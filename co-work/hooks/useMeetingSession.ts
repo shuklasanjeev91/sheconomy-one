@@ -13,7 +13,7 @@ import {
   startMeeting,
   updateParticipantMedia,
 } from '~/co-work/lib/meetings'
-import { createMediaSession, getMediaCapabilities, NATIVE_MEETING_NOTICE } from '~/co-work/lib/media'
+import { createMediaSession, getMediaCapabilities } from '~/co-work/lib/media'
 import {
   broadcastSignal,
   joinMeetingChannel,
@@ -315,8 +315,6 @@ export function useMeetingSession({
     setRecording(true)
   }, [caps.supportsRecording, localStream, recording])
 
-  const nativeNotice = Platform.OS !== 'web' ? NATIVE_MEETING_NOTICE : null
-
   return {
     caps,
     participants,
@@ -334,7 +332,6 @@ export function useMeetingSession({
     isConnecting,
     isWaiting,
     waitingParticipants,
-    nativeNotice,
     displayName,
     setPanel,
     setLayout,

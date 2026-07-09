@@ -1,7 +1,7 @@
 import { useState } from 'react'
-import { Platform, Linking } from 'react-native'
 
 import { Button, Icons, Input, ScrollView, Spinner, YStack, useAppToast } from '~/components/ui'
+import { openMailtoLink } from '~/lib/platform/openMailto'
 import { CoWorkPanelShell, CoWorkSectionLabel } from '~/co-work/components/CoWorkUi'
 import { MeetingInvitePicker } from '~/co-work/components/MeetingInvitePicker'
 import { MeetingPanelHeader } from '~/co-work/components/MeetingPanelHeader'
@@ -63,11 +63,7 @@ export function MeetingInvitePanel({
         for (const link of result.mailtoLinks) {
           const email = link.replace('mailto:', '')
           const mailto = buildInviteMailtoLink(meeting, emailToInvitee(email), hostName)
-          if (Platform.OS === 'web') {
-            window.open(mailto, '_blank')
-          } else {
-            await Linking.openURL(mailto)
-          }
+          await openMailtoLink(mailto)
         }
       }
 

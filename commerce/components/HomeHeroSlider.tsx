@@ -155,6 +155,9 @@ export function HomeHeroSlider({ slides }: HomeHeroSliderProps) {
       width="100%"
       position="relative"
       onLayout={(event) => setViewportWidth(event.nativeEvent.layout.width)}
+      onTouchStart={() => setPaused(true)}
+      onTouchEnd={() => setPaused(false)}
+      onTouchCancel={() => setPaused(false)}
       onMouseEnter={Platform.OS === 'web' ? () => setPaused(true) : undefined}
       onMouseLeave={Platform.OS === 'web' ? () => setPaused(false) : undefined}
     >

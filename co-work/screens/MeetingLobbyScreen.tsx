@@ -15,6 +15,7 @@ import {
   verifyMeetingPasscode,
 } from '~/co-work/lib/meetings'
 import { coworkGlassStyle, useCoWorkTheme } from '~/co-work/lib/theme'
+import { controlGradientStyle, coworkBoxShadow, pageGradientStyle } from '~/lib/platform/crossStyles'
 import type { Meeting } from '~/co-work/lib/types'
 import { copyToClipboard } from '~/lib/platform/clipboard'
 import { coWorkRoutes } from '~/lib/routes'
@@ -101,7 +102,7 @@ export function MeetingLobbyScreen({ code, startLive = false }: MeetingLobbyScre
   }
 
   return (
-    <FullWidthLayout scroll backgroundColor={coworkUi.pageBg} style={Platform.OS === 'web' ? { background: coworkGradients.page } : undefined}>
+    <FullWidthLayout scroll backgroundColor={coworkUi.pageBg} style={pageGradientStyle(coworkGradients.page, coworkUi.pageBg)}>
       <PageSection paddingVertical="$6">
         <FormRail gap="$5">
           <YStack gap="$3">
@@ -135,7 +136,7 @@ export function MeetingLobbyScreen({ code, startLive = false }: MeetingLobbyScre
               borderColor={coworkUi.glassBorder}
               style={{
                 ...coworkGlassStyle(coworkUi, true),
-                ...(Platform.OS === 'web' ? { boxShadow: coworkShadows.card } : {}),
+                ...coworkBoxShadow(coworkShadows, 'card'),
               }}
             >
               <XStack alignItems="center" gap="$3">
@@ -175,7 +176,7 @@ export function MeetingLobbyScreen({ code, startLive = false }: MeetingLobbyScre
               borderColor={coworkUi.glassBorder}
               style={{
                 ...coworkGlassStyle(coworkUi, true),
-                ...(Platform.OS === 'web' ? { boxShadow: coworkShadows.card } : {}),
+                ...coworkBoxShadow(coworkShadows, 'card'),
               }}
             >
               <Text color={coworkUi.textSecondary} fontSize={14}>
@@ -188,7 +189,7 @@ export function MeetingLobbyScreen({ code, startLive = false }: MeetingLobbyScre
                   borderRadius={999}
                   icon={<Icons.Video size={18} color="white" />}
                   onPress={() => setInRoom(true)}
-                  style={Platform.OS === 'web' ? { backgroundImage: coworkGradients.activeControl } : undefined}
+                  style={controlGradientStyle(coworkGradients.activeControl, coworkUi.brand)}
                 >
                   Join now
                 </Button>

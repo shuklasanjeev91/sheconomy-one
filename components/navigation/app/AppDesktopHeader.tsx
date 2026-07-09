@@ -56,7 +56,7 @@ export function AppDesktopHeader() {
       width="100%"
       display="none"
       $gtMd={{ display: 'flex' }}
-      style={Platform.OS === 'web' ? chromeSurfaceStyle(ui) : undefined}
+      style={chromeSurfaceStyle(ui)}
     >
       <XStack
         width="100%"

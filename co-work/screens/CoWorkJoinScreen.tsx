@@ -6,6 +6,7 @@ import { AppPage } from '~/components/layout'
 import { Button, Icons, Input, Text, XStack, YStack } from '~/components/ui'
 import { CoWorkBrandChip, CoWorkIconBadge } from '~/co-work/components/CoWorkUi'
 import { coworkGlassStyle, useCoWorkTheme } from '~/co-work/lib/theme'
+import { controlGradientStyle, coworkBoxShadow, pageGradientStyle } from '~/lib/platform/crossStyles'
 import { coWorkRoutes } from '~/lib/routes'
 
 import { BRAND_NAME } from '~/config/brand'
@@ -20,7 +21,7 @@ export function CoWorkJoinScreen() {
       scroll
       backgroundColor={coworkUi.pageBg}
       paddingVertical="$6"
-      style={Platform.OS === 'web' ? { background: coworkGradients.page } : undefined}
+      style={pageGradientStyle(coworkGradients.page, coworkUi.pageBg)}
     >
       <YStack gap="$5" width="100%" maxWidth={560} alignSelf="center">
         <YStack gap="$3">
@@ -41,7 +42,7 @@ export function CoWorkJoinScreen() {
           borderColor={coworkUi.glassBorder}
           style={{
             ...coworkGlassStyle(coworkUi, true),
-            ...(Platform.OS === 'web' ? { boxShadow: coworkShadows.card } : {}),
+            ...coworkBoxShadow(coworkShadows, 'card'),
           }}
         >
           <XStack alignItems="center" gap="$3">
@@ -73,7 +74,7 @@ export function CoWorkJoinScreen() {
               if (!normalized) return
               router.push(coWorkRoutes.meeting(normalized))
             }}
-            style={Platform.OS === 'web' ? { backgroundImage: coworkGradients.activeControl } : undefined}
+            style={controlGradientStyle(coworkGradients.activeControl, coworkUi.brand)}
           >
             Join meeting
           </Button>

@@ -1,8 +1,8 @@
 import type { ReactNode } from 'react'
-import { Platform } from 'react-native'
 
 import { Button, Icons, Text, XStack, YStack } from '~/components/ui'
 import { coworkGlassStyle, useCoWorkTheme } from '~/co-work/lib/theme'
+import { coworkBoxShadow } from '~/lib/platform/crossStyles'
 
 export function CoWorkBrandChip({ label = 'CO-WORK' }: { label?: string }) {
   const { ui: coworkUi, gradients: coworkGradients, shadows: coworkShadows } = useCoWorkTheme()
@@ -125,7 +125,7 @@ export function CoWorkFeatureCard({
       backgroundColor={coworkUi.surface}
       borderWidth={1}
       borderColor={coworkUi.borderSoft}
-      style={Platform.OS === 'web' ? { boxShadow: coworkShadows.card } : undefined}
+      style={coworkBoxShadow(coworkShadows, 'card')}
     >
       <YStack
         width={40}
@@ -169,7 +169,7 @@ export function CoWorkPanelShell({
       borderColor={coworkUi.glassBorder}
       style={{
         ...coworkGlassStyle(coworkUi, true),
-        ...(Platform.OS === 'web' && !fullWidth ? { boxShadow: coworkShadows.panel } : {}),
+        ...(!fullWidth ? coworkBoxShadow(coworkShadows, 'panel') : {}),
       }}
     >
       {children}

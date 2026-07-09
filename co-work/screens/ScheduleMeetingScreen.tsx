@@ -1,5 +1,4 @@
 import { Link, useRouter } from 'one'
-import { Platform, Linking } from 'react-native'
 import { useMemo, useState } from 'react'
 
 import { RequireAuth } from '~/components/auth/RequireAuth'
@@ -12,8 +11,10 @@ import { MeetingInvitePicker } from '~/co-work/components/MeetingInvitePicker'
 import { createMeeting } from '~/co-work/lib/meetings'
 import { sendMeetingInvites, buildInviteMailtoLink, emailToInvitee } from '~/co-work/lib/invites'
 import { coworkGlassStyle, useCoWorkTheme } from '~/co-work/lib/theme'
+import { controlGradientStyle, coworkBoxShadow, pageGradientStyle } from '~/lib/platform/crossStyles'
 import type { MeetingInvitee, MeetingRepeat } from '~/co-work/lib/types'
 import { coWorkRoutes } from '~/lib/routes'
+import { openMailtoLink } from '~/lib/platform/openMailto'
 import { useProfile } from '~/hooks/useProfile'
 
 import { BRAND_NAME } from '~/config/brand'
@@ -121,11 +122,7 @@ export function ScheduleMeetingScreen() {
             for (const link of result.mailtoLinks) {
               const email = link.replace('mailto:', '')
               const mailto = buildInviteMailtoLink(meeting, emailToInvitee(email), hostName)
-              if (Platform.OS === 'web') {
-                window.open(mailto, '_blank')
-              } else {
-                await Linking.openURL(mailto)
-              }
+              await openMailtoLink(mailto)
             }
           }
 
@@ -156,7 +153,7 @@ export function ScheduleMeetingScreen() {
       form
       backgroundColor={coworkUi.pageBg}
       paddingVertical="$6"
-      style={Platform.OS === 'web' ? { background: coworkGradients.page } : undefined}
+      style={pageGradientStyle(coworkGradients.page, coworkUi.pageBg)}
     >
       <YStack gap="$5" width="100%" maxWidth={720} alignSelf="center">
         <YStack gap="$3">
@@ -177,7 +174,7 @@ export function ScheduleMeetingScreen() {
           borderColor={coworkUi.glassBorder}
           style={{
             ...coworkGlassStyle(coworkUi, true),
-            ...(Platform.OS === 'web' ? { boxShadow: coworkShadows.card } : {}),
+            ...coworkBoxShadow(coworkShadows, 'card'),
           }}
         >
           <ScheduleSection title="Details">
@@ -317,7 +314,7 @@ export function ScheduleMeetingScreen() {
             disabled={saving}
             icon={saving ? <Spinner size="small" color="white" /> : <Icons.Calendar size={18} color="white" />}
             onPress={() => void handleSchedule()}
-            style={Platform.OS === 'web' ? { backgroundImage: coworkGradients.activeControl } : undefined}
+            style={controlGradientStyle(coworkGradients.activeControl, coworkUi.brand)}
           >
             Schedule meeting
           </Button>

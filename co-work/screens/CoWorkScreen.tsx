@@ -7,6 +7,7 @@ import { Button, Icons, Input, Spinner, Text, XStack, YStack, useAppToast } from
 import { CoWorkBrandChip, CoWorkFeatureCard, CoWorkIconBadge } from '~/co-work/components/CoWorkUi'
 import { createMeeting } from '~/co-work/lib/meetings'
 import { coworkGlassStyle, useCoWorkTheme } from '~/co-work/lib/theme'
+import { controlGradientStyle, coworkBoxShadow, pageGradientStyle } from '~/lib/platform/crossStyles'
 import { coWorkRoutes } from '~/lib/routes'
 import { useProfile } from '~/hooks/useProfile'
 import { useAppLayout } from '~/hooks/useAppLayout'
@@ -72,7 +73,7 @@ export function CoWorkScreen() {
       scroll
       backgroundColor={coworkUi.pageBg}
       paddingVertical="$6"
-      style={Platform.OS === 'web' ? { background: coworkGradients.page } : undefined}
+      style={pageGradientStyle(coworkGradients.page, coworkUi.pageBg)}
     >
       <YStack gap="$7" width="100%">
         <YStack gap="$4" position="relative">
@@ -102,7 +103,7 @@ export function CoWorkScreen() {
               icon={creating ? <Spinner size="small" color="white" /> : <Icons.Video size={18} color="white" />}
               disabled={creating}
               onPress={() => void startInstantMeeting()}
-              style={Platform.OS === 'web' ? { backgroundImage: coworkGradients.activeControl } : undefined}
+              style={controlGradientStyle(coworkGradients.activeControl, coworkUi.brand)}
             >
               Start instant meeting
             </Button>
@@ -139,7 +140,7 @@ export function CoWorkScreen() {
           borderColor={coworkUi.glassBorder}
           style={{
             ...coworkGlassStyle(coworkUi, true),
-            ...(Platform.OS === 'web' ? { boxShadow: coworkShadows.card } : {}),
+            ...coworkBoxShadow(coworkShadows, 'card'),
           }}
         >
           <XStack alignItems="center" gap="$3">

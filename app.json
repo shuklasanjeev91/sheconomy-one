@@ -7,7 +7,9 @@
       "android"
     ],
     "plugins": [
-      "one/expo-plugin"
+      "one/expo-plugin",
+      "@livekit/react-native-expo-plugin",
+      "@config-plugins/react-native-webrtc"
     ],
     "icon": "./public/app-icon.png",
     "splash": {

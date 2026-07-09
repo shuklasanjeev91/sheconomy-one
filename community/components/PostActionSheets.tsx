@@ -1,4 +1,4 @@
-import { useRouter } from 'one'
+import { Platform, Share } from 'react-native'
 
 import { CommunityAdaptiveSheet } from '~/community/components/CommunityAdaptiveSheet'
 import { PostComments } from '~/community/components/PostComments'
@@ -20,8 +20,11 @@ import {
   YStack,
   useAppToast,
 } from '~/components/ui'
-import { chatRoutes } from '~/lib/routes'
+import { chatRoutes, routes } from '~/lib/routes'
+import { copyToClipboard } from '~/lib/platform/clipboard'
 import { useAppUi } from '~/lib/theme/useAppUi'
+
+import { useRouter } from 'one'
 
 import { BRAND_NAME } from '~/config/brand'
 
@@ -49,15 +52,25 @@ export function PostActionSheets({ post, engagement }: PostActionSheetsProps) {
   }
 
   async function copyLink() {
-    if (typeof navigator !== 'undefined' && navigator.clipboard) {
-      await navigator.clipboard.writeText(shareUrl).catch(() => undefined)
-    }
+    await copyToClipboard(shareUrl)
     toast.show('Link copied', { tone: 'success', message: 'Post link copied to clipboard.' })
     engagement.closeSheet()
   }
 
   async function nativeShare() {
-    if (typeof navigator !== 'undefined' && navigator.share) {
+    try {
+      await Share.share({
+        title: `${authorName} on ${BRAND_NAME}`,
+        message: `${post.content.slice(0, 120)}\n${shareUrl}`,
+        url: shareUrl,
+      })
+      engagement.closeSheet()
+      return
+    } catch {
+      // user cancelled or unavailable
+    }
+
+    if (Platform.OS === 'web' && typeof navigator !== 'undefined' && navigator.share) {
       try {
         await navigator.share({
           title: `${authorName} on ${BRAND_NAME}`,
@@ -70,6 +83,7 @@ export function PostActionSheets({ post, engagement }: PostActionSheetsProps) {
         // user cancelled
       }
     }
+
     await copyLink()
   }
 

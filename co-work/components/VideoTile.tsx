@@ -1,5 +1,5 @@
+import { useEffect, useRef, useState } from 'react'
 import { Platform } from 'react-native'
-import { useEffect, useRef } from 'react'
 
 import { Avatar, Text, YStack } from '~/components/ui'
 import { useCoWorkTheme } from '~/co-work/lib/theme'
@@ -27,15 +27,43 @@ export function VideoTile({
   isScreen,
   large,
 }: VideoTileProps) {
-  const { ui: coworkUi, gradients: coworkGradients, shadows: coworkShadows } = useCoWorkTheme()
+  const { ui: coworkUi } = useCoWorkTheme()
   const videoRef = useRef<HTMLVideoElement | null>(null)
+  const [RtcView, setRtcView] = useState<React.ComponentType<{
+    streamURL: string
+    style?: object
+    objectFit?: string
+    mirror?: boolean
+  }> | null>(null)
+  const [streamUrl, setStreamUrl] = useState<string | null>(null)
 
   useEffect(() => {
-    if (Platform.OS !== 'web' || !videoRef.current) return
-    videoRef.current.srcObject = stream ?? null
+    if (Platform.OS === 'web') return
+    void import('react-native-webrtc').then((module) => setRtcView(() => module.RTCView))
+  }, [])
+
+  useEffect(() => {
+    if (Platform.OS === 'web') {
+      if (!videoRef.current) return
+      videoRef.current.srcObject = stream ?? null
+      return
+    }
+
+    if (!stream) {
+      setStreamUrl(null)
+      return
+    }
+
+    try {
+      const url = (stream as MediaStream & { toURL?: () => string }).toURL?.()
+      setStreamUrl(url ?? null)
+    } catch {
+      setStreamUrl(null)
+    }
   }, [stream])
 
-  const showVideo = Platform.OS === 'web' && stream && !videoOff
+  const showWebVideo = Platform.OS === 'web' && stream && !videoOff
+  const showNativeVideo = Platform.OS !== 'web' && streamUrl && !videoOff && RtcView
 
   return (
     <YStack
@@ -50,13 +78,20 @@ export function VideoTile({
       borderColor={handRaised ? coworkUi.brand : coworkUi.tileBorder}
       position="relative"
     >
-      {showVideo ? (
+      {showWebVideo ? (
         <video
           ref={videoRef}
           autoPlay
           playsInline
           muted={isSelf}
           style={{ width: '100%', height: '100%', objectFit: isScreen ? 'contain' : 'cover' }}
+        />
+      ) : showNativeVideo ? (
+        <RtcView
+          streamURL={streamUrl}
+          objectFit={isScreen ? 'contain' : 'cover'}
+          mirror={isSelf && !isScreen}
+          style={{ width: '100%', height: '100%' }}
         />
       ) : (
         <YStack flex={1} alignItems="center" justifyContent="center" gap="$2" backgroundColor={coworkUi.surfaceMuted}>

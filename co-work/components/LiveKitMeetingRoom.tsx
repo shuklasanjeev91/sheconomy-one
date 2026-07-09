@@ -1,5 +1,6 @@
-import { Platform } from 'react-native'
 import { useCallback, useEffect, useState } from 'react'
+import { Platform } from 'react-native'
+import { ConnectionState, RoomEvent } from 'livekit-client'
 
 import {
   LiveKitRoom,
@@ -8,7 +9,6 @@ import {
   useRoomContext,
 } from '@livekit/components-react'
 import '@livekit/components-styles'
-import { ConnectionState, RoomEvent } from 'livekit-client'
 
 import { Spinner, Text, YStack } from '~/components/ui'
 import { ScreenCenter, ScreenFill } from '~/components/layout'
@@ -17,6 +17,8 @@ import { fetchLiveKitCredentials } from '~/co-work/lib/livekit'
 import { getLiveKitRoomOptions } from '~/co-work/lib/livekit-room-options'
 import { coworkGlassStyle, useCoWorkTheme, type CoWorkShadows, type CoWorkUiTokens } from '~/co-work/lib/theme'
 import { fetchLiveKitConfig, type LiveKitConfig } from '~/lib/livekit/config'
+import { supportsLiveKitVideo } from '~/lib/platform/capabilities'
+import { pageGradientStyle } from '~/lib/platform/crossStyles'
 import { meetingViewportStyle } from '~/lib/platform/viewport'
 
 export type LiveKitMediaControls = {
@@ -172,11 +174,50 @@ function getSheconomyLivekitCss(ui: CoWorkUiTokens, shadows: CoWorkShadows) {
 `
 }
 
-export function LiveKitMeetingRoom({
+export function LiveKitMeetingRoom(props: LiveKitMeetingRoomProps) {
+  if (Platform.OS === 'web') {
+    return <WebLiveKitMeetingRoom {...props} />
+  }
+  return <NativeLiveKitMeetingRoomLoader {...props} />
+}
+
+function NativeLiveKitMeetingRoomLoader(props: LiveKitMeetingRoomProps) {
+  const { ui: coworkUi } = useCoWorkTheme()
+  const [NativeRoom, setNativeRoom] = useState<typeof import('./NativeLiveKitMeetingRoom').NativeLiveKitMeetingRoom | null>(
+    null,
+  )
+
+  useEffect(() => {
+    void import('./NativeLiveKitMeetingRoom').then((module) => {
+      setNativeRoom(() => module.NativeLiveKitMeetingRoom)
+    })
+  }, [])
+
+  if (!supportsLiveKitVideo()) {
+    return (
+      <ScreenFill padding="$5" alignItems="center" justifyContent="center" backgroundColor={coworkUi.pageBg}>
+        <Text color={coworkUi.textSecondary} textAlign="center">
+          Video meetings are not available on this device.
+        </Text>
+      </ScreenFill>
+    )
+  }
+
+  if (!NativeRoom) {
+    return (
+      <ScreenCenter backgroundColor={coworkUi.pageBg}>
+        <Spinner size="large" color={coworkUi.brand} />
+      </ScreenCenter>
+    )
+  }
+
+  return <NativeRoom {...props} />
+}
+
+function WebLiveKitMeetingRoom({
   meetingId,
   roomId,
   displayName,
-  isHost,
   enabled,
   onDisconnected,
   overlay,
@@ -188,7 +229,7 @@ export function LiveKitMeetingRoom({
   const [loading, setLoading] = useState(false)
 
   useEffect(() => {
-    if (Platform.OS !== 'web' || !enabled) return
+    if (!supportsLiveKitVideo() || !enabled) return
     void fetchLiveKitConfig().then(setConfig)
   }, [enabled])
 
@@ -215,32 +256,12 @@ export function LiveKitMeetingRoom({
     void loadCredentials()
   }, [loadCredentials])
 
-  if (Platform.OS !== 'web') {
+  if (!supportsLiveKitVideo()) {
     return (
-      <ScreenFill
-        padding="$5"
-        alignItems="center"
-        justifyContent="center"
-        backgroundColor={coworkUi.pageBg}
-      >
-        <YStack
-          maxWidth={420}
-          padding="$5"
-          borderRadius={coworkUi.radius.card}
-          borderWidth={1}
-          borderColor={coworkUi.glassBorder}
-          gap="$3"
-          alignItems="center"
-          style={coworkGlassStyle(coworkUi, true)}
-        >
-          <Text fontSize={18} fontWeight="800" color={coworkUi.text} textAlign="center">
-            Co-Work on mobile
-          </Text>
-          <Text color={coworkUi.textSecondary} textAlign="center" lineHeight={22}>
-            Chat, people, and hand raise work here. For HD video and screen share, open this meeting in your mobile
-            browser.
-          </Text>
-        </YStack>
+      <ScreenFill padding="$5" alignItems="center" justifyContent="center" backgroundColor={coworkUi.pageBg}>
+        <Text color={coworkUi.textSecondary} textAlign="center" lineHeight={22}>
+          Allow camera and microphone access in your browser to join with video.
+        </Text>
         {overlay?.(null)}
       </ScreenFill>
     )
@@ -290,7 +311,7 @@ export function LiveKitMeetingRoom({
     <ScreenFill
       backgroundColor={coworkUi.pageBg}
       position="relative"
-      style={{ ...meetingViewportStyle(), background: coworkGradients.page }}
+      style={{ ...meetingViewportStyle(), ...pageGradientStyle(coworkGradients.page, coworkUi.pageBg) }}
     >
       <LiveKitRoom
         serverUrl={credentials.serverUrl}
@@ -311,14 +332,14 @@ export function LiveKitMeetingRoom({
           background: 'transparent',
         }}
       >
-        <LiveKitMeetingContent overlay={overlay} />
+        <WebLiveKitMeetingContent overlay={overlay} />
       </LiveKitRoom>
       <style>{getSheconomyLivekitCss(coworkUi, coworkShadows)}</style>
     </ScreenFill>
   )
 }
 
-function LiveKitMeetingContent({
+function WebLiveKitMeetingContent({
   overlay,
 }: {
   overlay?: (liveKit: LiveKitMediaControls | null) => React.ReactNode
@@ -378,26 +399,4 @@ function LiveKitMeetingContent({
   )
 }
 
-export function useLiveKitMediaControls(): LiveKitMediaControls {
-  const room = useRoomContext()
-  const { localParticipant, isMicrophoneEnabled, isCameraEnabled, isScreenShareEnabled } = useLocalParticipant()
-
-  return {
-    room,
-    localParticipant,
-    audioEnabled: isMicrophoneEnabled,
-    videoEnabled: isCameraEnabled,
-    screenSharing: isScreenShareEnabled,
-    toggleAudio: () => {
-      const next = !isMicrophoneEnabled
-      void localParticipant.setMicrophoneEnabled(next, {
-        echoCancellation: true,
-        noiseSuppression: true,
-        autoGainControl: true,
-        voiceIsolation: true,
-      })
-    },
-    toggleVideo: () => void localParticipant.setCameraEnabled(!isCameraEnabled),
-    toggleScreenShare: () => void localParticipant.setScreenShareEnabled(!isScreenShareEnabled),
-  }
-}
+export { useLiveKitMediaControls } from '~/co-work/hooks/useLiveKitMediaControls'

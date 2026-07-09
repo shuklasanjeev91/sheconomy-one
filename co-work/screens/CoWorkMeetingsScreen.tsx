@@ -8,6 +8,7 @@ import { Button, Icons, Spinner, Text, XStack, YStack } from '~/components/ui'
 import { CoWorkBrandChip, CoWorkStatusPill } from '~/co-work/components/CoWorkUi'
 import { fetchHostedMeetings, formatMeetingCode } from '~/co-work/lib/meetings'
 import { coworkGlassStyle, useCoWorkTheme } from '~/co-work/lib/theme'
+import { coworkBoxShadow, pageGradientStyle } from '~/lib/platform/crossStyles'
 import type { Meeting } from '~/co-work/lib/types'
 import { coWorkRoutes } from '~/lib/routes'
 import { useProfile } from '~/hooks/useProfile'
@@ -73,7 +74,7 @@ export function CoWorkMeetingsScreen() {
       scroll
       backgroundColor={coworkUi.pageBg}
       paddingVertical="$6"
-      style={Platform.OS === 'web' ? { background: coworkGradients.page } : undefined}
+      style={pageGradientStyle(coworkGradients.page, coworkUi.pageBg)}
     >
       <YStack gap="$5" width="100%" maxWidth={720} alignSelf="center">
         <YStack gap="$3">
@@ -131,7 +132,7 @@ export function CoWorkMeetingsScreen() {
               borderColor={coworkUi.glassBorder}
               style={{
                 ...coworkGlassStyle(coworkUi, true),
-                ...(Platform.OS === 'web' ? { boxShadow: coworkShadows.card } : {}),
+                ...coworkBoxShadow(coworkShadows, 'card'),
               }}
             >
               <XStack alignItems="flex-start" justifyContent="space-between" gap="$3">

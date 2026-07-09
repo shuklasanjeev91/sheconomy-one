@@ -1,4 +1,6 @@
 import { useRouter } from 'one'
+import { Platform } from 'react-native'
+import { useEffect } from 'react'
 
 import { AuthBackButton } from '~/components/auth/AuthBackButton'
 import { useAuthUi } from '~/components/auth/auth-theme'
@@ -8,6 +10,7 @@ import {
 } from '~/components/gender-verification/GenderVerificationPanel'
 import { ScreenFill, FormRail } from '~/components/layout'
 import { Button, Icons, Text, YStack } from '~/components/ui'
+import { useAccess } from '~/hooks/useAccess'
 import { useGenderVerification } from '~/hooks/useGenderVerification'
 import { refreshProfiles } from '~/lib/profile/refresh'
 import { communityRoutes } from '~/lib/routes'
@@ -19,6 +22,7 @@ export function GenderVerificationScreen() {
   const authUi = useAuthUi()
   const ui = useAppUi()
   const router = useRouter()
+  const { isFemale } = useAccess()
 
   const verification = useGenderVerification({
     onVerified: () => {
@@ -29,10 +33,18 @@ export function GenderVerificationScreen() {
     },
   })
 
+  useEffect(() => {
+    if (Platform.OS === 'web' || !isFemale) return
+    refreshProfiles()
+    router.replace(communityRoutes.home)
+  }, [isFemale, router])
+
   const isRunning =
     verification.phase !== 'idle' &&
     verification.phase !== 'error' &&
     verification.phase !== 'success'
+
+  const nativeWebViewMode = Platform.OS !== 'web'
 
   return (
     <ScreenFill
@@ -63,16 +75,16 @@ export function GenderVerificationScreen() {
           borderColor={ui.borderSubtle}
           gap="$5"
         >
-          <VerificationSteps phase={verification.phase} />
+          {!nativeWebViewMode ? <VerificationSteps phase={verification.phase} /> : null}
           <FaceCaptureOverlay
             containerRef={verification.containerRef}
-            phase={verification.phase}
+            phase={nativeWebViewMode ? 'camera' : verification.phase}
             instruction={verification.instruction}
             blinkCount={verification.blinkCount}
             requiredBlinks={verification.requiredBlinks}
           />
 
-          {verification.error ? (
+          {verification.error && !nativeWebViewMode ? (
             <YStack
               padding="$3"
               borderRadius={12}
@@ -101,7 +113,7 @@ export function GenderVerificationScreen() {
                 You&apos;re verified. Redirecting to Community…
               </Text>
             </YStack>
-          ) : (
+          ) : nativeWebViewMode ? null : (
             <YStack gap="$3">
               <Button
                 tone="primary"

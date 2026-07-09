@@ -1,17 +1,16 @@
 import { useMemo } from 'react'
 import type { CSSProperties } from 'react'
-import { Platform, useWindowDimensions } from 'react-native'
+import { useWindowDimensions } from 'react-native'
 
 import { TrackLoop } from '@livekit/components-react'
 
-import { YStack } from '~/components/ui'
 import { useMeetingGalleryTracks } from '~/co-work/hooks/useMeetingGalleryTracks'
 import { meetingGalleryLayout } from '~/co-work/lib/meeting-gallery-layout'
 import { useAppLayout } from '~/hooks/useAppLayout'
 
 import { SheconomyParticipantTile } from './SheconomyParticipantTile'
 
-/** SHEconomy-branded video gallery — fills stage like Zoom/Meet. */
+/** SHEconomy-branded video gallery — web LiveKit stage (native uses NativeLiveKitMeetingRoom). */
 export function MeetingVideoStage() {
   const { isDesktop } = useAppLayout()
   const { width, height } = useWindowDimensions()
@@ -23,16 +22,6 @@ export function MeetingVideoStage() {
     [stageTracks.length, isDesktop, isLandscape],
   )
   const solo = stageTracks.length <= 1 && !pipTrack
-
-  if (Platform.OS !== 'web') {
-    return (
-      <YStack width="100%" height="100%" className="sheconomy-video-stage">
-        <TrackLoop tracks={stageTracks}>
-          <SheconomyParticipantTile />
-        </TrackLoop>
-      </YStack>
-    )
-  }
 
   return (
     <div className="sheconomy-video-stage">

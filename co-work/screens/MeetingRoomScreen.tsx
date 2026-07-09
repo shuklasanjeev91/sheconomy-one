@@ -1,6 +1,6 @@
 import { useRouter } from 'one'
 import { Platform } from 'react-native'
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 
 import { ScreenCenter } from '~/components/layout'
 import { Spinner, Text, XStack, YStack, useAppToast } from '~/components/ui'
@@ -9,11 +9,16 @@ import { LiveKitMeetingRoom, type LiveKitMediaControls } from '~/co-work/compone
 import { MeetingChatPanel } from '~/co-work/components/MeetingChatPanel'
 import { MeetingControls } from '~/co-work/components/MeetingControls'
 import { MeetingInvitePanel } from '~/co-work/components/MeetingInvitePanel'
+import { MeetingLiveCaptions } from '~/co-work/components/MeetingLiveCaptions'
 import { MeetingParticipantsPanel } from '~/co-work/components/MeetingParticipantsPanel'
+import { useLiveCaptions } from '~/co-work/hooks/useLiveCaptions'
+import { useMeetingRecording } from '~/co-work/hooks/useMeetingRecording'
 import { useMeetingPresence } from '~/co-work/hooks/useMeetingPresence'
 import { getMediaCapabilities } from '~/co-work/lib/media'
+import { supportsLiveKitVideo } from '~/lib/platform/capabilities'
 import { formatMeetingCode } from '~/co-work/lib/meetings'
 import { coworkGlassStyle, useCoWorkTheme } from '~/co-work/lib/theme'
+import { controlGradientStyle, footerFadeStyle } from '~/lib/platform/crossStyles'
 import type { Meeting } from '~/co-work/lib/types'
 import { useAppLayout } from '~/hooks/useAppLayout'
 import { coWorkRoutes } from '~/lib/routes'
@@ -42,7 +47,7 @@ export function MeetingRoomScreen(props: MeetingRoomScreenProps) {
 
   const title = useMemo(() => props.meeting.title, [props.meeting.title])
   const caps = useMemo(() => getMediaCapabilities(), [])
-  const useLiveKit = Platform.OS === 'web' && !!props.meeting.room_id
+  const useLiveKit = supportsLiveKitVideo() && !!props.meeting.room_id
 
   if (presence.isConnecting) {
     return (
@@ -116,13 +121,33 @@ function MeetingRoomOverlay({
   const toast = useAppToast()
   const { isMobile, safeTop } = useAppLayout()
   const [dismissedError, setDismissedError] = useState<string | null>(null)
-  const [recording, setRecording] = useState(false)
   const [meetingState, setMeetingState] = useState(meeting)
-  const recorderRef = useRef<MediaRecorder | null>(null)
-  const recordingChunksRef = useRef<Blob[]>([])
+
+  const allowRecording = meeting.security_settings?.allowRecording !== false
+  const autoRecord = !!meeting.meeting_options?.autoRecord && isHost && allowRecording
+
+  const captions = useLiveCaptions({
+    userId,
+    displayName,
+    enabled: true,
+    remoteCaptions: presence.liveCaptions,
+    onFinalCaption: (text) => presence.broadcastCaption(text, displayName),
+  })
+
+  const recordingSession = useMeetingRecording({
+    room: liveKit?.room,
+    meetingCode: meeting.meeting_code,
+    enabled: allowRecording && isHost,
+    autoStart: autoRecord,
+    captionLines: captions.transcriptLines,
+    onStarted: () => toast.show('Recording started', { tone: 'success' }),
+    onStopped: () => toast.show('Recording saved to your device', { tone: 'success' }),
+    onError: (message) => toast.show(message, { tone: 'error' }),
+  })
 
   const showError = presence.error && presence.error !== dismissedError
   const panelFullWidth = isMobile
+  const recording = recordingSession.recording
 
   useEffect(() => {
     if (!liveKit) {
@@ -140,75 +165,35 @@ function MeetingRoomOverlay({
     return () => presence.registerMediaHandlers({})
   }, [liveKit, presence.registerMediaHandlers, presence.syncMediaState])
 
-  useEffect(() => {
-    return () => {
-      recorderRef.current?.stop()
-      recorderRef.current = null
-    }
-  }, [])
-
   const toggleRecording = useCallback(() => {
-    if (Platform.OS !== 'web') {
-      toast.show('Recording is available on web', { tone: 'info' })
+    if (!allowRecording) {
+      toast.show('Recording is disabled for this meeting', { tone: 'info' })
       return
     }
-
-    if (!liveKit?.room) {
-      toast.show('Connect to the meeting before recording', { tone: 'error' })
+    if (!isHost) {
+      toast.show('Only the host can record this meeting', { tone: 'info' })
       return
     }
+    recordingSession.toggleRecording()
+  }, [allowRecording, isHost, recordingSession, toast])
 
-    if (recording) {
-      recorderRef.current?.stop()
+  const toggleCaptions = useCallback(() => {
+    if (!captions.supported) {
+      toast.show('Live captions are not available on this device', { tone: 'info' })
       return
     }
-
-    const stream = new MediaStream()
-    liveKit.room.localParticipant.trackPublications.forEach((publication) => {
-      const track = publication.track?.mediaStreamTrack
-      if (track) stream.addTrack(track)
-    })
-
-    if (stream.getTracks().length === 0) {
-      toast.show('Turn on your camera or mic to record', { tone: 'error' })
+    const turningOn = !captions.active
+    captions.toggleCaptions()
+    if (turningOn && !captions.canPublish) {
+      toast.show('Viewing live captions from the meeting', { tone: 'success' })
       return
     }
-
-    try {
-      const recorder = new MediaRecorder(stream)
-      recordingChunksRef.current = []
-      recorder.ondataavailable = (event) => {
-        if (event.data.size > 0) recordingChunksRef.current.push(event.data)
-      }
-      recorder.onstop = () => {
-        const blob = new Blob(recordingChunksRef.current, { type: 'video/webm' })
-        const url = URL.createObjectURL(blob)
-        const anchor = document.createElement('a')
-        anchor.href = url
-        anchor.download = `sheconomy-${meeting.meeting_code}-${Date.now()}.webm`
-        anchor.click()
-        URL.revokeObjectURL(url)
-        setRecording(false)
-        recorderRef.current = null
-        toast.show('Recording saved to your device', { tone: 'success' })
-      }
-      recorder.start()
-      recorderRef.current = recorder
-      setRecording(true)
-      toast.show('Recording started', { tone: 'success' })
-    } catch (recordError) {
-      toast.show('Could not start recording', {
-        tone: 'error',
-        message: recordError instanceof Error ? recordError.message : undefined,
-      })
-    }
-  }, [liveKit, meeting.meeting_code, recording, toast])
+    toast.show(turningOn ? 'Live captions on' : 'Live captions off', { tone: 'success' })
+  }, [captions, toast])
 
   const toggleScreenShare = useCallback(async () => {
     if (!liveKit) {
-      if (Platform.OS !== 'web') {
-        toast.show('Screen share works in the mobile browser meeting view', { tone: 'info' })
-      }
+      toast.show('Connect to the meeting to share your screen', { tone: 'info' })
       return
     }
 
@@ -255,7 +240,7 @@ function MeetingRoomOverlay({
           borderBottomColor={coworkUi.borderSoft}
           style={{
             ...coworkGlassStyle(coworkUi),
-            ...(Platform.OS === 'web' ? { backgroundImage: coworkGradients.header } : {}),
+            ...controlGradientStyle(coworkGradients.header, coworkUi.surfaceElevated),
           }}
         >
           <YStack gap={4} flex={1}>
@@ -273,6 +258,7 @@ function MeetingRoomOverlay({
               </Text>
               {presence.handRaised ? <CoWorkStatusPill label="✋ Hand raised" tone="coral" /> : null}
               {recording ? <CoWorkStatusPill label="● Recording" tone="danger" /> : null}
+              {captions.active ? <CoWorkStatusPill label="CC" tone="brand" /> : null}
               {liveKit ? <CoWorkStatusPill label="Live" tone="live" /> : null}
             </XStack>
             <XStack alignItems="center" gap="$2" flexWrap="wrap">
@@ -381,6 +367,13 @@ function MeetingRoomOverlay({
         </YStack>
       ) : null}
 
+      <MeetingLiveCaptions
+        active={captions.active}
+        currentCaption={captions.currentCaption}
+        lines={captions.visibleLines}
+        error={captions.error}
+      />
+
       <YStack
         position={overlayPosition}
         bottom={0}
@@ -388,24 +381,25 @@ function MeetingRoomOverlay({
         right={0}
         zIndex={30}
         pointerEvents="auto"
-        style={
-          Platform.OS === 'web'
-            ? { background: 'linear-gradient(180deg, transparent 0%, rgba(12, 8, 10, 0.75) 55%)' }
-            : undefined
-        }
+        style={footerFadeStyle(
+          'linear-gradient(180deg, transparent 0%, rgba(12, 8, 10, 0.75) 55%)',
+          'rgba(12, 8, 10, 0.92)',
+        )}
       >
         <MeetingControls
           caps={{
             ...caps,
             supportsVideo: !!liveKit || caps.supportsVideo,
-            supportsScreenShare: !!liveKit || caps.supportsScreenShare || Platform.OS !== 'web',
-            supportsRecording: isHost && (!!liveKit || caps.supportsRecording),
+            supportsScreenShare: !!liveKit || caps.supportsScreenShare,
+            supportsRecording: isHost && allowRecording && (caps.supportsRecording || !!liveKit),
+            supportsLiveCaptions: caps.supportsLiveCaptions,
           }}
           audioEnabled={liveKit?.audioEnabled ?? true}
           videoEnabled={liveKit?.videoEnabled ?? false}
           screenSharing={liveKit?.screenSharing ?? false}
           handRaised={presence.handRaised}
           recording={recording}
+          captionsActive={captions.active}
           isHost={isHost}
           panel={presence.panel}
           onToggleAudio={() => {
@@ -421,6 +415,7 @@ function MeetingRoomOverlay({
           onToggleScreen={() => void toggleScreenShare()}
           onToggleHand={toggleHand}
           onToggleRecord={toggleRecording}
+          onToggleCaptions={toggleCaptions}
           onToggleChat={() => presence.togglePanel('chat')}
           onTogglePeople={() => presence.togglePanel('people')}
           onToggleInvite={isHost ? () => presence.togglePanel('invite') : undefined}

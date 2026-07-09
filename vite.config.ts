@@ -1,3 +1,5 @@
+import { fileURLToPath } from 'node:url'
+
 import { defineConfig, loadEnv } from 'vite'
 import { one } from 'one/vite'
 import { tamaguiPlugin } from '@tamagui/vite-plugin'
@@ -11,10 +13,30 @@ export default defineConfig(({ mode }) => {
       strictPort: false,
     },
 
+    resolve: {
+      alias: {
+        'expo-av': fileURLToPath(new URL('./lib/stubs/expo-av.ts', import.meta.url)),
+        'expo-sharing': fileURLToPath(new URL('./lib/stubs/expo-sharing.ts', import.meta.url)),
+        'expo-camera': fileURLToPath(new URL('./lib/stubs/expo-camera.ts', import.meta.url)),
+        'expo-location': fileURLToPath(new URL('./lib/stubs/expo-location.ts', import.meta.url)),
+        'expo-clipboard': fileURLToPath(new URL('./lib/stubs/expo-clipboard.ts', import.meta.url)),
+        'expo-file-system/legacy': fileURLToPath(
+          new URL('./lib/stubs/expo-file-system-legacy.ts', import.meta.url),
+        ),
+        'expo-localization': fileURLToPath(new URL('./lib/stubs/expo-localization.ts', import.meta.url)),
+        '@react-native-community/datetimepicker': fileURLToPath(
+          new URL('./lib/stubs/datetimepicker.ts', import.meta.url),
+        ),
+        '@livekit/react-native': fileURLToPath(new URL('./lib/stubs/livekit-react-native.ts', import.meta.url)),
+        'react-native-webrtc': fileURLToPath(new URL('./lib/stubs/react-native-webrtc.ts', import.meta.url)),
+        'react-native-webview': fileURLToPath(new URL('./lib/stubs/react-native-webview.ts', import.meta.url)),
+      },
+    },
+
     plugins: [
       one({
         setupFile: {
-          native: './lib/polyfills.native.ts',
+          native: './lib/polyfills.ts',
         },
 
         web: {
@@ -101,6 +123,9 @@ export default defineConfig(({ mode }) => {
       ),
       'import.meta.env.EXPO_PUBLIC_SUPABASE_ANON_KEY': JSON.stringify(
         env.EXPO_PUBLIC_SUPABASE_ANON_KEY ?? '',
+      ),
+      'import.meta.env.EXPO_PUBLIC_WEB_APP_URL': JSON.stringify(
+        env.EXPO_PUBLIC_WEB_APP_URL ?? env.ONE_SERVER_URL ?? '',
       ),
     },
 

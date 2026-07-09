@@ -3,6 +3,7 @@ import { Platform } from 'react-native'
 import { Button, Icons, ScrollView, Text, XStack, YStack } from '~/components/ui'
 import { useAppLayout } from '~/hooks/useAppLayout'
 import { coworkGlassStyle, useCoWorkTheme } from '~/co-work/lib/theme'
+import { controlGradientStyle, coworkBoxShadow } from '~/lib/platform/crossStyles'
 import type { MediaCapabilities } from '~/co-work/lib/types'
 
 type MeetingControlsProps = {
@@ -12,6 +13,7 @@ type MeetingControlsProps = {
   screenSharing: boolean
   handRaised: boolean
   recording: boolean
+  captionsActive: boolean
   isHost: boolean
   panel: 'none' | 'chat' | 'people' | 'invite'
   onToggleAudio: () => void
@@ -19,6 +21,7 @@ type MeetingControlsProps = {
   onToggleScreen: () => void
   onToggleHand: () => void
   onToggleRecord: () => void
+  onToggleCaptions: () => void
   onToggleChat: () => void
   onTogglePeople: () => void
   onToggleInvite?: () => void
@@ -88,7 +91,7 @@ function ControlButton({
         hoverStyle={{ opacity: 0.92, scale: 1.02 }}
         pressStyle={{ opacity: 0.86, scale: 0.96 }}
         onPress={onPress}
-        style={Platform.OS === 'web' && styles.webBg ? { backgroundImage: styles.webBg } : undefined}
+        style={styles.webBg ? controlGradientStyle(styles.webBg, styles.bg) : undefined}
         icon={<Icon size={compact ? 18 : 20} color={styles.icon} />}
       />
       {!compact ? (
@@ -112,6 +115,7 @@ export function MeetingControls({
   screenSharing,
   handRaised,
   recording,
+  captionsActive,
   isHost,
   panel,
   onToggleAudio,
@@ -119,6 +123,7 @@ export function MeetingControls({
   onToggleScreen,
   onToggleHand,
   onToggleRecord,
+  onToggleCaptions,
   onToggleChat,
   onTogglePeople,
   onToggleInvite,
@@ -126,6 +131,7 @@ export function MeetingControls({
   onEnd,
   onMuteAll,
 }: MeetingControlsProps) {
+  const { ui: coworkUi, gradients: coworkGradients, shadows: coworkShadows } = useCoWorkTheme()
   const { isMobile, safeBottom } = useAppLayout()
   const compact = isMobile
 
@@ -147,7 +153,7 @@ export function MeetingControls({
         paddingHorizontal="$2"
         style={{
           ...coworkGlassStyle(coworkUi, true),
-          ...(Platform.OS === 'web' ? { boxShadow: coworkShadows.dock } : {}),
+          ...coworkBoxShadow(coworkShadows, 'dock'),
         }}
       >
         <ScrollView
@@ -204,6 +210,15 @@ export function MeetingControls({
                 icon={Icons.Circle}
                 variant={recording ? 'danger' : 'neutral'}
                 onPress={onToggleRecord}
+                compact={compact}
+              />
+            ) : null}
+            {caps.supportsLiveCaptions ? (
+              <ControlButton
+                label={captionsActive ? 'Hide CC' : 'Captions'}
+                icon={Icons.Captions}
+                variant={captionsActive ? 'brand' : 'neutral'}
+                onPress={onToggleCaptions}
                 compact={compact}
               />
             ) : null}
@@ -264,7 +279,7 @@ export function MeetingControls({
                 borderRadius={999}
                 backgroundColor={coworkUi.brand}
                 onPress={onEnd}
-                style={Platform.OS === 'web' ? { backgroundImage: coworkGradients.activeControl } : undefined}
+                style={controlGradientStyle(coworkGradients.activeControl, coworkUi.brand)}
               >
                 End room
               </Button>

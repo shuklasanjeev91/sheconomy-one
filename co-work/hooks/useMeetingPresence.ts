@@ -18,6 +18,7 @@ import {
   unsubscribeMeetingChannel,
 } from '~/co-work/lib/signaling'
 import type { Meeting, MeetingChatMessage, MeetingParticipant, SignalPayload } from '~/co-work/lib/types'
+import type { LiveCaptionLine } from '~/co-work/lib/live-captions'
 
 type UseMeetingPresenceOptions = {
   meeting: Meeting
@@ -53,6 +54,7 @@ export function useMeetingPresence({
   const [isConnecting, setIsConnecting] = useState(false)
   const [handRaised, setHandRaised] = useState(false)
   const [raisedHands, setRaisedHands] = useState<Record<string, boolean>>({})
+  const [liveCaptions, setLiveCaptions] = useState<LiveCaptionLine[]>([])
   const [realtimeDegraded, setRealtimeDegraded] = useState(false)
 
   const selfParticipant = participants.find((p) => p.user_id === userId)
@@ -92,6 +94,20 @@ export function useMeetingPresence({
     (payload: SignalPayload) => {
       if (payload.type === 'mute-all' && payload.from !== userId) {
         mediaHandlersRef.current.onMuteAll?.()
+        return
+      }
+      if (payload.type === 'caption' && payload.from !== userId && payload.isFinal) {
+        setLiveCaptions((current) => [
+          ...current.slice(-80),
+          {
+            id: `${payload.from}-${payload.timestamp}`,
+            userId: payload.from,
+            speaker: payload.speaker,
+            text: payload.text,
+            isFinal: true,
+            timestamp: payload.timestamp,
+          },
+        ])
         return
       }
       if (payload.type !== 'presence' || payload.from === userId) return
@@ -234,6 +250,20 @@ export function useMeetingPresence({
     sendSignal({ type: 'mute-all', from: userId })
   }, [sendSignal, userId])
 
+  const broadcastCaption = useCallback(
+    (text: string, speaker: string) => {
+      sendSignal({
+        type: 'caption',
+        from: userId,
+        speaker,
+        text,
+        isFinal: true,
+        timestamp: Date.now(),
+      })
+    },
+    [sendSignal, userId],
+  )
+
   const syncMediaState = useCallback(
     async (patch: { is_muted?: boolean; is_video_off?: boolean }) => {
       await updateParticipantMedia(meeting.id, userId, patch)
@@ -264,6 +294,7 @@ export function useMeetingPresence({
     waitingParticipants,
     handRaised,
     raisedHands,
+    liveCaptions,
     realtimeDegraded,
     setPanel,
     togglePanel,
@@ -274,6 +305,7 @@ export function useMeetingPresence({
     hostEnd,
     toggleHandRaise,
     muteAll,
+    broadcastCaption,
     syncMediaState,
     registerMediaHandlers,
     retryRealtime,

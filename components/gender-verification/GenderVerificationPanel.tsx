@@ -1,12 +1,12 @@
 import type { RefObject } from 'react'
+import { useEffect, useState } from 'react'
 import { Platform } from 'react-native'
 
 import { useAuthUi } from '~/components/auth/auth-theme'
-import { Button, Icons, Spinner, Text, XStack, YStack } from '~/components/ui'
+import { Icons, Spinner, Text, XStack, YStack } from '~/components/ui'
 import type { VerificationPhase } from '~/lib/gender-verification'
+import { buildAbsoluteUrl } from '~/lib/platform/url'
 import { useAppUi } from '~/lib/theme/useAppUi'
-
-import { BRAND_NAME } from '~/config/brand'
 
 type FaceCaptureOverlayProps = {
   containerRef: RefObject<HTMLDivElement | null>
@@ -27,20 +27,7 @@ export function FaceCaptureOverlay({
   const active = phase === 'camera' || phase === 'position' || phase === 'blink' || phase === 'analyze'
 
   if (Platform.OS !== 'web') {
-    return (
-      <YStack
-        borderRadius={24}
-        backgroundColor={ui.surfaceMuted}
-        padding="$6"
-        alignItems="center"
-        gap="$3"
-      >
-        <Icons.ScanFace size={48} color={ui.brand} />
-        <Text textAlign="center" color={ui.textMuted}>
-          Open {BRAND_NAME} in a web browser to complete face liveness verification.
-        </Text>
-      </YStack>
-    )
+    return <NativeVerificationWebView active={active} instruction={instruction} />
   }
 
   return (
@@ -112,6 +99,52 @@ export function FaceCaptureOverlay({
           </Text>
         ) : null}
       </YStack>
+    </YStack>
+  )
+}
+
+function NativeVerificationWebView({ active, instruction }: { active: boolean; instruction: string }) {
+  const ui = useAppUi()
+  const [WebViewComponent, setWebViewComponent] = useState<React.ComponentType<any> | null>(null)
+
+  useEffect(() => {
+    void import('react-native-webview').then((module) => setWebViewComponent(() => module.WebView))
+  }, [])
+
+  if (!WebViewComponent) {
+    return (
+      <YStack width="100%" maxWidth={420} aspectRatio={3 / 4} alignItems="center" justifyContent="center">
+        <Spinner size="large" color={ui.brand} />
+      </YStack>
+    )
+  }
+
+  const WebView = WebViewComponent
+
+  return (
+    <YStack gap="$3" width="100%" alignItems="center">
+      <YStack
+        width="100%"
+        maxWidth={420}
+        aspectRatio={3 / 4}
+        borderRadius={24}
+        overflow="hidden"
+        borderWidth={1}
+        borderColor={ui.borderSubtle}
+        backgroundColor="#101010"
+      >
+        <WebView
+          source={{ uri: buildAbsoluteUrl('/auth/verify-gender') }}
+          style={{ flex: 1, backgroundColor: '#101010' }}
+          mediaCapturePermissionGrantType="grant"
+          allowsInlineMediaPlayback
+          javaScriptEnabled
+          domStorageEnabled
+        />
+      </YStack>
+      <Text fontSize={14} color={ui.textMuted} textAlign="center" maxWidth={420}>
+        {active ? instruction : 'Complete face verification using your device camera.'}
+      </Text>
     </YStack>
   )
 }

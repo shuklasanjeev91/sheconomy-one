@@ -1,13 +1,24 @@
-import { Platform } from 'react-native'
+import {
+  getRuntimePlatform,
+  hasDisplayMedia,
+  hasMediaRecorder,
+  hasSpeechRecognition,
+  isNativeRuntime,
+  supportsLiveKitVideo,
+} from '~/lib/platform/capabilities'
 
 import type { MediaCapabilities } from '../types'
 
 export function getMediaCapabilities(): MediaCapabilities {
+  const platform = getRuntimePlatform()
+  const liveKit = supportsLiveKitVideo()
+
   return {
-    platform: 'web',
-    supportsVideo: typeof navigator !== 'undefined' && !!navigator.mediaDevices?.getUserMedia,
-    supportsScreenShare: typeof navigator !== 'undefined' && !!navigator.mediaDevices?.getDisplayMedia,
-    supportsRecording: typeof MediaRecorder !== 'undefined',
+    platform,
+    supportsVideo: liveKit,
+    supportsScreenShare: hasDisplayMedia() || isNativeRuntime(),
+    supportsRecording: hasMediaRecorder() || isNativeRuntime(),
+    supportsLiveCaptions: hasSpeechRecognition() || isNativeRuntime(),
   }
 }
 
@@ -43,7 +54,7 @@ export class WebMediaSession {
   }
 
   async startLocalMedia(video = true, audio = true): Promise<MediaStream | null> {
-    if (!navigator.mediaDevices?.getUserMedia) return null
+    if (typeof navigator === 'undefined' || !navigator.mediaDevices?.getUserMedia) return null
 
     this.localStream = await navigator.mediaDevices.getUserMedia({
       video: video ? { facingMode: 'user', width: { ideal: 1280 }, height: { ideal: 720 } } : false,
@@ -89,7 +100,7 @@ export class WebMediaSession {
   }
 
   async startScreenShare(): Promise<MediaStream | null> {
-    if (!navigator.mediaDevices?.getDisplayMedia) return null
+    if (typeof navigator === 'undefined' || !navigator.mediaDevices?.getDisplayMedia) return null
     this.screenStream = await navigator.mediaDevices.getDisplayMedia({ video: true, audio: false })
     this.screenStream.getVideoTracks()[0]?.addEventListener('ended', () => {
       void this.stopScreenShare()
@@ -210,8 +221,6 @@ export function createMediaSession(
   sendSignal: (payload: import('../types').SignalPayload) => void,
   callbacks: MediaSessionCallbacks,
 ): WebMediaSession | null {
-  if (Platform.OS !== 'web') return null
+  if (typeof navigator === 'undefined' || !navigator.mediaDevices?.getUserMedia) return null
   return new WebMediaSession(selfId, sendSignal, callbacks)
 }
-
-export const NATIVE_MEETING_NOTICE = null as string | null

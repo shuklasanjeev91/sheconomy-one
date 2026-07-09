@@ -29,7 +29,7 @@ export function useGenderVerification({ onVerified }: UseGenderVerificationOptio
   const [sessionId, setSessionId] = useState<string | null>(null)
   const [blinkCount, setBlinkCount] = useState(0)
   const [instruction, setInstruction] = useState('Prepare for face verification')
-  const [supported] = useState(() => Platform.OS === 'web' && typeof navigator !== 'undefined')
+  const [supported] = useState(() => Platform.OS === 'web' || Platform.OS === 'ios' || Platform.OS === 'android')
 
   const containerRef = useRef<HTMLDivElement | null>(null)
   const videoRef = useRef<HTMLVideoElement | null>(null)

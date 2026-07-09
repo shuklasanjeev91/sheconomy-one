@@ -142,10 +142,12 @@ export type SignalPayload =
   | { type: 'presence'; from: string; audio: boolean; video: boolean; screen: boolean; hand: boolean }
   | { type: 'mute-all'; from: string }
   | { type: 'kick'; from: string; to: string }
+  | { type: 'caption'; from: string; speaker: string; text: string; isFinal: boolean; timestamp: number }
 
 export type MediaCapabilities = {
   supportsVideo: boolean
   supportsScreenShare: boolean
   supportsRecording: boolean
-  platform: 'web' | 'native'
+  supportsLiveCaptions: boolean
+  platform: 'web' | 'ios' | 'android'
 }

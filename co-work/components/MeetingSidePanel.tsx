@@ -1,6 +1,7 @@
 import type { ReactNode } from 'react'
 import { Platform } from 'react-native'
 
+import { getShadowStyle } from '~/config/tokens'
 import { YStack } from '~/components/ui'
 import { useCoWorkTheme } from '~/co-work/lib/theme'
 
@@ -9,9 +10,13 @@ type MeetingSidePanelProps = {
   fullWidth?: boolean
 }
 
+function sidePanelShadow(webShadow: string) {
+  return Platform.OS === 'web' ? ({ boxShadow: webShadow } as const) : getShadowStyle('lg')
+}
+
 /** Chat / people panel — docked right on desktop, full-width sheet on mobile. */
 export function MeetingSidePanel({ children, fullWidth }: MeetingSidePanelProps) {
-  const { ui: coworkUi, gradients: coworkGradients, shadows: coworkShadows } = useCoWorkTheme()
+  const { ui: coworkUi } = useCoWorkTheme()
   if (fullWidth) {
     return (
       <YStack
@@ -25,7 +30,7 @@ export function MeetingSidePanel({ children, fullWidth }: MeetingSidePanelProps)
         borderTopWidth={1}
         borderTopColor={coworkUi.borderAccent}
         pointerEvents="auto"
-        {...(Platform.OS === 'web' ? { style: { boxShadow: '0 -12px 48px rgba(208, 16, 96, 0.12)' } } : {})}
+        style={sidePanelShadow('0 -12px 48px rgba(208, 16, 96, 0.12)')}
       >
         {children}
       </YStack>
@@ -42,7 +47,7 @@ export function MeetingSidePanel({ children, fullWidth }: MeetingSidePanelProps)
       borderLeftWidth={1}
       borderLeftColor={coworkUi.borderAccent}
       backgroundColor={coworkUi.surface}
-      style={Platform.OS === 'web' ? { boxShadow: '-8px 0 32px rgba(0,0,0,0.2)' } : undefined}
+      style={sidePanelShadow('-8px 0 32px rgba(0,0,0,0.2)')}
     >
       {children}
     </YStack>

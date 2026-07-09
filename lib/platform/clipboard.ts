@@ -9,9 +9,20 @@ export async function copyToClipboard(text: string): Promise<boolean> {
       return true
     }
 
+    if (Platform.OS !== 'web') {
+      const Clipboard = await import('expo-clipboard')
+      await Clipboard.setStringAsync(text)
+      return true
+    }
+
     await Share.share({ message: text })
     return true
   } catch {
-    return false
+    try {
+      await Share.share({ message: text })
+      return true
+    } catch {
+      return false
+    }
   }
 }

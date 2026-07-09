@@ -55,7 +55,7 @@ export function AppMobileHeader({ minimal = false }: AppMobileHeaderProps) {
       position="sticky"
       top={0}
       $gtMd={{ display: 'none' }}
-      style={Platform.OS === 'web' ? chromeSurfaceStyle(ui) : undefined}
+      style={chromeSurfaceStyle(ui)}
     >
       <XStack
         paddingHorizontal="$3"
