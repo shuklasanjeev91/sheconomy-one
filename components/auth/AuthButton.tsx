@@ -4,7 +4,7 @@ import { useState, type ReactNode } from 'react'
 import { AuthGuestMenuContent, AuthUserMenuContent } from '~/components/auth/AuthUserMenu'
 import {
   Avatar,
-  Image,
+  Icons,
   Popover,
   PopoverContent,
   Sheet,
@@ -17,7 +17,6 @@ import {
   useMedia,
 } from '~/components/ui'
 import { buildSignInUrl } from '~/lib/auth/redirect'
-import { getSheconomyLogoUrl } from '~/lib/supabase/brand'
 import { useProfile } from '~/hooks/useProfile'
 import { useAppUi } from '~/lib/theme/useAppUi'
 
@@ -36,7 +35,7 @@ type AuthButtonProps = {
 }
 
 /**
- * Cross-platform auth control — brand logo when signed out, avatar when signed in.
+ * Cross-platform auth control — user icon + label when signed out, avatar when signed in.
  * Desktop: popover user menu. Mobile/tablet: bottom sheet.
  */
 export function AuthButton({
@@ -57,7 +56,6 @@ export function AuthButton({
   const isDesktop = media.gtMd
   const signInHref = buildSignInUrl(pathname)
   const displayName = profile?.full_name || profile?.username || 'Account'
-  const logoUrl = getSheconomyLogoUrl('icon')
 
   const trigger =
     variant === 'tab' ? (
@@ -66,18 +64,16 @@ export function AuthButton({
         isFocused={isFocused}
         displayName={displayName}
         avatarUrl={profile?.avatar_url}
-        logoUrl={logoUrl}
         activeColor={activeColor ?? ui.brand}
         inactiveColor={inactiveColor ?? ui.icon}
         activePillBg={activePillBg}
-        tabLabel={tabLabel}
+        tabLabel={isAuthenticated ? tabLabel : 'Sign in'}
       />
     ) : (
       <HeaderAuthTrigger
         isAuthenticated={isAuthenticated}
         displayName={displayName}
         avatarUrl={profile?.avatar_url}
-        logoUrl={logoUrl}
         ui={ui}
       />
     )
@@ -158,13 +154,11 @@ function HeaderAuthTrigger({
   isAuthenticated,
   displayName,
   avatarUrl,
-  logoUrl,
   ui,
 }: {
   isAuthenticated: boolean
   displayName: string
   avatarUrl?: string | null
-  logoUrl: string
   ui: ReturnType<typeof useAppUi>
 }) {
   if (isAuthenticated) {
@@ -186,24 +180,22 @@ function HeaderAuthTrigger({
 
   return (
     <XStack
-      width={40}
       height={40}
+      paddingHorizontal="$3"
       borderRadius={999}
-      backgroundColor={ui.surfaceHover}
       borderWidth={1}
       borderColor={ui.borderSubtle}
+      backgroundColor={ui.surfaceHover}
       alignItems="center"
       justifyContent="center"
+      gap="$2"
       hoverStyle={{ backgroundColor: ui.chipHover }}
       aria-label={`Sign in to ${BRAND_NAME}`}
     >
-      <Image
-        src={logoUrl}
-        width={26}
-        height={26}
-        objectFit="contain"
-        accessibilityLabel={`${BRAND_NAME} sign in`}
-      />
+      <Icons.CircleUser size={20} color={ui.text} />
+      <Text fontSize={13} fontWeight="700" color={ui.text}>
+        Sign in
+      </Text>
     </XStack>
   )
 }
@@ -213,7 +205,6 @@ function TabAuthTrigger({
   isFocused,
   displayName,
   avatarUrl,
-  logoUrl,
   activeColor,
   inactiveColor,
   activePillBg,
@@ -223,7 +214,6 @@ function TabAuthTrigger({
   isFocused: boolean
   displayName: string
   avatarUrl?: string | null
-  logoUrl: string
   activeColor: string
   inactiveColor: string
   activePillBg: string
@@ -260,12 +250,10 @@ function TabAuthTrigger({
           justifyContent="center"
           backgroundColor={isFocused ? activePillBg : 'transparent'}
         >
-          <Image
-            src={logoUrl}
-            width={22}
-            height={22}
-            objectFit="contain"
-            accessibilityLabel={`${BRAND_NAME} account`}
+          <Icons.User
+            size={isFocused ? 22 : 21}
+            color={isFocused ? activeColor : inactiveColor}
+            strokeWidth={isFocused ? 2.35 : 1.9}
           />
         </XStack>
       )}
