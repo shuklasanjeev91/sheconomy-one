@@ -1,0 +1,1 @@
+export { ChatPlaceholderScreen as default } from '~/chat/screens/ChatPlaceholderScreen'

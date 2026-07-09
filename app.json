@@ -1,0 +1,25 @@
+{
+  "expo": {
+    "name": "sheconomy-one",
+    "slug": "sheconomy-one",
+    "platforms": [
+      "ios",
+      "android"
+    ],
+    "plugins": [
+      "one/expo-plugin"
+    ],
+    "icon": "./public/app-icon.png",
+    "splash": {
+      "image": "./public/splash.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#000000"
+    },
+    "ios": {
+      "bundleIdentifier": "com.sheconomy.one"
+    },
+    "android": {
+      "package": "com.sheconomy.one"
+    }
+  }
+}

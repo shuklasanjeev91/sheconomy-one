@@ -1,0 +1,1 @@
+export { CreateCompanyScreen as default } from '~/community/screens/CreateCompanyScreen'

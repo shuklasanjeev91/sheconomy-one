@@ -1,0 +1,31 @@
+import { useCallback } from 'react'
+
+import {
+  COMMERCE_PAGE_SIZE,
+  fetchListingFeedPage,
+  type ListingFeedKind,
+  type ListingSummary,
+} from '~/lib/supabase/commerce'
+
+import { usePaginatedFeed } from './usePaginatedFeed'
+
+type UseListingFeedOptions = {
+  kind: ListingFeedKind
+  shopId?: string
+  pageSize?: number
+  enabled?: boolean
+}
+
+export function useListingFeed({
+  kind,
+  shopId,
+  pageSize = COMMERCE_PAGE_SIZE,
+  enabled = true,
+}: UseListingFeedOptions) {
+  const fetchPage = useCallback(
+    (page: number) => fetchListingFeedPage(kind, page, { pageSize, shopId }),
+    [kind, pageSize, shopId],
+  )
+
+  return usePaginatedFeed<ListingSummary>({ fetchPage, enabled })
+}

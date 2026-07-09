@@ -1,0 +1,1 @@
+export { ProgramScreen as default } from '~/class/screens/ProgramScreen'

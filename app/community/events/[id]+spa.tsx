@@ -1,0 +1,1 @@
+export { EventDetailScreen as default } from '~/community/screens/EventDetailScreen'

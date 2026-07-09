@@ -1,0 +1,1 @@
+export { JobDetailScreen as default } from '~/community/screens/JobDetailScreen'

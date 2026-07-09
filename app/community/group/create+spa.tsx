@@ -1,0 +1,1 @@
+export { CreateGroupScreen as default } from '~/community/screens/CreateGroupScreen'

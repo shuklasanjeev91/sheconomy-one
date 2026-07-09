@@ -1,0 +1,244 @@
+import type { Href } from 'one'
+
+/** Routes shared across every section (auth, account, cart, alerts). */
+export const appRoutes = {
+  /** Single OTP entry — creates account on first verify (no separate sign-up). */
+  signIn: '/auth/sign-in' as Href,
+  signUp: '/auth/sign-in' as Href,
+  verifyGender: '/auth/verify-gender' as Href,
+  notifications: '/notifications' as Href,
+  profile: '/profile' as Href,
+  userProfile: (handle: string) => `/profile/${encodeURIComponent(handle)}` as Href,
+  settings: '/settings' as Href,
+  cart: '/cart' as Href,
+  checkout: '/checkout' as Href,
+} as const
+
+/** Reserved prefixes — everything else is the commerce storefront. */
+const NON_COMMERCE_PREFIXES = [
+  '/community',
+  '/chat',
+  '/class',
+  '/co-work',
+  '/auth',
+  '/ui-kit',
+  '/notifications',
+  '/profile',
+  '/settings',
+] as const
+
+export const commerceRoutes = {
+  home: '/' as Href,
+  myShops: '/my-shops' as Href,
+  shops: '/shops' as Href,
+  cart: appRoutes.cart,
+  checkout: appRoutes.checkout,
+  favorites: '/favorites' as Href,
+  search: (query?: string) =>
+    (query ? `/search?q=${encodeURIComponent(query)}` : '/search') as Href,
+  category: (slug: string) => `/category/${encodeURIComponent(slug)}` as Href,
+  browse: (kind: string) => `/browse/${kind}` as Href,
+  listing: (slug: string) => `/listing/${encodeURIComponent(slug)}` as Href,
+  shop: (slug: string) => `/shop/${encodeURIComponent(slug)}` as Href,
+} as const
+
+export const communityRoutes = {
+  home: '/community' as Href,
+  network: '/community/network' as Href,
+  people: '/community/people' as Href,
+  peopleTab: (tab: string) => `/community/people/${encodeURIComponent(tab)}` as Href,
+  notifications: appRoutes.notifications,
+  profile: appRoutes.profile,
+  userProfile: appRoutes.userProfile,
+  userFollowers: (handle: string) =>
+    `/profile/${encodeURIComponent(handle)}/followers` as Href,
+  userFollowing: (handle: string) =>
+    `/profile/${encodeURIComponent(handle)}/following` as Href,
+  userConnections: (handle: string) =>
+    `/profile/${encodeURIComponent(handle)}/connections` as Href,
+  settings: appRoutes.settings,
+  createPost: '/community/create' as Href,
+  jobs: '/community/jobs' as Href,
+  job: (id: string) => `/community/jobs/${encodeURIComponent(id)}` as Href,
+  hashtag: (tag: string) => `/community/hashtag/${encodeURIComponent(tag.replace(/^#/, ''))}` as Href,
+  stories: '/community/stories' as Href,
+  storyCreate: '/community/stories/create' as Href,
+  storyUser: (userId: string) => `/community/stories/${encodeURIComponent(userId)}` as Href,
+  companies: '/community/companies' as Href,
+  company: (slug: string) => `/community/company/${encodeURIComponent(slug)}` as Href,
+  companyCreate: '/community/company/create' as Href,
+  groups: '/community/groups' as Href,
+  group: (id: string) => `/community/group/${encodeURIComponent(id)}` as Href,
+  groupCreate: '/community/group/create' as Href,
+  events: '/community/events' as Href,
+  eventCreate: '/community/events/create' as Href,
+  event: (id: string) => `/community/events/${encodeURIComponent(id)}` as Href,
+} as const
+
+export const chatRoutes = {
+  home: '/chat' as Href,
+} as const
+
+export const classRoutes = {
+  home: '/class' as Href,
+  video: '/class' as Href,
+  audio: '/class/audio' as Href,
+  program: (slug: string) => `/class/${encodeURIComponent(slug)}` as Href,
+} as const
+
+export const coWorkRoutes = {
+  home: '/co-work' as Href,
+  meeting: (code: string) => `/co-work/meeting/${encodeURIComponent(code)}` as Href,
+  meetingLive: (code: string) => `/co-work/meeting/${encodeURIComponent(code)}/live` as Href,
+  schedule: '/co-work/schedule' as Href,
+  meetings: '/co-work/meetings' as Href,
+  join: '/co-work/join' as Href,
+} as const
+
+/** Shared auth + legacy aliases used across the app. */
+export const routes = {
+  root: '/' as Href,
+  signIn: appRoutes.signIn,
+  signUp: appRoutes.signUp,
+  verifyGender: appRoutes.verifyGender,
+  commerce: commerceRoutes,
+  community: communityRoutes,
+  chat: chatRoutes,
+  class: classRoutes,
+  coWork: coWorkRoutes,
+  app: appRoutes,
+  home: commerceRoutes.home,
+  myShops: commerceRoutes.myShops,
+  profile: appRoutes.profile,
+  userProfile: appRoutes.userProfile,
+  settings: appRoutes.settings,
+  notifications: appRoutes.notifications,
+  cart: appRoutes.cart,
+  checkout: appRoutes.checkout,
+  uiKit: '/ui-kit' as Href,
+  listing: commerceRoutes.listing,
+  shop: commerceRoutes.shop,
+} as const
+
+export function isCommercePath(pathname: string) {
+  if (pathname === '/') return true
+  return !NON_COMMERCE_PREFIXES.some(
+    (prefix) => pathname === prefix || pathname.startsWith(`${prefix}/`),
+  )
+}
+
+export function isCommerceShopsPath(pathname: string) {
+  return (
+    pathname === '/shops' ||
+    pathname.startsWith('/shop/') ||
+    pathname === '/my-shops'
+  )
+}
+
+export function isCommerceFavoritesPath(pathname: string) {
+  return pathname === '/favorites' || pathname.startsWith('/favorites/')
+}
+
+export function isCommunityPath(pathname: string) {
+  return pathname === '/community' || pathname.startsWith('/community/')
+}
+
+export function isCommunityFeedPath(pathname: string) {
+  return (
+    pathname === '/community' ||
+    pathname.startsWith('/community/network') ||
+    pathname === '/community/create' ||
+    pathname.startsWith('/community/create/') ||
+    pathname === '/community/jobs' ||
+    pathname.startsWith('/community/jobs/')
+  )
+}
+
+export function isChatPath(pathname: string) {
+  return pathname === '/chat' || pathname.startsWith('/chat/')
+}
+
+export function isClassPath(pathname: string) {
+  return pathname === '/class' || pathname.startsWith('/class/')
+}
+
+export function isClassAudioPath(pathname: string) {
+  return pathname === '/class/audio' || pathname.startsWith('/class/audio/')
+}
+
+export function isClassVideoHomePath(pathname: string) {
+  return pathname === '/class' || pathname === '/class/'
+}
+
+export function isClassProgramPath(pathname: string) {
+  if (!pathname.startsWith('/class/')) return false
+  if (isClassAudioPath(pathname)) return false
+  return true
+}
+
+export function isCoWorkPath(pathname: string) {
+  return pathname === '/co-work' || pathname.startsWith('/co-work/')
+}
+
+export function isCoWorkHomePath(pathname: string) {
+  return pathname === '/co-work' || pathname === '/co-work/'
+}
+
+export function isCoWorkSchedulePath(pathname: string) {
+  return pathname === '/co-work/schedule' || pathname.startsWith('/co-work/schedule/')
+}
+
+export function isCoWorkMeetingsPath(pathname: string) {
+  return pathname === '/co-work/meetings' || pathname.startsWith('/co-work/meetings/')
+}
+
+export function isCoWorkJoinPath(pathname: string) {
+  return pathname === '/co-work/join' || pathname.startsWith('/co-work/join/')
+}
+
+export function isCoWorkLivePath(pathname: string) {
+  return /\/co-work\/meeting\/[^/]+\/live/.test(pathname)
+}
+
+export function isCreatePostPath(pathname: string) {
+  return pathname === '/community/create' || pathname.startsWith('/community/create/')
+}
+
+export function isJobsPath(pathname: string) {
+  return pathname === '/community/jobs' || pathname.startsWith('/community/jobs/')
+}
+
+export function isNotificationsPath(pathname: string) {
+  return pathname === '/notifications' || pathname.startsWith('/notifications/')
+}
+
+export function isAccountPath(pathname: string) {
+  return (
+    pathname === appRoutes.profile ||
+    pathname.startsWith(`${appRoutes.profile}/`) ||
+    pathname === appRoutes.settings ||
+    pathname.startsWith(`${appRoutes.settings}/`) ||
+    pathname.startsWith('/auth/')
+  )
+}
+
+export function isHomePath(pathname: string) {
+  return pathname === '/' || pathname === '/community'
+}
+
+export function isMyShopsPath(pathname: string) {
+  return pathname === '/my-shops'
+}
+
+export function isProfilePath(pathname: string) {
+  return isAccountPath(pathname)
+}
+
+export function isCartPath(pathname: string) {
+  return (
+    pathname === appRoutes.cart ||
+    pathname.startsWith(`${appRoutes.cart}/`) ||
+    pathname === appRoutes.checkout ||
+    pathname.startsWith(`${appRoutes.checkout}/`)
+  )
+}

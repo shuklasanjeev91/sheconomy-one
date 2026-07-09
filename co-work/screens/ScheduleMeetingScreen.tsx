@@ -1,0 +1,332 @@
+import { Link, useRouter } from 'one'
+import { Platform, Linking } from 'react-native'
+import { useMemo, useState } from 'react'
+
+import { RequireAuth } from '~/components/auth/RequireAuth'
+import { AppPage } from '~/components/layout'
+import { Button, Field, Icons, Input, Spinner, Text, XStack, YStack, useAppToast } from '~/components/ui'
+import { CoWorkBrandChip } from '~/co-work/components/CoWorkUi'
+import { defaultScheduleDateTime, ScheduleDateTimeField } from '~/co-work/components/ScheduleDateTimeField'
+import { ScheduleSection, ScheduleToggleRow } from '~/co-work/components/ScheduleFormFields'
+import { MeetingInvitePicker } from '~/co-work/components/MeetingInvitePicker'
+import { createMeeting } from '~/co-work/lib/meetings'
+import { sendMeetingInvites, buildInviteMailtoLink, emailToInvitee } from '~/co-work/lib/invites'
+import { coworkGlassStyle, useCoWorkTheme } from '~/co-work/lib/theme'
+import type { MeetingInvitee, MeetingRepeat } from '~/co-work/lib/types'
+import { coWorkRoutes } from '~/lib/routes'
+import { useProfile } from '~/hooks/useProfile'
+
+import { BRAND_NAME } from '~/config/brand'
+
+const REPEAT_OPTIONS: { label: string; value: MeetingRepeat }[] = [
+  { label: 'Does not repeat', value: null },
+  { label: 'Daily', value: 'daily' },
+  { label: 'Weekly', value: 'weekly' },
+  { label: 'Monthly', value: 'monthly' },
+]
+
+export function ScheduleMeetingScreen() {
+  const { ui: coworkUi, gradients: coworkGradients, shadows: coworkShadows } = useCoWorkTheme()
+  const router = useRouter()
+  const toast = useAppToast()
+  const { user, profile, isAuthenticated } = useProfile()
+
+  const [title, setTitle] = useState('')
+  const [description, setDescription] = useState('')
+  const [scheduledAt, setScheduledAt] = useState(defaultScheduleDateTime)
+  const [maxParticipants, setMaxParticipants] = useState('100')
+  const [passcode, setPasscode] = useState('')
+  const [waitingRoom, setWaitingRoom] = useState(true)
+  const [muteOnJoin, setMuteOnJoin] = useState(false)
+  const [videoOffOnJoin, setVideoOffOnJoin] = useState(false)
+  const [authenticatedOnly, setAuthenticatedOnly] = useState(true)
+  const [allowScreenShare, setAllowScreenShare] = useState(true)
+  const [allowChat, setAllowChat] = useState(true)
+  const [allowRecording, setAllowRecording] = useState(true)
+  const [allowHandRaise, setAllowHandRaise] = useState(true)
+  const [defaultVideo, setDefaultVideo] = useState(true)
+  const [defaultAudio, setDefaultAudio] = useState(true)
+  const [allowJoinBeforeHost, setAllowJoinBeforeHost] = useState(false)
+  const [autoRecord, setAutoRecord] = useState(false)
+  const [isRecurring, setIsRecurring] = useState(false)
+  const [repeat, setRepeat] = useState<MeetingRepeat>(null)
+  const [invitees, setInvitees] = useState<MeetingInvitee[]>([])
+  const [saving, setSaving] = useState(false)
+
+  const timeZone = useMemo(() => Intl.DateTimeFormat().resolvedOptions().timeZone, [])
+
+  if (!isAuthenticated || !user) {
+    return <RequireAuth redirectTo={coWorkRoutes.schedule} />
+  }
+
+  async function handleSchedule() {
+    if (!title.trim()) {
+      toast.show('Add a meeting title', { tone: 'error' })
+      return
+    }
+
+    const capacity = Number.parseInt(maxParticipants, 10)
+    if (!Number.isFinite(capacity) || capacity < 2 || capacity > 500) {
+      toast.show('Capacity must be between 2 and 500', { tone: 'error' })
+      return
+    }
+
+    if (!scheduledAt) {
+      toast.show('Choose a date and time', { tone: 'error' })
+      return
+    }
+
+    setSaving(true)
+    try {
+      const meeting = await createMeeting(user.id, {
+        title: title.trim(),
+        description: description.trim() || undefined,
+        scheduledAt,
+        timeZone,
+        maxParticipants: capacity,
+        isRecurring,
+        repeat: isRecurring ? repeat : null,
+        securitySettings: {
+          passcode: passcode.trim() || undefined,
+          requirePasscode: !!passcode.trim(),
+          waitingRoom,
+          muteOnJoin,
+          videoOffOnJoin,
+          authenticatedUsersOnly: authenticatedOnly,
+          allowScreenShare,
+          allowChat,
+          allowRecording,
+          allowHandRaise,
+        },
+        meetingOptions: {
+          layout: 'grid',
+          defaultVideo,
+          defaultAudio,
+          allowJoinBeforeHost,
+          autoRecord,
+          enableMeetingChat: allowChat,
+        },
+        invitees,
+      })
+
+      if (invitees.length > 0) {
+        try {
+          const result = await sendMeetingInvites({
+            meetingId: meeting.id,
+            invitees,
+          })
+
+          if (result.mailtoLinks?.length) {
+            const hostName = profile?.full_name || profile?.username || 'You'
+            for (const link of result.mailtoLinks) {
+              const email = link.replace('mailto:', '')
+              const mailto = buildInviteMailtoLink(meeting, emailToInvitee(email), hostName)
+              if (Platform.OS === 'web') {
+                window.open(mailto, '_blank')
+              } else {
+                await Linking.openURL(mailto)
+              }
+            }
+          }
+
+          toast.show('Invites sent', {
+            tone: 'success',
+            message: `${result.notifications ?? 0} in-app · ${result.emailsSent ?? 0} email`,
+          })
+        } catch {
+          toast.show('Meeting scheduled — open the lobby to resend invites', { tone: 'info' })
+        }
+      } else {
+        toast.show('Meeting scheduled', { tone: 'success' })
+      }
+      router.push(coWorkRoutes.meeting(meeting.meeting_code))
+    } catch (scheduleError) {
+      toast.show('Could not schedule meeting', {
+        tone: 'error',
+        message: scheduleError instanceof Error ? scheduleError.message : undefined,
+      })
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  return (
+    <AppPage
+      scroll
+      form
+      backgroundColor={coworkUi.pageBg}
+      paddingVertical="$6"
+      style={Platform.OS === 'web' ? { background: coworkGradients.page } : undefined}
+    >
+      <YStack gap="$5" width="100%" maxWidth={720} alignSelf="center">
+        <YStack gap="$3">
+          <CoWorkBrandChip label="SCHEDULE" />
+          <Text fontSize={30} fontWeight="800" color={coworkUi.text} letterSpacing={-0.8}>
+            Plan a Co-Work session
+          </Text>
+          <Text color={coworkUi.textSecondary} lineHeight={22}>
+            Set the title, time, security options, and who can join.
+          </Text>
+        </YStack>
+
+        <YStack
+          gap="$5"
+          padding="$5"
+          borderRadius={coworkUi.radius.card}
+          borderWidth={1}
+          borderColor={coworkUi.glassBorder}
+          style={{
+            ...coworkGlassStyle(coworkUi, true),
+            ...(Platform.OS === 'web' ? { boxShadow: coworkShadows.card } : {}),
+          }}
+        >
+          <ScheduleSection title="Details">
+            <Field label="Title">
+              <Input
+                value={title}
+                onChangeText={setTitle}
+                placeholder={`${profile?.full_name || 'Team'} sync`}
+                backgroundColor="rgba(255,255,255,0.05)"
+                borderColor={coworkUi.borderSoft}
+                color={coworkUi.text}
+                borderRadius={14}
+              />
+            </Field>
+            <Field label="Description">
+              <Input
+                value={description}
+                onChangeText={setDescription}
+                placeholder="Agenda, goals, or notes for attendees"
+                backgroundColor="rgba(255,255,255,0.05)"
+                borderColor={coworkUi.borderSoft}
+                color={coworkUi.text}
+                borderRadius={14}
+                multiline
+              />
+            </Field>
+            <ScheduleDateTimeField value={scheduledAt} onChange={setScheduledAt} />
+            <Field label={`Timezone · ${timeZone}`}>
+              <Text fontSize={12} color={coworkUi.textMuted}>
+                Invitees will see the meeting time in this timezone.
+              </Text>
+            </Field>
+            <Field label="Max participants">
+              <Input
+                value={maxParticipants}
+                onChangeText={setMaxParticipants}
+                keyboardType="number-pad"
+                backgroundColor="rgba(255,255,255,0.05)"
+                borderColor={coworkUi.borderSoft}
+                color={coworkUi.text}
+                borderRadius={14}
+              />
+            </Field>
+          </ScheduleSection>
+
+          <ScheduleSection title="Invite people">
+            <Text fontSize={13} color={coworkUi.textSecondary} marginBottom="$2">
+              Add {BRAND_NAME} members or guests by email — like Zoom or Google Meet.
+            </Text>
+            <MeetingInvitePicker hostId={user.id} value={invitees} onChange={setInvitees} />
+          </ScheduleSection>
+
+          <ScheduleSection title="Recurrence">
+            <ScheduleToggleRow
+              label="Recurring meeting"
+              description="Repeat this session on a schedule"
+              checked={isRecurring}
+              onCheckedChange={setIsRecurring}
+            />
+            {isRecurring ? (
+              <XStack gap="$2" flexWrap="wrap">
+                {REPEAT_OPTIONS.filter((opt) => opt.value !== null).map((opt) => (
+                  <Button
+                    key={opt.label}
+                    size="$2"
+                    borderRadius={999}
+                    tone={repeat === opt.value ? 'primary' : 'outline'}
+                    borderColor={repeat === opt.value ? coworkUi.brand : coworkUi.borderSoft}
+                    onPress={() => setRepeat(opt.value)}
+                  >
+                    {opt.label}
+                  </Button>
+                ))}
+              </XStack>
+            ) : null}
+          </ScheduleSection>
+
+          <ScheduleSection title="Security">
+            <Field label="Passcode (optional)">
+              <Input
+                value={passcode}
+                onChangeText={setPasscode}
+                secureTextEntry
+                placeholder="Guests enter this before joining"
+                backgroundColor="rgba(255,255,255,0.05)"
+                borderColor={coworkUi.borderSoft}
+                color={coworkUi.text}
+                borderRadius={14}
+              />
+            </Field>
+            <ScheduleToggleRow
+              label="Waiting room"
+              description="Admit attendees before they enter the room"
+              checked={waitingRoom}
+              onCheckedChange={setWaitingRoom}
+            />
+            <ScheduleToggleRow
+              label={`${BRAND_NAME} members only`}
+              description={`Require a signed-in ${BRAND_NAME} account`}
+              checked={authenticatedOnly}
+              onCheckedChange={setAuthenticatedOnly}
+            />
+            <ScheduleToggleRow
+              label="Mute on join"
+              checked={muteOnJoin}
+              onCheckedChange={setMuteOnJoin}
+            />
+            <ScheduleToggleRow
+              label="Camera off on join"
+              checked={videoOffOnJoin}
+              onCheckedChange={setVideoOffOnJoin}
+            />
+          </ScheduleSection>
+
+          <ScheduleSection title="Room features">
+            <ScheduleToggleRow label="Screen sharing" checked={allowScreenShare} onCheckedChange={setAllowScreenShare} />
+            <ScheduleToggleRow label="In-meeting chat" checked={allowChat} onCheckedChange={setAllowChat} />
+            <ScheduleToggleRow label="Recording" checked={allowRecording} onCheckedChange={setAllowRecording} />
+            <ScheduleToggleRow label="Raise hand" checked={allowHandRaise} onCheckedChange={setAllowHandRaise} />
+            <ScheduleToggleRow
+              label="Join before host"
+              checked={allowJoinBeforeHost}
+              onCheckedChange={setAllowJoinBeforeHost}
+            />
+            <ScheduleToggleRow label="Auto-record" checked={autoRecord} onCheckedChange={setAutoRecord} />
+          </ScheduleSection>
+
+          <ScheduleSection title="Defaults">
+            <ScheduleToggleRow label="Camera on by default" checked={defaultVideo} onCheckedChange={setDefaultVideo} />
+            <ScheduleToggleRow label="Microphone on by default" checked={defaultAudio} onCheckedChange={setDefaultAudio} />
+          </ScheduleSection>
+
+          <Button
+            tone="primary"
+            size="$4"
+            borderRadius={999}
+            disabled={saving}
+            icon={saving ? <Spinner size="small" color="white" /> : <Icons.Calendar size={18} color="white" />}
+            onPress={() => void handleSchedule()}
+            style={Platform.OS === 'web' ? { backgroundImage: coworkGradients.activeControl } : undefined}
+          >
+            Schedule meeting
+          </Button>
+        </YStack>
+
+        <Link href={coWorkRoutes.home} asChild>
+          <Button tone="ghost">Back to Co-Work</Button>
+        </Link>
+      </YStack>
+    </AppPage>
+  )
+}

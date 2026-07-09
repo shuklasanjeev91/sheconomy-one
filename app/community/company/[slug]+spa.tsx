@@ -1,0 +1,1 @@
+export { CompanyPageScreen as default } from '~/community/screens/CompanyPageScreen'

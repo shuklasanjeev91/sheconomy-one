@@ -1,0 +1,1 @@
+export { ScheduleMeetingScreen as default } from '~/co-work/screens/ScheduleMeetingScreen'

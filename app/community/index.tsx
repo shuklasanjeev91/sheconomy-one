@@ -1,0 +1,1 @@
+export { CommunityFeedScreen as default } from '~/community/screens/CommunityFeedScreen'

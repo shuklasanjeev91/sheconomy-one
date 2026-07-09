@@ -1,0 +1,1 @@
+export { StoryComposerScreen as default } from '~/community/screens/StoryComposerScreen'

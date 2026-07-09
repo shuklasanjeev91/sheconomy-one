@@ -1,0 +1,1 @@
+export { CoWorkScreen as default } from '~/co-work/screens/CoWorkScreen'
