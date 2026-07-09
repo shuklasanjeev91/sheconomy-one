@@ -1,4 +1,11 @@
 {
+  "installCommand": "corepack enable && corepack prepare yarn@4.17.0 --activate && yarn install --immutable",
+  "build": {
+    "env": {
+      "ONE_SERVER_URL": "https://sheconomy-one-sanjeev-shuklas-projects.vercel.app",
+      "EXPO_PUBLIC_WEB_APP_URL": "https://sheconomy-one-sanjeev-shuklas-projects.vercel.app"
+    }
+  },
   "cleanUrls": true,
   "headers": [
     {
