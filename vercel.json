@@ -3,6 +3,7 @@
   "buildCommand": "node .yarn/releases/yarn-4.17.0.cjs build",
   "build": {
     "env": {
+      "NODE_OPTIONS": "--max-old-space-size=6144",
       "ONE_SERVER_URL": "https://sheconomy-one-sanjeev-shuklas-projects.vercel.app",
       "EXPO_PUBLIC_WEB_APP_URL": "https://sheconomy-one-sanjeev-shuklas-projects.vercel.app",
       "EXPO_PUBLIC_SUPABASE_URL": "https://zsaqrrzwygzwrlzgymxk.supabase.co",

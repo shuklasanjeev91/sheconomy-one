@@ -1,0 +1,12 @@
+node_modules
+dist
+.expo
+ios
+android
+.git
+.tamagui
+.yarn/cache
+.yarn/unplugged
+.yarn/install-state.gz
+*.log
+.DS_Store
