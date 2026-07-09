@@ -35,3 +35,4 @@ tsconfig.tsbuildinfo
 # generated code
 /ios
 /android
+.env*
