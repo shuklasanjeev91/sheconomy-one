@@ -2,14 +2,14 @@ import { Link, usePathname } from 'one'
 import { useMemo } from 'react'
 import { Platform } from 'react-native'
 
-import { Avatar, Text, XStack, YStack } from '~/components/ui'
+import { AuthButton } from '~/components/auth/AuthButton'
+import { Text, XStack, YStack } from '~/components/ui'
 import { getShadowStyle, radius } from '~/config/tokens'
 import { tabBarPositionStyle } from '~/lib/layout/styles'
 import { NavCountBadge } from '~/components/navigation/NavCountBadge'
 import { useCart } from '~/commerce/hooks/useCart'
 import { useAccess } from '~/hooks/useAccess'
 import { useAppLayout } from '~/hooks/useAppLayout'
-import { useProfile } from '~/hooks/useProfile'
 import { useCoWorkTheme } from '~/co-work/lib/theme'
 
 import {
@@ -24,7 +24,6 @@ import { useAppUi } from '~/lib/theme/useAppUi'
 /** Modern floating bottom tab dock — Home + section tabs + You. */
 export function AppMobileBottomTabs() {
   const pathname = usePathname()
-  const { isAuthenticated, profile } = useProfile()
   const { tier } = useAccess()
   const { safeBottom } = useAppLayout()
   const { itemCount } = useCart()
@@ -95,6 +94,21 @@ export function AppMobileBottomTabs() {
           const isCartTab = tab.label === 'Cart'
           const isFocused = tab.match ? tab.match(pathname) : pathname === tab.href
 
+          if (isAuthTab) {
+            return (
+              <AuthButton
+                key={`${tab.label}-${String(tab.href)}`}
+                variant="tab"
+                isFocused={isFocused}
+                activeColor={activeColor}
+                inactiveColor={inactiveColor}
+                activePillBg={activePillBg}
+                surfaceColor={surfaceColor}
+                tabLabel={tab.label}
+              />
+            )
+          }
+
           return (
             <Link key={`${tab.label}-${String(tab.href)}`} href={tab.href} asChild>
               <TabItem
@@ -103,9 +117,6 @@ export function AppMobileBottomTabs() {
                 activeColor={activeColor}
                 inactiveColor={inactiveColor}
                 activePillBg={activePillBg}
-                showAvatar={isAuthTab && isAuthenticated}
-                avatarName={profile?.full_name || profile?.username || 'You'}
-                avatarSrc={profile?.avatar_url}
                 badge={isCartTab ? itemCount : undefined}
                 surfaceColor={surfaceColor}
               />
@@ -123,9 +134,6 @@ function TabItem({
   activeColor,
   inactiveColor,
   activePillBg,
-  showAvatar,
-  avatarName,
-  avatarSrc,
   badge,
   surfaceColor,
   ...props
@@ -135,9 +143,6 @@ function TabItem({
   activeColor: string
   inactiveColor: string
   activePillBg: string
-  showAvatar?: boolean
-  avatarName?: string
-  avatarSrc?: string | null
   badge?: number
   surfaceColor: string
   [key: string]: unknown
@@ -159,46 +164,26 @@ function TabItem({
       minWidth={0}
       position="relative"
     >
-      {showAvatar ? (
-        <YStack
-          width={40}
-          height={32}
-          alignItems="center"
-          justifyContent="center"
-          borderRadius={999}
-          backgroundColor={isFocused ? activePillBg : 'transparent'}
-        >
-          <YStack
-            borderWidth={isFocused ? 2 : 1.5}
-            borderColor={isFocused ? activeColor : 'rgba(143,115,128,0.35)'}
-            borderRadius={999}
-            padding={1}
-          >
-            <Avatar name={avatarName} src={avatarSrc ?? undefined} size="$3" />
-          </YStack>
-        </YStack>
-      ) : (
-        <XStack
-          width={44}
-          height={32}
-          borderRadius={999}
-          alignItems="center"
-          justifyContent="center"
-          backgroundColor={isFocused ? activePillBg : 'transparent'}
-          position="relative"
-          overflow="visible"
-        >
-          <Icon
-            size={isFocused ? 22 : 21}
-            color={isFocused ? activeColor : inactiveColor}
-            fill={isFocused && tab.label !== 'Cart' && tab.label !== 'Saved' ? activeColor : 'none'}
-            strokeWidth={isFocused ? 2.35 : 1.9}
-          />
-          {badge != null && badge > 0 ? (
-            <NavCountBadge count={badge} size="sm" borderColor={surfaceColor} />
-          ) : null}
-        </XStack>
-      )}
+      <XStack
+        width={44}
+        height={32}
+        borderRadius={999}
+        alignItems="center"
+        justifyContent="center"
+        backgroundColor={isFocused ? activePillBg : 'transparent'}
+        position="relative"
+        overflow="visible"
+      >
+        <Icon
+          size={isFocused ? 22 : 21}
+          color={isFocused ? activeColor : inactiveColor}
+          fill={isFocused && tab.label !== 'Cart' && tab.label !== 'Saved' ? activeColor : 'none'}
+          strokeWidth={isFocused ? 2.35 : 1.9}
+        />
+        {badge != null && badge > 0 ? (
+          <NavCountBadge count={badge} size="sm" borderColor={surfaceColor} />
+        ) : null}
+      </XStack>
 
       <Text
         fontSize={compactLabel ? 9.5 : 10.5}

@@ -1,16 +1,14 @@
-import { Link, usePathname, useRouter } from 'one'
+import { Link, useRouter } from 'one'
 import { useState } from 'react'
-import { Platform } from 'react-native'
 
-import { Avatar, Icons, Input, Text, XStack, YStack } from '~/components/ui'
+import { AuthButton } from '~/components/auth/AuthButton'
+import { Icons, Input, Text, XStack, YStack } from '~/components/ui'
 import { NavCountBadge } from '~/components/navigation/NavCountBadge'
 import { NavLogo } from '~/components/navigation/NavLogo'
 import { useCart } from '~/commerce/hooks/useCart'
 import { useUnreadNotifications } from '~/community/hooks/useUnreadNotifications'
-import { buildSignInUrl } from '~/lib/auth/redirect'
 import { commerceRoutes, routes } from '~/lib/routes'
 import { useAccess } from '~/hooks/useAccess'
-import { useAuth } from '~/hooks/useAuth'
 import { useProfile } from '~/hooks/useProfile'
 import { useVendorShops } from '~/hooks/useVendorShops'
 import { chromeSurfaceStyle, searchFieldStyle } from '~/lib/theme/surfaces'
@@ -25,10 +23,8 @@ import { BRAND_NAME } from '~/config/brand'
 export function AppDesktopHeader() {
   const ui = useAppUi()
   const colors = getAppColors(ui)
-  const pathname = usePathname()
-  const { isAuthenticated, profile } = useProfile()
-  const { canManageShops, isMale, canAccessFeature } = useAccess()
-  const { signOut } = useAuth()
+  const { isAuthenticated } = useProfile()
+  const { canManageShops, canAccessFeature } = useAccess()
   const { shops, isLoading: shopsLoading } = useVendorShops()
   const { itemCount } = useCart()
   const { count: unreadNotifications } = useUnreadNotifications()
@@ -37,8 +33,6 @@ export function AppDesktopHeader() {
 
   const hasShops = shops.length > 0
   const showCreateShop = canManageShops && isAuthenticated && !shopsLoading && !hasShops
-
-  const accountHref = isMale ? routes.verifyGender : routes.profile
 
   function submitSearch() {
     const trimmed = searchQuery.trim()
@@ -144,54 +138,7 @@ export function AppDesktopHeader() {
               badge={unreadNotifications}
             />
           ) : null}
-          {isAuthenticated ? (
-            <>
-              <Link href={accountHref} asChild>
-                <YStack cursor="pointer" pressStyle={{ opacity: 0.85 }} marginLeft={2}>
-                  <Avatar
-                    name={profile?.full_name || profile?.username || 'Account'}
-                    src={profile?.avatar_url ?? undefined}
-                    size="$3"
-                  />
-                </YStack>
-              </Link>
-              <XStack
-                width={40}
-                height={40}
-                borderRadius={999}
-                backgroundColor={colors.chip}
-                alignItems="center"
-                justifyContent="center"
-                cursor="pointer"
-                hoverStyle={{ backgroundColor: colors.chipHover }}
-                aria-label="Sign out"
-                onPress={() => {
-                  void signOut()
-                }}
-              >
-                <Icons.LogOut size={20} color={colors.text} />
-              </XStack>
-            </>
-          ) : (
-            <Link href={buildSignInUrl(pathname)} asChild>
-              <XStack
-                height={40}
-                paddingHorizontal="$3"
-                borderRadius={999}
-                borderWidth={1}
-                borderColor={colors.border}
-                backgroundColor={colors.chip}
-                alignItems="center"
-                justifyContent="center"
-                cursor="pointer"
-                hoverStyle={{ backgroundColor: colors.chipHover }}
-              >
-                <Text fontSize={13} fontWeight="700" color={colors.text}>
-                  Sign in
-                </Text>
-              </XStack>
-            </Link>
-          )}
+          <AuthButton variant="header" />
         </XStack>
       </XStack>
     </YStack>
