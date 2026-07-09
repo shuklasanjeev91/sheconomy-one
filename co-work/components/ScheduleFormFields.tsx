@@ -56,6 +56,7 @@ export function ScheduleSection({
   title: string
   children: ReactNode
 }) {
+  const { ui: coworkUi } = useCoWorkTheme()
   return (
     <YStack gap="$3">
       <Text fontSize={12} fontWeight="800" color={coworkUi.textMuted} letterSpacing={1.1} textTransform="uppercase">

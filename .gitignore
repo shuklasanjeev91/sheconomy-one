@@ -9,6 +9,7 @@
 
 tmp
 dist
+.vercel
 node_modules
 
 *.tsbuildinfo

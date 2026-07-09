@@ -6,6 +6,7 @@
   "scripts": {
     "postinstall": "one patch || true",
     "android": "one run:android",
+    "build": "one build",
     "build:web": "one build",
     "clean": "one clean",
     "dev": "one dev",

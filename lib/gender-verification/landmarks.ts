@@ -1,13 +1,15 @@
-import * as faceLandmarksDetection from '@tensorflow-models/face-landmarks-detection'
-import * as tf from '@tensorflow/tfjs'
+type FaceLandmarksDetector = import('@tensorflow-models/face-landmarks-detection').FaceLandmarksDetector
 
-import '@tensorflow/tfjs-backend-webgl'
-
-let detectorPromise: Promise<faceLandmarksDetection.FaceLandmarksDetector> | null = null
+let detectorPromise: Promise<FaceLandmarksDetector> | null = null
 
 export async function getFaceLandmarksDetector() {
   if (!detectorPromise) {
     detectorPromise = (async () => {
+      const [faceLandmarksDetection, tf] = await Promise.all([
+        import('@tensorflow-models/face-landmarks-detection'),
+        import('@tensorflow/tfjs'),
+      ])
+      await import('@tensorflow/tfjs-backend-webgl')
       await tf.setBackend('webgl')
       await tf.ready()
       return faceLandmarksDetection.createDetector(

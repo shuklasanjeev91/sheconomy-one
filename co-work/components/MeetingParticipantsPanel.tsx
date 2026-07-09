@@ -25,6 +25,7 @@ export function MeetingParticipantsPanel({
   raisedHands = {},
   fullWidth,
 }: MeetingParticipantsPanelProps) {
+  const { ui: coworkUi } = useCoWorkTheme()
   const admitted = participants.filter((p) => p.status === 'admitted')
   const waiting = participants.filter((p) => p.status === 'waiting')
 
@@ -91,6 +92,7 @@ function ParticipantRow({
   action?: ReactNode
   handRaised?: boolean
 }) {
+  const { ui: coworkUi } = useCoWorkTheme()
   const name = participant.profile?.full_name || participant.profile?.username || 'Member'
 
   return (

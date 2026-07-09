@@ -19,6 +19,7 @@ export default defineConfig(({ mode }) => {
 
         web: {
           defaultRenderMode: 'ssg',
+          deploy: 'vercel',
           redirects: [
             { source: '/auth/sign-up', destination: '/auth/sign-in', permanent: true },
             { source: '/auth/sign-up/', destination: '/auth/sign-in', permanent: true },

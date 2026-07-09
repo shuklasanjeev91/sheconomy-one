@@ -111,6 +111,7 @@ function MeetingRoomOverlay({
   title: string
   liveKit?: LiveKitMediaControls
 }) {
+  const { ui: coworkUi, gradients: coworkGradients } = useCoWorkTheme()
   const router = useRouter()
   const toast = useAppToast()
   const { isMobile, safeTop } = useAppLayout()

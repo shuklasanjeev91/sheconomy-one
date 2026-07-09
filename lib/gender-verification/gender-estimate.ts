@@ -1,29 +1,29 @@
-import * as faceapi from '@vladmandic/face-api'
-
 import { GENDER_VERIFICATION } from './constants'
 import type { GenderEstimate } from './constants'
 
-let modelsPromise: Promise<void> | null = null
+let faceApiModulePromise: Promise<typeof import('@vladmandic/face-api')> | null = null
 
-async function loadGenderModels() {
-  if (!modelsPromise) {
-    modelsPromise = (async () => {
+async function getFaceApi() {
+  if (!faceApiModulePromise) {
+    faceApiModulePromise = (async () => {
+      const faceapi = await import('@vladmandic/face-api')
       const base = GENDER_VERIFICATION.faceApiModelBaseUrl
       await Promise.all([
         faceapi.nets.ssdMobilenetv1.loadFromUri(base),
         faceapi.nets.faceLandmark68Net.loadFromUri(base),
         faceapi.nets.ageGenderNet.loadFromUri(base),
       ])
+      return faceapi
     })()
   }
 
-  return modelsPromise
+  return faceApiModulePromise
 }
 
 export async function estimateGenderFromVideo(
   video: HTMLVideoElement,
 ): Promise<GenderEstimate | null> {
-  await loadGenderModels()
+  const faceapi = await getFaceApi()
 
   const detection = await faceapi
     .detectSingleFace(video)
@@ -44,7 +44,7 @@ export async function estimateGenderFromVideo(
 export async function estimateGenderFromCanvas(
   canvas: HTMLCanvasElement,
 ): Promise<GenderEstimate | null> {
-  await loadGenderModels()
+  const faceapi = await getFaceApi()
 
   const detection = await faceapi
     .detectSingleFace(canvas)

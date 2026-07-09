@@ -15,7 +15,7 @@ import { ScreenCenter, ScreenFill } from '~/components/layout'
 import { MeetingVideoStage } from '~/co-work/components/MeetingVideoStage'
 import { fetchLiveKitCredentials } from '~/co-work/lib/livekit'
 import { getLiveKitRoomOptions } from '~/co-work/lib/livekit-room-options'
-import { coworkGlassStyle, useCoWorkTheme } from '~/co-work/lib/theme'
+import { coworkGlassStyle, useCoWorkTheme, type CoWorkShadows, type CoWorkUiTokens } from '~/co-work/lib/theme'
 import { fetchLiveKitConfig, type LiveKitConfig } from '~/lib/livekit/config'
 import { meetingViewportStyle } from '~/lib/platform/viewport'
 
@@ -40,7 +40,8 @@ type LiveKitMeetingRoomProps = {
   overlay?: (liveKit: LiveKitMediaControls | null) => React.ReactNode
 }
 
-const SHECONOMY_LIVEKIT_CSS = `
+function getSheconomyLivekitCss(ui: CoWorkUiTokens, shadows: CoWorkShadows) {
+  return `
   .sheconomy-livekit-room {
     position: absolute;
     inset: 0;
@@ -88,10 +89,10 @@ const SHECONOMY_LIVEKIT_CSS = `
     width: min(28vw, 220px);
     aspect-ratio: 16 / 9;
     z-index: 15;
-    border-radius: ${coworkUi.radius.tile}px;
+    border-radius: ${ui.radius.tile}px;
     overflow: hidden;
-    border: 2px solid ${coworkUi.brand};
-    box-shadow: ${coworkShadows.tile};
+    border: 2px solid ${ui.brand};
+    box-shadow: ${shadows.tile};
     pointer-events: none;
   }
   .sheconomy-video-pip .sheconomy-participant-tile {
@@ -111,11 +112,11 @@ const SHECONOMY_LIVEKIT_CSS = `
     height: 100%;
     min-height: 0;
     min-width: 0;
-    border-radius: ${coworkUi.radius.tile}px;
-    border: 1px solid ${coworkUi.glassBorder};
-    background: ${coworkUi.tileBg};
+    border-radius: ${ui.radius.tile}px;
+    border: 1px solid ${ui.glassBorder};
+    background: ${ui.tileBg};
     overflow: hidden;
-    box-shadow: ${coworkShadows.tile};
+    box-shadow: ${shadows.tile};
     transition: border-color 0.2s ease, box-shadow 0.2s ease;
   }
   .sheconomy-participant-tile video,
@@ -126,13 +127,13 @@ const SHECONOMY_LIVEKIT_CSS = `
     object-position: center center;
   }
   .sheconomy-video-gallery .lk-participant-placeholder {
-    background: ${coworkUi.tileBg};
+    background: ${ui.tileBg};
     width: 100%;
     height: 100%;
   }
   .sheconomy-participant-tile.lk-participant-tile[data-lk-speaking='true'] {
-    border-color: ${coworkUi.brandLight};
-    box-shadow: 0 0 0 2px ${coworkUi.brandGlow}, ${coworkShadows.tile};
+    border-color: ${ui.brandLight};
+    box-shadow: 0 0 0 2px ${ui.brandGlow}, ${shadows.tile};
   }
   .sheconomy-participant-tile .lk-participant-metadata {
     background: linear-gradient(180deg, transparent 0%, rgba(12, 8, 10, 0.88) 100%);
@@ -140,7 +141,7 @@ const SHECONOMY_LIVEKIT_CSS = `
     backdrop-filter: blur(8px);
   }
   .sheconomy-participant-tile .lk-participant-metadata-item {
-    color: ${coworkUi.text};
+    color: ${ui.text};
     font-size: 12px;
     font-weight: 600;
   }
@@ -150,7 +151,7 @@ const SHECONOMY_LIVEKIT_CSS = `
   }
   .sheconomy-video-gallery .lk-pagination-control,
   .sheconomy-video-gallery .lk-pagination-indicator {
-    color: ${coworkUi.textSecondary};
+    color: ${ui.textSecondary};
   }
   .sheconomy-livekit-room .lk-control-bar,
   .sheconomy-livekit-room .lk-chat-toggle,
@@ -169,6 +170,7 @@ const SHECONOMY_LIVEKIT_CSS = `
     pointer-events: none;
   }
 `
+}
 
 export function LiveKitMeetingRoom({
   meetingId,
@@ -311,7 +313,7 @@ export function LiveKitMeetingRoom({
       >
         <LiveKitMeetingContent overlay={overlay} />
       </LiveKitRoom>
-      <style>{SHECONOMY_LIVEKIT_CSS}</style>
+      <style>{getSheconomyLivekitCss(coworkUi, coworkShadows)}</style>
     </ScreenFill>
   )
 }
