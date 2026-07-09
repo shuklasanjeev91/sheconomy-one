@@ -5,6 +5,7 @@ import { one } from 'one/vite'
 import { tamaguiPlugin } from '@tamagui/vite-plugin'
 
 import { APP_SCHEME, DEFAULT_APP_ORIGIN } from './config/app-origin.ts'
+import { PUBLIC_SUPABASE_ANON_KEY, PUBLIC_SUPABASE_URL } from './config/supabase-public.ts'
 
 /** Vite loadEnv only reads .env files; merge CI/Vercel process.env for EXPO_PUBLIC_* keys. */
 function loadProjectEnv(mode: string) {
@@ -151,10 +152,10 @@ export default defineConfig(({ mode }) => {
 
     define: {
       'import.meta.env.EXPO_PUBLIC_SUPABASE_URL': JSON.stringify(
-        env.EXPO_PUBLIC_SUPABASE_URL ?? '',
+        env.EXPO_PUBLIC_SUPABASE_URL?.trim() || PUBLIC_SUPABASE_URL,
       ),
       'import.meta.env.EXPO_PUBLIC_SUPABASE_ANON_KEY': JSON.stringify(
-        env.EXPO_PUBLIC_SUPABASE_ANON_KEY ?? '',
+        env.EXPO_PUBLIC_SUPABASE_ANON_KEY?.trim() || PUBLIC_SUPABASE_ANON_KEY,
       ),
       'import.meta.env.EXPO_PUBLIC_WEB_APP_URL': JSON.stringify(
         env.EXPO_PUBLIC_WEB_APP_URL ?? env.ONE_SERVER_URL ?? DEFAULT_APP_ORIGIN,

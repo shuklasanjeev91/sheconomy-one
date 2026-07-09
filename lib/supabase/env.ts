@@ -1,20 +1,29 @@
-function readEnv(key: 'EXPO_PUBLIC_SUPABASE_URL' | 'EXPO_PUBLIC_SUPABASE_ANON_KEY') {
-  const fromImportMeta = import.meta.env[key]
-  if (fromImportMeta) return fromImportMeta
+import { PUBLIC_SUPABASE_ANON_KEY, PUBLIC_SUPABASE_URL } from '~/config/supabase-public'
 
-  if (typeof process !== 'undefined' && process.env[key]) {
-    return process.env[key]!
+type SupabaseEnvKey = 'EXPO_PUBLIC_SUPABASE_URL' | 'EXPO_PUBLIC_SUPABASE_ANON_KEY'
+
+function readEnv(key: SupabaseEnvKey): string {
+  const candidates = [
+    import.meta.env[key],
+    typeof process !== 'undefined' ? process.env[key] : undefined,
+  ]
+
+  for (const value of candidates) {
+    if (typeof value === 'string' && value.trim().length > 0) {
+      return value.trim()
+    }
   }
 
-  return ''
+  if (key === 'EXPO_PUBLIC_SUPABASE_URL') return PUBLIC_SUPABASE_URL
+  return PUBLIC_SUPABASE_ANON_KEY
 }
 
 const supabaseUrl = readEnv('EXPO_PUBLIC_SUPABASE_URL')
 const supabaseAnonKey = readEnv('EXPO_PUBLIC_SUPABASE_ANON_KEY')
 
 export const supabaseConfig = {
-  url: supabaseUrl ?? '',
-  anonKey: supabaseAnonKey ?? '',
+  url: supabaseUrl,
+  anonKey: supabaseAnonKey,
   projectId: 'zsaqrrzwygzwrlzgymxk',
   projectName: 'sheconomy_db',
 } as const

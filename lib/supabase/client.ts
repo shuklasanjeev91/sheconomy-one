@@ -5,9 +5,7 @@ import { createClient } from '@supabase/supabase-js'
 import { Platform } from 'react-native'
 
 import type { Database } from './database.types'
-import { assertSupabaseConfig, supabaseConfig } from './env'
-
-assertSupabaseConfig()
+import { supabaseConfig } from './env'
 
 export const supabase = createClient<Database>(
   supabaseConfig.url,
