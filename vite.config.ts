@@ -6,8 +6,27 @@ import { tamaguiPlugin } from '@tamagui/vite-plugin'
 
 import { APP_SCHEME, DEFAULT_APP_ORIGIN } from './config/app-origin.ts'
 
+/** Vite loadEnv only reads .env files; merge CI/Vercel process.env for EXPO_PUBLIC_* keys. */
+function loadProjectEnv(mode: string) {
+  const fromFiles = loadEnv(mode, process.cwd(), '')
+  const keys = [
+    'EXPO_PUBLIC_SUPABASE_URL',
+    'EXPO_PUBLIC_SUPABASE_ANON_KEY',
+    'EXPO_PUBLIC_WEB_APP_URL',
+    'ONE_SERVER_URL',
+  ] as const
+
+  const env = { ...fromFiles }
+  for (const key of keys) {
+    if (!env[key] && process.env[key]) {
+      env[key] = process.env[key]!
+    }
+  }
+  return env
+}
+
 export default defineConfig(({ mode }) => {
-  const env = loadEnv(mode, process.cwd(), '')
+  const env = loadProjectEnv(mode)
   const appOrigin = (env.EXPO_PUBLIC_WEB_APP_URL || env.ONE_SERVER_URL || DEFAULT_APP_ORIGIN).replace(
     /\/$/,
     '',
