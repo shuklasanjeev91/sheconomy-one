@@ -1,5 +1,6 @@
 {
-  "installCommand": "corepack enable && corepack prepare yarn@4.17.0 --activate && yarn install --immutable",
+  "installCommand": "node .yarn/releases/yarn-4.17.0.cjs install --immutable",
+  "buildCommand": "node .yarn/releases/yarn-4.17.0.cjs build",
   "build": {
     "env": {
       "ONE_SERVER_URL": "https://sheconomy-one-sanjeev-shuklas-projects.vercel.app",
