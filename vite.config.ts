@@ -4,8 +4,14 @@ import { defineConfig, loadEnv } from 'vite'
 import { one } from 'one/vite'
 import { tamaguiPlugin } from '@tamagui/vite-plugin'
 
+import { APP_SCHEME, DEFAULT_APP_ORIGIN } from './config/app-origin.ts'
+
 export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, process.cwd(), '')
+  const appOrigin = (env.EXPO_PUBLIC_WEB_APP_URL || env.ONE_SERVER_URL || DEFAULT_APP_ORIGIN).replace(
+    /\/$/,
+    '',
+  )
 
   return {
     server: {
@@ -37,6 +43,13 @@ export default defineConfig(({ mode }) => {
       one({
         setupFile: {
           native: './lib/polyfills.ts',
+        },
+
+        router: {
+          linking: {
+            scheme: APP_SCHEME,
+            prefixes: [`${APP_SCHEME}://`, appOrigin],
+          },
         },
 
         web: {
@@ -125,7 +138,10 @@ export default defineConfig(({ mode }) => {
         env.EXPO_PUBLIC_SUPABASE_ANON_KEY ?? '',
       ),
       'import.meta.env.EXPO_PUBLIC_WEB_APP_URL': JSON.stringify(
-        env.EXPO_PUBLIC_WEB_APP_URL ?? env.ONE_SERVER_URL ?? '',
+        env.EXPO_PUBLIC_WEB_APP_URL ?? env.ONE_SERVER_URL ?? DEFAULT_APP_ORIGIN,
+      ),
+      'import.meta.env.ONE_SERVER_URL': JSON.stringify(
+        env.ONE_SERVER_URL ?? env.EXPO_PUBLIC_WEB_APP_URL ?? DEFAULT_APP_ORIGIN,
       ),
     },
 

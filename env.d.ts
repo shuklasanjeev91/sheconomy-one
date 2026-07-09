@@ -3,6 +3,8 @@
 interface ImportMetaEnv {
   readonly EXPO_PUBLIC_SUPABASE_URL: string
   readonly EXPO_PUBLIC_SUPABASE_ANON_KEY: string
+  readonly EXPO_PUBLIC_WEB_APP_URL: string
+  readonly ONE_SERVER_URL: string
 }
 
 interface ImportMeta {

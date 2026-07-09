@@ -140,6 +140,9 @@ function NativeVerificationWebView({ active, instruction }: { active: boolean; i
           allowsInlineMediaPlayback
           javaScriptEnabled
           domStorageEnabled
+          sharedCookiesEnabled
+          thirdPartyCookiesEnabled
+          setSupportMultipleWindows={false}
         />
       </YStack>
       <Text fontSize={14} color={ui.textMuted} textAlign="center" maxWidth={420}>

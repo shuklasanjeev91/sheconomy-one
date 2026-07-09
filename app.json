@@ -2,10 +2,8 @@
   "expo": {
     "name": "sheconomy-one",
     "slug": "sheconomy-one",
-    "platforms": [
-      "ios",
-      "android"
-    ],
+    "scheme": "sheconomy",
+    "platforms": ["ios", "android"],
     "plugins": [
       "one/expo-plugin",
       "@livekit/react-native-expo-plugin",
@@ -18,10 +16,27 @@
       "backgroundColor": "#000000"
     },
     "ios": {
-      "bundleIdentifier": "com.sheconomy.one"
+      "bundleIdentifier": "com.sheconomy.one",
+      "associatedDomains": [
+        "applinks:sheconomy-one-sanjeev-shuklas-projects.vercel.app"
+      ]
     },
     "android": {
-      "package": "com.sheconomy.one"
+      "package": "com.sheconomy.one",
+      "intentFilters": [
+        {
+          "action": "VIEW",
+          "autoVerify": true,
+          "data": [
+            {
+              "scheme": "https",
+              "host": "sheconomy-one-sanjeev-shuklas-projects.vercel.app",
+              "pathPrefix": "/"
+            }
+          ],
+          "category": ["BROWSABLE", "DEFAULT"]
+        }
+      ]
     }
   }
 }

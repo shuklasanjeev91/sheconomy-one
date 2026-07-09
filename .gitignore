@@ -35,4 +35,5 @@ tsconfig.tsbuildinfo
 # generated code
 /ios
 /android
+package-lock.json
 .env*
