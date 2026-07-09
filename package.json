@@ -8,7 +8,7 @@
     "android": "one run:android",
     "build": "one build",
     "build:web": "one build",
-    "deploy:vercel": "yarn build && vercel deploy --prebuilt --prod --yes",
+    "deploy:vercel": "yarn build && npx vercel deploy --prebuilt --prod --yes",
     "clean": "one clean",
     "dev": "one dev",
     "dev:clean": "one dev --clean",
