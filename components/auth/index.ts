@@ -12,6 +12,11 @@ export {
   AuthUserMenuContent,
   AuthGuestMenuContent,
 } from './AuthAccountMenu'
+export {
+  getAccountMenuSections,
+  getAccountQuickActions,
+  getGuestAccountMenuSections,
+} from './accountMenu'
 export { AuthBackButton } from './AuthBackButton'
 export { CountryCodePicker, DEFAULT_COUNTRY } from './CountryCodePicker'
 export { AppAccessGate } from './AppAccessGate'

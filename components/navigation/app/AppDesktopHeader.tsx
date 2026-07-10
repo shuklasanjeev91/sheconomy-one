@@ -20,7 +20,7 @@ import { useAppUi } from '~/lib/theme/useAppUi'
 
 import { BRAND_NAME } from '~/config/brand'
 
-/** Facebook web desktop header — logo + search | icon-only center nav | utilities + avatar. */
+/** Desktop header — logo + search | icon-only center nav | utilities + avatar. */
 export function AppDesktopHeader() {
   const ui = useAppUi()
   const { gutter } = useAppLayout()

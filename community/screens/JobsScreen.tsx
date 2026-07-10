@@ -44,6 +44,19 @@ export function JobsScreen() {
         <CommunityPageHeader
           title="Jobs"
           subtitle="Find roles from women-led companies and founders in the network."
+          actions={
+            <Link href={communityRoutes.jobCreate} asChild>
+              <Button
+                size="$3"
+                backgroundColor={communityUi.brand}
+                color="white"
+                borderRadius={999}
+                icon={<Icons.Plus size={16} color="white" />}
+              >
+                Post a job
+              </Button>
+            </Link>
+          }
         />
         <XStack gap={8} alignItems="center" padding={12} borderRadius={radius.chip} borderWidth={1} borderColor={communityUi.borderLight} backgroundColor={communityUi.inputBg}>
           <Icons.Search size={18} color={communityUi.textMuted} />

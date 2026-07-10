@@ -1,3 +1,5 @@
+import { validatePostalCode } from '~/lib/geo'
+
 export type Validator = (value: string) => string | null
 
 export function compose(...validators: Validator[]): Validator {
@@ -82,11 +84,15 @@ export function timeHm(message = 'Use format HH:MM (24-hour).'): Validator {
   return pattern(/^([01]\d|2[0-3]):[0-5]\d$/, message)
 }
 
-export function postalCodeIN(message = 'Enter a valid 6-digit PIN code.'): Validator {
+export function postalCodeForCountry(countryCode = 'IN'): Validator {
   return (value: string) => {
     if (!value.trim()) return null
-    return /^[1-9]\d{5}$/.test(value.trim()) ? null : message
+    return validatePostalCode(countryCode, value)
   }
+}
+
+export function postalCodeIN(): Validator {
+  return postalCodeForCountry('IN')
 }
 
 export function numeric(message = 'Enter a valid number.'): Validator {

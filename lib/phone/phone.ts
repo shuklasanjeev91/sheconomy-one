@@ -1,11 +1,11 @@
 import {
   DEFAULT_COUNTRY,
-  PHONE_COUNTRIES,
+  getAllPhoneCountries,
   countryFlag,
   type Country,
 } from '~/lib/phone/countries'
 
-const SORTED_BY_DIAL = [...PHONE_COUNTRIES].sort((a, b) => b.dialCode.length - a.dialCode.length)
+const SORTED_BY_DIAL = [...getAllPhoneCountries()].sort((a, b) => b.dialCode.length - a.dialCode.length)
 
 export function nationalDigits(value: string) {
   return value.replace(/\D/g, '')

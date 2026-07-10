@@ -14,7 +14,7 @@ type ListingGridProps = {
   personalize?: boolean
 }
 
-/** Etsy-style responsive listing grid — tight gaps, fluid columns. */
+/** Responsive listing grid — tight gaps, fluid columns. */
 export function ListingGrid({ listings, columns = 5, compact, personalize = true }: ListingGridProps) {
   const marketplace = useOptionalMarketplacePersonalization()
 

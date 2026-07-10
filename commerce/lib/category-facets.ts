@@ -1,8 +1,9 @@
 import { isStorefrontCategoryVisible } from '~/commerce/lib/category-visibility'
+import { ACTIVE_LISTING_FILTER } from '~/commerce/lib/listing-visibility'
 import { getCategorySlug } from '~/commerce/lib/seo-urls'
 import { supabase } from '~/lib/supabase/client'
 
-const ACTIVE = { is_active: true, listing_status: 'active' as const }
+const ACTIVE = ACTIVE_LISTING_FILTER
 const FACET_LISTING_BATCH = 500
 const FACET_MAX_LISTINGS = 5000
 const ID_CHUNK = 200
@@ -411,8 +412,7 @@ export function getAvailableSortOptions(facets: CategoryFilterFacets) {
 export function hasCategoryFilterOptions(facets: CategoryFilterFacets): boolean {
   return (
     facets.totalListings > 0 &&
-    (getAvailableSortOptions(facets).length > 0 ||
-      facets.subcategories.length > 0 ||
+    (facets.subcategories.length > 0 ||
       facets.listingTypes.length > 1 ||
       facets.priceRange.max > facets.priceRange.min ||
       facets.onSaleCount > 0 ||

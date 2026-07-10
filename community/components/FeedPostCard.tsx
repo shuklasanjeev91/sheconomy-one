@@ -34,9 +34,11 @@ function formatPostTime(value: string | null) {
 
 type FeedPostCardProps = {
   post: CommunityPost
+  /** When false, timestamps and content won't link to the post detail page. */
+  linkToDetail?: boolean
 }
 
-export function FeedPostCard({ post }: FeedPostCardProps) {
+export function FeedPostCard({ post, linkToDetail = true }: FeedPostCardProps) {
   const communityUi = useCommunityUi()
   const router = useRouter()
 
@@ -134,9 +136,22 @@ export function FeedPostCard({ post }: FeedPostCardProps) {
               </Text>
             ) : null}
             <XStack gap={4} alignItems="center">
-              <Text fontSize={12} color={communityUi.textSubtle}>
-                {formatPostTime(post.created_at)}
-              </Text>
+              {linkToDetail ? (
+                <Link href={communityRoutes.post(post.id)}>
+                  <Text
+                    fontSize={12}
+                    color={communityUi.textSubtle}
+                    cursor="pointer"
+                    hoverStyle={{ color: communityUi.brand, textDecorationLine: 'underline' }}
+                  >
+                    {formatPostTime(post.created_at)}
+                  </Text>
+                </Link>
+              ) : (
+                <Text fontSize={12} color={communityUi.textSubtle}>
+                  {formatPostTime(post.created_at)}
+                </Text>
+              )}
               <Text fontSize={12} color={communityUi.textSubtle}>
                 ·
               </Text>
@@ -155,7 +170,13 @@ export function FeedPostCard({ post }: FeedPostCardProps) {
         </XStack>
 
         <YStack paddingHorizontal={16} paddingBottom={12} gap={10}>
-          <PostContentText content={post.content} />
+          {linkToDetail ? (
+            <Link href={communityRoutes.post(post.id)}>
+              <PostContentText content={post.content} />
+            </Link>
+          ) : (
+            <PostContentText content={post.content} />
+          )}
           {post.event_rsvp_enabled && post.event_title ? (
             <PostEventCard post={post} onRequireAuth={requireAuth} />
           ) : null}

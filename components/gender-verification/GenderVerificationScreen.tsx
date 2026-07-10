@@ -43,8 +43,6 @@ export function GenderVerificationScreen() {
     verification.phase !== 'error' &&
     verification.phase !== 'success'
 
-  const nativeWebViewMode = Platform.OS !== 'web'
-
   return (
     <ScreenFill
       backgroundColor={ui.background}
@@ -75,16 +73,25 @@ export function GenderVerificationScreen() {
           gap="$5"
           style={getShadowStyle('sm')}
         >
-          {!nativeWebViewMode ? <VerificationSteps phase={verification.phase} /> : null}
+          <VerificationSteps phase={verification.phase} />
           <FaceCaptureOverlay
             containerRef={verification.containerRef}
-            phase={nativeWebViewMode ? 'camera' : verification.phase}
+            phase={verification.phase}
             instruction={verification.instruction}
             blinkCount={verification.blinkCount}
             requiredBlinks={verification.requiredBlinks}
+            cameraRef={'cameraRef' in verification ? verification.cameraRef : undefined}
+            analyzerRef={'analyzerRef' in verification ? verification.analyzerRef : undefined}
+            cameraPermission={
+              'cameraPermission' in verification ? verification.cameraPermission : undefined
+            }
+            onCameraReady={'onCameraReady' in verification ? verification.onCameraReady : undefined}
+            onAnalyzerReady={
+              'onAnalyzerReady' in verification ? verification.onAnalyzerReady : undefined
+            }
           />
 
-          {verification.error && !nativeWebViewMode ? (
+          {verification.error ? (
             <YStack
               padding="$3"
               borderRadius={radius.chip}
@@ -113,7 +120,7 @@ export function GenderVerificationScreen() {
                 You&apos;re verified. Redirecting to Community…
               </Text>
             </YStack>
-          ) : nativeWebViewMode ? null : (
+          ) : (
             <YStack gap="$3">
               <Button
                 tone="primary"

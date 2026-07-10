@@ -37,6 +37,9 @@ export default defineConfig(({ mode }) => {
     server: {
       port: 8081,
       strictPort: false,
+      ws: {
+        path: '/__vxrnhmr',
+      },
       watch: {
         ignored: ['**/.vercel/**', '**/dist/**'],
       },
@@ -133,6 +136,22 @@ export default defineConfig(({ mode }) => {
         // Rolldown dev bundle runs whatwg-fetch init before Request/Response exist;
         // defer Body.call to end of fetch.js (see patch below).
         patches: {
+          vxrn: {
+            'dist/config/getViteServerConfig.mjs': (contents) => {
+              if (!contents || contents.includes('sheconomy-vite-ws')) return
+              return contents.replace(
+                /hmr:\s*\{\s*path:\s*"\/__vxrnhmr"\s*\},/,
+                'ws: { path: "/__vxrnhmr" }, // sheconomy-vite-ws',
+              )
+            },
+            'dist/config/getViteServerConfig.native.js': (contents) => {
+              if (!contents || contents.includes('sheconomy-vite-ws')) return
+              return contents.replace(
+                /hmr:\s*\{\s*path:\s*"\/__vxrnhmr"\s*\},/,
+                'ws: { path: "/__vxrnhmr" }, // sheconomy-vite-ws',
+              )
+            },
+          },
           '@expo/cli': {
             'build/src/start/server/metro/withMetroMultiPlatform.js': (contents) => {
               if (!contents) return

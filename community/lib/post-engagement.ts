@@ -177,8 +177,4 @@ export async function repostPost(
   return { id: data?.id ?? null, error: error?.message ?? null }
 }
 
-import { buildAbsoluteUrl } from '~/lib/platform/url'
-
-export function getPostShareUrl(postId: string) {
-  return buildAbsoluteUrl(`/community/post/${postId}`)
-}
+export { getPostShareUrl } from '~/lib/share/urls'

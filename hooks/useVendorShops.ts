@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 
+import { normalizeVendorShopAddress } from '~/commerce/lib/shop-address'
+import type { ShopAddress } from '~/commerce/lib/shop-location'
 import { supabase } from '~/lib/supabase'
 import type { Tables } from '~/lib/supabase'
 import { useSupabase } from '~/providers/SupabaseProvider'
@@ -20,7 +22,24 @@ export type VendorShop = Pick<
   | 'verified'
   | 'is_active'
   | 'created_at'
->
+> & {
+  address?: ShopAddress | null
+}
+
+const VENDOR_SHOP_SELECT =
+  'id, shop_name, shop_description, logo_url, shop_currency, shop_email, shop_phone_number, website_url, slug, average_rating, total_reviews, verified, is_active, created_at, shop_addresses(city, state, country, postal_code)'
+
+type VendorShopRow = Omit<VendorShop, 'address'> & {
+  shop_addresses?: unknown
+}
+
+function mapVendorShop(row: VendorShopRow): VendorShop {
+  const { shop_addresses, ...shop } = row
+  return {
+    ...shop,
+    address: normalizeVendorShopAddress(shop_addresses),
+  }
+}
 
 export function useVendorShops() {
   const { user, isLoading: authLoading } = useSupabase()
@@ -39,9 +58,7 @@ export function useVendorShops() {
 
     const { data, error: shopsError } = await supabase
       .from('shops')
-      .select(
-        'id, shop_name, shop_description, logo_url, shop_currency, shop_email, shop_phone_number, website_url, slug, average_rating, total_reviews, verified, is_active, created_at',
-      )
+      .select(VENDOR_SHOP_SELECT)
       .eq('user_id', user.id)
       .order('created_at', { ascending: false })
 
@@ -49,7 +66,7 @@ export function useVendorShops() {
       setError(shopsError.message)
       setShops([])
     } else {
-      setShops(data ?? [])
+      setShops((data ?? []).map((row) => mapVendorShop(row as VendorShopRow)))
     }
 
     setIsLoading(false)
@@ -77,9 +94,7 @@ export function useVendorShops() {
         })
         .eq('id', shopId)
         .eq('user_id', user.id)
-        .select(
-          'id, shop_name, shop_description, logo_url, shop_currency, shop_email, shop_phone_number, website_url, slug, average_rating, total_reviews, verified, is_active, created_at',
-        )
+        .select(VENDOR_SHOP_SELECT)
         .maybeSingle()
 
       if (updateError) {
@@ -87,7 +102,9 @@ export function useVendorShops() {
       }
 
       if (data) {
-        setShops((current) => current.map((shop) => (shop.id === shopId ? data : shop)))
+        const mapped = mapVendorShop(data as VendorShopRow)
+        setShops((current) => current.map((shop) => (shop.id === shopId ? mapped : shop)))
+        return { data: mapped, error: null }
       }
 
       return { data, error: null }

@@ -243,6 +243,7 @@ export function ShopScreen() {
           country={shopCountry}
           websiteUrl={shop.website_url}
           ownerUserId={shop.owner?.id}
+          shopSlug={slug ?? shop.slug}
         />
 
         <PageSection paddingTop="$6" gap="$6">

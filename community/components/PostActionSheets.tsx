@@ -1,5 +1,3 @@
-import { Platform, Share } from 'react-native'
-
 import { CommunityAdaptiveSheet } from '~/community/components/CommunityAdaptiveSheet'
 import { PostComments } from '~/community/components/PostComments'
 import { PostContentText } from '~/community/components/PostContentText'
@@ -9,6 +7,8 @@ import { BRAND_BLUE, REACTION_TYPES } from '~/community/lib/constants'
 import { useCommunityUi } from '~/community/lib/community-theme'
 import { getPostShareUrl } from '~/community/lib/post-engagement'
 import type { CommunityPost } from '~/community/lib/community'
+import { ShareActionRow } from '~/components/share/ShareActionRow'
+import { ShareSheet } from '~/components/share/ShareSheet'
 import {
   Avatar,
   Button,
@@ -21,7 +21,7 @@ import {
   useAppToast,
 } from '~/components/ui'
 import { chatRoutes, routes } from '~/lib/routes'
-import { copyToClipboard } from '~/lib/platform/clipboard'
+import { copyShareLink } from '~/lib/share'
 import { useAppUi } from '~/lib/theme/useAppUi'
 
 import { useRouter } from 'one'
@@ -52,39 +52,13 @@ export function PostActionSheets({ post, engagement }: PostActionSheetsProps) {
   }
 
   async function copyLink() {
-    await copyToClipboard(shareUrl)
-    toast.show('Link copied', { tone: 'success', message: 'Post link copied to clipboard.' })
-    engagement.closeSheet()
-  }
-
-  async function nativeShare() {
-    try {
-      await Share.share({
-        title: `${authorName} on ${BRAND_NAME}`,
-        message: `${post.content.slice(0, 120)}\n${shareUrl}`,
-        url: shareUrl,
-      })
+    const copied = await copyShareLink(shareUrl)
+    if (copied) {
+      toast.show('Link copied', { tone: 'success', message: 'Post link copied to clipboard.' })
       engagement.closeSheet()
       return
-    } catch {
-      // user cancelled or unavailable
     }
-
-    if (Platform.OS === 'web' && typeof navigator !== 'undefined' && navigator.share) {
-      try {
-        await navigator.share({
-          title: `${authorName} on ${BRAND_NAME}`,
-          text: post.content.slice(0, 120),
-          url: shareUrl,
-        })
-        engagement.closeSheet()
-        return
-      } catch {
-        // user cancelled
-      }
-    }
-
-    await copyLink()
+    toast.show('Could not copy link', { tone: 'danger' })
   }
 
   return (
@@ -270,24 +244,19 @@ export function PostActionSheets({ post, engagement }: PostActionSheetsProps) {
         </YStack>
       </CommunityAdaptiveSheet>
 
-      <CommunityAdaptiveSheet
+      <ShareSheet
         open={engagement.activeSheet === 'share'}
         onOpenChange={(open) => !open && engagement.closeSheet()}
+        payload={{
+          url: shareUrl,
+          title: `${authorName} on ${BRAND_NAME}`,
+          text: post.content.slice(0, 120),
+        }}
         title="Send post"
-        maxWidth={480}
-      >
-        <YStack gap="$2">
-          <SheetAction
-            icon={Icons.Link}
-            label="Copy link to post"
-            onPress={copyLink}
-          />
-          <SheetAction
-            icon={Icons.Share2}
-            label="Share via…"
-            onPress={nativeShare}
-          />
-          <SheetAction
+        copyLabel="Copy link to post"
+        copyToastMessage="Post link copied to clipboard."
+        extraActions={
+          <ShareActionRow
             icon={Icons.Send}
             label="Send in a message"
             onPress={() => {
@@ -295,8 +264,8 @@ export function PostActionSheets({ post, engagement }: PostActionSheetsProps) {
               router.push(chatRoutes.home)
             }}
           />
-        </YStack>
-      </CommunityAdaptiveSheet>
+        }
+      />
 
       <CommunityAdaptiveSheet
         open={engagement.activeSheet === 'options'}

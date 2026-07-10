@@ -24,9 +24,9 @@ import {
   isCommerceHomePath,
   isCommercePath,
   isCommerceShopsPath,
+  isCommunityPath,
   isMyShopsPath,
   isCommunityFeedPath,
-  isCreatePostPath,
   isJobsPath,
   isNotificationsPath,
   isProfilePath,
@@ -34,6 +34,12 @@ import {
 } from '~/lib/routes'
 
 import { type AppUiTokens, appUiLight } from '~/lib/theme/app-ui'
+
+import {
+  formatBottomTabLabel,
+  limitMiddleTabsForWidth,
+  type BottomTabWidthTier,
+} from './mobile-tab-bar-width'
 
 export function getAppColors(ui: AppUiTokens = appUiLight) {
   return {
@@ -93,7 +99,7 @@ export const APP_CENTER_NAV: AppCenterNavItem[] = [
     label: 'Community',
     icon: Icons.Users,
     feature: 'community',
-    match: (path) => isCommunityFeedPath(path),
+    match: (path) => isCommunityPath(path),
   },
   {
     href: chatRoutes.home,
@@ -182,7 +188,7 @@ export function getHomeMobileTab(section: BottomTabSection): AppMobileTabItem {
         href: classRoutes.home,
         label: 'Home',
         icon: Icons.Home,
-        match: (path) => isClassProgramPath(path),
+        match: (path) => isClassPath(path),
       }
     case 'co-work':
       return {
@@ -242,10 +248,16 @@ export const APP_COMMUNITY_MOBILE_TABS: AppMobileTabItem[] = [
     match: (path) => path.startsWith('/community/network'),
   },
   {
-    href: communityRoutes.createPost,
-    label: 'Create Post',
-    icon: Icons.SquarePen,
-    match: (path) => isCreatePostPath(path),
+    href: communityRoutes.groups,
+    label: 'Groups',
+    icon: Icons.UsersRound,
+    match: (path) => path === '/community/groups' || path.startsWith('/community/group/'),
+  },
+  {
+    href: communityRoutes.events,
+    label: 'Events',
+    icon: Icons.Calendar,
+    match: (path) => path === '/community/events' || path.startsWith('/community/events/'),
   },
   {
     href: communityRoutes.jobs,
@@ -316,28 +328,53 @@ export function getMobileBottomTabSection(pathname: string): BottomTabSection | 
 export function getMobileBottomTabMiddleTabs(
   section: BottomTabSection,
   commerceOptions?: CommerceMobileTabOptions,
+  widthTier: BottomTabWidthTier = 'expanded',
 ): AppMobileTabItem[] {
+  let tabs: AppMobileTabItem[]
+
   switch (section) {
     case 'chat':
-      return APP_CHAT_MOBILE_TABS
+      tabs = APP_CHAT_MOBILE_TABS
+      break
     case 'commerce':
-      return getCommerceMobileTabs(commerceOptions ?? { hasShops: false })
+      tabs = getCommerceMobileTabs(commerceOptions ?? { hasShops: false })
+      break
     case 'community':
-      return APP_COMMUNITY_MOBILE_TABS
+      tabs = APP_COMMUNITY_MOBILE_TABS
+      break
     case 'class':
-      return APP_CLASS_MOBILE_TABS
+      tabs = APP_CLASS_MOBILE_TABS
+      break
     case 'co-work':
-      return APP_COWORK_MOBILE_TABS
+      tabs = APP_COWORK_MOBILE_TABS
+      break
     default:
-      return []
+      tabs = []
   }
+
+  return limitMiddleTabsForWidth(tabs, widthTier).map((tab) => ({
+    ...tab,
+    label: formatBottomTabLabel(tab.label, widthTier),
+  }))
 }
 
 export function buildMobileBottomTabs(
   section: BottomTabSection,
   middleTabs: AppMobileTabItem[],
   tier: AccessTier,
+  widthTier: BottomTabWidthTier = 'expanded',
 ): AppMobileTabItem[] {
   const globalTabs = section === 'co-work' ? [] : APP_GLOBAL_MOBILE_TABS
-  return [getHomeMobileTab(section), ...middleTabs, ...globalTabs, getAuthMobileTab(tier)]
+  const home = getHomeMobileTab(section)
+  const auth = getAuthMobileTab(tier)
+
+  return [
+    { ...home, label: formatBottomTabLabel(home.label, widthTier) },
+    ...middleTabs,
+    ...globalTabs.map((tab) => ({
+      ...tab,
+      label: formatBottomTabLabel(tab.label, widthTier),
+    })),
+    { ...auth, label: formatBottomTabLabel(auth.label, widthTier) },
+  ]
 }

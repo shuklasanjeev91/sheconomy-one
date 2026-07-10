@@ -23,6 +23,7 @@ import {
   ListingMobileGallery,
   ListingMobileStickyBuyBar,
   LISTING_MOBILE_STICKY_BAR_HEIGHT,
+  ListingRecommendationsSections,
   ListingVariantPicker,
   RatingSummary,
   ReviewsSection,
@@ -32,6 +33,7 @@ import { useListingReviews } from '~/commerce/hooks/useListingReviews'
 import { useCanonicalListingSlug } from '~/commerce/hooks/useCanonicalSlug'
 import { PageCenter, PageScroll } from '~/components/layout'
 import { MOBILE_TAB_BAR_HEIGHT } from '~/components/navigation/constants'
+import { ShareButton } from '~/components/share'
 import { BRAND_THEME, getShadowStyle, radius } from '~/config/tokens'
 import { useListing } from '~/hooks/useListing'
 import {
@@ -51,6 +53,7 @@ import { formatCurrency } from '~/lib/format'
 import { hasVisibleReviews, mergeReviewSummary } from '~/commerce/lib/reviews'
 import { getShopSlug } from '~/lib/supabase/commerce'
 import { commerceRoutes } from '~/lib/routes'
+import { getListingShareUrl } from '~/lib/share'
 import { useAppUi } from '~/lib/theme/useAppUi'
 
 import { BRAND_SHOP_LABEL } from '~/config/brand'
@@ -182,6 +185,21 @@ export default function ListingDetailScreen() {
   const isDigital = isDigitalListing(listing.listing_type)
   const buyNowLabel = isDigital ? 'Buy & download' : 'Buy it now'
   const mobileBottomInset = MOBILE_TAB_BAR_HEIGHT + LISTING_MOBILE_STICKY_BAR_HEIGHT + 16
+  const listingShareSlug = slug ?? listing.id
+  const listingShareButton = (
+    <ShareButton
+      variant="icon"
+      label="Share listing"
+      sheetTitle="Share listing"
+      copyLabel="Copy listing link"
+      copyToastMessage="Listing link copied to clipboard."
+      payload={{
+        url: getListingShareUrl(listingShareSlug),
+        title: listing.title,
+        text: listing.shops?.shop_name ? `From ${listing.shops.shop_name}` : undefined,
+      }}
+    />
+  )
 
   const shopReviewSummary = listing.shops
     ? mergeReviewSummary(
@@ -252,9 +270,12 @@ export default function ListingDetailScreen() {
                 <RatingSummary summary={reviewSummary} size="sm" />
               </YStack>
 
-              <Text fontSize={17} color={ui.text} lineHeight={24} fontWeight="600" letterSpacing={-0.2}>
-                {listing.title}
-              </Text>
+              <XStack alignItems="flex-start" justifyContent="space-between" gap="$2">
+                <Text fontSize={17} color={ui.text} lineHeight={24} fontWeight="600" letterSpacing={-0.2} flex={1}>
+                  {listing.title}
+                </Text>
+                {listingShareButton}
+              </XStack>
 
               {listing.shops?.shop_name ? (
                 <Text fontSize={13} color={ui.textMuted} fontWeight="500">
@@ -303,6 +324,9 @@ export default function ListingDetailScreen() {
                 isLoading={reviewsLoading}
                 error={reviewsError}
               />
+
+              <Separator borderColor={ui.panelBorder} />
+              <ListingRecommendationsSections listingId={listing.id} />
             </YStack>
           </YStack>
         </PageScroll>
@@ -388,9 +412,12 @@ export default function ListingDetailScreen() {
         <Text fontSize={13} color={ui.textMuted} fontWeight="600" letterSpacing={0.2} textTransform="uppercase">
           {listing.shops?.shop_name ?? BRAND_SHOP_LABEL}
         </Text>
-        <Text fontWeight="700" fontSize={26} color={ui.text} lineHeight={32} letterSpacing={-0.45}>
-          {listing.title}
-        </Text>
+        <XStack alignItems="flex-start" justifyContent="space-between" gap="$2">
+          <Text fontWeight="700" fontSize={26} color={ui.text} lineHeight={32} letterSpacing={-0.45} flex={1}>
+            {listing.title}
+          </Text>
+          {listingShareButton}
+        </XStack>
       </YStack>
 
       <RatingSummary summary={reviewSummary} />
@@ -488,6 +515,9 @@ export default function ListingDetailScreen() {
           isLoading={reviewsLoading}
           error={reviewsError}
         />
+
+        <Separator borderColor={ui.panelBorder} />
+        <ListingRecommendationsSections listingId={listing.id} />
       </YStack>
     </PageScroll>
   )

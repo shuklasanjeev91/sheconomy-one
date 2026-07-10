@@ -5,6 +5,7 @@ import { CommunityCard } from '~/community/components/CommunityCard'
 import { CommunityShell } from '~/community/components/CommunityShell'
 import { createCompanyPage } from '~/community/lib/companies'
 import { useCommunityUi } from '~/community/lib/community-theme'
+import { LocationPickerField } from '~/components/geo'
 import { Button, Spinner, Text, ValidatedTextField, YStack, useAppToast } from '~/components/ui'
 import { useFormValidation } from '~/hooks/useFormValidation'
 import { communityRoutes } from '~/lib/routes'
@@ -16,7 +17,7 @@ export function CreateCompanyScreen() {
   const router = useRouter()
   const toast = useAppToast()
   const { user } = useSupabase()
-  const [isSaving, setIsSaving] = useState(false)
+  const [location, setLocation] = useState('')
 
   const form = useFormValidation(
     useMemo(
@@ -25,7 +26,6 @@ export function CreateCompanyScreen() {
         slug: { validators: [required('Page slug is required.'), slug()] },
         industry: { validators: [required('Industry is required.'), minLength(2)] },
         tagline: { validators: [maxLength(120)] },
-        location: { validators: [maxLength(120)] },
         website: { validators: [optionalUrl()] },
         logoUrl: { validators: [optionalUrl()] },
       }),
@@ -45,7 +45,7 @@ export function CreateCompanyScreen() {
       size: '1-10',
       type: 'company',
       tagline: form.fields.tagline.value.trim(),
-      location: form.fields.location.value.trim(),
+      location: location.trim(),
       website: form.fields.website.value.trim(),
       logoUrl: form.fields.logoUrl.value.trim(),
     })
@@ -61,9 +61,9 @@ export function CreateCompanyScreen() {
     <CommunityShell wide>
       <CommunityCard padding={16} gap={16}>
         <Text fontSize={22} fontWeight="700" color={communityUi.text}>
-          Create company page
+          Create page
         </Text>
-        <ValidatedTextField label="Company name" field={form.fields.name} required />
+        <ValidatedTextField label="Page name" field={form.fields.name} required />
         <ValidatedTextField
           label="Page slug"
           field={form.fields.slug}
@@ -73,7 +73,7 @@ export function CreateCompanyScreen() {
         />
         <ValidatedTextField label="Industry" field={form.fields.industry} required />
         <ValidatedTextField label="Tagline" field={form.fields.tagline} />
-        <ValidatedTextField label="Location" field={form.fields.location} />
+        <LocationPickerField value={location} onChange={setLocation} label="Location" />
         <ValidatedTextField label="Website" field={form.fields.website} placeholder="https://..." />
         <ValidatedTextField label="Logo URL" field={form.fields.logoUrl} placeholder="https://..." />
         <Button

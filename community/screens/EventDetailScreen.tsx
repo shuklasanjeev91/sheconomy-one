@@ -19,7 +19,9 @@ import {
 } from '~/community/lib/events'
 import { useCommunityUi } from '~/community/lib/community-theme'
 import { Avatar, Button, Icons, Spinner, Text, XStack, YStack, useAppToast } from '~/components/ui'
+import { ShareButton } from '~/components/share'
 import { communityRoutes } from '~/lib/routes'
+import { getEventShareUrl } from '~/lib/share'
 import { useSupabase } from '~/providers/SupabaseProvider'
 
 type Tab = 'about' | 'attendees'
@@ -132,6 +134,18 @@ export function EventDetailScreen() {
                   </Button>
                 </Link>
               ) : null}
+              <ShareButton
+                variant="outline"
+                label="Share"
+                sheetTitle="Share event"
+                copyLabel="Copy event link"
+                copyToastMessage="Event link copied to clipboard."
+                payload={{
+                  url: getEventShareUrl(event.id),
+                  title: event.title,
+                  text: meta,
+                }}
+              />
             </>
           }
         />

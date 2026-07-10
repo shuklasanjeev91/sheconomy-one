@@ -15,7 +15,7 @@ type NavIconButtonProps = {
   badge?: number
 }
 
-/** Etsy-style nav icon — icon + small label beneath. */
+/** Nav icon — icon + small label beneath. */
 export function NavIconButton({
   href,
   icon: Icon,

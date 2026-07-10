@@ -9,16 +9,19 @@ import {
 import type { Href } from 'one'
 import { useCommunityUi } from '~/community/lib/community-theme'
 import { COMMUNITY_LAYOUT } from '~/community/lib/layout'
-import { Avatar, Icons, Separator, Text, XStack, YStack } from '~/components/ui'
+import { StickyRail } from '~/components/layout'
+import { Icons, Text, XStack, YStack } from '~/components/ui'
+import { useAppLayout } from '~/hooks/useAppLayout'
 import { useProfile } from '~/hooks/useProfile'
 import { communityRoutes } from '~/lib/routes'
 
-export function CommunityLeftSidebar() {
-  const communityUi = useCommunityUi()
+type CommunitySidebarPin = 'document' | 'viewport'
+
+export function CommunityLeftSidebar({ pin = 'document' }: { pin?: CommunitySidebarPin }) {
+  const { isDesktop } = useAppLayout()
   const pathname = usePathname()
-  const { profile, isAuthenticated } = useProfile()
+  const { isAuthenticated } = useProfile()
   const [expanded, setExpanded] = useState(false)
-  const displayName = profile?.full_name || profile?.username || 'Your profile'
 
   const navItems = useMemo(
     () => COMMUNITY_LEFT_NAV.filter((item) => !item.authRequired || isAuthenticated),
@@ -28,46 +31,21 @@ export function CommunityLeftSidebar() {
   const visibleItems = expanded ? navItems : navItems.slice(0, COMMUNITY_LEFT_NAV_VISIBLE)
   const canExpand = navItems.length > COMMUNITY_LEFT_NAV_VISIBLE
 
+  if (!isDesktop) {
+    return null
+  }
+
   return (
-    <YStack
+    <StickyRail
       width={COMMUNITY_LAYOUT.leftSidebarWidth}
-      flexShrink={0}
       gap="$1"
-      position="sticky"
-      top={COMMUNITY_LAYOUT.stickyTop}
-      alignSelf="flex-start"
-      display="none"
-      $gtMd={{ display: 'flex' }}
+      scrollable={pin === 'document'}
+      pin={pin}
     >
-      {isAuthenticated ? (
-        <Link href={communityRoutes.profile} asChild>
-          <XStack
-            gap={12}
-            alignItems="center"
-            paddingVertical={8}
-            paddingHorizontal={8}
-            borderRadius={8}
-            cursor="pointer"
-            hoverStyle={{ backgroundColor: communityUi.divider }}
-          >
-            <Avatar
-              name={displayName}
-              src={profile?.avatar_url ?? undefined}
-              size="$4"
-            />
-            <Text fontSize={15} fontWeight="600" color={communityUi.text} numberOfLines={1} flex={1}>
-              {displayName}
-            </Text>
-          </XStack>
-        </Link>
-      ) : null}
-
-      <Separator borderColor={communityUi.borderLight} marginVertical={4} />
-
       <YStack gap={2}>
         {visibleItems.map((item) => (
           <SidebarNavItem
-            key={item.label}
+            key={String(item.href)}
             item={item}
             active={isActive(pathname, item.href)}
           />
@@ -80,7 +58,7 @@ export function CommunityLeftSidebar() {
           />
         ) : null}
       </YStack>
-    </YStack>
+    </StickyRail>
   )
 }
 

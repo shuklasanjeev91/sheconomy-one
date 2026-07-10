@@ -14,9 +14,10 @@ import {
   YStack,
   useAppToast,
 } from '~/components/ui'
-import { FullWidthLayout, LAYOUT_STRETCH, PageSection } from '~/components/layout'
+import { FullWidthLayout, LAYOUT_STRETCH, PageSection, StickyRail } from '~/components/layout'
 import { BRAND_THEME, radius, getShadowStyle } from '~/config/tokens'
 import { useCart } from '~/commerce/hooks/useCart'
+import { useStorefrontCartItems } from '~/commerce/hooks/useStorefrontCartItems'
 import { CommercePageHeader, CommercePanel } from '~/commerce/components'
 import {
   createOrderFromCart,
@@ -25,48 +26,55 @@ import {
   type CheckoutAddressInput,
   type UserAddress,
 } from '~/commerce/lib/checkout'
+import { fetchBuyerPaymentMethods } from '~/commerce/lib/buyer-account'
+import {
+  parsePaymentMethod,
+  paymentMethodSubtitle,
+  paymentMethodTitle,
+  type ParsedPaymentMethod,
+} from '~/commerce/lib/payment-methods'
 import { cartRequiresShipping, fetchListingTypesByIds } from '~/commerce/lib/listing-fulfillment'
 import { formatCurrency } from '~/lib/format'
 import { useFormValidation } from '~/hooks/useFormValidation'
 import { useProfile } from '~/hooks/useProfile'
 import { openExternalUrl } from '~/lib/platform/openUrl'
 import { commerceRoutes, routes } from '~/lib/routes'
-import { maxLength, minLength, postalCodeIN, required } from '~/lib/validation'
+import { createEmptyAddressInput } from '~/commerce/components/AddressForm'
+import { validateAddressInput } from '~/commerce/lib/addresses'
+import {
+  LocationFields,
+  addressGeoFromInput,
+  patchAddressFromGeo,
+} from '~/components/geo'
+import { maxLength, minLength, required } from '~/lib/validation'
+import { useAppLayout } from '~/hooks/useAppLayout'
 import { useAppUi } from '~/lib/theme/useAppUi'
-
-const EMPTY_ADDRESS: CheckoutAddressInput = {
-  address_line_1: '',
-  address_line_2: '',
-  city: '',
-  state: '',
-  postal_code: '',
-  country: 'IN',
-  address_label: 'Home',
-}
 
 export function CheckoutScreen() {
   const ui = useAppUi()
+  const { isDesktop, isWide } = useAppLayout()
   const { user, isAuthenticated } = useProfile()
-  const { cart, items, isLoading, refresh } = useCart()
+  const { cart, items: cartItems, isLoading, refresh } = useCart()
+  const { items, isChecking } = useStorefrontCartItems(cartItems)
   const toast = useAppToast()
   const router = useRouter()
   const [addresses, setAddresses] = useState<UserAddress[]>([])
   const [selectedAddressId, setSelectedAddressId] = useState<string | null>(null)
   const [useNewAddress, setUseNewAddress] = useState(false)
+  const [newAddress, setNewAddress] = useState<CheckoutAddressInput>(() => createEmptyAddressInput())
   const addressForm = useFormValidation(
     useMemo(
       () => ({
         address_line_1: { validators: [required('Address line 1 is required.'), minLength(3)] },
         address_line_2: { validators: [maxLength(120)] },
-        city: { validators: [required('City is required.'), minLength(2)] },
-        state: { validators: [required('State is required.'), minLength(2)] },
-        postal_code: { validators: [required('Postal code is required.'), postalCodeIN()] },
       }),
       [],
     ),
   )
   const [customerNotes, setCustomerNotes] = useState('')
   const [paymentMethod, setPaymentMethod] = useState<'online' | 'cod'>('online')
+  const [savedPaymentMethods, setSavedPaymentMethods] = useState<ParsedPaymentMethod[]>([])
+  const [selectedSavedPaymentId, setSelectedSavedPaymentId] = useState<string | null>(null)
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [isLoadingAddresses, setIsLoadingAddresses] = useState(true)
   const [listingTypes, setListingTypes] = useState<Map<string, string>>(new Map())
@@ -94,13 +102,23 @@ export function CheckoutScreen() {
       }
       setIsLoadingAddresses(false)
     })
+
+    void fetchBuyerPaymentMethods(user.id).then(({ methods, error }) => {
+      const parsed = (methods ?? []).map(parsePaymentMethod)
+      setSavedPaymentMethods(parsed)
+      const defaultMethod = parsed.find((method) => method.is_default) ?? parsed[0] ?? null
+      setSelectedSavedPaymentId(defaultMethod?.id ?? null)
+      if (error) {
+        toast.show('Could not load payment methods', { tone: 'danger', message: error })
+      }
+    })
   }, [isAuthenticated, toast, user])
 
   if (!isAuthenticated) {
     return <Redirect href={routes.signIn} />
   }
 
-  if (isLoading || isLoadingAddresses) {
+  if (isLoading || isLoadingAddresses || isChecking) {
     return (
       <FullWidthLayout>
         <PageSection paddingVertical="$10" alignItems="center">
@@ -136,16 +154,19 @@ export function CheckoutScreen() {
             return
           }
 
-          const newAddress: CheckoutAddressInput = {
-            ...EMPTY_ADDRESS,
+          const draftAddress: CheckoutAddressInput = {
+            ...newAddress,
             address_line_1: addressForm.fields.address_line_1.value.trim(),
             address_line_2: addressForm.fields.address_line_2.value.trim(),
-            city: addressForm.fields.city.value.trim(),
-            state: addressForm.fields.state.value.trim(),
-            postal_code: addressForm.fields.postal_code.value.trim(),
+          }
+          const addressValidationError = validateAddressInput(draftAddress)
+          if (addressValidationError) {
+            toast.show('Check your address', { tone: 'danger', message: addressValidationError })
+            setIsSubmitting(false)
+            return
           }
 
-          const { address, error } = await saveUserAddress(user.id, newAddress)
+          const { address, error } = await saveUserAddress(user.id, draftAddress)
           if (error || !address) {
             toast.show('Could not save address', { tone: 'danger', message: error ?? undefined })
             setIsSubmitting(false)
@@ -174,6 +195,10 @@ export function CheckoutScreen() {
         shippingAddressId,
         customerNotes,
         paymentMethod: needsShipping ? paymentMethod : 'online',
+        savedPaymentMethodId:
+          (needsShipping ? paymentMethod : 'online') === 'online'
+            ? selectedSavedPaymentId ?? undefined
+            : undefined,
       })
 
       if (error) {
@@ -206,7 +231,7 @@ export function CheckoutScreen() {
   return (
     <FullWidthLayout scroll>
       <PageSection paddingVertical="$6" {...LAYOUT_STRETCH}>
-          <YStack gap="$6" width="100%" {...LAYOUT_STRETCH}>
+          <YStack gap="$6" width="100%" maxWidth="100%" alignSelf="stretch">
             <CommercePageHeader
               title="Checkout"
               subtitle={
@@ -216,8 +241,15 @@ export function CheckoutScreen() {
               }
             />
 
-            <XStack gap="$5" flexWrap="wrap" alignItems="flex-start">
-              <YStack flex={1} minWidth={300} gap="$4">
+            <XStack
+              width="100%"
+              maxWidth="100%"
+              alignSelf="stretch"
+              flexDirection={isDesktop ? 'row' : 'column'}
+              alignItems="flex-start"
+              gap={isWide ? 32 : 24}
+            >
+              <YStack flex={1} minWidth={0} width="100%" gap="$4">
                 {hasDigitalItems && !needsShipping ? (
                   <CommercePanel backgroundColor={ui.digitalBg}>
                     <Text fontWeight="700" fontSize={16} color={ui.text}>
@@ -272,15 +304,21 @@ export function CheckoutScreen() {
                     </YStack>
                   ) : null}
 
-                  <Button
-                    tone={useNewAddress ? 'primary' : 'outline'}
-                    size="$3"
-                    borderRadius={999}
-                    alignSelf="flex-start"
-                    onPress={() => setUseNewAddress(true)}
-                  >
-                    {addresses.length ? 'Use a new address' : 'Add shipping address'}
-                  </Button>
+                  <XStack gap="$2" flexWrap="wrap" alignItems="center">
+                    <Button
+                      tone={useNewAddress ? 'primary' : 'outline'}
+                      size="$3"
+                      borderRadius={999}
+                      onPress={() => setUseNewAddress(true)}
+                    >
+                      {addresses.length ? 'Use a new address' : 'Add shipping address'}
+                    </Button>
+                    <Link href={commerceRoutes.addresses} asChild>
+                      <Button tone="outline" size="$3" borderRadius={999}>
+                        Manage addresses
+                      </Button>
+                    </Link>
+                  </XStack>
 
                   {useNewAddress ? (
                     <YStack gap="$3">
@@ -290,21 +328,16 @@ export function CheckoutScreen() {
                         required
                       />
                       <ValidatedTextField label="Address line 2" field={addressForm.fields.address_line_2} />
-                      <XStack gap="$3" flexWrap="wrap">
-                        <ValidatedTextField label="City" field={addressForm.fields.city} flex={1} minWidth={140} required />
-                        <ValidatedTextField label="State" field={addressForm.fields.state} flex={1} minWidth={140} required />
-                      </XStack>
-                      <ValidatedTextField
-                        label="Postal code"
-                        field={addressForm.fields.postal_code}
-                        required
+                      <LocationFields
+                        value={addressGeoFromInput(newAddress)}
+                        onChange={(geo) => setNewAddress((current) => patchAddressFromGeo(current, geo))}
                       />
                     </YStack>
                   ) : null}
                 </CommercePanel>
                 ) : null}
 
-                <CommercePanel>
+                <CommercePanel gap="$3">
                   <Text fontWeight="700" fontSize={16} color={ui.text}>
                     Payment
                   </Text>
@@ -328,24 +361,67 @@ export function CheckoutScreen() {
                     </Button>
                     ) : null}
                   </XStack>
+
+                  {paymentMethod === 'online' ? (
+                    <YStack gap="$2">
+                      {savedPaymentMethods.length > 0 ? (
+                        <>
+                          <Text fontSize={13} fontWeight="600" color={ui.textSecondary}>
+                            Saved payment methods
+                          </Text>
+                          {savedPaymentMethods.map((method) => {
+                            const selected = selectedSavedPaymentId === method.id
+                            return (
+                              <XStack
+                                key={method.id}
+                                gap="$3"
+                                alignItems="center"
+                                padding="$3"
+                                borderRadius={12}
+                                borderWidth={1}
+                                borderColor={selected ? ui.brand : ui.borderSubtle}
+                                backgroundColor={selected ? ui.chip : ui.surface}
+                                cursor="pointer"
+                                onPress={() => setSelectedSavedPaymentId(method.id)}
+                              >
+                                <YStack flex={1} gap={2} minWidth={0}>
+                                  <Text fontWeight="600" fontSize={14} color={ui.text} numberOfLines={1}>
+                                    {paymentMethodTitle(method)}
+                                  </Text>
+                                  <Text fontSize={12} color={ui.textSecondary} numberOfLines={1}>
+                                    {paymentMethodSubtitle(method)}
+                                  </Text>
+                                </YStack>
+                                {method.is_default ? (
+                                  <Text fontSize={11} fontWeight="700" color={ui.brand}>
+                                    Default
+                                  </Text>
+                                ) : null}
+                              </XStack>
+                            )
+                          })}
+                        </>
+                      ) : (
+                        <Text fontSize={13} color={ui.textSecondary}>
+                          Save a card or UPI ID in payment methods for faster checkout.
+                        </Text>
+                      )}
+                      <Link href={commerceRoutes.paymentMethods} asChild>
+                        <Button tone="outline" size="$2.5" borderRadius={999} alignSelf="flex-start">
+                          Manage payment methods
+                        </Button>
+                      </Link>
+                    </YStack>
+                  ) : null}
+
                   <Field label="Order notes (optional)">
                     <Input value={customerNotes} onChangeText={setCustomerNotes} />
                   </Field>
                 </CommercePanel>
               </YStack>
 
-              <CommercePanel
-                width="100%"
-                maxWidth="100%"
-                gap="$4"
-                style={getShadowStyle('md')}
-                $gtMd={{
-                  width: 340,
-                  position: 'sticky',
-                  top: 80,
-                  alignSelf: 'flex-start',
-                }}
-              >
+              <StickyRail width={isDesktop ? 380 : '100%'} maxWidth="100%">
+              <CommercePanel width="100%" gap="$4" style={getShadowStyle('md')}>
                 <Text fontWeight="700" fontSize={18} color={ui.text} letterSpacing={-0.2}>
                   Order summary
                 </Text>
@@ -373,6 +449,7 @@ export function CheckoutScreen() {
                     tone="primary"
                     size="$4"
                     borderRadius={999}
+                    width="100%"
                     disabled={isSubmitting}
                     onPress={handlePlaceOrder}
                     icon={isSubmitting ? <Spinner size="small" color="white" /> : undefined}
@@ -381,11 +458,12 @@ export function CheckoutScreen() {
                   </Button>
                 </Theme>
                 <Link href={commerceRoutes.cart} asChild>
-                  <Button tone="outline" size="$3" borderRadius={999}>
+                  <Button tone="outline" size="$3" borderRadius={999} width="100%">
                     Back to cart
                   </Button>
                 </Link>
               </CommercePanel>
+              </StickyRail>
             </XStack>
           </YStack>
       </PageSection>

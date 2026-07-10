@@ -220,12 +220,15 @@ export function getListingOrderColumn(sort: ListingSort = 'newest') {
   }
 }
 
-export function countActiveFilters(filters: ListingBrowseFilters): number {
+export function countActiveFilters(
+  filters: ListingBrowseFilters,
+  options?: { excludeSort?: boolean },
+): number {
   let count = 0
   if (filters.listingType) count += 1
   if (filters.minPrice != null || filters.maxPrice != null) count += 1
   if (filters.minRating != null) count += 1
-  if (filters.sort && filters.sort !== 'relevance') count += 1
+  if (!options?.excludeSort && filters.sort && filters.sort !== 'relevance') count += 1
   if (filters.categoryIds?.length) count += 1
   if (filters.shopIds?.length) count += 1
   if (filters.onSale) count += 1

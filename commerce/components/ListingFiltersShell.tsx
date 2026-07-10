@@ -16,9 +16,12 @@ import { BRAND_THEME } from '~/config/tokens'
 import {
   countActiveFilters,
   hasActiveFilters,
+  LISTING_SORT_OPTIONS,
   type ListingBrowseFilters,
+  type ListingSort,
 } from '~/commerce/lib/filters'
 import {
+  getAvailableSortOptions,
   hasCategoryFilterOptions,
   type CategoryFilterFacets,
 } from '~/commerce/lib/category-facets'
@@ -28,6 +31,7 @@ import {
   mergeDraftPriceInputs,
   useFilterDraftPriceState,
 } from './ListingFiltersPanel'
+import { ListingSortMenu } from './ListingSortMenu'
 import { overlayBackdropStyle, edgePanelPositionStyle } from '~/lib/layout/styles'
 import { useAppUi } from '~/lib/theme/useAppUi'
 
@@ -39,12 +43,14 @@ type ListingFiltersShellProps = {
   facets?: CategoryFilterFacets | null
   facetsLoading?: boolean
   inventoryDriven?: boolean
+  /** Sort dropdown in the toolbar instead of inside the filter panel. */
+  sortInToolbar?: boolean
   children: ReactNode
 }
 
 const SIDEBAR_WIDTH = 400
 
-/** Etsy-style filters — left sidebar on desktop, bottom sheet elsewhere. */
+/** Filters — left sidebar on desktop, bottom sheet elsewhere. */
 export function ListingFiltersShell({
   filters,
   onApply,
@@ -53,6 +59,7 @@ export function ListingFiltersShell({
   facets,
   facetsLoading = false,
   inventoryDriven = false,
+  sortInToolbar = false,
   children,
 }: ListingFiltersShellProps) {
   const ui = useAppUi()
@@ -64,9 +71,21 @@ export function ListingFiltersShell({
     draft,
     facets?.priceRange,
   )
-  const activeCount = countActiveFilters(filters)
+  const activeCount = countActiveFilters(filters, { excludeSort: sortInToolbar })
+  const sortOptions =
+    inventoryDriven && facets ? getAvailableSortOptions(facets) : LISTING_SORT_OPTIONS
+  const showSortToolbar =
+    sortInToolbar && (sortOptions.length > 0 || facetsLoading || !inventoryDriven)
   const showFilterButton =
-    !inventoryDriven || (facets != null && hasCategoryFilterOptions(facets))
+    sortInToolbar ||
+    !inventoryDriven ||
+    (facets != null && hasCategoryFilterOptions(facets))
+  const showToolbar = showFilterButton || showSortToolbar
+  const currentSort = filters.sort ?? 'relevance'
+  const resolvedSortOptions =
+    sortOptions.length > 0
+      ? sortOptions
+      : LISTING_SORT_OPTIONS.filter((option) => option.value === 'relevance' || option.value === 'newest')
 
   useEffect(() => {
     if (open) {
@@ -108,11 +127,16 @@ export function ListingFiltersShell({
   }
 
   function clearDraft() {
-    setDraft({})
+    const next = sortInToolbar && filters.sort ? { sort: filters.sort } : {}
+    setDraft(next)
     setMinPrice('')
     setMaxPrice('')
-    onApply({})
+    onApply(next)
     close()
+  }
+
+  function applySort(sort: ListingSort) {
+    onApply({ ...filters, sort })
   }
 
   const footer = (
@@ -150,6 +174,7 @@ export function ListingFiltersShell({
       facets={facets}
       facetsLoading={facetsLoading}
       showTypeFilter={showTypeFilter}
+      showSort={!sortInToolbar}
       minPrice={minPrice}
       maxPrice={maxPrice}
       onMinPriceChange={setMinPrice}
@@ -158,39 +183,59 @@ export function ListingFiltersShell({
   )
 
   return (
-    <YStack gap="$4" width="100%">
-      {showFilterButton ? (
-        <XStack alignItems="center" justifyContent="space-between" gap="$3" flexWrap="wrap">
-          <Button
-            tone="outline"
-            size="$3"
-            borderRadius={999}
-            backgroundColor={ui.surface}
-            borderColor={ui.text}
-            icon={<Icons.SlidersHorizontal size={16} color={ui.text} />}
-            onPress={() => setOpen(true)}
-          >
-            <XStack gap="$2" alignItems="center">
-              <Text fontSize={14} fontWeight="500" color={ui.text}>
-                All filters
-              </Text>
-              {activeCount > 0 ? (
-                <XStack
-                  minWidth={20}
-                  height={20}
-                  borderRadius={999}
-                  backgroundColor={ui.text}
-                  alignItems="center"
-                  justifyContent="center"
-                  paddingHorizontal={6}
-                >
-                  <Text fontSize={11} fontWeight="700" color={ui.onBrand}>
-                    {activeCount}
-                  </Text>
-                </XStack>
-              ) : null}
-            </XStack>
-          </Button>
+    <YStack gap="$3" width="100%">
+      {showToolbar ? (
+        <XStack
+          width="100%"
+          alignItems="center"
+          gap="$3"
+          flexWrap="nowrap"
+          zIndex={10}
+          paddingBottom="$1"
+        >
+          {showFilterButton ? (
+            <Button
+              tone="outline"
+              size="$3"
+              borderRadius={999}
+              backgroundColor={ui.surface}
+              borderColor={ui.text}
+              flexShrink={0}
+              icon={<Icons.SlidersHorizontal size={16} color={ui.text} />}
+              onPress={() => setOpen(true)}
+            >
+              <XStack gap="$2" alignItems="center">
+                <Text fontSize={14} fontWeight="500" color={ui.text}>
+                  All filters
+                </Text>
+                {activeCount > 0 ? (
+                  <XStack
+                    minWidth={20}
+                    height={20}
+                    borderRadius={999}
+                    backgroundColor={ui.text}
+                    alignItems="center"
+                    justifyContent="center"
+                    paddingHorizontal={6}
+                  >
+                    <Text fontSize={11} fontWeight="700" color={ui.onBrand}>
+                      {activeCount}
+                    </Text>
+                  </XStack>
+                ) : null}
+              </XStack>
+            </Button>
+          ) : null}
+
+          <XStack flex={1} minWidth={8} />
+
+          {showSortToolbar ? (
+            <ListingSortMenu
+              value={currentSort}
+              options={resolvedSortOptions}
+              onChange={applySort}
+            />
+          ) : null}
         </XStack>
       ) : null}
 

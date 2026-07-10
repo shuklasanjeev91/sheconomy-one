@@ -18,6 +18,13 @@
         {
           "photosPermission": "Allow SHEconomy to access your photos to upload listing images and shop logos."
         }
+      ],
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "Allow SHEconomy to use your camera for face liveness verification.",
+          "recordAudioAndroid": false
+        }
       ]
     ],
     "icon": "./public/app-icon.png",

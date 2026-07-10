@@ -14,6 +14,8 @@ export type MobileTabBarItemProps = {
   children: ReactNode
   onPress?: () => void
   accessibilityLabel?: string
+  /** Hide caption on very narrow widths — icon stays visible. */
+  showLabel?: boolean
 }
 
 /** Shared mobile bottom-tab cell — icon slot + label + optional badge. */
@@ -28,6 +30,7 @@ export function MobileTabBarItem({
   children,
   onPress,
   accessibilityLabel,
+  showLabel = true,
   ...props
 }: MobileTabBarItemProps & Record<string, unknown>) {
   const compactLabel = label.length > 9
@@ -54,9 +57,9 @@ export function MobileTabBarItem({
         width="100%"
         alignItems="center"
         justifyContent="center"
-        gap={3}
-        paddingTop={6}
-        paddingBottom={4}
+        gap={showLabel ? 3 : 0}
+        paddingTop={showLabel ? 6 : 8}
+        paddingBottom={showLabel ? 4 : 8}
         paddingHorizontal={4}
         borderRadius={18}
         backgroundColor={isFocused ? activePillBg : 'transparent'}
@@ -76,19 +79,21 @@ export function MobileTabBarItem({
           ) : null}
         </YStack>
 
-        <Text
-          fontSize={compactLabel ? 9 : 10}
-          fontWeight={isFocused ? '700' : '500'}
-          color={isFocused ? activeColor : inactiveColor}
-          numberOfLines={1}
-          letterSpacing={isFocused ? 0.15 : 0.05}
-          textAlign="center"
-          width="100%"
-          lineHeight={12}
-          opacity={isFocused ? 1 : 0.92}
-        >
-          {label}
-        </Text>
+        {showLabel ? (
+          <Text
+            fontSize={compactLabel ? 9 : 10}
+            fontWeight={isFocused ? '700' : '500'}
+            color={isFocused ? activeColor : inactiveColor}
+            numberOfLines={1}
+            letterSpacing={isFocused ? 0.15 : 0.05}
+            textAlign="center"
+            width="100%"
+            lineHeight={12}
+            opacity={isFocused ? 1 : 0.92}
+          >
+            {label}
+          </Text>
+        ) : null}
       </YStack>
     </YStack>
   )

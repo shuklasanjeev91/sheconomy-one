@@ -38,8 +38,8 @@ export function CompaniesScreen() {
     <CommunityShell wide>
       <CommunityCard padding={18} gap={12}>
         <CommunityPageHeader
-          title="Companies"
-          subtitle="Follow businesses and see their updates."
+          title="Pages"
+          subtitle="Follow pages and see their updates."
           actions={
             user ? (
               <Button
@@ -55,7 +55,7 @@ export function CompaniesScreen() {
         />
         <XStack gap={8} alignItems="center" padding={12} borderRadius={radius.chip} borderWidth={1} borderColor={communityUi.borderLight} backgroundColor={communityUi.inputBg}>
           <Icons.Search size={18} color={communityUi.textMuted} />
-          <Input flex={1} value={search} onChangeText={setSearch} placeholder="Search companies" borderWidth={0} backgroundColor="transparent" />
+          <Input flex={1} value={search} onChangeText={setSearch} placeholder="Search pages" borderWidth={0} backgroundColor="transparent" />
         </XStack>
       </CommunityCard>
 

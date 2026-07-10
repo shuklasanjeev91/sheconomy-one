@@ -9,7 +9,7 @@ type CommunityPageHeaderProps = {
   actions?: ReactNode
 }
 
-/** Community section page title — LinkedIn-blue accent rail. */
+/** Community section page title — brand accent rail. */
 export function CommunityPageHeader({ title, subtitle, actions }: CommunityPageHeaderProps) {
   const communityUi = useCommunityUi()
 

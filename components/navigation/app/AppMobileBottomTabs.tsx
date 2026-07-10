@@ -1,6 +1,6 @@
 import { Link, usePathname } from 'one'
 import { useMemo } from 'react'
-import { Platform } from 'react-native'
+import { Platform, useWindowDimensions } from 'react-native'
 
 import { AuthButton } from '~/components/auth'
 import { XStack, YStack } from '~/components/ui'
@@ -9,6 +9,7 @@ import { mobileTabBarDockStyle } from '~/lib/theme/surfaces'
 import { useCart } from '~/commerce/hooks/useCart'
 import { useAccess } from '~/hooks/useAccess'
 import { useAppLayout } from '~/hooks/useAppLayout'
+import { useStableMedia } from '~/hooks/useStableMedia'
 import { useVendorShops } from '~/hooks/useVendorShops'
 import { useCoWorkTheme } from '~/co-work/lib/theme'
 
@@ -19,6 +20,10 @@ import {
   getMobileBottomTabSection,
   type AppMobileTabItem,
 } from './config'
+import {
+  getBottomTabWidthTier,
+  shouldShowBottomTabLabels,
+} from './mobile-tab-bar-width'
 import { MobileTabBarItem } from './MobileTabBarItem'
 import { useAppUi } from '~/lib/theme/useAppUi'
 
@@ -37,6 +42,10 @@ export function AppMobileBottomTabs() {
   const ui = useAppUi()
   const { ui: coworkUi } = useCoWorkTheme()
   const appColors = getAppColors(ui)
+  const { width } = useWindowDimensions()
+  const media = useStableMedia()
+  const widthTier = getBottomTabWidthTier(width, media.gtSm)
+  const showLabels = shouldShowBottomTabLabels(widthTier)
 
   const tabs = useMemo((): AppMobileTabItem[] => {
     const section = getMobileBottomTabSection(pathname)
@@ -49,10 +58,12 @@ export function AppMobileBottomTabs() {
       getMobileBottomTabMiddleTabs(
         section,
         section === 'commerce' ? { hasShops, primaryShopId } : undefined,
+        widthTier,
       ),
       tier,
+      widthTier,
     )
-  }, [hasShops, pathname, primaryShopId, tier])
+  }, [hasShops, pathname, primaryShopId, tier, widthTier])
 
   const section = getMobileBottomTabSection(pathname)
 
@@ -109,6 +120,7 @@ export function AppMobileBottomTabs() {
                   activePillBg={activePillBg}
                   surfaceColor={dockSurface}
                   tabLabel={tab.label}
+                  showTabLabel={showLabels}
                 />
               </YStack>
             )
@@ -123,6 +135,7 @@ export function AppMobileBottomTabs() {
                 minWidth={0}
                 alignSelf="stretch"
                 label={tab.label}
+                showLabel={showLabels}
                 isFocused={isFocused}
                 activeColor={activeColor}
                 inactiveColor={inactiveColor}
