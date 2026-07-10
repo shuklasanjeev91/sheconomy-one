@@ -7,11 +7,24 @@ export const LAYOUT_STRETCH = {
   alignSelf: 'stretch',
 } as const
 
-/** Bottom tab bar — fixed on web, in flex flow on native (AppShell column). */
+/** Bottom tab bar — fixed on web, pinned to screen bottom on native. */
 export function tabBarPositionStyle() {
   return Platform.select({
-    web: { position: 'fixed' as const, bottom: 0, left: 0, right: 0 },
-    default: { position: 'relative' as const, width: '100%' as const },
+    web: {
+      position: 'fixed' as const,
+      bottom: 0,
+      left: 0,
+      right: 0,
+      width: '100%',
+      maxWidth: '100vw',
+    },
+    default: {
+      position: 'absolute' as const,
+      bottom: 0,
+      left: 0,
+      right: 0,
+      width: '100%',
+    },
   })
 }
 

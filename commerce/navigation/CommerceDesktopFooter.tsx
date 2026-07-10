@@ -7,10 +7,12 @@ import { BRAND_NAME, BRAND_SOCIAL } from '~/config/brand'
 import { COMMERCE_FOOTER_COLUMNS, COMMERCE_FOOTER_LEGAL } from './config'
 import { NavLogo } from '~/components/navigation/NavLogo'
 import { commerceRoutes } from '~/lib/routes'
+import { useAppLayout } from '~/hooks/useAppLayout'
 import { useAppUi } from '~/lib/theme/useAppUi'
 
 export function CommerceDesktopFooter() {
   const ui = useAppUi()
+  const { gutter } = useAppLayout()
 
   return (
     <YStack
@@ -22,7 +24,7 @@ export function CommerceDesktopFooter() {
     >
       <XStack
         width="100%"
-        paddingHorizontal="$5"
+        paddingHorizontal={gutter}
         paddingVertical="$8"
         gap="$8"
         flexWrap="wrap"
@@ -65,7 +67,7 @@ export function CommerceDesktopFooter() {
 
       <XStack
         width="100%"
-        paddingHorizontal="$5"
+        paddingHorizontal={gutter}
         paddingVertical="$4"
         justifyContent="space-between"
         alignItems="center"

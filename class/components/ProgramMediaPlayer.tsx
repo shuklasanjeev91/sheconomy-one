@@ -104,12 +104,18 @@ function WebProgramMediaPlayer({ program, mediaUrl }: { program: Program; mediaU
 function NativeProgramMediaPlayer({ program, mediaUrl }: { program: Program; mediaUrl: string }) {
   const ui = useAppUi()
   const [WebViewComponent, setWebViewComponent] = useState<React.ComponentType<any> | null>(null)
-  const [VideoComponent, setVideoComponent] = useState<React.ComponentType<any> | null>(null)
+  const [NativeVideoFile, setNativeVideoFile] = useState<React.ComponentType<{ uri: string }> | null>(
+    null,
+  )
+  const [NativeAudioFile, setNativeAudioFile] = useState<React.ComponentType<{ uri: string }> | null>(
+    null,
+  )
 
   useEffect(() => {
     void import('react-native-webview').then((module) => setWebViewComponent(() => module.WebView))
-    void import('expo-av').then((module) => {
-      setVideoComponent(() => module.Video)
+    void import('~/lib/native/NativeMediaPlayers').then((module) => {
+      setNativeVideoFile(() => module.NativeVideoFile)
+      setNativeAudioFile(() => module.NativeAudioFile)
     })
   }, [])
 
@@ -129,36 +135,18 @@ function NativeProgramMediaPlayer({ program, mediaUrl }: { program: Program; med
       )
     }
 
-    if (/\.(mp4|webm|m3u8)(\?|$)/i.test(program.video_url) && VideoComponent) {
-      const Video = VideoComponent
-      return (
-        <YStack width="100%" aspectRatio={16 / 9} borderRadius={12} overflow="hidden" backgroundColor="#000">
-          <Video
-            source={{ uri: program.video_url }}
-            useNativeControls
-            resizeMode="contain"
-            style={{ width: '100%', height: '100%' }}
-          />
-        </YStack>
-      )
+    if (/\.(mp4|webm|m3u8)(\?|$)/i.test(program.video_url) && NativeVideoFile) {
+      const VideoFile = NativeVideoFile
+      return <VideoFile uri={program.video_url} />
     }
   }
 
-  if (program.audio_url && VideoComponent) {
-    const Video = VideoComponent
-    return (
-      <YStack width="100%" borderRadius={12} overflow="hidden" backgroundColor={ui.surfaceMuted} padding="$2">
-        <Video
-          source={{ uri: program.audio_url }}
-          useNativeControls
-          resizeMode="contain"
-          style={{ width: '100%', height: 56 }}
-        />
-      </YStack>
-    )
+  if (program.audio_url && NativeAudioFile) {
+    const AudioFile = NativeAudioFile
+    return <AudioFile uri={program.audio_url} />
   }
 
-  if (!WebViewComponent && !VideoComponent) {
+  if (!WebViewComponent && !NativeVideoFile && !NativeAudioFile) {
     return (
       <YStack width="100%" aspectRatio={16 / 9} alignItems="center" justifyContent="center">
         <Icons.Radio size={28} color={ui.brand} />

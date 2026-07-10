@@ -1,9 +1,11 @@
 import type { ReactNode } from 'react'
 
-import { Spinner, Text, YStack, useMedia } from '~/components/ui'
+import { Spinner, Text, YStack, useMedia, Icons } from '~/components/ui'
 import type { ListingSummary } from '~/lib/supabase/commerce'
+import { getShadowStyle, radius } from '~/config/tokens'
 import { useAppUi } from '~/lib/theme/useAppUi'
 
+import { CommercePageHeader } from './CommercePageHeader'
 import { ListingGrid } from './ListingGrid'
 import { LoadMoreEnd, LoadMoreSentinel } from './LoadMoreSentinel'
 
@@ -39,18 +41,7 @@ export function ListingBrowseView({
 
   return (
     <YStack gap="$5" width="100%">
-      {header ?? (
-        <YStack gap="$1">
-          <Text fontWeight="500" fontSize={28} color={ui.text} letterSpacing={-0.4} lineHeight={34}>
-            {title}
-          </Text>
-          {subtitle ? (
-            <Text color={ui.textMuted} fontSize={14} lineHeight={20}>
-              {subtitle}
-            </Text>
-          ) : null}
-        </YStack>
-      )}
+      {header ?? <CommercePageHeader title={title} subtitle={subtitle} />}
 
       {isLoading ? (
         <YStack alignItems="center" paddingVertical="$8">
@@ -65,16 +56,19 @@ export function ListingBrowseView({
           alignItems="center"
           justifyContent="center"
           paddingVertical="$10"
-          gap="$2"
-          borderRadius={8}
+          paddingHorizontal="$5"
+          gap="$3"
+          borderRadius={radius.card}
           backgroundColor={ui.surfaceMuted}
           borderWidth={1}
-          borderColor={ui.panelBorder}
+          borderColor={ui.borderSubtle}
+          style={getShadowStyle('sm')}
         >
-          <Text fontWeight="500" fontSize={16} color={ui.text}>
+          <Icons.Search size={36} color={ui.brand} opacity={0.7} />
+          <Text fontWeight="800" fontSize={17} color={ui.text} letterSpacing={-0.25} textAlign="center">
             {emptyMessage}
           </Text>
-          <Text color={ui.textMuted} fontSize={14} textAlign="center" maxWidth={360}>
+          <Text color={ui.textMuted} fontSize={14} textAlign="center" maxWidth={360} lineHeight={21}>
             Try adjusting your search or browse other categories.
           </Text>
         </YStack>

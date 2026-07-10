@@ -37,11 +37,16 @@ export default defineConfig(({ mode }) => {
     server: {
       port: 8081,
       strictPort: false,
+      watch: {
+        ignored: ['**/.vercel/**', '**/dist/**'],
+      },
     },
 
     resolve: {
       alias: {
         'expo-av': fileURLToPath(new URL('./lib/stubs/expo-av.ts', import.meta.url)),
+        'expo-audio': fileURLToPath(new URL('./lib/stubs/expo-audio.ts', import.meta.url)),
+        'expo-video': fileURLToPath(new URL('./lib/stubs/expo-video.ts', import.meta.url)),
         'expo-sharing': fileURLToPath(new URL('./lib/stubs/expo-sharing.ts', import.meta.url)),
         'expo-camera': fileURLToPath(new URL('./lib/stubs/expo-camera.ts', import.meta.url)),
         'expo-location': fileURLToPath(new URL('./lib/stubs/expo-location.ts', import.meta.url)),
@@ -54,6 +59,9 @@ export default defineConfig(({ mode }) => {
           new URL('./lib/stubs/datetimepicker.ts', import.meta.url),
         ),
         '@livekit/react-native': fileURLToPath(new URL('./lib/stubs/livekit-react-native.ts', import.meta.url)),
+        '@livekit/react-native-webrtc': fileURLToPath(
+          new URL('./lib/stubs/react-native-webrtc.ts', import.meta.url),
+        ),
         'react-native-webrtc': fileURLToPath(new URL('./lib/stubs/react-native-webrtc.ts', import.meta.url)),
         'react-native-webview': fileURLToPath(new URL('./lib/stubs/react-native-webview.ts', import.meta.url)),
       },
@@ -69,6 +77,17 @@ export default defineConfig(({ mode }) => {
           linking: {
             scheme: APP_SCHEME,
             prefixes: [`${APP_SCHEME}://`, appOrigin],
+          },
+        },
+
+        native: {
+          bundler: 'metro',
+          suspendRoutes: false,
+          bundlerOptions: {
+            defaultConfigOverrides: (config) => {
+              const { withoutExpoStreamsPolyfillOnNative } = require('./lib/metro-expo-polyfill-fix.cjs')
+              return withoutExpoStreamsPolyfillOnNative(config)
+            },
           },
         },
 
@@ -114,6 +133,61 @@ export default defineConfig(({ mode }) => {
         // Rolldown dev bundle runs whatwg-fetch init before Request/Response exist;
         // defer Body.call to end of fetch.js (see patch below).
         patches: {
+          '@expo/cli': {
+            'build/src/start/server/metro/withMetroMultiPlatform.js': (contents) => {
+              if (!contents) return
+
+              let next = contents
+
+              if (!next.includes('sheconomy-safe-require-external')) {
+                next = next.replace(
+                  "return 'try { global.$$require_external = typeof expo === \"undefined\" ? require : (moduleId) => { throw new Error(`Node.js standard library module ${moduleId} is not available in this JavaScript environment`);} } catch { global.$$require_external = (moduleId) => { throw new Error(`Node.js standard library module ${moduleId} is not available in this JavaScript environment`);} }';",
+                  `return 'try { global.$$require_external = (typeof require !== "undefined") ? (m) => require(m) : (moduleId) => { throw new Error(\\\`Node.js standard library module \\\${moduleId} is not available in this JavaScript environment\\\`); }; } catch { global.$$require_external = (moduleId) => { throw new Error(\\\`Node.js standard library module \\\${moduleId} is not available in this JavaScript environment\\\`); }; } // sheconomy-safe-require-external';`,
+                )
+              } else if (next.includes('global.$require_external')) {
+                next = next.replace(/global\.\$require_external/g, 'global.$$require_external')
+              }
+
+              if (!next.includes('sheconomy-skip-streams-native')) {
+                next = next.replace(
+                  `            // Removed on server platforms during the transform.
+            require.resolve('expo/virtual/streams.js')`,
+                  `            ...(ctx.platform === 'ios' || ctx.platform === 'android'
+                ? []
+                : [require.resolve('expo/virtual/streams.js')]), // sheconomy-skip-streams-native`,
+                )
+              }
+
+              if (next.includes('sheconomy-early-native-polyfills')) {
+                next = next.replace(
+                  `        const sheconomyEarlyNativePolyfills =
+            ctx.platform === 'ios' || ctx.platform === 'android'
+                ? [require('path').join(process.cwd(), 'lib/polyfills-globals.native.cjs')]
+                : [];
+        return [
+            ...sheconomyEarlyNativePolyfills, // sheconomy-early-native-polyfills
+            ...polyfills,`,
+                  `        return [
+            ...polyfills,`,
+                )
+              }
+
+              return next === contents ? undefined : next
+            },
+          },
+          one: {
+            'dist/cjs/babel-plugins/one-router-metro.cjs': (contents) => {
+              if (!contents || contents.includes('sheconomy-setup-first')) return
+              return contents.replace(
+                `          if (lastImportIndex >= 0) {
+            body[lastImportIndex].insertAfter(importDeclaration);
+          } else {
+            path.unshiftContainer("body", importDeclaration);
+          }`,
+                `          path.unshiftContainer("body", importDeclaration); // sheconomy-setup-first: polyfills before \`one\``,
+              )
+            },
+          },
           'whatwg-fetch': {
             'fetch.js': (contents) => {
               if (!contents || contents.includes('sheconomy-defer-body-call')) {
@@ -163,6 +237,18 @@ export default defineConfig(({ mode }) => {
       'import.meta.env.ONE_SERVER_URL': JSON.stringify(
         env.ONE_SERVER_URL ?? env.EXPO_PUBLIC_WEB_APP_URL ?? DEFAULT_APP_ORIGIN,
       ),
+      'process.env.EXPO_PUBLIC_SUPABASE_URL': JSON.stringify(
+        env.EXPO_PUBLIC_SUPABASE_URL?.trim() || PUBLIC_SUPABASE_URL,
+      ),
+      'process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY': JSON.stringify(
+        env.EXPO_PUBLIC_SUPABASE_ANON_KEY?.trim() || PUBLIC_SUPABASE_ANON_KEY,
+      ),
+      'process.env.EXPO_PUBLIC_WEB_APP_URL': JSON.stringify(
+        env.EXPO_PUBLIC_WEB_APP_URL ?? env.ONE_SERVER_URL ?? DEFAULT_APP_ORIGIN,
+      ),
+      'process.env.ONE_SERVER_URL': JSON.stringify(
+        env.ONE_SERVER_URL ?? env.EXPO_PUBLIC_WEB_APP_URL ?? DEFAULT_APP_ORIGIN,
+      ),
     },
 
     ssr: {
@@ -170,6 +256,16 @@ export default defineConfig(({ mode }) => {
     },
 
     optimizeDeps: {
+      exclude: [
+        '@react-native-community/datetimepicker',
+        '@livekit/react-native',
+        '@livekit/react-native-webrtc',
+        'expo-camera',
+        'expo-location',
+        'expo-audio',
+        'expo-video',
+        'react-native-webview',
+      ],
       include: [
         '@tamagui/config',
         'tamagui',

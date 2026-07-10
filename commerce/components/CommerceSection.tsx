@@ -14,7 +14,7 @@ type CommerceSectionProps = {
   children: ReactNode
 }
 
-/** Section header for commerce home rows — title left, text link right. */
+/** Section header for commerce feeds — accent rail, pill action, generous rhythm. */
 export function CommerceSection({
   title,
   subtitle,
@@ -26,36 +26,50 @@ export function CommerceSection({
 
   return (
     <YStack gap="$4" width="100%">
-      <XStack alignItems="baseline" justifyContent="space-between" gap="$3" flexWrap="wrap">
-        <YStack gap="$1" flex={1}>
-          <Text
-            fontWeight="500"
-            fontSize={22}
-            color={ui.text}
-            letterSpacing={-0.3}
-            lineHeight={28}
-          >
-            {title}
-          </Text>
-          {subtitle ? (
-            <Text color={ui.textMuted} fontSize={13} lineHeight={18}>
-              {subtitle}
+      <XStack alignItems="flex-end" justifyContent="space-between" gap="$3" flexWrap="wrap">
+        <XStack gap="$3" flex={1} alignItems="flex-start" minWidth={0}>
+          <YStack
+            width={4}
+            height={36}
+            borderRadius={999}
+            backgroundColor={ui.brand}
+            marginTop={4}
+            opacity={0.9}
+          />
+          <YStack gap="$1" flex={1} minWidth={0}>
+            <Text
+              fontWeight="800"
+              fontSize={24}
+              color={ui.text}
+              letterSpacing={-0.5}
+              lineHeight={30}
+            >
+              {title}
             </Text>
-          ) : null}
-        </YStack>
+            {subtitle ? (
+              <Text color={ui.textMuted} fontSize={13} lineHeight={18} fontWeight="500">
+                {subtitle}
+              </Text>
+            ) : null}
+          </YStack>
+        </XStack>
         {actionLabel && actionHref ? (
           <Link href={actionHref}>
             <Theme name={BRAND_THEME}>
-              <Text
-                color="$color9"
-                fontWeight="500"
-                fontSize={13}
+              <XStack
+                paddingHorizontal="$3"
+                paddingVertical="$1.5"
+                borderRadius={999}
+                backgroundColor="$color3"
                 cursor="pointer"
-                textDecorationLine="underline"
-                hoverStyle={{ color: '$color10' }}
+                animation="quick"
+                hoverStyle={{ backgroundColor: '$color4', y: -1 }}
+                pressStyle={{ scale: 0.97, y: 0 }}
               >
-                {actionLabel}
-              </Text>
+                <Text color="$color11" fontWeight="600" fontSize={12} letterSpacing={0.15}>
+                  {actionLabel}
+                </Text>
+              </XStack>
             </Theme>
           </Link>
         ) : null}

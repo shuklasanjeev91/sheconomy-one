@@ -26,7 +26,7 @@ export function CommunityShell({ children }: CommunityShellProps) {
         <PageColumns gap={COMMUNITY_LAYOUT.columnGap}>
           <CommunityLeftSidebar />
 
-          <YStack flex={1} minWidth={0} gap="$2" {...LAYOUT_STRETCH}>
+          <YStack flex={1} minWidth={0} gap="$3" {...LAYOUT_STRETCH}>
             {children}
           </YStack>
 

@@ -2,6 +2,7 @@ import { Avatar, Icons, Text, XStack, YStack } from '~/components/ui'
 import { ProfileLink } from '~/community/components/ProfileLink'
 import type { ShopAddress, ShopOwnerProfile } from '~/commerce/lib/shop-location'
 import { formatShopCountry, formatShopLocation } from '~/commerce/lib/shop-location'
+import { getShadowStyle, radius } from '~/config/tokens'
 import { useAppUi } from '~/lib/theme/useAppUi'
 
 type ShopOwnerPanelProps = {
@@ -47,15 +48,15 @@ export function ShopOwnerPanel({
   return (
     <YStack
       gap="$4"
-      padding="$4"
-      borderRadius={12}
+      padding="$4.5"
+      borderRadius={radius.card}
       borderWidth={1}
-      borderColor={ui.panelBorder}
+      borderColor={ui.borderSubtle}
       backgroundColor={ui.surface}
-      style={{ boxShadow: ui.shadowSoft }}
+      style={getShadowStyle('sm')}
     >
       <YStack gap={2}>
-        <Text fontWeight="600" fontSize={16} color={ui.text}>
+        <Text fontWeight="700" fontSize={16} color={ui.text} letterSpacing={-0.15}>
           About this shop
         </Text>
         <Text fontSize={13} color={ui.textMuted} lineHeight={18}>
@@ -68,7 +69,7 @@ export function ShopOwnerPanel({
           gap="$3"
           alignItems="center"
           padding="$3"
-          borderRadius={10}
+          borderRadius={radius.chip}
           backgroundColor={ui.surfaceMuted}
           borderWidth={1}
           borderColor={ui.borderSubtle}

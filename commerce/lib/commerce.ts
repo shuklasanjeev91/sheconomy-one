@@ -15,6 +15,7 @@ import {
   type ShopShippingSummary,
 } from '~/commerce/lib/shop-shipping'
 import { isStorefrontCategoryVisible } from '~/commerce/lib/category-visibility'
+import { formatShopLocation, normalizeShopAddress } from '~/commerce/lib/shop-location'
 import { supabase } from '~/lib/supabase/client'
 
 import { BRAND_NAME } from '~/config/brand'
@@ -31,6 +32,10 @@ export type ShopSummary = {
   total_reviews: number | null
   verified: boolean
   shop_currency: string
+  city?: string | null
+  state?: string | null
+  country?: string | null
+  location_label?: string | null
 }
 
 export type ListingImageSummary = {
@@ -623,6 +628,53 @@ export async function fetchListingFeedPage(
   }
 }
 
+const SHOP_BROWSE_SELECT =
+  'id, shop_name, slug, logo_url, shop_description, average_rating, total_reviews, verified, shop_currency, shop_addresses(city, state, country)'
+
+function toNullableNumber(value: unknown): number | null {
+  if (value == null || value === '') return null
+  const parsed = Number(value)
+  return Number.isFinite(parsed) ? parsed : null
+}
+
+function mapShopSummaryRow(
+  row: ShopSummary & { shop_addresses?: unknown },
+): ShopSummary {
+  const address = normalizeShopAddress(row.shop_addresses)
+  const { shop_addresses: _address, ...shop } = row
+  return {
+    ...shop,
+    average_rating: toNullableNumber(shop.average_rating),
+    total_reviews: toNullableNumber(shop.total_reviews),
+    city: address?.city ?? null,
+    state: address?.state ?? null,
+    country: address?.country ?? null,
+    location_label: formatShopLocation(address),
+  }
+}
+
+/** Full shop directory for browse page — includes address for country filters. */
+export async function fetchAllShopsForBrowse(): Promise<{
+  items: ShopSummary[]
+  error: string | null
+}> {
+  const { data, error } = await supabase
+    .from('shops')
+    .select(SHOP_BROWSE_SELECT)
+    .eq('is_active', true)
+    .order('shop_name', { ascending: true })
+    .limit(500)
+
+  if (error) {
+    return { items: [], error: error.message }
+  }
+
+  return {
+    items: (data ?? []).map((row) => mapShopSummaryRow(row as ShopSummary & { shop_addresses?: unknown })),
+    error: null,
+  }
+}
+
 export async function fetchShopsPage(
   page: number,
   pageSize = COMMERCE_HORIZONTAL_PAGE_SIZE,
@@ -632,10 +684,7 @@ export async function fetchShopsPage(
 
   const { data, error, count } = await supabase
     .from('shops')
-    .select(
-      'id, shop_name, slug, logo_url, shop_description, average_rating, total_reviews, verified, shop_currency',
-      { count: 'exact' },
-    )
+    .select(SHOP_BROWSE_SELECT, { count: 'exact' })
     .eq('is_active', true)
     .order('average_rating', { ascending: false, nullsFirst: false })
     .range(from, to)
@@ -646,7 +695,7 @@ export async function fetchShopsPage(
 
   const total = count ?? 0
   return {
-    items: data ?? [],
+    items: (data ?? []).map((row) => mapShopSummaryRow(row as ShopSummary & { shop_addresses?: unknown })),
     page,
     pageSize,
     hasMore: total ? to + 1 < total : (data?.length ?? 0) === pageSize,

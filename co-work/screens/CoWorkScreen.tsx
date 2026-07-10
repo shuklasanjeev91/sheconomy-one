@@ -2,7 +2,7 @@ import { Link, useRouter } from 'one'
 import { Platform } from 'react-native'
 import { useState } from 'react'
 
-import { PageContent } from '~/components/layout'
+import { PageContent, LAYOUT_STRETCH } from '~/components/layout'
 import { Button, Icons, Input, Spinner, Text, XStack, YStack, useAppToast } from '~/components/ui'
 import { CoWorkBrandChip, CoWorkFeatureCard, CoWorkIconBadge } from '~/co-work/components/CoWorkUi'
 import { createMeeting } from '~/co-work/lib/meetings'
@@ -13,6 +13,33 @@ import { useProfile } from '~/hooks/useProfile'
 import { useAppLayout } from '~/hooks/useAppLayout'
 
 import { BRAND_NAME, BRAND_COWORK_LABEL } from '~/config/brand'
+
+function CoWorkQuickStat({
+  icon: Icon,
+  label,
+}: {
+  icon: typeof Icons.Video
+  label: string
+}) {
+  const { ui: coworkUi } = useCoWorkTheme()
+  return (
+    <XStack
+      gap={8}
+      alignItems="center"
+      paddingHorizontal={14}
+      paddingVertical={8}
+      borderRadius={999}
+      borderWidth={1}
+      borderColor={coworkUi.glassBorder}
+      backgroundColor={coworkUi.surfaceMuted}
+    >
+      <Icon size={15} color={coworkUi.brandLight} />
+      <Text fontSize={12} fontWeight="700" color={coworkUi.textSecondary} letterSpacing={0.2}>
+        {label}
+      </Text>
+    </XStack>
+  )
+}
 
 function buildFeatures(brandLight: string) {
   return [
@@ -75,7 +102,7 @@ export function CoWorkScreen() {
       paddingVertical="$6"
       style={pageGradientStyle(coworkGradients.page, coworkUi.pageBg)}
     >
-      <YStack gap="$7" width="100%">
+      <YStack gap="$7" width="100%" {...LAYOUT_STRETCH}>
         <YStack gap="$4" position="relative">
           <CoWorkBrandChip label={BRAND_COWORK_LABEL} />
           <Text
@@ -84,14 +111,19 @@ export function CoWorkScreen() {
             color={coworkUi.text}
             letterSpacing={-1.2}
             lineHeight={isDesktop ? 46 : 38}
-            maxWidth={720}
+            maxWidth="100%"
           >
             Professional meetings, built for your community
           </Text>
-          <Text fontSize={16} color={coworkUi.textSecondary} lineHeight={25} maxWidth={600}>
+          <Text fontSize={16} color={coworkUi.textSecondary} lineHeight={25}>
             Host branded video rooms with chat, screen sharing, waiting room, hand raise, and host controls — all in
             one {BRAND_NAME} experience.
           </Text>
+          <XStack gap="$3" flexWrap="wrap" paddingTop="$1">
+            <CoWorkQuickStat icon={Icons.Video} label="HD video" />
+            <CoWorkQuickStat icon={Icons.Shield} label="Secure rooms" />
+            <CoWorkQuickStat icon={Icons.Users} label="Host controls" />
+          </XStack>
         </YStack>
 
         <XStack gap="$3" flexWrap="wrap">

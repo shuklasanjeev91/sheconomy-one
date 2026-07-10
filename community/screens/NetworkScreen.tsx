@@ -5,6 +5,7 @@ import { useEffect, useState } from 'react'
 import { CommunityShell } from '~/community/components/CommunityShell'
 import { CommunityWidget } from '~/community/components/CommunityWidget'
 import { CommunityCard } from '~/community/components/CommunityCard'
+import { CommunityPageHeader } from '~/community/components/CommunityPageHeader'
 import { MemberRow } from '~/community/components/MemberRow'
 import { useCommunityUi } from '~/community/lib/community-theme'
 import { fetchDiscoverMembers, type NetworkMember } from '~/community/lib/network'
@@ -188,18 +189,16 @@ function NetworkHero({
   invitationsCount: number
   isGuest?: boolean
 }) {
-  const ui = useAppUi()
-
   return (
-    <CommunityCard padding={16} gap={12}>
-      <Text fontSize={24} fontWeight="600" color={ui.text} letterSpacing={-0.3}>
-        My network
-      </Text>
-      <Text fontSize={15} color={ui.textMuted} lineHeight={22}>
-        {isGuest
-          ? `Connect with women entrepreneurs, founders, and creators building on ${BRAND_NAME}.`
-          : 'Manage invitations, discover network suggestions, and grow your professional network.'}
-      </Text>
+    <CommunityCard padding={18} gap={12}>
+      <CommunityPageHeader
+        title="My network"
+        subtitle={
+          isGuest
+            ? `Connect with women entrepreneurs, founders, and creators building on ${BRAND_NAME}.`
+            : 'Manage invitations, discover network suggestions, and grow your professional network.'
+        }
+      />
 
       {!isGuest ? (
         <XStack gap="$3" flexWrap="wrap">

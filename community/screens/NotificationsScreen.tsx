@@ -2,7 +2,8 @@ import { Link } from 'one'
 import { useCallback, useEffect, useState } from 'react'
 
 import { CommunityCard } from '~/community/components/CommunityCard'
-import { FullWidthLayout, PageRail, PageSection } from '~/components/layout'
+import { CommunityPageHeader } from '~/community/components/CommunityPageHeader'
+import { FullWidthLayout, LAYOUT_STRETCH, PageSection } from '~/components/layout'
 import {
   fetchNotifications,
   markAllNotificationsRead,
@@ -64,19 +65,18 @@ export function NotificationsScreen() {
 
   return (
     <FullWidthLayout scroll>
-      <PageSection paddingVertical="$6">
-        <PageRail>
-          <CommunityCard padding={16} gap={12}>
-            <XStack justifyContent="space-between" alignItems="center">
-              <Text fontSize={24} fontWeight="700" color={ui.text}>
-                Notifications
-              </Text>
-              {user ? (
-                <Button size="$3" tone="outline" onPress={handleMarkAll}>
-                  Mark all read
-                </Button>
-              ) : null}
-            </XStack>
+      <PageSection paddingVertical="$6" {...LAYOUT_STRETCH}>
+          <CommunityCard padding={18} gap={14} width="100%">
+            <CommunityPageHeader
+              title="Notifications"
+              actions={
+                user ? (
+                  <Button size="$3" tone="outline" borderRadius={999} onPress={handleMarkAll}>
+                    Mark all read
+                  </Button>
+                ) : undefined
+              }
+            />
             {!user ? (
               <Text color={ui.textMuted}>Sign in to see your notifications.</Text>
             ) : isLoading ? (
@@ -84,7 +84,11 @@ export function NotificationsScreen() {
                 <Spinner size="large" color={communityUi.brand} />
               </YStack>
             ) : items.length === 0 ? (
-              <Text color={ui.textMuted}>You are all caught up.</Text>
+              <YStack alignItems="center" paddingVertical="$6" gap="$2">
+                <Text color={ui.textMuted} fontWeight="500" textAlign="center">
+                  You are all caught up.
+                </Text>
+              </YStack>
             ) : (
               <YStack gap={0}>
                 {items.map((notification) => (
@@ -113,7 +117,6 @@ export function NotificationsScreen() {
               </YStack>
             )}
           </CommunityCard>
-        </PageRail>
       </PageSection>
     </FullWidthLayout>
   )
@@ -130,19 +133,28 @@ function NotificationRow({
   const row = (
     <XStack
       gap={12}
-      paddingVertical={12}
+      paddingVertical={14}
       borderBottomWidth={1}
       borderBottomColor={communityUi.borderLight}
-      backgroundColor={notification.read ? 'transparent' : 'rgba(10,102,194,0.06)'}
+      backgroundColor={notification.read ? 'transparent' : communityUi.accentMuted}
       alignItems="flex-start"
       cursor="pointer"
+      borderRadius={10}
+      marginBottom={4}
+      paddingHorizontal={4}
+      hoverStyle={{ backgroundColor: communityUi.hoverBg }}
       onPress={() => onOpen(notification)}
     >
       <Avatar name={notification.title} src={notification.image_url ?? undefined} size="$3" />
       <YStack flex={1} gap={4}>
-        <Text fontSize={14} fontWeight={notification.read ? '500' : '700'} color={communityUi.text}>
-          {notification.title}
-        </Text>
+        <XStack alignItems="center" gap={8}>
+          {!notification.read ? (
+            <YStack width={8} height={8} borderRadius={999} backgroundColor={communityUi.brand} flexShrink={0} />
+          ) : null}
+          <Text fontSize={14} fontWeight={notification.read ? '500' : '700'} color={communityUi.text} flex={1}>
+            {notification.title}
+          </Text>
+        </XStack>
         <Text fontSize={13} color={communityUi.textMuted} lineHeight={18}>
           {notification.message}
         </Text>

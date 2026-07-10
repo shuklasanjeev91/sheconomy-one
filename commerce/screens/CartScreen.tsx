@@ -12,13 +12,14 @@ import {
   YStack,
   useAppToast,
 } from '~/components/ui'
-import { FullWidthLayout, PageRail, PageSection } from '~/components/layout'
+import { FullWidthLayout, LAYOUT_STRETCH, PageSection } from '~/components/layout'
 import { BRAND_THEME } from '~/config/tokens'
 import { useCart } from '~/commerce/hooks/useCart'
-import { ListingTypeBadge } from '~/commerce/components'
+import { CommercePageHeader, CommercePanel, ListingTypeBadge } from '~/commerce/components'
 import { fetchListingSlugMap, fetchListingTypesByIds, isDigitalListing } from '~/lib/supabase/commerce'
 import { formatCurrency } from '~/lib/format'
 import { commerceRoutes } from '~/lib/routes'
+import { getShadowStyle, radius } from '~/config/tokens'
 import { useAppUi } from '~/lib/theme/useAppUi'
 
 export function CartScreen() {
@@ -88,19 +89,16 @@ export function CartScreen() {
 
   return (
     <FullWidthLayout scroll>
-      <PageSection paddingVertical="$6">
-        <PageRail>
-          <YStack gap="$5" width="100%">
-            <YStack gap="$1">
-              <Text fontSize={28} fontWeight="500" color={ui.text} letterSpacing={-0.4}>
-                Your cart
-              </Text>
-              <Text fontSize={14} color={ui.textSecondary}>
-                {items.length
+      <PageSection paddingVertical="$6" {...LAYOUT_STRETCH}>
+          <YStack gap="$6" width="100%" {...LAYOUT_STRETCH}>
+            <CommercePageHeader
+              title="Your cart"
+              subtitle={
+                items.length
                   ? `${items.reduce((sum, item) => sum + item.quantity, 0)} items from ${groupedByShop.length} ${groupedByShop.length === 1 ? 'shop' : 'shops'}`
-                  : 'Your cart is empty'}
-              </Text>
-            </YStack>
+                  : 'Your cart is empty'
+              }
+            />
 
             {error ? (
               <Text color={ui.danger} fontSize={14}>
@@ -109,18 +107,9 @@ export function CartScreen() {
             ) : null}
 
             {items.length === 0 ? (
-              <YStack
-                alignItems="center"
-                justifyContent="center"
-                paddingVertical="$10"
-                gap="$4"
-                borderRadius={12}
-                borderWidth={1}
-                borderColor={ui.borderSubtle}
-                backgroundColor={ui.surface}
-              >
-                <Icons.ShoppingBag size={40} color={ui.icon} />
-                <Text fontSize={16} color={ui.textSecondary} textAlign="center">
+              <CommercePanel alignItems="center" justifyContent="center" paddingVertical="$10" gap="$4">
+                <Icons.ShoppingBag size={44} color={ui.brand} opacity={0.85} />
+                <Text fontSize={16} color={ui.textSecondary} textAlign="center" fontWeight="500">
                   Discover something you love and add it to your cart.
                 </Text>
                 <Link href={commerceRoutes.home} asChild>
@@ -130,39 +119,43 @@ export function CartScreen() {
                     </Button>
                   </Theme>
                 </Link>
-              </YStack>
+              </CommercePanel>
             ) : (
-              <YStack gap="$5" width="100%">
+              <XStack
+                width="100%"
+                flexDirection="column"
+                gap="$5"
+                $gtMd={{ flexDirection: 'row', alignItems: 'flex-start', gap: '$6' }}
+              >
                 <YStack flex={1} minWidth={280} gap="$4">
                   {groupedByShop.map(([shopId, shopItems]) => (
-                    <YStack
-                      key={shopId}
-                      gap="$3"
-                      padding="$4"
-                      borderRadius={12}
-                      borderWidth={1}
-                      borderColor={ui.borderSubtle}
-                      backgroundColor={ui.surface}
-                    >
-                      <Text fontWeight="500" fontSize={15} color={ui.text}>
-                        {shopItems[0]?.shop_name}
-                      </Text>
+                    <CommercePanel key={shopId} gap="$3">
+                      <XStack alignItems="center" gap="$2">
+                        <Icons.Store size={16} color={ui.brand} />
+                        <Text fontWeight="700" fontSize={15} color={ui.text} letterSpacing={-0.15}>
+                          {shopItems[0]?.shop_name}
+                        </Text>
+                      </XStack>
                       {shopItems.map((item) => (
                         <XStack key={item.id} gap="$3" alignItems="center">
                           <Link href={listingHref(item.listing_id)} asChild>
                             <YStack
-                              width={88}
-                              height={88}
-                              borderRadius={8}
+                              width={92}
+                              height={92}
+                              borderRadius={radius.chip}
                               overflow="hidden"
                               backgroundColor={ui.imagePlaceholder}
                               cursor="pointer"
+                              borderWidth={1}
+                              borderColor={ui.borderSubtle}
+                              animation="quick"
+                              hoverStyle={{ opacity: 0.92, scale: 0.98 }}
                             >
                               {item.image_url ? (
                                 <Image
                                   src={item.image_url}
-                                  width={88}
-                                  height={88}
+                                  width={92}
+                                  height={92}
                                   objectFit="cover"
                                 />
                               ) : null}
@@ -172,10 +165,11 @@ export function CartScreen() {
                             <Link href={listingHref(item.listing_id)} asChild>
                               <Text
                                 fontSize={14}
+                                fontWeight="600"
                                 color={ui.text}
                                 numberOfLines={2}
                                 cursor="pointer"
-                                hoverStyle={{ textDecorationLine: 'underline' }}
+                                hoverStyle={{ color: ui.brand }}
                               >
                                 {item.title}
                               </Text>
@@ -197,32 +191,43 @@ export function CartScreen() {
                                 }
                               />
                             ) : null}
-                            <Text fontWeight="700" fontSize={15} color={ui.text}>
+                            <Text fontWeight="800" fontSize={16} color={ui.text} letterSpacing={-0.3}>
                               {formatCurrency(item.unit_price, currency)}
                             </Text>
-                            <XStack gap="$2" alignItems="center">
-                              <Button
-                                tone="outline"
-                                size="$2"
+                            <XStack gap="$2" alignItems="center" flexWrap="wrap">
+                              <XStack
+                                alignItems="center"
+                                borderWidth={1}
+                                borderColor={ui.borderSubtle}
                                 borderRadius={999}
-                                onPress={() => handleQuantityChange(item.id, item.quantity - 1)}
+                                overflow="hidden"
                               >
-                                −
-                              </Button>
-                              <Text fontSize={14} minWidth={24} textAlign="center">
-                                {item.quantity}
-                              </Text>
-                              <Button
-                                tone="outline"
-                                size="$2"
-                                borderRadius={999}
-                                onPress={() => handleQuantityChange(item.id, item.quantity + 1)}
-                              >
-                                +
-                              </Button>
+                                <Button
+                                  tone="ghost"
+                                  size="$2"
+                                  borderRadius={0}
+                                  minWidth={36}
+                                  onPress={() => handleQuantityChange(item.id, item.quantity - 1)}
+                                >
+                                  −
+                                </Button>
+                                <Text fontSize={14} minWidth={28} textAlign="center" fontWeight="600">
+                                  {item.quantity}
+                                </Text>
+                                <Button
+                                  tone="ghost"
+                                  size="$2"
+                                  borderRadius={0}
+                                  minWidth={36}
+                                  onPress={() => handleQuantityChange(item.id, item.quantity + 1)}
+                                >
+                                  +
+                                </Button>
+                              </XStack>
                               <Button
                                 tone="ghost"
                                 size="$2"
+                                color={ui.danger}
                                 onPress={() => handleRemove(item.id)}
                               >
                                 Remove
@@ -231,28 +236,25 @@ export function CartScreen() {
                           </YStack>
                         </XStack>
                       ))}
-                    </YStack>
+                    </CommercePanel>
                   ))}
                 </YStack>
 
-                <YStack
+                <CommercePanel
+                  flex={1}
                   width="100%"
                   gap="$4"
-                  padding="$4"
-                  borderRadius={12}
-                  borderWidth={1}
-                  borderColor={ui.borderSubtle}
-                  backgroundColor={ui.surface}
-                  style={{ boxShadow: ui.shadowCard }}
+                  style={getShadowStyle('md')}
                   $gtMd={{
-                    width: 320,
+                    flex: 0,
+                    width: 340,
                     maxWidth: '100%',
                     position: 'sticky',
                     top: 80,
                     alignSelf: 'flex-start',
                   }}
                 >
-                  <Text fontWeight="500" fontSize={18} color={ui.text}>
+                  <Text fontWeight="700" fontSize={18} color={ui.text} letterSpacing={-0.2}>
                     Order summary
                   </Text>
                   <XStack justifyContent="space-between">
@@ -290,11 +292,10 @@ export function CartScreen() {
                       Continue shopping
                     </Button>
                   </Link>
-                </YStack>
-              </YStack>
+                </CommercePanel>
+              </XStack>
             )}
           </YStack>
-        </PageRail>
       </PageSection>
     </FullWidthLayout>
   )

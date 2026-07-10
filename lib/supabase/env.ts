@@ -3,10 +3,7 @@ import { PUBLIC_SUPABASE_ANON_KEY, PUBLIC_SUPABASE_URL } from '~/config/supabase
 type SupabaseEnvKey = 'EXPO_PUBLIC_SUPABASE_URL' | 'EXPO_PUBLIC_SUPABASE_ANON_KEY'
 
 function readEnv(key: SupabaseEnvKey): string {
-  const candidates = [
-    import.meta.env[key],
-    typeof process !== 'undefined' ? process.env[key] : undefined,
-  ]
+  const candidates = [typeof process !== 'undefined' ? process.env[key] : undefined]
 
   for (const value of candidates) {
     if (typeof value === 'string' && value.trim().length > 0) {

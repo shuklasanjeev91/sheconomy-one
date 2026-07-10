@@ -2,7 +2,7 @@ import { Link, useRouter } from 'one'
 import { useMemo, useState } from 'react'
 
 import { RequireAuth } from '~/components/auth/RequireAuth'
-import { AppPage } from '~/components/layout'
+import { AppPage, LAYOUT_STRETCH } from '~/components/layout'
 import { Button, Field, Icons, Input, Spinner, Text, XStack, YStack, useAppToast } from '~/components/ui'
 import { CoWorkBrandChip } from '~/co-work/components/CoWorkUi'
 import { defaultScheduleDateTime, ScheduleDateTimeField } from '~/co-work/components/ScheduleDateTimeField'
@@ -155,7 +155,7 @@ export function ScheduleMeetingScreen() {
       paddingVertical="$6"
       style={pageGradientStyle(coworkGradients.page, coworkUi.pageBg)}
     >
-      <YStack gap="$5" width="100%" maxWidth={720} alignSelf="center">
+      <YStack gap="$5" width="100%" {...LAYOUT_STRETCH}>
         <YStack gap="$3">
           <CoWorkBrandChip label="SCHEDULE" />
           <Text fontSize={30} fontWeight="800" color={coworkUi.text} letterSpacing={-0.8}>

@@ -1,33 +1,65 @@
 import { Platform } from 'react-native'
 
-import { getShadowStyle, webShadows } from '~/config/tokens'
+import { getShadowStyle, radius, webShadows, webShadowsDark, type ColorScheme } from '~/config/tokens'
 import type { AppUiTokens } from '~/lib/theme/app-ui'
 
 /** Shared elevated card surface — theme-aware border, radius, and shadow. */
-export function elevatedCardStyle(ui: AppUiTokens, size: 'sm' | 'md' = 'sm') {
+export function elevatedCardStyle(
+  ui: AppUiTokens,
+  size: 'sm' | 'md' = 'sm',
+  scheme: ColorScheme = 'light',
+) {
+  const isDark = scheme === 'dark'
   return {
     backgroundColor: ui.surface,
-    borderRadius: 16,
+    borderRadius: radius.card,
     borderWidth: 1,
     borderColor: ui.borderSubtle,
     ...(Platform.OS === 'web'
-      ? { boxShadow: size === 'md' ? webShadows.md : webShadows.sm }
-      : getShadowStyle(size)),
+      ? { boxShadow: isDark ? webShadowsDark[size] : webShadows[size] }
+      : getShadowStyle(size, scheme)),
   } as const
 }
 
-/** Froststed app chrome (headers, tab bars) — blur on web, solid on native. */
+/** Frosted app chrome (headers, tab bars) — blur on web, elevated surface on native. */
 export function chromeSurfaceStyle(ui: AppUiTokens) {
   return Platform.select({
     web: {
       backgroundColor: ui.chromeBg,
-      backdropFilter: 'blur(20px) saturate(180%)',
-      WebkitBackdropFilter: 'blur(20px) saturate(180%)',
+      backdropFilter: 'blur(24px) saturate(200%)',
+      WebkitBackdropFilter: 'blur(24px) saturate(200%)',
       borderColor: ui.borderSubtle,
     },
     default: {
-      backgroundColor: ui.surface,
-      borderColor: ui.border,
+      backgroundColor: ui.elevatedSurface,
+      borderColor: ui.borderSubtle,
+      ...getShadowStyle('sm'),
+    },
+  })
+}
+
+/** Full-width mobile bottom tab dock — native app chrome. */
+export function mobileTabBarDockStyle(ui: AppUiTokens, options?: { dark?: boolean; surface?: string }) {
+  const bg = options?.surface ?? ui.chromeBg
+  return Platform.select({
+    web: {
+      width: '100%',
+      maxWidth: '100vw',
+      backgroundColor: bg,
+      backdropFilter: 'blur(28px) saturate(210%)',
+      WebkitBackdropFilter: 'blur(28px) saturate(210%)',
+      borderTopWidth: 1,
+      borderTopColor: ui.borderSubtle,
+      boxShadow: options?.dark
+        ? '0 -8px 32px rgba(0, 0, 0, 0.35)'
+        : '0 -4px 24px rgba(16, 12, 14, 0.07)',
+    },
+    default: {
+      width: '100%',
+      backgroundColor: options?.surface ?? ui.elevatedSurface,
+      borderTopWidth: 1,
+      borderTopColor: ui.borderSubtle,
+      ...getShadowStyle('sm'),
     },
   })
 }
@@ -39,7 +71,26 @@ export function searchFieldStyle(ui: AppUiTokens) {
     borderRadius: 999,
     borderWidth: 1,
     borderColor: ui.borderSubtle,
+    ...(Platform.OS === 'web'
+      ? {
+          transition: 'border-color 0.2s ease, box-shadow 0.2s ease',
+        }
+      : {}),
   } as const
+}
+
+/** Focus ring for inline search inputs on native + web. */
+export function searchFieldFocusStyle(ui: AppUiTokens) {
+  return Platform.select({
+    web: {
+      borderColor: ui.brand,
+      boxShadow: `0 0 0 3px ${ui.focusRing}`,
+    },
+    default: {
+      borderColor: ui.brand,
+      borderWidth: 1.5,
+    },
+  })
 }
 
 /** Interactive list-row hover surface. */

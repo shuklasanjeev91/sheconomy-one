@@ -13,11 +13,11 @@ type PageScrollProps = {
 
 /**
  * Cross-platform scroll container.
- * Mobile native: flex ScrollView between sticky header and fixed bottom tabs.
- * Web desktop: natural document flow so the global footer follows content.
+ * Web desktop: natural document flow (window scroll) so footer follows content.
+ * Native + mobile web: flex ScrollView between sticky header and bottom tabs.
  */
 export function PageScroll({ children }: PageScrollProps) {
-  const { isDesktop } = useAppLayout()
+  const { isDesktopWeb, mobileTabBarOffset } = useAppLayout()
   const { setScrollY } = useAppBarScroll()
   const ui = useAppUi()
 
@@ -29,7 +29,9 @@ export function PageScroll({ children }: PageScrollProps) {
     setScrollY(event.nativeEvent.contentOffset.y)
   }
 
-  if (isDesktop) {
+  const useDocumentScroll = Platform.OS === 'web' && isDesktopWeb
+
+  if (useDocumentScroll) {
     return (
       <YStack width="100%" maxWidth="100%" alignSelf="stretch" backgroundColor={ui.background}>
         {children}
@@ -45,12 +47,19 @@ export function PageScroll({ children }: PageScrollProps) {
       backgroundColor={ui.background}
       onScroll={handleScroll}
       scrollEventThrottle={16}
-      showsVerticalScrollIndicator={Platform.OS === 'web'}
+      showsVerticalScrollIndicator
       keyboardShouldPersistTaps="handled"
+      nestedScrollEnabled
+      style={
+        Platform.OS === 'web'
+          ? ({ flex: 1, minHeight: 0, overflowY: 'auto', WebkitOverflowScrolling: 'touch' } as const)
+          : undefined
+      }
       contentContainerStyle={{
-        flexGrow: 1,
         width: '100%',
         maxWidth: '100%',
+        backgroundColor: ui.background,
+        paddingBottom: isDesktopWeb ? 0 : mobileTabBarOffset,
       }}
     >
       {children}

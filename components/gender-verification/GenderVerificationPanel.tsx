@@ -2,7 +2,6 @@ import type { RefObject } from 'react'
 import { useEffect, useState } from 'react'
 import { Platform } from 'react-native'
 
-import { useAuthUi } from '~/components/auth/auth-theme'
 import { Icons, Spinner, Text, XStack, YStack } from '~/components/ui'
 import type { VerificationPhase } from '~/lib/gender-verification'
 import { buildAbsoluteUrl } from '~/lib/platform/url'
@@ -163,7 +162,6 @@ const STEPS = [
 ] as const
 
 export function VerificationSteps({ phase }: VerificationStepsProps) {
-  const authUi = useAuthUi()
   const ui = useAppUi()
 
   function stepState(stepId: (typeof STEPS)[number]['id']) {
@@ -184,9 +182,9 @@ export function VerificationSteps({ phase }: VerificationStepsProps) {
       {STEPS.map((step) => {
         const state = stepState(step.id)
         const color =
-          state === 'done' ? ui.brand : state === 'active' ? ui.text : authUi.stepText
+          state === 'done' ? ui.brand : state === 'active' ? ui.text : ui.textMuted
         const bg =
-          state === 'done' ? ui.brand : state === 'active' ? ui.surfaceMuted : authUi.stepInactive
+          state === 'done' ? ui.brand : state === 'active' ? ui.surfaceMuted : ui.borderSubtle
 
         return (
           <YStack key={step.id} flex={1} gap="$2" alignItems="center">
@@ -201,7 +199,7 @@ export function VerificationSteps({ phase }: VerificationStepsProps) {
               {state === 'done' ? (
                 <Icons.Check size={16} color={ui.onBrand} />
               ) : (
-                <Text fontSize={12} fontWeight="800" color={state === 'active' ? ui.text : authUi.stepText}>
+                <Text fontSize={12} fontWeight="800" color={state === 'active' ? ui.text : ui.textMuted}>
                   {step.id === 'position' ? '1' : step.id === 'blink' ? '2' : '3'}
                 </Text>
               )}

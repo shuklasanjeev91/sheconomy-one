@@ -12,6 +12,7 @@ import type { CommunityPost } from '~/community/lib/community'
 import { isGifUrl } from '~/community/lib/giphy'
 import { useCommunityUi } from '~/community/lib/community-theme'
 import { Avatar, Button, Icons, Image, Text, XStack, YStack } from '~/components/ui'
+import { radius } from '~/config/tokens'
 import { communityRoutes, routes } from '~/lib/routes'
 import { useSupabase } from '~/providers/SupabaseProvider'
 import { rsvpToPostEvent, cancelPostEventRsvp, fetchPostEventRsvpState } from '~/community/lib/events'
@@ -70,7 +71,7 @@ export function FeedPostCard({ post }: FeedPostCardProps) {
   return (
     <>
       <CommunityCard gap={0}>
-        <XStack paddingHorizontal={12} paddingTop={12} paddingBottom={8} gap={8} alignItems="flex-start">
+        <XStack paddingHorizontal={16} paddingTop={16} paddingBottom={12} gap={12} alignItems="flex-start">
           {post.company ? (
             <Link href={communityRoutes.company(post.company.slug)} asChild>
               <Avatar name={avatarName} src={avatarSrc} size="$4" cursor="pointer" />
@@ -153,7 +154,7 @@ export function FeedPostCard({ post }: FeedPostCardProps) {
           </XStack>
         </XStack>
 
-        <YStack paddingHorizontal={12} paddingBottom={8} gap={8}>
+        <YStack paddingHorizontal={16} paddingBottom={12} gap={10}>
           <PostContentText content={post.content} />
           {post.event_rsvp_enabled && post.event_title ? (
             <PostEventCard post={post} onRequireAuth={requireAuth} />
@@ -199,9 +200,9 @@ export function FeedPostCard({ post }: FeedPostCardProps) {
         ) : null}
 
         <XStack
-          paddingHorizontal={4}
+          paddingHorizontal={8}
           marginHorizontal={8}
-          marginBottom={4}
+          marginBottom={8}
           borderTopWidth={1}
           borderTopColor={communityUi.borderLight}
           justifyContent="space-around"
@@ -275,23 +276,23 @@ function PostMedia({ urls }: { urls: string[] }) {
     const url = urls[0]
     if (isGifUrl(url)) {
       return (
-        <YStack width="100%" borderRadius={4} overflow="hidden" backgroundColor={communityUi.pageBg}>
+        <YStack width="100%" borderRadius={radius.card} overflow="hidden" backgroundColor={communityUi.pageBg}>
           {/* eslint-disable-next-line jsx-a11y/alt-text */}
           <img src={url} style={{ width: '100%', maxHeight: 420, objectFit: 'contain' }} />
         </YStack>
       )
     }
     return (
-      <YStack width="100%" borderRadius={4} overflow="hidden" backgroundColor={communityUi.pageBg}>
+      <YStack width="100%" borderRadius={radius.card} overflow="hidden" backgroundColor={communityUi.pageBg}>
         <Image src={url} width="100%" height={360} objectFit="cover" alt="" />
       </YStack>
     )
   }
 
   return (
-    <XStack flexWrap="wrap" gap={2} borderRadius={4} overflow="hidden">
+    <XStack flexWrap="wrap" gap={4} borderRadius={radius.card} overflow="hidden">
       {urls.slice(0, 4).map((url) => (
-        <YStack key={url} width="49%" height={180} backgroundColor={communityUi.pageBg}>
+        <YStack key={url} width="49%" height={180} backgroundColor={communityUi.pageBg} borderRadius={radius.chip} overflow="hidden">
           {isGifUrl(url) ? (
             // eslint-disable-next-line jsx-a11y/alt-text
             <img src={url} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
@@ -320,16 +321,18 @@ function PostActionButton({
       alignItems="center"
       justifyContent="center"
       gap={6}
-      paddingVertical={12}
+      paddingVertical={10}
       paddingHorizontal={8}
-      borderRadius={4}
+      borderRadius={999}
       cursor="pointer"
+      animation="quick"
       hoverStyle={{ backgroundColor: communityUi.divider }}
+      pressStyle={{ scale: 0.97 }}
       onPress={onPress}
     >
       <Icon size={20} color={communityUi.textMuted} />
       <Text
-        fontSize={14}
+        fontSize={13}
         fontWeight="600"
         color={communityUi.textMuted}
         display="none"

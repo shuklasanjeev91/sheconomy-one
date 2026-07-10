@@ -29,6 +29,7 @@ import {
   useMedia,
 } from '~/components/ui'
 import { communityRoutes } from '~/lib/routes'
+import { getShadowStyle, radius } from '~/config/tokens'
 import { useAppUi } from '~/lib/theme/useAppUi'
 
 type ProfileViewProps = {
@@ -149,11 +150,11 @@ function ProfileHero({
   return (
     <YStack
       backgroundColor={ui.surface}
-      borderRadius={12}
+      borderRadius={radius.card}
       borderWidth={1}
-      borderColor={ui.border}
+      borderColor={ui.borderSubtle}
       overflow="hidden"
-      style={{ boxShadow: '0 1px 3px rgba(0,0,0,0.06)' }}
+      style={getShadowStyle('sm')}
     >
       <CoverBanner coverUrl={profile.cover_url} />
 
@@ -173,7 +174,7 @@ function ProfileHero({
             borderWidth={4}
             borderColor={ui.surface}
             flexShrink={0}
-            style={{ boxShadow: '0 2px 8px rgba(0,0,0,0.12)' }}
+            style={getShadowStyle('md')}
           />
           {headerActions ? (
             <XStack
@@ -251,11 +252,12 @@ function ProfileCompletionCard({ percent }: { percent: number }) {
   return (
     <YStack
       backgroundColor={ui.surface}
-      borderRadius={12}
+      borderRadius={radius.card}
       borderWidth={1}
-      borderColor={ui.border}
+      borderColor={ui.borderSubtle}
       padding="$4"
       gap="$3"
+      style={getShadowStyle('sm')}
     >
       <XStack justifyContent="space-between" alignItems="center">
         <Text fontWeight="600" color={ui.text}>
@@ -483,7 +485,7 @@ function EducationRow({ item }: { item: ProfileEducation }) {
         <YStack
           width={48}
           height={48}
-          borderRadius={8}
+          borderRadius={radius.chip}
           overflow="hidden"
           backgroundColor={ui.surfaceMuted}
         >
@@ -819,16 +821,17 @@ function SectionCard({
   return (
     <YStack
       backgroundColor={ui.surface}
-      borderRadius={12}
+      borderRadius={radius.card}
       borderWidth={1}
-      borderColor={ui.border}
+      borderColor={ui.borderSubtle}
       padding="$4"
       gap="$3"
-      style={{ boxShadow: '0 1px 2px rgba(0,0,0,0.04)' }}
+      style={getShadowStyle('sm')}
     >
-      <XStack gap="$2" alignItems="center">
-        {Icon ? <Icon size={20} color={BRAND_BLUE} /> : null}
-        <Text fontSize={18} fontWeight="700" color={ui.text} letterSpacing={-0.2}>
+      <XStack gap="$2.5" alignItems="center">
+        <YStack width={3} height={20} borderRadius={999} backgroundColor={ui.brand} opacity={0.85} />
+        {Icon ? <Icon size={18} color={BRAND_BLUE} /> : null}
+        <Text fontSize={18} fontWeight="700" color={ui.text} letterSpacing={-0.25}>
           {title}
         </Text>
       </XStack>
@@ -853,7 +856,7 @@ function OrgAvatar({ name }: { name: string }) {
     <YStack
       width={48}
       height={48}
-      borderRadius={8}
+      borderRadius={radius.chip}
       backgroundColor={ui.surfaceMuted}
       alignItems="center"
       justifyContent="center"

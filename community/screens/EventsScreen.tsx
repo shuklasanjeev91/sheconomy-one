@@ -2,6 +2,7 @@ import { Link } from 'one'
 import { useCallback, useEffect, useState } from 'react'
 
 import { CommunityCard } from '~/community/components/CommunityCard'
+import { CommunityPageHeader } from '~/community/components/CommunityPageHeader'
 import { CommunityShell } from '~/community/components/CommunityShell'
 import { fetchUpcomingEvents, type CommunityEvent } from '~/community/lib/events'
 import { useCommunityUi } from '~/community/lib/community-theme'
@@ -35,22 +36,23 @@ export function EventsScreen() {
 
   return (
     <CommunityShell wide>
-      <CommunityCard padding={16} gap={12}>
-        <XStack justifyContent="space-between" alignItems="flex-start" gap={12} flexWrap="wrap">
-          <YStack gap={4} flex={1}>
-            <Text fontSize={24} fontWeight="700" color={communityUi.text}>
-              Events
-            </Text>
-            <Text fontSize={14} color={communityUi.textMuted} lineHeight={20}>
-              Discover meetups, workshops, and online sessions from the {BRAND_NAME} network.
-            </Text>
-          </YStack>
-          <Link href={communityRoutes.eventCreate}>
-            <Button backgroundColor={communityUi.brand} color="white" borderRadius={999} icon={<Icons.Plus size={16} color="white" />}>
-              Create event
-            </Button>
-          </Link>
-        </XStack>
+      <CommunityCard padding={18} gap={12}>
+        <CommunityPageHeader
+          title="Events"
+          subtitle={`Discover meetups, workshops, and online sessions from the ${BRAND_NAME} network.`}
+          actions={
+            <Link href={communityRoutes.eventCreate}>
+              <Button
+                backgroundColor={communityUi.brand}
+                color="white"
+                borderRadius={999}
+                icon={<Icons.Plus size={16} color="white" />}
+              >
+                Create event
+              </Button>
+            </Link>
+          }
+        />
       </CommunityCard>
 
       {isLoading ? (

@@ -1,5 +1,5 @@
 import type { LucideIcon } from '@tamagui/lucide-icons'
-import { Calendar, Radio, ShieldCheck, Store, Users } from '@tamagui/lucide-icons'
+import { Calendar, Radio, ShieldCheck, Sparkles, Store, Users } from '@tamagui/lucide-icons'
 
 import { BRAND_NAME } from '~/config/brand'
 
@@ -7,6 +7,8 @@ export type AuthBenefitSlide = {
   icon: LucideIcon
   title: string
   body: string
+  /** Show SHEconomy brand mark instead of the Lucide icon. */
+  brandLogo?: boolean
 }
 
 export const AUTH_BENEFIT_SLIDES: AuthBenefitSlide[] = [
@@ -35,4 +37,15 @@ export const AUTH_BENEFIT_SLIDES: AuthBenefitSlide[] = [
     title: 'Join community events',
     body: 'RSVP to workshops, meetups, and live sessions tailored for women entrepreneurs.',
   },
+]
+
+/** Full-screen mobile onboarding slides (welcome + key benefits). */
+export const AUTH_ONBOARDING_SLIDES: AuthBenefitSlide[] = [
+  {
+    icon: Sparkles,
+    title: `Welcome to ${BRAND_NAME}`,
+    body: 'Where women shop, sell, learn, and grow together — one platform for commerce, community, and more.',
+    brandLogo: true,
+  },
+  ...AUTH_BENEFIT_SLIDES.slice(0, 4),
 ]

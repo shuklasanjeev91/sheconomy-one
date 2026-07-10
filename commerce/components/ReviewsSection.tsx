@@ -1,9 +1,11 @@
 import { Avatar, Icons, Paragraph, Spinner, Text, XStack, YStack } from '~/components/ui'
+import { getShadowStyle, radius } from '~/config/tokens'
 import type { PublicReview, ReviewSummary } from '~/commerce/lib/reviews'
 import { hasVisibleReviews } from '~/commerce/lib/reviews'
 import { useAppUi } from '~/lib/theme/useAppUi'
 
 import { RatingSummary } from './RatingSummary'
+import { SectionTitle } from './SectionTitle'
 import { StarRating } from './StarRating'
 
 type ReviewsSectionProps = {
@@ -34,10 +36,8 @@ export function ReviewsSection({
   if (!hasVisibleReviews(summary) && !reviews.length) {
     return (
       <YStack gap="$3" paddingTop="$2">
-        <Text fontWeight="500" fontSize={22} color={ui.text} letterSpacing={-0.3}>
-          {title}
-        </Text>
-        <Paragraph color={ui.textSecondary} fontSize={14} lineHeight={22}>
+        <SectionTitle title={title} />
+        <Paragraph color={ui.textSecondary} fontSize={14} lineHeight={22} fontWeight="500">
           No reviews yet. Be the first to share your experience after purchase.
         </Paragraph>
       </YStack>
@@ -46,9 +46,7 @@ export function ReviewsSection({
 
   return (
     <YStack gap="$5" width="100%" paddingTop="$2">
-      <Text fontWeight="500" fontSize={22} color={ui.text} letterSpacing={-0.3}>
-        {title}
-      </Text>
+      <SectionTitle title={title} />
 
       {error ? (
         <Text color={ui.starFill} fontSize={13}>
@@ -82,9 +80,12 @@ function ReviewCard({ review }: { review: PublicReview }) {
   return (
     <YStack
       gap="$3"
-      paddingBottom="$4"
-      borderBottomWidth={1}
-      borderBottomColor={ui.panelBorder}
+      padding="$4"
+      borderRadius={radius.chip}
+      backgroundColor={ui.surface}
+      borderWidth={1}
+      borderColor={ui.borderSubtle}
+      style={getShadowStyle('sm')}
     >
       <XStack gap="$3" alignItems="center">
         <Avatar name={review.reviewerName} src={review.reviewerAvatarUrl ?? undefined} size="$3" />

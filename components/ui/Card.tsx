@@ -12,8 +12,8 @@ export const Card = styled(TCard, {
   borderRadius: radius.card,
   borderWidth: 1,
   borderColor: '$borderColor',
-  padding: '$4',
-  gap: '$3',
+  padding: '$4.5',
+  gap: '$3.5',
   ...getShadowStyle('sm'),
 
   variants: {
@@ -27,7 +27,7 @@ export const Card = styled(TCard, {
     },
     interactive: {
       true: {
-        animation: 'quick',
+        animation: 'smooth',
         cursor: 'pointer',
         hoverStyle: {
           ...getShadowStyle('md'),

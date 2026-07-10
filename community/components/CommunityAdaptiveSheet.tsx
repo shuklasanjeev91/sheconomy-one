@@ -1,21 +1,16 @@
 import type { ReactNode } from 'react'
+import { Platform } from 'react-native'
 
 import {
+  AppBottomSheet,
+  BottomSheetHeader,
   Dialog,
   DialogContent,
   DialogOverlay,
-  DialogTitle,
-  Icons,
-  Sheet,
-  SheetFrame,
-  SheetHandle,
-  SheetOverlay,
-  Text,
-  XStack,
   YStack,
   useMedia,
 } from '~/components/ui'
-import { useAppUi } from '~/lib/theme/useAppUi'
+import { radius } from '~/config/tokens'
 
 type CommunityAdaptiveSheetProps = {
   open: boolean
@@ -33,7 +28,6 @@ export function CommunityAdaptiveSheet({
   children,
   maxWidth = 520,
 }: CommunityAdaptiveSheetProps) {
-  const ui = useAppUi()
   const media = useMedia()
   const isDesktop = media.gtMd
 
@@ -42,11 +36,21 @@ export function CommunityAdaptiveSheet({
       <Dialog open={open} onOpenChange={onOpenChange} modal>
         <Dialog.Portal>
           <DialogOverlay />
-          <DialogContent maxWidth={maxWidth} width="92%" padding="$0" overflow="hidden">
-            {title ? (
-              <SheetHeader title={title} onClose={() => onOpenChange(false)} />
-            ) : null}
-            <YStack padding="$4" gap="$3" maxHeight="80vh" overflow="scroll">
+          <DialogContent
+            maxWidth={maxWidth}
+            width="92%"
+            padding="$0"
+            overflow="hidden"
+            borderRadius={radius.card}
+          >
+            <BottomSheetHeader title={title} onClose={() => onOpenChange(false)} />
+            <YStack
+              padding="$4"
+              gap="$3"
+              maxHeight="80vh"
+              overflow="scroll"
+              {...(Platform.OS === 'web' ? { style: { overflowY: 'auto' as const } } : {})}
+            >
               {children}
             </YStack>
           </DialogContent>
@@ -56,49 +60,8 @@ export function CommunityAdaptiveSheet({
   }
 
   return (
-    <Sheet open={open} onOpenChange={onOpenChange} modal snapPointsMode="fit" dismissOnSnapToBottom>
-      <SheetOverlay />
-      <SheetFrame padding="$0" backgroundColor={ui.surface}>
-        <YStack width="100%" gap="$3" paddingBottom="$4">
-          <YStack paddingTop="$3" alignItems="center">
-            <SheetHandle />
-          </YStack>
-          {title ? (
-            <SheetHeader title={title} onClose={() => onOpenChange(false)} />
-          ) : null}
-          <YStack paddingHorizontal="$4" gap="$3" maxHeight="75vh">
-            {children}
-          </YStack>
-        </YStack>
-      </SheetFrame>
-    </Sheet>
-  )
-}
-
-function SheetHeader({ title, onClose }: { title: string; onClose: () => void }) {
-  const ui = useAppUi()
-
-  return (
-    <XStack
-      paddingHorizontal="$4"
-      paddingBottom="$2"
-      alignItems="center"
-      justifyContent="space-between"
-      borderBottomWidth={1}
-      borderBottomColor={ui.borderSubtle}
-    >
-      <Text fontSize={18} fontWeight="700" color={ui.text}>
-        {title}
-      </Text>
-      <XStack
-        padding="$2"
-        borderRadius={999}
-        cursor="pointer"
-        hoverStyle={{ backgroundColor: ui.surfaceHover }}
-        onPress={onClose}
-      >
-        <Icons.X size={20} color={ui.icon} />
-      </XStack>
-    </XStack>
+    <AppBottomSheet open={open} onOpenChange={onOpenChange} title={title}>
+      {children}
+    </AppBottomSheet>
   )
 }

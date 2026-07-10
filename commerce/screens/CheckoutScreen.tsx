@@ -14,9 +14,10 @@ import {
   YStack,
   useAppToast,
 } from '~/components/ui'
-import { FullWidthLayout, PageRail, PageSection } from '~/components/layout'
-import { BRAND_THEME } from '~/config/tokens'
+import { FullWidthLayout, LAYOUT_STRETCH, PageSection } from '~/components/layout'
+import { BRAND_THEME, radius, getShadowStyle } from '~/config/tokens'
 import { useCart } from '~/commerce/hooks/useCart'
+import { CommercePageHeader, CommercePanel } from '~/commerce/components'
 import {
   createOrderFromCart,
   fetchUserAddresses,
@@ -204,51 +205,34 @@ export function CheckoutScreen() {
 
   return (
     <FullWidthLayout scroll>
-      <PageSection paddingVertical="$6">
-        <PageRail>
-          <YStack gap="$5" width="100%">
-            <YStack gap="$1">
-              <Text fontSize={28} fontWeight="500" color={ui.text} letterSpacing={-0.4}>
-                Checkout
-              </Text>
-              <Text fontSize={14} color={ui.textSecondary}>
-                {needsShipping
+      <PageSection paddingVertical="$6" {...LAYOUT_STRETCH}>
+          <YStack gap="$6" width="100%" {...LAYOUT_STRETCH}>
+            <CommercePageHeader
+              title="Checkout"
+              subtitle={
+                needsShipping
                   ? 'Review your order and shipping details'
-                  : 'Review your order — digital items download instantly'}
-              </Text>
-            </YStack>
+                  : 'Review your order — digital items download instantly'
+              }
+            />
 
             <XStack gap="$5" flexWrap="wrap" alignItems="flex-start">
               <YStack flex={1} minWidth={300} gap="$4">
                 {hasDigitalItems && !needsShipping ? (
-                  <YStack
-                    gap="$2"
-                    padding="$4"
-                    borderRadius={12}
-                    borderWidth={1}
-                    borderColor={ui.borderSubtle}
-                    backgroundColor={ui.digitalBg}
-                  >
-                    <Text fontWeight="500" fontSize={16} color={ui.text}>
+                  <CommercePanel backgroundColor={ui.digitalBg}>
+                    <Text fontWeight="700" fontSize={16} color={ui.text}>
                       Digital delivery
                     </Text>
-                    <Text fontSize={13} color={ui.textSecondary} lineHeight={18}>
+                    <Text fontSize={13} color={ui.textSecondary} lineHeight={18} fontWeight="500">
                       Your digital files will be available to download right after purchase. No
                       shipping required.
                     </Text>
-                  </YStack>
+                  </CommercePanel>
                 ) : null}
 
                 {needsShipping ? (
-                <YStack
-                  gap="$3"
-                  padding="$4"
-                  borderRadius={12}
-                  borderWidth={1}
-                  borderColor={ui.borderSubtle}
-                  backgroundColor={ui.surface}
-                >
-                  <Text fontWeight="500" fontSize={16}>
+                <CommercePanel>
+                  <Text fontWeight="700" fontSize={16} color={ui.text}>
                     Shipping address
                   </Text>
 
@@ -259,7 +243,7 @@ export function CheckoutScreen() {
                           key={address.id}
                           gap="$3"
                           padding="$3"
-                          borderRadius={8}
+                          borderRadius={radius.chip}
                           borderWidth={1}
                           borderColor={
                             !useNewAddress && selectedAddressId === address.id
@@ -317,18 +301,11 @@ export function CheckoutScreen() {
                       />
                     </YStack>
                   ) : null}
-                </YStack>
+                </CommercePanel>
                 ) : null}
 
-                <YStack
-                  gap="$3"
-                  padding="$4"
-                  borderRadius={12}
-                  borderWidth={1}
-                  borderColor={ui.borderSubtle}
-                  backgroundColor={ui.surface}
-                >
-                  <Text fontWeight="500" fontSize={16}>
+                <CommercePanel>
+                  <Text fontWeight="700" fontSize={16} color={ui.text}>
                     Payment
                   </Text>
                   <XStack gap="$2" flexWrap="wrap">
@@ -354,20 +331,22 @@ export function CheckoutScreen() {
                   <Field label="Order notes (optional)">
                     <Input value={customerNotes} onChangeText={setCustomerNotes} />
                   </Field>
-                </YStack>
+                </CommercePanel>
               </YStack>
 
-              <YStack
-                width={320}
+              <CommercePanel
+                width="100%"
                 maxWidth="100%"
-                gap="$3"
-                padding="$4"
-                borderRadius={12}
-                borderWidth={1}
-                borderColor={ui.borderSubtle}
-                backgroundColor={ui.surface}
+                gap="$4"
+                style={getShadowStyle('md')}
+                $gtMd={{
+                  width: 340,
+                  position: 'sticky',
+                  top: 80,
+                  alignSelf: 'flex-start',
+                }}
               >
-                <Text fontWeight="500" fontSize={18}>
+                <Text fontWeight="700" fontSize={18} color={ui.text} letterSpacing={-0.2}>
                   Order summary
                 </Text>
                 {items.map((item) => (
@@ -406,10 +385,9 @@ export function CheckoutScreen() {
                     Back to cart
                   </Button>
                 </Link>
-              </YStack>
+              </CommercePanel>
             </XStack>
           </YStack>
-        </PageRail>
       </PageSection>
     </FullWidthLayout>
   )

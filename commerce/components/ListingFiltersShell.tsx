@@ -2,13 +2,10 @@ import type { ReactNode } from 'react'
 import { useEffect, useState } from 'react'
 
 import {
+  AppBottomSheet,
   Button,
   Icons,
   ScrollView,
-  Sheet,
-  SheetFrame,
-  SheetHandle,
-  SheetOverlay,
   Text,
   Theme,
   XStack,
@@ -140,24 +137,24 @@ export function ListingFiltersShell({
   )
 
   const panelHeader = (
-    <XStack alignItems="center" justifyContent="space-between" width="100%">
-      <Text fontWeight="600" fontSize={18} color={ui.text}>
-        Filters
-      </Text>
-      <XStack
-        width={36}
-        height={36}
-        alignItems="center"
-        justifyContent="center"
-        borderRadius={999}
-        cursor="pointer"
-        hoverStyle={{ backgroundColor: ui.navHover }}
-        onPress={close}
-        aria-label="Close filters"
-      >
-        <Icons.X size={20} color={ui.text} />
-      </XStack>
-    </XStack>
+    <Text fontWeight="700" fontSize={18} color={ui.text} letterSpacing={-0.2}>
+      Filters
+    </Text>
+  )
+
+  const filtersBody = (
+    <ListingFiltersPanel
+      draft={draft}
+      onChange={setDraft}
+      inventoryDriven={inventoryDriven}
+      facets={facets}
+      facetsLoading={facetsLoading}
+      showTypeFilter={showTypeFilter}
+      minPrice={minPrice}
+      maxPrice={maxPrice}
+      onMinPriceChange={setMinPrice}
+      onMaxPriceChange={setMaxPrice}
+    />
   )
 
   return (
@@ -219,20 +216,25 @@ export function ListingFiltersShell({
               style={{ ...edgePanelPositionStyle(), boxShadow: '4px 0 24px rgba(0,0,0,0.12)' }}
             >
               <YStack flex={1} padding="$4" gap="$4" height="100%">
-                {panelHeader}
+                <XStack alignItems="center" justifyContent="space-between" width="100%">
+                  {panelHeader}
+                  <XStack
+                    width={40}
+                    height={40}
+                    alignItems="center"
+                    justifyContent="center"
+                    borderRadius={999}
+                    cursor="pointer"
+                    hoverStyle={{ backgroundColor: ui.navHover }}
+                    onPress={close}
+                    accessibilityRole="button"
+                    accessibilityLabel="Close filters"
+                  >
+                    <Icons.X size={22} color={ui.text} />
+                  </XStack>
+                </XStack>
                 <ScrollView flex={1} showsVerticalScrollIndicator>
-                  <ListingFiltersPanel
-                    draft={draft}
-                    onChange={setDraft}
-                    inventoryDriven={inventoryDriven}
-                    facets={facets}
-                    facetsLoading={facetsLoading}
-                    showTypeFilter={showTypeFilter}
-                    minPrice={minPrice}
-                    maxPrice={maxPrice}
-                    onMinPriceChange={setMinPrice}
-                    onMaxPriceChange={setMaxPrice}
-                  />
+                  {filtersBody}
                 </ScrollView>
                 {footer}
               </YStack>
@@ -240,32 +242,9 @@ export function ListingFiltersShell({
           </>
         ) : null
       ) : (
-        <Sheet open={open} onOpenChange={setOpen} modal snapPointsMode="fit" dismissOnSnapToBottom>
-          <SheetOverlay />
-          <SheetFrame padding="$0">
-            <YStack width="100%" gap="$3" paddingHorizontal="$4" paddingBottom="$4">
-              <YStack paddingTop="$3" alignItems="center">
-                <SheetHandle />
-              </YStack>
-              {panelHeader}
-              <Sheet.ScrollView showsVerticalScrollIndicator width="100%">
-                <ListingFiltersPanel
-                  draft={draft}
-                  onChange={setDraft}
-                  inventoryDriven={inventoryDriven}
-                  facets={facets}
-                  facetsLoading={facetsLoading}
-                  showTypeFilter={showTypeFilter}
-                  minPrice={minPrice}
-                  maxPrice={maxPrice}
-                  onMinPriceChange={setMinPrice}
-                  onMaxPriceChange={setMaxPrice}
-                />
-              </Sheet.ScrollView>
-              {footer}
-            </YStack>
-          </SheetFrame>
-        </Sheet>
+        <AppBottomSheet open={open} onOpenChange={setOpen} title="Filters" footer={footer}>
+          {filtersBody}
+        </AppBottomSheet>
       )}
     </YStack>
   )

@@ -1,5 +1,11 @@
-import { homeLoader, HomeScreen } from '~/commerce/screens/HomeScreen'
+import { useLoader } from 'one'
+
+import { homeLoader, HomeScreenView } from '~/commerce/screens/home-screen.shared'
 
 export const loader = homeLoader
 
-export default HomeScreen
+export default function StoreHomePage() {
+  const { data, error } = useLoader(loader)
+
+  return <HomeScreenView data={data ?? null} error={error ?? null} />
+}

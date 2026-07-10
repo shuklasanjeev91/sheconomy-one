@@ -39,7 +39,7 @@ export function VideoTile({
 
   useEffect(() => {
     if (Platform.OS === 'web') return
-    void import('react-native-webrtc').then((module) => setRtcView(() => module.RTCView))
+    void import('@livekit/react-native-webrtc').then((module) => setRtcView(() => module.default))
   }, [])
 
   useEffect(() => {

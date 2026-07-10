@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 
 import { Icons, Image, YStack } from '~/components/ui'
 import { getListingImageUrls } from '~/lib/listing-images'
+import { useAppUi } from '~/lib/theme/useAppUi'
 
 type ListingImageProps = {
   imageUrls?: string[] | null
@@ -23,6 +24,7 @@ export function ListingImage({
   objectFit = 'cover',
   placeholderIconSize = 28,
 }: ListingImageProps) {
+  const ui = useAppUi()
   const urls = getListingImageUrls(imageUrls, fallbackUrl)
   const [activeIndex, setActiveIndex] = useState(0)
   const [failed, setFailed] = useState(false)
@@ -35,8 +37,15 @@ export function ListingImage({
 
   if (!src || failed) {
     return (
-      <YStack flex={1} width="100%" height="100%" alignItems="center" justifyContent="center">
-        <Icons.Image size={placeholderIconSize} color="$color8" />
+      <YStack
+        flex={1}
+        width="100%"
+        height="100%"
+        alignItems="center"
+        justifyContent="center"
+        backgroundColor={ui.roseSurface}
+      >
+        <Icons.Image size={placeholderIconSize} color={ui.brand} opacity={0.7} />
       </YStack>
     )
   }

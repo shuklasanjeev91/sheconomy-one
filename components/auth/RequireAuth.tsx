@@ -1,6 +1,6 @@
 import type { ReactNode } from 'react'
 
-import { SignInPanel } from '~/components/auth/SignInPanel'
+import { AuthSignInFlow } from '~/components/auth/AuthSignInFlow'
 import { PageCenter } from '~/components/layout'
 import { Spinner } from '~/components/ui'
 import { useAuth } from '~/hooks/useAuth'
@@ -22,7 +22,7 @@ export function RequireAuth({ children, redirectTo }: RequireAuthProps) {
   }
 
   if (!isAuthenticated) {
-    return <SignInPanel returnTo={redirectTo} />
+    return <AuthSignInFlow returnTo={redirectTo} />
   }
 
   return <>{children}</>

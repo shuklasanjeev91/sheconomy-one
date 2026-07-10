@@ -59,6 +59,7 @@ declare module 'one' {
         | `/(store)/browse/${OneRouter.SingleRoutePart<T>}`
         | `/(store)/category/${OneRouter.SingleRoutePart<T>}`
         | `/(store)/listing/${OneRouter.SingleRoutePart<T>}`
+        | `/(store)/my-shops/${OneRouter.SingleRoutePart<T>}`
         | `/(store)/shop/${OneRouter.SingleRoutePart<T>}`
         | `/browse/${OneRouter.SingleRoutePart<T>}`
         | `/category/${OneRouter.SingleRoutePart<T>}`
@@ -73,6 +74,7 @@ declare module 'one' {
         | `/community/people/${OneRouter.SingleRoutePart<T>}`
         | `/community/stories/${OneRouter.SingleRoutePart<T>}`
         | `/listing/${OneRouter.SingleRoutePart<T>}`
+        | `/my-shops/${OneRouter.SingleRoutePart<T>}`
         | `/profile/${OneRouter.SingleRoutePart<T>}`
         | `/profile/${OneRouter.SingleRoutePart<T>}/connections`
         | `/profile/${OneRouter.SingleRoutePart<T>}/followers`
@@ -82,6 +84,7 @@ declare module 'one' {
         | `/(store)/browse/[kind]`
         | `/(store)/category/[slug]`
         | `/(store)/listing/[slug]`
+        | `/(store)/my-shops/[shopId]`
         | `/(store)/shop/[slug]`
         | `/browse/[kind]`
         | `/category/[slug]`
@@ -96,6 +99,7 @@ declare module 'one' {
         | `/community/people/[tab]`
         | `/community/stories/[userId]`
         | `/listing/[slug]`
+        | `/my-shops/[shopId]`
         | `/profile/[username]`
         | `/profile/[username]/connections`
         | `/profile/[username]/followers`
@@ -106,6 +110,7 @@ declare module 'one' {
         '/(store)/browse/[kind]': RouteInfo<{ kind: string }>
         '/(store)/category/[slug]': RouteInfo<{ slug: string }>
         '/(store)/listing/[slug]': RouteInfo<{ slug: string }>
+        '/(store)/my-shops/[shopId]': RouteInfo<{ shopId: string }>
         '/(store)/shop/[slug]': RouteInfo<{ slug: string }>
         '/browse/[kind]': RouteInfo<{ kind: string }>
         '/category/[slug]': RouteInfo<{ slug: string }>
@@ -120,6 +125,7 @@ declare module 'one' {
         '/community/people/[tab]': RouteInfo<{ tab: string }>
         '/community/stories/[userId]': RouteInfo<{ userId: string }>
         '/listing/[slug]': RouteInfo<{ slug: string }>
+        '/my-shops/[shopId]': RouteInfo<{ shopId: string }>
         '/profile/[username]': RouteInfo<{ username: string }>
         '/profile/[username]/connections': RouteInfo<{ username: string }>
         '/profile/[username]/followers': RouteInfo<{ username: string }>

@@ -1,4 +1,5 @@
 import { createContext, useContext, useEffect, useMemo, useState } from 'react'
+import { Platform } from 'react-native'
 import type { Session, User } from '@supabase/supabase-js'
 
 import { supabase } from '~/lib/supabase'
@@ -13,16 +14,28 @@ const SupabaseContext = createContext<SupabaseContextValue | null>(null)
 
 export function SupabaseProvider({ children }: { children: React.ReactNode }) {
   const [session, setSession] = useState<Session | null>(null)
-  const [isLoading, setIsLoading] = useState(true)
+  const [isLoading, setIsLoading] = useState(Platform.OS !== 'web')
 
   useEffect(() => {
     let isMounted = true
 
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      if (!isMounted) return
-      setSession(session)
-      setIsLoading(false)
-    })
+    const timeout = Platform.OS === 'web' ? null : setTimeout(() => {
+      if (isMounted) setIsLoading(false)
+    }, 2000)
+
+    supabase.auth
+      .getSession()
+      .then(({ data: { session } }) => {
+        if (!isMounted) return
+        setSession(session)
+        setIsLoading(false)
+      })
+      .catch(() => {
+        if (isMounted) setIsLoading(false)
+      })
+      .finally(() => {
+        if (timeout) clearTimeout(timeout)
+      })
 
     const {
       data: { subscription },
@@ -33,6 +46,7 @@ export function SupabaseProvider({ children }: { children: React.ReactNode }) {
 
     return () => {
       isMounted = false
+      if (timeout) clearTimeout(timeout)
       subscription.unsubscribe()
     }
   }, [])

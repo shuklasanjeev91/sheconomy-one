@@ -1,11 +1,13 @@
 import type { ReactNode } from 'react'
+import { Platform } from 'react-native'
 import { Redirect, usePathname } from 'one'
 
-import { SignInPanel } from '~/components/auth/SignInPanel'
+import { AuthSignInFlow } from '~/components/auth/AuthSignInFlow'
 import { PageCenter } from '~/components/layout'
-import { Spinner } from '~/components/ui'
+import { Spinner, YStack } from '~/components/ui'
 import { getGuestSignInReturnTo } from '~/lib/auth/access'
 import { useAccess } from '~/hooks/useAccess'
+import { useAppLayout } from '~/hooks/useAppLayout'
 
 type AppAccessGateProps = {
   children: ReactNode
@@ -15,8 +17,14 @@ type AppAccessGateProps = {
 export function AppAccessGate({ children }: AppAccessGateProps) {
   const pathname = usePathname()
   const { tier, isLoading, canAccessPath, getDeniedRedirect } = useAccess()
+  const { isDesktopWeb } = useAppLayout()
+  const useDocumentScroll = Platform.OS === 'web' && isDesktopWeb
 
-  if (isLoading) {
+  const guestSignInReturnTo = getGuestSignInReturnTo(tier, pathname)
+  const guestCanBrowseWhileAuthLoads =
+    canAccessPath('guest', pathname) && getGuestSignInReturnTo('guest', pathname) === null
+
+  if (isLoading && !guestCanBrowseWhileAuthLoads) {
     return (
       <PageCenter>
         <Spinner size="large" />
@@ -24,14 +32,25 @@ export function AppAccessGate({ children }: AppAccessGateProps) {
     )
   }
 
-  const guestSignInReturnTo = getGuestSignInReturnTo(tier, pathname)
-  if (guestSignInReturnTo) {
-    return <SignInPanel returnTo={guestSignInReturnTo} />
+  if (!isLoading && guestSignInReturnTo) {
+    return <AuthSignInFlow returnTo={guestSignInReturnTo} />
   }
 
-  if (!canAccessPath(pathname)) {
+  const activeTier = isLoading ? 'guest' : tier
+
+  if (!canAccessPath(activeTier, pathname)) {
     return <Redirect href={getDeniedRedirect(pathname)} />
   }
 
-  return <>{children}</>
+  return (
+    <YStack
+      flex={useDocumentScroll ? undefined : 1}
+      width="100%"
+      maxWidth="100%"
+      alignSelf="stretch"
+      overflow={useDocumentScroll ? 'visible' : 'hidden'}
+    >
+      {children}
+    </YStack>
+  )
 }

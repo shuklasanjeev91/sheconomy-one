@@ -8,8 +8,6 @@ function readEnvOrigin(): string | undefined {
   const candidates = [
     typeof process !== 'undefined' ? process.env.EXPO_PUBLIC_WEB_APP_URL : undefined,
     typeof process !== 'undefined' ? process.env.ONE_SERVER_URL : undefined,
-    typeof import.meta !== 'undefined' ? import.meta.env?.EXPO_PUBLIC_WEB_APP_URL : undefined,
-    typeof import.meta !== 'undefined' ? import.meta.env?.ONE_SERVER_URL : undefined,
   ]
 
   for (const value of candidates) {

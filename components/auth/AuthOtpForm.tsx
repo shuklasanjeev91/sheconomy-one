@@ -1,8 +1,9 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useState, type ReactNode } from 'react'
+import { Platform } from 'react-native'
 
 import { AUTH_COPY } from '~/components/auth/auth-copy'
-import { useAuthUi } from '~/components/auth/auth-theme'
-import { AuthStepIndicator } from '~/components/auth/AuthMethodToggle'
+import { AUTH_LAYOUT } from '~/components/auth/auth-layout'
+import { AuthStepProgress } from '~/components/auth/AuthMethodTabs'
 import { CountryCodePicker, DEFAULT_COUNTRY } from '~/components/auth/CountryCodePicker'
 import {
   Button,
@@ -30,13 +31,13 @@ import { useAppUi } from '~/lib/theme/useAppUi'
 
 const RESEND_COOLDOWN_SECONDS = 30
 
-type OtpAuthFormProps = {
+type AuthOtpFormProps = {
   channel: OtpChannel
   onSuccess?: () => void
 }
 
-export function OtpAuthForm({ channel, onSuccess }: OtpAuthFormProps) {
-  const authUi = useAuthUi()
+/** Passwordless OTP sign-in — email or SMS, cross-platform. */
+export function AuthOtpForm({ channel, onSuccess }: AuthOtpFormProps) {
   const ui = useAppUi()
   const toast = useAppToast()
   const [country, setCountry] = useState<Country>(DEFAULT_COUNTRY)
@@ -47,7 +48,6 @@ export function OtpAuthForm({ channel, onSuccess }: OtpAuthFormProps) {
   const [resendIn, setResendIn] = useState(0)
 
   const isEmail = channel === 'email'
-  const placeholder = isEmail ? 'you@example.com' : country.placeholder
 
   const schema = useMemo(
     () => ({
@@ -101,14 +101,12 @@ export function OtpAuthForm({ channel, onSuccess }: OtpAuthFormProps) {
     if (isEmail) {
       return form.fields.identifier.value.trim().toLowerCase()
     }
-
     const result = validateNationalPhone(form.fields.identifier.value, country)
     if (!result.ok) {
       form.fields.identifier.touch()
       form.fields.identifier.validate()
       return null
     }
-
     setPhoneE164(result.e164)
     return result.e164
   }
@@ -170,83 +168,67 @@ export function OtpAuthForm({ channel, onSuccess }: OtpAuthFormProps) {
     onSuccess?.()
   }
 
+  function resetOtpStep() {
+    setOtpSent(false)
+    form.fields.otpCode.reset()
+    setPhoneE164('')
+    setResendIn(0)
+    setApiError(null)
+  }
+
   const displayIdentifier = isEmail
     ? form.fields.identifier.value.trim().toLowerCase()
     : formatPhoneForDisplay(phoneE164 || form.fields.identifier.value, country)
 
   const identifierError = form.fields.identifier.showError ? form.fields.identifier.error : null
-  const otpError = form.fields.otpCode.showError ? form.fields.otpCode.error : null
+  const otpFieldError = form.fields.otpCode.showError ? form.fields.otpCode.error : null
 
   return (
     <YStack gap="$5">
-      <AuthStepIndicator step={otpSent ? 2 : 1} />
+      <AuthStepProgress step={otpSent ? 2 : 1} />
 
       {otpSent ? (
         <YStack gap="$4">
-          <XStack
-            alignItems="center"
-            gap="$2"
-            alignSelf="flex-start"
-            cursor="pointer"
-            opacity={isSubmitting ? 0.5 : 1}
-            onPress={
-              isSubmitting
-                ? undefined
-                : () => {
-                    setOtpSent(false)
-                    form.fields.otpCode.reset()
-                    setPhoneE164('')
-                    setResendIn(0)
-                    setApiError(null)
-                  }
-            }
-          >
-            <Icons.ArrowLeft size={18} color={ui.textMuted} />
-            <Text fontSize={14} fontWeight="600" color={ui.textMuted}>
-              Back
-            </Text>
-          </XStack>
-
+          <AuthBackRow disabled={isSubmitting} onPress={resetOtpStep} />
           <YStack gap="$1">
-            <Text fontSize={17} fontWeight="800" color={ui.text} letterSpacing={-0.2}>
+            <Text fontSize={18} fontWeight="800" color={ui.text} letterSpacing={-0.25}>
               Enter verification code
             </Text>
             <Text fontSize={14} color={ui.textMuted} lineHeight={21}>
-              We sent a 6-digit code to{' '}
+              Sent to{' '}
               <Text fontWeight="700" color={ui.text}>
                 {displayIdentifier}
               </Text>
             </Text>
           </YStack>
 
-          <Field label="Verification code" error={otpError ?? undefined}>
-            <Input
-              autoCapitalize="none"
-              keyboardType="number-pad"
-              placeholder="• • • • • •"
-              value={form.fields.otpCode.value}
-              onChangeText={form.fields.otpCode.onChange}
-              onBlur={form.fields.otpCode.onBlur}
-              invalid={!!otpError}
-              maxLength={8}
-              autoFocus
-              textAlign="center"
-              fontSize={24}
-              fontWeight="700"
-              letterSpacing={8}
-              height={58}
-              borderRadius={authUi.inputRadius}
-              backgroundColor={ui.surfaceMuted}
-              borderColor={otpError ? ui.error : ui.borderSubtle}
-              borderWidth={1}
-              style={{ boxShadow: 'inset 0 1px 2px rgba(26, 10, 18, 0.04)' }}
-            />
+          <Field label="Verification code" error={otpFieldError ?? undefined}>
+            <AuthInputShell invalid={!!otpFieldError}>
+              <Input
+                flex={1}
+                borderWidth={0}
+                backgroundColor="transparent"
+                autoCapitalize="none"
+                keyboardType="number-pad"
+                placeholder="000000"
+                value={form.fields.otpCode.value}
+                onChangeText={form.fields.otpCode.onChange}
+                onBlur={form.fields.otpCode.onBlur}
+                invalid={!!otpFieldError}
+                maxLength={8}
+                autoFocus
+                textAlign="center"
+                fontSize={22}
+                fontWeight="700"
+                letterSpacing={6}
+              />
+            </AuthInputShell>
           </Field>
 
           <Button
             tone="primary"
             size="$4"
-            borderRadius={authUi.pillRadius}
+            borderRadius={AUTH_LAYOUT.pillRadius}
             disabled={isSubmitting || !form.fields.otpCode.isValid}
             onPress={handleVerifyOtp}
             icon={isSubmitting ? <Spinner size="small" color="white" /> : undefined}
@@ -255,26 +237,10 @@ export function OtpAuthForm({ channel, onSuccess }: OtpAuthFormProps) {
           </Button>
 
           <XStack justifyContent="space-between" alignItems="center" flexWrap="wrap" gap="$2">
-            <Button
-              tone="ghost"
-              size="$3"
-              disabled={isSubmitting || resendIn > 0}
-              onPress={handleSendOtp}
-            >
+            <Button tone="ghost" size="$3" disabled={isSubmitting || resendIn > 0} onPress={handleSendOtp}>
               {resendIn > 0 ? `Resend in ${resendIn}s` : 'Resend code'}
             </Button>
-            <Button
-              tone="ghost"
-              size="$3"
-              disabled={isSubmitting}
-              onPress={() => {
-                setOtpSent(false)
-                form.fields.otpCode.reset()
-                setPhoneE164('')
-                setResendIn(0)
-                setApiError(null)
-              }}
-            >
+            <Button tone="ghost" size="$3" disabled={isSubmitting} onPress={resetOtpStep}>
               Change {isEmail ? 'email' : 'number'}
             </Button>
           </XStack>
@@ -282,76 +248,52 @@ export function OtpAuthForm({ channel, onSuccess }: OtpAuthFormProps) {
       ) : (
         <YStack gap="$4">
           <YStack gap="$1">
-            <Text fontSize={17} fontWeight="800" color={ui.text} letterSpacing={-0.2}>
+            <Text fontSize={18} fontWeight="800" color={ui.text} letterSpacing={-0.25}>
               {isEmail ? 'Your email address' : 'Your mobile number'}
             </Text>
             <Text fontSize={14} color={ui.textMuted} lineHeight={21}>
               {isEmail
-                ? "We'll email a one-time code. New accounts are created automatically on verify."
-                : `Enter your ${country.name} number — we'll text a secure code to verify you.`}
+                ? 'We will email a one-time code. New accounts are created automatically.'
+                : `Enter your ${country.name} number — we will text a secure code.`}
             </Text>
           </YStack>
 
           <Field label={isEmail ? 'Email' : 'Mobile number'} error={identifierError ?? undefined}>
             {isEmail ? (
-              <XStack
-                alignItems="center"
-                gap="$3"
-                paddingHorizontal="$4"
-                height={56}
-                borderRadius={authUi.inputRadius}
-                borderWidth={1}
-                borderColor={identifierError ? ui.error : ui.borderSubtle}
-                backgroundColor={ui.surfaceMuted}
-                style={{ boxShadow: 'inset 0 1px 2px rgba(26, 10, 18, 0.04)' }}
-              >
-                <Icons.Mail size={18} color={ui.textMuted} />
+              <AuthInputShell invalid={!!identifierError} icon={Icons.Mail}>
                 <Input
                   flex={1}
                   borderWidth={0}
                   backgroundColor="transparent"
-                  paddingHorizontal={0}
                   autoCapitalize="none"
                   autoComplete="email"
                   keyboardType="email-address"
-                  placeholder={placeholder}
+                  placeholder="you@example.com"
                   value={form.fields.identifier.value}
                   onChangeText={form.fields.identifier.onChange}
                   onBlur={form.fields.identifier.onBlur}
                   invalid={!!identifierError}
                 />
-              </XStack>
+              </AuthInputShell>
             ) : (
-              <XStack
-                alignItems="center"
-                gap="$2"
-                paddingLeft="$2"
-                paddingRight="$3"
-                height={56}
-                borderRadius={authUi.inputRadius}
-                borderWidth={1}
-                borderColor={identifierError ? ui.error : ui.borderSubtle}
-                backgroundColor={ui.surfaceMuted}
-                style={{ boxShadow: 'inset 0 1px 2px rgba(26, 10, 18, 0.04)' }}
-              >
+              <AuthInputShell invalid={!!identifierError} row>
                 <CountryCodePicker value={country} onChange={setCountry} compact />
                 <YStack width={1} height={28} backgroundColor={ui.borderSubtle} />
                 <Input
                   flex={1}
                   borderWidth={0}
                   backgroundColor="transparent"
-                  paddingHorizontal={0}
                   autoCapitalize="none"
                   autoComplete="tel"
                   keyboardType="phone-pad"
-                  placeholder={placeholder}
+                  placeholder={country.placeholder}
                   value={form.fields.identifier.value}
                   onChangeText={form.fields.identifier.onChange}
                   onBlur={form.fields.identifier.onBlur}
                   invalid={!!identifierError}
                   maxLength={country.maxLength + 4}
                 />
-              </XStack>
+              </AuthInputShell>
             )}
             {!isEmail && form.fields.identifier.value && !identifierError ? (
               <Text fontSize={12} color={ui.textMuted} marginTop={6}>
@@ -364,7 +306,7 @@ export function OtpAuthForm({ channel, onSuccess }: OtpAuthFormProps) {
           <Button
             tone="primary"
             size="$4"
-            borderRadius={authUi.pillRadius}
+            borderRadius={AUTH_LAYOUT.pillRadius}
             disabled={isSubmitting || !form.fields.identifier.isValid}
             onPress={handleSendOtp}
             icon={isSubmitting ? <Spinner size="small" color="white" /> : undefined}
@@ -375,34 +317,81 @@ export function OtpAuthForm({ channel, onSuccess }: OtpAuthFormProps) {
         </YStack>
       )}
 
-      {apiError ? <AuthError message={apiError} /> : null}
+      {apiError ? <AuthErrorBanner message={apiError} /> : null}
     </YStack>
   )
 }
 
-function AuthError({ message }: { message: string }) {
+function AuthInputShell({
+  children,
+  invalid,
+  icon: Icon,
+  row,
+}: {
+  children: React.ReactNode
+  invalid?: boolean
+  icon?: typeof Icons.Mail
+  row?: boolean
+}) {
+  const ui = useAppUi()
+
+  return (
+    <XStack
+      alignItems="center"
+      gap={row ? '$2' : '$3'}
+      paddingHorizontal="$3"
+      height={56}
+      borderRadius={AUTH_LAYOUT.inputRadius}
+      borderWidth={1}
+      borderColor={invalid ? ui.error : ui.borderSubtle}
+      backgroundColor={ui.surfaceMuted}
+      paddingLeft={row ? '$2' : '$3'}
+      style={
+        Platform.OS === 'web'
+          ? ({ boxShadow: 'inset 0 1px 2px rgba(26, 10, 18, 0.04)' } as const)
+          : undefined
+      }
+    >
+      {Icon ? <Icon size={18} color={ui.textMuted} /> : null}
+      {children}
+    </XStack>
+  )
+}
+
+function AuthBackRow({ disabled, onPress }: { disabled?: boolean; onPress: () => void }) {
+  const ui = useAppUi()
+  return (
+    <XStack
+      alignItems="center"
+      gap="$2"
+      alignSelf="flex-start"
+      cursor={disabled ? 'default' : 'pointer'}
+      opacity={disabled ? 0.5 : 1}
+      animation="quick"
+      pressStyle={{ opacity: 0.7 }}
+      onPress={disabled ? undefined : onPress}
+    >
+      <Icons.ArrowLeft size={18} color={ui.textMuted} />
+      <Text fontSize={14} fontWeight="600" color={ui.textMuted}>
+        Back
+      </Text>
+    </XStack>
+  )
+}
+
+function AuthErrorBanner({ message }: { message: string }) {
   const ui = useAppUi()
   return (
     <XStack
       gap="$2.5"
       alignItems="flex-start"
       padding="$3.5"
-      borderRadius={14}
+      borderRadius={AUTH_LAYOUT.inputRadius}
       backgroundColor="rgba(185, 28, 28, 0.06)"
       borderWidth={1}
       borderColor="rgba(185, 28, 28, 0.14)"
     >
-      <YStack
-        width={28}
-        height={28}
-        borderRadius={8}
-        backgroundColor="rgba(185, 28, 28, 0.1)"
-        alignItems="center"
-        justifyContent="center"
-        flexShrink={0}
-      >
-        <Icons.AlertCircle size={16} color={ui.error} />
-      </YStack>
+      <Icons.AlertCircle size={18} color={ui.error} />
       <Text color={ui.error} fontSize={14} flex={1} lineHeight={20} fontWeight="500">
         {message}
       </Text>

@@ -8,8 +8,7 @@ export type GifResult = {
 }
 
 const GIPHY_API_KEY =
-  (typeof import.meta !== 'undefined' &&
-    (import.meta as { env?: Record<string, string> }).env?.EXPO_PUBLIC_GIPHY_API_KEY) ||
+  (typeof process !== 'undefined' && process.env.EXPO_PUBLIC_GIPHY_API_KEY) ||
   'sXpVOEpsHfRYG9xhnW9Vx5Jj3fPFcQX'
 
 const FALLBACK_GIFS: GifResult[] = [

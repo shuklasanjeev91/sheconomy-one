@@ -1,6 +1,9 @@
 import { Separator, Text, XStack, YStack } from '~/components/ui'
 import type { ListingSpecification } from '~/lib/listing-detail'
+import { radius } from '~/config/tokens'
 import { useAppUi } from '~/lib/theme/useAppUi'
+
+import { SectionTitle } from './SectionTitle'
 
 type ListingSpecificationsProps = {
   specifications: ListingSpecification[]
@@ -13,14 +16,12 @@ export function ListingSpecifications({ specifications }: ListingSpecificationsP
 
   return (
     <YStack gap="$3" width="100%">
-      <Text fontWeight="500" fontSize={18} color={ui.text} letterSpacing={-0.2}>
-        Item details
-      </Text>
+      <SectionTitle title="Item details" />
       <YStack
         width="100%"
         borderWidth={1}
-        borderColor={ui.panelBorder}
-        borderRadius={8}
+        borderColor={ui.borderSubtle}
+        borderRadius={radius.card}
         overflow="hidden"
         backgroundColor={ui.surface}
       >

@@ -1,7 +1,6 @@
 import type { ReactNode } from 'react'
-import { Redirect } from 'one'
 
-import { SignInPanel } from '~/components/auth/SignInPanel'
+import { AuthSignInFlow } from '~/components/auth/AuthSignInFlow'
 import { PageCenter } from '~/components/layout'
 import { Spinner } from '~/components/ui'
 import { useAccess } from '~/hooks/useAccess'
@@ -11,9 +10,9 @@ type RequireShopAccessProps = {
   redirectTo?: string
 }
 
-/** Seller dashboard — verified female members only. */
+/** Seller dashboard — sign in required; guests see inline auth. */
 export function RequireShopAccess({ children, redirectTo = '/my-shops' }: RequireShopAccessProps) {
-  const { isLoading, isGuest, canManageShops, getDeniedRedirect } = useAccess()
+  const { isLoading, isGuest } = useAccess()
 
   if (isLoading) {
     return (
@@ -24,11 +23,7 @@ export function RequireShopAccess({ children, redirectTo = '/my-shops' }: Requir
   }
 
   if (isGuest) {
-    return <SignInPanel returnTo={redirectTo} />
-  }
-
-  if (!canManageShops) {
-    return <Redirect href={getDeniedRedirect(redirectTo)} />
+    return <AuthSignInFlow returnTo={redirectTo} />
   }
 
   return <>{children}</>

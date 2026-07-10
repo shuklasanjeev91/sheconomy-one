@@ -3,7 +3,7 @@ import { Platform } from 'react-native'
 import { useCallback, useEffect, useState } from 'react'
 
 import { RequireAuth } from '~/components/auth/RequireAuth'
-import { FullWidthLayout, PageCenter, PageSection, FormRail } from '~/components/layout'
+import { FullWidthLayout, LAYOUT_STRETCH, PageSection } from '~/components/layout'
 import { Button, Field, Icons, Input, Spinner, Text, XStack, YStack, useAppToast } from '~/components/ui'
 import { CoWorkBrandChip, CoWorkIconBadge } from '~/co-work/components/CoWorkUi'
 import { MeetingInvitePanel } from '~/co-work/components/MeetingInvitePanel'
@@ -21,7 +21,7 @@ import { copyToClipboard } from '~/lib/platform/clipboard'
 import { coWorkRoutes } from '~/lib/routes'
 import { useProfile } from '~/hooks/useProfile'
 
-import { BRAND_MEMBER_LABEL } from '~/config/brand'
+import { APP_LAYOUT } from '~/lib/layout/constants'
 
 type MeetingLobbyScreenProps = {
   code: string
@@ -103,8 +103,8 @@ export function MeetingLobbyScreen({ code, startLive = false }: MeetingLobbyScre
 
   return (
     <FullWidthLayout scroll backgroundColor={coworkUi.pageBg} style={pageGradientStyle(coworkGradients.page, coworkUi.pageBg)}>
-      <PageSection paddingVertical="$6">
-        <FormRail gap="$5">
+      <PageSection paddingVertical="$6" {...LAYOUT_STRETCH}>
+        <YStack gap="$5" width="100%" maxWidth={APP_LAYOUT.maxFormWidth} alignSelf="center">
           <YStack gap="$3">
             <CoWorkBrandChip />
             <Text fontSize={30} fontWeight="800" color={coworkUi.text} letterSpacing={-0.8}>
@@ -244,7 +244,7 @@ export function MeetingLobbyScreen({ code, startLive = false }: MeetingLobbyScre
           <Link href={coWorkRoutes.home} asChild>
             <Button tone="ghost">Back to Co-Work</Button>
           </Link>
-        </FormRail>
+        </YStack>
       </PageSection>
     </FullWidthLayout>
   )

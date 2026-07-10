@@ -82,7 +82,9 @@ export function formatCurrency(amount: number, currency = 'INR') {
   }).format(amount)
 }
 
-export function formatRating(rating: number | null | undefined) {
-  if (rating == null) return '—'
-  return rating.toFixed(1)
+export function formatRating(rating: number | string | null | undefined) {
+  if (rating == null || rating === '') return '—'
+  const value = Number(rating)
+  if (!Number.isFinite(value)) return '—'
+  return value.toFixed(1)
 }

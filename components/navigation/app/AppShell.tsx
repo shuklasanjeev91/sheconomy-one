@@ -1,15 +1,18 @@
 import type { ReactNode } from 'react'
+import { Platform } from 'react-native'
 import { usePathname } from 'one'
 
 import { YStack } from '~/components/ui'
 import { AppAccessGate } from '~/components/auth/AppAccessGate'
-import { ScreenFill } from '~/components/layout'
+import { ScreenFill, NativeSafeArea } from '~/components/layout'
 import { AppBarScrollProvider } from '~/components/navigation/AppBarScrollContext'
 import { DesktopScrollTracker } from '~/components/navigation/DesktopScrollTracker'
 import { CommerceDesktopFooter } from '~/commerce/navigation/CommerceDesktopFooter'
 import { useAppLayout } from '~/hooks/useAppLayout'
+import { useAuthScreen } from '~/hooks/useAuthScreen'
 import { isCommercePath } from '~/lib/routes'
-import { meetingViewportStyle } from '~/lib/platform/viewport'
+import { authViewportStyle } from '~/components/auth/auth-layout'
+import { appShellStyle, meetingViewportStyle } from '~/lib/platform/viewport'
 import { useAppUi } from '~/lib/theme/useAppUi'
 
 import { AppDesktopHeader } from './AppDesktopHeader'
@@ -60,37 +63,64 @@ function useCompactMobileTopBar() {
 /** Global app chrome — header, footer, and bottom tabs on every section. */
 export function AppShell({ children }: AppShellProps) {
   const ui = useAppUi()
-  const { isDesktop, mobileTabBarOffset } = useAppLayout()
+  const { isDesktop, isDesktopWeb } = useAppLayout()
   const pathname = usePathname()
   const chromeless = useChromelessRoute()
+  const authScreen = useAuthScreen()
   const compactMobileTopBar = useCompactMobileTopBar()
-  const showCommerceFooter = isDesktop && isCommercePath(pathname)
+  const showCommerceFooter = isDesktopWeb && isCommercePath(pathname)
+  const stretchMainContent = Platform.OS !== 'web' || !isDesktopWeb
 
-  if (chromeless) {
-    return <ScreenFill style={meetingViewportStyle()}>{children}</ScreenFill>
+  if (chromeless || authScreen.chromeless) {
+    return (
+      <NativeSafeArea edges={['top', 'bottom']}>
+        <ScreenFill
+          flex={1}
+          width="100%"
+          maxWidth="100%"
+          backgroundColor={ui.background}
+          overflow="hidden"
+          style={
+            authScreen.chromeless && !chromeless
+              ? authViewportStyle()
+              : meetingViewportStyle()
+          }
+        >
+          <AppAccessGate>{children}</AppAccessGate>
+        </ScreenFill>
+      </NativeSafeArea>
+    )
   }
 
   return (
-    <AppAccessGate>
-      <AppBarScrollProvider>
-        <DesktopScrollTracker />
-        <ScreenFill flexDirection="column" backgroundColor={ui.background} overflow="hidden">
-          <AppDesktopHeader />
-          {!isDesktop ? <AppMobileHeader minimal={compactMobileTopBar} /> : null}
-          <YStack
-            flexGrow={1}
-            flex={isDesktop ? undefined : 1}
-            width="100%"
-            maxWidth="100%"
-            minHeight={0}
-            paddingBottom={isDesktop ? 0 : mobileTabBarOffset}
+    <NativeSafeArea edges={['top']}>
+      <AppAccessGate>
+        <AppBarScrollProvider>
+          <DesktopScrollTracker />
+          <ScreenFill
+            flex={Platform.OS === 'web' ? undefined : 1}
+            flexDirection="column"
+            position="relative"
+            backgroundColor={ui.background}
+            overflow={Platform.OS === 'web' && isDesktopWeb ? 'visible' : 'hidden'}
+            style={appShellStyle(isDesktopWeb)}
           >
-            {children}
-          </YStack>
-          {showCommerceFooter ? <CommerceDesktopFooter /> : null}
-          {!isDesktop ? <AppMobileBottomTabs /> : null}
-        </ScreenFill>
-      </AppBarScrollProvider>
-    </AppAccessGate>
+            {isDesktop ? <AppDesktopHeader /> : null}
+            {!isDesktop ? <AppMobileHeader minimal={compactMobileTopBar} /> : null}
+            <YStack
+              flexGrow={stretchMainContent ? 1 : undefined}
+              flex={stretchMainContent ? 1 : undefined}
+              width="100%"
+              maxWidth="100%"
+              minHeight={Platform.OS === 'web' && isDesktopWeb ? undefined : 0}
+            >
+              {children}
+            </YStack>
+            {showCommerceFooter ? <CommerceDesktopFooter /> : null}
+            {!isDesktop ? <AppMobileBottomTabs /> : null}
+          </ScreenFill>
+        </AppBarScrollProvider>
+      </AppAccessGate>
+    </NativeSafeArea>
   )
 }

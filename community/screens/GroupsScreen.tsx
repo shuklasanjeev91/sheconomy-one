@@ -2,11 +2,13 @@ import { Link, useRouter } from 'one'
 import { useEffect, useState } from 'react'
 
 import { CommunityCard } from '~/community/components/CommunityCard'
+import { CommunityPageHeader } from '~/community/components/CommunityPageHeader'
 import { CommunityShell } from '~/community/components/CommunityShell'
 import { fetchGroups, fetchMyGroups, type Group } from '~/community/lib/groups'
 import { useCommunityUi } from '~/community/lib/community-theme'
 import { Avatar, Button, Icons, Input, Spinner, Text, XStack, YStack } from '~/components/ui'
 import { communityRoutes } from '~/lib/routes'
+import { radius } from '~/config/tokens'
 import { useSupabase } from '~/providers/SupabaseProvider'
 
 export function GroupsScreen() {
@@ -34,23 +36,24 @@ export function GroupsScreen() {
 
   return (
     <CommunityShell wide>
-      <CommunityCard padding={16} gap={12}>
-        <XStack justifyContent="space-between" alignItems="center" flexWrap="wrap" gap={12}>
-          <YStack gap={4}>
-            <Text fontSize={22} fontWeight="700" color={communityUi.text}>
-              Groups
-            </Text>
-            <Text fontSize={14} color={communityUi.textMuted}>
-              Join communities and share with members.
-            </Text>
-          </YStack>
-          {user ? (
-            <Button backgroundColor={communityUi.brand} color="white" borderRadius={999} onPress={() => router.push(communityRoutes.groupCreate)}>
-              Create group
-            </Button>
-          ) : null}
-        </XStack>
-        <XStack gap={8} alignItems="center" padding={10} borderRadius={8} borderWidth={1} borderColor={communityUi.border}>
+      <CommunityCard padding={18} gap={12}>
+        <CommunityPageHeader
+          title="Groups"
+          subtitle="Join communities and share with members."
+          actions={
+            user ? (
+              <Button
+                backgroundColor={communityUi.brand}
+                color="white"
+                borderRadius={999}
+                onPress={() => router.push(communityRoutes.groupCreate)}
+              >
+                Create group
+              </Button>
+            ) : undefined
+          }
+        />
+        <XStack gap={8} alignItems="center" padding={12} borderRadius={radius.chip} borderWidth={1} borderColor={communityUi.borderLight} backgroundColor={communityUi.inputBg}>
           <Icons.Search size={18} color={communityUi.textMuted} />
           <Input flex={1} value={search} onChangeText={setSearch} placeholder="Search groups" borderWidth={0} backgroundColor="transparent" />
         </XStack>

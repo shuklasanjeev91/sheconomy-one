@@ -1,3 +1,4 @@
-export function DateTimePicker() {
+export default function DateTimePicker() {
   return null
 }
+

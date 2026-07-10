@@ -4,6 +4,7 @@ import { ProfileLink } from '~/community/components/ProfileLink'
 import { useCommunityUi } from '~/community/lib/community-theme'
 import type { UserListMember } from '~/community/lib/user-lists'
 import { Avatar, Icons, Text, XStack, YStack } from '~/components/ui'
+import { radius } from '~/config/tokens'
 
 type UserListItemProps = {
   member: UserListMember
@@ -26,11 +27,11 @@ export function UserListItem({
       gap={12}
       alignItems={compact ? 'center' : 'flex-start'}
       paddingVertical={compact ? 8 : 12}
-      paddingHorizontal={8}
-      borderRadius={8}
+      paddingHorizontal={10}
+      borderRadius={radius.chip}
       borderBottomWidth={1}
       borderBottomColor={communityUi.borderLight}
-      hoverStyle={{ backgroundColor: communityUi.divider }}
+      hoverStyle={{ backgroundColor: communityUi.hoverBg }}
     >
       <ProfileLink userId={member.user_id} username={member.username}>
         <Avatar

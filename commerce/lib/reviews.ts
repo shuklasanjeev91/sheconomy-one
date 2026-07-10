@@ -65,18 +65,29 @@ export function computeReviewSummary(reviews: Pick<PublicReview, 'rating'>[]): R
 }
 
 export function mergeReviewSummary(
-  stored: { averageRating: number | null | undefined; totalReviews: number | null | undefined },
+  stored: { averageRating: number | string | null | undefined; totalReviews: number | string | null | undefined },
   computed: ReviewSummary,
 ): ReviewSummary {
+  const averageRating =
+    stored.averageRating != null && stored.averageRating !== ''
+      ? Number(stored.averageRating)
+      : null
+  const totalReviews =
+    stored.totalReviews != null && stored.totalReviews !== ''
+      ? Number(stored.totalReviews)
+      : 0
+
   const hasStored =
-    stored.averageRating != null &&
-    stored.averageRating > 0 &&
-    (stored.totalReviews ?? 0) > 0
+    averageRating != null &&
+    Number.isFinite(averageRating) &&
+    averageRating > 0 &&
+    Number.isFinite(totalReviews) &&
+    totalReviews > 0
 
   if (hasStored) {
     return {
-      averageRating: stored.averageRating ?? null,
-      totalReviews: stored.totalReviews ?? 0,
+      averageRating,
+      totalReviews,
       distribution: computed.distribution,
     }
   }
@@ -291,5 +302,14 @@ export async function fetchShopReviews(
 }
 
 export function hasVisibleReviews(summary: ReviewSummary) {
-  return summary.totalReviews > 0 && summary.averageRating != null && summary.averageRating > 0
+  const averageRating =
+    summary.averageRating != null ? Number(summary.averageRating) : null
+  const totalReviews = Number(summary.totalReviews) || 0
+
+  return (
+    totalReviews > 0 &&
+    averageRating != null &&
+    Number.isFinite(averageRating) &&
+    averageRating > 0
+  )
 }

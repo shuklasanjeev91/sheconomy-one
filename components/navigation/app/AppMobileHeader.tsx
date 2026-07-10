@@ -6,17 +6,14 @@ import { Icons, Input, XStack, YStack } from '~/components/ui'
 import { AppMobileBackButton } from '~/components/navigation/AppMobileBackButton'
 import { NavCountBadge } from '~/components/navigation/NavCountBadge'
 import { NavLogo } from '~/components/navigation/NavLogo'
-import { useCart } from '~/commerce/hooks/useCart'
 import { useUnreadNotifications } from '~/community/hooks/useUnreadNotifications'
 import { commerceRoutes, routes } from '~/lib/routes'
-import { useAccess } from '~/hooks/useAccess'
-import { useProfile } from '~/hooks/useProfile'
 import { useMobileBackNavigation } from '~/hooks/useMobileBackNavigation'
-import { chromeSurfaceStyle, searchFieldStyle } from '~/lib/theme/surfaces'
+import { useAppUi } from '~/lib/theme/useAppUi'
+import { chromeSurfaceStyle, searchFieldFocusStyle, searchFieldStyle } from '~/lib/theme/surfaces'
 
 import { AppCenterNavTabs } from './AppCenterNavTabs'
 import { getAppColors } from './config'
-import { useAppUi } from '~/lib/theme/useAppUi'
 
 import { BRAND_NAME } from '~/config/brand'
 
@@ -34,10 +31,7 @@ export function AppMobileHeader({ minimal = false }: AppMobileHeaderProps) {
   const colors = getAppColors(ui)
   const router = useRouter()
   const { showBack } = useMobileBackNavigation()
-  const { itemCount } = useCart()
   const { count: unreadNotifications } = useUnreadNotifications()
-  const { isAuthenticated } = useProfile()
-  const { canManageShops, canAccessFeature } = useAccess()
   const [searchQuery, setSearchQuery] = useState('')
 
   function submitSearch() {
@@ -52,18 +46,18 @@ export function AppMobileHeader({ minimal = false }: AppMobileHeaderProps) {
       borderBottomColor={colors.borderSubtle}
       zIndex={200}
       width="100%"
-      position="sticky"
-      top={0}
+      position={Platform.OS === 'web' ? 'sticky' : 'relative'}
+      top={Platform.OS === 'web' ? 0 : undefined}
       $gtMd={{ display: 'none' }}
       style={chromeSurfaceStyle(ui)}
     >
       <XStack
         paddingHorizontal="$3"
-        paddingTop="$2"
-        paddingBottom="$1"
+        paddingTop="$2.5"
+        paddingBottom="$2"
         alignItems="center"
-        gap="$2"
-        style={{ minHeight: 52 }}
+        gap="$2.5"
+        style={{ minHeight: 56 }}
       >
         <XStack flexShrink={0} alignItems="center">
           {showBack ? <AppMobileBackButton /> : <NavLogo compact href={commerceRoutes.home} />}
@@ -72,13 +66,14 @@ export function AppMobileHeader({ minimal = false }: AppMobileHeaderProps) {
         <XStack
           flex={1}
           minWidth={0}
-          paddingHorizontal="$2.5"
+          paddingHorizontal="$3"
           alignItems="center"
-          gap={6}
-          height={36}
+          gap={8}
+          height={40}
           style={searchFieldStyle(ui)}
+          focusStyle={searchFieldFocusStyle(ui)}
         >
-          <Icons.Search size={16} color={colors.icon} flexShrink={0} />
+          <Icons.Search size={17} color={colors.icon} flexShrink={0} />
           <Input
             flex={1}
             minWidth={0}
@@ -98,22 +93,11 @@ export function AppMobileHeader({ minimal = false }: AppMobileHeaderProps) {
 
         <XStack flexShrink={0} gap={8} alignItems="center">
           <HeaderIcon
-            href={routes.cart}
-            icon={Icons.ShoppingBag}
-            label="Cart"
-            badgeCount={itemCount}
+            href={routes.notifications}
+            icon={Icons.Bell}
+            label="Notifications"
+            badgeCount={unreadNotifications}
           />
-          {isAuthenticated && canManageShops ? (
-            <HeaderIcon href={commerceRoutes.myShops} icon={Icons.Store} label="My shops" />
-          ) : null}
-          {isAuthenticated && canAccessFeature('community') ? (
-            <HeaderIcon
-              href={routes.notifications}
-              icon={Icons.Bell}
-              label="Notifications"
-              badgeCount={unreadNotifications}
-            />
-          ) : null}
         </XStack>
       </XStack>
 
@@ -138,8 +122,8 @@ function HeaderIcon({
   return (
     <Link href={href} asChild>
       <XStack
-        width={36}
-        height={36}
+        width={38}
+        height={38}
         borderRadius={999}
         backgroundColor={colors.chip}
         alignItems="center"
@@ -148,7 +132,9 @@ function HeaderIcon({
         overflow="visible"
         cursor="pointer"
         aria-label={label}
-        pressStyle={{ opacity: 0.75 }}
+        animation="quick"
+        hoverStyle={{ backgroundColor: colors.chipHover, scale: 1.04 }}
+        pressStyle={{ opacity: 0.75, scale: 0.94 }}
       >
         <Icon size={20} color={colors.text} />
         {badgeCount != null && badgeCount > 0 ? (

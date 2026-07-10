@@ -120,11 +120,14 @@ export function CoWorkFeatureCard({
       flex={1}
       minWidth={150}
       padding="$4"
-      gap="$2"
+      gap="$2.5"
       borderRadius={coworkUi.radius.card}
       backgroundColor={coworkUi.surface}
       borderWidth={1}
       borderColor={coworkUi.borderSoft}
+      animation="quick"
+      hoverStyle={{ y: -3, borderColor: coworkUi.borderAccent }}
+      pressStyle={{ scale: 0.98, y: 0 }}
       style={coworkBoxShadow(coworkShadows, 'card')}
     >
       <YStack

@@ -11,6 +11,10 @@ export type VendorShop = Pick<
   | 'shop_description'
   | 'logo_url'
   | 'shop_currency'
+  | 'shop_email'
+  | 'shop_phone_number'
+  | 'website_url'
+  | 'slug'
   | 'average_rating'
   | 'total_reviews'
   | 'verified'
@@ -36,7 +40,7 @@ export function useVendorShops() {
     const { data, error: shopsError } = await supabase
       .from('shops')
       .select(
-        'id, shop_name, shop_description, logo_url, shop_currency, average_rating, total_reviews, verified, is_active, created_at',
+        'id, shop_name, shop_description, logo_url, shop_currency, shop_email, shop_phone_number, website_url, slug, average_rating, total_reviews, verified, is_active, created_at',
       )
       .eq('user_id', user.id)
       .order('created_at', { ascending: false })
@@ -74,7 +78,7 @@ export function useVendorShops() {
         .eq('id', shopId)
         .eq('user_id', user.id)
         .select(
-          'id, shop_name, shop_description, logo_url, shop_currency, average_rating, total_reviews, verified, is_active, created_at',
+          'id, shop_name, shop_description, logo_url, shop_currency, shop_email, shop_phone_number, website_url, slug, average_rating, total_reviews, verified, is_active, created_at',
         )
         .maybeSingle()
 

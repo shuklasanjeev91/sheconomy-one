@@ -7,6 +7,7 @@ import {
   LoadMoreEnd,
   LoadMoreSentinel,
   ReviewsSection,
+  SectionTitle,
   ShopHero,
   ShopManagePanel,
   ShopOwnerPanel,
@@ -18,6 +19,7 @@ import { useShopReviews } from '~/commerce/hooks/useShopReviews'
 import { hasVisibleReviews } from '~/commerce/lib/reviews'
 import { formatShopCountry } from '~/commerce/lib/shop-location'
 import { FullWidthLayout, PageCenter, PageSection } from '~/components/layout'
+import { getShadowStyle, radius } from '~/config/tokens'
 import { useVendorShops } from '~/hooks/useVendorShops'
 import { useProfile } from '~/hooks/useProfile'
 import { commerceRoutes } from '~/lib/routes'
@@ -65,11 +67,12 @@ export function ShopScreen() {
           <YStack
             gap="$4"
             padding="$6"
-            borderRadius={12}
+            borderRadius={radius.card}
             borderWidth={1}
-            borderColor={ui.panelBorder}
+            borderColor={ui.borderSubtle}
             backgroundColor={ui.surface}
             maxWidth={480}
+            style={getShadowStyle('sm')}
           >
             <Text fontWeight="600" fontSize={22} color={ui.text}>
               Shop not found
@@ -142,17 +145,10 @@ export function ShopScreen() {
 
   const listingsSection = (
     <YStack gap="$4" width="100%" flex={1} minWidth={0}>
-      <XStack alignItems="baseline" justifyContent="space-between" gap="$3" flexWrap="wrap">
-        <YStack gap={2}>
-          <Text fontWeight="600" fontSize={22} color={ui.text} letterSpacing={-0.3}>
-            Shop items
-          </Text>
-          <Text fontSize={14} color={ui.textMuted}>
-            Browse everything from this seller
-          </Text>
-        </YStack>
+      <XStack alignItems="flex-end" justifyContent="space-between" gap="$3" flexWrap="wrap">
+        <SectionTitle title="Shop items" subtitle="Browse everything from this seller" />
         {listingsCount > 0 ? (
-          <Text fontSize={13} color={ui.textSecondary} fontWeight="500">
+          <Text fontSize={13} color={ui.textSecondary} fontWeight="600" paddingBottom="$1">
             {listingsCount}
             {listingsFeed.hasMore ? '+' : ''} listings
           </Text>
@@ -168,14 +164,15 @@ export function ShopScreen() {
           alignItems="center"
           justifyContent="center"
           paddingVertical="$10"
-          gap="$2"
-          borderRadius={12}
+          gap="$3"
+          borderRadius={radius.card}
           backgroundColor={ui.surfaceMuted}
           borderWidth={1}
-          borderColor={ui.panelBorder}
+          borderColor={ui.borderSubtle}
+          style={getShadowStyle('sm')}
         >
-          <Icons.Store size={28} color={ui.textMuted} />
-          <Text fontWeight="500" fontSize={16} color={ui.text}>
+          <Icons.Store size={32} color={ui.brand} opacity={0.8} />
+          <Text fontWeight="700" fontSize={16} color={ui.text} letterSpacing={-0.2}>
             No listings yet
           </Text>
           <Text color={ui.textMuted} fontSize={14} textAlign="center" maxWidth={320}>

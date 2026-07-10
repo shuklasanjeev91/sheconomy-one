@@ -1,6 +1,6 @@
 import { Redirect } from 'one'
 
-import { SignInPanel } from '~/components/auth/SignInPanel'
+import { AuthSignInFlow } from '~/components/auth/AuthSignInFlow'
 import { PageCenter } from '~/components/layout'
 import { Spinner } from '~/components/ui'
 import { useAuth } from '~/hooks/useAuth'
@@ -26,5 +26,5 @@ export default function SignInScreen() {
     return <Redirect href={sanitizeReturnPath(getReturnToFromLocation()) as import('one').Href} />
   }
 
-  return <SignInPanel returnTo={getReturnToFromLocation()} />
+  return <AuthSignInFlow returnTo={getReturnToFromLocation()} />
 }

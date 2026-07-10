@@ -1,7 +1,9 @@
 import type { ReactNode } from 'react'
+import { Platform } from 'react-native'
 
 import { useCommunityUi } from '~/community/lib/community-theme'
 import { Avatar, Image, Text, XStack, YStack } from '~/components/ui'
+import { getShadowStyle, radius } from '~/config/tokens'
 
 type EntityPageHeroProps = {
   coverUrl?: string | null
@@ -28,26 +30,42 @@ export function EntityPageHero({
   return (
     <YStack
       backgroundColor={communityUi.cardBg}
-      borderRadius={12}
+      borderRadius={radius.card}
       borderWidth={1}
       borderColor={communityUi.borderLight}
       overflow="hidden"
+      style={getShadowStyle('sm')}
     >
-      <YStack height={180} backgroundColor={communityUi.brand}>
-        {coverUrl ? <Image src={coverUrl} width="100%" height={180} /> : null}
+      <YStack height={200} backgroundColor={communityUi.brand} overflow="hidden" position="relative">
+        {coverUrl ? (
+          <Image src={coverUrl} width="100%" height={200} objectFit="cover" />
+        ) : (
+          <YStack
+            flex={1}
+            width="100%"
+            height="100%"
+            style={
+              Platform.OS === 'web'
+                ? ({ background: `linear-gradient(135deg, ${communityUi.brand} 0%, ${communityUi.brand}cc 100%)` } as const)
+                : undefined
+            }
+            backgroundColor={communityUi.brand}
+          />
+        )}
       </YStack>
 
-      <YStack paddingHorizontal={16} paddingBottom={16} gap={12} marginTop={-48}>
+      <YStack paddingHorizontal={20} paddingBottom={20} gap={12} marginTop={-52}>
         <Avatar
           name={avatarName}
           src={avatarUrl ?? undefined}
           size="$7"
           borderWidth={4}
           borderColor={communityUi.cardBg}
+          style={getShadowStyle('md')}
         />
 
         <YStack gap={6}>
-          <Text fontSize={26} fontWeight="700" color={communityUi.text} letterSpacing={-0.3}>
+          <Text fontSize={28} fontWeight="800" color={communityUi.text} letterSpacing={-0.45}>
             {title}
           </Text>
           {subtitle ? (

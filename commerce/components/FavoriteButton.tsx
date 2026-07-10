@@ -26,9 +26,9 @@ export function FavoriteButton({ listingId, size = 18 }: FavoriteButtonProps) {
       alignItems="center"
       justifyContent="center"
       cursor="pointer"
-      animation="quick"
-      hoverStyle={{ backgroundColor: ui.surface, scale: 1.05 }}
-      pressStyle={{ scale: 0.92 }}
+      animation="bouncy"
+      hoverStyle={{ backgroundColor: ui.surface, scale: 1.06 }}
+      pressStyle={{ scale: 0.88 }}
       onPress={(e: { stopPropagation?: () => void; preventDefault?: () => void }) => {
         e?.stopPropagation?.()
         e?.preventDefault?.()

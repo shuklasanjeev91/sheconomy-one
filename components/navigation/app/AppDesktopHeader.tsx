@@ -1,7 +1,7 @@
 import { Link, useRouter } from 'one'
 import { useState } from 'react'
 
-import { AuthButton } from '~/components/auth/AuthButton'
+import { AuthButton } from '~/components/auth'
 import { Icons, Input, Text, XStack, YStack } from '~/components/ui'
 import { NavCountBadge } from '~/components/navigation/NavCountBadge'
 import { NavLogo } from '~/components/navigation/NavLogo'
@@ -11,6 +11,7 @@ import { commerceRoutes, routes } from '~/lib/routes'
 import { useAccess } from '~/hooks/useAccess'
 import { useProfile } from '~/hooks/useProfile'
 import { useVendorShops } from '~/hooks/useVendorShops'
+import { useAppLayout } from '~/hooks/useAppLayout'
 import { chromeSurfaceStyle, searchFieldStyle } from '~/lib/theme/surfaces'
 
 import { AppCenterNavTabs } from './AppCenterNavTabs'
@@ -22,6 +23,7 @@ import { BRAND_NAME } from '~/config/brand'
 /** Facebook web desktop header — logo + search | icon-only center nav | utilities + avatar. */
 export function AppDesktopHeader() {
   const ui = useAppUi()
+  const { gutter } = useAppLayout()
   const colors = getAppColors(ui)
   const { isAuthenticated } = useProfile()
   const { canManageShops, canAccessFeature } = useAccess()
@@ -48,15 +50,14 @@ export function AppDesktopHeader() {
       position="sticky"
       top={0}
       width="100%"
-      display="none"
-      $gtMd={{ display: 'flex' }}
+      display="flex"
       style={chromeSurfaceStyle(ui)}
     >
       <XStack
         width="100%"
         alignSelf="center"
         alignItems="stretch"
-        paddingHorizontal="$5"
+        paddingHorizontal={gutter}
         height={60}
         gap="$3"
       >

@@ -4,27 +4,28 @@ import { Input as TInput, TextArea as TTextArea, YStack, SizableText } from 'tam
 import { BRAND_THEME } from '~/config/tokens'
 
 const sharedFieldStyle = {
-  borderRadius: '$5',
+  borderRadius: '$6',
   borderWidth: 1,
   borderColor: '$borderColor',
   backgroundColor: '$background',
   color: '$color12',
   placeholderTextColor: '$color9',
-  paddingHorizontal: '$3.5',
+  paddingHorizontal: '$4',
   fontSize: '$4',
+  fontWeight: '500',
   focusStyle: {
-    borderColor: '$color8',
+    borderColor: '$color9',
     backgroundColor: '$background',
     color: '$color12',
     outlineWidth: 0,
     borderWidth: 1.5,
     shadowColor: '$color8',
-    shadowOpacity: 0.12,
-    shadowRadius: 4,
+    shadowOpacity: 0.14,
+    shadowRadius: 6,
     shadowOffset: { width: 0, height: 0 },
   },
   hoverStyle: {
-    borderColor: '$color6',
+    borderColor: '$color7',
   },
 } as const
 
@@ -36,7 +37,7 @@ export const Input = forwardRef<any, GetProps<typeof TInput> & { invalid?: boole
     <TInput
       ref={ref}
       theme={BRAND_THEME}
-      height="$4.5"
+      height="$5"
       {...sharedFieldStyle}
       {...(invalid
         ? {

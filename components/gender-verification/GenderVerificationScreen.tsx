@@ -3,13 +3,13 @@ import { Platform } from 'react-native'
 import { useEffect } from 'react'
 
 import { AuthBackButton } from '~/components/auth/AuthBackButton'
-import { useAuthUi } from '~/components/auth/auth-theme'
 import {
   FaceCaptureOverlay,
   VerificationSteps,
 } from '~/components/gender-verification/GenderVerificationPanel'
 import { ScreenFill, FormRail } from '~/components/layout'
 import { Button, Icons, Text, YStack } from '~/components/ui'
+import { getShadowStyle, radius } from '~/config/tokens'
 import { useAccess } from '~/hooks/useAccess'
 import { useGenderVerification } from '~/hooks/useGenderVerification'
 import { refreshProfiles } from '~/lib/profile/refresh'
@@ -19,7 +19,6 @@ import { useAppUi } from '~/lib/theme/useAppUi'
 import { BRAND_NAME } from '~/config/brand'
 
 export function GenderVerificationScreen() {
-  const authUi = useAuthUi()
   const ui = useAppUi()
   const router = useRouter()
   const { isFemale } = useAccess()
@@ -68,12 +67,13 @@ export function GenderVerificationScreen() {
         </YStack>
 
         <YStack
-          padding="$4"
-          borderRadius={authUi.cardRadius}
+          padding="$4.5"
+          borderRadius={radius.card}
           backgroundColor={ui.surface}
           borderWidth={1}
           borderColor={ui.borderSubtle}
           gap="$5"
+          style={getShadowStyle('sm')}
         >
           {!nativeWebViewMode ? <VerificationSteps phase={verification.phase} /> : null}
           <FaceCaptureOverlay
@@ -87,7 +87,7 @@ export function GenderVerificationScreen() {
           {verification.error && !nativeWebViewMode ? (
             <YStack
               padding="$3"
-              borderRadius={12}
+              borderRadius={radius.chip}
               backgroundColor="rgba(185, 28, 28, 0.08)"
               borderWidth={1}
               borderColor="rgba(185, 28, 28, 0.18)"
@@ -101,7 +101,7 @@ export function GenderVerificationScreen() {
           {verification.phase === 'success' ? (
             <YStack
               padding="$4"
-              borderRadius={14}
+              borderRadius={radius.card}
               backgroundColor="rgba(22, 163, 74, 0.1)"
               borderWidth={1}
               borderColor="rgba(22, 163, 74, 0.2)"
@@ -118,7 +118,7 @@ export function GenderVerificationScreen() {
               <Button
                 tone="primary"
                 size="$4"
-                borderRadius={authUi.pillRadius}
+                borderRadius={radius.pill}
                 disabled={isRunning || !verification.supported}
                 onPress={() => {
                   void verification.start()
@@ -127,7 +127,7 @@ export function GenderVerificationScreen() {
                 {verification.phase === 'idle' ? 'Start verification' : 'Verification in progress…'}
               </Button>
               {verification.phase === 'error' ? (
-                <Button tone="outline" size="$4" borderRadius={authUi.pillRadius} onPress={verification.reset}>
+                <Button tone="outline" size="$4" borderRadius={radius.pill} onPress={verification.reset}>
                   Try again
                 </Button>
               ) : null}

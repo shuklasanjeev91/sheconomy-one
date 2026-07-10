@@ -1,4 +1,4 @@
-import type { LiveKitMediaControls } from '~/co-work/components/LiveKitMeetingRoom'
+import type { LiveKitMediaControls } from '~/co-work/lib/livekit-media-controls'
 
 type NativeLiveKitMeetingRoomProps = {
   meetingId: string

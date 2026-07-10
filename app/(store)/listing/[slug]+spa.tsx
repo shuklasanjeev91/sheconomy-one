@@ -15,6 +15,7 @@ import {
   useMedia,
 } from '~/components/ui'
 import {
+  CommercePanel,
   FavoriteButton,
   ListingDetailsPanel,
   ListingFulfillmentPanel,
@@ -31,7 +32,7 @@ import { useListingReviews } from '~/commerce/hooks/useListingReviews'
 import { useCanonicalListingSlug } from '~/commerce/hooks/useCanonicalSlug'
 import { PageCenter, PageScroll } from '~/components/layout'
 import { MOBILE_TAB_BAR_HEIGHT } from '~/components/navigation/constants'
-import { BRAND_THEME } from '~/config/tokens'
+import { BRAND_THEME, getShadowStyle, radius } from '~/config/tokens'
 import { useListing } from '~/hooks/useListing'
 import {
   buildListingSpecifications,
@@ -197,15 +198,17 @@ export default function ListingDetailScreen() {
       <XStack
         gap="$3"
         alignItems="center"
-        padding="$3"
-        borderRadius={isDesktop ? 8 : 0}
+        padding="$3.5"
+        borderRadius={isDesktop ? radius.card : radius.chip}
         borderWidth={1}
-        borderColor={ui.panelBorder}
+        borderColor={ui.borderSubtle}
         cursor="pointer"
-        hoverStyle={{ backgroundColor: ui.navHover }}
+        hoverStyle={{ backgroundColor: ui.navHover, ...getShadowStyle('md') }}
+        pressStyle={{ scale: 0.99 }}
         backgroundColor={ui.surface}
         marginHorizontal={isDesktop ? 0 : -16}
-        paddingHorizontal={isDesktop ? '$3' : '$4'}
+        paddingHorizontal={isDesktop ? '$3.5' : '$4'}
+        style={getShadowStyle('sm')}
       >
         <Avatar
           name={listing.shops.shop_name}
@@ -241,21 +244,23 @@ export default function ListingDetailScreen() {
               onIndexChange={setActiveImageIndex}
             />
 
-            <YStack paddingHorizontal="$4" gap="$4" paddingTop="$4">
-              <YStack gap="$2">
-                <Text fontWeight="700" fontSize={26} color={ui.text} letterSpacing={-0.4} lineHeight={32}>
+            <YStack paddingHorizontal="$4" gap="$5" paddingTop="$5">
+              <YStack gap="$2.5">
+                <Text fontWeight="800" fontSize={28} color={ui.text} letterSpacing={-0.5} lineHeight={34}>
                   {formatCurrency(displayPrice, currency)}
                 </Text>
                 <RatingSummary summary={reviewSummary} size="sm" />
               </YStack>
 
-              <Text fontSize={16} color={ui.text} lineHeight={22} fontWeight="400">
+              <Text fontSize={17} color={ui.text} lineHeight={24} fontWeight="600" letterSpacing={-0.2}>
                 {listing.title}
               </Text>
 
-              <Text fontSize={13} color={ui.textMuted}>
-                {listing.shops?.shop_name ?? BRAND_SHOP_LABEL}
-              </Text>
+              {listing.shops?.shop_name ? (
+                <Text fontSize={13} color={ui.textMuted} fontWeight="500">
+                  Sold by {listing.shops.shop_name}
+                </Text>
+              ) : null}
 
               {fulfillmentInfo ? <ListingFulfillmentPanel info={fulfillmentInfo} compact /> : null}
 
@@ -307,8 +312,10 @@ export default function ListingDetailScreen() {
           currency={currency}
           disabled={outOfStock}
           isLoading={isAddingToCart}
-          label={isDigital ? 'Add to cart' : 'Add to cart'}
+          label="Add to cart"
+          buyNowLabel={isDigital ? 'Download' : 'Buy now'}
           onPress={() => handleAddToCart(false)}
+          onBuyNow={() => handleAddToCart(true)}
         />
       </YStack>
     )
@@ -319,10 +326,13 @@ export default function ListingDetailScreen() {
       <YStack
         width="100%"
         aspectRatio={1}
-        borderRadius={8}
+        borderRadius={radius.card}
         overflow="hidden"
         backgroundColor={ui.imagePlaceholder}
         position="relative"
+        borderWidth={1}
+        borderColor={ui.borderSubtle}
+        style={getShadowStyle('sm')}
       >
         {activeGalleryUrls.length > 0 ? (
           <ListingImage
@@ -349,7 +359,7 @@ export default function ListingDetailScreen() {
                 key={image.id}
                 width={72}
                 height={72}
-                borderRadius={6}
+                borderRadius={radius.chip}
                 overflow="hidden"
                 borderWidth={activeImageIndex === index ? 2 : 1}
                 borderColor={activeImageIndex === index ? ui.text : ui.panelBorder}
@@ -373,19 +383,19 @@ export default function ListingDetailScreen() {
   )
 
   const buyPanel = (
-    <YStack flex={1} gap="$4" minWidth={0}>
+    <CommercePanel flex={1} gap="$4" minWidth={0} padding="$5">
       <YStack gap="$2">
-        <Text fontSize={13} color={ui.textSecondary}>
+        <Text fontSize={13} color={ui.textMuted} fontWeight="600" letterSpacing={0.2} textTransform="uppercase">
           {listing.shops?.shop_name ?? BRAND_SHOP_LABEL}
         </Text>
-        <Text fontWeight="400" fontSize={28} color={ui.text} lineHeight={34}>
+        <Text fontWeight="700" fontSize={26} color={ui.text} lineHeight={32} letterSpacing={-0.45}>
           {listing.title}
         </Text>
       </YStack>
 
       <RatingSummary summary={reviewSummary} />
 
-      <Text fontWeight="700" fontSize={28} color={ui.text} letterSpacing={-0.5}>
+      <Text fontWeight="800" fontSize={32} color={ui.text} letterSpacing={-0.6}>
         {formatCurrency(displayPrice, currency)}
       </Text>
 
@@ -436,7 +446,7 @@ export default function ListingDetailScreen() {
       </XStack>
 
       {shopCard}
-    </YStack>
+    </CommercePanel>
   )
 
   return (

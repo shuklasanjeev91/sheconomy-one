@@ -1,17 +1,17 @@
 import { useEffect } from 'react'
 import { Platform } from 'react-native'
 
-import { useMedia } from '~/components/ui'
+import { useStableMedia } from '~/hooks/useStableMedia'
 
 import { useAppBarScroll } from './AppBarScrollContext'
 
 /** Reports window scroll position for desktop sticky header collapse. */
 export function DesktopScrollTracker() {
-  const media = useMedia()
+  const media = useStableMedia()
   const { setScrollY } = useAppBarScroll()
 
   useEffect(() => {
-    if (Platform.OS !== 'web' || !media.gtMd) {
+    if (Platform.OS !== 'web' || !media.desktopWeb) {
       setScrollY(0)
       return
     }
@@ -25,7 +25,7 @@ export function DesktopScrollTracker() {
       window.removeEventListener('scroll', onScroll)
       setScrollY(0)
     }
-  }, [media.gtMd, setScrollY])
+  }, [media.desktopWeb, setScrollY])
 
   return null
 }

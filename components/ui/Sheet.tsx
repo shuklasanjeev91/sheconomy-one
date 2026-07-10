@@ -17,8 +17,8 @@ export const SheetOverlay = styled(
 export const SheetFrame = styled(TSheet.Frame, {
   name: 'SheetFrame',
   backgroundColor: '$background',
-  borderTopLeftRadius: '$8',
-  borderTopRightRadius: '$8',
+  borderTopLeftRadius: 22,
+  borderTopRightRadius: 22,
   padding: '$5',
   gap: '$3',
 })

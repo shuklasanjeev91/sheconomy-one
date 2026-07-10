@@ -1,11 +1,33 @@
 import { Platform } from 'react-native'
 
-/** Full-viewport height — flex on native, minHeight vh on web. */
+/** Full-viewport height — flex on native; web uses minHeight so document can grow and scroll. */
 export function screenFillStyle() {
   return Platform.select({
-    web: { flex: 1, minHeight: '100vh' as const, width: '100%' as const, maxWidth: '100%' as const },
+    web: { minHeight: '100vh' as const, width: '100%' as const, maxWidth: '100%' as const },
     default: { flex: 1, width: '100%' as const, maxWidth: '100%' as const },
   })
+}
+
+/** App shell viewport — document flow on web desktop, locked viewport on native + mobile web. */
+export function appShellStyle(isDesktop: boolean) {
+  if (Platform.OS !== 'web') return undefined
+
+  if (isDesktop) {
+    return {
+      minHeight: '100vh' as const,
+      width: '100%' as const,
+      display: 'flex' as const,
+      flexDirection: 'column' as const,
+    }
+  }
+
+  return {
+    height: '100dvh' as const,
+    minHeight: '100dvh' as const,
+    width: '100%' as const,
+    display: 'flex' as const,
+    flexDirection: 'column' as const,
+  }
 }
 
 /** Locked viewport for live meeting — prevents scroll and keeps controls on screen. */

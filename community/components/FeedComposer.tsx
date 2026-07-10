@@ -41,12 +41,12 @@ export function FeedComposer({ onGifSelect }: FeedComposerProps) {
   return (
     <>
       <CommunityCard
-        padding={12}
-        gap={8}
+        padding={16}
+        gap={12}
         display="none"
         $gtLg={{ display: 'flex' }}
       >
-        <XStack gap={8} alignItems="center">
+        <XStack gap={10} alignItems="center">
           <Link href={(isAuthenticated ? communityRoutes.profile : routes.signIn) as Href} asChild>
             <Avatar name={name} src={profile?.avatar_url ?? undefined} size="$4" cursor="pointer" />
           </Link>
@@ -57,10 +57,11 @@ export function FeedComposer({ onGifSelect }: FeedComposerProps) {
               borderRadius={999}
               borderWidth={1}
               borderColor={communityUi.border}
-              paddingHorizontal={16}
-              paddingVertical={12}
+              paddingHorizontal={18}
+              paddingVertical={13}
               cursor="pointer"
-              hoverStyle={{ backgroundColor: communityUi.borderLight }}
+              animation="quick"
+              hoverStyle={{ backgroundColor: communityUi.borderLight, borderColor: communityUi.brand }}
             >
               <Text fontSize={14} fontWeight="600" color={communityUi.textMuted}>
                 {isAuthenticated ? 'Start a post' : 'Sign in to post'}
@@ -69,7 +70,7 @@ export function FeedComposer({ onGifSelect }: FeedComposerProps) {
           </Link>
         </XStack>
 
-        <XStack borderTopWidth={1} borderTopColor={communityUi.borderLight} paddingTop={4}>
+        <XStack borderTopWidth={1} borderTopColor={communityUi.borderLight} paddingTop={8}>
           <ComposerAction icon={Icons.Image} label="Media" color="#70b5f9" href={mediaHref} />
           <ComposerAction
             icon={Icons.Film}

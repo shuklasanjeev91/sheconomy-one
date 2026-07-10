@@ -52,27 +52,10 @@ export type ListingBadge = {
   tone: 'brand' | 'success' | 'info' | 'neutral' | 'accent'
 }
 
-import { Platform } from 'react-native'
-
 const NEW_LISTING_DAYS = 14
 const NEARBY_KM = 120
 
-export function inferCountryFromLocale(): string | null {
-  if (Platform.OS !== 'web') {
-    try {
-      // eslint-disable-next-line @typescript-eslint/no-require-imports
-      const { getLocales } = require('expo-localization') as typeof import('expo-localization')
-      return getLocales()[0]?.regionCode ?? null
-    } catch {
-      // fall through
-    }
-  }
-
-  if (typeof navigator === 'undefined') return null
-  const locale = navigator.language || ''
-  const match = locale.match(/-([A-Z]{2})$/i)
-  return match ? match[1].toUpperCase() : null
-}
+export { inferCountryFromLocale } from '~/commerce/lib/infer-country-from-locale'
 
 export function parseProfileLocation(location?: string | null): UserGeo {
   if (!location?.trim()) return {}

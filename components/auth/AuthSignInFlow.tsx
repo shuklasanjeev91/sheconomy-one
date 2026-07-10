@@ -1,30 +1,30 @@
 import { useState } from 'react'
 
-import { AuthMethodToggle, type AuthMethod } from '~/components/auth/AuthMethodToggle'
-import { AuthScreen } from '~/components/auth/AuthScreen'
-import { OtpAuthForm } from '~/components/auth/OtpAuthForm'
 import { AUTH_COPY } from '~/components/auth/auth-copy'
+import { AuthMethodTabs, type AuthMethod } from '~/components/auth/AuthMethodTabs'
+import { AuthOtpForm } from '~/components/auth/AuthOtpForm'
+import { AuthShell } from '~/components/auth/AuthShell'
 import { Icons, Text, XStack, YStack } from '~/components/ui'
 import { useAuth } from '~/hooks/useAuth'
 import { useAppUi } from '~/lib/theme/useAppUi'
 
-type SignInPanelProps = {
-  /** Path to open after a successful sign-in. */
+type AuthSignInFlowProps = {
   returnTo?: string
 }
 
-export function SignInPanel({ returnTo }: SignInPanelProps) {
+/** Unified sign-in / sign-up OTP flow for web, iOS, and Android. */
+export function AuthSignInFlow({ returnTo }: AuthSignInFlowProps) {
   const ui = useAppUi()
   const { completeSignIn } = useAuth()
   const [mode, setMode] = useState<AuthMethod>('email')
 
   return (
-    <AuthScreen
+    <AuthShell
       footer={
         <XStack
           alignItems="flex-start"
           gap="$2"
-          paddingTop="$2"
+          paddingTop="$3"
           borderTopWidth={1}
           borderTopColor={ui.borderSubtle}
         >
@@ -36,13 +36,12 @@ export function SignInPanel({ returnTo }: SignInPanelProps) {
       }
     >
       <YStack gap="$5">
-        <AuthMethodToggle value={mode} onChange={setMode} />
-        <OtpAuthForm
-          key={mode}
-          channel={mode}
-          onSuccess={() => completeSignIn(returnTo)}
-        />
+        <AuthMethodTabs value={mode} onChange={setMode} />
+        <AuthOtpForm key={mode} channel={mode} onSuccess={() => completeSignIn(returnTo)} />
       </YStack>
-    </AuthScreen>
+    </AuthShell>
   )
 }
+
+/** @deprecated Use AuthSignInFlow */
+export const SignInPanel = AuthSignInFlow

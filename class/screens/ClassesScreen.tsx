@@ -10,6 +10,7 @@ import {
 } from '~/class/lib/programs'
 import { HorizontalScrollRow } from '~/components/layout'
 import { Icons, Spinner, Text, XStack, YStack, useMedia } from '~/components/ui'
+import { getShadowStyle, radius } from '~/config/tokens'
 import { isClassAudioPath } from '~/lib/routes'
 import { useAppUi } from '~/lib/theme/useAppUi'
 import { useCallback, useEffect, useMemo, useState } from 'react'
@@ -135,14 +136,15 @@ export function ClassesScreen() {
           alignItems="center"
           gap="$3"
           paddingVertical="$10"
-          borderRadius={16}
+          borderRadius={radius.card}
           borderWidth={1}
           borderColor={ui.borderSubtle}
           backgroundColor={ui.surface}
           width="100%"
+          style={getShadowStyle('sm')}
         >
-          <Icons.Radio size={40} color={ui.icon} />
-          <Text fontSize={16} fontWeight="600" color={ui.text}>
+          <Icons.Radio size={44} color={ui.brand} opacity={0.85} />
+          <Text fontSize={16} fontWeight="700" color={ui.text} letterSpacing={-0.2}>
             No {mediaTab} programs yet
           </Text>
           <Text fontSize={14} color={ui.textSecondary} textAlign="center" paddingHorizontal="$4">
@@ -200,15 +202,15 @@ function CategoryChip({
       paddingHorizontal="$3"
       paddingVertical={8}
       borderRadius={999}
-      backgroundColor={active ? ui.text : ui.surfaceMuted}
+      backgroundColor={active ? ui.brand : ui.surfaceMuted}
       borderWidth={1}
-      borderColor={active ? ui.text : ui.borderSubtle}
+      borderColor={active ? ui.brand : ui.borderSubtle}
       cursor="pointer"
       onPress={onPress}
       pressStyle={{ opacity: 0.85 }}
       flexShrink={0}
     >
-      <Text fontSize={13} fontWeight="600" color={active ? ui.surface : ui.textSecondary}>
+      <Text fontSize={13} fontWeight="600" color={active ? '#ffffff' : ui.textSecondary}>
         {label}
       </Text>
     </XStack>

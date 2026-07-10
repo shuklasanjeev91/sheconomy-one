@@ -30,6 +30,7 @@ const NON_COMMERCE_PREFIXES = [
 export const commerceRoutes = {
   home: '/' as Href,
   myShops: '/my-shops' as Href,
+  manageShop: (shopId: string) => `/my-shops/${encodeURIComponent(shopId)}` as Href,
   shops: '/shops' as Href,
   cart: appRoutes.cart,
   checkout: appRoutes.checkout,
@@ -128,15 +129,22 @@ export function isCommercePath(pathname: string) {
 }
 
 export function isCommerceShopsPath(pathname: string) {
-  return (
-    pathname === '/shops' ||
-    pathname.startsWith('/shop/') ||
-    pathname === '/my-shops'
-  )
+  return pathname === '/shops' || pathname.startsWith('/shop/')
 }
 
 export function isCommerceFavoritesPath(pathname: string) {
   return pathname === '/favorites' || pathname.startsWith('/favorites/')
+}
+
+/** Commerce marketplace home — excludes routes owned by other bottom tabs. */
+export function isCommerceHomePath(pathname: string) {
+  return (
+    isCommercePath(pathname) &&
+    !isCartPath(pathname) &&
+    !isCommerceShopsPath(pathname) &&
+    !isCommerceFavoritesPath(pathname) &&
+    !isMyShopsPath(pathname)
+  )
 }
 
 export function isCommunityPath(pathname: string) {
@@ -227,7 +235,7 @@ export function isHomePath(pathname: string) {
 }
 
 export function isMyShopsPath(pathname: string) {
-  return pathname === '/my-shops'
+  return pathname === '/my-shops' || pathname.startsWith('/my-shops/')
 }
 
 export function isProfilePath(pathname: string) {

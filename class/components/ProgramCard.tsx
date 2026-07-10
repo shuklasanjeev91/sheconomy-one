@@ -8,8 +8,10 @@ import {
   type Program,
 } from '~/class/lib/programs'
 import { classRoutes } from '~/lib/routes'
-import { Avatar, Icons, Image, Text, XStack, YStack } from '~/components/ui'
+import { Icons, Image, Text, XStack, YStack } from '~/components/ui'
+import { radius } from '~/config/tokens'
 import { useAppUi } from '~/lib/theme/useAppUi'
+import { useThemedShadowStyle } from '~/lib/theme/useThemedShadowStyle'
 
 type ProgramCardProps = {
   program: Program
@@ -18,26 +20,32 @@ type ProgramCardProps = {
 
 export function ProgramCard({ program, width = 280 }: ProgramCardProps) {
   const ui = useAppUi()
+  const cardShadow = useThemedShadowStyle('sm')
+  const cardShadowMd = useThemedShadowStyle('md')
 
   return (
-    <YStack width={width} gap="$2" flexShrink={0}>
+    <YStack width={width} gap="$2.5" flexShrink={0}>
       <Link href={classRoutes.program(getProgramSlug(program))} asChild>
         <YStack
           width="100%"
           aspectRatio={16 / 9}
-          borderRadius={12}
+          borderRadius={radius.card}
           overflow="hidden"
           backgroundColor={ui.imagePlaceholder}
           cursor="pointer"
           position="relative"
-          hoverStyle={{ opacity: 0.92 }}
-          pressStyle={{ scale: 0.99 }}
+          borderWidth={1}
+          borderColor={ui.borderSubtle}
+          animation="quick"
+          hoverStyle={{ opacity: 0.96, y: -3, ...cardShadowMd }}
+          pressStyle={{ scale: 0.985, y: 0 }}
+          style={cardShadow}
         >
           {program.image_url ? (
             <Image src={program.image_url} width="100%" height="100%" objectFit="cover" />
           ) : (
-            <YStack flex={1} alignItems="center" justifyContent="center">
-              <Icons.Play size={36} color={ui.icon} />
+            <YStack flex={1} alignItems="center" justifyContent="center" backgroundColor={ui.roseSurface}>
+              <Icons.Play size={36} color={ui.brand} opacity={0.75} />
             </YStack>
           )}
           {program.duration ? (
@@ -46,8 +54,8 @@ export function ProgramCard({ program, width = 280 }: ProgramCardProps) {
               bottom={8}
               right={8}
               paddingHorizontal="$2"
-              paddingVertical={3}
-              borderRadius={6}
+              paddingVertical={4}
+              borderRadius={999}
               backgroundColor="rgba(0,0,0,0.78)"
             >
               <Text fontSize={11} fontWeight="600" color="#fff">

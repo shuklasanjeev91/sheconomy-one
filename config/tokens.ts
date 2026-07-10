@@ -26,11 +26,11 @@ export { BRAND_NAME, BRAND_MEMBER_LABEL, BRAND_SHOP_LABEL, BRAND_COWORK_LABEL } 
 export const radius = {
   pill: 999,
   /** Standard cards, tiles, panels */
-  card: 16,
+  card: 18,
   /** Modals, sheets, hero blocks */
-  surface: 20,
+  surface: 22,
   /** Compact chips, tags */
-  chip: 10,
+  chip: 12,
 } as const
 
 type ShadowPreset = {
@@ -63,13 +63,30 @@ export const shadows = {
   xl: shadow(20, 40, 0.18, 16),
 } satisfies Record<string, ShadowPreset>
 
+/** Stronger native shadows for dark surfaces. */
+export const shadowsDark = {
+  none: shadow(0, 0, 0, 0),
+  sm: shadow(2, 6, 0.22, 2),
+  md: shadow(6, 16, 0.28, 6),
+  lg: shadow(12, 28, 0.34, 12),
+  xl: shadow(20, 40, 0.4, 16),
+} satisfies Record<string, ShadowPreset>
+
 /** Web renders real box-shadows via CSS; RN needs the shadow* props above. */
 export const webShadows = {
   none: 'none',
-  sm: '0 1px 2px rgba(208, 16, 96, 0.04), 0 2px 10px rgba(16, 12, 14, 0.05)',
-  md: '0 4px 20px rgba(208, 16, 96, 0.07), 0 1px 4px rgba(16, 12, 14, 0.06)',
-  lg: '0 12px 36px rgba(208, 16, 96, 0.1), 0 4px 12px rgba(16, 12, 14, 0.07)',
-  xl: '0 24px 56px rgba(208, 16, 96, 0.12), 0 8px 20px rgba(16, 12, 14, 0.09)',
+  sm: '0 1px 2px rgba(208, 16, 96, 0.05), 0 4px 14px rgba(16, 12, 14, 0.06)',
+  md: '0 8px 28px rgba(208, 16, 96, 0.09), 0 2px 8px rgba(16, 12, 14, 0.07)',
+  lg: '0 16px 40px rgba(208, 16, 96, 0.11), 0 6px 16px rgba(16, 12, 14, 0.08)',
+  xl: '0 28px 64px rgba(208, 16, 96, 0.13), 0 10px 24px rgba(16, 12, 14, 0.1)',
+} as const
+
+export const webShadowsDark = {
+  none: 'none',
+  sm: '0 2px 8px rgba(0, 0, 0, 0.45), 0 0 0 1px rgba(255, 255, 255, 0.06)',
+  md: '0 8px 28px rgba(0, 0, 0, 0.5), 0 0 0 1px rgba(208, 16, 96, 0.12)',
+  lg: '0 16px 44px rgba(0, 0, 0, 0.55), 0 0 0 1px rgba(208, 16, 96, 0.14)',
+  xl: '0 24px 56px rgba(0, 0, 0, 0.6), 0 0 0 1px rgba(208, 16, 96, 0.16)',
 } as const
 
 /**
@@ -87,9 +104,15 @@ export function looseStyle(style: Record<string, unknown>): any {
 
 export type ShadowSize = keyof typeof shadows
 
+export type ColorScheme = 'light' | 'dark'
+
 /** Spread this onto any Tamagui view/stack for a cross-platform elevation. */
-export function getShadowStyle(size: ShadowSize) {
-  return isWeb ? { boxShadow: webShadows[size] } : shadows[size]
+export function getShadowStyle(size: ShadowSize, scheme: ColorScheme = 'light') {
+  const isDark = scheme === 'dark'
+  if (isWeb) {
+    return { boxShadow: isDark ? webShadowsDark[size] : webShadows[size] }
+  }
+  return isDark ? shadowsDark[size] : shadows[size]
 }
 
 /** Brand gradient stops, used by <BrandGradient /> and hero/marketing surfaces. */

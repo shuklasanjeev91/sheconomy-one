@@ -1,9 +1,11 @@
 import { Link } from 'one'
+import { Platform } from 'react-native'
 
 import { Avatar, Button, Icons, Image, Text, XStack, YStack, useMedia } from '~/components/ui'
 import { ShopActionButtons } from '~/commerce/components/ShopActionButtons'
 import { RatingSummary } from '~/commerce/components/RatingSummary'
 import type { ReviewSummary } from '~/commerce/lib/reviews'
+import { getShadowStyle, radius } from '~/config/tokens'
 import { useAppUi } from '~/lib/theme/useAppUi'
 
 type ShopHeroProps = {
@@ -36,7 +38,7 @@ export function ShopHero({
   const ui = useAppUi()
   const media = useMedia()
   const isDesktop = media.gtMd
-  const coverHeight = isDesktop ? 220 : 148
+  const coverHeight = isDesktop ? 240 : 160
 
   return (
     <YStack width="100%">
@@ -53,18 +55,27 @@ export function ShopHero({
           <YStack
             width="100%"
             height="100%"
-            style={{
-              background: `linear-gradient(135deg, ${ui.brandDark} 0%, ${ui.brand} 55%, ${ui.brandLight} 100%)`,
-            }}
+            backgroundColor={ui.brand}
+            style={
+              Platform.OS === 'web'
+                ? {
+                    background: `linear-gradient(135deg, ${ui.brandDark} 0%, ${ui.brand} 55%, ${ui.brandLight} 100%)`,
+                  }
+                : undefined
+            }
           />
         )}
-        <YStack
-          position="absolute"
-          inset={0}
-          style={{
-            background: 'linear-gradient(180deg, rgba(0,0,0,0.02) 0%, rgba(0,0,0,0.55) 100%)',
-          }}
-        />
+        {Platform.OS === 'web' ? (
+          <YStack
+            position="absolute"
+            inset={0}
+            style={{
+              background: 'linear-gradient(180deg, rgba(0,0,0,0.02) 0%, rgba(0,0,0,0.55) 100%)',
+            }}
+          />
+        ) : (
+          <YStack position="absolute" inset={0} backgroundColor="rgba(0,0,0,0.28)" />
+        )}
       </YStack>
 
       <YStack
@@ -82,9 +93,9 @@ export function ShopHero({
           <XStack
             borderWidth={4}
             borderColor={ui.surface}
-            borderRadius={999}
+            borderRadius={radius.pill}
             overflow="hidden"
-            style={{ boxShadow: ui.shadowCard }}
+            style={getShadowStyle('md')}
           >
             <Avatar name={shopName} src={logoUrl ?? undefined} size={isDesktop ? '$10' : '$8'} />
           </XStack>
@@ -94,14 +105,14 @@ export function ShopHero({
               <XStack gap="$2" alignItems="center" flexWrap="wrap">
                 <Text
                   fontWeight="700"
-                  fontSize={isDesktop ? 32 : 26}
+                  fontSize={isDesktop ? 34 : 28}
                   color={ui.text}
-                  letterSpacing={-0.5}
-                  lineHeight={isDesktop ? 38 : 32}
+                  letterSpacing={-0.6}
+                  lineHeight={isDesktop ? 40 : 34}
                 >
                   {shopName}
                 </Text>
-                {verified ? <ShopBadge tone="success" label="Star Seller" icon={Icons.Award} /> : null}
+                {verified ? <ShopBadge tone="success" label="Verified shop" icon={Icons.BadgeCheck} /> : null}
               </XStack>
 
               <XStack gap="$2" alignItems="center" flexWrap="wrap">
@@ -118,7 +129,6 @@ export function ShopHero({
                 color={ui.textSecondary}
                 fontSize={15}
                 lineHeight={24}
-                maxWidth={720}
                 numberOfLines={isDesktop ? 3 : 4}
               >
                 {description}

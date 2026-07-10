@@ -72,9 +72,9 @@ export const Button = forwardRef<any, ButtonProps>(function Button(
     <AnyButton
       ref={ref}
       theme={TONE_THEME[tone]}
-      borderRadius="$6"
-      fontWeight="600"
-      letterSpacing={0.2}
+      borderRadius="$7"
+      fontWeight="700"
+      letterSpacing={0.15}
       animation="quick"
       {...TONE_STYLE[tone]}
       {...props}

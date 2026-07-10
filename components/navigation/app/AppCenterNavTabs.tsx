@@ -28,7 +28,9 @@ export function AppCenterNavTabs({ variant = 'desktop' }: AppCenterNavTabsProps)
       alignSelf="stretch"
       borderTopWidth={variant === 'mobile' ? 1 : 0}
       borderTopColor={colors.border}
-      paddingHorizontal={variant === 'mobile' ? 4 : 0}
+      paddingHorizontal={variant === 'mobile' ? 8 : 0}
+      paddingVertical={variant === 'mobile' ? 6 : 0}
+      gap={variant === 'mobile' ? 4 : 0}
     >
       {APP_CENTER_NAV.map((item) => {
         const isActive = item.match(pathname)
@@ -45,17 +47,31 @@ export function AppCenterNavTabs({ variant = 'desktop' }: AppCenterNavTabsProps)
               cursor="pointer"
               position="relative"
               height={isMobile ? (isInline ? 44 : 48) : undefined}
-              hoverStyle={isMobile ? undefined : { backgroundColor: ui.navHover }}
-              pressStyle={isMobile ? { opacity: 0.7 } : undefined}
+              borderRadius={isMobile ? 999 : 0}
+              paddingHorizontal={isMobile ? 12 : 0}
+              backgroundColor={isMobile && isActive ? `${colors.brand}18` : 'transparent'}
+              hoverStyle={isMobile ? { backgroundColor: `${colors.brand}10` } : { backgroundColor: ui.navHover }}
+              pressStyle={isMobile ? { opacity: 0.72, scale: 0.96 } : undefined}
+              animation="quick"
               aria-label={item.label}
               title={item.label}
             >
               <Icon
-                size={isInline ? 20 : isMobile ? 22 : 24}
+                size={isInline ? 20 : isMobile ? 21 : 24}
                 color={isActive ? colors.brand : colors.icon}
                 fill={isActive ? colors.brand : 'none'}
+                strokeWidth={isActive ? 2.2 : 1.8}
               />
-              {isActive ? (
+              {isMobile && !isInline ? (
+                <YStack
+                  width={isActive ? 4 : 0}
+                  height={4}
+                  borderRadius={999}
+                  backgroundColor={colors.brand}
+                  marginTop={4}
+                  animation="quick"
+                />
+              ) : isActive ? (
                 <YStack
                   position="absolute"
                   bottom={0}

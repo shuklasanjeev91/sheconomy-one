@@ -2,14 +2,18 @@ import type { ReactNode } from 'react'
 import type { GetProps } from 'tamagui'
 
 import { YStack, useMedia } from '~/components/ui'
-import { getShadowStyle, radius } from '~/config/tokens'
+import { radius } from '~/config/tokens'
 import { useAppLayout } from '~/hooks/useAppLayout'
 import { APP_LAYOUT } from '~/lib/layout/constants'
-import { useAppUi } from '~/lib/theme/useAppUi'
+import { LAYOUT_STRETCH } from '~/lib/layout/styles'
+import { useAppUi, useIsDarkTheme } from '~/lib/theme/useAppUi'
+import { motion } from '~/lib/theme/motion'
 import { elevatedCardStyle } from '~/lib/theme/surfaces'
 
 import { PageScroll } from './PageScroll'
 import { pageCenterMinHeight } from '~/lib/platform/viewport'
+
+export { LAYOUT_STRETCH } from '~/lib/layout/styles'
 
 type FullWidthLayoutProps = {
   children: ReactNode
@@ -89,18 +93,20 @@ type PageRailProps = {
   centered?: boolean
 } & GetProps<typeof YStack>
 
-/** Full-width content rail inside a section. */
+/** Full-width content rail — stretches edge-to-edge unless `maxWidth` is set. */
 export function PageRail({
   children,
   maxWidth,
   centered = false,
   ...props
 }: PageRailProps) {
+  const constrained = maxWidth != null
+
   return (
     <YStack
-      width="100%"
-      maxWidth={maxWidth ?? '100%'}
-      alignSelf={centered || maxWidth ? 'center' : 'stretch'}
+      {...LAYOUT_STRETCH}
+      maxWidth={maxWidth ?? APP_LAYOUT.contentMaxWidth}
+      alignSelf={constrained && centered ? 'center' : 'stretch'}
       {...props}
     >
       {children}
@@ -152,7 +158,7 @@ export function PageContent({
   return (
     <FullWidthLayout scroll={scroll} backgroundColor={backgroundColor}>
       <PageSection bleed={bleed} {...sectionProps}>
-        <PageRail maxWidth={maxWidth} centered={centered}>
+        <PageRail maxWidth={maxWidth} centered={centered} {...(maxWidth == null ? LAYOUT_STRETCH : {})}>
           {children}
         </PageRail>
       </PageSection>
@@ -165,15 +171,18 @@ type SurfaceCardProps = {
 } & GetProps<typeof YStack>
 
 /** Elevated surface card used across feed and settings. */
-export function SurfaceCard({ children, ...props }: SurfaceCardProps) {
+export function SurfaceCard({ children, padding = '$4', ...props }: SurfaceCardProps) {
   const ui = useAppUi()
+  const isDark = useIsDarkTheme()
 
   return (
     <YStack
       width="100%"
       maxWidth="100%"
       overflow="hidden"
-      style={elevatedCardStyle(ui)}
+      padding={padding}
+      style={elevatedCardStyle(ui, 'sm', isDark ? 'dark' : 'light')}
+      {...motion.fadeUp}
       {...props}
     >
       {children}
@@ -181,12 +190,39 @@ export function SurfaceCard({ children, ...props }: SurfaceCardProps) {
   )
 }
 
-/** Centered form column inside a full-width page (auth, settings, lobby). */
+/** Centered narrow form column — use inside full-width pages for inputs only. */
 export function FormRail({ children, ...props }: { children: ReactNode } & GetProps<typeof YStack>) {
   return (
     <PageRail maxWidth={APP_LAYOUT.maxFormWidth} centered width="100%" {...props}>
       {children}
     </PageRail>
+  )
+}
+
+/**
+ * Standard full-width page scaffold.
+ * Content spans 100% between app chrome gutters unless `form` narrows the inner column.
+ */
+export function FullWidthPage({
+  children,
+  scroll = true,
+  bleed = false,
+  form = false,
+  backgroundColor,
+  ...sectionProps
+}: {
+  children: ReactNode
+  scroll?: boolean
+  bleed?: boolean
+  form?: boolean
+  backgroundColor?: string
+} & GetProps<typeof YStack>) {
+  return (
+    <FullWidthLayout scroll={scroll} backgroundColor={backgroundColor}>
+      <PageSection bleed={bleed} {...LAYOUT_STRETCH} {...sectionProps}>
+        {form ? <FormRail>{children}</FormRail> : <PageRail {...LAYOUT_STRETCH}>{children}</PageRail>}
+      </PageSection>
+    </FullWidthLayout>
   )
 }
 
@@ -210,8 +246,8 @@ export function AppPage({
 } & GetProps<typeof YStack>) {
   return (
     <FullWidthLayout scroll={scroll} backgroundColor={backgroundColor}>
-      <PageSection bleed={bleed} width="100%" {...sectionProps}>
-        {form ? <FormRail>{children}</FormRail> : <PageRail>{children}</PageRail>}
+      <PageSection bleed={bleed} {...LAYOUT_STRETCH} {...sectionProps}>
+        {form ? <FormRail>{children}</FormRail> : <PageRail {...LAYOUT_STRETCH}>{children}</PageRail>}
       </PageSection>
     </FullWidthLayout>
   )

@@ -1,4 +1,9 @@
+import type { ReactNode } from 'react'
+import { Platform } from 'react-native'
 import { createContext, useContext, useMemo, useState } from 'react'
+
+import { YStack } from '~/components/ui'
+import { useAppLayout } from '~/hooks/useAppLayout'
 
 type AppBarScrollContextValue = {
   scrollY: number
@@ -12,9 +17,15 @@ const noop = () => {}
 export function AppBarScrollProvider({ children }: { children: React.ReactNode }) {
   const [scrollY, setScrollY] = useState(0)
   const value = useMemo(() => ({ scrollY, setScrollY }), [scrollY])
+  const { isDesktopWeb } = useAppLayout()
+  const useDocumentScroll = Platform.OS === 'web' && isDesktopWeb
 
   return (
-    <AppBarScrollContext.Provider value={value}>{children}</AppBarScrollContext.Provider>
+    <AppBarScrollContext.Provider value={value}>
+      <YStack flex={useDocumentScroll ? undefined : 1} width="100%" maxWidth="100%">
+        {children}
+      </YStack>
+    </AppBarScrollContext.Provider>
   )
 }
 

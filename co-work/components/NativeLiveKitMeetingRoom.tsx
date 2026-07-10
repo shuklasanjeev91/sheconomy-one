@@ -12,7 +12,7 @@ import {
 
 import { Spinner, Text, YStack } from '~/components/ui'
 import { ScreenCenter, ScreenFill } from '~/components/layout'
-import type { LiveKitMediaControls } from '~/co-work/components/LiveKitMeetingRoom'
+import type { LiveKitMediaControls } from '~/co-work/lib/livekit-media-controls'
 import { useLiveKitMediaControls } from '~/co-work/hooks/useLiveKitMediaControls'
 import { fetchLiveKitCredentials } from '~/co-work/lib/livekit'
 import { getLiveKitRoomOptions } from '~/co-work/lib/livekit-room-options'

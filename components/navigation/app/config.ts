@@ -21,9 +21,10 @@ import {
   isCoWorkMeetingsPath,
   isCoWorkJoinPath,
   isCoWorkLivePath,
+  isCommerceHomePath,
   isCommercePath,
-  isCommerceFavoritesPath,
   isCommerceShopsPath,
+  isMyShopsPath,
   isCommunityFeedPath,
   isCreatePostPath,
   isJobsPath,
@@ -118,20 +119,35 @@ export const APP_CENTER_NAV: AppCenterNavItem[] = [
 ]
 
 /** Bottom tabs — commerce section (Home + You added automatically). */
-export const APP_COMMERCE_MOBILE_TABS: AppMobileTabItem[] = [
-  {
-    href: commerceRoutes.shops,
-    label: 'Shops',
-    icon: Icons.Store,
-    match: (path) => isCommerceShopsPath(path),
-  },
-  {
-    href: commerceRoutes.favorites,
-    label: 'Saved',
-    icon: Icons.Heart,
-    match: (path) => isCommerceFavoritesPath(path),
-  },
-]
+export type CommerceMobileTabOptions = {
+  hasShops: boolean
+  primaryShopId?: string | null
+}
+
+export function getCommerceMobileTabs({
+  hasShops,
+  primaryShopId,
+}: CommerceMobileTabOptions): AppMobileTabItem[] {
+  const sellerHref =
+    hasShops && primaryShopId
+      ? commerceRoutes.manageShop(primaryShopId)
+      : commerceRoutes.myShops
+
+  return [
+    {
+      href: commerceRoutes.shops,
+      label: 'Shops',
+      icon: Icons.Store,
+      match: (path) => isCommerceShopsPath(path),
+    },
+    {
+      href: sellerHref,
+      label: hasShops ? 'Manage shop' : 'Create shop',
+      icon: hasShops ? Icons.Settings : Icons.PlusCircle,
+      match: (path) => isMyShopsPath(path),
+    },
+  ]
+}
 
 /** Global utilities — cart on mobile bottom tabs (alerts stay in desktop header). */
 export const APP_GLOBAL_MOBILE_TABS: AppMobileTabItem[] = [
@@ -181,7 +197,7 @@ export function getHomeMobileTab(section: BottomTabSection): AppMobileTabItem {
         href: commerceRoutes.home,
         label: 'Home',
         icon: Icons.Home,
-        match: (path) => isCommercePath(path) && !isCartPath(path),
+        match: (path) => isCommerceHomePath(path),
       }
   }
 }
@@ -297,12 +313,15 @@ export function getMobileBottomTabSection(pathname: string): BottomTabSection | 
   return 'commerce'
 }
 
-export function getMobileBottomTabMiddleTabs(section: BottomTabSection): AppMobileTabItem[] {
+export function getMobileBottomTabMiddleTabs(
+  section: BottomTabSection,
+  commerceOptions?: CommerceMobileTabOptions,
+): AppMobileTabItem[] {
   switch (section) {
     case 'chat':
       return APP_CHAT_MOBILE_TABS
     case 'commerce':
-      return APP_COMMERCE_MOBILE_TABS
+      return getCommerceMobileTabs(commerceOptions ?? { hasShops: false })
     case 'community':
       return APP_COMMUNITY_MOBILE_TABS
     case 'class':

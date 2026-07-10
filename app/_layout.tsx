@@ -1,11 +1,13 @@
 import { LoadProgressBar, Slot } from 'one'
-import { SafeAreaProvider } from 'react-native-safe-area-context'
-import { Platform } from 'react-native'
+import { SafeAreaProvider, useSafeAreaInsets } from 'react-native-safe-area-context'
+import { ActivityIndicator, Platform, View } from 'react-native'
 import { TamaguiProvider, Theme, YStack } from 'tamagui'
 import { MetaTheme, SchemeProvider, useUserScheme } from '@vxrn/color-scheme'
 import { ToastProvider, ToastViewport } from '@tamagui/toast'
+import type { ReactNode } from 'react'
 
 import config from '~/config/tamagui.config'
+import { screenFillStyle } from '~/lib/platform/viewport'
 import { AppToasts } from '~/components/ui/Toast'
 import { AppShell } from '~/components/navigation/app/AppShell'
 import { CartProvider } from '~/commerce/hooks/useCart'
@@ -13,6 +15,15 @@ import { FavoritesProvider } from '~/commerce/hooks/useFavorites'
 import { MarketplacePersonalizationProvider } from '~/commerce/context/MarketplacePersonalizationContext'
 import { useAppFonts } from '~/hooks/useAppFonts'
 import { SupabaseProvider } from '~/providers/SupabaseProvider'
+
+function NativeRootShell({ children }: { children: ReactNode }) {
+  if (Platform.OS === 'web') {
+    return <>{children}</>
+  }
+
+  const { GestureHandlerRootView } = require('react-native-gesture-handler') as typeof import('react-native-gesture-handler')
+  return <GestureHandlerRootView style={{ flex: 1 }}>{children}</GestureHandlerRootView>
+}
 
 export default function Layout() {
   const routes = (
@@ -43,16 +54,31 @@ html, body, #root {
   width: 100%;
   max-width: 100%;
   margin: 0;
-  min-height: 100%;
   overflow-x: hidden;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   text-rendering: optimizeLegibility;
 }
 body {
-  background-color: var(--background);
-  color: var(--color);
+  min-height: 100vh;
+  min-height: 100dvh;
+  background-color: var(--background, #fef5f9);
+  color: var(--color, #1a0a12);
   font-feature-settings: 'kern' 1, 'liga' 1;
+}
+@media (max-width: 1020px) {
+  html, body {
+    height: 100%;
+    overflow: hidden;
+  }
+}
+@media (min-width: 1021px) {
+  html, body {
+    height: auto;
+    min-height: 100%;
+    overflow-y: auto;
+    scroll-behavior: smooth;
+  }
 }
 ::selection {
   background: rgba(208, 16, 96, 0.22);
@@ -102,19 +128,19 @@ img {
   border-radius: 8px;
   margin: 8px 0 16px;
 }
-@media (min-width: 1021px) {
-  html, body {
-    height: auto;
-    overflow-y: auto;
-  }
-}
 .t_unmounted .is_View,
 .t_unmounted .is_Text,
 .t_unmounted .is_Pressable,
-.t_unmounted .is_ScrollView {
+.t_unmounted .is_ScrollView,
+.t_unmounted .is_Spinner,
+.t_unmounted [role="progressbar"] {
   opacity: 1 !important;
   transform: none !important;
   visibility: visible !important;
+}
+@keyframes heroProgress {
+  from { transform: scaleX(0); }
+  to { transform: scaleX(1); }
 }
 `,
             }}
@@ -122,56 +148,83 @@ img {
         </head>
 
         <body>
-          <AppProviders>{routes}</AppProviders>
+          <SafeAreaProvider>
+            <AppProviders>{routes}</AppProviders>
+          </SafeAreaProvider>
         </body>
       </html>
     )
   }
 
   return (
-    <YStack flex={1} width="100%">
-      <AppProviders>{routes}</AppProviders>
-    </YStack>
+    <NativeRootShell>
+      <SafeAreaProvider>
+        <AppProviders>{routes}</AppProviders>
+      </SafeAreaProvider>
+    </NativeRootShell>
   )
 }
 
 function AppProviders({ children }: { children: React.ReactNode }) {
   const [fontsLoaded] = useAppFonts()
+  const insets = useSafeAreaInsets()
 
   if (!fontsLoaded) {
-    return null
+    return (
+      <View
+        style={{
+          flex: 1,
+          alignItems: 'center',
+          justifyContent: 'center',
+          backgroundColor: '#fef5f9',
+          paddingTop: Platform.OS !== 'web' ? insets.top : 0,
+          paddingBottom: Platform.OS !== 'web' ? insets.bottom : 0,
+        }}
+      >
+        <ActivityIndicator size="large" color="#D01060" />
+      </View>
+    )
   }
 
   return (
     <SupabaseProvider>
-      <SafeAreaProvider>
-        <SchemeProvider>
-          <ThemedApp>
-            <CartProvider>
-              <FavoritesProvider>
-                <MarketplacePersonalizationProvider>
-                  <AppShell>{children}</AppShell>
-                </MarketplacePersonalizationProvider>
-              </FavoritesProvider>
-            </CartProvider>
-          </ThemedApp>
-        </SchemeProvider>
-      </SafeAreaProvider>
+      <SchemeProvider>
+        <ThemedApp>
+          <CartProvider>
+            <FavoritesProvider>
+              <MarketplacePersonalizationProvider>
+                <AppShell>{children}</AppShell>
+              </MarketplacePersonalizationProvider>
+            </FavoritesProvider>
+          </CartProvider>
+        </ThemedApp>
+      </SchemeProvider>
     </SupabaseProvider>
   )
 }
 
 function ThemedApp({ children }: { children: React.ReactNode }) {
   const userScheme = useUserScheme()
+  const insets = useSafeAreaInsets()
 
   return (
     <TamaguiProvider config={config} defaultTheme={userScheme.value}>
       <Theme name={userScheme.value}>
-        <ToastProvider swipeDirection="horizontal" duration={4000} native={false}>
-          {children}
-          <AppToasts />
-          <ToastViewport top="$8" left={0} right={0} />
-        </ToastProvider>
+        <YStack
+          flex={Platform.OS === 'web' ? undefined : 1}
+          width="100%"
+          style={Platform.OS === 'web' ? screenFillStyle() : undefined}
+        >
+          <ToastProvider swipeDirection="horizontal" duration={4000} native={Platform.OS !== 'web'}>
+            {children}
+            <AppToasts />
+            <ToastViewport
+              top={Platform.OS === 'web' ? '$8' : Math.max(insets.top, 8)}
+              left={0}
+              right={0}
+            />
+          </ToastProvider>
+        </YStack>
       </Theme>
     </TamaguiProvider>
   )

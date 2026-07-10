@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react'
 
-import { useAuthUi } from '~/components/auth/auth-theme'
+import { AUTH_LAYOUT } from '~/components/auth/auth-layout'
 import { CommunityAdaptiveSheet } from '~/community/components/CommunityAdaptiveSheet'
 import {
   DEFAULT_COUNTRY,
@@ -24,7 +24,6 @@ export function CountryCodePicker({
   disabled = false,
   compact = false,
 }: CountryCodePickerProps) {
-  const authUi = useAuthUi()
   const ui = useAppUi()
   const [open, setOpen] = useState(false)
   const [query, setQuery] = useState('')
@@ -44,7 +43,7 @@ export function CountryCodePicker({
         gap="$1.5"
         paddingHorizontal={compact ? '$2' : '$3'}
         paddingVertical={compact ? '$2' : '$2.5'}
-        borderRadius={compact ? 10 : authUi.inputRadius}
+        borderRadius={compact ? 10 : AUTH_LAYOUT.inputRadius}
         borderWidth={compact ? 0 : 1}
         borderColor={ui.borderSubtle}
         backgroundColor={compact ? 'transparent' : ui.surface}
@@ -75,7 +74,7 @@ export function CountryCodePicker({
             gap="$2"
             paddingHorizontal="$3"
             paddingVertical="$2"
-            borderRadius={authUi.inputRadius}
+            borderRadius={AUTH_LAYOUT.inputRadius}
             borderWidth={1}
             borderColor={ui.borderSubtle}
             backgroundColor={ui.surfaceMuted}

@@ -12,8 +12,10 @@ import {
   recordProgramView,
   type Program,
 } from '~/class/lib/programs'
+import { SectionTitle } from '~/commerce/components'
 import { FullWidthLayout, PageCenter } from '~/components/layout'
 import { Icons, Spinner, Text, XStack, YStack } from '~/components/ui'
+import { getShadowStyle, radius } from '~/config/tokens'
 import { classRoutes } from '~/lib/routes'
 import { useAppUi } from '~/lib/theme/useAppUi'
 
@@ -113,16 +115,15 @@ export function ProgramScreen() {
           {hasProgramAuthor(program) ? (
             <YStack
               padding="$4"
-              borderRadius={12}
+              borderRadius={radius.card}
               borderWidth={1}
               borderColor={ui.borderSubtle}
               backgroundColor={ui.surface}
               gap="$3"
               width="100%"
+              style={getShadowStyle('sm')}
             >
-              <Text fontSize={15} fontWeight="600" color={ui.text}>
-                Host
-              </Text>
+              <SectionTitle title="Host" />
               <ProgramAuthorProfile program={program} size="large" />
             </YStack>
           ) : null}
@@ -130,16 +131,15 @@ export function ProgramScreen() {
           {program.description ? (
             <YStack
               padding="$4"
-              borderRadius={12}
+              borderRadius={radius.card}
               borderWidth={1}
               borderColor={ui.borderSubtle}
               backgroundColor={ui.surface}
               gap="$2"
               width="100%"
+              style={getShadowStyle('sm')}
             >
-              <Text fontSize={15} fontWeight="600" color={ui.text}>
-                About this program
-              </Text>
+              <SectionTitle title="About this program" />
               <Text fontSize={14} color={ui.textSecondary} lineHeight={22} whiteSpace="pre-wrap">
                 {program.description}
               </Text>

@@ -24,7 +24,7 @@ export function AuthUserMenuContent({ onClose }: AuthUserMenuContentProps) {
   const ui = useAppUi()
   const router = useRouter()
   const { profile } = useProfile()
-  const { canManageShops, isMale } = useAccess()
+  const { isMale } = useAccess()
   const { signOut } = useAuth()
 
   const displayName = profile?.full_name || profile?.username || 'Your account'
@@ -37,11 +37,8 @@ export function AuthUserMenuContent({ onClose }: AuthUserMenuContentProps) {
   const items: MenuItem[] = [
     { icon: Icons.User, label: 'View profile', href: profileHref },
     { icon: Icons.Settings, label: 'Settings', href: routes.settings },
+    { icon: Icons.Store, label: 'Seller hub', href: commerceRoutes.myShops },
   ]
-
-  if (canManageShops) {
-    items.push({ icon: Icons.Store, label: 'My shops', href: commerceRoutes.myShops })
-  }
 
   items.push({
     icon: Icons.LogOut,
@@ -61,11 +58,7 @@ export function AuthUserMenuContent({ onClose }: AuthUserMenuContentProps) {
   return (
     <YStack gap="$1" minWidth={240}>
       <XStack gap="$3" alignItems="center" paddingHorizontal="$2" paddingVertical="$2">
-        <Avatar
-          name={displayName}
-          src={profile?.avatar_url ?? undefined}
-          size="$4"
-        />
+        <Avatar name={displayName} src={profile?.avatar_url ?? undefined} size="$4" />
         <YStack flex={1} minWidth={0} gap={2}>
           <Text fontSize={15} fontWeight="700" color={ui.text} numberOfLines={1}>
             {displayName}
@@ -126,6 +119,7 @@ function MenuRow({
       paddingHorizontal="$2"
       borderRadius={10}
       cursor="pointer"
+      animation="quick"
       hoverStyle={{ backgroundColor: ui.surfaceHover }}
       pressStyle={{ opacity: 0.85 }}
       onPress={onPress}
@@ -138,28 +132,30 @@ function MenuRow({
   )
 }
 
-/** Guest quick actions when opening the auth sheet from mobile. */
 export function AuthGuestMenuContent({ onClose, signInHref }: { onClose: () => void; signInHref: Href }) {
   const ui = useAppUi()
 
   return (
-    <YStack gap="$2" paddingBottom="$2">
-      <Text fontSize={18} fontWeight="700" color={ui.text} paddingHorizontal="$2">
-        Welcome
-      </Text>
-      <Text fontSize={14} color={ui.textMuted} paddingHorizontal="$2" marginBottom="$2">
-        Sign in to access your profile, shops, and community.
-      </Text>
+    <YStack gap="$3" paddingBottom="$2">
+      <YStack gap="$1" paddingHorizontal="$2">
+        <Text fontSize={18} fontWeight="800" color={ui.text} letterSpacing={-0.3}>
+          Welcome
+        </Text>
+        <Text fontSize={14} color={ui.textMuted} lineHeight={21}>
+          Sign in to access your profile, shops, and community.
+        </Text>
+      </YStack>
       <Link href={signInHref} asChild>
         <XStack
-          height={44}
+          height={48}
           borderRadius={999}
           backgroundColor={ui.brand}
           alignItems="center"
           justifyContent="center"
           marginHorizontal="$2"
           cursor="pointer"
-          pressStyle={{ opacity: 0.9 }}
+          animation="quick"
+          pressStyle={{ opacity: 0.9, scale: 0.98 }}
           onPress={onClose}
         >
           <Text fontSize={15} fontWeight="700" color={ui.onBrand}>

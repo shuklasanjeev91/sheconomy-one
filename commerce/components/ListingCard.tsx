@@ -2,10 +2,11 @@ import { useState } from 'react'
 import { Link } from 'one'
 
 import { Icons, Text, XStack, YStack } from '~/components/ui'
-import { getShadowStyle, radius } from '~/config/tokens'
+import { radius } from '~/config/tokens'
 import { getListingSlug } from '~/lib/supabase/commerce'
 import type { ListingSummary } from '~/lib/supabase/commerce'
 import { routes } from '~/lib/routes'
+import { useThemedShadowStyle } from '~/lib/theme/useThemedShadowStyle'
 
 import { FavoriteButton } from './FavoriteButton'
 import { ListingBadge } from './ListingBadge'
@@ -27,6 +28,8 @@ type ListingCardProps = {
  */
 export function ListingCard({ listing, compact }: ListingCardProps) {
   const ui = useAppUi()
+  const cardShadow = useThemedShadowStyle('sm')
+  const cardShadowMd = useThemedShadowStyle('md')
   const personalization = useOptionalMarketplacePersonalization()
   const badge = personalization?.getBadge(listing) ?? null
   const hasRating =
@@ -73,9 +76,9 @@ export function ListingCard({ listing, compact }: ListingCardProps) {
             borderColor={ui.borderSubtle}
             cursor="pointer"
             animation="quick"
-            hoverStyle={{ opacity: 0.95, y: -2, ...getShadowStyle('md') }}
-            pressStyle={{ scale: 0.99, y: 0 }}
-            style={getShadowStyle('sm')}
+            hoverStyle={{ opacity: 0.98, y: -4, ...cardShadowMd }}
+            pressStyle={{ scale: 0.985, y: 0 }}
+            style={cardShadow}
           >
             <ListingImage
               imageUrls={displayUrls}
@@ -131,13 +134,15 @@ export function ListingCard({ listing, compact }: ListingCardProps) {
       ) : null}
 
       <Link href={listingHref} asChild>
-        <YStack gap={3} cursor="pointer" paddingHorizontal={1}>
+        <YStack gap={4} cursor="pointer" paddingHorizontal={2} animation="quick">
           <Text
             fontSize={compact ? 12 : 13}
-            fontWeight="400"
+            fontWeight="600"
             numberOfLines={2}
-            lineHeight={compact ? 16 : 18}
+            lineHeight={compact ? 17 : 19}
             color={ui.text}
+            letterSpacing={-0.2}
+            hoverStyle={{ color: ui.brand }}
           >
             {cardTitle}
           </Text>
@@ -145,22 +150,23 @@ export function ListingCard({ listing, compact }: ListingCardProps) {
           {hasRating ? (
             <XStack gap={4} alignItems="center">
               <StarRating rating={listing.average_rating ?? 0} size={11} />
-              <Text fontSize={12} color={ui.textSecondary} fontWeight="400">
+              <Text fontSize={12} color={ui.textSecondary} fontWeight="500">
                 {formatRating(listing.average_rating)}
                 {listing.total_reviews ? ` (${listing.total_reviews})` : ''}
               </Text>
             </XStack>
           ) : null}
 
-          <Text fontSize={compact ? 14 : 16} fontWeight="700" color={ui.text} letterSpacing={-0.2}>
-            {formatCurrency(listing.price, listing.currency)}
-          </Text>
-
-          {listing.shop_name && !compact ? (
-            <Text fontSize={12} color={ui.textMuted} numberOfLines={1}>
-              {listing.shop_name}
+          <XStack alignItems="baseline" gap="$2" flexWrap="wrap">
+            <Text fontSize={compact ? 15 : 17} fontWeight="800" color={ui.text} letterSpacing={-0.4}>
+              {formatCurrency(listing.price, listing.currency)}
             </Text>
-          ) : null}
+            {listing.shop_name && !compact ? (
+              <Text fontSize={11} color={ui.textMuted} numberOfLines={1} fontWeight="500">
+                · {listing.shop_name}
+              </Text>
+            ) : null}
+          </XStack>
         </YStack>
       </Link>
     </YStack>

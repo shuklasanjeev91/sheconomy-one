@@ -38,9 +38,9 @@ const TIER_FEATURES: Record<AccessTier, ReadonlySet<AppFeature>> = {
   female: new Set(['commerce', 'class', 'co-work', 'community', 'chat', 'account']),
 }
 
-/** Creating and managing seller shops is limited to verified female members. */
+/** Any signed-in member can open a shop and manage listings. */
 export function canManageShops(tier: AccessTier): boolean {
-  return tier === 'female'
+  return tier !== 'guest'
 }
 
 export function canAccessFeature(tier: AccessTier, feature: AppFeature): boolean {
@@ -98,7 +98,6 @@ export function getAccessDeniedRedirect(tier: AccessTier, pathname: string): Hre
 
   if (isMyShopsPath(pathname)) {
     if (tier === 'guest') return buildSignInUrl(pathname)
-    if (tier === 'male') return appRoutes.verifyGender
   }
 
   if (

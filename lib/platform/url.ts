@@ -9,8 +9,12 @@ export function getWindowOrigin(): string {
 }
 
 export function getSearchParam(key: string): string | null {
-  if (typeof window === 'undefined') return null
-  return new URLSearchParams(window.location.search).get(key)
+  if (typeof window === 'undefined' || typeof window.location === 'undefined') {
+    return null
+  }
+  const search = window.location.search
+  if (search == null) return null
+  return new URLSearchParams(search).get(key)
 }
 
 export function buildAbsoluteUrl(path: string): string {

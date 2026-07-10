@@ -1,6 +1,6 @@
 import type { Href } from 'one'
 
-import { AuthButton } from '~/components/auth/AuthButton'
+import { AuthButton } from '~/components/auth'
 
 type NavAccountLinkProps = {
   href: Href

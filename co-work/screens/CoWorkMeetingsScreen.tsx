@@ -3,7 +3,7 @@ import { Platform } from 'react-native'
 import { useCallback, useEffect, useState } from 'react'
 
 import { RequireAuth } from '~/components/auth/RequireAuth'
-import { AppPage } from '~/components/layout'
+import { AppPage, LAYOUT_STRETCH } from '~/components/layout'
 import { Button, Icons, Spinner, Text, XStack, YStack } from '~/components/ui'
 import { CoWorkBrandChip, CoWorkStatusPill } from '~/co-work/components/CoWorkUi'
 import { fetchHostedMeetings, formatMeetingCode } from '~/co-work/lib/meetings'
@@ -76,7 +76,7 @@ export function CoWorkMeetingsScreen() {
       paddingVertical="$6"
       style={pageGradientStyle(coworkGradients.page, coworkUi.pageBg)}
     >
-      <YStack gap="$5" width="100%" maxWidth={720} alignSelf="center">
+      <YStack gap="$5" width="100%" {...LAYOUT_STRETCH}>
         <YStack gap="$3">
           <CoWorkBrandChip label="YOUR MEETINGS" />
           <Text fontSize={30} fontWeight="800" color={coworkUi.text} letterSpacing={-0.8}>
@@ -127,9 +127,18 @@ export function CoWorkMeetingsScreen() {
               key={meeting.id}
               gap="$3"
               padding="$4"
+              paddingLeft="$4"
               borderRadius={coworkUi.radius.card}
               borderWidth={1}
               borderColor={coworkUi.glassBorder}
+              borderLeftWidth={4}
+              borderLeftColor={
+                meeting.status === 'active' || meeting.status === 'instant'
+                  ? coworkUi.live
+                  : coworkUi.brandLight
+              }
+              animation="quick"
+              hoverStyle={{ y: -2, borderColor: coworkUi.borderAccent }}
               style={{
                 ...coworkGlassStyle(coworkUi, true),
                 ...coworkBoxShadow(coworkShadows, 'card'),

@@ -17,9 +17,9 @@ export const ListItem = forwardRef<any, GetProps<typeof TListItem>>(function Lis
       borderRadius={radius.chip}
       paddingVertical="$3"
       paddingHorizontal="$3.5"
-      animation="quick"
-      hoverStyle={{ backgroundColor: '$color3' }}
-      pressStyle={{ backgroundColor: '$color4', scale: 0.992 }}
+      animation="smooth"
+      hoverStyle={{ backgroundColor: '$color3', x: 2 }}
+      pressStyle={{ backgroundColor: '$color4', scale: 0.99, x: 0 }}
       {...props}
     />
   )

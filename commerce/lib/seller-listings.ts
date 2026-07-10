@@ -1,0 +1,169 @@
+import { supabase } from '~/lib/supabase'
+import type { Database, Tables } from '~/lib/supabase'
+import { slugifyTitle } from '~/commerce/lib/seo-urls'
+
+type ListingType = Database['public']['Enums']['listing_type_enum']
+type ListingStatus = Database['public']['Enums']['listing_status_enum']
+
+export type CreateListingInput = {
+  shopId: string
+  title: string
+  description?: string
+  price: number
+  listingType: ListingType
+  quantity?: number
+  category?: string
+  imageUrl?: string
+  imageUrls?: string[]
+  publish?: boolean
+}
+
+export type UpdateListingInput = {
+  title?: string
+  description?: string
+  price?: number
+  quantity?: number
+  category?: string
+  listingStatus?: ListingStatus
+  isActive?: boolean
+}
+
+export type UpdateShopProfileInput = Pick<
+  Tables<'shops'>,
+  | 'shop_name'
+  | 'shop_description'
+  | 'shop_email'
+  | 'shop_phone_number'
+  | 'website_url'
+  | 'is_active'
+>
+
+export async function createSellerListing(input: CreateListingInput) {
+  const title = input.title.trim()
+  const slug = slugifyTitle(title)
+  const listingStatus: ListingStatus = input.publish ? 'active' : 'draft'
+
+  const { data, error } = await supabase
+    .from('listings')
+    .insert({
+      shop_id: input.shopId,
+      title,
+      slug,
+      description: input.description?.trim() || null,
+      price: input.price,
+      listing_type: input.listingType,
+      listing_status: listingStatus,
+      is_active: input.publish ?? false,
+      quantity: input.quantity ?? (input.listingType === 'digital' ? null : 1),
+      stock: input.quantity ?? (input.listingType === 'digital' ? null : 1),
+      category: input.category?.trim() || null,
+      shipping_required: input.listingType === 'physical',
+      published_at: input.publish ? new Date().toISOString() : null,
+    })
+    .select('id, slug, title, listing_status')
+    .single()
+
+  if (error || !data) {
+    return { listing: null, error: error?.message ?? 'Could not create listing.' }
+  }
+
+  const imageUrls = (input.imageUrls?.length
+    ? input.imageUrls
+    : input.imageUrl?.trim()
+      ? [input.imageUrl.trim()]
+      : []
+  ).filter(Boolean)
+
+  if (imageUrls.length > 0) {
+    await supabase.from('listing_images').insert(
+      imageUrls.map((imageUrl, index) => ({
+        listing_id: data.id,
+        image_url: imageUrl,
+        is_primary: index === 0,
+        display_order: index,
+      })),
+    )
+  }
+
+  return { listing: data, error: null as string | null }
+}
+
+export async function updateSellerListing(listingId: string, shopId: string, input: UpdateListingInput) {
+  const payload: Tables<'listings'>['Update'] = {}
+
+  if (input.title != null) {
+    payload.title = input.title.trim()
+    payload.slug = slugifyTitle(input.title)
+  }
+  if (input.description != null) payload.description = input.description.trim() || null
+  if (input.price != null) payload.price = input.price
+  if (input.quantity != null) {
+    payload.quantity = input.quantity
+    payload.stock = input.quantity
+  }
+  if (input.category != null) payload.category = input.category.trim() || null
+  if (input.listingStatus != null) {
+    payload.listing_status = input.listingStatus
+    payload.is_active = input.listingStatus === 'active'
+    payload.published_at =
+      input.listingStatus === 'active' ? new Date().toISOString() : null
+  }
+  if (input.isActive != null) payload.is_active = input.isActive
+
+  const { data, error } = await supabase
+    .from('listings')
+    .update(payload)
+    .eq('id', listingId)
+    .eq('shop_id', shopId)
+    .select('id, slug, title, listing_status, is_active')
+    .single()
+
+  if (error) {
+    return { listing: null, error: error.message }
+  }
+
+  return { listing: data, error: null as string | null }
+}
+
+export async function updateShopProfile(shopId: string, userId: string, input: UpdateShopProfileInput) {
+  const { data, error } = await supabase
+    .from('shops')
+    .update({
+      shop_name: input.shop_name,
+      shop_description: input.shop_description,
+      shop_email: input.shop_email,
+      shop_phone_number: input.shop_phone_number,
+      website_url: input.website_url,
+      is_active: input.is_active,
+    })
+    .eq('id', shopId)
+    .eq('user_id', userId)
+    .select(
+      'id, shop_name, shop_description, logo_url, shop_currency, shop_email, shop_phone_number, website_url, average_rating, total_reviews, verified, is_active, created_at, slug',
+    )
+    .single()
+
+  if (error) {
+    return { shop: null, error: error.message }
+  }
+
+  return { shop: data, error: null as string | null }
+}
+
+export async function updateShopLogo(shopId: string, userId: string, logoUrl: string) {
+  const { data, error } = await supabase
+    .from('shops')
+    .update({ logo_url: logoUrl })
+    .eq('id', shopId)
+    .eq('user_id', userId)
+    .select(
+      'id, shop_name, shop_description, logo_url, shop_currency, shop_email, shop_phone_number, website_url, average_rating, total_reviews, verified, is_active, created_at, slug',
+    )
+    .single()
+
+  if (error) {
+    return { shop: null, error: error.message }
+  }
+
+  return { shop: data, error: null as string | null }
+}

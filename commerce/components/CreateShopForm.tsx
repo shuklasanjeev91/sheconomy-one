@@ -13,7 +13,7 @@ import {
   useAppToast,
 } from '~/components/ui'
 import { useFormValidation } from '~/hooks/useFormValidation'
-import { routes } from '~/lib/routes'
+import { commerceRoutes } from '~/lib/routes'
 import { minLength, required } from '~/lib/validation'
 
 import { BRAND_NAME } from '~/config/brand'
@@ -64,7 +64,7 @@ export function CreateShopForm({ onCreated, onCancel }: CreateShopFormProps) {
 
     toast.show('Shop created', { tone: 'success', message: 'Your storefront is ready.' })
     onCreated?.()
-    router.push(routes.shop(shopId))
+    router.push(commerceRoutes.manageShop(shopId))
   }
 
   return (

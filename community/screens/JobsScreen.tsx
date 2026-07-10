@@ -2,10 +2,12 @@ import { Link } from 'one'
 import { useCallback, useEffect, useState } from 'react'
 
 import { CommunityCard } from '~/community/components/CommunityCard'
+import { CommunityPageHeader } from '~/community/components/CommunityPageHeader'
 import { CommunityShell } from '~/community/components/CommunityShell'
 import { searchJobs, type JobListing } from '~/community/lib/jobs'
 import { useCommunityUi } from '~/community/lib/community-theme'
 import { Button, Icons, Input, Spinner, Text, XStack, YStack } from '~/components/ui'
+import { radius } from '~/config/tokens'
 import { communityRoutes } from '~/lib/routes'
 
 export function JobsScreen() {
@@ -38,11 +40,12 @@ export function JobsScreen() {
 
   return (
     <CommunityShell wide>
-      <CommunityCard padding={16} gap={12}>
-        <Text fontSize={22} fontWeight="700" color={communityUi.text}>
-          Jobs
-        </Text>
-        <XStack gap={8} alignItems="center" padding={10} borderRadius={8} borderWidth={1} borderColor={communityUi.border}>
+      <CommunityCard padding={18} gap={12}>
+        <CommunityPageHeader
+          title="Jobs"
+          subtitle="Find roles from women-led companies and founders in the network."
+        />
+        <XStack gap={8} alignItems="center" padding={12} borderRadius={radius.chip} borderWidth={1} borderColor={communityUi.borderLight} backgroundColor={communityUi.inputBg}>
           <Icons.Search size={18} color={communityUi.textMuted} />
           <Input flex={1} value={search} onChangeText={setSearch} placeholder="Search jobs, companies, skills" borderWidth={0} backgroundColor="transparent" />
         </XStack>

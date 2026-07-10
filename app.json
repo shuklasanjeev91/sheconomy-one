@@ -3,11 +3,22 @@
     "name": "sheconomy-one",
     "slug": "sheconomy-one",
     "scheme": "sheconomy",
-    "platforms": ["ios", "android"],
+    "platforms": [
+      "ios",
+      "android"
+    ],
     "plugins": [
       "one/expo-plugin",
       "@livekit/react-native-expo-plugin",
-      "@config-plugins/react-native-webrtc"
+      "expo-font",
+      "expo-localization",
+      "expo-sharing",
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "Allow SHEconomy to access your photos to upload listing images and shop logos."
+        }
+      ]
     ],
     "icon": "./public/app-icon.png",
     "splash": {
@@ -34,7 +45,10 @@
               "pathPrefix": "/"
             }
           ],
-          "category": ["BROWSABLE", "DEFAULT"]
+          "category": [
+            "BROWSABLE",
+            "DEFAULT"
+          ]
         }
       ]
     }

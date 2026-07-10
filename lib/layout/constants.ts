@@ -10,10 +10,13 @@ export const APP_LAYOUT = {
   desktopHeaderHeight: 60,
   mobileHeaderHeight: 96,
   stickyTopDesktop: 60,
-  /** Optional cap for focused flows (auth, settings forms). Main feeds stay full width. */
+  /** Web desktop breakpoint — matches `app/_layout.tsx` media queries. */
+  desktopMinWidth: 1021,
+  /** Narrow column for OTP inputs and focused forms only — not page shells. */
   maxFormWidth: 560,
-  maxAuthWidth: 1120,
-  /** Content rails — feeds and commerce use full width; no global max cap. */
+  /** Auth form column on desktop split layout. */
+  maxAuthFormWidth: 480,
+  /** Content rails — always full viewport width. */
   contentMaxWidth: '100%',
 } as const
 

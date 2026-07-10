@@ -2,6 +2,7 @@ import { useUserScheme } from '@vxrn/color-scheme'
 import { useState } from 'react'
 
 import { CommunityShell } from '~/community/components/CommunityShell'
+import { CommunityPageHeader } from '~/community/components/CommunityPageHeader'
 import { BRAND_BLUE } from '~/community/lib/constants'
 import {
   Button,
@@ -17,6 +18,7 @@ import {
   useAppToast,
 } from '~/components/ui'
 import { SurfaceCard } from '~/components/layout'
+import { radius } from '~/config/tokens'
 import { useAuth } from '~/hooks/useAuth'
 import { useAppUi } from '~/lib/theme/useAppUi'
 
@@ -44,18 +46,14 @@ export function SettingsScreen() {
 
   return (
     <CommunityShell>
-      <YStack gap="$4" width="100%">
-        <YStack gap="$1">
-          <Text fontSize={24} fontWeight="700" color={ui.text} letterSpacing={-0.3}>
-            Settings
-          </Text>
-          <Text color={ui.textSecondary} fontSize={14}>
-            Customize your {BRAND_NAME} experience
-          </Text>
-        </YStack>
+      <YStack gap="$5" width="100%">
+        <CommunityPageHeader
+          title="Settings"
+          subtitle={`Customize your ${BRAND_NAME} experience`}
+        />
 
         <SettingsSection title="Appearance">
-          <SurfaceCard padding="$4" gap="$4" borderRadius={10}>
+          <SurfaceCard padding="$4" gap="$4" borderRadius={radius.card}>
             <Text color={ui.textSecondary} fontSize={14}>
               Theme
             </Text>
@@ -68,7 +66,7 @@ export function SettingsScreen() {
         </SettingsSection>
 
         <SettingsSection title="Notifications">
-          <SurfaceCard padding="$0" borderRadius={10} overflow="hidden">
+          <SurfaceCard padding="$0" borderRadius={radius.card} overflow="hidden">
             <PreferenceRow icon={Icons.Bell} title="Push notifications" defaultChecked />
             <Separator />
             <PreferenceRow icon={Icons.Mail} title="Email digest" />
@@ -80,7 +78,7 @@ export function SettingsScreen() {
         </SettingsSection>
 
         <SettingsSection title="Privacy">
-          <SurfaceCard padding="$0" borderRadius={10} overflow="hidden">
+          <SurfaceCard padding="$0" borderRadius={radius.card} overflow="hidden">
             <PreferenceRow icon={Icons.Eye} title="Profile visibility" subtitle="Public" />
             <Separator />
             <PreferenceRow icon={Icons.Fingerprint} title="Biometric unlock" defaultChecked />
@@ -88,7 +86,7 @@ export function SettingsScreen() {
         </SettingsSection>
 
         <SettingsSection title="Account">
-          <SurfaceCard padding="$0" borderRadius={10} overflow="hidden">
+          <SurfaceCard padding="$0" borderRadius={radius.card} overflow="hidden">
             <XStack
               alignItems="center"
               justifyContent="space-between"
@@ -114,7 +112,7 @@ export function SettingsScreen() {
         </SettingsSection>
 
         <SettingsSection title="About">
-          <SurfaceCard padding="$0" borderRadius={10} overflow="hidden">
+          <SurfaceCard padding="$0" borderRadius={radius.card} overflow="hidden">
             <ListItem
               icon={<Icons.Info size={18} color={BRAND_BLUE} />}
               title="Version"
@@ -137,10 +135,13 @@ function SettingsSection({
   const ui = useAppUi()
 
   return (
-    <YStack gap="$2">
-      <Text fontWeight="700" fontSize={16} color={ui.text}>
-        {title}
-      </Text>
+    <YStack gap="$2.5">
+      <XStack gap="$2.5" alignItems="center">
+        <YStack width={3} height={18} borderRadius={999} backgroundColor={ui.brand} opacity={0.85} />
+        <Text fontWeight="700" fontSize={15} color={ui.text} letterSpacing={-0.15}>
+          {title}
+        </Text>
+      </XStack>
       {children}
     </YStack>
   )
@@ -164,8 +165,8 @@ function PreferenceRow({
       alignItems="center"
       justifyContent="space-between"
       paddingHorizontal="$4"
-      paddingVertical="$3"
-      hoverStyle={{ backgroundColor: ui.surfaceHover }}
+      paddingVertical="$3.5"
+      hoverStyle={{ backgroundColor: ui.navHover }}
     >
       <XStack alignItems="center" gap="$3" flex={1}>
         <Icon size={18} color={ui.textSecondary} />

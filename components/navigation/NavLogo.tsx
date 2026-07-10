@@ -28,7 +28,7 @@ export function NavLogo({ compact, href = routes.commerce.home }: NavLogoProps) 
           width={compact ? 36 : 148}
           height={compact ? 36 : 40}
           objectFit="contain"
-          accessibilityLabel={`${BRAND_NAME} home`}
+          alt={`${BRAND_NAME} home`}
         />
       </XStack>
     </Link>
