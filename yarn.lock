@@ -2808,6 +2808,13 @@ __metadata:
   languageName: node
   linkType: hard
 
+"@mediapipe/face_mesh@npm:~0.4.0":
+  version: 0.4.1633559619
+  resolution: "@mediapipe/face_mesh@npm:0.4.1633559619"
+  checksum: 10/aab20f4a293eb4c8794794260b1efb8f7110053efc923f786b95f0eb17dd4f2cd75897c20c0bfa1ae7fb89ce68d36e5d882b48dbeb33382eaf82423cbe001510
+  languageName: node
+  linkType: hard
+
 "@napi-rs/nice-android-arm-eabi@npm:1.1.1":
   version: 1.1.1
   resolution: "@napi-rs/nice-android-arm-eabi@npm:1.1.1"
@@ -3193,6 +3200,17 @@ __metadata:
   version: 0.11.0
   resolution: "@pkgjs/parseargs@npm:0.11.0"
   checksum: 10/115e8ceeec6bc69dff2048b35c0ab4f8bbee12d8bb6c1f4af758604586d802b6e669dcb02dda61d078de42c2b4ddce41b3d9e726d7daa6b4b850f4adbf7333ff
+  languageName: node
+  linkType: hard
+
+"@playwright/test@npm:^1.61.1":
+  version: 1.61.1
+  resolution: "@playwright/test@npm:1.61.1"
+  dependencies:
+    playwright: "npm:1.61.1"
+  bin:
+    playwright: cli.js
+  checksum: 10/08915357031e1bc273a19bb428fb7e51031ca44f25750832e389bcd69c399f6a243f5f832e7832d46153b57b1305f1f5f5dd63f3a3261f928f61e464c6b3c64e
   languageName: node
   linkType: hard
 
@@ -6113,6 +6131,21 @@ __metadata:
   languageName: node
   linkType: hard
 
+"@tensorflow-models/face-detection@npm:^1.0.3":
+  version: 1.0.3
+  resolution: "@tensorflow-models/face-detection@npm:1.0.3"
+  dependencies:
+    rimraf: "npm:^3.0.2"
+    tslib: "npm:2.4.0"
+  peerDependencies:
+    "@mediapipe/face_detection": ~0.4.0
+    "@tensorflow/tfjs-backend-webgl": ^4.21.0
+    "@tensorflow/tfjs-converter": ^4.21.0
+    "@tensorflow/tfjs-core": ^4.21.0
+  checksum: 10/6d556d6fe73f37c988a617796d67cc7fda2ce4fbe5d2c64256920113d6b59db3c28e319cb2121fd5cff265cd15485fbaa65ed4249ee15eb74df2d6998284d443
+  languageName: node
+  linkType: hard
+
 "@tensorflow-models/face-landmarks-detection@npm:^1.0.6":
   version: 1.0.6
   resolution: "@tensorflow-models/face-landmarks-detection@npm:1.0.6"
@@ -6140,7 +6173,7 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@tensorflow/tfjs-backend-webgl@npm:4.22.0":
+"@tensorflow/tfjs-backend-webgl@npm:4.22.0, @tensorflow/tfjs-backend-webgl@npm:^4.22.0":
   version: 4.22.0
   resolution: "@tensorflow/tfjs-backend-webgl@npm:4.22.0"
   dependencies:
@@ -7894,6 +7927,13 @@ __metadata:
   languageName: node
   linkType: hard
 
+"country-state-city@npm:^3.2.1":
+  version: 3.2.1
+  resolution: "country-state-city@npm:3.2.1"
+  checksum: 10/9a32e077235513ce6de8990bdc9148d32e11a72b3d577624a09262571e5c26860e0b0cb750bf5501b50230c09df1fbac9f26c76fd0032a37640c35ee51e99bb8
+  languageName: node
+  linkType: hard
+
 "cpy@npm:^11.0.1":
   version: 11.1.0
   resolution: "cpy@npm:11.1.0"
@@ -9618,12 +9658,31 @@ __metadata:
   languageName: node
   linkType: hard
 
+"fsevents@npm:2.3.2":
+  version: 2.3.2
+  resolution: "fsevents@npm:2.3.2"
+  dependencies:
+    node-gyp: "npm:latest"
+  checksum: 10/6b5b6f5692372446ff81cf9501c76e3e0459a4852b3b5f1fc72c103198c125a6b8c72f5f166bdd76ffb2fca261e7f6ee5565daf80dca6e571e55bcc589cc1256
+  conditions: os=darwin
+  languageName: node
+  linkType: hard
+
 "fsevents@npm:2.3.3, fsevents@npm:^2.3.2, fsevents@npm:~2.3.3":
   version: 2.3.3
   resolution: "fsevents@npm:2.3.3"
   dependencies:
     node-gyp: "npm:latest"
   checksum: 10/4c1ade961ded57cdbfbb5cac5106ec17bc8bccd62e16343c569a0ceeca83b9dfef87550b4dc5cbb89642da412b20c5071f304c8c464b80415446e8e155a038c0
+  conditions: os=darwin
+  languageName: node
+  linkType: hard
+
+"fsevents@patch:fsevents@npm%3A2.3.2#optional!builtin<compat/fsevents>":
+  version: 2.3.2
+  resolution: "fsevents@patch:fsevents@npm%3A2.3.2#optional!builtin<compat/fsevents>::version=2.3.2&hash=df0bf1"
+  dependencies:
+    node-gyp: "npm:latest"
   conditions: os=darwin
   languageName: node
   linkType: hard
@@ -12693,6 +12752,30 @@ __metadata:
   languageName: node
   linkType: hard
 
+"playwright-core@npm:1.61.1":
+  version: 1.61.1
+  resolution: "playwright-core@npm:1.61.1"
+  bin:
+    playwright-core: cli.js
+  checksum: 10/b0e7b1d4de7ca6c1a57eb88f1709609a8b7637092f149e703d84d6c8e01835992ec5ca26b86f1a32fb5f5bc1aad042c3ae27311e131b3dda8a27824a543eb3c7
+  languageName: node
+  linkType: hard
+
+"playwright@npm:1.61.1":
+  version: 1.61.1
+  resolution: "playwright@npm:1.61.1"
+  dependencies:
+    fsevents: "npm:2.3.2"
+    playwright-core: "npm:1.61.1"
+  dependenciesMeta:
+    fsevents:
+      optional: true
+  bin:
+    playwright: cli.js
+  checksum: 10/0cd1a8a7e106202e785450763973bf326d4aa112ed195bbd78b17af43dcfd12e29bc8204ae61c88f748dd0f2bdf69a7827bc3bbf8c1ec4c71b8e35586e05f13c
+  languageName: node
+  linkType: hard
+
 "plist@npm:^3.0.5":
   version: 3.1.1
   resolution: "plist@npm:3.1.1"
@@ -13867,6 +13950,8 @@ __metadata:
     "@livekit/react-native": "npm:^2.11.1"
     "@livekit/react-native-expo-plugin": "npm:^1.0.2"
     "@livekit/react-native-webrtc": "npm:^144.1.1"
+    "@mediapipe/face_mesh": "npm:~0.4.0"
+    "@playwright/test": "npm:^1.61.1"
     "@react-native-async-storage/async-storage": "npm:^3.1.1"
     "@react-native-community/cli": "npm:^20.1.2"
     "@react-native-community/datetimepicker": "npm:^9.1.0"
@@ -13880,12 +13965,15 @@ __metadata:
     "@tamagui/native": "npm:^2.4.2"
     "@tamagui/toast": "npm:2.4.0"
     "@tamagui/vite-plugin": "npm:2.4.0"
+    "@tensorflow-models/face-detection": "npm:^1.0.3"
     "@tensorflow-models/face-landmarks-detection": "npm:^1.0.6"
     "@tensorflow/tfjs": "npm:^4.22.0"
+    "@tensorflow/tfjs-backend-webgl": "npm:^4.22.0"
     "@types/react": "npm:^19.2.2"
     "@vladmandic/face-api": "npm:^1.7.15"
     "@vxrn/color-scheme": "npm:1.20.1"
     core-js: "npm:^3.38.1"
+    country-state-city: "npm:^3.2.1"
     expo: "npm:~55.0.7"
     expo-audio: "npm:~55.0.15"
     expo-camera: "npm:~55.0.20"
@@ -14588,6 +14676,13 @@ __metadata:
     minimist: "npm:^1.2.6"
     strip-bom: "npm:^3.0.0"
   checksum: 10/5e55cc2fb6b800eb72011522e10edefccb45b1f9af055681a51354c9b597d1390c6fa9cc356b8c7529f195ac8a90a78190d563159f3a1eed10e01bbd4d01a8ab
+  languageName: node
+  linkType: hard
+
+"tslib@npm:2.4.0":
+  version: 2.4.0
+  resolution: "tslib@npm:2.4.0"
+  checksum: 10/d8379e68b36caf082c1905ec25d17df8261e1d68ddc1abfd6c91158a064f6e4402039ae7c02cf4c81d12e3a2a2c7cd8ea2f57b233eb80136a2e3e7279daf2911
   languageName: node
   linkType: hard
 

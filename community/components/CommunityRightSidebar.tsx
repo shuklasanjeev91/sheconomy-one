@@ -6,23 +6,24 @@ import { CommunitySuggestionsSections } from '~/community/components/CommunitySu
 import { CommunityWidget } from '~/community/components/CommunityWidget'
 import { MemberRow } from '~/community/components/MemberRow'
 import { ProfileLink } from '~/community/components/ProfileLink'
-import { useUnreadNotifications } from '~/community/hooks/useUnreadNotifications'
 import { fetchUpcomingEvents, type CommunityEvent } from '~/community/lib/events'
 import { useNetwork } from '~/community/hooks/useNetwork'
 import { COMMUNITY_DISCOVER_LINKS } from '~/community/navigation/config'
 import { useCommunityUi } from '~/community/lib/community-theme'
 import { COMMUNITY_LAYOUT } from '~/community/lib/layout'
+import { StickyRail } from '~/components/layout'
 import { Avatar, Icons, Text, XStack, YStack } from '~/components/ui'
-import { communityRoutes, commerceRoutes } from '~/lib/routes'
+import { useAppLayout } from '~/hooks/useAppLayout'
+import { communityRoutes } from '~/lib/routes'
 import { useSupabase } from '~/providers/SupabaseProvider'
 
-import { BRAND_NAME } from '~/config/brand'
+type CommunitySidebarPin = 'document' | 'viewport'
 
-export function CommunityRightSidebar() {
+export function CommunityRightSidebar({ pin = 'document' }: { pin?: CommunitySidebarPin }) {
   const communityUi = useCommunityUi()
+  const { isWide } = useAppLayout()
   const { user } = useSupabase()
   const network = useNetwork()
-  const { count: unreadNotifications } = useUnreadNotifications()
   const [upcomingEvents, setUpcomingEvents] = useState<CommunityEvent[]>([])
 
   useEffect(() => {
@@ -36,42 +37,17 @@ export function CommunityRightSidebar() {
   const contacts = user ? network.connections.slice(0, 8) : []
   const invitations = user ? network.pendingReceived.slice(0, 3) : []
 
-  return (
-    <YStack
-      width={COMMUNITY_LAYOUT.rightSidebarWidth}
-      flexShrink={0}
-      gap="$2"
-      position="sticky"
-      top={COMMUNITY_LAYOUT.stickyTop}
-      alignSelf="flex-start"
-      display="none"
-      $gtLg={{ display: 'flex' }}
-    >
-      <CommunityWidget title="Sponsored">
-        <Link href={commerceRoutes.shops} asChild>
-          <XStack gap={12} alignItems="center" cursor="pointer" hoverStyle={{ opacity: 0.9 }}>
-            <YStack
-              width={120}
-              height={120}
-              borderRadius={8}
-              backgroundColor={communityUi.divider}
-              alignItems="center"
-              justifyContent="center"
-            >
-              <Icons.Store size={32} color={communityUi.brand} />
-            </YStack>
-            <YStack flex={1} gap={4}>
-              <Text fontSize={13} fontWeight="600" color={communityUi.text} lineHeight={18}>
-                Grow your shop on {BRAND_NAME}
-              </Text>
-              <Text fontSize={12} color={communityUi.textMuted}>
-                Browse shops
-              </Text>
-            </YStack>
-          </XStack>
-        </Link>
-      </CommunityWidget>
+  if (!isWide) {
+    return null
+  }
 
+  return (
+    <StickyRail
+      width={COMMUNITY_LAYOUT.rightSidebarWidth}
+      gap="$2"
+      scrollable={pin === 'document'}
+      pin={pin}
+    >
       <CommunitySuggestionsSections perKindLimit={4} />
 
       <CommunityWidget title="Quick links">
@@ -108,41 +84,6 @@ export function CommunityRightSidebar() {
           })}
         </YStack>
       </CommunityWidget>
-
-      {user && unreadNotifications > 0 ? (
-        <CommunityWidget title="Alerts">
-          <Link href={communityRoutes.notifications}>
-            <XStack
-              gap={10}
-              alignItems="center"
-              paddingVertical={8}
-              paddingHorizontal={8}
-              borderRadius={8}
-              cursor="pointer"
-              hoverStyle={{ backgroundColor: communityUi.divider }}
-            >
-              <XStack
-                width={32}
-                height={32}
-                borderRadius={999}
-                backgroundColor="#e41e3f"
-                alignItems="center"
-                justifyContent="center"
-              >
-                <Icons.Bell size={16} color="white" />
-              </XStack>
-              <YStack flex={1} gap={2}>
-                <Text fontSize={14} fontWeight="600" color={communityUi.text}>
-                  {unreadNotifications} unread
-                </Text>
-                <Text fontSize={12} color={communityUi.textMuted}>
-                  View notifications
-                </Text>
-              </YStack>
-            </XStack>
-          </Link>
-        </CommunityWidget>
-      ) : null}
 
       {user && invitations.length > 0 ? (
         <CommunityWidget
@@ -259,7 +200,7 @@ export function CommunityRightSidebar() {
           </YStack>
         </CommunityCardSection>
       ) : null}
-    </YStack>
+    </StickyRail>
   )
 }
 

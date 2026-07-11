@@ -2,8 +2,16 @@ import { useEffect, useState } from 'react'
 
 import { ImageUploadField, preparePickedImagesForUpload } from '~/components/media/ImageUploadField'
 import { CommercePanel } from '~/commerce/components'
+import { LocationFields } from '~/components/geo'
+import {
+  fetchShopAddressForOwner,
+  shopAddressInputFromRow,
+  upsertShopAddress,
+} from '~/commerce/lib/shop-address'
 import { updateShopLogo, updateShopProfile } from '~/commerce/lib/seller-listings'
+import type { ShopAddress } from '~/commerce/lib/shop-location'
 import type { VendorShop } from '~/hooks/useVendorShops'
+import type { GeoLocationParts } from '~/lib/geo'
 import type { PickedImage } from '~/lib/media/pick-image'
 import { uploadShopLogoImage } from '~/lib/supabase/storage-upload'
 import {
@@ -38,6 +46,10 @@ export function ShopSettingsPanel({ shop, onUpdated }: ShopSettingsPanelProps) {
   const [websiteUrl, setWebsiteUrl] = useState(shop.website_url ?? '')
   const [isActive, setIsActive] = useState(shop.is_active)
   const [logoImages, setLogoImages] = useState<PickedImage[]>([])
+  const [addressValue, setAddressValue] = useState<GeoLocationParts>(() =>
+    shopAddressInputFromRow(shop.address ?? null),
+  )
+  const [isLoadingAddress, setIsLoadingAddress] = useState(false)
   const [isSaving, setIsSaving] = useState(false)
 
   useEffect(() => {
@@ -48,7 +60,29 @@ export function ShopSettingsPanel({ shop, onUpdated }: ShopSettingsPanelProps) {
     setWebsiteUrl(shop.website_url ?? '')
     setIsActive(shop.is_active)
     setLogoImages([])
+    setAddressValue(shopAddressInputFromRow(shop.address ?? null))
   }, [shop])
+
+  useEffect(() => {
+    if (!user?.id || shop.address) return
+
+    let active = true
+    setIsLoadingAddress(true)
+    void fetchShopAddressForOwner(shop.id, user.id).then(({ address, error }) => {
+      if (!active) return
+      if (address) {
+        setAddressValue(shopAddressInputFromRow(address))
+      }
+      if (error) {
+        toast.show('Could not load shop location', { tone: 'danger', message: error })
+      }
+      setIsLoadingAddress(false)
+    })
+
+    return () => {
+      active = false
+    }
+  }, [shop.address, shop.id, toast, user?.id])
 
   async function handleSave() {
     if (!user || shopName.trim().length < 2) return
@@ -56,6 +90,7 @@ export function ShopSettingsPanel({ shop, onUpdated }: ShopSettingsPanelProps) {
     setIsSaving(true)
 
     let latestShop: VendorShop | null = null
+    let latestAddress: ShopAddress | null = shop.address ?? null
 
     if (logoImages.length > 0) {
       try {
@@ -94,15 +129,33 @@ export function ShopSettingsPanel({ shop, onUpdated }: ShopSettingsPanelProps) {
       website_url: websiteUrl.trim() || null,
       is_active: isActive,
     })
-    setIsSaving(false)
 
     if (error || !updated) {
+      setIsSaving(false)
       toast.show('Could not save shop', { tone: 'danger', message: error ?? 'Try again.' })
       return
     }
 
-    toast.show('Shop updated', { tone: 'success' })
-    onUpdated?.((latestShop ?? updated) as VendorShop)
+    const { address: savedAddress, error: addressError } = await upsertShopAddress(
+      shop.id,
+      user.id,
+      addressValue,
+      shopName.trim(),
+    )
+
+    setIsSaving(false)
+
+    if (addressError) {
+      toast.show('Shop saved, location not updated', { tone: 'danger', message: addressError })
+    } else {
+      latestAddress = savedAddress
+      toast.show('Shop updated', { tone: 'success' })
+    }
+
+    onUpdated?.({
+      ...((latestShop ?? updated) as VendorShop),
+      address: latestAddress,
+    })
     setLogoImages([])
   }
 
@@ -113,7 +166,7 @@ export function ShopSettingsPanel({ shop, onUpdated }: ShopSettingsPanelProps) {
           Shop settings
         </Text>
         <Text fontSize={14} color={ui.textSecondary} lineHeight={20}>
-          Manage storefront details visible to buyers — similar to a seller profile on Etsy or Amazon.
+          Manage storefront details and business location visible to buyers.
         </Text>
       </YStack>
 
@@ -152,6 +205,26 @@ export function ShopSettingsPanel({ shop, onUpdated }: ShopSettingsPanelProps) {
         <Field label="Website">
           <Input value={websiteUrl} onChangeText={setWebsiteUrl} autoCapitalize="none" />
         </Field>
+
+        <YStack gap="$2">
+          <Text fontSize={15} fontWeight="700" color={ui.text}>
+            Business location
+          </Text>
+          <Text fontSize={13} color={ui.textSecondary} lineHeight={20}>
+            Used for shop discovery, shipping estimates, and marketplace personalization.
+          </Text>
+          {isLoadingAddress ? (
+            <XStack alignItems="center" gap="$2" paddingVertical="$3">
+              <Spinner size="small" />
+              <Text fontSize={13} color={ui.textMuted}>
+                Loading location…
+              </Text>
+            </XStack>
+          ) : (
+            <LocationFields value={addressValue} onChange={setAddressValue} disabled={isSaving} />
+          )}
+        </YStack>
+
         <YStack gap="$2">
           <Text fontSize={14} fontWeight="600" color={ui.text}>
             Shop visible to buyers
@@ -169,7 +242,7 @@ export function ShopSettingsPanel({ shop, onUpdated }: ShopSettingsPanelProps) {
         tone="primary"
         size="$4"
         borderRadius={999}
-        disabled={isSaving || shopName.trim().length < 2}
+        disabled={isSaving || shopName.trim().length < 2 || isLoadingAddress}
         onPress={() => void handleSave()}
         icon={isSaving ? <Spinner size="small" color="white" /> : undefined}
       >

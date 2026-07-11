@@ -32,7 +32,10 @@ import {
   YStack,
   useAppToast,
 } from '~/components/ui'
+import { ShareButton } from '~/components/share'
+import { LocationPickerField } from '~/components/geo'
 import { communityRoutes } from '~/lib/routes'
+import { getCompanyShareUrl } from '~/lib/share'
 import { useSupabase } from '~/providers/SupabaseProvider'
 
 import { BRAND_MEMBER_LABEL } from '~/config/brand'
@@ -137,7 +140,7 @@ export function CompanyPageScreen() {
       toast.show('Could not save', { tone: 'danger', message: error })
       return
     }
-    toast.show('Company page updated', { tone: 'success' })
+    toast.show('Page updated', { tone: 'success' })
     setIsEditing(false)
     reload()
   }
@@ -156,7 +159,7 @@ export function CompanyPageScreen() {
     return (
       <CommunityShell wide>
         <CommunityCard padding={24}>
-          <Text color={communityUi.textMuted}>Company not found.</Text>
+          <Text color={communityUi.textMuted}>Page not found.</Text>
         </CommunityCard>
       </CommunityShell>
     )
@@ -176,6 +179,18 @@ export function CompanyPageScreen() {
           actions={
             <>
               <CompanyFollowButton company={company} />
+              <ShareButton
+                variant="outline"
+                label="Share"
+                sheetTitle="Share page"
+                copyLabel="Copy page link"
+                copyToastMessage="Page link copied to clipboard."
+                payload={{
+                  url: getCompanyShareUrl(slug ?? company.page_slug),
+                  title: company.name,
+                  text: company.tagline ?? undefined,
+                }}
+              />
               {isOwner ? (
                 <Button tone="outline" borderRadius={999} onPress={() => setIsEditing((value) => !value)}>
                   {isEditing ? 'Cancel edit' : 'Edit page'}
@@ -206,7 +221,7 @@ export function CompanyPageScreen() {
                 </Text>
                 <Link href={`${communityRoutes.createPost}?companyId=${company.id}` as never}>
                   <Text fontSize={14} fontWeight="600" color={communityUi.brand}>
-                    Write a company post
+                    Write a page post
                   </Text>
                 </Link>
               </CommunityCard>
@@ -230,7 +245,7 @@ export function CompanyPageScreen() {
                 <Field label="Tagline" value={editTagline} onChange={setEditTagline} />
                 <Field label="Industry" value={editIndustry} onChange={setEditIndustry} />
                 <Field label="Company size" value={editSize} onChange={setEditSize} />
-                <Field label="Location" value={editLocation} onChange={setEditLocation} />
+                <LocationPickerField value={editLocation} onChange={setEditLocation} label="Location" />
                 <Field label="Headquarters" value={editHeadquarters} onChange={setEditHeadquarters} />
                 <Field label="Website" value={editWebsite} onChange={setEditWebsite} />
                 <Button

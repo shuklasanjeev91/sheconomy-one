@@ -8,6 +8,5 @@ export const BRAND_COWORK_LABEL = `${BRAND_NAME} Co-Work` as const
 /** Public social profiles — footer and marketing surfaces. */
 export const BRAND_SOCIAL = {
   instagram: 'https://www.instagram.com/',
-  facebook: 'https://www.facebook.com/',
   twitter: 'https://twitter.com/',
 } as const

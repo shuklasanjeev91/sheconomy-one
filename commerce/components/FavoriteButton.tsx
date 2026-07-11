@@ -7,7 +7,7 @@ type FavoriteButtonProps = {
   size?: number
 }
 
-/** Etsy-style heart overlay — top-right of listing image. */
+/** Heart overlay — top-right of listing image. */
 export function FavoriteButton({ listingId, size = 18 }: FavoriteButtonProps) {
   const ui = useAppUi()
   const { isFavorite, toggleFavorite } = useFavorites()

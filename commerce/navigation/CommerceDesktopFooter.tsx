@@ -33,11 +33,10 @@ export function CommerceDesktopFooter() {
           <NavLogo href={commerceRoutes.home} />
           <Text color={ui.textSecondary} fontSize={13} lineHeight={20} maxWidth={280}>
             A women-led commerce platform to discover unique shops, buy with confidence, and grow your
-            business — inspired by the best of handmade commerce.
+            business on {BRAND_NAME}.
           </Text>
           <XStack gap="$3">
             <FooterSocial icon={Icons.Instagram} label="Instagram" href={BRAND_SOCIAL.instagram} />
-            <FooterSocial icon={Icons.Facebook} label="Facebook" href={BRAND_SOCIAL.facebook} />
             <FooterSocial icon={Icons.Twitter} label="Twitter" href={BRAND_SOCIAL.twitter} />
           </XStack>
         </YStack>

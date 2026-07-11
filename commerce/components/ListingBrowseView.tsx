@@ -20,9 +20,10 @@ type ListingBrowseViewProps = {
   error: string | null
   onLoadMore: () => void
   emptyMessage?: string
+  hideHeader?: boolean
 }
 
-/** Etsy-style browse page body — header, grid, infinite scroll. */
+/** Browse page body — header, grid, infinite scroll. */
 export function ListingBrowseView({
   title,
   subtitle,
@@ -34,14 +35,15 @@ export function ListingBrowseView({
   error,
   onLoadMore,
   emptyMessage = 'No listings found.',
+  hideHeader = false,
 }: ListingBrowseViewProps) {
   const ui = useAppUi()
   const media = useMedia()
   const gridColumns = media.gtLg ? 6 : media.gtMd ? 5 : media.gtSm ? 3 : 2
 
   return (
-    <YStack gap="$5" width="100%">
-      {header ?? <CommercePageHeader title={title} subtitle={subtitle} />}
+    <YStack gap="$4" width="100%">
+      {hideHeader ? null : header ?? <CommercePageHeader title={title} subtitle={subtitle} />}
 
       {isLoading ? (
         <YStack alignItems="center" paddingVertical="$8">

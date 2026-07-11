@@ -12,7 +12,7 @@ type PromoBannerProps = {
   backgroundColor?: string
 }
 
-/** Etsy-style editorial promo card in the home row. */
+/** Editorial promo card in the home row. */
 export function PromoBanner({
   title,
   subtitle,

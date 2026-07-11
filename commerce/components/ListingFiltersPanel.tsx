@@ -27,13 +27,14 @@ type ListingFiltersPanelProps = {
   facets?: CategoryFilterFacets | null
   facetsLoading?: boolean
   showTypeFilter?: boolean
+  showSort?: boolean
   minPrice: string
   maxPrice: string
   onMinPriceChange: (value: string) => void
   onMaxPriceChange: (value: string) => void
 }
 
-/** Etsy-style filter sections driven by available category inventory. */
+/** Filter sections driven by available category inventory. */
 export function ListingFiltersPanel({
   draft,
   onChange,
@@ -41,6 +42,7 @@ export function ListingFiltersPanel({
   facets,
   facetsLoading = false,
   showTypeFilter = true,
+  showSort = true,
   minPrice,
   maxPrice,
   onMinPriceChange,
@@ -105,7 +107,7 @@ export function ListingFiltersPanel({
 
   return (
     <YStack gap="$5" width="100%">
-      {sortOptions.length > 0 ? (
+      {showSort && sortOptions.length > 0 ? (
         <FilterSection title="Sort by">
           {sortOptions.map((option) => (
             <FilterOption

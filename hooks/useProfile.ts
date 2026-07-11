@@ -24,7 +24,6 @@ export type Profile = Pick<
   | 'occupation'
   | 'business_name'
   | 'website_url'
-  | 'linkedin_url'
   | 'portfolio_url'
   | 'interests'
   | 'profile_completion_percentage'
@@ -57,7 +56,7 @@ export function useProfile() {
     supabase
       .from('profiles')
       .select(
-        'id, full_name, username, email, avatar_url, cover_url, headline, bio, is_verified, follower_count, following_count, connections_count, location, industry, occupation, business_name, website_url, linkedin_url, portfolio_url, interests, profile_completion_percentage, gender',
+        'id, full_name, username, email, avatar_url, cover_url, headline, bio, is_verified, follower_count, following_count, connections_count, location, industry, occupation, business_name, website_url, portfolio_url, interests, profile_completion_percentage, gender',
       )
       .eq('id', user.id)
       .maybeSingle()

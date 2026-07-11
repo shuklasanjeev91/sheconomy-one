@@ -5,9 +5,11 @@ import { LoadMoreEnd, LoadMoreSentinel } from '~/commerce/components/LoadMoreSen
 import { CommunityShell } from '~/community/components/CommunityShell'
 import { FeedPostCard } from '~/community/components/FeedPostCard'
 import { fetchHashtagFeedPage, type CommunityPost } from '~/community/lib/community'
-import { Spinner, Text, YStack } from '~/components/ui'
+import { Spinner, Text, XStack, YStack } from '~/components/ui'
+import { ShareButton } from '~/components/share'
 import { usePaginatedFeed } from '~/commerce/hooks/usePaginatedFeed'
 import { useAppUi } from '~/lib/theme/useAppUi'
+import { getHashtagShareUrl } from '~/lib/share'
 
 export function HashtagFeedScreen() {
   const ui = useAppUi()
@@ -37,12 +39,27 @@ export function HashtagFeedScreen() {
         gap="$2"
         style={{ boxShadow: ui.shadowSoft }}
       >
-        <Text fontSize={22} fontWeight="700" color={ui.text}>
-          #{normalizedTag}
-        </Text>
-        <Text fontSize={14} color={ui.textSecondary}>
-          Posts tagged with #{normalizedTag}
-        </Text>
+        <XStack alignItems="flex-start" justifyContent="space-between" gap="$3">
+          <YStack gap="$2" flex={1}>
+            <Text fontSize={22} fontWeight="700" color={ui.text}>
+              #{normalizedTag}
+            </Text>
+            <Text fontSize={14} color={ui.textSecondary}>
+              Posts tagged with #{normalizedTag}
+            </Text>
+          </YStack>
+          <ShareButton
+            variant="icon"
+            label="Share hashtag"
+            sheetTitle="Share hashtag"
+            copyLabel="Copy hashtag link"
+            copyToastMessage="Hashtag link copied to clipboard."
+            payload={{
+              url: getHashtagShareUrl(normalizedTag),
+              title: `#${normalizedTag}`,
+            }}
+          />
+        </XStack>
       </YStack>
 
       {isLoading ? (

@@ -1,4 +1,4 @@
-import { Link, useRouter } from 'one'
+import { Link, useParams, useRouter } from 'one'
 import { useEffect, useState } from 'react'
 
 import { CommunityCard } from '~/community/components/CommunityCard'
@@ -6,7 +6,9 @@ import { CommunityShell } from '~/community/components/CommunityShell'
 import { applyToJob, fetchJob, saveJob, unsaveJob, type JobListing } from '~/community/lib/jobs'
 import { useCommunityUi } from '~/community/lib/community-theme'
 import { Avatar, Button, Spinner, Text, TextArea, XStack, YStack, useAppToast } from '~/components/ui'
+import { ShareButton } from '~/components/share'
 import { routes } from '~/lib/routes'
+import { getJobShareUrl } from '~/lib/share'
 import { useSupabase } from '~/providers/SupabaseProvider'
 
 export function JobDetailScreen() {
@@ -94,6 +96,18 @@ export function JobDetailScreen() {
           </Text>
         </XStack>
         <XStack gap={8} flexWrap="wrap">
+          <ShareButton
+            variant="outline"
+            label="Share"
+            sheetTitle="Share job"
+            copyLabel="Copy job link"
+            copyToastMessage="Job link copied to clipboard."
+            payload={{
+              url: getJobShareUrl(job.id),
+              title: job.title,
+              text: `${job.company_name} · ${job.location}`,
+            }}
+          />
           {user ? (
             <>
               <Button

@@ -154,3 +154,54 @@ export async function applyToJob(
   })
   return { error: error?.message ?? null }
 }
+
+export type CreateJobInput = {
+  title: string
+  companyName: string
+  description: string
+  location: string
+  jobType: string
+  experienceLevel: string
+  salaryRange?: string
+  isRemote?: boolean
+  requirements?: string
+  benefits?: string
+  industry?: string
+}
+
+export async function createJob(
+  userId: string,
+  input: CreateJobInput,
+): Promise<{ data: { id: string } | null; error: string | null }> {
+  const location = input.isRemote ? 'Remote' : input.location.trim()
+  if (!location) {
+    return { data: null, error: 'Job location is required.' }
+  }
+
+  const { data, error } = await supabase
+    .from('jobs')
+    .insert({
+      title: input.title.trim(),
+      company_name: input.companyName.trim(),
+      description: input.description.trim(),
+      location,
+      job_type: input.jobType,
+      experience_level: input.experienceLevel,
+      salary_range: input.salaryRange?.trim() || null,
+      is_remote: input.isRemote ?? false,
+      requirements: input.requirements?.trim() || null,
+      benefits: input.benefits?.trim() || null,
+      industry: input.industry?.trim() || null,
+      posted_by: userId,
+      is_active: true,
+      status: 'open',
+    })
+    .select('id')
+    .single()
+
+  if (error) {
+    return { data: null, error: error.message }
+  }
+
+  return { data, error: null }
+}

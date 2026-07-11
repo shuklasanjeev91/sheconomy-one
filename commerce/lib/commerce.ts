@@ -15,12 +15,20 @@ import {
   type ShopShippingSummary,
 } from '~/commerce/lib/shop-shipping'
 import { isStorefrontCategoryVisible } from '~/commerce/lib/category-visibility'
+import { ACTIVE_LISTING_FILTER } from '~/commerce/lib/listing-visibility'
 import { formatShopLocation, normalizeShopAddress } from '~/commerce/lib/shop-location'
 import { supabase } from '~/lib/supabase/client'
 
 import { BRAND_NAME } from '~/config/brand'
 
 export { getCategorySlug, getListingSlug, getShopSlug } from '~/commerce/lib/seo-urls'
+export {
+  ACTIVE_LISTING_FILTER,
+  ACTIVE_LISTING_STATUS,
+  fetchActiveListingIdSet,
+  isListingStorefrontVisible,
+  type ListingVisibilityFields,
+} from '~/commerce/lib/listing-visibility'
 
 export type ShopSummary = {
   id: string
@@ -357,6 +365,8 @@ export async function fetchListingSlugMap(
     .from('listings')
     .select('id, slug, title')
     .in('id', ids)
+    .eq('is_active', ACTIVE_LISTING_FILTER.is_active)
+    .eq('listing_status', ACTIVE_LISTING_FILTER.listing_status)
 
   const map = new Map<string, string>()
   for (const row of data ?? []) {
@@ -420,11 +430,6 @@ const DEFAULT_STATS: CommerceStats = {
   new_listings_this_week: 0,
   physical_listings: 0,
   digital_listings: 0,
-}
-
-const ACTIVE_LISTING_FILTER = {
-  is_active: true,
-  listing_status: 'active' as const,
 }
 
 let trendingIdsPromise: Promise<string[]> | null = null

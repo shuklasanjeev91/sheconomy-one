@@ -32,6 +32,11 @@ tsconfig.tsbuildinfo
 
 .expo
 
+# playwright
+test-results/
+playwright-report/
+blob-report/
+
 # generated code
 /ios
 /android

@@ -7,7 +7,9 @@ import { CommunityWidget } from '~/community/components/CommunityWidget'
 import { CommunityCard } from '~/community/components/CommunityCard'
 import { CommunityPageHeader } from '~/community/components/CommunityPageHeader'
 import { MemberRow } from '~/community/components/MemberRow'
+import { UserListBottomSheet } from '~/community/components/UserListBottomSheet'
 import { useCommunityUi } from '~/community/lib/community-theme'
+import type { UserListKind } from '~/community/lib/user-lists'
 import { fetchDiscoverMembers, type NetworkMember } from '~/community/lib/network'
 import { useNetwork } from '~/community/hooks/useNetwork'
 import { Button, Icons, Input, Spinner, Text, XStack, YStack } from '~/components/ui'
@@ -25,6 +27,13 @@ export function NetworkScreen() {
   const [guestSuggestions, setGuestSuggestions] = useState<NetworkMember[]>([])
   const [guestLoading, setGuestLoading] = useState(false)
   const [search, setSearch] = useState('')
+  const [listSheetKind, setListSheetKind] = useState<UserListKind | null>(null)
+  const [listSheetOpen, setListSheetOpen] = useState(false)
+
+  function openUserList(kind: UserListKind) {
+    setListSheetKind(kind)
+    setListSheetOpen(true)
+  }
 
   useEffect(() => {
     if (user || authLoading) return
@@ -100,6 +109,8 @@ export function NetworkScreen() {
       <NetworkHero
         connectionsCount={network.connections.length}
         invitationsCount={network.pendingReceived.length}
+        onOpenConnections={() => openUserList('connections')}
+        onOpenInvitations={() => openUserList('pending-received')}
       />
 
       <CommunityCard padding={12}>
@@ -176,6 +187,16 @@ export function NetworkScreen() {
           ))
         )}
       </NetworkSection>
+
+      {user ? (
+        <UserListBottomSheet
+          open={listSheetOpen}
+          onOpenChange={setListSheetOpen}
+          kind={listSheetKind}
+          userId={user.id}
+          isOwnProfile
+        />
+      ) : null}
     </CommunityShell>
   )
 }
@@ -184,10 +205,14 @@ function NetworkHero({
   connectionsCount,
   invitationsCount,
   isGuest = false,
+  onOpenConnections,
+  onOpenInvitations,
 }: {
   connectionsCount: number
   invitationsCount: number
   isGuest?: boolean
+  onOpenConnections?: () => void
+  onOpenInvitations?: () => void
 }) {
   return (
     <CommunityCard padding={18} gap={12}>
@@ -202,12 +227,18 @@ function NetworkHero({
 
       {!isGuest ? (
         <XStack gap="$3" flexWrap="wrap">
-          <Link href={communityRoutes.peopleTab('connections')} asChild>
-            <StatPill icon={Icons.Users} label="Connections" value={connectionsCount} />
-          </Link>
-          <Link href={communityRoutes.peopleTab('pending-received')} asChild>
-            <StatPill icon={Icons.Mail} label="Invitations" value={invitationsCount} />
-          </Link>
+          <StatPill
+            icon={Icons.Users}
+            label="Connections"
+            value={connectionsCount}
+            onPress={connectionsCount > 0 ? onOpenConnections : undefined}
+          />
+          <StatPill
+            icon={Icons.Mail}
+            label="Invitations"
+            value={invitationsCount}
+            onPress={invitationsCount > 0 ? onOpenInvitations : undefined}
+          />
         </XStack>
       ) : null}
     </CommunityCard>
@@ -218,10 +249,12 @@ function StatPill({
   icon: Icon,
   label,
   value,
+  onPress,
 }: {
   icon: typeof Icons.Users
   label: string
   value: number
+  onPress?: () => void
 }) {
   const communityUi = useCommunityUi()
   const ui = useAppUi()
@@ -236,8 +269,9 @@ function StatPill({
       backgroundColor={ui.surfaceMuted}
       borderWidth={1}
       borderColor={ui.borderSubtle}
-      cursor="pointer"
-      hoverStyle={{ opacity: 0.9 }}
+      cursor={onPress ? 'pointer' : 'default'}
+      hoverStyle={onPress ? { opacity: 0.9 } : undefined}
+      onPress={onPress}
     >
       <Icon size={16} color={communityUi.brand} />
       <Text fontSize={18} fontWeight="700" color={ui.text}>

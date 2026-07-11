@@ -1,8 +1,9 @@
 import { Link } from 'one'
-import { ScrollView } from 'react-native'
+import { Platform, ScrollView } from 'react-native'
+import { LinearGradient } from 'expo-linear-gradient'
 
 import { useStoryRings } from '~/community/hooks/useStories'
-import { INSTAGRAM_GRADIENT, BRAND_BLUE } from '~/community/lib/constants'
+import { BRAND_BLUE } from '~/community/lib/constants'
 import { useCommunityUi } from '~/community/lib/community-theme'
 import { Avatar, Icons, Spinner, Text, XStack, YStack } from '~/components/ui'
 import { communityRoutes } from '~/lib/routes'
@@ -68,17 +69,13 @@ export function StoriesStrip() {
             {otherRings.map((ring) => (
               <Link key={ring.user_id} href={communityRoutes.storyUser(ring.user_id)} asChild>
                 <YStack width={72} alignItems="center" gap={6} cursor="pointer">
-                  <YStack
-                    padding={2}
-                    borderRadius={999}
-                    style={{
-                      background: ring.has_unseen ? INSTAGRAM_GRADIENT : communityUi.border,
-                    }}
-                  >
-                    <YStack padding={2} borderRadius={999} backgroundColor={communityUi.cardBg}>
-                      <Avatar name={ring.full_name} src={ring.avatar_url ?? undefined} size="$5" />
-                    </YStack>
-                  </YStack>
+                  <StoryRingAvatar
+                    name={ring.full_name}
+                    src={ring.avatar_url}
+                    hasUnseen={ring.has_unseen}
+                    cardBg={communityUi.cardBg}
+                    borderColor={communityUi.border}
+                  />
                   <Text fontSize={11} fontWeight="500" color={communityUi.text} textAlign="center" numberOfLines={1} width={68}>
                     {ring.full_name.split(' ')[0]}
                   </Text>
@@ -89,5 +86,58 @@ export function StoriesStrip() {
         </ScrollView>
       )}
     </YStack>
+  )
+}
+
+const STORY_RING_COLORS = ['#f58529', '#dd2a7b', '#8134af'] as const
+
+function StoryRingAvatar({
+  name,
+  src,
+  hasUnseen,
+  cardBg,
+  borderColor,
+}: {
+  name: string
+  src?: string | null
+  hasUnseen: boolean
+  cardBg: string
+  borderColor: string
+}) {
+  const inner = (
+    <YStack padding={2} borderRadius={999} backgroundColor={cardBg}>
+      <Avatar name={name} src={src ?? undefined} size="$5" />
+    </YStack>
+  )
+
+  if (!hasUnseen) {
+    return (
+      <YStack padding={2} borderRadius={999} backgroundColor={borderColor}>
+        {inner}
+      </YStack>
+    )
+  }
+
+  if (Platform.OS === 'web') {
+    return (
+      <YStack
+        padding={2}
+        borderRadius={999}
+        style={{ background: 'linear-gradient(45deg, #f58529, #dd2a7b, #8134af)' }}
+      >
+        {inner}
+      </YStack>
+    )
+  }
+
+  return (
+    <LinearGradient
+      colors={[...STORY_RING_COLORS]}
+      start={{ x: 0, y: 0 }}
+      end={{ x: 1, y: 1 }}
+      style={{ borderRadius: 999, padding: 2 }}
+    >
+      {inner}
+    </LinearGradient>
   )
 }

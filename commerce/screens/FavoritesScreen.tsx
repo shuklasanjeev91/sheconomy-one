@@ -56,11 +56,11 @@ export function FavoritesScreen() {
     <FullWidthLayout scroll>
       <PageSection paddingVertical="$6">
         <ListingBrowseView
-          title="Your favorites"
+          title="Your wishlist"
           subtitle={
             items.length > 0
               ? `${items.length} saved ${items.length === 1 ? 'item' : 'items'}`
-              : 'Items you heart will appear here'
+              : 'Items you save will appear here'
           }
           items={items}
           isLoading={isLoading}
@@ -68,7 +68,7 @@ export function FavoritesScreen() {
           hasMore={false}
           error={error}
           onLoadMore={() => {}}
-          emptyMessage="No favorites yet."
+          emptyMessage="Your wishlist is empty."
         />
       </PageSection>
     </FullWidthLayout>

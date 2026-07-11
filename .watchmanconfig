@@ -1,0 +1,13 @@
+{
+  "ignore_dirs": [
+    ".git",
+    "node_modules",
+    ".vercel",
+    "dist",
+    ".one",
+    ".expo",
+    ".yarn",
+    "android",
+    "ios"
+  ]
+}

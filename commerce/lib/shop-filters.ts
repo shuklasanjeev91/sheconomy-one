@@ -1,4 +1,5 @@
 import type { ShopSummary } from '~/commerce/lib/commerce'
+import { getCountryName } from '~/lib/geo'
 
 export type ShopSortOption =
   | 'name_asc'
@@ -28,14 +29,16 @@ export const SHOP_SORT_OPTIONS: { value: ShopSortOption; label: string }[] = [
 ]
 
 export function getShopCountryLabel(shop: ShopSummary) {
-  return shop.country?.trim() || 'Unknown'
+  const raw = shop.country?.trim()
+  if (!raw) return 'Unknown'
+  return getCountryName(raw, raw)
 }
 
 export function extractShopCountries(shops: ShopSummary[]) {
   const countries = new Set<string>()
   for (const shop of shops) {
-    const country = shop.country?.trim()
-    if (country) countries.add(country)
+    const label = getShopCountryLabel(shop)
+    if (label !== 'Unknown') countries.add(label)
   }
   return Array.from(countries).sort((a, b) => a.localeCompare(b))
 }

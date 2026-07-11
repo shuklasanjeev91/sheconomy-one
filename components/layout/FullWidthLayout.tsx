@@ -121,14 +121,16 @@ type PageColumnsProps = {
 
 /** Responsive multi-column row that stretches edge-to-edge. */
 export function PageColumns({ children, gap = '$4', ...props }: PageColumnsProps) {
+  const { isDesktop } = useAppLayout()
+
   return (
     <YStack
       width="100%"
       maxWidth="100%"
-      flexDirection="column"
+      flexDirection={isDesktop ? 'row' : 'column'}
+      alignItems="flex-start"
       gap={gap}
       alignSelf="stretch"
-      $gtMd={{ flexDirection: 'row', alignItems: 'flex-start' }}
       {...props}
     >
       {children}

@@ -95,6 +95,24 @@ export function mergeReviewSummary(
   return computed
 }
 
+type ReviewerProfile = {
+  full_name: string | null
+  username: string | null
+  avatar_url: string | null
+}
+
+async function fetchReviewerProfiles(reviewerIds: string[]): Promise<Map<string, ReviewerProfile>> {
+  const ids = [...new Set(reviewerIds.filter(Boolean))]
+  if (!ids.length) return new Map()
+
+  const { data } = await supabase
+    .from('profiles')
+    .select('id, full_name, username, avatar_url')
+    .in('id', ids)
+
+  return new Map((data ?? []).map((profile) => [profile.id, profile]))
+}
+
 type ListingReviewRow = {
   id: string
   rating: number
@@ -105,14 +123,13 @@ type ListingReviewRow = {
   is_verified_purchase: boolean
   helpful_count: number
   review_images: unknown
-  profiles: {
-    full_name: string | null
-    username: string | null
-    avatar_url: string | null
-  } | null
+  reviewer_id: string
+  profiles: ReviewerProfile | null
 }
 
-function mapListingReviewRow(row: ListingReviewRow): PublicReview {
+function mapListingReviewRow(
+  row: Omit<ListingReviewRow, 'profiles'> & { profiles?: ReviewerProfile | null },
+): PublicReview {
   return {
     id: row.id,
     rating: row.rating,
@@ -122,7 +139,7 @@ function mapListingReviewRow(row: ListingReviewRow): PublicReview {
     isVerifiedPurchase: row.is_verified_purchase,
     helpfulCount: row.helpful_count ?? 0,
     reviewImages: parseReviewImages(row.review_images),
-    reviewerName: reviewerDisplayName(row.profiles),
+    reviewerName: reviewerDisplayName(row.profiles ?? null),
     reviewerAvatarUrl: row.profiles?.avatar_url ?? null,
   }
 }
@@ -144,7 +161,7 @@ export async function fetchListingReviews(
       is_verified_purchase,
       helpful_count,
       review_images,
-      profiles!listing_reviews_reviewer_id_fkey(full_name, username, avatar_url)
+      reviewer_id
     `,
     )
     .eq('listing_id', listingId)
@@ -161,7 +178,14 @@ export async function fetchListingReviews(
     }
   }
 
-  const reviews = (data ?? []).map((row) => mapListingReviewRow(row as ListingReviewRow))
+  const rows = data ?? []
+  const profilesById = await fetchReviewerProfiles(rows.map((row) => row.reviewer_id))
+  const reviews = rows.map((row) =>
+    mapListingReviewRow({
+      ...row,
+      profiles: profilesById.get(row.reviewer_id) ?? null,
+    }),
+  )
   const { count } = await supabase
     .from('listing_reviews')
     .select('id', { count: 'exact', head: true })
@@ -269,7 +293,7 @@ export async function fetchShopReviews(
       is_verified_purchase,
       helpful_count,
       review_images,
-      profiles!shop_reviews_reviewer_id_fkey1(full_name, username, avatar_url)
+      reviewer_id
     `,
     )
     .eq('shop_id', shopId)
@@ -285,8 +309,16 @@ export async function fetchShopReviews(
     }
   }
 
-  const reviews = (fallback.data ?? []).map((row, index) =>
-    mapShopReviewPayload(row as ShopReviewPayload, index),
+  const shopRows = fallback.data ?? []
+  const shopProfilesById = await fetchReviewerProfiles(shopRows.map((row) => row.reviewer_id))
+  const reviews = shopRows.map((row, index) =>
+    mapShopReviewPayload(
+      {
+        ...row,
+        profiles: shopProfilesById.get(row.reviewer_id) ?? null,
+      },
+      index,
+    ),
   )
 
   const { count } = await supabase

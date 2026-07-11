@@ -77,7 +77,7 @@ export function MyShopsScreen() {
               </Text>
               <Text fontSize={14} color={ui.textSecondary} lineHeight={21}>
                 Guests sign in first. Once you have an account, you can create one shop and manage
-                listings like Etsy or Amazon seller central.
+                listings from one seller hub.
               </Text>
             </YStack>
           </XStack>

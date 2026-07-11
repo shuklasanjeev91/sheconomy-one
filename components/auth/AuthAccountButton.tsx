@@ -1,4 +1,4 @@
-import { Link, usePathname } from 'one'
+import { usePathname } from 'one'
 import { useState, type ReactNode } from 'react'
 
 import {
@@ -10,13 +10,10 @@ import {
   Avatar,
   AppBottomSheet,
   Icons,
-  Popover,
-  PopoverContent,
   Text,
   XStack,
   YStack,
 } from '~/components/ui'
-import { useStableMedia } from '~/hooks/useStableMedia'
 import { buildSignInUrl } from '~/lib/auth/redirect'
 import { useProfile } from '~/hooks/useProfile'
 import { useAppUi } from '~/lib/theme/useAppUi'
@@ -33,11 +30,12 @@ type AuthAccountButtonProps = {
   activePillBg?: string
   surfaceColor?: string
   tabLabel?: string
+  showTabLabel?: boolean
 }
 
 /**
  * Cross-platform account control — sign-in chip or avatar menu.
- * Desktop header: popover. Mobile: bottom sheet via AppBottomSheet.
+ * Header + tab: bottom sheet account drawer on all platforms.
  */
 export function AuthAccountButton({
   variant = 'header',
@@ -48,14 +46,13 @@ export function AuthAccountButton({
   activePillBg = 'transparent',
   surfaceColor,
   tabLabel = 'You',
+  showTabLabel = true,
 }: AuthAccountButtonProps) {
   const ui = useAppUi()
-  const media = useStableMedia()
   const pathname = usePathname()
   const { isAuthenticated, profile } = useProfile()
   const [menuOpen, setMenuOpen] = useState(false)
 
-  const isDesktop = media.gtMd
   const signInHref = buildSignInUrl(pathname)
   const displayName = profile?.full_name || profile?.username || 'Account'
 
@@ -67,6 +64,7 @@ export function AuthAccountButton({
         width="100%"
         alignSelf="stretch"
         label={isAuthenticated ? tabLabel : 'Sign in'}
+        showLabel={showTabLabel}
         isFocused={isFocused}
         activeColor={activeColor ?? ui.brand}
         inactiveColor={inactiveColor ?? ui.icon}
@@ -102,61 +100,37 @@ export function AuthAccountButton({
       />
     )
 
-  if (!isAuthenticated) {
-    if (variant === 'tab') {
-      return (
-        <YStack flex={1} minWidth={0} width="100%" alignSelf="stretch">
-          {trigger}
-          <AccountSheet open={menuOpen} onOpenChange={setMenuOpen} title="Account">
-            <AuthGuestMenuContent onClose={() => setMenuOpen(false)} signInHref={signInHref} />
-          </AccountSheet>
-        </YStack>
-      )
-    }
+  const menuContent = isAuthenticated ? (
+    <AuthUserMenuContent onClose={() => setMenuOpen(false)} />
+  ) : (
+    <AuthGuestMenuContent onClose={() => setMenuOpen(false)} signInHref={signInHref} />
+  )
 
+  if (variant === 'header') {
     return (
-      <Link href={signInHref} asChild>
-        <XStack cursor="pointer" pressStyle={{ opacity: 0.85 }} animation="quick">
-          {trigger}
-        </XStack>
-      </Link>
-    )
-  }
-
-  if (isDesktop && variant === 'header') {
-    return (
-      <Popover open={menuOpen} onOpenChange={setMenuOpen} placement="bottom-end">
-        <Popover.Trigger asChild>
-          <XStack cursor="pointer" pressStyle={{ opacity: 0.85 }} animation="quick">
-            {trigger}
-          </XStack>
-        </Popover.Trigger>
-        <PopoverContent padding="$3" minWidth={260}>
-          <AuthUserMenuContent onClose={() => setMenuOpen(false)} />
-        </PopoverContent>
-      </Popover>
-    )
-  }
-
-  return (
-    <YStack flex={variant === 'tab' ? 1 : undefined} minWidth={variant === 'tab' ? 0 : undefined} width={variant === 'tab' ? '100%' : undefined} alignSelf={variant === 'tab' ? 'stretch' : undefined}>
-      {variant === 'tab' ? (
-        trigger
-      ) : (
-        <YStack
-          alignItems="center"
-          justifyContent="center"
+      <>
+        <XStack
           cursor="pointer"
           pressStyle={{ opacity: 0.85 }}
           animation="quick"
           onPress={() => setMenuOpen(true)}
-          aria-label="Account menu"
+          aria-label={isAuthenticated ? 'Account menu' : 'Sign in'}
+          accessibilityRole="button"
         >
           {trigger}
-        </YStack>
-      )}
+        </XStack>
+        <AccountSheet open={menuOpen} onOpenChange={setMenuOpen} title="Account">
+          {menuContent}
+        </AccountSheet>
+      </>
+    )
+  }
+
+  return (
+    <YStack flex={1} minWidth={0} width="100%" alignSelf="stretch">
+      {trigger}
       <AccountSheet open={menuOpen} onOpenChange={setMenuOpen} title="Account">
-        <AuthUserMenuContent onClose={() => setMenuOpen(false)} />
+        {menuContent}
       </AccountSheet>
     </YStack>
   )
@@ -189,6 +163,7 @@ function HeaderTrigger({
         borderWidth={1.5}
         borderColor={ui.borderSubtle}
         hoverStyle={{ borderColor: ui.brand }}
+        pointerEvents="none"
       >
         <Avatar name={displayName} src={avatarUrl ?? undefined} size="$3" />
       </YStack>
@@ -232,7 +207,7 @@ function AccountSheet({
   children: ReactNode
 }) {
   return (
-    <AppBottomSheet open={open} onOpenChange={onOpenChange} title={title} scrollable={false}>
+    <AppBottomSheet open={open} onOpenChange={onOpenChange} title={title} scrollable>
       {children}
     </AppBottomSheet>
   )

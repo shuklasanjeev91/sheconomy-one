@@ -49,7 +49,7 @@ const KIND_LABEL: Record<SuggestionKind, string> = {
   person: 'Network',
   listing: 'Product',
   shop: 'Shop',
-  company: 'Company',
+  company: 'Page',
   group: 'Group',
   job: 'Job',
   event: 'Event',
@@ -65,14 +65,34 @@ const SUGGESTION_KIND_ORDER: SuggestionKind[] = [
   'event',
 ]
 
+/** Destination for each suggestion section's "See all" action. */
+export function getSuggestionSeeAllHref(kind: SuggestionKind): string {
+  switch (kind) {
+    case 'person':
+      return communityRoutes.network
+    case 'listing':
+      return commerceRoutes.browse('featured')
+    case 'shop':
+      return commerceRoutes.shops
+    case 'company':
+      return communityRoutes.companies
+    case 'group':
+      return communityRoutes.groups
+    case 'job':
+      return communityRoutes.jobs
+    case 'event':
+      return communityRoutes.events
+  }
+}
+
 export const SUGGESTION_SECTIONS: SuggestionSectionMeta[] = [
-  { kind: 'person', title: 'Network suggestions', seeAllHref: communityRoutes.network },
-  { kind: 'listing', title: 'Products for you', seeAllHref: commerceRoutes.shops },
-  { kind: 'shop', title: 'Shops for you', seeAllHref: commerceRoutes.shops },
-  { kind: 'company', title: 'Companies for you', seeAllHref: communityRoutes.companies },
-  { kind: 'group', title: 'Groups for you', seeAllHref: communityRoutes.groups },
-  { kind: 'job', title: 'Jobs for you', seeAllHref: communityRoutes.jobs },
-  { kind: 'event', title: 'Events for you', seeAllHref: communityRoutes.events },
+  { kind: 'person', title: 'Network suggestions', seeAllHref: getSuggestionSeeAllHref('person') },
+  { kind: 'listing', title: 'Products for you', seeAllHref: getSuggestionSeeAllHref('listing') },
+  { kind: 'shop', title: 'Shops for you', seeAllHref: getSuggestionSeeAllHref('shop') },
+  { kind: 'company', title: 'Pages for you', seeAllHref: getSuggestionSeeAllHref('company') },
+  { kind: 'group', title: 'Groups for you', seeAllHref: getSuggestionSeeAllHref('group') },
+  { kind: 'job', title: 'Jobs for you', seeAllHref: getSuggestionSeeAllHref('job') },
+  { kind: 'event', title: 'Events for you', seeAllHref: getSuggestionSeeAllHref('event') },
 ]
 
 /** Ensures every candidate competes even without profile/geo signals. */
@@ -278,7 +298,7 @@ function scoreCompany(company: CompanyPage, ctx: PersonalizationContext): Commun
   else if (locationScore(ctx.geo, ctx.location, company.location ?? company.headquarters) > 0) {
     reasons.push('Near you')
   } else {
-    reasons.push('Growing company')
+    reasons.push('Popular page')
   }
 
   return {

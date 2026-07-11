@@ -77,7 +77,7 @@ export function SellerOverviewPanel({
             <Icons.TrendingUp size={16} color={ui.brand} />
             <Text fontSize={13} color={ui.textSecondary} lineHeight={20} flex={1}>
               Keep listings active, respond to buyers quickly, and update shipping details to improve
-              visibility — similar to seller hubs on Etsy and Amazon.
+              visibility from your seller dashboard.
             </Text>
           </XStack>
         </YStack>

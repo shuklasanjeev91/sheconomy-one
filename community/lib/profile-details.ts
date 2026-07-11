@@ -45,13 +45,11 @@ export type ProfileLanguage = Pick<
 
 export type ProfileSocialLinks = {
   websiteUrl: string | null
-  linkedinUrl: string | null
   portfolioUrl: string | null
   instagramUrl: string | null
   twitterUrl: string | null
   youtubeUrl: string | null
   githubUrl: string | null
-  facebookUrl: string | null
 }
 
 export type ProfileDetails = {
@@ -62,6 +60,55 @@ export type ProfileDetails = {
   interests: string[]
   socialLinks: ProfileSocialLinks
   profileCompletion: number | null
+}
+
+type ProfileDetailsRpcRow = {
+  experiences?: ProfileExperience[] | null
+  education?: ProfileEducation[] | null
+  skills?: ProfileSkill[] | null
+  languages?: ProfileLanguage[] | null
+  interests?: string[] | null
+  socialLinks?: ProfileSocialLinks | null
+  profileCompletion?: number | null
+}
+
+function mapProfileDetailsPayload(payload: ProfileDetailsRpcRow): ProfileDetails {
+  return {
+    experiences: payload.experiences ?? [],
+    education: payload.education ?? [],
+    skills: payload.skills ?? [],
+    languages: payload.languages ?? [],
+    interests: payload.interests ?? [],
+    socialLinks: {
+      websiteUrl: payload.socialLinks?.websiteUrl ?? null,
+      portfolioUrl: payload.socialLinks?.portfolioUrl ?? null,
+      instagramUrl: payload.socialLinks?.instagramUrl ?? null,
+      twitterUrl: payload.socialLinks?.twitterUrl ?? null,
+      youtubeUrl: payload.socialLinks?.youtubeUrl ?? null,
+      githubUrl: payload.socialLinks?.githubUrl ?? null,
+    },
+    profileCompletion: payload.profileCompletion ?? null,
+  }
+}
+
+async function fetchProfileDetailsViaRpc(userId: string): Promise<{
+  data: ProfileDetails | null
+  error: string | null
+}> {
+  const { data, error } = await supabase.rpc('get_profile_details', { p_user_id: userId })
+
+  if (error) {
+    return { data: null, error: error.message }
+  }
+
+  if (!data) {
+    return { data: null, error: null }
+  }
+
+  return {
+    data: mapProfileDetailsPayload(data as ProfileDetailsRpcRow),
+    error: null,
+  }
 }
 
 const EXPERIENCE_SELECT =
@@ -76,23 +123,26 @@ const SKILL_SELECT =
 const LANGUAGE_SELECT = 'id, language_name, proficiency'
 
 const PROFILE_META_SELECT =
-  'interests, portfolio_url, profile_completion_percentage, website_url, linkedin_url, instagram_url, twitter_url, youtube_url, github_url, facebook_url'
+  'interests, portfolio_url, profile_completion_percentage, website_url, instagram_url, twitter_url, youtube_url, github_url'
 
 const EMPTY_SOCIAL_LINKS: ProfileSocialLinks = {
   websiteUrl: null,
-  linkedinUrl: null,
   portfolioUrl: null,
   instagramUrl: null,
   twitterUrl: null,
   youtubeUrl: null,
   githubUrl: null,
-  facebookUrl: null,
 }
 
 export async function fetchProfileDetails(userId: string): Promise<{
   data: ProfileDetails
   error: string | null
 }> {
+  const rpcResult = await fetchProfileDetailsViaRpc(userId)
+  if (rpcResult.data) {
+    return { data: rpcResult.data, error: null }
+  }
+
   const [experiencesRes, educationRes, skillsRes, languagesRes, profileRes] = await Promise.all([
     supabase
       .from('experiences')
@@ -140,13 +190,11 @@ export async function fetchProfileDetails(userId: string): Promise<{
       interests: (profile?.interests as string[] | null) ?? [],
       socialLinks: {
         websiteUrl: profile?.website_url ?? null,
-        linkedinUrl: profile?.linkedin_url ?? null,
         portfolioUrl: profile?.portfolio_url ?? null,
         instagramUrl: profile?.instagram_url ?? null,
         twitterUrl: profile?.twitter_url ?? null,
         youtubeUrl: profile?.youtube_url ?? null,
         githubUrl: profile?.github_url ?? null,
-        facebookUrl: profile?.facebook_url ?? null,
       },
       profileCompletion: profile?.profile_completion_percentage ?? null,
     },
@@ -160,23 +208,19 @@ export function mergeProfileSocialLinks(
 ): ProfileSocialLinks {
   return {
     websiteUrl: details?.websiteUrl ?? profile.website_url ?? null,
-    linkedinUrl: details?.linkedinUrl ?? profile.linkedin_url ?? null,
     portfolioUrl: details?.portfolioUrl ?? profile.portfolio_url ?? null,
     instagramUrl: details?.instagramUrl ?? profile.instagram_url ?? null,
     twitterUrl: details?.twitterUrl ?? profile.twitter_url ?? null,
     youtubeUrl: details?.youtubeUrl ?? profile.youtube_url ?? null,
     githubUrl: details?.githubUrl ?? profile.github_url ?? null,
-    facebookUrl: details?.facebookUrl ?? profile.facebook_url ?? null,
   }
 }
 
 type ProfileDisplaySocialFields = {
   website_url?: string | null
-  linkedin_url?: string | null
   portfolio_url?: string | null
   instagram_url?: string | null
   twitter_url?: string | null
   youtube_url?: string | null
   github_url?: string | null
-  facebook_url?: string | null
 }

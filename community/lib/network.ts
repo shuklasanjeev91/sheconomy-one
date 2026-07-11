@@ -33,19 +33,17 @@ export type PublicProfile = {
   following_count: number | null
   connections_count: number | null
   website_url: string | null
-  linkedin_url: string | null
   portfolio_url: string | null
   instagram_url: string | null
   twitter_url: string | null
   youtube_url: string | null
   github_url: string | null
-  facebook_url: string | null
   interests: string[] | null
   profile_completion_percentage: number | null
 }
 
 const PUBLIC_PROFILE_SELECT =
-  'id, full_name, username, avatar_url, cover_url, headline, bio, location, industry, occupation, business_name, is_verified, follower_count, following_count, connections_count, website_url, linkedin_url, portfolio_url, instagram_url, twitter_url, youtube_url, github_url, facebook_url, interests, profile_completion_percentage'
+  'id, full_name, username, avatar_url, cover_url, headline, bio, location, industry, occupation, business_name, is_verified, follower_count, following_count, connections_count, website_url, portfolio_url, instagram_url, twitter_url, youtube_url, github_url, interests, profile_completion_percentage'
 
 export type NetworkMember = {
   user_id: string

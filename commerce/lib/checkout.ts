@@ -1,70 +1,18 @@
+import {
+  createUserAddress,
+  fetchUserAddresses,
+  type AddressInput,
+  type UserAddress,
+} from '~/commerce/lib/addresses'
 import { supabase } from '~/lib/supabase/client'
-import type { Tables } from '~/lib/supabase'
 
-export type UserAddress = {
-  id: string
-  address_label: string
-  address_line_1: string
-  address_line_2: string
-  address_type: string
-  city: string
-  country: string
-  is_default: boolean
-  postal_code: string
-  state: string
-}
+export type { AddressInput, UserAddress }
+export type CheckoutAddressInput = AddressInput
 
-export type CheckoutAddressInput = {
-  address_line_1: string
-  address_line_2?: string
-  city: string
-  state: string
-  postal_code: string
-  country?: string
-  address_label?: string
-}
+export { fetchUserAddresses }
 
-export async function fetchUserAddresses(userId?: string): Promise<{
-  addresses: UserAddress[]
-  error: string | null
-}> {
-  const { data, error } = await supabase.rpc('get_user_addresses', {
-    target_user_id: userId,
-  })
-
-  if (error) {
-    return { addresses: [], error: error.message }
-  }
-
-  return { addresses: data ?? [], error: null }
-}
-
-export async function saveUserAddress(
-  userId: string,
-  input: CheckoutAddressInput,
-): Promise<{ address: Tables<'addresses'> | null; error: string | null }> {
-  const { data, error } = await supabase
-    .from('addresses')
-    .insert({
-      user_id: userId,
-      address_line_1: input.address_line_1,
-      address_line_2: input.address_line_2 ?? null,
-      city: input.city,
-      state: input.state,
-      postal_code: input.postal_code,
-      country: input.country ?? 'IN',
-      address_label: input.address_label ?? 'Home',
-      address_type: 'shipping',
-      is_default: false,
-    })
-    .select('*')
-    .single()
-
-  if (error) {
-    return { address: null, error: error.message }
-  }
-
-  return { address: data, error: null }
+export async function saveUserAddress(userId: string, input: AddressInput) {
+  return createUserAddress(userId, input)
 }
 
 export type CheckoutInput = {
@@ -73,6 +21,7 @@ export type CheckoutInput = {
   billingAddressId?: string
   customerNotes?: string
   paymentMethod?: 'online' | 'cod'
+  savedPaymentMethodId?: string
 }
 
 export type CheckoutResult = {
@@ -89,7 +38,7 @@ export async function createOrderFromCart(
     cart_id: input.cartId,
     shipping_address_id: input.shippingAddressId,
     billing_address_id: input.billingAddressId ?? input.shippingAddressId,
-    customer_notes: input.customerNotes ?? null,
+    customer_notes: buildCheckoutNotes(input),
     payment_method: input.paymentMethod ?? 'online',
     order_source: 'sheconomy-one',
   }
@@ -114,4 +63,11 @@ export async function createOrderFromCart(
     },
     error: null,
   }
+}
+
+function buildCheckoutNotes(input: CheckoutInput): string | null {
+  const parts = [input.customerNotes?.trim(), input.savedPaymentMethodId
+    ? `saved_payment_method_id:${input.savedPaymentMethodId}`
+    : null].filter(Boolean)
+  return parts.length ? parts.join('\n') : null
 }

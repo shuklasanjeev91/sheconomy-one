@@ -613,6 +613,8 @@ export type Database = {
       buyer_payment_methods: {
         Row: {
           card_brand: string | null
+          card_type: string | null
+          cardholder_name: string | null
           created_at: string
           exp_month: number | null
           exp_year: number | null
@@ -620,14 +622,18 @@ export type Database = {
           is_default: boolean
           label: string | null
           last_four: string | null
+          method_type: string
           metadata: Json
           provider: string
           provider_token: string | null
+          upi_id: string | null
           updated_at: string
           user_id: string
         }
         Insert: {
           card_brand?: string | null
+          card_type?: string | null
+          cardholder_name?: string | null
           created_at?: string
           exp_month?: number | null
           exp_year?: number | null
@@ -635,14 +641,18 @@ export type Database = {
           is_default?: boolean
           label?: string | null
           last_four?: string | null
+          method_type?: string
           metadata?: Json
           provider?: string
           provider_token?: string | null
+          upi_id?: string | null
           updated_at?: string
           user_id: string
         }
         Update: {
           card_brand?: string | null
+          card_type?: string | null
+          cardholder_name?: string | null
           created_at?: string
           exp_month?: number | null
           exp_year?: number | null
@@ -650,9 +660,11 @@ export type Database = {
           is_default?: boolean
           label?: string | null
           last_four?: string | null
+          method_type?: string
           metadata?: Json
           provider?: string
           provider_token?: string | null
+          upi_id?: string | null
           updated_at?: string
           user_id?: string
         }
