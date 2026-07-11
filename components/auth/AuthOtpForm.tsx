@@ -56,13 +56,13 @@ export function AuthOtpForm({ channel, onSuccess }: AuthOtpFormProps) {
         validators: isEmail
           ? [required('Enter your email address.'), email()]
           : [
-              required('Enter your mobile number.'),
-              (value: string) => {
-                if (!value.trim()) return null
-                const result = validateNationalPhone(value, country)
-                return result.ok ? null : result.error
-              },
-            ],
+            required('Enter your mobile number.'),
+            (value: string) => {
+              if (!value.trim()) return null
+              const result = validateNationalPhone(value, country)
+              return result.ok ? null : result.error
+            },
+          ],
       },
       otpCode: {
         initialValue: '',
@@ -297,20 +297,21 @@ export function AuthOtpForm({ channel, onSuccess }: AuthOtpFormProps) {
             )}
             {!isEmail && form.fields.identifier.value && !identifierError ? (
               <Text fontSize={12} color={ui.textMuted} marginTop={6}>
-                {countryFlag(country.iso2)} Sending to{' '}
+                Sending to{' '}
                 {formatPhoneForDisplay(form.fields.identifier.value, country)}
               </Text>
             ) : null}
           </Field>
 
           <Button
-            tone="primary"
+            color="$pink10"
+            tone="white"
             size="$4"
             borderRadius={AUTH_LAYOUT.pillRadius}
             disabled={isSubmitting || !form.fields.identifier.isValid}
             onPress={handleSendOtp}
-            icon={isSubmitting ? <Spinner size="small" color="white" /> : undefined}
-            iconAfter={!isSubmitting ? <Icons.ArrowRight size={18} color="white" /> : undefined}
+            icon={isSubmitting ? <Spinner size="small" color="$pink10" /> : undefined}
+            iconAfter={!isSubmitting ? <Icons.ArrowRight size={18} color="$pink10" /> : undefined}
           >
             {isSubmitting ? 'Sending code…' : 'Send verification code'}
           </Button>

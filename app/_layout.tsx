@@ -1,4 +1,5 @@
 import { LoadProgressBar, Slot } from 'one'
+import { Provider as ReduxProvider } from 'react-redux'
 import { SafeAreaProvider, useSafeAreaInsets } from 'react-native-safe-area-context'
 import { ActivityIndicator, Platform, View } from 'react-native'
 import { TamaguiProvider, Theme, YStack } from 'tamagui'
@@ -15,6 +16,7 @@ import { CartProvider } from '~/commerce/hooks/useCart'
 import { FavoritesProvider } from '~/commerce/hooks/useFavorites'
 import { MarketplacePersonalizationProvider } from '~/commerce/context/MarketplacePersonalizationContext'
 import { useAppFonts } from '~/hooks/useAppFonts'
+import { store } from '~/lib/store'
 import { SupabaseProvider } from '~/providers/SupabaseProvider'
 
 function NativeRootShell({ children }: { children: ReactNode }) {
@@ -188,21 +190,21 @@ function AppProviders({ children }: { children: React.ReactNode }) {
   }
 
   return (
-    <SupabaseProvider>
-      <SchemeProvider>
-        <ThemedApp>
-          <CartProvider>
-            <FavoritesProvider>
-              <MarketplacePersonalizationProvider>
-                <AppErrorBoundary scope="app">
+    <ReduxProvider store={store}>
+      <SupabaseProvider>
+        <SchemeProvider>
+          <ThemedApp>
+            <CartProvider>
+              <FavoritesProvider>
+                <MarketplacePersonalizationProvider>
                   <AppShell>{children}</AppShell>
-                </AppErrorBoundary>
-              </MarketplacePersonalizationProvider>
-            </FavoritesProvider>
-          </CartProvider>
-        </ThemedApp>
-      </SchemeProvider>
-    </SupabaseProvider>
+                </MarketplacePersonalizationProvider>
+              </FavoritesProvider>
+            </CartProvider>
+          </ThemedApp>
+        </SchemeProvider>
+      </SupabaseProvider>
+    </ReduxProvider>
   )
 }
 
