@@ -1,0 +1,790 @@
+import { useEffect, useMemo, useState } from 'react'
+
+import {
+  Badge,
+  Button,
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogOverlay,
+  DialogTitle,
+  Icons,
+  Image,
+  Input,
+  ScrollView,
+  Spinner,
+  Text,
+  TextArea,
+  useAppToast,
+  XStack,
+  YStack,
+} from '~/components/ui'
+import { getShadowStyle, radius } from '~/config/tokens'
+import { useAppLayout } from '~/hooks/useAppLayout'
+import { useAppDispatch, useAppSelector } from '~/lib/store/hooks'
+import {
+  adminUpdateShop,
+  createShop,
+  deleteShop,
+  loadAdminShops,
+  loadPlatformStats,
+  setShopActiveAdmin,
+  verifyShop,
+} from '~/lib/shop/shop.store'
+import type { Shop, ShopFormData, ShopUpdate } from '~/lib/shop/shop.type'
+import { COMMON_SHOP_CATEGORIES } from '~/lib/shop/shop.type'
+import {
+  formatShopHours,
+  getCurrencySymbol,
+  getShopCompletionPercentage,
+  shopToFormData,
+} from '~/lib/shop/shop.utils'
+
+const PAGE_SIZE = 20
+
+type ShopStatusFilter = 'all' | 'active' | 'inactive'
+type VerificationFilter = 'all' | 'verified' | 'pending'
+type FormMode = 'create' | 'edit'
+
+type ShopFormState = Pick<
+  ShopFormData,
+  | 'shop_name'
+  | 'shop_description'
+  | 'logo_url'
+  | 'website_url'
+  | 'shop_phone_number'
+  | 'shop_email'
+  | 'shop_currency'
+> & {
+  ownerUserId: string
+  slug: string
+  categoriesText: string
+  seoTitle: string
+  seoDescription: string
+}
+
+const EMPTY_FORM: ShopFormState = {
+  ownerUserId: '',
+  shop_name: '',
+  shop_description: '',
+  logo_url: '',
+  website_url: '',
+  shop_phone_number: '',
+  shop_email: '',
+  shop_currency: 'INR',
+  slug: '',
+  categoriesText: '',
+  seoTitle: '',
+  seoDescription: '',
+}
+
+export function AdminShopsManager() {
+  const dispatch = useAppDispatch()
+  const toast = useAppToast()
+  const { isDesktop, safeBottom } = useAppLayout()
+  const {
+    adminShops,
+    totalAdminShops,
+    hasMoreAdminShops,
+    platformStats,
+    isLoadingShops,
+    isCreating,
+    isUpdating,
+    isDeleting,
+    error,
+  } = useAppSelector((state) => state.shop)
+
+  const [search, setSearch] = useState('')
+  const [statusFilter, setStatusFilter] = useState<ShopStatusFilter>('all')
+  const [verificationFilter, setVerificationFilter] = useState<VerificationFilter>('all')
+  const [categoryFilter, setCategoryFilter] = useState('all')
+  const [selectedShopId, setSelectedShopId] = useState<string | null>(null)
+  const [formMode, setFormMode] = useState<FormMode>('create')
+  const [formOpen, setFormOpen] = useState(false)
+  const [form, setForm] = useState<ShopFormState>(EMPTY_FORM)
+
+  const selectedShop = adminShops.find((shop) => shop.id === selectedShopId) ?? adminShops[0] ?? null
+  const isBusy = isCreating || isUpdating || isDeleting
+
+  const filters = useMemo(
+    () => ({
+      search: search.trim() || undefined,
+      isActive: statusFilter === 'all' ? undefined : statusFilter === 'active',
+      verified: verificationFilter === 'all' ? undefined : verificationFilter === 'verified',
+      category: categoryFilter === 'all' ? undefined : categoryFilter,
+    }),
+    [categoryFilter, search, statusFilter, verificationFilter],
+  )
+
+  useEffect(() => {
+    dispatch(loadPlatformStats())
+  }, [dispatch])
+
+  useEffect(() => {
+    dispatch(loadAdminShops({ filters, pagination: { limit: PAGE_SIZE, offset: 0 } }))
+  }, [dispatch, filters])
+
+  useEffect(() => {
+    if (!selectedShopId && adminShops[0]) {
+      setSelectedShopId(adminShops[0].id)
+    }
+  }, [adminShops, selectedShopId])
+
+  function loadMore() {
+    dispatch(
+      loadAdminShops({
+        filters,
+        pagination: { limit: PAGE_SIZE, offset: adminShops.length },
+      }),
+    )
+  }
+
+  function openCreateForm() {
+    setFormMode('create')
+    setForm(EMPTY_FORM)
+    setFormOpen(true)
+  }
+
+  function openEditForm(shop: Shop) {
+    const data = shopToFormData(shop)
+    setFormMode('edit')
+    setForm({
+      ownerUserId: shop.user_id,
+      shop_name: data.shop_name,
+      shop_description: data.shop_description,
+      logo_url: data.logo_url,
+      website_url: data.website_url,
+      shop_phone_number: data.shop_phone_number,
+      shop_email: data.shop_email,
+      shop_currency: data.shop_currency,
+      slug: shop.slug ?? '',
+      categoriesText: data.shop_categories.join(', '),
+      seoTitle: shop.seo_title ?? '',
+      seoDescription: shop.seo_description ?? '',
+    })
+    setFormOpen(true)
+  }
+
+  async function submitForm() {
+    const categories = splitCsv(form.categoriesText)
+
+    if (formMode === 'create') {
+      const created = await dispatch(
+        createShop({
+          userId: form.ownerUserId.trim() || undefined,
+          formData: {
+            shop_name: form.shop_name.trim(),
+            shop_description: form.shop_description.trim(),
+            logo_url: form.logo_url.trim(),
+            website_url: form.website_url.trim(),
+            shop_phone_number: form.shop_phone_number.trim(),
+            shop_email: form.shop_email.trim(),
+            shop_currency: form.shop_currency.trim().toUpperCase() || 'INR',
+            shop_categories: categories,
+          },
+        }),
+      ).unwrap()
+
+      if (created?.id && (form.slug || form.seoTitle || form.seoDescription)) {
+        await dispatch(
+          adminUpdateShop({
+            shopId: created.id,
+            updates: {
+              slug: nullableText(form.slug),
+              seo_title: nullableText(form.seoTitle),
+              seo_description: nullableText(form.seoDescription),
+            },
+          }),
+        ).unwrap()
+      }
+
+      if (created?.id) setSelectedShopId(created.id)
+      setFormOpen(false)
+      toast.show('Shop created', {
+        tone: 'success',
+        message: 'Successfully shop created.',
+      })
+      dispatch(loadPlatformStats())
+      dispatch(loadAdminShops({ filters, pagination: { limit: PAGE_SIZE, offset: 0 } }))
+      return
+    }
+
+    if (!selectedShop) return
+
+    const updates: ShopUpdate = {
+      shop_name: form.shop_name.trim(),
+      shop_description: nullableText(form.shop_description),
+      logo_url: nullableText(form.logo_url),
+      website_url: nullableText(form.website_url),
+      shop_phone_number: nullableText(form.shop_phone_number),
+      shop_email: nullableText(form.shop_email),
+      shop_currency: form.shop_currency.trim().toUpperCase() || 'INR',
+      shop_categories: categories,
+      slug: nullableText(form.slug),
+      seo_title: nullableText(form.seoTitle),
+      seo_description: nullableText(form.seoDescription),
+    }
+
+    await dispatch(adminUpdateShop({ shopId: selectedShop.id, updates })).unwrap()
+    setFormOpen(false)
+  }
+
+  async function toggleVerified(shop: Shop) {
+    await dispatch(verifyShop({ shopId: shop.id, verified: !shop.verified })).unwrap()
+    dispatch(loadPlatformStats())
+  }
+
+  async function toggleActive(shop: Shop) {
+    await dispatch(setShopActiveAdmin({ shopId: shop.id, isActive: !shop.is_active })).unwrap()
+    dispatch(loadPlatformStats())
+  }
+
+  async function softDeleteShop(shop: Shop) {
+    await dispatch(deleteShop(shop.id)).unwrap()
+    dispatch(loadPlatformStats())
+  }
+
+  return (
+    <YStack width="100%" gap="$4" paddingHorizontal={isDesktop ? '$6' : '$4'} paddingTop="$5" paddingBottom={safeBottom + 28}>
+      <AdminShopHeader
+        total={totalAdminShops}
+        platformStats={platformStats}
+        onCreate={openCreateForm}
+      />
+
+      {error ? (
+        <YStack padding="$3" borderRadius={radius.card} backgroundColor="$red3" borderWidth={1} borderColor="$red7">
+          <Text color="$red11" fontWeight="700">{error}</Text>
+        </YStack>
+      ) : null}
+
+      <AdminShopFilters
+        search={search}
+        statusFilter={statusFilter}
+        verificationFilter={verificationFilter}
+        categoryFilter={categoryFilter}
+        onSearchChange={setSearch}
+        onStatusChange={setStatusFilter}
+        onVerificationChange={setVerificationFilter}
+        onCategoryChange={setCategoryFilter}
+      />
+
+      <XStack width="100%" gap="$4" alignItems="flex-start" flexWrap={isDesktop ? 'nowrap' : 'wrap'}>
+        <YStack flex={isDesktop ? 1.1 : undefined} width={isDesktop ? undefined : '100%'} gap="$3">
+          <AdminShopList
+            shops={adminShops}
+            selectedShopId={selectedShop?.id ?? null}
+            loading={isLoadingShops}
+            hasMore={hasMoreAdminShops}
+            total={totalAdminShops}
+            onSelect={setSelectedShopId}
+            onLoadMore={loadMore}
+          />
+        </YStack>
+
+        <YStack flex={isDesktop ? 0.9 : undefined} width={isDesktop ? undefined : '100%'} gap="$3">
+          {selectedShop ? (
+            <ShopDetailsPanel
+              shop={selectedShop}
+              busy={isBusy}
+              onEdit={() => openEditForm(selectedShop)}
+              onToggleVerified={() => toggleVerified(selectedShop)}
+              onToggleActive={() => toggleActive(selectedShop)}
+              onDelete={() => softDeleteShop(selectedShop)}
+            />
+          ) : (
+            <EmptyPanel title="No shop selected" description="Load shops or create a new shop to see details." />
+          )}
+
+        </YStack>
+      </XStack>
+
+      <ShopEditorDialog
+        open={formOpen}
+        mode={formMode}
+        form={form}
+        busy={isBusy}
+        onOpenChange={setFormOpen}
+        onChange={(patch) => setForm((current) => ({ ...current, ...patch }))}
+        onSubmit={submitForm}
+      />
+    </YStack>
+  )
+}
+
+function AdminShopHeader({
+  total,
+  platformStats,
+  onCreate,
+}: {
+  total: number
+  platformStats: { totalShops: number; activeShops: number; verifiedShops: number; pendingVerification: number } | null
+  onCreate: () => void
+}) {
+  const stats = [
+    { label: 'Total', value: platformStats?.totalShops ?? total, tone: 'info' as const },
+    { label: 'Active', value: platformStats?.activeShops ?? 0, tone: 'success' as const },
+    { label: 'Verified', value: platformStats?.verifiedShops ?? 0, tone: 'brand' as const },
+    { label: 'Pending', value: platformStats?.pendingVerification ?? 0, tone: 'warning' as const },
+  ]
+
+  return (
+    <YStack gap="$3">
+      <XStack alignItems="center" justifyContent="space-between" gap="$3" flexWrap="wrap">
+        <YStack gap="$1">
+          <Text fontSize={26} fontWeight="800" color="$color12">Shop Management</Text>
+          <Text color="$color10">Review shops, inspect owner data, verify, activate, edit, create, or soft-delete.</Text>
+        </YStack>
+        <Button icon={Icons.Plus} onPress={onCreate}>Create shop</Button>
+      </XStack>
+
+      <XStack gap="$3" flexWrap="wrap">
+        {stats.map((stat) => (
+          <YStack
+            key={stat.label}
+            minWidth={150}
+            flex={1}
+            padding="$3"
+            borderRadius={radius.card}
+            borderWidth={1}
+            borderColor="$borderColor"
+            backgroundColor="$background"
+            style={getShadowStyle('sm')}
+          >
+            <Badge tone={stat.tone}>{stat.label}</Badge>
+            <Text marginTop="$2" fontSize={24} fontWeight="800" color="$color12">{stat.value}</Text>
+          </YStack>
+        ))}
+      </XStack>
+    </YStack>
+  )
+}
+
+function AdminShopFilters({
+  search,
+  statusFilter,
+  verificationFilter,
+  categoryFilter,
+  onSearchChange,
+  onStatusChange,
+  onVerificationChange,
+  onCategoryChange,
+}: {
+  search: string
+  statusFilter: ShopStatusFilter
+  verificationFilter: VerificationFilter
+  categoryFilter: string
+  onSearchChange: (value: string) => void
+  onStatusChange: (value: ShopStatusFilter) => void
+  onVerificationChange: (value: VerificationFilter) => void
+  onCategoryChange: (value: string) => void
+}) {
+  return (
+    <YStack gap="$3" padding="$3" borderRadius={radius.card} borderWidth={1} borderColor="$borderColor" backgroundColor="$background">
+      <Input value={search} onChangeText={onSearchChange} placeholder="Search shops by name or email" />
+      <XStack gap="$2" flexWrap="wrap">
+        <FilterButton label="All shops" active={statusFilter === 'all'} onPress={() => onStatusChange('all')} />
+        <FilterButton label="Active" active={statusFilter === 'active'} onPress={() => onStatusChange('active')} />
+        <FilterButton label="Inactive" active={statusFilter === 'inactive'} onPress={() => onStatusChange('inactive')} />
+        <FilterButton label="All verification" active={verificationFilter === 'all'} onPress={() => onVerificationChange('all')} />
+        <FilterButton label="Verified" active={verificationFilter === 'verified'} onPress={() => onVerificationChange('verified')} />
+        <FilterButton label="Pending" active={verificationFilter === 'pending'} onPress={() => onVerificationChange('pending')} />
+      </XStack>
+      <XStack gap="$2" flexWrap="wrap">
+        <FilterButton label="All categories" active={categoryFilter === 'all'} onPress={() => onCategoryChange('all')} />
+        {COMMON_SHOP_CATEGORIES.slice(0, 8).map((category) => (
+          <FilterButton
+            key={category}
+            label={category}
+            active={categoryFilter === category}
+            onPress={() => onCategoryChange(category)}
+          />
+        ))}
+      </XStack>
+    </YStack>
+  )
+}
+
+function FilterButton({ label, active, onPress }: { label: string; active: boolean; onPress: () => void }) {
+  return (
+    <Button size="$3" tone={active ? 'primary' : 'outline'} onPress={onPress}>
+      {label}
+    </Button>
+  )
+}
+
+function AdminShopList({
+  shops,
+  selectedShopId,
+  loading,
+  hasMore,
+  total,
+  onSelect,
+  onLoadMore,
+}: {
+  shops: Shop[]
+  selectedShopId: string | null
+  loading: boolean
+  hasMore: boolean
+  total: number
+  onSelect: (shopId: string) => void
+  onLoadMore: () => void
+}) {
+  if (loading && shops.length === 0) {
+    return (
+      <YStack minHeight={260} alignItems="center" justifyContent="center">
+        <Spinner size="large" />
+        <Text marginTop="$2" color="$color10">Loading shops...</Text>
+      </YStack>
+    )
+  }
+
+  if (!shops.length) {
+    return <EmptyPanel title="No shops found" description="Try changing filters or create a new shop." />
+  }
+
+  return (
+    <YStack gap="$3">
+      <XStack justifyContent="space-between" alignItems="center">
+        <Text fontWeight="800" color="$color12">All shops</Text>
+        <Text color="$color10">{shops.length} of {total}</Text>
+      </XStack>
+
+      {shops.map((shop) => (
+        <ShopRow
+          key={shop.id}
+          shop={shop}
+          active={shop.id === selectedShopId}
+          onPress={() => onSelect(shop.id)}
+        />
+      ))}
+
+      {hasMore ? (
+        <Button tone="outline" onPress={onLoadMore} disabled={loading}>
+          {loading ? 'Loading...' : 'Load more shops'}
+        </Button>
+      ) : (
+        <Text textAlign="center" color="$color10">End of shop list</Text>
+      )}
+    </YStack>
+  )
+}
+
+function ShopRow({ shop, active, onPress }: { shop: Shop; active: boolean; onPress: () => void }) {
+  const completion = getShopCompletionPercentage(shop)
+  const categories = shopCategories(shop)
+
+  return (
+    <XStack
+      gap="$3"
+      padding="$3"
+      borderRadius={radius.card}
+      borderWidth={1}
+      borderColor={active ? '$color9' : '$borderColor'}
+      backgroundColor={active ? '$color2' : '$background'}
+      cursor="pointer"
+      animation="quick"
+      hoverStyle={{ borderColor: '$color8' }}
+      onPress={onPress}
+      style={getShadowStyle('sm')}
+    >
+      <LogoBox shop={shop} size={52} />
+      <YStack flex={1} minWidth={0} gap="$1">
+        <XStack gap="$2" alignItems="center" flexWrap="wrap">
+          <Text fontWeight="800" color="$color12" numberOfLines={1}>{shop.shop_name}</Text>
+          <Badge tone={shop.verified ? 'success' : 'warning'} size="sm">
+            {shop.verified ? 'Verified' : 'Pending'}
+          </Badge>
+          <Badge tone={shop.is_active ? 'success' : 'danger'} size="sm">
+            {shop.is_active ? 'Active' : 'Inactive'}
+          </Badge>
+        </XStack>
+        <Text color="$color10" numberOfLines={1}>{shop.shop_email || shop.user_id}</Text>
+        <Text color="$color10" fontSize={12}>
+          {categories.slice(0, 3).join(', ') || 'No categories'} • {completion}% complete
+        </Text>
+      </YStack>
+      <Icons.ChevronRight size={18} color="$color10" />
+    </XStack>
+  )
+}
+
+export function ShopDetailsPanel({
+  shop,
+  busy,
+  onEdit,
+  onToggleVerified,
+  onToggleActive,
+  onDelete,
+}: {
+  shop: Shop
+  busy: boolean
+  onEdit: () => void
+  onToggleVerified: () => void
+  onToggleActive: () => void
+  onDelete: () => void
+}) {
+  const categories = shopCategories(shop)
+  const hours = formatShopHours(shop.shop_hours as Record<string, string>)
+  const socialLinks = recordEntries(shop.social_links)
+  const metadata = recordEntries(shop.shop_metadata)
+  const taxConfig = recordEntries(shop.tax_configuration)
+
+  return (
+    <YStack gap="$4" padding="$4" borderRadius={radius.card} borderWidth={1} borderColor="$borderColor" backgroundColor="$background" style={getShadowStyle('sm')}>
+      <XStack gap="$3" alignItems="center">
+        <LogoBox shop={shop} size={68} />
+        <YStack flex={1} minWidth={0}>
+          <Text fontSize={22} fontWeight="800" color="$color12" numberOfLines={1}>{shop.shop_name}</Text>
+          <Text color="$color10" numberOfLines={1}>{shop.slug ? `/${shop.slug}` : shop.id}</Text>
+          <XStack gap="$2" marginTop="$2" flexWrap="wrap">
+            <Badge tone={shop.verified ? 'success' : 'warning'}>{shop.verified ? 'Verified' : 'Pending verification'}</Badge>
+            <Badge tone={shop.is_active ? 'success' : 'danger'}>{shop.is_active ? 'Active' : 'Inactive'}</Badge>
+          </XStack>
+        </YStack>
+      </XStack>
+
+      <XStack gap="$2" flexWrap="wrap">
+        <Button size="$3" tone="outline" icon={Icons.Pencil} onPress={onEdit} disabled={busy}>Edit</Button>
+        <Button size="$3" tone={shop.verified ? 'outline' : 'primary'} onPress={onToggleVerified} disabled={busy}>
+          {shop.verified ? 'Unverify' : 'Verify'}
+        </Button>
+        <Button size="$3" tone="outline" onPress={onToggleActive} disabled={busy}>
+          {shop.is_active ? 'Deactivate' : 'Activate'}
+        </Button>
+        <Button size="$3" tone="destructive" icon={Icons.Trash2} onPress={onDelete} disabled={busy}>
+          Soft delete
+        </Button>
+      </XStack>
+
+      <DetailSection title="Owner">
+        <DetailRow label="Owner user id" value={shop.user_id} />
+        <DetailRow label="Address id" value={shop.shop_address_id ?? 'No address linked'} />
+      </DetailSection>
+
+      <DetailSection title="Shop details">
+        <DetailRow label="Description" value={shop.shop_description ?? 'No description'} />
+        <DetailRow label="Email" value={shop.shop_email ?? 'No email'} />
+        <DetailRow label="Phone" value={shop.shop_phone_number ?? 'No phone'} />
+        <DetailRow label="Website" value={shop.website_url ?? 'No website'} />
+        <DetailRow label="Currency" value={`${getCurrencySymbol(shop.shop_currency)} ${shop.shop_currency}`} />
+        <DetailRow label="Rating" value={`${shop.average_rating ?? 0} (${shop.total_reviews ?? 0} reviews)`} />
+        <DetailRow label="Created" value={formatDate(shop.created_at)} />
+        <DetailRow label="Updated" value={formatDate(shop.updated_at)} />
+      </DetailSection>
+
+      <DetailSection title="Categories">
+        <XStack gap="$2" flexWrap="wrap">
+          {categories.length ? categories.map((category) => <Badge key={category}>{category}</Badge>) : <Text color="$color10">No categories</Text>}
+        </XStack>
+      </DetailSection>
+
+      <DetailSection title="Hours">
+        {hours.length ? hours.map((item) => <DetailRow key={item.day} label={item.day} value={item.hours} />) : <Text color="$color10">No hours configured</Text>}
+      </DetailSection>
+
+      <DetailSection title="SEO">
+        <DetailRow label="SEO title" value={shop.seo_title ?? shop.meta_title ?? 'No SEO title'} />
+        <DetailRow label="SEO description" value={shop.seo_description ?? shop.meta_description ?? 'No SEO description'} />
+        <DetailRow label="Canonical URL" value={shop.canonical_url ?? 'No canonical URL'} />
+        <DetailRow label="Robots" value={`${shop.robots_index ? 'index' : 'noindex'}, ${shop.robots_follow ? 'follow' : 'nofollow'}`} />
+      </DetailSection>
+
+      <KeyValueSection title="Social links" entries={socialLinks} empty="No social links" />
+      <KeyValueSection title="Tax configuration" entries={taxConfig} empty="No tax config" />
+      <KeyValueSection title="Metadata" entries={metadata} empty="No metadata" />
+    </YStack>
+  )
+}
+
+function ShopEditorDialog({
+  open,
+  mode,
+  form,
+  busy,
+  onOpenChange,
+  onChange,
+  onSubmit,
+}: {
+  open: boolean
+  mode: FormMode
+  form: ShopFormState
+  busy: boolean
+  onOpenChange: (open: boolean) => void
+  onChange: (patch: Partial<ShopFormState>) => void
+  onSubmit: () => void
+}) {
+  return (
+    <Dialog modal open={open} onOpenChange={onOpenChange}>
+      <Dialog.Portal>
+        <DialogOverlay />
+        <DialogContent maxWidth={760} maxHeight="90vh" width="92%">
+          <DialogTitle>{mode === 'create' ? 'Create shop' : 'Edit shop'}</DialogTitle>
+          <DialogDescription>
+            Fill the shop details, contact information, categories, and SEO metadata.
+          </DialogDescription>
+
+          <ScrollView maxHeight="68vh" showsVerticalScrollIndicator={false}>
+            <YStack gap="$3" paddingRight="$1">
+              {mode === 'create' ? (
+                <Field label="Owner user id">
+                  <Input value={form.ownerUserId} onChangeText={(ownerUserId) => onChange({ ownerUserId })} placeholder="Owner UUID, optional if current user is owner" />
+                </Field>
+              ) : null}
+              <Field label="Shop name" required>
+                <Input value={form.shop_name} onChangeText={(shop_name) => onChange({ shop_name })} placeholder="Shop name" />
+              </Field>
+              <Field label="Description">
+                <TextArea value={form.shop_description} onChangeText={(shop_description) => onChange({ shop_description })} placeholder="Shop description" />
+              </Field>
+              <XStack gap="$3" flexWrap="wrap">
+                <YStack flex={1} minWidth={180}>
+                  <Field label="Email">
+                    <Input value={form.shop_email} onChangeText={(shop_email) => onChange({ shop_email })} placeholder="shop@example.com" />
+                  </Field>
+                </YStack>
+                <YStack flex={1} minWidth={180}>
+                  <Field label="Phone">
+                    <Input value={form.shop_phone_number} onChangeText={(shop_phone_number) => onChange({ shop_phone_number })} placeholder="+91..." />
+                  </Field>
+                </YStack>
+              </XStack>
+              <Field label="Website URL">
+                <Input value={form.website_url} onChangeText={(website_url) => onChange({ website_url })} placeholder="https://example.com" />
+              </Field>
+              <Field label="Logo URL">
+                <Input value={form.logo_url} onChangeText={(logo_url) => onChange({ logo_url })} placeholder="https://..." />
+              </Field>
+              <XStack gap="$3" flexWrap="wrap">
+                <YStack flex={1} minWidth={160}>
+                  <Field label="Currency">
+                    <Input value={form.shop_currency} onChangeText={(shop_currency) => onChange({ shop_currency })} maxLength={3} placeholder="INR" />
+                  </Field>
+                </YStack>
+                <YStack flex={2} minWidth={220}>
+                  <Field label="Categories">
+                    <Input value={form.categoriesText} onChangeText={(categoriesText) => onChange({ categoriesText })} placeholder="Fashion, Beauty" />
+                  </Field>
+                </YStack>
+              </XStack>
+              <Field label="Slug">
+                <Input value={form.slug} onChangeText={(slug) => onChange({ slug })} placeholder="shop-slug" />
+              </Field>
+              <Field label="SEO title">
+                <Input value={form.seoTitle} onChangeText={(seoTitle) => onChange({ seoTitle })} placeholder="Search title" />
+              </Field>
+              <Field label="SEO description">
+                <TextArea value={form.seoDescription} onChangeText={(seoDescription) => onChange({ seoDescription })} placeholder="Search description" />
+              </Field>
+            </YStack>
+          </ScrollView>
+
+          <XStack gap="$2" justifyContent="flex-end" flexWrap="wrap">
+            <Button tone="outline" onPress={() => onOpenChange(false)} disabled={busy}>Cancel</Button>
+            <Button onPress={onSubmit} disabled={busy || !form.shop_name.trim()}>
+              {busy ? 'Saving...' : mode === 'create' ? 'Create shop' : 'Save changes'}
+            </Button>
+          </XStack>
+        </DialogContent>
+      </Dialog.Portal>
+    </Dialog>
+  )
+}
+
+function LogoBox({ shop, size }: { shop: Shop; size: number }) {
+  if (shop.logo_url) {
+    return (
+      <Image
+        source={{ uri: shop.logo_url }}
+        width={size}
+        height={size}
+        borderRadius={radius.card}
+        backgroundColor="$color3"
+      />
+    )
+  }
+
+  return (
+    <YStack width={size} height={size} borderRadius={radius.card} alignItems="center" justifyContent="center" backgroundColor="$color3">
+      <Icons.Store size={Math.round(size * 0.42)} color="$color10" />
+    </YStack>
+  )
+}
+
+function DetailSection({ title, children }: { title: string; children: React.ReactNode }) {
+  return (
+    <YStack gap="$2">
+      <Text fontSize={14} fontWeight="800" color="$color12">{title}</Text>
+      <YStack gap="$2" padding="$3" borderRadius={radius.chip} backgroundColor="$color2">
+        {children}
+      </YStack>
+    </YStack>
+  )
+}
+
+function DetailRow({ label, value }: { label: string; value: string | number }) {
+  return (
+    <XStack gap="$3" justifyContent="space-between" alignItems="flex-start">
+      <Text flex={1} color="$color10" fontSize={12}>{label}</Text>
+      <Text flex={2} color="$color12" fontSize={12} fontWeight="600" textAlign="right">{String(value)}</Text>
+    </XStack>
+  )
+}
+
+function KeyValueSection({ title, entries, empty }: { title: string; entries: [string, string][]; empty: string }) {
+  return (
+    <DetailSection title={title}>
+      {entries.length ? entries.map(([key, value]) => <DetailRow key={key} label={key} value={value} />) : <Text color="$color10">{empty}</Text>}
+    </DetailSection>
+  )
+}
+
+function EmptyPanel({ title, description }: { title: string; description: string }) {
+  return (
+    <YStack minHeight={220} alignItems="center" justifyContent="center" gap="$2" padding="$4" borderRadius={radius.card} borderWidth={1} borderColor="$borderColor" backgroundColor="$background">
+      <Icons.Store size={28} color="$color10" />
+      <Text fontWeight="800" color="$color12">{title}</Text>
+      <Text color="$color10" textAlign="center">{description}</Text>
+    </YStack>
+  )
+}
+
+function Field({ label, required, children }: { label: string; required?: boolean; children: React.ReactNode }) {
+  return (
+    <YStack gap="$2">
+      <Text fontSize={12} fontWeight="700" color="$color11">
+        {label}{required ? ' *' : ''}
+      </Text>
+      {children}
+    </YStack>
+  )
+}
+
+function splitCsv(value: string) {
+  return value
+    .split(',')
+    .map((item) => item.trim())
+    .filter(Boolean)
+}
+
+function nullableText(value: string) {
+  const trimmed = value.trim()
+  return trimmed ? trimmed : null
+}
+
+function shopCategories(shop: Pick<Shop, 'shop_categories'>) {
+  return Array.isArray(shop.shop_categories) ? (shop.shop_categories as string[]) : []
+}
+
+function recordEntries(value: unknown): [string, string][] {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return []
+  return Object.entries(value as Record<string, unknown>).map(([key, item]) => [
+    key,
+    typeof item === 'string' ? item : JSON.stringify(item),
+  ])
+}
+
+function formatDate(value: string | null) {
+  if (!value) return 'Not set'
+  return new Date(value).toLocaleString()
+}

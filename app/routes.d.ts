@@ -24,6 +24,7 @@ declare module 'one' {
         | `/admin`
         | `/admin/`
         | `/admin/analytics`
+        | `/admin/components/AdminShopsManager`
         | `/admin/layout`
         | `/admin/moderation`
         | `/admin/orders`
