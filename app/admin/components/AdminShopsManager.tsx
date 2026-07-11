@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useState, type ReactNode } from 'react'
 
 import {
   Badge,
@@ -12,6 +12,11 @@ import {
   Image,
   Input,
   ScrollView,
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectViewport,
   Spinner,
   Text,
   TextArea,
@@ -22,6 +27,7 @@ import {
 import { getShadowStyle, radius } from '~/config/tokens'
 import { useAppLayout } from '~/hooks/useAppLayout'
 import { useAppDispatch, useAppSelector } from '~/lib/store/hooks'
+import { supabase } from '~/lib/supabase'
 import {
   adminUpdateShop,
   createShop,
@@ -45,6 +51,22 @@ const PAGE_SIZE = 20
 type ShopStatusFilter = 'all' | 'active' | 'inactive'
 type VerificationFilter = 'all' | 'verified' | 'pending'
 type FormMode = 'create' | 'edit'
+
+type OwnerProfile = {
+  id: string
+  username: string | null
+  full_name: string | null
+  avatar_url: string | null
+  email: string | null
+  phone: string | null
+  role: string | null
+  occupation: string | null
+  business_name: string | null
+  location: string | null
+  bio: string | null
+  is_verified: boolean | null
+  follower_count: number | null
+}
 
 type ShopFormState = Pick<
   ShopFormData,
@@ -99,11 +121,14 @@ export function AdminShopsManager() {
   const [verificationFilter, setVerificationFilter] = useState<VerificationFilter>('all')
   const [categoryFilter, setCategoryFilter] = useState('all')
   const [selectedShopId, setSelectedShopId] = useState<string | null>(null)
+  const [detailsOpen, setDetailsOpen] = useState(false)
   const [formMode, setFormMode] = useState<FormMode>('create')
   const [formOpen, setFormOpen] = useState(false)
   const [form, setForm] = useState<ShopFormState>(EMPTY_FORM)
+  const [ownerProfilesById, setOwnerProfilesById] = useState<Record<string, OwnerProfile>>({})
 
   const selectedShop = adminShops.find((shop) => shop.id === selectedShopId) ?? adminShops[0] ?? null
+  const selectedOwner = selectedShop ? ownerProfilesById[selectedShop.user_id] ?? null : null
   const isBusy = isCreating || isUpdating || isDeleting
 
   const filters = useMemo(
@@ -129,6 +154,43 @@ export function AdminShopsManager() {
       setSelectedShopId(adminShops[0].id)
     }
   }, [adminShops, selectedShopId])
+
+  useEffect(() => {
+    const userIds = Array.from(new Set(adminShops.map((shop) => shop.user_id).filter(Boolean)))
+    if (!userIds.length) return
+
+    let cancelled = false
+
+    async function loadOwners() {
+      const { data } = await supabase
+        .from('profiles')
+        .select(
+          'id, username, full_name, avatar_url, email, phone, role, occupation, business_name, location, bio, is_verified, follower_count',
+        )
+        .in('id', userIds)
+
+      if (cancelled || !data) return
+
+      setOwnerProfilesById((current) => {
+        const next = { ...current }
+        for (const profile of data) {
+          next[profile.id] = profile as OwnerProfile
+        }
+        return next
+      })
+    }
+
+    loadOwners()
+
+    return () => {
+      cancelled = true
+    }
+  }, [adminShops])
+
+  function openShopDetails(shopId: string) {
+    setSelectedShopId(shopId)
+    setDetailsOpen(true)
+  }
 
   function loadMore() {
     dispatch(
@@ -269,35 +331,27 @@ export function AdminShopsManager() {
         onCategoryChange={setCategoryFilter}
       />
 
-      <XStack width="100%" gap="$4" alignItems="flex-start" flexWrap={isDesktop ? 'nowrap' : 'wrap'}>
-        <YStack flex={isDesktop ? 1.1 : undefined} width={isDesktop ? undefined : '100%'} gap="$3">
-          <AdminShopList
-            shops={adminShops}
-            selectedShopId={selectedShop?.id ?? null}
-            loading={isLoadingShops}
-            hasMore={hasMoreAdminShops}
-            total={totalAdminShops}
-            onSelect={setSelectedShopId}
-            onLoadMore={loadMore}
-          />
-        </YStack>
+      <AdminShopList
+        shops={adminShops}
+        selectedShopId={selectedShop?.id ?? null}
+        loading={isLoadingShops}
+        hasMore={hasMoreAdminShops}
+        total={totalAdminShops}
+        onSelect={openShopDetails}
+        onLoadMore={loadMore}
+      />
 
-        <YStack flex={isDesktop ? 0.9 : undefined} width={isDesktop ? undefined : '100%'} gap="$3">
-          {selectedShop ? (
-            <ShopDetailsPanel
-              shop={selectedShop}
-              busy={isBusy}
-              onEdit={() => openEditForm(selectedShop)}
-              onToggleVerified={() => toggleVerified(selectedShop)}
-              onToggleActive={() => toggleActive(selectedShop)}
-              onDelete={() => softDeleteShop(selectedShop)}
-            />
-          ) : (
-            <EmptyPanel title="No shop selected" description="Load shops or create a new shop to see details." />
-          )}
-
-        </YStack>
-      </XStack>
+      <ShopDetailsDialog
+        open={detailsOpen}
+        shop={selectedShop}
+        owner={selectedOwner}
+        busy={isBusy}
+        onOpenChange={setDetailsOpen}
+        onEdit={() => selectedShop && openEditForm(selectedShop)}
+        onToggleVerified={() => selectedShop && toggleVerified(selectedShop)}
+        onToggleActive={() => selectedShop && toggleActive(selectedShop)}
+        onDelete={() => selectedShop && softDeleteShop(selectedShop)}
+      />
 
       <ShopEditorDialog
         open={formOpen}
@@ -379,37 +433,145 @@ function AdminShopFilters({
   onVerificationChange: (value: VerificationFilter) => void
   onCategoryChange: (value: string) => void
 }) {
+  const activeCount = [
+    search.trim() ? 1 : 0,
+    statusFilter !== 'all' ? 1 : 0,
+    verificationFilter !== 'all' ? 1 : 0,
+    categoryFilter !== 'all' ? 1 : 0,
+  ].reduce((total, value) => total + value, 0)
+
+  const statusOptions: { value: ShopStatusFilter; label: string }[] = [
+    { value: 'all', label: 'All shops' },
+    { value: 'active', label: 'Active shops' },
+    { value: 'inactive', label: 'Inactive shops' },
+  ]
+  const verificationOptions: { value: VerificationFilter; label: string }[] = [
+    { value: 'all', label: 'All verification' },
+    { value: 'verified', label: 'Verified shops' },
+    { value: 'pending', label: 'Pending verification' },
+  ]
+  const categoryOptions = [
+    { value: 'all', label: 'All categories' },
+    ...COMMON_SHOP_CATEGORIES.map((category) => ({ value: category, label: category })),
+  ]
+
+  function resetFilters() {
+    onSearchChange('')
+    onStatusChange('all')
+    onVerificationChange('all')
+    onCategoryChange('all')
+  }
+
   return (
-    <YStack gap="$3" padding="$3" borderRadius={radius.card} borderWidth={1} borderColor="$borderColor" backgroundColor="$background">
-      <Input value={search} onChangeText={onSearchChange} placeholder="Search shops by name or email" />
-      <XStack gap="$2" flexWrap="wrap">
-        <FilterButton label="All shops" active={statusFilter === 'all'} onPress={() => onStatusChange('all')} />
-        <FilterButton label="Active" active={statusFilter === 'active'} onPress={() => onStatusChange('active')} />
-        <FilterButton label="Inactive" active={statusFilter === 'inactive'} onPress={() => onStatusChange('inactive')} />
-        <FilterButton label="All verification" active={verificationFilter === 'all'} onPress={() => onVerificationChange('all')} />
-        <FilterButton label="Verified" active={verificationFilter === 'verified'} onPress={() => onVerificationChange('verified')} />
-        <FilterButton label="Pending" active={verificationFilter === 'pending'} onPress={() => onVerificationChange('pending')} />
+    <YStack
+      gap="$4"
+      padding="$4"
+      borderRadius={radius.card}
+      borderWidth={1}
+      borderColor="$borderColor"
+      backgroundColor="$background"
+      style={getShadowStyle('sm')}
+    >
+      <XStack alignItems="center" justifyContent="space-between" gap="$3" flexWrap="wrap">
+        <XStack alignItems="center" gap="$2">
+          <YStack width={34} height={34} borderRadius={999} alignItems="center" justifyContent="center" backgroundColor="$color2">
+            <Icons.SlidersHorizontal size={16} color="$color10" />
+          </YStack>
+          <YStack>
+            <Text fontWeight="800" color="$color12">Filter shops</Text>
+            <Text fontSize={12} color="$color10">
+              Use dropdowns to narrow the admin shop list
+            </Text>
+          </YStack>
+        </XStack>
+        <XStack alignItems="center" gap="$2">
+          {activeCount > 0 ? <Badge tone="brand">{activeCount} active</Badge> : null}
+          <Button tone="ghost" size="$3" onPress={resetFilters} disabled={activeCount === 0}>
+            Reset
+          </Button>
+        </XStack>
       </XStack>
-      <XStack gap="$2" flexWrap="wrap">
-        <FilterButton label="All categories" active={categoryFilter === 'all'} onPress={() => onCategoryChange('all')} />
-        {COMMON_SHOP_CATEGORIES.slice(0, 8).map((category) => (
-          <FilterButton
-            key={category}
-            label={category}
-            active={categoryFilter === category}
-            onPress={() => onCategoryChange(category)}
+
+      <XStack gap="$3" flexWrap="wrap" alignItems="flex-end" width="100%">
+        <FilterField label="Search" flex={1.4} minWidth={240}>
+          <Input value={search} onChangeText={onSearchChange} placeholder="Search by shop name or email" />
+        </FilterField>
+        <FilterField label="Status" flex={1} minWidth={190}>
+          <FilterSelect
+            value={statusFilter}
+            options={statusOptions}
+            placeholder="Select status"
+            onValueChange={(value) => onStatusChange(value as ShopStatusFilter)}
           />
-        ))}
+        </FilterField>
+        <FilterField label="Verification" flex={1} minWidth={210}>
+          <FilterSelect
+            value={verificationFilter}
+            options={verificationOptions}
+            placeholder="Select verification"
+            onValueChange={(value) => onVerificationChange(value as VerificationFilter)}
+          />
+        </FilterField>
+        <FilterField label="Category" flex={1.2} minWidth={240}>
+          <FilterSelect
+            value={categoryFilter}
+            options={categoryOptions}
+            placeholder="Select category"
+            onValueChange={onCategoryChange}
+          />
+        </FilterField>
       </XStack>
     </YStack>
   )
 }
 
-function FilterButton({ label, active, onPress }: { label: string; active: boolean; onPress: () => void }) {
+function FilterField({
+  label,
+  children,
+  flex,
+  minWidth,
+}: {
+  label: string
+  children: ReactNode
+  flex?: number
+  minWidth?: number
+}) {
   return (
-    <Button size="$3" tone={active ? 'primary' : 'outline'} onPress={onPress}>
-      {label}
-    </Button>
+    <YStack gap="$1.5" flex={flex} minWidth={minWidth}>
+      <Text fontSize={12} fontWeight="700" color="$color10">
+        {label}
+      </Text>
+      {children}
+    </YStack>
+  )
+}
+
+function FilterSelect({
+  value,
+  options,
+  placeholder,
+  onValueChange,
+}: {
+  value: string
+  options: { value: string; label: string }[]
+  placeholder: string
+  onValueChange: (value: string) => void
+}) {
+  return (
+    <Select value={value} onValueChange={onValueChange}>
+      <SelectTrigger width="100%" iconAfter={<Icons.ChevronDown size={16} />}>
+        <Select.Value placeholder={placeholder} />
+      </SelectTrigger>
+      <SelectContent zIndex={300000}>
+        <SelectViewport maxHeight={320}>
+          {options.map((option, index) => (
+            <SelectItem key={option.value} index={index} value={option.value}>
+              <Select.ItemText>{option.label}</Select.ItemText>
+            </SelectItem>
+          ))}
+        </SelectViewport>
+      </SelectContent>
+    </Select>
   )
 }
 
@@ -509,8 +671,83 @@ function ShopRow({ shop, active, onPress }: { shop: Shop; active: boolean; onPre
   )
 }
 
+function ShopDetailsDialog({
+  open,
+  shop,
+  owner,
+  busy,
+  onOpenChange,
+  onEdit,
+  onToggleVerified,
+  onToggleActive,
+  onDelete,
+}: {
+  open: boolean
+  shop: Shop | null
+  owner: OwnerProfile | null
+  busy: boolean
+  onOpenChange: (open: boolean) => void
+  onEdit: () => void
+  onToggleVerified: () => void
+  onToggleActive: () => void
+  onDelete: () => void
+}) {
+  return (
+    <Dialog modal open={open} onOpenChange={onOpenChange}>
+      <Dialog.Portal>
+        <DialogOverlay />
+        <DialogContent maxWidth={960} maxHeight="92vh" width="94%" padding={0} overflow="hidden">
+          <YStack
+            padding="$5"
+            paddingTop="$6"
+            gap="$3"
+            backgroundColor="$color2"
+            borderBottomWidth={1}
+            borderBottomColor="$borderColor"
+          >
+            <Button
+              circular
+              size="$3"
+              tone="secondary"
+              icon={Icons.X}
+              position="absolute"
+              top="$3"
+              left="$3"
+              zIndex={1}
+              onPress={() => onOpenChange(false)}
+              aria-label="Close shop details"
+            />
+            <YStack paddingLeft="$5" gap="$1">
+              <DialogTitle>{shop?.shop_name ?? 'Shop details'}</DialogTitle>
+              <DialogDescription>
+                Review the shop, owner profile, SEO, tax, metadata, and admin controls.
+              </DialogDescription>
+            </YStack>
+          </YStack>
+          <ScrollView maxHeight="74vh" showsVerticalScrollIndicator={false} contentContainerStyle={{ padding: 20 }}>
+            {shop ? (
+              <ShopDetailsPanel
+                shop={shop}
+                owner={owner}
+                busy={busy}
+                onEdit={onEdit}
+                onToggleVerified={onToggleVerified}
+                onToggleActive={onToggleActive}
+                onDelete={onDelete}
+              />
+            ) : (
+              <EmptyPanel title="No shop selected" description="Select a shop to view details." />
+            )}
+          </ScrollView>
+        </DialogContent>
+      </Dialog.Portal>
+    </Dialog>
+  )
+}
+
 export function ShopDetailsPanel({
   shop,
+  owner,
   busy,
   onEdit,
   onToggleVerified,
@@ -518,6 +755,7 @@ export function ShopDetailsPanel({
   onDelete,
 }: {
   shop: Shop
+  owner: OwnerProfile | null
   busy: boolean
   onEdit: () => void
   onToggleVerified: () => void
@@ -531,8 +769,17 @@ export function ShopDetailsPanel({
   const taxConfig = recordEntries(shop.tax_configuration)
 
   return (
-    <YStack gap="$4" padding="$4" borderRadius={radius.card} borderWidth={1} borderColor="$borderColor" backgroundColor="$background" style={getShadowStyle('sm')}>
-      <XStack gap="$3" alignItems="center">
+    <YStack gap="$4">
+      <XStack
+        gap="$3"
+        alignItems="center"
+        padding="$4"
+        borderRadius={radius.card}
+        borderWidth={1}
+        borderColor="$borderColor"
+        backgroundColor="$background"
+        style={getShadowStyle('sm')}
+      >
         <LogoBox shop={shop} size={68} />
         <YStack flex={1} minWidth={0}>
           <Text fontSize={22} fontWeight="800" color="$color12" numberOfLines={1}>{shop.shop_name}</Text>
@@ -544,7 +791,15 @@ export function ShopDetailsPanel({
         </YStack>
       </XStack>
 
-      <XStack gap="$2" flexWrap="wrap">
+      <XStack
+        gap="$2"
+        flexWrap="wrap"
+        padding="$3"
+        borderRadius={radius.card}
+        backgroundColor="$color2"
+        borderWidth={1}
+        borderColor="$borderColor"
+      >
         <Button size="$3" tone="outline" icon={Icons.Pencil} onPress={onEdit} disabled={busy}>Edit</Button>
         <Button size="$3" tone={shop.verified ? 'outline' : 'primary'} onPress={onToggleVerified} disabled={busy}>
           {shop.verified ? 'Unverify' : 'Verify'}
@@ -558,7 +813,29 @@ export function ShopDetailsPanel({
       </XStack>
 
       <DetailSection title="Owner">
+        <XStack gap="$3" alignItems="center" marginBottom="$2">
+          <OwnerAvatar owner={owner} size={52} />
+          <YStack flex={1} minWidth={0}>
+            <Text fontWeight="800" color="$color12" numberOfLines={1}>
+              {owner?.full_name || owner?.username || 'Unknown owner'}
+            </Text>
+            <Text color="$color10" numberOfLines={1}>
+              {owner?.username ? `@${owner.username}` : shop.user_id}
+            </Text>
+          </YStack>
+          {owner?.is_verified ? <Badge tone="success">Profile verified</Badge> : null}
+        </XStack>
         <DetailRow label="Owner user id" value={shop.user_id} />
+        <DetailRow label="Name" value={owner?.full_name ?? 'Not available'} />
+        <DetailRow label="Username" value={owner?.username ? `@${owner.username}` : 'Not available'} />
+        <DetailRow label="Email" value={owner?.email ?? 'Not available'} />
+        <DetailRow label="Phone" value={owner?.phone ?? 'Not available'} />
+        <DetailRow label="Role" value={formatOwnerRole(owner?.role)} />
+        <DetailRow label="Occupation" value={owner?.occupation ?? 'Not available'} />
+        <DetailRow label="Business" value={owner?.business_name ?? 'Not available'} />
+        <DetailRow label="Location" value={owner?.location ?? 'Not available'} />
+        <DetailRow label="Followers" value={owner?.follower_count ?? 0} />
+        <DetailRow label="Bio" value={owner?.bio ?? 'No bio'} />
         <DetailRow label="Address id" value={shop.shop_address_id ?? 'No address linked'} />
       </DetailSection>
 
@@ -711,11 +988,42 @@ function LogoBox({ shop, size }: { shop: Shop; size: number }) {
   )
 }
 
+function OwnerAvatar({ owner, size }: { owner: OwnerProfile | null; size: number }) {
+  if (owner?.avatar_url) {
+    return (
+      <Image
+        source={{ uri: owner.avatar_url }}
+        width={size}
+        height={size}
+        borderRadius={999}
+        backgroundColor="$color3"
+      />
+    )
+  }
+
+  return (
+    <YStack width={size} height={size} borderRadius={999} alignItems="center" justifyContent="center" backgroundColor="$color3">
+      <Icons.User size={Math.round(size * 0.42)} color="$color10" />
+    </YStack>
+  )
+}
+
 function DetailSection({ title, children }: { title: string; children: React.ReactNode }) {
   return (
-    <YStack gap="$2">
-      <Text fontSize={14} fontWeight="800" color="$color12">{title}</Text>
-      <YStack gap="$2" padding="$3" borderRadius={radius.chip} backgroundColor="$color2">
+    <YStack
+      gap="$2.5"
+      padding="$4"
+      borderRadius={radius.card}
+      borderWidth={1}
+      borderColor="$borderColor"
+      backgroundColor="$background"
+      style={getShadowStyle('sm')}
+    >
+      <XStack alignItems="center" gap="$2">
+        <YStack width={4} height={18} borderRadius={999} backgroundColor="$color9" />
+        <Text fontSize={14} fontWeight="800" color="$color12">{title}</Text>
+      </XStack>
+      <YStack gap="$2.5">
         {children}
       </YStack>
     </YStack>
@@ -787,4 +1095,11 @@ function recordEntries(value: unknown): [string, string][] {
 function formatDate(value: string | null) {
   if (!value) return 'Not set'
   return new Date(value).toLocaleString()
+}
+
+function formatOwnerRole(role: string | null | undefined) {
+  if (role === 'A') return 'Admin'
+  if (role === 'V') return 'Vendor'
+  if (role === 'U') return 'User'
+  return role ?? 'Not available'
 }
