@@ -21,6 +21,8 @@ declare module 'one' {
         | `/(store)/shops`
         | `/_sitemap`
         | `/addresses`
+        | `/admin`
+        | `/admin/layout`
         | `/auth`
         | `/auth/sign-in`
         | `/auth/sign-up`
@@ -50,6 +52,7 @@ declare module 'one' {
         | `/community/jobs/create`
         | `/community/network`
         | `/community/people`
+        | `/community/stories`
         | `/community/stories/create`
         | `/favorites`
         | `/my-shops`
