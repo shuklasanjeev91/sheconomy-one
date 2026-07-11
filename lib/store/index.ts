@@ -11,6 +11,12 @@ import {
 } from 'redux-persist'
 
 import { profileCompletionReducer, profileReducer } from '~/lib/profile/profile.store'
+import { shopReducer } from '~/lib/shop/shop.store'
+import { listingReducer } from '~/lib/listing/listing.store'
+import { listingAttributesReducer } from '~/lib/listing/listing-attributes.store'
+import { listingImagesReducer } from '~/lib/listing/listing-images.store'
+import { listingMaterialsReducer } from '~/lib/listing/listing-materials.store'
+import { listingVariationsReducer } from '~/lib/listing/listing-variations.store'
 
 import { persistStorage } from './storage'
 
@@ -20,9 +26,29 @@ const completionPersistConfig = {
   whitelist: ['isBasicProfileCompleted', 'isBasicProfileSkipped'],
 }
 
+const shopPersistConfig = {
+  key: 'shop',
+  storage: persistStorage,
+  // Cache the owner's shops so the seller UI paints instantly on reload.
+  whitelist: ['currentShop', 'myShops'],
+}
+
+const listingPersistConfig = {
+  key: 'listing',
+  storage: persistStorage,
+  // Cache the owner's catalogue + form draft so the seller UI paints instantly.
+  whitelist: ['myListings', 'formData'],
+}
+
 const rootReducer = combineReducers({
   profile: profileReducer,
   profileCompletion: persistReducer(completionPersistConfig, profileCompletionReducer),
+  shop: persistReducer(shopPersistConfig, shopReducer),
+  listing: persistReducer(listingPersistConfig, listingReducer),
+  listingImages: listingImagesReducer,
+  listingVariations: listingVariationsReducer,
+  listingAttributes: listingAttributesReducer,
+  listingMaterials: listingMaterialsReducer,
 })
 
 export const store = configureStore({

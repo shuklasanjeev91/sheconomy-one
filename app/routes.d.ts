@@ -50,6 +50,7 @@ declare module 'one' {
         | `/community/jobs/create`
         | `/community/network`
         | `/community/people`
+        | `/community/stories`
         | `/community/stories/create`
         | `/favorites`
         | `/my-shops`
