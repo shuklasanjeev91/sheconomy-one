@@ -22,7 +22,16 @@ declare module 'one' {
         | `/_sitemap`
         | `/addresses`
         | `/admin`
+        | `/admin/`
+        | `/admin/analytics`
         | `/admin/layout`
+        | `/admin/moderation`
+        | `/admin/orders`
+        | `/admin/payments`
+        | `/admin/products`
+        | `/admin/settings`
+        | `/admin/shops`
+        | `/admin/users`
         | `/auth`
         | `/auth/sign-in`
         | `/auth/sign-up`

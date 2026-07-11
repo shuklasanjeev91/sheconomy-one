@@ -1,5 +1,5 @@
-import AdminLayout from './layout'
+import { AdminSectionPage } from './layout'
 
 export default function AdminPage() {
-  return <AdminLayout />
+  return <AdminSectionPage sectionId="dashboard" />
 }

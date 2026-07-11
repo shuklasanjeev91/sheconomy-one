@@ -4,8 +4,10 @@ import { defineConfig, loadEnv } from 'vite'
 import { one } from 'one/vite'
 import { tamaguiPlugin } from '@tamagui/vite-plugin'
 
-import { APP_SCHEME, DEFAULT_APP_ORIGIN } from './config/app-origin.ts'
-import { PUBLIC_SUPABASE_ANON_KEY, PUBLIC_SUPABASE_URL } from './config/supabase-public.ts'
+import { APP_SCHEME, DEFAULT_APP_ORIGIN } from './config/app-origin'
+import { PUBLIC_SUPABASE_ANON_KEY, PUBLIC_SUPABASE_URL } from './config/supabase-public'
+
+const fromProjectRoot = (path: string) => fileURLToPath(new URL(path, import.meta.url).toString())
 
 /** Vite loadEnv only reads .env files; merge CI/Vercel process.env for EXPO_PUBLIC_* keys. */
 function loadProjectEnv(mode: string) {
@@ -32,6 +34,9 @@ export default defineConfig(({ mode }) => {
     /\/$/,
     '',
   )
+  const useSyncExternalStoreWithSelector = fromProjectRoot(
+    './lib/stubs/use-sync-external-store-with-selector.ts',
+  )
 
   return {
     server: {
@@ -47,26 +52,22 @@ export default defineConfig(({ mode }) => {
 
     resolve: {
       alias: {
-        'expo-av': fileURLToPath(new URL('./lib/stubs/expo-av.ts', import.meta.url)),
-        'expo-audio': fileURLToPath(new URL('./lib/stubs/expo-audio.ts', import.meta.url)),
-        'expo-video': fileURLToPath(new URL('./lib/stubs/expo-video.ts', import.meta.url)),
-        'expo-sharing': fileURLToPath(new URL('./lib/stubs/expo-sharing.ts', import.meta.url)),
-        'expo-camera': fileURLToPath(new URL('./lib/stubs/expo-camera.ts', import.meta.url)),
-        'expo-location': fileURLToPath(new URL('./lib/stubs/expo-location.ts', import.meta.url)),
-        'expo-clipboard': fileURLToPath(new URL('./lib/stubs/expo-clipboard.ts', import.meta.url)),
-        'expo-file-system/legacy': fileURLToPath(
-          new URL('./lib/stubs/expo-file-system-legacy.ts', import.meta.url),
-        ),
-        'expo-localization': fileURLToPath(new URL('./lib/stubs/expo-localization.ts', import.meta.url)),
-        '@react-native-community/datetimepicker': fileURLToPath(
-          new URL('./lib/stubs/datetimepicker.ts', import.meta.url),
-        ),
-        '@livekit/react-native': fileURLToPath(new URL('./lib/stubs/livekit-react-native.ts', import.meta.url)),
-        '@livekit/react-native-webrtc': fileURLToPath(
-          new URL('./lib/stubs/react-native-webrtc.ts', import.meta.url),
-        ),
-        'react-native-webrtc': fileURLToPath(new URL('./lib/stubs/react-native-webrtc.ts', import.meta.url)),
-        'react-native-webview': fileURLToPath(new URL('./lib/stubs/react-native-webview.ts', import.meta.url)),
+        'expo-av': fromProjectRoot('./lib/stubs/expo-av.ts'),
+        'expo-audio': fromProjectRoot('./lib/stubs/expo-audio.ts'),
+        'expo-video': fromProjectRoot('./lib/stubs/expo-video.ts'),
+        'expo-sharing': fromProjectRoot('./lib/stubs/expo-sharing.ts'),
+        'expo-camera': fromProjectRoot('./lib/stubs/expo-camera.ts'),
+        'expo-location': fromProjectRoot('./lib/stubs/expo-location.ts'),
+        'expo-clipboard': fromProjectRoot('./lib/stubs/expo-clipboard.ts'),
+        'expo-file-system/legacy': fromProjectRoot('./lib/stubs/expo-file-system-legacy.ts'),
+        'expo-localization': fromProjectRoot('./lib/stubs/expo-localization.ts'),
+        '@react-native-community/datetimepicker': fromProjectRoot('./lib/stubs/datetimepicker.ts'),
+        '@livekit/react-native': fromProjectRoot('./lib/stubs/livekit-react-native.ts'),
+        '@livekit/react-native-webrtc': fromProjectRoot('./lib/stubs/react-native-webrtc.ts'),
+        'react-native-webrtc': fromProjectRoot('./lib/stubs/react-native-webrtc.ts'),
+        'react-native-webview': fromProjectRoot('./lib/stubs/react-native-webview.ts'),
+        'use-sync-external-store/with-selector': useSyncExternalStoreWithSelector,
+        'use-sync-external-store/with-selector.js': useSyncExternalStoreWithSelector,
       },
     },
 

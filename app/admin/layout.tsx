@@ -1,5 +1,7 @@
 import { useState } from 'react'
 import { Platform } from 'react-native'
+import { Redirect, Slot, usePathname, useRouter } from 'one'
+import type { Href } from 'one'
 
 import { Icons, ScrollView, Text, XStack, YStack } from '~/components/ui'
 import { getShadowStyle, radius } from '~/config/tokens'
@@ -15,6 +17,7 @@ type AdminNavItem = {
   label: string
   description: string
   icon: IconType
+  href: Href
 }
 
 type AdminNavGroup = {
@@ -31,12 +34,14 @@ const NAV_GROUPS: AdminNavGroup[] = [
         label: 'Dashboard',
         description: 'Key metrics and platform activity at a glance.',
         icon: Icons.LayoutDashboard,
+        href: '/admin' as Href,
       },
       {
         id: 'analytics',
         label: 'Analytics',
         description: 'Traffic, conversion, and revenue trends.',
         icon: Icons.BarChart3,
+        href: '/admin/analytics' as Href,
       },
     ],
   },
@@ -48,30 +53,35 @@ const NAV_GROUPS: AdminNavGroup[] = [
         label: 'Users',
         description: 'Manage members, roles, and verification.',
         icon: Icons.Users,
+        href: '/admin/users' as Href,
       },
       {
         id: 'shops',
         label: 'Shops',
         description: 'Review and moderate seller storefronts.',
         icon: Icons.Store,
+        href: '/admin/shops' as Href,
       },
       {
         id: 'products',
         label: 'Products',
         description: 'Catalog, listings, and inventory.',
         icon: Icons.Package,
+        href: '/admin/products' as Href,
       },
       {
         id: 'orders',
         label: 'Orders',
         description: 'Track fulfilment and resolve disputes.',
         icon: Icons.ShoppingCart,
+        href: '/admin/orders' as Href,
       },
       {
         id: 'payments',
         label: 'Payments',
         description: 'Payouts, refunds, and transactions.',
         icon: Icons.CreditCard,
+        href: '/admin/payments' as Href,
       },
     ],
   },
@@ -83,12 +93,14 @@ const NAV_GROUPS: AdminNavGroup[] = [
         label: 'Moderation',
         description: 'Reports, flags, and safety tools.',
         icon: Icons.ShieldCheck,
+        href: '/admin/moderation' as Href,
       },
       {
         id: 'settings',
         label: 'Settings',
         description: 'Platform configuration and preferences.',
         icon: Icons.Settings,
+        href: '/admin/settings' as Href,
       },
     ],
   },
@@ -101,18 +113,38 @@ const COLLAPSED_WIDTH = 80
 const DRAWER_WIDTH = 300
 const TOPBAR_HEIGHT = 60
 
-export default function AdminLayout() {
+function getActiveNavItem(pathname: string) {
+  const normalizedPath = pathname.replace(/\/+$/, '') || '/admin'
+
+  if (normalizedPath === '/admin') {
+    return NAV_ITEMS[0]
+  }
+
+  return (
+    NAV_ITEMS.find((item) => {
+      const href = String(item.href).replace(/\/+$/, '')
+      return href === '/admin' ? normalizedPath === href : normalizedPath === href || normalizedPath.startsWith(`${href}/`)
+    }) ?? NAV_ITEMS[0]
+  )
+}
+
+export function getAdminNavItem(id: string) {
+  return NAV_ITEMS.find((item) => item.id === id) ?? NAV_ITEMS[0]
+}
+
+export function AdminLayout() {
   const ui = useAppUi()
   const { isDesktop, safeTop, safeBottom, desktopHeaderHeight } = useAppLayout()
-  const [activeId, setActiveId] = useState<string>('dashboard')
+  const router = useRouter()
+  const pathname = usePathname()
   const [collapsed, setCollapsed] = useState(false)
   const [drawerOpen, setDrawerOpen] = useState(false)
 
-  const active = NAV_ITEMS.find((item) => item.id === activeId) ?? NAV_ITEMS[0]
+  const active = getActiveNavItem(pathname)
 
-  function handleSelect(id: string) {
-    setActiveId(id)
+  function handleSelect(item: AdminNavItem) {
     setDrawerOpen(false)
+    router.push(item.href)
   }
 
   const desktopHeight =
@@ -155,7 +187,7 @@ export default function AdminLayout() {
             <AdminSidebar
               ui={ui}
               collapsed={collapsed}
-              activeId={activeId}
+              activeId={active.id}
               onSelect={handleSelect}
               onToggleCollapse={() => setCollapsed((value) => !value)}
             />
@@ -222,7 +254,7 @@ export default function AdminLayout() {
             style={Platform.OS === 'web' ? ({ overflowY: 'auto', minHeight: 0 } as const) : undefined}
             contentContainerStyle={{ flexGrow: 1 }}
           >
-            <AdminContent ui={ui} active={active} isDesktop={isDesktop} safeBottom={safeBottom} />
+            <Slot />
           </ScrollView>
         </YStack>
       </XStack>
@@ -255,7 +287,7 @@ export default function AdminLayout() {
               <AdminSidebar
                 ui={ui}
                 collapsed={false}
-                activeId={activeId}
+                activeId={active.id}
                 onSelect={handleSelect}
                 onClose={() => setDrawerOpen(false)}
               />
@@ -267,11 +299,15 @@ export default function AdminLayout() {
   )
 }
 
+export default function AdminLayoutRoute() {
+  return <Redirect href="/admin" />
+}
+
 type AdminSidebarProps = {
   ui: AppUiTokens
   collapsed: boolean
   activeId: string
-  onSelect: (id: string) => void
+  onSelect: (item: AdminNavItem) => void
   onToggleCollapse?: () => void
   onClose?: () => void
 }
@@ -367,7 +403,7 @@ function AdminSidebar({
                   item={item}
                   active={item.id === activeId}
                   collapsed={collapsed}
-                  onPress={() => onSelect(item.id)}
+                  onPress={() => onSelect(item)}
                 />
               ))}
             </YStack>
@@ -484,6 +520,14 @@ type AdminContentProps = {
   active: AdminNavItem
   isDesktop: boolean
   safeBottom: number
+}
+
+export function AdminSectionPage({ sectionId }: { sectionId: string }) {
+  const ui = useAppUi()
+  const { isDesktop, safeBottom } = useAppLayout()
+  const active = getAdminNavItem(sectionId)
+
+  return <AdminContent ui={ui} active={active} isDesktop={isDesktop} safeBottom={safeBottom} />
 }
 
 function AdminContent({ ui, active, isDesktop, safeBottom }: AdminContentProps) {
