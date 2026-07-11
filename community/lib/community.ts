@@ -1,3 +1,5 @@
+import { fail, ok, type ApiResult } from '~/lib/api'
+import { logger } from '~/lib/api/logger'
 import { supabase } from '~/lib/supabase/client'
 
 import { extractHashtags, extractMentions } from './post-text'
@@ -316,6 +318,26 @@ export async function fetchCommunityFeedPage(
   sort: FeedSort = 'recent',
 ): Promise<PaginatedPostsResult> {
   return fetchPostsPage(page, pageSize, sort)
+}
+
+export async function fetchPostById(id: string): Promise<ApiResult<CommunityPost>> {
+  const { data, error } = await supabase
+    .from('posts_with_stats')
+    .select(POST_STATS_SELECT)
+    .eq('id', id)
+    .eq('is_deleted', false)
+    .maybeSingle()
+
+  if (error) {
+    logger.apiError('fetchPostById', error.message, { id })
+    return fail(error.message)
+  }
+
+  if (!data) return fail('Post not found.')
+
+  const mapped = mapPost(data as PostRow)
+  const [post] = await enrichPosts([mapped])
+  return ok(post)
 }
 
 export async function fetchCompanyPostsPage(

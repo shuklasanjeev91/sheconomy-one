@@ -35,6 +35,10 @@ export const commerceRoutes = {
   cart: appRoutes.cart,
   checkout: appRoutes.checkout,
   favorites: '/favorites' as Href,
+  wishlist: '/favorites' as Href,
+  orders: '/orders' as Href,
+  paymentMethods: '/payment-methods' as Href,
+  addresses: '/addresses' as Href,
   search: (query?: string) =>
     (query ? `/search?q=${encodeURIComponent(query)}` : '/search') as Href,
   category: (slug: string) => `/category/${encodeURIComponent(slug)}` as Href,
@@ -59,7 +63,9 @@ export const communityRoutes = {
     `/profile/${encodeURIComponent(handle)}/connections` as Href,
   settings: appRoutes.settings,
   createPost: '/community/create' as Href,
+  post: (id: string) => `/community/post/${encodeURIComponent(id)}` as Href,
   jobs: '/community/jobs' as Href,
+  jobCreate: '/community/jobs/create' as Href,
   job: (id: string) => `/community/jobs/${encodeURIComponent(id)}` as Href,
   hashtag: (tag: string) => `/community/hashtag/${encodeURIComponent(tag.replace(/^#/, ''))}` as Href,
   stories: '/community/stories' as Href,
@@ -136,6 +142,17 @@ export function isCommerceFavoritesPath(pathname: string) {
   return pathname === '/favorites' || pathname.startsWith('/favorites/')
 }
 
+export function isCommerceBuyerAccountPath(pathname: string) {
+  return (
+    pathname === '/orders' ||
+    pathname.startsWith('/orders/') ||
+    pathname === '/payment-methods' ||
+    pathname.startsWith('/payment-methods/') ||
+    pathname === '/addresses' ||
+    pathname.startsWith('/addresses/')
+  )
+}
+
 /** Commerce marketplace home — excludes routes owned by other bottom tabs. */
 export function isCommerceHomePath(pathname: string) {
   return (
@@ -143,6 +160,7 @@ export function isCommerceHomePath(pathname: string) {
     !isCartPath(pathname) &&
     !isCommerceShopsPath(pathname) &&
     !isCommerceFavoritesPath(pathname) &&
+    !isCommerceBuyerAccountPath(pathname) &&
     !isMyShopsPath(pathname)
   )
 }
@@ -157,6 +175,9 @@ export function isCommunityFeedPath(pathname: string) {
     pathname.startsWith('/community/network') ||
     pathname === '/community/create' ||
     pathname.startsWith('/community/create/') ||
+    pathname.startsWith('/community/post/') ||
+    pathname === '/community/stories' ||
+    pathname.startsWith('/community/stories/') ||
     pathname === '/community/jobs' ||
     pathname.startsWith('/community/jobs/')
   )

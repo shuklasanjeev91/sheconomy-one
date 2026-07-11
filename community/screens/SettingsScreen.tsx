@@ -1,7 +1,6 @@
 import { useUserScheme } from '@vxrn/color-scheme'
 import { useState } from 'react'
 
-import { CommunityShell } from '~/community/components/CommunityShell'
 import { CommunityPageHeader } from '~/community/components/CommunityPageHeader'
 import { BRAND_BLUE } from '~/community/lib/constants'
 import {
@@ -17,7 +16,7 @@ import {
   YStack,
   useAppToast,
 } from '~/components/ui'
-import { SurfaceCard } from '~/components/layout'
+import { SurfaceCard, FullWidthLayout, PageSection } from '~/components/layout'
 import { radius } from '~/config/tokens'
 import { useAuth } from '~/hooks/useAuth'
 import { useAppUi } from '~/lib/theme/useAppUi'
@@ -45,8 +44,9 @@ export function SettingsScreen() {
   }
 
   return (
-    <CommunityShell>
-      <YStack gap="$5" width="100%">
+    <FullWidthLayout scroll>
+      <PageSection paddingVertical="$3">
+        <YStack gap="$5" width="100%">
         <CommunityPageHeader
           title="Settings"
           subtitle={`Customize your ${BRAND_NAME} experience`}
@@ -120,8 +120,9 @@ export function SettingsScreen() {
             />
           </SurfaceCard>
         </SettingsSection>
-      </YStack>
-    </CommunityShell>
+        </YStack>
+      </PageSection>
+    </FullWidthLayout>
   )
 }
 

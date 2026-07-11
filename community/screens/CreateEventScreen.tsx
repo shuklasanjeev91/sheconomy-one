@@ -7,6 +7,8 @@ import { createEvent } from '~/community/lib/events'
 import { useCommunityUi } from '~/community/lib/community-theme'
 import {
   Button,
+  Field,
+  Input,
   Spinner,
   Text,
   ValidatedTextArea,
@@ -15,6 +17,7 @@ import {
   YStack,
   useAppToast,
 } from '~/components/ui'
+import { LocationPickerField } from '~/components/geo'
 import { useFormValidation } from '~/hooks/useFormValidation'
 import { communityRoutes, routes } from '~/lib/routes'
 import {
@@ -42,6 +45,8 @@ export function CreateEventScreen() {
   const [isOnline, setIsOnline] = useState(false)
   const [isFree, setIsFree] = useState(true)
   const [isSaving, setIsSaving] = useState(false)
+  const [eventLocation, setEventLocation] = useState('')
+  const [venueDetail, setVenueDetail] = useState('')
 
   const form = useFormValidation(
     useMemo(
@@ -52,9 +57,6 @@ export function CreateEventScreen() {
         startTime: { validators: [required('Start time is required.'), timeHm()] },
         endDate: { validators: [dateYmd()] },
         endTime: { validators: [timeHm()] },
-        location: {
-          validators: isOnline ? [] : [required('Location is required for in-person events.')],
-        },
         meetingUrl: {
           validators: isOnline
             ? [required('Meeting link is required for online events.'), url()]
@@ -94,6 +96,16 @@ export function CreateEventScreen() {
   async function handleCreate() {
     if (!form.validateAll()) return
 
+    if (!isOnline && !eventLocation.trim()) {
+      toast.show('Location required', {
+        tone: 'danger',
+        message: 'Select a city and region for in-person events.',
+      })
+      return
+    }
+
+    const locationLabel = [venueDetail.trim(), eventLocation.trim()].filter(Boolean).join(', ')
+
     const startIso = new Date(
       `${form.fields.startDate.value}T${form.fields.startTime.value}`,
     ).toISOString()
@@ -109,7 +121,7 @@ export function CreateEventScreen() {
       startTime: startIso,
       endTime: endIso,
       isOnline,
-      location: isOnline ? undefined : form.fields.location.value.trim(),
+      location: isOnline ? undefined : locationLabel,
       meetingUrl: isOnline ? form.fields.meetingUrl.value.trim() : undefined,
       imageUrl: form.fields.imageUrl.value.trim(),
       eventType,
@@ -236,12 +248,20 @@ export function CreateEventScreen() {
             required
           />
         ) : (
-          <ValidatedTextField
-            label="Location"
-            field={form.fields.location}
-            placeholder="City, venue, or address"
-            required
-          />
+          <YStack gap={12}>
+            <LocationPickerField
+              value={eventLocation}
+              onChange={setEventLocation}
+              label="Event location"
+            />
+            <Field label="Venue name or address (optional)">
+              <Input
+                value={venueDetail}
+                onChangeText={setVenueDetail}
+                placeholder="Community hall, co-working space, street address"
+              />
+            </Field>
+          </YStack>
         )}
 
         <ValidatedTextField

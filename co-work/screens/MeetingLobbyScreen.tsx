@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from 'react'
 
 import { RequireAuth } from '~/components/auth/RequireAuth'
 import { FullWidthLayout, LAYOUT_STRETCH, PageSection } from '~/components/layout'
+import { ShareSheet } from '~/components/share'
 import { Button, Field, Icons, Input, Spinner, Text, XStack, YStack, useAppToast } from '~/components/ui'
 import { CoWorkBrandChip, CoWorkIconBadge } from '~/co-work/components/CoWorkUi'
 import { MeetingInvitePanel } from '~/co-work/components/MeetingInvitePanel'
@@ -17,7 +18,6 @@ import {
 import { coworkGlassStyle, useCoWorkTheme } from '~/co-work/lib/theme'
 import { controlGradientStyle, coworkBoxShadow, pageGradientStyle } from '~/lib/platform/crossStyles'
 import type { Meeting } from '~/co-work/lib/types'
-import { copyToClipboard } from '~/lib/platform/clipboard'
 import { coWorkRoutes } from '~/lib/routes'
 import { useProfile } from '~/hooks/useProfile'
 
@@ -39,6 +39,7 @@ export function MeetingLobbyScreen({ code, startLive = false }: MeetingLobbyScre
   const [error, setError] = useState<string | null>(null)
   const [loadingMeeting, setLoadingMeeting] = useState(true)
   const [showInvite, setShowInvite] = useState(false)
+  const [shareOpen, setShareOpen] = useState(false)
 
   const isHost = !!meeting && !!user && meeting.host_id === user.id
   const hostName = profile?.full_name || profile?.username || 'You'
@@ -210,14 +211,21 @@ export function MeetingLobbyScreen({ code, startLive = false }: MeetingLobbyScre
                   size="$4"
                   borderRadius={999}
                   borderColor={coworkUi.glassBorder}
-                  onPress={async () => {
-                    const url = getMeetingShareUrl(meeting.meeting_code)
-                    const copied = await copyToClipboard(url)
-                    if (copied) toast.show('Link copied', { tone: 'success' })
-                  }}
+                  onPress={() => setShareOpen(true)}
                 >
-                  Copy link
+                  Share
                 </Button>
+                <ShareSheet
+                  open={shareOpen}
+                  onOpenChange={setShareOpen}
+                  title="Share meeting"
+                  copyLabel="Copy meeting link"
+                  copyToastMessage="Meeting link copied to clipboard."
+                  payload={{
+                    url: getMeetingShareUrl(meeting.meeting_code),
+                    title: meeting.title,
+                  }}
+                />
               </XStack>
 
               {isHost && showInvite && user ? (

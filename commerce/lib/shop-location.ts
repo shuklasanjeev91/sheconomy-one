@@ -1,3 +1,5 @@
+import { getCountryName } from '~/lib/geo'
+
 export type ShopAddress = {
   city: string | null
   state: string | null
@@ -27,7 +29,8 @@ export function formatShopLocation(
   address?: ShopAddress | null,
   fallbackLocation?: string | null,
 ): string | null {
-  const parts = [address?.city, address?.state, address?.country]
+  const countryName = address?.country ? getCountryName(address.country, address.country) : null
+  const parts = [address?.city, address?.state, countryName]
     .map((part) => part?.trim())
     .filter((part): part is string => !!part)
 
@@ -36,5 +39,6 @@ export function formatShopLocation(
 }
 
 export function formatShopCountry(address?: ShopAddress | null): string | null {
-  return address?.country?.trim() || null
+  if (!address?.country?.trim()) return null
+  return getCountryName(address.country, address.country)
 }

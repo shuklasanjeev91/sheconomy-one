@@ -43,7 +43,10 @@ import {
   YStack,
   useAppToast,
 } from '~/components/ui'
+import { ShareButton } from '~/components/share'
+import { LocationPickerField } from '~/components/geo'
 import { communityRoutes } from '~/lib/routes'
+import { getGroupShareUrl } from '~/lib/share'
 import { useSupabase } from '~/providers/SupabaseProvider'
 
 const TABS = [
@@ -253,6 +256,18 @@ export function GroupScreen() {
                   {joinLabel}
                 </Button>
               ) : null}
+              <ShareButton
+                variant="outline"
+                label="Share"
+                sheetTitle="Share group"
+                copyLabel="Copy group link"
+                copyToastMessage="Group link copied to clipboard."
+                payload={{
+                  url: getGroupShareUrl(group.id),
+                  title: group.title,
+                  text: group.description ?? undefined,
+                }}
+              />
               {isMember ? (
                 <Link href={`${communityRoutes.createPost}?groupId=${group.id}` as never}>
                   <Button backgroundColor={communityUi.brand} color="white" borderRadius={999}>
@@ -352,7 +367,7 @@ export function GroupScreen() {
                   </Text>
                   <TextArea value={editRules} onChangeText={setEditRules} minHeight={80} />
                 </YStack>
-                <Field label="Location" value={editLocation} onChange={setEditLocation} />
+                <LocationPickerField value={editLocation} onChange={setEditLocation} label="Location" />
                 <Button
                   backgroundColor={communityUi.brand}
                   color="white"

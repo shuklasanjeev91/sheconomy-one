@@ -147,7 +147,7 @@ export function CreatePostForm({ onSuccess, initialGroupId, initialCompanyId }: 
               <XStack gap={8} flexWrap="wrap">
                 <ContextChip label="Your profile" active={postContext === 'profile'} onPress={() => setPostContext('profile')} />
                 {companies.length > 0 ? (
-                  <ContextChip label="Company page" active={postContext === 'company'} onPress={() => setPostContext('company')} />
+                  <ContextChip label="Page" active={postContext === 'company'} onPress={() => setPostContext('company')} />
                 ) : null}
                 {groups.length > 0 ? (
                   <ContextChip label="Group" active={postContext === 'group'} onPress={() => setPostContext('group')} />

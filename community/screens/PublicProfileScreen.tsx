@@ -1,7 +1,6 @@
 import { useEffect, useState } from 'react'
 import { Link, useParams, useRouter } from 'one'
 
-import { CommunityShell } from '~/community/components/CommunityShell'
 import { ProfileConnectButton } from '~/community/components/ProfileConnectButton'
 import { ProfileFollowButton } from '~/community/components/ProfileFollowButton'
 import { ProfileView } from '~/community/components/profile/ProfileView'
@@ -98,17 +97,19 @@ export function PublicProfileScreen() {
   const displayProfile: ProfileDisplay = profile
 
   return (
-    <CommunityShell wide>
-      <ProfileView
-        profile={displayProfile}
-        isOwnProfile={false}
-        headerActions={
-          <XStack gap="$2" flexWrap="wrap" alignItems="center">
-            <ProfileConnectButton targetUserId={profile.id} />
-            <ProfileFollowButton targetUserId={profile.id} />
-          </XStack>
-        }
-      />
-    </CommunityShell>
+    <FullWidthLayout scroll>
+      <PageSection paddingVertical="$3">
+        <ProfileView
+          profile={displayProfile}
+          isOwnProfile={false}
+          headerActions={
+            <XStack gap="$2" flexWrap="wrap" alignItems="center">
+              <ProfileConnectButton targetUserId={profile.id} />
+              <ProfileFollowButton targetUserId={profile.id} />
+            </XStack>
+          }
+        />
+      </PageSection>
+    </FullWidthLayout>
   )
 }

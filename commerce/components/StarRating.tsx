@@ -54,7 +54,7 @@ function RatingStar({
   )
 }
 
-/** Etsy-style filled star row for a 0–5 rating. */
+/** Filled star row for a 0–5 rating. */
 export function StarRating({ rating, size = 14, max = 5 }: StarRatingProps) {
   const safeRating = normalizeRating(rating, max)
 

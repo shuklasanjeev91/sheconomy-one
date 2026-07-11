@@ -1,8 +1,8 @@
 import { useParams, useRouter } from 'one'
 import { useEffect, useMemo, useState } from 'react'
 
-import { Icons, Image, Spinner, Text, YStack } from '~/components/ui'
-import { ListingBrowseView, ListingFiltersShell } from '~/commerce/components'
+import { Spinner, Text, YStack } from '~/components/ui'
+import { ListingBrowseView, ListingFiltersShell, CommercePageHeader } from '~/commerce/components'
 import { useCategoryFilterFacets } from '~/commerce/hooks/useCategoryFilterFacets'
 import { useCategoryListings } from '~/commerce/hooks/useCategoryListings'
 import {
@@ -87,59 +87,32 @@ export function CategoryScreen({ filters: initialFilters = {} }: { filters?: Lis
   return (
     <FullWidthLayout scroll>
       <PageSection paddingVertical="$6">
-        <YStack gap="$5" width="100%">
+        <YStack gap="$4" width="100%">
+          <CommercePageHeader
+            title={category.category}
+            subtitle={`${itemCount} ${itemCount === 1 ? 'item' : 'items'}`}
+          />
           <ListingFiltersShell
             filters={filters}
             onApply={updateFilters}
             facets={facets}
             facetsLoading={facetsLoading}
             inventoryDriven
+            sortInToolbar
             showTypeFilter={false}
           >
             <ListingBrowseView
-            key={filterKey}
-            title={category.category}
-          subtitle={`${itemCount} ${itemCount === 1 ? 'item' : 'items'}`}
-          header={
-            <YStack gap="$4">
-              <YStack
-                width={96}
-                height={96}
-                borderRadius={999}
-                overflow="hidden"
-                backgroundColor={ui.imagePlaceholder}
-                alignItems="center"
-                justifyContent="center"
-              >
-                {category.category_image_url ? (
-                  <Image
-                    src={category.category_image_url}
-                    width={96}
-                    height={96}
-                    objectFit="cover"
-                  />
-                ) : (
-                  <Icons.LayoutGrid size={32} color={ui.textSecondary} />
-                )}
-              </YStack>
-              <YStack gap="$1">
-                <Text fontWeight="500" fontSize={28} color={ui.text} letterSpacing={-0.4}>
-                  {category.category}
-                </Text>
-                <Text color={ui.textMuted} fontSize={14}>
-                  {itemCount} {itemCount === 1 ? 'item' : 'items'}
-                </Text>
-              </YStack>
-            </YStack>
-          }
-          items={listingsFeed.items}
-          isLoading={listingsFeed.isLoading}
-          isLoadingMore={listingsFeed.isLoadingMore}
-          hasMore={listingsFeed.hasMore}
-          error={listingsFeed.error}
-          onLoadMore={listingsFeed.loadMore}
-          emptyMessage={`No listings in ${category.category} yet.`}
-        />
+              key={filterKey}
+              hideHeader
+              title={category.category}
+              items={listingsFeed.items}
+              isLoading={listingsFeed.isLoading}
+              isLoadingMore={listingsFeed.isLoadingMore}
+              hasMore={listingsFeed.hasMore}
+              error={listingsFeed.error}
+              onLoadMore={listingsFeed.loadMore}
+              emptyMessage={`No listings in ${category.category} yet.`}
+            />
           </ListingFiltersShell>
         </YStack>
       </PageSection>

@@ -300,7 +300,13 @@ export async function fetchListingTypesByIds(
   if (!listingIds.length) return new Map()
 
   const { supabase } = await import('~/lib/supabase/client')
-  const { data } = await supabase.from('listings').select('id, listing_type').in('id', listingIds)
+  const { ACTIVE_LISTING_FILTER } = await import('~/commerce/lib/listing-visibility')
+  const { data } = await supabase
+    .from('listings')
+    .select('id, listing_type')
+    .in('id', listingIds)
+    .eq('is_active', ACTIVE_LISTING_FILTER.is_active)
+    .eq('listing_status', ACTIVE_LISTING_FILTER.listing_status)
 
   const map = new Map<string, string>()
   for (const row of data ?? []) {

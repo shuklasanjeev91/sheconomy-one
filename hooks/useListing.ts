@@ -4,6 +4,7 @@ import type { DeliveryProfile } from '~/commerce/lib/listing-fulfillment'
 import { buildShopShippingSummary } from '~/commerce/lib/shop-shipping'
 import type { ListingAttribute, ListingVariation } from '~/commerce/lib/listing-detail'
 import { normalizeListingImageUrl } from '~/commerce/lib/listing-images'
+import { isListingStorefrontVisible, ACTIVE_LISTING_FILTER } from '~/commerce/lib/listing-visibility'
 import { isUuid, listingSlugMatches, slugifyTitle } from '~/commerce/lib/seo-urls'
 import { supabase } from '~/lib/supabase'
 import type { Json, Tables } from '~/lib/supabase'
@@ -34,6 +35,8 @@ export type ListingDetail = Pick<
   | 'digital_file_size'
   | 'download_limit'
   | 'shipping_required'
+  | 'is_active'
+  | 'listing_status'
 >
 
 export type ListingImage = Pick<
@@ -129,11 +132,23 @@ export function useListing(listingRef?: string) {
       let listingError = null
 
       if (isUuid(listingRef!)) {
-        const result = await supabase.from('listings').select(LISTING_SELECT).eq('id', listingRef!).maybeSingle()
+        const result = await supabase
+          .from('listings')
+          .select(LISTING_SELECT)
+          .eq('id', listingRef!)
+          .eq('is_active', ACTIVE_LISTING_FILTER.is_active)
+          .eq('listing_status', ACTIVE_LISTING_FILTER.listing_status)
+          .maybeSingle()
         data = result.data
         listingError = result.error
       } else {
-        const bySlug = await supabase.from('listings').select(LISTING_SELECT).eq('slug', listingRef!).maybeSingle()
+        const bySlug = await supabase
+          .from('listings')
+          .select(LISTING_SELECT)
+          .eq('slug', listingRef!)
+          .eq('is_active', ACTIVE_LISTING_FILTER.is_active)
+          .eq('listing_status', ACTIVE_LISTING_FILTER.listing_status)
+          .maybeSingle()
         data = bySlug.data
         listingError = bySlug.error
 
@@ -143,8 +158,8 @@ export function useListing(listingRef?: string) {
             .from('listings')
             .select(LISTING_SELECT)
             .ilike('title', titleGuess)
-            .eq('is_active', true)
-            .eq('listing_status', 'active')
+            .eq('is_active', ACTIVE_LISTING_FILTER.is_active)
+            .eq('listing_status', ACTIVE_LISTING_FILTER.listing_status)
             .limit(1)
             .maybeSingle()
           data = byTitle.data
@@ -155,8 +170,8 @@ export function useListing(listingRef?: string) {
           const { data: activeListings } = await supabase
             .from('listings')
             .select(LISTING_SELECT)
-            .eq('is_active', true)
-            .eq('listing_status', 'active')
+            .eq('is_active', ACTIVE_LISTING_FILTER.is_active)
+            .eq('listing_status', ACTIVE_LISTING_FILTER.listing_status)
             .limit(300)
 
           data =
@@ -170,11 +185,21 @@ export function useListing(listingRef?: string) {
         if (!data) {
           const idPrefix = listingRef!.split('-')[0]
           if (isUuid(idPrefix)) {
-            const byId = await supabase.from('listings').select(LISTING_SELECT).eq('id', idPrefix).maybeSingle()
+            const byId = await supabase
+              .from('listings')
+              .select(LISTING_SELECT)
+              .eq('id', idPrefix)
+              .eq('is_active', ACTIVE_LISTING_FILTER.is_active)
+              .eq('listing_status', ACTIVE_LISTING_FILTER.listing_status)
+              .maybeSingle()
             data = byId.data
             listingError = byId.error
           }
         }
+      }
+
+      if (data && !isListingStorefrontVisible(data)) {
+        data = null
       }
 
       if (cancelled) return

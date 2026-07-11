@@ -24,7 +24,7 @@ type ListingCardProps = {
 }
 
 /**
- * Etsy listing tile — square image(s), heart overlay, title, optional rating, bold price.
+ * Listing tile — square image(s), heart overlay, title, optional rating, bold price.
  */
 export function ListingCard({ listing, compact }: ListingCardProps) {
   const ui = useAppUi()

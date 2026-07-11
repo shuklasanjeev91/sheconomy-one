@@ -10,13 +10,17 @@ declare module 'one' {
         | `/`
         | `/(store)`
         | `/(store)/`
+        | `/(store)/addresses`
         | `/(store)/cart`
         | `/(store)/checkout`
         | `/(store)/favorites`
         | `/(store)/my-shops`
+        | `/(store)/orders`
+        | `/(store)/payment-methods`
         | `/(store)/search`
         | `/(store)/shops`
         | `/_sitemap`
+        | `/addresses`
         | `/auth`
         | `/auth/sign-in`
         | `/auth/sign-up`
@@ -43,12 +47,15 @@ declare module 'one' {
         | `/community/group/create`
         | `/community/groups`
         | `/community/jobs`
+        | `/community/jobs/create`
         | `/community/network`
         | `/community/people`
         | `/community/stories/create`
         | `/favorites`
         | `/my-shops`
         | `/notifications`
+        | `/orders`
+        | `/payment-methods`
         | `/profile`
         | `/search`
         | `/settings`
@@ -72,6 +79,7 @@ declare module 'one' {
         | `/community/hashtag/${OneRouter.SingleRoutePart<T>}`
         | `/community/jobs/${OneRouter.SingleRoutePart<T>}`
         | `/community/people/${OneRouter.SingleRoutePart<T>}`
+        | `/community/post/${OneRouter.SingleRoutePart<T>}`
         | `/community/stories/${OneRouter.SingleRoutePart<T>}`
         | `/listing/${OneRouter.SingleRoutePart<T>}`
         | `/my-shops/${OneRouter.SingleRoutePart<T>}`
@@ -97,6 +105,7 @@ declare module 'one' {
         | `/community/hashtag/[tag]`
         | `/community/jobs/[id]`
         | `/community/people/[tab]`
+        | `/community/post/[id]`
         | `/community/stories/[userId]`
         | `/listing/[slug]`
         | `/my-shops/[shopId]`
@@ -123,6 +132,7 @@ declare module 'one' {
         '/community/hashtag/[tag]': RouteInfo<{ tag: string }>
         '/community/jobs/[id]': RouteInfo<{ id: string }>
         '/community/people/[tab]': RouteInfo<{ tab: string }>
+        '/community/post/[id]': RouteInfo<{ id: string }>
         '/community/stories/[userId]': RouteInfo<{ userId: string }>
         '/listing/[slug]': RouteInfo<{ slug: string }>
         '/my-shops/[shopId]': RouteInfo<{ shopId: string }>

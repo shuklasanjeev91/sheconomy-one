@@ -1,10 +1,15 @@
 import type { RefObject } from 'react'
-import { useEffect, useState } from 'react'
-import { Platform } from 'react-native'
+import { Platform, StyleSheet, View } from 'react-native'
+import type { CameraView } from 'expo-camera'
+import { CameraView as ExpoCameraView } from 'expo-camera'
+import type { PermissionResponse } from 'expo-modules-core'
 
+import {
+  NativeFaceAnalyzer,
+  type NativeFaceAnalyzerHandle,
+} from '~/components/gender-verification/NativeFaceAnalyzer'
 import { Icons, Spinner, Text, XStack, YStack } from '~/components/ui'
 import type { VerificationPhase } from '~/lib/gender-verification'
-import { buildAbsoluteUrl } from '~/lib/platform/url'
 import { useAppUi } from '~/lib/theme/useAppUi'
 
 type FaceCaptureOverlayProps = {
@@ -13,6 +18,11 @@ type FaceCaptureOverlayProps = {
   instruction: string
   blinkCount: number
   requiredBlinks: number
+  cameraRef?: RefObject<CameraView | null>
+  analyzerRef?: RefObject<NativeFaceAnalyzerHandle | null>
+  cameraPermission?: PermissionResponse | null
+  onCameraReady?: () => void
+  onAnalyzerReady?: () => void
 }
 
 export function FaceCaptureOverlay({
@@ -21,12 +31,89 @@ export function FaceCaptureOverlay({
   instruction,
   blinkCount,
   requiredBlinks,
+  cameraRef,
+  analyzerRef,
+  cameraPermission,
+  onCameraReady,
+  onAnalyzerReady,
 }: FaceCaptureOverlayProps) {
   const ui = useAppUi()
   const active = phase === 'camera' || phase === 'position' || phase === 'blink' || phase === 'analyze'
+  const showCamera =
+    phase === 'loading' || phase === 'camera' || phase === 'position' || phase === 'blink' || phase === 'analyze'
 
   if (Platform.OS !== 'web') {
-    return <NativeVerificationWebView active={active} instruction={instruction} />
+    return (
+      <YStack gap="$4" width="100%" alignItems="center">
+        <NativeFaceAnalyzer ref={analyzerRef} onReady={onAnalyzerReady} />
+
+        <YStack
+          width="100%"
+          maxWidth={420}
+          aspectRatio={3 / 4}
+          borderRadius={24}
+          overflow="hidden"
+          backgroundColor="#101010"
+          position="relative"
+          borderWidth={1}
+          borderColor={ui.borderSubtle}
+        >
+          {showCamera && cameraPermission?.granted ? (
+            <ExpoCameraView
+              ref={cameraRef}
+              style={StyleSheet.absoluteFill}
+              facing="front"
+              mirror
+              onCameraReady={onCameraReady}
+            />
+          ) : (
+            <YStack flex={1} alignItems="center" justifyContent="center" padding="$4">
+              <Spinner size="large" color="white" />
+              <Text fontSize={14} color="rgba(255,255,255,0.75)" textAlign="center" marginTop="$3">
+                {cameraPermission?.granted === false
+                  ? 'Camera permission is required for verification.'
+                  : 'Preparing camera…'}
+              </Text>
+            </YStack>
+          )}
+
+          <View pointerEvents="none" style={styles.ovalMask}>
+            <View
+              style={[
+                styles.oval,
+                { borderColor: active ? '#ffffff' : 'rgba(255,255,255,0.45)' },
+              ]}
+            />
+          </View>
+
+          {phase === 'analyze' ? (
+            <YStack
+              position="absolute"
+              top={0}
+              left={0}
+              right={0}
+              bottom={0}
+              alignItems="center"
+              justifyContent="center"
+              backgroundColor="rgba(0,0,0,0.45)"
+            >
+              <Spinner size="large" color="white" />
+            </YStack>
+          ) : null}
+        </YStack>
+
+        <YStack gap="$2" width="100%" maxWidth={420} alignItems="center">
+          <Text fontSize={18} fontWeight="800" color={ui.text} textAlign="center">
+            {instruction}
+          </Text>
+          {phase === 'blink' || phase === 'camera' || phase === 'position' ? (
+            <Text fontSize={14} color={ui.textMuted} textAlign="center">
+              Blinks detected: {blinkCount}/{requiredBlinks}
+            </Text>
+          ) : null}
+        </YStack>
+      </YStack>
+    )
   }
 
   return (
@@ -102,55 +189,6 @@ export function FaceCaptureOverlay({
   )
 }
 
-function NativeVerificationWebView({ active, instruction }: { active: boolean; instruction: string }) {
-  const ui = useAppUi()
-  const [WebViewComponent, setWebViewComponent] = useState<React.ComponentType<any> | null>(null)
-
-  useEffect(() => {
-    void import('react-native-webview').then((module) => setWebViewComponent(() => module.WebView))
-  }, [])
-
-  if (!WebViewComponent) {
-    return (
-      <YStack width="100%" maxWidth={420} aspectRatio={3 / 4} alignItems="center" justifyContent="center">
-        <Spinner size="large" color={ui.brand} />
-      </YStack>
-    )
-  }
-
-  const WebView = WebViewComponent
-
-  return (
-    <YStack gap="$3" width="100%" alignItems="center">
-      <YStack
-        width="100%"
-        maxWidth={420}
-        aspectRatio={3 / 4}
-        borderRadius={24}
-        overflow="hidden"
-        borderWidth={1}
-        borderColor={ui.borderSubtle}
-        backgroundColor="#101010"
-      >
-        <WebView
-          source={{ uri: buildAbsoluteUrl('/auth/verify-gender') }}
-          style={{ flex: 1, backgroundColor: '#101010' }}
-          mediaCapturePermissionGrantType="grant"
-          allowsInlineMediaPlayback
-          javaScriptEnabled
-          domStorageEnabled
-          sharedCookiesEnabled
-          thirdPartyCookiesEnabled
-          setSupportMultipleWindows={false}
-        />
-      </YStack>
-      <Text fontSize={14} color={ui.textMuted} textAlign="center" maxWidth={420}>
-        {active ? instruction : 'Complete face verification using your device camera.'}
-      </Text>
-    </YStack>
-  )
-}
-
 type VerificationStepsProps = {
   phase: VerificationPhase
 }
@@ -213,3 +251,19 @@ export function VerificationSteps({ phase }: VerificationStepsProps) {
     </XStack>
   )
 }
+
+const styles = StyleSheet.create({
+  ovalMask: {
+    ...StyleSheet.absoluteFillObject,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  oval: {
+    width: '62%',
+    height: '72%',
+    borderRadius: 9999,
+    borderWidth: 3,
+    backgroundColor: 'transparent',
+    boxShadow: 'none',
+  },
+})

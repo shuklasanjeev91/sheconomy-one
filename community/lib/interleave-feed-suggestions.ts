@@ -5,7 +5,7 @@ export type FeedEntry =
   | { type: 'post'; post: CommunityPost }
   | { type: 'suggestion'; section: SuggestionSection; slot: number }
 
-/** Insert one suggestion section every `interval` posts (LinkedIn-style). */
+/** Insert one suggestion section every `interval` posts. */
 export function interleaveFeedWithSuggestions(
   posts: CommunityPost[],
   sections: SuggestionSection[],

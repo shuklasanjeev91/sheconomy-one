@@ -103,6 +103,30 @@ export function parseListingBrowseFilters(params: URLSearchParams): ListingBrows
   }
 }
 
+type RouteSearchParams = Record<string, string | string[] | undefined | null>
+
+/** Parse browse filters from expo-router / one global search params (client-safe). */
+export function listingBrowseFiltersFromRouteParams(
+  params: RouteSearchParams,
+  options?: { exclude?: string[] },
+): ListingBrowseFilters {
+  const exclude = new Set(options?.exclude ?? [])
+  const searchParts = Object.entries(params).flatMap(([key, value]) => {
+    if (value == null || exclude.has(key)) return []
+    const values = Array.isArray(value) ? value : [value]
+    return values.map((v) => `${encodeURIComponent(key)}=${encodeURIComponent(v)}`)
+  })
+
+  return parseListingBrowseFilters(new URLSearchParams(searchParts.join('&')))
+}
+
+export function searchQueryFromRouteParams(params: RouteSearchParams): string {
+  const value = params.q
+  if (typeof value === 'string') return value
+  if (Array.isArray(value)) return value[0] ?? ''
+  return ''
+}
+
 export function buildFilterSearchParams(
   base: URLSearchParams,
   filters: ListingBrowseFilters,
@@ -196,12 +220,15 @@ export function getListingOrderColumn(sort: ListingSort = 'newest') {
   }
 }
 
-export function countActiveFilters(filters: ListingBrowseFilters): number {
+export function countActiveFilters(
+  filters: ListingBrowseFilters,
+  options?: { excludeSort?: boolean },
+): number {
   let count = 0
   if (filters.listingType) count += 1
   if (filters.minPrice != null || filters.maxPrice != null) count += 1
   if (filters.minRating != null) count += 1
-  if (filters.sort && filters.sort !== 'relevance') count += 1
+  if (!options?.excludeSort && filters.sort && filters.sort !== 'relevance') count += 1
   if (filters.categoryIds?.length) count += 1
   if (filters.shopIds?.length) count += 1
   if (filters.onSale) count += 1

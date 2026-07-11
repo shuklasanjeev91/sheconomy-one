@@ -8,15 +8,18 @@ import {
   fetchProgramBySlug,
   formatProgramDuration,
   formatProgramViews,
+  getProgramSlug,
   hasProgramAuthor,
   recordProgramView,
   type Program,
 } from '~/class/lib/programs'
 import { SectionTitle } from '~/commerce/components'
 import { FullWidthLayout, PageCenter } from '~/components/layout'
+import { ShareButton } from '~/components/share'
 import { Icons, Spinner, Text, XStack, YStack } from '~/components/ui'
 import { getShadowStyle, radius } from '~/config/tokens'
 import { classRoutes } from '~/lib/routes'
+import { getProgramShareUrl } from '~/lib/share'
 import { useAppUi } from '~/lib/theme/useAppUi'
 
 export function ProgramScreen() {
@@ -102,9 +105,23 @@ export function ProgramScreen() {
         <ProgramMediaPlayer program={program} />
 
         <YStack gap="$3" width="100%">
-          <Text fontSize={24} fontWeight="700" color={ui.text} letterSpacing={-0.4}>
-            {program.title}
-          </Text>
+          <XStack alignItems="flex-start" justifyContent="space-between" gap="$3">
+            <Text fontSize={24} fontWeight="700" color={ui.text} letterSpacing={-0.4} flex={1}>
+              {program.title}
+            </Text>
+            <ShareButton
+              variant="icon"
+              label="Share program"
+              sheetTitle="Share program"
+              copyLabel="Copy program link"
+              copyToastMessage="Program link copied to clipboard."
+              payload={{
+                url: getProgramShareUrl(getProgramSlug(program)),
+                title: program.title,
+                text: statsLine || undefined,
+              }}
+            />
+          </XStack>
 
           {statsLine ? (
             <Text fontSize={13} color={ui.textMuted}>

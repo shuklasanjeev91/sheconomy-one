@@ -7,7 +7,7 @@ type ListingFulfillmentPanelProps = {
   compact?: boolean
 }
 
-/** Etsy-style shipping / digital download details on the listing page. */
+/** Shipping / digital download details on the listing page. */
 export function ListingFulfillmentPanel({ info, compact = false }: ListingFulfillmentPanelProps) {
   const ui = useAppUi()
 

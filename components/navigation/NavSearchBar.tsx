@@ -12,7 +12,7 @@ type NavSearchBarProps = {
   initialQuery?: string
 }
 
-/** Etsy-style search — pill input, brand-filled search button on the right. */
+/** Search — pill input, brand-filled search button on the right. */
 export function NavSearchBar({
   compact,
   placeholder = 'Search for anything',

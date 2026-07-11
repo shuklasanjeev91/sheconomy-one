@@ -5,6 +5,8 @@ import { Avatar, Button, Icons, Image, Text, XStack, YStack, useMedia } from '~/
 import { ShopActionButtons } from '~/commerce/components/ShopActionButtons'
 import { RatingSummary } from '~/commerce/components/RatingSummary'
 import type { ReviewSummary } from '~/commerce/lib/reviews'
+import { ShareButton } from '~/components/share'
+import { getShopShareUrl } from '~/lib/share'
 import { getShadowStyle, radius } from '~/config/tokens'
 import { useAppUi } from '~/lib/theme/useAppUi'
 
@@ -20,6 +22,7 @@ type ShopHeroProps = {
   country?: string | null
   websiteUrl?: string | null
   ownerUserId?: string | null
+  shopSlug: string
 }
 
 export function ShopHero({
@@ -34,6 +37,7 @@ export function ShopHero({
   country,
   websiteUrl,
   ownerUserId,
+  shopSlug,
 }: ShopHeroProps) {
   const ui = useAppUi()
   const media = useMedia()
@@ -137,6 +141,18 @@ export function ShopHero({
 
             <XStack gap="$2" flexWrap="wrap" alignItems="center">
               <ShopActionButtons shopId={shopId} ownerUserId={ownerUserId} />
+              <ShareButton
+                variant="outline"
+                label="Share"
+                sheetTitle="Share shop"
+                copyLabel="Copy shop link"
+                copyToastMessage="Shop link copied to clipboard."
+                payload={{
+                  url: getShopShareUrl(shopSlug),
+                  title: shopName,
+                  text: description ?? undefined,
+                }}
+              />
               {websiteUrl ? (
                 <Link href={websiteUrl as never} target="_blank" asChild>
                   <Button

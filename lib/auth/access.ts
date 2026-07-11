@@ -47,7 +47,16 @@ export function canAccessFeature(tier: AccessTier, feature: AppFeature): boolean
   return TIER_FEATURES[tier].has(feature)
 }
 
+/** `/profile/:username` and sub-routes — public member profiles (LinkedIn-style). */
+export function isPublicProfilePath(pathname: string): boolean {
+  if (!pathname.startsWith(`${appRoutes.profile}/`)) return false
+  const segment = pathname.slice(`${appRoutes.profile}/`.length).split('/')[0]
+  return Boolean(segment)
+}
+
 function isAccountPath(pathname: string) {
+  if (isPublicProfilePath(pathname)) return false
+
   return (
     pathname === appRoutes.profile ||
     pathname.startsWith(`${appRoutes.profile}/`) ||
@@ -59,6 +68,7 @@ function isAccountPath(pathname: string) {
 export function getPathFeature(pathname: string): AppFeature | 'auth' | 'public' {
   if (pathname.startsWith('/auth/')) return 'auth'
   if (pathname === '/ui-kit' || pathname.startsWith('/ui-kit/')) return 'public'
+  if (isPublicProfilePath(pathname)) return 'public'
   if (isClassPath(pathname)) return 'class'
   if (isCoWorkPath(pathname)) return 'co-work'
   if (isChatPath(pathname)) return 'chat'

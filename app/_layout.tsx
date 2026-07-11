@@ -7,6 +7,7 @@ import { MetaTheme, SchemeProvider, useUserScheme } from '@vxrn/color-scheme'
 import { ToastProvider, ToastViewport } from '@tamagui/toast'
 import type { ReactNode } from 'react'
 
+import { AppErrorBoundary } from '~/components/AppErrorBoundary'
 import config from '~/config/tamagui.config'
 import { screenFillStyle } from '~/lib/platform/viewport'
 import { AppToasts } from '~/components/ui/Toast'

@@ -1,7 +1,6 @@
 import { useState } from 'react'
 import { Link } from 'one'
 
-import { CommunityShell } from '~/community/components/CommunityShell'
 import { ProfileView } from '~/community/components/profile/ProfileView'
 import type { ProfileDisplay } from '~/community/components/profile/types'
 import { BRAND_BLUE } from '~/community/lib/constants'
@@ -67,8 +66,9 @@ export function ProfileScreen() {
   }
 
   return (
-    <CommunityShell wide>
-      {error ? (
+    <FullWidthLayout scroll>
+      <PageSection paddingVertical="$3">
+        {error ? (
         <YStack
           backgroundColor={ui.surface}
           borderRadius={8}
@@ -92,9 +92,6 @@ export function ProfileScreen() {
             <Link href={commerceRoutes.myShops} asChild>
               <ProfileActionButton label="My shops" variant="outline" />
             </Link>
-            <Link href={communityRoutes.settings} asChild>
-              <ProfileActionButton label="Edit profile" variant="primary" />
-            </Link>
           </>
         }
         sidebarFooter={
@@ -106,7 +103,8 @@ export function ProfileScreen() {
           />
         }
       />
-    </CommunityShell>
+      </PageSection>
+    </FullWidthLayout>
   )
 }
 
