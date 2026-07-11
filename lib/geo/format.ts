@@ -35,6 +35,13 @@ export function parseGeoLocationText(value: string | null | undefined): Partial<
 
   if (segments.length === 2) {
     if (usedCountry) {
+      // "X, Country" is ambiguous — X may be a lone city OR a lone state (when
+      // no city has been chosen yet). Prefer state when X is a known state of
+      // the country, otherwise treat it as a city.
+      const stateMatch = getStateByName(countryCode, segments[0])
+      if (stateMatch) {
+        return { stateName: stateMatch.name, countryCode }
+      }
       return { city: segments[0], countryCode }
     }
     return { city: segments[0], stateName: segments[1] }

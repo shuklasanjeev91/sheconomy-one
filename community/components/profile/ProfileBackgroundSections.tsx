@@ -61,6 +61,11 @@ import {
   useAppToast,
 } from '~/components/ui'
 import { LocationPickerField } from '~/components/geo'
+import { MonthYearField } from '~/components/forms/MonthYearField'
+import { SearchSelectField } from '~/components/forms/SearchSelectField'
+import { suggestCompanyNames } from '~/community/lib/companies'
+import { INDUSTRY_OPTIONS } from '~/lib/datasets/industries'
+import { JOB_TITLE_OPTIONS } from '~/lib/datasets/job-titles'
 import { getShadowStyle, radius } from '~/config/tokens'
 import { refreshProfiles } from '~/lib/profile/refresh'
 import { useAppUi } from '~/lib/theme/useAppUi'
@@ -101,6 +106,7 @@ export function ProfileBackgroundSections({
 
   function openAbout() {
     setAboutForm({
+      full_name: profile.full_name ?? '',
       headline: profile.headline ?? '',
       bio: profile.bio ?? '',
       occupation: profile.occupation ?? '',
@@ -951,6 +957,14 @@ function AboutForm({ value, onChange }: { value: AboutInput; onChange: (value: A
 
   return (
     <YStack gap="$3" paddingHorizontal="$4" paddingBottom="$4">
+      <Field label="Name" required>
+        <Input
+          value={value.full_name ?? ''}
+          onChangeText={(text) => patch({ full_name: text })}
+          placeholder="Your full name"
+          backgroundColor={ui.surface}
+        />
+      </Field>
       <Field label="Headline">
         <Input
           value={value.headline ?? ''}
@@ -959,30 +973,36 @@ function AboutForm({ value, onChange }: { value: AboutInput; onChange: (value: A
           backgroundColor={ui.surface}
         />
       </Field>
-      <Field label="Occupation">
-        <Input
-          value={value.occupation ?? ''}
-          onChangeText={(text) => patch({ occupation: text })}
-          placeholder="Your role or title"
-          backgroundColor={ui.surface}
-        />
-      </Field>
-      <Field label="Business name">
-        <Input
-          value={value.business_name ?? ''}
-          onChangeText={(text) => patch({ business_name: text })}
-          placeholder="Shop or company name"
-          backgroundColor={ui.surface}
-        />
-      </Field>
-      <Field label="Industry">
-        <Input
-          value={value.industry ?? ''}
-          onChangeText={(text) => patch({ industry: text })}
-          placeholder="e.g. Retail, Technology"
-          backgroundColor={ui.surface}
-        />
-      </Field>
+      <SearchSelectField
+        label="Occupation"
+        value={value.occupation ?? ''}
+        onChange={(occupation) => patch({ occupation })}
+        options={JOB_TITLE_OPTIONS}
+        allowCustom
+        placeholder="Your role or title"
+        searchPlaceholder="Search or type a title"
+        sheetTitle="Occupation"
+      />
+      <SearchSelectField
+        label="Business name"
+        value={value.business_name ?? ''}
+        onChange={(business_name) => patch({ business_name })}
+        loadOptions={suggestCompanyNames}
+        allowCustom
+        placeholder="Shop or company name"
+        searchPlaceholder="Search or type a name"
+        sheetTitle="Business name"
+      />
+      <SearchSelectField
+        label="Industry"
+        value={value.industry ?? ''}
+        onChange={(industry) => patch({ industry })}
+        options={INDUSTRY_OPTIONS}
+        allowCustom
+        placeholder="e.g. Retail, Technology"
+        searchPlaceholder="Search industries"
+        sheetTitle="Industry"
+      />
       <LocationPickerField
         value={value.location ?? ''}
         onChange={(text) => patch({ location: text })}
@@ -1016,22 +1036,28 @@ function ExperienceForm({
 
   return (
     <YStack gap="$3" paddingHorizontal="$4" paddingBottom="$4">
-      <Field label="Title" required>
-        <Input
-          value={value.title}
-          onChangeText={(text) => patch({ title: text })}
-          placeholder="e.g. Product Manager"
-          backgroundColor={ui.surface}
-        />
-      </Field>
-      <Field label="Company" required>
-        <Input
-          value={value.company_name}
-          onChangeText={(text) => patch({ company_name: text })}
-          placeholder="Organization name"
-          backgroundColor={ui.surface}
-        />
-      </Field>
+      <SearchSelectField
+        label="Title"
+        required
+        value={value.title}
+        onChange={(title) => patch({ title })}
+        options={JOB_TITLE_OPTIONS}
+        allowCustom
+        placeholder="e.g. Product Manager"
+        searchPlaceholder="Search or type a title"
+        sheetTitle="Title"
+      />
+      <SearchSelectField
+        label="Company"
+        required
+        value={value.company_name}
+        onChange={(company_name) => patch({ company_name })}
+        loadOptions={suggestCompanyNames}
+        allowCustom
+        placeholder="Organization name"
+        searchPlaceholder="Search or type a name"
+        sheetTitle="Company"
+      />
       <Field label="Employment type">
         <OptionChips
           options={EMPLOYMENT_TYPE_OPTIONS}
@@ -1051,29 +1077,17 @@ function ExperienceForm({
           onChange={(location_type) => patch({ location_type })}
         />
       </Field>
-      <XStack gap="$3" flexWrap="wrap">
-        <YStack flex={1} minWidth={140}>
-          <Field label="Start date">
-            <Input
-              value={value.start_date ?? ''}
-              onChangeText={(text) => patch({ start_date: text })}
-              placeholder="YYYY-MM"
-              backgroundColor={ui.surface}
-            />
-          </Field>
-        </YStack>
-        <YStack flex={1} minWidth={140}>
-          <Field label="End date">
-            <Input
-              value={value.end_date ?? ''}
-              onChangeText={(text) => patch({ end_date: text })}
-              placeholder="YYYY-MM"
-              backgroundColor={ui.surface}
-              disabled={value.is_current}
-            />
-          </Field>
-        </YStack>
-      </XStack>
+      <MonthYearField
+        label="Start date"
+        value={value.start_date ?? ''}
+        onChange={(start_date) => patch({ start_date })}
+      />
+      <MonthYearField
+        label="End date"
+        value={value.end_date ?? ''}
+        onChange={(end_date) => patch({ end_date })}
+        disabled={value.is_current}
+      />
       <XStack alignItems="center" justifyContent="space-between">
         <Text fontSize={15} color={ui.text}>
           I currently work here
@@ -1083,13 +1097,16 @@ function ExperienceForm({
           onCheckedChange={(checked) => patch({ is_current: checked, end_date: checked ? '' : value.end_date })}
         />
       </XStack>
-      <Field label="Industry">
-        <Input
-          value={value.industry ?? ''}
-          onChangeText={(text) => patch({ industry: text })}
-          backgroundColor={ui.surface}
-        />
-      </Field>
+      <SearchSelectField
+        label="Industry"
+        value={value.industry ?? ''}
+        onChange={(industry) => patch({ industry })}
+        options={INDUSTRY_OPTIONS}
+        allowCustom
+        placeholder="e.g. Retail, Technology"
+        searchPlaceholder="Search industries"
+        sheetTitle="Industry"
+      />
       <Field label="Description">
         <TextArea
           value={value.description ?? ''}
@@ -1151,24 +1168,20 @@ function EducationForm({
       </Field>
       <XStack gap="$3" flexWrap="wrap">
         <YStack flex={1} minWidth={120}>
-          <Field label="Start year">
-            <Input
-              value={value.start_year ?? ''}
-              onChangeText={(text) => patch({ start_year: text })}
-              placeholder="2018"
-              backgroundColor={ui.surface}
-            />
-          </Field>
+          <MonthYearField
+            label="Start year"
+            yearOnly
+            value={value.start_year ?? ''}
+            onChange={(start_year) => patch({ start_year })}
+          />
         </YStack>
         <YStack flex={1} minWidth={120}>
-          <Field label="End year">
-            <Input
-              value={value.end_year ?? ''}
-              onChangeText={(text) => patch({ end_year: text })}
-              placeholder="2022"
-              backgroundColor={ui.surface}
-            />
-          </Field>
+          <MonthYearField
+            label="End year"
+            yearOnly
+            value={value.end_year ?? ''}
+            onChange={(end_year) => patch({ end_year })}
+          />
         </YStack>
       </XStack>
       <Field label="Grade">

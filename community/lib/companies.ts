@@ -1,3 +1,4 @@
+import { isUuid } from '~/commerce/lib/seo-urls'
 import { supabase } from '~/lib/supabase/client'
 
 export const COMPANY_PAGE_SIZE = 20
@@ -22,16 +23,19 @@ export type CompanyPage = {
   created_at: string
 }
 
-export async function fetchCompanyBySlug(slug: string): Promise<{
+export async function fetchCompanyBySlug(slugOrId: string): Promise<{
   data: CompanyPage | null
   error: string | null
 }> {
-  const normalized = decodeURIComponent(slug).trim()
-  const { data, error } = await supabase
-    .from('companypages')
-    .select('*')
-    .eq('page_slug', normalized)
-    .maybeSingle()
+  const normalized = decodeURIComponent(slugOrId).trim()
+
+  // Company page_slug values are user-entered and often contain spaces or
+  // slashes, which break URL routing. Prefer resolving by the stable id (uuid);
+  // fall back to page_slug for legacy links.
+  let query = supabase.from('companypages').select('*')
+  query = isUuid(normalized) ? query.eq('id', normalized) : query.eq('page_slug', normalized)
+
+  const { data, error } = await query.maybeSingle()
 
   return { data: (data as CompanyPage | null) ?? null, error: error?.message ?? null }
 }
@@ -61,6 +65,38 @@ export async function fetchCompanies(
     hasMore: total ? to + 1 < total : (data?.length ?? 0) === COMPANY_PAGE_SIZE,
     error: null,
   }
+}
+
+/**
+ * Suggest company/organization names for the profile autocomplete. Matches
+ * existing company pages by name and returns de-duplicated, ordered names.
+ */
+export async function suggestCompanyNames(query: string, limit = 12): Promise<string[]> {
+  const trimmed = query.trim()
+  let request = supabase
+    .from('companypages')
+    .select('name')
+    .order('community_members', { ascending: false, nullsFirst: false })
+    .limit(limit)
+
+  if (trimmed) {
+    request = request.ilike('name', `%${trimmed}%`)
+  }
+
+  const { data, error } = await request
+  if (error || !data) return []
+
+  const seen = new Set<string>()
+  const names: string[] = []
+  for (const row of data as { name: string | null }[]) {
+    const name = row.name?.trim()
+    if (!name) continue
+    const key = name.toLowerCase()
+    if (seen.has(key)) continue
+    seen.add(key)
+    names.push(name)
+  }
+  return names
 }
 
 export async function fetchMyCompanies(userId: string): Promise<CompanyPage[]> {

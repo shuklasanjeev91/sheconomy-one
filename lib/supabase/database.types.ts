@@ -613,8 +613,6 @@ export type Database = {
       buyer_payment_methods: {
         Row: {
           card_brand: string | null
-          card_type: string | null
-          cardholder_name: string | null
           created_at: string
           exp_month: number | null
           exp_year: number | null
@@ -622,18 +620,14 @@ export type Database = {
           is_default: boolean
           label: string | null
           last_four: string | null
-          method_type: string
           metadata: Json
           provider: string
           provider_token: string | null
-          upi_id: string | null
           updated_at: string
           user_id: string
         }
         Insert: {
           card_brand?: string | null
-          card_type?: string | null
-          cardholder_name?: string | null
           created_at?: string
           exp_month?: number | null
           exp_year?: number | null
@@ -641,18 +635,14 @@ export type Database = {
           is_default?: boolean
           label?: string | null
           last_four?: string | null
-          method_type?: string
           metadata?: Json
           provider?: string
           provider_token?: string | null
-          upi_id?: string | null
           updated_at?: string
           user_id: string
         }
         Update: {
           card_brand?: string | null
-          card_type?: string | null
-          cardholder_name?: string | null
           created_at?: string
           exp_month?: number | null
           exp_year?: number | null
@@ -660,11 +650,9 @@ export type Database = {
           is_default?: boolean
           label?: string | null
           last_four?: string | null
-          method_type?: string
           metadata?: Json
           provider?: string
           provider_token?: string | null
-          upi_id?: string | null
           updated_at?: string
           user_id?: string
         }
@@ -817,6 +805,7 @@ export type Database = {
           duration: number | null
           ended_at: string | null
           id: string
+          meeting_code: string | null
           receiver_id: string
           started_at: string | null
           status: string
@@ -830,6 +819,7 @@ export type Database = {
           duration?: number | null
           ended_at?: string | null
           id?: string
+          meeting_code?: string | null
           receiver_id: string
           started_at?: string | null
           status?: string
@@ -843,6 +833,7 @@ export type Database = {
           duration?: number | null
           ended_at?: string | null
           id?: string
+          meeting_code?: string | null
           receiver_id?: string
           started_at?: string | null
           status?: string
@@ -3044,23 +3035,38 @@ export type Database = {
       }
       conversation_participants: {
         Row: {
+          cleared_at: string | null
           conversation_id: string | null
           id: string
+          is_archived: boolean
+          is_muted: boolean
+          is_pinned: boolean
           joined_at: string | null
+          last_read_at: string | null
           role: string
           user_id: string | null
         }
         Insert: {
+          cleared_at?: string | null
           conversation_id?: string | null
           id?: string
+          is_archived?: boolean
+          is_muted?: boolean
+          is_pinned?: boolean
           joined_at?: string | null
+          last_read_at?: string | null
           role?: string
           user_id?: string | null
         }
         Update: {
+          cleared_at?: string | null
           conversation_id?: string | null
           id?: string
+          is_archived?: boolean
+          is_muted?: boolean
+          is_pinned?: boolean
           joined_at?: string | null
+          last_read_at?: string | null
           role?: string
           user_id?: string | null
         }
@@ -3085,6 +3091,7 @@ export type Database = {
         Row: {
           conversation_type: string | null
           created_at: string | null
+          disappearing_seconds: number | null
           id: string
           last_message_id: string | null
           members_can_add: boolean
@@ -3096,6 +3103,7 @@ export type Database = {
         Insert: {
           conversation_type?: string | null
           created_at?: string | null
+          disappearing_seconds?: number | null
           id?: string
           last_message_id?: string | null
           members_can_add?: boolean
@@ -3107,6 +3115,7 @@ export type Database = {
         Update: {
           conversation_type?: string | null
           created_at?: string | null
+          disappearing_seconds?: number | null
           id?: string
           last_message_id?: string | null
           members_can_add?: boolean
@@ -6255,6 +6264,38 @@ export type Database = {
           },
         ]
       }
+      message_poll_votes: {
+        Row: {
+          created_at: string
+          id: string
+          message_id: string
+          option_index: number
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          message_id: string
+          option_index: number
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          message_id?: string
+          option_index?: number
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "message_poll_votes_message_id_fkey"
+            columns: ["message_id"]
+            isOneToOne: false
+            referencedRelation: "messages"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       message_reactions: {
         Row: {
           created_at: string | null
@@ -6330,6 +6371,32 @@ export type Database = {
           },
         ]
       }
+      message_stars: {
+        Row: {
+          created_at: string
+          message_id: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          message_id: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          message_id?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "message_stars_message_id_fkey"
+            columns: ["message_id"]
+            isOneToOne: false
+            referencedRelation: "messages"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       message_status: {
         Row: {
           id: string
@@ -6374,6 +6441,8 @@ export type Database = {
           content: string
           conversation_id: string | null
           created_at: string | null
+          deleted_at: string | null
+          edited_at: string | null
           file_name: string | null
           file_path: string | null
           file_size: number | null
@@ -6383,6 +6452,7 @@ export type Database = {
           message_type: string | null
           metadata: Json | null
           post_id: string | null
+          reply_to_id: string | null
           sender_id: string | null
           status: string | null
           updated_at: string | null
@@ -6391,6 +6461,8 @@ export type Database = {
           content: string
           conversation_id?: string | null
           created_at?: string | null
+          deleted_at?: string | null
+          edited_at?: string | null
           file_name?: string | null
           file_path?: string | null
           file_size?: number | null
@@ -6400,6 +6472,7 @@ export type Database = {
           message_type?: string | null
           metadata?: Json | null
           post_id?: string | null
+          reply_to_id?: string | null
           sender_id?: string | null
           status?: string | null
           updated_at?: string | null
@@ -6408,6 +6481,8 @@ export type Database = {
           content?: string
           conversation_id?: string | null
           created_at?: string | null
+          deleted_at?: string | null
+          edited_at?: string | null
           file_name?: string | null
           file_path?: string | null
           file_size?: number | null
@@ -6417,6 +6492,7 @@ export type Database = {
           message_type?: string | null
           metadata?: Json | null
           post_id?: string | null
+          reply_to_id?: string | null
           sender_id?: string | null
           status?: string | null
           updated_at?: string | null
@@ -6441,6 +6517,13 @@ export type Database = {
             columns: ["post_id"]
             isOneToOne: false
             referencedRelation: "posts_with_stats"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "messages_reply_to_id_fkey"
+            columns: ["reply_to_id"]
+            isOneToOne: false
+            referencedRelation: "messages"
             referencedColumns: ["id"]
           },
           {
@@ -15225,6 +15308,10 @@ export type Database = {
       }
     }
     Functions: {
+      add_group_participants: {
+        Args: { p_conversation_id: string; p_user_ids: string[] }
+        Returns: undefined
+      }
       add_to_cart: {
         Args: {
           p_cart_id: string
@@ -15383,6 +15470,18 @@ export type Database = {
       cancel_scheduled_notification: {
         Args: { p_notification_id: string; p_reason?: string }
         Returns: Json
+      }
+      cast_message_poll_vote: {
+        Args: {
+          p_message_id: string
+          p_option_index: number
+          p_user_id: string
+        }
+        Returns: undefined
+      }
+      cast_poll_vote: {
+        Args: { p_option_id: string; p_poll_id: string; p_user_id: string }
+        Returns: undefined
       }
       check_grammar:
         | { Args: { text_content: string }; Returns: Json[] }
@@ -15606,6 +15705,10 @@ export type Database = {
         Args: { feedback?: string; rating?: number; session_id: string }
         Returns: boolean
       }
+      ensure_meeting_room_id_rpc: {
+        Args: { meeting_id_input: string }
+        Returns: string
+      }
       ensure_wallet_account: { Args: { p_currency?: string }; Returns: string }
       extract_file_name: { Args: { url: string }; Returns: string }
       extract_video_format: { Args: { url: string }; Returns: string }
@@ -15633,6 +15736,7 @@ export type Database = {
         Args: { shop_id: string; title: string }
         Returns: string
       }
+      generate_livekit_room_id: { Args: never; Returns: string }
       generate_meeting_code: { Args: never; Returns: string }
       generate_order_number: { Args: never; Returns: string }
       generate_referral_code: { Args: never; Returns: string }
@@ -15760,6 +15864,13 @@ export type Database = {
           user_id: string
         }[]
       }
+      get_hashtag_suggestions: {
+        Args: { max_results?: number; prefix?: string }
+        Returns: {
+          tag: string
+          usage_count: number
+        }[]
+      }
       get_conversation_messages: {
         Args: {
           limit_count?: number
@@ -15835,14 +15946,6 @@ export type Database = {
         Returns: {
           id: string
           order_count: number
-        }[]
-      }
-      get_marketplace_recommended_listings: {
-        Args: { max_results?: number }
-        Returns: {
-          id: string
-          order_count: number
-          recommendation_score: number
         }[]
       }
       get_marketplace_trending_listings: {
@@ -16000,6 +16103,7 @@ export type Database = {
           unique_viewers_count: number
         }[]
       }
+      get_profile_details: { Args: { p_user_id: string }; Returns: Json }
       get_profile_role: { Args: { uid: string }; Returns: string }
       get_public_shops: {
         Args: {
@@ -16273,12 +16377,14 @@ export type Database = {
           chat_name: string
           chat_type: string
           current_user_role: string
+          is_archived: boolean
           is_muted: boolean
           is_online: boolean
           is_pinned: boolean
           last_message: string
           last_message_sender_name: string
           last_message_time: string
+          last_message_type: string
           last_seen: string
           other_user_avatar: string
           other_user_id: string
@@ -16766,6 +16872,10 @@ export type Database = {
           isSetofReturn: false
         }
       }
+      remove_group_participant: {
+        Args: { p_conversation_id: string; p_user_id: string }
+        Returns: undefined
+      }
       reschedule_notification: {
         Args: { p_new_scheduled_time: string; p_notification_id: string }
         Returns: Json
@@ -16888,6 +16998,7 @@ export type Database = {
           p_file_type?: string
           p_file_url?: string
           p_message_type?: string
+          p_metadata?: Json
           p_reply_to_id?: string
           p_sender_id: string
         }
@@ -16898,6 +17009,10 @@ export type Database = {
         Returns: Json
       }
       set_default_address: { Args: { address_id: string }; Returns: Json }
+      set_group_participant_role: {
+        Args: { p_conversation_id: string; p_role: string; p_user_id: string }
+        Returns: undefined
+      }
       set_typing_indicator: {
         Args: {
           p_chat_room_id: string
@@ -16946,6 +17061,14 @@ export type Database = {
       }
       update_cart_totals: { Args: { p_cart_id: string }; Returns: undefined }
       update_existing_shops_seo: { Args: never; Returns: undefined }
+      update_group_info: {
+        Args: {
+          p_avatar_url?: string
+          p_conversation_id: string
+          p_title?: string
+        }
+        Returns: undefined
+      }
       update_listing_stock: {
         Args: {
           p_listing_id: string

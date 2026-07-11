@@ -8,7 +8,8 @@ import { PostLikeButton } from '~/community/components/PostLikeButton'
 import { ProfileLink } from '~/community/components/ProfileLink'
 import { usePostEngagement } from '~/community/hooks/usePostEngagement'
 import { REACTION_TYPES } from '~/community/lib/constants'
-import type { CommunityPost } from '~/community/lib/community'
+import type { CommunityPoll, CommunityPost } from '~/community/lib/community'
+import { castPollVote } from '~/community/lib/polls'
 import { isGifUrl } from '~/community/lib/giphy'
 import { useCommunityUi } from '~/community/lib/community-theme'
 import { Avatar, Button, Icons, Image, Text, XStack, YStack } from '~/components/ui'
@@ -61,8 +62,11 @@ export function FeedPostCard({ post, linkToDetail = true }: FeedPostCardProps) {
     : post.group
       ? `Posted in ${post.group.title}`
       : null
+  // Event posts show their cover image inside the event card, so keep it out of
+  // the general media grid to avoid rendering the same image twice.
+  const isEventPost = !!(post.event_rsvp_enabled && post.event_title)
   const mediaUrls = [
-    ...(post.image_url ? [post.image_url] : []),
+    ...(post.image_url && !isEventPost ? [post.image_url] : []),
     ...(post.media_urls ?? []).filter((url) => url !== post.image_url),
   ]
 
@@ -75,7 +79,7 @@ export function FeedPostCard({ post, linkToDetail = true }: FeedPostCardProps) {
       <CommunityCard gap={0}>
         <XStack paddingHorizontal={16} paddingTop={16} paddingBottom={12} gap={12} alignItems="flex-start">
           {post.company ? (
-            <Link href={communityRoutes.company(post.company.slug)} asChild>
+            <Link href={communityRoutes.company(post.company.id)} asChild>
               <Avatar name={avatarName} src={avatarSrc} size="$4" cursor="pointer" />
             </Link>
           ) : post.group ? (
@@ -89,7 +93,7 @@ export function FeedPostCard({ post, linkToDetail = true }: FeedPostCardProps) {
           )}
           <YStack flex={1} gap={2} minWidth={0}>
             {post.company ? (
-              <Link href={communityRoutes.company(post.company.slug)}>
+              <Link href={communityRoutes.company(post.company.id)}>
                 <Text
                   fontWeight="600"
                   fontSize={14}
@@ -177,6 +181,7 @@ export function FeedPostCard({ post, linkToDetail = true }: FeedPostCardProps) {
           ) : (
             <PostContentText content={post.content} />
           )}
+          {post.poll ? <PollBlock poll={post.poll} onRequireAuth={requireAuth} /> : null}
           {post.event_rsvp_enabled && post.event_title ? (
             <PostEventCard post={post} onRequireAuth={requireAuth} />
           ) : null}
@@ -365,6 +370,129 @@ function PostActionButton({
   )
 }
 
+function pollTimeLeft(expiresAt: string): string {
+  const diff = new Date(expiresAt).getTime() - Date.now()
+  if (diff <= 0) return 'Final results'
+  const days = Math.floor(diff / (1000 * 60 * 60 * 24))
+  if (days >= 1) return `${days}d left`
+  const hours = Math.floor(diff / (1000 * 60 * 60))
+  if (hours >= 1) return `${hours}h left`
+  const minutes = Math.max(1, Math.floor(diff / (1000 * 60)))
+  return `${minutes}m left`
+}
+
+type PollState = {
+  options: { id: string; text: string; votes: number }[]
+  myOptionId: string | null
+  totalVotes: number
+}
+
+function PollBlock({ poll, onRequireAuth }: { poll: CommunityPoll; onRequireAuth: () => void }) {
+  const communityUi = useCommunityUi()
+  const { user } = useSupabase()
+  const [state, setState] = useState<PollState>({
+    options: poll.options.map((option) => ({ id: option.id, text: option.text, votes: option.votes })),
+    myOptionId: poll.myOptionId,
+    totalVotes: poll.totalVotes,
+  })
+
+  useEffect(() => {
+    setState({
+      options: poll.options.map((option) => ({ id: option.id, text: option.text, votes: option.votes })),
+      myOptionId: poll.myOptionId,
+      totalVotes: poll.totalVotes,
+    })
+  }, [poll])
+
+  const closed = poll.isClosed
+  const showResults = !!state.myOptionId || closed
+
+  function vote(optionId: string) {
+    if (!user) {
+      onRequireAuth()
+      return
+    }
+    if (closed) return
+
+    const previous = state
+    setState((prev) => {
+      const options = prev.options.map((option) => ({ ...option }))
+      const findOption = (id: string) => options.find((option) => option.id === id)
+      if (prev.myOptionId === optionId) {
+        const target = findOption(optionId)
+        if (target) target.votes = Math.max(0, target.votes - 1)
+        return { options, myOptionId: null, totalVotes: Math.max(0, prev.totalVotes - 1) }
+      }
+      if (prev.myOptionId) {
+        const old = findOption(prev.myOptionId)
+        if (old) old.votes = Math.max(0, old.votes - 1)
+        const next = findOption(optionId)
+        if (next) next.votes += 1
+        return { options, myOptionId: optionId, totalVotes: prev.totalVotes }
+      }
+      const next = findOption(optionId)
+      if (next) next.votes += 1
+      return { options, myOptionId: optionId, totalVotes: prev.totalVotes + 1 }
+    })
+
+    castPollVote(poll.id, optionId, user.id).then(({ error }) => {
+      if (error) setState(previous)
+    })
+  }
+
+  return (
+    <YStack gap={8}>
+      <YStack gap={6}>
+        {state.options.map((option) => {
+          const isMine = state.myOptionId === option.id
+          const percent =
+            state.totalVotes > 0 ? Math.round((option.votes / state.totalVotes) * 100) : 0
+          return (
+            <YStack
+              key={option.id}
+              onPress={() => vote(option.id)}
+              cursor={closed ? 'default' : 'pointer'}
+              borderRadius={8}
+              borderWidth={1}
+              borderColor={isMine ? communityUi.brand : communityUi.border}
+              overflow="hidden"
+              position="relative"
+              minHeight={40}
+              justifyContent="center"
+              pressStyle={closed ? undefined : { opacity: 0.85 }}
+            >
+              {showResults ? (
+                <YStack
+                  position="absolute"
+                  top={0}
+                  left={0}
+                  bottom={0}
+                  width={`${Math.max(2, percent)}%`}
+                  backgroundColor={isMine ? 'rgba(10,102,194,0.16)' : communityUi.divider}
+                />
+              ) : null}
+              <XStack paddingHorizontal={12} paddingVertical={9} alignItems="center" gap={8}>
+                <Text flex={1} fontSize={14} fontWeight={isMine ? '700' : '500'} color={communityUi.text}>
+                  {option.text}
+                </Text>
+                {isMine ? <Icons.Check size={15} color={communityUi.brand} /> : null}
+                {showResults ? (
+                  <Text fontSize={13} fontWeight="600" color={communityUi.textMuted}>
+                    {percent}%
+                  </Text>
+                ) : null}
+              </XStack>
+            </YStack>
+          )
+        })}
+      </YStack>
+      <Text fontSize={12} color={communityUi.textMuted}>
+        {state.totalVotes} {state.totalVotes === 1 ? 'vote' : 'votes'} · {pollTimeLeft(poll.expiresAt)}
+      </Text>
+    </YStack>
+  )
+}
+
 function PostEventCard({
   post,
   onRequireAuth,
@@ -414,41 +542,45 @@ function PostEventCard({
 
   return (
     <YStack
-      padding={12}
       borderRadius={8}
       borderWidth={1}
       borderColor={communityUi.border}
       backgroundColor={communityUi.pageBg}
-      gap={8}
+      overflow="hidden"
     >
-      <XStack gap={8} alignItems="center">
-        <Icons.Calendar size={18} color={communityUi.brand} />
-        <Text fontSize={15} fontWeight="600" color={communityUi.text}>
-          {post.event_title}
-        </Text>
-      </XStack>
-      {when ? (
-        <Text fontSize={13} color={communityUi.textMuted}>
-          {when}
-          {post.event_location ? ` · ${post.event_location}` : ''}
-        </Text>
+      {post.image_url ? (
+        <Image src={post.image_url} width="100%" height={168} objectFit="cover" alt="" />
       ) : null}
-      {post.event_description ? (
-        <Text fontSize={13} color={communityUi.textMuted} numberOfLines={3}>
-          {post.event_description}
-        </Text>
-      ) : null}
-      <Button
-        alignSelf="flex-start"
-        size="$3"
-        borderRadius={999}
-        backgroundColor={isRsvped ? communityUi.divider : communityUi.brand}
-        color={isRsvped ? communityUi.textMuted : 'white'}
-        disabled={isLoading || isToggling}
-        onPress={toggleRsvp}
-      >
-        {isRsvped ? 'Going' : 'RSVP'}
-      </Button>
+      <YStack padding={12} gap={8}>
+        <XStack gap={8} alignItems="center">
+          <Icons.Calendar size={18} color={communityUi.brand} />
+          <Text fontSize={15} fontWeight="600" color={communityUi.text}>
+            {post.event_title}
+          </Text>
+        </XStack>
+        {when ? (
+          <Text fontSize={13} color={communityUi.textMuted}>
+            {when}
+            {post.event_location ? ` · ${post.event_location}` : ''}
+          </Text>
+        ) : null}
+        {post.event_description ? (
+          <Text fontSize={13} color={communityUi.textMuted} numberOfLines={3}>
+            {post.event_description}
+          </Text>
+        ) : null}
+        <Button
+          alignSelf="flex-start"
+          size="$3"
+          borderRadius={999}
+          backgroundColor={isRsvped ? communityUi.divider : communityUi.brand}
+          color={isRsvped ? communityUi.textMuted : 'white'}
+          disabled={isLoading || isToggling}
+          onPress={toggleRsvp}
+        >
+          {isRsvped ? 'Going' : 'RSVP'}
+        </Button>
+      </YStack>
     </YStack>
   )
 }

@@ -1,10 +1,14 @@
+import { useRef } from 'react'
+
 import { CommunityAdaptiveSheet } from '~/community/components/CommunityAdaptiveSheet'
+import { MentionInput } from '~/community/components/MentionInput'
 import { PostComments } from '~/community/components/PostComments'
 import { PostContentText } from '~/community/components/PostContentText'
 import { ProfileLink } from '~/community/components/ProfileLink'
 import type { usePostEngagement } from '~/community/hooks/usePostEngagement'
 import { BRAND_BLUE, REACTION_TYPES } from '~/community/lib/constants'
 import { useCommunityUi } from '~/community/lib/community-theme'
+import { mentionsToPlainText } from '~/community/lib/mentions'
 import { getPostShareUrl } from '~/community/lib/post-engagement'
 import type { CommunityPost } from '~/community/lib/community'
 import { ShareActionRow } from '~/components/share/ShareActionRow'
@@ -15,7 +19,6 @@ import {
   Icons,
   Spinner,
   Text,
-  TextArea,
   XStack,
   YStack,
   useAppToast,
@@ -40,6 +43,7 @@ export function PostActionSheets({ post, engagement }: PostActionSheetsProps) {
   const ui = useAppUi()
   const router = useRouter()
   const toast = useAppToast()
+  const repostEncodedRef = useRef('')
   const shareUrl = getPostShareUrl(post.id)
   const authorName = post.author?.full_name || post.author?.username || 'member'
 
@@ -175,12 +179,12 @@ export function PostActionSheets({ post, engagement }: PostActionSheetsProps) {
           commentDraft={engagement.commentDraft}
           isCommenting={engagement.isCommenting}
           onDraftChange={engagement.setCommentDraft}
-          onSubmit={() => {
+          onSubmit={(encoded) => {
             if (!engagement.isAuthenticated) {
               requireAuth('comment')
               return
             }
-            engagement.submitComment().then((result) => {
+            engagement.submitComment(encoded).then((result) => {
               if (result?.error) {
                 toast.show('Could not comment', { tone: 'danger', message: result.error })
               }
@@ -212,10 +216,15 @@ export function PostActionSheets({ post, engagement }: PostActionSheetsProps) {
             </Text>
             <PostContentText content={post.content} collapsible={false} fontSize={14} lineHeight={20} />
           </YStack>
-          <TextArea
+          <MentionInput
+            multiline
             value={engagement.repostDraft}
             onChangeText={engagement.setRepostDraft}
+            onEncodedChange={(encoded) => {
+              repostEncodedRef.current = encoded
+            }}
             placeholder="Add a comment…"
+            suggestionsPlacement="top"
             minHeight={100}
             backgroundColor={ui.surface}
           />
@@ -229,7 +238,7 @@ export function PostActionSheets({ post, engagement }: PostActionSheetsProps) {
                 requireAuth('repost')
                 return
               }
-              engagement.submitRepost().then((result) => {
+              engagement.submitRepost(repostEncodedRef.current || engagement.repostDraft).then((result) => {
                 if (result?.error) {
                   toast.show('Could not repost', { tone: 'danger', message: result.error })
                 } else {
@@ -250,7 +259,7 @@ export function PostActionSheets({ post, engagement }: PostActionSheetsProps) {
         payload={{
           url: shareUrl,
           title: `${authorName} on ${BRAND_NAME}`,
-          text: post.content.slice(0, 120),
+          text: mentionsToPlainText(post.content).slice(0, 120),
         }}
         title="Send post"
         copyLabel="Copy link to post"

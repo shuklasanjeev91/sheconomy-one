@@ -3,7 +3,8 @@ import { Platform } from 'react-native'
 import { useCallback, useEffect, useState } from 'react'
 
 import { RequireAuth } from '~/components/auth/RequireAuth'
-import { FullWidthLayout, LAYOUT_STRETCH, PageSection } from '~/components/layout'
+import { FullWidthLayout, LAYOUT_STRETCH, PageCenter, PageSection } from '~/components/layout'
+import { BRAND_MEMBER_LABEL } from '~/config/brand'
 import { ShareSheet } from '~/components/share'
 import { Button, Field, Icons, Input, Spinner, Text, XStack, YStack, useAppToast } from '~/components/ui'
 import { CoWorkBrandChip, CoWorkIconBadge } from '~/co-work/components/CoWorkUi'
@@ -80,7 +81,7 @@ export function MeetingLobbyScreen({ code, startLive = false }: MeetingLobbyScre
 
   if (isLoading || loadingMeeting) {
     return (
-      <PageCenter backgroundColor={coworkUi.pageBg}>
+      <PageCenter>
         <Spinner size="large" color={coworkUi.brand} />
       </PageCenter>
     )

@@ -306,7 +306,7 @@ function scoreCompany(company: CompanyPage, ctx: PersonalizationContext): Commun
     kind: 'company',
     title: company.name,
     subtitle: company.tagline || company.industry,
-    href: communityRoutes.company(company.page_slug),
+    href: communityRoutes.company(company.id),
     imageUrl: company.logo_url,
     score: score + BASE_SCORE,
     reason: reasons[0],

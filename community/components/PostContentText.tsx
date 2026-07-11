@@ -1,7 +1,8 @@
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 import { Link } from 'one'
 
 import {
+  htmlToPlainText,
   parsePostText,
   shouldTruncatePost,
   truncatePost,
@@ -28,9 +29,10 @@ export function PostContentText({
   const communityUi = useCommunityUi()
   const ui = useAppUi()
   const [expanded, setExpanded] = useState(false)
-  const canCollapse = collapsible && shouldTruncatePost(content)
+  const plainContent = useMemo(() => htmlToPlainText(content), [content])
+  const canCollapse = collapsible && shouldTruncatePost(plainContent)
   const visibleContent =
-    canCollapse && !expanded ? truncatePost(content) : content
+    canCollapse && !expanded ? truncatePost(plainContent) : plainContent
 
   return (
     <Text fontSize={fontSize} color={ui.text} lineHeight={lineHeight} whiteSpace="pre-wrap">

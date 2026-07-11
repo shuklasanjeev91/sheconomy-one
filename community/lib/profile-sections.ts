@@ -71,6 +71,7 @@ export type LanguageInput = {
 }
 
 export type AboutInput = {
+  full_name?: string
   headline?: string
   bio?: string
   occupation?: string
@@ -406,18 +407,41 @@ export async function updateProfileAbout(
   userId: string,
   input: AboutInput,
 ): Promise<{ error: string | null }> {
-  const { error } = await supabase
-    .from('profiles')
-    .update({
-      headline: trimOrNull(input.headline),
-      bio: trimOrNull(input.bio),
-      occupation: trimOrNull(input.occupation),
-      industry: trimOrNull(input.industry),
-      business_name: trimOrNull(input.business_name),
-      location: trimOrNull(input.location),
-    })
-    .eq('id', userId)
+  const patch: Record<string, string | null> = {
+    headline: trimOrNull(input.headline),
+    bio: trimOrNull(input.bio),
+    occupation: trimOrNull(input.occupation),
+    industry: trimOrNull(input.industry),
+    business_name: trimOrNull(input.business_name),
+    location: trimOrNull(input.location),
+  }
 
+  // Only update the name when a non-empty value is supplied — a profile must
+  // always keep a name, so we never null it out.
+  const fullName = input.full_name?.trim()
+  if (fullName) {
+    patch.full_name = fullName
+  }
+
+  const { error } = await supabase.from('profiles').update(patch).eq('id', userId)
+
+  return { error: error?.message ?? null }
+}
+
+/**
+ * Update the signed-in user's profile picture and/or cover image URLs. Pass
+ * only the field(s) you want to change.
+ */
+export async function updateProfileImages(
+  userId: string,
+  input: { avatar_url?: string; cover_url?: string },
+): Promise<{ error: string | null }> {
+  const patch: Record<string, string> = {}
+  if (input.avatar_url !== undefined) patch.avatar_url = input.avatar_url
+  if (input.cover_url !== undefined) patch.cover_url = input.cover_url
+  if (Object.keys(patch).length === 0) return { error: null }
+
+  const { error } = await supabase.from('profiles').update(patch).eq('id', userId)
   return { error: error?.message ?? null }
 }
 
