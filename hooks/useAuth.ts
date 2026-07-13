@@ -6,6 +6,7 @@ import { buildSignInUrl, getReturnToFromLocation, isSafeReturnPath } from '~/lib
 import { signOut as supabaseSignOut } from '~/lib/supabase/auth'
 import { supabase } from '~/lib/supabase'
 import { routes } from '~/lib/routes'
+import { persistor, resetStore, store } from '~/lib/store'
 import { useSupabase } from '~/providers/SupabaseProvider'
 
 export function useAuth() {
@@ -24,6 +25,15 @@ export function useAuth() {
 
   const signOut = useCallback(async () => {
     const { error } = await supabaseSignOut()
+    // Wipe cached per-account state so the next user doesn't inherit the
+    // previous session's shops/listings/etc. (reset in-memory, then clear
+    // persisted storage).
+    store.dispatch(resetStore())
+    try {
+      await persistor.purge()
+    } catch {
+      // Purge failures are non-fatal — the in-memory reset already applied.
+    }
     router.replace(routes.home)
     return { error: error?.message ?? null }
   }, [router])

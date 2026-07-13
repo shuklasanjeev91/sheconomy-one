@@ -74,6 +74,7 @@ declare module 'one' {
         | `/community/post`
         | `/community/stories`
         | `/community/stories/create`
+        | `/create-my-shop`
         | `/favorites`
         | `/listing`
         | `/my-shops`
@@ -87,6 +88,18 @@ declare module 'one' {
         | `/shops`
         | `/ui-kit`
         | `/ui-kit/UiKitScreen`
+        | `/vendor`
+        | `/vendor/`
+        | `/vendor/ads`
+        | `/vendor/analytics`
+        | `/vendor/create-listing`
+        | `/vendor/delivery`
+        | `/vendor/myshop`
+        | `/vendor/myshop/edit`
+        | `/vendor/orders`
+        | `/vendor/products`
+        | `/vendor/reviews`
+        | `/vendor/settings`
       DynamicRoutes:
         | `/(store)/browse/${OneRouter.SingleRoutePart<T>}`
         | `/(store)/category/${OneRouter.SingleRoutePart<T>}`
