@@ -10,10 +10,12 @@ import { DesktopScrollTracker } from '~/components/navigation/DesktopScrollTrack
 import { CommerceDesktopFooter } from '~/commerce/navigation/CommerceDesktopFooter'
 import { useAppLayout } from '~/hooks/useAppLayout'
 import { useAuthScreen } from '~/hooks/useAuthScreen'
-import { isCommercePath } from '~/lib/routes'
+import { isChatConversationPath, isCommercePath } from '~/lib/routes'
 import { authViewportStyle } from '~/components/auth/auth-layout'
 import { appShellStyle, meetingViewportStyle } from '~/lib/platform/viewport'
 import { useAppUi } from '~/lib/theme/useAppUi'
+
+import { IncomingCallHost } from '~/chat/components/IncomingCallHost'
 
 import { AppDesktopHeader } from './AppDesktopHeader'
 import { AppMobileBottomTabs } from './AppMobileBottomTabs'
@@ -70,8 +72,10 @@ export function AppShell({ children }: AppShellProps) {
   const compactMobileTopBar = useCompactMobileTopBar()
   const showCommerceFooter = isDesktopWeb && isCommercePath(pathname)
   const stretchMainContent = Platform.OS !== 'web' || !isDesktopWeb
+  // Open conversations are full-screen on mobile: no app header/tabs.
+  const chatFullScreen = !isDesktop && isChatConversationPath(pathname)
 
-  if (chromeless || authScreen.chromeless) {
+  if (chromeless || chatFullScreen || authScreen.chromeless) {
     return (
       <NativeSafeArea edges={['top', 'bottom']}>
         <ScreenFill
@@ -86,7 +90,10 @@ export function AppShell({ children }: AppShellProps) {
               : meetingViewportStyle()
           }
         >
-          <AppAccessGate>{children}</AppAccessGate>
+          <AppAccessGate>
+            {children}
+            <IncomingCallHost />
+          </AppAccessGate>
         </ScreenFill>
       </NativeSafeArea>
     )
@@ -118,6 +125,7 @@ export function AppShell({ children }: AppShellProps) {
             </YStack>
             {showCommerceFooter ? <CommerceDesktopFooter /> : null}
             {!isDesktop ? <AppMobileBottomTabs /> : null}
+            <IncomingCallHost />
           </ScreenFill>
         </AppBarScrollProvider>
       </AppAccessGate>

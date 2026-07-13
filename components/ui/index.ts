@@ -26,6 +26,7 @@ export * from './Menu'
 // Panels
 export * from './Accordion'
 export * from './AlertDialog'
+export * from './ConfirmDialog'
 export * from './Dialog'
 export * from './Popover'
 export * from './Sheet'

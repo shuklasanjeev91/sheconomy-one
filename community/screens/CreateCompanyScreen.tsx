@@ -18,6 +18,7 @@ export function CreateCompanyScreen() {
   const toast = useAppToast()
   const { user } = useSupabase()
   const [location, setLocation] = useState('')
+  const [isSaving, setIsSaving] = useState(false)
 
   const form = useFormValidation(
     useMemo(
@@ -54,7 +55,7 @@ export function CreateCompanyScreen() {
       toast.show('Could not create page', { tone: 'danger', message: error ?? 'Try again.' })
       return
     }
-    router.replace(communityRoutes.company(data.page_slug))
+    router.replace(communityRoutes.company(data.id))
   }
 
   return (

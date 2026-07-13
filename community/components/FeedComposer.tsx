@@ -22,7 +22,10 @@ export function FeedComposer({ onGifSelect }: FeedComposerProps) {
   const [gifOpen, setGifOpen] = useState(false)
 
   const composeHref = (isAuthenticated ? communityRoutes.createPost : buildSignInUrl(communityRoutes.createPost)) as Href
-  const eventHref = (isAuthenticated ? communityRoutes.eventCreate : buildSignInUrl(communityRoutes.eventCreate)) as Href
+  const pollPath = `${communityRoutes.createPost}?compose=poll`
+  const eventPath = `${communityRoutes.createPost}?compose=event`
+  const pollHref = (isAuthenticated ? pollPath : buildSignInUrl(pollPath)) as Href
+  const eventHref = (isAuthenticated ? eventPath : buildSignInUrl(eventPath)) as Href
   const mediaHref = composeHref
   const articleHref = composeHref
 
@@ -84,6 +87,7 @@ export function FeedComposer({ onGifSelect }: FeedComposerProps) {
               setGifOpen(true)
             }}
           />
+          <ComposerAction icon={Icons.BarChart2} label="Poll" color="#c37dda" href={pollHref} />
           <ComposerAction icon={Icons.Calendar} label="Event" color="#e7a33e" href={eventHref} />
           <ComposerAction icon={Icons.FileText} label="Write article" color="#fc9295" href={articleHref} />
         </XStack>

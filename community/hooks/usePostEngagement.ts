@@ -126,11 +126,14 @@ export function usePostEngagement(
     [loadReactions, postId, reactionId, reactionType, user],
   )
 
-  const submitComment = useCallback(async () => {
+  const submitComment = useCallback(async (encodedOverride?: string) => {
     if (!user) return { error: 'Sign in to comment' }
 
+    const body = (encodedOverride ?? commentDraft).trim()
+    if (!body) return { error: 'Comment is empty' }
+
     setIsCommenting(true)
-    const result = await addPostComment(user.id, postId, commentDraft)
+    const result = await addPostComment(user.id, postId, body)
     setIsCommenting(false)
 
     if (!result.error) {
@@ -144,11 +147,11 @@ export function usePostEngagement(
     return result
   }, [commentDraft, loadComments, postId, user])
 
-  const submitRepost = useCallback(async () => {
+  const submitRepost = useCallback(async (encodedOverride?: string) => {
     if (!user) return { error: 'Sign in to repost' }
 
     setIsReposting(true)
-    const result = await repostPost(user.id, postId, repostDraft)
+    const result = await repostPost(user.id, postId, encodedOverride ?? repostDraft)
     setIsReposting(false)
 
     if (!result.error) {

@@ -174,7 +174,80 @@ export async function fetchPublicProfile(
     return { data: null, error: error.message }
   }
 
-  return { data: (data as PublicProfile | null) ?? null, error: data ? null : 'Profile not found' }
+  if (data) {
+    return { data: data as PublicProfile, error: null }
+  }
+
+  // Fallback for legacy mentions stored as a display name (e.g.
+  // "@Archena_S_Agarwal"). Try resolving by full_name with underscores treated
+  // as spaces. Uses a wildcard-free ilike for a case-insensitive exact match.
+  if (!isUuid(normalized)) {
+    const nameGuess = normalized.replace(/_+/g, ' ').trim()
+    if (nameGuess) {
+      const { data: byName } = await supabase
+        .from('profiles')
+        .select(PUBLIC_PROFILE_SELECT)
+        .eq('is_deleted', false)
+        .ilike('full_name', nameGuess)
+        .order('connections_count', { ascending: false, nullsFirst: false })
+        .limit(1)
+        .maybeSingle()
+
+      if (byName) {
+        return { data: byName as PublicProfile, error: null }
+      }
+    }
+  }
+
+  return { data: null, error: 'Profile not found' }
+}
+
+export type ProfileSuggestion = {
+  id: string
+  full_name: string | null
+  username: string | null
+  avatar_url: string | null
+  headline: string | null
+}
+
+/** Escape characters that would break a PostgREST `or(...)` filter value. */
+function sanitizeFilterValue(value: string): string {
+  return value.replace(/[,()\\%]/g, ' ').trim()
+}
+
+/**
+ * Search public profiles by name or username for the mention autocomplete.
+ * With an empty query it returns well-connected profiles as default suggestions.
+ */
+export async function searchProfiles(query: string, limit = 6): Promise<ProfileSuggestion[]> {
+  const trimmed = query.trim()
+  let request = supabase
+    .from('profiles')
+    .select('id, full_name, username, avatar_url, headline')
+    .eq('is_deleted', false)
+    .limit(limit)
+
+  const safe = sanitizeFilterValue(trimmed)
+  if (safe) {
+    request = request.or(`full_name.ilike.%${safe}%,username.ilike.%${safe}%`)
+  } else {
+    request = request.order('connections_count', { ascending: false, nullsFirst: false })
+  }
+
+  const { data, error } = await request
+  if (error || !data) return []
+  return data as ProfileSuggestion[]
+}
+
+/** Suggest hashtags for the composer autocomplete, ordered by usage. */
+export async function suggestHashtags(query: string, limit = 8): Promise<string[]> {
+  const prefix = query.trim().replace(/^#/, '')
+  const { data, error } = await supabase.rpc('get_hashtag_suggestions', {
+    prefix,
+    max_results: limit,
+  })
+  if (error || !data) return []
+  return (data as { tag: string }[]).map((row) => row.tag).filter(Boolean)
 }
 
 type ConnectionStatusRow = {
@@ -359,5 +432,14 @@ export async function respondToConnection(connectionId: string, status: 'accepte
     .update({ status, updated_at: new Date().toISOString() })
     .eq('id', connectionId)
 
+  return { error: error?.message ?? null }
+}
+
+/**
+ * Delete a connection row. Used both to remove an accepted connection
+ * (disconnect) and to withdraw a still-pending outgoing request.
+ */
+export async function removeConnection(connectionId: string) {
+  const { error } = await supabase.from('connections').delete().eq('id', connectionId)
   return { error: error?.message ?? null }
 }

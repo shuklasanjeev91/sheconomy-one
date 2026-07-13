@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react'
 
 import {
   fetchNetworkSummary,
+  removeConnection,
   respondToConnection,
   sendConnectionRequest,
   type NetworkMember,
@@ -103,6 +104,36 @@ export function useNetwork() {
     return result
   }, [])
 
+  // Remove an accepted connection (disconnect).
+  const disconnect = useCallback(async (member: NetworkMember) => {
+    if (!member.connection_id) return { error: 'Missing connection' }
+
+    setActionUserId(member.user_id)
+    const result = await removeConnection(member.connection_id)
+    setActionUserId(null)
+
+    if (!result.error) {
+      setConnections((items) => items.filter((item) => item.user_id !== member.user_id))
+    }
+
+    return result
+  }, [])
+
+  // Withdraw a still-pending outgoing request.
+  const withdrawInvitation = useCallback(async (member: NetworkMember) => {
+    if (!member.connection_id) return { error: 'Missing connection' }
+
+    setActionUserId(member.user_id)
+    const result = await removeConnection(member.connection_id)
+    setActionUserId(null)
+
+    if (!result.error) {
+      setPendingSent((items) => items.filter((item) => item.user_id !== member.user_id))
+    }
+
+    return result
+  }, [])
+
   return {
     user,
     isAuthenticated: !!user,
@@ -116,6 +147,8 @@ export function useNetwork() {
     connect,
     acceptInvitation,
     ignoreInvitation,
+    disconnect,
+    withdrawInvitation,
     reload: load,
   }
 }

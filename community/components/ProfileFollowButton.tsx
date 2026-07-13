@@ -1,8 +1,9 @@
 import { Link } from 'one'
+import { useState } from 'react'
 
 import { useProfileFollow } from '~/community/hooks/useProfileFollow'
 import { useCommunityUi } from '~/community/lib/community-theme'
-import { Spinner, Text, XStack } from '~/components/ui'
+import { ConfirmDialog, Spinner, Text, XStack } from '~/components/ui'
 import { routes } from '~/lib/routes'
 
 type ProfileFollowButtonProps = {
@@ -13,6 +14,7 @@ type ProfileFollowButtonProps = {
 export function ProfileFollowButton({ targetUserId, size = 'md' }: ProfileFollowButtonProps) {
   const communityUi = useCommunityUi()
   const follow = useProfileFollow(targetUserId)
+  const [confirmUnfollow, setConfirmUnfollow] = useState(false)
 
   if (!targetUserId || follow.isLoading) {
     return (
@@ -33,14 +35,33 @@ export function ProfileFollowButton({ targetUserId, size = 'md' }: ProfileFollow
   }
 
   return (
-    <FollowChip
-      label={follow.isFollowing ? 'Following' : 'Follow'}
-      variant={follow.isFollowing ? 'outline' : 'primary'}
-      size={size}
-      disabled={follow.isToggling}
-      isLoading={follow.isToggling}
-      onPress={follow.toggleFollow}
-    />
+    <>
+      <FollowChip
+        label={follow.isFollowing ? 'Following' : 'Follow'}
+        variant={follow.isFollowing ? 'outline' : 'primary'}
+        size={size}
+        disabled={follow.isToggling}
+        isLoading={follow.isToggling}
+        onPress={() => {
+          if (follow.isFollowing) {
+            setConfirmUnfollow(true)
+          } else {
+            void follow.toggleFollow()
+          }
+        }}
+      />
+      <ConfirmDialog
+        open={confirmUnfollow}
+        onOpenChange={setConfirmUnfollow}
+        title="Unfollow?"
+        description="You'll stop seeing their posts in your feed. You can follow again anytime."
+        confirmLabel="Unfollow"
+        destructive
+        onConfirm={() => {
+          void follow.toggleFollow()
+        }}
+      />
+    </>
   )
 }
 

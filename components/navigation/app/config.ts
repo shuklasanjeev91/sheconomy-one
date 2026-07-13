@@ -239,7 +239,7 @@ export function getAuthMobileTab(tier: AccessTier): AppMobileTabItem {
   }
 }
 
-/** Bottom tabs — community section (Home + You added automatically). */
+/** Bottom tabs — community section (Home + Cart + You added automatically). */
 export const APP_COMMUNITY_MOBILE_TABS: AppMobileTabItem[] = [
   {
     href: communityRoutes.network,
@@ -248,16 +248,10 @@ export const APP_COMMUNITY_MOBILE_TABS: AppMobileTabItem[] = [
     match: (path) => path.startsWith('/community/network'),
   },
   {
-    href: communityRoutes.groups,
-    label: 'Groups',
-    icon: Icons.UsersRound,
-    match: (path) => path === '/community/groups' || path.startsWith('/community/group/'),
-  },
-  {
-    href: communityRoutes.events,
-    label: 'Events',
-    icon: Icons.Calendar,
-    match: (path) => path === '/community/events' || path.startsWith('/community/events/'),
+    href: communityRoutes.createPost,
+    label: 'Create Post',
+    icon: Icons.PlusCircle,
+    match: (path) => path.startsWith('/community/create'),
   },
   {
     href: communityRoutes.jobs,
