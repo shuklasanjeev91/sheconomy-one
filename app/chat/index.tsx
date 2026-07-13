@@ -1,1 +1,5 @@
-export { ChatPlaceholderScreen as default } from '~/chat/screens/ChatPlaceholderScreen'
+import { ChatScreen } from '~/chat/screens/ChatScreen'
+
+export default function ChatHomeRoute() {
+  return <ChatScreen />
+}

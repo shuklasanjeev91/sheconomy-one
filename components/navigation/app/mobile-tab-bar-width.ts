@@ -3,8 +3,8 @@ export type BottomTabWidthTier = 'compact' | 'comfortable' | 'expanded'
 
 /** Max section tabs (excluding Home, Cart, You) per width tier. */
 export const BOTTOM_TAB_MIDDLE_LIMIT: Record<BottomTabWidthTier, number> = {
-  compact: 1,
-  comfortable: 2,
+  compact: 2,
+  comfortable: 3,
   expanded: 99,
 }
 
@@ -24,6 +24,7 @@ export function formatBottomTabLabel(label: string, tier: BottomTabWidthTier) {
   const short: Record<string, string> = {
     'Manage shop': 'Shop',
     'Create shop': 'Create',
+    'Create Post': 'Post',
     Network: 'Net',
     Groups: 'Groups',
     Events: 'Events',

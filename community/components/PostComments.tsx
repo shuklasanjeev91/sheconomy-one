@@ -1,3 +1,6 @@
+import { useRef } from 'react'
+
+import { MentionInput } from '~/community/components/MentionInput'
 import { ProfileLink } from '~/community/components/ProfileLink'
 import { PostContentText } from '~/community/components/PostContentText'
 import type { PostComment } from '~/community/lib/post-engagement'
@@ -6,7 +9,6 @@ import {
   Avatar,
   Button,
   Icons,
-  Input,
   Spinner,
   Text,
   XStack,
@@ -33,7 +35,7 @@ type PostCommentsProps = {
   commentDraft: string
   isCommenting: boolean
   onDraftChange: (value: string) => void
-  onSubmit: () => void
+  onSubmit: (encoded?: string) => void
 }
 
 export function PostComments({
@@ -46,6 +48,7 @@ export function PostComments({
   onSubmit,
 }: PostCommentsProps) {
   const ui = useAppUi()
+  const encodedRef = useRef('')
 
   return (
     <YStack
@@ -121,14 +124,18 @@ export function PostComments({
 
       {isAuthenticated ? (
         <XStack gap="$2" alignItems="center">
-          <Input
+          <MentionInput
             flex={1}
             value={commentDraft}
             onChangeText={onDraftChange}
+            onEncodedChange={(encoded) => {
+              encodedRef.current = encoded
+            }}
             placeholder="Add a comment…"
+            suggestionsPlacement="top"
             borderRadius={999}
             backgroundColor={ui.surface}
-            onSubmitEditing={onSubmit}
+            onSubmitEditing={() => onSubmit(encodedRef.current || commentDraft)}
           />
           <Button
             size="$3"
@@ -136,7 +143,7 @@ export function PostComments({
             color={commentDraft.trim() ? 'white' : ui.textMuted}
             borderRadius={999}
             disabled={!commentDraft.trim() || isCommenting}
-            onPress={onSubmit}
+            onPress={() => onSubmit(encodedRef.current || commentDraft)}
             icon={isCommenting ? <Spinner size="small" color="white" /> : <Icons.Send size={16} color="white" />}
           />
         </XStack>

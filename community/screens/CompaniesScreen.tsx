@@ -84,7 +84,7 @@ function CompanySection({ title, items }: { title: string; items: CompanyPage[] 
         {title}
       </Text>
       {items.map((company) => (
-        <Link key={company.id} href={communityRoutes.company(company.page_slug)}>
+        <Link key={company.id} href={communityRoutes.company(company.id)}>
           <XStack gap={12} paddingVertical={12} borderBottomWidth={1} borderBottomColor={communityUi.borderLight} alignItems="center">
             <Avatar name={company.name} src={company.logo_url ?? undefined} size="$4" />
             <YStack flex={1} gap={2}>

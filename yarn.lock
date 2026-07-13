@@ -9025,6 +9025,15 @@ __metadata:
   languageName: node
   linkType: hard
 
+"expo-document-picker@npm:~55.0.14":
+  version: 55.0.14
+  resolution: "expo-document-picker@npm:55.0.14"
+  peerDependencies:
+    expo: "*"
+  checksum: 10/d770e5f0a55c04b27051548c12f85298e52aa193193980f153a76a76e376c2b3deb041f047dcaad1a0a5ae27a0eb6c5339b4b12e7e73b82e27a411f5d3d9c573
+  languageName: node
+  linkType: hard
+
 "expo-file-system@npm:~55.0.23":
   version: 55.0.23
   resolution: "expo-file-system@npm:55.0.23"
@@ -14080,6 +14089,7 @@ __metadata:
     expo-audio: "npm:~55.0.15"
     expo-camera: "npm:~55.0.20"
     expo-clipboard: "npm:~55.0.14"
+    expo-document-picker: "npm:~55.0.14"
     expo-file-system: "npm:~55.0.23"
     expo-font: "npm:~55.0.8"
     expo-image-picker: "npm:~55.0.10"

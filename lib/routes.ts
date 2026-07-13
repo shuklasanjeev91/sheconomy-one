@@ -84,6 +84,7 @@ export const communityRoutes = {
 
 export const chatRoutes = {
   home: '/chat' as Href,
+  conversation: (id: string) => `/chat/${encodeURIComponent(id)}` as Href,
 } as const
 
 export const classRoutes = {
@@ -170,21 +171,24 @@ export function isCommunityPath(pathname: string) {
 }
 
 export function isCommunityFeedPath(pathname: string) {
+  // Home tab: the feed and feed-adjacent pages only. Network, Create Post and
+  // Jobs have their own bottom tabs, so they must NOT match here (otherwise
+  // Home would light up alongside them).
   return (
     pathname === '/community' ||
-    pathname.startsWith('/community/network') ||
-    pathname === '/community/create' ||
-    pathname.startsWith('/community/create/') ||
     pathname.startsWith('/community/post/') ||
     pathname === '/community/stories' ||
-    pathname.startsWith('/community/stories/') ||
-    pathname === '/community/jobs' ||
-    pathname.startsWith('/community/jobs/')
+    pathname.startsWith('/community/stories/')
   )
 }
 
 export function isChatPath(pathname: string) {
   return pathname === '/chat' || pathname.startsWith('/chat/')
+}
+
+/** A specific conversation thread (`/chat/{id}`) — rendered full-screen on mobile. */
+export function isChatConversationPath(pathname: string) {
+  return /^\/chat\/[^/]+/.test(pathname)
 }
 
 export function isClassPath(pathname: string) {

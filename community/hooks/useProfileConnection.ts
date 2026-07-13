@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react'
 
 import {
   fetchConnectionState,
+  removeConnection,
   respondToConnection,
   sendConnectionRequest,
   type ProfileConnectionState,
@@ -96,6 +97,25 @@ export function useProfileConnection(targetUserId?: string | null) {
     return result
   }, [state.connectionId])
 
+  // Remove an accepted connection (disconnect) or withdraw a pending outgoing
+  // request — both simply delete the underlying connection row.
+  const remove = useCallback(async () => {
+    if (!state.connectionId) return { error: 'Missing connection' }
+
+    setIsActing(true)
+    setError(null)
+    const result = await removeConnection(state.connectionId)
+    setIsActing(false)
+
+    if (result.error) {
+      setError(result.error)
+      return result
+    }
+
+    setState({ status: 'none', connectionId: null, isSender: false })
+    return result
+  }, [state.connectionId])
+
   return {
     user,
     isAuthenticated: !!user,
@@ -106,6 +126,8 @@ export function useProfileConnection(targetUserId?: string | null) {
     connect,
     accept,
     ignore,
+    disconnect: remove,
+    withdraw: remove,
     reload,
   }
 }

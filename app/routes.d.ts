@@ -11,21 +11,38 @@ declare module 'one' {
         | `/(store)`
         | `/(store)/`
         | `/(store)/addresses`
+        | `/(store)/browse`
         | `/(store)/cart`
+        | `/(store)/category`
         | `/(store)/checkout`
         | `/(store)/favorites`
+        | `/(store)/listing`
         | `/(store)/my-shops`
         | `/(store)/orders`
         | `/(store)/payment-methods`
         | `/(store)/search`
+        | `/(store)/shop`
         | `/(store)/shops`
         | `/_sitemap`
         | `/addresses`
+        | `/admin`
+        | `/admin/`
+        | `/admin/analytics`
+        | `/admin/layout`
+        | `/admin/moderation`
+        | `/admin/orders`
+        | `/admin/payments`
+        | `/admin/products`
+        | `/admin/settings`
+        | `/admin/shops`
+        | `/admin/users`
         | `/auth`
         | `/auth/sign-in`
         | `/auth/sign-up`
         | `/auth/verify-gender`
+        | `/browse`
         | `/cart`
+        | `/category`
         | `/chat`
         | `/chat/`
         | `/checkout`
@@ -35,24 +52,30 @@ declare module 'one' {
         | `/co-work`
         | `/co-work/`
         | `/co-work/join`
+        | `/co-work/meeting`
         | `/co-work/meetings`
         | `/co-work/schedule`
         | `/community`
         | `/community/`
         | `/community/companies`
+        | `/community/company`
         | `/community/company/create`
         | `/community/create`
         | `/community/events`
         | `/community/events/create`
+        | `/community/group`
         | `/community/group/create`
         | `/community/groups`
+        | `/community/hashtag`
         | `/community/jobs`
         | `/community/jobs/create`
         | `/community/network`
         | `/community/people`
+        | `/community/post`
         | `/community/stories`
         | `/community/stories/create`
         | `/favorites`
+        | `/listing`
         | `/my-shops`
         | `/notifications`
         | `/orders`
@@ -60,6 +83,7 @@ declare module 'one' {
         | `/profile`
         | `/search`
         | `/settings`
+        | `/shop`
         | `/shops`
         | `/ui-kit`
         | `/ui-kit/UiKitScreen`
@@ -71,6 +95,7 @@ declare module 'one' {
         | `/(store)/shop/${OneRouter.SingleRoutePart<T>}`
         | `/browse/${OneRouter.SingleRoutePart<T>}`
         | `/category/${OneRouter.SingleRoutePart<T>}`
+        | `/chat/${OneRouter.SingleRoutePart<T>}`
         | `/class/${OneRouter.SingleRoutePart<T>}`
         | `/co-work/meeting/${OneRouter.SingleRoutePart<T>}`
         | `/co-work/meeting/${OneRouter.SingleRoutePart<T>}/live`
@@ -97,6 +122,7 @@ declare module 'one' {
         | `/(store)/shop/[slug]`
         | `/browse/[kind]`
         | `/category/[slug]`
+        | `/chat/[id]`
         | `/class/[slug]`
         | `/co-work/meeting/[code]`
         | `/co-work/meeting/[code]/live`
@@ -124,6 +150,7 @@ declare module 'one' {
         '/(store)/shop/[slug]': RouteInfo<{ slug: string }>
         '/browse/[kind]': RouteInfo<{ kind: string }>
         '/category/[slug]': RouteInfo<{ slug: string }>
+        '/chat/[id]': RouteInfo<{ id: string }>
         '/class/[slug]': RouteInfo<{ slug: string }>
         '/co-work/meeting/[code]': RouteInfo<{ code: string }>
         '/co-work/meeting/[code]/live': RouteInfo<{ code: string }>

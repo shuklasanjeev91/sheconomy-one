@@ -29,6 +29,25 @@ export type PostGroupContext = {
 
 export type FeedSort = 'top' | 'recent'
 
+export type CommunityPollOption = {
+  id: string
+  text: string
+  votes: number
+  position: number
+}
+
+export type CommunityPoll = {
+  id: string
+  question: string
+  options: CommunityPollOption[]
+  totalVotes: number
+  expiresAt: string
+  isActive: boolean
+  isClosed: boolean
+  /** The option this viewer voted for, if any. */
+  myOptionId: string | null
+}
+
 export type CommunityPost = {
   id: string
   content: string
@@ -53,6 +72,7 @@ export type CommunityPost = {
   event_end_time: string | null
   event_location: string | null
   event_rsvp_enabled: boolean | null
+  poll: CommunityPoll | null
 }
 
 export type PaginatedPostsResult = {
@@ -75,6 +95,11 @@ export type CreatePostInput = {
   eventEndTime?: string | null
   eventLocation?: string | null
   eventRsvpEnabled?: boolean
+  poll?: {
+    question: string
+    options: string[]
+    durationDays: number
+  } | null
 }
 
 const POST_STATS_SELECT =
@@ -134,6 +159,7 @@ function mapPost(row: PostRow, username?: string | null): CommunityPost {
     event_end_time: row.event_end_time,
     event_location: row.event_location,
     event_rsvp_enabled: row.event_rsvp_enabled,
+    poll: null,
   }
 }
 
@@ -205,10 +231,82 @@ async function enrichPostsWithContext(posts: CommunityPost[]): Promise<Community
   }))
 }
 
+/** Attach normalized poll data (options, counts, this viewer's vote) to poll posts. */
+export async function fetchPollsForPosts(
+  postIds: string[],
+): Promise<Map<string, CommunityPoll>> {
+  const result = new Map<string, CommunityPoll>()
+  if (!postIds.length) return result
+
+  const { data: pollRows } = await supabase
+    .from('polls')
+    .select('id, post_id, question, expires_at, is_active, total_votes')
+    .in('post_id', postIds)
+  if (!pollRows?.length) return result
+
+  const pollIds = pollRows.map((row) => row.id)
+  const [optionsRes, userRes] = await Promise.all([
+    supabase
+      .from('poll_options')
+      .select('id, poll_id, option_text, vote_count, position')
+      .in('poll_id', pollIds)
+      .order('position', { ascending: true }),
+    supabase.auth.getUser(),
+  ])
+
+  const userId = userRes.data.user?.id ?? null
+  const myVoteByPoll = new Map<string, string>()
+  if (userId) {
+    const { data: voteRows } = await supabase
+      .from('poll_votes')
+      .select('poll_id, option_id')
+      .eq('user_id', userId)
+      .in('poll_id', pollIds)
+    for (const vote of voteRows ?? []) myVoteByPoll.set(vote.poll_id, vote.option_id)
+  }
+
+  const optionsByPoll = new Map<string, CommunityPollOption[]>()
+  for (const opt of optionsRes.data ?? []) {
+    const list = optionsByPoll.get(opt.poll_id) ?? []
+    list.push({
+      id: opt.id,
+      text: opt.option_text,
+      votes: opt.vote_count ?? 0,
+      position: opt.position,
+    })
+    optionsByPoll.set(opt.poll_id, list)
+  }
+
+  for (const row of pollRows) {
+    const expiresAt = row.expires_at as string
+    result.set(row.post_id, {
+      id: row.id,
+      question: row.question,
+      options: optionsByPoll.get(row.id) ?? [],
+      totalVotes: row.total_votes ?? 0,
+      expiresAt,
+      isActive: row.is_active ?? true,
+      isClosed: !!expiresAt && new Date(expiresAt).getTime() < Date.now(),
+      myOptionId: myVoteByPoll.get(row.id) ?? null,
+    })
+  }
+
+  return result
+}
+
+async function enrichPostsWithPolls(posts: CommunityPost[]): Promise<CommunityPost[]> {
+  const pollPostIds = posts.filter((post) => post.post_type === 'poll').map((post) => post.id)
+  if (!pollPostIds.length) return posts
+  const pollByPost = await fetchPollsForPosts(pollPostIds)
+  if (!pollByPost.size) return posts
+  return posts.map((post) => ({ ...post, poll: pollByPost.get(post.id) ?? null }))
+}
+
 async function enrichPosts(posts: CommunityPost[]): Promise<CommunityPost[]> {
   const withMeta = await enrichPostsWithPostMeta(posts)
   const withUsernames = await enrichPostsWithUsernames(withMeta)
-  return enrichPostsWithContext(withUsernames)
+  const withContext = await enrichPostsWithContext(withUsernames)
+  return enrichPostsWithPolls(withContext)
 }
 
 type PostFilter = {
@@ -412,13 +510,16 @@ export async function createCommunityPost(
 ): Promise<{ id: string | null; error: string | null }> {
   const content = input.content.trim()
   const imageUrl = input.imageUrl?.trim() || null
-  if (!content && !imageUrl) {
+  const isEvent = !!input.eventTitle?.trim()
+  const pollOptions = (input.poll?.options ?? []).map((option) => option.trim()).filter(Boolean)
+  const pollQuestion = input.poll?.question?.trim() ?? ''
+  const hasPoll = !!input.poll && pollOptions.length >= 2
+  if (!content && !imageUrl && !isEvent && !hasPoll) {
     return { id: null, error: 'Write something or add media before posting.' }
   }
 
   const tags = extractHashtags(content)
   const mentions = extractMentions(content)
-  const isEvent = !!input.eventTitle?.trim()
 
   const { data, error } = await supabase
     .from('posts')
@@ -429,7 +530,13 @@ export async function createCommunityPost(
       visibility: 'public',
       post_type:
         input.postType ??
-        (isEvent ? 'event' : imageUrl && /\.gif/i.test(imageUrl) ? 'gif' : 'text'),
+        (hasPoll
+          ? 'poll'
+          : isEvent
+            ? 'event'
+            : imageUrl && /\.gif/i.test(imageUrl)
+              ? 'gif'
+              : 'text'),
       image_url: imageUrl,
       company_id: input.companyId ?? null,
       group_id: input.groupId ?? null,
@@ -448,5 +555,35 @@ export async function createCommunityPost(
     .select('id')
     .maybeSingle()
 
-  return { id: data?.id ?? null, error: error?.message ?? null }
+  const postId = data?.id ?? null
+
+  if (postId && hasPoll && input.poll) {
+    const durationDays = input.poll.durationDays > 0 ? input.poll.durationDays : 1
+    const expiresAt = new Date(Date.now() + durationDays * 24 * 60 * 60 * 1000).toISOString()
+    const { data: pollRow, error: pollError } = await supabase
+      .from('polls')
+      .insert({
+        post_id: postId,
+        question: pollQuestion || content || 'Poll',
+        duration: `${durationDays}d`,
+        expires_at: expiresAt,
+        is_active: true,
+        total_votes: 0,
+      })
+      .select('id')
+      .maybeSingle()
+
+    if (!pollError && pollRow) {
+      await supabase.from('poll_options').insert(
+        pollOptions.slice(0, 4).map((text, index) => ({
+          poll_id: pollRow.id,
+          option_text: text,
+          position: index,
+          vote_count: 0,
+        })),
+      )
+    }
+  }
+
+  return { id: postId, error: error?.message ?? null }
 }

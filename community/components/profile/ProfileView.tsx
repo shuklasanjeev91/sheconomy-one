@@ -7,10 +7,16 @@ import { UserListBottomSheet } from '~/community/components/UserListBottomSheet'
 import { ProfileBackgroundSections } from '~/community/components/profile/ProfileBackgroundSections'
 import type { ProfileDisplay } from '~/community/components/profile/types'
 import { useProfileDetails } from '~/community/hooks/useProfileDetails'
-import { useUserPosts } from '~/community/hooks/useUserPosts'
+import { useUserActivity } from '~/community/hooks/useUserActivity'
 import { BRAND_BLUE } from '~/community/lib/constants'
 import type { CommunityPost } from '~/community/lib/community'
+import type {
+  ActivityComment,
+  ActivityFilter,
+  ActivityReaction,
+} from '~/community/lib/user-activity'
 import { mergeProfileSocialLinks } from '~/community/lib/profile-details'
+import { htmlToPlainText } from '~/community/lib/post-text'
 import type { UserListKind } from '~/community/lib/user-lists'
 import {
   Avatar,
@@ -22,11 +28,16 @@ import {
   Text,
   XStack,
   YStack,
+  useAppToast,
   useMedia,
 } from '~/components/ui'
 import { ShareButton } from '~/components/share'
+import { updateProfileImages } from '~/community/lib/profile-sections'
+import { pickImages, pickedImageToBlob } from '~/lib/media/pick-image'
+import { refreshProfiles } from '~/lib/profile/refresh'
 import { communityRoutes } from '~/lib/routes'
 import { getProfileShareUrl } from '~/lib/share'
+import { uploadProfileAvatarImage, uploadProfileCoverImage } from '~/lib/supabase/storage-upload'
 import { getShadowStyle, radius } from '~/config/tokens'
 import { useAppUi } from '~/lib/theme/useAppUi'
 
@@ -46,7 +57,6 @@ export function ProfileView({
   const media = useMedia()
   const isSideBySide = media.gtLg
   const { details, isLoading: detailsLoading, refresh } = useProfileDetails(profile.id)
-  const { posts, isLoading: postsLoading } = useUserPosts(profile.id)
 
   const displayName = profile.full_name || profile.username
   const connectionsCount = profile.connections_count ?? 0
@@ -69,9 +79,7 @@ export function ProfileView({
       width={isSideBySide ? 300 : '100%'}
       maxWidth="100%"
       flexShrink={0}
-      flexGrow={isSideBySide ? 0 : 1}
       gap="$4"
-      alignSelf="stretch"
     >
       <StatsSidebar
         profile={profile}
@@ -80,6 +88,29 @@ export function ProfileView({
         onOpenList={openUserList}
       />
       <LinksSidebar socialLinks={socialLinks} />
+    </YStack>
+  )
+
+  const mainColumn = (
+    <YStack flex={isSideBySide ? 1 : undefined} gap="$4" width="100%" minWidth={0}>
+      {detailsLoading && !details ? (
+        <SectionCard title="Background">
+          <YStack paddingVertical="$6" alignItems="center">
+            <Spinner size="large" />
+          </YStack>
+        </SectionCard>
+      ) : (
+        <ProfileBackgroundSections
+          profile={profile}
+          details={details}
+          interests={interests}
+          isOwnProfile={isOwnProfile}
+          onRefresh={refresh}
+        />
+      )}
+
+      <ActivitySection userId={profile.id} isOwnProfile={isOwnProfile} displayName={displayName} />
+      {sidebarFooter}
     </YStack>
   )
 
@@ -98,38 +129,17 @@ export function ProfileView({
         <ProfileCompletionCard percent={completion} />
       ) : null}
 
-      <XStack
-        gap="$4"
-        alignItems="flex-start"
-        flexDirection={isSideBySide ? 'row' : 'column'}
-        flexWrap="wrap"
-        width="100%"
-      >
-        {isSideBySide ? null : profileRail}
-
-        <YStack flex={isSideBySide ? 1 : undefined} gap="$4" width="100%" minWidth={0} flexBasis={isSideBySide ? 0 : '100%'}>
-          {detailsLoading && !details ? (
-            <SectionCard title="Background">
-              <YStack paddingVertical="$6" alignItems="center">
-                <Spinner size="large" />
-              </YStack>
-            </SectionCard>
-          ) : (
-            <ProfileBackgroundSections
-              profile={profile}
-              details={details}
-              interests={interests}
-              isOwnProfile={isOwnProfile}
-              onRefresh={refresh}
-            />
-          )}
-
-          <ActivitySection posts={posts} postsLoading={postsLoading} isOwnProfile={isOwnProfile} />
-          {sidebarFooter}
+      {isSideBySide ? (
+        <XStack gap="$4" alignItems="flex-start" width="100%">
+          {mainColumn}
+          {profileRail}
+        </XStack>
+      ) : (
+        <YStack gap="$4" width="100%">
+          {profileRail}
+          {mainColumn}
         </YStack>
-
-        {isSideBySide ? profileRail : null}
-      </XStack>
+      )}
 
       <UserListBottomSheet
         open={listSheetOpen}
@@ -159,6 +169,49 @@ function ProfileHero({
   onOpenConnections: () => void
 }) {
   const ui = useAppUi()
+  const toast = useAppToast()
+  const [uploadingAvatar, setUploadingAvatar] = useState(false)
+  const [uploadingCover, setUploadingCover] = useState(false)
+
+  async function handlePickImage(kind: 'avatar' | 'cover') {
+    if (!profile.id) return
+    const busy = kind === 'avatar' ? uploadingAvatar : uploadingCover
+    if (busy) return
+    const setBusy = kind === 'avatar' ? setUploadingAvatar : setUploadingCover
+    try {
+      const picked = await pickImages({ multiple: false, maxCount: 1 })
+      const first = picked[0]
+      if (!first) return
+      setBusy(true)
+      const blob = await pickedImageToBlob(first)
+      const upload = kind === 'avatar' ? uploadProfileAvatarImage : uploadProfileCoverImage
+      const { data, error } = await upload(profile.id, {
+        blob,
+        mimeType: first.mimeType || blob.type || 'image/jpeg',
+        fileName: first.fileName,
+      })
+      if (error || !data) {
+        toast.show('Could not upload image', { tone: 'danger', message: error ?? undefined })
+        return
+      }
+      const { error: updateError } = await updateProfileImages(
+        profile.id,
+        kind === 'avatar' ? { avatar_url: data.publicUrl } : { cover_url: data.publicUrl },
+      )
+      if (updateError) {
+        toast.show('Could not update photo', { tone: 'danger', message: updateError })
+        return
+      }
+      toast.show(kind === 'avatar' ? 'Profile photo updated' : 'Cover photo updated', {
+        tone: 'success',
+      })
+      refreshProfiles()
+    } catch {
+      toast.show('Could not update photo', { tone: 'danger' })
+    } finally {
+      setBusy(false)
+    }
+  }
 
   return (
     <YStack
@@ -169,7 +222,12 @@ function ProfileHero({
       overflow="hidden"
       style={getShadowStyle('sm')}
     >
-      <CoverBanner coverUrl={profile.cover_url} />
+      <CoverBanner
+        coverUrl={profile.cover_url}
+        editable={isOwnProfile}
+        uploading={uploadingCover}
+        onEdit={() => void handlePickImage('cover')}
+      />
 
       <YStack paddingHorizontal="$4" paddingBottom="$4">
         <XStack
@@ -180,15 +238,42 @@ function ProfileHero({
           gap="$3"
           width="100%"
         >
-          <Avatar
-            name={displayName}
-            src={profile.avatar_url ?? undefined}
-            size="$10"
-            borderWidth={4}
-            borderColor={ui.surface}
+          <YStack
+            position="relative"
             flexShrink={0}
-            style={getShadowStyle('md')}
-          />
+            cursor={isOwnProfile ? 'pointer' : 'default'}
+            onPress={isOwnProfile ? () => void handlePickImage('avatar') : undefined}
+          >
+            <Avatar
+              name={displayName}
+              src={profile.avatar_url ?? undefined}
+              size="$10"
+              borderWidth={4}
+              borderColor={ui.surface}
+              style={getShadowStyle('md')}
+            />
+            {isOwnProfile ? (
+              <XStack
+                position="absolute"
+                bottom={2}
+                right={2}
+                width={34}
+                height={34}
+                borderRadius={999}
+                backgroundColor={BRAND_BLUE}
+                borderWidth={3}
+                borderColor={ui.surface}
+                alignItems="center"
+                justifyContent="center"
+              >
+                {uploadingAvatar ? (
+                  <Spinner size="small" color="white" />
+                ) : (
+                  <Icons.Camera size={16} color="white" />
+                )}
+              </XStack>
+            ) : null}
+          </YStack>
           <XStack
             gap="$2"
             flexWrap="wrap"
@@ -304,44 +389,187 @@ function ProfileCompletionCard({ percent }: { percent: number }) {
   )
 }
 
+const ACTIVITY_TABS: { key: ActivityFilter; label: string; icon: typeof Icons.Activity }[] = [
+  { key: 'posts', label: 'Posts', icon: Icons.FileText },
+  { key: 'comments', label: 'Comments', icon: Icons.MessageCircle },
+  { key: 'reactions', label: 'Reactions', icon: Icons.ThumbsUp },
+]
+
+const REACTION_META: Record<string, { emoji: string; label: string }> = {
+  like: { emoji: '👍', label: 'liked' },
+  celebrate: { emoji: '👏', label: 'celebrated' },
+  support: { emoji: '🤝', label: 'supported' },
+  love: { emoji: '❤️', label: 'loved' },
+  insightful: { emoji: '💡', label: 'found insightful' },
+  funny: { emoji: '😄', label: 'found funny' },
+  curious: { emoji: '🤔', label: 'was curious about' },
+}
+
 function ActivitySection({
-  posts,
-  postsLoading,
+  userId,
   isOwnProfile,
+  displayName,
 }: {
-  posts: CommunityPost[]
-  postsLoading: boolean
+  userId: string
   isOwnProfile: boolean
+  displayName: string
 }) {
+  const ui = useAppUi()
+  const activity = useUserActivity(userId)
+  const subject = isOwnProfile ? 'You' : displayName
+
+  const emptyMessage =
+    activity.filter === 'posts'
+      ? isOwnProfile
+        ? 'You have not posted yet. Share an update with your network.'
+        : 'No posts yet.'
+      : activity.filter === 'comments'
+        ? isOwnProfile
+          ? 'You have not commented on any posts yet.'
+          : 'No comments yet.'
+        : isOwnProfile
+          ? 'You have not reacted to any posts yet.'
+          : 'No reactions yet.'
+
   return (
     <SectionCard title="Activity" icon={Icons.Activity}>
-      {postsLoading ? (
-        <YStack paddingVertical="$6" alignItems="center">
-          <Spinner size="large" />
-        </YStack>
-      ) : posts.length > 0 ? (
-        <YStack gap="$3">
-          {posts.map((post) => (
-            <FeedPostCard key={post.id} post={post} />
-          ))}
-        </YStack>
-      ) : (
-        <YStack gap="$2">
-          <Text color="$color10">
-            {isOwnProfile
-              ? 'You have not posted yet. Share an update with your network.'
-              : 'No public posts yet.'}
-          </Text>
-          {isOwnProfile ? (
-            <Link href={communityRoutes.home}>
-              <Text color={BRAND_BLUE} fontWeight="600">
-                Create a post
-              </Text>
-            </Link>
-          ) : null}
-        </YStack>
-      )}
+      <YStack gap="$3">
+        <XStack gap="$2" flexWrap="wrap">
+          {ACTIVITY_TABS.map((tab) => {
+            const active = activity.filter === tab.key
+            const TabIcon = tab.icon
+            return (
+              <XStack
+                key={tab.key}
+                gap={6}
+                alignItems="center"
+                paddingHorizontal="$3"
+                paddingVertical="$2"
+                borderRadius={999}
+                borderWidth={1}
+                borderColor={active ? BRAND_BLUE : ui.borderSubtle}
+                backgroundColor={active ? `${BRAND_BLUE}14` : 'transparent'}
+                cursor="pointer"
+                hoverStyle={{ opacity: 0.85 }}
+                pressStyle={{ opacity: 0.7 }}
+                onPress={() => activity.setFilter(tab.key)}
+              >
+                <TabIcon size={15} color={active ? BRAND_BLUE : ui.textMuted} />
+                <Text fontSize={13} fontWeight="600" color={active ? BRAND_BLUE : ui.textMuted}>
+                  {tab.label}
+                </Text>
+              </XStack>
+            )
+          })}
+        </XStack>
+
+        {activity.isLoading ? (
+          <YStack paddingVertical="$6" alignItems="center">
+            <Spinner size="large" />
+          </YStack>
+        ) : activity.items.length === 0 ? (
+          <YStack gap="$2" paddingVertical="$2">
+            <Text color={ui.textMuted}>{emptyMessage}</Text>
+            {isOwnProfile && activity.filter === 'posts' ? (
+              <Link href={communityRoutes.createPost}>
+                <Text color={BRAND_BLUE} fontWeight="600">
+                  Create a post
+                </Text>
+              </Link>
+            ) : null}
+          </YStack>
+        ) : (
+          <YStack gap="$3">
+            {activity.filter === 'posts'
+              ? (activity.items as CommunityPost[]).map((post) => (
+                  <FeedPostCard key={post.id} post={post} />
+                ))
+              : activity.filter === 'comments'
+                ? (activity.items as ActivityComment[]).map((item) => (
+                    <ActivityEntry
+                      key={item.id}
+                      context={`${subject} commented`}
+                      quote={htmlToPlainText(item.content)}
+                      post={item.post}
+                    />
+                  ))
+                : (activity.items as ActivityReaction[]).map((item) => {
+                    const meta = REACTION_META[item.reactionType] ?? {
+                      emoji: '👍',
+                      label: 'reacted to',
+                    }
+                    return (
+                      <ActivityEntry
+                        key={item.id}
+                        context={`${meta.emoji} ${subject} ${meta.label} this`}
+                        post={item.post}
+                      />
+                    )
+                  })}
+
+            {activity.hasMore ? (
+              <XStack justifyContent="center" paddingTop="$1">
+                <XStack
+                  paddingHorizontal="$4"
+                  paddingVertical="$2.5"
+                  borderRadius={999}
+                  borderWidth={1}
+                  borderColor={ui.borderSubtle}
+                  cursor="pointer"
+                  alignItems="center"
+                  gap="$2"
+                  hoverStyle={{ backgroundColor: ui.surfaceMuted }}
+                  onPress={() => void activity.loadMore()}
+                >
+                  {activity.isLoadingMore ? <Spinner size="small" /> : null}
+                  <Text fontSize={14} fontWeight="600" color={ui.text}>
+                    {activity.isLoadingMore ? 'Loading…' : 'Show more activity'}
+                  </Text>
+                </XStack>
+              </XStack>
+            ) : null}
+          </YStack>
+        )}
+      </YStack>
     </SectionCard>
+  )
+}
+
+function ActivityEntry({
+  context,
+  quote,
+  post,
+}: {
+  context: string
+  quote?: string
+  post: CommunityPost | null
+}) {
+  const ui = useAppUi()
+
+  return (
+    <YStack gap="$2">
+      <Text fontSize={13} color={ui.textMuted} fontWeight="500">
+        {context}
+      </Text>
+      {quote ? (
+        <Text
+          fontSize={14}
+          color={ui.text}
+          borderLeftWidth={3}
+          borderLeftColor={ui.borderSubtle}
+          paddingLeft="$3"
+        >
+          {quote}
+        </Text>
+      ) : null}
+      {post ? (
+        <FeedPostCard post={post} />
+      ) : (
+        <Text fontSize={13} color={ui.textMuted} fontStyle="italic">
+          This post is no longer available.
+        </Text>
+      )}
+    </YStack>
   )
 }
 
@@ -527,24 +755,59 @@ function ExternalLink({ href, label }: { href: string; label: string }) {
   )
 }
 
-function CoverBanner({ coverUrl }: { coverUrl?: string | null }) {
+function CoverBanner({
+  coverUrl,
+  editable = false,
+  uploading = false,
+  onEdit,
+}: {
+  coverUrl?: string | null
+  editable?: boolean
+  uploading?: boolean
+  onEdit?: () => void
+}) {
   const ui = useAppUi()
 
-  if (coverUrl) {
-    return (
-      <YStack height={200} width="100%" backgroundColor={ui.imagePlaceholder} overflow="hidden">
-        <Image src={coverUrl} width="100%" height={200} objectFit="cover" alt="" />
-      </YStack>
-    )
-  }
-
   return (
-    <YStack
-      height={200}
-      width="100%"
-      style={{
-        background: 'linear-gradient(135deg, #004182 0%, #0a66c2 50%, #378fe9 100%)',
-      }}
-    />
+    <YStack height={200} width="100%" position="relative" overflow="hidden">
+      {coverUrl ? (
+        <YStack height={200} width="100%" backgroundColor={ui.imagePlaceholder}>
+          <Image src={coverUrl} width="100%" height={200} objectFit="cover" alt="" />
+        </YStack>
+      ) : (
+        <YStack
+          height={200}
+          width="100%"
+          style={{
+            background: 'linear-gradient(135deg, #004182 0%, #0a66c2 50%, #378fe9 100%)',
+          }}
+        />
+      )}
+
+      {editable ? (
+        <XStack
+          position="absolute"
+          top={12}
+          right={12}
+          width={40}
+          height={40}
+          borderRadius={999}
+          backgroundColor="rgba(0,0,0,0.55)"
+          alignItems="center"
+          justifyContent="center"
+          cursor="pointer"
+          hoverStyle={{ opacity: 0.85 }}
+          pressStyle={{ opacity: 0.7 }}
+          onPress={onEdit}
+          accessibilityLabel="Change cover photo"
+        >
+          {uploading ? (
+            <Spinner size="small" color="white" />
+          ) : (
+            <Icons.Camera size={18} color="white" />
+          )}
+        </XStack>
+      ) : null}
+    </YStack>
   )
 }

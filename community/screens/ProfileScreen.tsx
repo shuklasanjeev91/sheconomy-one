@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Link } from 'one'
+import { useRouter } from 'one'
 
 import { ProfileView } from '~/community/components/profile/ProfileView'
 import type { ProfileDisplay } from '~/community/components/profile/types'
@@ -20,6 +20,7 @@ import { useAppUi } from '~/lib/theme/useAppUi'
 
 export function ProfileScreen() {
   const ui = useAppUi()
+  const router = useRouter()
   const toast = useAppToast()
   const { profile, isLoading, error, user } = useProfile()
   const { signOut } = useAuth()
@@ -86,12 +87,16 @@ export function ProfileScreen() {
         isOwnProfile
         headerActions={
           <>
-            <Link href={communityRoutes.network} asChild>
-              <ProfileActionButton label="My network" variant="outline" />
-            </Link>
-            <Link href={commerceRoutes.myShops} asChild>
-              <ProfileActionButton label="My shops" variant="outline" />
-            </Link>
+            <ProfileActionButton
+              label="My network"
+              variant="outline"
+              onPress={() => router.push(communityRoutes.network)}
+            />
+            <ProfileActionButton
+              label="My shops"
+              variant="outline"
+              onPress={() => router.push(commerceRoutes.myShops)}
+            />
           </>
         }
         sidebarFooter={
@@ -111,9 +116,11 @@ export function ProfileScreen() {
 function ProfileActionButton({
   label,
   variant,
+  onPress,
 }: {
   label: string
   variant: 'outline' | 'primary'
+  onPress?: () => void
 }) {
   const ui = useAppUi()
   const isPrimary = variant === 'primary'
@@ -128,6 +135,9 @@ function ProfileActionButton({
       backgroundColor={isPrimary ? BRAND_BLUE : 'transparent'}
       cursor="pointer"
       hoverStyle={{ opacity: 0.9 }}
+      pressStyle={{ opacity: 0.7 }}
+      onPress={onPress}
+      accessibilityLabel={label}
     >
       <Text fontSize={14} fontWeight="600" color={isPrimary ? ui.onBrand : BRAND_BLUE}>
         {label}

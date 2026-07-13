@@ -186,7 +186,7 @@ export function CompanyPageScreen() {
                 copyLabel="Copy page link"
                 copyToastMessage="Page link copied to clipboard."
                 payload={{
-                  url: getCompanyShareUrl(slug ?? company.page_slug),
+                  url: getCompanyShareUrl(company.id),
                   title: company.name,
                   text: company.tagline ?? undefined,
                 }}
