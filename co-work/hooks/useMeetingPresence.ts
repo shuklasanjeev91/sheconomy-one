@@ -49,7 +49,7 @@ export function useMeetingPresence({
 
   const [participants, setParticipants] = useState<MeetingParticipant[]>([])
   const [chatMessages, setChatMessages] = useState<MeetingChatMessage[]>([])
-  const [panel, setPanel] = useState<'none' | 'chat' | 'people' | 'invite'>('none')
+  const [panel, setPanel] = useState<'none' | 'chat' | 'people' | 'invite' | 'info'>('none')
   const [error, setError] = useState<string | null>(null)
   const [isConnecting, setIsConnecting] = useState(false)
   const [handRaised, setHandRaised] = useState(false)
@@ -275,7 +275,7 @@ export function useMeetingPresence({
     mediaHandlersRef.current = handlers
   }, [])
 
-  const togglePanel = useCallback((next: 'chat' | 'people' | 'invite') => {
+  const togglePanel = useCallback((next: 'chat' | 'people' | 'invite' | 'info') => {
     setPanel((current) => (current === next ? 'none' : next))
   }, [])
 

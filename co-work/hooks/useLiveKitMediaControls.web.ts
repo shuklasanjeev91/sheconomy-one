@@ -23,6 +23,8 @@ export function useLiveKitMediaControls(): LiveKitMediaControls {
       })
     },
     toggleVideo: () => void localParticipant.setCameraEnabled(!isCameraEnabled),
-    toggleScreenShare: () => void localParticipant.setScreenShareEnabled(!isScreenShareEnabled),
+    toggleScreenShare: async () => {
+      await localParticipant.setScreenShareEnabled(!isScreenShareEnabled)
+    },
   }
 }

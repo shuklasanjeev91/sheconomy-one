@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { ScrollView, useWindowDimensions } from 'react-native'
+import { useWindowDimensions } from 'react-native'
 import { ConnectionState, RoomEvent, Track } from 'livekit-client'
 
 import {
@@ -8,16 +8,22 @@ import {
   VideoTrack,
   isTrackReference,
   useTracks,
+  type TrackReference,
 } from '@livekit/react-native'
 
-import { Spinner, Text, YStack } from '~/components/ui'
+import { Spinner, Text, XStack, YStack } from '~/components/ui'
 import { ScreenCenter, ScreenFill } from '~/components/layout'
 import type { LiveKitMediaControls } from '~/co-work/lib/livekit-media-controls'
-import { useLiveKitMediaControls } from '~/co-work/hooks/useLiveKitMediaControls'
+import {
+  NativeScreenCapturePicker,
+  useLiveKitMediaControls,
+} from '~/co-work/hooks/useLiveKitMediaControls'
 import { fetchLiveKitCredentials } from '~/co-work/lib/livekit'
 import { getLiveKitRoomOptions } from '~/co-work/lib/livekit-room-options'
+import { meetingGalleryLayout } from '~/co-work/lib/meeting-gallery-layout'
 import { useCoWorkTheme } from '~/co-work/lib/theme'
 import { fetchLiveKitConfig, type LiveKitConfig } from '~/lib/livekit/config'
+import { useAppLayout } from '~/hooks/useAppLayout'
 
 type NativeLiveKitMeetingRoomProps = {
   meetingId: string
@@ -28,6 +34,10 @@ type NativeLiveKitMeetingRoomProps = {
   onDisconnected: () => void
   overlay?: (liveKit: LiveKitMediaControls | null) => React.ReactNode
 }
+
+const STAGE_GAP = 10
+const HEADER_CLEARANCE = 88
+const CONTROLS_CLEARANCE = 108
 
 export function NativeLiveKitMeetingRoom({
   meetingId,
@@ -88,7 +98,7 @@ export function NativeLiveKitMeetingRoom({
 
   if (!roomId) {
     return (
-      <ScreenFill padding="$4" backgroundColor={coworkUi.pageBg}>
+      <ScreenFill padding="$4" backgroundColor="#0c080a">
         <Text color={coworkUi.danger}>Meeting room is not ready. Refresh and try again.</Text>
       </ScreenFill>
     )
@@ -96,7 +106,7 @@ export function NativeLiveKitMeetingRoom({
 
   if (config && !config.enabled) {
     return (
-      <ScreenFill padding="$4" backgroundColor={coworkUi.pageBg} gap="$3">
+      <ScreenFill padding="$4" backgroundColor="#0c080a" gap="$3">
         <Text color={coworkUi.danger} fontWeight="700">
           Co-Work video not configured
         </Text>
@@ -109,9 +119,9 @@ export function NativeLiveKitMeetingRoom({
 
   if (loading || !credentials) {
     return (
-      <ScreenCenter backgroundColor={coworkUi.pageBg}>
+      <ScreenCenter backgroundColor="#0c080a">
         <Spinner size="large" color={coworkUi.brand} />
-        <Text color={coworkUi.textSecondary} marginTop="$3">
+        <Text color="rgba(255,255,255,0.7)" marginTop="$3">
           Joining Co-Work room…
         </Text>
       </ScreenCenter>
@@ -120,14 +130,14 @@ export function NativeLiveKitMeetingRoom({
 
   if (error) {
     return (
-      <ScreenFill padding="$4" backgroundColor={coworkUi.pageBg}>
+      <ScreenFill padding="$4" backgroundColor="#0c080a">
         <Text color={coworkUi.danger}>{error}</Text>
       </ScreenFill>
     )
   }
 
   return (
-    <ScreenFill backgroundColor={coworkUi.pageBg} position="relative">
+    <ScreenFill backgroundColor="#0c080a" position="relative">
       <LiveKitRoom
         serverUrl={credentials.serverUrl}
         token={credentials.token}
@@ -175,8 +185,9 @@ function NativeLiveKitMeetingContent({
   }, [liveKit.room])
 
   return (
-    <YStack flex={1} width="100%" height="100%" position="relative">
+    <YStack flex={1} width="100%" height="100%" position="relative" backgroundColor="#0c080a">
       <NativeMeetingVideoStage />
+      <NativeScreenCapturePicker />
       <YStack position="absolute" top={0} left={0} right={0} bottom={0} pointerEvents="box-none" zIndex={100}>
         {overlay?.(liveKit)}
       </YStack>
@@ -184,49 +195,145 @@ function NativeLiveKitMeetingContent({
   )
 }
 
+function collectStageTracks(tracks: ReturnType<typeof useTracks>): TrackReference[] {
+  const screenShares: TrackReference[] = []
+  const cameras = new Map<string, TrackReference>()
+
+  for (const track of tracks) {
+    if (!isTrackReference(track) || track.publication?.kind !== 'video') continue
+
+    if (track.source === Track.Source.ScreenShare || track.publication.source === Track.Source.ScreenShare) {
+      screenShares.push(track)
+      continue
+    }
+
+    cameras.set(track.participant.identity, track)
+  }
+
+  return [...screenShares, ...cameras.values()]
+}
+
 function NativeMeetingVideoStage() {
   const { ui: coworkUi } = useCoWorkTheme()
-  const { width } = useWindowDimensions()
-  const tracks = useTracks([Track.Source.Camera, Track.Source.ScreenShare], { onlySubscribed: true })
-  const videoTracks = useMemo(
-    () => tracks.filter((track) => isTrackReference(track) && track.publication?.kind === 'video'),
-    [tracks],
+  const { width, height } = useWindowDimensions()
+  const { isDesktop, isTablet, safeTop } = useAppLayout()
+  const tracks = useTracks([Track.Source.Camera, Track.Source.ScreenShare], {
+    onlySubscribed: false,
+  })
+
+  const videoTracks = useMemo(() => collectStageTracks(tracks), [tracks])
+  const isLandscape = width > height
+  const useWideLayout = isDesktop || isTablet || width >= 768
+  const layout = useMemo(
+    () =>
+      meetingGalleryLayout(Math.max(videoTracks.length, 1), {
+        isDesktop: useWideLayout,
+        isLandscape,
+      }),
+    [videoTracks.length, useWideLayout, isLandscape],
   )
-  const columns = width > 720 ? 2 : 1
+
+  const topInset = Math.max(safeTop, 12) + HEADER_CLEARANCE
+  // Meeting chrome is chromeless — no app tab bar. Leave room for the control dock only.
+  const bottomInset = CONTROLS_CLEARANCE
+  const horizontalPad = useWideLayout ? 20 : 12
+  const stageWidth = Math.max(width - horizontalPad * 2, 160)
+  const stageHeight = Math.max(height - topInset - bottomInset, 180)
+  const solo = videoTracks.length <= 1
+
+  const cellWidth = solo
+    ? stageWidth
+    : Math.floor((stageWidth - STAGE_GAP * (layout.columns - 1)) / layout.columns)
+  const cellHeight = solo
+    ? stageHeight
+    : Math.floor((stageHeight - STAGE_GAP * (layout.rows - 1)) / layout.rows)
 
   return (
-    <ScrollView
-      contentContainerStyle={{
-        flexGrow: 1,
-        paddingTop: 72,
-        paddingBottom: 108,
-        paddingHorizontal: 12,
-        gap: 12,
-      }}
-      style={{ flex: 1 }}
+    <YStack
+      flex={1}
+      width="100%"
+      height="100%"
+      backgroundColor="#0c080a"
+      paddingTop={topInset}
+      paddingBottom={bottomInset}
+      paddingHorizontal={horizontalPad}
     >
       {videoTracks.length === 0 ? (
-        <YStack flex={1} alignItems="center" justifyContent="center" minHeight={240}>
-          <Text color={coworkUi.textSecondary}>Waiting for video…</Text>
+        <YStack
+          flex={1}
+          width="100%"
+          alignItems="center"
+          justifyContent="center"
+          borderRadius={coworkUi.radius.tile}
+          backgroundColor="#1a1216"
+          borderWidth={1}
+          borderColor="rgba(255,255,255,0.08)"
+        >
+          <Text color="rgba(255,255,255,0.65)" fontSize={15} fontWeight="600">
+            Waiting for video…
+          </Text>
+          <Text color="rgba(255,255,255,0.4)" fontSize={13} marginTop="$2">
+            Turn on your camera or wait for others to join
+          </Text>
         </YStack>
       ) : (
-        <YStack flexDirection="row" flexWrap="wrap" gap="$3" justifyContent="center">
-          {videoTracks.map((trackRef) => (
-            <YStack
-              key={trackRef.publication?.trackSid ?? trackRef.participant.identity}
-              width={columns === 2 ? '48%' : '100%'}
-              aspectRatio={16 / 9}
-              borderRadius={coworkUi.radius.tile}
-              overflow="hidden"
-              borderWidth={1}
-              borderColor={coworkUi.glassBorder}
-              backgroundColor={coworkUi.tileBg}
-            >
-              <VideoTrack trackRef={trackRef} style={{ width: '100%', height: '100%' }} objectFit="cover" />
-            </YStack>
-          ))}
-        </YStack>
+        <XStack
+          flex={1}
+          width="100%"
+          flexWrap="wrap"
+          alignContent={solo ? 'stretch' : 'center'}
+          justifyContent="center"
+          gap={STAGE_GAP}
+        >
+          {videoTracks.map((trackRef) => {
+            const name =
+              trackRef.participant.name ||
+              trackRef.participant.identity ||
+              'Participant'
+            const isScreen =
+              trackRef.source === Track.Source.ScreenShare ||
+              trackRef.publication.source === Track.Source.ScreenShare
+
+            return (
+              <YStack
+                key={trackRef.publication.trackSid ?? `${trackRef.participant.identity}-${trackRef.source}`}
+                width={cellWidth}
+                height={cellHeight}
+                maxWidth="100%"
+                borderRadius={solo ? coworkUi.radius.tile : 14}
+                overflow="hidden"
+                borderWidth={1}
+                borderColor="rgba(255,255,255,0.12)"
+                backgroundColor="#1a1216"
+                position="relative"
+              >
+                <VideoTrack
+                  trackRef={trackRef}
+                  style={{ width: '100%', height: '100%' }}
+                  objectFit={isScreen ? 'contain' : 'cover'}
+                />
+                <YStack
+                  position="absolute"
+                  left={10}
+                  bottom={10}
+                  paddingHorizontal={12}
+                  paddingVertical={5}
+                  borderRadius={999}
+                  backgroundColor="rgba(12, 8, 10, 0.72)"
+                  borderWidth={1}
+                  borderColor="rgba(255,255,255,0.12)"
+                  maxWidth="90%"
+                >
+                  <Text fontSize={12} fontWeight="700" color="#fff" numberOfLines={1}>
+                    {name}
+                    {isScreen ? ' · Screen' : ''}
+                  </Text>
+                </YStack>
+              </YStack>
+            )
+          })}
+        </XStack>
       )}
-    </ScrollView>
+    </YStack>
   )
 }
