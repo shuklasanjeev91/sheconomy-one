@@ -439,7 +439,14 @@ const shopSlice = createSlice({
       })
       .addCase(loadMyShops.fulfilled, (state, action) => {
         state.myShops = action.payload
-        if (!state.currentShop) {
+        // Reconcile the selected shop against the freshly loaded set. A persisted
+        // `currentShop` can belong to a previous session/account, so only keep it
+        // if it's actually one of this user's shops; otherwise pick their active
+        // (or first) shop.
+        const stillOwned =
+          state.currentShop != null &&
+          action.payload.some((shop) => shop.id === state.currentShop!.id)
+        if (!stillOwned) {
           state.currentShop = action.payload.find((shop) => shop.is_active) ?? action.payload[0] ?? null
         }
         state.isLoadingShops = false

@@ -1,7 +1,6 @@
 import { Link, useLocalSearchParams, useRouter } from 'one'
 import { useEffect } from 'react'
 
-import { CreateShopForm } from '~/commerce/components/CreateShopForm'
 import { CommercePageHeader, CommercePanel } from '~/commerce/components'
 import { Button, Icons, Paragraph, Spinner, Text, XStack, YStack } from '~/components/ui'
 import { PageContent, PageCenter } from '~/components/layout'
@@ -15,7 +14,7 @@ export function MyShopsScreen() {
   const ui = useAppUi()
   const router = useRouter()
   const params = useLocalSearchParams<{ create?: string }>()
-  const { shops, isLoading, error, refresh } = useVendorShops()
+  const { shops, isLoading, error } = useVendorShops()
   const forceCreate = params.create === '1' || params.create === 'true'
   const hasShops = shops.length > 0
   const primaryShop = shops[0] ?? null
@@ -82,11 +81,17 @@ export function MyShopsScreen() {
             </YStack>
           </XStack>
 
-          <CreateShopForm
-            onCreated={() => {
-              void refresh()
-            }}
-          />
+          <Link href={commerceRoutes.createShop} asChild>
+            <Button
+              tone="primary"
+              size="$4"
+              borderRadius={999}
+              icon={<Icons.Store size={18} color="white" />}
+              iconAfter={<Icons.ArrowRight size={16} color="white" />}
+            >
+              Start seller setup
+            </Button>
+          </Link>
         </CommercePanel>
 
         <Link href={commerceRoutes.home} asChild>

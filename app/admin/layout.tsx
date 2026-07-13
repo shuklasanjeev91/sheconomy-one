@@ -3,6 +3,7 @@ import { Platform } from 'react-native'
 import { Redirect, Slot, usePathname, useRouter } from 'one'
 import type { Href } from 'one'
 
+import { RequireAdmin } from '~/components/auth/RouteGuard'
 import { Icons, ScrollView, Text, XStack, YStack } from '~/components/ui'
 import { getShadowStyle, radius } from '~/config/tokens'
 import { useAppLayout } from '~/hooks/useAppLayout'
@@ -198,6 +199,7 @@ export function AdminLayout() {
     Platform.OS === 'web' ? (`calc(100dvh - ${desktopHeaderHeight}px)` as const) : undefined
 
   return (
+    <RequireAdmin>
     <YStack
       width="100%"
       maxWidth="100%"
@@ -343,6 +345,7 @@ export function AdminLayout() {
         </YStack>
       ) : null}
     </YStack>
+    </RequireAdmin>
   )
 }
 
