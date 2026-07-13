@@ -28,11 +28,18 @@ declare module 'one' {
         | `/admin`
         | `/admin/`
         | `/admin/analytics`
+        | `/admin/cart`
+        | `/admin/categories`
+        | `/admin/cms`
+        | `/admin/company-pages`
+        | `/admin/components/AdminShopsManager`
+        | `/admin/groups`
         | `/admin/layout`
         | `/admin/moderation`
         | `/admin/orders`
         | `/admin/payments`
         | `/admin/products`
+        | `/admin/sale-events`
         | `/admin/settings`
         | `/admin/shops`
         | `/admin/users`
