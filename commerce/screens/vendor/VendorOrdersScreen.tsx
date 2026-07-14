@@ -17,9 +17,11 @@ import {
 import { getShadowStyle, radius } from '~/config/tokens'
 import { useAppLayout } from '~/hooks/useAppLayout'
 import { useProfile } from '~/hooks/useProfile'
+import { createTracking, selectDeliveryLoading } from '~/lib/orders/delivery.store'
 import { ORDER_STATUS, ORDER_STATUS_DISPLAY, type OrderStatus } from '~/lib/orders/order.constants'
 import { formatOrderAmount, formatOrderDate } from '~/lib/orders/order.utils'
 import { selectOrderPayments, getOrderPayments } from '~/lib/orders/payment.store'
+import type { Json } from '~/lib/supabase'
 import {
   clearError,
   loadVendorOrderItem,
@@ -40,6 +42,7 @@ import { useAppUi } from '~/lib/theme/useAppUi'
 
 import { OrderStatusBadge } from '~/commerce/components/vendor/OrderStatusBadge'
 import { getVendorOrderActions, type VendorOrderAction } from '~/commerce/components/vendor/vendor-order-actions'
+import { VendorAddTrackingDrawer, type TrackingFormValues } from './VendorAddTrackingDrawer'
 import { ActionButton, VendorOrderDetailDrawer } from './VendorOrderDetailDrawer'
 
 const PAGE_SIZE = 10
@@ -96,6 +99,7 @@ export function VendorOrdersScreen() {
   const searchPagination = useAppSelector((s) => s.vendorOrders.searchPagination)
   const currentItem = useAppSelector(selectCurrentVendorOrderItem)
   const payments = useAppSelector(selectOrderPayments)
+  const deliveryLoading = useAppSelector(selectDeliveryLoading)
 
   const shopId = shop?.id ?? null
   const role = profile?.role ?? null
@@ -106,6 +110,7 @@ export function VendorOrdersScreen() {
   const [datePreset, setDatePreset] = useState<DatePreset>('all')
   const [page, setPage] = useState(1)
   const [selectedItemId, setSelectedItemId] = useState<string | null>(null)
+  const [trackingItem, setTrackingItem] = useState<VendorOrderItem | null>(null)
 
   const isSearchMode = searchTerm.trim().length > 0
   const orders = isSearchMode ? searchResults : listOrders
@@ -189,6 +194,14 @@ export function VendorOrdersScreen() {
   const closeDetail = () => setSelectedItemId(null)
 
   const handleAdvance = async (item: VendorOrderItem, target: VendorOrderAction['target']) => {
+    // Shipping requires tracking info: open the Add-Tracking drawer instead of
+    // advancing straight to "shipped". The item is only marked shipped once a
+    // delivery record (with a valid tracking number) is created.
+    if (target === ORDER_STATUS.SHIPPED) {
+      setTrackingItem(item)
+      return
+    }
+
     try {
       await dispatch(updateOrderItemStatus({ orderItemId: item.id, newStatus: target })).unwrap()
       toast.show('Order updated', {
@@ -197,6 +210,43 @@ export function VendorOrdersScreen() {
       })
     } catch (err) {
       toast.show('Update failed', {
+        tone: 'danger',
+        message: typeof err === 'string' ? err : 'Please try again.',
+      })
+    }
+  }
+
+  const handleSubmitTracking = async (values: TrackingFormValues) => {
+    if (!trackingItem) return
+    const address =
+      trackingItem.billing_address ?? trackingItem.orders?.billing_address ?? {}
+    try {
+      await dispatch(
+        createTracking({
+          input: {
+            order_id: trackingItem.order_id,
+            order_item_id: trackingItem.id,
+            tracking_number: values.tracking_number,
+            courier_slug: values.courier_slug,
+            delivery_mode: values.delivery_mode,
+            shipping_date: values.shipping_date,
+            estimated_delivery_date: values.estimated_delivery_date,
+            note: values.note,
+            custom_tracking_url: values.custom_tracking_url,
+            delivery_address: address as unknown as Json,
+            notify_customer: values.notify_customer,
+          },
+        }),
+      ).unwrap()
+      toast.show('Shipment added', {
+        tone: 'success',
+        message: 'Tracking saved — the order is now marked as shipped.',
+      })
+      setTrackingItem(null)
+      loadPage()
+      if (selectedItemId) void dispatch(loadVendorOrderItem({ orderItemId: selectedItemId }))
+    } catch (err) {
+      toast.show('Could not add tracking', {
         tone: 'danger',
         message: typeof err === 'string' ? err : 'Please try again.',
       })
@@ -429,6 +479,16 @@ export function VendorOrdersScreen() {
         role={role}
         onClose={closeDetail}
         onAdvance={handleAdvance}
+      />
+
+      <VendorAddTrackingDrawer
+        ui={ui}
+        open={trackingItem !== null}
+        isDesktop={isDesktop}
+        item={trackingItem}
+        submitting={deliveryLoading.creating}
+        onClose={() => setTrackingItem(null)}
+        onSubmit={handleSubmitTracking}
       />
     </>
   )

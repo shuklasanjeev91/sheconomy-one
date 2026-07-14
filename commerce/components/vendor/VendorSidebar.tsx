@@ -1,3 +1,4 @@
+import { useEffect, useState } from 'react'
 import { Platform } from 'react-native'
 
 import { Avatar, Icons, ScrollView, Text, XStack, YStack } from '~/components/ui'
@@ -12,6 +13,8 @@ type VendorSidebarProps = {
   ui: AppUiTokens
   collapsed: boolean
   activeId: string
+  /** Active nested item id (e.g. `settings-general`) used to highlight sub-rows. */
+  activeSubId?: string
   shopName?: string | null
   shopLogo?: string | null
   userName?: string | null
@@ -26,6 +29,7 @@ export function VendorSidebar({
   ui,
   collapsed,
   activeId,
+  activeSubId,
   shopName,
   shopLogo,
   userName,
@@ -116,13 +120,14 @@ export function VendorSidebar({
                 </Text>
               ) : null}
               {group.items.map((item) => (
-                <VendorNavRow
+                <VendorNavEntry
                   key={item.id}
                   ui={ui}
                   item={item}
-                  active={item.id === activeId}
+                  activeId={activeId}
+                  activeSubId={activeSubId}
                   collapsed={collapsed}
-                  onPress={() => onSelect(item)}
+                  onSelect={onSelect}
                 />
               ))}
             </YStack>
@@ -205,22 +210,96 @@ export function VendorSidebar({
   )
 }
 
+type VendorNavEntryProps = {
+  ui: AppUiTokens
+  item: VendorNavItem
+  activeId: string
+  activeSubId?: string
+  collapsed: boolean
+  onSelect: (item: VendorNavItem) => void
+}
+
+/** Renders a nav item and, for parents with children, an expandable dropdown. */
+function VendorNavEntry({ ui, item, activeId, activeSubId, collapsed, onSelect }: VendorNavEntryProps) {
+  const children = item.children ?? []
+  const hasChildren = children.length > 0
+  const groupActive = item.id === activeId
+  // Auto-open when this group owns the active route (e.g. navigated via a link);
+  // the user can still collapse it manually afterwards.
+  const [expanded, setExpanded] = useState(groupActive)
+  useEffect(() => {
+    if (groupActive) setExpanded(true)
+  }, [groupActive])
+  const showChildren = hasChildren && !collapsed && expanded
+
+  if (!hasChildren || collapsed) {
+    return (
+      <VendorNavRow
+        ui={ui}
+        item={item}
+        active={groupActive}
+        collapsed={collapsed}
+        onPress={() => onSelect(item)}
+      />
+    )
+  }
+
+  return (
+    <YStack gap="$1">
+      <VendorNavRow
+        ui={ui}
+        item={item}
+        active={groupActive && !activeSubId}
+        collapsed={collapsed}
+        expandable
+        expanded={expanded}
+        onPress={() => setExpanded((value) => !value)}
+      />
+      {showChildren ? (
+        <YStack
+          gap="$0.5"
+          marginLeft="$4"
+          paddingLeft="$2"
+          borderLeftWidth={1}
+          borderLeftColor={ui.borderSubtle}
+        >
+          {children.map((child) => (
+            <VendorNavRow
+              key={child.id}
+              ui={ui}
+              item={child}
+              active={child.id === activeSubId}
+              collapsed={false}
+              isChild
+              onPress={() => onSelect(child)}
+            />
+          ))}
+        </YStack>
+      ) : null}
+    </YStack>
+  )
+}
+
 type VendorNavRowProps = {
   ui: AppUiTokens
   item: VendorNavItem
   active: boolean
   collapsed: boolean
+  isChild?: boolean
+  expandable?: boolean
+  expanded?: boolean
   onPress: () => void
 }
 
-function VendorNavRow({ ui, item, active, collapsed, onPress }: VendorNavRowProps) {
+function VendorNavRow({ ui, item, active, collapsed, isChild, expandable, expanded, onPress }: VendorNavRowProps) {
   const Icon = item.icon ?? Icons.Circle
+  const iconSize = isChild ? 17 : 20
 
   return (
     <XStack
       alignItems="center"
       gap="$2.5"
-      paddingVertical="$2.5"
+      paddingVertical={isChild ? '$2' : '$2.5'}
       paddingHorizontal={collapsed ? 0 : '$2'}
       justifyContent={collapsed ? 'center' : 'flex-start'}
       borderRadius={radius.chip}
@@ -231,13 +310,13 @@ function VendorNavRow({ ui, item, active, collapsed, onPress }: VendorNavRowProp
       pressStyle={{ opacity: 0.85 }}
       onPress={onPress}
     >
-      <Icon size={20} color={active ? ui.onBrand : ui.textSecondary} />
+      <Icon size={iconSize} color={active ? ui.onBrand : ui.textSecondary} />
       {!collapsed ? (
         <>
           <Text
             flex={1}
-            fontSize={14}
-            fontWeight={active ? '700' : '500'}
+            fontSize={isChild ? 13.5 : 14}
+            fontWeight={active ? '700' : isChild ? '500' : '500'}
             color={active ? ui.onBrand : ui.text}
             numberOfLines={1}
           >
@@ -254,6 +333,13 @@ function VendorNavRow({ ui, item, active, collapsed, onPress }: VendorNavRowProp
                 SOON
               </Text>
             </YStack>
+          ) : null}
+          {expandable ? (
+            <Icons.ChevronDown
+              size={16}
+              color={active ? ui.onBrand : ui.textMuted}
+              style={{ transform: [{ rotate: expanded ? '180deg' : '0deg' }] }}
+            />
           ) : null}
         </>
       ) : null}
