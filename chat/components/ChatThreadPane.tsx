@@ -184,6 +184,7 @@ export function ChatThreadPane({
     reactionsByMessage,
     pollResultsByMessage,
     send,
+    resend,
     sendImage,
     sendFile,
     sendPoll,
@@ -740,6 +741,7 @@ export function ChatThreadPane({
                     }
                     onRequestActions={() => openActions(message)}
                     onReactionPress={(emoji) => react(message.id, emoji)}
+                    onRetry={() => void resend(message)}
                     onOpenFile={() => void openFile(message)}
                     onCallBack={() => callBack(message)}
                     isStarred={starredIds.has(message.id)}

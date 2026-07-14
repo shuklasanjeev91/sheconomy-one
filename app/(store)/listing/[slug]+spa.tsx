@@ -15,6 +15,7 @@ import {
   useMedia,
 } from '~/components/ui'
 import {
+  AvailableOffersCard,
   CommercePanel,
   FavoriteButton,
   ListingDetailsPanel,
@@ -29,6 +30,7 @@ import {
   ReviewsSection,
 } from '~/commerce/components'
 import { useCart } from '~/commerce/hooks/useCart'
+import { recordListingView } from '~/commerce/lib/recently-viewed'
 import { useListingReviews } from '~/commerce/hooks/useListingReviews'
 import { useCanonicalListingSlug } from '~/commerce/hooks/useCanonicalSlug'
 import { PageCenter, PageScroll } from '~/components/layout'
@@ -86,6 +88,10 @@ export default function ListingDetailScreen() {
   useEffect(() => {
     setVariantSelection(getDefaultVariantSelection(variationGroups))
   }, [listing?.id, variationGroups])
+
+  useEffect(() => {
+    if (listing?.id) recordListingView(listing.id)
+  }, [listing?.id])
 
   if (isLoading) {
     return (
@@ -291,6 +297,8 @@ export default function ListingDetailScreen() {
                 </Text>
               ) : null}
 
+              <AvailableOffersCard currency={currency} shopId={listing.shop_id} compact />
+
               <Separator borderColor={ui.panelBorder} />
 
               <ListingVariantPicker
@@ -433,6 +441,8 @@ export default function ListingDetailScreen() {
           {displayStock > 0 ? `${displayStock} in stock` : 'Out of stock'}
         </Text>
       ) : null}
+
+      <AvailableOffersCard currency={currency} shopId={listing.shop_id} />
 
       <ListingVariantPicker
         groups={variationGroups}

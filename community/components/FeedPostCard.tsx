@@ -4,17 +4,26 @@ import { Link, useRouter } from 'one'
 import { CommunityCard } from '~/community/components/CommunityCard'
 import { PostActionSheets } from '~/community/components/PostActionSheets'
 import { PostContentText } from '~/community/components/PostContentText'
+import { PostImageLightbox } from '~/community/components/PostImageLightbox'
 import { PostLikeButton } from '~/community/components/PostLikeButton'
+import { PostLinkPreviewCard } from '~/community/components/PostLinkPreviewCard'
+import { PostMediaCarousel } from '~/community/components/PostMediaCarousel'
 import { ProfileLink } from '~/community/components/ProfileLink'
 import { usePostEngagement } from '~/community/hooks/usePostEngagement'
 import { REACTION_TYPES } from '~/community/lib/constants'
-import type { CommunityPoll, CommunityPost } from '~/community/lib/community'
+import type {
+  CommunityPoll,
+  CommunityPost,
+  PostCelebration,
+  PostProduct,
+  PostShop,
+} from '~/community/lib/community'
 import { castPollVote } from '~/community/lib/polls'
 import { isGifUrl } from '~/community/lib/giphy'
 import { useCommunityUi } from '~/community/lib/community-theme'
 import { Avatar, Button, Icons, Image, Text, XStack, YStack } from '~/components/ui'
 import { radius } from '~/config/tokens'
-import { communityRoutes, routes } from '~/lib/routes'
+import { commerceRoutes, communityRoutes, routes } from '~/lib/routes'
 import { useSupabase } from '~/providers/SupabaseProvider'
 import { rsvpToPostEvent, cancelPostEventRsvp, fetchPostEventRsvpState } from '~/community/lib/events'
 
@@ -70,8 +79,20 @@ export function FeedPostCard({ post, linkToDetail = true }: FeedPostCardProps) {
     ...(post.media_urls ?? []).filter((url) => url !== post.image_url),
   ]
 
+  const [lightboxOpen, setLightboxOpen] = useState(false)
+
   function requireAuth() {
     router.push(routes.signIn)
+  }
+
+  // In the feed, tapping media opens the post (LinkedIn behavior); on the detail
+  // page (linkToDetail=false) it opens a fullscreen viewer instead.
+  function openMedia() {
+    if (linkToDetail) {
+      router.push(communityRoutes.post(post.id) as never)
+    } else {
+      setLightboxOpen(true)
+    }
   }
 
   return (
@@ -181,11 +202,19 @@ export function FeedPostCard({ post, linkToDetail = true }: FeedPostCardProps) {
           ) : (
             <PostContentText content={post.content} />
           )}
+          {post.celebration ? <PostCelebrationCard celebration={post.celebration} /> : null}
           {post.poll ? <PollBlock poll={post.poll} onRequireAuth={requireAuth} /> : null}
           {post.event_rsvp_enabled && post.event_title ? (
             <PostEventCard post={post} onRequireAuth={requireAuth} />
           ) : null}
-          {mediaUrls.length > 0 ? <PostMedia urls={mediaUrls} /> : null}
+          {mediaUrls.length > 0 ? (
+            <PostMedia urls={mediaUrls} onPress={openMedia} />
+          ) : null}
+          {post.link && mediaUrls.length === 0 ? (
+            <PostLinkPreviewCard preview={post.link} />
+          ) : null}
+          {post.product ? <PostProductCard product={post.product} /> : null}
+          {post.shop ? <PostShopCard shop={post.shop} /> : null}
         </YStack>
 
         {(engagement.likeCount > 0 || engagement.commentCount > 0) ? (
@@ -268,6 +297,10 @@ export function FeedPostCard({ post, linkToDetail = true }: FeedPostCardProps) {
       </CommunityCard>
 
       <PostActionSheets post={post} engagement={engagement} />
+
+      {mediaUrls.length > 0 ? (
+        <PostImageLightbox urls={mediaUrls} open={lightboxOpen} onOpenChange={setLightboxOpen} />
+      ) : null}
     </>
   )
 }
@@ -296,39 +329,226 @@ function ReactionIcons() {
   )
 }
 
-function PostMedia({ urls }: { urls: string[] }) {
+function PostMedia({ urls, onPress }: { urls: string[]; onPress?: () => void }) {
   const communityUi = useCommunityUi()
+  const pressable = onPress ? { cursor: 'pointer' as const, onPress } : {}
+
   if (urls.length === 1) {
     const url = urls[0]
     if (isGifUrl(url)) {
       return (
-        <YStack width="100%" borderRadius={radius.card} overflow="hidden" backgroundColor={communityUi.pageBg}>
+        <YStack width="100%" borderRadius={radius.card} overflow="hidden" backgroundColor={communityUi.pageBg} {...pressable}>
           {/* eslint-disable-next-line jsx-a11y/alt-text */}
           <img src={url} style={{ width: '100%', maxHeight: 420, objectFit: 'contain' }} />
         </YStack>
       )
     }
     return (
-      <YStack width="100%" borderRadius={radius.card} overflow="hidden" backgroundColor={communityUi.pageBg}>
+      <YStack width="100%" borderRadius={radius.card} overflow="hidden" backgroundColor={communityUi.pageBg} {...pressable}>
         <Image src={url} width="100%" height={360} objectFit="cover" alt="" />
       </YStack>
     )
   }
 
+  // Multiple images render as a LinkedIn-style swipeable carousel.
+  return <PostMediaCarousel urls={urls} onPressImage={onPress ? () => onPress() : undefined} />
+}
+
+const CELEBRATION_EMOJI: Record<string, string> = {
+  new_job: '💼',
+  work_anniversary: '🎊',
+  education: '🎓',
+  award: '🏆',
+  launch: '🚀',
+  milestone: '📈',
+  welcome: '👋',
+}
+
+function PostCelebrationCard({ celebration }: { celebration: PostCelebration }) {
+  const communityUi = useCommunityUi()
+  const emoji = CELEBRATION_EMOJI[celebration.occasion] ?? '🎉'
   return (
-    <XStack flexWrap="wrap" gap={4} borderRadius={radius.card} overflow="hidden">
-      {urls.slice(0, 4).map((url) => (
-        <YStack key={url} width="49%" height={180} backgroundColor={communityUi.pageBg} borderRadius={radius.chip} overflow="hidden">
-          {isGifUrl(url) ? (
-            // eslint-disable-next-line jsx-a11y/alt-text
-            <img src={url} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-          ) : (
-            <Image src={url} width="100%" height="100%" objectFit="cover" alt="" />
-          )}
+    <YStack borderRadius={radius.card} overflow="hidden" borderWidth={1} borderColor={communityUi.border}>
+      {celebration.imageUrl ? (
+        <YStack position="relative">
+          <Image
+            src={celebration.imageUrl}
+            width="100%"
+            height={260}
+            objectFit="cover"
+            alt={celebration.title}
+          />
+          <YStack
+            position="absolute"
+            bottom={0}
+            left={0}
+            right={0}
+            paddingHorizontal={16}
+            paddingTop={40}
+            paddingBottom={14}
+            gap={4}
+            backgroundColor="rgba(0,0,0,0.45)"
+          >
+            {celebration.subtitle ? (
+              <Text fontSize={11} fontWeight="700" color="#fff" letterSpacing={0.4} opacity={0.9}>
+                {emoji} {celebration.subtitle.toUpperCase()}
+              </Text>
+            ) : null}
+            <Text fontSize={17} fontWeight="800" color="#fff">
+              {celebration.title}
+            </Text>
+          </YStack>
         </YStack>
-      ))}
+      ) : (
+        <YStack
+          alignItems="center"
+          justifyContent="center"
+          paddingVertical={28}
+          gap={8}
+          backgroundColor={communityUi.accentMuted}
+        >
+          <Text fontSize={44}>{emoji}</Text>
+          {celebration.subtitle ? (
+            <Text fontSize={12} fontWeight="700" color={communityUi.brand} letterSpacing={0.4}>
+              {celebration.subtitle.toUpperCase()}
+            </Text>
+          ) : null}
+          <Text
+            fontSize={17}
+            fontWeight="800"
+            color={communityUi.text}
+            textAlign="center"
+            paddingHorizontal={16}
+          >
+            {celebration.title}
+          </Text>
+        </YStack>
+      )}
+    </YStack>
+  )
+}
+
+function formatPostPrice(price: number | null, currency: string | null) {
+  if (price == null) return 'Free'
+  try {
+    return new Intl.NumberFormat('en-IN', {
+      style: 'currency',
+      currency: currency || 'INR',
+      maximumFractionDigits: 0,
+    }).format(price)
+  } catch {
+    return `${currency ?? '₹'}${price}`
+  }
+}
+
+function PostProductCard({ product }: { product: PostProduct }) {
+  const communityUi = useCommunityUi()
+  const card = (
+    <XStack
+      borderRadius={radius.card}
+      overflow="hidden"
+      borderWidth={1}
+      borderColor={communityUi.border}
+      backgroundColor={communityUi.cardBg}
+      cursor={product.slug ? 'pointer' : 'default'}
+      hoverStyle={product.slug ? { borderColor: communityUi.brand } : undefined}
+      animation="quick"
+    >
+      <YStack
+        width={112}
+        height={112}
+        backgroundColor={communityUi.pageBg}
+        alignItems="center"
+        justifyContent="center"
+      >
+        {product.imageUrl ? (
+          <Image src={product.imageUrl} width={112} height={112} objectFit="cover" alt="" />
+        ) : (
+          <Icons.Package size={26} color={communityUi.textMuted} />
+        )}
+      </YStack>
+      <YStack flex={1} padding={12} gap={4} justifyContent="center" minWidth={0}>
+        <Text fontSize={11} fontWeight="700" color={communityUi.textMuted} letterSpacing={0.4}>
+          PRODUCT
+        </Text>
+        <Text fontSize={15} fontWeight="700" color={communityUi.text} numberOfLines={2}>
+          {product.title}
+        </Text>
+        <Text fontSize={14} fontWeight="700" color={communityUi.brand}>
+          {formatPostPrice(product.price, product.currency)}
+        </Text>
+        {product.shopName ? (
+          <Text fontSize={12} color={communityUi.textMuted} numberOfLines={1}>
+            {product.shopName}
+          </Text>
+        ) : null}
+      </YStack>
     </XStack>
   )
+
+  if (product.slug) {
+    return (
+      <Link href={commerceRoutes.listing(product.slug)} asChild>
+        {card}
+      </Link>
+    )
+  }
+  return card
+}
+
+function PostShopCard({ shop }: { shop: PostShop }) {
+  const communityUi = useCommunityUi()
+  const card = (
+    <XStack
+      alignItems="center"
+      gap={12}
+      borderRadius={radius.card}
+      borderWidth={1}
+      borderColor={communityUi.border}
+      backgroundColor={communityUi.cardBg}
+      padding={12}
+      cursor={shop.slug ? 'pointer' : 'default'}
+      hoverStyle={shop.slug ? { borderColor: communityUi.brand } : undefined}
+      animation="quick"
+    >
+      <Avatar name={shop.name} src={shop.logoUrl ?? undefined} size="$5" />
+      <YStack flex={1} gap={2} minWidth={0}>
+        <Text fontSize={11} fontWeight="700" color={communityUi.textMuted} letterSpacing={0.4}>
+          SHOP
+        </Text>
+        <Text fontSize={15} fontWeight="700" color={communityUi.text} numberOfLines={1}>
+          {shop.name}
+        </Text>
+        {shop.description ? (
+          <Text fontSize={12} color={communityUi.textMuted} numberOfLines={2}>
+            {shop.description}
+          </Text>
+        ) : null}
+      </YStack>
+      {shop.slug ? (
+        <XStack
+          paddingHorizontal={14}
+          paddingVertical={7}
+          borderRadius={999}
+          borderWidth={1}
+          borderColor={communityUi.brand}
+        >
+          <Text fontSize={13} fontWeight="700" color={communityUi.brand}>
+            Visit
+          </Text>
+        </XStack>
+      ) : null}
+    </XStack>
+  )
+
+  if (shop.slug) {
+    return (
+      <Link href={commerceRoutes.shop(shop.slug)} asChild>
+        {card}
+      </Link>
+    )
+  }
+  return card
 }
 
 function PostActionButton({

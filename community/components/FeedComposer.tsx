@@ -4,6 +4,7 @@ import type { Href } from 'one'
 
 import { GifPicker } from '~/community/components/GifPicker'
 import { CommunityCard } from '~/community/components/CommunityCard'
+import { openComposer, type ComposerOptions } from '~/community/lib/composer-store'
 import { useCommunityUi } from '~/community/lib/community-theme'
 import { Avatar, Icons, Text, XStack } from '~/components/ui'
 import { communityRoutes, routes } from '~/lib/routes'
@@ -21,24 +22,22 @@ export function FeedComposer({ onGifSelect }: FeedComposerProps) {
   const name = profile?.full_name || profile?.username || 'You'
   const [gifOpen, setGifOpen] = useState(false)
 
-  const composeHref = (isAuthenticated ? communityRoutes.createPost : buildSignInUrl(communityRoutes.createPost)) as Href
-  const pollPath = `${communityRoutes.createPost}?compose=poll`
-  const eventPath = `${communityRoutes.createPost}?compose=event`
-  const pollHref = (isAuthenticated ? pollPath : buildSignInUrl(pollPath)) as Href
-  const eventHref = (isAuthenticated ? eventPath : buildSignInUrl(eventPath)) as Href
-  const mediaHref = composeHref
-  const articleHref = composeHref
-
-  function handleGif(url: string) {
+  // Every entry point opens the shared composer overlay. Unauthenticated users
+  // are routed through sign-in first (returning to the feed afterwards).
+  function compose(options: ComposerOptions = {}) {
     if (!isAuthenticated) {
-      router.push(buildSignInUrl(communityRoutes.createPost) as never)
+      router.push(buildSignInUrl(communityRoutes.home) as never)
       return
     }
+    openComposer(options)
+  }
+
+  function handleGif(url: string) {
     if (onGifSelect) {
       onGifSelect(url)
       return
     }
-    router.push(`${communityRoutes.createPost}?gif=${encodeURIComponent(url)}` as never)
+    compose({ gifUrl: url })
   }
 
   return (
@@ -53,43 +52,43 @@ export function FeedComposer({ onGifSelect }: FeedComposerProps) {
           <Link href={(isAuthenticated ? communityRoutes.profile : routes.signIn) as Href} asChild>
             <Avatar name={name} src={profile?.avatar_url ?? undefined} size="$4" cursor="pointer" />
           </Link>
-          <Link href={composeHref} asChild>
-            <XStack
-              flex={1}
-              backgroundColor={communityUi.pageBg}
-              borderRadius={999}
-              borderWidth={1}
-              borderColor={communityUi.border}
-              paddingHorizontal={18}
-              paddingVertical={13}
-              cursor="pointer"
-              animation="quick"
-              hoverStyle={{ backgroundColor: communityUi.borderLight, borderColor: communityUi.brand }}
-            >
-              <Text fontSize={14} fontWeight="600" color={communityUi.textMuted}>
-                {isAuthenticated ? 'Start a post' : 'Sign in to post'}
-              </Text>
-            </XStack>
-          </Link>
+          <XStack
+            flex={1}
+            backgroundColor={communityUi.pageBg}
+            borderRadius={999}
+            borderWidth={1}
+            borderColor={communityUi.border}
+            paddingHorizontal={18}
+            paddingVertical={13}
+            cursor="pointer"
+            animation="quick"
+            hoverStyle={{ backgroundColor: communityUi.borderLight, borderColor: communityUi.brand }}
+            onPress={() => compose()}
+          >
+            <Text fontSize={14} fontWeight="600" color={communityUi.textMuted}>
+              {isAuthenticated ? 'Start a post' : 'Sign in to post'}
+            </Text>
+          </XStack>
         </XStack>
 
         <XStack borderTopWidth={1} borderTopColor={communityUi.borderLight} paddingTop={8}>
-          <ComposerAction icon={Icons.Image} label="Media" color="#70b5f9" href={mediaHref} />
+          <ComposerAction icon={Icons.Image} label="Media" color="#70b5f9" onPress={() => compose({ media: true })} />
           <ComposerAction
             icon={Icons.Film}
             label="GIF"
             color="#7fc15e"
             onPress={() => {
               if (!isAuthenticated) {
-                router.push(buildSignInUrl(communityRoutes.createPost) as never)
+                router.push(buildSignInUrl(communityRoutes.home) as never)
                 return
               }
               setGifOpen(true)
             }}
           />
-          <ComposerAction icon={Icons.BarChart2} label="Poll" color="#c37dda" href={pollHref} />
-          <ComposerAction icon={Icons.Calendar} label="Event" color="#e7a33e" href={eventHref} />
-          <ComposerAction icon={Icons.FileText} label="Write article" color="#fc9295" href={articleHref} />
+          <ComposerAction icon={Icons.BarChart2} label="Poll" color="#c37dda" onPress={() => compose({ mode: 'poll' })} />
+          <ComposerAction icon={Icons.Calendar} label="Event" color="#e7a33e" onPress={() => compose({ mode: 'event' })} />
+          <ComposerAction icon={Icons.PartyPopper} label="Celebrate" color="#e7a33e" onPress={() => compose({ mode: 'celebration' })} />
+          <ComposerAction icon={Icons.Tag} label="Product" color="#0a66c2" onPress={() => compose({ mode: 'product' })} />
         </XStack>
       </CommunityCard>
 
@@ -109,17 +108,15 @@ function ComposerAction({
   icon: Icon,
   label,
   color,
-  href,
   onPress,
 }: {
   icon: typeof Icons.Image
   label: string
   color: string
-  href?: Href
-  onPress?: () => void
+  onPress: () => void
 }) {
   const communityUi = useCommunityUi()
-  const content = (
+  return (
     <XStack
       gap={8}
       alignItems="center"
@@ -138,14 +135,4 @@ function ComposerAction({
       </Text>
     </XStack>
   )
-
-  if (href && !onPress) {
-    return (
-      <Link href={href} asChild>
-        {content}
-      </Link>
-    )
-  }
-
-  return content
 }

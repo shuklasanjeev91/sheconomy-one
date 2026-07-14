@@ -16,19 +16,30 @@ export type AppNotification = {
   context_type: string | null
 }
 
+export type NotificationFilters = {
+  category?: string
+  unreadOnly?: boolean
+}
+
 export async function fetchNotifications(
   userId: string,
   page = 0,
+  filters: NotificationFilters = {},
 ): Promise<{ items: AppNotification[]; hasMore: boolean; error: string | null }> {
   const from = page * NOTIFICATION_PAGE_SIZE
   const to = from + NOTIFICATION_PAGE_SIZE - 1
 
-  const { data, error, count } = await supabase
+  let query = supabase
     .from('notifications')
     .select('id, title, message, type, category, read, created_at, action_url, image_url, context_id, context_type', {
       count: 'exact',
     })
     .eq('recipient_id', userId)
+
+  if (filters.category) query = query.eq('category', filters.category)
+  if (filters.unreadOnly) query = query.eq('read', false)
+
+  const { data, error, count } = await query
     .order('created_at', { ascending: false })
     .range(from, to)
 
@@ -40,6 +51,32 @@ export async function fetchNotifications(
     hasMore: total ? to + 1 < total : (data?.length ?? 0) === NOTIFICATION_PAGE_SIZE,
     error: null,
   }
+}
+
+/** Distinct notification categories for a stable filter menu. */
+export async function fetchNotificationCategories(userId: string): Promise<string[]> {
+  const categories = new Set<string>()
+
+  const { data: facetRows, error } = await supabase.rpc('community_notification_categories', {
+    p_user: userId,
+  })
+  if (!error && facetRows) {
+    for (const row of facetRows as { value: string }[]) {
+      if (row.value) categories.add(row.value)
+    }
+    return Array.from(categories).sort((a, b) => a.localeCompare(b))
+  }
+
+  const { data } = await supabase
+    .from('notifications')
+    .select('category')
+    .eq('recipient_id', userId)
+    .limit(1000)
+
+  for (const row of (data ?? []) as { category: string | null }[]) {
+    if (row.category?.trim()) categories.add(row.category.trim())
+  }
+  return Array.from(categories).sort((a, b) => a.localeCompare(b))
 }
 
 export async function getUnreadCount(userId: string): Promise<number> {

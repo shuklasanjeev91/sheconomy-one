@@ -8,6 +8,7 @@ import {
   fetchPostReactions,
   fetchUserPostReaction,
   repostPost,
+  toggleCommentLike as toggleCommentLikeApi,
   upsertPostReaction,
   type PostComment,
   type PostReaction,
@@ -65,11 +66,11 @@ export function usePostEngagement(
 
   const loadComments = useCallback(async () => {
     setIsLoadingComments(true)
-    const result = await fetchPostComments(postId)
+    const result = await fetchPostComments(postId, 100, user?.id ?? null)
     setComments(result.items)
     setError(result.error)
     setIsLoadingComments(false)
-  }, [postId])
+  }, [postId, user])
 
   const loadReactions = useCallback(async () => {
     setIsLoadingReactions(true)
@@ -147,6 +148,65 @@ export function usePostEngagement(
     return result
   }, [commentDraft, loadComments, postId, user])
 
+  const replyToComment = useCallback(
+    async (parentCommentId: string, body: string) => {
+      if (!user) return { error: 'Sign in to reply' }
+      const trimmed = body.trim()
+      if (!trimmed) return { error: 'Reply is empty' }
+
+      const result = await addPostComment(user.id, postId, trimmed, parentCommentId)
+      if (!result.error) {
+        setCommentCount((count) => count + 1)
+        await loadComments()
+      } else {
+        setError(result.error)
+      }
+      return result
+    },
+    [loadComments, postId, user],
+  )
+
+  const toggleCommentLike = useCallback(
+    async (commentId: string) => {
+      if (!user) return { error: 'Sign in to like' }
+
+      const target = comments.find((comment) => comment.id === commentId)
+      if (!target) return { error: 'Comment not found' }
+      const wasLiked = target.likedByMe
+
+      // Optimistic update.
+      setComments((current) =>
+        current.map((comment) =>
+          comment.id === commentId
+            ? {
+                ...comment,
+                likedByMe: !wasLiked,
+                likeCount: Math.max(0, comment.likeCount + (wasLiked ? -1 : 1)),
+              }
+            : comment,
+        ),
+      )
+
+      const result = await toggleCommentLikeApi(user.id, commentId, wasLiked)
+      if (result.error) {
+        // Revert on failure.
+        setComments((current) =>
+          current.map((comment) =>
+            comment.id === commentId
+              ? {
+                  ...comment,
+                  likedByMe: wasLiked,
+                  likeCount: Math.max(0, comment.likeCount + (wasLiked ? 1 : -1)),
+                }
+              : comment,
+          ),
+        )
+      }
+      return result
+    },
+    [comments, user],
+  )
+
   const submitRepost = useCallback(async (encodedOverride?: string) => {
     if (!user) return { error: 'Sign in to repost' }
 
@@ -200,6 +260,8 @@ export function usePostEngagement(
     closeSheet,
     pickReaction,
     submitComment,
+    replyToComment,
+    toggleCommentLike,
     submitRepost,
     loadComments,
     loadReactions,

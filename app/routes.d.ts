@@ -45,6 +45,8 @@ declare module 'one' {
         | `/category`
         | `/chat`
         | `/chat/`
+        | `/chat/calls`
+        | `/chat/groups`
         | `/checkout`
         | `/class`
         | `/class/`

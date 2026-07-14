@@ -1,10 +1,11 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef } from 'react'
 import { Platform } from 'react-native'
 import { Link, useRouter } from 'one'
 
 import { ChatListPane } from '~/chat/components/ChatListPane'
+import { ChatSectionTabs } from '~/chat/components/ChatSectionTabs'
 import { ChatThreadPane } from '~/chat/components/ChatThreadPane'
-import { NewChatSheet } from '~/chat/components/NewChatSheet'
+import { openNewChat } from '~/chat/lib/chat-actions-store'
 import { usePresence } from '~/chat/hooks/usePresence'
 import { useUserChats } from '~/chat/hooks/useUserChats'
 import type { ChatSummary } from '~/chat/lib/types'
@@ -18,9 +19,11 @@ const LIST_PANE_WIDTH = 380
 
 type ChatScreenProps = {
   chatId?: string | null
+  /** When 'groups', only group conversations are listed (WhatsApp-style view). */
+  filter?: 'all' | 'groups'
 }
 
-export function ChatScreen({ chatId = null }: ChatScreenProps) {
+export function ChatScreen({ chatId = null, filter = 'all' }: ChatScreenProps) {
   const theme = useChatTheme()
   const router = useRouter()
   const { isDesktop, isDesktopWeb, desktopHeaderHeight, mobileTabBarOffset } = useAppLayout()
@@ -30,8 +33,12 @@ export function ChatScreen({ chatId = null }: ChatScreenProps) {
   usePresence(currentUserId)
 
   const { chats, isLoading, reload } = useUserChats(currentUserId)
-  const [newChatOpen, setNewChatOpen] = useState(false)
   const reloadedFor = useRef<string | null>(null)
+
+  const visibleChats = useMemo<ChatSummary[]>(
+    () => (filter === 'groups' ? chats.filter((c) => c.type === 'group') : chats),
+    [chats, filter],
+  )
 
   const activeChat = useMemo<ChatSummary | null>(
     () => (chatId ? chats.find((c) => c.id === chatId) ?? null : null),
@@ -115,13 +122,14 @@ export function ChatScreen({ chatId = null }: ChatScreenProps) {
           borderRightColor={theme.border}
           minHeight={0}
         >
+          <ChatSectionTabs />
           <ChatListPane
-            chats={chats}
+            chats={visibleChats}
             isLoading={isLoading}
             activeChatId={chatId}
             currentUserId={currentUserId}
             onSelect={(chat) => router.push(chatRoutes.conversation(chat.id))}
-            onNewChat={() => setNewChatOpen(true)}
+            onNewChat={openNewChat}
             onChanged={reload}
           />
         </YStack>
@@ -139,13 +147,6 @@ export function ChatScreen({ chatId = null }: ChatScreenProps) {
             <EmptyThreadPlaceholder loading={!!chatId && isLoading} />
           )}
         </YStack>
-
-        <NewChatSheet
-          open={newChatOpen}
-          onOpenChange={setNewChatOpen}
-          currentUserId={currentUserId}
-          onConversationReady={(id) => router.push(chatRoutes.conversation(id))}
-        />
       </XStack>
     )
   }
@@ -167,23 +168,16 @@ export function ChatScreen({ chatId = null }: ChatScreenProps) {
         </YStack>
       ) : (
         <ChatListPane
-          chats={chats}
+          chats={visibleChats}
           isLoading={isLoading}
           activeChatId={null}
           currentUserId={currentUserId}
           onSelect={(chat) => router.push(chatRoutes.conversation(chat.id))}
-          onNewChat={() => setNewChatOpen(true)}
+          onNewChat={openNewChat}
           onChanged={reload}
           tabClearance={mobileTabBarOffset}
         />
       )}
-
-      <NewChatSheet
-        open={newChatOpen}
-        onOpenChange={setNewChatOpen}
-        currentUserId={currentUserId}
-        onConversationReady={(id) => router.push(chatRoutes.conversation(id))}
-      />
     </YStack>
   )
 }

@@ -1,31 +1,45 @@
 import { Link, Redirect, useRouter } from 'one'
+import type { ReactNode } from 'react'
 import { useEffect, useMemo, useState } from 'react'
 
 import {
-  Button,
   Field,
+  Icons,
+  Image,
   Input,
   Paragraph,
   Spinner,
   Text,
-  Theme,
-  ValidatedTextField,
   XStack,
   YStack,
   useAppToast,
 } from '~/components/ui'
 import { FullWidthLayout, LAYOUT_STRETCH, PageSection, StickyRail } from '~/components/layout'
-import { BRAND_THEME, radius, getShadowStyle } from '~/config/tokens'
 import { useCart } from '~/commerce/hooks/useCart'
 import { useStorefrontCartItems } from '~/commerce/hooks/useStorefrontCartItems'
-import { CommercePageHeader, CommercePanel } from '~/commerce/components'
+import { useShopPartners } from '~/commerce/hooks/useShopPartners'
+import { useShopHeaders } from '~/commerce/hooks/useShopHeaders'
 import {
+  CartCoupon,
+  CommerceButton,
+  CommerceLink,
+  CommerceRadio,
+  ShopPartnerChips,
+  ShopRatingBadge,
+  useCommercePalette,
+} from '~/commerce/components'
+import {
+  checkCartStock,
   createOrderFromCart,
   fetchUserAddresses,
   saveUserAddress,
   type CheckoutAddressInput,
+  type CheckoutLineItem,
+  type CheckoutPaymentMode,
   type UserAddress,
 } from '~/commerce/lib/checkout'
+import { clearCartItems, type CartItemRow } from '~/commerce/lib/cart'
+import { computeSelectedTotals, useCartSelection } from '~/commerce/lib/cart-selection'
 import { fetchBuyerPaymentMethods } from '~/commerce/lib/buyer-account'
 import {
   parsePaymentMethod,
@@ -34,6 +48,8 @@ import {
   type ParsedPaymentMethod,
 } from '~/commerce/lib/payment-methods'
 import { cartRequiresShipping, fetchListingTypesByIds } from '~/commerce/lib/listing-fulfillment'
+import { paymentCollectionFor } from '~/commerce/lib/shop-commerce'
+import { deliveryEstimateLabel } from '~/commerce/lib/delivery-estimate'
 import { formatCurrency } from '~/lib/format'
 import { useFormValidation } from '~/hooks/useFormValidation'
 import { useProfile } from '~/hooks/useProfile'
@@ -41,23 +57,22 @@ import { openExternalUrl } from '~/lib/platform/openUrl'
 import { commerceRoutes, routes } from '~/lib/routes'
 import { createEmptyAddressInput } from '~/commerce/components/AddressForm'
 import { validateAddressInput } from '~/commerce/lib/addresses'
-import {
-  LocationFields,
-  addressGeoFromInput,
-  patchAddressFromGeo,
-} from '~/components/geo'
+import { LocationFields, addressGeoFromInput, patchAddressFromGeo } from '~/components/geo'
 import { maxLength, minLength, required } from '~/lib/validation'
 import { useAppLayout } from '~/hooks/useAppLayout'
 import { useAppUi } from '~/lib/theme/useAppUi'
 
+const SUMMARY_WIDTH = 320
+
 export function CheckoutScreen() {
-  const ui = useAppUi()
-  const { isDesktop, isWide } = useAppLayout()
+  const c = useCommercePalette()
+  const { isDesktop } = useAppLayout()
   const { user, isAuthenticated } = useProfile()
   const { cart, items: cartItems, isLoading, refresh } = useCart()
   const { items, isChecking } = useStorefrontCartItems(cartItems)
   const toast = useAppToast()
   const router = useRouter()
+
   const [addresses, setAddresses] = useState<UserAddress[]>([])
   const [selectedAddressId, setSelectedAddressId] = useState<string | null>(null)
   const [useNewAddress, setUseNewAddress] = useState(false)
@@ -71,13 +86,55 @@ export function CheckoutScreen() {
       [],
     ),
   )
-  const [customerNotes, setCustomerNotes] = useState('')
-  const [paymentMethod, setPaymentMethod] = useState<'online' | 'cod'>('online')
+  const [notesByShop, setNotesByShop] = useState<Record<string, string>>({})
+  const [giftByShop, setGiftByShop] = useState<Record<string, boolean>>({})
+  const [paymentMethod, setPaymentMethod] = useState<CheckoutPaymentMode>('online')
   const [savedPaymentMethods, setSavedPaymentMethods] = useState<ParsedPaymentMethod[]>([])
   const [selectedSavedPaymentId, setSelectedSavedPaymentId] = useState<string | null>(null)
   const [isSubmitting, setIsSubmitting] = useState(false)
+  const [orderPlaced, setOrderPlaced] = useState(false)
   const [isLoadingAddresses, setIsLoadingAddresses] = useState(true)
   const [listingTypes, setListingTypes] = useState<Map<string, string>>(new Map())
+
+  const availableIds = useMemo(() => items.map((item) => item.id), [items])
+  const { isSelected, noneSelected } = useCartSelection(availableIds)
+  const { selectedItems, subtotal, unitCount, discount, total } = computeSelectedTotals(
+    cart,
+    items,
+    isSelected,
+  )
+
+  const orderShops = useMemo(() => {
+    const map = new Map<string, string>()
+    for (const item of selectedItems) {
+      if (!map.has(item.shop_id)) map.set(item.shop_id, item.shop_name)
+    }
+    return [...map.entries()].map(([shopId, shopName]) => ({ shopId, shopName }))
+  }, [selectedItems])
+
+  const shopIds = useMemo(() => orderShops.map((shop) => shop.shopId), [orderShops])
+  const { partners: shopPartners } = useShopPartners(shopIds)
+  const shopHeaders = useShopHeaders(shopIds)
+  const multiShop = orderShops.length > 1
+
+  // Group shops by who collects the money. Every SHEPay shop can be collected in a
+  // single SHEconomy payment; each seller with their own gateway is paid directly
+  // (0% commission), so it forms its own payment.
+  const paymentGroups = useMemo(() => {
+    const shepay: { shopId: string; shopName: string }[] = []
+    const direct: { shopId: string; shopName: string; gateway: string }[] = []
+    for (const shop of orderShops) {
+      const info = shopPartners.get(shop.shopId)
+      if (paymentCollectionFor(info) === 'direct') {
+        direct.push({ ...shop, gateway: info?.paymentLabel ?? 'their gateway' })
+      } else {
+        shepay.push(shop)
+      }
+    }
+    return { shepay, direct }
+  }, [orderShops, shopPartners])
+
+  const paymentStepCount = (paymentGroups.shepay.length ? 1 : 0) + paymentGroups.direct.length
 
   useEffect(() => {
     const ids = items.map((item) => item.listing_id)
@@ -92,25 +149,23 @@ export function CheckoutScreen() {
     if (!isAuthenticated || !user) return
 
     setIsLoadingAddresses(true)
-    fetchUserAddresses(user.id).then(({ addresses: rows, error }) => {
-      setAddresses(rows)
-      const defaultAddress = rows.find((row) => row.is_default) ?? rows[0]
-      setSelectedAddressId(defaultAddress?.id ?? null)
-      setUseNewAddress(rows.length === 0)
-      if (error) {
-        toast.show('Could not load addresses', { tone: 'danger', message: error })
-      }
-      setIsLoadingAddresses(false)
-    })
+    fetchUserAddresses(user.id)
+      .then(({ addresses: rows, error }) => {
+        setAddresses(rows)
+        const defaultAddress = rows.find((row) => row.is_default) ?? rows[0]
+        setSelectedAddressId(defaultAddress?.id ?? null)
+        setUseNewAddress(rows.length === 0)
+        if (error) toast.show('Could not load addresses', { tone: 'danger', message: error })
+      })
+      .catch(() => toast.show('Could not load addresses', { tone: 'danger' }))
+      .finally(() => setIsLoadingAddresses(false))
 
     void fetchBuyerPaymentMethods(user.id).then(({ methods, error }) => {
       const parsed = (methods ?? []).map(parsePaymentMethod)
       setSavedPaymentMethods(parsed)
       const defaultMethod = parsed.find((method) => method.is_default) ?? parsed[0] ?? null
       setSelectedSavedPaymentId(defaultMethod?.id ?? null)
-      if (error) {
-        toast.show('Could not load payment methods', { tone: 'danger', message: error })
-      }
+      if (error) toast.show('Could not load payment methods', { tone: 'danger', message: error })
     })
   }, [isAuthenticated, toast, user])
 
@@ -128,32 +183,58 @@ export function CheckoutScreen() {
     )
   }
 
-  if (!cart || items.length === 0) {
+  if (!orderPlaced && (!cart || items.length === 0)) {
     return <Redirect href={commerceRoutes.cart} />
+  }
+  if (!cart) {
+    return <Redirect href={commerceRoutes.home} />
   }
 
   const currency = cart.currency ?? 'INR'
   const needsShipping = cartRequiresShipping(
     listingTypes,
-    items.map((item) => item.listing_id),
+    selectedItems.map((item) => item.listing_id),
   )
-  const hasDigitalItems = items.some((item) => listingTypes.get(item.listing_id) === 'digital')
+  const placeLabel = 'Place your order'
+  const canPlace = !noneSelected && !isSubmitting
 
   async function handlePlaceOrder() {
-    if (!cart || !user) return
-
+    if (!cart || !user || noneSelected) return
     setIsSubmitting(true)
 
     let shippingAddressId = selectedAddressId
 
     try {
+      // Validate stock up-front so a multi-shop order never places some orders
+      // and then fails midway on an out-of-stock item.
+      const { issues, error: stockError } = await checkCartStock(
+        selectedItems.map((item) => ({ listingId: item.listing_id, quantity: item.quantity })),
+      )
+      if (stockError) {
+        toast.show('Could not verify stock', { tone: 'danger', message: stockError })
+        setIsSubmitting(false)
+        return
+      }
+      if (issues.length > 0) {
+        const first = issues[0]
+        toast.show('Not enough stock', {
+          tone: 'danger',
+          message:
+            issues.length === 1
+              ? `Only ${first.available} left of "${first.title}". Update the quantity in your cart.`
+              : `${issues.length} items exceed available stock. Update quantities in your cart.`,
+        })
+        setIsSubmitting(false)
+        router.push(commerceRoutes.cart)
+        return
+      }
+
       if (needsShipping) {
         if (useNewAddress) {
           if (!addressForm.validateAll()) {
             setIsSubmitting(false)
             return
           }
-
           const draftAddress: CheckoutAddressInput = {
             ...newAddress,
             address_line_1: addressForm.fields.address_line_1.value.trim(),
@@ -165,7 +246,6 @@ export function CheckoutScreen() {
             setIsSubmitting(false)
             return
           }
-
           const { address, error } = await saveUserAddress(user.id, draftAddress)
           if (error || !address) {
             toast.show('Could not save address', { tone: 'danger', message: error ?? undefined })
@@ -174,9 +254,8 @@ export function CheckoutScreen() {
           }
           shippingAddressId = address.id
         }
-
         if (!shippingAddressId) {
-          toast.show('Select a shipping address', { tone: 'danger' })
+          toast.show('Select a delivery address', { tone: 'danger' })
           setIsSubmitting(false)
           return
         }
@@ -190,283 +269,661 @@ export function CheckoutScreen() {
         return
       }
 
-      const { data, error } = await createOrderFromCart({
-        cartId: cart.id,
-        shippingAddressId,
-        customerNotes,
-        paymentMethod: needsShipping ? paymentMethod : 'online',
-        savedPaymentMethodId:
-          (needsShipping ? paymentMethod : 'online') === 'online'
-            ? selectedSavedPaymentId ?? undefined
-            : undefined,
+      const mode: CheckoutPaymentMode = needsShipping ? paymentMethod : 'online'
+      const savedPaymentMethodId =
+        mode === 'online' ? selectedSavedPaymentId ?? undefined : undefined
+
+      const toLineItem = (item: CartItemRow): CheckoutLineItem => ({
+        listingId: item.listing_id,
+        quantity: item.quantity,
+        unitPrice: item.unit_price,
+        variationDetails: item.variant_id
+          ? {
+              variant_id: item.variant_id,
+              variant_name: item.variant_name,
+              variant_value: item.variant_value,
+            }
+          : undefined,
       })
 
-      if (error) {
-        toast.show('Checkout failed', { tone: 'danger', message: error })
-        setIsSubmitting(false)
-        return
+      const discountMeta = cart.applied_discount_id
+        ? {
+            profileId: cart.applied_discount_id,
+            name: cart.applied_discount_name,
+            type: cart.applied_discount_type,
+          }
+        : null
+
+      // Etsy-style: buyer pays once (platform-collected), but each shop gets its
+      // own receipt/order. Group selected items per shop and create one order per
+      // shop, splitting any order-level discount proportionally by subtotal.
+      const groups = new Map<string, CartItemRow[]>()
+      for (const item of selectedItems) {
+        const list = groups.get(item.shop_id) ?? []
+        list.push(item)
+        groups.set(item.shop_id, list)
       }
 
-      await refresh()
+      const orderNumbers: string[] = []
+      let checkoutUrl: string | null = null
+      for (const [shopId, shopItems] of groups.entries()) {
+        const shopSubtotal = shopItems.reduce(
+          (sum, item) => sum + item.unit_price * item.quantity,
+          0,
+        )
+        const shopDiscount =
+          subtotal > 0 ? Math.round(((discount * shopSubtotal) / subtotal) * 100) / 100 : 0
+        const shopTotal = Math.max(0, shopSubtotal - shopDiscount)
 
-      if (data?.checkoutUrl && paymentMethod === 'online') {
-        const opened = await openExternalUrl(data.checkoutUrl)
-        if (opened) return
+        const partnerInfo = shopPartners.get(shopId)
+        const collection = paymentCollectionFor(partnerInfo)
+
+        const { data, error } = await createOrderFromCart({
+          userId: user.id,
+          cartId: cart.id,
+          shippingAddressId,
+          customerNotes: notesByShop[shopId]?.trim() || undefined,
+          paymentMode: mode,
+          savedPaymentMethodId,
+          currency,
+          items: shopItems.map(toLineItem),
+          subtotalAmount: shopSubtotal,
+          discountAmount: shopDiscount,
+          totalAmount: shopTotal,
+          discount: shopDiscount > 0 ? discountMeta : null,
+          paymentRouting: {
+            collection,
+            gateway: partnerInfo?.paymentLabel ?? null,
+            shopId,
+            commissionApplies: collection === 'shepay',
+          },
+          isGift: !!giftByShop[shopId],
+        })
+        if (error) {
+          toast.show('Checkout failed', { tone: 'danger', message: error })
+          setIsSubmitting(false)
+          return
+        }
+        if (data?.orderNumber) orderNumbers.push(data.orderNumber)
+        if (!checkoutUrl && data?.checkoutUrl) checkoutUrl = data.checkoutUrl
+      }
+
+      setOrderPlaced(true)
+      await clearCartItems(cart.id)
+
+      if (checkoutUrl && mode === 'online') {
+        const opened = await openExternalUrl(checkoutUrl)
+        if (opened) {
+          void refresh()
+          return
+        }
       }
 
       toast.show('Order placed', {
         tone: 'success',
-        message: data?.orderNumber
-          ? `Order ${data.orderNumber} has been created.`
-          : 'Your order has been created.',
+        message:
+          orderNumbers.length > 1
+            ? `${orderNumbers.length} packages from ${orderNumbers.length} shops are on the way.`
+            : orderNumbers[0]
+              ? `Order ${orderNumbers[0]} has been placed.`
+              : 'Your order has been placed.',
       })
       router.replace(commerceRoutes.home)
+      void refresh()
     } catch {
       toast.show('Checkout failed', { tone: 'danger', message: 'Please try again.' })
-    } finally {
       setIsSubmitting(false)
     }
   }
 
+  const placeButton = (
+    <CommerceButton variant="primary" width="100%" disabled={!canPlace} onPress={handlePlaceOrder}>
+      {isSubmitting ? 'Placing…' : placeLabel}
+    </CommerceButton>
+  )
+
+  const orderSummary = (
+    <YStack
+      backgroundColor={c.panel}
+      borderColor={c.border}
+      borderWidth={1}
+      borderRadius={12}
+      padding="$4"
+      gap="$3"
+      width="100%"
+    >
+      {placeButton}
+      <Text fontSize={11} color={c.secondary} textAlign="center" lineHeight={15}>
+        By placing your order, you agree to SHEconomy&apos;s privacy notice and conditions of use.
+      </Text>
+      <YStack height={1} backgroundColor={c.divider} />
+      <Text fontSize={17} fontWeight="700" color={c.text}>
+        Order summary
+      </Text>
+      <SummaryRow label={`Items (${unitCount})`} value={formatCurrency(subtotal, currency)} />
+      <SummaryRow label="Delivery" value="FREE" valueColor={c.inStock} />
+      {discount > 0 ? (
+        <SummaryRow
+          label={`Promotion${cart.applied_discount_name ? ` (${cart.applied_discount_name})` : ''}`}
+          value={`−${formatCurrency(discount, currency)}`}
+          valueColor={c.inStock}
+        />
+      ) : null}
+      <CartCoupon />
+      <YStack height={1} backgroundColor={c.divider} />
+      <XStack justifyContent="space-between" alignItems="center">
+        <Text fontSize={18} fontWeight="700" color={c.priceStrong}>
+          Order total:
+        </Text>
+        <Text fontSize={18} fontWeight="700" color={c.priceStrong}>
+          {formatCurrency(total, currency)}
+        </Text>
+      </XStack>
+      {multiShop ? (
+        <Text fontSize={11} color={c.secondary} lineHeight={15}>
+          {paymentGroups.direct.length
+            ? `Payments routed per shop · ${paymentGroups.direct.length} paid directly to sellers (0% commission)`
+            : `Securely collected by SHEconomy · ${orderShops.length} shops fulfil separately`}
+        </Text>
+      ) : null}
+    </YStack>
+  )
+
   return (
     <FullWidthLayout scroll>
-      <PageSection paddingVertical="$6" {...LAYOUT_STRETCH}>
-          <YStack gap="$6" width="100%" maxWidth="100%" alignSelf="stretch">
-            <CommercePageHeader
-              title="Checkout"
-              subtitle={
-                needsShipping
-                  ? 'Review your order and shipping details'
-                  : 'Review your order — digital items download instantly'
-              }
-            />
+      <PageSection paddingVertical="$5" {...LAYOUT_STRETCH}>
+        <YStack
+          gap="$4"
+          width="100%"
+          maxWidth="100%"
+          alignSelf="stretch"
+          backgroundColor={c.page}
+          padding={isDesktop ? '$4' : '$2'}
+          borderRadius={12}
+        >
+          <XStack alignItems="center" gap="$2" paddingHorizontal="$1">
+            <Icons.Lock size={16} color={c.brand} />
+            <Text fontSize={22} fontWeight="600" color={c.text}>
+              Secure checkout
+            </Text>
+          </XStack>
 
-            <XStack
-              width="100%"
-              maxWidth="100%"
-              alignSelf="stretch"
-              flexDirection={isDesktop ? 'row' : 'column'}
-              alignItems="flex-start"
-              gap={isWide ? 32 : 24}
-            >
-              <YStack flex={1} minWidth={0} width="100%" gap="$4">
-                {hasDigitalItems && !needsShipping ? (
-                  <CommercePanel backgroundColor={ui.digitalBg}>
-                    <Text fontWeight="700" fontSize={16} color={ui.text}>
-                      Digital delivery
-                    </Text>
-                    <Text fontSize={13} color={ui.textSecondary} lineHeight={18} fontWeight="500">
-                      Your digital files will be available to download right after purchase. No
-                      shipping required.
-                    </Text>
-                  </CommercePanel>
-                ) : null}
-
-                {needsShipping ? (
-                <CommercePanel>
-                  <Text fontWeight="700" fontSize={16} color={ui.text}>
-                    Shipping address
-                  </Text>
-
+          <XStack
+            width="100%"
+            alignSelf="stretch"
+            flexDirection={isDesktop ? 'row' : 'column'}
+            alignItems="flex-start"
+            gap="$4"
+          >
+            <YStack flex={1} minWidth={0} width="100%" gap="$4">
+              {needsShipping ? (
+                <SectionCard step={1} title="Delivery address">
                   {addresses.length > 0 ? (
                     <YStack gap="$2">
-                      {addresses.map((address) => (
-                        <XStack
-                          key={address.id}
-                          gap="$3"
-                          padding="$3"
-                          borderRadius={radius.chip}
-                          borderWidth={1}
-                          borderColor={
-                            !useNewAddress && selectedAddressId === address.id
-                              ? ui.brand
-                              : ui.borderSubtle
-                          }
-                          cursor="pointer"
-                          onPress={() => {
-                            setUseNewAddress(false)
-                            setSelectedAddressId(address.id)
-                          }}
-                        >
-                          <YStack flex={1} gap={2}>
-                            <Text fontWeight="500" fontSize={14}>
-                              {address.address_label}
-                            </Text>
-                            <Paragraph fontSize={13} color={ui.textSecondary}>
-                              {address.address_line_1}
-                              {address.address_line_2 ? `, ${address.address_line_2}` : ''}
-                              {'\n'}
-                              {address.city}, {address.state} {address.postal_code}
-                            </Paragraph>
-                          </YStack>
-                        </XStack>
-                      ))}
+                      {addresses.map((address) => {
+                        const selected = !useNewAddress && selectedAddressId === address.id
+                        return (
+                          <XStack
+                            key={address.id}
+                            gap="$3"
+                            padding="$3"
+                            borderRadius={10}
+                            borderWidth={1}
+                            borderColor={selected ? c.brand : c.border}
+                            backgroundColor={selected ? c.chip : c.panel}
+                            cursor="pointer"
+                            onPress={() => {
+                              setUseNewAddress(false)
+                              setSelectedAddressId(address.id)
+                            }}
+                          >
+                            <YStack paddingTop="$1">
+                              <CommerceRadio selected={selected} />
+                            </YStack>
+                            <YStack flex={1} gap={2}>
+                              <Text fontWeight="700" fontSize={14} color={c.text}>
+                                {address.address_label}
+                              </Text>
+                              <Paragraph fontSize={13} color={c.secondary}>
+                                {address.address_line_1}
+                                {address.address_line_2 ? `, ${address.address_line_2}` : ''}
+                                {'\n'}
+                                {address.city}, {address.state} {address.postal_code}
+                              </Paragraph>
+                            </YStack>
+                          </XStack>
+                        )
+                      })}
                     </YStack>
                   ) : null}
 
-                  <XStack gap="$2" flexWrap="wrap" alignItems="center">
-                    <Button
-                      tone={useNewAddress ? 'primary' : 'outline'}
-                      size="$3"
-                      borderRadius={999}
-                      onPress={() => setUseNewAddress(true)}
-                    >
-                      {addresses.length ? 'Use a new address' : 'Add shipping address'}
-                    </Button>
+                  <XStack gap="$3" alignItems="center" flexWrap="wrap">
+                    <CommerceLink onPress={() => setUseNewAddress(true)}>
+                      {addresses.length ? '+ Add a new delivery address' : '+ Add a delivery address'}
+                    </CommerceLink>
                     <Link href={commerceRoutes.addresses} asChild>
-                      <Button tone="outline" size="$3" borderRadius={999}>
+                      <Text fontSize={13} color={c.link} cursor="pointer">
                         Manage addresses
-                      </Button>
+                      </Text>
                     </Link>
                   </XStack>
 
                   {useNewAddress ? (
-                    <YStack gap="$3">
-                      <ValidatedTextField
-                        label="Address line 1"
-                        field={addressForm.fields.address_line_1}
-                        required
-                      />
-                      <ValidatedTextField label="Address line 2" field={addressForm.fields.address_line_2} />
+                    <YStack
+                      gap="$3"
+                      padding="$3"
+                      borderRadius={10}
+                      borderWidth={1}
+                      borderColor={c.border}
+                    >
+                      <Field label="Address line 1">
+                        <Input
+                          value={addressForm.fields.address_line_1.value}
+                          onChangeText={addressForm.fields.address_line_1.onChangeText}
+                        />
+                      </Field>
+                      <Field label="Address line 2">
+                        <Input
+                          value={addressForm.fields.address_line_2.value}
+                          onChangeText={addressForm.fields.address_line_2.onChangeText}
+                        />
+                      </Field>
                       <LocationFields
                         value={addressGeoFromInput(newAddress)}
-                        onChange={(geo) => setNewAddress((current) => patchAddressFromGeo(current, geo))}
+                        onChange={(geo) =>
+                          setNewAddress((current) => patchAddressFromGeo(current, geo))
+                        }
                       />
                     </YStack>
                   ) : null}
-                </CommercePanel>
+                </SectionCard>
+              ) : (
+                <SectionCard step={1} title="Digital delivery">
+                  <Text fontSize={13} color={c.secondary} lineHeight={19}>
+                    Your items are digital — files will be available to download right after
+                    purchase. No shipping address required.
+                  </Text>
+                </SectionCard>
+              )}
+
+              <SectionCard step={2} title="Payment method">
+                {paymentMethod === 'online' && paymentStepCount > 1 ? (
+                  <YStack
+                    gap="$2"
+                    padding="$3"
+                    borderRadius={10}
+                    borderWidth={1}
+                    borderColor={c.border}
+                    backgroundColor={c.chip}
+                  >
+                    <XStack alignItems="center" gap="$2">
+                      <Icons.Info size={15} color={c.brand} />
+                      <Text fontSize={12} color={c.text} fontWeight="700" flex={1}>
+                        This order is paid in {paymentStepCount} secure steps
+                      </Text>
+                    </XStack>
+                    {paymentGroups.shepay.length ? (
+                      <PaymentRouteRow
+                        icon={<Icons.ShieldCheck size={14} color={c.brand} />}
+                        title="SHEconomy Payments (SHEPay)"
+                        detail={`${paymentGroups.shepay
+                          .map((shop) => shop.shopName)
+                          .join(', ')} · collected securely by SHEconomy`}
+                      />
+                    ) : null}
+                    {paymentGroups.direct.map((group) => (
+                      <PaymentRouteRow
+                        key={group.shopId}
+                        icon={<Icons.Wallet size={14} color={c.inStock} />}
+                        title={`Paid directly to ${group.shopName}`}
+                        detail={`via ${group.gateway} · 0% SHEconomy commission`}
+                      />
+                    ))}
+                  </YStack>
+                ) : paymentMethod === 'online' && paymentGroups.direct.length === 1 ? (
+                  <XStack
+                    gap="$2"
+                    alignItems="center"
+                    padding="$2.5"
+                    borderRadius={10}
+                    backgroundColor={c.chip}
+                  >
+                    <Icons.Wallet size={15} color={c.inStock} />
+                    <Text fontSize={12} color={c.secondary} flex={1}>
+                      Paid directly to {paymentGroups.direct[0].shopName} via{' '}
+                      {paymentGroups.direct[0].gateway}. SHEconomy charges no commission.
+                    </Text>
+                  </XStack>
+                ) : null}
+                <PaymentOption
+                  selected={paymentMethod === 'online'}
+                  title="Credit/Debit card, UPI, Net banking, Wallet"
+                  subtitle={
+                    paymentGroups.direct.length && !paymentGroups.shepay.length
+                      ? 'Paid directly to the seller — 0% commission'
+                      : 'Processed securely (SHEPay for SHEconomy-powered shops)'
+                  }
+                  onPress={() => setPaymentMethod('online')}
+                />
+                {paymentMethod === 'online' && savedPaymentMethods.length > 0 ? (
+                  <YStack gap="$2" paddingLeft="$6">
+                    {savedPaymentMethods.map((method) => {
+                      const selected = selectedSavedPaymentId === method.id
+                      return (
+                        <XStack
+                          key={method.id}
+                          gap="$3"
+                          alignItems="center"
+                          padding="$2.5"
+                          borderRadius={10}
+                          borderWidth={1}
+                          borderColor={selected ? c.brand : c.border}
+                          cursor="pointer"
+                          onPress={() => setSelectedSavedPaymentId(method.id)}
+                        >
+                          <CommerceRadio selected={selected} size={16} />
+                          <YStack flex={1} minWidth={0}>
+                            <Text fontSize={13} fontWeight="600" color={c.text} numberOfLines={1}>
+                              {paymentMethodTitle(method)}
+                            </Text>
+                            <Text fontSize={12} color={c.secondary} numberOfLines={1}>
+                              {paymentMethodSubtitle(method)}
+                            </Text>
+                          </YStack>
+                        </XStack>
+                      )
+                    })}
+                  </YStack>
                 ) : null}
 
-                <CommercePanel gap="$3">
-                  <Text fontWeight="700" fontSize={16} color={ui.text}>
-                    Payment
+                {needsShipping ? (
+                  <PaymentOption
+                    selected={paymentMethod === 'cod'}
+                    title="Cash on delivery / Pay on delivery"
+                    subtitle="Pay with cash, UPI or card when your order arrives"
+                    onPress={() => setPaymentMethod('cod')}
+                  />
+                ) : null}
+
+                <Link href={commerceRoutes.paymentMethods} asChild>
+                  <Text fontSize={13} color={c.link} cursor="pointer" paddingTop="$1">
+                    Manage payment methods
                   </Text>
-                  <XStack gap="$2" flexWrap="wrap">
-                    <Button
-                      tone={paymentMethod === 'online' ? 'primary' : 'outline'}
-                      size="$3"
-                      borderRadius={999}
-                      onPress={() => setPaymentMethod('online')}
-                    >
-                      Pay online
-                    </Button>
-                    {needsShipping ? (
-                    <Button
-                      tone={paymentMethod === 'cod' ? 'primary' : 'outline'}
-                      size="$3"
-                      borderRadius={999}
-                      onPress={() => setPaymentMethod('cod')}
-                    >
-                      Cash on delivery
-                    </Button>
-                    ) : null}
-                  </XStack>
-
-                  {paymentMethod === 'online' ? (
-                    <YStack gap="$2">
-                      {savedPaymentMethods.length > 0 ? (
-                        <>
-                          <Text fontSize={13} fontWeight="600" color={ui.textSecondary}>
-                            Saved payment methods
-                          </Text>
-                          {savedPaymentMethods.map((method) => {
-                            const selected = selectedSavedPaymentId === method.id
-                            return (
-                              <XStack
-                                key={method.id}
-                                gap="$3"
-                                alignItems="center"
-                                padding="$3"
-                                borderRadius={12}
-                                borderWidth={1}
-                                borderColor={selected ? ui.brand : ui.borderSubtle}
-                                backgroundColor={selected ? ui.chip : ui.surface}
-                                cursor="pointer"
-                                onPress={() => setSelectedSavedPaymentId(method.id)}
-                              >
-                                <YStack flex={1} gap={2} minWidth={0}>
-                                  <Text fontWeight="600" fontSize={14} color={ui.text} numberOfLines={1}>
-                                    {paymentMethodTitle(method)}
-                                  </Text>
-                                  <Text fontSize={12} color={ui.textSecondary} numberOfLines={1}>
-                                    {paymentMethodSubtitle(method)}
-                                  </Text>
-                                </YStack>
-                                {method.is_default ? (
-                                  <Text fontSize={11} fontWeight="700" color={ui.brand}>
-                                    Default
-                                  </Text>
-                                ) : null}
-                              </XStack>
-                            )
-                          })}
-                        </>
-                      ) : (
-                        <Text fontSize={13} color={ui.textSecondary}>
-                          Save a card or UPI ID in payment methods for faster checkout.
-                        </Text>
-                      )}
-                      <Link href={commerceRoutes.paymentMethods} asChild>
-                        <Button tone="outline" size="$2.5" borderRadius={999} alignSelf="flex-start">
-                          Manage payment methods
-                        </Button>
-                      </Link>
-                    </YStack>
-                  ) : null}
-
-                  <Field label="Order notes (optional)">
-                    <Input value={customerNotes} onChangeText={setCustomerNotes} />
-                  </Field>
-                </CommercePanel>
-              </YStack>
-
-              <StickyRail width={isDesktop ? 380 : '100%'} maxWidth="100%">
-              <CommercePanel width="100%" gap="$4" style={getShadowStyle('md')}>
-                <Text fontWeight="700" fontSize={18} color={ui.text} letterSpacing={-0.2}>
-                  Order summary
-                </Text>
-                {items.map((item) => (
-                  <XStack key={item.id} justifyContent="space-between" gap="$3">
-                    <Text flex={1} fontSize={13} numberOfLines={2}>
-                      {item.title} × {item.quantity}
-                    </Text>
-                    <Text fontSize={13} fontWeight="500">
-                      {formatCurrency(item.unit_price * item.quantity, currency)}
-                    </Text>
-                  </XStack>
-                ))}
-                <XStack
-                  justifyContent="space-between"
-                  paddingTop="$2"
-                  borderTopWidth={1}
-                  borderTopColor={ui.borderSubtle}
-                >
-                  <Text fontWeight="700">Total</Text>
-                  <Text fontWeight="700">{formatCurrency(cart.total_amount, currency)}</Text>
-                </XStack>
-                <Theme name={BRAND_THEME}>
-                  <Button
-                    tone="primary"
-                    size="$4"
-                    borderRadius={999}
-                    width="100%"
-                    disabled={isSubmitting}
-                    onPress={handlePlaceOrder}
-                    icon={isSubmitting ? <Spinner size="small" color="white" /> : undefined}
-                  >
-                    {isSubmitting ? 'Placing order…' : 'Place order'}
-                  </Button>
-                </Theme>
-                <Link href={commerceRoutes.cart} asChild>
-                  <Button tone="outline" size="$3" borderRadius={999} width="100%">
-                    Back to cart
-                  </Button>
                 </Link>
-              </CommercePanel>
+              </SectionCard>
+
+              <SectionCard step={3} title="Review your order">
+                {multiShop ? (
+                  <Text fontSize={12} color={c.secondary}>
+                    Your order includes items from {orderShops.length} shops. Each shop packs and
+                    ships separately, so you may receive multiple deliveries.
+                  </Text>
+                ) : null}
+
+                {orderShops.map((shop, index) => {
+                  const shopItems = selectedItems.filter((item) => item.shop_id === shop.shopId)
+                  const shopSubtotal = shopItems.reduce(
+                    (sum, item) => sum + item.unit_price * item.quantity,
+                    0,
+                  )
+                  return (
+                    <YStack
+                      key={shop.shopId}
+                      gap="$2.5"
+                      paddingTop={index > 0 ? '$3' : 0}
+                      borderTopWidth={index > 0 ? 1 : 0}
+                      borderTopColor={c.divider}
+                    >
+                      <XStack alignItems="center" gap="$2">
+                        <Icons.Store size={14} color={c.secondary} />
+                        <Text fontSize={13} color={c.text} fontWeight="600">
+                          {shop.shopName}
+                        </Text>
+                      </XStack>
+                      <ShopRatingBadge info={shopHeaders.get(shop.shopId)} />
+                      <XStack alignItems="center" gap="$1.5">
+                        <Icons.Truck size={13} color={c.inStock} />
+                        <Text fontSize={12} color={c.inStock} fontWeight="600">
+                          {deliveryEstimateLabel()}
+                        </Text>
+                      </XStack>
+                      <ShopPartnerChips info={shopPartners.get(shop.shopId)} />
+                      {shopItems.map((item) => (
+                        <XStack key={item.id} gap="$3" alignItems="center">
+                          <YStack
+                            width={54}
+                            height={54}
+                            borderRadius={8}
+                            overflow="hidden"
+                            backgroundColor={c.imagePlaceholder}
+                            flexShrink={0}
+                          >
+                            {item.image_url ? (
+                              <Image
+                                src={item.image_url}
+                                width={54}
+                                height={54}
+                                objectFit="contain"
+                              />
+                            ) : null}
+                          </YStack>
+                          <YStack flex={1} minWidth={0}>
+                            <Text fontSize={13} color={c.text} numberOfLines={2}>
+                              {item.title}
+                            </Text>
+                            <Text fontSize={12} color={c.secondary}>
+                              Qty: {item.quantity}
+                            </Text>
+                          </YStack>
+                          <Text fontSize={14} fontWeight="700" color={c.priceStrong}>
+                            {formatCurrency(item.unit_price * item.quantity, currency)}
+                          </Text>
+                        </XStack>
+                      ))}
+                      <XStack justifyContent="flex-end">
+                        <Text fontSize={12} color={c.secondary}>
+                          Shop subtotal:{' '}
+                          <Text fontWeight="700" color={c.text}>
+                            {formatCurrency(shopSubtotal, currency)}
+                          </Text>
+                        </Text>
+                      </XStack>
+                      <GiftToggle
+                        active={!!giftByShop[shop.shopId]}
+                        onToggle={() =>
+                          setGiftByShop((current) => ({
+                            ...current,
+                            [shop.shopId]: !current[shop.shopId],
+                          }))
+                        }
+                      />
+                      <Field
+                        label={
+                          giftByShop[shop.shopId]
+                            ? `Gift message for ${shop.shopName}`
+                            : `Add a note to ${shop.shopName} (optional)`
+                        }
+                      >
+                        <Input
+                          value={notesByShop[shop.shopId] ?? ''}
+                          placeholder={
+                            giftByShop[shop.shopId]
+                              ? 'Write your gift message…'
+                              : 'Personalization, delivery instructions…'
+                          }
+                          onChangeText={(value) =>
+                            setNotesByShop((current) => ({ ...current, [shop.shopId]: value }))
+                          }
+                        />
+                      </Field>
+                    </YStack>
+                  )
+                })}
+              </SectionCard>
+
+              {!isDesktop ? orderSummary : null}
+            </YStack>
+
+            {isDesktop ? (
+              <StickyRail width={SUMMARY_WIDTH} maxWidth="100%">
+                {orderSummary}
               </StickyRail>
-            </XStack>
-          </YStack>
+            ) : null}
+          </XStack>
+        </YStack>
       </PageSection>
     </FullWidthLayout>
+  )
+}
+
+function SectionCard({
+  step,
+  title,
+  children,
+}: {
+  step: number
+  title: string
+  children: ReactNode
+}) {
+  const c = useCommercePalette()
+  const ui = useAppUi()
+  return (
+    <YStack
+      backgroundColor={c.panel}
+      borderColor={c.border}
+      borderWidth={1}
+      borderRadius={12}
+      padding="$4"
+      gap="$3"
+    >
+      <XStack alignItems="center" gap="$2">
+        <Text
+          width={22}
+          height={22}
+          borderRadius={11}
+          backgroundColor={ui.brand}
+          color={ui.onBrand}
+          fontSize={13}
+          fontWeight="700"
+          textAlign="center"
+          lineHeight={22}
+        >
+          {step}
+        </Text>
+        <Text fontSize={18} fontWeight="700" color={c.text}>
+          {title}
+        </Text>
+      </XStack>
+      {children}
+    </YStack>
+  )
+}
+
+function GiftToggle({ active, onToggle }: { active: boolean; onToggle: () => void }) {
+  const c = useCommercePalette()
+  return (
+    <XStack
+      alignItems="center"
+      gap="$2"
+      alignSelf="flex-start"
+      paddingHorizontal="$3"
+      paddingVertical="$2"
+      borderRadius={999}
+      borderWidth={1}
+      borderColor={active ? c.brand : c.border}
+      backgroundColor={active ? c.chip : c.panel}
+      cursor="pointer"
+      onPress={onToggle}
+    >
+      <Icons.Gift size={15} color={active ? c.brand : c.secondary} />
+      <Text fontSize={13} fontWeight="600" color={active ? c.brand : c.text}>
+        This is a gift
+      </Text>
+      {active ? <Icons.Check size={15} color={c.brand} /> : null}
+    </XStack>
+  )
+}
+
+function PaymentRouteRow({
+  icon,
+  title,
+  detail,
+}: {
+  icon: ReactNode
+  title: string
+  detail: string
+}) {
+  const c = useCommercePalette()
+  return (
+    <XStack gap="$2" alignItems="flex-start" paddingLeft="$1">
+      <YStack paddingTop={2}>{icon}</YStack>
+      <YStack flex={1} minWidth={0}>
+        <Text fontSize={12} fontWeight="600" color={c.text}>
+          {title}
+        </Text>
+        <Text fontSize={11} color={c.secondary}>
+          {detail}
+        </Text>
+      </YStack>
+    </XStack>
+  )
+}
+
+function PaymentOption({
+  selected,
+  title,
+  subtitle,
+  onPress,
+}: {
+  selected: boolean
+  title: string
+  subtitle: string
+  onPress: () => void
+}) {
+  const c = useCommercePalette()
+  return (
+    <XStack
+      gap="$3"
+      alignItems="center"
+      padding="$3"
+      borderRadius={10}
+      borderWidth={1}
+      borderColor={selected ? c.brand : c.border}
+      backgroundColor={selected ? c.chip : c.panel}
+      cursor="pointer"
+      onPress={onPress}
+    >
+      <CommerceRadio selected={selected} />
+      <YStack flex={1} minWidth={0}>
+        <Text fontSize={14} fontWeight="600" color={c.text}>
+          {title}
+        </Text>
+        <Text fontSize={12} color={c.secondary}>
+          {subtitle}
+        </Text>
+      </YStack>
+    </XStack>
+  )
+}
+
+function SummaryRow({
+  label,
+  value,
+  valueColor,
+}: {
+  label: string
+  value: string
+  valueColor?: string
+}) {
+  const c = useCommercePalette()
+  return (
+    <XStack justifyContent="space-between" alignItems="center">
+      <Text fontSize={13} color={c.secondary}>
+        {label}
+      </Text>
+      <Text fontSize={13} fontWeight="600" color={valueColor ?? c.text}>
+        {value}
+      </Text>
+    </XStack>
   )
 }

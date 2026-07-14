@@ -69,6 +69,7 @@ export function FavoritesScreen() {
           error={error}
           onLoadMore={() => {}}
           emptyMessage="Your wishlist is empty."
+          showQuickAdd
         />
       </PageSection>
     </FullWidthLayout>

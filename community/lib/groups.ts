@@ -40,9 +40,16 @@ export async function fetchGroup(id: string): Promise<{ data: Group | null; erro
   return { data: (data as Group | null) ?? null, error: error?.message ?? null }
 }
 
+export type GroupFilters = {
+  groupType?: string
+  location?: string
+  industry?: string
+}
+
 export async function fetchGroups(
   page = 0,
   search = '',
+  filters: GroupFilters = {},
 ): Promise<{ items: Group[]; hasMore: boolean; error: string | null }> {
   const from = page * GROUP_PAGE_SIZE
   const to = from + GROUP_PAGE_SIZE - 1
@@ -56,6 +63,10 @@ export async function fetchGroups(
     query = query.or(`name.ilike.%${search.trim()}%,title.ilike.%${search.trim()}%`)
   }
 
+  if (filters.groupType) query = query.eq('group_type', filters.groupType)
+  if (filters.location) query = query.eq('location', filters.location)
+  if (filters.industry) query = query.contains('industries', [filters.industry])
+
   const { data, error, count } = await query.range(from, to)
   if (error) return { items: [], hasMore: false, error: error.message }
 
@@ -65,6 +76,38 @@ export async function fetchGroups(
     hasMore: total ? to + 1 < total : (data?.length ?? 0) === GROUP_PAGE_SIZE,
     error: null,
   }
+}
+
+export type GroupFacets = {
+  locations: string[]
+  industries: string[]
+}
+
+/** Distinct location + industry values for stable group filter menus. */
+export async function fetchGroupFacets(): Promise<GroupFacets> {
+  const locations = new Set<string>()
+  const industries = new Set<string>()
+  const sorted = (set: Set<string>) => Array.from(set).sort((a, b) => a.localeCompare(b))
+
+  const { data: facetRows, error } = await supabase.rpc('community_group_facets')
+  if (!error && facetRows) {
+    for (const row of facetRows as { facet: string; value: string }[]) {
+      if (row.facet === 'location') locations.add(row.value)
+      else if (row.facet === 'industry') industries.add(row.value)
+    }
+    return { locations: sorted(locations), industries: sorted(industries) }
+  }
+
+  const { data } = await supabase.from('groups').select('location, industries').limit(1000)
+
+  for (const row of (data ?? []) as { location: string | null; industries: string[] | null }[]) {
+    if (row.location?.trim()) locations.add(row.location.trim())
+    for (const value of row.industries ?? []) {
+      if (value?.trim()) industries.add(value.trim())
+    }
+  }
+
+  return { locations: sorted(locations), industries: sorted(industries) }
 }
 
 export async function fetchMyGroups(userId: string): Promise<Group[]> {

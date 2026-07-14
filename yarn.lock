@@ -8118,6 +8118,13 @@ __metadata:
   languageName: node
   linkType: hard
 
+"date-fns@npm:^4.4.0":
+  version: 4.4.0
+  resolution: "date-fns@npm:4.4.0"
+  checksum: 10/ae702acea42fb8452abe74f6d133c2360de9a14f00985645684b0df9c12280276649e95b52298a4fd7dabcc3b38799eb111107da99320d1cd94ba1d8a3d1c174
+  languageName: node
+  linkType: hard
+
 "dayjs@npm:^1.8.15":
   version: 1.11.21
   resolution: "dayjs@npm:1.11.21"
@@ -14085,6 +14092,7 @@ __metadata:
     "@vxrn/color-scheme": "npm:1.20.1"
     core-js: "npm:^3.38.1"
     country-state-city: "npm:^3.2.1"
+    date-fns: "npm:^4.4.0"
     expo: "npm:~55.0.7"
     expo-audio: "npm:~55.0.15"
     expo-camera: "npm:~55.0.20"

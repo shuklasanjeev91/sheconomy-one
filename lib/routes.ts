@@ -84,6 +84,8 @@ export const communityRoutes = {
 
 export const chatRoutes = {
   home: '/chat' as Href,
+  groups: '/chat/groups' as Href,
+  calls: '/chat/calls' as Href,
   conversation: (id: string) => `/chat/${encodeURIComponent(id)}` as Href,
 } as const
 
@@ -186,9 +188,23 @@ export function isChatPath(pathname: string) {
   return pathname === '/chat' || pathname.startsWith('/chat/')
 }
 
+/** Group-chats view (`/chat/groups`). */
+export function isChatGroupsPath(pathname: string) {
+  return pathname === '/chat/groups'
+}
+
+/** Call-history view (`/chat/calls`). */
+export function isChatCallsPath(pathname: string) {
+  return pathname === '/chat/calls'
+}
+
 /** A specific conversation thread (`/chat/{id}`) — rendered full-screen on mobile. */
 export function isChatConversationPath(pathname: string) {
-  return /^\/chat\/[^/]+/.test(pathname)
+  return (
+    /^\/chat\/[^/]+/.test(pathname) &&
+    !isChatGroupsPath(pathname) &&
+    !isChatCallsPath(pathname)
+  )
 }
 
 export function isClassPath(pathname: string) {

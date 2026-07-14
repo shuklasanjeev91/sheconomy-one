@@ -9,6 +9,7 @@ import { CreateListingForm } from '~/commerce/components/seller/CreateListingFor
 import { SellerListingsPanel } from '~/commerce/components/seller/SellerListingsPanel'
 import { SellerOverviewPanel } from '~/commerce/components/seller/SellerOverviewPanel'
 import { ShopSettingsPanel } from '~/commerce/components/seller/ShopSettingsPanel'
+import { ShopCommercePanel } from '~/commerce/components/seller/ShopCommercePanel'
 import { useShopDashboard } from '~/commerce/hooks/useShopDashboard'
 import { Button, Icons, Paragraph, Spinner, Text, XStack, YStack } from '~/components/ui'
 import { PageContent, PageCenter } from '~/components/layout'
@@ -16,11 +17,12 @@ import { commerceRoutes } from '~/lib/routes'
 import { useVendorShops, type VendorShop } from '~/hooks/useVendorShops'
 import { useAppUi } from '~/lib/theme/useAppUi'
 
-type SellerTab = 'overview' | 'listings' | 'settings'
+type SellerTab = 'overview' | 'listings' | 'payments' | 'settings'
 
 const TABS: { id: SellerTab; label: string }[] = [
   { id: 'overview', label: 'Overview' },
   { id: 'listings', label: 'Listings' },
+  { id: 'payments', label: 'Payments & delivery' },
   { id: 'settings', label: 'Settings' },
 ]
 
@@ -151,6 +153,8 @@ export function SellerDashboardScreen() {
             onAddListing={() => setShowCreateListing(true)}
           />
         ) : null}
+
+        {tab === 'payments' ? <ShopCommercePanel shop={activeShop} /> : null}
 
         {tab === 'settings' ? (
           <ShopSettingsPanel shop={activeShop} onUpdated={handleShopUpdated} />

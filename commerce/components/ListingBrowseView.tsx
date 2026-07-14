@@ -21,6 +21,7 @@ type ListingBrowseViewProps = {
   onLoadMore: () => void
   emptyMessage?: string
   hideHeader?: boolean
+  showQuickAdd?: boolean
 }
 
 /** Browse page body — header, grid, infinite scroll. */
@@ -36,6 +37,7 @@ export function ListingBrowseView({
   onLoadMore,
   emptyMessage = 'No listings found.',
   hideHeader = false,
+  showQuickAdd = false,
 }: ListingBrowseViewProps) {
   const ui = useAppUi()
   const media = useMedia()
@@ -76,7 +78,7 @@ export function ListingBrowseView({
         </YStack>
       ) : (
         <YStack gap="$4" width="100%">
-          <ListingGrid listings={items} columns={gridColumns} />
+          <ListingGrid listings={items} columns={gridColumns} showQuickAdd={showQuickAdd} />
           <LoadMoreSentinel
             hasMore={hasMore}
             isLoadingMore={isLoadingMore}

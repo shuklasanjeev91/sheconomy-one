@@ -1,15 +1,48 @@
 import { Link } from 'one'
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 
 import { CommunityCard } from '~/community/components/CommunityCard'
 import { CommunityPageHeader } from '~/community/components/CommunityPageHeader'
 import { CommunityShell } from '~/community/components/CommunityShell'
-import { fetchUpcomingEvents, type CommunityEvent } from '~/community/lib/events'
+import {
+  CommunityFilterPill,
+  CommunityFilterSheet,
+  type FilterOption,
+} from '~/community/components/CommunityFilters'
+import { fetchEventTypeFacets, fetchUpcomingEvents, type CommunityEvent } from '~/community/lib/events'
 import { useCommunityUi } from '~/community/lib/community-theme'
-import { Button, Icons, Image, Spinner, Text, XStack, YStack } from '~/components/ui'
+import { Button, Icons, Image, ScrollView, Spinner, Text, XStack, YStack } from '~/components/ui'
 import { communityRoutes } from '~/lib/routes'
 
 import { BRAND_NAME } from '~/config/brand'
+
+const FORMAT_OPTIONS: FilterOption[] = [
+  { label: 'Any format', value: 'any' },
+  { label: 'Online', value: 'online' },
+  { label: 'In person', value: 'in-person' },
+]
+
+const PRICE_OPTIONS: FilterOption[] = [
+  { label: 'Any price', value: 'any' },
+  { label: 'Free', value: 'free' },
+  { label: 'Paid', value: 'paid' },
+]
+
+const DATE_OPTIONS: FilterOption[] = [
+  { label: 'Any time', value: 'any' },
+  { label: 'This week', value: '7' },
+  { label: 'This month', value: '30' },
+]
+
+type ActiveSheet = 'type' | 'format' | 'price' | 'date' | null
+
+function toOptions(values: string[]): FilterOption[] {
+  return values.map((value) => ({ label: value, value }))
+}
+
+function labelForValue(options: FilterOption[], value: string): string | undefined {
+  return options.find((option) => option.value === value)?.label
+}
 
 export function EventsScreen() {
   const communityUi = useCommunityUi()
@@ -19,20 +52,53 @@ export function EventsScreen() {
   const [isLoading, setIsLoading] = useState(true)
   const [isLoadingMore, setIsLoadingMore] = useState(false)
 
-  const load = useCallback(async (pageToLoad: number, append: boolean) => {
-    if (append) setIsLoadingMore(true)
-    else setIsLoading(true)
-    const result = await fetchUpcomingEvents(pageToLoad)
-    setItems((current) => (append ? [...current, ...result.items] : result.items))
-    setHasMore(result.hasMore)
-    setPage(pageToLoad)
-    setIsLoading(false)
-    setIsLoadingMore(false)
+  const [eventType, setEventType] = useState('')
+  const [format, setFormat] = useState('any')
+  const [price, setPrice] = useState('any')
+  const [datePosted, setDatePosted] = useState('any')
+  const [typeFacets, setTypeFacets] = useState<string[]>([])
+  const [activeSheet, setActiveSheet] = useState<ActiveSheet>(null)
+
+  const load = useCallback(
+    async (pageToLoad: number, append: boolean) => {
+      if (append) setIsLoadingMore(true)
+      else setIsLoading(true)
+      const result = await fetchUpcomingEvents(pageToLoad, {
+        eventType,
+        format,
+        price,
+        withinDays: datePosted === 'any' ? undefined : Number(datePosted),
+      })
+      setItems((current) => (append ? [...current, ...result.items] : result.items))
+      setHasMore(result.hasMore)
+      setPage(pageToLoad)
+      setIsLoading(false)
+      setIsLoadingMore(false)
+    },
+    [datePosted, eventType, format, price],
+  )
+
+  useEffect(() => {
+    fetchEventTypeFacets().then(setTypeFacets)
   }, [])
 
   useEffect(() => {
     load(0, false)
   }, [load])
+
+  const typeOptions = useMemo(() => toOptions(typeFacets), [typeFacets])
+
+  const visibleItems = items
+
+  const activeCount =
+    (eventType ? 1 : 0) + (format !== 'any' ? 1 : 0) + (price !== 'any' ? 1 : 0) + (datePosted !== 'any' ? 1 : 0)
+
+  function clearAll() {
+    setEventType('')
+    setFormat('any')
+    setPrice('any')
+    setDatePosted('any')
+  }
 
   return (
     <CommunityShell wide>
@@ -53,13 +119,54 @@ export function EventsScreen() {
             </Link>
           }
         />
+
+        <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+          <XStack gap={8} alignItems="center" paddingVertical={2}>
+            <CommunityFilterPill
+              label="Event type"
+              summary={eventType || undefined}
+              active={!!eventType}
+              onPress={() => setActiveSheet('type')}
+            />
+            <CommunityFilterPill
+              label="Format"
+              summary={format !== 'any' ? labelForValue(FORMAT_OPTIONS, format) : undefined}
+              active={format !== 'any'}
+              onPress={() => setActiveSheet('format')}
+            />
+            <CommunityFilterPill
+              label="Price"
+              summary={price !== 'any' ? labelForValue(PRICE_OPTIONS, price) : undefined}
+              active={price !== 'any'}
+              onPress={() => setActiveSheet('price')}
+            />
+            <CommunityFilterPill
+              label="Date"
+              summary={datePosted !== 'any' ? labelForValue(DATE_OPTIONS, datePosted) : undefined}
+              active={datePosted !== 'any'}
+              onPress={() => setActiveSheet('date')}
+            />
+            {activeCount > 0 ? (
+              <Text
+                fontSize={13}
+                fontWeight="600"
+                color={communityUi.brand}
+                cursor="pointer"
+                paddingHorizontal={6}
+                onPress={clearAll}
+              >
+                Clear all
+              </Text>
+            ) : null}
+          </XStack>
+        </ScrollView>
       </CommunityCard>
 
       {isLoading ? (
         <YStack alignItems="center" paddingVertical="$8">
           <Spinner size="large" color={communityUi.brand} />
         </YStack>
-      ) : items.length === 0 ? (
+      ) : visibleItems.length === 0 ? (
         <CommunityCard padding={24} gap={12} alignItems="center">
           <Icons.Calendar size={40} color={communityUi.brand} />
           <Text fontWeight="600" color={communityUi.text}>
@@ -76,7 +183,7 @@ export function EventsScreen() {
         </CommunityCard>
       ) : (
         <YStack gap={12}>
-          {items.map((event) => (
+          {visibleItems.map((event) => (
             <Link key={event.id} href={communityRoutes.event(event.id)}>
               <CommunityCard padding={0} overflow="hidden">
                 {event.image_url ? (
@@ -115,6 +222,41 @@ export function EventsScreen() {
           ) : null}
         </YStack>
       )}
+
+      <CommunityFilterSheet
+        open={activeSheet === 'type'}
+        onOpenChange={(open) => !open && setActiveSheet(null)}
+        title="Event type"
+        options={typeOptions}
+        value={eventType ? [eventType] : []}
+        onApply={(next) => setEventType(next[0] ?? '')}
+        searchable
+        searchPlaceholder="Search types"
+      />
+      <CommunityFilterSheet
+        open={activeSheet === 'format'}
+        onOpenChange={(open) => !open && setActiveSheet(null)}
+        title="Format"
+        options={FORMAT_OPTIONS}
+        value={[format]}
+        onApply={(next) => setFormat(next[0] ?? 'any')}
+      />
+      <CommunityFilterSheet
+        open={activeSheet === 'price'}
+        onOpenChange={(open) => !open && setActiveSheet(null)}
+        title="Price"
+        options={PRICE_OPTIONS}
+        value={[price]}
+        onApply={(next) => setPrice(next[0] ?? 'any')}
+      />
+      <CommunityFilterSheet
+        open={activeSheet === 'date'}
+        onOpenChange={(open) => !open && setActiveSheet(null)}
+        title="Date"
+        options={DATE_OPTIONS}
+        value={[datePosted]}
+        onApply={(next) => setDatePosted(next[0] ?? 'any')}
+      />
     </CommunityShell>
   )
 }

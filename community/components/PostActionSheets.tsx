@@ -1,5 +1,6 @@
-import { useRef } from 'react'
+import { useRef, useState } from 'react'
 
+import { SendPostSheet } from '~/chat/components/SendPostSheet'
 import { CommunityAdaptiveSheet } from '~/community/components/CommunityAdaptiveSheet'
 import { MentionInput } from '~/community/components/MentionInput'
 import { PostComments } from '~/community/components/PostComments'
@@ -26,6 +27,7 @@ import {
 import { chatRoutes, routes } from '~/lib/routes'
 import { copyShareLink } from '~/lib/share'
 import { useAppUi } from '~/lib/theme/useAppUi'
+import { useSupabase } from '~/providers/SupabaseProvider'
 
 import { useRouter } from 'one'
 
@@ -43,9 +45,15 @@ export function PostActionSheets({ post, engagement }: PostActionSheetsProps) {
   const ui = useAppUi()
   const router = useRouter()
   const toast = useAppToast()
+  const { user } = useSupabase()
+  const [sendOpen, setSendOpen] = useState(false)
   const repostEncodedRef = useRef('')
   const shareUrl = getPostShareUrl(post.id)
   const authorName = post.author?.full_name || post.author?.username || 'member'
+  const postSnippet = mentionsToPlainText(post.content).trim().slice(0, 140)
+  const sendContext = postSnippet
+    ? `${authorName} on ${BRAND_NAME}: "${postSnippet}"`
+    : `${authorName} on ${BRAND_NAME}`
 
   function requireAuth(action: string) {
     toast.show('Sign in required', {
@@ -190,6 +198,29 @@ export function PostActionSheets({ post, engagement }: PostActionSheetsProps) {
               }
             })
           }}
+          onLikeComment={(commentId) => {
+            if (!engagement.isAuthenticated) {
+              requireAuth('react')
+              return
+            }
+            engagement.toggleCommentLike(commentId).then((result) => {
+              if (result?.error) {
+                toast.show('Could not like comment', { tone: 'danger', message: result.error })
+              }
+            })
+          }}
+          onReply={(parentId, encoded) => {
+            if (!engagement.isAuthenticated) {
+              requireAuth('comment')
+              return
+            }
+            return engagement.replyToComment(parentId, encoded).then((result) => {
+              if (result?.error) {
+                toast.show('Could not reply', { tone: 'danger', message: result.error })
+              }
+              return result
+            })
+          }}
         />
       </CommunityAdaptiveSheet>
 
@@ -270,11 +301,26 @@ export function PostActionSheets({ post, engagement }: PostActionSheetsProps) {
             label="Send in a message"
             onPress={() => {
               engagement.closeSheet()
-              router.push(chatRoutes.home)
+              if (!user?.id) {
+                requireAuth('send this post')
+                return
+              }
+              setSendOpen(true)
             }}
           />
         }
       />
+
+      {user?.id ? (
+        <SendPostSheet
+          open={sendOpen}
+          onOpenChange={setSendOpen}
+          currentUserId={user.id}
+          shareUrl={shareUrl}
+          contextText={sendContext}
+          onSent={(conversationId) => router.push(chatRoutes.conversation(conversationId))}
+        />
+      ) : null}
 
       <CommunityAdaptiveSheet
         open={engagement.activeSheet === 'options'}

@@ -19,6 +19,7 @@ export type JobListing = {
   application_count: number
   benefits: string | null
   requirements: string | null
+  industry: string | null
   posted_by: string
   poster_name: string
   poster_avatar: string
@@ -52,8 +53,21 @@ export async function searchJobs(
 
   if (error) return { items: [], hasMore: false, error: error.message }
 
-  const items = (data ?? []) as JobListing[]
+  const items = await enrichWithIndustry((data ?? []) as JobListing[])
   return { items, hasMore: items.length === JOB_PAGE_SIZE, error: null }
+}
+
+/**
+ * The `search_jobs` RPC does not return the `industry` column, so we hydrate it
+ * from the base table in a single follow-up query. Keeps industry filtering
+ * fully functional without changing the remote function signature.
+ */
+async function enrichWithIndustry(items: JobListing[]): Promise<JobListing[]> {
+  if (!items.length) return items
+  const ids = items.map((job) => job.id)
+  const { data } = await supabase.from('jobs').select('id, industry').in('id', ids)
+  const industryById = new Map((data ?? []).map((row) => [row.id, row.industry as string | null]))
+  return items.map((job) => ({ ...job, industry: industryById.get(job.id) ?? job.industry ?? null }))
 }
 
 export async function searchJobsByCompany(
@@ -115,6 +129,7 @@ export async function fetchJob(
       application_count: row.applicants_count ?? 0,
       benefits: row.benefits,
       requirements: row.requirements,
+      industry: row.industry ?? null,
       posted_by: row.posted_by,
       poster_name: poster?.full_name ?? 'Recruiter',
       poster_avatar: poster?.avatar_url ?? '',

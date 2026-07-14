@@ -15,12 +15,18 @@ import {
   getCartSessionId,
   getOrCreateCart,
   mergeGuestCartWithUser,
+  removeCartDiscount,
   removeCartItem,
   updateCartItemQuantity,
   type CartItemRow,
   type CartRow,
   type CartWithItems,
 } from '~/commerce/lib/cart'
+import {
+  applyCouponCode,
+  autoApplyBestOffer,
+  reconcileCartDiscount,
+} from '~/commerce/lib/discounts'
 import { useSupabase } from '~/providers/SupabaseProvider'
 
 type CartContextValue = {
@@ -35,6 +41,10 @@ type CartContextValue = {
   }>
   updateQuantity: (cartItemId: string, quantity: number) => Promise<{ error: string | null }>
   removeItem: (cartItemId: string) => Promise<{ error: string | null }>
+  applyCoupon: (code: string) => Promise<{ error: string | null }>
+  removeCoupon: () => Promise<{ error: string | null }>
+  /** True when the current discount was auto-applied as the best available offer. */
+  couponAutoApplied: boolean
 }
 
 const CartContext = createContext<CartContextValue | null>(null)
@@ -44,7 +54,10 @@ export function CartProvider({ children }: { children: ReactNode }) {
   const [cartData, setCartData] = useState<CartWithItems | null>(null)
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const [autoApplied, setAutoApplied] = useState(false)
   const mergedRef = useRef(false)
+  // Stop auto-applying the best offer once the shopper removes a coupon themselves.
+  const couponOptOutRef = useRef(false)
 
   const loadCart = useCallback(async () => {
     if (authLoading) return
@@ -70,6 +83,29 @@ export function CartProvider({ children }: { children: ReactNode }) {
       if (itemsError || !data) {
         setCartData(null)
         setError(itemsError ?? 'Could not load cart items')
+      } else if (data.cart.applied_discount_id) {
+        // Keep a percentage coupon (or its min-order eligibility) in sync with
+        // the latest subtotal after quantity/remove edits.
+        const changed = await reconcileCartDiscount(data.cart)
+        if (changed) {
+          const fresh = await fetchCartWithItems(cart.id)
+          setCartData(fresh.data ?? data)
+        } else {
+          setCartData(data)
+        }
+      } else if (!couponOptOutRef.current && data.cart.items_subtotal > 0) {
+        // No coupon applied — auto-apply the best eligible offer (marketplace-style).
+        const result = await autoApplyBestOffer({
+          cartId: cart.id,
+          subtotal: data.cart.items_subtotal,
+        })
+        if (result.applied) {
+          setAutoApplied(true)
+          const fresh = await fetchCartWithItems(cart.id)
+          setCartData(fresh.data ?? data)
+        } else {
+          setCartData(data)
+        }
       } else {
         setCartData(data)
       }
@@ -167,6 +203,36 @@ export function CartProvider({ children }: { children: ReactNode }) {
     [cartData?.cart.id, loadCart],
   )
 
+  const applyCoupon = useCallback(
+    async (code: string) => {
+      const cart = cartData?.cart
+      if (!cart) return { error: 'Cart not found' }
+      const { error: couponError } = await applyCouponCode({
+        cartId: cart.id,
+        code,
+        subtotal: cart.items_subtotal,
+        currency: cart.currency ?? 'INR',
+      })
+      if (!couponError) {
+        // A hand-picked coupon isn't the "auto best offer" badge.
+        setAutoApplied(false)
+        await loadCart()
+      }
+      return { error: couponError }
+    },
+    [cartData?.cart, loadCart],
+  )
+
+  const removeCoupon = useCallback(async () => {
+    const cart = cartData?.cart
+    if (!cart) return { error: 'Cart not found' }
+    // Respect the shopper's choice — don't silently re-apply an auto offer.
+    couponOptOutRef.current = true
+    const { error: removeError } = await removeCartDiscount(cart.id)
+    if (!removeError) await loadCart()
+    return { error: removeError }
+  }, [cartData?.cart, loadCart])
+
   const value = useMemo<CartContextValue>(
     () => ({
       cart: cartData?.cart ?? null,
@@ -178,8 +244,22 @@ export function CartProvider({ children }: { children: ReactNode }) {
       addToCart,
       updateQuantity,
       removeItem,
+      applyCoupon,
+      removeCoupon,
+      couponAutoApplied: autoApplied && !!cartData?.cart.applied_discount_id,
     }),
-    [addToCart, cartData, error, isLoading, loadCart, removeItem, updateQuantity],
+    [
+      addToCart,
+      applyCoupon,
+      autoApplied,
+      cartData,
+      error,
+      isLoading,
+      loadCart,
+      removeCoupon,
+      removeItem,
+      updateQuantity,
+    ],
   )
 
   return <CartContext.Provider value={value}>{children}</CartContext.Provider>

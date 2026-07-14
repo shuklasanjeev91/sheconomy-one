@@ -2,6 +2,7 @@ import { Link } from 'one'
 import { Platform } from 'react-native'
 
 import {
+  AvailableOffersCard,
   CategoryChip,
   CommerceSection,
   HomeHeroSlider,
@@ -117,6 +118,10 @@ export function HomeScreenView({ data, error, loading = false }: HomeScreenViewP
             <Spinner size="small" />
           </PageSection>
         ) : null}
+
+        <PageSection>
+          <AvailableOffersCard title="Offers for you" maxItems={6} />
+        </PageSection>
 
         <PageSection>
           <InfiniteListingSection

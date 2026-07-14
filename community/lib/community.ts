@@ -48,6 +48,45 @@ export type CommunityPoll = {
   myOptionId: string | null
 }
 
+/** "Celebrate an occasion" post (new job, work anniversary, launch, etc.). */
+export type PostCelebration = {
+  occasion: string
+  title: string
+  subtitle?: string | null
+  imageUrl?: string | null
+}
+
+/** A product/listing shared into the feed. */
+export type PostProduct = {
+  listingId: string | null
+  title: string
+  price: number | null
+  currency: string | null
+  imageUrl: string | null
+  slug: string | null
+  shopName: string | null
+}
+
+/** A shop promoted into the feed. */
+export type PostShop = {
+  shopId: string | null
+  name: string
+  logoUrl: string | null
+  slug: string | null
+  description: string | null
+}
+
+/** Open Graph preview for a URL shared in a post (LinkedIn-style unfurl). */
+export type PostLinkPreview = {
+  url: string
+  title: string | null
+  description: string | null
+  image: string | null
+  siteName: string | null
+  video: string | null
+  videoType: string | null
+}
+
 export type CommunityPost = {
   id: string
   content: string
@@ -73,6 +112,11 @@ export type CommunityPost = {
   event_location: string | null
   event_rsvp_enabled: boolean | null
   poll: CommunityPoll | null
+  listing_id: string | null
+  celebration: PostCelebration | null
+  product: PostProduct | null
+  shop: PostShop | null
+  link: PostLinkPreview | null
 }
 
 export type PaginatedPostsResult = {
@@ -86,6 +130,8 @@ export type PaginatedPostsResult = {
 export type CreatePostInput = {
   content: string
   imageUrl?: string | null
+  mediaUrls?: string[] | null
+  visibility?: string
   companyId?: string | null
   groupId?: string | null
   postType?: string | null
@@ -100,6 +146,24 @@ export type CreatePostInput = {
     options: string[]
     durationDays: number
   } | null
+  celebration?: PostCelebration | null
+  product?: {
+    listingId: string
+    title: string
+    price?: number | null
+    currency?: string | null
+    imageUrl?: string | null
+    slug?: string | null
+    shopName?: string | null
+  } | null
+  shop?: {
+    shopId: string
+    name: string
+    logoUrl?: string | null
+    slug?: string | null
+    description?: string | null
+  } | null
+  linkPreview?: PostLinkPreview | null
 }
 
 const POST_STATS_SELECT =
@@ -160,6 +224,11 @@ function mapPost(row: PostRow, username?: string | null): CommunityPost {
     event_location: row.event_location,
     event_rsvp_enabled: row.event_rsvp_enabled,
     poll: null,
+    listing_id: null,
+    celebration: null,
+    product: null,
+    shop: null,
+    link: null,
   }
 }
 
@@ -178,19 +247,99 @@ async function enrichPostsWithUsernames(posts: CommunityPost[]): Promise<Communi
   }))
 }
 
+function toRecord(value: unknown): Record<string, unknown> | null {
+  return value && typeof value === 'object' && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : null
+}
+
+function mapCelebration(value: unknown): PostCelebration | null {
+  const data = toRecord(value)
+  if (!data) return null
+  const occasion = typeof data.occasion === 'string' ? data.occasion : ''
+  const title = typeof data.title === 'string' ? data.title : ''
+  if (!occasion && !title) return null
+  return {
+    occasion,
+    title,
+    subtitle: typeof data.subtitle === 'string' ? data.subtitle : null,
+    imageUrl: typeof data.imageUrl === 'string' ? data.imageUrl : null,
+  }
+}
+
+function mapProduct(value: unknown, listingId: string | null): PostProduct | null {
+  const data = toRecord(value)
+  if (!data && !listingId) return null
+  return {
+    listingId: (typeof data?.listingId === 'string' ? data.listingId : null) ?? listingId,
+    title: typeof data?.title === 'string' ? data.title : '',
+    price: typeof data?.price === 'number' ? data.price : null,
+    currency: typeof data?.currency === 'string' ? data.currency : null,
+    imageUrl: typeof data?.imageUrl === 'string' ? data.imageUrl : null,
+    slug: typeof data?.slug === 'string' ? data.slug : null,
+    shopName: typeof data?.shopName === 'string' ? data.shopName : null,
+  }
+}
+
+function mapLinkPreview(value: unknown): PostLinkPreview | null {
+  const data = toRecord(value)
+  if (!data) return null
+  const url = typeof data.url === 'string' ? data.url : ''
+  if (!url) return null
+  const title = typeof data.title === 'string' ? data.title : null
+  const description = typeof data.description === 'string' ? data.description : null
+  const image = typeof data.image === 'string' ? data.image : null
+  const video = typeof data.video === 'string' ? data.video : null
+  if (!title && !description && !image && !video) return null
+  return {
+    url,
+    title,
+    description,
+    image,
+    siteName: typeof data.siteName === 'string' ? data.siteName : null,
+    video,
+    videoType: typeof data.videoType === 'string' ? data.videoType : null,
+  }
+}
+
+function mapShop(value: unknown): PostShop | null {
+  const data = toRecord(value)
+  if (!data) return null
+  const name = typeof data.name === 'string' ? data.name : ''
+  if (!name) return null
+  return {
+    shopId: typeof data.shopId === 'string' ? data.shopId : null,
+    name,
+    logoUrl: typeof data.logoUrl === 'string' ? data.logoUrl : null,
+    slug: typeof data.slug === 'string' ? data.slug : null,
+    description: typeof data.description === 'string' ? data.description : null,
+  }
+}
+
 async function enrichPostsWithPostMeta(posts: CommunityPost[]): Promise<CommunityPost[]> {
   const ids = posts.map((post) => post.id).filter(Boolean)
   if (!ids.length) return posts
 
-  const { data } = await supabase.from('posts').select('id, company_id, group_id').in('id', ids)
+  const { data } = await supabase
+    .from('posts')
+    .select(
+      'id, company_id, group_id, listing_id, celebration_data, product_data, service_data, link_preview_data',
+    )
+    .in('id', ids)
   const metaById = new Map((data ?? []).map((row) => [row.id, row]))
 
   return posts.map((post) => {
     const meta = metaById.get(post.id)
+    const listingId = meta?.listing_id ?? null
     return {
       ...post,
       company_id: meta?.company_id ?? null,
       group_id: meta?.group_id ?? null,
+      listing_id: listingId,
+      celebration: mapCelebration(meta?.celebration_data),
+      product: mapProduct(meta?.product_data, listingId),
+      shop: mapShop(meta?.service_data),
+      link: mapLinkPreview(meta?.link_preview_data),
     }
   })
 }
@@ -309,9 +458,13 @@ async function enrichPosts(posts: CommunityPost[]): Promise<CommunityPost[]> {
   return enrichPostsWithPolls(withContext)
 }
 
+/** Feed content filter used by the "Post type" pill on the main feed. */
+export type FeedContentFilter = 'photos' | 'polls' | 'events' | 'text'
+
 type PostFilter = {
   companyId?: string
   groupId?: string
+  feed?: FeedContentFilter
 }
 
 async function fetchPostsPage(
@@ -331,6 +484,20 @@ async function fetchPostsPage(
     .from('posts_with_stats')
     .select(POST_STATS_SELECT, { count: 'exact' })
     .eq('is_deleted', false)
+
+  if (filter?.feed === 'photos') {
+    // Media posts are identified by presence of media, not a post_type value.
+    query = query.or('image_url.not.is.null,media_urls.not.is.null')
+  } else if (filter?.feed === 'polls') {
+    query = query.eq('post_type', 'poll')
+  } else if (filter?.feed === 'events') {
+    query = query.eq('post_type', 'event')
+  } else if (filter?.feed === 'text') {
+    query = query
+      .is('image_url', null)
+      .is('media_urls', null)
+      .not('post_type', 'in', '(poll,event)')
+  }
 
   query =
     sort === 'top'
@@ -414,8 +581,9 @@ export async function fetchCommunityFeedPage(
   page: number,
   pageSize = COMMUNITY_PAGE_SIZE,
   sort: FeedSort = 'recent',
+  feed?: FeedContentFilter,
 ): Promise<PaginatedPostsResult> {
-  return fetchPostsPage(page, pageSize, sort)
+  return fetchPostsPage(page, pageSize, sort, feed ? { feed } : undefined)
 }
 
 export async function fetchPostById(id: string): Promise<ApiResult<CommunityPost>> {
@@ -509,17 +677,48 @@ export async function createCommunityPost(
   input: CreatePostInput,
 ): Promise<{ id: string | null; error: string | null }> {
   const content = input.content.trim()
-  const imageUrl = input.imageUrl?.trim() || null
+  const mediaUrls = (input.mediaUrls ?? []).map((url) => url.trim()).filter(Boolean)
+  const imageUrl = input.imageUrl?.trim() || mediaUrls[0] || null
   const isEvent = !!input.eventTitle?.trim()
   const pollOptions = (input.poll?.options ?? []).map((option) => option.trim()).filter(Boolean)
   const pollQuestion = input.poll?.question?.trim() ?? ''
   const hasPoll = !!input.poll && pollOptions.length >= 2
-  if (!content && !imageUrl && !isEvent && !hasPoll) {
+  const hasImage = !!imageUrl || mediaUrls.length > 0
+  const celebration =
+    input.celebration && (input.celebration.occasion || input.celebration.title)
+      ? input.celebration
+      : null
+  const product = input.product?.listingId ? input.product : null
+  const shop = input.shop?.shopId ? input.shop : null
+  const linkPreview =
+    input.linkPreview?.url &&
+    (input.linkPreview.title || input.linkPreview.description || input.linkPreview.image)
+      ? input.linkPreview
+      : null
+  if (!content && !hasImage && !isEvent && !hasPoll && !celebration && !product && !shop) {
     return { id: null, error: 'Write something or add media before posting.' }
   }
 
   const tags = extractHashtags(content)
   const mentions = extractMentions(content)
+
+  // NOTE: post_type is constrained by posts_post_type_check to a fixed set
+  // (post, poll, event, celebration, product, service, text, thought,
+  // group_post). Media posts are surfaced via media_urls/image_url presence,
+  // not a dedicated type, so a generic 'post' is used for text/photo/GIF.
+  const postType =
+    input.postType ??
+    (celebration
+      ? 'celebration'
+      : product
+        ? 'product'
+        : shop
+          ? 'service'
+          : hasPoll
+            ? 'poll'
+            : isEvent
+              ? 'event'
+              : 'post')
 
   const { data, error } = await supabase
     .from('posts')
@@ -527,19 +726,52 @@ export async function createCommunityPost(
       user_id: userId,
       content,
       post_data: {},
-      visibility: 'public',
-      post_type:
-        input.postType ??
-        (hasPoll
-          ? 'poll'
-          : isEvent
-            ? 'event'
-            : imageUrl && /\.gif/i.test(imageUrl)
-              ? 'gif'
-              : 'text'),
+      visibility: input.visibility ?? 'public',
+      post_type: postType,
       image_url: imageUrl,
+      media_urls: mediaUrls.length ? mediaUrls : null,
       company_id: input.companyId ?? null,
       group_id: input.groupId ?? null,
+      listing_id: product?.listingId ?? null,
+      celebration_data: celebration
+        ? {
+            occasion: celebration.occasion,
+            title: celebration.title,
+            subtitle: celebration.subtitle ?? null,
+            imageUrl: celebration.imageUrl ?? null,
+          }
+        : null,
+      product_data: product
+        ? {
+            listingId: product.listingId,
+            title: product.title,
+            price: product.price ?? null,
+            currency: product.currency ?? null,
+            imageUrl: product.imageUrl ?? null,
+            slug: product.slug ?? null,
+            shopName: product.shopName ?? null,
+          }
+        : null,
+      service_data: shop
+        ? {
+            shopId: shop.shopId,
+            name: shop.name,
+            logoUrl: shop.logoUrl ?? null,
+            slug: shop.slug ?? null,
+            description: shop.description ?? null,
+          }
+        : null,
+      link_preview_data: linkPreview
+        ? {
+            url: linkPreview.url,
+            title: linkPreview.title ?? null,
+            description: linkPreview.description ?? null,
+            image: linkPreview.image ?? null,
+            siteName: linkPreview.siteName ?? null,
+            video: linkPreview.video ?? null,
+            videoType: linkPreview.videoType ?? null,
+          }
+        : null,
       published_at: new Date().toISOString(),
       allow_comments: true,
       allow_reactions: true,

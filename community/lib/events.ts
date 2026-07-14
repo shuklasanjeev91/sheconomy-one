@@ -23,20 +23,42 @@ export type CommunityEvent = {
   created_at: string | null
 }
 
+export type EventFilters = {
+  eventType?: string
+  /** 'online' | 'in-person' */
+  format?: string
+  /** 'free' | 'paid' */
+  price?: string
+  /** Only include events starting within this many days from now. */
+  withinDays?: number
+}
+
 export async function fetchUpcomingEvents(
   page = 0,
+  filters: EventFilters = {},
 ): Promise<{ items: CommunityEvent[]; hasMore: boolean; error: string | null }> {
   const from = page * EVENT_PAGE_SIZE
   const to = from + EVENT_PAGE_SIZE - 1
   const now = new Date().toISOString()
 
-  const { data, error, count } = await supabase
+  let query = supabase
     .from('events')
     .select('*', { count: 'exact' })
     .gte('start_time', now)
     .neq('status', 'cancelled')
     .order('start_time', { ascending: true })
-    .range(from, to)
+
+  if (filters.eventType) query = query.eq('event_type', filters.eventType)
+  if (filters.format === 'online') query = query.eq('is_online', true)
+  if (filters.format === 'in-person') query = query.eq('is_online', false)
+  if (filters.price === 'free') query = query.eq('is_free', true)
+  if (filters.price === 'paid') query = query.eq('is_free', false)
+  if (filters.withinDays && filters.withinDays > 0) {
+    const cutoff = new Date(Date.now() + filters.withinDays * 24 * 60 * 60 * 1000).toISOString()
+    query = query.lte('start_time', cutoff)
+  }
+
+  const { data, error, count } = await query.range(from, to)
 
   if (error) return { items: [], hasMore: false, error: error.message }
 
@@ -46,6 +68,32 @@ export async function fetchUpcomingEvents(
     hasMore: total ? to + 1 < total : (data?.length ?? 0) === EVENT_PAGE_SIZE,
     error: null,
   }
+}
+
+/** Distinct event types for a stable filter menu. */
+export async function fetchEventTypeFacets(): Promise<string[]> {
+  const types = new Set<string>()
+
+  const { data: facetRows, error } = await supabase.rpc('community_event_types')
+  if (!error && facetRows) {
+    for (const row of facetRows as { value: string }[]) {
+      if (row.value) types.add(row.value)
+    }
+    return Array.from(types).sort((a, b) => a.localeCompare(b))
+  }
+
+  const now = new Date().toISOString()
+  const { data } = await supabase
+    .from('events')
+    .select('event_type')
+    .gte('start_time', now)
+    .neq('status', 'cancelled')
+    .limit(1000)
+
+  for (const row of (data ?? []) as { event_type: string | null }[]) {
+    if (row.event_type?.trim()) types.add(row.event_type.trim())
+  }
+  return Array.from(types).sort((a, b) => a.localeCompare(b))
 }
 
 export async function fetchEvent(

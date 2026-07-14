@@ -9,6 +9,7 @@ import { ProfileLink } from '~/community/components/ProfileLink'
 import { fetchUpcomingEvents, type CommunityEvent } from '~/community/lib/events'
 import { useNetwork } from '~/community/hooks/useNetwork'
 import { COMMUNITY_DISCOVER_LINKS } from '~/community/navigation/config'
+import { openComposer } from '~/community/lib/composer-store'
 import { useCommunityUi } from '~/community/lib/community-theme'
 import { COMMUNITY_LAYOUT } from '~/community/lib/layout'
 import { StickyRail } from '~/components/layout'
@@ -54,31 +55,43 @@ export function CommunityRightSidebar({ pin = 'document' }: { pin?: CommunitySid
         <YStack gap={2}>
           {COMMUNITY_DISCOVER_LINKS.map((item) => {
             const Icon = item.icon
+            const row = (
+              <XStack
+                gap={10}
+                alignItems="center"
+                paddingVertical={8}
+                paddingHorizontal={8}
+                borderRadius={8}
+                cursor="pointer"
+                hoverStyle={{ backgroundColor: communityUi.divider }}
+                {...(item.href === communityRoutes.createPost
+                  ? { onPress: () => openComposer() }
+                  : {})}
+              >
+                <XStack
+                  width={32}
+                  height={32}
+                  borderRadius={999}
+                  backgroundColor={item.iconBg}
+                  alignItems="center"
+                  justifyContent="center"
+                >
+                  <Icon size={16} color="white" />
+                </XStack>
+                <Text fontSize={14} fontWeight="500" color={communityUi.text} flex={1}>
+                  {item.label}
+                </Text>
+              </XStack>
+            )
+
+            // "Create post" opens the composer overlay; other links navigate.
+            if (item.href === communityRoutes.createPost) {
+              return <YStack key={item.label}>{row}</YStack>
+            }
+
             return (
               <Link key={item.label} href={item.href}>
-                <XStack
-                  gap={10}
-                  alignItems="center"
-                  paddingVertical={8}
-                  paddingHorizontal={8}
-                  borderRadius={8}
-                  cursor="pointer"
-                  hoverStyle={{ backgroundColor: communityUi.divider }}
-                >
-                  <XStack
-                    width={32}
-                    height={32}
-                    borderRadius={999}
-                    backgroundColor={item.iconBg}
-                    alignItems="center"
-                    justifyContent="center"
-                  >
-                    <Icon size={16} color="white" />
-                  </XStack>
-                  <Text fontSize={14} fontWeight="500" color={communityUi.text} flex={1}>
-                    {item.label}
-                  </Text>
-                </XStack>
+                {row}
               </Link>
             )
           })}

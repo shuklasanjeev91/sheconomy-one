@@ -5,7 +5,10 @@ import { CommunityCard } from '~/community/components/CommunityCard'
 import { CommunityShell } from '~/community/components/CommunityShell'
 import { createStory } from '~/community/lib/stories'
 import { useCommunityUi } from '~/community/lib/community-theme'
-import { Button, Input, Spinner, Text, TextArea, XStack, YStack, useAppToast } from '~/components/ui'
+import { Button, Spinner, Text, TextArea, XStack, YStack, useAppToast } from '~/components/ui'
+import { ImageUploadField, preparePickedImagesForUpload } from '~/components/media/ImageUploadField'
+import type { PickedImage } from '~/lib/media/pick-image'
+import { uploadPostImages } from '~/lib/supabase/storage-upload'
 import { communityRoutes } from '~/lib/routes'
 import { useSupabase } from '~/providers/SupabaseProvider'
 
@@ -17,7 +20,7 @@ export function StoryComposerScreen() {
   const toast = useAppToast()
   const { user } = useSupabase()
   const [content, setContent] = useState('')
-  const [mediaUrl, setMediaUrl] = useState('')
+  const [storyImage, setStoryImage] = useState<PickedImage[]>([])
   const [bgColor, setBgColor] = useState(BG_COLORS[0])
   const [mode, setMode] = useState<'text' | 'image'>('text')
   const [isPosting, setIsPosting] = useState(false)
@@ -28,16 +31,32 @@ export function StoryComposerScreen() {
       toast.show('Add text', { tone: 'danger', message: 'Write something for your story.' })
       return
     }
-    if (mode === 'image' && !mediaUrl.trim()) {
-      toast.show('Add image', { tone: 'danger', message: 'Paste an image URL.' })
+    if (mode === 'image' && !storyImage[0]) {
+      toast.show('Add image', { tone: 'danger', message: 'Choose an image for your story.' })
       return
     }
 
     setIsPosting(true)
+
+    let mediaUrl: string | undefined
+    if (mode === 'image' && storyImage[0]) {
+      const files = await preparePickedImagesForUpload(storyImage)
+      const { urls, error: uploadError } = await uploadPostImages(user.id, files)
+      if (uploadError || !urls[0]) {
+        setIsPosting(false)
+        toast.show('Could not upload image', {
+          tone: 'danger',
+          message: uploadError ?? 'Try again shortly.',
+        })
+        return
+      }
+      mediaUrl = urls[0]
+    }
+
     const result = await createStory(user.id, {
       mediaType: mode,
       content: mode === 'text' ? content : undefined,
-      mediaUrl: mode === 'image' ? mediaUrl : undefined,
+      mediaUrl,
       backgroundColor: bgColor,
     })
     setIsPosting(false)
@@ -102,11 +121,12 @@ export function StoryComposerScreen() {
           </>
         ) : (
           <>
-            <Input value={mediaUrl} onChangeText={setMediaUrl} placeholder="Image URL" />
-            {mediaUrl ? (
-              // eslint-disable-next-line jsx-a11y/alt-text
-              <img src={mediaUrl} style={{ width: '100%', maxHeight: 320, objectFit: 'cover', borderRadius: 12 }} />
-            ) : null}
+            <ImageUploadField
+              label="Story image"
+              hint="Upload a photo for your story."
+              value={storyImage}
+              onChange={setStoryImage}
+            />
             <TextArea value={content} onChangeText={setContent} placeholder="Optional caption" />
           </>
         )}

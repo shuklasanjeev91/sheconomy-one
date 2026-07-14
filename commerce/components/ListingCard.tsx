@@ -1,11 +1,12 @@
 import { useState } from 'react'
-import { Link } from 'one'
+import { Link, useRouter } from 'one'
 
-import { Icons, Text, XStack, YStack } from '~/components/ui'
+import { Button, Icons, Text, XStack, YStack, useAppToast } from '~/components/ui'
 import { radius } from '~/config/tokens'
 import { getListingSlug } from '~/lib/supabase/commerce'
 import type { ListingSummary } from '~/lib/supabase/commerce'
 import { routes } from '~/lib/routes'
+import { useCart } from '~/commerce/hooks/useCart'
 import { useThemedShadowStyle } from '~/lib/theme/useThemedShadowStyle'
 
 import { FavoriteButton } from './FavoriteButton'
@@ -21,12 +22,14 @@ import { formatCurrency, formatRating } from '~/lib/format'
 type ListingCardProps = {
   listing: ListingSummary
   compact?: boolean
+  /** Show an inline "Add to cart" button (used on wishlist/favorites). */
+  showQuickAdd?: boolean
 }
 
 /**
  * Listing tile — square image(s), heart overlay, title, optional rating, bold price.
  */
-export function ListingCard({ listing, compact }: ListingCardProps) {
+export function ListingCard({ listing, compact, showQuickAdd }: ListingCardProps) {
   const ui = useAppUi()
   const cardShadow = useThemedShadowStyle('sm')
   const cardShadowMd = useThemedShadowStyle('md')
@@ -169,6 +172,43 @@ export function ListingCard({ listing, compact }: ListingCardProps) {
           </XStack>
         </YStack>
       </Link>
+
+      {showQuickAdd ? <QuickAddButton listing={listing} /> : null}
     </YStack>
+  )
+}
+
+function QuickAddButton({ listing }: { listing: ListingSummary }) {
+  const { addToCart } = useCart()
+  const toast = useAppToast()
+  const router = useRouter()
+  const [adding, setAdding] = useState(false)
+
+  return (
+    <Button
+      size="$2.5"
+      tone="primary"
+      borderRadius={999}
+      width="100%"
+      disabled={adding}
+      icon={<Icons.ShoppingCart size={14} />}
+      onPress={async () => {
+        setAdding(true)
+        const { error } = await addToCart(listing.id)
+        setAdding(false)
+        if (error) {
+          // Likely needs variant/option selection — send them to the product page.
+          toast.show('Choose options', {
+            tone: 'default',
+            message: 'Select options on the product page to add it.',
+          })
+          router.push(routes.listing(getListingSlug(listing)))
+          return
+        }
+        toast.show('Added to cart', { tone: 'success' })
+      }}
+    >
+      {adding ? 'Adding…' : 'Add to cart'}
+    </Button>
   )
 }

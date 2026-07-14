@@ -102,6 +102,37 @@ export async function uploadEventCoverImage(
 }
 
 /**
+ * Upload one or more images for a community post to the public `post-images`
+ * bucket. Paths are prefixed with the uploader's id to satisfy owner-scoped
+ * write policies. Returns public URLs in the same order as the input files.
+ */
+export async function uploadPostImages(
+  userId: string,
+  files: Array<{ blob: Blob; mimeType: string; fileName?: string }>,
+) {
+  const uploads: UploadResult[] = []
+
+  for (const [index, file] of files.entries()) {
+    const ext = file.fileName?.split('.').pop() ?? extensionForMime(file.mimeType)
+    const path = `${userId}/posts/${Date.now()}-${index}-${randomSuffix()}.${ext}`
+    const { data, error } = await uploadStorageObject(
+      STORAGE_BUCKETS.postImages,
+      path,
+      file.blob,
+      file.mimeType,
+    )
+
+    if (error || !data) {
+      return { urls: uploads.map((item) => item.publicUrl), error: error ?? 'Upload failed.' }
+    }
+
+    uploads.push(data)
+  }
+
+  return { urls: uploads.map((item) => item.publicUrl), error: null as string | null }
+}
+
+/**
  * Upload a group chat avatar to the public `post-images` bucket. Path is
  * prefixed with the uploader's id to satisfy owner-scoped write policies.
  */

@@ -1,19 +1,32 @@
 import { Link } from 'one'
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 
 import { CommunityCard } from '~/community/components/CommunityCard'
 import { CommunityPageHeader } from '~/community/components/CommunityPageHeader'
+import {
+  CommunityFilterPill,
+  CommunityFilterSheet,
+  type FilterOption,
+} from '~/community/components/CommunityFilters'
 import { FullWidthLayout, LAYOUT_STRETCH, PageSection } from '~/components/layout'
 import {
+  fetchNotificationCategories,
   fetchNotifications,
   markAllNotificationsRead,
   markNotificationRead,
   type AppNotification,
 } from '~/community/lib/notifications'
 import { useCommunityUi } from '~/community/lib/community-theme'
-import { Avatar, Button, Spinner, Text, XStack, YStack } from '~/components/ui'
+import { Avatar, Button, ScrollView, Spinner, Text, XStack, YStack } from '~/components/ui'
 import { useSupabase } from '~/providers/SupabaseProvider'
 import { useAppUi } from '~/lib/theme/useAppUi'
+
+function titleCase(value: string): string {
+  return value
+    .replace(/[_-]+/g, ' ')
+    .replace(/\b\w/g, (c) => c.toUpperCase())
+    .trim()
+}
 
 export function NotificationsScreen() {
   const communityUi = useCommunityUi()
@@ -25,6 +38,11 @@ export function NotificationsScreen() {
   const [isLoading, setIsLoading] = useState(true)
   const [isLoadingMore, setIsLoadingMore] = useState(false)
 
+  const [category, setCategory] = useState('')
+  const [unreadOnly, setUnreadOnly] = useState(false)
+  const [categoryFacets, setCategoryFacets] = useState<string[]>([])
+  const [categorySheetOpen, setCategorySheetOpen] = useState(false)
+
   const load = useCallback(
     async (pageToLoad: number, append: boolean) => {
       if (!user) {
@@ -34,19 +52,28 @@ export function NotificationsScreen() {
       }
       if (append) setIsLoadingMore(true)
       else setIsLoading(true)
-      const result = await fetchNotifications(user.id, pageToLoad)
+      const result = await fetchNotifications(user.id, pageToLoad, { category, unreadOnly })
       setItems((current) => (append ? [...current, ...result.items] : result.items))
       setHasMore(result.hasMore)
       setPage(pageToLoad)
       setIsLoading(false)
       setIsLoadingMore(false)
     },
-    [user],
+    [category, unreadOnly, user],
   )
+
+  useEffect(() => {
+    if (user) fetchNotificationCategories(user.id).then(setCategoryFacets)
+  }, [user])
 
   useEffect(() => {
     load(0, false)
   }, [load])
+
+  const categoryOptions = useMemo<FilterOption[]>(
+    () => categoryFacets.map((value) => ({ label: titleCase(value), value })),
+    [categoryFacets],
+  )
 
   async function handleOpen(notification: AppNotification) {
     if (!notification.read) {
@@ -77,6 +104,39 @@ export function NotificationsScreen() {
                 ) : undefined
               }
             />
+            {user ? (
+              <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+                <XStack gap={8} alignItems="center" paddingVertical={2}>
+                  <CommunityFilterPill
+                    label="Category"
+                    summary={category ? titleCase(category) : undefined}
+                    active={!!category}
+                    onPress={() => setCategorySheetOpen(true)}
+                  />
+                  <CommunityFilterPill
+                    label="Unread only"
+                    summary="Unread only"
+                    active={unreadOnly}
+                    onPress={() => setUnreadOnly((v) => !v)}
+                  />
+                  {category || unreadOnly ? (
+                    <Text
+                      fontSize={13}
+                      fontWeight="600"
+                      color={communityUi.brand}
+                      cursor="pointer"
+                      paddingHorizontal={6}
+                      onPress={() => {
+                        setCategory('')
+                        setUnreadOnly(false)
+                      }}
+                    >
+                      Clear all
+                    </Text>
+                  ) : null}
+                </XStack>
+              </ScrollView>
+            ) : null}
             {!user ? (
               <Text color={ui.textMuted}>Sign in to see your notifications.</Text>
             ) : isLoading ? (
@@ -117,6 +177,17 @@ export function NotificationsScreen() {
               </YStack>
             )}
           </CommunityCard>
+
+          <CommunityFilterSheet
+            open={categorySheetOpen}
+            onOpenChange={setCategorySheetOpen}
+            title="Category"
+            options={categoryOptions}
+            value={category ? [category] : []}
+            onApply={(next) => setCategory(next[0] ?? '')}
+            searchable
+            searchPlaceholder="Search categories"
+          />
       </PageSection>
     </FullWidthLayout>
   )

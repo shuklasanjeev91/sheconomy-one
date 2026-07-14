@@ -127,6 +127,40 @@ export function AppMobileBottomTabs() {
           }
 
           const Icon = tab.icon
+          const iconNode = (
+            <Icon
+              size={isFocused ? TAB_ICON.active : TAB_ICON.inactive}
+              color={isFocused ? activeColor : inactiveColor}
+              fill={
+                isFocused && tab.label !== 'Cart' && tab.label !== 'Shops'
+                  ? activeColor
+                  : 'none'
+              }
+              strokeWidth={isFocused ? 2.4 : 1.85}
+            />
+          )
+
+          // Action tabs (e.g. Create Post) trigger an overlay instead of routing.
+          if (tab.onPress) {
+            return (
+              <MobileTabBarItem
+                key={`${tab.label}-${String(tab.href)}`}
+                flex={1}
+                minWidth={0}
+                alignSelf="stretch"
+                label={tab.label}
+                showLabel={showLabels}
+                isFocused={isFocused}
+                activeColor={activeColor}
+                inactiveColor={inactiveColor}
+                activePillBg={activePillBg}
+                badgeBorderColor={dockSurface}
+                onPress={tab.onPress}
+              >
+                {iconNode}
+              </MobileTabBarItem>
+            )
+          }
 
           return (
             <Link key={`${tab.label}-${String(tab.href)}`} href={tab.href} asChild>
@@ -143,16 +177,7 @@ export function AppMobileBottomTabs() {
                 badge={isCartTab ? itemCount : undefined}
                 badgeBorderColor={dockSurface}
               >
-                <Icon
-                  size={isFocused ? TAB_ICON.active : TAB_ICON.inactive}
-                  color={isFocused ? activeColor : inactiveColor}
-                  fill={
-                    isFocused && tab.label !== 'Cart' && tab.label !== 'Shops'
-                      ? activeColor
-                      : 'none'
-                  }
-                  strokeWidth={isFocused ? 2.4 : 1.85}
-                />
+                {iconNode}
               </MobileTabBarItem>
             </Link>
           )

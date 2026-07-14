@@ -1,4 +1,5 @@
 import type { ComponentType } from 'react'
+import { useMemo, useRef } from 'react'
 import type { ThemeName } from 'tamagui'
 import { Toast as TToast, useToastController, useToastState } from '@tamagui/toast'
 import { getShadowStyle } from '~/config/tokens'
@@ -24,22 +25,34 @@ const TONE_THEME: Partial<Record<ToastTone, ThemeName>> = {
   info: 'blue',
 }
 
-/** `const toast = useAppToast(); toast.show('Saved', { tone: 'success' })` */
+/**
+ * `const toast = useAppToast(); toast.show('Saved', { tone: 'success' })`
+ *
+ * Returns a stable reference so it's safe to include in effect/callback
+ * dependency arrays without triggering re-run loops.
+ */
 export function useAppToast() {
   const controller = useToastController()
-  return {
-    show: (
-      title: string,
-      opts?: { message?: string; tone?: ToastTone; duration?: number }
-    ) => {
-      controller.show(title, {
-        message: opts?.message,
-        tone: opts?.tone ?? 'default',
-        duration: opts?.duration,
-      })
-    },
-    hide: controller.hide,
-  }
+  const controllerRef = useRef(controller)
+  controllerRef.current = controller
+
+  return useMemo(
+    () => ({
+      show: (
+        title: string,
+        opts?: { message?: string; tone?: ToastTone; duration?: number }
+      ) => {
+        controllerRef.current.show(title, {
+          message: opts?.message,
+          tone: opts?.tone ?? 'default',
+          duration: opts?.duration,
+        })
+      },
+      hide: (...args: Parameters<typeof controller.hide>) =>
+        controllerRef.current.hide(...args),
+    }),
+    [],
+  )
 }
 
 /** Mount once near the root — renders whatever `useAppToast().show()` triggers. */

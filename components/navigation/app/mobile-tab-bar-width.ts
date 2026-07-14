@@ -25,6 +25,7 @@ export function formatBottomTabLabel(label: string, tier: BottomTabWidthTier) {
     'Manage shop': 'Shop',
     'Create shop': 'Create',
     'Create Post': 'Post',
+    'New chat': 'New',
     Network: 'Net',
     Groups: 'Groups',
     Events: 'Events',

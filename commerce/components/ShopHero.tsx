@@ -104,7 +104,7 @@ export function ShopHero({
             <Avatar name={shopName} src={logoUrl ?? undefined} size={isDesktop ? '$10' : '$8'} />
           </XStack>
 
-          <YStack flex={1} gap="$3" width="100%" paddingTop={isDesktop ? 0 : '$1'}>
+          <YStack flex={isDesktop ? 1 : undefined} gap="$3" width="100%" paddingTop={isDesktop ? 0 : '$1'}>
             <YStack gap="$2">
               <XStack gap="$2" alignItems="center" flexWrap="wrap">
                 <Text

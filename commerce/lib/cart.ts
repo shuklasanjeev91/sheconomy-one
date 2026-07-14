@@ -153,6 +153,50 @@ export async function removeCartItem(
   return { error: null }
 }
 
+/** Empties a cart after its items have been converted into order(s). */
+export async function clearCartItems(cartId: string): Promise<{ error: string | null }> {
+  const { error } = await supabase.from('cart_items').delete().eq('cart_id', cartId)
+  if (error) {
+    return { error: error.message }
+  }
+  await removeCartDiscount(cartId)
+  await supabase.rpc('update_cart_totals', { p_cart_id: cartId })
+  return { error: null }
+}
+
+export async function applyCartDiscount(options: {
+  cartId: string
+  profileId: string
+  /** Pre-computed, clamped discount amount. Passed so totals never go negative. */
+  amount?: number
+}): Promise<{ cart: CartRow | null; error: string | null }> {
+  const { data, error } = await supabase.rpc('apply_discount_to_cart', {
+    p_cart_id: options.cartId,
+    p_discount_profile_id: options.profileId,
+    p_discount_amount: options.amount ?? undefined,
+  })
+
+  if (error) {
+    return { cart: null, error: error.message }
+  }
+
+  return { cart: data, error: null }
+}
+
+export async function removeCartDiscount(
+  cartId: string,
+): Promise<{ cart: CartRow | null; error: string | null }> {
+  const { data, error } = await supabase.rpc('remove_discount_from_cart', {
+    p_cart_id: cartId,
+  })
+
+  if (error) {
+    return { cart: null, error: error.message }
+  }
+
+  return { cart: data, error: null }
+}
+
 export async function mergeGuestCartWithUser(options: {
   sessionId: string
   userId: string
