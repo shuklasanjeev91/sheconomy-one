@@ -1,17 +1,19 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useWindowDimensions } from 'react-native'
-import { ConnectionState, RoomEvent, Track } from 'livekit-client'
+import { ConnectionState, RoomEvent, Track, type Participant } from 'livekit-client'
 
 import {
   AudioSession,
   LiveKitRoom,
   VideoTrack,
   isTrackReference,
+  useLocalParticipant,
+  useParticipants,
   useTracks,
   type TrackReference,
 } from '@livekit/react-native'
 
-import { Spinner, Text, XStack, YStack } from '~/components/ui'
+import { Avatar, Spinner, Text, XStack, YStack } from '~/components/ui'
 import { ScreenCenter, ScreenFill } from '~/components/layout'
 import type { LiveKitMediaControls } from '~/co-work/lib/livekit-media-controls'
 import {
@@ -20,10 +22,14 @@ import {
 } from '~/co-work/hooks/useLiveKitMediaControls'
 import { fetchLiveKitCredentials } from '~/co-work/lib/livekit'
 import { getLiveKitRoomOptions } from '~/co-work/lib/livekit-room-options'
-import { meetingGalleryLayout } from '~/co-work/lib/meeting-gallery-layout'
+import { chunkGalleryRows, meetingGalleryLayout } from '~/co-work/lib/meeting-gallery-layout'
 import { useCoWorkTheme } from '~/co-work/lib/theme'
+import { ensureLiveKitGlobals } from '~/lib/livekit/ensure-globals'
 import { fetchLiveKitConfig, type LiveKitConfig } from '~/lib/livekit/config'
 import { useAppLayout } from '~/hooks/useAppLayout'
+
+// Runs when this module is first evaluated (meeting entry), not at app cold start.
+ensureLiveKitGlobals()
 
 type NativeLiveKitMeetingRoomProps = {
   meetingId: string
@@ -36,8 +42,8 @@ type NativeLiveKitMeetingRoomProps = {
 }
 
 const STAGE_GAP = 10
-const HEADER_CLEARANCE = 88
-const CONTROLS_CLEARANCE = 108
+const HEADER_CLEARANCE = 92
+const CONTROLS_CLEARANCE = 118
 
 export function NativeLiveKitMeetingRoom({
   meetingId,
@@ -62,7 +68,19 @@ export function NativeLiveKitMeetingRoom({
 
   useEffect(() => {
     if (!enabled) return
-    void fetchLiveKitConfig().then(setConfig)
+    let cancelled = false
+    void fetchLiveKitConfig()
+      .then((next) => {
+        if (!cancelled) setConfig(next)
+      })
+      .catch((loadError) => {
+        if (!cancelled) {
+          setError(loadError instanceof Error ? loadError.message : 'Failed to load meeting video config')
+        }
+      })
+    return () => {
+      cancelled = true
+    }
   }, [enabled])
 
   useEffect(() => {
@@ -195,7 +213,30 @@ function NativeLiveKitMeetingContent({
   )
 }
 
-function collectStageTracks(tracks: ReturnType<typeof useTracks>): TrackReference[] {
+type StageTile = {
+  key: string
+  name: string
+  trackRef: TrackReference | null
+  videoOff: boolean
+  isScreen: boolean
+  isLocal: boolean
+}
+
+function participantDisplayName(participant: Participant) {
+  return participant.name?.trim() || participant.identity || 'Participant'
+}
+
+function isCameraOff(participant: Participant, trackRef: TrackReference | null) {
+  if (!participant.isCameraEnabled) return true
+  if (!trackRef) return true
+  return !!trackRef.publication?.isMuted
+}
+
+function buildStageTiles(
+  participants: Participant[],
+  tracks: ReturnType<typeof useTracks>,
+  localIdentity: string | undefined,
+): StageTile[] {
   const screenShares: TrackReference[] = []
   const cameras = new Map<string, TrackReference>()
 
@@ -210,43 +251,151 @@ function collectStageTracks(tracks: ReturnType<typeof useTracks>): TrackReferenc
     cameras.set(track.participant.identity, track)
   }
 
-  return [...screenShares, ...cameras.values()]
+  const cameraTiles: StageTile[] = participants.map((participant) => {
+    const trackRef = cameras.get(participant.identity) ?? null
+    return {
+      key: `camera-${participant.identity}`,
+      name: participantDisplayName(participant),
+      trackRef,
+      videoOff: isCameraOff(participant, trackRef),
+      isScreen: false,
+      isLocal: participant.identity === localIdentity,
+    }
+  })
+
+  // Keep local near the start so 1:1 matches Meet (you | them) reading order.
+  cameraTiles.sort((a, b) => Number(b.isLocal) - Number(a.isLocal))
+
+  const screenTiles: StageTile[] = screenShares.map((trackRef) => ({
+    key: `screen-${trackRef.publication.trackSid ?? trackRef.participant.identity}`,
+    name: `${participantDisplayName(trackRef.participant)} · Screen`,
+    trackRef,
+    videoOff: false,
+    isScreen: true,
+    isLocal: trackRef.participant.identity === localIdentity,
+  }))
+
+  return [...screenTiles, ...cameraTiles]
+}
+
+function NativeParticipantTile({
+  tile,
+  solo,
+  radius,
+  mirror,
+}: {
+  tile: StageTile
+  solo: boolean
+  radius: number
+  mirror?: boolean
+}) {
+  const showVideo = !!tile.trackRef && !tile.videoOff
+
+  return (
+    <YStack
+      flex={1}
+      width="100%"
+      height="100%"
+      minWidth={0}
+      minHeight={0}
+      borderRadius={solo ? radius : 16}
+      overflow="hidden"
+      borderWidth={1}
+      borderColor="rgba(255,255,255,0.12)"
+      backgroundColor="#1a1216"
+      position="relative"
+    >
+      {showVideo && tile.trackRef ? (
+        <VideoTrack
+          trackRef={tile.trackRef}
+          style={{ width: '100%', height: '100%' }}
+          objectFit={tile.isScreen ? 'contain' : 'cover'}
+          mirror={mirror ?? (tile.isLocal && !tile.isScreen)}
+          zOrder={tile.isLocal ? 1 : 0}
+        />
+      ) : (
+        <YStack flex={1} alignItems="center" justifyContent="center" gap="$2" backgroundColor="#141014">
+          <Avatar name={tile.name} size={solo ? '$10' : '$8'} />
+          <Text fontSize={12} color="rgba(255,255,255,0.45)" fontWeight="600">
+            Camera off
+          </Text>
+        </YStack>
+      )}
+
+      <YStack
+        position="absolute"
+        left={10}
+        bottom={10}
+        paddingHorizontal={12}
+        paddingVertical={5}
+        borderRadius={999}
+        backgroundColor="rgba(12, 8, 10, 0.75)"
+        borderWidth={1}
+        borderColor="rgba(255,255,255,0.12)"
+        maxWidth="90%"
+      >
+        <Text fontSize={12} fontWeight="700" color="#fff" numberOfLines={1}>
+          {tile.isLocal ? `${tile.name} (You)` : tile.name}
+        </Text>
+      </YStack>
+    </YStack>
+  )
 }
 
 function NativeMeetingVideoStage() {
   const { ui: coworkUi } = useCoWorkTheme()
   const { width, height } = useWindowDimensions()
   const { isDesktop, isTablet, safeTop } = useAppLayout()
+  const participants = useParticipants()
+  const { localParticipant } = useLocalParticipant()
   const tracks = useTracks([Track.Source.Camera, Track.Source.ScreenShare], {
     onlySubscribed: false,
   })
 
-  const videoTracks = useMemo(() => collectStageTracks(tracks), [tracks])
-  const isLandscape = width > height
-  const useWideLayout = isDesktop || isTablet || width >= 768
-  const layout = useMemo(
-    () =>
-      meetingGalleryLayout(Math.max(videoTracks.length, 1), {
-        isDesktop: useWideLayout,
-        isLandscape,
-      }),
-    [videoTracks.length, useWideLayout, isLandscape],
+  const tiles = useMemo(
+    () => buildStageTiles(participants, tracks, localParticipant?.identity),
+    [participants, tracks, localParticipant?.identity],
   )
 
+  const useWideLayout = isDesktop || isTablet || width >= 768
   const topInset = Math.max(safeTop, 12) + HEADER_CLEARANCE
   // Meeting chrome is chromeless — no app tab bar. Leave room for the control dock only.
   const bottomInset = CONTROLS_CLEARANCE
-  const horizontalPad = useWideLayout ? 20 : 12
-  const stageWidth = Math.max(width - horizontalPad * 2, 160)
-  const stageHeight = Math.max(height - topInset - bottomInset, 180)
-  const solo = videoTracks.length <= 1
+  const horizontalPad = useWideLayout ? 16 : 10
+  const stageWidth = Math.max(width - horizontalPad * 2, 1)
+  const stageHeight = Math.max(height - topInset - bottomInset, 1)
 
-  const cellWidth = solo
-    ? stageWidth
-    : Math.floor((stageWidth - STAGE_GAP * (layout.columns - 1)) / layout.columns)
-  const cellHeight = solo
-    ? stageHeight
-    : Math.floor((stageHeight - STAGE_GAP * (layout.rows - 1)) / layout.rows)
+  const screenTile = tiles.find((tile) => tile.isScreen)
+  const cameraTiles = tiles.filter((tile) => !tile.isScreen)
+  const localCamera = cameraTiles.find((tile) => tile.isLocal) ?? null
+  const remoteCameras = cameraTiles.filter((tile) => !tile.isLocal)
+
+  // WhatsApp / Meet / Zoom 1:1 — remote fills the stage, local floats as PiP.
+  const isDualCall = !screenTile && remoteCameras.length === 1 && !!localCamera
+  const dualPrimary = isDualCall ? remoteCameras[0] : null
+  const dualPip = isDualCall ? localCamera : null
+
+  const galleryTiles = isDualCall ? [] : tiles
+  const layout = useMemo(
+    () =>
+      meetingGalleryLayout(Math.max(galleryTiles.length, 1), {
+        width: stageWidth,
+        height: stageHeight,
+      }),
+    [galleryTiles.length, stageWidth, stageHeight],
+  )
+
+  const solo = galleryTiles.length <= 1
+  const rows = useMemo(
+    () => chunkGalleryRows(galleryTiles, layout.columns),
+    [galleryTiles, layout.columns],
+  )
+
+  // Screen share: dominant top tile, cameras in a compact strip below (Meet/Zoom style).
+  const screenFocus = !!screenTile && cameraTiles.length > 0
+
+  const pipWidth = Math.min(useWideLayout ? 240 : 148, Math.floor(stageWidth * (useWideLayout ? 0.28 : 0.4)))
+  const pipHeight = Math.round(pipWidth * (9 / 16))
 
   return (
     <YStack
@@ -257,8 +406,9 @@ function NativeMeetingVideoStage() {
       paddingTop={topInset}
       paddingBottom={bottomInset}
       paddingHorizontal={horizontalPad}
+      position="relative"
     >
-      {videoTracks.length === 0 ? (
+      {tiles.length === 0 ? (
         <YStack
           flex={1}
           width="100%"
@@ -270,69 +420,84 @@ function NativeMeetingVideoStage() {
           borderColor="rgba(255,255,255,0.08)"
         >
           <Text color="rgba(255,255,255,0.65)" fontSize={15} fontWeight="600">
-            Waiting for video…
+            Waiting for participants…
           </Text>
           <Text color="rgba(255,255,255,0.4)" fontSize={13} marginTop="$2">
-            Turn on your camera or wait for others to join
+            Others will appear here when they join
           </Text>
         </YStack>
+      ) : isDualCall && dualPrimary && dualPip ? (
+        <>
+          <YStack flex={1} width="100%" height="100%" minHeight={0}>
+            <NativeParticipantTile tile={dualPrimary} solo radius={coworkUi.radius.tile} />
+          </YStack>
+          <YStack
+            position="absolute"
+            right={0}
+            bottom={8}
+            width={pipWidth}
+            height={pipHeight}
+            zIndex={20}
+            borderRadius={16}
+            overflow="hidden"
+            borderWidth={1}
+            borderColor="rgba(255,255,255,0.2)"
+            backgroundColor="#1a1216"
+            elevation={8}
+            shadowColor="#000"
+            shadowOpacity={0.35}
+            shadowRadius={12}
+            shadowOffset={{ width: 0, height: 4 }}
+          >
+            <NativeParticipantTile tile={dualPip} solo={false} radius={16} mirror />
+          </YStack>
+        </>
+      ) : screenFocus && screenTile ? (
+        <YStack flex={1} width="100%" gap={STAGE_GAP} minHeight={0}>
+          <YStack flex={3} minHeight={0} width="100%">
+            <NativeParticipantTile tile={screenTile} solo={false} radius={coworkUi.radius.tile} />
+          </YStack>
+          <XStack flex={1} width="100%" gap={STAGE_GAP} minHeight={96}>
+            {cameraTiles.map((tile) => (
+              <NativeParticipantTile
+                key={tile.key}
+                tile={tile}
+                solo={false}
+                radius={coworkUi.radius.tile}
+              />
+            ))}
+          </XStack>
+        </YStack>
       ) : (
-        <XStack
-          flex={1}
-          width="100%"
-          flexWrap="wrap"
-          alignContent={solo ? 'stretch' : 'center'}
-          justifyContent="center"
-          gap={STAGE_GAP}
-        >
-          {videoTracks.map((trackRef) => {
-            const name =
-              trackRef.participant.name ||
-              trackRef.participant.identity ||
-              'Participant'
-            const isScreen =
-              trackRef.source === Track.Source.ScreenShare ||
-              trackRef.publication.source === Track.Source.ScreenShare
-
+        <YStack flex={1} width="100%" height="100%" gap={STAGE_GAP} minHeight={0}>
+          {rows.map((row, rowIndex) => {
+            const incomplete = row.length < layout.columns
+            const tileWidth =
+              (stageWidth - STAGE_GAP * Math.max(layout.columns - 1, 0)) / layout.columns
             return (
-              <YStack
-                key={trackRef.publication.trackSid ?? `${trackRef.participant.identity}-${trackRef.source}`}
-                width={cellWidth}
-                height={cellHeight}
-                maxWidth="100%"
-                borderRadius={solo ? coworkUi.radius.tile : 14}
-                overflow="hidden"
-                borderWidth={1}
-                borderColor="rgba(255,255,255,0.12)"
-                backgroundColor="#1a1216"
-                position="relative"
+              <XStack
+                key={`row-${rowIndex}`}
+                flex={1}
+                width="100%"
+                gap={STAGE_GAP}
+                minHeight={0}
+                justifyContent={incomplete ? 'center' : 'flex-start'}
               >
-                <VideoTrack
-                  trackRef={trackRef}
-                  style={{ width: '100%', height: '100%' }}
-                  objectFit={isScreen ? 'contain' : 'cover'}
-                />
-                <YStack
-                  position="absolute"
-                  left={10}
-                  bottom={10}
-                  paddingHorizontal={12}
-                  paddingVertical={5}
-                  borderRadius={999}
-                  backgroundColor="rgba(12, 8, 10, 0.72)"
-                  borderWidth={1}
-                  borderColor="rgba(255,255,255,0.12)"
-                  maxWidth="90%"
-                >
-                  <Text fontSize={12} fontWeight="700" color="#fff" numberOfLines={1}>
-                    {name}
-                    {isScreen ? ' · Screen' : ''}
-                  </Text>
-                </YStack>
-              </YStack>
+                {row.map((tile) => (
+                  <YStack
+                    key={tile.key}
+                    flex={incomplete ? undefined : 1}
+                    width={incomplete ? tileWidth : undefined}
+                    minWidth={0}
+                    minHeight={0}
+                  >
+                    <NativeParticipantTile tile={tile} solo={solo} radius={coworkUi.radius.tile} />
+                  </YStack>
+                ))}
+              </XStack>
             )
           })}
-        </XStack>
+        </YStack>
       )}
     </YStack>
   )

@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react'
 import { Platform } from 'react-native'
 
-import { useMedia } from '~/components/ui'
+import { useMedia } from 'tamagui'
+
 import { useViewportMedia } from '~/hooks/useViewportMedia'
 
 /** Tamagui SSR defaults — keep first client paint aligned to avoid hydration blank screens. */

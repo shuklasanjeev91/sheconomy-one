@@ -1,8 +1,10 @@
 import type { ReactNode } from 'react'
 import { useMemo } from 'react'
 import { Platform, useWindowDimensions } from 'react-native'
+import * as Icons from '@tamagui/lucide-icons'
+import { Text, XStack, YStack } from 'tamagui'
 
-import { Icons, Sheet, SheetFrame, SheetHandle, SheetOverlay, Text, XStack, YStack } from '~/components/ui'
+import { Sheet, SheetFrame, SheetHandle, SheetOverlay } from '~/components/ui/Sheet'
 import { radius } from '~/config/tokens'
 import { useAppLayout } from '~/hooks/useAppLayout'
 import { useAppUi } from '~/lib/theme/useAppUi'

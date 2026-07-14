@@ -24,10 +24,12 @@ import '@tamagui/native/setup-safe-area'
 import '@tamagui/native/setup-expo-linear-gradient'
 import '@tamagui/native/setup-teleport'
 import '@tamagui/native/setup-worklets'
-import { registerGlobals } from '@livekit/react-native'
 
 // Register Tamagui config on the single @tamagui/web instance before any UI mounts.
 import '~/config/tamagui.config'
 
 globalThis.global = globalThis
-registerGlobals()
+
+// Do NOT call LiveKit `registerGlobals()` here. It starts WebRTC threads immediately
+// and can race Hermes GC on cold start (SIGSEGV on the `hades` thread). Globals are
+// registered lazily via `ensureLiveKitGlobals()` when entering a meeting room.

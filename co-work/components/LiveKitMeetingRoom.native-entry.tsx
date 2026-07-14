@@ -1,23 +1,19 @@
-import { useEffect, useState } from 'react'
-
 import { Spinner, Text } from '~/components/ui'
-import { ScreenCenter, ScreenFill } from '~/components/layout'
+import { ScreenFill } from '~/components/layout'
+import { NativeLiveKitMeetingRoom } from '~/co-work/components/NativeLiveKitMeetingRoom'
 import { useCoWorkTheme } from '~/co-work/lib/theme'
 import { supportsLiveKitVideo } from '~/lib/platform/capabilities'
 
 import type { LiveKitMeetingRoomProps } from '~/co-work/lib/livekit-media-controls'
 
+/**
+ * Native LiveKit entry. Keep a static import so Metro does not emit a lazy
+ * chunk (Hermes fails those with SyntaxError: 'identifier' expected).
+ * WebRTC globals are registered inside NativeLiveKitMeetingRoom on first load,
+ * not at app cold start.
+ */
 export function NativeLiveKitMeetingRoomLoader(props: LiveKitMeetingRoomProps) {
   const { ui: coworkUi } = useCoWorkTheme()
-  const [NativeRoom, setNativeRoom] = useState<
-    typeof import('./NativeLiveKitMeetingRoom').NativeLiveKitMeetingRoom | null
-  >(null)
-
-  useEffect(() => {
-    void import('./NativeLiveKitMeetingRoom').then((module) => {
-      setNativeRoom(() => module.NativeLiveKitMeetingRoom)
-    })
-  }, [])
 
   if (!supportsLiveKitVideo()) {
     return (
@@ -29,13 +25,5 @@ export function NativeLiveKitMeetingRoomLoader(props: LiveKitMeetingRoomProps) {
     )
   }
 
-  if (!NativeRoom) {
-    return (
-      <ScreenCenter backgroundColor={coworkUi.pageBg}>
-        <Spinner size="large" color={coworkUi.brand} />
-      </ScreenCenter>
-    )
-  }
-
-  return <NativeRoom {...props} />
+  return <NativeLiveKitMeetingRoom {...props} />
 }
