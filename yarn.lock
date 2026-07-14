@@ -1948,7 +1948,7 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@expo/image-utils@npm:^0.8.14":
+"@expo/image-utils@npm:^0.8.14, @expo/image-utils@npm:^0.8.8":
   version: 0.8.14
   resolution: "@expo/image-utils@npm:0.8.14"
   dependencies:
@@ -12418,6 +12418,18 @@ __metadata:
   languageName: node
   linkType: hard
 
+"onesignal-expo-plugin@npm:^2.7.0":
+  version: 2.7.0
+  resolution: "onesignal-expo-plugin@npm:2.7.0"
+  dependencies:
+    "@expo/image-utils": "npm:^0.8.8"
+  peerDependencies:
+    expo: ">=53.0.0"
+    react-native-onesignal: ">=5.0.0"
+  checksum: 10/be83ad824d2c01d1dcb2719e2541b617d3140d69da6f76b719559dad1e0a6627f788fd14abb962c5a5a7cb35f6bdbe1e8d3b1786f904c6fa86f00b7c1187003c
+  languageName: node
+  linkType: hard
+
 "onetime@npm:^2.0.0":
   version: 2.0.1
   resolution: "onetime@npm:2.0.1"
@@ -13226,6 +13238,17 @@ __metadata:
   languageName: node
   linkType: hard
 
+"react-native-onesignal@npm:^5.5.4":
+  version: 5.5.4
+  resolution: "react-native-onesignal@npm:5.5.4"
+  dependencies:
+    invariant: "npm:^2.2.4"
+  peerDependencies:
+    react-native: ">=0.79.0"
+  checksum: 10/cb01dd6e097ab1909410caa20de8299965aae40e5b08085359cb3ef88898d009f47847eb507b5035e1e8e6cc1d0e60aa6c8185616b81854e8b6345f31121278f
+  languageName: node
+  linkType: hard
+
 "react-native-reanimated@npm:~4.2.1":
   version: 4.2.3
   resolution: "react-native-reanimated@npm:4.2.3"
@@ -13401,6 +13424,13 @@ __metadata:
   bin:
     react-native: cli.js
   checksum: 10/415d10079de4b21608b303809c938154fcd55731204827c34334d331acd8edb0162b72ee146ee61202ecdd2a0c6a5d4e9b35dc82e39a22cd8ff870a2f6b4ac1c
+  languageName: node
+  linkType: hard
+
+"react-onesignal@npm:^3.5.6":
+  version: 3.5.6
+  resolution: "react-onesignal@npm:3.5.6"
+  checksum: 10/2854d8066fab9a78e51d109ed0577b21455e17c01321cb68afc7a790eaa80cd53eb294fb502565d4c6d4f137dd3b8d002e9b78e02b9ac13b9a4c7e0687a975ca
   languageName: node
   linkType: hard
 
@@ -14177,10 +14207,12 @@ __metadata:
     expo-video: "npm:~55.0.18"
     livekit-client: "npm:^2.20.0"
     one: "npm:^1.20.1"
+    onesignal-expo-plugin: "npm:^2.7.0"
     react: "npm:19.2.0"
     react-dom: "npm:19.2.0"
     react-native: "npm:0.83.2"
     react-native-gesture-handler: "npm:~2.30.0"
+    react-native-onesignal: "npm:^5.5.4"
     react-native-reanimated: "npm:~4.2.1"
     react-native-safe-area-context: "npm:~5.6.2"
     react-native-screens: "npm:~4.23.0"
@@ -14189,6 +14221,7 @@ __metadata:
     react-native-web: "npm:^0.21.2"
     react-native-webview: "npm:^14.0.1"
     react-native-worklets: "npm:~0.7.4"
+    react-onesignal: "npm:^3.5.6"
     react-redux: "npm:^9.3.0"
     redux-persist: "npm:^6.0.0"
     tamagui: "npm:2.4.0"

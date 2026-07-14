@@ -12,12 +12,13 @@ import { useThemedShadowStyle } from '~/lib/theme/useThemedShadowStyle'
 import { FavoriteButton } from './FavoriteButton'
 import { ListingBadge } from './ListingBadge'
 import { ListingImage } from './ListingImage'
+import { ListingPriceBlock } from './ListingPriceBlock'
 import { ListingTypeBadge } from './ListingTypeBadge'
 import { StarRating } from './StarRating'
 import { useOptionalMarketplacePersonalization } from '~/commerce/context/MarketplacePersonalizationContext'
 import { buildListingFulfillmentInputFromSummary, getListingCardFulfillmentLabel } from '~/commerce/lib/listing-fulfillment'
 import { useAppUi } from '~/lib/theme/useAppUi'
-import { formatCurrency, formatRating } from '~/lib/format'
+import { formatRating } from '~/lib/format'
 
 type ListingCardProps = {
   listing: ListingSummary
@@ -160,16 +161,22 @@ export function ListingCard({ listing, compact, showQuickAdd }: ListingCardProps
             </XStack>
           ) : null}
 
-          <XStack alignItems="baseline" gap="$2" flexWrap="wrap">
-            <Text fontSize={compact ? 15 : 17} fontWeight="800" color={ui.text} letterSpacing={-0.4}>
-              {formatCurrency(listing.price, listing.currency)}
-            </Text>
+          <YStack gap={2}>
+            <ListingPriceBlock
+              price={listing.price}
+              mrp={listing.mrp}
+              currency={listing.currency}
+              priceIncludesTax={listing.price_includes_tax}
+              taxPercent={listing.tax_percent}
+              size="sm"
+              hideTaxLabel
+            />
             {listing.shop_name && !compact ? (
               <Text fontSize={11} color={ui.textMuted} numberOfLines={1} fontWeight="500">
-                · {listing.shop_name}
+                {listing.shop_name}
               </Text>
             ) : null}
-          </XStack>
+          </YStack>
         </YStack>
       </Link>
 

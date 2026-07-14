@@ -1,3 +1,2 @@
-import { homeLoader, HomeScreenView } from '~/commerce/screens/home-screen.shared'
-
-export { homeLoader, HomeScreenView }
+export { homeLoader, HomeScreen } from '~/commerce/screens/HomeScreen'
+export { SettingsScreen } from '~/screens/SettingsScreen'

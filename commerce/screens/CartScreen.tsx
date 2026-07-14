@@ -1,7 +1,9 @@
 import { Link, useRouter } from 'one'
 import { useEffect, useMemo, useState } from 'react'
+import { Share } from 'react-native'
 
 import { Icons, Image, Spinner, Text, XStack, YStack, useAppToast } from '~/components/ui'
+import { BRAND_NAME } from '~/config/brand'
 import { FullWidthLayout, LAYOUT_STRETCH, PageSection, StickyRail } from '~/components/layout'
 import { useCart } from '~/commerce/hooks/useCart'
 import { useStorefrontCartItems } from '~/commerce/hooks/useStorefrontCartItems'
@@ -14,7 +16,9 @@ import {
   CommerceLink,
   CommerceMobileCheckoutBar,
   COMMERCE_MOBILE_CHECKOUT_BAR_HEIGHT,
+  CartRecoveryNudge,
   CartShopOffers,
+  CartFreeShippingBar,
   ListingRecommendationsSections,
   RecentlyViewedRail,
   ShopPartnerChips,
@@ -34,6 +38,7 @@ import { useFavorites } from '~/commerce/hooks/useFavorites'
 import { fetchListingStockByIds } from '~/commerce/lib/listing-fulfillment'
 import { fetchListingSlugMap, fetchListingTypesByIds, isDigitalListing } from '~/lib/supabase/commerce'
 import { formatCurrency } from '~/lib/format'
+import { copyToClipboard } from '~/lib/platform/clipboard'
 import { commerceRoutes } from '~/lib/routes'
 import { useAppLayout } from '~/hooks/useAppLayout'
 
@@ -91,6 +96,14 @@ export function CartScreen() {
   const { subtotal, unitCount, discount, total } = computeSelectedTotals(cart, items, isSelected)
   const recommendationSeedId = items[0]?.listing_id ?? favoriteIds[0] ?? undefined
   const cartListingIds = useMemo(() => items.map((item) => item.listing_id), [items])
+  const shippableSubtotal = useMemo(() => {
+    return items.reduce((sum, item) => {
+      if (!isSelected(item.id)) return sum
+      const type = listingTypes.get(item.listing_id)
+      if (type && isDigitalListing(type)) return sum
+      return sum + item.total_price
+    }, 0)
+  }, [items, isSelected, listingTypes])
 
   function listingHref(listingId: string) {
     return commerceRoutes.listing(listingSlugs.get(listingId) ?? listingId)
@@ -100,6 +113,43 @@ export function CartScreen() {
     if (nextQuantity < 1) return
     const { error: updateError } = await updateQuantity(itemId, nextQuantity)
     if (updateError) toast.show('Could not update item', { tone: 'danger', message: updateError })
+  }
+
+  async function handleShareCartSummary() {
+    const selected = items.filter((item) => isSelected(item.id))
+    if (!selected.length) {
+      toast.show('Select items to share', { tone: 'info' })
+      return
+    }
+    const lines = selected.map((item) => {
+      const variant =
+        item.variant_name && item.variant_value
+          ? ` (${item.variant_name}: ${item.variant_value})`
+          : item.variant_name
+            ? ` (${item.variant_name})`
+            : ''
+      return `• ${item.title}${variant} × ${item.quantity} — ${formatCurrency(
+        item.unit_price * item.quantity,
+        currency,
+      )}`
+    })
+    const message = [
+      `Cart on ${BRAND_NAME}`,
+      `${selected.length} item${selected.length === 1 ? '' : 's'}`,
+      '',
+      ...lines,
+      '',
+      `Total: ${formatCurrency(total, currency)}`,
+    ].join('\n')
+
+    try {
+      await Share.share({ title: 'Cart summary', message })
+    } catch {
+      const copied = await copyToClipboard(message)
+      toast.show(copied ? 'Cart summary copied' : 'Could not share cart', {
+        tone: copied ? 'success' : 'danger',
+      })
+    }
   }
 
   async function handleRemove(itemId: string) {
@@ -152,10 +202,13 @@ export function CartScreen() {
       width="100%"
     >
       {!noneSelected ? (
-        <Text fontSize={13} color={c.inStock}>
-          Your order is eligible for FREE Delivery.
-        </Text>
+        <CartFreeShippingBar
+          shippableSubtotal={shippableSubtotal}
+          shopIds={shopIds}
+          currency={currency}
+        />
       ) : null}
+      <CartRecoveryNudge itemCount={unitCount} />
       {subtotalLine}
       {discount > 0 ? (
         <XStack justifyContent="space-between">
@@ -214,6 +267,8 @@ export function CartScreen() {
           borderRadius={12}
           paddingBottom={showMobileBar ? COMMERCE_MOBILE_CHECKOUT_BAR_HEIGHT + 12 : undefined}
         >
+
+
           {items.length === 0 ? (
             <YStack gap="$8" width="100%">
               <YStack
@@ -266,9 +321,16 @@ export function CartScreen() {
                     </Text>
                   </XStack>
 
-                  <CommerceLink onPress={() => setCartItemsSelected(availableIds, !allSelected)}>
-                    {allSelected ? 'Deselect all items' : 'Select all items'}
-                  </CommerceLink>
+                  <XStack alignItems="center" gap="$3" flexWrap="wrap">
+                    <CommerceLink onPress={() => setCartItemsSelected(availableIds, !allSelected)}>
+                      {allSelected ? 'Deselect all items' : 'Select all items'}
+                    </CommerceLink>
+                    {!noneSelected ? (
+                      <CommerceLink onPress={() => void handleShareCartSummary()}>
+                        Share cart summary
+                      </CommerceLink>
+                    ) : null}
+                  </XStack>
 
                   <YStack
                     height={1}
@@ -489,6 +551,14 @@ function CartRow({
           <Text fontSize={12} color={c.secondary}>
             {item.variant_name}
             {item.variant_value ? `: ${item.variant_value}` : ''}
+          </Text>
+        ) : null}
+
+        {typeof (item.item_metadata as { personalization_note?: string } | null)?.personalization_note ===
+        'string' &&
+        (item.item_metadata as { personalization_note: string }).personalization_note.trim() ? (
+          <Text fontSize={12} color={c.secondary} fontStyle="italic">
+            Note: {(item.item_metadata as { personalization_note: string }).personalization_note.trim()}
           </Text>
         ) : null}
 

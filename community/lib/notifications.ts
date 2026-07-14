@@ -8,6 +8,7 @@ export type AppNotification = {
   message: string
   type: string
   category: string
+  platform: string | null
   read: boolean | null
   created_at: string | null
   action_url: string | null
@@ -16,10 +17,48 @@ export type AppNotification = {
   context_type: string | null
 }
 
+/** Product filter keys used by the unified inbox. */
+export type NotificationProductFilter =
+  | ''
+  | 'commerce'
+  | 'shop'
+  | 'community'
+  | 'chat'
+  | 'class'
+  | 'cowork'
+
+export const NOTIFICATION_PRODUCT_FILTERS: Array<{
+  key: NotificationProductFilter
+  label: string
+}> = [
+  { key: '', label: 'All' },
+  { key: 'commerce', label: 'Commerce' },
+  { key: 'shop', label: 'Shop' },
+  { key: 'community', label: 'Community' },
+  { key: 'chat', label: 'Chat' },
+  { key: 'class', label: 'Class' },
+  { key: 'cowork', label: 'Co-Work' },
+]
+
 export type NotificationFilters = {
+  /** @deprecated Prefer `product` for cross-tab inbox filters. */
   category?: string
+  product?: NotificationProductFilter
   unreadOnly?: boolean
 }
+
+const VENDOR_TYPES = [
+  'new_order_vendor',
+  'cod_order_vendor',
+  'payment_received_vendor',
+  'low_stock_alert_vendor',
+  'listing_inquiry_seller',
+  'order_confirmation_reminder_vendor',
+  'order_status_update_vendor',
+  'admin_vendor_registration',
+  'vendor_enrollment_accepted',
+  'vendor_enrollment_rejected',
+]
 
 export async function fetchNotifications(
   userId: string,
@@ -31,13 +70,36 @@ export async function fetchNotifications(
 
   let query = supabase
     .from('notifications')
-    .select('id, title, message, type, category, read, created_at, action_url, image_url, context_id, context_type', {
-      count: 'exact',
-    })
+    .select(
+      'id, title, message, type, category, platform, read, created_at, action_url, image_url, context_id, context_type',
+      { count: 'exact' },
+    )
     .eq('recipient_id', userId)
 
   if (filters.category) query = query.eq('category', filters.category)
   if (filters.unreadOnly) query = query.eq('read', false)
+
+  if (filters.product === 'commerce') {
+    query = query
+      .eq('platform', 'marketplace')
+      .not('type', 'in', `(${VENDOR_TYPES.join(',')})`)
+  } else if (filters.product === 'shop') {
+    query = query.or(
+      `type.in.(${VENDOR_TYPES.join(',')}),and(platform.eq.unified,type.eq.order_status_update_vendor)`,
+    )
+  } else if (filters.product === 'community') {
+    query = query.eq('platform', 'community').not('type', 'ilike', 'meeting_%')
+  } else if (filters.product === 'chat') {
+    query = query.or(
+      'platform.eq.chat,type.eq.message_received,type.eq.new_message,context_type.eq.chat',
+    )
+  } else if (filters.product === 'class') {
+    query = query.or('platform.eq.class,type.ilike.class_%')
+  } else if (filters.product === 'cowork') {
+    query = query.or(
+      'type.ilike.meeting_%,category.eq.co-work,category.eq.cowork,context_type.eq.meeting',
+    )
+  }
 
   const { data, error, count } = await query
     .order('created_at', { ascending: false })

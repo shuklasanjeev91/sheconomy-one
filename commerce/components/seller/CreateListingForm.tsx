@@ -3,6 +3,7 @@ import { useMemo, useState, type ReactNode } from 'react'
 import { ImageUploadField, preparePickedImagesForUpload } from '~/components/media/ImageUploadField'
 import { CommercePanel } from '~/commerce/components'
 import { createSellerListing } from '~/commerce/lib/seller-listings'
+import { serializeListingProductInfo } from '~/commerce/lib/listing-product-info'
 import type { Database } from '~/lib/supabase'
 import { uploadListingImages } from '~/lib/supabase/storage-upload'
 import type { PickedImage } from '~/lib/media/pick-image'
@@ -36,6 +37,8 @@ const LISTING_TYPES: { label: string; value: ListingType }[] = [
   { label: 'Service', value: 'service' },
 ]
 
+const GST_PRESETS = ['0', '5', '12', '18', '28']
+
 export function CreateListingForm({ shopId, onCreated, onCancel }: CreateListingFormProps) {
   const ui = useAppUi()
   const toast = useAppToast()
@@ -43,6 +46,9 @@ export function CreateListingForm({ shopId, onCreated, onCancel }: CreateListing
   const [title, setTitle] = useState('')
   const [description, setDescription] = useState('')
   const [price, setPrice] = useState('')
+  const [mrp, setMrp] = useState('')
+  const [taxPercent, setTaxPercent] = useState('18')
+  const [priceIncludesTax, setPriceIncludesTax] = useState(true)
   const [quantity, setQuantity] = useState('1')
   const [category, setCategory] = useState('')
   const [images, setImages] = useState<PickedImage[]>([])
@@ -50,7 +56,19 @@ export function CreateListingForm({ shopId, onCreated, onCancel }: CreateListing
   const [publishNow, setPublishNow] = useState(false)
   const [isSaving, setIsSaving] = useState(false)
 
+  const [brand, setBrand] = useState('')
+  const [manufacturerName, setManufacturerName] = useState('')
+  const [manufacturerAddress, setManufacturerAddress] = useState('')
+  const [countryOfOrigin, setCountryOfOrigin] = useState('India')
+  const [netQuantity, setNetQuantity] = useState('')
+  const [hsnCode, setHsnCode] = useState('')
+  const [materialComposition, setMaterialComposition] = useState('')
+  const [careInstructions, setCareInstructions] = useState('')
+  const [modelNumber, setModelNumber] = useState('')
+
   const parsedPrice = useMemo(() => Number.parseFloat(price), [price])
+  const parsedMrp = useMemo(() => Number.parseFloat(mrp), [mrp])
+  const parsedTax = useMemo(() => Number.parseFloat(taxPercent), [taxPercent])
   const parsedQuantity = useMemo(() => Number.parseInt(quantity, 10), [quantity])
   const canSubmit =
     title.trim().length >= 3 && Number.isFinite(parsedPrice) && parsedPrice > 0 && !isSaving
@@ -84,11 +102,27 @@ export function CreateListingForm({ shopId, onCreated, onCancel }: CreateListing
       }
     }
 
+    const productInfo = serializeListingProductInfo({
+      brand,
+      manufacturerName,
+      manufacturerAddress,
+      countryOfOrigin,
+      netQuantity,
+      hsnCode,
+      materialComposition,
+      careInstructions,
+      modelNumber,
+    })
+
     const { listing, error } = await createSellerListing({
       shopId,
       title,
       description,
       price: parsedPrice,
+      mrp: Number.isFinite(parsedMrp) && parsedMrp > 0 ? parsedMrp : null,
+      priceIncludesTax,
+      taxPercent: Number.isFinite(parsedTax) ? parsedTax : null,
+      productInfo,
       listingType,
       quantity: listingType === 'digital' ? undefined : parsedQuantity,
       category,
@@ -113,7 +147,7 @@ export function CreateListingForm({ shopId, onCreated, onCancel }: CreateListing
           New listing
         </Text>
         <Text fontSize={14} color={ui.textSecondary} lineHeight={20}>
-          Add photos and product details. Images upload to secure storage before your listing is saved.
+          Set tax-inclusive pricing, MRP, and manufacturing details shoppers expect on typical marketplaces.
         </Text>
       </YStack>
 
@@ -152,9 +186,41 @@ export function CreateListingForm({ shopId, onCreated, onCancel }: CreateListing
             ))}
           </XStack>
         </Field>
-        <Field label="Price (INR)" required>
+
+        <Text fontSize={15} fontWeight="700" color={ui.text} paddingTop="$2">
+          Pricing
+        </Text>
+        <Field label="Selling price (INR)" required>
           <Input value={price} onChangeText={setPrice} keyboardType="decimal-pad" placeholder="999" />
         </Field>
+        <Field label="MRP (INR)">
+          <Input value={mrp} onChangeText={setMrp} keyboardType="decimal-pad" placeholder="1299" />
+        </Field>
+        <Text fontSize={12} color={ui.textMuted}>
+          Shown struck through when higher than selling price. Leave blank if MRP equals price.
+        </Text>
+        <XStackSwitch
+          label="Price inclusive of all taxes"
+          checked={priceIncludesTax}
+          onCheckedChange={setPriceIncludesTax}
+        />
+        <Field label="GST / tax %">
+          <XStack gap="$2" flexWrap="wrap" marginBottom="$2">
+            {GST_PRESETS.map((preset) => (
+              <Button
+                key={preset}
+                tone={taxPercent === preset ? 'primary' : 'outline'}
+                size="$2"
+                borderRadius={999}
+                onPress={() => setTaxPercent(preset)}
+              >
+                {preset}%
+              </Button>
+            ))}
+          </XStack>
+          <Input value={taxPercent} onChangeText={setTaxPercent} keyboardType="decimal-pad" placeholder="18" />
+        </Field>
+
         {listingType !== 'digital' ? (
           <Field label="Quantity">
             <Input value={quantity} onChangeText={setQuantity} keyboardType="number-pad" placeholder="1" />
@@ -163,6 +229,58 @@ export function CreateListingForm({ shopId, onCreated, onCancel }: CreateListing
         <Field label="Category">
           <Input value={category} onChangeText={setCategory} placeholder="Home decor" />
         </Field>
+
+        <Text fontSize={15} fontWeight="700" color={ui.text} paddingTop="$2">
+          Manufacturing & legal details
+        </Text>
+        <Text fontSize={12} color={ui.textMuted} lineHeight={18}>
+          Shown on the product page under Product details (brand, manufacturer, origin, HSN, etc.).
+        </Text>
+        <Field label="Brand">
+          <Input value={brand} onChangeText={setBrand} placeholder="Your brand name" />
+        </Field>
+        <Field label="Manufacturer name">
+          <Input
+            value={manufacturerName}
+            onChangeText={setManufacturerName}
+            placeholder="Legal manufacturer / maker name"
+          />
+        </Field>
+        <Field label="Manufacturer address">
+          <TextArea
+            value={manufacturerAddress}
+            onChangeText={setManufacturerAddress}
+            placeholder="Full manufacturing address"
+            minHeight={72}
+          />
+        </Field>
+        <Field label="Country of origin">
+          <Input value={countryOfOrigin} onChangeText={setCountryOfOrigin} placeholder="India" />
+        </Field>
+        <Field label="Net quantity">
+          <Input value={netQuantity} onChangeText={setNetQuantity} placeholder="e.g. 1 piece, 250 g, 500 ml" />
+        </Field>
+        <Field label="HSN code">
+          <Input value={hsnCode} onChangeText={setHsnCode} placeholder="e.g. 6911" />
+        </Field>
+        <Field label="Model / item no.">
+          <Input value={modelNumber} onChangeText={setModelNumber} placeholder="Optional SKU / style code" />
+        </Field>
+        <Field label="Material / composition">
+          <Input
+            value={materialComposition}
+            onChangeText={setMaterialComposition}
+            placeholder="e.g. 100% cotton, ceramic, brass"
+          />
+        </Field>
+        <Field label="Care instructions">
+          <Input
+            value={careInstructions}
+            onChangeText={setCareInstructions}
+            placeholder="e.g. Hand wash only, spot clean"
+          />
+        </Field>
+
         <XStackSwitch
           label="Publish immediately"
           checked={publishNow}

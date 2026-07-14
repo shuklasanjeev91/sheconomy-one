@@ -691,6 +691,22 @@ export async function markConversationRead(
   return { error: error?.message ?? null }
 }
 
+/** Mark every unread conversation as read (web + iOS + Android). */
+export async function markAllConversationsRead(
+  chats: Array<{ id: string; unreadCount: number }>,
+  userId: string,
+): Promise<{ marked: number; error: string | null }> {
+  const unread = chats.filter((chat) => chat.unreadCount > 0)
+  if (!unread.length) return { marked: 0, error: null }
+
+  const results = await Promise.all(
+    unread.map((chat) => markConversationRead(chat.id, userId)),
+  )
+  const firstError = results.find((result) => result.error)?.error ?? null
+  const marked = results.filter((result) => !result.error).length
+  return { marked, error: firstError }
+}
+
 export async function setTypingIndicator(
   conversationId: string,
   userId: string,

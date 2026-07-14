@@ -3,7 +3,14 @@ import type { TextInput } from 'react-native'
 
 import { useChatTheme } from '~/chat/lib/chat-theme'
 import { mediaPreviewLabel } from '~/chat/lib/emoji'
+import {
+  clearMessageDraft,
+  loadMessageDraft,
+  saveMessageDraft,
+} from '~/chat/lib/message-drafts'
+import { localChatQuickReplies } from '~/chat/lib/quick-replies'
 import type { ChatComposerAttachment, ChatMessage } from '~/chat/lib/types'
+import { HorizontalScrollRow } from '~/components/layout'
 import { Icons, Input, Spinner, Text, XStack, YStack, useAppToast } from '~/components/ui'
 import {
   cancelRecording,
@@ -17,6 +24,7 @@ import { AttachmentSheet } from './AttachmentSheet'
 import { EmojiPickerSheet } from './EmojiPickerSheet'
 
 type MessageComposerProps = {
+  conversationId?: string | null
   onSend: (text: string) => void
   onSendImage: (attachment: ChatComposerAttachment) => void
   onSendFile: (attachment: ChatComposerAttachment) => void
@@ -65,6 +73,7 @@ function IconButton({
 }
 
 export function MessageComposer({
+  conversationId,
   onSend,
   onSendImage,
   onSendFile,
@@ -83,12 +92,14 @@ export function MessageComposer({
   const theme = useChatTheme()
   const toast = useAppToast()
   const [text, setText] = useState('')
+  const [draftReady, setDraftReady] = useState(!conversationId)
   const [attaching, setAttaching] = useState(false)
   const [attachOpen, setAttachOpen] = useState(false)
   const [emojiOpen, setEmojiOpen] = useState(false)
   const [recording, setRecording] = useState(false)
   const [recordSeconds, setRecordSeconds] = useState(0)
   const recordTimerRef = useRef<ReturnType<typeof setInterval> | null>(null)
+  const draftTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const inputRef = useRef<TextInput>(null)
 
   const isEditing = !!editing
@@ -98,8 +109,37 @@ export function MessageComposer({
   useEffect(() => {
     return () => {
       if (recordTimerRef.current) clearInterval(recordTimerRef.current)
+      if (draftTimerRef.current) clearTimeout(draftTimerRef.current)
     }
   }, [])
+
+  useEffect(() => {
+    let active = true
+    setDraftReady(!conversationId)
+    if (!conversationId) {
+      setText('')
+      return
+    }
+    void loadMessageDraft(conversationId).then((draft) => {
+      if (!active) return
+      setText(draft)
+      setDraftReady(true)
+    })
+    return () => {
+      active = false
+    }
+  }, [conversationId])
+
+  useEffect(() => {
+    if (!conversationId || !draftReady || isEditing) return
+    if (draftTimerRef.current) clearTimeout(draftTimerRef.current)
+    draftTimerRef.current = setTimeout(() => {
+      void saveMessageDraft(conversationId, text)
+    }, 350)
+    return () => {
+      if (draftTimerRef.current) clearTimeout(draftTimerRef.current)
+    }
+  }, [conversationId, draftReady, isEditing, text])
 
   function stopRecordTimer() {
     if (recordTimerRef.current) {
@@ -176,6 +216,7 @@ export function MessageComposer({
     } else {
       onSend(text)
       onTyping('')
+      if (conversationId) void clearMessageDraft(conversationId)
     }
     setText('')
   }
@@ -183,7 +224,11 @@ export function MessageComposer({
   function cancelContext() {
     if (isEditing) {
       onCancelEdit?.()
-      setText('')
+      if (conversationId) {
+        void loadMessageDraft(conversationId).then(setText)
+      } else {
+        setText('')
+      }
     } else {
       onCancelReply?.()
     }
@@ -259,8 +304,46 @@ export function MessageComposer({
         }
       : null
 
+  const showQuickReplies = !isEditing && !recording && text.trim().length === 0
+  const quickReplies = showQuickReplies
+    ? localChatQuickReplies({
+        isReply: Boolean(replyTo),
+        peerName: replySenderName,
+      })
+    : []
+
   return (
     <YStack backgroundColor={theme.composerBg} paddingBottom={2}>
+      {quickReplies.length > 0 ? (
+        <YStack paddingHorizontal={8} paddingTop={8} gap={6}>
+          <HorizontalScrollRow gap={8}>
+            {quickReplies.map((reply) => (
+              <XStack
+                key={reply}
+                paddingHorizontal={12}
+                paddingVertical={8}
+                borderRadius={999}
+                borderWidth={1}
+                borderColor={theme.border}
+                backgroundColor={theme.inputBg}
+                cursor="pointer"
+                hoverStyle={{ borderColor: theme.brand }}
+                pressStyle={{ opacity: 0.85 }}
+                onPress={() => {
+                  setText(reply)
+                  onTyping(reply)
+                  inputRef.current?.focus()
+                }}
+              >
+                <Text fontSize={12.5} fontWeight="600" color={theme.text} numberOfLines={1}>
+                  {reply}
+                </Text>
+              </XStack>
+            ))}
+          </HorizontalScrollRow>
+        </YStack>
+      ) : null}
+
       {contextBar ? (
         <XStack
           alignItems="center"

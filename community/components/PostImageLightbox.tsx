@@ -1,14 +1,27 @@
 import { PostMediaCarousel } from '~/community/components/PostMediaCarousel'
 import { Dialog, DialogContent, DialogOverlay, Icons, XStack } from '~/components/ui'
+import type { PostMediaItem } from '~/community/lib/post-media'
 
 type PostImageLightboxProps = {
-  urls: string[]
+  items?: PostMediaItem[]
+  /** @deprecated Prefer `items`. */
+  urls?: string[]
   open: boolean
   onOpenChange: (open: boolean) => void
 }
 
-/** Fullscreen viewer for post media — opened when tapping an image on the detail view. */
-export function PostImageLightbox({ urls, open, onOpenChange }: PostImageLightboxProps) {
+/** Fullscreen viewer for post media — opened when tapping media on the detail view. */
+export function PostImageLightbox({ items, urls, open, onOpenChange }: PostImageLightboxProps) {
+  const slides =
+    items?.length
+      ? items
+      : (urls ?? []).map((url) => ({
+          url,
+          kind: /\.(mp4|webm|mov|m4v|mkv|ogg|m3u8)(\?|$)/i.test(url) ? ('video' as const) : ('image' as const),
+        }))
+
+  if (!slides.length) return null
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange} modal>
       <Dialog.Portal>
@@ -40,7 +53,7 @@ export function PostImageLightbox({ urls, open, onOpenChange }: PostImageLightbo
             <Icons.X size={20} color="white" />
           </XStack>
           {open ? (
-            <PostMediaCarousel urls={urls} height={620} fit="contain" rounded={false} />
+            <PostMediaCarousel items={slides} height={620} fit="contain" rounded={false} />
           ) : null}
         </DialogContent>
       </Dialog.Portal>

@@ -5,8 +5,14 @@ import { CommunityAdaptiveSheet } from '~/community/components/CommunityAdaptive
 import { GifPicker } from '~/community/components/GifPicker'
 import { CommunityCard } from '~/community/components/CommunityCard'
 import { MentionInput } from '~/community/components/MentionInput'
+import { PostComposeAiBar } from '~/community/components/PostComposeAiBar'
 import { PostLinkPreviewCard } from '~/community/components/PostLinkPreviewCard'
 import { createCommunityPost, type PostLinkPreview } from '~/community/lib/community'
+import {
+  clearComposeDraft,
+  loadComposeDraft,
+  saveComposeDraft,
+} from '~/community/lib/compose-draft'
 import { extractFirstUrl, fetchLinkPreview } from '~/lib/link-preview'
 import { fetchMyCompanies } from '~/community/lib/companies'
 import { fetchMyGroups } from '~/community/lib/groups'
@@ -39,6 +45,7 @@ import { uploadEventCoverImage, uploadPostImages } from '~/lib/supabase/storage-
 import { maxLength, optionalUrl } from '~/lib/validation'
 
 const MAX_POST_LENGTH = 3000
+const MAX_ARTICLE_LENGTH = 12000
 const MAX_POLL_OPTIONS = 4
 const MAX_PHOTOS = 9
 const POLL_DURATIONS = [
@@ -70,7 +77,7 @@ const AUDIENCE: Record<Visibility, { label: string; description: string; icon: t
 }
 
 type PostContext = 'profile' | 'company' | 'group'
-type ComposeMode = 'text' | 'poll' | 'event' | 'celebration' | 'product' | 'shop'
+type ComposeMode = 'text' | 'poll' | 'event' | 'celebration' | 'product' | 'shop' | 'article'
 
 type CreatePostFormProps = {
   onSuccess?: () => void
@@ -104,7 +111,7 @@ export function CreatePostForm({
   const form = useFormValidation(
     useMemo(
       () => ({
-        content: { validators: [maxLength(MAX_POST_LENGTH)] },
+        content: { validators: [maxLength(MAX_ARTICLE_LENGTH)] },
         imageUrl: { validators: [optionalUrl()] },
       }),
       [],
@@ -144,6 +151,7 @@ export function CreatePostForm({
   const [occasion, setOccasion] = useState('new_job')
   const [celebrationTitle, setCelebrationTitle] = useState('')
   const [celebrationCover, setCelebrationCover] = useState<PickedImage[]>([])
+  const [articleTitle, setArticleTitle] = useState('')
 
   // Product / Shop (seller data)
   const { shops } = useVendorShops()
@@ -156,13 +164,14 @@ export function CreatePostForm({
   const displayName = profile?.full_name || profile?.username || 'You'
   const content = form.fields.content.value
   const imageUrl = form.fields.imageUrl.value
-  const remaining = MAX_POST_LENGTH - content.length
+  const contentLimit = composeMode === 'article' ? MAX_ARTICLE_LENGTH : MAX_POST_LENGTH
+  const remaining = contentLimit - content.length
   const isOverLimit = remaining < 0
   const contentError = form.fields.content.showError ? form.fields.content.error : null
   const hasMedia = photos.length > 0 || Boolean(imageUrl.trim())
 
   // Detect the first URL in a text post and unfurl an Open Graph preview
-  // (LinkedIn-style), debounced. Skipped once the user removes a preview or
+  // Debounced. Skipped once the user removes a preview or
   // adds their own media/GIF.
   useEffect(() => {
     if (composeMode !== 'text' || hasMedia) {
@@ -209,7 +218,9 @@ export function CreatePostForm({
         ? eventTitle.trim().length > 0 && eventDate.trim().length > 0 && eventTime.trim().length > 0
         : composeMode === 'celebration'
           ? celebrationTitle.trim().length > 0 && !isOverLimit
-          : composeMode === 'product'
+          : composeMode === 'article'
+            ? articleTitle.trim().length > 0 && content.trim().length > 0 && !isOverLimit
+            : composeMode === 'product'
             ? !!selectedListing
             : composeMode === 'shop'
               ? !!selectedShop
@@ -254,6 +265,45 @@ export function CreatePostForm({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [companyParam, composeParam, gifParam, groupParam])
 
+  // Restore autosaved draft (works offline on web + native).
+  useEffect(() => {
+    let active = true
+    void loadComposeDraft().then((draft) => {
+      if (!active || !draft) return
+      if (draft.content && !form.fields.content.value) {
+        form.fields.content.setValue(draft.content)
+      }
+      if (draft.articleTitle) setArticleTitle(draft.articleTitle)
+      if (
+        draft.mode === 'poll' ||
+        draft.mode === 'event' ||
+        draft.mode === 'celebration' ||
+        draft.mode === 'product' ||
+        draft.mode === 'shop' ||
+        draft.mode === 'article' ||
+        draft.mode === 'text'
+      ) {
+        setComposeMode(draft.mode)
+      }
+    })
+    return () => {
+      active = false
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  // Debounced autosave so drafts survive tab switches / app restarts.
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      void saveComposeDraft({
+        content: form.fields.content.value,
+        articleTitle,
+        mode: composeMode,
+      })
+    }, 600)
+    return () => clearTimeout(timer)
+  }, [articleTitle, composeMode, form.fields.content.value])
+
   // Apply overlay/sheet options once on mount (takes precedence over query params).
   const initializedRef = useRef(false)
   useEffect(() => {
@@ -264,7 +314,8 @@ export function CreatePostForm({
       initialMode === 'event' ||
       initialMode === 'celebration' ||
       initialMode === 'product' ||
-      initialMode === 'shop'
+      initialMode === 'shop' ||
+      initialMode === 'article'
     ) {
       setComposeMode(initialMode)
     }
@@ -448,6 +499,32 @@ export function CreatePostForm({
         eventLocation: eventLocation.trim() || null,
         eventRsvpEnabled: eventRsvp,
       })
+    } else if (composeMode === 'article') {
+      let mediaUrls: string[] = []
+      if (photos.length) {
+        const files = await preparePickedImagesForUpload(photos)
+        const { urls, error: uploadError } = await uploadPostImages(user.id, files)
+        if (uploadError) {
+          setIsPosting(false)
+          toast.show('Could not upload photos', {
+            tone: 'danger',
+            message: uploadError,
+          })
+          return
+        }
+        mediaUrls = urls
+      }
+      const finalImageUrl = mediaUrls.length ? null : imageUrl || null
+      result = await createCommunityPost(user.id, {
+        content: finalContent,
+        imageUrl: finalImageUrl,
+        mediaUrls: mediaUrls.length ? mediaUrls : null,
+        visibility,
+        companyId: targetCompanyId,
+        groupId: targetGroupId,
+        postType: 'article',
+        articleTitle: articleTitle.trim(),
+      })
     } else {
       let mediaUrls: string[] = []
       if (photos.length) {
@@ -483,6 +560,7 @@ export function CreatePostForm({
     }
 
     toast.show('Posted', { tone: 'success', message: 'Your update is live.' })
+    void clearComposeDraft()
     form.resetAll()
     setPollOptions(['', ''])
     setEventTitle('')
@@ -493,6 +571,7 @@ export function CreatePostForm({
     setCelebrationTitle('')
     setOccasion('new_job')
     setCelebrationCover([])
+    setArticleTitle('')
     setSelectedListing(null)
     setSelectedShop(null)
     setComposeMode('text')
@@ -514,7 +593,9 @@ export function CreatePostForm({
         ? 'Add details attendees should know'
         : composeMode === 'celebration'
           ? 'Say a few words about this moment…'
-          : composeMode === 'product'
+          : composeMode === 'article'
+            ? 'Write your article…'
+            : composeMode === 'product'
             ? 'Tell people why they should check this out…'
             : composeMode === 'shop'
               ? 'Share what makes your shop special…'
@@ -590,21 +671,50 @@ export function CreatePostForm({
 
         {/* Compose body */}
         <YStack paddingHorizontal={16} paddingBottom={12} gap={12}>
+          {composeMode === 'article' ? (
+            <YStack gap="$2">
+              <Text fontSize={13} fontWeight="600" color={communityUi.textMuted}>
+                Article headline
+              </Text>
+              <Input
+                value={articleTitle}
+                onChangeText={(value) => setArticleTitle(value.slice(0, 160))}
+                placeholder="Give your article a clear title"
+                fontSize={20}
+                fontWeight="700"
+                borderWidth={0}
+                backgroundColor="transparent"
+                paddingHorizontal={0}
+              />
+            </YStack>
+          ) : null}
+
           <MentionInput
             multiline
             value={content}
-            onChangeText={(value) => form.fields.content.onChange(value.slice(0, MAX_POST_LENGTH + 50))}
+            onChangeText={(value) => form.fields.content.onChange(value.slice(0, contentLimit + 50))}
             onEncodedChange={(encoded) => {
               encodedContentRef.current = encoded
             }}
             invalid={!!contentError}
             placeholder={contentPlaceholder}
-            minHeight={composeMode === 'text' ? 150 : 96}
+            minHeight={composeMode === 'article' ? 220 : composeMode === 'text' ? 150 : 96}
             fontSize={18}
             lineHeight={26}
             borderWidth={0}
             backgroundColor="transparent"
             padding={0}
+          />
+
+          <PostComposeAiBar
+            mode={composeMode}
+            seedPrompt={content || articleTitle || celebrationTitle || eventTitle}
+            onApplyDraft={(draft) => {
+              form.fields.content.onChange(draft.content.slice(0, contentLimit + 50))
+              if (draft.articleTitle) {
+                setArticleTitle(draft.articleTitle.slice(0, 160))
+              }
+            }}
           />
 
           {contentError ? (
@@ -721,7 +831,7 @@ export function CreatePostForm({
             </YStack>
           ) : null}
 
-          {/* Link preview (LinkedIn-style URL unfurl) */}
+          {/* Link preview (URL unfurl) */}
           {composeMode === 'text' && !hasMedia && (linkLoading || linkPreview) ? (
             <PostLinkPreviewCard
               preview={linkPreview}
@@ -1010,7 +1120,12 @@ export function CreatePostForm({
               icon={Icons.MoreHorizontal}
               color={communityUi.textMuted}
               label="More"
-              active={composeMode === 'celebration' || composeMode === 'product' || composeMode === 'shop'}
+              active={
+                composeMode === 'celebration' ||
+                composeMode === 'product' ||
+                composeMode === 'shop' ||
+                composeMode === 'article'
+              }
               onPress={() => setMoreOpen(true)}
             />
           </XStack>
@@ -1024,7 +1139,7 @@ export function CreatePostForm({
             onPress={handlePost}
             icon={isPosting ? <Spinner size="small" color="white" /> : undefined}
           >
-            {isPosting ? 'Posting…' : 'Post'}
+            {isPosting ? 'Posting…' : composeMode === 'article' ? 'Publish' : 'Post'}
           </Button>
         </XStack>
       </Container>
@@ -1033,6 +1148,16 @@ export function CreatePostForm({
 
       <CommunityAdaptiveSheet open={moreOpen} onOpenChange={setMoreOpen} title="Create">
         <YStack gap={4}>
+          <MoreOptionRow
+            icon={Icons.Newspaper}
+            tint="#0a66c2"
+            title="Write an article"
+            description="Long-form thought leadership for your network"
+            onPress={() => {
+              setComposeMode('article')
+              setMoreOpen(false)
+            }}
+          />
           <MoreOptionRow
             icon={Icons.PartyPopper}
             tint="#c37dda"

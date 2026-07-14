@@ -9,11 +9,12 @@ import {
   CommunityFilterSheet,
   type FilterOption,
 } from '~/community/components/CommunityFilters'
-import { searchJobs, type JobListing } from '~/community/lib/jobs'
+import { fetchSavedJobs, searchJobs, type JobListing } from '~/community/lib/jobs'
 import { useCommunityUi } from '~/community/lib/community-theme'
 import { Button, Icons, Input, ScrollView, Spinner, Text, XStack, YStack } from '~/components/ui'
 import { radius } from '~/config/tokens'
 import { communityRoutes } from '~/lib/routes'
+import { useSupabase } from '~/providers/SupabaseProvider'
 
 const JOB_TYPE_OPTIONS: FilterOption[] = [
   { label: 'Full-time', value: 'Full-time' },
@@ -64,6 +65,7 @@ function labelForValue(options: FilterOption[], value: string): string | undefin
 
 export function JobsScreen() {
   const communityUi = useCommunityUi()
+  const { user } = useSupabase()
   const [search, setSearch] = useState('')
   const [jobTypes, setJobTypes] = useState<string[]>([])
   const [experience, setExperience] = useState('')
@@ -73,8 +75,10 @@ export function JobsScreen() {
   const [datePosted, setDatePosted] = useState('any')
   const [sort, setSort] = useState('recent')
   const [activeSheet, setActiveSheet] = useState<ActiveSheet>(null)
+  const [showSavedOnly, setShowSavedOnly] = useState(false)
 
   const [items, setItems] = useState<JobListing[]>([])
+  const [savedJobs, setSavedJobs] = useState<JobListing[]>([])
   const [page, setPage] = useState(0)
   const [hasMore, setHasMore] = useState(false)
   const [isLoading, setIsLoading] = useState(true)
@@ -104,6 +108,20 @@ export function JobsScreen() {
     load(0, false)
   }, [load])
 
+  useEffect(() => {
+    if (!user?.id) {
+      setSavedJobs([])
+      return
+    }
+    let active = true
+    void fetchSavedJobs(user.id).then((result) => {
+      if (active) setSavedJobs(result.items)
+    })
+    return () => {
+      active = false
+    }
+  }, [user?.id])
+
   const companyOptions = useMemo<FilterOption[]>(() => {
     const names = Array.from(new Set(items.map((job) => job.company_name).filter(Boolean)))
     names.sort((a, b) => a.localeCompare(b))
@@ -119,7 +137,7 @@ export function JobsScreen() {
   }, [items])
 
   const visibleItems = useMemo(() => {
-    let next = [...items]
+    let next = showSavedOnly ? [...savedJobs] : [...items]
 
     if (jobTypes.length > 1) {
       next = next.filter((job) => jobTypes.includes(job.job_type))
@@ -142,6 +160,17 @@ export function JobsScreen() {
       })
     }
 
+    if (showSavedOnly && search.trim()) {
+      const needle = search.trim().toLowerCase()
+      next = next.filter((job) =>
+        [job.title, job.company_name, job.location, job.job_type]
+          .filter(Boolean)
+          .join(' ')
+          .toLowerCase()
+          .includes(needle),
+      )
+    }
+
     if (sort === 'recent') {
       next.sort(
         (a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime(),
@@ -151,7 +180,7 @@ export function JobsScreen() {
     }
 
     return next
-  }, [company, datePosted, industry, items, jobTypes, sort])
+  }, [company, datePosted, industry, items, jobTypes, savedJobs, search, showSavedOnly, sort])
 
   const activeCount =
     jobTypes.length +
@@ -191,6 +220,16 @@ export function JobsScreen() {
             </Link>
           }
         />
+
+
+        {user ? (
+          <CommunityFilterPill
+            label={savedJobs.length ? `Saved (${savedJobs.length})` : 'Saved'}
+            summary="Saved jobs"
+            active={showSavedOnly}
+            onPress={() => setShowSavedOnly((value) => !value)}
+          />
+        ) : null}
 
         <XStack
           gap={8}
@@ -286,7 +325,7 @@ export function JobsScreen() {
         <CommunityCard padding={12} gap={0}>
           {visibleItems.length === 0 ? (
             <Text color={communityUi.textMuted} padding={12}>
-              No jobs found.
+              {showSavedOnly ? 'No saved jobs yet. Open a role and tap Save job.' : 'No jobs found.'}
             </Text>
           ) : (
             visibleItems.map((job) => (
@@ -310,12 +349,13 @@ export function JobsScreen() {
                   <Text fontSize={12} color={communityUi.textMuted}>
                     {job.application_count} applicants
                     {job.is_applied ? ' · Applied' : ''}
+                    {job.is_saved || showSavedOnly ? ' · Saved' : ''}
                   </Text>
                 </YStack>
               </Link>
             ))
           )}
-          {hasMore ? (
+          {hasMore && !showSavedOnly ? (
             <YStack alignItems="center" paddingVertical={12}>
               {isLoadingMore ? (
                 <Spinner size="small" color={communityUi.brand} />

@@ -19,6 +19,8 @@ export type AvailableOffer = {
   minOrderAmount: number | null
   maxDiscountAmount: number | null
   validUntil: string | null
+  /** When set, this coupon only applies to that shop's products. */
+  shopId: string | null
 }
 
 type DiscountLike = {
@@ -91,14 +93,15 @@ export type ApplyCouponResult = {
 
 /**
  * Validate a coupon code against the current cart and, if valid, apply it.
- * Validation that the DB RPC skips (min order, usage limit, effective amount)
- * happens here; RLS handles active/validity/shop checks.
+ * Shop-scoped coupons are checked against that shop's cart subtotal only.
  */
 export async function applyCouponCode(options: {
   cartId: string
   code: string
   subtotal: number
   currency: string
+  /** Cart line items (needed to validate / price shop-scoped coupons). */
+  items?: Array<{ shop_id: string | null; total_price: number | string | null }>
 }): Promise<ApplyCouponResult> {
   const trimmed = options.code.trim()
   if (!trimmed) return { cart: null, error: 'Enter a coupon code.' }
@@ -108,19 +111,34 @@ export async function applyCouponCode(options: {
     return { cart: null, error: 'This coupon is invalid or has expired.' }
   }
 
-  const minOrder = profile.min_order_amount == null ? null : toNumber(profile.min_order_amount)
-  if (minOrder != null && options.subtotal < minOrder) {
-    return {
-      cart: null,
-      error: `Spend at least ${formatCurrency(minOrder, options.currency)} to use this coupon.`,
-    }
-  }
-
   if (usageExhausted(profile)) {
     return { cart: null, error: 'This coupon has reached its usage limit.' }
   }
 
-  const amount = computeDiscountAmount(profile, options.subtotal)
+  const shopId = profile.shop_id
+  let eligibleSubtotal = options.subtotal
+
+  if (shopId) {
+    const items = options.items ?? []
+    const shopItems = items.filter((item) => item.shop_id === shopId)
+    if (shopItems.length === 0) {
+      return {
+        cart: null,
+        error: 'This coupon is only valid for products from that shop. Add them to your cart first.',
+      }
+    }
+    eligibleSubtotal = shopItems.reduce((sum, item) => sum + toNumber(item.total_price), 0)
+  }
+
+  const minOrder = profile.min_order_amount == null ? null : toNumber(profile.min_order_amount)
+  if (minOrder != null && eligibleSubtotal < minOrder) {
+    return {
+      cart: null,
+      error: `Spend at least ${formatCurrency(minOrder, options.currency)} on this shop to use this coupon.`,
+    }
+  }
+
+  const amount = computeDiscountAmount(profile, eligibleSubtotal)
   if (amount <= 0) {
     return { cart: null, error: "This coupon doesn't apply to your cart." }
   }
@@ -135,31 +153,22 @@ export async function applyCouponCode(options: {
   return { cart, error: null, discountAmount: amount }
 }
 
-/**
- * Fetch order-level coupons the customer can apply. RLS keeps this to active,
- * in-window offers. Deduped by code (newest wins) and usage-exhausted ones
- * dropped, sorted so the easiest-to-qualify offers surface first.
- */
-export async function fetchAvailableOffers(options?: {
-  /** Scope to a shop's own coupons plus platform-wide ones. Omit for all. */
-  shopId?: string | null
-}): Promise<AvailableOffer[]> {
-  let query = supabase
-    .from('discount_profiles')
-    .select(
-      'id, discount_code, discount_name, description, discount_type, discount_value, min_order_amount, max_discount_amount, valid_until, valid_from, max_uses_total, total_uses',
-    )
-    .eq('applies_to', 'order')
-    .not('discount_code', 'is', null)
+type OfferRow = {
+  id: string
+  discount_code: string | null
+  discount_name: string
+  description: string | null
+  discount_type: string
+  discount_value: number | string
+  min_order_amount: number | string | null
+  max_discount_amount: number | string | null
+  valid_until: string | null
+  max_uses_total: number | null
+  total_uses: number | null
+  shop_id: string | null
+}
 
-  if (options?.shopId) {
-    query = query.or(`shop_id.is.null,shop_id.eq.${options.shopId}`)
-  }
-
-  const { data, error } = await query.order('valid_from', { ascending: false }).limit(50)
-
-  if (error || !data) return []
-
+function mapOfferRows(data: OfferRow[]): AvailableOffer[] {
   const seen = new Set<string>()
   const offers: AvailableOffer[] = []
 
@@ -182,6 +191,7 @@ export async function fetchAvailableOffers(options?: {
       maxDiscountAmount:
         row.max_discount_amount == null ? null : toNumber(row.max_discount_amount),
       validUntil: row.valid_until,
+      shopId: row.shop_id,
     })
   }
 
@@ -189,60 +199,66 @@ export async function fetchAvailableOffers(options?: {
   return offers
 }
 
+const OFFER_SELECT =
+  'id, discount_code, discount_name, description, discount_type, discount_value, min_order_amount, max_discount_amount, valid_until, valid_from, max_uses_total, total_uses, shop_id'
+
 /**
- * Fetch a specific shop's own coupon codes (shop-level offers, Etsy-style).
+ * Fetch order-level coupons the customer can apply.
+ *
+ * Scoping rules (marketplace / marketplace):
+ * - No options → platform-wide only (`shop_id` null). Used by home "Offers for you".
+ * - `shopId` → that shop's coupons only. Used on shop + product pages.
+ * - `shopIds` → platform-wide + those shops. Used by cart.
+ */
+export async function fetchAvailableOffers(options?: {
+  shopId?: string | null
+  shopIds?: string[] | null
+}): Promise<AvailableOffer[]> {
+  let query = supabase
+    .from('discount_profiles')
+    .select(OFFER_SELECT)
+    .eq('applies_to', 'order')
+    .not('discount_code', 'is', null)
+
+  if (options?.shopId) {
+    // Product / shop page — only that seller's own offers.
+    query = query.eq('shop_id', options.shopId)
+  } else if (options?.shopIds && options.shopIds.length > 0) {
+    const unique = [...new Set(options.shopIds.filter(Boolean))]
+    const shopClause = unique.map((id) => `shop_id.eq.${id}`).join(',')
+    query = query.or(`shop_id.is.null,${shopClause}`)
+  } else {
+    // Home / global rail — never surface another shop's private coupons.
+    query = query.is('shop_id', null)
+  }
+
+  const { data, error } = await query.order('valid_from', { ascending: false }).limit(50)
+
+  if (error || !data) return []
+  return mapOfferRows(data as OfferRow[])
+}
+
+/**
+ * Fetch a specific shop's own coupon codes (shop-level offers, marketplace).
  * Only rows with a non-null shop_id matching this shop are returned, so platform
  * offers are excluded. RLS keeps these to active, in-window coupons.
  */
 export async function fetchShopCoupons(shopId: string): Promise<AvailableOffer[]> {
   if (!shopId) return []
-
-  const { data, error } = await supabase
-    .from('discount_profiles')
-    .select(
-      'id, discount_code, discount_name, description, discount_type, discount_value, min_order_amount, max_discount_amount, valid_until, valid_from, max_uses_total, total_uses',
-    )
-    .eq('applies_to', 'order')
-    .eq('shop_id', shopId)
-    .not('discount_code', 'is', null)
-    .order('valid_from', { ascending: false })
-    .limit(20)
-
-  if (error || !data) return []
-
-  const seen = new Set<string>()
-  const offers: AvailableOffer[] = []
-  for (const row of data) {
-    const code = (row.discount_code ?? '').trim()
-    if (!code) continue
-    const key = code.toUpperCase()
-    if (seen.has(key)) continue
-    if (usageExhausted(row)) continue
-    seen.add(key)
-    offers.push({
-      id: row.id,
-      code,
-      name: row.discount_name,
-      description: row.description,
-      type: row.discount_type === 'percentage' ? 'percentage' : 'fixed',
-      value: toNumber(row.discount_value),
-      minOrderAmount: row.min_order_amount == null ? null : toNumber(row.min_order_amount),
-      maxDiscountAmount:
-        row.max_discount_amount == null ? null : toNumber(row.max_discount_amount),
-      validUntil: row.valid_until,
-    })
-  }
-  offers.sort((a, b) => (a.minOrderAmount ?? 0) - (b.minOrderAmount ?? 0))
-  return offers
+  return fetchAvailableOffers({ shopId })
 }
 
 /**
  * Re-validate an applied discount against the cart's current subtotal (called
  * after quantity/remove edits). Percentage coupons are recomputed, coupons that
  * fall below their minimum order or no longer produce a discount are dropped.
+ * Shop coupons use that shop's line subtotal only.
  * Returns true when the cart's discount changed and should be reloaded.
  */
-export async function reconcileCartDiscount(cart: CartRow): Promise<boolean> {
+export async function reconcileCartDiscount(
+  cart: CartRow,
+  items?: Array<{ shop_id: string | null; total_price: number | string | null }>,
+): Promise<boolean> {
   if (!cart.applied_discount_id) return false
 
   const { data: profile, error } = await supabase
@@ -259,13 +275,23 @@ export async function reconcileCartDiscount(cart: CartRow): Promise<boolean> {
     return true
   }
 
+  let eligibleSubtotal = cart.items_subtotal
+  if (profile.shop_id) {
+    const shopItems = (items ?? []).filter((item) => item.shop_id === profile.shop_id)
+    if (shopItems.length === 0) {
+      await removeCartDiscount(cart.id)
+      return true
+    }
+    eligibleSubtotal = shopItems.reduce((sum, item) => sum + toNumber(item.total_price), 0)
+  }
+
   const minOrder = profile.min_order_amount == null ? null : toNumber(profile.min_order_amount)
-  if (minOrder != null && cart.items_subtotal < minOrder) {
+  if (minOrder != null && eligibleSubtotal < minOrder) {
     await removeCartDiscount(cart.id)
     return true
   }
 
-  const nextAmount = computeDiscountAmount(profile, cart.items_subtotal)
+  const nextAmount = computeDiscountAmount(profile, eligibleSubtotal)
   if (nextAmount <= 0) {
     await removeCartDiscount(cart.id)
     return true
@@ -297,23 +323,36 @@ export type BestOfferResult = {
 }
 
 /**
- * Find the highest-value eligible offer for the current subtotal and apply it
- * automatically (marketplace-style). Only used when no coupon is applied.
+ * Find the highest-value eligible offer for the current cart and apply it
+ * automatically (marketplace). Only used when no coupon is applied.
+ * Shop coupons are scored against that shop's line subtotal only.
  */
 export async function autoApplyBestOffer(options: {
   cartId: string
   subtotal: number
   shopId?: string | null
+  shopIds?: string[] | null
+  items?: Array<{ shop_id: string | null; total_price: number | string | null }>
 }): Promise<BestOfferResult> {
   if (options.subtotal <= 0) return { applied: false }
 
-  const offers = await fetchAvailableOffers({ shopId: options.shopId })
+  const offers = options.shopId
+    ? await fetchAvailableOffers({ shopId: options.shopId })
+    : await fetchAvailableOffers({ shopIds: options.shopIds ?? null })
 
   let best: AvailableOffer | null = null
   let bestAmount = 0
   for (const offer of offers) {
-    if (offer.minOrderAmount != null && options.subtotal < offer.minOrderAmount) continue
-    const amount = estimateOfferDiscount(offer, options.subtotal)
+    let eligibleSubtotal = options.subtotal
+    if (offer.shopId) {
+      const items = options.items ?? []
+      eligibleSubtotal = items
+        .filter((item) => item.shop_id === offer.shopId)
+        .reduce((sum, item) => sum + toNumber(item.total_price), 0)
+      if (eligibleSubtotal <= 0) continue
+    }
+    if (offer.minOrderAmount != null && eligibleSubtotal < offer.minOrderAmount) continue
+    const amount = estimateOfferDiscount(offer, eligibleSubtotal)
     if (amount > bestAmount) {
       best = offer
       bestAmount = amount

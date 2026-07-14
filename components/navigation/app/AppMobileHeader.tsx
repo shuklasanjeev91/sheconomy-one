@@ -2,6 +2,7 @@ import { Link, useRouter } from 'one'
 import { useState } from 'react'
 import { Platform } from 'react-native'
 
+import { recordSearchTerm } from '~/commerce/lib/search-history'
 import { Icons, Input, XStack, YStack } from '~/components/ui'
 import { AppMobileBackButton } from '~/components/navigation/AppMobileBackButton'
 import { NavCountBadge } from '~/components/navigation/NavCountBadge'
@@ -37,6 +38,7 @@ export function AppMobileHeader({ minimal = false }: AppMobileHeaderProps) {
 
   function submitSearch() {
     const trimmed = searchQuery.trim()
+    if (trimmed) recordSearchTerm(trimmed)
     router.push(trimmed ? commerceRoutes.search(trimmed) : commerceRoutes.search())
   }
 

@@ -1,20 +1,27 @@
 import { useCallback } from 'react'
-import { useParams } from 'one'
+import { useParams, useRouter } from 'one'
 
 import { LoadMoreEnd, LoadMoreSentinel } from '~/commerce/components/LoadMoreSentinel'
 import { CommunityShell } from '~/community/components/CommunityShell'
 import { FeedPostCard } from '~/community/components/FeedPostCard'
+import { useHashtagFollow } from '~/community/hooks/useHashtagFollow'
+import { BRAND_BLUE } from '~/community/lib/constants'
 import { fetchHashtagFeedPage, type CommunityPost } from '~/community/lib/community'
-import { Spinner, Text, XStack, YStack } from '~/components/ui'
-import { ShareButton } from '~/components/share'
 import { usePaginatedFeed } from '~/commerce/hooks/usePaginatedFeed'
-import { useAppUi } from '~/lib/theme/useAppUi'
+import { Button, Spinner, Text, XStack, YStack, useAppToast } from '~/components/ui'
+import { ShareButton } from '~/components/share'
+import { buildSignInUrl } from '~/lib/auth/redirect'
+import { communityRoutes } from '~/lib/routes'
 import { getHashtagShareUrl } from '~/lib/share'
+import { useAppUi } from '~/lib/theme/useAppUi'
 
 export function HashtagFeedScreen() {
   const ui = useAppUi()
+  const router = useRouter()
+  const toast = useAppToast()
   const { tag } = useParams<{ tag: string }>()
   const normalizedTag = decodeURIComponent(tag ?? '').replace(/^#/, '')
+  const follow = useHashtagFollow(normalizedTag)
 
   const fetchPage = useCallback(
     (page: number) => fetchHashtagFeedPage(normalizedTag, page),
@@ -27,6 +34,22 @@ export function HashtagFeedScreen() {
       enabled: !!normalizedTag,
     })
 
+  async function handleFollowToggle() {
+    if (!follow.isAuthenticated) {
+      router.push(buildSignInUrl(communityRoutes.hashtag(normalizedTag)) as never)
+      return
+    }
+    const wasFollowing = follow.isFollowing
+    const result = await follow.toggleFollow()
+    if (result.error) {
+      toast.show('Could not update follow', { tone: 'danger', message: result.error })
+      return
+    }
+    toast.show(wasFollowing ? 'Unfollowed hashtag' : 'Following hashtag', {
+      tone: 'success',
+    })
+  }
+
   return (
     <CommunityShell>
       <YStack
@@ -36,7 +59,7 @@ export function HashtagFeedScreen() {
         borderWidth={1}
         borderColor={ui.borderSubtle}
         padding="$4"
-        gap="$2"
+        gap="$3"
         style={{ boxShadow: ui.shadowSoft }}
       >
         <XStack alignItems="flex-start" justifyContent="space-between" gap="$3">
@@ -45,20 +68,32 @@ export function HashtagFeedScreen() {
               #{normalizedTag}
             </Text>
             <Text fontSize={14} color={ui.textSecondary}>
-              Posts tagged with #{normalizedTag}
+              Follow this hashtag to get notified when people post about it.
             </Text>
           </YStack>
-          <ShareButton
-            variant="icon"
-            label="Share hashtag"
-            sheetTitle="Share hashtag"
-            copyLabel="Copy hashtag link"
-            copyToastMessage="Hashtag link copied to clipboard."
-            payload={{
-              url: getHashtagShareUrl(normalizedTag),
-              title: `#${normalizedTag}`,
-            }}
-          />
+          <XStack gap="$2" alignItems="center">
+            <Button
+              size="$3"
+              tone={follow.isFollowing ? 'outline' : 'primary'}
+              borderRadius={999}
+              disabled={follow.isLoading || follow.isToggling}
+              backgroundColor={follow.isFollowing ? undefined : BRAND_BLUE}
+              onPress={() => void handleFollowToggle()}
+            >
+              {follow.isToggling ? '…' : follow.isFollowing ? 'Following' : 'Follow'}
+            </Button>
+            <ShareButton
+              variant="icon"
+              label="Share hashtag"
+              sheetTitle="Share hashtag"
+              copyLabel="Copy hashtag link"
+              copyToastMessage="Hashtag link copied to clipboard."
+              payload={{
+                url: getHashtagShareUrl(normalizedTag),
+                title: `#${normalizedTag}`,
+              }}
+            />
+          </XStack>
         </XStack>
       </YStack>
 

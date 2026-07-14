@@ -19,6 +19,7 @@ import { useAuth } from '~/hooks/useAuth'
 import { useProfile } from '~/hooks/useProfile'
 import { useVendorShops } from '~/hooks/useVendorShops'
 import { useAppUi } from '~/lib/theme/useAppUi'
+import { useAiAssistOptional } from '~/providers/AiAssistProvider'
 
 import { BRAND_NAME } from '~/config/brand'
 
@@ -34,6 +35,7 @@ export function AuthUserMenuContent({ onClose }: AuthUserMenuContentProps) {
   const { shops } = useVendorShops()
   const { itemCount: cartCount } = useCart()
   const { favoriteIds } = useFavorites()
+  const ai = useAiAssistOptional()
 
   const displayName = profile?.full_name || profile?.username || 'Your account'
   const profileHref = isMale
@@ -82,7 +84,16 @@ export function AuthUserMenuContent({ onClose }: AuthUserMenuContentProps) {
       {sections.map((section, index) => (
         <YStack key={section.id} gap="$1" width="100%">
           {index > 0 ? <SectionDivider /> : null}
-          <AccountMenuSectionBlock section={section} onNavigate={go} />
+          <AccountMenuSectionBlock
+            section={section}
+            onNavigate={go}
+            onAction={(action) => {
+              if (action === 'open-ai') {
+                onClose()
+                ai?.openAssist()
+              }
+            }}
+          />
         </YStack>
       ))}
 
@@ -223,9 +234,11 @@ function QuickActionsRow({
 function AccountMenuSectionBlock({
   section,
   onNavigate,
+  onAction,
 }: {
   section: AccountMenuSection
   onNavigate: (href: Href) => void
+  onAction?: (action: NonNullable<AccountMenuItem['action']>) => void
 }) {
   const ui = useAppUi()
 
@@ -254,7 +267,13 @@ function AccountMenuSectionBlock({
           label={menuItem.label}
           description={menuItem.description}
           badge={menuItem.badge}
-          onPress={() => onNavigate(menuItem.href)}
+          onPress={() => {
+            if (menuItem.action) {
+              onAction?.(menuItem.action)
+              return
+            }
+            onNavigate(menuItem.href)
+          }}
         />
       ))}
     </YStack>

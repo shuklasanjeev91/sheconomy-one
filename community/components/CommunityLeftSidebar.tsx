@@ -1,19 +1,20 @@
 import { Link, usePathname } from 'one'
+import type { Href } from 'one'
 import { useMemo, useState } from 'react'
 
+import { CommunityIdentityCard } from '~/community/components/CommunityIdentityCard'
 import {
   COMMUNITY_LEFT_NAV,
   COMMUNITY_LEFT_NAV_VISIBLE,
   type CommunityNavItem,
 } from '~/community/navigation/config'
-import type { Href } from 'one'
 import { useCommunityUi } from '~/community/lib/community-theme'
 import { COMMUNITY_LAYOUT } from '~/community/lib/layout'
 import { StickyRail } from '~/components/layout'
-import { Icons, Text, XStack, YStack } from '~/components/ui'
+import { Icons, Separator, Text, XStack, YStack } from '~/components/ui'
 import { useAppLayout } from '~/hooks/useAppLayout'
 import { useProfile } from '~/hooks/useProfile'
-import { communityRoutes } from '~/lib/routes'
+import { communityRoutes, routes } from '~/lib/routes'
 
 type CommunitySidebarPin = 'document' | 'viewport'
 
@@ -21,6 +22,7 @@ export function CommunityLeftSidebar({ pin = 'document' }: { pin?: CommunitySide
   const { isDesktop } = useAppLayout()
   const pathname = usePathname()
   const { isAuthenticated } = useProfile()
+  const communityUi = useCommunityUi()
   const [expanded, setExpanded] = useState(false)
 
   const navItems = useMemo(
@@ -42,6 +44,42 @@ export function CommunityLeftSidebar({ pin = 'document' }: { pin?: CommunitySide
       scrollable={pin === 'document'}
       pin={pin}
     >
+      <CommunityIdentityCard />
+      {isAuthenticated ? (
+        <YStack gap={2}>
+          <SidebarNavItem
+            item={{
+              href: routes.profile,
+              label: 'Profile',
+              icon: Icons.User,
+              iconBg: '#0a66c2',
+            }}
+            active={pathname === routes.profile || pathname.startsWith(`${String(routes.profile)}/`)}
+          />
+          <SidebarNavItem
+            item={{
+              href: routes.notifications,
+              label: 'Notifications',
+              icon: Icons.Bell,
+              iconBg: '#e7357a',
+            }}
+            active={
+              pathname === routes.notifications ||
+              pathname.startsWith(`${String(routes.notifications)}/`)
+            }
+          />
+          <SidebarNavItem
+            item={{
+              href: routes.settings,
+              label: 'Settings',
+              icon: Icons.Settings,
+              iconBg: '#64748b',
+            }}
+            active={pathname === routes.settings || pathname.startsWith(`${String(routes.settings)}/`)}
+          />
+          <Separator borderColor={communityUi.divider} marginVertical="$1.5" />
+        </YStack>
+      ) : null}
       <YStack gap={2}>
         {visibleItems.map((item) => (
           <SidebarNavItem

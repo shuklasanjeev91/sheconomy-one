@@ -16,7 +16,12 @@ export function ListingCarouselRow({ listings, compact = true }: ListingCarousel
   if (!listings.length) return null
 
   return (
-    <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+    <ScrollView
+      horizontal
+      showsHorizontalScrollIndicator={false}
+      style={{ flexGrow: 0 }}
+      contentContainerStyle={{ flexGrow: 0, alignItems: 'stretch' }}
+    >
       <XStack gap="$3" paddingRight="$4" alignItems="stretch">
         {listings.map((listing) => (
           <YStack key={listing.id} width={cardWidth} flexShrink={0}>

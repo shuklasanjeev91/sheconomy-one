@@ -9,6 +9,13 @@
     ],
     "plugins": [
       "./plugins/withUniversalDeviceSupport.cjs",
+      [
+        "onesignal-expo-plugin",
+        {
+          "mode": "development",
+          "disableLocation": true
+        }
+      ],
       "one/expo-plugin",
       [
         "@livekit/react-native-expo-plugin",
@@ -63,6 +70,10 @@
         "applinks:sheconomy-one-sanjeev-shuklas-projects.vercel.app"
       ],
       "infoPlist": {
+        "UIBackgroundModes": [
+          "remote-notification"
+        ],
+        "NSUserTrackingUsageDescription": "This permission is used to deliver personalized push notifications.",
         "UIDeviceFamily": [
           1,
           2

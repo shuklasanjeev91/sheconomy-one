@@ -17,9 +17,9 @@ export function HorizontalScrollRow({ children, gap = '$3' }: HorizontalScrollRo
       showsHorizontalScrollIndicator={false}
       width="100%"
       maxWidth="100%"
-      style={Platform.OS === 'web' ? { overflowX: 'auto', overflowY: 'visible' } : undefined}
+      style={Platform.OS === 'web' ? { overflowX: 'auto', overflowY: 'visible', flexGrow: 0 } : { flexGrow: 0 }}
       contentContainerStyle={{
-        flexGrow: 1,
+        flexGrow: 0,
         alignItems: 'stretch',
       }}
     >

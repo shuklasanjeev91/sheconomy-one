@@ -10,6 +10,9 @@ export const appRoutes = {
   profile: '/profile' as Href,
   userProfile: (handle: string) => `/profile/${encodeURIComponent(handle)}` as Href,
   settings: '/settings' as Href,
+  help: '/help' as Href,
+  helpProduct: (product: string) =>
+    `/help?product=${encodeURIComponent(product)}` as Href,
   cart: '/cart' as Href,
   checkout: '/checkout' as Href,
 } as const
@@ -25,6 +28,7 @@ const NON_COMMERCE_PREFIXES = [
   '/notifications',
   '/profile',
   '/settings',
+  '/help',
   '/vendor',
 ] as const
 
@@ -98,6 +102,8 @@ export const communityRoutes = {
   events: '/community/events' as Href,
   eventCreate: '/community/events/create' as Href,
   event: (id: string) => `/community/events/${encodeURIComponent(id)}` as Href,
+  saved: '/community/saved' as Href,
+  analytics: '/community/analytics' as Href,
 } as const
 
 export const chatRoutes = {
@@ -141,6 +147,7 @@ export const routes = {
   profile: appRoutes.profile,
   userProfile: appRoutes.userProfile,
   settings: appRoutes.settings,
+  help: appRoutes.help,
   notifications: appRoutes.notifications,
   cart: appRoutes.cart,
   checkout: appRoutes.checkout,
@@ -286,8 +293,14 @@ export function isAccountPath(pathname: string) {
     pathname.startsWith(`${appRoutes.profile}/`) ||
     pathname === appRoutes.settings ||
     pathname.startsWith(`${appRoutes.settings}/`) ||
+    pathname === appRoutes.help ||
+    pathname.startsWith(`${appRoutes.help}/`) ||
     pathname.startsWith('/auth/')
   )
+}
+
+export function isHelpPath(pathname: string) {
+  return pathname === appRoutes.help || pathname.startsWith(`${appRoutes.help}/`)
 }
 
 export function isHomePath(pathname: string) {

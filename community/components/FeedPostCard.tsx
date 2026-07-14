@@ -8,18 +8,20 @@ import { PostImageLightbox } from '~/community/components/PostImageLightbox'
 import { PostLikeButton } from '~/community/components/PostLikeButton'
 import { PostLinkPreviewCard } from '~/community/components/PostLinkPreviewCard'
 import { PostMediaCarousel } from '~/community/components/PostMediaCarousel'
+import { PostMediaSlide } from '~/community/components/PostMediaSlide'
 import { ProfileLink } from '~/community/components/ProfileLink'
 import { usePostEngagement } from '~/community/hooks/usePostEngagement'
 import { REACTION_TYPES } from '~/community/lib/constants'
 import type {
   CommunityPoll,
   CommunityPost,
+  OriginalPostPreview,
   PostCelebration,
   PostProduct,
   PostShop,
 } from '~/community/lib/community'
 import { castPollVote } from '~/community/lib/polls'
-import { isGifUrl } from '~/community/lib/giphy'
+import { collectPostMedia, type PostMediaItem } from '~/community/lib/post-media'
 import { useCommunityUi } from '~/community/lib/community-theme'
 import { Avatar, Button, Icons, Image, Text, XStack, YStack } from '~/components/ui'
 import { radius } from '~/config/tokens'
@@ -74,10 +76,10 @@ export function FeedPostCard({ post, linkToDetail = true }: FeedPostCardProps) {
   // Event posts show their cover image inside the event card, so keep it out of
   // the general media grid to avoid rendering the same image twice.
   const isEventPost = !!(post.event_rsvp_enabled && post.event_title)
-  const mediaUrls = [
-    ...(post.image_url && !isEventPost ? [post.image_url] : []),
-    ...(post.media_urls ?? []).filter((url) => url !== post.image_url),
-  ]
+  const mediaItems = collectPostMedia(post).filter((item) => {
+    if (!isEventPost) return true
+    return item.url !== post.image_url
+  })
 
   const [lightboxOpen, setLightboxOpen] = useState(false)
 
@@ -85,7 +87,7 @@ export function FeedPostCard({ post, linkToDetail = true }: FeedPostCardProps) {
     router.push(routes.signIn)
   }
 
-  // In the feed, tapping media opens the post (LinkedIn behavior); on the detail
+  // In the feed, tapping media opens the post (professional-network behavior); on the detail
   // page (linkToDetail=false) it opens a fullscreen viewer instead.
   function openMedia() {
     if (linkToDetail) {
@@ -98,6 +100,21 @@ export function FeedPostCard({ post, linkToDetail = true }: FeedPostCardProps) {
   return (
     <>
       <CommunityCard gap={0}>
+        {post.original_post_id || post.post_type === 'repost' ? (
+          <XStack
+            paddingHorizontal={16}
+            paddingTop={12}
+            paddingBottom={0}
+            gap={6}
+            alignItems="center"
+          >
+            <Icons.Repeat size={14} color={communityUi.textMuted} />
+            <Text fontSize={12} fontWeight="600" color={communityUi.textMuted}>
+              {authorName} reposted
+            </Text>
+          </XStack>
+        ) : null}
+
         <XStack paddingHorizontal={16} paddingTop={16} paddingBottom={12} gap={12} alignItems="flex-start">
           {post.company ? (
             <Link href={communityRoutes.company(post.company.id)} asChild>
@@ -195,6 +212,27 @@ export function FeedPostCard({ post, linkToDetail = true }: FeedPostCardProps) {
         </XStack>
 
         <YStack paddingHorizontal={16} paddingBottom={12} gap={10}>
+          {post.post_type === 'article' && post.article_title ? (
+            <XStack gap={8} alignItems="center">
+              <Icons.Newspaper size={16} color={communityUi.brand} />
+              <Text fontSize={12} fontWeight="700" color={communityUi.brand} textTransform="uppercase" letterSpacing={0.4}>
+                Article
+              </Text>
+            </XStack>
+          ) : null}
+          {post.article_title ? (
+            linkToDetail ? (
+              <Link href={communityRoutes.post(post.id)}>
+                <Text fontSize={20} fontWeight="800" color={communityUi.text} letterSpacing={-0.3} lineHeight={26}>
+                  {post.article_title}
+                </Text>
+              </Link>
+            ) : (
+              <Text fontSize={20} fontWeight="800" color={communityUi.text} letterSpacing={-0.3} lineHeight={26}>
+                {post.article_title}
+              </Text>
+            )
+          ) : null}
           {linkToDetail ? (
             <Link href={communityRoutes.post(post.id)}>
               <PostContentText content={post.content} />
@@ -202,15 +240,18 @@ export function FeedPostCard({ post, linkToDetail = true }: FeedPostCardProps) {
           ) : (
             <PostContentText content={post.content} />
           )}
+          {post.originalPost ? (
+            <OriginalPostEmbed original={post.originalPost} />
+          ) : null}
           {post.celebration ? <PostCelebrationCard celebration={post.celebration} /> : null}
           {post.poll ? <PollBlock poll={post.poll} onRequireAuth={requireAuth} /> : null}
           {post.event_rsvp_enabled && post.event_title ? (
             <PostEventCard post={post} onRequireAuth={requireAuth} />
           ) : null}
-          {mediaUrls.length > 0 ? (
-            <PostMedia urls={mediaUrls} onPress={openMedia} />
+          {mediaItems.length > 0 ? (
+            <PostMedia items={mediaItems} onPress={openMedia} />
           ) : null}
-          {post.link && mediaUrls.length === 0 ? (
+          {post.link && mediaItems.length === 0 ? (
             <PostLinkPreviewCard preview={post.link} />
           ) : null}
           {post.product ? <PostProductCard product={post.product} /> : null}
@@ -286,20 +327,20 @@ export function FeedPostCard({ post, linkToDetail = true }: FeedPostCardProps) {
           <PostActionButton
             icon={Icons.Repeat2}
             label="Repost"
-            onPress={() => engagement.openSheet('repost')}
+            onPress={() => engagement.openSheet('repost-menu')}
           />
           <PostActionButton
             icon={Icons.Send}
             label="Send"
-            onPress={() => engagement.openSheet('share')}
+            onPress={() => engagement.openSheet('send')}
           />
         </XStack>
       </CommunityCard>
 
       <PostActionSheets post={post} engagement={engagement} />
 
-      {mediaUrls.length > 0 ? (
-        <PostImageLightbox urls={mediaUrls} open={lightboxOpen} onOpenChange={setLightboxOpen} />
+      {mediaItems.length > 0 ? (
+        <PostImageLightbox items={mediaItems} open={lightboxOpen} onOpenChange={setLightboxOpen} />
       ) : null}
     </>
   )
@@ -329,29 +370,35 @@ function ReactionIcons() {
   )
 }
 
-function PostMedia({ urls, onPress }: { urls: string[]; onPress?: () => void }) {
+function PostMedia({ items, onPress }: { items: PostMediaItem[]; onPress?: () => void }) {
   const communityUi = useCommunityUi()
   const pressable = onPress ? { cursor: 'pointer' as const, onPress } : {}
 
-  if (urls.length === 1) {
-    const url = urls[0]
-    if (isGifUrl(url)) {
-      return (
-        <YStack width="100%" borderRadius={radius.card} overflow="hidden" backgroundColor={communityUi.pageBg} {...pressable}>
-          {/* eslint-disable-next-line jsx-a11y/alt-text */}
-          <img src={url} style={{ width: '100%', maxHeight: 420, objectFit: 'contain' }} />
-        </YStack>
-      )
-    }
+  if (items.length === 1) {
+    const item = items[0]
+    const height = item.kind === 'video' ? 420 : 360
     return (
-      <YStack width="100%" borderRadius={radius.card} overflow="hidden" backgroundColor={communityUi.pageBg} {...pressable}>
-        <Image src={url} width="100%" height={360} objectFit="cover" alt="" />
+      <YStack
+        width="100%"
+        height={height}
+        borderRadius={radius.card}
+        overflow="hidden"
+        backgroundColor={item.kind === 'video' ? '#000' : communityUi.pageBg}
+        {...pressable}
+      >
+        <PostMediaSlide item={item} width={0} height={height} fit={item.kind === 'video' ? 'contain' : 'cover'} fill />
       </YStack>
     )
   }
 
-  // Multiple images render as a LinkedIn-style swipeable carousel.
-  return <PostMediaCarousel urls={urls} onPressImage={onPress ? () => onPress() : undefined} />
+  return (
+    <PostMediaCarousel
+      items={items}
+      height={items.some((item) => item.kind === 'video') ? 420 : 360}
+      fit="contain"
+      onPressImage={onPress ? () => onPress() : undefined}
+    />
+  )
 }
 
 const CELEBRATION_EMOJI: Record<string, string> = {
@@ -802,5 +849,61 @@ function PostEventCard({
         </Button>
       </YStack>
     </YStack>
+  )
+}
+
+function OriginalPostEmbed({ original }: { original: OriginalPostPreview }) {
+  const communityUi = useCommunityUi()
+
+  return (
+    <Link href={communityRoutes.post(original.id)}>
+      <YStack
+        borderWidth={1}
+        borderColor={communityUi.border}
+        borderRadius={8}
+        overflow="hidden"
+        backgroundColor={communityUi.pageBg}
+        cursor="pointer"
+        hoverStyle={{ borderColor: communityUi.brandLight }}
+      >
+        <XStack padding={12} gap={10} alignItems="flex-start">
+          <Avatar
+            name={original.authorName}
+            src={original.authorAvatar ?? undefined}
+            size="$3"
+          />
+          <YStack flex={1} gap={2} minWidth={0}>
+            <Text fontSize={13} fontWeight="700" color={communityUi.text} numberOfLines={1}>
+              {original.authorName}
+            </Text>
+            {original.authorHeadline ? (
+              <Text fontSize={12} color={communityUi.textMuted} numberOfLines={1}>
+                {original.authorHeadline}
+              </Text>
+            ) : null}
+            <Text fontSize={12} color={communityUi.textSubtle}>
+              {formatPostTime(original.createdAt)}
+            </Text>
+          </YStack>
+        </XStack>
+        {original.content ? (
+          <YStack paddingHorizontal={12} paddingBottom={12}>
+            <PostContentText content={original.content} fontSize={14} lineHeight={22} />
+          </YStack>
+        ) : null}
+        {(() => {
+          const originalMedia = collectPostMedia(original)
+          if (!originalMedia.length) return null
+          if (originalMedia.length === 1) {
+            return (
+              <YStack height={180} backgroundColor="#000">
+                <PostMediaSlide item={originalMedia[0]} width={0} height={180} fit="cover" fill />
+              </YStack>
+            )
+          }
+          return <PostMediaCarousel items={originalMedia} height={180} fit="cover" rounded={false} />
+        })()}
+      </YStack>
+    </Link>
   )
 }

@@ -1,8 +1,11 @@
 import { fail, ok, type ApiResult } from '~/lib/api'
 import { logger } from '~/lib/api/logger'
+import { fetchFeedExclusion } from '~/community/lib/moderation'
 import { supabase } from '~/lib/supabase/client'
 
 import { extractHashtags, extractMentions } from './post-text'
+import { notifyHashtagFollowers } from './hashtag-follows'
+import { isVideoMediaUrl, normalizeUrlList } from './post-media'
 
 export const COMMUNITY_PAGE_SIZE = 10
 
@@ -76,7 +79,7 @@ export type PostShop = {
   description: string | null
 }
 
-/** Open Graph preview for a URL shared in a post (LinkedIn-style unfurl). */
+/** Open Graph preview for a URL shared in a post (professional unfurl). */
 export type PostLinkPreview = {
   url: string
   title: string | null
@@ -91,7 +94,11 @@ export type CommunityPost = {
   id: string
   content: string
   image_url: string | null
+  image_urls: string[] | null
+  media_url: string | null
   media_urls: string[] | null
+  video_url: string | null
+  video_urls: string[] | null
   created_at: string | null
   post_type: string | null
   user_id: string | null
@@ -117,6 +124,28 @@ export type CommunityPost = {
   product: PostProduct | null
   shop: PostShop | null
   link: PostLinkPreview | null
+  /** Present when post_type is article. */
+  article_title: string | null
+  original_post_id: string | null
+  repost_comment: string | null
+  originalPost: OriginalPostPreview | null
+  is_pinned: boolean
+}
+
+export type OriginalPostPreview = {
+  id: string
+  content: string
+  image_url: string | null
+  image_urls: string[] | null
+  media_url: string | null
+  media_urls: string[] | null
+  video_url: string | null
+  video_urls: string[] | null
+  authorName: string
+  authorHeadline: string | null
+  authorAvatar: string | null
+  authorUsername: string | null
+  createdAt: string | null
 }
 
 export type PaginatedPostsResult = {
@@ -130,11 +159,17 @@ export type PaginatedPostsResult = {
 export type CreatePostInput = {
   content: string
   imageUrl?: string | null
+  imageUrls?: string[] | null
+  mediaUrl?: string | null
   mediaUrls?: string[] | null
+  videoUrl?: string | null
+  videoUrls?: string[] | null
   visibility?: string
   companyId?: string | null
   groupId?: string | null
   postType?: string | null
+  /** professional long-form article headline stored in post_data. */
+  articleTitle?: string | null
   eventTitle?: string | null
   eventDescription?: string | null
   eventStartTime?: string | null
@@ -166,14 +201,18 @@ export type CreatePostInput = {
   linkPreview?: PostLinkPreview | null
 }
 
+/** Columns available on `posts_with_stats` (includes image_urls / video_urls from posts). */
 const POST_STATS_SELECT =
-  'id, content, image_url, media_urls, created_at, post_type, user_id, like_count, total_comments, engagement_score, total_reactions, author_verified, author_name, author_headline, author_avatar, event_title, event_description, event_start_time, event_end_time, event_location, event_rsvp_enabled'
+  'id, content, image_url, image_urls, media_urls, video_url, video_urls, created_at, post_type, user_id, like_count, total_comments, engagement_score, total_reactions, author_verified, author_name, author_headline, author_avatar, event_title, event_description, event_start_time, event_end_time, event_location, event_rsvp_enabled, original_post_id, repost_comment, is_pinned'
 
 type PostRow = {
   id: string
   content: string | null
   image_url: string | null
+  image_urls?: string[] | null
   media_urls: string[] | null
+  video_url?: string | null
+  video_urls?: string[] | null
   created_at: string | null
   post_type: string | null
   user_id: string | null
@@ -191,6 +230,9 @@ type PostRow = {
   event_end_time: string | null
   event_location: string | null
   event_rsvp_enabled: boolean | null
+  original_post_id?: string | null
+  repost_comment?: string | null
+  is_pinned?: boolean | null
 }
 
 function mapPost(row: PostRow, username?: string | null): CommunityPost {
@@ -198,7 +240,11 @@ function mapPost(row: PostRow, username?: string | null): CommunityPost {
     id: row.id,
     content: row.content ?? '',
     image_url: row.image_url,
+    image_urls: normalizeUrlList(row.image_urls).length ? normalizeUrlList(row.image_urls) : null,
+    media_url: null,
     media_urls: row.media_urls,
+    video_url: row.video_url ?? null,
+    video_urls: normalizeUrlList(row.video_urls).length ? normalizeUrlList(row.video_urls) : null,
     created_at: row.created_at,
     post_type: row.post_type,
     user_id: row.user_id,
@@ -229,6 +275,11 @@ function mapPost(row: PostRow, username?: string | null): CommunityPost {
     product: null,
     shop: null,
     link: null,
+    article_title: null,
+    original_post_id: row.original_post_id ?? null,
+    repost_comment: row.repost_comment ?? null,
+    originalPost: null,
+    is_pinned: !!row.is_pinned,
   }
 }
 
@@ -316,6 +367,42 @@ function mapShop(value: unknown): PostShop | null {
   }
 }
 
+/** Hydrate media columns (+ post_data.media_url) from `posts` for any CommunityPost list. */
+export async function hydrateCommunityPostMedia(
+  posts: CommunityPost[],
+): Promise<CommunityPost[]> {
+  const ids = posts.map((post) => post.id).filter(Boolean)
+  if (!ids.length) return posts
+
+  const { data } = await supabase
+    .from('posts')
+    .select('id, image_url, image_urls, media_urls, video_url, video_urls, post_data')
+    .in('id', ids)
+  const metaById = new Map((data ?? []).map((row) => [row.id, row]))
+
+  return posts.map((post) => {
+    const meta = metaById.get(post.id)
+    if (!meta) return post
+    const postData = toRecord(meta.post_data)
+    return {
+      ...post,
+      image_url: meta.image_url ?? post.image_url,
+      image_urls: normalizeUrlList(meta.image_urls).length
+        ? normalizeUrlList(meta.image_urls)
+        : post.image_urls,
+      media_url:
+        (typeof postData?.media_url === 'string' ? postData.media_url : null) ?? post.media_url,
+      media_urls: normalizeUrlList(meta.media_urls).length
+        ? normalizeUrlList(meta.media_urls)
+        : post.media_urls,
+      video_url: meta.video_url ?? post.video_url,
+      video_urls: normalizeUrlList(meta.video_urls).length
+        ? normalizeUrlList(meta.video_urls)
+        : post.video_urls,
+    }
+  })
+}
+
 async function enrichPostsWithPostMeta(posts: CommunityPost[]): Promise<CommunityPost[]> {
   const ids = posts.map((post) => post.id).filter(Boolean)
   if (!ids.length) return posts
@@ -323,7 +410,7 @@ async function enrichPostsWithPostMeta(posts: CommunityPost[]): Promise<Communit
   const { data } = await supabase
     .from('posts')
     .select(
-      'id, company_id, group_id, listing_id, celebration_data, product_data, service_data, link_preview_data',
+      'id, company_id, group_id, listing_id, celebration_data, product_data, service_data, link_preview_data, post_data, image_url, image_urls, media_urls, video_url, video_urls',
     )
     .in('id', ids)
   const metaById = new Map((data ?? []).map((row) => [row.id, row]))
@@ -331,6 +418,9 @@ async function enrichPostsWithPostMeta(posts: CommunityPost[]): Promise<Communit
   return posts.map((post) => {
     const meta = metaById.get(post.id)
     const listingId = meta?.listing_id ?? null
+    const postData = toRecord(meta?.post_data)
+    const articleTitle =
+      typeof postData?.article_title === 'string' ? postData.article_title : null
     return {
       ...post,
       company_id: meta?.company_id ?? null,
@@ -340,6 +430,20 @@ async function enrichPostsWithPostMeta(posts: CommunityPost[]): Promise<Communit
       product: mapProduct(meta?.product_data, listingId),
       shop: mapShop(meta?.service_data),
       link: mapLinkPreview(meta?.link_preview_data),
+      article_title: articleTitle,
+      image_url: meta?.image_url ?? post.image_url,
+      image_urls: normalizeUrlList(meta?.image_urls).length
+        ? normalizeUrlList(meta?.image_urls)
+        : post.image_urls,
+      media_url:
+        (typeof postData?.media_url === 'string' ? postData.media_url : null) ?? post.media_url,
+      media_urls: normalizeUrlList(meta?.media_urls).length
+        ? normalizeUrlList(meta?.media_urls)
+        : post.media_urls,
+      video_url: meta?.video_url ?? post.video_url,
+      video_urls: normalizeUrlList(meta?.video_urls).length
+        ? normalizeUrlList(meta?.video_urls)
+        : post.video_urls,
     }
   })
 }
@@ -451,11 +555,88 @@ async function enrichPostsWithPolls(posts: CommunityPost[]): Promise<CommunityPo
   return posts.map((post) => ({ ...post, poll: pollByPost.get(post.id) ?? null }))
 }
 
+async function enrichPostsWithOriginals(posts: CommunityPost[]): Promise<CommunityPost[]> {
+  const originalIds = [
+    ...new Set(posts.map((post) => post.original_post_id).filter(Boolean)),
+  ] as string[]
+  if (!originalIds.length) return posts
+
+  const { data } = await supabase
+    .from('posts_with_stats')
+    .select(
+      'id, content, image_url, image_urls, media_urls, video_url, video_urls, created_at, author_name, author_headline, author_avatar, user_id',
+    )
+    .in('id', originalIds)
+
+  if (!data?.length) return posts
+
+  const userIds = [...new Set(data.map((row) => row.user_id).filter(Boolean))] as string[]
+  const { data: profiles } = userIds.length
+    ? await supabase.from('profiles').select('id, username').in('id', userIds)
+    : { data: [] as Array<{ id: string; username: string | null }> }
+  const usernameById = new Map((profiles ?? []).map((p) => [p.id, p.username]))
+
+  const originals = data.map((row) => ({
+    id: row.id as string,
+    content: row.content ?? '',
+    image_url: row.image_url,
+    image_urls: normalizeUrlList(row.image_urls).length ? normalizeUrlList(row.image_urls) : null,
+    media_url: null as string | null,
+    media_urls: row.media_urls,
+    video_url: row.video_url,
+    video_urls: normalizeUrlList(row.video_urls).length ? normalizeUrlList(row.video_urls) : null,
+    authorName: row.author_name || 'Member',
+    authorHeadline: row.author_headline,
+    authorAvatar: row.author_avatar,
+    authorUsername: row.user_id ? usernameById.get(row.user_id) ?? null : null,
+    createdAt: row.created_at,
+  })) satisfies OriginalPostPreview[]
+
+  const originalMetaIds = originals.map((row) => row.id)
+  const { data: mediaRows } = await supabase
+    .from('posts')
+    .select('id, image_url, image_urls, media_urls, video_url, video_urls, post_data')
+    .in('id', originalMetaIds)
+  const mediaById = new Map((mediaRows ?? []).map((row) => [row.id, row]))
+
+  const byId = new Map(
+    originals.map((row) => {
+      const media = mediaById.get(row.id)
+      const postData = toRecord(media?.post_data)
+      return [
+        row.id,
+        {
+          ...row,
+          image_url: media?.image_url ?? row.image_url,
+          image_urls: normalizeUrlList(media?.image_urls).length
+            ? normalizeUrlList(media?.image_urls)
+            : null,
+          media_url:
+            (typeof postData?.media_url === 'string' ? postData.media_url : null) ?? row.media_url,
+          media_urls: normalizeUrlList(media?.media_urls).length
+            ? normalizeUrlList(media?.media_urls)
+            : row.media_urls,
+          video_url: media?.video_url ?? row.video_url,
+          video_urls: normalizeUrlList(media?.video_urls).length
+            ? normalizeUrlList(media?.video_urls)
+            : null,
+        } satisfies OriginalPostPreview,
+      ]
+    }),
+  )
+
+  return posts.map((post) => ({
+    ...post,
+    originalPost: post.original_post_id ? byId.get(post.original_post_id) ?? null : null,
+  }))
+}
+
 async function enrichPosts(posts: CommunityPost[]): Promise<CommunityPost[]> {
   const withMeta = await enrichPostsWithPostMeta(posts)
   const withUsernames = await enrichPostsWithUsernames(withMeta)
   const withContext = await enrichPostsWithContext(withUsernames)
-  return enrichPostsWithPolls(withContext)
+  const withPolls = await enrichPostsWithPolls(withContext)
+  return enrichPostsWithOriginals(withPolls)
 }
 
 /** Feed content filter used by the "Post type" pill on the main feed. */
@@ -465,6 +646,20 @@ type PostFilter = {
   companyId?: string
   groupId?: string
   feed?: FeedContentFilter
+}
+
+async function applyFeedExclusions(posts: CommunityPost[]): Promise<CommunityPost[]> {
+  const {
+    data: { user },
+  } = await supabase.auth.getUser()
+  if (!user?.id || posts.length === 0) return posts
+
+  const { hiddenPostIds, blockedUserIds } = await fetchFeedExclusion(user.id)
+  if (!hiddenPostIds.length && !blockedUserIds.length) return posts
+
+  const hidden = new Set(hiddenPostIds)
+  const blocked = new Set(blockedUserIds)
+  return posts.filter((post) => !hidden.has(post.id) && !blocked.has(post.user_id))
 }
 
 async function fetchPostsPage(
@@ -486,8 +681,10 @@ async function fetchPostsPage(
     .eq('is_deleted', false)
 
   if (filter?.feed === 'photos') {
-    // Media posts are identified by presence of media, not a post_type value.
-    query = query.or('image_url.not.is.null,media_urls.not.is.null')
+    // Media posts are identified by presence of media columns on the view.
+    query = query.or(
+      'image_url.not.is.null,image_urls.not.is.null,media_urls.not.is.null,video_url.not.is.null,video_urls.not.is.null',
+    )
   } else if (filter?.feed === 'polls') {
     query = query.eq('post_type', 'poll')
   } else if (filter?.feed === 'events') {
@@ -495,7 +692,10 @@ async function fetchPostsPage(
   } else if (filter?.feed === 'text') {
     query = query
       .is('image_url', null)
+      .is('image_urls', null)
       .is('media_urls', null)
+      .is('video_url', null)
+      .is('video_urls', null)
       .not('post_type', 'in', '(poll,event)')
   }
 
@@ -511,7 +711,8 @@ async function fetchPostsPage(
   }
 
   const mapped = ((data ?? []) as PostRow[]).map((row) => mapPost(row))
-  const items = await enrichPosts(mapped)
+  const enriched = await enrichPosts(mapped)
+  const items = await applyFeedExclusions(enriched)
   const total = count ?? 0
 
   return {
@@ -677,13 +878,45 @@ export async function createCommunityPost(
   input: CreatePostInput,
 ): Promise<{ id: string | null; error: string | null }> {
   const content = input.content.trim()
-  const mediaUrls = (input.mediaUrls ?? []).map((url) => url.trim()).filter(Boolean)
-  const imageUrl = input.imageUrl?.trim() || mediaUrls[0] || null
+  const mediaUrls = normalizeUrlList(input.mediaUrls)
+  const imageUrlsInput = normalizeUrlList(input.imageUrls)
+  const videoUrlsInput = normalizeUrlList(input.videoUrls)
+  const imageUrl = input.imageUrl?.trim() || null
+  const mediaUrl = input.mediaUrl?.trim() || null
+  const videoUrl = input.videoUrl?.trim() || null
+
+  const classifiedFromMedia = mediaUrls.reduce(
+    (acc, url) => {
+      if (isVideoMediaUrl(url)) acc.videos.push(url)
+      else acc.images.push(url)
+      return acc
+    },
+    { images: [] as string[], videos: [] as string[] },
+  )
+  const imageUrls = [
+    ...new Set([
+      ...imageUrlsInput,
+      ...classifiedFromMedia.images,
+      ...(imageUrl && !isVideoMediaUrl(imageUrl) ? [imageUrl] : []),
+    ]),
+  ]
+  const videoUrls = [
+    ...new Set([
+      ...videoUrlsInput,
+      ...classifiedFromMedia.videos,
+      ...(videoUrl ? [videoUrl] : []),
+      ...(imageUrl && isVideoMediaUrl(imageUrl) ? [imageUrl] : []),
+    ]),
+  ]
+  const coverImage = imageUrl && !isVideoMediaUrl(imageUrl) ? imageUrl : imageUrls[0] ?? null
+  const coverVideo = videoUrl || videoUrls[0] || null
+  const allMediaUrls = [...new Set([...mediaUrls, ...imageUrls, ...videoUrls, mediaUrl].filter(Boolean))] as string[]
+
   const isEvent = !!input.eventTitle?.trim()
   const pollOptions = (input.poll?.options ?? []).map((option) => option.trim()).filter(Boolean)
   const pollQuestion = input.poll?.question?.trim() ?? ''
   const hasPoll = !!input.poll && pollOptions.length >= 2
-  const hasImage = !!imageUrl || mediaUrls.length > 0
+  const hasImage = !!coverImage || !!coverVideo || allMediaUrls.length > 0
   const celebration =
     input.celebration && (input.celebration.occasion || input.celebration.title)
       ? input.celebration
@@ -702,10 +935,8 @@ export async function createCommunityPost(
   const tags = extractHashtags(content)
   const mentions = extractMentions(content)
 
-  // NOTE: post_type is constrained by posts_post_type_check to a fixed set
-  // (post, poll, event, celebration, product, service, text, thought,
-  // group_post). Media posts are surfaced via media_urls/image_url presence,
-  // not a dedicated type, so a generic 'post' is used for text/photo/GIF.
+  // NOTE: post_type includes professional variants (article, celebration, …).
+  // Media posts are surfaced via media_urls/image_url presence, not a dedicated type.
   const postType =
     input.postType ??
     (celebration
@@ -720,16 +951,26 @@ export async function createCommunityPost(
               ? 'event'
               : 'post')
 
+  const postData =
+    postType === 'article' && input.articleTitle?.trim()
+      ? { article_title: input.articleTitle.trim(), ...(mediaUrl ? { media_url: mediaUrl } : {}) }
+      : mediaUrl
+        ? { media_url: mediaUrl }
+        : {}
+
   const { data, error } = await supabase
     .from('posts')
     .insert({
       user_id: userId,
       content,
-      post_data: {},
+      post_data: postData,
       visibility: input.visibility ?? 'public',
       post_type: postType,
-      image_url: imageUrl,
-      media_urls: mediaUrls.length ? mediaUrls : null,
+      image_url: coverImage,
+      image_urls: imageUrls.length ? imageUrls : null,
+      media_urls: allMediaUrls.length ? allMediaUrls : null,
+      video_url: coverVideo,
+      video_urls: videoUrls.length ? videoUrls : null,
       company_id: input.companyId ?? null,
       group_id: input.groupId ?? null,
       listing_id: product?.listingId ?? null,
@@ -788,6 +1029,20 @@ export async function createCommunityPost(
     .maybeSingle()
 
   const postId = data?.id ?? null
+
+  if (postId && tags.length) {
+    const { data: author } = await supabase
+      .from('profiles')
+      .select('full_name, username')
+      .eq('id', userId)
+      .maybeSingle()
+    void notifyHashtagFollowers({
+      authorId: userId,
+      authorName: author?.full_name || author?.username || 'Someone',
+      postId,
+      tags,
+    })
+  }
 
   if (postId && hasPoll && input.poll) {
     const durationDays = input.poll.durationDays > 0 ? input.poll.durationDays : 1

@@ -22,6 +22,8 @@ export type AccountMenuItem = {
   label: string
   description?: string
   href: Href
+  /** Optional non-navigation action (e.g. open AI assistant). */
+  action?: 'open-ai'
   tone?: 'default' | 'danger'
   badge?: number
 }
@@ -116,10 +118,20 @@ export function getAccountMenuSections({
     subtitle: 'Preferences and security',
     items: [
       item(tier, 'settings', Icons.Settings, 'Settings & privacy', routes.settings, 'account', {
-        description: 'Security, notifications, and appearance',
+        description: 'Shared across every tab — security, alerts, and appearance',
       }),
-      item(tier, 'notifications', Icons.Bell, 'Notifications', routes.notifications, 'community', {
-        description: 'Alerts from your network and orders',
+      item(tier, 'profile', Icons.User, 'Your profile', routes.profile, 'account', {
+        description: 'Photo, headline, and career preferences',
+      }),
+      item(tier, 'notifications', Icons.Bell, 'Notifications', routes.notifications, 'account', {
+        description: 'Alerts from marketplace, community, and chat',
+      }),
+      item(tier, 'help', Icons.HelpCircle, 'Help & Support', routes.help, 'account', {
+        description: 'FAQs and contact for every tab — opens with your current product when possible',
+      }),
+      item(tier, 'ai-assist', Icons.Sparkles, 'Ask SHEconomy AI', routes.help, 'account', {
+        description: 'Contextual help for Marketplace, Community, Chat, Class, Co-Work, and Shop',
+        action: 'open-ai',
       }),
     ],
   })

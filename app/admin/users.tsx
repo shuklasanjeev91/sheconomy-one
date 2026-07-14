@@ -850,12 +850,12 @@ function UserDetailsPanel({
       </DetailSection>
 
       <DetailSection title="Social links">
-        <DetailRow label="LinkedIn" value={user.linkedin_url ?? 'Not set'} />
+        <DetailRow label="Professional profile" value={user.linkedin_url ?? 'Not set'} />
         <DetailRow label="Twitter/X" value={user.twitter_url ?? 'Not set'} />
         <DetailRow label="GitHub" value={user.github_url ?? 'Not set'} />
         <DetailRow label="Instagram" value={user.instagram_url ?? 'Not set'} />
         <DetailRow label="YouTube" value={user.youtube_url ?? 'Not set'} />
-        <DetailRow label="Facebook" value={user.facebook_url ?? 'Not set'} />
+        <DetailRow label="Social profile" value={user.facebook_url ?? 'Not set'} />
         <DetailRow label="Portfolio" value={user.portfolio_url ?? 'Not set'} />
       </DetailSection>
     </YStack>

@@ -20,7 +20,7 @@ type CartShopOffersProps = {
 }
 
 /**
- * Shop-level coupon codes surfaced inside a cart shop group (Etsy-style). The
+ * Shop-level coupon codes surfaced inside a cart shop group (marketplace). The
  * cart carries a single order-level discount, so applying a shop code replaces
  * any current coupon (the customer is told when they tap Apply).
  */

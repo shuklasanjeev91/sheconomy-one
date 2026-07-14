@@ -1,36 +1,32 @@
-import { Link } from 'one'
+import { Link, useRouter } from 'one'
 import { useCallback, useEffect, useMemo, useState } from 'react'
 
 import { CommunityCard } from '~/community/components/CommunityCard'
 import { CommunityPageHeader } from '~/community/components/CommunityPageHeader'
 import {
   CommunityFilterPill,
-  CommunityFilterSheet,
-  type FilterOption,
 } from '~/community/components/CommunityFilters'
 import { FullWidthLayout, LAYOUT_STRETCH, PageSection } from '~/components/layout'
+import { PushPermissionBanner } from '~/components/notifications/PushPermissionBanner'
 import {
-  fetchNotificationCategories,
   fetchNotifications,
   markAllNotificationsRead,
   markNotificationRead,
+  NOTIFICATION_PRODUCT_FILTERS,
   type AppNotification,
+  type NotificationProductFilter,
 } from '~/community/lib/notifications'
 import { useCommunityUi } from '~/community/lib/community-theme'
-import { Avatar, Button, ScrollView, Spinner, Text, XStack, YStack } from '~/components/ui'
-import { useSupabase } from '~/providers/SupabaseProvider'
+import { Avatar, Button, Icons, Input, ScrollView, Spinner, Text, XStack, YStack } from '~/components/ui'
+import { pathFromNotificationUrl } from '~/lib/notifications/push-config'
+import { supabase } from '~/lib/supabase/client'
 import { useAppUi } from '~/lib/theme/useAppUi'
-
-function titleCase(value: string): string {
-  return value
-    .replace(/[_-]+/g, ' ')
-    .replace(/\b\w/g, (c) => c.toUpperCase())
-    .trim()
-}
+import { useSupabase } from '~/providers/SupabaseProvider'
 
 export function NotificationsScreen() {
   const communityUi = useCommunityUi()
   const ui = useAppUi()
+  const router = useRouter()
   const { user } = useSupabase()
   const [items, setItems] = useState<AppNotification[]>([])
   const [page, setPage] = useState(0)
@@ -38,10 +34,21 @@ export function NotificationsScreen() {
   const [isLoading, setIsLoading] = useState(true)
   const [isLoadingMore, setIsLoadingMore] = useState(false)
 
-  const [category, setCategory] = useState('')
+  const [product, setProduct] = useState<NotificationProductFilter>('')
   const [unreadOnly, setUnreadOnly] = useState(false)
-  const [categoryFacets, setCategoryFacets] = useState<string[]>([])
-  const [categorySheetOpen, setCategorySheetOpen] = useState(false)
+  const [query, setQuery] = useState('')
+
+  const visibleItems = useMemo(() => {
+    const needle = query.trim().toLowerCase()
+    if (!needle) return items
+    return items.filter((item) => {
+      const haystack = [item.title, item.message, item.type, item.category, item.platform]
+        .filter(Boolean)
+        .join(' ')
+        .toLowerCase()
+      return haystack.includes(needle)
+    })
+  }, [items, query])
 
   const load = useCallback(
     async (pageToLoad: number, append: boolean) => {
@@ -52,28 +59,41 @@ export function NotificationsScreen() {
       }
       if (append) setIsLoadingMore(true)
       else setIsLoading(true)
-      const result = await fetchNotifications(user.id, pageToLoad, { category, unreadOnly })
+      const result = await fetchNotifications(user.id, pageToLoad, { product, unreadOnly })
       setItems((current) => (append ? [...current, ...result.items] : result.items))
       setHasMore(result.hasMore)
       setPage(pageToLoad)
       setIsLoading(false)
       setIsLoadingMore(false)
     },
-    [category, unreadOnly, user],
+    [product, unreadOnly, user],
   )
 
   useEffect(() => {
-    if (user) fetchNotificationCategories(user.id).then(setCategoryFacets)
-  }, [user])
-
-  useEffect(() => {
-    load(0, false)
+    void load(0, false)
   }, [load])
 
-  const categoryOptions = useMemo<FilterOption[]>(
-    () => categoryFacets.map((value) => ({ label: titleCase(value), value })),
-    [categoryFacets],
-  )
+  useEffect(() => {
+    if (!user?.id) return
+    const channel = supabase
+      .channel(`notifications-inbox:${user.id}`)
+      .on(
+        'postgres_changes',
+        {
+          event: 'INSERT',
+          schema: 'public',
+          table: 'notifications',
+          filter: `recipient_id=eq.${user.id}`,
+        },
+        () => {
+          void load(0, false)
+        },
+      )
+      .subscribe()
+    return () => {
+      void supabase.removeChannel(channel)
+    }
+  }, [load, user?.id])
 
   async function handleOpen(notification: AppNotification) {
     if (!notification.read) {
@@ -82,6 +102,8 @@ export function NotificationsScreen() {
         current.map((item) => (item.id === notification.id ? { ...item, read: true } : item)),
       )
     }
+    const path = pathFromNotificationUrl(notification.action_url)
+    if (path) router.push(path as never)
   }
 
   async function handleMarkAll() {
@@ -93,6 +115,8 @@ export function NotificationsScreen() {
   return (
     <FullWidthLayout scroll>
       <PageSection paddingVertical="$6" {...LAYOUT_STRETCH}>
+        <YStack gap="$4" width="100%">
+          <PushPermissionBanner />
           <CommunityCard padding={18} gap={14} width="100%">
             <CommunityPageHeader
               title="Notifications"
@@ -105,37 +129,70 @@ export function NotificationsScreen() {
               }
             />
             {user ? (
-              <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-                <XStack gap={8} alignItems="center" paddingVertical={2}>
-                  <CommunityFilterPill
-                    label="Category"
-                    summary={category ? titleCase(category) : undefined}
-                    active={!!category}
-                    onPress={() => setCategorySheetOpen(true)}
+              <YStack gap={10}>
+                <XStack
+                  alignItems="center"
+                  gap={8}
+                  paddingHorizontal={12}
+                  minHeight={42}
+                  borderRadius={999}
+                  borderWidth={1}
+                  borderColor={communityUi.borderLight}
+                  backgroundColor={ui.surface}
+                >
+                  <Icons.Search size={16} color={ui.textMuted} />
+                  <Input
+                    flex={1}
+                    value={query}
+                    onChangeText={setQuery}
+                    placeholder="Search notifications"
+                    borderWidth={0}
+                    backgroundColor="transparent"
+                    height={40}
+                    paddingHorizontal={0}
                   />
-                  <CommunityFilterPill
-                    label="Unread only"
-                    summary="Unread only"
-                    active={unreadOnly}
-                    onPress={() => setUnreadOnly((v) => !v)}
-                  />
-                  {category || unreadOnly ? (
-                    <Text
-                      fontSize={13}
-                      fontWeight="600"
-                      color={communityUi.brand}
-                      cursor="pointer"
-                      paddingHorizontal={6}
-                      onPress={() => {
-                        setCategory('')
-                        setUnreadOnly(false)
-                      }}
-                    >
-                      Clear all
-                    </Text>
+                  {query ? (
+                    <XStack cursor="pointer" onPress={() => setQuery('')} padding={4}>
+                      <Icons.X size={14} color={ui.textMuted} />
+                    </XStack>
                   ) : null}
                 </XStack>
-              </ScrollView>
+                <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+                  <XStack gap={8} alignItems="center" paddingVertical={2}>
+                    {NOTIFICATION_PRODUCT_FILTERS.map((filter) => (
+                      <CommunityFilterPill
+                        key={filter.key || 'all'}
+                        label={filter.label}
+                        summary={filter.label}
+                        active={product === filter.key}
+                        onPress={() => setProduct(filter.key)}
+                      />
+                    ))}
+                    <CommunityFilterPill
+                      label="Unread only"
+                      summary="Unread only"
+                      active={unreadOnly}
+                      onPress={() => setUnreadOnly((v) => !v)}
+                    />
+                    {product || unreadOnly || query ? (
+                      <Text
+                        fontSize={13}
+                        fontWeight="600"
+                        color={communityUi.brand}
+                        cursor="pointer"
+                        paddingHorizontal={6}
+                        onPress={() => {
+                          setProduct('')
+                          setUnreadOnly(false)
+                          setQuery('')
+                        }}
+                      >
+                        Clear
+                      </Text>
+                    ) : null}
+                  </XStack>
+                </ScrollView>
+              </YStack>
             ) : null}
             {!user ? (
               <Text color={ui.textMuted}>Sign in to see your notifications.</Text>
@@ -149,16 +206,22 @@ export function NotificationsScreen() {
                   You are all caught up.
                 </Text>
               </YStack>
+            ) : visibleItems.length === 0 ? (
+              <YStack alignItems="center" paddingVertical="$6" gap="$2">
+                <Text color={ui.textMuted} fontWeight="500" textAlign="center">
+                  No notifications match your search.
+                </Text>
+              </YStack>
             ) : (
               <YStack gap={0}>
-                {items.map((notification) => (
+                {visibleItems.map((notification) => (
                   <NotificationRow
                     key={notification.id}
                     notification={notification}
                     onOpen={handleOpen}
                   />
                 ))}
-                {hasMore ? (
+                {hasMore && !query.trim() ? (
                   <YStack alignItems="center" paddingVertical={12}>
                     {isLoadingMore ? (
                       <Spinner size="small" color={communityUi.brand} />
@@ -167,7 +230,7 @@ export function NotificationsScreen() {
                         color={communityUi.brand}
                         fontWeight="600"
                         cursor="pointer"
-                        onPress={() => load(page + 1, true)}
+                        onPress={() => void load(page + 1, true)}
                       >
                         Load more
                       </Text>
@@ -177,17 +240,7 @@ export function NotificationsScreen() {
               </YStack>
             )}
           </CommunityCard>
-
-          <CommunityFilterSheet
-            open={categorySheetOpen}
-            onOpenChange={setCategorySheetOpen}
-            title="Category"
-            options={categoryOptions}
-            value={category ? [category] : []}
-            onApply={(next) => setCategory(next[0] ?? '')}
-            searchable
-            searchPlaceholder="Search categories"
-          />
+        </YStack>
       </PageSection>
     </FullWidthLayout>
   )
@@ -201,6 +254,7 @@ function NotificationRow({
   onOpen: (n: AppNotification) => void
 }) {
   const communityUi = useCommunityUi()
+  const path = pathFromNotificationUrl(notification.action_url)
   const row = (
     <XStack
       gap={12}
@@ -220,9 +274,20 @@ function NotificationRow({
       <YStack flex={1} gap={4}>
         <XStack alignItems="center" gap={8}>
           {!notification.read ? (
-            <YStack width={8} height={8} borderRadius={999} backgroundColor={communityUi.brand} flexShrink={0} />
+            <YStack
+              width={8}
+              height={8}
+              borderRadius={999}
+              backgroundColor={communityUi.brand}
+              flexShrink={0}
+            />
           ) : null}
-          <Text fontSize={14} fontWeight={notification.read ? '500' : '700'} color={communityUi.text} flex={1}>
+          <Text
+            fontSize={14}
+            fontWeight={notification.read ? '500' : '700'}
+            color={communityUi.text}
+            flex={1}
+          >
             {notification.title}
           </Text>
         </XStack>
@@ -238,8 +303,8 @@ function NotificationRow({
     </XStack>
   )
 
-  if (notification.action_url) {
-    return <Link href={notification.action_url as never}>{row}</Link>
+  if (path) {
+    return <Link href={path as never}>{row}</Link>
   }
 
   return row

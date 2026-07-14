@@ -1,7 +1,15 @@
 import { useEffect, useState } from 'react'
+import { Share } from 'react-native'
 
 import { fetchListingsByIds, type ListingSummary } from '~/lib/supabase/commerce'
-import { useRecentlyViewed } from '~/commerce/lib/recently-viewed'
+import { PageSection } from '~/components/layout'
+import { Text, XStack, YStack, useAppToast } from '~/components/ui'
+import { clearRecentlyViewed, useRecentlyViewed } from '~/commerce/lib/recently-viewed'
+import { BRAND_NAME } from '~/config/brand'
+import { formatCurrency } from '~/lib/format'
+import { copyToClipboard } from '~/lib/platform/clipboard'
+import { getListingShareUrl } from '~/lib/share'
+import { useAppUi } from '~/lib/theme/useAppUi'
 
 import { CommerceSection } from './CommerceSection'
 import { ListingCarouselRow } from './ListingCarouselRow'
@@ -11,6 +19,8 @@ type RecentlyViewedRailProps = {
   excludeIds?: string[]
   title?: string
   subtitle?: string
+  /** Wrap in PageSection only when there are items (avoids empty home gaps). */
+  inset?: boolean
 }
 
 /** Horizontal "Recently viewed" rail backed by the local recently-viewed store. */
@@ -18,7 +28,10 @@ export function RecentlyViewedRail({
   excludeIds = [],
   title = 'Recently viewed',
   subtitle = 'Pick up where you left off',
+  inset = false,
 }: RecentlyViewedRailProps) {
+  const ui = useAppUi()
+  const toast = useAppToast()
   const recentIds = useRecentlyViewed(excludeIds)
   const [items, setItems] = useState<ListingSummary[]>([])
 
@@ -38,11 +51,61 @@ export function RecentlyViewedRail({
     }
   }, [recentIds.join(',')])
 
+  async function handleShareRecent() {
+    if (!items.length) return
+    const lines = items.slice(0, 8).map((item) => {
+      const price =
+        typeof item.price === 'number'
+          ? ` — ${formatCurrency(item.price, item.currency ?? 'INR')}`
+          : ''
+      const url = item.slug ? getListingShareUrl(item.slug) : ''
+      return `• ${item.title}${price}${url ? `\n  ${url}` : ''}`
+    })
+    const message = [`Recently viewed on ${BRAND_NAME}`, '', ...lines].join('\n')
+    try {
+      await Share.share({ title: 'Recently viewed', message })
+    } catch {
+      const copied = await copyToClipboard(message)
+      toast.show(copied ? 'List copied' : 'Could not share', {
+        tone: copied ? 'success' : 'danger',
+      })
+    }
+  }
+
   if (items.length === 0) return null
 
-  return (
-    <CommerceSection title={title} subtitle={subtitle}>
+  const content = (
+    <CommerceSection
+      title={title}
+      subtitle={subtitle}
+      action={
+        <XStack alignItems="center" gap="$3">
+          <Text
+            fontSize={13}
+            fontWeight="600"
+            color={ui.brand}
+            cursor="pointer"
+            pressStyle={{ opacity: 0.8 }}
+            onPress={() => void handleShareRecent()}
+          >
+            Share
+          </Text>
+          <Text
+            fontSize={13}
+            fontWeight="600"
+            color={ui.textMuted}
+            cursor="pointer"
+            pressStyle={{ opacity: 0.8 }}
+            onPress={() => clearRecentlyViewed()}
+          >
+            Clear
+          </Text>
+        </XStack>
+      }
+    >
       <ListingCarouselRow listings={items} />
     </CommerceSection>
   )
+
+  return inset ? <PageSection>{content}</PageSection> : content
 }

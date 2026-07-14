@@ -42,12 +42,7 @@ export function FeedComposer({ onGifSelect }: FeedComposerProps) {
 
   return (
     <>
-      <CommunityCard
-        padding={16}
-        gap={12}
-        display="none"
-        $gtLg={{ display: 'flex' }}
-      >
+      <CommunityCard padding={16} gap={12}>
         <XStack gap={10} alignItems="center">
           <Link href={(isAuthenticated ? communityRoutes.profile : routes.signIn) as Href} asChild>
             <Avatar name={name} src={profile?.avatar_url ?? undefined} size="$4" cursor="pointer" />
@@ -66,7 +61,7 @@ export function FeedComposer({ onGifSelect }: FeedComposerProps) {
             onPress={() => compose()}
           >
             <Text fontSize={14} fontWeight="600" color={communityUi.textMuted}>
-              {isAuthenticated ? 'Start a post' : 'Sign in to post'}
+              {isAuthenticated ? 'Share what’s on your mind' : 'Sign in to post'}
             </Text>
           </XStack>
         </XStack>

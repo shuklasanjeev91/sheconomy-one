@@ -2,24 +2,36 @@ import { useRef, useState } from 'react'
 import type { LayoutChangeEvent, NativeScrollEvent, NativeSyntheticEvent } from 'react-native'
 import { Platform } from 'react-native'
 
-import { isGifUrl } from '~/community/lib/giphy'
+import { PostMediaSlide } from '~/community/components/PostMediaSlide'
+import type { PostMediaItem } from '~/community/lib/post-media'
 import { useCommunityUi } from '~/community/lib/community-theme'
-import { Icons, Image, ScrollView, Text, XStack, YStack } from '~/components/ui'
+import { Icons, ScrollView, Text, XStack, YStack } from '~/components/ui'
 import { radius } from '~/config/tokens'
 
 type PostMediaCarouselProps = {
-  urls: string[]
+  items: PostMediaItem[]
+  /** @deprecated Prefer `items` — URLs are treated as images unless clearly video. */
+  urls?: string[]
   /** Fixed slide height. */
   height?: number
-  /** contain = show whole image (LinkedIn carousel); cover = fill/crop. */
+  /** contain = show whole image (image carousel); cover = fill/crop. */
   fit?: 'cover' | 'contain'
   /** Tapping a slide (fires with the tapped index). */
   onPressImage?: (index: number) => void
   rounded?: boolean
 }
 
-/** LinkedIn-style swipeable image carousel: paging, arrows, dots and a counter. */
+function toItems(items: PostMediaItem[] | undefined, urls: string[] | undefined): PostMediaItem[] {
+  if (items?.length) return items
+  return (urls ?? []).map((url) => ({
+    url,
+    kind: /\.(mp4|webm|mov|m4v|mkv|ogg|m3u8)(\?|$)/i.test(url) ? 'video' : 'image',
+  }))
+}
+
+/** Swipeable image/video carousel: paging, arrows, dots and a counter. */
 export function PostMediaCarousel({
+  items,
   urls,
   height = 380,
   fit = 'contain',
@@ -27,10 +39,13 @@ export function PostMediaCarousel({
   rounded = true,
 }: PostMediaCarouselProps) {
   const communityUi = useCommunityUi()
+  const slides = toItems(items, urls)
   const scrollRef = useRef<ScrollView>(null)
   const [width, setWidth] = useState(0)
   const [index, setIndex] = useState(0)
   const isWeb = Platform.OS === 'web'
+
+  if (!slides.length) return null
 
   function onLayout(event: LayoutChangeEvent) {
     setWidth(event.nativeEvent.layout.width)
@@ -39,11 +54,11 @@ export function PostMediaCarousel({
   function onScroll(event: NativeSyntheticEvent<NativeScrollEvent>) {
     if (!width) return
     const next = Math.round(event.nativeEvent.contentOffset.x / width)
-    if (next !== index) setIndex(Math.max(0, Math.min(next, urls.length - 1)))
+    if (next !== index) setIndex(Math.max(0, Math.min(next, slides.length - 1)))
   }
 
   function goTo(next: number) {
-    const clamped = Math.max(0, Math.min(next, urls.length - 1))
+    const clamped = Math.max(0, Math.min(next, slides.length - 1))
     setIndex(clamped)
     scrollRef.current?.scrollTo({ x: clamped * width, animated: true })
   }
@@ -66,9 +81,9 @@ export function PostMediaCarousel({
         scrollEventThrottle={16}
         onScroll={onScroll}
       >
-        {urls.map((url, i) => (
+        {slides.map((item, i) => (
           <YStack
-            key={`${url}-${i}`}
+            key={`${item.kind}-${item.url}-${i}`}
             width={width || undefined}
             height={height}
             alignItems="center"
@@ -77,21 +92,12 @@ export function PostMediaCarousel({
             {...(onPressImage ? { onPress: () => onPressImage(i) } : {})}
           >
             {width ? (
-              isGifUrl(url) ? (
-                // eslint-disable-next-line jsx-a11y/alt-text
-                <img
-                  src={url}
-                  style={{ width: '100%', height: '100%', objectFit: fit }}
-                />
-              ) : (
-                <Image src={url} width={width} height={height} objectFit={fit} alt="" />
-              )
+              <PostMediaSlide item={item} width={width} height={height} fit={fit} />
             ) : null}
           </YStack>
         ))}
       </ScrollView>
 
-      {/* Counter */}
       <XStack
         position="absolute"
         top={10}
@@ -103,23 +109,19 @@ export function PostMediaCarousel({
         pointerEvents="none"
       >
         <Text fontSize={12} fontWeight="700" color="white">
-          {index + 1}/{urls.length}
+          {index + 1}/{slides.length}
         </Text>
       </XStack>
 
-      {/* Desktop arrows */}
       {isWeb ? (
         <>
-          {index > 0 ? (
-            <CarouselArrow side="left" onPress={() => goTo(index - 1)} />
-          ) : null}
-          {index < urls.length - 1 ? (
+          {index > 0 ? <CarouselArrow side="left" onPress={() => goTo(index - 1)} /> : null}
+          {index < slides.length - 1 ? (
             <CarouselArrow side="right" onPress={() => goTo(index + 1)} />
           ) : null}
         </>
       ) : null}
 
-      {/* Dots */}
       <XStack
         position="absolute"
         bottom={10}
@@ -129,9 +131,9 @@ export function PostMediaCarousel({
         gap={6}
         pointerEvents="none"
       >
-        {urls.map((url, i) => (
+        {slides.map((item, i) => (
           <YStack
-            key={`dot-${url}-${i}`}
+            key={`dot-${item.url}-${i}`}
             width={i === index ? 18 : 6}
             height={6}
             borderRadius={999}

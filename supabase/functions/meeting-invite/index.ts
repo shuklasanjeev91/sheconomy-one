@@ -165,28 +165,30 @@ Deno.serve(async (req) => {
     let emailsSent = 0
     const mailtoLinks: string[] = []
     const resendKey = Deno.env.get('RESEND_API_KEY')
+    const roomId = meeting.meeting_code
 
     for (const invitee of invitees) {
       if (invitee.type === 'user' && invitee.id && !invitee.id.startsWith('email:')) {
-        const { error: notifyError } = await service.from('notifications').insert({
-          recipient_id: invitee.id,
-          context_type: 'meeting',
-          context_id: meeting.id,
-          type: 'meeting_invite',
-          category: 'co-work',
-          title: `${hostName} invited you to Co-Work`,
-          message: message || `${meeting.title} · ${when}`,
-          action_url: joinUrl,
-          data: {
-            meeting_id: meeting.id,
-            meeting_code: meeting.meeting_code,
-            host_id: authData.user.id,
+        const { data: notificationId, error: notifyError } = await service.rpc(
+          'create_notification_from_template',
+          {
+            p_template_key: 'meeting_invitation',
+            p_recipient_id: invitee.id,
+            p_variables: {
+              host_name: hostName,
+              meeting_title: meeting.title,
+              room_id: roomId,
+              action_url: joinUrl,
+              message: message || undefined,
+            },
+            p_context_type: 'meeting',
+            p_context_id: meeting.id,
+            p_override_channels: ['in_app', 'email', 'push'],
+            p_override_priority: 2,
           },
-          channels: ['in_app'],
-          priority: 2,
-        })
+        )
 
-        if (!notifyError) notifications += 1
+        if (!notifyError && notificationId) notifications += 1
         continue
       }
 

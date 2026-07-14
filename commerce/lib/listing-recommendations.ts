@@ -114,6 +114,33 @@ export async function fetchRelatedListings(
   return fetchRelatedListingsFallback(listingId, limit)
 }
 
+/** Other active listings from the same shop (marketplace "More from this shop"). */
+export async function fetchMoreFromShop(
+  shopId: string,
+  excludeListingId?: string | null,
+  limit = DEFAULT_LIMIT,
+): Promise<ListingSummary[]> {
+  if (!shopId) return []
+
+  let query = supabase
+    .from('listings')
+    .select('id')
+    .eq('shop_id', shopId)
+    .eq('is_active', ACTIVE_LISTING_FILTER.is_active)
+    .eq('listing_status', ACTIVE_LISTING_FILTER.listing_status)
+    .order('average_rating', { ascending: false, nullsFirst: false })
+    .limit(limit + 2)
+
+  if (excludeListingId) {
+    query = query.neq('id', excludeListingId)
+  }
+
+  const { data } = await query
+  const ids = (data ?? []).map((row) => row.id).filter((id) => id !== excludeListingId)
+  if (!ids.length) return []
+  return (await fetchListingsByIds(ids)).slice(0, limit)
+}
+
 /** Marketplace picks personalized for the signed-in user and demand signals. */
 export async function fetchPersonalizedListings(
   excludeIds: string[],

@@ -19,7 +19,7 @@ type CommunityFilterPillProps = {
   onPress: () => void
 }
 
-/** LinkedIn-style filter chip that opens a dropdown (desktop) / bottom sheet (mobile). */
+/** professional filter chip that opens a dropdown (desktop) / bottom sheet (mobile). */
 export function CommunityFilterPill({ label, summary, active, onPress }: CommunityFilterPillProps) {
   const communityUi = useCommunityUi()
   const isActive = Boolean(active)

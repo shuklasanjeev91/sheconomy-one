@@ -369,6 +369,31 @@ export async function fetchPublishedPrograms(options?: {
   return { programs, error: null }
 }
 
+/** Fetch programs by id, preserving the caller's order. */
+export async function fetchProgramsByIds(
+  ids: string[],
+): Promise<{ programs: Program[]; error: string | null }> {
+  const unique = [...new Set(ids.filter(Boolean))]
+  if (!unique.length) return { programs: [], error: null }
+
+  const { data, error } = await supabase
+    .from('programs')
+    .select(PROGRAM_SELECT)
+    .in('id', unique)
+    .not('published_at', 'is', null)
+
+  if (error) return { programs: [], error: error.message }
+
+  const mapped = await enrichProgramAuthors((data as ProgramRow[]).map(mapProgram), {
+    resolveByTitle: false,
+  })
+  const byId = new Map(mapped.map((program) => [program.id, program]))
+  return {
+    programs: unique.map((id) => byId.get(id)).filter((program): program is Program => Boolean(program)),
+    error: null,
+  }
+}
+
 export async function fetchProgramBySlug(
   slug: string,
 ): Promise<{ program: Program | null; error: string | null }> {

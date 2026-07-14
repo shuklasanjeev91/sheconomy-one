@@ -1,5 +1,5 @@
 /**
- * Curated, LinkedIn-style industry list used by the Industry picker across the
+ * Curated, professional industry list used by the Industry picker across the
  * app (profile About, Experience, company/job forms). Kept as a local dataset
  * so the picker works identically on web, iOS and Android without a web-only
  * npm dependency.

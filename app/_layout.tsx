@@ -17,7 +17,10 @@ import { FavoritesProvider } from '~/commerce/hooks/useFavorites'
 import { MarketplacePersonalizationProvider } from '~/commerce/context/MarketplacePersonalizationContext'
 import { useAppFonts } from '~/hooks/useAppFonts'
 import { store } from '~/lib/store'
+import { PushNotificationsProvider } from '~/providers/PushNotificationsProvider'
 import { SupabaseProvider } from '~/providers/SupabaseProvider'
+import { InAppNotificationHost } from '~/components/notifications/InAppNotificationHost'
+import { AiAssistProvider } from '~/providers/AiAssistProvider'
 
 function NativeRootShell({ children }: { children: ReactNode }) {
   if (Platform.OS === 'web') {
@@ -192,17 +195,22 @@ function AppProviders({ children }: { children: React.ReactNode }) {
   return (
     <ReduxProvider store={store}>
       <SupabaseProvider>
-        <SchemeProvider>
-          <ThemedApp>
-            <CartProvider>
-              <FavoritesProvider>
-                <MarketplacePersonalizationProvider>
-                  <AppShell>{children}</AppShell>
-                </MarketplacePersonalizationProvider>
-              </FavoritesProvider>
-            </CartProvider>
-          </ThemedApp>
-        </SchemeProvider>
+        <PushNotificationsProvider>
+          <SchemeProvider>
+            <ThemedApp>
+              <CartProvider>
+                <FavoritesProvider>
+                  <MarketplacePersonalizationProvider>
+                    <AiAssistProvider>
+                      <InAppNotificationHost />
+                      <AppShell>{children}</AppShell>
+                    </AiAssistProvider>
+                  </MarketplacePersonalizationProvider>
+                </FavoritesProvider>
+              </CartProvider>
+            </ThemedApp>
+          </SchemeProvider>
+        </PushNotificationsProvider>
       </SupabaseProvider>
     </ReduxProvider>
   )

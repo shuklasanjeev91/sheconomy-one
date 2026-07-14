@@ -40,6 +40,13 @@ export function recordListingView(listingId: string) {
   void AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(ids)).catch(() => {})
 }
 
+/** Clear recently viewed history on web, iOS, and Android. */
+export function clearRecentlyViewed() {
+  ids = []
+  emit()
+  void AsyncStorage.removeItem(STORAGE_KEY).catch(() => {})
+}
+
 function subscribe(callback: () => void) {
   listeners.add(callback)
   return () => {

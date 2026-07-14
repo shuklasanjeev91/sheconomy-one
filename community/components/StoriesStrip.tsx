@@ -33,7 +33,12 @@ export function StoriesStrip() {
           <Spinner size="small" color={communityUi.brand} />
         </YStack>
       ) : (
-        <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          style={{ flexGrow: 0 }}
+          contentContainerStyle={{ flexGrow: 0, alignItems: 'flex-start' }}
+        >
           <XStack gap="$3" paddingHorizontal="$3">
             {isAuthenticated ? (
               <Link

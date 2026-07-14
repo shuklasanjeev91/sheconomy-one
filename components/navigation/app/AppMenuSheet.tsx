@@ -7,17 +7,21 @@ import {
   Icons,
   Popover,
   PopoverContent,
+  Separator,
   Text,
   XStack,
   YStack,
 } from '~/components/ui'
 import { useAccess } from '~/hooks/useAccess'
+import { useProfile } from '~/hooks/useProfile'
+import { useAiAssistOptional } from '~/providers/AiAssistProvider'
 import {
   chatRoutes,
   classRoutes,
   coWorkRoutes,
   commerceRoutes,
   communityRoutes,
+  routes,
 } from '~/lib/routes'
 import { useAppUi } from '~/lib/theme/useAppUi'
 
@@ -26,11 +30,12 @@ import { getAppColors } from './config'
 type MenuTile = {
   label: string
   icon: typeof Icons.Users
-  href: Href
+  href?: Href
+  action?: 'open-ai'
   color: string
 }
 
-function useMenuTiles(): MenuTile[] {
+function useProductTiles(): MenuTile[] {
   const { canAccessFeature } = useAccess()
   const hasCommunity = canAccessFeature('community')
 
@@ -53,6 +58,23 @@ function useMenuTiles(): MenuTile[] {
   ]
 }
 
+/** Account destinations shared by every tab (one profile / settings / inbox). */
+function useAccountTiles(): MenuTile[] {
+  const { isAuthenticated } = useProfile()
+  if (!isAuthenticated) {
+    return [
+      { label: 'Sign in', icon: Icons.LogIn, href: routes.signIn, color: '#0a66c2' },
+    ]
+  }
+  return [
+    { label: 'Profile', icon: Icons.User, href: routes.profile, color: '#0a66c2' },
+    { label: 'Notifications', icon: Icons.Bell, href: routes.notifications, color: '#e7357a' },
+    { label: 'Settings', icon: Icons.Settings, href: routes.settings, color: '#64748b' },
+    { label: 'Help', icon: Icons.HelpCircle, href: routes.help, color: '#0ea5e9' },
+    { label: 'Ask AI', icon: Icons.Sparkles, action: 'open-ai', color: '#D01060' },
+  ]
+}
+
 type AppMenuButtonProps = {
   /** Desktop headers use an anchored popup; mobile uses a bottom sheet. */
   mode: 'popover' | 'sheet'
@@ -61,27 +83,50 @@ type AppMenuButtonProps = {
 }
 
 /**
- * Facebook-style app launcher trigger + menu.
- * `popover` → anchored dropdown (desktop); `sheet` → bottom sheet (mobile).
+ * app-launcher app launcher — product hubs + shared account shortcuts
+ * so Settings / Profile / Notifications are reachable from every tab.
  */
 export function AppMenuButton({ mode, size = 40 }: AppMenuButtonProps) {
   const ui = useAppUi()
   const colors = getAppColors(ui)
   const router = useRouter()
   const [open, setOpen] = useState(false)
-  const tiles = useMenuTiles()
+  const productTiles = useProductTiles()
+  const accountTiles = useAccountTiles()
+  const ai = useAiAssistOptional()
 
   function go(href: Href) {
     setOpen(false)
     router.push(href)
   }
 
-  const grid = (
-    <XStack flexWrap="wrap" rowGap="$3" columnGap="$2">
-      {tiles.map((tile) => (
-        <MenuTileButton key={tile.label} tile={tile} colors={colors} onPress={() => go(tile.href)} />
-      ))}
-    </XStack>
+  function onTile(tile: MenuTile) {
+    if (tile.action === 'open-ai') {
+      setOpen(false)
+      ai?.openAssist()
+      return
+    }
+    if (tile.href) go(tile.href)
+  }
+
+  const body = (
+    <YStack gap="$3" width="100%">
+      <MenuSectionLabel colors={colors} label="Your account" />
+      <XStack flexWrap="wrap" rowGap="$3" columnGap="$2">
+        {accountTiles.map((tile) => (
+          <MenuTileButton key={tile.label} tile={tile} colors={colors} onPress={() => onTile(tile)} />
+        ))}
+      </XStack>
+
+      <Separator borderColor={colors.borderSubtle} />
+
+      <MenuSectionLabel colors={colors} label="Explore" />
+      <XStack flexWrap="wrap" rowGap="$3" columnGap="$2">
+        {productTiles.map((tile) => (
+          <MenuTileButton key={tile.label} tile={tile} colors={colors} onPress={() => onTile(tile)} />
+        ))}
+      </XStack>
+    </YStack>
   )
 
   const chipStyle = {
@@ -111,18 +156,7 @@ export function AppMenuButton({ mode, size = 40 }: AppMenuButtonProps) {
           borderColor={colors.borderSubtle}
           zIndex={1000}
         >
-          <YStack gap="$3" width="100%">
-            <Text
-              fontSize={12}
-              fontWeight="800"
-              color={colors.icon}
-              textTransform="uppercase"
-              letterSpacing={0.7}
-            >
-              Menu
-            </Text>
-            {grid}
-          </YStack>
+          {body}
         </PopoverContent>
       </Popover>
     )
@@ -134,9 +168,29 @@ export function AppMenuButton({ mode, size = 40 }: AppMenuButtonProps) {
         <Icons.Grid2x2 size={20} color={colors.text} />
       </XStack>
       <AppBottomSheet open={open} onOpenChange={setOpen} title="Menu" scrollable>
-        {grid}
+        {body}
       </AppBottomSheet>
     </>
+  )
+}
+
+function MenuSectionLabel({
+  colors,
+  label,
+}: {
+  colors: ReturnType<typeof getAppColors>
+  label: string
+}) {
+  return (
+    <Text
+      fontSize={12}
+      fontWeight="800"
+      color={colors.icon}
+      textTransform="uppercase"
+      letterSpacing={0.7}
+    >
+      {label}
+    </Text>
   )
 }
 

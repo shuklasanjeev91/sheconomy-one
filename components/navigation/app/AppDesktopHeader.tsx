@@ -2,6 +2,7 @@ import { Link, useRouter } from 'one'
 import { useState } from 'react'
 
 import { AuthButton } from '~/components/auth'
+import { recordSearchTerm } from '~/commerce/lib/search-history'
 import { Icons, Input, Text, XStack, YStack } from '~/components/ui'
 import { NavCountBadge } from '~/components/navigation/NavCountBadge'
 import { NavLogo } from '~/components/navigation/NavLogo'
@@ -27,7 +28,7 @@ export function AppDesktopHeader() {
   const { gutter } = useAppLayout()
   const colors = getAppColors(ui)
   const { isAuthenticated } = useProfile()
-  const { canManageShops, canAccessFeature } = useAccess()
+  const { canManageShops } = useAccess()
   const { shops, isLoading: shopsLoading } = useVendorShops()
   const { itemCount } = useCart()
   const { count: unreadNotifications } = useUnreadNotifications()
@@ -39,6 +40,7 @@ export function AppDesktopHeader() {
 
   function submitSearch() {
     const trimmed = searchQuery.trim()
+    if (trimmed) recordSearchTerm(trimmed)
     router.push(trimmed ? commerceRoutes.search(trimmed) : commerceRoutes.search())
   }
 
@@ -132,13 +134,16 @@ export function AppDesktopHeader() {
             </>
           ) : null}
           <UtilityButton href={routes.cart} icon={Icons.ShoppingBag} label="Cart" badge={itemCount} />
-          {isAuthenticated && canAccessFeature('community') ? (
+          {isAuthenticated ? (
             <UtilityButton
               href={routes.notifications}
               icon={Icons.Bell}
               label="Notifications"
               badge={unreadNotifications}
             />
+          ) : null}
+          {isAuthenticated ? (
+            <UtilityButton href={routes.settings} icon={Icons.Settings} label="Settings" />
           ) : null}
           <AuthButton variant="header" />
         </XStack>
