@@ -1,15 +1,37 @@
 import type { ReactNode } from 'react'
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Link } from 'one'
 
 import { FeedPostCard } from '~/community/components/FeedPostCard'
 import { UserListBottomSheet } from '~/community/components/UserListBottomSheet'
 import { ProfileBackgroundSections } from '~/community/components/profile/ProfileBackgroundSections'
+import { FeaturedPostsSection } from '~/community/components/profile/FeaturedPostsSection'
+import { RecommendationsSection } from '~/community/components/profile/RecommendationsSection'
+import { WhoViewedYourProfileCard } from '~/community/components/profile/WhoViewedYourProfileCard'
 import type { ProfileDisplay } from '~/community/components/profile/types'
 import { useProfileDetails } from '~/community/hooks/useProfileDetails'
 import { useUserActivity } from '~/community/hooks/useUserActivity'
 import { BRAND_BLUE } from '~/community/lib/constants'
 import type { CommunityPost } from '~/community/lib/community'
+import {
+  parseCreatorMode,
+  saveCreatorMode,
+  type CreatorModePrefs,
+} from '~/community/lib/creator-mode'
+import {
+  parseOpenToServices,
+  saveOpenToServices,
+  type OpenToServicesPrefs,
+} from '~/community/lib/open-to-services'
+import {
+  parseOpenToWork,
+  saveOpenToWork,
+  type OpenToWorkPrefs,
+} from '~/community/lib/open-to-work'
+import {
+  fetchProfileAnalytics,
+  type ProfileAnalytics,
+} from '~/community/lib/profile-views'
 import type {
   ActivityComment,
   ActivityFilter,
@@ -21,9 +43,9 @@ import type { UserListKind } from '~/community/lib/user-lists'
 import {
   Avatar,
   Badge,
+  Button,
   Icons,
   Image,
-  Paragraph,
   Spinner,
   Text,
   XStack,
@@ -37,6 +59,7 @@ import { pickImages, pickedImageToBlob } from '~/lib/media/pick-image'
 import { refreshProfiles } from '~/lib/profile/refresh'
 import { communityRoutes } from '~/lib/routes'
 import { getProfileShareUrl } from '~/lib/share'
+import { supabase } from '~/lib/supabase/client'
 import { uploadProfileAvatarImage, uploadProfileCoverImage } from '~/lib/supabase/storage-upload'
 import { getShadowStyle, radius } from '~/config/tokens'
 import { useAppUi } from '~/lib/theme/useAppUi'
@@ -57,6 +80,132 @@ export function ProfileView({
   const media = useMedia()
   const isSideBySide = media.gtLg
   const { details, isLoading: detailsLoading, refresh } = useProfileDetails(profile.id)
+  const [analytics, setAnalytics] = useState<ProfileAnalytics | null>(null)
+  const [openToWork, setOpenToWork] = useState<OpenToWorkPrefs>({ enabled: false })
+  const [openToServices, setOpenToServices] = useState<OpenToServicesPrefs>({ enabled: false })
+  const [creatorMode, setCreatorMode] = useState<CreatorModePrefs>({ enabled: false })
+  const [jobPreferences, setJobPreferences] = useState<unknown>(null)
+  const [savingOpenToWork, setSavingOpenToWork] = useState(false)
+  const [savingOpenToServices, setSavingOpenToServices] = useState(false)
+  const [savingCreatorMode, setSavingCreatorMode] = useState(false)
+  const toast = useAppToast()
+
+  useEffect(() => {
+    let active = true
+    void supabase
+      .from('profiles')
+      .select('job_preferences')
+      .eq('id', profile.id)
+      .maybeSingle()
+      .then(({ data }) => {
+        if (!active) return
+        setJobPreferences(data?.job_preferences ?? null)
+        setOpenToWork(parseOpenToWork(data?.job_preferences))
+        setOpenToServices(parseOpenToServices(data?.job_preferences))
+        setCreatorMode(parseCreatorMode(data?.job_preferences))
+      })
+    return () => {
+      active = false
+    }
+  }, [profile.id])
+
+  useEffect(() => {
+    if (!isOwnProfile) {
+      setAnalytics(null)
+      return
+    }
+    let active = true
+    void fetchProfileAnalytics(profile.id).then((data) => {
+      if (active) setAnalytics(data)
+    })
+    return () => {
+      active = false
+    }
+  }, [isOwnProfile, profile.id])
+
+  async function handleToggleOpenToWork() {
+    if (!isOwnProfile || savingOpenToWork) return
+    const next = { ...openToWork, enabled: !openToWork.enabled }
+    setSavingOpenToWork(true)
+    const { error } = await saveOpenToWork(profile.id, next, jobPreferences)
+    setSavingOpenToWork(false)
+    if (error) {
+      toast.show('Could not update Open to work', { tone: 'danger', message: error })
+      return
+    }
+    setOpenToWork(next)
+    setJobPreferences((prev) => {
+      const base =
+        prev && typeof prev === 'object' && !Array.isArray(prev)
+          ? { ...(prev as Record<string, unknown>) }
+          : {}
+      return {
+        ...base,
+        open_to_work: {
+          enabled: next.enabled,
+          title: next.title ?? 'Open to work',
+          locations: next.locations ?? [],
+          visibility: next.visibility ?? 'public',
+        },
+      }
+    })
+    toast.show(next.enabled ? 'Open to work is on' : 'Open to work is off', { tone: 'success' })
+  }
+
+  async function handleToggleOpenToServices() {
+    if (!isOwnProfile || savingOpenToServices) return
+    const next = { ...openToServices, enabled: !openToServices.enabled }
+    setSavingOpenToServices(true)
+    const { error } = await saveOpenToServices(profile.id, next, jobPreferences)
+    setSavingOpenToServices(false)
+    if (error) {
+      toast.show('Could not update services preference', { tone: 'danger', message: error })
+      return
+    }
+    setOpenToServices(next)
+    setJobPreferences((prev) => {
+      const base =
+        prev && typeof prev === 'object' && !Array.isArray(prev)
+          ? { ...(prev as Record<string, unknown>) }
+          : {}
+      return {
+        ...base,
+        open_to_services: {
+          enabled: next.enabled,
+          title: next.title ?? 'Open to providing services',
+          categories: next.categories ?? [],
+        },
+      }
+    })
+    toast.show(next.enabled ? 'Services flag is on' : 'Services flag is off', { tone: 'success' })
+  }
+
+  async function handleToggleCreatorMode() {
+    if (!isOwnProfile || savingCreatorMode) return
+    const next = { ...creatorMode, enabled: !creatorMode.enabled }
+    setSavingCreatorMode(true)
+    const { error } = await saveCreatorMode(profile.id, next, jobPreferences)
+    setSavingCreatorMode(false)
+    if (error) {
+      toast.show('Could not update Creator mode', { tone: 'danger', message: error })
+      return
+    }
+    setCreatorMode(next)
+    setJobPreferences((prev) => {
+      const base =
+        prev && typeof prev === 'object' && !Array.isArray(prev)
+          ? { ...(prev as Record<string, unknown>) }
+          : {}
+      return {
+        ...base,
+        creator_mode: {
+          enabled: next.enabled,
+          topics: next.topics ?? [],
+        },
+      }
+    })
+    toast.show(next.enabled ? 'Creator mode is on' : 'Creator mode is off', { tone: 'success' })
+  }
 
   const displayName = profile.full_name || profile.username
   const connectionsCount = profile.connections_count ?? 0
@@ -85,8 +234,36 @@ export function ProfileView({
         profile={profile}
         connectionsCount={connectionsCount}
         isOwnProfile={isOwnProfile}
+        analytics={analytics}
         onOpenList={openUserList}
       />
+      {isOwnProfile ? (
+        <WhoViewedYourProfileCard
+          profileUserId={profile.id}
+          viewsCount={analytics?.profileViewsLast30Days}
+        />
+      ) : null}
+      {isOwnProfile ? (
+        <OpenToWorkCard
+          prefs={openToWork}
+          saving={savingOpenToWork}
+          onToggle={() => void handleToggleOpenToWork()}
+        />
+      ) : null}
+      {isOwnProfile ? (
+        <OpenToServicesCard
+          prefs={openToServices}
+          saving={savingOpenToServices}
+          onToggle={() => void handleToggleOpenToServices()}
+        />
+      ) : null}
+      {isOwnProfile ? (
+        <CreatorModeCard
+          prefs={creatorMode}
+          saving={savingCreatorMode}
+          onToggle={() => void handleToggleCreatorMode()}
+        />
+      ) : null}
       <LinksSidebar socialLinks={socialLinks} />
     </YStack>
   )
@@ -109,6 +286,15 @@ export function ProfileView({
         />
       )}
 
+      <FeaturedPostsSection profileUserId={profile.id} isOwnProfile={isOwnProfile} />
+
+      <RecommendationsSection
+        profileUserId={profile.id}
+        profileUsername={profile.username}
+        displayName={displayName}
+        isOwnProfile={isOwnProfile}
+      />
+
       <ActivitySection userId={profile.id} isOwnProfile={isOwnProfile} displayName={displayName} />
       {sidebarFooter}
     </YStack>
@@ -122,6 +308,9 @@ export function ProfileView({
         connectionsCount={connectionsCount}
         headerActions={headerActions}
         isOwnProfile={isOwnProfile}
+        openToWork={openToWork.enabled}
+        openToServices={openToServices.enabled}
+        creatorMode={creatorMode.enabled}
         onOpenConnections={() => openUserList('connections')}
       />
 
@@ -159,6 +348,9 @@ function ProfileHero({
   connectionsCount,
   headerActions,
   isOwnProfile,
+  openToWork,
+  openToServices,
+  creatorMode,
   onOpenConnections,
 }: {
   profile: ProfileDisplay
@@ -166,6 +358,9 @@ function ProfileHero({
   connectionsCount: number
   headerActions?: ReactNode
   isOwnProfile: boolean
+  openToWork: boolean
+  openToServices: boolean
+  creatorMode: boolean
   onOpenConnections: () => void
 }) {
   const ui = useAppUi()
@@ -307,6 +502,21 @@ function ProfileHero({
             {profile.is_verified ? (
               <Badge tone="brand" size="sm">
                 Verified
+              </Badge>
+            ) : null}
+            {openToWork ? (
+              <Badge tone="success" size="sm">
+                Open to work
+              </Badge>
+            ) : null}
+            {openToServices ? (
+              <Badge tone="brand" size="sm">
+                Providing services
+              </Badge>
+            ) : null}
+            {creatorMode ? (
+              <Badge tone="brand" size="sm">
+                Creator
               </Badge>
             ) : null}
           </XStack>
@@ -577,11 +787,13 @@ function StatsSidebar({
   profile,
   connectionsCount,
   isOwnProfile,
+  analytics,
   onOpenList,
 }: {
   profile: ProfileDisplay
   connectionsCount: number
   isOwnProfile: boolean
+  analytics: ProfileAnalytics | null
   onOpenList: (kind: UserListKind) => void
 }) {
   return (
@@ -602,6 +814,112 @@ function StatsSidebar({
           value={connectionsCount}
           onPress={() => onOpenList('connections')}
         />
+        {isOwnProfile && analytics ? (
+          <>
+            <StatRow label="Profile views (30d)" value={analytics.profileViewsLast30Days} />
+            <StatRow label="Unique viewers" value={analytics.uniqueViewersCount} />
+          </>
+        ) : null}
+      </YStack>
+    </SectionCard>
+  )
+}
+
+function OpenToWorkCard({
+  prefs,
+  saving,
+  onToggle,
+}: {
+  prefs: OpenToWorkPrefs
+  saving: boolean
+  onToggle: () => void
+}) {
+  const ui = useAppUi()
+
+  return (
+    <SectionCard title="Career preferences" icon={Icons.Briefcase}>
+      <YStack gap="$3">
+        <Text fontSize={14} color={ui.textMuted} lineHeight={20}>
+          Let recruiters and your network know you are open to opportunities.
+        </Text>
+        <Button
+          size="$3"
+          tone={prefs.enabled ? 'outline' : 'primary'}
+          borderRadius={999}
+          disabled={saving}
+          onPress={onToggle}
+          alignSelf="flex-start"
+        >
+          {saving ? 'Saving…' : prefs.enabled ? 'Turn off Open to work' : 'Turn on Open to work'}
+        </Button>
+      </YStack>
+    </SectionCard>
+  )
+}
+
+function OpenToServicesCard({
+  prefs,
+  saving,
+  onToggle,
+}: {
+  prefs: OpenToServicesPrefs
+  saving: boolean
+  onToggle: () => void
+}) {
+  const ui = useAppUi()
+
+  return (
+    <SectionCard title="Services" icon={Icons.Handshake}>
+      <YStack gap="$3">
+        <Text fontSize={14} color={ui.textMuted} lineHeight={20}>
+          Show that you offer professional services so clients can find and message you.
+        </Text>
+        <Button
+          size="$3"
+          tone={prefs.enabled ? 'outline' : 'primary'}
+          borderRadius={999}
+          disabled={saving}
+          onPress={onToggle}
+          alignSelf="flex-start"
+        >
+          {saving
+            ? 'Saving…'
+            : prefs.enabled
+              ? 'Turn off Providing services'
+              : 'Turn on Providing services'}
+        </Button>
+      </YStack>
+    </SectionCard>
+  )
+}
+
+function CreatorModeCard({
+  prefs,
+  saving,
+  onToggle,
+}: {
+  prefs: CreatorModePrefs
+  saving: boolean
+  onToggle: () => void
+}) {
+  const ui = useAppUi()
+
+  return (
+    <SectionCard title="Creator mode" icon={Icons.Sparkles}>
+      <YStack gap="$3">
+        <Text fontSize={14} color={ui.textMuted} lineHeight={20}>
+          Highlight that you publish content. People can follow you and use content-focused icebreakers.
+        </Text>
+        <Button
+          size="$3"
+          tone={prefs.enabled ? 'outline' : 'primary'}
+          borderRadius={999}
+          disabled={saving}
+          onPress={onToggle}
+          alignSelf="flex-start"
+        >
+          {saving ? 'Saving…' : prefs.enabled ? 'Turn off Creator mode' : 'Turn on Creator mode'}
+        </Button>
       </YStack>
     </SectionCard>
   )

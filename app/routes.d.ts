@@ -66,6 +66,7 @@ declare module 'one' {
         | `/co-work/schedule`
         | `/community`
         | `/community/`
+        | `/community/analytics`
         | `/community/companies`
         | `/community/company`
         | `/community/company/create`
@@ -81,10 +82,12 @@ declare module 'one' {
         | `/community/network`
         | `/community/people`
         | `/community/post`
+        | `/community/saved`
         | `/community/stories`
         | `/community/stories/create`
         | `/create-my-shop`
         | `/favorites`
+        | `/help`
         | `/listing`
         | `/my-shops`
         | `/notifications`

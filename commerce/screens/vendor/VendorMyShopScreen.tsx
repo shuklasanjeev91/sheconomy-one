@@ -483,7 +483,10 @@ function MainColumn({ ui, shop, stats, address, totalOrders, isDesktop }: MainCo
           {socialEntries.length > 0 ? (
             <XStack gap="$2" flexWrap="wrap" marginTop="$1">
               {socialEntries.map(([platform, url]) => {
-                const Icon = SOCIAL_ICONS[platform.toLowerCase()] ?? Icons.Link
+                const key = platform.toLowerCase()
+                const Icon = SOCIAL_ICONS[key] ?? Icons.Link
+                // Keep icons; omit brand-name text for selected platforms.
+                const hideBrandLabel = key === 'facebook' || key === 'linkedin' || key === 'etsy' || key === 'amazon'
                 return (
                   <XStack
                     key={platform}
@@ -498,11 +501,14 @@ function MainColumn({ ui, shop, stats, address, totalOrders, isDesktop }: MainCo
                     cursor="pointer"
                     pressStyle={{ opacity: 0.8 }}
                     onPress={() => openExternalUrl(url)}
+                    accessibilityLabel="Social link"
                   >
                     <Icon size={15} color={ui.brand} />
-                    <Text fontSize={12} fontWeight="600" color={ui.text} textTransform="capitalize">
-                      {platform}
-                    </Text>
+                    {hideBrandLabel ? null : (
+                      <Text fontSize={12} fontWeight="600" color={ui.text} textTransform="capitalize">
+                        {platform}
+                      </Text>
+                    )}
                   </XStack>
                 )
               })}

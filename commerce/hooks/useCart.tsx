@@ -27,6 +27,7 @@ import {
   autoApplyBestOffer,
   reconcileCartDiscount,
 } from '~/commerce/lib/discounts'
+import { supabase } from '~/lib/supabase/client'
 import { useSupabase } from '~/providers/SupabaseProvider'
 
 type CartContextValue = {
@@ -36,7 +37,10 @@ type CartContextValue = {
   isLoading: boolean
   error: string | null
   refresh: () => Promise<void>
-  addToCart: (listingId: string, options?: { quantity?: number; variantId?: string | null }) => Promise<{
+  addToCart: (
+    listingId: string,
+    options?: { quantity?: number; variantId?: string | null; personalizationNote?: string | null },
+  ) => Promise<{
     error: string | null
   }>
   updateQuantity: (cartItemId: string, quantity: number) => Promise<{ error: string | null }>
@@ -79,6 +83,11 @@ export function CartProvider({ children }: { children: ReactNode }) {
         return
       }
 
+      // Resume shopping after an abandoned-cart reminder.
+      if (cart.status === 'abandoned') {
+        await supabase.from('carts').update({ status: 'active', last_activity_at: new Date().toISOString() }).eq('id', cart.id)
+      }
+
       const { data, error: itemsError } = await fetchCartWithItems(cart.id)
       if (itemsError || !data) {
         setCartData(null)
@@ -86,7 +95,7 @@ export function CartProvider({ children }: { children: ReactNode }) {
       } else if (data.cart.applied_discount_id) {
         // Keep a percentage coupon (or its min-order eligibility) in sync with
         // the latest subtotal after quantity/remove edits.
-        const changed = await reconcileCartDiscount(data.cart)
+        const changed = await reconcileCartDiscount(data.cart, data.items)
         if (changed) {
           const fresh = await fetchCartWithItems(cart.id)
           setCartData(fresh.data ?? data)
@@ -94,10 +103,15 @@ export function CartProvider({ children }: { children: ReactNode }) {
           setCartData(data)
         }
       } else if (!couponOptOutRef.current && data.cart.items_subtotal > 0) {
-        // No coupon applied — auto-apply the best eligible offer (marketplace-style).
+        // No coupon applied — auto-apply the best eligible offer (marketplace).
+        const shopIds = [
+          ...new Set(data.items.map((item) => item.shop_id).filter((id): id is string => !!id)),
+        ]
         const result = await autoApplyBestOffer({
           cartId: cart.id,
           subtotal: data.cart.items_subtotal,
+          shopIds,
+          items: data.items,
         })
         if (result.applied) {
           setAutoApplied(true)
@@ -146,7 +160,7 @@ export function CartProvider({ children }: { children: ReactNode }) {
   const addToCart = useCallback(
     async (
       listingId: string,
-      options?: { quantity?: number; variantId?: string | null },
+      options?: { quantity?: number; variantId?: string | null; personalizationNote?: string | null },
     ) => {
       let cartId = cartData?.cart.id
 
@@ -167,6 +181,7 @@ export function CartProvider({ children }: { children: ReactNode }) {
         listingId,
         quantity: options?.quantity,
         variantId: options?.variantId,
+        personalizationNote: options?.personalizationNote,
       })
 
       if (addError) {
@@ -212,6 +227,7 @@ export function CartProvider({ children }: { children: ReactNode }) {
         code,
         subtotal: cart.items_subtotal,
         currency: cart.currency ?? 'INR',
+        items: cartData?.items,
       })
       if (!couponError) {
         // A hand-picked coupon isn't the "auto best offer" badge.
@@ -220,7 +236,7 @@ export function CartProvider({ children }: { children: ReactNode }) {
       }
       return { error: couponError }
     },
-    [cartData?.cart, loadCart],
+    [cartData?.cart, cartData?.items, loadCart],
   )
 
   const removeCoupon = useCallback(async () => {

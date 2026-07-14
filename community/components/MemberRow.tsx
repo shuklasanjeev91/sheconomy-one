@@ -8,12 +8,14 @@ type MemberRowProps = {
   member: NetworkMember
   compact?: boolean
   showConnect?: boolean
+  onDismiss?: () => void
 }
 
 export function MemberRow({
   member,
   compact = false,
   showConnect = true,
+  onDismiss,
 }: MemberRowProps) {
   const communityUi = useCommunityUi()
   const subtitle = member.headline || member.industry || member.location
@@ -78,6 +80,20 @@ export function MemberRow({
 
       {showConnect ? (
         <ProfileConnectButton targetUserId={member.user_id} size={compact ? 'sm' : 'md'} />
+      ) : null}
+
+      {onDismiss ? (
+        <XStack
+          onPress={onDismiss}
+          cursor="pointer"
+          padding={6}
+          borderRadius={999}
+          pressStyle={{ opacity: 0.7 }}
+          hitSlop={8}
+          aria-label="Dismiss suggestion"
+        >
+          <Icons.X size={16} color={communityUi.textMuted} />
+        </XStack>
       ) : null}
     </XStack>
   )

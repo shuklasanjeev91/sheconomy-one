@@ -1,6 +1,6 @@
 -- Distinct filter option values ("facets") for the community filter menus.
 --
--- Each function aggregates distinct values for a resource so the LinkedIn-style
+-- Each function aggregates distinct values for a resource so the professional
 -- filter pills can show a complete, stable option list regardless of the caller's
 -- row-level visibility or the current page of results. SECURITY DEFINER lets the
 -- menus reflect the whole community; results are read-only distinct lists.

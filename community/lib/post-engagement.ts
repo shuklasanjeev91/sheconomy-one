@@ -1,6 +1,7 @@
 import { supabase } from '~/lib/supabase/client'
 
 import type { ReactionType } from './constants'
+import { extractMentions } from './post-text'
 
 export type PostComment = {
   id: string
@@ -163,11 +164,14 @@ export async function addPostComment(
   const trimmed = content.trim()
   if (!trimmed) return { error: 'Comment cannot be empty.' }
 
+  const mentions = extractMentions(trimmed)
+
   const { error } = await supabase.from('comments').insert({
     user_id: userId,
     post_id: postId,
     content: trimmed,
     parent_comment_id: parentCommentId ?? null,
+    mentions: mentions.length ? mentions : null,
   })
 
   return { error: error?.message ?? null }
@@ -194,12 +198,43 @@ export async function toggleCommentLike(
   return { error: error?.message ?? null }
 }
 
+export async function hasUserReposted(
+  userId: string,
+  postId: string,
+): Promise<boolean> {
+  const { data } = await supabase
+    .from('reposts')
+    .select('id')
+    .eq('user_id', userId)
+    .eq('post_id', postId)
+    .limit(1)
+    .maybeSingle()
+  return !!data?.id
+}
+
+export async function recordRepostTracking(
+  userId: string,
+  postId: string,
+  comment?: string,
+): Promise<void> {
+  await supabase.from('reposts').insert({
+    user_id: userId,
+    post_id: postId,
+    comment: comment?.trim() || null,
+  })
+}
+
 export async function repostPost(
   userId: string,
   originalPostId: string,
   comment?: string,
 ): Promise<{ id: string | null; error: string | null }> {
   const trimmedComment = comment?.trim() ?? ''
+
+  const already = await hasUserReposted(userId, originalPostId)
+  if (already) {
+    return { id: null, error: 'You already reposted this post' }
+  }
 
   const { data, error } = await supabase
     .from('posts')
@@ -218,7 +253,11 @@ export async function repostPost(
     .select('id')
     .maybeSingle()
 
-  return { id: data?.id ?? null, error: error?.message ?? null }
+  if (error) return { id: null, error: error.message }
+
+  void recordRepostTracking(userId, originalPostId, trimmedComment)
+
+  return { id: data?.id ?? null, error: null }
 }
 
 export { getPostShareUrl } from '~/lib/share/urls'

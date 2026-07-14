@@ -141,6 +141,60 @@ export async function fetchJob(
   }
 }
 
+export async function fetchSavedJobs(
+  userId?: string,
+): Promise<{ items: JobListing[]; error: string | null }> {
+  const { data, error } = await supabase.rpc('get_saved_jobs', {
+    user_uuid: userId,
+  })
+  if (error) return { items: [], error: error.message }
+
+  const rows = (data ?? []) as Array<{
+    job_id: string
+    title: string
+    company_name: string
+    description: string
+    location: string
+    job_type: string
+    experience_level: string
+    salary_range: string | null
+    is_remote: boolean
+    is_active: boolean
+    is_applied: boolean
+    application_count: number
+    created_at: string
+    saved_at: string
+  }>
+
+  const items: JobListing[] = rows.map((row) => ({
+    id: row.job_id,
+    title: row.title,
+    company_name: row.company_name,
+    company_logo: null,
+    description: row.description,
+    location: row.location,
+    job_type: row.job_type,
+    experience_level: row.experience_level,
+    salary_range: row.salary_range,
+    is_remote: row.is_remote,
+    is_active: row.is_active,
+    is_applied: row.is_applied,
+    is_saved: true,
+    application_count: row.application_count,
+    benefits: null,
+    requirements: null,
+    industry: null,
+    posted_by: '',
+    poster_name: '',
+    poster_avatar: '',
+    created_at: row.created_at,
+    updated_at: row.saved_at,
+    expires_at: null,
+  }))
+
+  return { items, error: null }
+}
+
 export async function saveJob(jobId: string, userId: string): Promise<{ error: string | null }> {
   const { error } = await supabase.from('saved_jobs').insert({ job_id: jobId, user_id: userId })
   return { error: error?.message ?? null }

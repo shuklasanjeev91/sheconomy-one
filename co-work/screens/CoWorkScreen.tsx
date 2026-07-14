@@ -2,10 +2,18 @@ import { Link, useRouter } from 'one'
 import { useState } from 'react'
 
 import { PageContent, LAYOUT_STRETCH } from '~/components/layout'
+import { DevicePrepCard } from '~/co-work/components/DevicePrepCard'
+import { UpcomingMeetingsStrip } from '~/co-work/components/UpcomingMeetingsStrip'
+import {
+  recordMeetingCode,
+  useRecentMeetingCodes,
+} from '~/co-work/lib/recent-meeting-codes'
+import { PushPermissionBanner } from '~/components/notifications/PushPermissionBanner'
 import { Button, Icons, Input, Spinner, Text, XStack, YStack, useAppToast } from '~/components/ui'
 import { CoWorkBrandChip, CoWorkFeatureCard, CoWorkIconBadge } from '~/co-work/components/CoWorkUi'
 import { createMeeting } from '~/co-work/lib/meetings'
 import { coworkGlassStyle, useCoWorkTheme } from '~/co-work/lib/theme'
+import { readFromClipboard } from '~/lib/platform/clipboard'
 import { controlGradientStyle, coworkBoxShadow, pageGradientStyle } from '~/lib/platform/crossStyles'
 import { coWorkRoutes } from '~/lib/routes'
 import { useProfile } from '~/hooks/useProfile'
@@ -72,6 +80,7 @@ export function CoWorkScreen() {
   const toast = useAppToast()
   const { user, profile, isAuthenticated } = useProfile()
   const { isDesktop } = useAppLayout()
+  const recentCodes = useRecentMeetingCodes()
   const [joinCode, setJoinCode] = useState('')
   const [creating, setCreating] = useState(false)
 
@@ -87,6 +96,7 @@ export function CoWorkScreen() {
       if (!meeting.meeting_code) {
         throw new Error('Meeting was created without a join code. Please try again.')
       }
+      recordMeetingCode(meeting.meeting_code)
       router.push(coWorkRoutes.meetingLive(meeting.meeting_code))
     } catch (createError) {
       toast.show('Could not start meeting', {
@@ -98,6 +108,28 @@ export function CoWorkScreen() {
     }
   }
 
+  function joinWithCode(code: string) {
+    const normalized = code.replace(/\s/g, '').toUpperCase()
+    if (!normalized) return
+    recordMeetingCode(normalized)
+    router.push(coWorkRoutes.meeting(normalized))
+  }
+
+  async function pasteJoinCode() {
+    const text = await readFromClipboard()
+    if (!text) {
+      toast.show('Clipboard is empty', { tone: 'info' })
+      return
+    }
+    const normalized = text.replace(/[^a-zA-Z0-9]/g, '').toUpperCase()
+    if (!normalized) {
+      toast.show('No meeting code found', { tone: 'danger' })
+      return
+    }
+    setJoinCode(normalized)
+    toast.show('Code pasted', { tone: 'success' })
+  }
+
   return (
     <PageContent
       scroll
@@ -106,6 +138,9 @@ export function CoWorkScreen() {
       style={pageGradientStyle(coworkGradients.page, coworkUi.pageBg)}
     >
       <YStack gap="$7" width="100%" {...LAYOUT_STRETCH}>
+        <PushPermissionBanner />
+        <DevicePrepCard />
+        <UpcomingMeetingsStrip />
         <YStack gap="$4" position="relative">
           <CoWorkBrandChip label={BRAND_COWORK_LABEL} />
           <Text
@@ -204,17 +239,42 @@ export function CoWorkScreen() {
               borderRadius={14}
             />
             <Button
-              tone="primary"
+              tone="outline"
               borderRadius={14}
-              onPress={() => {
-                const normalized = joinCode.replace(/\s/g, '').toUpperCase()
-                if (!normalized) return
-                router.push(coWorkRoutes.meeting(normalized))
-              }}
+              icon={<Icons.Copy size={16} />}
+              onPress={() => void pasteJoinCode()}
             >
+              Paste
+            </Button>
+            <Button tone="primary" borderRadius={14} onPress={() => joinWithCode(joinCode)}>
               Join meeting
             </Button>
           </XStack>
+          {recentCodes.length > 0 ? (
+            <XStack gap="$2" flexWrap="wrap" alignItems="center">
+              <Text fontSize={12} fontWeight="600" color={coworkUi.textMuted}>
+                Recent
+              </Text>
+              {recentCodes.slice(0, 4).map((code) => (
+                <XStack
+                  key={code}
+                  paddingHorizontal="$3"
+                  paddingVertical="$1.5"
+                  borderRadius={999}
+                  borderWidth={1}
+                  borderColor={coworkUi.borderSoft}
+                  backgroundColor="rgba(255,255,255,0.04)"
+                  cursor="pointer"
+                  pressStyle={{ opacity: 0.85 }}
+                  onPress={() => joinWithCode(code)}
+                >
+                  <Text fontSize={12} fontWeight="700" color={coworkUi.text} letterSpacing={1}>
+                    {code}
+                  </Text>
+                </XStack>
+              ))}
+            </XStack>
+          ) : null}
         </YStack>
 
         <YStack gap="$3">

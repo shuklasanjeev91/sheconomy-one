@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react'
 import { ClassShell } from '~/class/components/ClassShell'
 import { ProgramAuthorProfile } from '~/class/components/ProgramAuthorProfile'
 import { ProgramMediaPlayer } from '~/class/components/ProgramMediaPlayer'
+import { RelatedProgramsRail } from '~/class/components/RelatedProgramsRail'
 import {
   fetchProgramBySlug,
   formatProgramDuration,
@@ -13,10 +14,12 @@ import {
   recordProgramView,
   type Program,
 } from '~/class/lib/programs'
+import { recordProgramLocalView } from '~/class/lib/recently-viewed-programs'
+import { isProgramSaved, toggleSavedProgram, useSavedPrograms } from '~/class/lib/saved-programs'
 import { SectionTitle } from '~/commerce/components'
 import { FullWidthLayout, PageCenter } from '~/components/layout'
 import { ShareButton } from '~/components/share'
-import { Icons, Spinner, Text, XStack, YStack } from '~/components/ui'
+import { Button, Icons, Spinner, Text, XStack, YStack, useAppToast } from '~/components/ui'
 import { getShadowStyle, radius } from '~/config/tokens'
 import { classRoutes } from '~/lib/routes'
 import { getProgramShareUrl } from '~/lib/share'
@@ -24,7 +27,9 @@ import { useAppUi } from '~/lib/theme/useAppUi'
 
 export function ProgramScreen() {
   const ui = useAppUi()
+  const toast = useAppToast()
   const { slug } = useParams<{ slug: string }>()
+  const savedIds = useSavedPrograms()
   const [program, setProgram] = useState<Program | null>(null)
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -43,6 +48,7 @@ export function ProgramScreen() {
       setIsLoading(false)
 
       if (next) {
+        recordProgramLocalView(next.id)
         void recordProgramView(next.id)
       }
     })
@@ -82,6 +88,7 @@ export function ProgramScreen() {
 
   const mediaTab = program.media_type === 'audio' ? 'audio' : 'video'
   const backHref = program.media_type === 'audio' ? classRoutes.audio : classRoutes.home
+  const saved = savedIds.includes(program.id) || isProgramSaved(program.id)
   const statsLine = [
     formatProgramViews(program.view_count || program.listen_count),
     program.duration ? formatProgramDuration(program.duration) : null,
@@ -109,18 +116,37 @@ export function ProgramScreen() {
             <Text fontSize={24} fontWeight="700" color={ui.text} letterSpacing={-0.4} flex={1}>
               {program.title}
             </Text>
-            <ShareButton
-              variant="icon"
-              label="Share program"
-              sheetTitle="Share program"
-              copyLabel="Copy program link"
-              copyToastMessage="Program link copied to clipboard."
-              payload={{
-                url: getProgramShareUrl(getProgramSlug(program)),
-                title: program.title,
-                text: statsLine || undefined,
-              }}
-            />
+            <XStack gap="$1" alignItems="center">
+              <Button
+                tone="ghost"
+                size="$3"
+                borderRadius={999}
+                icon={
+                  <Icons.Bookmark
+                    size={18}
+                    color={saved ? ui.brand : ui.textMuted}
+                    fill={saved ? ui.brand : 'transparent'}
+                  />
+                }
+                aria-label={saved ? 'Remove from saved' : 'Save program'}
+                onPress={() => {
+                  const next = toggleSavedProgram(program.id)
+                  toast.show(next ? 'Program saved' : 'Removed from saved', { tone: 'success' })
+                }}
+              />
+              <ShareButton
+                variant="icon"
+                label="Share program"
+                sheetTitle="Share program"
+                copyLabel="Copy program link"
+                copyToastMessage="Program link copied to clipboard."
+                payload={{
+                  url: getProgramShareUrl(getProgramSlug(program)),
+                  title: program.title,
+                  text: statsLine || undefined,
+                }}
+              />
+            </XStack>
           </XStack>
 
           {statsLine ? (
@@ -163,6 +189,8 @@ export function ProgramScreen() {
             </YStack>
           ) : null}
         </YStack>
+
+        <RelatedProgramsRail program={program} />
       </YStack>
     </ClassShell>
   )

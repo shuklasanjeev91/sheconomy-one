@@ -24,7 +24,7 @@ function hostFromUrl(url: string): string {
   }
 }
 
-/** LinkedIn-style Open Graph unfurl card for a URL shared in a post. */
+/** professional Open Graph unfurl card for a URL shared in a post. */
 export function PostLinkPreviewCard({ preview, loading, onRemove }: PostLinkPreviewCardProps) {
   const ui = useCommunityUi()
   const [playing, setPlaying] = useState(false)

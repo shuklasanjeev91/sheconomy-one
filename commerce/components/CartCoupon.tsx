@@ -23,7 +23,7 @@ import { useAppUi } from '~/lib/theme/useAppUi'
 export function CartCoupon() {
   const ui = useAppUi()
   const toast = useAppToast()
-  const { cart, applyCoupon, removeCoupon, couponAutoApplied } = useCart()
+  const { cart, items, applyCoupon, removeCoupon, couponAutoApplied } = useCart()
 
   const [code, setCode] = useState('')
   const [applying, setApplying] = useState(false)
@@ -38,17 +38,25 @@ export function CartCoupon() {
   const appliedId = cart?.applied_discount_id ?? null
   const appliedName = cart?.applied_discount_name ?? null
   const discountAmount = cart?.discount_amount ?? 0
+  const cartShopIdsKey = items
+    .map((item) => item.shop_id)
+    .filter(Boolean)
+    .sort()
+    .join(',')
 
   useEffect(() => {
     let active = true
-    void fetchAvailableOffers().then((rows) => {
+    const shopIds = [
+      ...new Set(items.map((item) => item.shop_id).filter((id): id is string => !!id)),
+    ]
+    void fetchAvailableOffers({ shopIds }).then((rows) => {
       if (!active) return
       setOffers(rows)
     })
     return () => {
       active = false
     }
-  }, [])
+  }, [cartShopIdsKey])
 
   if (!cart || subtotal <= 0) return null
 

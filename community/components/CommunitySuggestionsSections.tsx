@@ -20,7 +20,7 @@ export function CommunitySuggestionsSections({
 
   if (isLoading) {
     return (
-      <CommunityWidget title="Suggestions">
+      <CommunityWidget title="Add to your feed">
         <XStack paddingVertical={16} justifyContent="center">
           <Spinner size="small" color={communityUi.brand} />
         </XStack>
@@ -30,10 +30,10 @@ export function CommunitySuggestionsSections({
 
   if (!sections.length) {
     return (
-      <CommunityWidget title="Suggestions">
+      <CommunityWidget title="Add to your feed">
         <YStack gap={8}>
           <Text fontSize={14} color={communityUi.textMuted} lineHeight={20}>
-            Explore your network, shops, groups, and more tailored to your interests and location.
+            Follow people, groups, and pages to personalise your community feed.
           </Text>
           <Link href={communityRoutes.network}>
             <Text fontSize={14} fontWeight="600" color={communityUi.brand}>

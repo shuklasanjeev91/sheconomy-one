@@ -96,6 +96,8 @@ export async function addListingToCart(options: {
   listingId: string
   quantity?: number
   variantId?: string | null
+  /** Optional buyer note / personalization stored on the cart line. */
+  personalizationNote?: string | null
 }): Promise<{ item: CartItemRow | null; error: string | null }> {
   const { data, error } = await supabase.rpc('add_to_cart', {
     p_cart_id: options.cartId,
@@ -106,6 +108,22 @@ export async function addListingToCart(options: {
 
   if (error) {
     return { item: null, error: error.message }
+  }
+
+  const note = options.personalizationNote?.trim()
+  if (note && data?.id) {
+    const existing =
+      data.item_metadata && typeof data.item_metadata === 'object' && !Array.isArray(data.item_metadata)
+        ? (data.item_metadata as Record<string, unknown>)
+        : {}
+    await supabase
+      .from('cart_items')
+      .update({
+        item_metadata: { ...existing, personalization_note: note },
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', data.id)
+      .eq('cart_id', options.cartId)
   }
 
   await supabase.rpc('update_cart_totals', { p_cart_id: options.cartId })

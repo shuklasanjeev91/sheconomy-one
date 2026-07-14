@@ -8,20 +8,26 @@ import { useListingRecommendations } from '~/commerce/hooks/useListingRecommenda
 
 type ListingRecommendationsSectionsProps = {
   listingId: string
+  shopId?: string | null
+  shopName?: string | null
+  shopSlug?: string | null
   enabled?: boolean
   limit?: number
 }
 
 export function ListingRecommendationsSections({
   listingId,
+  shopId,
+  shopName,
+  shopSlug,
   enabled = true,
   limit = 12,
 }: ListingRecommendationsSectionsProps) {
   const ui = useAppUi()
-  const { related, personalized, isLoading, error } = useListingRecommendations(listingId, {
-    enabled,
-    limit,
-  })
+  const { related, personalized, fromShop, isLoading, error } = useListingRecommendations(
+    listingId,
+    { enabled, limit, shopId },
+  )
 
   if (isLoading) {
     return (
@@ -31,7 +37,7 @@ export function ListingRecommendationsSections({
     )
   }
 
-  if (!related.length && !personalized.length) {
+  if (!related.length && !personalized.length && !fromShop.length) {
     return error ? (
       <Text color={ui.textSecondary} fontSize={13}>
         {error}
@@ -41,6 +47,17 @@ export function ListingRecommendationsSections({
 
   return (
     <YStack gap="$8" width="100%">
+      {fromShop.length > 0 ? (
+        <CommerceSection
+          title={shopName ? `More from ${shopName}` : 'More from this shop'}
+          subtitle="Other finds from this seller"
+          actionLabel={shopSlug ? 'Visit shop' : undefined}
+          actionHref={shopSlug ? commerceRoutes.shop(shopSlug) : undefined}
+        >
+          <ListingCarouselRow listings={fromShop} />
+        </CommerceSection>
+      ) : null}
+
       {related.length > 0 ? (
         <CommerceSection title="You may also like" subtitle="Similar items in this category">
           <ListingCarouselRow listings={related} />

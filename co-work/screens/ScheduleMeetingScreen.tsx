@@ -5,6 +5,7 @@ import { RequireAuth } from '~/components/auth/RequireAuth'
 import { AppPage, LAYOUT_STRETCH } from '~/components/layout'
 import { Button, Field, Icons, Input, Spinner, Text, XStack, YStack, useAppToast } from '~/components/ui'
 import { CoWorkBrandChip } from '~/co-work/components/CoWorkUi'
+import { MeetingAiDraftPanel } from '~/co-work/components/MeetingAiDraftPanel'
 import { defaultScheduleDateTime, ScheduleDateTimeField } from '~/co-work/components/ScheduleDateTimeField'
 import { ScheduleSection, ScheduleToggleRow } from '~/co-work/components/ScheduleFormFields'
 import { MeetingInvitePicker } from '~/co-work/components/MeetingInvitePicker'
@@ -14,6 +15,8 @@ import { coworkGlassStyle, useCoWorkTheme } from '~/co-work/lib/theme'
 import { controlGradientStyle, coworkBoxShadow, pageGradientStyle } from '~/lib/platform/crossStyles'
 import type { MeetingInvitee, MeetingRepeat } from '~/co-work/lib/types'
 import { coWorkRoutes } from '~/lib/routes'
+import { recordMeetingCode } from '~/co-work/lib/recent-meeting-codes'
+import { buildMeetingCalendarEvent, shareIcsFile } from '~/lib/calendar/ics'
 import { openMailtoLink } from '~/lib/platform/openMailto'
 import { useProfile } from '~/hooks/useProfile'
 
@@ -136,6 +139,17 @@ export function ScheduleMeetingScreen() {
       } else {
         toast.show('Meeting scheduled', { tone: 'success' })
       }
+
+      recordMeetingCode(meeting.meeting_code)
+
+      const ics = buildMeetingCalendarEvent({
+        title: meeting.title,
+        description: meeting.description,
+        scheduledAt: meeting.scheduled_at ?? scheduledAt,
+        meetingCode: meeting.meeting_code,
+      })
+      await shareIcsFile(ics, `sheconomy-${meeting.meeting_code}.ics`)
+
       router.push(coWorkRoutes.meeting(meeting.meeting_code))
     } catch (scheduleError) {
       toast.show('Could not schedule meeting', {
@@ -162,9 +176,19 @@ export function ScheduleMeetingScreen() {
             Plan a Co-Work session
           </Text>
           <Text color={coworkUi.textSecondary} lineHeight={22}>
-            Set the title, time, security options, and who can join.
+            Describe the meeting with AI, or set the title, time, security, and invitees yourself.
           </Text>
         </YStack>
+
+        <MeetingAiDraftPanel
+          timeZone={timeZone}
+          onApply={(draft) => {
+            setTitle(draft.title)
+            setDescription(draft.description)
+            if (draft.scheduledAt) setScheduledAt(draft.scheduledAt)
+            if (draft.maxParticipants) setMaxParticipants(String(draft.maxParticipants))
+          }}
+        />
 
         <YStack
           gap="$5"

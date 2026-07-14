@@ -294,7 +294,7 @@ export function CheckoutScreen() {
           }
         : null
 
-      // Etsy-style: buyer pays once (platform-collected), but each shop gets its
+      // marketplace: buyer pays once (platform-collected), but each shop gets its
       // own receipt/order. Group selected items per shop and create one order per
       // shop, splitting any order-level discount proportionally by subtotal.
       const groups = new Map<string, CartItemRow[]>()

@@ -1,8 +1,10 @@
 import { useMemo, useRef, useState } from 'react'
 
+import { CommentSuggestionChips } from '~/community/components/CommentSuggestionChips'
 import { MentionInput } from '~/community/components/MentionInput'
 import { ProfileLink } from '~/community/components/ProfileLink'
 import { PostContentText } from '~/community/components/PostContentText'
+import type { CommentSuggestionContext } from '~/community/lib/comment-suggestions'
 import type { PostComment } from '~/community/lib/post-engagement'
 import { BRAND_BLUE } from '~/community/lib/constants'
 import {
@@ -38,6 +40,8 @@ type PostCommentsProps = {
   onSubmit: (encoded?: string) => void
   onLikeComment: (commentId: string) => void
   onReply: (parentCommentId: string, encoded: string) => Promise<unknown> | void
+  /** When set, show AI/local comment starters. */
+  suggestionContext?: CommentSuggestionContext
 }
 
 export function PostComments({
@@ -50,6 +54,7 @@ export function PostComments({
   onSubmit,
   onLikeComment,
   onReply,
+  suggestionContext,
 }: PostCommentsProps) {
   const ui = useAppUi()
   const encodedRef = useRef('')
@@ -102,30 +107,39 @@ export function PostComments({
       )}
 
       {isAuthenticated ? (
-        <XStack gap="$2" alignItems="center">
-          <MentionInput
-            flex={1}
-            value={commentDraft}
-            onChangeText={onDraftChange}
-            onEncodedChange={(encoded) => {
-              encodedRef.current = encoded
-            }}
-            placeholder="Add a comment…"
-            suggestionsPlacement="top"
-            borderRadius={999}
-            backgroundColor={ui.surface}
-            onSubmitEditing={() => onSubmit(encodedRef.current || commentDraft)}
-          />
-          <Button
-            size="$3"
-            backgroundColor={commentDraft.trim() ? BRAND_BLUE : ui.chip}
-            color={commentDraft.trim() ? 'white' : ui.textMuted}
-            borderRadius={999}
-            disabled={!commentDraft.trim() || isCommenting}
-            onPress={() => onSubmit(encodedRef.current || commentDraft)}
-            icon={isCommenting ? <Spinner size="small" color="white" /> : <Icons.Send size={16} color="white" />}
-          />
-        </XStack>
+        <YStack gap="$2">
+          {suggestionContext ? (
+            <CommentSuggestionChips
+              context={suggestionContext}
+              disabled={isCommenting}
+              onSelect={(text) => onDraftChange(text)}
+            />
+          ) : null}
+          <XStack gap="$2" alignItems="center">
+            <MentionInput
+              flex={1}
+              value={commentDraft}
+              onChangeText={onDraftChange}
+              onEncodedChange={(encoded) => {
+                encodedRef.current = encoded
+              }}
+              placeholder="Add a comment…"
+              suggestionsPlacement="top"
+              borderRadius={999}
+              backgroundColor={ui.surface}
+              onSubmitEditing={() => onSubmit(encodedRef.current || commentDraft)}
+            />
+            <Button
+              size="$3"
+              backgroundColor={commentDraft.trim() ? BRAND_BLUE : ui.chip}
+              color={commentDraft.trim() ? 'white' : ui.textMuted}
+              borderRadius={999}
+              disabled={!commentDraft.trim() || isCommenting}
+              onPress={() => onSubmit(encodedRef.current || commentDraft)}
+              icon={isCommenting ? <Spinner size="small" color="white" /> : <Icons.Send size={16} color="white" />}
+            />
+          </XStack>
+        </YStack>
       ) : (
         <Text fontSize={13} color={ui.textMuted} textAlign="center">
           Sign in to join the conversation

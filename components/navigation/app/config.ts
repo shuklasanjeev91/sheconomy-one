@@ -247,7 +247,8 @@ export function getAuthMobileTab(tier: AccessTier): AppMobileTabItem {
     href: routes.profile,
     label: 'You',
     icon: Icons.User,
-    match: (path) => isProfilePath(path),
+    // Profile, settings, and notifications are one shared account surface across tabs.
+    match: (path) => isProfilePath(path) || isNotificationsPath(path),
   }
 }
 
@@ -342,10 +343,13 @@ export function getMobileBottomTabSection(pathname: string): BottomTabSection | 
   if (isCommercePath(pathname)) return 'commerce'
   if (isCoWorkPath(pathname)) return 'co-work'
   if (isClassPath(pathname)) return 'class'
+  // Shared account destinations stay on community chrome (profile/network context)
   if (
     pathname.startsWith('/community') ||
     isNotificationsPath(pathname) ||
-    isProfilePath(pathname)
+    isProfilePath(pathname) ||
+    pathname === routes.settings ||
+    pathname.startsWith(`${String(routes.settings)}/`)
   ) {
     return 'community'
   }

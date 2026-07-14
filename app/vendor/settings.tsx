@@ -1,5 +1,5 @@
-import { VendorComingSoonScreen } from '~/commerce/screens/vendor/VendorComingSoonScreen'
+import { VendorSettingsScreen } from '~/commerce/screens/vendor/VendorSettingsScreen'
 
 export default function VendorSettingsRoute() {
-  return <VendorComingSoonScreen />
+  return <VendorSettingsScreen />
 }

@@ -19,7 +19,9 @@ export type PostSheetType =
   | 'reactions'
   | 'reaction-picker'
   | 'comments'
+  | 'repost-menu'
   | 'repost'
+  | 'send'
   | 'share'
   | 'options'
   | null

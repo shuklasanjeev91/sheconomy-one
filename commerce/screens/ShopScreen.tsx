@@ -9,6 +9,8 @@ import {
   LoadMoreSentinel,
   ReviewsSection,
   SectionTitle,
+  ShopAnnouncementBanner,
+  shopAnnouncementFromMetadata,
   ShopHero,
   ShopManagePanel,
   ShopOwnerPanel,
@@ -254,6 +256,14 @@ export function ShopScreen() {
           ownerUserId={shop.owner?.id}
           shopSlug={slug ?? shop.slug}
         />
+
+        {shopAnnouncementFromMetadata(shop.shop_metadata) ? (
+          <PageSection paddingTop="$4">
+            <ShopAnnouncementBanner
+              message={shopAnnouncementFromMetadata(shop.shop_metadata) ?? ''}
+            />
+          </PageSection>
+        ) : null}
 
         <PageSection paddingTop="$6" gap="$6">
           {isDesktop ? (

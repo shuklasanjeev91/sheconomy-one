@@ -28,6 +28,7 @@ export type ShopDetail = Pick<
   | 'slug'
   | 'website_url'
   | 'created_at'
+  | 'shop_metadata'
 > & {
   owner: ShopOwnerProfile | null
   address: ShopAddress | null
@@ -49,6 +50,7 @@ const SHOP_SELECT = `
   slug,
   website_url,
   created_at,
+  shop_metadata,
   shop_addresses(city, state, country, postal_code)
 `
 

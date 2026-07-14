@@ -11,6 +11,7 @@ import { useUserChats } from '~/chat/hooks/useUserChats'
 import type { ChatSummary } from '~/chat/lib/types'
 import { useChatTheme } from '~/chat/lib/chat-theme'
 import { Button, Icons, Spinner, Text, XStack, YStack } from '~/components/ui'
+import { PushPermissionBanner } from '~/components/notifications/PushPermissionBanner'
 import { useAppLayout } from '~/hooks/useAppLayout'
 import { chatRoutes, routes } from '~/lib/routes'
 import { useSupabase } from '~/providers/SupabaseProvider'
@@ -52,6 +53,12 @@ export function ChatScreen({ chatId = null, filter = 'all' }: ChatScreenProps) {
     reloadedFor.current = chatId
     void reload()
   }, [chatId, isLoading, activeChat, reload])
+
+  // Reset reload marker when the signed-in user changes so a prior account's
+  // conversation id can be re-checked against the new inbox.
+  useEffect(() => {
+    reloadedFor.current = null
+  }, [currentUserId])
 
   const fillStyle =
     Platform.OS === 'web'
@@ -123,6 +130,9 @@ export function ChatScreen({ chatId = null, filter = 'all' }: ChatScreenProps) {
           minHeight={0}
         >
           <ChatSectionTabs />
+          <YStack paddingHorizontal={12} paddingBottom={8} gap={8}>
+            <PushPermissionBanner />
+          </YStack>
           <ChatListPane
             chats={visibleChats}
             isLoading={isLoading}
@@ -167,16 +177,25 @@ export function ChatScreen({ chatId = null, filter = 'all' }: ChatScreenProps) {
           <Spinner size="large" color={theme.brand} />
         </YStack>
       ) : (
-        <ChatListPane
-          chats={visibleChats}
-          isLoading={isLoading}
-          activeChatId={null}
-          currentUserId={currentUserId}
-          onSelect={(chat) => router.push(chatRoutes.conversation(chat.id))}
-          onNewChat={openNewChat}
-          onChanged={reload}
-          tabClearance={mobileTabBarOffset}
-        />
+        <YStack flex={1} minHeight={0}>
+          <YStack paddingHorizontal={12} paddingTop={8} paddingBottom={4} gap={8}>
+            <PushPermissionBanner />
+            {!chatId ? (
+              <>
+              </>
+            ) : null}
+          </YStack>
+          <ChatListPane
+            chats={visibleChats}
+            isLoading={isLoading}
+            activeChatId={null}
+            currentUserId={currentUserId}
+            onSelect={(chat) => router.push(chatRoutes.conversation(chat.id))}
+            onNewChat={openNewChat}
+            onChanged={reload}
+            tabClearance={mobileTabBarOffset}
+          />
+        </YStack>
       )}
     </YStack>
   )

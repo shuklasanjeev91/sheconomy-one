@@ -2,6 +2,10 @@ import { useEffect, useState } from 'react'
 
 import { ImageUploadField, preparePickedImagesForUpload } from '~/components/media/ImageUploadField'
 import { CommercePanel } from '~/commerce/components'
+import {
+  shopAnnouncementFromMetadata,
+  updateShopAnnouncement,
+} from '~/commerce/components/ShopAnnouncementBanner'
 import { LocationFields } from '~/components/geo'
 import {
   fetchShopAddressForOwner,
@@ -41,6 +45,9 @@ export function ShopSettingsPanel({ shop, onUpdated }: ShopSettingsPanelProps) {
   const { user } = useSupabase()
   const [shopName, setShopName] = useState(shop.shop_name)
   const [shopDescription, setShopDescription] = useState(shop.shop_description ?? '')
+  const [announcement, setAnnouncement] = useState(
+    () => shopAnnouncementFromMetadata(shop.shop_metadata) ?? '',
+  )
   const [shopEmail, setShopEmail] = useState(shop.shop_email ?? '')
   const [shopPhone, setShopPhone] = useState(shop.shop_phone_number ?? '')
   const [websiteUrl, setWebsiteUrl] = useState(shop.website_url ?? '')
@@ -55,6 +62,7 @@ export function ShopSettingsPanel({ shop, onUpdated }: ShopSettingsPanelProps) {
   useEffect(() => {
     setShopName(shop.shop_name)
     setShopDescription(shop.shop_description ?? '')
+    setAnnouncement(shopAnnouncementFromMetadata(shop.shop_metadata) ?? '')
     setShopEmail(shop.shop_email ?? '')
     setShopPhone(shop.shop_phone_number ?? '')
     setWebsiteUrl(shop.website_url ?? '')
@@ -128,6 +136,7 @@ export function ShopSettingsPanel({ shop, onUpdated }: ShopSettingsPanelProps) {
       shop_phone_number: shopPhone.trim() || null,
       website_url: websiteUrl.trim() || null,
       is_active: isActive,
+      shop_metadata: updateShopAnnouncement(shop.shop_metadata, announcement),
     })
 
     if (error || !updated) {
@@ -195,6 +204,17 @@ export function ShopSettingsPanel({ shop, onUpdated }: ShopSettingsPanelProps) {
         </Field>
         <Field label="Description">
           <TextArea value={shopDescription} onChangeText={setShopDescription} minHeight={100} />
+        </Field>
+        <Field
+          label="Shop announcement"
+          hint="Shown on your shop page (sales, delays, custom orders)."
+        >
+          <TextArea
+            value={announcement}
+            onChangeText={setAnnouncement}
+            minHeight={72}
+            placeholder="Free gift wrap this week · Ships in 2–3 days"
+          />
         </Field>
         <Field label="Support email">
           <Input value={shopEmail} onChangeText={setShopEmail} autoCapitalize="none" keyboardType="email-address" />

@@ -1,6 +1,8 @@
+import type { ReactNode } from 'react'
 import type { Href } from 'one'
 
 import { Spinner, Text, YStack, useMedia } from '~/components/ui'
+import { PageSection } from '~/components/layout'
 import type { ListingFeedKind } from '~/lib/supabase/commerce'
 import { useListingFeed } from '~/commerce/hooks/useListingFeed'
 
@@ -17,6 +19,8 @@ type InfiniteListingSectionProps = {
   actionHref?: Href
   shopId?: string
   enabled?: boolean
+  /** Wrap in PageSection only when content exists (avoids empty home gaps). */
+  inset?: boolean
 }
 
 export function InfiniteListingSection({
@@ -27,6 +31,7 @@ export function InfiniteListingSection({
   actionHref,
   shopId,
   enabled = true,
+  inset = false,
 }: InfiniteListingSectionProps) {
   const ui = useAppUi()
   const media = useMedia()
@@ -37,27 +42,31 @@ export function InfiniteListingSection({
     enabled,
   })
 
+  function wrap(node: ReactNode) {
+    return inset ? <PageSection>{node}</PageSection> : node
+  }
+
   if (isLoading) {
-    return (
-      <YStack width="100%" alignItems="center" paddingVertical="$6">
+    return wrap(
+      <YStack width="100%" alignItems="center" paddingVertical="$4">
         <Spinner size="small" />
-      </YStack>
+      </YStack>,
     )
   }
 
   if (error) {
-    return (
+    return wrap(
       <CommerceSection title={title} subtitle={subtitle}>
         <Text color={ui.textSecondary} fontSize={14}>
           {error}
         </Text>
-      </CommerceSection>
+      </CommerceSection>,
     )
   }
 
   if (!items.length) return null
 
-  return (
+  return wrap(
     <CommerceSection
       title={title}
       subtitle={subtitle}
@@ -73,6 +82,6 @@ export function InfiniteListingSection({
         />
         {!hasMore ? <LoadMoreEnd /> : null}
       </YStack>
-    </CommerceSection>
+    </CommerceSection>,
   )
 }

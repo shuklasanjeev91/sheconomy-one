@@ -1,7 +1,7 @@
 import { addDays, format } from 'date-fns'
 
 /**
- * Buyer-facing estimated arrival window (marketplace-style, informational).
+ * Buyer-facing estimated arrival window (marketplace, informational).
  * Returns e.g. "Est. arrival Jul 16 – Jul 20".
  */
 export function deliveryEstimateLabel(minDays = 3, maxDays = 7): string {

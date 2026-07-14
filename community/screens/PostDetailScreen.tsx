@@ -8,10 +8,11 @@ import { FeedPostCard } from '~/community/components/FeedPostCard'
 import { fetchPostById, type CommunityPost } from '~/community/lib/community'
 import { useCommunityUi } from '~/community/lib/community-theme'
 import { mentionsToPlainText } from '~/community/lib/mentions'
-import { ShareActionRow, ShareSheet } from '~/components/share'
+import { collectPostMedia } from '~/community/lib/post-media'
+import { ShareSheet } from '~/components/share'
 import { Button, Icons, Spinner, Text, XStack, YStack } from '~/components/ui'
 import { BRAND_NAME } from '~/config/brand'
-import { chatRoutes, communityRoutes, routes } from '~/lib/routes'
+import { chatRoutes, communityRoutes } from '~/lib/routes'
 import { getPostShareUrl } from '~/lib/share'
 import { useSupabase } from '~/providers/SupabaseProvider'
 
@@ -81,6 +82,12 @@ export function PostDetailScreen() {
   const sendContext = postSnippet
     ? `${authorName} on ${BRAND_NAME}: "${postSnippet}"`
     : `${authorName} on ${BRAND_NAME}`
+  const sendPreview = {
+    authorName,
+    authorAvatar: post.author?.avatar_url ?? post.company?.logo_url ?? post.group?.avatar_url,
+    snippet: postSnippet || null,
+    thumbUrl: collectPostMedia(post)[0]?.url ?? null,
+  }
 
   return (
     <CommunityShell wide>
@@ -127,20 +134,6 @@ export function PostDetailScreen() {
           title: preview,
           text: post.content.trim().slice(0, 140) || undefined,
         }}
-        extraActions={
-          <ShareActionRow
-            icon={Icons.Send}
-            label="Send in a message"
-            onPress={() => {
-              setShareOpen(false)
-              if (!user?.id) {
-                router.push(routes.signIn)
-                return
-              }
-              setSendOpen(true)
-            }}
-          />
-        }
       />
 
       {user?.id ? (
@@ -150,6 +143,8 @@ export function PostDetailScreen() {
           currentUserId={user.id}
           shareUrl={shareUrl}
           contextText={sendContext}
+          preview={sendPreview}
+          onShareElsewhere={() => setShareOpen(true)}
           onSent={(conversationId) => router.push(chatRoutes.conversation(conversationId))}
         />
       ) : null}
