@@ -4,7 +4,9 @@ const listeners = new Set<RefreshListener>()
 
 export function subscribeProfileRefresh(listener: RefreshListener) {
   listeners.add(listener)
-  return () => listeners.delete(listener)
+  return () => {
+    listeners.delete(listener)
+  }
 }
 
 export function refreshProfiles() {

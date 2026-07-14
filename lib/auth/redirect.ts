@@ -21,10 +21,31 @@ export function getReturnToFromLocation(): Href {
 }
 
 export function buildSignInUrl(returnTo?: string | null): Href {
-  if (!isSafeReturnPath(returnTo ?? null)) {
+  const target = returnTo ?? null
+  if (!isSafeReturnPath(target)) {
     return appRoutes.signIn
   }
 
-  const params = new URLSearchParams({ [AUTH_RETURN_TO_PARAM]: returnTo })
+  const params = new URLSearchParams({ [AUTH_RETURN_TO_PARAM]: target })
   return `/auth/sign-in?${params.toString()}` as Href
+}
+
+/**
+ * Current path + query + hash (web), or `fallback` off-web. Used by the route
+ * protection layer to remember where a guest was headed before sign-in.
+ */
+export function getCurrentPathWithSearch(fallback = '/'): string {
+  if (Platform.OS !== 'web' || typeof window === 'undefined' || !window.location) {
+    return fallback
+  }
+  const { pathname, search, hash } = window.location
+  return `${pathname}${search}${hash}` || fallback
+}
+
+/**
+ * Turn any candidate redirect target into a safe in-app path, never pointing
+ * back at the auth screens (avoids post-login redirect loops).
+ */
+export function normalizeReturnPath(target: string | null | undefined, fallback = '/'): string {
+  return isSafeReturnPath(target ?? null) ? (target as string) : fallback
 }

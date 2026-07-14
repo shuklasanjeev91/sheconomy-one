@@ -13,6 +13,7 @@ import {
 import { profileCompletionReducer, profileReducer } from '~/lib/profile/profile.store'
 import { shopReducer } from '~/lib/shop/shop.store'
 import { listingReducer } from '~/lib/listing/listing.store'
+import { categoriesReducer } from '~/lib/listing/listing-categories.store'
 import { listingAttributesReducer } from '~/lib/listing/listing-attributes.store'
 import { listingImagesReducer } from '~/lib/listing/listing-images.store'
 import { listingMaterialsReducer } from '~/lib/listing/listing-materials.store'
@@ -45,11 +46,19 @@ const listingPersistConfig = {
   whitelist: ['myListings', 'formData'],
 }
 
-const rootReducer = combineReducers({
+const categoriesPersistConfig = {
+  key: 'categories',
+  storage: persistStorage,
+  // Cache the taxonomy + popular list so category pickers paint instantly.
+  whitelist: ['categories', 'popularCategories', 'lastUpdated'],
+}
+
+const appReducer = combineReducers({
   profile: profileReducer,
   profileCompletion: persistReducer(completionPersistConfig, profileCompletionReducer),
   shop: persistReducer(shopPersistConfig, shopReducer),
   listing: persistReducer(listingPersistConfig, listingReducer),
+  categories: persistReducer(categoriesPersistConfig, categoriesReducer),
   listingImages: listingImagesReducer,
   listingVariations: listingVariationsReducer,
   listingAttributes: listingAttributesReducer,
@@ -60,6 +69,23 @@ const rootReducer = combineReducers({
   orderIssues: orderIssuesReducer,
   fulfillment: fulfillmentReducer,
 })
+
+/** Dispatched on sign-out to wipe all in-memory state back to initial. */
+export const RESET_STORE = 'app/resetStore' as const
+
+export const resetStore = () => ({ type: RESET_STORE })
+
+/**
+ * Root reducer wrapper: on `RESET_STORE`, drop the entire tree so every slice
+ * re-initialises. This prevents one account's cached data (e.g. the persisted
+ * `currentShop`/`myShops`) from leaking into the next session after sign-out.
+ */
+const rootReducer: typeof appReducer = (state, action) => {
+  if (action.type === RESET_STORE) {
+    return appReducer(undefined, action)
+  }
+  return appReducer(state, action)
+}
 
 export const store = configureStore({
   reducer: rootReducer,
@@ -73,5 +99,5 @@ export const store = configureStore({
 
 export const persistor = persistStore(store)
 
-export type RootState = ReturnType<typeof store.getState>
+export type RootState = ReturnType<typeof appReducer>
 export type AppDispatch = typeof store.dispatch

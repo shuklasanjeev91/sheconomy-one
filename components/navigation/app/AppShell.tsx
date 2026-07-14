@@ -52,6 +52,7 @@ function useCompactMobileTopBar() {
     pathname.startsWith('/cart') ||
     pathname.startsWith('/checkout') ||
     pathname.startsWith('/my-shops') ||
+    pathname.startsWith('/vendor') ||
     pathname.startsWith('/settings') ||
     pathname.startsWith('/profile') ||
     pathname.startsWith('/notifications') ||
