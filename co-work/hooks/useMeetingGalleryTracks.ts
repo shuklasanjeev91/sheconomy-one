@@ -32,7 +32,12 @@ function oneCameraTilePerParticipant(tracks: TrackReferenceOrPlaceholder[]) {
   return [...screenShares, ...cameraByIdentity.values()]
 }
 
-/** Stage tiles (remotes first) + optional local PiP tile. */
+/**
+ * Meet / Zoom / WhatsApp-style track roles:
+ * - 1:1 call → remote fills stage, local floats as PiP
+ * - 3+ people → everyone (including local) in the equal gallery
+ * - Screen shares always lead the stage
+ */
 export function useMeetingGalleryTracks() {
   const { localParticipant } = useLocalParticipant()
   const tracks = useTracks(
@@ -47,12 +52,34 @@ export function useMeetingGalleryTracks() {
 
   return useMemo(() => {
     const localIdentity = localParticipant.identity
-    const localTrack = displayTracks.find((track) => track.participant.identity === localIdentity)
-    const remoteTracks = displayTracks.filter((track) => track.participant.identity !== localIdentity)
+    const screenShares = displayTracks.filter(
+      (track) => isTrackReference(track) && track.publication.source === Track.Source.ScreenShare,
+    )
+    const cameras = displayTracks.filter(
+      (track) => !isTrackReference(track) || track.publication.source !== Track.Source.ScreenShare,
+    )
+    const localCamera = cameras.find((track) => track.participant.identity === localIdentity) ?? null
+    const remoteCameras = cameras.filter((track) => track.participant.identity !== localIdentity)
 
-    const stageTracks = remoteTracks.length > 0 ? remoteTracks : localTrack ? [localTrack] : displayTracks
-    const pipTrack = remoteTracks.length > 0 ? localTrack ?? null : null
+    // WhatsApp / Meet 1:1 — remote fills the stage, self is PiP.
+    const isDualCall = screenShares.length === 0 && remoteCameras.length === 1 && !!localCamera
 
-    return { stageTracks, pipTrack, totalTiles: stageTracks.length + (pipTrack ? 1 : 0) }
+    if (isDualCall) {
+      return {
+        stageTracks: remoteCameras,
+        pipTrack: localCamera,
+        totalTiles: 2,
+        isDualCall: true,
+      }
+    }
+
+    // Gallery: everyone equal (Meet/Zoom tiled). Screens first if present.
+    const stageTracks = [...screenShares, ...cameras]
+    return {
+      stageTracks,
+      pipTrack: null as TrackReferenceOrPlaceholder | null,
+      totalTiles: stageTracks.length,
+      isDualCall: false,
+    }
   }, [displayTracks, localParticipant.identity])
 }

@@ -1,5 +1,4 @@
 import { Link, useRouter } from 'one'
-import { Platform } from 'react-native'
 import { useState } from 'react'
 
 import { PageContent, LAYOUT_STRETCH } from '~/components/layout'
@@ -89,8 +88,9 @@ export function CoWorkScreen() {
     if (!user) return
     setCreating(true)
     try {
+      const hostLabel = profile?.full_name?.trim() || profile?.username?.trim() || BRAND_NAME
       const meeting = await createMeeting(user.id, {
-        title: `${profile?.full_name || BRAND_NAME}'s meeting`,
+        title: `${hostLabel} meeting`,
         startNow: true,
       })
       recordMeetingCode(meeting.meeting_code)
