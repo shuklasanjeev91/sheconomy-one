@@ -1,5 +1,5 @@
-import { AdminSectionPage } from './layout'
+import { AdminShopsManager } from './components/AdminShopsManager'
 
 export default function AdminShopsPage() {
-  return <AdminSectionPage sectionId="shops" />
+  return <AdminShopsManager />
 }

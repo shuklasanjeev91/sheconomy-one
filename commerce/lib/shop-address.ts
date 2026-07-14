@@ -112,6 +112,39 @@ export async function upsertShopAddress(
   return fetchShopAddressForOwner(shopId, userId)
 }
 
+export type ShopAddressDetails = {
+  address_line_1: string | null
+  address_line_2: string | null
+  city: string | null
+  state: string | null
+  country: string | null
+  postal_code: string | null
+}
+
+/**
+ * Full address detail for a shop, resolved through the linked `addresses` row.
+ * RLS gates visibility (owner or admin), so no explicit user filter is needed
+ * here — this lets both a vendor and an admin read the storefront address.
+ */
+export async function fetchShopAddressDetails(
+  shopId: string,
+): Promise<{ address: ShopAddressDetails | null; error: string | null }> {
+  const { data, error } = await supabase
+    .from('shops')
+    .select(
+      'shop_addresses(address_line_1, address_line_2, city, state, country, postal_code)',
+    )
+    .eq('id', shopId)
+    .maybeSingle()
+
+  if (error) {
+    return { address: null, error: error.message }
+  }
+
+  const row = normalizeVendorShopAddress(data?.shop_addresses)
+  return { address: (row as ShopAddressDetails | null) ?? null, error: null }
+}
+
 export function shopAddressInputFromRow(address: ShopAddress | null): ShopAddressInput {
   if (!address) {
     return createDefaultGeoLocation()

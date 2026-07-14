@@ -25,11 +25,14 @@ const NON_COMMERCE_PREFIXES = [
   '/notifications',
   '/profile',
   '/settings',
+  '/vendor',
 ] as const
 
 export const commerceRoutes = {
   home: '/' as Href,
   myShops: '/my-shops' as Href,
+  /** Guided multi-step seller onboarding for any signed-in member without a shop. */
+  createShop: '/create-my-shop' as Href,
   manageShop: (shopId: string) => `/my-shops/${encodeURIComponent(shopId)}` as Href,
   shops: '/shops' as Href,
   cart: appRoutes.cart,
@@ -45,6 +48,21 @@ export const commerceRoutes = {
   browse: (kind: string) => `/browse/${kind}` as Href,
   listing: (slug: string) => `/listing/${encodeURIComponent(slug)}` as Href,
   shop: (slug: string) => `/shop/${encodeURIComponent(slug)}` as Href,
+} as const
+
+/** Vendor console — a seller's own storefront management section. */
+export const vendorRoutes = {
+  home: '/vendor' as Href,
+  myShop: '/vendor/myshop' as Href,
+  editShop: '/vendor/myshop/edit' as Href,
+  createListing: '/vendor/create-listing' as Href,
+  products: '/vendor/products' as Href,
+  orders: '/vendor/orders' as Href,
+  analytics: '/vendor/analytics' as Href,
+  delivery: '/vendor/delivery' as Href,
+  ads: '/vendor/ads' as Href,
+  reviews: '/vendor/reviews' as Href,
+  settings: '/vendor/settings' as Href,
 } as const
 
 export const communityRoutes = {
@@ -112,6 +130,7 @@ export const routes = {
   signUp: appRoutes.signUp,
   verifyGender: appRoutes.verifyGender,
   commerce: commerceRoutes,
+  vendor: vendorRoutes,
   community: communityRoutes,
   chat: chatRoutes,
   class: classRoutes,
@@ -277,6 +296,10 @@ export function isHomePath(pathname: string) {
 
 export function isMyShopsPath(pathname: string) {
   return pathname === '/my-shops' || pathname.startsWith('/my-shops/')
+}
+
+export function isVendorPath(pathname: string) {
+  return pathname === '/vendor' || pathname.startsWith('/vendor/')
 }
 
 export function isProfilePath(pathname: string) {
