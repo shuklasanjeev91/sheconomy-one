@@ -220,7 +220,7 @@ function ThemedApp({ children }: { children: React.ReactNode }) {
           width="100%"
           style={Platform.OS === 'web' ? screenFillStyle() : undefined}
         >
-          <ToastProvider swipeDirection="horizontal" duration={4000} native={Platform.OS !== 'web'}>
+          <ToastProvider swipeDirection="horizontal" duration={4000} native={false}>
             {children}
             <AppToasts />
             <ToastViewport

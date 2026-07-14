@@ -8,7 +8,7 @@ export type LiveKitMediaControls = {
   screenSharing: boolean
   toggleAudio: () => void
   toggleVideo: () => void
-  toggleScreenShare: () => void
+  toggleScreenShare: () => void | Promise<void>
 }
 
 export type LiveKitMeetingRoomProps = {

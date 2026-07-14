@@ -34,17 +34,22 @@ export function buildLiveKitRecordingStream(room: Room): MediaStream {
 }
 
 export function getMeetingRecorderMimeType(hasVideo: boolean): string {
+  const isTypeSupported =
+    typeof MediaRecorder !== 'undefined' && typeof MediaRecorder.isTypeSupported === 'function'
+      ? (type: string) => MediaRecorder.isTypeSupported(type)
+      : () => false
+
   if (!hasVideo) {
     const audioTypes = ['audio/webm;codecs=opus', 'audio/webm', 'audio/mp4']
     for (const type of audioTypes) {
-      if (MediaRecorder.isTypeSupported(type)) return type
+      if (isTypeSupported(type)) return type
     }
     return 'audio/webm'
   }
 
   const videoTypes = ['video/webm;codecs=vp9,opus', 'video/webm;codecs=vp8,opus', 'video/webm']
   for (const type of videoTypes) {
-    if (MediaRecorder.isTypeSupported(type)) return type
+    if (isTypeSupported(type)) return type
   }
   return 'video/webm'
 }

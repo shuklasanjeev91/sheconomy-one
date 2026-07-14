@@ -1793,6 +1793,27 @@ __metadata:
   languageName: node
   linkType: hard
 
+"@expo/config-plugins@npm:>=8.0.0":
+  version: 57.0.3
+  resolution: "@expo/config-plugins@npm:57.0.3"
+  dependencies:
+    "@expo/config-types": "npm:^57.0.1"
+    "@expo/json-file": "npm:~11.0.0"
+    "@expo/plist": "npm:^0.8.0"
+    "@expo/require-utils": "npm:^57.0.1"
+    "@expo/sdk-runtime-versions": "npm:^1.0.0"
+    chalk: "npm:^4.1.2"
+    debug: "npm:^4.3.5"
+    getenv: "npm:^2.0.0"
+    glob: "npm:^13.0.0"
+    semver: "npm:^7.5.4"
+    slugify: "npm:^1.6.6"
+    xcode: "npm:^3.0.1"
+    xml2js: "npm:0.6.0"
+  checksum: 10/18b0f6ef8f1201d71e7072554e7a05641c4457953e6c61c7d9f990def99bd6fab7093f4f345845ef123239c29d7d0e26c7eae68b2cc37907039e79a2ce9ce433
+  languageName: node
+  linkType: hard
+
 "@expo/config-plugins@npm:^55.0.10, @expo/config-plugins@npm:~55.0.10, @expo/config-plugins@npm:~55.0.6":
   version: 55.0.10
   resolution: "@expo/config-plugins@npm:55.0.10"
@@ -1818,6 +1839,13 @@ __metadata:
   version: 55.0.5
   resolution: "@expo/config-types@npm:55.0.5"
   checksum: 10/9a7b5a025218618b6810d720663ef973b5497baedb194ed29ed60f4aa3d4b012676e57c71807a96aa78f099d562030b3246ae403776b46e0db56db68c6f3ac82
+  languageName: node
+  linkType: hard
+
+"@expo/config-types@npm:^57.0.1":
+  version: 57.0.1
+  resolution: "@expo/config-types@npm:57.0.1"
+  checksum: 10/b90d5d55692451d7b3aabd6fffbd10d909fd54f2f09ce785f86948bbaa90a74ab4b9fa516044fec7e2ec312800c21b3e2b6a45142442fd8af4a1a457c4f45914
   languageName: node
   linkType: hard
 
@@ -1945,7 +1973,7 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@expo/json-file@npm:^11.0.0":
+"@expo/json-file@npm:^11.0.0, @expo/json-file@npm:~11.0.0":
   version: 11.0.0
   resolution: "@expo/json-file@npm:11.0.0"
   dependencies:
@@ -2068,6 +2096,17 @@ __metadata:
   languageName: node
   linkType: hard
 
+"@expo/plist@npm:>=0.1.0, @expo/plist@npm:^0.8.0":
+  version: 0.8.0
+  resolution: "@expo/plist@npm:0.8.0"
+  dependencies:
+    "@xmldom/xmldom": "npm:^0.8.8"
+    base64-js: "npm:^1.5.1"
+    xmlbuilder: "npm:^15.1.1"
+  checksum: 10/887ce561154d0d7a1564835ac4fc0bff6516ad50b67dde2ef90776b0ff67d4587cd39399132b0cb047fb91852c3447d0bfea60f32ec3426cea61a99e27649f94
+  languageName: node
+  linkType: hard
+
 "@expo/plist@npm:^0.5.4":
   version: 0.5.4
   resolution: "@expo/plist@npm:0.5.4"
@@ -2112,6 +2151,22 @@ __metadata:
     typescript:
       optional: true
   checksum: 10/0799a241d771d80becf8ff01564d3a49e9b8a30ef08da9123bcc33a3c67b2c545aa05c5841bbf33621f44b01559a16684c1cfcafd0119f816e4af57c07ac267d
+  languageName: node
+  linkType: hard
+
+"@expo/require-utils@npm:^57.0.1":
+  version: 57.0.1
+  resolution: "@expo/require-utils@npm:57.0.1"
+  dependencies:
+    "@babel/code-frame": "npm:^7.20.0"
+    "@babel/core": "npm:^7.25.2"
+    "@babel/plugin-transform-modules-commonjs": "npm:^7.24.8"
+  peerDependencies:
+    typescript: ^5.0.0 || ^5.0.0-0 || ^6.0.0
+  peerDependenciesMeta:
+    typescript:
+      optional: true
+  checksum: 10/cb465f42933e87203ffb857a7c7d8b009222f660c4be9f507c0a16b63f27561e86a9ddc4fae06d1f9a6b77bde5430b56769f7db28b74b2a7ef3b4e4ed64e8941
   languageName: node
   linkType: hard
 
@@ -9118,6 +9173,19 @@ __metadata:
   languageName: node
   linkType: hard
 
+"expo-livekit-screen-share@npm:^0.2.1":
+  version: 0.2.1
+  resolution: "expo-livekit-screen-share@npm:0.2.1"
+  dependencies:
+    "@expo/config-plugins": "npm:>=8.0.0"
+    "@expo/plist": "npm:>=0.1.0"
+  peerDependencies:
+    "@livekit/react-native": ">=2.0.0"
+    expo: ">=51.0.0"
+  checksum: 10/a390088318f5585374e16b9de4212a55d7f30911f3569295f6aed7165a0e8c2496a3635cfaca7fcf9d0b3882994f5d5b0a783b467d3073e54a497e60a5d39431
+  languageName: node
+  linkType: hard
+
 "expo-localization@npm:~55.0.16":
   version: 55.0.16
   resolution: "expo-localization@npm:55.0.16"
@@ -14102,6 +14170,7 @@ __metadata:
     expo-font: "npm:~55.0.8"
     expo-image-picker: "npm:~55.0.10"
     expo-linear-gradient: "npm:~55.0.15"
+    expo-livekit-screen-share: "npm:^0.2.1"
     expo-localization: "npm:~55.0.16"
     expo-location: "npm:~55.1.11"
     expo-sharing: "npm:~55.0.21"

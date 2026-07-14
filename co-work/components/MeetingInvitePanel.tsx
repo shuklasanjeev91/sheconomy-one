@@ -1,6 +1,7 @@
 import { useState } from 'react'
 
-import { Button, Icons, Input, ScrollView, Spinner, YStack, useAppToast } from '~/components/ui'
+import { ShareSheet } from '~/components/share'
+import { Button, Icons, Input, ScrollView, Spinner, Text, XStack, YStack, useAppToast } from '~/components/ui'
 import { openMailtoLink } from '~/lib/platform/openMailto'
 import { CoWorkPanelShell, CoWorkSectionLabel } from '~/co-work/components/CoWorkUi'
 import { MeetingInvitePicker } from '~/co-work/components/MeetingInvitePicker'
@@ -11,8 +12,10 @@ import {
   mergeInvitees,
   sendMeetingInvites,
 } from '~/co-work/lib/invites'
+import { formatMeetingCode, getMeetingShareUrl } from '~/co-work/lib/meetings'
 import { useCoWorkTheme } from '~/co-work/lib/theme'
 import type { Meeting, MeetingInvitee } from '~/co-work/lib/types'
+import { copyShareLink } from '~/lib/share'
 
 type MeetingInvitePanelProps = {
   meeting: Meeting
@@ -31,11 +34,13 @@ export function MeetingInvitePanel({
   fullWidth,
   onInviteesUpdated,
 }: MeetingInvitePanelProps) {
-  const { ui: coworkUi, gradients: coworkGradients, shadows: coworkShadows } = useCoWorkTheme()
+  const { ui: coworkUi } = useCoWorkTheme()
   const toast = useAppToast()
   const [message, setMessage] = useState('')
   const [selected, setSelected] = useState<MeetingInvitee[]>(meeting.invitees ?? [])
   const [sending, setSending] = useState(false)
+  const [shareOpen, setShareOpen] = useState(false)
+  const shareUrl = getMeetingShareUrl(meeting.meeting_code)
 
   async function handleSendInvites() {
     const pending = selected.filter((item) => item.status !== 'joined')
@@ -91,6 +96,55 @@ export function MeetingInvitePanel({
       />
 
       <ScrollView flex={1} padding="$3">
+        <YStack gap="$3" marginBottom="$4">
+          <CoWorkSectionLabel>Invite link</CoWorkSectionLabel>
+          <YStack
+            gap="$2"
+            padding="$3"
+            borderRadius={14}
+            backgroundColor="rgba(255,255,255,0.04)"
+            borderWidth={1}
+            borderColor={coworkUi.borderSoft}
+          >
+            <Text fontSize={12} color={coworkUi.textMuted}>
+              Meeting ID · {formatMeetingCode(meeting.meeting_code)}
+            </Text>
+            <Text fontSize={12} fontWeight="600" color={coworkUi.text} numberOfLines={2}>
+              {shareUrl}
+            </Text>
+            <XStack gap="$2" flexWrap="wrap">
+              <Button
+                tone="outline"
+                size="$2"
+                borderRadius={999}
+                borderColor={coworkUi.borderAccent}
+                color={coworkUi.brandLight}
+                icon={<Icons.Copy size={14} color={coworkUi.brandLight} />}
+                onPress={() => {
+                  void copyShareLink(shareUrl).then((copied) => {
+                    toast.show(copied ? 'Invite link copied' : 'Could not copy link', {
+                      tone: copied ? 'success' : 'error',
+                    })
+                  })
+                }}
+              >
+                Copy link
+              </Button>
+              <Button
+                tone="outline"
+                size="$2"
+                borderRadius={999}
+                borderColor={coworkUi.glassBorder}
+                color={coworkUi.text}
+                icon={<Icons.Share2 size={14} color={coworkUi.text} />}
+                onPress={() => setShareOpen(true)}
+              >
+                Share
+              </Button>
+            </XStack>
+          </YStack>
+        </YStack>
+
         <MeetingInvitePicker hostId={hostId} value={selected} onChange={setSelected} compact />
 
         <YStack gap="$2" marginTop="$4">
@@ -119,6 +173,18 @@ export function MeetingInvitePanel({
           Send invites
         </Button>
       </YStack>
+
+      <ShareSheet
+        open={shareOpen}
+        onOpenChange={setShareOpen}
+        title="Share meeting"
+        copyLabel="Copy meeting link"
+        copyToastMessage="Meeting link copied to clipboard."
+        payload={{
+          url: shareUrl,
+          title: meeting.title,
+        }}
+      />
     </CoWorkPanelShell>
   )
 }

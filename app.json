@@ -8,8 +8,30 @@
       "android"
     ],
     "plugins": [
+      "./plugins/withUniversalDeviceSupport.cjs",
       "one/expo-plugin",
-      "@livekit/react-native-expo-plugin",
+      [
+        "@livekit/react-native-expo-plugin",
+        {
+          "android": {
+            "audioType": "communication",
+            "enableScreenShareService": true
+          }
+        }
+      ],
+      [
+        "expo-livekit-screen-share",
+        {
+          "ios": {
+            "extensionName": "ScreenShareExtension",
+            "appGroupIdentifier": "group.com.sheconomy.one"
+          },
+          "android": {
+            "enableScreenShareService": true,
+            "foregroundServicePermission": true
+          }
+        }
+      ],
       "expo-font",
       "expo-localization",
       "expo-sharing",
@@ -35,12 +57,32 @@
     },
     "ios": {
       "bundleIdentifier": "com.sheconomy.one",
+      "supportsTablet": true,
+      "requireFullScreen": false,
       "associatedDomains": [
         "applinks:sheconomy-one-sanjeev-shuklas-projects.vercel.app"
-      ]
+      ],
+      "infoPlist": {
+        "UIDeviceFamily": [
+          1,
+          2
+        ],
+        "UISupportedInterfaceOrientations": [
+          "UIInterfaceOrientationPortrait",
+          "UIInterfaceOrientationLandscapeLeft",
+          "UIInterfaceOrientationLandscapeRight"
+        ],
+        "UISupportedInterfaceOrientations~ipad": [
+          "UIInterfaceOrientationPortrait",
+          "UIInterfaceOrientationPortraitUpsideDown",
+          "UIInterfaceOrientationLandscapeLeft",
+          "UIInterfaceOrientationLandscapeRight"
+        ]
+      }
     },
     "android": {
       "package": "com.sheconomy.one",
+      "softwareKeyboardLayoutMode": "resize",
       "intentFilters": [
         {
           "action": "VIEW",
