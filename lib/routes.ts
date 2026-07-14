@@ -5,6 +5,7 @@ export const appRoutes = {
   /** Single OTP entry — creates account on first verify (no separate sign-up). */
   signIn: '/auth/sign-in' as Href,
   signUp: '/auth/sign-in' as Href,
+  importContacts: '/auth/import-contacts' as Href,
   verifyGender: '/auth/verify-gender' as Href,
   notifications: '/notifications' as Href,
   profile: '/profile' as Href,

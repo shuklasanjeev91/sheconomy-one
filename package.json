@@ -18,6 +18,8 @@
     "serve": "one serve",
     "test:smoke": "playwright test",
     "test:smoke:ui": "playwright test --ui",
+    "test:unit": "vitest run",
+    "test:unit:watch": "vitest",
     "supabase:types": "supabase gen types typescript --project-id zsaqrrzwygzwrlzgymxk > lib/supabase/database.types.ts"
   },
   "dependencies": {
@@ -53,6 +55,7 @@
     "expo-audio": "~55.0.15",
     "expo-camera": "~55.0.20",
     "expo-clipboard": "~55.0.14",
+    "expo-contacts": "~55.0.15",
     "expo-document-picker": "~55.0.14",
     "expo-file-system": "~55.0.23",
     "expo-font": "~55.0.8",
@@ -61,8 +64,11 @@
     "expo-livekit-screen-share": "^0.2.1",
     "expo-localization": "~55.0.16",
     "expo-location": "~55.1.11",
+    "expo-secure-store": "~55.0.15",
     "expo-sharing": "~55.0.21",
+    "expo-updates": "~55.0.25",
     "expo-video": "~55.0.18",
+    "expo-web-browser": "~55.0.17",
     "livekit-client": "^2.20.0",
     "one": "^1.20.1",
     "onesignal-expo-plugin": "^2.7.0",
@@ -91,7 +97,8 @@
     "@tamagui/vite-plugin": "2.4.0",
     "@types/react": "^19.2.2",
     "typescript": "5.9.3",
-    "vite": "^8.0.13"
+    "vite": "^8.0.13",
+    "vitest": "^3.2.4"
   },
   "packageManager": "yarn@4.17.0",
   "resolutions": {

@@ -20,6 +20,7 @@ import { store } from '~/lib/store'
 import { PushNotificationsProvider } from '~/providers/PushNotificationsProvider'
 import { SupabaseProvider } from '~/providers/SupabaseProvider'
 import { InAppNotificationHost } from '~/components/notifications/InAppNotificationHost'
+import { AutomaticUpdateManager } from '~/components/system/AutomaticUpdateManager'
 import { AiAssistProvider } from '~/providers/AiAssistProvider'
 
 function NativeRootShell({ children }: { children: ReactNode }) {
@@ -202,6 +203,7 @@ function AppProviders({ children }: { children: React.ReactNode }) {
                 <FavoritesProvider>
                   <MarketplacePersonalizationProvider>
                     <AiAssistProvider>
+                      <AutomaticUpdateManager />
                       <InAppNotificationHost />
                       <AppShell>{children}</AppShell>
                     </AiAssistProvider>

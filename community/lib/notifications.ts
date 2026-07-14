@@ -1,4 +1,14 @@
+import { pathFromNotificationUrl } from '~/lib/notifications/push-config'
 import { supabase } from '~/lib/supabase/client'
+import {
+  appRoutes,
+  chatRoutes,
+  classRoutes,
+  coWorkRoutes,
+  commerceRoutes,
+  communityRoutes,
+  vendorRoutes,
+} from '~/lib/routes'
 
 export const NOTIFICATION_PAGE_SIZE = 30
 
@@ -15,6 +25,103 @@ export type AppNotification = {
   image_url: string | null
   context_id: string | null
   context_type: string | null
+}
+
+type UnreadListener = () => void
+const unreadListeners = new Set<UnreadListener>()
+
+/** Notify header badges to re-fetch unread count immediately. */
+export function notifyUnreadCountChanged() {
+  for (const listener of unreadListeners) listener()
+}
+
+export function subscribeUnreadCountChanged(listener: UnreadListener) {
+  unreadListeners.add(listener)
+  return () => {
+    unreadListeners.delete(listener)
+  }
+}
+
+/** Resolve in-app path from action_url, with type/context fallbacks. */
+export function resolveNotificationPath(notification: AppNotification): string | null {
+  const fromUrl = pathFromNotificationUrl(notification.action_url)
+  if (fromUrl) return fromUrl
+
+  const contextType = (notification.context_type ?? '').toLowerCase()
+  const contextId = notification.context_id?.trim() || null
+  const type = (notification.type ?? '').toLowerCase()
+
+  if (contextId) {
+    if (
+      contextType === 'post' ||
+      contextType === 'community_post' ||
+      type.includes('post') ||
+      type.includes('comment') ||
+      type.includes('reaction') ||
+      type.includes('repost') ||
+      type.includes('mention')
+    ) {
+      return communityRoutes.post(contextId)
+    }
+    if (
+      contextType === 'chat' ||
+      contextType === 'chat_room' ||
+      contextType === 'conversation' ||
+      type === 'message_received' ||
+      type === 'new_message'
+    ) {
+      return chatRoutes.conversation(contextId)
+    }
+    if (contextType === 'order' || type.includes('order')) {
+      return type.includes('vendor') ? vendorRoutes.orders : commerceRoutes.orders
+    }
+    if (contextType === 'listing' || type.includes('listing') || type.includes('stock')) {
+      return commerceRoutes.listing(contextId)
+    }
+    if (contextType === 'shop') {
+      return commerceRoutes.shop(contextId)
+    }
+    if (contextType === 'job') {
+      return communityRoutes.job(contextId)
+    }
+    if (contextType === 'group' || contextType === 'community_group') {
+      return communityRoutes.group(contextId)
+    }
+    if (contextType === 'company' || contextType === 'company_page') {
+      return communityRoutes.company(contextId)
+    }
+    if (contextType === 'event' || contextType === 'community_event') {
+      return communityRoutes.event(contextId)
+    }
+    if (contextType === 'meeting' || type.startsWith('meeting_')) {
+      return coWorkRoutes.meeting(contextId)
+    }
+    if (contextType === 'class' || contextType === 'course' || type.startsWith('class_')) {
+      return classRoutes.program(contextId)
+    }
+    if (
+      contextType === 'profile' ||
+      contextType === 'user' ||
+      type.includes('follow') ||
+      type.includes('connection') ||
+      type.includes('endorsement') ||
+      type.includes('recommendation')
+    ) {
+      return communityRoutes.userProfile(contextId)
+    }
+  }
+
+  if (type.includes('connection') || type.includes('intro')) return communityRoutes.network
+  if (type.includes('cart')) return commerceRoutes.cart
+  if (type.startsWith('meeting_') || notification.category === 'co-work' || notification.category === 'cowork') {
+    return coWorkRoutes.home
+  }
+  if (type.startsWith('class_')) return classRoutes.home
+  if (type.includes('message')) return chatRoutes.home
+  if (notification.platform === 'community') return communityRoutes.home
+  if (notification.platform === 'marketplace') return commerceRoutes.home
+
+  return appRoutes.notifications
 }
 
 /** Product filter keys used by the unified inbox. */
@@ -151,19 +258,38 @@ export async function getUnreadCount(userId: string): Promise<number> {
   return count ?? 0
 }
 
-export async function markNotificationRead(id: string): Promise<{ error: string | null }> {
-  const { error } = await supabase
-    .from('notifications')
-    .update({ read: true, read_at: new Date().toISOString() })
-    .eq('id', id)
-  return { error: error?.message ?? null }
+export async function markNotificationRead(
+  id: string,
+  userId?: string,
+): Promise<{ error: string | null }> {
+  const { error } = await supabase.rpc('mark_notification_read', {
+    p_notification_id: id,
+    ...(userId ? { p_user_id: userId } : {}),
+  })
+  if (error) {
+    // Fallback for environments where the RPC is unavailable.
+    const { error: updateError } = await supabase
+      .from('notifications')
+      .update({ read: true, read_at: new Date().toISOString() })
+      .eq('id', id)
+    if (updateError) return { error: updateError.message }
+  }
+  notifyUnreadCountChanged()
+  return { error: null }
 }
 
 export async function markAllNotificationsRead(userId: string): Promise<{ error: string | null }> {
-  const { error } = await supabase
-    .from('notifications')
-    .update({ read: true, read_at: new Date().toISOString() })
-    .eq('recipient_id', userId)
-    .eq('read', false)
-  return { error: error?.message ?? null }
+  const { error } = await supabase.rpc('mark_all_notifications_read', {
+    p_user_id: userId,
+  })
+  if (error) {
+    const { error: updateError } = await supabase
+      .from('notifications')
+      .update({ read: true, read_at: new Date().toISOString() })
+      .eq('recipient_id', userId)
+      .eq('read', false)
+    if (updateError) return { error: updateError.message }
+  }
+  notifyUnreadCountChanged()
+  return { error: null }
 }

@@ -1,4 +1,4 @@
-import { Link, useRouter } from 'one'
+import { useRouter } from 'one'
 import { useCallback, useEffect, useMemo, useState } from 'react'
 
 import { CommunityCard } from '~/community/components/CommunityCard'
@@ -13,12 +13,12 @@ import {
   markAllNotificationsRead,
   markNotificationRead,
   NOTIFICATION_PRODUCT_FILTERS,
+  resolveNotificationPath,
   type AppNotification,
   type NotificationProductFilter,
 } from '~/community/lib/notifications'
 import { useCommunityUi } from '~/community/lib/community-theme'
 import { Avatar, Button, Icons, Input, ScrollView, Spinner, Text, XStack, YStack } from '~/components/ui'
-import { pathFromNotificationUrl } from '~/lib/notifications/push-config'
 import { supabase } from '~/lib/supabase/client'
 import { useAppUi } from '~/lib/theme/useAppUi'
 import { useSupabase } from '~/providers/SupabaseProvider'
@@ -97,19 +97,21 @@ export function NotificationsScreen() {
 
   async function handleOpen(notification: AppNotification) {
     if (!notification.read) {
-      await markNotificationRead(notification.id)
       setItems((current) =>
         current.map((item) => (item.id === notification.id ? { ...item, read: true } : item)),
       )
+      await markNotificationRead(notification.id, user?.id)
     }
-    const path = pathFromNotificationUrl(notification.action_url)
-    if (path) router.push(path as never)
+    const path = resolveNotificationPath(notification)
+    if (path && path !== '/notifications') {
+      router.push(path as never)
+    }
   }
 
   async function handleMarkAll() {
     if (!user) return
-    await markAllNotificationsRead(user.id)
     setItems((current) => current.map((item) => ({ ...item, read: true })))
+    await markAllNotificationsRead(user.id)
   }
 
   return (
@@ -254,8 +256,7 @@ function NotificationRow({
   onOpen: (n: AppNotification) => void
 }) {
   const communityUi = useCommunityUi()
-  const path = pathFromNotificationUrl(notification.action_url)
-  const row = (
+  return (
     <XStack
       gap={12}
       paddingVertical={14}
@@ -268,7 +269,7 @@ function NotificationRow({
       marginBottom={4}
       paddingHorizontal={4}
       hoverStyle={{ backgroundColor: communityUi.hoverBg }}
-      onPress={() => onOpen(notification)}
+      onPress={() => void onOpen(notification)}
     >
       <Avatar name={notification.title} src={notification.image_url ?? undefined} size="$3" />
       <YStack flex={1} gap={4}>
@@ -302,10 +303,4 @@ function NotificationRow({
       </YStack>
     </XStack>
   )
-
-  if (path) {
-    return <Link href={path as never}>{row}</Link>
-  }
-
-  return row
 }

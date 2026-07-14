@@ -1,6 +1,9 @@
 import { useCallback, useEffect, useState } from 'react'
 
-import { getUnreadCount } from '~/community/lib/notifications'
+import {
+  getUnreadCount,
+  subscribeUnreadCountChanged,
+} from '~/community/lib/notifications'
 import { supabase } from '~/lib/supabase/client'
 import { useSupabase } from '~/providers/SupabaseProvider'
 
@@ -26,6 +29,10 @@ export function useUnreadNotifications() {
       void refresh()
     }, 60_000)
 
+    const unsubscribe = subscribeUnreadCountChanged(() => {
+      void refresh()
+    })
+
     const channel = supabase
       .channel(`notifications-unread:${user.id}`)
       .on(
@@ -44,6 +51,7 @@ export function useUnreadNotifications() {
 
     return () => {
       clearInterval(interval)
+      unsubscribe()
       void supabase.removeChannel(channel)
     }
   }, [refresh, user?.id])

@@ -44,8 +44,10 @@ declare module 'one' {
         | `/admin/shops`
         | `/admin/users`
         | `/auth`
+        | `/auth/import-contacts`
         | `/auth/sign-in`
         | `/auth/sign-up`
+        | `/auth/import-contacts`
         | `/auth/verify-gender`
         | `/browse`
         | `/cart`
