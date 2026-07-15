@@ -21,6 +21,7 @@ import { FullWidthLayout, LAYOUT_STRETCH, PageSection, StickyRail } from '~/comp
 import { getShadowStyle, radius } from '~/config/tokens'
 import { useAppLayout } from '~/hooks/useAppLayout'
 import { useProfile } from '~/hooks/useProfile'
+import { copyToClipboard } from '~/lib/platform/clipboard'
 import { useAppUi } from '~/lib/theme/useAppUi'
 
 const FORM_RAIL_WIDTH = 420
@@ -337,6 +338,15 @@ function SavedAddressRow({
   onDelete: () => void
 }) {
   const ui = useAppUi()
+  const toast = useAppToast()
+
+  async function handleCopy() {
+    const block = [address.address_label, formatAddressBlock(address)].filter(Boolean).join('\n')
+    const copied = await copyToClipboard(block)
+    toast.show(copied ? 'Address copied' : 'Could not copy address', {
+      tone: copied ? 'success' : 'danger',
+    })
+  }
 
   return (
     <YStack width="100%">
@@ -395,6 +405,15 @@ function SavedAddressRow({
           alignSelf={isDesktop ? 'center' : 'stretch'}
           justifyContent={isDesktop ? 'flex-end' : 'flex-start'}
         >
+          <Button
+            tone="outline"
+            size="$2.5"
+            borderRadius={999}
+            icon={<Icons.Copy size={14} />}
+            onPress={() => void handleCopy()}
+          >
+            Copy
+          </Button>
           <Button tone="outline" size="$2.5" borderRadius={999} onPress={onEdit}>
             Edit
           </Button>

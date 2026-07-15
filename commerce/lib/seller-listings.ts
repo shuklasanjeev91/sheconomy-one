@@ -10,6 +10,10 @@ export type CreateListingInput = {
   title: string
   description?: string
   price: number
+  mrp?: number | null
+  priceIncludesTax?: boolean
+  taxPercent?: number | null
+  productInfo?: Record<string, string> | null
   listingType: ListingType
   quantity?: number
   category?: string
@@ -36,7 +40,9 @@ export type UpdateShopProfileInput = Pick<
   | 'shop_phone_number'
   | 'website_url'
   | 'is_active'
->
+> & {
+  shop_metadata?: Tables<'shops'>['shop_metadata']
+}
 
 export async function createSellerListing(input: CreateListingInput) {
   const title = input.title.trim()
@@ -51,6 +57,10 @@ export async function createSellerListing(input: CreateListingInput) {
       slug,
       description: input.description?.trim() || null,
       price: input.price,
+      mrp: input.mrp ?? null,
+      price_includes_tax: input.priceIncludesTax ?? true,
+      tax_percent: input.taxPercent ?? null,
+      product_info: input.productInfo ?? {},
       listing_type: input.listingType,
       listing_status: listingStatus,
       is_active: input.publish ?? false,
@@ -135,11 +145,12 @@ export async function updateShopProfile(shopId: string, userId: string, input: U
       shop_phone_number: input.shop_phone_number,
       website_url: input.website_url,
       is_active: input.is_active,
+      ...(input.shop_metadata !== undefined ? { shop_metadata: input.shop_metadata } : {}),
     })
     .eq('id', shopId)
     .eq('user_id', userId)
     .select(
-      'id, shop_name, shop_description, logo_url, shop_currency, shop_email, shop_phone_number, website_url, average_rating, total_reviews, verified, is_active, created_at, slug',
+      'id, shop_name, shop_description, logo_url, shop_currency, shop_email, shop_phone_number, website_url, shop_metadata, average_rating, total_reviews, verified, is_active, created_at, slug',
     )
     .single()
 

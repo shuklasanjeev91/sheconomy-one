@@ -5,11 +5,15 @@ export const appRoutes = {
   /** Single OTP entry — creates account on first verify (no separate sign-up). */
   signIn: '/auth/sign-in' as Href,
   signUp: '/auth/sign-in' as Href,
+  importContacts: '/auth/import-contacts' as Href,
   verifyGender: '/auth/verify-gender' as Href,
   notifications: '/notifications' as Href,
   profile: '/profile' as Href,
   userProfile: (handle: string) => `/profile/${encodeURIComponent(handle)}` as Href,
   settings: '/settings' as Href,
+  help: '/help' as Href,
+  helpProduct: (product: string) =>
+    `/help?product=${encodeURIComponent(product)}` as Href,
   cart: '/cart' as Href,
   checkout: '/checkout' as Href,
 } as const
@@ -25,6 +29,7 @@ const NON_COMMERCE_PREFIXES = [
   '/notifications',
   '/profile',
   '/settings',
+  '/help',
   '/vendor',
 ] as const
 
@@ -98,10 +103,14 @@ export const communityRoutes = {
   events: '/community/events' as Href,
   eventCreate: '/community/events/create' as Href,
   event: (id: string) => `/community/events/${encodeURIComponent(id)}` as Href,
+  saved: '/community/saved' as Href,
+  analytics: '/community/analytics' as Href,
 } as const
 
 export const chatRoutes = {
   home: '/chat' as Href,
+  groups: '/chat/groups' as Href,
+  calls: '/chat/calls' as Href,
   conversation: (id: string) => `/chat/${encodeURIComponent(id)}` as Href,
 } as const
 
@@ -139,6 +148,7 @@ export const routes = {
   profile: appRoutes.profile,
   userProfile: appRoutes.userProfile,
   settings: appRoutes.settings,
+  help: appRoutes.help,
   notifications: appRoutes.notifications,
   cart: appRoutes.cart,
   checkout: appRoutes.checkout,
@@ -205,9 +215,23 @@ export function isChatPath(pathname: string) {
   return pathname === '/chat' || pathname.startsWith('/chat/')
 }
 
+/** Group-chats view (`/chat/groups`). */
+export function isChatGroupsPath(pathname: string) {
+  return pathname === '/chat/groups'
+}
+
+/** Call-history view (`/chat/calls`). */
+export function isChatCallsPath(pathname: string) {
+  return pathname === '/chat/calls'
+}
+
 /** A specific conversation thread (`/chat/{id}`) — rendered full-screen on mobile. */
 export function isChatConversationPath(pathname: string) {
-  return /^\/chat\/[^/]+/.test(pathname)
+  return (
+    /^\/chat\/[^/]+/.test(pathname) &&
+    !isChatGroupsPath(pathname) &&
+    !isChatCallsPath(pathname)
+  )
 }
 
 export function isClassPath(pathname: string) {
@@ -270,8 +294,14 @@ export function isAccountPath(pathname: string) {
     pathname.startsWith(`${appRoutes.profile}/`) ||
     pathname === appRoutes.settings ||
     pathname.startsWith(`${appRoutes.settings}/`) ||
+    pathname === appRoutes.help ||
+    pathname.startsWith(`${appRoutes.help}/`) ||
     pathname.startsWith('/auth/')
   )
+}
+
+export function isHelpPath(pathname: string) {
+  return pathname === appRoutes.help || pathname.startsWith(`${appRoutes.help}/`)
 }
 
 export function isHomePath(pathname: string) {

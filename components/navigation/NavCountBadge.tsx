@@ -44,7 +44,7 @@ export function NavCountBadge({
         color={ui.onBrand}
         lineHeight={compact ? 11 : 14}
       >
-        {count > 9 ? '9+' : count}
+        {count > 99 ? '99+' : count}
       </Text>
     </YStack>
   )

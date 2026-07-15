@@ -1,7 +1,7 @@
 /**
  * Curated list of common job titles used to power the Occupation / Title
  * typeahead. This is intentionally a suggestion list — the picker also lets the
- * user keep any free-text value they type (mirroring LinkedIn behaviour).
+ * user keep any free-text value they type (matching common professional-network behaviour).
  */
 export const JOB_TITLE_OPTIONS: string[] = [
   'Founder',

@@ -39,6 +39,11 @@ export function PageScroll({ children }: PageScrollProps) {
     )
   }
 
+  // The bottom tab bar is a fixed/absolute opaque overlay, so the scroll
+  // viewport is inset by its height (via marginBottom) to end exactly at the
+  // tab bar's top edge — otherwise content scrolls behind (and is hidden by) it.
+  const bottomInset = isDesktopWeb ? 0 : mobileTabBarOffset
+
   return (
     <ScrollView
       flex={1}
@@ -52,14 +57,20 @@ export function PageScroll({ children }: PageScrollProps) {
       nestedScrollEnabled
       style={
         Platform.OS === 'web'
-          ? ({ flex: 1, minHeight: 0, overflowY: 'auto', WebkitOverflowScrolling: 'touch' } as const)
-          : undefined
+          ? ({
+              flex: 1,
+              minHeight: 0,
+              overflowY: 'auto',
+              WebkitOverflowScrolling: 'touch',
+              marginBottom: bottomInset,
+            } as const)
+          : ({ marginBottom: bottomInset } as const)
       }
       contentContainerStyle={{
         width: '100%',
         maxWidth: '100%',
         backgroundColor: ui.background,
-        paddingBottom: isDesktopWeb ? 0 : mobileTabBarOffset,
+        paddingBottom: 16,
       }}
     >
       {children}

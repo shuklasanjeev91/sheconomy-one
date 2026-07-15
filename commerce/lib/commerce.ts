@@ -60,6 +60,10 @@ export type ListingSummary = {
   title: string
   card_title: string
   price: number
+  mrp?: number | null
+  price_includes_tax?: boolean | null
+  tax_percent?: number | null
+  product_info?: unknown
   listing_type: string
   average_rating: number | null
   total_reviews: number | null
@@ -115,6 +119,10 @@ type ListingRow = {
   meta_title?: string | null
   description?: string | null
   price: number
+  mrp?: number | null
+  price_includes_tax?: boolean | null
+  tax_percent?: number | null
+  product_info?: unknown
   listing_type: string
   average_rating: number | null
   total_reviews: number | null
@@ -206,6 +214,10 @@ const LISTING_CATALOG_SELECT = `
   meta_title,
   description,
   price,
+  mrp,
+  price_includes_tax,
+  tax_percent,
+  product_info,
   listing_type,
   average_rating,
   total_reviews,
@@ -242,6 +254,10 @@ export const LISTING_DETAIL_SELECT = `
   meta_title,
   description,
   price,
+  mrp,
+  price_includes_tax,
+  tax_percent,
+  product_info,
   listing_type,
   average_rating,
   total_reviews,
@@ -317,6 +333,10 @@ export function mapListingRow(listing: ListingRow): ListingSummary {
     title: listing.title,
     card_title: cardTitle,
     price: listing.price,
+    mrp: listing.mrp ?? null,
+    price_includes_tax: listing.price_includes_tax ?? true,
+    tax_percent: listing.tax_percent ?? null,
+    product_info: listing.product_info ?? null,
     listing_type: listing.listing_type,
     average_rating: listing.average_rating,
     total_reviews: listing.total_reviews,

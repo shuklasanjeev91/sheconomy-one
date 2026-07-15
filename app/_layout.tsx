@@ -18,7 +18,11 @@ import { FavoritesProvider } from '~/commerce/hooks/useFavorites'
 import { MarketplacePersonalizationProvider } from '~/commerce/context/MarketplacePersonalizationContext'
 import { useAppFonts } from '~/hooks/useAppFonts'
 import { store } from '~/lib/store'
+import { PushNotificationsProvider } from '~/providers/PushNotificationsProvider'
 import { SupabaseProvider } from '~/providers/SupabaseProvider'
+import { InAppNotificationHost } from '~/components/notifications/InAppNotificationHost'
+import { AutomaticUpdateManager } from '~/components/system/AutomaticUpdateManager'
+import { AiAssistProvider } from '~/providers/AiAssistProvider'
 
 function NativeRootShell({ children }: { children: ReactNode }) {
   if (Platform.OS === 'web') {
@@ -222,7 +226,7 @@ function ThemedApp({ children }: { children: React.ReactNode }) {
           width="100%"
           style={Platform.OS === 'web' ? screenFillStyle() : undefined}
         >
-          <ToastProvider swipeDirection="horizontal" duration={4000} native={Platform.OS !== 'web'}>
+          <ToastProvider swipeDirection="horizontal" duration={4000} native={false}>
             {children}
             <AppToasts />
             <ToastViewport

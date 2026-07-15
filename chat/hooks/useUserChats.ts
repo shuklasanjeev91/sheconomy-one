@@ -35,6 +35,9 @@ export function useUserChats(userId: string | null | undefined) {
   }, [load])
 
   useEffect(() => {
+    // Clear previous account's conversations immediately on user switch.
+    setChats([])
+    setError(null)
     setIsLoading(true)
     void load()
     return () => {

@@ -2,6 +2,7 @@ import { Link, useRouter } from 'one'
 import { useState } from 'react'
 import { Platform } from 'react-native'
 
+import { recordSearchTerm } from '~/commerce/lib/search-history'
 import { Icons, Input, XStack, YStack } from '~/components/ui'
 import { AppMobileBackButton } from '~/components/navigation/AppMobileBackButton'
 import { NavCountBadge } from '~/components/navigation/NavCountBadge'
@@ -13,6 +14,7 @@ import { useAppUi } from '~/lib/theme/useAppUi'
 import { chromeSurfaceStyle, searchFieldFocusStyle, searchFieldStyle } from '~/lib/theme/surfaces'
 
 import { AppCenterNavTabs } from './AppCenterNavTabs'
+import { AppMenuButton } from './AppMenuSheet'
 import { getAppColors } from './config'
 
 import { BRAND_NAME } from '~/config/brand'
@@ -36,6 +38,7 @@ export function AppMobileHeader({ minimal = false }: AppMobileHeaderProps) {
 
   function submitSearch() {
     const trimmed = searchQuery.trim()
+    if (trimmed) recordSearchTerm(trimmed)
     router.push(trimmed ? commerceRoutes.search(trimmed) : commerceRoutes.search())
   }
 
@@ -92,6 +95,7 @@ export function AppMobileHeader({ minimal = false }: AppMobileHeaderProps) {
         </XStack>
 
         <XStack flexShrink={0} gap={8} alignItems="center">
+          <AppMenuButton mode="sheet" size={38} />
           <HeaderIcon
             href={routes.notifications}
             icon={Icons.Bell}
@@ -108,39 +112,49 @@ export function AppMobileHeader({ minimal = false }: AppMobileHeaderProps) {
 
 function HeaderIcon({
   href,
+  onPress,
   icon: Icon,
   label,
   badgeCount,
 }: {
-  href: import('one').Href
+  href?: import('one').Href
+  onPress?: () => void
   icon: typeof Icons.Bell
   label: string
   badgeCount?: number
 }) {
   const colors = getAppColors(useAppUi())
 
-  return (
-    <Link href={href} asChild>
-      <XStack
-        width={38}
-        height={38}
-        borderRadius={999}
-        backgroundColor={colors.chip}
-        alignItems="center"
-        justifyContent="center"
-        position="relative"
-        overflow="visible"
-        cursor="pointer"
-        aria-label={label}
-        animation="quick"
-        hoverStyle={{ backgroundColor: colors.chipHover, scale: 1.04 }}
-        pressStyle={{ opacity: 0.75, scale: 0.94 }}
-      >
-        <Icon size={20} color={colors.text} />
-        {badgeCount != null && badgeCount > 0 ? (
-          <NavCountBadge count={badgeCount} size="sm" borderColor={colors.surface} />
-        ) : null}
-      </XStack>
-    </Link>
+  const button = (
+    <XStack
+      width={38}
+      height={38}
+      borderRadius={999}
+      backgroundColor={colors.chip}
+      alignItems="center"
+      justifyContent="center"
+      position="relative"
+      overflow="visible"
+      cursor="pointer"
+      aria-label={label}
+      animation="quick"
+      hoverStyle={{ backgroundColor: colors.chipHover, scale: 1.04 }}
+      pressStyle={{ opacity: 0.75, scale: 0.94 }}
+      {...(onPress ? { onPress } : {})}
+    >
+      <Icon size={20} color={colors.text} />
+      {badgeCount != null && badgeCount > 0 ? (
+        <NavCountBadge count={badgeCount} size="sm" borderColor={colors.surface} />
+      ) : null}
+    </XStack>
   )
+
+  if (href) {
+    return (
+      <Link href={href} asChild>
+        {button}
+      </Link>
+    )
+  }
+  return button
 }

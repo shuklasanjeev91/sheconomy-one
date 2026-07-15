@@ -100,6 +100,8 @@ export function buildListingSpecifications(input: {
   listingType?: string | null
   attributes?: ListingAttribute[]
   tags?: string[] | null
+  /** Extra manufacturing / legal rows (brand, origin, HSN, etc.). */
+  productInfoSpecs?: ListingSpecification[]
 }): ListingSpecification[] {
   const specs: ListingSpecification[] = []
   const seen = new Set<string>()
@@ -119,6 +121,10 @@ export function buildListingSpecifications(input: {
     (a, b) => a.display_order - b.display_order,
   )) {
     add(attribute.attribute_name, attribute.attribute_value)
+  }
+
+  for (const extra of input.productInfoSpecs ?? []) {
+    add(extra.label, extra.value)
   }
 
   add('SKU', input.sku)

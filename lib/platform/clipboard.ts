@@ -26,3 +26,19 @@ export async function copyToClipboard(text: string): Promise<boolean> {
     }
   }
 }
+
+/** Read clipboard text on web + native (expo-clipboard). */
+export async function readFromClipboard(): Promise<string | null> {
+  try {
+    if (Platform.OS === 'web' && typeof navigator !== 'undefined' && navigator.clipboard?.readText) {
+      const text = await navigator.clipboard.readText()
+      return text?.trim() ? text.trim() : null
+    }
+
+    const Clipboard = await import('expo-clipboard')
+    const text = await Clipboard.getStringAsync()
+    return text?.trim() ? text.trim() : null
+  } catch {
+    return null
+  }
+}

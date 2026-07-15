@@ -3,12 +3,12 @@
     "apps": [],
     "details": [
       {
-        "appID": "REPLACE_WITH_APPLE_TEAM_ID.com.sheconomy.one",
+        "appID": "52H73QK4CL.com.sheconomy.ecommerce",
         "paths": ["*"]
       }
     ]
   },
   "webcredentials": {
-    "apps": ["REPLACE_WITH_APPLE_TEAM_ID.com.sheconomy.one"]
+    "apps": ["52H73QK4CL.com.sheconomy.ecommerce"]
   }
 }

@@ -87,10 +87,11 @@ export const VENDOR_NAV_GROUPS: VendorNavGroup[] = [
     items: [
       {
         id: 'settings',
-        label: 'Settings',
-        description: 'Shop configuration and preferences.',
+        label: 'Shop settings',
+        description: 'Storefront config — personal account prefs live at Account settings.',
         icon: Icons.Settings,
         href: vendorRoutes.settings,
+        ready: true,
       },
     ],
   },

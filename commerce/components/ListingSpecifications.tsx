@@ -16,7 +16,7 @@ export function ListingSpecifications({ specifications }: ListingSpecificationsP
 
   return (
     <YStack gap="$3" width="100%">
-      <SectionTitle title="Item details" />
+      <SectionTitle title="Product details" />
       <YStack
         width="100%"
         borderWidth={1}

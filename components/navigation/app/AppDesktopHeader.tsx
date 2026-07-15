@@ -2,6 +2,7 @@ import { Link, useRouter } from 'one'
 import { useState } from 'react'
 
 import { AuthButton } from '~/components/auth'
+import { recordSearchTerm } from '~/commerce/lib/search-history'
 import { Icons, Input, Text, XStack, YStack } from '~/components/ui'
 import { NavCountBadge } from '~/components/navigation/NavCountBadge'
 import { NavLogo } from '~/components/navigation/NavLogo'
@@ -15,6 +16,7 @@ import { useAppLayout } from '~/hooks/useAppLayout'
 import { chromeSurfaceStyle, searchFieldStyle } from '~/lib/theme/surfaces'
 
 import { AppCenterNavTabs } from './AppCenterNavTabs'
+import { AppMenuButton } from './AppMenuSheet'
 import { getAppColors } from './config'
 import { useAppUi } from '~/lib/theme/useAppUi'
 
@@ -26,7 +28,7 @@ export function AppDesktopHeader() {
   const { gutter } = useAppLayout()
   const colors = getAppColors(ui)
   const { isAuthenticated } = useProfile()
-  const { canManageShops, canAccessFeature } = useAccess()
+  const { canManageShops } = useAccess()
   const { shops, isLoading: shopsLoading } = useVendorShops()
   const { itemCount } = useCart()
   const { count: unreadNotifications } = useUnreadNotifications()
@@ -38,6 +40,7 @@ export function AppDesktopHeader() {
 
   function submitSearch() {
     const trimmed = searchQuery.trim()
+    if (trimmed) recordSearchTerm(trimmed)
     router.push(trimmed ? commerceRoutes.search(trimmed) : commerceRoutes.search())
   }
 
@@ -105,7 +108,7 @@ export function AppDesktopHeader() {
         >
           {isAuthenticated ? (
             <>
-              <UtilityButton href={routes.settings} icon={Icons.Grid2x2} label="Menu" />
+              <AppMenuButton mode="popover" size={40} />
               {canManageShops ? (
                 <UtilityButton href={commerceRoutes.myShops} icon={Icons.Store} label="My shops" />
               ) : null}
@@ -131,13 +134,16 @@ export function AppDesktopHeader() {
             </>
           ) : null}
           <UtilityButton href={routes.cart} icon={Icons.ShoppingBag} label="Cart" badge={itemCount} />
-          {isAuthenticated && canAccessFeature('community') ? (
+          {isAuthenticated ? (
             <UtilityButton
               href={routes.notifications}
               icon={Icons.Bell}
               label="Notifications"
               badge={unreadNotifications}
             />
+          ) : null}
+          {isAuthenticated ? (
+            <UtilityButton href={routes.settings} icon={Icons.Settings} label="Settings" />
           ) : null}
           <AuthButton variant="header" />
         </XStack>
@@ -148,37 +154,47 @@ export function AppDesktopHeader() {
 
 function UtilityButton({
   href,
+  onPress,
   icon: Icon,
   label,
   badge,
 }: {
-  href: import('one').Href
+  href?: import('one').Href
+  onPress?: () => void
   icon: typeof Icons.Bell
   label: string
   badge?: number
 }) {
   const colors = getAppColors(useAppUi())
 
-  return (
-    <Link href={href} asChild>
-      <XStack
-        width={40}
-        height={40}
-        borderRadius={999}
-        backgroundColor={colors.chip}
-        alignItems="center"
-        justifyContent="center"
-        cursor="pointer"
-        hoverStyle={{ backgroundColor: colors.chipHover }}
-        aria-label={label}
-        position="relative"
-        overflow="visible"
-      >
-        <Icon size={20} color={colors.text} />
-        {badge != null && badge > 0 ? (
-          <NavCountBadge count={badge} borderColor={colors.surface} />
-        ) : null}
-      </XStack>
-    </Link>
+  const button = (
+    <XStack
+      width={40}
+      height={40}
+      borderRadius={999}
+      backgroundColor={colors.chip}
+      alignItems="center"
+      justifyContent="center"
+      cursor="pointer"
+      hoverStyle={{ backgroundColor: colors.chipHover }}
+      aria-label={label}
+      position="relative"
+      overflow="visible"
+      {...(onPress ? { onPress } : {})}
+    >
+      <Icon size={20} color={colors.text} />
+      {badge != null && badge > 0 ? (
+        <NavCountBadge count={badge} borderColor={colors.surface} />
+      ) : null}
+    </XStack>
   )
+
+  if (href) {
+    return (
+      <Link href={href} asChild>
+        {button}
+      </Link>
+    )
+  }
+  return button
 }

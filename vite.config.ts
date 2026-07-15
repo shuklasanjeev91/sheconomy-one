@@ -289,6 +289,7 @@ export default defineConfig(({ mode }) => {
       include: [
         '@tamagui/config',
         'tamagui',
+        'date-fns',
         '@tensorflow/tfjs',
         '@tensorflow/tfjs-backend-webgl',
         '@tensorflow-models/face-landmarks-detection',

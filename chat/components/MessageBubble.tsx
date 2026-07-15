@@ -35,6 +35,8 @@ type MessageBubbleProps = {
   replySenderName?: string | null
   onRequestActions?: () => void
   onReactionPress?: (emoji: string) => void
+  /** Retry sending a failed message (own messages only). */
+  onRetry?: () => void
   /** Open a shared document (file messages). */
   onOpenFile?: () => void
   /** Re-initiate a call from a call-log entry. */
@@ -185,6 +187,7 @@ export function MessageBubble({
   replySenderName,
   onRequestActions,
   onReactionPress,
+  onRetry,
   onOpenFile,
   onCallBack,
   isStarred,
@@ -469,7 +472,23 @@ export function MessageBubble({
               {formatBubbleTime(message.createdAt)}
             </Text>
             {isOwn && !isDeleted && !isCall ? (
-              <StatusTicks status={effectiveStatus} color={metaColor} readColor={chat.tickRead} />
+              effectiveStatus === 'failed' && onRetry ? (
+                <XStack
+                  alignItems="center"
+                  gap={3}
+                  onPress={onRetry}
+                  cursor="pointer"
+                  pressStyle={{ opacity: 0.6 }}
+                  aria-label="Retry sending"
+                >
+                  <Icons.RotateCcw size={12} color="#ef4444" />
+                  <Text fontSize={11} fontWeight="700" color="#ef4444">
+                    Retry
+                  </Text>
+                </XStack>
+              ) : (
+                <StatusTicks status={effectiveStatus} color={metaColor} readColor={chat.tickRead} />
+              )
             ) : null}
           </XStack>
         </YStack>

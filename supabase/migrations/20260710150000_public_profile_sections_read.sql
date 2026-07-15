@@ -1,4 +1,4 @@
--- Public LinkedIn-style profile sections: readable career data for non-deleted profiles.
+-- Public professional profile sections: readable career data for non-deleted profiles.
 -- Adds SELECT policies (owner + public) and a SECURITY DEFINER RPC used by the app.
 
 DO $$

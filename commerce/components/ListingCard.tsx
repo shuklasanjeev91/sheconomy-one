@@ -1,32 +1,36 @@
 import { useState } from 'react'
-import { Link } from 'one'
+import { Link, useRouter } from 'one'
 
-import { Icons, Text, XStack, YStack } from '~/components/ui'
+import { Button, Icons, Text, XStack, YStack, useAppToast } from '~/components/ui'
 import { radius } from '~/config/tokens'
 import { getListingSlug } from '~/lib/supabase/commerce'
 import type { ListingSummary } from '~/lib/supabase/commerce'
 import { routes } from '~/lib/routes'
+import { useCart } from '~/commerce/hooks/useCart'
 import { useThemedShadowStyle } from '~/lib/theme/useThemedShadowStyle'
 
 import { FavoriteButton } from './FavoriteButton'
 import { ListingBadge } from './ListingBadge'
 import { ListingImage } from './ListingImage'
+import { ListingPriceBlock } from './ListingPriceBlock'
 import { ListingTypeBadge } from './ListingTypeBadge'
 import { StarRating } from './StarRating'
 import { useOptionalMarketplacePersonalization } from '~/commerce/context/MarketplacePersonalizationContext'
 import { buildListingFulfillmentInputFromSummary, getListingCardFulfillmentLabel } from '~/commerce/lib/listing-fulfillment'
 import { useAppUi } from '~/lib/theme/useAppUi'
-import { formatCurrency, formatRating } from '~/lib/format'
+import { formatRating } from '~/lib/format'
 
 type ListingCardProps = {
   listing: ListingSummary
   compact?: boolean
+  /** Show an inline "Add to cart" button (used on wishlist/favorites). */
+  showQuickAdd?: boolean
 }
 
 /**
  * Listing tile — square image(s), heart overlay, title, optional rating, bold price.
  */
-export function ListingCard({ listing, compact }: ListingCardProps) {
+export function ListingCard({ listing, compact, showQuickAdd }: ListingCardProps) {
   const ui = useAppUi()
   const cardShadow = useThemedShadowStyle('sm')
   const cardShadowMd = useThemedShadowStyle('md')
@@ -157,18 +161,61 @@ export function ListingCard({ listing, compact }: ListingCardProps) {
             </XStack>
           ) : null}
 
-          <XStack alignItems="baseline" gap="$2" flexWrap="wrap">
-            <Text fontSize={compact ? 15 : 17} fontWeight="800" color={ui.text} letterSpacing={-0.4}>
-              {formatCurrency(listing.price, listing.currency)}
-            </Text>
+          <YStack gap={2}>
+            <ListingPriceBlock
+              price={listing.price}
+              mrp={listing.mrp}
+              currency={listing.currency}
+              priceIncludesTax={listing.price_includes_tax}
+              taxPercent={listing.tax_percent}
+              size="sm"
+              hideTaxLabel
+            />
             {listing.shop_name && !compact ? (
               <Text fontSize={11} color={ui.textMuted} numberOfLines={1} fontWeight="500">
-                · {listing.shop_name}
+                {listing.shop_name}
               </Text>
             ) : null}
-          </XStack>
+          </YStack>
         </YStack>
       </Link>
+
+      {showQuickAdd ? <QuickAddButton listing={listing} /> : null}
     </YStack>
+  )
+}
+
+function QuickAddButton({ listing }: { listing: ListingSummary }) {
+  const { addToCart } = useCart()
+  const toast = useAppToast()
+  const router = useRouter()
+  const [adding, setAdding] = useState(false)
+
+  return (
+    <Button
+      size="$2.5"
+      tone="primary"
+      borderRadius={999}
+      width="100%"
+      disabled={adding}
+      icon={<Icons.ShoppingCart size={14} />}
+      onPress={async () => {
+        setAdding(true)
+        const { error } = await addToCart(listing.id)
+        setAdding(false)
+        if (error) {
+          // Likely needs variant/option selection — send them to the product page.
+          toast.show('Choose options', {
+            tone: 'default',
+            message: 'Select options on the product page to add it.',
+          })
+          router.push(routes.listing(getListingSlug(listing)))
+          return
+        }
+        toast.show('Added to cart', { tone: 'success' })
+      }}
+    >
+      {adding ? 'Adding…' : 'Add to cart'}
+    </Button>
   )
 }

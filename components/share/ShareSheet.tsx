@@ -32,9 +32,9 @@ type ShareTarget = {
 
 const SHARE_TARGETS: ShareTarget[] = [
   { key: 'whatsapp', label: 'WhatsApp', icon: Icons.MessageCircle, color: '#25D366' },
-  { key: 'linkedin', label: 'LinkedIn', icon: Icons.Linkedin, color: '#0A66C2' },
+  { key: 'linkedin', label: '', icon: Icons.Linkedin, color: '#0A66C2' },
   { key: 'x', label: 'X', icon: Icons.Twitter, color: '#1DA1F2' },
-  { key: 'facebook', label: 'Facebook', icon: Icons.Facebook, color: '#1877F2' },
+  { key: 'facebook', label: '', icon: Icons.Facebook, color: '#1877F2' },
   { key: 'telegram', label: 'Telegram', icon: Icons.Send, color: '#229ED9' },
   { key: 'email', label: 'Email', icon: Icons.Mail, color: '#EA4335' },
 ]
@@ -67,7 +67,7 @@ export function ShareSheet({
   async function handleTargetPress(target: ShareTarget) {
     const opened = await openShareTarget(target.key, payload)
     if (!opened) {
-      toast.show(`Could not open ${target.label}`, { tone: 'danger' })
+      toast.show('Could not open share option', { tone: 'danger' })
       return
     }
     close()
@@ -127,7 +127,7 @@ function ShareTargetButton({
       hoverStyle={{ opacity: 0.85 }}
       pressStyle={{ opacity: 0.7 }}
       onPress={onPress}
-      accessibilityLabel={`Share on ${target.label}`}
+      accessibilityLabel={target.label ? `Share via ${target.label}` : 'Share'}
     >
       <YStack
         width={52}
@@ -139,9 +139,11 @@ function ShareTargetButton({
       >
         <Icon size={24} color="#ffffff" />
       </YStack>
-      <Text fontSize={12} fontWeight="500" color={ui.textSecondary} numberOfLines={1}>
-        {target.label}
-      </Text>
+      {target.label ? (
+        <Text fontSize={12} fontWeight="500" color={ui.textSecondary} numberOfLines={1}>
+          {target.label}
+        </Text>
+      ) : null}
     </YStack>
   )
 }

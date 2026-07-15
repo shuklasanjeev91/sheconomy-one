@@ -20,6 +20,8 @@ export function ValidatedTextField({
   hint,
   required,
   field,
+  flex,
+  minWidth,
   ...inputProps
 }: ValidatedTextFieldProps) {
   return (
@@ -28,8 +30,11 @@ export function ValidatedTextField({
       required={required}
       hint={!field.showError ? hint : undefined}
       error={field.showError ? field.error ?? undefined : undefined}
+      flex={flex}
+      minWidth={minWidth}
     >
       <Input
+        width="100%"
         value={field.value}
         onChangeText={field.onChange}
         onBlur={field.onBlur}

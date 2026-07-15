@@ -16,14 +16,19 @@ type AppAccessGateProps = {
 /** Redirects users away from routes their access tier cannot use. */
 export function AppAccessGate({ children }: AppAccessGateProps) {
   const pathname = usePathname()
-  const { tier, isLoading, canAccessPath, getDeniedRedirect } = useAccess()
+  const { tier, isLoading, isAuthenticated, canAccessPath, getDeniedRedirect } = useAccess()
   const { isDesktopWeb } = useAppLayout()
   const useDocumentScroll = Platform.OS === 'web' && isDesktopWeb
 
   const guestSignInReturnTo = getGuestSignInReturnTo(tier, pathname)
   const guestCanBrowseWhileAuthLoads =
-    canAccessPath('guest', pathname) && getGuestSignInReturnTo('guest', pathname) === null
+    !isAuthenticated &&
+    canAccessPath('guest', pathname) &&
+    getGuestSignInReturnTo('guest', pathname) === null
 
+  // Always wait for auth/profile to settle before tier redirects. Skipping this
+  // during account switch briefly treats users as male (gender unknown) and can
+  // yank chat/co-work into a blank redirect state.
   if (isLoading && !guestCanBrowseWhileAuthLoads) {
     return (
       <PageCenter>
@@ -36,9 +41,7 @@ export function AppAccessGate({ children }: AppAccessGateProps) {
     return <AuthSignInFlow returnTo={guestSignInReturnTo} />
   }
 
-  const activeTier = isLoading ? 'guest' : tier
-
-  if (!canAccessPath(activeTier, pathname)) {
+  if (!canAccessPath(tier, pathname)) {
     return <Redirect href={getDeniedRedirect(pathname)} />
   }
 
@@ -48,6 +51,8 @@ export function AppAccessGate({ children }: AppAccessGateProps) {
       width="100%"
       maxWidth="100%"
       alignSelf="stretch"
+      minHeight={0}
+      // Avoid clipping scroll pages to a zero-height box on mobile web.
       overflow={useDocumentScroll ? 'visible' : 'hidden'}
     >
       {children}

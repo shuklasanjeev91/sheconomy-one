@@ -2,12 +2,14 @@ import { useRouter } from 'one'
 import { Platform } from 'react-native'
 import { useCallback, useEffect, useMemo, useState } from 'react'
 
+import { ShareSheet } from '~/components/share'
 import { ScreenCenter } from '~/components/layout'
-import { Spinner, Text, XStack, YStack, useAppToast } from '~/components/ui'
-import { CoWorkAlertBanner, CoWorkBrandChip, CoWorkStatusPill } from '~/co-work/components/CoWorkUi'
+import { Button, Icons, Spinner, Text, XStack, YStack, useAppToast } from '~/components/ui'
+import { CoWorkAlertBanner, CoWorkStatusPill } from '~/co-work/components/CoWorkUi'
 import { LiveKitMeetingRoom, type LiveKitMediaControls } from '~/co-work/components/LiveKitMeetingRoom'
 import { MeetingChatPanel } from '~/co-work/components/MeetingChatPanel'
 import { MeetingControls } from '~/co-work/components/MeetingControls'
+import { MeetingInfoPanel } from '~/co-work/components/MeetingInfoPanel'
 import { MeetingInvitePanel } from '~/co-work/components/MeetingInvitePanel'
 import { MeetingLiveCaptions } from '~/co-work/components/MeetingLiveCaptions'
 import { MeetingParticipantsPanel } from '~/co-work/components/MeetingParticipantsPanel'
@@ -16,14 +18,13 @@ import { useMeetingRecording } from '~/co-work/hooks/useMeetingRecording'
 import { useMeetingPresence } from '~/co-work/hooks/useMeetingPresence'
 import { getMediaCapabilities } from '~/co-work/lib/media'
 import { supportsLiveKitVideo } from '~/lib/platform/capabilities'
-import { formatMeetingCode } from '~/co-work/lib/meetings'
+import { formatMeetingCode, getMeetingShareUrl } from '~/co-work/lib/meetings'
 import { coworkGlassStyle, useCoWorkTheme } from '~/co-work/lib/theme'
 import { controlGradientStyle, footerFadeStyle } from '~/lib/platform/crossStyles'
 import type { Meeting } from '~/co-work/lib/types'
 import { useAppLayout } from '~/hooks/useAppLayout'
 import { coWorkRoutes } from '~/lib/routes'
-
-import { BRAND_NAME } from '~/config/brand'
+import { copyShareLink } from '~/lib/share'
 
 type MeetingRoomScreenProps = {
   meeting: Meeting
@@ -37,7 +38,7 @@ type PresenceState = ReturnType<typeof useMeetingPresence>
 type MediaCaps = ReturnType<typeof getMediaCapabilities>
 
 export function MeetingRoomScreen(props: MeetingRoomScreenProps) {
-  const { ui: coworkUi, gradients: coworkGradients, shadows: coworkShadows } = useCoWorkTheme()
+  const { ui: coworkUi } = useCoWorkTheme()
   const presence = useMeetingPresence({
     meeting: props.meeting,
     userId: props.userId,
@@ -63,13 +64,25 @@ export function MeetingRoomScreen(props: MeetingRoomScreenProps) {
   if (presence.isWaiting) {
     return (
       <ScreenCenter backgroundColor={coworkUi.pageBg} padding="$6" gap="$4">
-        <Text fontSize={24} fontWeight="800" color={coworkUi.text}>
+        <YStack
+          width={56}
+          height={56}
+          borderRadius={999}
+          alignItems="center"
+          justifyContent="center"
+          backgroundColor={coworkUi.brandMuted}
+          borderWidth={1}
+          borderColor={coworkUi.borderAccent}
+        >
+          <Icons.Shield size={24} color={coworkUi.brandLight} />
+        </YStack>
+        <Text fontSize={24} fontWeight="800" color={coworkUi.text} textAlign="center">
           Waiting for the host to let you in
         </Text>
         <Text color={coworkUi.textSecondary} textAlign="center">
           You&apos;ll join {title} as soon as the host admits you.
         </Text>
-        <Text color={coworkUi.textMuted}>Code: {formatMeetingCode(props.meeting.meeting_code)}</Text>
+        <Text color={coworkUi.textMuted}>Meeting ID: {formatMeetingCode(props.meeting.meeting_code)}</Text>
       </ScreenCenter>
     )
   }
@@ -119,12 +132,18 @@ function MeetingRoomOverlay({
   const { ui: coworkUi, gradients: coworkGradients } = useCoWorkTheme()
   const router = useRouter()
   const toast = useAppToast()
-  const { isMobile, safeTop } = useAppLayout()
+  const { isMobile, isTablet, isDesktop, safeTop } = useAppLayout()
   const [dismissedError, setDismissedError] = useState<string | null>(null)
   const [meetingState, setMeetingState] = useState(meeting)
+  const [shareOpen, setShareOpen] = useState(false)
 
   const allowRecording = meeting.security_settings?.allowRecording !== false
   const autoRecord = !!meeting.meeting_options?.autoRecord && isHost && allowRecording
+  const shareUrl = getMeetingShareUrl(meeting.meeting_code)
+  const admittedCount = presence.participants.filter((p) => p.status === 'admitted').length
+  const waitingCount = presence.waitingParticipants.length
+  const roomy = isTablet || isDesktop
+  const narrowPhone = isMobile && !isTablet && !isDesktop
 
   const captions = useLiveCaptions({
     userId,
@@ -146,7 +165,8 @@ function MeetingRoomOverlay({
   })
 
   const showError = presence.error && presence.error !== dismissedError
-  const panelFullWidth = isMobile
+  // Full-bleed side panels only on phones — tablets keep a Zoom-style right dock.
+  const panelFullWidth = narrowPhone
   const recording = recordingSession.recording
 
   useEffect(() => {
@@ -174,7 +194,14 @@ function MeetingRoomOverlay({
       toast.show('Only the host can record this meeting', { tone: 'info' })
       return
     }
-    recordingSession.toggleRecording()
+    try {
+      recordingSession.toggleRecording()
+    } catch (error) {
+      toast.show('Recording failed', {
+        tone: 'error',
+        message: error instanceof Error ? error.message : undefined,
+      })
+    }
   }, [allowRecording, isHost, recordingSession, toast])
 
   const toggleCaptions = useCallback(() => {
@@ -197,12 +224,29 @@ function MeetingRoomOverlay({
       return
     }
 
+    const wasSharing = liveKit.screenSharing
     try {
-      liveKit.toggleScreenShare()
+      await liveKit.toggleScreenShare()
+      toast.show(wasSharing ? 'Screen share stopped' : 'Screen sharing started', {
+        tone: 'success',
+        message: wasSharing
+          ? undefined
+          : Platform.OS === 'ios'
+            ? 'Keep the broadcast extension running while you present.'
+            : undefined,
+      })
     } catch (screenError) {
+      const message =
+        screenError instanceof Error
+          ? screenError.message
+          : typeof screenError === 'string'
+            ? screenError
+            : screenError && typeof screenError === 'object' && 'message' in screenError
+              ? String((screenError as { message?: unknown }).message)
+              : undefined
       toast.show('Screen share failed', {
         tone: 'error',
-        message: screenError instanceof Error ? screenError.message : undefined,
+        message: message || 'Allow screen recording when prompted, then try again.',
       })
     }
   }, [liveKit, toast])
@@ -210,11 +254,21 @@ function MeetingRoomOverlay({
   const toggleHand = useCallback(() => {
     const raising = !presence.handRaised
     presence.toggleHandRaise()
-    toast.show(raising ? 'Hand raised — visible in People panel' : 'Hand lowered', { tone: 'success' })
+    toast.show(raising ? 'Hand raised — visible in Participants' : 'Hand lowered', { tone: 'success' })
   }, [presence, toast])
 
-  const panelTop = isMobile ? 96 : 88
-  const panelBottom = isMobile ? 128 : 112
+  const copyMeetingId = useCallback(() => {
+    void copyShareLink(meeting.meeting_code.replace(/\s/g, '')).then((copied) => {
+      toast.show(copied ? 'Meeting ID copied' : 'Could not copy Meeting ID', {
+        tone: copied ? 'success' : 'error',
+      })
+    })
+  }, [meeting.meeting_code, toast])
+
+  const panelTop = roomy ? 92 : 96
+  // Meeting routes are chromeless (no app tab bar). Only clear the home indicator.
+  const controlsBottom = 0
+  const panelBottom = 100
   const overlayPosition = Platform.OS === 'web' ? ('fixed' as const) : ('absolute' as const)
 
   return (
@@ -231,11 +285,12 @@ function MeetingRoomOverlay({
     >
       <YStack position={overlayPosition} top={0} left={0} right={0} zIndex={20} pointerEvents="auto">
         <XStack
-          paddingHorizontal="$4"
+          paddingHorizontal={roomy ? '$5' : '$3'}
           paddingTop={safeTop > 0 ? safeTop : '$3'}
-          paddingBottom="$3"
+          paddingBottom="$2.5"
           alignItems="center"
           justifyContent="space-between"
+          gap="$2"
           borderBottomWidth={1}
           borderBottomColor={coworkUi.borderSoft}
           style={{
@@ -243,46 +298,101 @@ function MeetingRoomOverlay({
             ...controlGradientStyle(coworkGradients.header, coworkUi.surfaceElevated),
           }}
         >
-          <YStack gap={4} flex={1}>
-            <XStack alignItems="center" gap="$2" flexWrap="wrap">
-              <CoWorkBrandChip />
-              <Text
-                fontSize={isMobile ? 16 : 18}
-                fontWeight="800"
-                color={coworkUi.text}
-                numberOfLines={1}
-                flexShrink={1}
-                letterSpacing={-0.4}
-              >
-                {title}
-              </Text>
-              {presence.handRaised ? <CoWorkStatusPill label="✋ Hand raised" tone="coral" /> : null}
-              {recording ? <CoWorkStatusPill label="● Recording" tone="danger" /> : null}
-              {captions.active ? <CoWorkStatusPill label="CC" tone="brand" /> : null}
-              {liveKit ? <CoWorkStatusPill label="Live" tone="live" /> : null}
-            </XStack>
-            <XStack alignItems="center" gap="$2" flexWrap="wrap">
-              <Text fontSize={11} color={coworkUi.textMuted} fontWeight="600">
-                {formatMeetingCode(meeting.meeting_code)}
-              </Text>
-              <Text fontSize={11} color={coworkUi.textMuted}>
-                ·
-              </Text>
-              <Text fontSize={11} color={coworkUi.textMuted}>
-                {presence.participants.filter((p) => p.status === 'admitted').length} in room
-              </Text>
-              {liveKit ? (
-                <>
-                  <Text fontSize={11} color={coworkUi.textMuted}>
-                    ·
+          <XStack alignItems="center" gap="$2.5" flex={1} minWidth={0}>
+            <YStack
+              width={roomy ? 38 : 34}
+              height={roomy ? 38 : 34}
+              borderRadius={999}
+              alignItems="center"
+              justifyContent="center"
+              backgroundColor={coworkUi.liveMuted}
+              borderWidth={1}
+              borderColor="rgba(52,211,153,0.35)"
+            >
+              <Icons.Shield size={roomy ? 18 : 16} color={coworkUi.live} />
+            </YStack>
+            <YStack gap={2} flex={1} minWidth={0}>
+              <XStack alignItems="center" gap="$2" flexWrap="wrap">
+                <Text
+                  fontSize={roomy ? 18 : 15}
+                  fontWeight="800"
+                  color={coworkUi.text}
+                  numberOfLines={1}
+                  flexShrink={1}
+                  letterSpacing={-0.3}
+                >
+                  {title}
+                </Text>
+                {recording ? <CoWorkStatusPill label="REC" tone="danger" /> : null}
+                {captions.active ? <CoWorkStatusPill label="CC" tone="brand" /> : null}
+                {presence.handRaised ? <CoWorkStatusPill label="✋" tone="coral" /> : null}
+              </XStack>
+              <XStack alignItems="center" gap="$2" flexWrap="wrap">
+                <Button
+                  tone="ghost"
+                  size="$1"
+                  height={22}
+                  paddingHorizontal="$1.5"
+                  borderRadius={8}
+                  onPress={copyMeetingId}
+                >
+                  <Text fontSize={11} color={coworkUi.textMuted} fontWeight="600">
+                    ID {formatMeetingCode(meeting.meeting_code)}
                   </Text>
-                  <Text fontSize={11} color={coworkUi.brandLight} fontWeight="600">
-                    {BRAND_NAME} SFU
-                  </Text>
-                </>
-              ) : null}
-            </XStack>
-          </YStack>
+                </Button>
+                <Text fontSize={11} color={coworkUi.textMuted}>
+                  · Encrypted
+                </Text>
+              </XStack>
+            </YStack>
+          </XStack>
+
+          <XStack alignItems="center" gap="$1.5" flexShrink={0}>
+            <Button
+              tone="outline"
+              size="$2"
+              borderRadius={999}
+              borderColor={coworkUi.glassBorder}
+              backgroundColor="rgba(255,255,255,0.06)"
+              color={coworkUi.text}
+              icon={<Icons.Users size={14} color={coworkUi.text} />}
+              onPress={() => presence.togglePanel('people')}
+            >
+              {admittedCount}
+              {waitingCount > 0 && isHost ? ` +${waitingCount}` : ''}
+            </Button>
+            <Button
+              tone="outline"
+              size="$2"
+              width={36}
+              height={36}
+              padding={0}
+              borderRadius={999}
+              borderColor={presence.panel === 'info' ? coworkUi.borderAccent : coworkUi.glassBorder}
+              backgroundColor={
+                presence.panel === 'info' ? coworkUi.brandMuted : 'rgba(255,255,255,0.06)'
+              }
+              onPress={() => presence.togglePanel('info')}
+              icon={
+                <Icons.Info
+                  size={16}
+                  color={presence.panel === 'info' ? coworkUi.brandLight : coworkUi.text}
+                />
+              }
+            />
+            <Button
+              tone="outline"
+              size="$2"
+              width={36}
+              height={36}
+              padding={0}
+              borderRadius={999}
+              borderColor={coworkUi.glassBorder}
+              backgroundColor="rgba(255,255,255,0.06)"
+              onPress={() => setShareOpen(true)}
+              icon={<Icons.Share2 size={16} color={coworkUi.text} />}
+            />
+          </XStack>
         </XStack>
 
         {presence.realtimeDegraded ? (
@@ -346,6 +456,33 @@ function MeetingRoomOverlay({
         </YStack>
       ) : null}
 
+      {presence.panel === 'info' ? (
+        <YStack
+          position={overlayPosition}
+          top={panelTop}
+          right={panelFullWidth ? 0 : 12}
+          left={panelFullWidth ? 0 : undefined}
+          bottom={panelBottom}
+          zIndex={25}
+          pointerEvents="auto"
+        >
+          <MeetingInfoPanel
+            meeting={meetingState}
+            participantCount={admittedCount}
+            isHost={isHost}
+            onClose={() => presence.setPanel('none')}
+            onInvite={
+              isHost
+                ? () => {
+                    presence.setPanel('invite')
+                  }
+                : undefined
+            }
+            fullWidth={panelFullWidth}
+          />
+        </YStack>
+      ) : null}
+
       {isHost && presence.panel === 'invite' ? (
         <YStack
           position={overlayPosition}
@@ -376,7 +513,7 @@ function MeetingRoomOverlay({
 
       <YStack
         position={overlayPosition}
-        bottom={0}
+        bottom={controlsBottom}
         left={0}
         right={0}
         zIndex={30}
@@ -418,7 +555,9 @@ function MeetingRoomOverlay({
           onToggleCaptions={toggleCaptions}
           onToggleChat={() => presence.togglePanel('chat')}
           onTogglePeople={() => presence.togglePanel('people')}
+          onToggleInfo={() => presence.togglePanel('info')}
           onToggleInvite={isHost ? () => presence.togglePanel('invite') : undefined}
+          onShare={() => setShareOpen(true)}
           onMuteAll={isHost ? () => presence.muteAll() : undefined}
           onLeave={() => {
             void presence.leave()
@@ -430,6 +569,18 @@ function MeetingRoomOverlay({
           }}
         />
       </YStack>
+
+      <ShareSheet
+        open={shareOpen}
+        onOpenChange={setShareOpen}
+        title="Share meeting"
+        copyLabel="Copy meeting link"
+        copyToastMessage="Meeting link copied to clipboard."
+        payload={{
+          url: shareUrl,
+          title: meeting.title,
+        }}
+      />
     </YStack>
   )
 }

@@ -3,6 +3,11 @@ import { useEffect, useMemo, useState } from 'react'
 
 import { CommunityCard } from '~/community/components/CommunityCard'
 import { CommunityShell } from '~/community/components/CommunityShell'
+import {
+  CommunityFilterPill,
+  CommunityFilterSheet,
+  type FilterOption,
+} from '~/community/components/CommunityFilters'
 import { UserList } from '~/community/components/UserList'
 import { useUserList } from '~/community/hooks/useUserList'
 import { fetchPublicProfile } from '~/community/lib/network'
@@ -11,10 +16,28 @@ import {
   type UserListKind,
 } from '~/community/lib/user-lists'
 import { useCommunityUi } from '~/community/lib/community-theme'
-import { Spinner, Text, XStack, YStack } from '~/components/ui'
+import { ScrollView, Spinner, Text, XStack, YStack } from '~/components/ui'
 import { communityRoutes, routes } from '~/lib/routes'
 import { useProfile } from '~/hooks/useProfile'
 import { useSupabase } from '~/providers/SupabaseProvider'
+
+const SORT_OPTIONS: FilterOption[] = [
+  { label: 'Recommended', value: 'default' },
+  { label: 'Most mutual connections', value: 'mutual' },
+  { label: 'Name (A–Z)', value: 'name' },
+]
+
+type PeopleActiveSheet = 'industry' | 'location' | 'sort' | null
+
+function toOptions(values: (string | null | undefined)[]): FilterOption[] {
+  const unique = Array.from(new Set(values.filter((v): v is string => !!v && v.trim().length > 0)))
+  unique.sort((a, b) => a.localeCompare(b))
+  return unique.map((value) => ({ label: value, value }))
+}
+
+function labelForValue(options: FilterOption[], value: string): string | undefined {
+  return options.find((option) => option.value === value)?.label
+}
 
 const TABS: UserListKind[] = [
   'connections',
@@ -45,6 +68,10 @@ export function PeopleScreen({ initialTab, profileHandle }: PeopleScreenProps) {
   const [subjectId, setSubjectId] = useState<string | null>(null)
   const [subjectName, setSubjectName] = useState('You')
   const [isResolving, setIsResolving] = useState(!!profileHandle)
+  const [industry, setIndustry] = useState('')
+  const [location, setLocation] = useState('')
+  const [sort, setSort] = useState('default')
+  const [activeSheet, setActiveSheet] = useState<PeopleActiveSheet>(null)
 
   const isOwnList = !profileHandle
 
@@ -70,6 +97,33 @@ export function PeopleScreen({ initialTab, profileHandle }: PeopleScreenProps) {
 
   const listUserId = subjectId ?? undefined
   const list = useUserList(tab, listUserId, !!listUserId)
+
+  const industryOptions = useMemo(() => toOptions(list.items.map((m) => m.industry)), [list.items])
+  const locationOptions = useMemo(() => toOptions(list.items.map((m) => m.location)), [list.items])
+
+  const visibleItems = useMemo(() => {
+    let next = list.items.filter((member) => {
+      if (industry && member.industry !== industry) return false
+      if (location && member.location !== location) return false
+      return true
+    })
+
+    if (sort === 'mutual') {
+      next = [...next].sort((a, b) => (b.mutual_count ?? 0) - (a.mutual_count ?? 0))
+    } else if (sort === 'name') {
+      next = [...next].sort((a, b) => a.full_name.localeCompare(b.full_name))
+    }
+
+    return next
+  }, [industry, list.items, location, sort])
+
+  const activeFilterCount = (industry ? 1 : 0) + (location ? 1 : 0) + (sort !== 'default' ? 1 : 0)
+
+  function clearFilters() {
+    setIndustry('')
+    setLocation('')
+    setSort('default')
+  }
 
   const meta = USER_LIST_META[tab]
   const visibleTabs = useMemo(() => {
@@ -143,11 +197,46 @@ export function PeopleScreen({ initialTab, profileHandle }: PeopleScreenProps) {
             />
           ))}
         </XStack>
+
+        <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+          <XStack gap={8} alignItems="center" paddingVertical={2}>
+            <CommunityFilterPill
+              label="Industry"
+              summary={industry || undefined}
+              active={!!industry}
+              onPress={() => setActiveSheet('industry')}
+            />
+            <CommunityFilterPill
+              label="Location"
+              summary={location || undefined}
+              active={!!location}
+              onPress={() => setActiveSheet('location')}
+            />
+            <CommunityFilterPill
+              label="Sort by"
+              summary={sort !== 'default' ? labelForValue(SORT_OPTIONS, sort) : undefined}
+              active={sort !== 'default'}
+              onPress={() => setActiveSheet('sort')}
+            />
+            {activeFilterCount > 0 ? (
+              <Text
+                fontSize={13}
+                fontWeight="600"
+                color={communityUi.brand}
+                cursor="pointer"
+                paddingHorizontal={6}
+                onPress={clearFilters}
+              >
+                Clear all
+              </Text>
+            ) : null}
+          </XStack>
+        </ScrollView>
       </CommunityCard>
 
       <CommunityCard padding={12}>
         <UserList
-          items={list.items}
+          items={visibleItems}
           isLoading={list.isLoading}
           isLoadingMore={list.isLoadingMore}
           hasMore={list.hasMore}
@@ -157,6 +246,35 @@ export function PeopleScreen({ initialTab, profileHandle }: PeopleScreenProps) {
           showFollow
         />
       </CommunityCard>
+
+      <CommunityFilterSheet
+        open={activeSheet === 'industry'}
+        onOpenChange={(open) => !open && setActiveSheet(null)}
+        title="Industry"
+        options={industryOptions}
+        value={industry ? [industry] : []}
+        onApply={(next) => setIndustry(next[0] ?? '')}
+        searchable
+        searchPlaceholder="Search industries"
+      />
+      <CommunityFilterSheet
+        open={activeSheet === 'location'}
+        onOpenChange={(open) => !open && setActiveSheet(null)}
+        title="Location"
+        options={locationOptions}
+        value={location ? [location] : []}
+        onApply={(next) => setLocation(next[0] ?? '')}
+        searchable
+        searchPlaceholder="Search locations"
+      />
+      <CommunityFilterSheet
+        open={activeSheet === 'sort'}
+        onOpenChange={(open) => !open && setActiveSheet(null)}
+        title="Sort by"
+        options={SORT_OPTIONS}
+        value={[sort]}
+        onApply={(next) => setSort(next[0] ?? 'default')}
+      />
     </CommunityShell>
   )
 }

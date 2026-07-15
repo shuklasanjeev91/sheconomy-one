@@ -7,6 +7,7 @@ import { createEvent } from '~/community/lib/events'
 import { useCommunityUi } from '~/community/lib/community-theme'
 import {
   Button,
+  DateTimeField,
   Field,
   Input,
   Spinner,
@@ -17,6 +18,9 @@ import {
   YStack,
   useAppToast,
 } from '~/components/ui'
+import { ImageUploadField, preparePickedImagesForUpload } from '~/components/media/ImageUploadField'
+import type { PickedImage } from '~/lib/media/pick-image'
+import { uploadEventCoverImage } from '~/lib/supabase/storage-upload'
 import { LocationPickerField } from '~/components/geo'
 import { useFormValidation } from '~/hooks/useFormValidation'
 import { communityRoutes, routes } from '~/lib/routes'
@@ -47,6 +51,7 @@ export function CreateEventScreen() {
   const [isSaving, setIsSaving] = useState(false)
   const [eventLocation, setEventLocation] = useState('')
   const [venueDetail, setVenueDetail] = useState('')
+  const [cover, setCover] = useState<PickedImage[]>([])
 
   const form = useFormValidation(
     useMemo(
@@ -62,7 +67,6 @@ export function CreateEventScreen() {
             ? [required('Meeting link is required for online events.'), url()]
             : [optionalUrl()],
         },
-        imageUrl: { validators: [optionalUrl()] },
         price: {
           validators: isFree ? [] : [required('Price is required.'), positiveNumber()],
         },
@@ -115,6 +119,22 @@ export function CreateEventScreen() {
         : undefined
 
     setIsSaving(true)
+
+    let coverUrl = ''
+    if (cover[0]) {
+      const [file] = await preparePickedImagesForUpload(cover)
+      const { data: uploaded, error: uploadError } = await uploadEventCoverImage(user.id, file)
+      if (uploadError || !uploaded) {
+        setIsSaving(false)
+        toast.show('Could not upload cover image', {
+          tone: 'danger',
+          message: uploadError ?? 'Try again shortly.',
+        })
+        return
+      }
+      coverUrl = uploaded.publicUrl
+    }
+
     const { data, error } = await createEvent(user.id, {
       title: form.fields.title.value.trim(),
       description: form.fields.description.value.trim(),
@@ -123,7 +143,7 @@ export function CreateEventScreen() {
       isOnline,
       location: isOnline ? undefined : locationLabel,
       meetingUrl: isOnline ? form.fields.meetingUrl.value.trim() : undefined,
-      imageUrl: form.fields.imageUrl.value.trim(),
+      imageUrl: coverUrl,
       eventType,
       isFree,
       price: isFree ? undefined : Number(form.fields.price.value) || 0,
@@ -191,33 +211,47 @@ export function CreateEventScreen() {
         </YStack>
 
         <XStack gap={12} flexWrap="wrap">
-          <ValidatedTextField
+          <DateTimeField
+            mode="date"
             label="Start date"
-            field={form.fields.startDate}
-            placeholder="YYYY-MM-DD"
-            flex={1}
             required
+            minDate={new Date()}
+            value={form.fields.startDate.value}
+            onChange={form.fields.startDate.onChange}
+            error={form.fields.startDate.showError ? form.fields.startDate.error ?? undefined : undefined}
+            flex={1}
+            minWidth={150}
           />
-          <ValidatedTextField
+          <DateTimeField
+            mode="time"
             label="Start time"
-            field={form.fields.startTime}
-            placeholder="HH:MM"
-            flex={1}
             required
+            value={form.fields.startTime.value}
+            onChange={form.fields.startTime.onChange}
+            error={form.fields.startTime.showError ? form.fields.startTime.error ?? undefined : undefined}
+            flex={1}
+            minWidth={150}
           />
         </XStack>
         <XStack gap={12} flexWrap="wrap">
-          <ValidatedTextField
+          <DateTimeField
+            mode="date"
             label="End date (optional)"
-            field={form.fields.endDate}
-            placeholder="YYYY-MM-DD"
+            minDate={new Date()}
+            value={form.fields.endDate.value}
+            onChange={form.fields.endDate.onChange}
+            error={form.fields.endDate.showError ? form.fields.endDate.error ?? undefined : undefined}
             flex={1}
+            minWidth={150}
           />
-          <ValidatedTextField
+          <DateTimeField
+            mode="time"
             label="End time (optional)"
-            field={form.fields.endTime}
-            placeholder="HH:MM"
+            value={form.fields.endTime.value}
+            onChange={form.fields.endTime.onChange}
+            error={form.fields.endTime.showError ? form.fields.endTime.error ?? undefined : undefined}
             flex={1}
+            minWidth={150}
           />
         </XStack>
 
@@ -264,10 +298,11 @@ export function CreateEventScreen() {
           </YStack>
         )}
 
-        <ValidatedTextField
-          label="Cover image URL"
-          field={form.fields.imageUrl}
-          placeholder="https://..."
+        <ImageUploadField
+          label="Cover image (optional)"
+          hint="Upload a banner attendees will see on the event."
+          value={cover}
+          onChange={setCover}
         />
         <ValidatedTextField
           label="Tags (comma separated)"

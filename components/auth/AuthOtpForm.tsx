@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type ReactNode } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { Platform } from 'react-native'
 
 import { AUTH_COPY } from '~/components/auth/auth-copy'
@@ -16,28 +16,41 @@ import {
   YStack,
   useAppToast,
 } from '~/components/ui'
+import { OtpCodeInput } from '~/features/auth/components/OtpCodeInput'
+import { useOtpAutofill } from '~/features/auth/hooks/useOtpAutofill'
+import { sendAuthOtp, verifyAuthOtp } from '~/features/auth/services/auth-otp'
+import {
+  isCompleteOtp,
+  validateEmailAddress,
+  validateFullName,
+  validateMobileNumber,
+} from '~/features/auth/validation'
 import { useFormValidation } from '~/hooks/useFormValidation'
 import { countryFlag, type Country } from '~/lib/phone/countries'
 import { formatPhoneForDisplay, validateNationalPhone } from '~/lib/phone/phone'
-import {
-  sendOtp,
-  verifyOtp,
-  getSession,
-  type OtpChannel,
-  type PhoneAuthInput,
-} from '~/lib/supabase/auth'
+import { getSession, type OtpChannel, type PhoneAuthInput } from '~/lib/supabase/auth'
 import { email, otp, required } from '~/lib/validation'
 import { useAppUi } from '~/lib/theme/useAppUi'
 
 const RESEND_COOLDOWN_SECONDS = 30
+const OTP_LENGTH = 6
 
 type AuthOtpFormProps = {
   channel: OtpChannel
-  onSuccess?: () => void
+  fullName?: string
+  acceptedTerms?: boolean
+  onSuccess?: (meta: { isNewUser: boolean }) => void
+  onRequireConsent?: () => void
 }
 
-/** Passwordless OTP sign-in — email or SMS, cross-platform. */
-export function AuthOtpForm({ channel, onSuccess }: AuthOtpFormProps) {
+/** Passwordless OTP sign-in — email or SMS, cross-platform with autofill. */
+export function AuthOtpForm({
+  channel,
+  fullName = '',
+  acceptedTerms = true,
+  onSuccess,
+  onRequireConsent,
+}: AuthOtpFormProps) {
   const ui = useAppUi()
   const toast = useAppToast()
   const [country, setCountry] = useState<Country>(DEFAULT_COUNTRY)
@@ -46,6 +59,7 @@ export function AuthOtpForm({ channel, onSuccess }: AuthOtpFormProps) {
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [apiError, setApiError] = useState<string | null>(null)
   const [resendIn, setResendIn] = useState(0)
+  const verifyingRef = useRef(false)
 
   const isEmail = channel === 'email'
 
@@ -56,19 +70,15 @@ export function AuthOtpForm({ channel, onSuccess }: AuthOtpFormProps) {
         validators: isEmail
           ? [required('Enter your email address.'), email()]
           : [
-            required('Enter your mobile number.'),
-            (value: string) => {
-              if (!value.trim()) return null
-              const result = validateNationalPhone(value, country)
-              return result.ok ? null : result.error
-            },
-          ],
+              required('Enter your mobile number.'),
+              (value: string) => validateMobileNumber(value, country),
+            ],
       },
       otpCode: {
         initialValue: '',
         validators: [
           required('Enter the verification code we sent you.'),
-          otp(4, 8, 'Enter the full verification code.'),
+          otp(OTP_LENGTH, OTP_LENGTH, 'Enter the 6-digit verification code.'),
         ],
       },
     }),
@@ -89,6 +99,7 @@ export function AuthOtpForm({ channel, onSuccess }: AuthOtpFormProps) {
     setApiError(null)
     setResendIn(0)
     setCountry(DEFAULT_COUNTRY)
+    verifyingRef.current = false
   }, [channel])
 
   useEffect(() => {
@@ -99,6 +110,12 @@ export function AuthOtpForm({ channel, onSuccess }: AuthOtpFormProps) {
 
   function resolveIdentifier() {
     if (isEmail) {
+      const err = validateEmailAddress(form.fields.identifier.value)
+      if (err) {
+        form.fields.identifier.touch()
+        form.fields.identifier.validate()
+        return null
+      }
       return form.fields.identifier.value.trim().toLowerCase()
     }
     const result = validateNationalPhone(form.fields.identifier.value, country)
@@ -113,6 +130,18 @@ export function AuthOtpForm({ channel, onSuccess }: AuthOtpFormProps) {
 
   async function handleSendOtp() {
     setApiError(null)
+    if (!acceptedTerms) {
+      onRequireConsent?.()
+      return
+    }
+    if (fullName.trim()) {
+      const nameError = validateFullName(fullName)
+      if (nameError) {
+        setApiError(nameError)
+        return
+      }
+    }
+
     form.fields.identifier.touch()
     if (form.fields.identifier.validate()) return
 
@@ -120,16 +149,21 @@ export function AuthOtpForm({ channel, onSuccess }: AuthOtpFormProps) {
     if (!validated) return
 
     setIsSubmitting(true)
-    const { error: otpError } = await sendOtp(channel, isEmail ? validated : phoneInput)
+    const result = await sendAuthOtp({
+      channel,
+      identifier: isEmail ? validated : phoneInput,
+      fullName: fullName.trim() || undefined,
+      purpose: 'login',
+    })
     setIsSubmitting(false)
 
-    if (otpError) {
-      setApiError(otpError.message)
+    if (!result.success) {
+      setApiError(result.error ?? 'Unable to send code.')
       return
     }
 
     setOtpSent(true)
-    setResendIn(RESEND_COOLDOWN_SECONDS)
+    setResendIn(result.resendAfter || RESEND_COOLDOWN_SECONDS)
     toast.show('Code sent', {
       tone: 'success',
       message: isEmail
@@ -138,35 +172,80 @@ export function AuthOtpForm({ channel, onSuccess }: AuthOtpFormProps) {
     })
   }
 
-  async function handleVerifyOtp() {
-    setApiError(null)
-    form.fields.otpCode.touch()
-    if (form.fields.otpCode.validate()) return
+  const handleVerifyOtp = useCallback(
+    async (codeOverride?: string) => {
+      if (verifyingRef.current) return
+      setApiError(null)
 
-    const validated = resolveIdentifier()
-    if (!validated) return
+      const code = (codeOverride ?? form.fields.otpCode.value).trim()
+      if (!isCompleteOtp(code, OTP_LENGTH)) {
+        form.fields.otpCode.touch()
+        form.fields.otpCode.validate()
+        return
+      }
 
-    setIsSubmitting(true)
-    const { error: verifyError } = await verifyOtp(
+      const validated = resolveIdentifier()
+      if (!validated) return
+
+      verifyingRef.current = true
+      setIsSubmitting(true)
+
+      const result = await verifyAuthOtp({
+        channel,
+        identifier: isEmail ? validated : phoneInput,
+        otp: code,
+      })
+
+      setIsSubmitting(false)
+
+      if (!result.success) {
+        verifyingRef.current = false
+        setApiError(result.error ?? 'Verification failed.')
+        return
+      }
+
+      const { data: sessionData } = await getSession()
+      const createdAt = sessionData.session?.user?.created_at
+      const isNewUser =
+        !!createdAt && Date.now() - new Date(createdAt).getTime() < 2 * 60 * 1000
+
+      toast.show(isNewUser ? AUTH_COPY.welcomeNew : AUTH_COPY.welcomeBack, { tone: 'success' })
+      onSuccess?.({ isNewUser })
+    },
+    [
       channel,
-      isEmail ? validated : phoneInput,
-      form.fields.otpCode.value.trim(),
-    )
-    setIsSubmitting(false)
+      form.fields.otpCode,
+      isEmail,
+      onSuccess,
+      phoneInput,
+      toast,
+    ],
+  )
 
-    if (verifyError) {
-      setApiError(verifyError.message)
-      return
+  const onAutofillCode = useCallback(
+    (code: string) => {
+      form.fields.otpCode.onChange(code)
+      void handleVerifyOtp(code)
+    },
+    [form.fields.otpCode, handleVerifyOtp],
+  )
+
+  useOtpAutofill({ enabled: otpSent && !isSubmitting, onCode: onAutofillCode })
+
+  const lastAutoSubmitRef = useRef<string | null>(null)
+  useEffect(() => {
+    if (!otpSent) return
+    const code = form.fields.otpCode.value.trim()
+    if (
+      isCompleteOtp(code, OTP_LENGTH) &&
+      !isSubmitting &&
+      !verifyingRef.current &&
+      lastAutoSubmitRef.current !== code
+    ) {
+      lastAutoSubmitRef.current = code
+      void handleVerifyOtp(code)
     }
-
-    const { data: sessionData } = await getSession()
-    const createdAt = sessionData.session?.user?.created_at
-    const isNewUser =
-      !!createdAt && Date.now() - new Date(createdAt).getTime() < 2 * 60 * 1000
-
-    toast.show(isNewUser ? AUTH_COPY.welcomeNew : AUTH_COPY.welcomeBack, { tone: 'success' })
-    onSuccess?.()
-  }
+  }, [form.fields.otpCode.value, handleVerifyOtp, isSubmitting, otpSent])
 
   function resetOtpStep() {
     setOtpSent(false)
@@ -174,6 +253,7 @@ export function AuthOtpForm({ channel, onSuccess }: AuthOtpFormProps) {
     setPhoneE164('')
     setResendIn(0)
     setApiError(null)
+    verifyingRef.current = false
   }
 
   const displayIdentifier = isEmail
@@ -202,25 +282,18 @@ export function AuthOtpForm({ channel, onSuccess }: AuthOtpFormProps) {
             </Text>
           </YStack>
 
-          <Field label="Verification code" error={otpFieldError ?? undefined}>
-            <AuthInputShell invalid={!!otpFieldError}>
-              <Input
-                flex={1}
-                borderWidth={0}
-                backgroundColor="transparent"
-                autoCapitalize="none"
-                keyboardType="number-pad"
-                placeholder="000000"
+          <Field label="Verification code" error={otpFieldError ?? apiError ?? undefined}>
+            <AuthInputShell invalid={!!otpFieldError || !!apiError}>
+              <OtpCodeInput
                 value={form.fields.otpCode.value}
-                onChangeText={form.fields.otpCode.onChange}
-                onBlur={form.fields.otpCode.onBlur}
-                invalid={!!otpFieldError}
-                maxLength={8}
+                onChange={(next) => {
+                  setApiError(null)
+                  form.fields.otpCode.onChange(next)
+                }}
+                length={OTP_LENGTH}
+                disabled={isSubmitting}
+                invalid={!!otpFieldError || !!apiError}
                 autoFocus
-                textAlign="center"
-                fontSize={22}
-                fontWeight="700"
-                letterSpacing={6}
               />
             </AuthInputShell>
           </Field>
@@ -229,15 +302,20 @@ export function AuthOtpForm({ channel, onSuccess }: AuthOtpFormProps) {
             tone="primary"
             size="$4"
             borderRadius={AUTH_LAYOUT.pillRadius}
-            disabled={isSubmitting || !form.fields.otpCode.isValid}
-            onPress={handleVerifyOtp}
+            disabled={isSubmitting || !isCompleteOtp(form.fields.otpCode.value, OTP_LENGTH)}
+            onPress={() => void handleVerifyOtp()}
             icon={isSubmitting ? <Spinner size="small" color="white" /> : undefined}
           >
             {isSubmitting ? 'Verifying…' : 'Continue'}
           </Button>
 
           <XStack justifyContent="space-between" alignItems="center" flexWrap="wrap" gap="$2">
-            <Button tone="ghost" size="$3" disabled={isSubmitting || resendIn > 0} onPress={handleSendOtp}>
+            <Button
+              tone="ghost"
+              size="$3"
+              disabled={isSubmitting || resendIn > 0}
+              onPress={() => void handleSendOtp()}
+            >
               {resendIn > 0 ? `Resend in ${resendIn}s` : 'Resend code'}
             </Button>
             <Button tone="ghost" size="$3" disabled={isSubmitting} onPress={resetOtpStep}>
@@ -267,12 +345,14 @@ export function AuthOtpForm({ channel, onSuccess }: AuthOtpFormProps) {
                   backgroundColor="transparent"
                   autoCapitalize="none"
                   autoComplete="email"
+                  textContentType="emailAddress"
                   keyboardType="email-address"
                   placeholder="you@example.com"
                   value={form.fields.identifier.value}
                   onChangeText={form.fields.identifier.onChange}
                   onBlur={form.fields.identifier.onBlur}
                   invalid={!!identifierError}
+                  {...(Platform.OS === 'web' ? ({ autoComplete: 'email' } as object) : {})}
                 />
               </AuthInputShell>
             ) : (
@@ -285,6 +365,7 @@ export function AuthOtpForm({ channel, onSuccess }: AuthOtpFormProps) {
                   backgroundColor="transparent"
                   autoCapitalize="none"
                   autoComplete="tel"
+                  textContentType="telephoneNumber"
                   keyboardType="phone-pad"
                   placeholder={country.placeholder}
                   value={form.fields.identifier.value}
@@ -292,13 +373,14 @@ export function AuthOtpForm({ channel, onSuccess }: AuthOtpFormProps) {
                   onBlur={form.fields.identifier.onBlur}
                   invalid={!!identifierError}
                   maxLength={country.maxLength + 4}
+                  {...(Platform.OS === 'web' ? ({ autoComplete: 'tel' } as object) : {})}
                 />
               </AuthInputShell>
             )}
             {!isEmail && form.fields.identifier.value && !identifierError ? (
               <Text fontSize={12} color={ui.textMuted} marginTop={6}>
-                Sending to{' '}
-                {formatPhoneForDisplay(form.fields.identifier.value, country)}
+                Sending to {formatPhoneForDisplay(form.fields.identifier.value, country)}
+                {countryFlag(country) ? ` ${countryFlag(country)}` : ''}
               </Text>
             ) : null}
           </Field>
@@ -309,16 +391,16 @@ export function AuthOtpForm({ channel, onSuccess }: AuthOtpFormProps) {
             size="$4"
             borderRadius={AUTH_LAYOUT.pillRadius}
             disabled={isSubmitting || !form.fields.identifier.isValid}
-            onPress={handleSendOtp}
+            onPress={() => void handleSendOtp()}
             icon={isSubmitting ? <Spinner size="small" color="$pink10" /> : undefined}
             iconAfter={!isSubmitting ? <Icons.ArrowRight size={18} color="$pink10" /> : undefined}
           >
-            {isSubmitting ? 'Sending code…' : 'Send verification code'}
+            {isSubmitting ? 'Sending code…' : 'Continue'}
           </Button>
         </YStack>
       )}
 
-      {apiError ? <AuthErrorBanner message={apiError} /> : null}
+      {apiError && !otpSent ? <AuthErrorBanner message={apiError} /> : null}
     </YStack>
   )
 }
@@ -329,7 +411,7 @@ function AuthInputShell({
   icon: Icon,
   row,
 }: {
-  children: React.ReactNode
+  children: ReactNode
   invalid?: boolean
   icon?: typeof Icons.Mail
   row?: boolean
@@ -341,7 +423,7 @@ function AuthInputShell({
       alignItems="center"
       gap={row ? '$2' : '$3'}
       paddingHorizontal="$3"
-      height={56}
+      minHeight={56}
       borderRadius={AUTH_LAYOUT.inputRadius}
       borderWidth={1}
       borderColor={invalid ? ui.error : ui.borderSubtle}

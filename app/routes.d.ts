@@ -44,14 +44,18 @@ declare module 'one' {
         | `/admin/shops`
         | `/admin/users`
         | `/auth`
+        | `/auth/import-contacts`
         | `/auth/sign-in`
         | `/auth/sign-up`
+        | `/auth/import-contacts`
         | `/auth/verify-gender`
         | `/browse`
         | `/cart`
         | `/category`
         | `/chat`
         | `/chat/`
+        | `/chat/calls`
+        | `/chat/groups`
         | `/checkout`
         | `/class`
         | `/class/`
@@ -64,6 +68,7 @@ declare module 'one' {
         | `/co-work/schedule`
         | `/community`
         | `/community/`
+        | `/community/analytics`
         | `/community/companies`
         | `/community/company`
         | `/community/company/create`
@@ -79,10 +84,12 @@ declare module 'one' {
         | `/community/network`
         | `/community/people`
         | `/community/post`
+        | `/community/saved`
         | `/community/stories`
         | `/community/stories/create`
         | `/create-my-shop`
         | `/favorites`
+        | `/help`
         | `/listing`
         | `/my-shops`
         | `/notifications`

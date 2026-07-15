@@ -18,6 +18,8 @@ export type CommunityNavItem = {
 export const COMMUNITY_LEFT_NAV = [
   { href: communityRoutes.home, label: 'Home', icon: Icons.Home, iconBg: '#1877f2' },
   { href: communityRoutes.network, label: 'Network', icon: Icons.Users, iconBg: '#1877f2' },
+  { href: communityRoutes.saved, label: 'Saved', icon: Icons.Bookmark, iconBg: '#0a66c2', authRequired: true },
+  { href: communityRoutes.analytics, label: 'Analytics', icon: Icons.BarChart3, iconBg: '#64748b', authRequired: true },
   { href: communityRoutes.groups, label: 'Groups', icon: Icons.UsersRound, iconBg: '#42b72a' },
   { href: communityRoutes.events, label: 'Events', icon: Icons.Calendar, iconBg: '#8b5cf6' },
   { href: communityRoutes.companies, label: 'Pages', icon: Icons.Building2, iconBg: '#0a66c2' },

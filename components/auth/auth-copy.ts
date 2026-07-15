@@ -7,7 +7,7 @@ export const AUTH_COPY = {
   heroHeadline: 'Where women shop, sell, learn, and grow together.',
   heroSubline: 'One verification unlocks commerce, community, classes, and more.',
   footerLegal:
-    'By continuing, you agree to receive a one-time verification code. Standard SMS or data rates may apply.',
+    'Codes are verified securely on our servers. We never ask for your password. Standard SMS or data rates may apply.',
   welcomeBack: `Welcome back to ${BRAND_NAME}`,
   welcomeNew: `Welcome to ${BRAND_NAME} — your account is ready`,
   trustBadges: ['Passwordless', 'Secure OTP', 'Built for women'] as const,

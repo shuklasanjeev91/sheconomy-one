@@ -46,6 +46,7 @@ export function MentionInput({
   suggestionsPlacement = 'bottom',
   onSubmitEditing,
   autoFocus,
+  flex,
   ...inputStyle
 }: MentionInputProps) {
   const ui = useAppUi()
@@ -194,13 +195,15 @@ export function MentionInput({
   }
 
   return (
-    <YStack position="relative" flex={inputStyle.flex}>
+    <YStack position="relative" flex={flex}>
       {multiline ? (
         <TextArea
+          width="100%"
           {...commonProps}
         />
       ) : (
         <Input
+          width="100%"
           {...commonProps}
           onSubmitEditing={() => {
             const active = getActiveToken(value)

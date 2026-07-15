@@ -22,12 +22,13 @@ export type VendorShop = Pick<
   | 'verified'
   | 'is_active'
   | 'created_at'
+  | 'shop_metadata'
 > & {
   address?: ShopAddress | null
 }
 
 const VENDOR_SHOP_SELECT =
-  'id, shop_name, shop_description, logo_url, shop_currency, shop_email, shop_phone_number, website_url, slug, average_rating, total_reviews, verified, is_active, created_at, shop_addresses(city, state, country, postal_code)'
+  'id, shop_name, shop_description, logo_url, shop_currency, shop_email, shop_phone_number, website_url, slug, average_rating, total_reviews, verified, is_active, created_at, shop_metadata, shop_addresses(city, state, country, postal_code)'
 
 type VendorShopRow = Omit<VendorShop, 'address'> & {
   shop_addresses?: unknown

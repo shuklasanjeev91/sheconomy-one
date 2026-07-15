@@ -1,15 +1,55 @@
 {
   "expo": {
-    "name": "sheconomy-one",
-    "slug": "sheconomy-one",
+    "name": "SHEconomy",
+    "slug": "sheconomy",
+    "owner": "sheconomy",
+    "version": "1.20.1",
     "scheme": "sheconomy",
     "platforms": [
       "ios",
       "android"
     ],
+    "runtimeVersion": {
+      "policy": "appVersion"
+    },
+    "updates": {
+      "enabled": true,
+      "checkAutomatically": "ON_LOAD",
+      "fallbackToCacheTimeout": 3000,
+      "url": "https://u.expo.dev/61412da1-9fab-4374-83f5-9e7eba296400"
+    },
     "plugins": [
+      "./plugins/withUniversalDeviceSupport.cjs",
+      [
+        "onesignal-expo-plugin",
+        {
+          "mode": "development",
+          "disableLocation": true
+        }
+      ],
       "one/expo-plugin",
-      "@livekit/react-native-expo-plugin",
+      [
+        "@livekit/react-native-expo-plugin",
+        {
+          "android": {
+            "audioType": "communication",
+            "enableScreenShareService": true
+          }
+        }
+      ],
+      [
+        "expo-livekit-screen-share",
+        {
+          "ios": {
+            "extensionName": "ScreenShareExtension",
+            "appGroupIdentifier": "group.com.sheconomy.ecommerce"
+          },
+          "android": {
+            "enableScreenShareService": true,
+            "foregroundServicePermission": true
+          }
+        }
+      ],
       "expo-font",
       "expo-localization",
       "expo-sharing",
@@ -25,6 +65,14 @@
           "cameraPermission": "Allow SHEconomy to use your camera for face liveness verification.",
           "recordAudioAndroid": false
         }
+      ],
+      "expo-secure-store",
+      "expo-web-browser",
+      [
+        "expo-contacts",
+        {
+          "contactsPermission": "Allow access so you can select contacts to connect with people you know. SHEconomy only uploads the contacts you choose."
+        }
       ]
     ],
     "icon": "./public/app-icon.png",
@@ -34,13 +82,39 @@
       "backgroundColor": "#000000"
     },
     "ios": {
-      "bundleIdentifier": "com.sheconomy.one",
+      "bundleIdentifier": "com.sheconomy.ecommerce",
+      "appleTeamId": "52H73QK4CL",
+      "supportsTablet": true,
+      "requireFullScreen": false,
       "associatedDomains": [
         "applinks:sheconomy-one-sanjeev-shuklas-projects.vercel.app"
-      ]
+      ],
+      "infoPlist": {
+        "UIBackgroundModes": [
+          "remote-notification"
+        ],
+        "NSUserTrackingUsageDescription": "This permission is used to deliver personalized push notifications.",
+        "NSContactsUsageDescription": "Allow access so you can select contacts to connect with people you know. SHEconomy only uploads the contacts you choose.",
+        "UIDeviceFamily": [
+          1,
+          2
+        ],
+        "UISupportedInterfaceOrientations": [
+          "UIInterfaceOrientationPortrait",
+          "UIInterfaceOrientationLandscapeLeft",
+          "UIInterfaceOrientationLandscapeRight"
+        ],
+        "UISupportedInterfaceOrientations~ipad": [
+          "UIInterfaceOrientationPortrait",
+          "UIInterfaceOrientationPortraitUpsideDown",
+          "UIInterfaceOrientationLandscapeLeft",
+          "UIInterfaceOrientationLandscapeRight"
+        ]
+      }
     },
     "android": {
-      "package": "com.sheconomy.one",
+      "package": "com.sheconomy.ecommerce",
+      "softwareKeyboardLayoutMode": "resize",
       "intentFilters": [
         {
           "action": "VIEW",
@@ -57,7 +131,33 @@
             "DEFAULT"
           ]
         }
+      ],
+      "permissions": [
+        "android.permission.RECORD_AUDIO",
+        "android.permission.CAMERA"
       ]
+    },
+    "extra": {
+      "eas": {
+        "projectId": "61412da1-9fab-4374-83f5-9e7eba296400",
+        "build": {
+          "experimental": {
+            "ios": {
+              "appExtensions": [
+                {
+                  "targetName": "OneSignalNotificationServiceExtension",
+                  "bundleIdentifier": "com.sheconomy.ecommerce.OneSignalNotificationServiceExtension",
+                  "entitlements": {
+                    "com.apple.security.application-groups": [
+                      "group.com.sheconomy.ecommerce.onesignal"
+                    ]
+                  }
+                }
+              ]
+            }
+          }
+        }
+      }
     }
   }
 }
