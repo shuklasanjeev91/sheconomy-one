@@ -19,7 +19,12 @@ import {
   YStack,
 } from '~/components/ui'
 import { LocationFields, addressGeoFromInput, patchAddressFromGeo } from '~/components/geo'
+import {
+  AddressAutocompleteField,
+  LocationAssistActions,
+} from '~/components/location'
 import { getShadowStyle, radius } from '~/config/tokens'
+import { resolvedAddressToFormPatch, type ResolvedAddress } from '~/lib/location'
 import { useLockBodyScroll } from '~/hooks/useLockBodyScroll'
 import { overlayBackdropStyle } from '~/lib/layout/styles'
 import {
@@ -84,6 +89,17 @@ export function AddressFormDrawer({
 
   function patch(partial: Partial<AddressFormData>) {
     setFormData((current) => ({ ...current, ...partial }))
+  }
+
+  function applyResolved(resolved: ResolvedAddress) {
+    setFormData((current) => {
+      const next = resolvedAddressToFormPatch(resolved, current)
+      return {
+        ...current,
+        ...next,
+      }
+    })
+    setErrors({})
   }
 
   function handleSubmit() {
@@ -167,6 +183,13 @@ export function AddressFormDrawer({
           contentContainerStyle={{ padding: 20, paddingBottom: 28 }}
         >
           <YStack gap="$3.5">
+            <AddressAutocompleteField
+              country={formData.country}
+              onResolved={applyResolved}
+              disabled={submitting}
+            />
+            <LocationAssistActions onResolved={applyResolved} disabled={submitting} />
+
             <Field label="Address type">
               <Select
                 value={formData.address_type}
@@ -198,22 +221,36 @@ export function AddressFormDrawer({
             <Field label="Address line 1" required error={errors.address_line_1}>
               <Input
                 value={formData.address_line_1}
-                onChangeText={(value) => patch({ address_line_1: value })}
+                onChangeText={(value) => patch({ address_line_1: value, source: 'manual' })}
                 placeholder="House no., building, street"
+                autoComplete={Platform.OS === 'web' ? ('street-address' as never) : undefined}
+                textContentType={Platform.OS === 'ios' ? 'streetAddressLine1' : undefined}
               />
             </Field>
 
             <Field label="Address line 2 (optional)" error={errors.address_line_2}>
               <Input
                 value={formData.address_line_2}
-                onChangeText={(value) => patch({ address_line_2: value })}
+                onChangeText={(value) => patch({ address_line_2: value, source: 'manual' })}
                 placeholder="Area, landmark"
+                autoComplete={Platform.OS === 'web' ? ('address-line2' as never) : undefined}
+                textContentType={Platform.OS === 'ios' ? 'streetAddressLine2' : undefined}
               />
             </Field>
 
             <LocationFields
               value={addressGeoFromInput(formData)}
-              onChange={(geo) => setFormData((current) => patchAddressFromGeo(current, geo))}
+              onChange={(geo) => {
+                const patched = patchAddressFromGeo(formData, geo)
+                setFormData((current) => ({
+                  ...current,
+                  country: patched.country ?? current.country,
+                  state: patched.state,
+                  city: patched.city,
+                  postal_code: patched.postal_code,
+                  source: current.source ?? 'manual',
+                }))
+              }}
             />
 
             {errors.city ? (

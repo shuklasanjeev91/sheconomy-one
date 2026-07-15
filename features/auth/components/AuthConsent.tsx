@@ -1,6 +1,5 @@
-import { Link } from 'one'
-
 import { Text, XStack, YStack } from '~/components/ui'
+import { AppLink } from '~/components/navigation/AppLink'
 import { useAppUi } from '~/lib/theme/useAppUi'
 import { appRoutes } from '~/lib/routes'
 
@@ -43,17 +42,17 @@ export function AuthConsent({ accepted, onChange, error }: AuthConsentProps) {
         </YStack>
         <Text fontSize={13} color={ui.textMuted} lineHeight={19} flex={1}>
           I agree to the{' '}
-          <Link href={appRoutes.help as never}>
+          <AppLink href={appRoutes.legalTerms} asChild>
             <Text color={ui.brand} fontWeight="700">
               Terms of Service
             </Text>
-          </Link>{' '}
+          </AppLink>{' '}
           and{' '}
-          <Link href={appRoutes.help as never}>
+          <AppLink href={appRoutes.legalPrivacy} asChild>
             <Text color={ui.brand} fontWeight="700">
               Privacy Policy
             </Text>
-          </Link>
+          </AppLink>
           . SHEconomy will send a one-time verification code.
         </Text>
       </XStack>

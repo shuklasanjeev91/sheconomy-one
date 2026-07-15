@@ -1,5 +1,5 @@
-import { Link } from 'one'
 import type { Href } from 'one'
+import { AppLink } from '~/components/navigation/AppLink'
 import type { ComponentType } from 'react'
 
 import { Text, XStack, YStack } from '~/components/ui'
@@ -26,7 +26,7 @@ export function NavIconButton({
   const ui = useAppUi()
 
   return (
-    <Link href={href} asChild>
+    <AppLink href={href} asChild>
       <YStack
         alignItems="center"
         justifyContent="center"
@@ -66,6 +66,6 @@ export function NavIconButton({
           </Text>
         ) : null}
       </YStack>
-    </Link>
+    </AppLink>
   )
 }

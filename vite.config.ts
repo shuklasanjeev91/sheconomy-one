@@ -61,6 +61,9 @@ export default defineConfig(({ mode }) => {
         'expo-clipboard': fromProjectRoot('./lib/stubs/expo-clipboard.ts'),
         'expo-file-system/legacy': fromProjectRoot('./lib/stubs/expo-file-system-legacy.ts'),
         'expo-localization': fromProjectRoot('./lib/stubs/expo-localization.ts'),
+        // Published `@expo/log-box/utils.js` is CJS; Vite SSR eval throws `module is not defined`.
+        '@expo/log-box/utils': fromProjectRoot('./lib/stubs/expo-log-box-utils.ts'),
+        '@expo/log-box/utils.js': fromProjectRoot('./lib/stubs/expo-log-box-utils.ts'),
         '@react-native-community/datetimepicker': fromProjectRoot('./lib/stubs/datetimepicker.ts'),
         '@livekit/react-native': fromProjectRoot('./lib/stubs/livekit-react-native.ts'),
         '@livekit/react-native-webrtc': fromProjectRoot('./lib/stubs/react-native-webrtc.ts'),
@@ -139,6 +142,21 @@ export default defineConfig(({ mode }) => {
         // Rolldown dev bundle runs whatwg-fetch init before Request/Response exist;
         // defer Body.call to end of fetch.js (see patch below).
         patches: {
+          '@expo/log-box': {
+            // Root entry is pure CJS (`module.exports = require(...)`) and crashes Vite SSR.
+            'utils.js': (contents) => {
+              if (!contents || contents.includes('sheconomy-esm-log-box-utils')) return
+              return `// sheconomy-esm-log-box-utils
+export function withoutANSIColorStyles(message) {
+  if (typeof message !== 'string') return message
+  return message.replace(/[\\u001b\\u009b][[()#;?]*(?:[0-9]{1,4}(?:;[0-9]{0,4})*)?[0-9A-ORZcf-nqry=><]/g, '')
+}
+export function parseWebBuildErrors(input) {
+  return input
+}
+`
+            },
+          },
           vxrn: {
             'dist/config/getViteServerConfig.mjs': (contents) => {
               if (!contents || contents.includes('sheconomy-vite-ws')) return

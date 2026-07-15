@@ -1,5 +1,5 @@
-import { Link } from 'one'
 import { useEffect, useState } from 'react'
+import { AppLink } from '~/components/navigation/AppLink'
 
 import { ProfileLink } from '~/community/components/ProfileLink'
 import { BRAND_BLUE } from '~/community/lib/constants'
@@ -95,11 +95,11 @@ export function WhoViewedYourProfileCard({
           >
             See viewers
           </Button>
-          <Link href={communityRoutes.analytics} asChild>
+          <AppLink href={communityRoutes.analytics} asChild>
             <Button size="$3" tone="ghost" borderRadius={999} icon={<Icons.BarChart3 size={14} />}>
               Full analytics
             </Button>
-          </Link>
+          </AppLink>
         </XStack>
       </YStack>
 

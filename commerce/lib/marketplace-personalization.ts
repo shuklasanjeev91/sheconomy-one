@@ -180,6 +180,14 @@ export function scoreListing(
   if (shopRating >= 4.5 && shopReviews >= 10) score += 14
 
   if (getNearYouLabel(listing, signals.userGeo)) score += 20
+
+  // Prefer listings that ship from the member's selected / detected country.
+  const userCountry = normalizePlace(signals.userGeo.country)
+  const shopCountry = normalizePlace(listing.shop_address?.country)
+  if (userCountry && shopCountry && userCountry === shopCountry) {
+    score += 16
+  }
+
   if (isNewListing(listing.created_at)) score += 8
 
   if (listing.is_featured) score += 8

@@ -1,6 +1,5 @@
-import { Link } from 'one'
-
 import { CommercePageHeader } from '~/commerce/components'
+import { AppLink } from '~/components/navigation/AppLink'
 import { ShopFiltersBar } from '~/commerce/components/ShopFiltersBar'
 import { ShopGrid } from '~/commerce/components/ShopGrid'
 import { useShopsBrowse } from '~/commerce/hooks/useShopsBrowse'
@@ -8,6 +7,7 @@ import { Spinner, Text, Theme, YStack, useMedia } from '~/components/ui'
 import { BRAND_THEME, getShadowStyle, radius } from '~/config/tokens'
 import { commerceRoutes } from '~/lib/routes'
 import { FullWidthLayout, PageSection } from '~/components/layout'
+import { NearbyShopsSection } from '~/components/location'
 import { useAppUi } from '~/lib/theme/useAppUi'
 
 import { BRAND_NAME } from '~/config/brand'
@@ -25,6 +25,8 @@ export function ShopsBrowseScreen() {
           title="All shops"
           subtitle={`Discover women-led storefronts across ${BRAND_NAME}`}
         />
+
+        <NearbyShopsSection />
 
         {!isLoading && !error && totalCount > 0 ? (
           <ShopFiltersBar
@@ -60,13 +62,13 @@ export function ShopsBrowseScreen() {
                 ? 'Try another country or sort option.'
                 : 'Check back soon as new sellers join the marketplace.'}
             </Text>
-            <Link href={commerceRoutes.home}>
+            <AppLink href={commerceRoutes.home}>
               <Theme name={BRAND_THEME}>
                 <Text color="$color9" fontWeight="500" textDecorationLine="underline">
                   Browse marketplace
                 </Text>
               </Theme>
-            </Link>
+            </AppLink>
           </YStack>
         ) : (
           <ShopGrid shops={items} columns={gridColumns as 1 | 2 | 3 | 4 | 5 | 6} />

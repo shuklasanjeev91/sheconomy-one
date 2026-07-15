@@ -1,4 +1,6 @@
-import { Link, Redirect, useRouter } from 'one'
+import { useRouter } from 'one'
+import { SpaRedirect } from '~/components/navigation/SpaRedirect'
+import { AppLink } from '~/components/navigation/AppLink'
 import type { ReactNode } from 'react'
 import { useEffect, useMemo, useState } from 'react'
 
@@ -58,6 +60,18 @@ import { commerceRoutes, routes } from '~/lib/routes'
 import { createEmptyAddressInput } from '~/commerce/components/AddressForm'
 import { validateAddressInput } from '~/commerce/lib/addresses'
 import { LocationFields, addressGeoFromInput, patchAddressFromGeo } from '~/components/geo'
+import {
+  AddressAutocompleteField,
+  DeliveryPinCheck,
+  LocationAssistActions,
+} from '~/components/location'
+import {
+  readRecentAddresses,
+  rememberRecentAddress,
+  resolvedAddressToFormPatch,
+  type RecentAddressSnapshot,
+  type ResolvedAddress,
+} from '~/lib/location'
 import { maxLength, minLength, required } from '~/lib/validation'
 import { useAppLayout } from '~/hooks/useAppLayout'
 import { useAppUi } from '~/lib/theme/useAppUi'
@@ -74,6 +88,7 @@ export function CheckoutScreen() {
   const router = useRouter()
 
   const [addresses, setAddresses] = useState<UserAddress[]>([])
+  const [recentAddresses, setRecentAddresses] = useState<RecentAddressSnapshot[]>([])
   const [selectedAddressId, setSelectedAddressId] = useState<string | null>(null)
   const [useNewAddress, setUseNewAddress] = useState(false)
   const [newAddress, setNewAddress] = useState<CheckoutAddressInput>(() => createEmptyAddressInput())
@@ -146,6 +161,10 @@ export function CheckoutScreen() {
   }, [items])
 
   useEffect(() => {
+    void readRecentAddresses().then(setRecentAddresses)
+  }, [])
+
+  useEffect(() => {
     if (!isAuthenticated || !user) return
 
     setIsLoadingAddresses(true)
@@ -170,7 +189,7 @@ export function CheckoutScreen() {
   }, [isAuthenticated, toast, user])
 
   if (!isAuthenticated) {
-    return <Redirect href={routes.signIn} />
+    return <SpaRedirect href={routes.signIn} />
   }
 
   if (isLoading || isLoadingAddresses || isChecking) {
@@ -184,10 +203,10 @@ export function CheckoutScreen() {
   }
 
   if (!orderPlaced && (!cart || items.length === 0)) {
-    return <Redirect href={commerceRoutes.cart} />
+    return <SpaRedirect href={commerceRoutes.cart} />
   }
   if (!cart) {
-    return <Redirect href={commerceRoutes.home} />
+    return <SpaRedirect href={commerceRoutes.home} />
   }
 
   const currency = cart.currency ?? 'INR'
@@ -348,6 +367,23 @@ export function CheckoutScreen() {
         if (!checkoutUrl && data?.checkoutUrl) checkoutUrl = data.checkoutUrl
       }
 
+      const usedAddress =
+        addresses.find((row) => row.id === shippingAddressId) ??
+        (useNewAddress
+          ? ({
+              address_line_1: newAddress.address_line_1,
+              address_line_2: newAddress.address_line_2,
+              city: newAddress.city,
+              state: newAddress.state,
+              postal_code: newAddress.postal_code,
+              country: newAddress.country,
+              address_label: newAddress.address_label,
+            } as RecentAddressSnapshot)
+          : null)
+      if (usedAddress) {
+        void rememberRecentAddress(usedAddress as never).then(setRecentAddresses)
+      }
+
       setOrderPlaced(true)
       await clearCartItems(cart.id)
 
@@ -458,6 +494,54 @@ export function CheckoutScreen() {
             <YStack flex={1} minWidth={0} width="100%" gap="$4">
               {needsShipping ? (
                 <SectionCard step={1} title="Delivery address">
+                  {recentAddresses.length > 0 ? (
+                    <YStack gap="$2">
+                      <Text fontSize={12} fontWeight="600" color={c.secondary}>
+                        Recently used
+                      </Text>
+                      <XStack gap="$2" flexWrap="wrap">
+                        {recentAddresses.map((recent) => (
+                          <XStack
+                            key={`${recent.id ?? recent.address_line_1}-${recent.postal_code}`}
+                            paddingHorizontal={12}
+                            paddingVertical={8}
+                            borderRadius={999}
+                            borderWidth={1}
+                            borderColor={c.border}
+                            backgroundColor={c.chip}
+                            cursor="pointer"
+                            onPress={() => {
+                              const match = addresses.find((row) => row.id && row.id === recent.id)
+                              if (match) {
+                                setUseNewAddress(false)
+                                setSelectedAddressId(match.id)
+                                return
+                              }
+                              setUseNewAddress(true)
+                              setNewAddress({
+                                address_line_1: recent.address_line_1,
+                                address_line_2: recent.address_line_2 ?? '',
+                                city: recent.city,
+                                state: recent.state,
+                                postal_code: recent.postal_code,
+                                country: recent.country,
+                                address_label: recent.address_label ?? 'Home',
+                              })
+                              addressForm.fields.address_line_1.onChange(recent.address_line_1)
+                              addressForm.fields.address_line_2.onChange(
+                                recent.address_line_2 ?? '',
+                              )
+                            }}
+                          >
+                            <Text fontSize={12} fontWeight="600" color={c.text}>
+                              {recent.address_label || recent.city || recent.postal_code}
+                            </Text>
+                          </XStack>
+                        ))}
+                      </XStack>
+                    </YStack>
+                  ) : null}
+
                   {addresses.length > 0 ? (
                     <YStack gap="$2">
                       {addresses.map((address) => {
@@ -501,11 +585,11 @@ export function CheckoutScreen() {
                     <CommerceLink onPress={() => setUseNewAddress(true)}>
                       {addresses.length ? '+ Add a new delivery address' : '+ Add a delivery address'}
                     </CommerceLink>
-                    <Link href={commerceRoutes.addresses} asChild>
+                    <AppLink href={commerceRoutes.addresses} asChild>
                       <Text fontSize={13} color={c.link} cursor="pointer">
                         Manage addresses
                       </Text>
-                    </Link>
+                    </AppLink>
                   </XStack>
 
                   {useNewAddress ? (
@@ -516,16 +600,65 @@ export function CheckoutScreen() {
                       borderWidth={1}
                       borderColor={c.border}
                     >
+                      <AddressAutocompleteField
+                        country={newAddress.country}
+                        onResolved={(resolved: ResolvedAddress) => {
+                          const patch = resolvedAddressToFormPatch(resolved, {
+                            ...newAddress,
+                            address_line_2: newAddress.address_line_2 ?? '',
+                            address_type: 'shipping',
+                            is_default: false,
+                            address_label: newAddress.address_label ?? 'Home',
+                          })
+                          setNewAddress((current) => ({
+                            ...current,
+                            address_line_1: patch.address_line_1 ?? current.address_line_1,
+                            address_line_2: patch.address_line_2 ?? current.address_line_2 ?? '',
+                            city: patch.city ?? current.city,
+                            state: patch.state ?? current.state,
+                            postal_code: patch.postal_code ?? current.postal_code,
+                            country: patch.country ?? current.country,
+                          }))
+                          addressForm.fields.address_line_1.onChange(patch.address_line_1 ?? '')
+                          addressForm.fields.address_line_2.onChange(patch.address_line_2 ?? '')
+                        }}
+                      />
+                      <LocationAssistActions
+                        onResolved={(resolved: ResolvedAddress) => {
+                          const patch = resolvedAddressToFormPatch(resolved, {
+                            ...newAddress,
+                            address_line_2: newAddress.address_line_2 ?? '',
+                            address_type: 'shipping',
+                            is_default: false,
+                            address_label: newAddress.address_label ?? 'Home',
+                          })
+                          setNewAddress((current) => ({
+                            ...current,
+                            address_line_1: patch.address_line_1 || current.address_line_1,
+                            address_line_2: patch.address_line_2 || current.address_line_2 || '',
+                            city: patch.city || current.city,
+                            state: patch.state || current.state,
+                            postal_code: patch.postal_code || current.postal_code,
+                            country: patch.country || current.country,
+                          }))
+                          if (patch.address_line_1) {
+                            addressForm.fields.address_line_1.onChange(patch.address_line_1)
+                          }
+                          addressForm.fields.address_line_2.onChange(patch.address_line_2 ?? '')
+                        }}
+                      />
                       <Field label="Address line 1">
                         <Input
                           value={addressForm.fields.address_line_1.value}
-                          onChangeText={addressForm.fields.address_line_1.onChangeText}
+                          onChangeText={addressForm.fields.address_line_1.onChange}
+                          autoComplete="street-address"
                         />
                       </Field>
                       <Field label="Address line 2">
                         <Input
                           value={addressForm.fields.address_line_2.value}
-                          onChangeText={addressForm.fields.address_line_2.onChangeText}
+                          onChangeText={addressForm.fields.address_line_2.onChange}
+                          autoComplete="address-line2"
                         />
                       </Field>
                       <LocationFields
@@ -536,6 +669,26 @@ export function CheckoutScreen() {
                       />
                     </YStack>
                   ) : null}
+
+                  <DeliveryPinCheck
+                    country={
+                      useNewAddress
+                        ? newAddress.country
+                        : addresses.find((row) => row.id === selectedAddressId)?.country ?? 'IN'
+                    }
+                    state={
+                      useNewAddress
+                        ? newAddress.state
+                        : addresses.find((row) => row.id === selectedAddressId)?.state
+                    }
+                    initialPostal={
+                      useNewAddress
+                        ? newAddress.postal_code
+                        : addresses.find((row) => row.id === selectedAddressId)?.postal_code ?? ''
+                    }
+                    listingType={needsShipping ? 'physical' : 'digital'}
+                    compact
+                  />
                 </SectionCard>
               ) : (
                 <SectionCard step={1} title="Digital delivery">
@@ -645,11 +798,11 @@ export function CheckoutScreen() {
                   />
                 ) : null}
 
-                <Link href={commerceRoutes.paymentMethods} asChild>
+                <AppLink href={commerceRoutes.paymentMethods} asChild>
                   <Text fontSize={13} color={c.link} cursor="pointer" paddingTop="$1">
                     Manage payment methods
                   </Text>
-                </Link>
+                </AppLink>
               </SectionCard>
 
               <SectionCard step={3} title="Review your order">

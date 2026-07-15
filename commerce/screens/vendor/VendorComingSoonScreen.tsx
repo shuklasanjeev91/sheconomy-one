@@ -1,5 +1,6 @@
-import { Link, usePathname } from 'one'
+import { usePathname } from 'one'
 
+import { AppLink } from '~/components/navigation/AppLink'
 import { Button, Icons, Text, XStack, YStack } from '~/components/ui'
 import { radius } from '~/config/tokens'
 import { useAppLayout } from '~/hooks/useAppLayout'
@@ -61,11 +62,11 @@ export function VendorComingSoonScreen() {
         </Text>
       </YStack>
 
-      <Link href={vendorRoutes.myShop} asChild>
+      <AppLink href={vendorRoutes.myShop} asChild>
         <Button tone="primary" size="$4" borderRadius={999} icon={<Icons.Store size={16} />}>
           Open My Shop
         </Button>
-      </Link>
+      </AppLink>
     </YStack>
   )
 }

@@ -1,9 +1,23 @@
 import type { Href } from 'one'
 import { router } from 'one'
+import { Platform } from 'react-native'
 
 export type NavigateAppOptions = {
   /** Replace the current history entry instead of pushing. Prefer for tabs. */
   replace?: boolean
+}
+
+function normalizeLocation(pathWithOptionalQuery: string): string {
+  const [path = '/', query = ''] = pathWithOptionalQuery.split('?')
+  const trimmed = path.replace(/\/$/, '')
+  const normalizedPath = trimmed === '' ? '/' : trimmed
+  return query ? `${normalizedPath}?${query}` : normalizedPath
+}
+
+function isCurrentLocation(href: string): boolean {
+  if (Platform.OS !== 'web' || typeof window === 'undefined') return false
+  const current = `${window.location.pathname}${window.location.search}`
+  return normalizeLocation(current) === normalizeLocation(href)
 }
 
 /**
@@ -12,6 +26,7 @@ export type NavigateAppOptions = {
  */
 export function navigateApp(href: Href | string, options?: NavigateAppOptions): void {
   const target = (typeof href === 'string' ? href : String(href)) as Href
+  if (isCurrentLocation(String(target))) return
   if (options?.replace) {
     router.replace(target)
     return

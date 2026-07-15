@@ -44,7 +44,10 @@ declare module 'one' {
         | `/admin/shops`
         | `/admin/users`
         | `/auth`
+        | `/auth/callback`
+        | `/auth/complete-profile`
         | `/auth/import-contacts`
+        | `/auth/qr`
         | `/auth/sign-in`
         | `/auth/sign-up`
         | `/auth/verify-gender`
@@ -59,6 +62,7 @@ declare module 'one' {
         | `/class`
         | `/class/`
         | `/class/audio`
+        | `/class/playlists`
         | `/class/video`
         | `/co-work`
         | `/co-work/`
@@ -90,6 +94,10 @@ declare module 'one' {
         | `/create-my-shop`
         | `/favorites`
         | `/help`
+        | `/legal/ads`
+        | `/legal/cookies`
+        | `/legal/privacy`
+        | `/legal/terms`
         | `/listing`
         | `/my-shops`
         | `/notifications`
@@ -109,6 +117,7 @@ declare module 'one' {
         | `/settings/community`
         | `/settings/notifications`
         | `/settings/privacy`
+        | `/settings/security`
         | `/settings/shop`
         | `/shop`
         | `/shops`
@@ -135,7 +144,9 @@ declare module 'one' {
         | `/browse/${OneRouter.SingleRoutePart<T>}`
         | `/category/${OneRouter.SingleRoutePart<T>}`
         | `/chat/${OneRouter.SingleRoutePart<T>}`
+        | `/chat/call/${OneRouter.SingleRoutePart<T>}`
         | `/class/${OneRouter.SingleRoutePart<T>}`
+        | `/class/playlists/${OneRouter.SingleRoutePart<T>}`
         | `/co-work/meeting/${OneRouter.SingleRoutePart<T>}`
         | `/co-work/meeting/${OneRouter.SingleRoutePart<T>}/live`
         | `/community/company/${OneRouter.SingleRoutePart<T>}`
@@ -162,7 +173,9 @@ declare module 'one' {
         | `/browse/[kind]`
         | `/category/[slug]`
         | `/chat/[id]`
+        | `/chat/call/[code]`
         | `/class/[slug]`
+        | `/class/playlists/[id]`
         | `/co-work/meeting/[code]`
         | `/co-work/meeting/[code]/live`
         | `/community/company/[slug]`
@@ -190,7 +203,9 @@ declare module 'one' {
         '/browse/[kind]': RouteInfo<{ kind: string }>
         '/category/[slug]': RouteInfo<{ slug: string }>
         '/chat/[id]': RouteInfo<{ id: string }>
+        '/chat/call/[code]': RouteInfo<{ code: string }>
         '/class/[slug]': RouteInfo<{ slug: string }>
+        '/class/playlists/[id]': RouteInfo<{ id: string }>
         '/co-work/meeting/[code]': RouteInfo<{ code: string }>
         '/co-work/meeting/[code]/live': RouteInfo<{ code: string }>
         '/community/company/[slug]': RouteInfo<{ slug: string }>

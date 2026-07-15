@@ -12,7 +12,7 @@ import {
 } from '~/chat/lib/calls'
 import type { ChatSummary } from '~/chat/lib/types'
 import { useAppToast } from '~/components/ui'
-import { coWorkRoutes } from '~/lib/routes'
+import { chatRoutes } from '~/lib/routes'
 import { supabase } from '~/lib/supabase/client'
 
 export type OutgoingCallState = {
@@ -51,6 +51,8 @@ export function useOutgoingCall(currentUserId: string) {
         callerId: currentUserId,
         receiverId: chat.otherUserId,
         callType,
+        receiverName: chat.name,
+        receiverAvatar: chat.avatarUrl,
       })
 
       if (error || !call) {
@@ -72,7 +74,9 @@ export function useOutgoingCall(currentUserId: string) {
               const code = updated.meetingCode ?? call.meetingCode
               void logCall({ conversationId: chat.id, callerId: currentUserId, callType, outcome: 'answered' })
               teardown()
-              if (code) router.push(coWorkRoutes.meetingLive(code))
+              if (code) {
+                router.push(chatRoutes.call(code, { type: callType, callId: call.id }))
+              }
             } else if (updated.status === 'declined') {
               void logCall({ conversationId: chat.id, callerId: currentUserId, callType, outcome: 'declined' })
               toast.show(`${chat.name} declined the call`, { tone: 'default' })

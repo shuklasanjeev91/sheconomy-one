@@ -1,5 +1,6 @@
 export { MOBILE_TAB_BAR_HEIGHT } from './constants'
 export { AppLink, pressNavigate } from './AppLink'
+export { SpaRedirect } from './SpaRedirect'
 export { NavAccountLink } from './NavAccountLink'
 export { NavLogo } from './NavLogo'
 export { NavSearchBar } from './NavSearchBar'

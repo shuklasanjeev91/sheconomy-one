@@ -1,5 +1,6 @@
-import { Link } from 'one'
+import { type Href } from 'one'
 
+import { AppLink } from '~/components/navigation/AppLink'
 import { ProgramAuthorAvatar, ProgramAuthorName } from '~/class/components/ProgramAuthorProfile'
 import {
   formatProgramDuration,
@@ -19,6 +20,8 @@ import { useThemedShadowStyle } from '~/lib/theme/useThemedShadowStyle'
 type ProgramCardProps = {
   program: Program
   width?: number
+  /** Override default program detail link (e.g. playlist context). */
+  href?: Href
 }
 
 function canAutoplayProgram(program: Program): boolean {
@@ -28,13 +31,13 @@ function canAutoplayProgram(program: Program): boolean {
   return Boolean(url.includes('youtu') || isVideoMediaUrl(url))
 }
 
-export function ProgramCard({ program, width = 280 }: ProgramCardProps) {
+export function ProgramCard({ program, width = 280, href }: ProgramCardProps) {
   const ui = useAppUi()
   const cardShadow = useThemedShadowStyle('sm')
   const cardShadowMd = useThemedShadowStyle('md')
   const thumbnailUrl = getProgramThumbnailUrl(program)
   const autoplay = canAutoplayProgram(program)
-  const programHref = classRoutes.program(getProgramSlug(program))
+  const programHref = href ?? classRoutes.program(getProgramSlug(program))
 
   return (
     <YStack width={width} gap="$2.5" flexShrink={0}>
@@ -61,7 +64,7 @@ export function ProgramCard({ program, width = 280 }: ProgramCardProps) {
             borderRadius={0}
           />
         ) : (
-          <Link href={programHref} asChild>
+          <AppLink href={programHref} asChild>
             <YStack
               width="100%"
               height="100%"
@@ -112,7 +115,7 @@ export function ProgramCard({ program, width = 280 }: ProgramCardProps) {
                 </YStack>
               ) : null}
             </YStack>
-          </Link>
+          </AppLink>
         )}
 
         {program.duration ? (
@@ -137,7 +140,7 @@ export function ProgramCard({ program, width = 280 }: ProgramCardProps) {
       <XStack gap="$2.5" alignItems="flex-start">
         <ProgramAuthorAvatar program={program} size="compact" />
         <YStack flex={1} gap={2} minWidth={0}>
-          <Link href={programHref} asChild>
+          <AppLink href={programHref} asChild>
             <Text
               fontSize={14}
               fontWeight="600"
@@ -149,7 +152,7 @@ export function ProgramCard({ program, width = 280 }: ProgramCardProps) {
             >
               {program.title}
             </Text>
-          </Link>
+          </AppLink>
           <ProgramAuthorName program={program} size="compact" />
           <Text fontSize={12} color={ui.textMuted} numberOfLines={1}>
             {formatProgramViews(program.view_count || program.listen_count)}

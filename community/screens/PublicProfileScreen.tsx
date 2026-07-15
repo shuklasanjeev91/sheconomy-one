@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
-import { Link, useParams, useRouter } from 'one'
+import { useParams, useRouter } from 'one'
 
+import { AppLink } from '~/components/navigation/AppLink'
 import { ProfileView } from '~/community/components/profile/ProfileView'
 import type { ProfileDisplay } from '~/community/components/profile/types'
 import { ProfileVisitorActions } from '~/community/components/ProfileVisitorActions'
@@ -122,11 +123,11 @@ export function PublicProfileScreen() {
             <Paragraph color={ui.textSecondary}>
               {error ?? 'This profile could not be loaded.'}
             </Paragraph>
-            <Link href={communityRoutes.network} asChild>
+            <AppLink href={communityRoutes.network} asChild>
               <Button tone="primary" size="$4" borderRadius={999} alignSelf="flex-start">
                 Browse network
               </Button>
-            </Link>
+            </AppLink>
           </YStack>
         </PageSection>
       </FullWidthLayout>

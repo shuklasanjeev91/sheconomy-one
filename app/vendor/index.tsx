@@ -1,7 +1,6 @@
-import { Redirect } from 'one'
-
 import { vendorRoutes } from '~/lib/routes'
+import { SpaRedirect } from '~/components/navigation/SpaRedirect'
 
 export default function VendorIndexRoute() {
-  return <Redirect href={vendorRoutes.myShop} />
+  return <SpaRedirect href={vendorRoutes.myShop} />
 }

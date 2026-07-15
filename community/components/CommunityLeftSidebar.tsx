@@ -1,4 +1,5 @@
-import { Link, usePathname } from 'one'
+import { usePathname } from 'one'
+import { AppLink } from '~/components/navigation/AppLink'
 import type { Href } from 'one'
 import { useMemo, useState } from 'react'
 
@@ -141,7 +142,7 @@ function SidebarNavItem({ item, active }: { item: CommunityNavItem; active: bool
   const Icon = item.icon
 
   return (
-    <Link href={item.href as Href} asChild>
+    <AppLink href={item.href as Href} asChild>
       <XStack
         gap={12}
         alignItems="center"
@@ -172,6 +173,6 @@ function SidebarNavItem({ item, active }: { item: CommunityNavItem; active: bool
           {item.label}
         </Text>
       </XStack>
-    </Link>
+    </AppLink>
   )
 }

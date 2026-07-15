@@ -1,6 +1,7 @@
 import { useState } from 'react'
-import { Link, useRouter } from 'one'
+import { useRouter } from 'one'
 
+import { AppLink } from '~/components/navigation/AppLink'
 import { Button, Icons, Text, XStack, YStack, useAppToast } from '~/components/ui'
 import { radius } from '~/config/tokens'
 import { getListingSlug } from '~/lib/supabase/commerce'
@@ -69,7 +70,7 @@ export function ListingCard({ listing, compact, showQuickAdd }: ListingCardProps
         }}
         onMouseLeave={() => setHoverImageIndex(0)}
       >
-        <Link href={listingHref} asChild>
+        <AppLink href={listingHref} asChild>
           <YStack
             width="100%"
             height="100%"
@@ -92,7 +93,7 @@ export function ListingCard({ listing, compact, showQuickAdd }: ListingCardProps
               objectFit="cover"
             />
           </YStack>
-        </Link>
+        </AppLink>
         <FavoriteButton listingId={listing.id} size={compact ? 16 : 18} />
         {imageUrls.length > 1 ? (
           <XStack
@@ -137,7 +138,7 @@ export function ListingCard({ listing, compact, showQuickAdd }: ListingCardProps
         />
       ) : null}
 
-      <Link href={listingHref} asChild>
+      <AppLink href={listingHref} asChild>
         <YStack gap={4} cursor="pointer" paddingHorizontal={2} animation="quick">
           <Text
             fontSize={compact ? 12 : 13}
@@ -178,7 +179,7 @@ export function ListingCard({ listing, compact, showQuickAdd }: ListingCardProps
             ) : null}
           </YStack>
         </YStack>
-      </Link>
+      </AppLink>
 
       {showQuickAdd ? <QuickAddButton listing={listing} /> : null}
     </YStack>

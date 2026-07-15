@@ -1,4 +1,5 @@
-import { Link, useParams } from 'one'
+import { useParams } from 'one'
+import { AppLink } from '~/components/navigation/AppLink'
 import { useEffect, useState } from 'react'
 
 import { AboutDetailRow } from '~/community/components/AboutDetailRow'
@@ -128,11 +129,11 @@ export function EventDetailScreen() {
                 </Button>
               ) : null}
               {isOrganizer ? (
-                <Link href={communityRoutes.eventCreate}>
+                <AppLink href={communityRoutes.eventCreate}>
                   <Button tone="outline" borderRadius={999}>
                     Create another
                   </Button>
-                </Link>
+                </AppLink>
               ) : null}
               <ShareButton
                 variant="outline"

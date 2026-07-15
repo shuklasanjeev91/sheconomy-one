@@ -1,6 +1,8 @@
 import { useMemo, useState } from 'react'
-import { Link, Redirect, useParams } from 'one'
+import { useParams } from 'one'
 
+import { SpaRedirect } from '~/components/navigation/SpaRedirect'
+import { AppLink } from '~/components/navigation/AppLink'
 import {
   CommercePageHeader,
   CommercePanel,
@@ -45,7 +47,7 @@ export function SellerDashboardScreen() {
   const activeShop = localShop ?? shop
 
   if (!isAuthenticated) {
-    return <Redirect href={commerceRoutes.myShops} />
+    return <SpaRedirect href={commerceRoutes.myShops} />
   }
 
   if (isLoading) {
@@ -57,7 +59,7 @@ export function SellerDashboardScreen() {
   }
 
   if (!shopId || !activeShop) {
-    return <Redirect href={commerceRoutes.myShops} />
+    return <SpaRedirect href={commerceRoutes.myShops} />
   }
 
   function handleShopUpdated(next: VendorShop) {
@@ -82,17 +84,17 @@ export function SellerDashboardScreen() {
           />
           <XStack gap="$2" flexWrap="wrap">
             {shops.length > 1 ? (
-              <Link href={commerceRoutes.myShops} asChild>
+              <AppLink href={commerceRoutes.myShops} asChild>
                 <Button tone="outline" size="$3" borderRadius={999}>
                   Switch shop
                 </Button>
-              </Link>
+              </AppLink>
             ) : null}
-            <Link href={commerceRoutes.shop(activeShop.slug ?? activeShop.id)} asChild>
+            <AppLink href={commerceRoutes.shop(activeShop.slug ?? activeShop.id)} asChild>
               <Button tone="outline" size="$3" borderRadius={999}>
                 View shop
               </Button>
-            </Link>
+            </AppLink>
           </XStack>
         </XStack>
 

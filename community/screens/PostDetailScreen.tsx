@@ -1,4 +1,5 @@
-import { Link, useParams, useRouter } from 'one'
+import { useParams, useRouter } from 'one'
+import { AppLink } from '~/components/navigation/AppLink'
 import { useEffect, useState } from 'react'
 
 import { SendPostSheet } from '~/chat/components/SendPostSheet'
@@ -60,7 +61,7 @@ export function PostDetailScreen() {
             Post unavailable
           </Text>
           <Text color={communityUi.textMuted}>{error ?? 'This post may have been removed.'}</Text>
-          <Link href={communityRoutes.home} asChild>
+          <AppLink href={communityRoutes.home} asChild>
             <Button
               backgroundColor={communityUi.brand}
               color="white"
@@ -69,7 +70,7 @@ export function PostDetailScreen() {
             >
               Open feed
             </Button>
-          </Link>
+          </AppLink>
         </CommunityCard>
       </CommunityShell>
     )

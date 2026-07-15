@@ -1,6 +1,5 @@
-import { Link } from 'one'
-
 import { BRAND_BLUE } from '~/community/lib/constants'
+import { AppLink } from '~/components/navigation/AppLink'
 import { Icons, ListItem, Separator, Text, XStack, YStack } from '~/components/ui'
 import { SurfaceCard } from '~/components/layout'
 import { SettingsPanel } from '~/components/settings/SettingsPanel'
@@ -16,7 +15,7 @@ export function AboutSettingsPanel() {
   return (
     <SettingsPanel title="About" description="Help, AI assist, and app version">
       <SurfaceCard padding="$0" borderRadius={radius.card} overflow="hidden">
-        <Link href={routes.help} asChild>
+        <AppLink href={routes.help} asChild>
           <XStack
             alignItems="center"
             gap="$3"
@@ -36,7 +35,7 @@ export function AboutSettingsPanel() {
             </YStack>
             <Icons.ChevronRight size={16} color={ui.textMuted} />
           </XStack>
-        </Link>
+        </AppLink>
         <Separator />
         <XStack
           alignItems="center"

@@ -1,7 +1,8 @@
 import type { ReactNode } from 'react'
 import { Platform } from 'react-native'
-import { Redirect, usePathname } from 'one'
+import { usePathname } from 'one'
 
+import { SpaRedirect } from '~/components/navigation/SpaRedirect'
 import { AuthSignInFlow } from '~/components/auth/AuthSignInFlow'
 import { PageCenter } from '~/components/layout'
 import { Spinner, YStack } from '~/components/ui'
@@ -42,7 +43,7 @@ export function AppAccessGate({ children }: AppAccessGateProps) {
   }
 
   if (!canAccessPath(tier, pathname)) {
-    return <Redirect href={getDeniedRedirect(pathname)} />
+    return <SpaRedirect href={getDeniedRedirect(pathname)} />
   }
 
   return (

@@ -1,4 +1,5 @@
-import { Link, useRouter } from 'one'
+import { useRouter } from 'one'
+import { AppLink } from '~/components/navigation/AppLink'
 import { useEffect, useMemo, useState } from 'react'
 
 import { CommunityCard } from '~/community/components/CommunityCard'
@@ -150,11 +151,11 @@ export function PeopleScreen({ initialTab, profileHandle }: PeopleScreenProps) {
           <Text fontSize={18} fontWeight="600" color={communityUi.text}>
             Sign in to view your network
           </Text>
-          <Link href={routes.signIn} asChild>
+          <AppLink href={routes.signIn} asChild>
             <Text fontSize={14} fontWeight="600" color={communityUi.brand}>
               Sign in
             </Text>
-          </Link>
+          </AppLink>
         </CommunityCard>
       </CommunityShell>
     )

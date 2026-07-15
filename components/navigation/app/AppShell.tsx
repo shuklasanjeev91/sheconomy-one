@@ -16,6 +16,7 @@ import { appShellStyle, meetingViewportStyle } from '~/lib/platform/viewport'
 import { useAppUi } from '~/lib/theme/useAppUi'
 
 import { IncomingCallHost } from '~/chat/components/IncomingCallHost'
+import { ProfileOnboardingNudge } from '~/components/auth/ProfileOnboardingNudge'
 import { GenderVerificationHost } from '~/components/gender-verification/GenderVerificationHost'
 
 import { AppDesktopHeader } from './AppDesktopHeader'
@@ -32,7 +33,8 @@ function useChromelessRoute() {
   return (
     pathname.startsWith('/ui-kit') ||
     pathname.startsWith('/co-work/meeting/') ||
-    pathname === '/co-work/meeting'
+    pathname === '/co-work/meeting' ||
+    pathname.startsWith('/chat/call/')
   )
 }
 
@@ -62,6 +64,8 @@ function useCompactMobileTopBar() {
     pathname.startsWith('/my-shops') ||
     pathname.startsWith('/vendor') ||
     pathname.startsWith('/settings') ||
+    pathname.startsWith('/legal') ||
+    pathname.startsWith('/help') ||
     pathname.startsWith('/profile') ||
     pathname.startsWith('/notifications') ||
     pathname.startsWith('/community/') ||
@@ -123,6 +127,7 @@ export function AppShell({ children }: AppShellProps) {
           >
             {isDesktop ? <AppDesktopHeader /> : null}
             {!isDesktop ? <AppMobileHeader minimal={compactMobileTopBar || chatConversationMobile} /> : null}
+            <ProfileOnboardingNudge />
             <YStack
               flexGrow={stretchMainContent ? 1 : undefined}
               flex={stretchMainContent ? 1 : undefined}

@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react'
-import { Link } from 'one'
+import { AppLink } from '~/components/navigation/AppLink'
 
 import { routes } from '~/lib/routes'
 
@@ -19,8 +19,8 @@ export function ProfileLink({ userId, username, children }: ProfileLinkProps) {
   if (!handle) return <>{children}</>
 
   return (
-    <Link href={routes.userProfile(handle)} asChild>
+    <AppLink href={routes.userProfile(handle)} asChild>
       {children}
-    </Link>
+    </AppLink>
   )
 }

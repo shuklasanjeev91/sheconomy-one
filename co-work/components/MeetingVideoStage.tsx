@@ -14,7 +14,7 @@ import { SheconomyParticipantTile } from './SheconomyParticipantTile'
 export function MeetingVideoStage() {
   const { isDesktop } = useAppLayout()
   const { width, height } = useWindowDimensions()
-  const { stageTracks, pipTrack, totalTiles } = useMeetingGalleryTracks()
+  const { stageTracks, pipTrack, totalTiles, hasScreenShare } = useMeetingGalleryTracks()
 
   const isLandscape = width > height
   const layout = useMemo(
@@ -22,15 +22,20 @@ export function MeetingVideoStage() {
     [stageTracks.length, isDesktop, isLandscape],
   )
   const solo = stageTracks.length <= 1 && !pipTrack
+  const galleryClass = hasScreenShare
+    ? 'sheconomy-video-gallery sheconomy-video-gallery--screen'
+    : solo
+      ? 'sheconomy-video-gallery sheconomy-video-gallery--solo'
+      : 'sheconomy-video-gallery'
 
   return (
     <div className="sheconomy-video-stage">
       <div
-        className={solo ? 'sheconomy-video-gallery sheconomy-video-gallery--solo' : 'sheconomy-video-gallery'}
+        className={galleryClass}
         style={
           {
-            '--gallery-cols': layout.columns,
-            '--gallery-rows': layout.rows,
+            '--gallery-cols': hasScreenShare ? 1 : layout.columns,
+            '--gallery-rows': hasScreenShare ? 1 : layout.rows,
           } as CSSProperties
         }
       >

@@ -1,6 +1,7 @@
 import { useState } from 'react'
-import { Link, useParams } from 'one'
+import { useParams } from 'one'
 
+import { AppLink } from '~/components/navigation/AppLink'
 import { Button, Icons, Paragraph, Separator, Spinner, Text, XStack, YStack, useAppToast, useMedia } from '~/components/ui'
 import {
   AvailableOffersCard,
@@ -81,11 +82,11 @@ export function ShopScreen() {
               Shop not found
             </Text>
             <Paragraph color={ui.textSecondary}>{error ?? 'This shop could not be loaded.'}</Paragraph>
-            <Link href={commerceRoutes.home} asChild>
+            <AppLink href={commerceRoutes.home} asChild>
               <Button tone="primary" size="$4" borderRadius={999} alignSelf="flex-start">
                 Browse marketplace
               </Button>
-            </Link>
+            </AppLink>
           </YStack>
         </PageSection>
       </FullWidthLayout>

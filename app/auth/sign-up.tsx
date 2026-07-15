@@ -1,8 +1,7 @@
-import { Redirect } from 'one'
-
 import { appRoutes } from '~/lib/routes'
+import { SpaRedirect } from '~/components/navigation/SpaRedirect'
 
 /** No separate sign-up — `/auth/sign-up` redirects to the unified OTP flow. */
 export default function SignUpRedirect() {
-  return <Redirect href={appRoutes.signIn} />
+  return <SpaRedirect href={appRoutes.signIn} />
 }

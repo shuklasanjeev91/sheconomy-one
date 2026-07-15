@@ -22,8 +22,10 @@ export type PhoneAuthInput = {
   nationalNumber: string
 }
 
-export async function signOut() {
-  return supabase.auth.signOut()
+export type SignOutScope = 'local' | 'global' | 'others'
+
+export async function signOut(options?: { scope?: SignOutScope }) {
+  return supabase.auth.signOut({ scope: options?.scope ?? 'local' })
 }
 
 export async function getSession() {

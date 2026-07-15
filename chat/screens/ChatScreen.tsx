@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useRef } from 'react'
 import { Platform } from 'react-native'
-import { Link, useRouter } from 'one'
+import { useRouter } from 'one'
 
+import { AppLink } from '~/components/navigation/AppLink'
 import { ChatListPane } from '~/chat/components/ChatListPane'
 import { ChatSectionTabs } from '~/chat/components/ChatSectionTabs'
 import { ChatThreadPane } from '~/chat/components/ChatThreadPane'
@@ -105,9 +106,9 @@ export function ChatScreen({ chatId = null, filter = 'all' }: ChatScreenProps) {
           Sign in to chat with your network in real time — send messages, share photos, and see when
           contacts are online.
         </Text>
-        <Link href={routes.signIn} asChild>
+        <AppLink href={routes.signIn} asChild>
           <Button tone="primary">Sign in to continue</Button>
-        </Link>
+        </AppLink>
       </YStack>
     )
   }

@@ -1,6 +1,5 @@
 import type { ReactNode } from 'react'
 import { useEffect, useState } from 'react'
-import { Link } from 'one'
 
 import { FeedPostCard } from '~/community/components/FeedPostCard'
 import { UserListBottomSheet } from '~/community/components/UserListBottomSheet'
@@ -587,11 +586,11 @@ function ProfileHero({
                 {connectionsCount} connection{connectionsCount === 1 ? '' : 's'}
               </Text>
             ) : isOwnProfile ? (
-              <Link href={communityRoutes.network}>
+              <AppLink href={communityRoutes.network}>
                 <Text fontSize={14} fontWeight="600" color={BRAND_BLUE}>
                   Grow your network
                 </Text>
-              </Link>
+              </AppLink>
             ) : (
               <Text
                 fontSize={14}
@@ -734,11 +733,11 @@ function ActivitySection({
           <YStack gap="$2" paddingVertical="$2">
             <Text color={ui.textMuted}>{emptyMessage}</Text>
             {isOwnProfile && activity.filter === 'posts' ? (
-              <Link href={communityRoutes.createPost}>
+              <AppLink href={communityRoutes.createPost}>
                 <Text color={BRAND_BLUE} fontWeight="600">
                   Create a post
                 </Text>
-              </Link>
+              </AppLink>
             ) : null}
           </YStack>
         ) : (

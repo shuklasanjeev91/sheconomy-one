@@ -1,7 +1,8 @@
 import type { ReactNode } from 'react'
-import { Link } from 'one'
+
 import type { Href } from 'one'
 
+import { AppLink } from '~/components/navigation/AppLink'
 import { Text, Theme, XStack, YStack } from '~/components/ui'
 import { BRAND_THEME } from '~/config/tokens'
 import { useAppUi } from '~/lib/theme/useAppUi'
@@ -59,7 +60,7 @@ export function CommerceSection({
         {action ? (
           action
         ) : actionLabel && actionHref ? (
-          <Link href={actionHref}>
+          <AppLink href={actionHref}>
             <Theme name={BRAND_THEME}>
               <XStack
                 paddingHorizontal="$3"
@@ -76,7 +77,7 @@ export function CommerceSection({
                 </Text>
               </XStack>
             </Theme>
-          </Link>
+          </AppLink>
         ) : null}
       </XStack>
       {children}

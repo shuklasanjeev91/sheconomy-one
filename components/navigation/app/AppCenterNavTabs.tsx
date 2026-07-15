@@ -1,5 +1,6 @@
-import { Link, usePathname } from 'one'
+import { usePathname } from 'one'
 
+import { AppLink } from '~/components/navigation/AppLink'
 import { XStack, YStack } from '~/components/ui'
 import { useAccess } from '~/hooks/useAccess'
 import { useAppUi } from '~/lib/theme/useAppUi'
@@ -41,7 +42,7 @@ export function AppCenterNavTabs({ variant = 'desktop', compact = false }: AppCe
         const href = resolveFeatureNavHref(String(item.href), item.feature)
 
         return (
-          <Link key={item.label} href={href} replace asChild>
+          <AppLink key={item.label} href={href} replace asChild>
             <YStack
               flex={isInline ? 1 : 1}
               maxWidth={!isMobile ? 112 : undefined}
@@ -91,7 +92,7 @@ export function AppCenterNavTabs({ variant = 'desktop', compact = false }: AppCe
                 />
               ) : null}
             </YStack>
-          </Link>
+          </AppLink>
         )
       })}
     </XStack>

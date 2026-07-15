@@ -1,4 +1,5 @@
-import { Link, useLocalSearchParams, useRouter } from 'one'
+import { useLocalSearchParams, useRouter } from 'one'
+import { AppLink } from '~/components/navigation/AppLink'
 import { useEffect } from 'react'
 
 import { CommercePageHeader, CommercePanel } from '~/commerce/components'
@@ -81,7 +82,7 @@ export function MyShopsScreen() {
             </YStack>
           </XStack>
 
-          <Link href={commerceRoutes.createShop} asChild>
+          <AppLink href={commerceRoutes.createShop} asChild>
             <Button
               tone="primary"
               size="$4"
@@ -91,14 +92,14 @@ export function MyShopsScreen() {
             >
               Start seller setup
             </Button>
-          </Link>
+          </AppLink>
         </CommercePanel>
 
-        <Link href={commerceRoutes.home} asChild>
+        <AppLink href={commerceRoutes.home} asChild>
           <Button tone="outline" size="$4" borderRadius={999}>
             Browse marketplace
           </Button>
-        </Link>
+        </AppLink>
       </YStack>
     </PageContent>
   )

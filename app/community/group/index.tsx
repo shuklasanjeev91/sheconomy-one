@@ -1,8 +1,7 @@
-import { Redirect } from 'one'
-
 import { communityRoutes } from '~/lib/routes'
+import { SpaRedirect } from '~/components/navigation/SpaRedirect'
 
 /** `/community/group` has no bare page — send visitors to the groups list. */
 export default function GroupIndexRedirect() {
-  return <Redirect href={communityRoutes.groups} />
+  return <SpaRedirect href={communityRoutes.groups} />
 }

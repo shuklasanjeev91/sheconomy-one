@@ -6,6 +6,7 @@ import { appRoutes } from '~/lib/routes'
 
 export type SettingsSectionId =
   | 'account'
+  | 'security'
   | 'appearance'
   | 'notifications'
   | 'commerce'
@@ -38,9 +39,17 @@ export const SETTINGS_NAV: SettingsNavItem[] = [
     group: 'account',
   },
   {
+    id: 'security',
+    label: 'Security & sessions',
+    description: 'Devices, passkeys, and linked logins',
+    href: appRoutes.settingsSection('security'),
+    icon: Icons.ShieldCheck,
+    group: 'account',
+  },
+  {
     id: 'appearance',
     label: 'Appearance',
-    description: 'Theme for every tab',
+    description: 'Theme, region, currency & language',
     href: appRoutes.settingsSection('appearance'),
     icon: Icons.Palette,
     group: 'account',

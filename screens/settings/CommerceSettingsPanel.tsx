@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import type { Href } from 'one'
-import { Link } from 'one'
 
+import { AppLink } from '~/components/navigation/AppLink'
 import { Icons, Separator, Text, XStack, YStack, useAppToast } from '~/components/ui'
 import { SurfaceCard } from '~/components/layout'
 import { ChannelPrefsCard } from '~/components/settings/ChannelPrefsCard'
@@ -39,7 +39,7 @@ function DeepLinkRow({
 }) {
   const ui = useAppUi()
   return (
-    <Link href={href} asChild>
+    <AppLink href={href} asChild>
       <XStack
         alignItems="center"
         gap="$3"
@@ -59,7 +59,7 @@ function DeepLinkRow({
         </YStack>
         <Icons.ChevronRight size={16} color={ui.textMuted} />
       </XStack>
-    </Link>
+    </AppLink>
   )
 }
 

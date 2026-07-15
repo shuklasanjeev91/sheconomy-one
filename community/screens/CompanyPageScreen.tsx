@@ -1,10 +1,12 @@
-import { Link, useParams } from 'one'
+import { useParams } from 'one'
+import { AppLink } from '~/components/navigation/AppLink'
 import { useCallback, useEffect, useMemo, useState } from 'react'
 
 import { AboutDetailRow } from '~/community/components/AboutDetailRow'
 import { CompanyFollowButton } from '~/community/components/CompanyFollowButton'
 import { CommunityCard } from '~/community/components/CommunityCard'
 import { CommunityShell } from '~/community/components/CommunityShell'
+import { EntityAdminRoster, type EntityAdminRosterPerson } from '~/community/components/EntityAdminRoster'
 import { EntityPageHero } from '~/community/components/EntityPageHero'
 import { EntityPageTabs } from '~/community/components/EntityPageTabs'
 import { FeedPostCard } from '~/community/components/FeedPostCard'
@@ -15,6 +17,9 @@ import {
   fetchCompanyBySlug,
   fetchCompanyFollowerCount,
   fetchCompanyFollowers,
+  fetchCompanyMembers,
+  fetchCompanyMembership,
+  setCompanyMemberRole,
   updateCompanyPage,
   type CompanyPage,
 } from '~/community/lib/companies'
@@ -40,14 +45,14 @@ import { useSupabase } from '~/providers/SupabaseProvider'
 
 import { BRAND_MEMBER_LABEL } from '~/config/brand'
 
-const TABS = [
+const BASE_TABS = [
   { id: 'home', label: 'Home' },
   { id: 'about', label: 'About' },
   { id: 'jobs', label: 'Jobs' },
   { id: 'followers', label: 'Followers' },
 ] as const
 
-type Tab = (typeof TABS)[number]['id']
+type Tab = (typeof BASE_TABS)[number]['id'] | 'admins'
 
 export function CompanyPageScreen() {
   const communityUi = useCommunityUi()
@@ -60,12 +65,16 @@ export function CompanyPageScreen() {
   const [jobs, setJobs] = useState<JobListing[]>([])
   const [followers, setFollowers] = useState(0)
   const [followerRows, setFollowerRows] = useState<Awaited<ReturnType<typeof fetchCompanyFollowers>>>([])
+  const [adminPeople, setAdminPeople] = useState<EntityAdminRosterPerson[]>([])
   const [page, setPage] = useState(0)
   const [hasMore, setHasMore] = useState(false)
   const [isLoading, setIsLoading] = useState(true)
   const [isLoadingMore, setIsLoadingMore] = useState(false)
   const [isEditing, setIsEditing] = useState(false)
   const [isSaving, setIsSaving] = useState(false)
+  const [busyRoleUserId, setBusyRoleUserId] = useState<string | null>(null)
+  const [isOwner, setIsOwner] = useState(false)
+  const [isManager, setIsManager] = useState(false)
   const [editTagline, setEditTagline] = useState('')
   const [editIndustry, setEditIndustry] = useState('')
   const [editLocation, setEditLocation] = useState('')
@@ -73,7 +82,10 @@ export function CompanyPageScreen() {
   const [editWebsite, setEditWebsite] = useState('')
   const [editSize, setEditSize] = useState('')
 
-  const isOwner = !!user && company?.created_by === user.id
+  const tabs = useMemo(() => {
+    if (isManager) return [...BASE_TABS, { id: 'admins' as const, label: 'Admins' }]
+    return [...BASE_TABS]
+  }, [isManager])
 
   const reload = useCallback(async () => {
     if (!slug) return
@@ -81,11 +93,15 @@ export function CompanyPageScreen() {
     const { data } = await fetchCompanyBySlug(slug)
     setCompany(data)
     if (data) {
-      const [count, jobResult, postResult, followerList] = await Promise.all([
+      const [count, jobResult, postResult, followerList, membership, members] = await Promise.all([
         fetchCompanyFollowerCount(data.id),
         searchJobsByCompany(data.name),
         fetchCompanyPostsPage(data.id, 0),
         fetchCompanyFollowers(data.id),
+        user
+          ? fetchCompanyMembership(data.id, user.id)
+          : Promise.resolve({ role: null, isManager: false, isOwner: false }),
+        user ? fetchCompanyMembers(data.id) : Promise.resolve([]),
       ])
       setFollowers(count)
       setFollowerRows(followerList)
@@ -93,15 +109,31 @@ export function CompanyPageScreen() {
       setPosts(postResult.items)
       setHasMore(postResult.hasMore)
       setPage(0)
+      setIsOwner(membership.isOwner)
+      setIsManager(membership.isManager)
+      setAdminPeople(
+        members.map((member) => ({
+          user_id: member.user_id,
+          role: member.role,
+          username: member.username,
+          full_name: member.full_name,
+          headline: member.headline,
+          avatar_url: member.avatar_url,
+        })),
+      )
       setEditTagline(data.tagline ?? '')
       setEditIndustry(data.industry)
       setEditLocation(data.location ?? '')
       setEditHeadquarters(data.headquarters ?? '')
       setEditWebsite(data.website ?? '')
       setEditSize(data.size)
+    } else {
+      setIsOwner(false)
+      setIsManager(false)
+      setAdminPeople([])
     }
     setIsLoading(false)
-  }, [slug])
+  }, [slug, user])
 
   useEffect(() => {
     reload()
@@ -143,6 +175,30 @@ export function CompanyPageScreen() {
     toast.show('Page updated', { tone: 'success' })
     setIsEditing(false)
     reload()
+  }
+
+  async function handleToggleCompanyAdmin(person: EntityAdminRosterPerson) {
+    if (!company || !isOwner) return
+    const nextRole = person.role === 'admin' ? 'member' : 'admin'
+    setBusyRoleUserId(person.user_id)
+    if (nextRole === 'member') {
+      setAdminPeople((prev) => prev.filter((row) => row.user_id !== person.user_id))
+    } else {
+      setAdminPeople((prev) => {
+        if (prev.some((row) => row.user_id === person.user_id)) {
+          return prev.map((row) => (row.user_id === person.user_id ? { ...row, role: 'admin' } : row))
+        }
+        return [...prev, { ...person, role: 'admin' }]
+      })
+    }
+    const { error } = await setCompanyMemberRole(company.id, person.user_id, nextRole)
+    setBusyRoleUserId(null)
+    if (error) {
+      toast.show('Could not change role', { tone: 'danger', message: error })
+      reload()
+      return
+    }
+    toast.show(nextRole === 'admin' ? 'Admin assigned' : 'Admin removed', { tone: 'success' })
   }
 
   if (isLoading) {
@@ -191,27 +247,27 @@ export function CompanyPageScreen() {
                   text: company.tagline ?? undefined,
                 }}
               />
-              {isOwner ? (
+              {isManager ? (
                 <Button tone="outline" borderRadius={999} onPress={() => setIsEditing((value) => !value)}>
                   {isEditing ? 'Cancel edit' : 'Edit page'}
                 </Button>
               ) : null}
-              {isOwner ? (
-                <Link href={`${communityRoutes.createPost}?companyId=${company.id}` as never}>
+              {isManager ? (
+                <AppLink href={`${communityRoutes.createPost}?companyId=${company.id}` as never}>
                   <Button backgroundColor={communityUi.brand} color="white" borderRadius={999}>
                     Create post
                   </Button>
-                </Link>
+                </AppLink>
               ) : null}
             </>
           }
         />
 
-        <EntityPageTabs tabs={[...TABS]} active={tab} onChange={(id) => setTab(id as Tab)} />
+        <EntityPageTabs tabs={tabs} active={tab} onChange={(id) => setTab(id as Tab)} />
 
         {tab === 'home' ? (
           <YStack gap={12}>
-            {isOwner ? (
+            {isManager ? (
               <CommunityCard padding={16} gap={8}>
                 <Text fontSize={15} fontWeight="600" color={communityUi.text}>
                   Share an update as {company.name}
@@ -219,11 +275,11 @@ export function CompanyPageScreen() {
                 <Text fontSize={13} color={communityUi.textMuted}>
                   Post news, hiring updates, or announcements to your followers.
                 </Text>
-                <Link href={`${communityRoutes.createPost}?companyId=${company.id}` as never}>
+                <AppLink href={`${communityRoutes.createPost}?companyId=${company.id}` as never}>
                   <Text fontSize={14} fontWeight="600" color={communityUi.brand}>
                     Write a page post
                   </Text>
-                </Link>
+                </AppLink>
               </CommunityCard>
             ) : null}
             {posts.length === 0 ? (
@@ -240,7 +296,7 @@ export function CompanyPageScreen() {
 
         {tab === 'about' ? (
           <CommunityCard padding={16} gap={12}>
-            {isEditing && isOwner ? (
+            {isEditing && isManager ? (
               <YStack gap={12}>
                 <Field label="Tagline" value={editTagline} onChange={setEditTagline} />
                 <Field label="Industry" value={editIndustry} onChange={setEditIndustry} />
@@ -289,7 +345,7 @@ export function CompanyPageScreen() {
               </Text>
             ) : (
               jobs.map((job) => (
-                <Link key={job.id} href={communityRoutes.job(job.id)}>
+                <AppLink key={job.id} href={communityRoutes.job(job.id)}>
                   <YStack paddingVertical={14} paddingHorizontal={8} borderBottomWidth={1} borderBottomColor={communityUi.borderLight} gap={4}>
                     <Text fontWeight="600" fontSize={16} color={communityUi.text}>
                       {job.title}
@@ -298,7 +354,7 @@ export function CompanyPageScreen() {
                       {job.location} · {job.job_type} · {job.experience_level}
                     </Text>
                   </YStack>
-                </Link>
+                </AppLink>
               ))
             )}
           </CommunityCard>
@@ -311,11 +367,22 @@ export function CompanyPageScreen() {
                 No followers yet.
               </Text>
             ) : (
-              followerRows.map((follower) => (
-                <ProfileLink key={follower.user_id} userId={follower.user_id} username={follower.username}>
-                  <XStack gap={12} alignItems="center" paddingVertical={8} paddingHorizontal={8} borderRadius={8} hoverStyle={{ backgroundColor: communityUi.divider }}>
-                    <Avatar name={follower.full_name} src={follower.avatar_url ?? undefined} size="$4" />
-                    <YStack flex={1} gap={2}>
+              followerRows.map((follower) => {
+                const alreadyAdmin = adminPeople.some((admin) => admin.user_id === follower.user_id)
+                return (
+                  <XStack
+                    key={follower.user_id}
+                    gap={12}
+                    alignItems="center"
+                    paddingVertical={8}
+                    paddingHorizontal={8}
+                    borderRadius={8}
+                    hoverStyle={{ backgroundColor: communityUi.divider }}
+                  >
+                    <ProfileLink userId={follower.user_id} username={follower.username}>
+                      <Avatar name={follower.full_name} src={follower.avatar_url ?? undefined} size="$4" />
+                    </ProfileLink>
+                    <YStack flex={1} gap={2} minWidth={0}>
                       <Text fontSize={15} fontWeight="600" color={communityUi.text}>
                         {follower.full_name}
                       </Text>
@@ -323,10 +390,50 @@ export function CompanyPageScreen() {
                         {follower.headline || BRAND_MEMBER_LABEL}
                       </Text>
                     </YStack>
+                    {isOwner && !alreadyAdmin && follower.user_id !== user?.id ? (
+                      <Button
+                        tone="outline"
+                        borderRadius={999}
+                        size="$2"
+                        disabled={busyRoleUserId === follower.user_id}
+                        onPress={() =>
+                          void handleToggleCompanyAdmin({
+                            user_id: follower.user_id,
+                            role: 'member',
+                            username: follower.username,
+                            full_name: follower.full_name,
+                            headline: follower.headline,
+                            avatar_url: follower.avatar_url,
+                          })
+                        }
+                      >
+                        Make admin
+                      </Button>
+                    ) : null}
                   </XStack>
-                </ProfileLink>
-              ))
+                )
+              })
             )}
+          </CommunityCard>
+        ) : null}
+
+        {tab === 'admins' && isManager ? (
+          <CommunityCard padding={16}>
+            <EntityAdminRoster
+              title="Page admins"
+              subtitle={
+                isOwner
+                  ? 'Owners can assign or remove admins. Admins can edit the page and post as the company.'
+                  : 'You can edit this page and post as the company.'
+              }
+              people={adminPeople}
+              currentUserId={user?.id}
+              canManageRoles={isOwner}
+              lockedRoles={['owner']}
+              busyUserId={busyRoleUserId}
+              emptyMessage="No admins yet."
+              onToggleAdmin={(person) => void handleToggleCompanyAdmin(person)}
+            />
           </CommunityCard>
         ) : null}
       </YStack>

@@ -1,9 +1,9 @@
-import { Link, usePathname, useRouter } from 'one'
-import { useState } from 'react'
+import { usePathname } from 'one'
+import { AppLink } from '~/components/navigation/AppLink'
 import { Platform } from 'react-native'
 
-import { recordSearchTerm } from '~/commerce/lib/search-history'
-import { Icons, Input, Text, XStack, YStack } from '~/components/ui'
+import { AppSearchField } from '~/components/search'
+import { Icons, Text, XStack, YStack } from '~/components/ui'
 import { AppHeaderBackButton } from '~/components/navigation/AppHeaderBackButton'
 import { useAppBarScroll } from '~/components/navigation/AppBarScrollContext'
 import { NavCountBadge } from '~/components/navigation/NavCountBadge'
@@ -13,13 +13,11 @@ import { useUnreadNotifications } from '~/community/hooks/useUnreadNotifications
 import { commerceRoutes, routes } from '~/lib/routes'
 import { useAppBackNavigation } from '~/hooks/useAppBackNavigation'
 import { useAppUi } from '~/lib/theme/useAppUi'
-import { chromeSurfaceStyle, searchFieldFocusStyle, searchFieldStyle } from '~/lib/theme/surfaces'
+import { chromeSurfaceStyle } from '~/lib/theme/surfaces'
 
 import { AppCenterNavTabs } from './AppCenterNavTabs'
 import { AppMenuButton } from './AppMenuSheet'
 import { getAppColors } from './config'
-
-import { BRAND_NAME } from '~/config/brand'
 
 /** Collapse search/logo row after this scroll offset — tabs stay visible (LinkedIn-style). */
 const SCROLL_TABS_ONLY_THRESHOLD = 36
@@ -37,12 +35,10 @@ type AppMobileHeaderProps = {
 export function AppMobileHeader({ minimal = false }: AppMobileHeaderProps) {
   const ui = useAppUi()
   const colors = getAppColors(ui)
-  const router = useRouter()
   const pathname = usePathname()
   const { showBack } = useAppBackNavigation()
   const { scrollY } = useAppBarScroll()
   const { count: unreadNotifications } = useUnreadNotifications()
-  const [searchQuery, setSearchQuery] = useState('')
 
   const isSettings = pathname === '/settings' || pathname.startsWith('/settings/')
   const settingsTitle = settingsHeaderTitle(pathname)
@@ -50,12 +46,6 @@ export function AppMobileHeader({ minimal = false }: AppMobileHeaderProps) {
   /** Scrolled feed roots: collapse chrome to tabs only. */
   const tabsOnly = showProductTabs && scrollY > SCROLL_TABS_ONLY_THRESHOLD
   const showChromeRow = !tabsOnly
-
-  function submitSearch() {
-    const trimmed = searchQuery.trim()
-    if (trimmed) recordSearchTerm(trimmed)
-    router.push(trimmed ? commerceRoutes.search(trimmed) : commerceRoutes.search())
-  }
 
   return (
     <YStack
@@ -97,33 +87,9 @@ export function AppMobileHeader({ minimal = false }: AppMobileHeaderProps) {
               </Text>
             </YStack>
           ) : (
-            <XStack
-              flex={1}
-              minWidth={0}
-              paddingHorizontal="$3"
-              alignItems="center"
-              gap={8}
-              height={40}
-              style={searchFieldStyle(ui)}
-              focusStyle={searchFieldFocusStyle(ui)}
-            >
-              <Icons.Search size={17} color={colors.icon} flexShrink={0} />
-              <Input
-                flex={1}
-                minWidth={0}
-                unstyled
-                value={searchQuery}
-                onChangeText={setSearchQuery}
-                onSubmitEditing={submitSearch}
-                returnKeyType="search"
-                placeholder={`Search ${BRAND_NAME}`}
-                fontSize={14}
-                color={colors.text}
-                placeholderTextColor={colors.icon}
-                borderWidth={0}
-                backgroundColor="transparent"
-              />
-            </XStack>
+            <YStack flex={1} minWidth={0} justifyContent="center">
+              <AppSearchField compact />
+            </YStack>
           )}
 
           <XStack flexShrink={0} gap={8} alignItems="center">
@@ -192,9 +158,9 @@ function HeaderIcon({
 
   if (href) {
     return (
-      <Link href={href} asChild>
+      <AppLink href={href} asChild>
         {button}
-      </Link>
+      </AppLink>
     )
   }
   return button

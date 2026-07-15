@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
-import { Link } from 'one'
+
 import type { Href } from 'one'
+import { AppLink } from '~/components/navigation/AppLink'
 import { Platform } from 'react-native'
 
 import { useCommunityUi } from '~/community/lib/community-theme'
@@ -50,11 +51,11 @@ export function CommunityIdentityCard() {
               Sign in to see your network, profile views, and personalised feed.
             </Text>
           </YStack>
-          <Link href={routes.signIn as Href}>
+          <AppLink href={routes.signIn as Href}>
             <Text fontSize={13} fontWeight="700" color={communityUi.brand}>
               Sign in
             </Text>
-          </Link>
+          </AppLink>
         </YStack>
       </YStack>
     )
@@ -78,7 +79,7 @@ export function CommunityIdentityCard() {
       marginBottom={8}
       style={Platform.OS === 'web' ? { boxShadow: communityUi.cardShadow } : undefined}
     >
-      <Link href={href} asChild>
+      <AppLink href={href} asChild>
         <YStack cursor="pointer">
           <YStack height={56} width="100%" overflow="hidden" backgroundColor={communityUi.brand}>
             {profile.cover_url ? (
@@ -111,7 +112,7 @@ export function CommunityIdentityCard() {
             </YStack>
           </YStack>
         </YStack>
-      </Link>
+      </AppLink>
 
       <YStack borderTopWidth={1} borderTopColor={communityUi.borderLight} paddingVertical={8}>
         <StatLink
@@ -125,7 +126,7 @@ export function CommunityIdentityCard() {
         ) : null}
         {profile.profile_completion_percentage != null &&
         profile.profile_completion_percentage < 100 ? (
-          <Link href={href}>
+          <AppLink href={href}>
             <XStack
               paddingHorizontal={12}
               paddingVertical={8}
@@ -141,7 +142,7 @@ export function CommunityIdentityCard() {
                 {profile.profile_completion_percentage}%
               </Text>
             </XStack>
-          </Link>
+          </AppLink>
         ) : null}
       </YStack>
     </YStack>
@@ -152,7 +153,7 @@ function StatLink({ label, value, href }: { label: string; value: number; href: 
   const communityUi = useCommunityUi()
 
   return (
-    <Link href={href}>
+    <AppLink href={href}>
       <XStack
         paddingHorizontal={12}
         paddingVertical={6}
@@ -168,6 +169,6 @@ function StatLink({ label, value, href }: { label: string; value: number; href: 
           {value}
         </Text>
       </XStack>
-    </Link>
+    </AppLink>
   )
 }

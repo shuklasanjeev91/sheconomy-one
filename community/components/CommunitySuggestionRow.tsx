@@ -1,6 +1,5 @@
-import { Link } from 'one'
-
 import type { CommunitySuggestion, SuggestionKind } from '~/community/lib/community-personalization'
+import { AppLink } from '~/components/navigation/AppLink'
 import { suggestionKindLabel } from '~/community/lib/community-personalization'
 import { useCommunityUi } from '~/community/lib/community-theme'
 import { Avatar, Icons, Text, XStack, YStack } from '~/components/ui'
@@ -36,7 +35,7 @@ export function CommunitySuggestionRow({
   const Icon = KIND_ICON[item.kind]
 
   return (
-    <Link href={item.href as never}>
+    <AppLink href={item.href as never}>
       <XStack
         gap={10}
         alignItems="center"
@@ -73,6 +72,6 @@ export function CommunitySuggestionRow({
           </Text>
         </YStack>
       </XStack>
-    </Link>
+    </AppLink>
   )
 }

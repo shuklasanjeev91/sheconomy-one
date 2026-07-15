@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useState } from 'react'
 import { Platform } from 'react-native'
-import { Link, useRouter } from 'one'
+import { useRouter } from 'one'
 
+import { AppLink } from '~/components/navigation/AppLink'
 import { ChatSectionTabs } from '~/chat/components/ChatSectionTabs'
 import { fetchCallHistory, type CallHistoryEntry } from '~/chat/lib/calls'
 import { useChatTheme } from '~/chat/lib/chat-theme'
@@ -97,9 +98,9 @@ export function CallHistoryScreen() {
         <Text fontSize={14} color={theme.textMuted} textAlign="center" lineHeight={20} maxWidth={340}>
           Sign in to see your recent voice and video calls and call your contacts back.
         </Text>
-        <Link href={routes.signIn} asChild>
+        <AppLink href={routes.signIn} asChild>
           <Button tone="primary">Sign in to continue</Button>
-        </Link>
+        </AppLink>
       </YStack>
     )
   }
