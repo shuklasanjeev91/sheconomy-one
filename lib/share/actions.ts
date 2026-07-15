@@ -57,11 +57,7 @@ export async function openShareTarget(
 
   if (Platform.OS === 'web') {
     if (typeof window === 'undefined') return false
-    // mailto: should use the current context so the OS mail handler kicks in.
-    if (key === 'email') {
-      window.location.href = targetUrl
-      return true
-    }
+    // Never assign window.location — that unloads the SPA. Open in a new context.
     const opened = window.open(targetUrl, '_blank', 'noopener,noreferrer')
     return Boolean(opened)
   }

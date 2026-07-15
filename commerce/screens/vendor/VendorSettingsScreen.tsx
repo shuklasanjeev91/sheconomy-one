@@ -65,7 +65,7 @@ export function VendorSettingsScreen() {
 
       <Link href={vendorRoutes.myShop} asChild>
         <Button tone="ghost" size="$3" icon={<Icons.Store size={16} />}>
-          Back to My Shop
+          My Shop
         </Button>
       </Link>
     </YStack>

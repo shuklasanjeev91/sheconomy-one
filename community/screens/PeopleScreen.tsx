@@ -128,7 +128,7 @@ export function PeopleScreen({ initialTab, profileHandle }: PeopleScreenProps) {
   const meta = USER_LIST_META[tab]
   const visibleTabs = useMemo(() => {
     if (!isOwnList) {
-      return ['followers', 'following', 'connections'] as UserListKind[]
+      return ['connections', 'followers', 'following'] as UserListKind[]
     }
     return TABS
   }, [isOwnList])

@@ -13,6 +13,7 @@ import {
   useAppToast,
   useMedia,
 } from '~/components/ui'
+import { MediaLightbox } from '~/components/media/MediaLightbox'
 import {
   AvailableOffersCard,
   CommercePanel,
@@ -97,6 +98,7 @@ export default function ListingDetailScreen() {
   const isDesktop = media.gtMd
 
   const [activeImageIndex, setActiveImageIndex] = useState(0)
+  const [galleryLightboxOpen, setGalleryLightboxOpen] = useState(false)
   const [isAddingToCart, setIsAddingToCart] = useState(false)
   const [isUpdatingQuantity, setIsUpdatingQuantity] = useState(false)
   const [personalizationNote, setPersonalizationNote] = useState('')
@@ -144,7 +146,7 @@ export default function ListingDetailScreen() {
           <Text color={ui.textSecondary}>{error ?? 'This listing could not be loaded.'}</Text>
           <Link href={commerceRoutes.home} asChild>
             <Button tone="outline" size="$4" alignSelf="flex-start" borderRadius={999}>
-              Back to shops
+              Browse marketplace
             </Button>
           </Link>
         </YStack>
@@ -461,6 +463,12 @@ export default function ListingDetailScreen() {
         borderWidth={1}
         borderColor={ui.borderSubtle}
         style={getShadowStyle('sm')}
+        cursor={activeGalleryUrls.length > 0 ? 'zoom-in' : undefined}
+        onPress={
+          activeGalleryUrls.length > 0
+            ? () => setGalleryLightboxOpen(true)
+            : undefined
+        }
       >
         {activeGalleryUrls.length > 0 ? (
           <ListingImage
@@ -506,6 +514,19 @@ export default function ListingDetailScreen() {
             ))}
           </XStack>
         </ScrollView>
+      ) : null}
+
+      {sortedImages.length > 0 ? (
+        <MediaLightbox
+          items={sortedImages.map((image) => ({
+            url: image.image_url,
+            kind: 'image' as const,
+            alt: image.alt_text ?? listing.title,
+          }))}
+          open={galleryLightboxOpen}
+          onOpenChange={setGalleryLightboxOpen}
+          initialIndex={activeImageIndex}
+        />
       ) : null}
     </YStack>
   )
@@ -647,17 +668,6 @@ export default function ListingDetailScreen() {
         width="100%"
         gap="$5"
       >
-        {media.gtMd ? (
-          <Link href={commerceRoutes.shops} asChild>
-            <XStack alignItems="center" gap="$1" cursor="pointer" alignSelf="flex-start">
-              <Icons.ArrowLeft size={16} color={ui.textSecondary} />
-              <Text fontSize={13} color={ui.textSecondary} hoverStyle={{ textDecorationLine: 'underline' }}>
-                Back to shops
-              </Text>
-            </XStack>
-          </Link>
-        ) : null}
-
         <XStack gap="$6" alignItems="flex-start">
           {imageGallery}
           {buyPanel}

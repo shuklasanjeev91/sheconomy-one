@@ -163,7 +163,7 @@ export function AppMobileBottomTabs() {
           }
 
           return (
-            <Link key={`${tab.label}-${String(tab.href)}`} href={tab.href} asChild>
+            <Link key={`${tab.label}-${String(tab.href)}`} href={tab.href} replace asChild>
               <MobileTabBarItem
                 flex={1}
                 minWidth={0}

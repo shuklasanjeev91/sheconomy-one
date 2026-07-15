@@ -7,7 +7,6 @@ import {
   useState,
   type ReactNode,
 } from 'react'
-import { useRouter } from 'one'
 
 import {
   disablePushDevice,
@@ -18,6 +17,7 @@ import {
   getOneSignalAppId,
   pathFromNotificationUrl,
 } from '~/lib/notifications/push-config'
+import { navigateApp } from '~/lib/platform/navigate'
 import { useSupabase } from '~/providers/SupabaseProvider'
 
 type PushNotificationsContextValue = {
@@ -45,7 +45,6 @@ const PushNotificationsContext = createContext<PushNotificationsContextValue | n
  */
 export function PushNotificationsProvider({ children }: { children: ReactNode }) {
   const { user } = useSupabase()
-  const router = useRouter()
   const isConfigured = !!getOneSignalAppId()
   const [permissionGranted, setPermissionGranted] = useState(false)
   const [playerId, setPlayerId] = useState<string | null>(null)
@@ -96,13 +95,13 @@ export function PushNotificationsProvider({ children }: { children: ReactNode })
       const path = pathFromNotificationUrl(payload.url)
       if (path) {
         try {
-          router.push(path as never)
+          navigateApp(path)
         } catch {
           // ignore navigation failures
         }
       }
     })
-  }, [isConfigured, router])
+  }, [isConfigured])
 
   const enablePush = useCallback(async () => {
     if (!isConfigured) {

@@ -64,6 +64,28 @@ export async function blockCommunityMember(
   return { error: null }
 }
 
+/** Report a member for review. */
+export async function reportCommunityMember(
+  reporterId: string,
+  reportedUserId: string,
+  reason = 'inappropriate',
+): Promise<{ error: string | null }> {
+  if (reporterId === reportedUserId) return { error: 'You cannot report yourself.' }
+
+  const { error } = await supabase.from('user_reports').insert({
+    reporter_id: reporterId,
+    reported_user_id: reportedUserId,
+    reason,
+    status: 'open',
+  })
+
+  if (error && error.message.toLowerCase().includes('duplicate')) {
+    return { error: null }
+  }
+
+  return { error: error?.message ?? null }
+}
+
 /** IDs the viewer has hidden or whose authors they blocked. */
 export async function fetchFeedExclusion(
   userId: string,

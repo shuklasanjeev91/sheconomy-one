@@ -49,6 +49,11 @@ type AccountMenuOptions = {
   primaryShopId?: string | null
   cartCount?: number
   wishlistCount?: number
+  /**
+   * Mobile / compact chrome already shows center + bottom tabs.
+   * When true, omit destinations that those tabs already cover.
+   */
+  omitChromeDuplicates?: boolean
 }
 
 function item(
@@ -74,42 +79,57 @@ function badge(count?: number) {
   return count && count > 0 ? { badge: count } : {}
 }
 
-/** Pinned shopping shortcuts — items not repeated in sections below. */
+/** Pinned shopping shortcuts — not repeated in sections below. */
 export function getAccountQuickActions({
   tier,
   cartCount,
   wishlistCount,
-}: Pick<AccountMenuOptions, 'tier' | 'cartCount' | 'wishlistCount'>): AccountQuickAction[] {
-  return [
+  omitChromeDuplicates = false,
+}: Pick<
+  AccountMenuOptions,
+  'tier' | 'cartCount' | 'wishlistCount' | 'omitChromeDuplicates'
+>): AccountQuickAction[] {
+  const actions: AccountQuickAction[] = [
     {
       id: 'orders',
       icon: Icons.Package,
       label: 'Orders',
       href: item(tier, 'orders', Icons.Package, '', commerceRoutes.orders, 'commerce').href,
     },
-    {
+  ]
+
+  // Cart is already a mobile bottom tab — keep it on desktop only.
+  if (!omitChromeDuplicates) {
+    actions.push({
       id: 'cart',
       icon: Icons.ShoppingBag,
       label: 'Cart',
       href: item(tier, 'cart', Icons.ShoppingBag, '', commerceRoutes.cart, 'commerce').href,
       ...badge(cartCount),
-    },
-    {
-      id: 'wishlist',
-      icon: Icons.Heart,
-      label: 'Wishlist',
-      href: item(tier, 'wishlist', Icons.Heart, '', commerceRoutes.wishlist, 'commerce').href,
-      ...badge(wishlistCount),
-    },
-  ]
+    })
+  }
+
+  actions.push({
+    id: 'wishlist',
+    icon: Icons.Heart,
+    label: 'Wishlist',
+    href: item(tier, 'wishlist', Icons.Heart, '', commerceRoutes.wishlist, 'commerce').href,
+    ...badge(wishlistCount),
+  })
+
+  return actions
 }
 
-/** Account drawer sections — every main app tab hub from the You menu. */
+/** Account drawer sections — destinations not already covered by chrome. */
 export function getAccountMenuSections({
   tier,
   hasShops,
   primaryShopId,
-}: Pick<AccountMenuOptions, 'tier' | 'hasShops' | 'primaryShopId'>): AccountMenuSection[] {
+  omitChromeDuplicates = false,
+}: Pick<
+  AccountMenuOptions,
+  'tier' | 'hasShops' | 'primaryShopId' | 'omitChromeDuplicates'
+>): AccountMenuSection[] {
   const sections: AccountMenuSection[] = []
 
   sections.push({
@@ -118,7 +138,7 @@ export function getAccountMenuSections({
     subtitle: 'Preferences and security',
     items: [
       item(tier, 'settings', Icons.Settings, 'Settings & privacy', routes.settings, 'account', {
-        description: 'Shared across every tab — security, alerts, and appearance',
+        description: 'Account, appearance, and alerts per product',
       }),
       item(tier, 'profile', Icons.User, 'Your profile', routes.profile, 'account', {
         description: 'Photo, headline, and career preferences',
@@ -127,40 +147,28 @@ export function getAccountMenuSections({
         description: 'Alerts from marketplace, community, and chat',
       }),
       item(tier, 'help', Icons.HelpCircle, 'Help & Support', routes.help, 'account', {
-        description: 'FAQs and contact for every tab — opens with your current product when possible',
+        description: 'FAQs and contact for every tab',
       }),
       item(tier, 'ai-assist', Icons.Sparkles, 'Ask SHEconomy AI', routes.help, 'account', {
-        description: 'Contextual help for Marketplace, Community, Chat, Class, Co-Work, and Shop',
+        description: 'Contextual help for every product',
         action: 'open-ai',
       }),
     ],
   })
 
+  // Quick actions already cover Orders / Cart / Wishlist — only shops + payments here.
   sections.push({
     id: 'marketplace',
     title: 'Marketplace',
-    subtitle: 'Shop and discover',
+    subtitle: 'Shop discovery and checkout',
     items: [
-      item(tier, 'marketplace', Icons.Home, 'Marketplace home', commerceRoutes.home, 'commerce', {
-        description: 'Featured products and recommendations',
-      }),
-      item(tier, 'shops', Icons.Store, 'Browse shops', commerceRoutes.shops, 'commerce', {
-        description: 'Independent storefronts',
-      }),
-      item(tier, 'orders', Icons.Package, 'Order history', commerceRoutes.orders, 'commerce', {
-        description: 'Track purchases and deliveries',
-      }),
-      item(tier, 'wishlist', Icons.Heart, 'Saved items', commerceRoutes.wishlist, 'commerce', {
-        description: 'Listings you saved for later',
-      }),
-    ],
-  })
-
-  sections.push({
-    id: 'shopping',
-    title: 'Checkout',
-    subtitle: 'Payment and delivery',
-    items: [
+      ...(omitChromeDuplicates
+        ? []
+        : [
+            item(tier, 'shops', Icons.Store, 'Browse shops', commerceRoutes.shops, 'commerce', {
+              description: 'Independent storefronts',
+            }),
+          ]),
       item(
         tier,
         'payments',
@@ -210,107 +218,136 @@ export function getAccountMenuSections({
     })
   }
 
+  // Community: bottom tabs already cover Network / Create / Jobs on mobile.
+  const communityItems: AccountMenuItem[] = omitChromeDuplicates
+    ? [
+        item(tier, 'groups', Icons.UsersRound, 'Groups', communityRoutes.groups, 'community', {
+          description: 'Communities you follow or manage',
+        }),
+        item(tier, 'events', Icons.CalendarDays, 'Events', communityRoutes.events, 'community', {
+          description: 'Meetups and community gatherings',
+        }),
+        item(tier, 'pages', Icons.Building2, 'Pages', communityRoutes.companies, 'community', {
+          description: 'Business and creator pages',
+        }),
+        item(tier, 'stories', Icons.Film, 'Stories', communityRoutes.stories, 'community', {
+          description: 'Short updates from people you follow',
+        }),
+        item(tier, 'saved', Icons.Bookmark, 'Saved posts', communityRoutes.saved, 'community', {
+          description: 'Posts you bookmarked',
+        }),
+      ]
+    : [
+        item(tier, 'network', Icons.Users, 'Friends & network', communityRoutes.network, 'community', {
+          description: 'Connections, followers, and requests',
+        }),
+        item(
+          tier,
+          'create-post',
+          Icons.SquarePen,
+          'Create post',
+          communityRoutes.createPost,
+          'community',
+          { description: 'Share photos, updates, and stories' },
+        ),
+        item(tier, 'groups', Icons.UsersRound, 'Groups', communityRoutes.groups, 'community', {
+          description: 'Communities you follow or manage',
+        }),
+        item(tier, 'events', Icons.CalendarDays, 'Events', communityRoutes.events, 'community', {
+          description: 'Meetups and community gatherings',
+        }),
+        item(tier, 'pages', Icons.Building2, 'Pages', communityRoutes.companies, 'community', {
+          description: 'Business and creator pages',
+        }),
+        item(tier, 'jobs', Icons.Briefcase, 'Jobs', communityRoutes.jobs, 'community', {
+          description: 'Opportunities from the network',
+        }),
+        item(tier, 'stories', Icons.Film, 'Stories', communityRoutes.stories, 'community', {
+          description: 'Short updates from people you follow',
+        }),
+      ]
+
   sections.push({
     id: 'social',
     title: 'Community',
-    subtitle: 'Feed, network, and pages',
-    items: [
-      item(tier, 'feed', Icons.Home, 'News feed', communityRoutes.home, 'community', {
-        description: 'Posts and updates from your network',
-      }),
-      item(tier, 'network', Icons.Users, 'Friends & network', communityRoutes.network, 'community', {
-        description: 'Connections, followers, and requests',
-      }),
-      item(
-        tier,
-        'create-post',
-        Icons.SquarePen,
-        'Create post',
-        communityRoutes.createPost,
-        'community',
-        { description: 'Share photos, updates, and stories' },
-      ),
-      item(tier, 'groups', Icons.UsersRound, 'Groups', communityRoutes.groups, 'community', {
-        description: 'Communities you follow or manage',
-      }),
-      item(tier, 'events', Icons.CalendarDays, 'Events', communityRoutes.events, 'community', {
-        description: 'Meetups and community gatherings',
-      }),
-      item(tier, 'pages', Icons.Building2, 'Pages', communityRoutes.companies, 'community', {
-        description: 'Business and creator pages',
-      }),
-      item(tier, 'jobs', Icons.Briefcase, 'Jobs', communityRoutes.jobs, 'community', {
-        description: 'Opportunities from the network',
-      }),
-      item(tier, 'stories', Icons.Film, 'Stories', communityRoutes.stories, 'community', {
-        description: 'Short updates from people you follow',
-      }),
-    ],
+    subtitle: omitChromeDuplicates ? 'More community tools' : 'Feed tools and pages',
+    items: communityItems.filter(Boolean),
   })
 
-  sections.push({
-    id: 'messaging',
-    title: 'Chat',
-    subtitle: 'Direct conversations',
-    items: [
-      item(tier, 'inbox', Icons.MessageCircle, 'Inbox', chatRoutes.home, 'chat', {
-        description: 'Chats with buyers, sellers, and friends',
-      }),
-    ],
-  })
+  // Chat / Classes / Co-Work homes are center-nav tabs; keep only deep tools.
+  if (!omitChromeDuplicates) {
+    sections.push({
+      id: 'messaging',
+      title: 'Chat',
+      subtitle: 'Conversations',
+      items: [
+        item(tier, 'groups-chat', Icons.Users, 'Group chats', chatRoutes.groups, 'chat', {
+          description: 'Multi-member conversations',
+        }),
+        item(tier, 'calls', Icons.Phone, 'Calls', chatRoutes.calls, 'chat', {
+          description: 'Voice and video call history',
+        }),
+      ],
+    })
 
-  sections.push({
-    id: 'classes',
-    title: 'Classes',
-    subtitle: 'Learning programs',
-    items: [
-      item(tier, 'video', Icons.Play, 'Video classes', classRoutes.video, 'class', {
-        description: 'Watch programs and lessons',
-      }),
-      item(tier, 'audio', Icons.Radio, 'Audio classes', classRoutes.audio, 'class', {
-        description: 'Listen on the go',
-      }),
-    ],
-  })
+    sections.push({
+      id: 'classes',
+      title: 'Classes',
+      subtitle: 'Learning programs',
+      items: [
+        item(tier, 'video', Icons.Play, 'Video classes', classRoutes.video, 'class', {
+          description: 'Watch programs and lessons',
+        }),
+        item(tier, 'audio', Icons.Radio, 'Audio classes', classRoutes.audio, 'class', {
+          description: 'Listen on the go',
+        }),
+      ],
+    })
 
-  sections.push({
-    id: 'co-work',
-    title: 'Co-Work',
-    subtitle: 'Meetings and collaboration',
-    items: [
-      item(tier, 'cowork-home', Icons.Video, 'Meeting home', coWorkRoutes.home, 'co-work', {
-        description: 'Start or join a workspace session',
-      }),
-      item(tier, 'schedule', Icons.Calendar, 'Schedule', coWorkRoutes.schedule, 'co-work', {
-        description: 'Upcoming sessions on your calendar',
-      }),
-      item(tier, 'meetings', Icons.Monitor, 'Your meetings', coWorkRoutes.meetings, 'co-work', {
-        description: 'Past and active meeting rooms',
-      }),
-      item(tier, 'join', Icons.Hash, 'Join with code', coWorkRoutes.join, 'co-work', {
-        description: 'Enter a meeting code',
-      }),
-    ],
-  })
+    sections.push({
+      id: 'co-work',
+      title: 'Co-Work',
+      subtitle: 'Meetings and collaboration',
+      items: [
+        item(tier, 'schedule', Icons.Calendar, 'Schedule', coWorkRoutes.schedule, 'co-work', {
+          description: 'Upcoming sessions on your calendar',
+        }),
+        item(tier, 'meetings', Icons.Monitor, 'Your meetings', coWorkRoutes.meetings, 'co-work', {
+          description: 'Past and active meeting rooms',
+        }),
+        item(tier, 'join', Icons.Hash, 'Join with code', coWorkRoutes.join, 'co-work', {
+          description: 'Enter a meeting code',
+        }),
+      ],
+    })
+  }
 
-  return sections
+  return sections.filter((section) => section.items.length > 0)
 }
 
-/** Guest drawer — browse as a shopper, sign in for the full account hub. */
-export function getGuestAccountMenuSections(): AccountMenuSection[] {
+/** Guest drawer — browse destinations not already on chrome. */
+export function getGuestAccountMenuSections(
+  options?: { omitChromeDuplicates?: boolean },
+): AccountMenuSection[] {
+  const omit = options?.omitChromeDuplicates ?? false
+
   return [
     {
       id: 'shopping',
       title: 'Shopping',
       subtitle: 'No account needed',
       items: [
-        {
-          id: 'marketplace',
-          icon: Icons.Home,
-          label: 'Browse marketplace',
-          description: 'Discover shops and handmade finds',
-          href: commerceRoutes.home,
-        },
+        ...(omit
+          ? []
+          : [
+              {
+                id: 'marketplace',
+                icon: Icons.Home,
+                label: 'Browse marketplace',
+                description: 'Discover shops and handmade finds',
+                href: commerceRoutes.home,
+              } satisfies AccountMenuItem,
+            ]),
         {
           id: 'shops',
           icon: Icons.Store,
@@ -318,14 +355,18 @@ export function getGuestAccountMenuSections(): AccountMenuSection[] {
           description: 'Independent storefronts',
           href: commerceRoutes.shops,
         },
-        {
-          id: 'cart',
-          icon: Icons.ShoppingBag,
-          label: 'Cart',
-          description: 'Items you added while browsing',
-          href: commerceRoutes.cart,
-        },
-      ],
+        ...(omit
+          ? []
+          : [
+              {
+                id: 'cart',
+                icon: Icons.ShoppingBag,
+                label: 'Cart',
+                description: 'Items you added while browsing',
+                href: commerceRoutes.cart,
+              } satisfies AccountMenuItem,
+            ]),
+      ].filter(Boolean),
     },
     {
       id: 'sign-in',
@@ -360,42 +401,7 @@ export function getGuestAccountMenuSections(): AccountMenuSection[] {
           description: 'Seller tools and storefront setup',
           href: commerceRoutes.myShops,
         },
-        {
-          id: 'classes',
-          icon: Icons.Play,
-          label: 'Video classes',
-          description: 'Watch programs and lessons',
-          href: classRoutes.video,
-        },
-        {
-          id: 'audio-classes',
-          icon: Icons.Radio,
-          label: 'Audio classes',
-          description: 'Listen on the go',
-          href: classRoutes.audio,
-        },
-        {
-          id: 'cowork',
-          icon: Icons.Video,
-          label: 'Co-Work meetings',
-          description: 'Schedule or join sessions',
-          href: coWorkRoutes.home,
-        },
-        {
-          id: 'feed',
-          icon: Icons.Home,
-          label: 'News feed',
-          description: 'Community posts and updates',
-          href: communityRoutes.home,
-        },
-        {
-          id: 'messages',
-          icon: Icons.MessageCircle,
-          label: 'Messages',
-          description: 'Chat with the community',
-          href: chatRoutes.home,
-        },
       ],
     },
-  ]
+  ].filter((section) => section.items.length > 0)
 }

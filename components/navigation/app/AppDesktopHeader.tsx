@@ -4,12 +4,14 @@ import { useState } from 'react'
 import { AuthButton } from '~/components/auth'
 import { recordSearchTerm } from '~/commerce/lib/search-history'
 import { Icons, Input, Text, XStack, YStack } from '~/components/ui'
+import { AppHeaderBackButton } from '~/components/navigation/AppHeaderBackButton'
 import { NavCountBadge } from '~/components/navigation/NavCountBadge'
 import { NavLogo } from '~/components/navigation/NavLogo'
 import { useCart } from '~/commerce/hooks/useCart'
 import { useUnreadNotifications } from '~/community/hooks/useUnreadNotifications'
 import { commerceRoutes, routes } from '~/lib/routes'
 import { useAccess } from '~/hooks/useAccess'
+import { useAppBackNavigation } from '~/hooks/useAppBackNavigation'
 import { useProfile } from '~/hooks/useProfile'
 import { useVendorShops } from '~/hooks/useVendorShops'
 import { useAppLayout } from '~/hooks/useAppLayout'
@@ -33,6 +35,7 @@ export function AppDesktopHeader() {
   const { itemCount } = useCart()
   const { count: unreadNotifications } = useUnreadNotifications()
   const router = useRouter()
+  const { showBack } = useAppBackNavigation()
   const [searchQuery, setSearchQuery] = useState('')
 
   const hasShops = shops.length > 0
@@ -65,6 +68,7 @@ export function AppDesktopHeader() {
         gap="$3"
       >
         <XStack alignItems="center" gap="$2" flex={1} minWidth={0}>
+          {showBack ? <AppHeaderBackButton /> : null}
           <NavLogo compact href={commerceRoutes.home} />
           <XStack
             flex={1}
@@ -141,9 +145,6 @@ export function AppDesktopHeader() {
               label="Notifications"
               badge={unreadNotifications}
             />
-          ) : null}
-          {isAuthenticated ? (
-            <UtilityButton href={routes.settings} icon={Icons.Settings} label="Settings" />
           ) : null}
           <AuthButton variant="header" />
         </XStack>

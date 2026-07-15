@@ -38,7 +38,7 @@ export function ProfileFollowButton({ targetUserId, size = 'md' }: ProfileFollow
     <>
       <FollowChip
         label={follow.isFollowing ? 'Following' : 'Follow'}
-        variant={follow.isFollowing ? 'outline' : 'primary'}
+        variant="outline"
         size={size}
         disabled={follow.isToggling}
         isLoading={follow.isToggling}
@@ -49,8 +49,7 @@ export function ProfileFollowButton({ targetUserId, size = 'md' }: ProfileFollow
             void follow.toggleFollow()
           }
         }}
-      />
-      <ConfirmDialog
+      />      <ConfirmDialog
         open={confirmUnfollow}
         onOpenChange={setConfirmUnfollow}
         title="Unfollow?"

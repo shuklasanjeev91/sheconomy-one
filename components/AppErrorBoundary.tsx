@@ -32,10 +32,8 @@ export class AppErrorBoundary extends Component<Props, State> {
   }
 
   private handleRetry = () => {
+    // Remount children in-place — never full browser reload (that kills Vite SPA state).
     this.setState({ error: null })
-    if (Platform.OS === 'web' && typeof window !== 'undefined') {
-      window.location.reload()
-    }
   }
 
   render() {
@@ -58,7 +56,7 @@ export class AppErrorBoundary extends Component<Props, State> {
           {this.state.error.message || 'An unexpected error occurred. Please try again.'}
         </Text>
         <Button size="$4" theme="active" borderRadius={999} onPress={this.handleRetry}>
-          {Platform.OS === 'web' ? 'Reload page' : 'Try again'}
+          Try again
         </Button>
       </YStack>
     )

@@ -12,6 +12,7 @@ const TABS = [
 export function ClassMediaTabs() {
   const ui = useAppUi()
   const pathname = usePathname()
+  // Home (`/class`) and `/class/video` share the video catalogue.
   const activeTab = isClassAudioPath(pathname) ? 'audio' : 'video'
 
   return (

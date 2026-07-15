@@ -78,7 +78,7 @@ export function ProgramScreen() {
           <Text color={ui.textSecondary}>{error ?? 'This program could not be loaded.'}</Text>
           <Link href={classRoutes.home}>
             <Text fontWeight="600" color={ui.brand}>
-              Back to classes
+              Browse classes
             </Text>
           </Link>
         </YStack>
@@ -86,8 +86,6 @@ export function ProgramScreen() {
     )
   }
 
-  const mediaTab = program.media_type === 'audio' ? 'audio' : 'video'
-  const backHref = program.media_type === 'audio' ? classRoutes.audio : classRoutes.home
   const saved = savedIds.includes(program.id) || isProgramSaved(program.id)
   const statsLine = [
     formatProgramViews(program.view_count || program.listen_count),
@@ -100,15 +98,6 @@ export function ProgramScreen() {
   return (
     <ClassShell>
       <YStack gap="$5" width="100%">
-        <Link href={backHref}>
-          <XStack alignItems="center" gap="$1.5" cursor="pointer" alignSelf="flex-start">
-            <Icons.ChevronLeft size={18} color={ui.brand} />
-            <Text fontSize={14} fontWeight="600" color={ui.brand}>
-              Classes
-            </Text>
-          </XStack>
-        </Link>
-
         <ProgramMediaPlayer program={program} />
 
         <YStack gap="$3" width="100%">

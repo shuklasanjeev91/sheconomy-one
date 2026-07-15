@@ -156,14 +156,6 @@ export function AccessDenied({ message, homeHref }: AccessDeniedProps) {
           >
             Go to home
           </Button>
-          <Button
-            chromeless
-            borderRadius={radius.pill}
-            color={ui.textSecondary}
-            onPress={() => router.back()}
-          >
-            Go back
-          </Button>
         </YStack>
       </YStack>
     </PageCenter>

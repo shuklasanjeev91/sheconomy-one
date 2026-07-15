@@ -345,7 +345,7 @@ export function ScheduleMeetingScreen() {
         </YStack>
 
         <Link href={coWorkRoutes.home} asChild>
-          <Button tone="ghost">Back to Co-Work</Button>
+          <Button tone="ghost">Open Co-Work</Button>
         </Link>
       </YStack>
     </AppPage>

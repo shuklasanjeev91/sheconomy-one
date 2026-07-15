@@ -20,7 +20,11 @@ const MOBILE_ROOT_PATHS = new Set([
   '/community',
   '/chat',
   '/class',
+  '/class/video',
+  '/class/audio',
   '/co-work',
+  /** Settings hub list — drill into sections, then back here. */
+  '/settings',
 ])
 
 export function isMobileRootPath(pathname: string): boolean {
@@ -57,7 +61,10 @@ export function getMobileBackFallback(pathname: string): Href {
   if (pathname.startsWith('/my-shops')) {
     return commerceRoutes.home
   }
-  if (pathname.startsWith('/settings') || pathname.startsWith('/profile') || pathname.startsWith('/notifications')) {
+  if (pathname.startsWith('/settings/')) {
+    return routes.settings
+  }
+  if (pathname === '/settings' || pathname.startsWith('/profile') || pathname.startsWith('/notifications')) {
     return communityRoutes.home
   }
   if (pathname.startsWith('/community')) {

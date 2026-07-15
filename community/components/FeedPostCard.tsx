@@ -68,11 +68,7 @@ export function FeedPostCard({ post, linkToDetail = true }: FeedPostCardProps) {
     BRAND_MEMBER_LABEL
   const avatarSrc = post.company?.logo_url ?? post.group?.avatar_url ?? post.author?.avatar_url ?? undefined
   const avatarName = post.company?.name ?? post.group?.name ?? authorName
-  const contextLabel = post.company
-    ? `Posted by ${post.author?.full_name || post.author?.username || 'member'}`
-    : post.group
-      ? `Posted in ${post.group.title}`
-      : null
+  const posterName = post.author?.full_name || post.author?.username || 'member'
   // Event posts show their cover image inside the event card, so keep it out of
   // the general media grid to avoid rendering the same image twice.
   const isEventPost = !!(post.event_rsvp_enabled && post.event_title)
@@ -82,19 +78,16 @@ export function FeedPostCard({ post, linkToDetail = true }: FeedPostCardProps) {
   })
 
   const [lightboxOpen, setLightboxOpen] = useState(false)
+  const [lightboxIndex, setLightboxIndex] = useState(0)
 
   function requireAuth() {
     router.push(routes.signIn)
   }
 
-  // In the feed, tapping media opens the post (professional-network behavior); on the detail
-  // page (linkToDetail=false) it opens a fullscreen viewer instead.
-  function openMedia() {
-    if (linkToDetail) {
-      router.push(communityRoutes.post(post.id) as never)
-    } else {
-      setLightboxOpen(true)
-    }
+  // LinkedIn-style: tapping media opens a fullscreen zoomable viewer (feed + detail).
+  function openMedia(index = 0) {
+    setLightboxIndex(typeof index === 'number' ? index : 0)
+    setLightboxOpen(true)
   }
 
   return (
@@ -168,10 +161,42 @@ export function FeedPostCard({ post, linkToDetail = true }: FeedPostCardProps) {
                 </Text>
               </ProfileLink>
             )}
-            {contextLabel ? (
-              <Text fontSize={12} color={communityUi.textMuted} numberOfLines={1}>
-                {contextLabel}
-              </Text>
+            {post.company ? (
+              <XStack alignItems="center" gap={4} flexWrap="wrap">
+                <Text fontSize={12} color={communityUi.textMuted}>
+                  Posted by
+                </Text>
+                <ProfileLink userId={post.user_id} username={post.author?.username}>
+                  <Text
+                    fontSize={12}
+                    color={communityUi.textMuted}
+                    fontWeight="600"
+                    cursor="pointer"
+                    hoverStyle={{ color: communityUi.brand, textDecorationLine: 'underline' }}
+                    numberOfLines={1}
+                  >
+                    {posterName}
+                  </Text>
+                </ProfileLink>
+              </XStack>
+            ) : post.group ? (
+              <XStack alignItems="center" gap={4} flexWrap="wrap">
+                <Text fontSize={12} color={communityUi.textMuted}>
+                  Posted in
+                </Text>
+                <Link href={communityRoutes.group(post.group.id)}>
+                  <Text
+                    fontSize={12}
+                    color={communityUi.textMuted}
+                    fontWeight="600"
+                    cursor="pointer"
+                    hoverStyle={{ color: communityUi.brand, textDecorationLine: 'underline' }}
+                    numberOfLines={1}
+                  >
+                    {post.group.title}
+                  </Text>
+                </Link>
+              </XStack>
             ) : post.author?.headline ? (
               <Text fontSize={12} color={communityUi.textMuted} numberOfLines={1}>
                 {post.author.headline}
@@ -340,7 +365,12 @@ export function FeedPostCard({ post, linkToDetail = true }: FeedPostCardProps) {
       <PostActionSheets post={post} engagement={engagement} />
 
       {mediaItems.length > 0 ? (
-        <PostImageLightbox items={mediaItems} open={lightboxOpen} onOpenChange={setLightboxOpen} />
+        <PostImageLightbox
+          items={mediaItems}
+          open={lightboxOpen}
+          onOpenChange={setLightboxOpen}
+          initialIndex={lightboxIndex}
+        />
       ) : null}
     </>
   )
@@ -370,9 +400,21 @@ function ReactionIcons() {
   )
 }
 
-function PostMedia({ items, onPress }: { items: PostMediaItem[]; onPress?: () => void }) {
+function PostMedia({
+  items,
+  onPress,
+}: {
+  items: PostMediaItem[]
+  onPress?: (index?: number) => void
+}) {
   const communityUi = useCommunityUi()
-  const pressable = onPress ? { cursor: 'pointer' as const, onPress } : {}
+  const companionImage = items.find((item) => item.kind === 'image')?.url ?? null
+  const hasVideo = items.some((item) => item.kind === 'video')
+  // LinkedIn: videos stay in-feed with muted autoplay — images open zoom lightbox.
+  const pressable =
+    onPress && !hasVideo
+      ? ({ cursor: 'pointer' as const, onPress: () => onPress(0) } as const)
+      : {}
 
   if (items.length === 1) {
     const item = items[0]
@@ -386,7 +428,15 @@ function PostMedia({ items, onPress }: { items: PostMediaItem[]; onPress?: () =>
         backgroundColor={item.kind === 'video' ? '#000' : communityUi.pageBg}
         {...pressable}
       >
-        <PostMediaSlide item={item} width={0} height={height} fit={item.kind === 'video' ? 'contain' : 'cover'} fill />
+        <PostMediaSlide
+          item={item}
+          width={0}
+          height={height}
+          fit={item.kind === 'video' ? 'contain' : 'cover'}
+          fill
+          posterUrl={companionImage}
+          autoplayInView={item.kind === 'video'}
+        />
       </YStack>
     )
   }
@@ -394,9 +444,9 @@ function PostMedia({ items, onPress }: { items: PostMediaItem[]; onPress?: () =>
   return (
     <PostMediaCarousel
       items={items}
-      height={items.some((item) => item.kind === 'video') ? 420 : 360}
+      height={hasVideo ? 420 : 360}
       fit="contain"
-      onPressImage={onPress ? () => onPress() : undefined}
+      onPressImage={onPress && !hasVideo ? (index) => onPress(index) : undefined}
     />
   )
 }

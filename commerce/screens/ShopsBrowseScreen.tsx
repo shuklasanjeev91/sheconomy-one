@@ -63,7 +63,7 @@ export function ShopsBrowseScreen() {
             <Link href={commerceRoutes.home}>
               <Theme name={BRAND_THEME}>
                 <Text color="$color9" fontWeight="500" textDecorationLine="underline">
-                  Back to home
+                  Browse marketplace
                 </Text>
               </Theme>
             </Link>

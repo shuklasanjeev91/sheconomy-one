@@ -47,7 +47,6 @@ declare module 'one' {
         | `/auth/import-contacts`
         | `/auth/sign-in`
         | `/auth/sign-up`
-        | `/auth/import-contacts`
         | `/auth/verify-gender`
         | `/browse`
         | `/cart`
@@ -60,6 +59,7 @@ declare module 'one' {
         | `/class`
         | `/class/`
         | `/class/audio`
+        | `/class/video`
         | `/co-work`
         | `/co-work/`
         | `/co-work/join`
@@ -98,6 +98,18 @@ declare module 'one' {
         | `/profile`
         | `/search`
         | `/settings`
+        | `/settings/`
+        | `/settings/about`
+        | `/settings/account`
+        | `/settings/appearance`
+        | `/settings/chat`
+        | `/settings/class`
+        | `/settings/co-work`
+        | `/settings/commerce`
+        | `/settings/community`
+        | `/settings/notifications`
+        | `/settings/privacy`
+        | `/settings/shop`
         | `/shop`
         | `/shops`
         | `/ui-kit`

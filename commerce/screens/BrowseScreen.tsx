@@ -17,7 +17,7 @@ export function BrowseScreen() {
             <CommercePageHeader title="Browse page not found" subtitle="This collection doesn't exist." />
             <Link href={commerceRoutes.home} asChild>
               <Button tone="outline" size="$4" alignSelf="flex-start" borderRadius={999}>
-                Back to home
+                Browse marketplace
               </Button>
             </Link>
           </YStack>

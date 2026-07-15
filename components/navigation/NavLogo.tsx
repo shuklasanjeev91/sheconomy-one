@@ -15,7 +15,7 @@ export function NavLogo({ compact, href = routes.commerce.home }: NavLogoProps) 
   const logoUrl = getSheconomyLogoUrl(compact ? 'icon' : 'primary')
 
   return (
-    <Link href={href} asChild>
+    <Link href={href} replace asChild>
       <XStack
         alignItems="center"
         cursor="pointer"

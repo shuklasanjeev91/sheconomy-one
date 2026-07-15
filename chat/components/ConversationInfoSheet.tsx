@@ -1,5 +1,4 @@
 import { cloneElement, isValidElement, useCallback, useEffect, useState } from 'react'
-import { Linking } from 'react-native'
 
 import {
   addGroupParticipants,
@@ -20,6 +19,7 @@ import {
 import { useChatTheme } from '~/chat/lib/chat-theme'
 import { formatLastSeen } from '~/chat/lib/time'
 import type { ChatSummary } from '~/chat/lib/types'
+import { openExternalUrl } from '~/lib/platform/openUrl'
 import {
   AppBottomSheet,
   Avatar,
@@ -228,7 +228,7 @@ export function ConversationInfoSheet({
   async function openMedia(item: SharedMediaItem) {
     if (!item.mediaUrl) return
     const url = mediaUrls[item.id] ?? (await getChatMediaUrl(item.mediaUrl))
-    if (url) void Linking.openURL(url)
+    if (url) void openExternalUrl(url)
   }
 
   const subtitle = isGroup

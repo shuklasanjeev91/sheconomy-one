@@ -1,15 +1,11 @@
 import { useEffect, useState } from 'react'
 import { Link, useParams, useRouter } from 'one'
 
-import { ProfileConnectButton } from '~/community/components/ProfileConnectButton'
-import { ProfileFollowButton } from '~/community/components/ProfileFollowButton'
-import { MessageIcebreakerButton } from '~/community/components/MessageIcebreakerButton'
-import { IntroductionRequestButton } from '~/community/components/IntroductionRequestButton'
 import { ProfileView } from '~/community/components/profile/ProfileView'
 import type { ProfileDisplay } from '~/community/components/profile/types'
+import { ProfileVisitorActions } from '~/community/components/ProfileVisitorActions'
 import { fetchPublicProfile, type PublicProfile } from '~/community/lib/network'
 import { parseCreatorMode } from '~/community/lib/creator-mode'
-import { blockCommunityMember } from '~/community/lib/moderation'
 import { fetchMutualConnectionsCount } from '~/community/lib/mutual'
 import { trackProfileView } from '~/community/lib/profile-views'
 import {
@@ -20,19 +16,16 @@ import {
   Text,
   XStack,
   YStack,
-  useAppToast,
 } from '~/components/ui'
 import { FullWidthLayout, PageSection } from '~/components/layout'
 import { supabase } from '~/lib/supabase/client'
 import { useSupabase } from '~/providers/SupabaseProvider'
 import { communityRoutes, routes } from '~/lib/routes'
-import { copyShareLink, getProfileShareUrl } from '~/lib/share'
 import { useAppUi } from '~/lib/theme/useAppUi'
 
 export function PublicProfileScreen() {
   const ui = useAppUi()
   const router = useRouter()
-  const toast = useAppToast()
   const { username: handle } = useParams<{ username: string }>()
   const { user: currentUser, isLoading: authLoading } = useSupabase()
   const [profile, setProfile] = useState<PublicProfile | null>(null)
@@ -40,7 +33,6 @@ export function PublicProfileScreen() {
   const [error, setError] = useState<string | null>(null)
   const [creatorMode, setCreatorMode] = useState(false)
   const [mutualCount, setMutualCount] = useState(0)
-  const [blocking, setBlocking] = useState(false)
 
   useEffect(() => {
     if (!handle) return
@@ -142,7 +134,6 @@ export function PublicProfileScreen() {
   }
 
   const displayProfile: ProfileDisplay = profile
-  const profileUrl = getProfileShareUrl(profile.username)
 
   return (
     <FullWidthLayout scroll>
@@ -159,63 +150,18 @@ export function PublicProfileScreen() {
           <ProfileView
             profile={displayProfile}
             isOwnProfile={false}
-            headerActions={
-              <XStack gap="$2" flexWrap="wrap" alignItems="center">
-                <MessageIcebreakerButton
-                  targetUserId={profile.id}
-                  targetUsername={profile.username}
-                  displayName={profile.full_name || profile.username}
-                  headline={profile.headline}
-                  industry={profile.industry}
-                  creatorMode={creatorMode}
-                />
-                {mutualCount > 0 ? (
-                  <IntroductionRequestButton
-                    targetUserId={profile.id}
-                    targetUsername={profile.username}
-                    targetDisplayName={profile.full_name || profile.username}
-                  />
-                ) : null}
-                <ProfileConnectButton targetUserId={profile.id} />
-                <ProfileFollowButton targetUserId={profile.id} />
-                <Button
-                  size="$3"
-                  tone="outline"
-                  borderRadius={999}
-                  onPress={() => {
-                    void copyShareLink(profileUrl).then((copied) => {
-                      toast.show(copied ? 'Profile link copied' : 'Could not copy link', {
-                        tone: copied ? 'success' : 'danger',
-                      })
-                    })
-                  }}
-                >
-                  Share
-                </Button>
-                {currentUser?.id ? (
-                  <Button
-                    size="$3"
-                    tone="outline"
-                    borderRadius={999}
-                    disabled={blocking}
-                    onPress={() => {
-                      setBlocking(true)
-                      void blockCommunityMember(currentUser.id, profile.id).then((result) => {
-                        setBlocking(false)
-                        if (result.error) {
-                          toast.show('Could not block', { tone: 'danger', message: result.error })
-                          return
-                        }
-                        toast.show('Member blocked', { tone: 'default' })
-                        router.push(communityRoutes.network)
-                      })
-                    }}
-                  >
-                    {blocking ? 'Blocking…' : 'Block'}
-                  </Button>
-                ) : null}
-              </XStack>
-            }
+            headerActions={({ openUserList }) => (
+              <ProfileVisitorActions
+                targetUserId={profile.id}
+                targetUsername={profile.username}
+                displayName={profile.full_name || profile.username}
+                headline={profile.headline}
+                industry={profile.industry}
+                creatorMode={creatorMode}
+                mutualCount={mutualCount}
+                onViewConnections={() => openUserList('connections')}
+              />
+            )}
           />
         </YStack>
       </PageSection>

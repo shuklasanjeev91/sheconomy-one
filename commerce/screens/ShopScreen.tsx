@@ -83,7 +83,7 @@ export function ShopScreen() {
             <Paragraph color={ui.textSecondary}>{error ?? 'This shop could not be loaded.'}</Paragraph>
             <Link href={commerceRoutes.home} asChild>
               <Button tone="primary" size="$4" borderRadius={999} alignSelf="flex-start">
-                Back to home
+                Browse marketplace
               </Button>
             </Link>
           </YStack>
@@ -221,27 +221,6 @@ export function ShopScreen() {
   return (
     <FullWidthLayout scroll>
       <YStack width="100%" paddingBottom="$10" backgroundColor={ui.background}>
-        {isDesktop ? (
-          <PageSection paddingTop="$3" paddingBottom="$2">
-            <Link href={commerceRoutes.shops} asChild>
-              <XStack
-                alignItems="center"
-                gap="$1.5"
-                alignSelf="flex-start"
-                cursor="pointer"
-                opacity={0.85}
-                hoverStyle={{ opacity: 1 }}
-                pressStyle={{ opacity: 0.7 }}
-              >
-                <Icons.ArrowLeft size={16} color={ui.textSecondary} />
-                <Text fontSize={14} color={ui.textSecondary} fontWeight="500">
-                  Back to shops
-                </Text>
-              </XStack>
-            </Link>
-          </PageSection>
-        ) : null}
-
         <ShopHero
           shopId={shop.id}
           shopName={shop.shop_name}

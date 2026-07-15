@@ -22,6 +22,8 @@ import { SupabaseProvider } from '~/providers/SupabaseProvider'
 import { InAppNotificationHost } from '~/components/notifications/InAppNotificationHost'
 import { AutomaticUpdateManager } from '~/components/system/AutomaticUpdateManager'
 import { AiAssistProvider } from '~/providers/AiAssistProvider'
+import { ScreenZoomProvider } from '~/lib/zoom/ScreenZoomContext'
+import { ScreenZoomRoot } from '~/components/media/ScreenZoomRoot'
 
 function NativeRootShell({ children }: { children: ReactNode }) {
   if (Platform.OS === 'web') {
@@ -203,9 +205,13 @@ function AppProviders({ children }: { children: React.ReactNode }) {
                 <FavoritesProvider>
                   <MarketplacePersonalizationProvider>
                     <AiAssistProvider>
-                      <AutomaticUpdateManager />
-                      <InAppNotificationHost />
-                      <AppShell>{children}</AppShell>
+                      <ScreenZoomProvider>
+                        <ScreenZoomRoot>
+                          <AutomaticUpdateManager />
+                          <InAppNotificationHost />
+                          <AppShell>{children}</AppShell>
+                        </ScreenZoomRoot>
+                      </ScreenZoomProvider>
                     </AiAssistProvider>
                   </MarketplacePersonalizationProvider>
                 </FavoritesProvider>

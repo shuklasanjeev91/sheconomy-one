@@ -1,6 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
 import type { ReactNode } from 'react'
-import { Linking } from 'react-native'
 import { Link, useRouter } from 'one'
 import type { Href } from 'one'
 import type { GetProps } from 'tamagui'
@@ -23,6 +22,7 @@ import { getShadowStyle, radius } from '~/config/tokens'
 import { getCountryName } from '~/lib/geo'
 import { useAppLayout } from '~/hooks/useAppLayout'
 import { loadVendorAnalytics, selectVendorAnalytics } from '~/lib/orders/vendor-orders.store'
+import { openExternalUrl as openPlatformUrl } from '~/lib/platform/openUrl'
 import { commerceRoutes, vendorRoutes } from '~/lib/routes'
 import { deleteShop, loadMyShops, loadShopStats, updateShop } from '~/lib/shop/shop.store'
 import type { Shop, ShopStats } from '~/lib/shop/shop.type'
@@ -52,7 +52,7 @@ const ENGAGEMENT_DAYS = ['M', 'T', 'W', 'T', 'F', 'S', 'S']
 function openExternalUrl(url: string | null | undefined) {
   if (!url) return
   const normalized = /^https?:\/\//i.test(url) ? url : `https://${url}`
-  void Linking.openURL(normalized).catch(() => undefined)
+  void openPlatformUrl(normalized)
 }
 
 export function VendorMyShopScreen() {

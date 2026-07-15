@@ -67,7 +67,7 @@ export function PostDetailScreen() {
               borderRadius={999}
               alignSelf="flex-start"
             >
-              Back to feed
+              Open feed
             </Button>
           </Link>
         </CommunityCard>
@@ -92,24 +92,14 @@ export function PostDetailScreen() {
   return (
     <CommunityShell wide>
       <YStack gap={12}>
-        {/* Mobile already shows a back arrow in the app header and a share action
-            on the post card, so this toolbar is desktop-only to avoid duplicates. */}
+        {/* Share stays desktop-only; back lives in the shared app header. */}
         <XStack
           alignItems="center"
-          justifyContent="space-between"
+          justifyContent="flex-end"
           gap={12}
           display="none"
           $gtMd={{ display: 'flex' }}
         >
-          <Button
-            size="$3"
-            tone="ghost"
-            icon={<Icons.ArrowLeft size={18} color={communityUi.text} />}
-            onPress={() => router.back()}
-            paddingHorizontal={8}
-          >
-            Back
-          </Button>
           <Button
             size="$3"
             tone="outline"

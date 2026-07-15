@@ -3,6 +3,7 @@ import { useEffect, useState } from 'react'
 
 import { CommunityCard } from '~/community/components/CommunityCard'
 import { CommunityShell } from '~/community/components/CommunityShell'
+import { ProfileLink } from '~/community/components/ProfileLink'
 import { applyToJob, fetchJob, saveJob, unsaveJob, type JobListing } from '~/community/lib/jobs'
 import { useCommunityUi } from '~/community/lib/community-theme'
 import { Avatar, Button, Spinner, Text, TextArea, XStack, YStack, useAppToast } from '~/components/ui'
@@ -90,10 +91,25 @@ export function JobDetailScreen() {
           </Text>
         ) : null}
         <XStack gap={8} alignItems="center">
-          <Avatar name={job.poster_name} src={job.poster_avatar || undefined} size="$3" />
-          <Text fontSize={13} color={communityUi.textMuted}>
-            Posted by {job.poster_name}
-          </Text>
+          <ProfileLink userId={job.posted_by}>
+            <Avatar name={job.poster_name} src={job.poster_avatar || undefined} size="$3" cursor="pointer" />
+          </ProfileLink>
+          <XStack gap={4} alignItems="center" flexWrap="wrap">
+            <Text fontSize={13} color={communityUi.textMuted}>
+              Posted by
+            </Text>
+            <ProfileLink userId={job.posted_by}>
+              <Text
+                fontSize={13}
+                color={communityUi.textMuted}
+                fontWeight="600"
+                cursor="pointer"
+                hoverStyle={{ color: communityUi.brand, textDecorationLine: 'underline' }}
+              >
+                {job.poster_name}
+              </Text>
+            </ProfileLink>
+          </XStack>
         </XStack>
         <XStack gap={8} flexWrap="wrap">
           <ShareButton

@@ -1,5 +1,4 @@
 import { Link } from 'one'
-import { Linking } from 'react-native'
 
 import { Icons, Separator, Text, XStack, YStack } from '~/components/ui'
 import { BRAND_NAME, BRAND_SOCIAL } from '~/config/brand'
@@ -9,6 +8,7 @@ import { NavLogo } from '~/components/navigation/NavLogo'
 import { commerceRoutes } from '~/lib/routes'
 import { useAppLayout } from '~/hooks/useAppLayout'
 import { useAppUi } from '~/lib/theme/useAppUi'
+import { openExternalUrl } from '~/lib/platform/openUrl'
 
 export function CommerceDesktopFooter() {
   const ui = useAppUi()
@@ -119,7 +119,7 @@ function FooterSocial({
       pressStyle={{ scale: 0.96 }}
       aria-label={label}
       onPress={() => {
-        void Linking.openURL(href)
+        void openExternalUrl(href)
       }}
     >
       <Icon size={18} color={ui.text} />

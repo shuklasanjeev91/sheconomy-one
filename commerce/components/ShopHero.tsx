@@ -1,10 +1,10 @@
-import { Link } from 'one'
 import { Platform } from 'react-native'
 
 import { Avatar, Button, Icons, Image, Text, XStack, YStack, useMedia } from '~/components/ui'
 import { ShopActionButtons } from '~/commerce/components/ShopActionButtons'
 import { RatingSummary } from '~/commerce/components/RatingSummary'
 import type { ReviewSummary } from '~/commerce/lib/reviews'
+import { AppLink } from '~/components/navigation/AppLink'
 import { ShareButton } from '~/components/share'
 import { getShopShareUrl } from '~/lib/share'
 import { getShadowStyle, radius } from '~/config/tokens'
@@ -154,7 +154,7 @@ export function ShopHero({
                 }}
               />
               {websiteUrl ? (
-                <Link href={websiteUrl as never} target="_blank" asChild>
+                <AppLink href={websiteUrl} external asChild>
                   <Button
                     tone="ghost"
                     size="$3"
@@ -163,7 +163,7 @@ export function ShopHero({
                   >
                     Website
                   </Button>
-                </Link>
+                </AppLink>
               ) : null}
             </XStack>
           </YStack>

@@ -1,8 +1,12 @@
 import { createElement, useEffect, useState } from 'react'
 import { Image, Platform } from 'react-native'
 
-import { extractYoutubeVideoId, type Program } from '~/class/lib/programs'
+import { extractYoutubeVideoId, getProgramThumbnailUrl, type Program } from '~/class/lib/programs'
+import { AutoplayVideo } from '~/components/media/AutoplayVideo'
+import { MediaLightbox } from '~/components/media/MediaLightbox'
 import { Button, Icons, Text, YStack } from '~/components/ui'
+import { isVideoMediaUrl } from '~/community/lib/post-media'
+import { videoSrcWithFirstFrame } from '~/lib/media/video-thumbnail'
 import { openUrl } from '~/lib/platform/openUrl'
 import { useAppUi } from '~/lib/theme/useAppUi'
 
@@ -13,51 +17,89 @@ type ProgramMediaPlayerProps = {
 export function ProgramMediaPlayer({ program }: ProgramMediaPlayerProps) {
   const ui = useAppUi()
   const mediaUrl = program.video_url || program.audio_url
+  const poster = getProgramThumbnailUrl(program)
+  const [lightboxOpen, setLightboxOpen] = useState(false)
 
   if (!mediaUrl) {
     return (
-      <YStack
-        width="100%"
-        aspectRatio={16 / 9}
-        borderRadius={12}
-        backgroundColor={ui.surfaceMuted}
-        alignItems="center"
-        justifyContent="center"
-        gap="$2"
-      >
-        {program.image_url ? (
-          Platform.OS === 'web' ? (
-            createElement('img', {
-              src: program.image_url,
-              alt: program.title,
-              style: { width: '100%', height: '100%', objectFit: 'cover', borderRadius: 12 },
-            })
+      <>
+        <YStack
+          width="100%"
+          aspectRatio={16 / 9}
+          borderRadius={12}
+          backgroundColor={ui.surfaceMuted}
+          alignItems="center"
+          justifyContent="center"
+          gap="$2"
+          overflow="hidden"
+          cursor={poster ? 'zoom-in' : undefined}
+          onPress={poster ? () => setLightboxOpen(true) : undefined}
+        >
+          {poster ? (
+            Platform.OS === 'web' ? (
+              createElement('img', {
+                src: poster,
+                alt: program.title,
+                style: { width: '100%', height: '100%', objectFit: 'cover', borderRadius: 12 },
+              })
+            ) : (
+              <Image
+                source={{ uri: poster }}
+                style={{ width: '100%', height: '100%', borderRadius: 12 }}
+                resizeMode="cover"
+                accessibilityLabel={program.title}
+              />
+            )
           ) : (
-            <Image
-              source={{ uri: program.image_url }}
-              style={{ width: '100%', height: '100%', borderRadius: 12 }}
-              resizeMode="cover"
-              accessibilityLabel={program.title}
-            />
-          )
-        ) : (
-          <>
-            <Icons.Radio size={40} color={ui.icon} />
-            <Text color={ui.textSecondary}>Media unavailable</Text>
-          </>
-        )}
+            <>
+              <Icons.Radio size={40} color={ui.icon} />
+              <Text color={ui.textSecondary}>Media unavailable</Text>
+            </>
+          )}
+        </YStack>
+        {poster ? (
+          <MediaLightbox
+            items={[{ url: poster, kind: 'image', alt: program.title }]}
+            open={lightboxOpen}
+            onOpenChange={setLightboxOpen}
+          />
+        ) : null}
+      </>
+    )
+  }
+
+  // LinkedIn-style muted autoplay for program detail video.
+  if (program.video_url && (program.video_url.includes('youtu') || isVideoMediaUrl(program.video_url))) {
+    return (
+      <YStack width="100%" borderRadius={12} overflow="hidden">
+        <AutoplayVideo
+          src={program.video_url}
+          posterUrl={poster}
+          aspectRatio={16 / 9}
+          objectFit="contain"
+          autoplayInView
+          borderRadius={12}
+        />
       </YStack>
     )
   }
 
   if (Platform.OS === 'web') {
-    return <WebProgramMediaPlayer program={program} mediaUrl={mediaUrl} />
+    return <WebProgramMediaPlayer program={program} mediaUrl={mediaUrl} poster={poster} />
   }
 
-  return <NativeProgramMediaPlayer program={program} mediaUrl={mediaUrl} />
+  return <NativeProgramMediaPlayer program={program} mediaUrl={mediaUrl} poster={poster} />
 }
 
-function WebProgramMediaPlayer({ program, mediaUrl }: { program: Program; mediaUrl: string }) {
+function WebProgramMediaPlayer({
+  program,
+  mediaUrl,
+  poster,
+}: {
+  program: Program
+  mediaUrl: string
+  poster: string | null
+}) {
   if (program.video_url) {
     const youtubeId = extractYoutubeVideoId(program.video_url)
     if (youtubeId) {
@@ -82,9 +124,11 @@ function WebProgramMediaPlayer({ program, mediaUrl }: { program: Program; mediaU
 
     if (/\.(mp4|webm|m3u8)(\?|$)/i.test(program.video_url)) {
       return createElement('video', {
-        src: program.video_url,
+        src: videoSrcWithFirstFrame(program.video_url),
         controls: true,
         playsInline: true,
+        preload: 'metadata',
+        poster: poster ?? undefined,
         style: { width: '100%', aspectRatio: '16 / 9', borderRadius: 12, backgroundColor: '#000' },
       })
     }
@@ -101,12 +145,20 @@ function WebProgramMediaPlayer({ program, mediaUrl }: { program: Program; mediaU
   return <OpenMediaFallback program={program} mediaUrl={mediaUrl} />
 }
 
-function NativeProgramMediaPlayer({ program, mediaUrl }: { program: Program; mediaUrl: string }) {
+function NativeProgramMediaPlayer({
+  program,
+  mediaUrl,
+  poster,
+}: {
+  program: Program
+  mediaUrl: string
+  poster: string | null
+}) {
   const ui = useAppUi()
   const [WebViewComponent, setWebViewComponent] = useState<React.ComponentType<any> | null>(null)
-  const [NativeVideoFile, setNativeVideoFile] = useState<React.ComponentType<{ uri: string }> | null>(
-    null,
-  )
+  const [NativeVideoFile, setNativeVideoFile] = useState<
+    React.ComponentType<{ uri: string; posterUri?: string | null; autoPlay?: boolean }> | null
+  >(null)
   const [NativeAudioFile, setNativeAudioFile] = useState<React.ComponentType<{ uri: string }> | null>(
     null,
   )
@@ -137,7 +189,7 @@ function NativeProgramMediaPlayer({ program, mediaUrl }: { program: Program; med
 
     if (/\.(mp4|webm|m3u8)(\?|$)/i.test(program.video_url) && NativeVideoFile) {
       const VideoFile = NativeVideoFile
-      return <VideoFile uri={program.video_url} />
+      return <VideoFile uri={program.video_url} posterUri={poster} autoPlay />
     }
   }
 

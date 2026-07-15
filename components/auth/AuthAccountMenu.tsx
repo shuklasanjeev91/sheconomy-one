@@ -1,4 +1,4 @@
-import { Link, useRouter } from 'one'
+import { Link } from 'one'
 import type { Href } from 'one'
 import { useMemo } from 'react'
 
@@ -13,9 +13,11 @@ import {
 import { Avatar, Icons, Text, XStack, YStack } from '~/components/ui'
 import { useCart } from '~/commerce/hooks/useCart'
 import { useFavorites } from '~/commerce/hooks/useFavorites'
+import { navigateApp } from '~/lib/platform/navigate'
 import { routes } from '~/lib/routes'
 import { useAccess } from '~/hooks/useAccess'
 import { useAuth } from '~/hooks/useAuth'
+import { useAppLayout } from '~/hooks/useAppLayout'
 import { useProfile } from '~/hooks/useProfile'
 import { useVendorShops } from '~/hooks/useVendorShops'
 import { useAppUi } from '~/lib/theme/useAppUi'
@@ -28,13 +30,13 @@ type AuthUserMenuContentProps = {
 }
 
 export function AuthUserMenuContent({ onClose }: AuthUserMenuContentProps) {
-  const router = useRouter()
   const { profile } = useProfile()
   const { tier, isMale } = useAccess()
   const { signOut } = useAuth()
   const { shops } = useVendorShops()
   const { itemCount: cartCount } = useCart()
   const { favoriteIds } = useFavorites()
+  const { isDesktop } = useAppLayout()
   const ai = useAiAssistOptional()
 
   const displayName = profile?.full_name || profile?.username || 'Your account'
@@ -50,8 +52,9 @@ export function AuthUserMenuContent({ onClose }: AuthUserMenuContentProps) {
         tier,
         cartCount,
         wishlistCount: favoriteIds.length,
+        omitChromeDuplicates: !isDesktop,
       }),
-    [tier, cartCount, favoriteIds.length],
+    [tier, cartCount, favoriteIds.length, isDesktop],
   )
 
   const sections = useMemo(
@@ -60,13 +63,15 @@ export function AuthUserMenuContent({ onClose }: AuthUserMenuContentProps) {
         tier,
         hasShops: shops.length > 0,
         primaryShopId: shops[0]?.id,
+        omitChromeDuplicates: !isDesktop,
       }),
-    [tier, shops],
+    [tier, shops, isDesktop],
   )
 
   function go(href: Href) {
-    onClose()
-    router.push(href)
+    // Navigate first — closing a sheet/popover first can swallow the press.
+    navigateApp(href)
+    requestAnimationFrame(() => onClose())
   }
 
   return (
@@ -89,8 +94,8 @@ export function AuthUserMenuContent({ onClose }: AuthUserMenuContentProps) {
             onNavigate={go}
             onAction={(action) => {
               if (action === 'open-ai') {
-                onClose()
                 ai?.openAssist()
+                requestAnimationFrame(() => onClose())
               }
             }}
           />
@@ -344,12 +349,15 @@ function MenuRow({
 
 export function AuthGuestMenuContent({ onClose, signInHref }: { onClose: () => void; signInHref: Href }) {
   const ui = useAppUi()
-  const router = useRouter()
-  const sections = useMemo(() => getGuestAccountMenuSections(), [])
+  const { isDesktop } = useAppLayout()
+  const sections = useMemo(
+    () => getGuestAccountMenuSections({ omitChromeDuplicates: !isDesktop }),
+    [isDesktop],
+  )
 
   function preview() {
-    onClose()
-    router.push(signInHref)
+    navigateApp(signInHref)
+    requestAnimationFrame(() => onClose())
   }
 
   return (
@@ -390,7 +398,7 @@ export function AuthGuestMenuContent({ onClose, signInHref }: { onClose: () => v
               description={menuItem.description}
               onPress={() =>
                 section.id === 'shopping'
-                  ? (onClose(), router.push(menuItem.href))
+                  ? (navigateApp(menuItem.href), requestAnimationFrame(() => onClose()))
                   : preview()
               }
             />

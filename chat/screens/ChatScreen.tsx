@@ -149,7 +149,6 @@ export function ChatScreen({ chatId = null, filter = 'all' }: ChatScreenProps) {
             <ChatThreadPane
               chat={activeChat}
               currentUserId={currentUserId}
-              showBack={false}
               onBack={() => router.push(chatRoutes.home)}
               onConversationChanged={reload}
             />
@@ -168,7 +167,6 @@ export function ChatScreen({ chatId = null, filter = 'all' }: ChatScreenProps) {
         <ChatThreadPane
           chat={activeChat}
           currentUserId={currentUserId}
-          showBack
           onBack={() => router.push(chatRoutes.home)}
           onConversationChanged={reload}
         />

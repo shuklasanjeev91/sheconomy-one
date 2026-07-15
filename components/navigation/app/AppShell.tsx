@@ -42,6 +42,8 @@ function useCompactMobileTopBar() {
     pathname === '/community' ||
     pathname === '/chat' ||
     pathname === '/class' ||
+    pathname === '/class/video' ||
+    pathname === '/class/audio' ||
     pathname === '/co-work'
   ) {
     return false
@@ -78,10 +80,10 @@ export function AppShell({ children }: AppShellProps) {
   const compactMobileTopBar = useCompactMobileTopBar()
   const showCommerceFooter = isDesktopWeb && isCommercePath(pathname)
   const stretchMainContent = Platform.OS !== 'web' || !isDesktopWeb
-  // Open conversations are full-screen on mobile: no app header/tabs.
-  const chatFullScreen = !isDesktop && isChatConversationPath(pathname)
+  // Open conversations keep the app header (shared back); hide bottom tabs only.
+  const chatConversationMobile = !isDesktop && isChatConversationPath(pathname)
 
-  if (chromeless || chatFullScreen || authScreen.chromeless) {
+  if (chromeless || authScreen.chromeless) {
     return (
       <NativeSafeArea edges={['top', 'bottom']}>
         <ScreenFill
@@ -119,7 +121,7 @@ export function AppShell({ children }: AppShellProps) {
             style={appShellStyle(isDesktopWeb)}
           >
             {isDesktop ? <AppDesktopHeader /> : null}
-            {!isDesktop ? <AppMobileHeader minimal={compactMobileTopBar} /> : null}
+            {!isDesktop ? <AppMobileHeader minimal={compactMobileTopBar || chatConversationMobile} /> : null}
             <YStack
               flexGrow={stretchMainContent ? 1 : undefined}
               flex={stretchMainContent ? 1 : undefined}
@@ -130,7 +132,7 @@ export function AppShell({ children }: AppShellProps) {
               {children}
             </YStack>
             {showCommerceFooter ? <CommerceDesktopFooter /> : null}
-            {!isDesktop ? <AppMobileBottomTabs /> : null}
+            {!isDesktop && !chatConversationMobile ? <AppMobileBottomTabs /> : null}
             <IncomingCallHost />
           </ScreenFill>
         </AppBarScrollProvider>

@@ -1,15 +1,17 @@
-import { Link, useRouter } from 'one'
+import { Link, usePathname, useRouter } from 'one'
 import { useState } from 'react'
 import { Platform } from 'react-native'
 
 import { recordSearchTerm } from '~/commerce/lib/search-history'
-import { Icons, Input, XStack, YStack } from '~/components/ui'
-import { AppMobileBackButton } from '~/components/navigation/AppMobileBackButton'
+import { Icons, Input, Text, XStack, YStack } from '~/components/ui'
+import { AppHeaderBackButton } from '~/components/navigation/AppHeaderBackButton'
+import { useAppBarScroll } from '~/components/navigation/AppBarScrollContext'
 import { NavCountBadge } from '~/components/navigation/NavCountBadge'
 import { NavLogo } from '~/components/navigation/NavLogo'
+import { SETTINGS_NAV, settingsSectionFromPath } from '~/components/settings/config'
 import { useUnreadNotifications } from '~/community/hooks/useUnreadNotifications'
 import { commerceRoutes, routes } from '~/lib/routes'
-import { useMobileBackNavigation } from '~/hooks/useMobileBackNavigation'
+import { useAppBackNavigation } from '~/hooks/useAppBackNavigation'
 import { useAppUi } from '~/lib/theme/useAppUi'
 import { chromeSurfaceStyle, searchFieldFocusStyle, searchFieldStyle } from '~/lib/theme/surfaces'
 
@@ -19,6 +21,9 @@ import { getAppColors } from './config'
 
 import { BRAND_NAME } from '~/config/brand'
 
+/** Collapse search/logo row after this scroll offset — tabs stay visible (LinkedIn-style). */
+const SCROLL_TABS_ONLY_THRESHOLD = 36
+
 type AppMobileHeaderProps = {
   /** Compact detail chrome — back + search, no section tab row. */
   minimal?: boolean
@@ -26,15 +31,25 @@ type AppMobileHeaderProps = {
 
 /**
  * Mobile/tablet top bar (hidden on desktop).
- * Nested screens show a back control; section roots keep the logo.
+ * At rest: logo/search + product tabs.
+ * On scroll: product tabs only (except desktop, which keeps the full header).
  */
 export function AppMobileHeader({ minimal = false }: AppMobileHeaderProps) {
   const ui = useAppUi()
   const colors = getAppColors(ui)
   const router = useRouter()
-  const { showBack } = useMobileBackNavigation()
+  const pathname = usePathname()
+  const { showBack } = useAppBackNavigation()
+  const { scrollY } = useAppBarScroll()
   const { count: unreadNotifications } = useUnreadNotifications()
   const [searchQuery, setSearchQuery] = useState('')
+
+  const isSettings = pathname === '/settings' || pathname.startsWith('/settings/')
+  const settingsTitle = settingsHeaderTitle(pathname)
+  const showProductTabs = !minimal && !isSettings
+  /** Scrolled feed roots: collapse chrome to tabs only. */
+  const tabsOnly = showProductTabs && scrollY > SCROLL_TABS_ONLY_THRESHOLD
+  const showChromeRow = !tabsOnly
 
   function submitSearch() {
     const trimmed = searchQuery.trim()
@@ -53,61 +68,87 @@ export function AppMobileHeader({ minimal = false }: AppMobileHeaderProps) {
       top={Platform.OS === 'web' ? 0 : undefined}
       $gtMd={{ display: 'none' }}
       style={chromeSurfaceStyle(ui)}
+      animation="quick"
     >
-      <XStack
-        paddingHorizontal="$3"
-        paddingTop="$2.5"
-        paddingBottom="$2"
-        alignItems="center"
-        gap="$2.5"
-        style={{ minHeight: 56 }}
-      >
-        <XStack flexShrink={0} alignItems="center">
-          {showBack ? <AppMobileBackButton /> : <NavLogo compact href={commerceRoutes.home} />}
-        </XStack>
-
+      {showChromeRow ? (
         <XStack
-          flex={1}
-          minWidth={0}
           paddingHorizontal="$3"
+          paddingTop="$2.5"
+          paddingBottom="$2"
           alignItems="center"
-          gap={8}
-          height={40}
-          style={searchFieldStyle(ui)}
-          focusStyle={searchFieldFocusStyle(ui)}
+          gap="$2.5"
+          style={{ minHeight: 56 }}
+          animation="quick"
         >
-          <Icons.Search size={17} color={colors.icon} flexShrink={0} />
-          <Input
-            flex={1}
-            minWidth={0}
-            unstyled
-            value={searchQuery}
-            onChangeText={setSearchQuery}
-            onSubmitEditing={submitSearch}
-            returnKeyType="search"
-            placeholder={`Search ${BRAND_NAME}`}
-            fontSize={14}
-            color={colors.text}
-            placeholderTextColor={colors.icon}
-            borderWidth={0}
-            backgroundColor="transparent"
-          />
-        </XStack>
+          <XStack flexShrink={0} alignItems="center">
+            {showBack ? <AppHeaderBackButton /> : <NavLogo compact href={commerceRoutes.home} />}
+          </XStack>
 
-        <XStack flexShrink={0} gap={8} alignItems="center">
-          <AppMenuButton mode="sheet" size={38} />
-          <HeaderIcon
-            href={routes.notifications}
-            icon={Icons.Bell}
-            label="Notifications"
-            badgeCount={unreadNotifications}
-          />
-        </XStack>
-      </XStack>
+          {isSettings ? (
+            <YStack flex={1} minWidth={0} justifyContent="center">
+              <Text
+                fontSize={17}
+                fontWeight="700"
+                color={colors.text}
+                numberOfLines={1}
+                letterSpacing={-0.2}
+              >
+                {settingsTitle}
+              </Text>
+            </YStack>
+          ) : (
+            <XStack
+              flex={1}
+              minWidth={0}
+              paddingHorizontal="$3"
+              alignItems="center"
+              gap={8}
+              height={40}
+              style={searchFieldStyle(ui)}
+              focusStyle={searchFieldFocusStyle(ui)}
+            >
+              <Icons.Search size={17} color={colors.icon} flexShrink={0} />
+              <Input
+                flex={1}
+                minWidth={0}
+                unstyled
+                value={searchQuery}
+                onChangeText={setSearchQuery}
+                onSubmitEditing={submitSearch}
+                returnKeyType="search"
+                placeholder={`Search ${BRAND_NAME}`}
+                fontSize={14}
+                color={colors.text}
+                placeholderTextColor={colors.icon}
+                borderWidth={0}
+                backgroundColor="transparent"
+              />
+            </XStack>
+          )}
 
-      {!minimal ? <AppCenterNavTabs variant="mobile" /> : null}
+          <XStack flexShrink={0} gap={8} alignItems="center">
+            <AppMenuButton mode="sheet" size={38} />
+            <HeaderIcon
+              href={routes.notifications}
+              icon={Icons.Bell}
+              label="Notifications"
+              badgeCount={unreadNotifications}
+            />
+          </XStack>
+        </XStack>
+      ) : null}
+
+      {showProductTabs ? (
+        <AppCenterNavTabs variant="mobile" compact={tabsOnly} />
+      ) : null}
     </YStack>
   )
+}
+
+function settingsHeaderTitle(pathname: string): string {
+  const section = settingsSectionFromPath(pathname)
+  if (!section) return 'Settings'
+  return SETTINGS_NAV.find((item) => item.id === section)?.label ?? 'Settings'
 }
 
 function HeaderIcon({

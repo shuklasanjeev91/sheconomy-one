@@ -63,7 +63,7 @@ export function VendorComingSoonScreen() {
 
       <Link href={vendorRoutes.myShop} asChild>
         <Button tone="primary" size="$4" borderRadius={999} icon={<Icons.Store size={16} />}>
-          Back to My Shop
+          Open My Shop
         </Button>
       </Link>
     </YStack>

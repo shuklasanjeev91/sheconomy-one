@@ -96,7 +96,9 @@ export default defineConfig(({ mode }) => {
         },
 
         web: {
-          defaultRenderMode: 'ssg',
+          // SPA soft client navigation — avoid SSG full document loads on route changes.
+          defaultRenderMode: 'spa',
+          skewProtection: false,
           deploy: 'vercel',
           redirects: [
             { source: '/auth/sign-up', destination: '/auth/sign-in', permanent: true },
@@ -205,6 +207,35 @@ export default defineConfig(({ mode }) => {
             path.unshiftContainer("body", importDeclaration);
           }`,
                 `          path.unshiftContainer("body", importDeclaration); // sheconomy-setup-first: polyfills before \`one\``,
+              )
+            },
+            // Never hard-reload the SPA shell when One marks a deploy "stale".
+            'dist/esm/router/router.mjs': (contents) => {
+              if (!contents || contents.includes('sheconomy-spa-no-hard-reload')) return
+              return contents.replace(
+                `  if (isVersionStale()) {
+    window.location.href = href;
+    return;
+  }`,
+                `  // sheconomy-spa-no-hard-reload: keep soft client navigation
+  if (false && isVersionStale()) {
+    window.location.href = href;
+    return;
+  }`,
+              )
+            },
+            'dist/cjs/router/router.cjs': (contents) => {
+              if (!contents || contents.includes('sheconomy-spa-no-hard-reload')) return
+              return contents.replace(
+                `  if ((0, import_skewProtection.isVersionStale)()) {
+    window.location.href = href;
+    return;
+  }`,
+                `  // sheconomy-spa-no-hard-reload: keep soft client navigation
+  if (false && (0, import_skewProtection.isVersionStale)()) {
+    window.location.href = href;
+    return;
+  }`,
               )
             },
           },

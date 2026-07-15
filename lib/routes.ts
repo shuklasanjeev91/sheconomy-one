@@ -11,6 +11,8 @@ export const appRoutes = {
   profile: '/profile' as Href,
   userProfile: (handle: string) => `/profile/${encodeURIComponent(handle)}` as Href,
   settings: '/settings' as Href,
+  settingsSection: (section: string) =>
+    `/settings/${encodeURIComponent(section)}` as Href,
   help: '/help' as Href,
   helpProduct: (product: string) =>
     `/help?product=${encodeURIComponent(product)}` as Href,
@@ -116,7 +118,7 @@ export const chatRoutes = {
 
 export const classRoutes = {
   home: '/class' as Href,
-  video: '/class' as Href,
+  video: '/class/video' as Href,
   audio: '/class/audio' as Href,
   program: (slug: string) => `/class/${encodeURIComponent(slug)}` as Href,
 } as const
@@ -148,6 +150,7 @@ export const routes = {
   profile: appRoutes.profile,
   userProfile: appRoutes.userProfile,
   settings: appRoutes.settings,
+  settingsSection: appRoutes.settingsSection,
   help: appRoutes.help,
   notifications: appRoutes.notifications,
   cart: appRoutes.cart,
@@ -242,13 +245,25 @@ export function isClassAudioPath(pathname: string) {
   return pathname === '/class/audio' || pathname.startsWith('/class/audio/')
 }
 
+export function isClassVideoPath(pathname: string) {
+  return pathname === '/class/video' || pathname.startsWith('/class/video/')
+}
+
+/** Class home tab — `/class` hub and program detail pages (not Video/Audio lists). */
+export function isClassHomePath(pathname: string) {
+  if (!isClassPath(pathname)) return false
+  if (isClassAudioPath(pathname) || isClassVideoPath(pathname)) return false
+  return true
+}
+
+/** @deprecated Prefer isClassVideoPath — kept for older call sites. */
 export function isClassVideoHomePath(pathname: string) {
-  return pathname === '/class' || pathname === '/class/'
+  return isClassVideoPath(pathname) || pathname === '/class' || pathname === '/class/'
 }
 
 export function isClassProgramPath(pathname: string) {
   if (!pathname.startsWith('/class/')) return false
-  if (isClassAudioPath(pathname)) return false
+  if (isClassAudioPath(pathname) || isClassVideoPath(pathname)) return false
   return true
 }
 

@@ -1,5 +1,4 @@
 import type { Href } from 'one'
-import { useRouter } from 'one'
 import { useState } from 'react'
 
 import {
@@ -14,15 +13,9 @@ import {
 } from '~/components/ui'
 import { useAccess } from '~/hooks/useAccess'
 import { useProfile } from '~/hooks/useProfile'
+import { navigateApp } from '~/lib/platform/navigate'
 import { useAiAssistOptional } from '~/providers/AiAssistProvider'
-import {
-  chatRoutes,
-  classRoutes,
-  coWorkRoutes,
-  commerceRoutes,
-  communityRoutes,
-  routes,
-} from '~/lib/routes'
+import { commerceRoutes, communityRoutes, routes } from '~/lib/routes'
 import { useAppUi } from '~/lib/theme/useAppUi'
 
 import { getAppColors } from './config'
@@ -35,75 +28,64 @@ type MenuTile = {
   color: string
 }
 
-function useProductTiles(): MenuTile[] {
+/**
+ * Secondary destinations only — never repeat APP_CENTER_NAV hubs
+ * (Marketplace / Community / Chat / Classes / Co-Work).
+ */
+function useExploreTiles(): MenuTile[] {
   const { canAccessFeature } = useAccess()
   const hasCommunity = canAccessFeature('community')
 
   return [
-    { label: 'Marketplace', icon: Icons.Store, href: commerceRoutes.home, color: '#0a66c2' },
-    { label: 'Shops', icon: Icons.ShoppingBag, href: commerceRoutes.shops, color: '#8b5cf6' },
+    { label: 'Shops', icon: Icons.Store, href: commerceRoutes.shops, color: '#8b5cf6' },
     ...(hasCommunity
       ? ([
-          { label: 'Feed', icon: Icons.Newspaper, href: communityRoutes.home, color: '#e7357a' },
-          { label: 'Network', icon: Icons.Users, href: communityRoutes.network, color: '#0ea5e9' },
-          { label: 'Jobs', icon: Icons.Briefcase, href: communityRoutes.jobs, color: '#0f9d58' },
           { label: 'Groups', icon: Icons.UsersRound, href: communityRoutes.groups, color: '#f59e0b' },
           { label: 'Events', icon: Icons.Calendar, href: communityRoutes.events, color: '#ef4444' },
           { label: 'Pages', icon: Icons.Building2, href: communityRoutes.companies, color: '#6366f1' },
         ] as MenuTile[])
       : []),
-    { label: 'Messages', icon: Icons.MessageCircle, href: chatRoutes.home, color: '#25D366' },
-    { label: 'Meetings', icon: Icons.Video, href: coWorkRoutes.home, color: '#14b8a6' },
-    { label: 'Classes', icon: Icons.GraduationCap, href: classRoutes.home, color: '#d9488f' },
   ]
 }
 
-/** Account destinations shared by every tab (one profile / settings / inbox). */
-function useAccountTiles(): MenuTile[] {
+/**
+ * Guests get Sign in here. Signed-in account helpers (Help / AI / Profile)
+ * live only in the Auth / You menu — keep this menu for "More" explore.
+ */
+function useUtilityTiles(): MenuTile[] {
   const { isAuthenticated } = useProfile()
   if (!isAuthenticated) {
-    return [
-      { label: 'Sign in', icon: Icons.LogIn, href: routes.signIn, color: '#0a66c2' },
-    ]
+    return [{ label: 'Sign in', icon: Icons.LogIn, href: routes.signIn, color: '#0a66c2' }]
   }
-  return [
-    { label: 'Profile', icon: Icons.User, href: routes.profile, color: '#0a66c2' },
-    { label: 'Notifications', icon: Icons.Bell, href: routes.notifications, color: '#e7357a' },
-    { label: 'Settings', icon: Icons.Settings, href: routes.settings, color: '#64748b' },
-    { label: 'Help', icon: Icons.HelpCircle, href: routes.help, color: '#0ea5e9' },
-    { label: 'Ask AI', icon: Icons.Sparkles, action: 'open-ai', color: '#D01060' },
-  ]
+  return []
 }
 
 type AppMenuButtonProps = {
-  /** Desktop headers use an anchored popup; mobile uses a bottom sheet. */
   mode: 'popover' | 'sheet'
-  /** Diameter of the round trigger chip. */
   size?: number
 }
 
 /**
- * app-launcher app launcher — product hubs + shared account shortcuts
- * so Settings / Profile / Notifications are reachable from every tab.
+ * App launcher — secondary destinations + help/AI only.
+ * Primary product tabs and full account stay in center nav / Auth You menu.
  */
 export function AppMenuButton({ mode, size = 40 }: AppMenuButtonProps) {
   const ui = useAppUi()
   const colors = getAppColors(ui)
-  const router = useRouter()
   const [open, setOpen] = useState(false)
-  const productTiles = useProductTiles()
-  const accountTiles = useAccountTiles()
+  const exploreTiles = useExploreTiles()
+  const utilityTiles = useUtilityTiles()
   const ai = useAiAssistOptional()
 
   function go(href: Href) {
-    setOpen(false)
-    router.push(href)
+    navigateApp(href)
+    requestAnimationFrame(() => setOpen(false))
   }
 
   function onTile(tile: MenuTile) {
     if (tile.action === 'open-ai') {
-      setOpen(false)
       ai?.openAssist()
+      requestAnimationFrame(() => setOpen(false))
       return
     }
     if (tile.href) go(tile.href)
@@ -111,21 +93,38 @@ export function AppMenuButton({ mode, size = 40 }: AppMenuButtonProps) {
 
   const body = (
     <YStack gap="$3" width="100%">
-      <MenuSectionLabel colors={colors} label="Your account" />
-      <XStack flexWrap="wrap" rowGap="$3" columnGap="$2">
-        {accountTiles.map((tile) => (
-          <MenuTileButton key={tile.label} tile={tile} colors={colors} onPress={() => onTile(tile)} />
-        ))}
-      </XStack>
+      {utilityTiles.length > 0 ? (
+        <>
+          <MenuSectionLabel colors={colors} label="Account" />
+          <XStack flexWrap="wrap" rowGap="$3" columnGap="$2">
+            {utilityTiles.map((tile) => (
+              <MenuTileButton
+                key={tile.label}
+                tile={tile}
+                colors={colors}
+                onPress={() => onTile(tile)}
+              />
+            ))}
+          </XStack>
+        </>
+      ) : null}
 
-      <Separator borderColor={colors.borderSubtle} />
-
-      <MenuSectionLabel colors={colors} label="Explore" />
-      <XStack flexWrap="wrap" rowGap="$3" columnGap="$2">
-        {productTiles.map((tile) => (
-          <MenuTileButton key={tile.label} tile={tile} colors={colors} onPress={() => onTile(tile)} />
-        ))}
-      </XStack>
+      {exploreTiles.length > 0 ? (
+        <>
+          {utilityTiles.length > 0 ? <Separator borderColor={colors.borderSubtle} /> : null}
+          <MenuSectionLabel colors={colors} label="More" />
+          <XStack flexWrap="wrap" rowGap="$3" columnGap="$2">
+            {exploreTiles.map((tile) => (
+              <MenuTileButton
+                key={tile.label}
+                tile={tile}
+                colors={colors}
+                onPress={() => onTile(tile)}
+              />
+            ))}
+          </XStack>
+        </>
+      ) : null}
     </YStack>
   )
 
@@ -150,12 +149,7 @@ export function AppMenuButton({ mode, size = 40 }: AppMenuButtonProps) {
             <Icons.Grid2x2 size={20} color={colors.text} />
           </XStack>
         </Popover.Trigger>
-        <PopoverContent
-          width={360}
-          maxWidth={360}
-          borderColor={colors.borderSubtle}
-          zIndex={1000}
-        >
+        <PopoverContent width={360} maxWidth={360} borderColor={colors.borderSubtle} zIndex={1000}>
           {body}
         </PopoverContent>
       </Popover>
