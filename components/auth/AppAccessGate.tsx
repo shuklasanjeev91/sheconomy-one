@@ -27,9 +27,9 @@ export function AppAccessGate({ children }: AppAccessGateProps) {
     canAccessPath('guest', pathname) &&
     getGuestSignInReturnTo('guest', pathname) === null
 
-  // Always wait for auth/profile to settle before tier redirects. Skipping this
-  // during account switch briefly treats users as male (gender unknown) and can
-  // yank chat/co-work into a blank redirect state.
+  // Wait for first profile settle before tier redirects (account-switch safety).
+  // Keep the previous tree mounted whenever possible — a full-screen spinner on
+  // every soft navigation feels like a 5–10s hang.
   if (isLoading && !guestCanBrowseWhileAuthLoads) {
     return (
       <PageCenter>

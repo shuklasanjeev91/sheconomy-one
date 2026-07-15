@@ -6,8 +6,8 @@
   "scripts": {
     "postinstall": "one patch || true",
     "android": "one run:android",
-    "build": "ONE_CACHE_KEY=${ONE_CACHE_KEY:-202607151} one build && node scripts/patch-vercel-output.mjs",
-    "build:web": "ONE_CACHE_KEY=${ONE_CACHE_KEY:-202607151} one build && node scripts/patch-vercel-output.mjs",
+    "build": "VXRN_FORCE_PATCH=1 ONE_CACHE_KEY=${ONE_CACHE_KEY:-202607151} one build && node scripts/patch-vercel-output.mjs",
+    "build:web": "VXRN_FORCE_PATCH=1 ONE_CACHE_KEY=${ONE_CACHE_KEY:-202607151} one build && node scripts/patch-vercel-output.mjs",
     "deploy:vercel": "yarn build && npx vercel deploy --prebuilt --prod --yes",
     "clean": "one clean",
     "dev": "one dev",

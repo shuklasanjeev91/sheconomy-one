@@ -14,6 +14,7 @@ import { screenFillStyle } from '~/lib/platform/viewport'
 import { AppToasts } from '~/components/ui/Toast'
 import { AppUsageTracker } from '~/components/analytics/AppUsageTracker'
 import { AppShell } from '~/components/navigation/app/AppShell'
+import { RouteWarmup } from '~/components/navigation/RouteWarmup'
 import { CartProvider } from '~/commerce/hooks/useCart'
 import { FavoritesProvider } from '~/commerce/hooks/useFavorites'
 import { MarketplacePersonalizationProvider } from '~/commerce/context/MarketplacePersonalizationContext'
@@ -216,6 +217,7 @@ function AppProviders({ children }: { children: React.ReactNode }) {
                             <AppUsageTracker />
                             <BiometricUnlockGate>
                               <AppErrorBoundary scope="AppShell">
+                                <RouteWarmup />
                                 <AppShell>{children}</AppShell>
                               </AppErrorBoundary>
                             </BiometricUnlockGate>

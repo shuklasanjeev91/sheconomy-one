@@ -17,6 +17,7 @@ function loadProjectEnv(mode: string) {
     'EXPO_PUBLIC_SUPABASE_ANON_KEY',
     'EXPO_PUBLIC_WEB_APP_URL',
     'ONE_SERVER_URL',
+    'ONE_CACHE_KEY',
   ] as const
 
   const env = { ...fromFiles }
@@ -230,32 +231,66 @@ export function parseWebBuildErrors(input) {
               )
             },
             // Never hard-reload the SPA shell when One marks a deploy "stale".
+            // Also never block tab/link navigation on cold preload waterfalls (100+ modules).
+            // NOTE: vxrn skips re-patch when file mtime matches stats — build sets VXRN_FORCE_PATCH=1.
             'dist/esm/router/router.mjs': (contents) => {
-              if (!contents || contents.includes('sheconomy-spa-no-hard-reload')) return
-              return contents.replace(
-                `  if (isVersionStale()) {
-    window.location.href = href;
-    return;
-  }`,
-                `  // sheconomy-spa-no-hard-reload: keep soft client navigation
+              if (!contents) return
+              let next = contents
+              if (!next.includes('sheconomy-spa-no-hard-reload')) {
+                next = next.replace(
+                  /if \(isVersionStale\(\)\) \{\s*window\.location\.href = href;\s*return;\s*\}/,
+                  `// sheconomy-spa-no-hard-reload: keep soft client navigation
   if (false && isVersionStale()) {
     window.location.href = href;
     return;
   }`,
+                )
+              }
+              if (!next.includes('sheconomy-nav-instant')) {
+                next = next.replace(
+                  /if \(\!\(normalizedPreloadPath in preloadedLoaderData\) && \!\(href in preloadedLoaderData\)\) await preloadRoute\(href, true\);/,
+                  `// sheconomy-nav-instant: do not await cold preload (was 5–10s per tab)
+if (!(normalizedPreloadPath in preloadedLoaderData) && !(href in preloadedLoaderData)) void preloadRoute(href, true);`,
+                )
+              }
+              return next === contents ? undefined : next
+            },
+            'dist/esm/router/router.native.js': (contents) => {
+              if (!contents || contents.includes('sheconomy-nav-instant')) return
+              return contents.replace(
+                /if \(\!\(normalizedPreloadPath in preloadedLoaderData\) && \!\(href in preloadedLoaderData\)\) await preloadRoute\(href, true\);/,
+                `// sheconomy-nav-instant: do not await cold preload (was 5–10s per tab)
+if (!(normalizedPreloadPath in preloadedLoaderData) && !(href in preloadedLoaderData)) void preloadRoute(href, true);`,
               )
             },
             'dist/cjs/router/router.cjs': (contents) => {
-              if (!contents || contents.includes('sheconomy-spa-no-hard-reload')) return
-              return contents.replace(
-                `  if ((0, import_skewProtection.isVersionStale)()) {
-    window.location.href = href;
-    return;
-  }`,
-                `  // sheconomy-spa-no-hard-reload: keep soft client navigation
+              if (!contents) return
+              let next = contents
+              if (!next.includes('sheconomy-spa-no-hard-reload')) {
+                next = next.replace(
+                  /if \(\(0, import_skewProtection\.isVersionStale\)\(\)\) \{\s*window\.location\.href = href;\s*return;\s*\}/,
+                  `// sheconomy-spa-no-hard-reload: keep soft client navigation
   if (false && (0, import_skewProtection.isVersionStale)()) {
     window.location.href = href;
     return;
   }`,
+                )
+              }
+              if (!next.includes('sheconomy-nav-instant')) {
+                next = next.replace(
+                  /if \(\!\(normalizedPreloadPath in preloadedLoaderData\) && \!\(href in preloadedLoaderData\)\) await preloadRoute\(href, true\);/,
+                  `// sheconomy-nav-instant: do not await cold preload (was 5–10s per tab)
+if (!(normalizedPreloadPath in preloadedLoaderData) && !(href in preloadedLoaderData)) void preloadRoute(href, true);`,
+                )
+              }
+              return next === contents ? undefined : next
+            },
+            'dist/cjs/router/router.native.js': (contents) => {
+              if (!contents || contents.includes('sheconomy-nav-instant')) return
+              return contents.replace(
+                /if \(\!\(normalizedPreloadPath in preloadedLoaderData\) && \!\(href in preloadedLoaderData\)\) await preloadRoute\(href, true\);/,
+                `// sheconomy-nav-instant: do not await cold preload (was 5–10s per tab)
+if (!(normalizedPreloadPath in preloadedLoaderData) && !(href in preloadedLoaderData)) void preloadRoute(href, true);`,
               )
             },
           },
@@ -320,6 +355,8 @@ export function parseWebBuildErrors(input) {
       'process.env.ONE_SERVER_URL': JSON.stringify(
         env.ONE_SERVER_URL ?? env.EXPO_PUBLIC_WEB_APP_URL ?? DEFAULT_APP_ORIGIN,
       ),
+      'process.env.ONE_CACHE_KEY': JSON.stringify(env.ONE_CACHE_KEY?.trim() || '202607151'),
+      'import.meta.env.ONE_CACHE_KEY': JSON.stringify(env.ONE_CACHE_KEY?.trim() || '202607151'),
     },
 
     ssr: {
