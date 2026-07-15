@@ -78,6 +78,21 @@ export const DELIVERY_STATUS = {
   CANCELLED: 'cancelled',
 } as const satisfies Record<string, DeliveryStatus>
 
+/** Delivery shipping modes (free-text `order_delivery.delivery_mode` column). */
+export const DELIVERY_MODE = {
+  STANDARD: 'standard',
+  EXPRESS: 'express',
+  SAME_DAY: 'same_day',
+} as const
+
+export type DeliveryMode = (typeof DELIVERY_MODE)[keyof typeof DELIVERY_MODE]
+
+export const DELIVERY_MODE_OPTIONS: { value: DeliveryMode; label: string }[] = [
+  { value: DELIVERY_MODE.STANDARD, label: 'Standard' },
+  { value: DELIVERY_MODE.EXPRESS, label: 'Express' },
+  { value: DELIVERY_MODE.SAME_DAY, label: 'Same Day' },
+]
+
 // ============= STATUS MACHINE =============
 
 /**
@@ -217,6 +232,36 @@ export const ORDER_STATUS_PROGRESS: Record<OrderStatus, number> = {
   [ORDER_STATUS.DISPUTED]: 50,
   [ORDER_STATUS.ON_HOLD]: 30,
   [ORDER_STATUS.FAILED_DELIVERY]: 70,
+}
+
+/** Presentation data (label / tone / icon) per delivery status. */
+export const DELIVERY_STATUS_DISPLAY: Record<DeliveryStatus, OrderStatusDisplay> = {
+  [DELIVERY_STATUS.PENDING]: { label: 'Pending', tone: 'yellow', icon: 'Clock', description: 'Awaiting shipment' },
+  [DELIVERY_STATUS.READY_TO_SHIP]: { label: 'Ready to Ship', tone: 'orange', icon: 'PackageCheck', description: 'Packed and ready for pickup' },
+  [DELIVERY_STATUS.SHIPPED]: { label: 'Shipped', tone: 'purple', icon: 'Truck', description: 'Handed to the carrier' },
+  [DELIVERY_STATUS.IN_TRANSIT]: { label: 'In Transit', tone: 'blue', icon: 'Truck', description: 'Moving through the carrier network' },
+  [DELIVERY_STATUS.OUT_FOR_DELIVERY]: { label: 'Out for Delivery', tone: 'green', icon: 'Truck', description: 'On the way to the customer' },
+  [DELIVERY_STATUS.DELIVERED]: { label: 'Delivered', tone: 'green', icon: 'PackageCheck', description: 'Delivered to the customer' },
+  [DELIVERY_STATUS.FAILED_DELIVERY]: { label: 'Delivery Failed', tone: 'red', icon: 'AlertTriangle', description: 'A delivery attempt failed' },
+  [DELIVERY_STATUS.RETURNED_TO_SENDER]: { label: 'Returned to Sender', tone: 'orange', icon: 'RotateCcw', description: 'Package returned to sender' },
+  [DELIVERY_STATUS.LOST]: { label: 'Lost', tone: 'red', icon: 'AlertTriangle', description: 'Package reported lost' },
+  [DELIVERY_STATUS.DAMAGED]: { label: 'Damaged', tone: 'red', icon: 'AlertTriangle', description: 'Package reported damaged' },
+  [DELIVERY_STATUS.CANCELLED]: { label: 'Cancelled', tone: 'gray', icon: 'XCircle', description: 'Shipment cancelled' },
+}
+
+/** Progress percentage (0–100) for delivery-tracking bars. */
+export const DELIVERY_STATUS_PROGRESS: Record<DeliveryStatus, number> = {
+  [DELIVERY_STATUS.PENDING]: 10,
+  [DELIVERY_STATUS.READY_TO_SHIP]: 25,
+  [DELIVERY_STATUS.SHIPPED]: 45,
+  [DELIVERY_STATUS.IN_TRANSIT]: 70,
+  [DELIVERY_STATUS.OUT_FOR_DELIVERY]: 90,
+  [DELIVERY_STATUS.DELIVERED]: 100,
+  [DELIVERY_STATUS.FAILED_DELIVERY]: 60,
+  [DELIVERY_STATUS.RETURNED_TO_SENDER]: 0,
+  [DELIVERY_STATUS.LOST]: 0,
+  [DELIVERY_STATUS.DAMAGED]: 0,
+  [DELIVERY_STATUS.CANCELLED]: 0,
 }
 
 // ============= DEFAULTS / RULES =============

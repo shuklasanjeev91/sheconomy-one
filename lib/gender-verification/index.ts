@@ -1,5 +1,6 @@
 export * from './api'
 export * from './blink'
 export * from './constants'
+export * from './errors'
 export * from './gender-estimate'
 export * from './landmarks'

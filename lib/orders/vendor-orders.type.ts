@@ -43,6 +43,12 @@ export type OrderCustomerSummary = {
   email?: string | null
 }
 
+export type OrderShopSummary = {
+  id?: string | null
+  shop_name?: string | null
+  user_id?: string | null
+}
+
 export type OrderListingImage = {
   id: string
   image_url: string
@@ -88,6 +94,8 @@ export type VendorOrderParent = Pick<
   billing_address?: OrderAddressSummary | null
   shipping_address?: OrderAddressSummary | null
   profiles?: OrderCustomerSummary | null
+  /** Status history belongs to the order (FK: order_status_logs.order_id). */
+  order_status_logs?: OrderStatusLog[] | null
 }
 
 /**
@@ -99,8 +107,9 @@ export type VendorOrderItem = OrderItem & {
   listings?: OrderListingSummary | null
   /** Singular alias kept for components that expect `item.listing`. */
   listing?: OrderListingSummary | null
+  /** Owning shop (joined via `shops!vendor_id`) — used for invoice headers. */
+  shops?: OrderShopSummary | null
   order_delivery?: OrderDeliverySummary[] | OrderDeliverySummary | null
-  order_status_logs?: OrderStatusLog[] | null
   /** Derived: from `order_delivery[].delivery_address`. */
   shipping_address?: unknown
   /** Derived: from `orders.billing_address`. */

@@ -146,11 +146,11 @@ export async function getVendorOrderItem(
           customer_notes, special_instructions,
           billing_address:addresses!billing_address_id (*),
           shipping_address:addresses!shipping_address_id (*),
-          profiles!user_id ( full_name, email, phone )
+          profiles!user_id ( full_name, email, phone ),
+          order_status_logs ( * )
         ),
         listings ( id, title, description, listing_images ( id, image_url, is_primary, display_order ) ),
-        shops!vendor_id ( id, shop_name, user_id ),
-        order_status_logs ( * )
+        shops!vendor_id ( id, shop_name, user_id )
       `,
       )
       .eq('id', orderItemId)
