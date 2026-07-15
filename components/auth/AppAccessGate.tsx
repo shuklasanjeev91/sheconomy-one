@@ -6,7 +6,7 @@ import { SpaRedirect } from '~/components/navigation/SpaRedirect'
 import { AuthSignInFlow } from '~/components/auth/AuthSignInFlow'
 import { PageCenter } from '~/components/layout'
 import { Spinner, YStack } from '~/components/ui'
-import { getGuestSignInReturnTo } from '~/lib/auth/access'
+import { canAccessPath, getGuestSignInReturnTo } from '~/lib/auth/access'
 import { useAccess } from '~/hooks/useAccess'
 import { useAppLayout } from '~/hooks/useAppLayout'
 
@@ -17,7 +17,7 @@ type AppAccessGateProps = {
 /** Redirects users away from routes their access tier cannot use. */
 export function AppAccessGate({ children }: AppAccessGateProps) {
   const pathname = usePathname()
-  const { tier, isLoading, isAuthenticated, canAccessPath, getDeniedRedirect } = useAccess()
+  const { tier, isLoading, isAuthenticated, getDeniedRedirect } = useAccess()
   const { isDesktopWeb } = useAppLayout()
   const useDocumentScroll = Platform.OS === 'web' && isDesktopWeb
 
