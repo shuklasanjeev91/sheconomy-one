@@ -36,9 +36,8 @@ export function AppMobileBottomTabs() {
   const { tier } = useAccess()
   const { safeBottom } = useAppLayout()
   const { itemCount } = useCart()
-  const { shops } = useVendorShops()
+  const { shops, primaryShopId } = useVendorShops()
   const hasShops = shops.length > 0
-  const primaryShopId = shops[0]?.id ?? null
 
   const ui = useAppUi()
   const { ui: coworkUi } = useCoWorkTheme()

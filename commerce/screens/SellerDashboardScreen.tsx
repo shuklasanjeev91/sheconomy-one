@@ -59,7 +59,12 @@ export function SellerDashboardScreen() {
   }
 
   if (!shopId || !activeShop) {
-    return <SpaRedirect href={commerceRoutes.myShops} />
+    // Prefer the owner's real hub over bouncing to /my-shops (which would redirect again).
+    const fallbackShopId = shops[0]?.id
+    if (fallbackShopId && fallbackShopId !== shopId) {
+      return <SpaRedirect href={commerceRoutes.manageShop(fallbackShopId)} />
+    }
+    return <SpaRedirect href={`${commerceRoutes.myShops}?create=1`} />
   }
 
   function handleShopUpdated(next: VendorShop) {

@@ -1,6 +1,6 @@
-import { useLocalSearchParams, useRouter } from 'one'
+import { useLocalSearchParams } from 'one'
 import { AppLink } from '~/components/navigation/AppLink'
-import { useEffect } from 'react'
+import { SpaRedirect } from '~/components/navigation/SpaRedirect'
 
 import { CommercePageHeader, CommercePanel } from '~/commerce/components'
 import { Button, Icons, Paragraph, Spinner, Text, XStack, YStack } from '~/components/ui'
@@ -13,34 +13,20 @@ import { BRAND_NAME } from '~/config/brand'
 
 export function MyShopsScreen() {
   const ui = useAppUi()
-  const router = useRouter()
   const params = useLocalSearchParams<{ create?: string }>()
-  const { shops, isLoading, error } = useVendorShops()
+  const { shops, isLoading, error, primaryShopId } = useVendorShops()
   const forceCreate = params.create === '1' || params.create === 'true'
   const hasShops = shops.length > 0
-  const primaryShop = shops[0] ?? null
 
-  useEffect(() => {
-    if (!isLoading && hasShops && primaryShop && !forceCreate) {
-      router.replace(commerceRoutes.manageShop(primaryShop.id))
-    }
-  }, [forceCreate, hasShops, isLoading, primaryShop, router])
+  // Owners already have a shop — open the seller hub, don't strand them on /my-shops.
+  if (!isLoading && hasShops && primaryShopId && !forceCreate) {
+    return <SpaRedirect href={commerceRoutes.manageShop(primaryShopId)} />
+  }
 
   if (isLoading) {
     return (
       <PageCenter>
         <Spinner size="large" />
-      </PageCenter>
-    )
-  }
-
-  if (hasShops && !forceCreate) {
-    return (
-      <PageCenter>
-        <Spinner size="large" />
-        <Text color={ui.textMuted} marginTop="$3">
-          Opening seller hub…
-        </Text>
       </PageCenter>
     )
   }

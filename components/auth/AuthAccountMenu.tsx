@@ -62,7 +62,7 @@ export function AuthUserMenuContent({ onClose }: AuthUserMenuContentProps) {
       getAccountMenuSections({
         tier,
         hasShops: shops.length > 0,
-        primaryShopId: shops[0]?.id,
+        primaryShopId: shops[0]?.id ?? null,
         omitChromeDuplicates: !isDesktop,
       }),
     [tier, shops, isDesktop],

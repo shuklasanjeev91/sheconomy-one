@@ -28,12 +28,14 @@ export function AppDesktopHeader() {
   const colors = getAppColors(ui)
   const { isAuthenticated } = useProfile()
   const { canManageShops } = useAccess()
-  const { shops, isLoading: shopsLoading } = useVendorShops()
+  const { shops, isLoading: shopsLoading, primaryShopId } = useVendorShops()
   const { itemCount } = useCart()
   const { count: unreadNotifications } = useUnreadNotifications()
   const { showBack } = useAppBackNavigation()
 
   const hasShops = shops.length > 0
+  const sellerHubHref =
+    hasShops && primaryShopId ? commerceRoutes.manageShop(primaryShopId) : commerceRoutes.myShops
   const showCreateShop = canManageShops && isAuthenticated && !shopsLoading && !hasShops
 
   return (
@@ -79,8 +81,12 @@ export function AppDesktopHeader() {
           {isAuthenticated ? (
             <>
               <AppMenuButton mode="popover" size={40} />
-              {canManageShops ? (
-                <UtilityButton href={commerceRoutes.myShops} icon={Icons.Store} label="My shops" />
+              {canManageShops && !showCreateShop ? (
+                <UtilityButton
+                  href={sellerHubHref}
+                  icon={Icons.Store}
+                  label={hasShops ? 'Manage shop' : 'My shops'}
+                />
               ) : null}
               {showCreateShop ? (
                 <AppLink href={`${commerceRoutes.myShops}?create=1` as import('one').Href} asChild>

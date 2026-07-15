@@ -1,3 +1,5 @@
+import type { Href } from 'one'
+
 import { RegionPreferencesTrigger } from '~/components/locale'
 import { AppLink } from '~/components/navigation/AppLink'
 import { Icons, Text, XStack, YStack } from '~/components/ui'
@@ -5,6 +7,7 @@ import { BRAND_NAME, BRAND_SOCIAL } from '~/config/brand'
 import { NavLogo } from '~/components/navigation/NavLogo'
 import { commerceRoutes } from '~/lib/routes'
 import { useAppLayout } from '~/hooks/useAppLayout'
+import { useVendorShops } from '~/hooks/useVendorShops'
 import { useAppUi, useIsDarkTheme } from '~/lib/theme/useAppUi'
 import { openExternalUrl } from '~/lib/platform/openUrl'
 
@@ -15,11 +18,16 @@ export function CommerceDesktopFooter() {
   const ui = useAppUi()
   const isDark = useIsDarkTheme()
   const { gutter } = useAppLayout()
+  const { primaryShopId } = useVendorShops()
 
   const barBg = isDark ? '#12080e' : '#2F2340'
   const barText = 'rgba(255, 255, 255, 0.88)'
   const barMuted = 'rgba(255, 255, 255, 0.62)'
   const barHover = '#ffffff'
+
+  const sellerHubHref: Href = primaryShopId
+    ? commerceRoutes.manageShop(primaryShopId)
+    : commerceRoutes.myShops
 
   return (
     <YStack width="100%" flexShrink={0} marginTop="auto">
@@ -57,18 +65,22 @@ export function CommerceDesktopFooter() {
                 {column.title}
               </Text>
               <YStack gap="$2">
-                {column.links.map((link) => (
-                  <AppLink key={`${column.title}-${link.label}`} href={link.href} asChild>
-                    <Text
-                      fontSize={13}
-                      color={ui.textSecondary}
-                      cursor="pointer"
-                      hoverStyle={{ textDecorationLine: 'underline', color: ui.text }}
-                    >
-                      {link.label}
-                    </Text>
-                  </AppLink>
-                ))}
+                {column.links.map((link) => {
+                  const href =
+                    link.href === commerceRoutes.myShops ? sellerHubHref : link.href
+                  return (
+                    <AppLink key={`${column.title}-${link.label}`} href={href} asChild>
+                      <Text
+                        fontSize={13}
+                        color={ui.textSecondary}
+                        cursor="pointer"
+                        hoverStyle={{ textDecorationLine: 'underline', color: ui.text }}
+                      >
+                        {link.label}
+                      </Text>
+                    </AppLink>
+                  )
+                })}
               </YStack>
             </YStack>
           ))}
