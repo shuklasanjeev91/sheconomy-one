@@ -69,6 +69,8 @@ export default defineConfig(({ mode }) => {
         '@livekit/react-native-webrtc': fromProjectRoot('./lib/stubs/react-native-webrtc.ts'),
         'react-native-webrtc': fromProjectRoot('./lib/stubs/react-native-webrtc.ts'),
         'react-native-webview': fromProjectRoot('./lib/stubs/react-native-webview.ts'),
+        // Published package ships JSX in `.js`; Rolldown parse fails during web build.
+        'react-native-qrcode-svg': fromProjectRoot('./lib/stubs/react-native-qrcode-svg.tsx'),
         'use-sync-external-store/with-selector': useSyncExternalStoreWithSelector,
         'use-sync-external-store/with-selector.js': useSyncExternalStoreWithSelector,
       },
@@ -334,6 +336,7 @@ export function parseWebBuildErrors(input) {
         'expo-audio',
         'expo-video',
         'react-native-webview',
+        'react-native-qrcode-svg',
       ],
       include: [
         '@tamagui/config',
