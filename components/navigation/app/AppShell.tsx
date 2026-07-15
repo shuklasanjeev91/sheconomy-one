@@ -13,10 +13,8 @@ import { useAuthScreen } from '~/hooks/useAuthScreen'
 import {
   isChatConversationPath,
   isChatPath,
-  isClassPath,
   isCommercePath,
   isCommunityPath,
-  isCoWorkPath,
 } from '~/lib/routes'
 import { authViewportStyle } from '~/components/auth/auth-layout'
 import { appShellStyle, lockedAppShellStyle, meetingViewportStyle } from '~/lib/platform/viewport'
@@ -91,13 +89,19 @@ export function AppShell({ children }: AppShellProps) {
   const authScreen = useAuthScreen()
   const compactMobileTopBar = useCompactMobileTopBar()
   const showCommerceFooter = isDesktopWeb && isCommercePath(pathname)
-  // Pane products need a definite shell height so flex children don't collapse blank.
-  // Commerce keeps document scroll via minHeight-only shell styles.
-  const lockViewport =
-    isChatPath(pathname) ||
+
+  // Chat is a true two-pane app — lock the shell so panes get a definite height.
+  const lockViewport = isChatPath(pathname)
+  // Community desktop also fills the column (internal feed ScrollView), but commerce /
+  // class / co-work on desktop web must use document scroll (no flex:1 clip).
+  const stretchMainContent =
+    lockViewport ||
     isCommunityPath(pathname) ||
-    isClassPath(pathname) ||
-    isCoWorkPath(pathname)
+    Platform.OS !== 'web' ||
+    !isDesktopWeb
+  const clipShellOverflow =
+    lockViewport || isCommunityPath(pathname) || Platform.OS !== 'web' || !isDesktopWeb
+
   // Open conversations keep the app header (shared back); hide bottom tabs only.
   const chatConversationMobile = !isDesktop && isChatConversationPath(pathname)
 
@@ -131,24 +135,24 @@ export function AppShell({ children }: AppShellProps) {
         <AppBarScrollProvider>
           <DesktopScrollTracker />
           <ScreenFill
-            flex={Platform.OS === 'web' && !lockViewport ? undefined : 1}
+            flex={Platform.OS === 'web' && !stretchMainContent ? undefined : 1}
             flexDirection="column"
             position="relative"
             backgroundColor={ui.background}
-            overflow={
-              lockViewport || Platform.OS !== 'web' || !isDesktopWeb ? 'hidden' : 'visible'
-            }
+            overflow={clipShellOverflow ? 'hidden' : 'visible'}
             style={lockViewport ? lockedAppShellStyle() : appShellStyle(isDesktopWeb)}
           >
             {isDesktop ? <AppDesktopHeader /> : null}
             {!isDesktop ? <AppMobileHeader minimal={compactMobileTopBar || chatConversationMobile} /> : null}
             <ProfileOnboardingNudge />
             <YStack
-              flexGrow={1}
-              flex={1}
+              flexGrow={stretchMainContent ? 1 : undefined}
+              flex={stretchMainContent ? 1 : undefined}
               width="100%"
               maxWidth="100%"
-              minHeight={0}
+              // Only constrain height when we intentionally fill; document-scroll
+              // pages must grow with content or the window cannot scroll.
+              minHeight={stretchMainContent ? 0 : undefined}
             >
               {children}
             </YStack>

@@ -48,12 +48,13 @@ export function AppAccessGate({ children }: AppAccessGateProps) {
 
   return (
     <YStack
+      // Document-scroll pages (desktop web commerce/class/co-work) must not be
+      // flex-clipped — that traps content above the fold with nowhere to scroll.
       flex={useDocumentScroll ? undefined : 1}
       width="100%"
       maxWidth="100%"
       alignSelf="stretch"
-      minHeight={0}
-      // Avoid clipping scroll pages to a zero-height box on mobile web.
+      minHeight={useDocumentScroll ? undefined : 0}
       overflow={useDocumentScroll ? 'visible' : 'hidden'}
     >
       {children}
