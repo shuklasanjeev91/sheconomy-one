@@ -215,7 +215,9 @@ function AppProviders({ children }: { children: React.ReactNode }) {
                             <InAppNotificationHost />
                             <AppUsageTracker />
                             <BiometricUnlockGate>
-                              <AppShell>{children}</AppShell>
+                              <AppErrorBoundary scope="AppShell">
+                                <AppShell>{children}</AppShell>
+                              </AppErrorBoundary>
                             </BiometricUnlockGate>
                           </ScreenZoomRoot>
                         </ScreenZoomProvider>

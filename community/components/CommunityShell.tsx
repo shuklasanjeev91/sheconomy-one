@@ -5,7 +5,6 @@ import { useCommunityUi } from '~/community/lib/community-theme'
 import { COMMUNITY_LAYOUT } from '~/community/lib/layout'
 import { ScrollView, YStack } from '~/components/ui'
 import { FullWidthLayout, PageColumns, PageSection } from '~/components/layout'
-import { APP_LAYOUT } from '~/lib/layout/constants'
 import { LAYOUT_STRETCH } from '~/lib/layout/styles'
 import { isCommunityPath } from '~/lib/routes'
 import { useAppLayout } from '~/hooks/useAppLayout'
@@ -33,29 +32,19 @@ export function CommunityShell({ children }: CommunityShellProps) {
   const usePinnedSidebars = showSidebars && isDesktop
 
   if (usePinnedSidebars) {
-    const viewportHeight =
-      Platform.OS === 'web'
-        ? (`calc(100dvh - ${APP_LAYOUT.desktopHeaderHeight}px)` as const)
-        : undefined
-
     return (
       <FullWidthLayout
         backgroundColor={communityUi.pageBg}
-        flex={Platform.OS !== 'web' ? 1 : undefined}
-        minHeight={Platform.OS !== 'web' ? 0 : undefined}
+        flex={1}
+        minHeight={0}
+        width="100%"
       >
         <PageSection
           paddingVertical="$3"
           width="100%"
-          style={
-            Platform.OS === 'web'
-              ? ({
-                  height: viewportHeight,
-                  maxHeight: viewportHeight,
-                  overflow: 'hidden',
-                } as const)
-              : ({ flex: 1, minHeight: 0, overflow: 'hidden' } as const)
-          }
+          flex={1}
+          minHeight={0}
+          style={{ flex: 1, minHeight: 0, overflow: 'hidden' } as const}
         >
           <PageColumns
             gap={COMMUNITY_LAYOUT.columnGap}

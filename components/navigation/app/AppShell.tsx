@@ -10,9 +10,16 @@ import { DesktopScrollTracker } from '~/components/navigation/DesktopScrollTrack
 import { CommerceDesktopFooter } from '~/commerce/navigation/CommerceDesktopFooter'
 import { useAppLayout } from '~/hooks/useAppLayout'
 import { useAuthScreen } from '~/hooks/useAuthScreen'
-import { isChatConversationPath, isCommercePath } from '~/lib/routes'
+import {
+  isChatConversationPath,
+  isChatPath,
+  isClassPath,
+  isCommercePath,
+  isCommunityPath,
+  isCoWorkPath,
+} from '~/lib/routes'
 import { authViewportStyle } from '~/components/auth/auth-layout'
-import { appShellStyle, meetingViewportStyle } from '~/lib/platform/viewport'
+import { appShellStyle, lockedAppShellStyle, meetingViewportStyle } from '~/lib/platform/viewport'
 import { useAppUi } from '~/lib/theme/useAppUi'
 
 import { IncomingCallHost } from '~/chat/components/IncomingCallHost'
@@ -84,7 +91,13 @@ export function AppShell({ children }: AppShellProps) {
   const authScreen = useAuthScreen()
   const compactMobileTopBar = useCompactMobileTopBar()
   const showCommerceFooter = isDesktopWeb && isCommercePath(pathname)
-  const stretchMainContent = Platform.OS !== 'web' || !isDesktopWeb
+  // Pane products need a definite shell height so flex children don't collapse blank.
+  // Commerce keeps document scroll via minHeight-only shell styles.
+  const lockViewport =
+    isChatPath(pathname) ||
+    isCommunityPath(pathname) ||
+    isClassPath(pathname) ||
+    isCoWorkPath(pathname)
   // Open conversations keep the app header (shared back); hide bottom tabs only.
   const chatConversationMobile = !isDesktop && isChatConversationPath(pathname)
 
@@ -118,22 +131,24 @@ export function AppShell({ children }: AppShellProps) {
         <AppBarScrollProvider>
           <DesktopScrollTracker />
           <ScreenFill
-            flex={Platform.OS === 'web' ? undefined : 1}
+            flex={Platform.OS === 'web' && !lockViewport ? undefined : 1}
             flexDirection="column"
             position="relative"
             backgroundColor={ui.background}
-            overflow={Platform.OS === 'web' && isDesktopWeb ? 'visible' : 'hidden'}
-            style={appShellStyle(isDesktopWeb)}
+            overflow={
+              lockViewport || Platform.OS !== 'web' || !isDesktopWeb ? 'hidden' : 'visible'
+            }
+            style={lockViewport ? lockedAppShellStyle() : appShellStyle(isDesktopWeb)}
           >
             {isDesktop ? <AppDesktopHeader /> : null}
             {!isDesktop ? <AppMobileHeader minimal={compactMobileTopBar || chatConversationMobile} /> : null}
             <ProfileOnboardingNudge />
             <YStack
-              flexGrow={stretchMainContent ? 1 : undefined}
-              flex={stretchMainContent ? 1 : undefined}
+              flexGrow={1}
+              flex={1}
               width="100%"
               maxWidth="100%"
-              minHeight={Platform.OS === 'web' && isDesktopWeb ? undefined : 0}
+              minHeight={0}
             >
               {children}
             </YStack>

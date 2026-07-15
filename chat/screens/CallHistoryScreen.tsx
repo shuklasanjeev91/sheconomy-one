@@ -43,7 +43,7 @@ function callSubtitle(entry: CallHistoryEntry): string {
 export function CallHistoryScreen() {
   const theme = useChatTheme()
   const router = useRouter()
-  const { isDesktop, isDesktopWeb, desktopHeaderHeight, mobileTabBarOffset } = useAppLayout()
+  const { isDesktop, mobileTabBarOffset } = useAppLayout()
   const { user, isLoading: authLoading } = useSupabase()
   const currentUserId = user?.id ?? null
 
@@ -63,11 +63,7 @@ export function CallHistoryScreen() {
   }, [load])
 
   const fillStyle =
-    Platform.OS === 'web'
-      ? isDesktopWeb
-        ? ({ height: `calc(100dvh - ${desktopHeaderHeight}px)` } as const)
-        : ({ flex: 1, minHeight: 0 } as const)
-      : undefined
+    Platform.OS === 'web' ? ({ flex: 1, minHeight: 0, width: '100%' } as const) : undefined
 
   if (authLoading) {
     return (
