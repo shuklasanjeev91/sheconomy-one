@@ -700,24 +700,13 @@ function ShopDetailsDialog({
           <YStack
             padding="$5"
             paddingTop="$6"
+            paddingRight="$10"
             gap="$3"
             backgroundColor="$color2"
             borderBottomWidth={1}
             borderBottomColor="$borderColor"
           >
-            <Button
-              circular
-              size="$3"
-              tone="secondary"
-              icon={Icons.X}
-              position="absolute"
-              top="$3"
-              left="$3"
-              zIndex={1}
-              onPress={() => onOpenChange(false)}
-              aria-label="Close shop details"
-            />
-            <YStack paddingLeft="$5" gap="$1">
+            <YStack gap="$1">
               <DialogTitle>{shop?.shop_name ?? 'Shop details'}</DialogTitle>
               <DialogDescription>
                 Review the shop, owner profile, SEO, tax, metadata, and admin controls.

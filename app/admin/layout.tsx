@@ -37,13 +37,6 @@ const NAV_GROUPS: AdminNavGroup[] = [
         icon: Icons.LayoutDashboard,
         href: '/admin' as Href,
       },
-      {
-        id: 'analytics',
-        label: 'Analytics',
-        description: 'Traffic, conversion, and revenue trends.',
-        icon: Icons.BarChart3,
-        href: '/admin/analytics' as Href,
-      },
     ],
   },
   {

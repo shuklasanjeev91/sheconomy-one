@@ -11,6 +11,7 @@ import { AppErrorBoundary } from '~/components/AppErrorBoundary'
 import config from '~/config/tamagui.config'
 import { screenFillStyle } from '~/lib/platform/viewport'
 import { AppToasts } from '~/components/ui/Toast'
+import { AppUsageTracker } from '~/components/analytics/AppUsageTracker'
 import { AppShell } from '~/components/navigation/app/AppShell'
 import { CartProvider } from '~/commerce/hooks/useCart'
 import { FavoritesProvider } from '~/commerce/hooks/useFavorites'
@@ -196,23 +197,18 @@ function AppProviders({ children }: { children: React.ReactNode }) {
   return (
     <ReduxProvider store={store}>
       <SupabaseProvider>
-        <PushNotificationsProvider>
-          <SchemeProvider>
-            <ThemedApp>
-              <CartProvider>
-                <FavoritesProvider>
-                  <MarketplacePersonalizationProvider>
-                    <AiAssistProvider>
-                      <AutomaticUpdateManager />
-                      <InAppNotificationHost />
-                      <AppShell>{children}</AppShell>
-                    </AiAssistProvider>
-                  </MarketplacePersonalizationProvider>
-                </FavoritesProvider>
-              </CartProvider>
-            </ThemedApp>
-          </SchemeProvider>
-        </PushNotificationsProvider>
+        <SchemeProvider>
+          <ThemedApp>
+            <CartProvider>
+              <FavoritesProvider>
+                <MarketplacePersonalizationProvider>
+                  <AppUsageTracker />
+                  <AppShell>{children}</AppShell>
+                </MarketplacePersonalizationProvider>
+              </FavoritesProvider>
+            </CartProvider>
+          </ThemedApp>
+        </SchemeProvider>
       </SupabaseProvider>
     </ReduxProvider>
   )

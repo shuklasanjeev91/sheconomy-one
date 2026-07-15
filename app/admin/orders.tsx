@@ -952,9 +952,8 @@ function OrderDetailsDialog({
       <Dialog.Portal>
         <DialogOverlay />
         <DialogContent maxWidth={1100} maxHeight="92vh" width="94%" padding={0} overflow="hidden">
-          <YStack padding="$5" paddingTop="$6" gap="$3" backgroundColor="$color2" borderBottomWidth={1} borderBottomColor="$borderColor">
-            <Button circular size="$3" tone="secondary" icon={Icons.X} position="absolute" top="$3" left="$3" zIndex={1} onPress={() => onOpenChange(false)} aria-label="Close order details" />
-            <YStack paddingLeft="$5" gap="$1">
+          <YStack padding="$5" paddingTop="$6" paddingRight="$10" gap="$3" backgroundColor="$color2" borderBottomWidth={1} borderBottomColor="$borderColor">
+            <YStack gap="$1">
               <DialogTitle>{item?.product_title ?? 'Order details'}</DialogTitle>
               <DialogDescription>Full buyer, product, vendor, payment, fulfillment, issue, and audit information.</DialogDescription>
             </YStack>
