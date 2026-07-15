@@ -61,7 +61,8 @@ export const commerceRoutes = {
 export const vendorRoutes = {
   home: '/vendor' as Href,
   myShop: '/vendor/myshop' as Href,
-  editShop: '/vendor/myshop/edit' as Href,
+  /** "Edit Shop" opens the General tab of the shop Settings page. */
+  editShop: '/vendor/settings?section=general' as Href,
   createListing: '/vendor/create-listing' as Href,
   products: '/vendor/products' as Href,
   orders: '/vendor/orders' as Href,

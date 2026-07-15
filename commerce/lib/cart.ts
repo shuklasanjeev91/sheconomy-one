@@ -1,7 +1,7 @@
 import AsyncStorage from '@react-native-async-storage/async-storage'
 
 import { supabase } from '~/lib/supabase/client'
-import type { Tables } from '~/lib/supabase'
+import type { Json, Tables } from '~/lib/supabase'
 
 const CART_SESSION_KEY = 'sheconomy:cart-session'
 
@@ -127,7 +127,61 @@ export async function addListingToCart(options: {
   }
 
   await supabase.rpc('update_cart_totals', { p_cart_id: options.cartId })
+  await recordCartAddAnalytics({
+    cartId: options.cartId,
+    listingId: options.listingId,
+    quantity: options.quantity ?? 1,
+    variantId: options.variantId ?? null,
+  })
   return { item: data, error: null }
+}
+
+async function recordCartAddAnalytics(options: {
+  cartId: string
+  listingId: string
+  quantity: number
+  variantId: string | null
+}) {
+  const { data } = await supabase
+    .from('carts')
+    .select('cart_metadata, user_id, session_id')
+    .eq('id', options.cartId)
+    .maybeSingle()
+
+  if (!data) return
+
+  const currentMetadata =
+    data.cart_metadata && typeof data.cart_metadata === 'object' && !Array.isArray(data.cart_metadata)
+      ? (data.cart_metadata as Record<string, unknown>)
+      : {}
+
+  const analytics =
+    currentMetadata.analytics && typeof currentMetadata.analytics === 'object' && !Array.isArray(currentMetadata.analytics)
+      ? (currentMetadata.analytics as Record<string, unknown>)
+      : {}
+
+  const addCount = Number(analytics.add_count ?? 0) + 1
+  const quantityAdded = Number(analytics.quantity_added ?? 0) + options.quantity
+
+  await supabase
+    .from('carts')
+    .update({
+      cart_metadata: {
+        ...currentMetadata,
+        analytics: {
+          ...analytics,
+          add_count: addCount,
+          quantity_added: quantityAdded,
+          last_added_at: new Date().toISOString(),
+          last_added_listing_id: options.listingId,
+          last_added_variant_id: options.variantId,
+          last_actor_type: data.user_id ? 'user' : 'guest',
+          last_session_id: data.session_id,
+          last_user_id: data.user_id,
+        },
+      } as Json,
+    })
+    .eq('id', options.cartId)
 }
 
 export async function updateCartItemQuantity(

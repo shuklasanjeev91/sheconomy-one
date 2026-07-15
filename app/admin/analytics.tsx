@@ -1,5 +1,5 @@
-import { AdminSectionPage } from './layout'
+import { Redirect } from 'one'
 
 export default function AdminAnalyticsPage() {
-  return <AdminSectionPage sectionId="analytics" />
+  return <Redirect href="/admin" />
 }

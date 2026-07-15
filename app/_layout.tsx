@@ -11,6 +11,7 @@ import { AppErrorBoundary } from '~/components/AppErrorBoundary'
 import config from '~/config/tamagui.config'
 import { screenFillStyle } from '~/lib/platform/viewport'
 import { AppToasts } from '~/components/ui/Toast'
+import { AppUsageTracker } from '~/components/analytics/AppUsageTracker'
 import { AppShell } from '~/components/navigation/app/AppShell'
 import { CartProvider } from '~/commerce/hooks/useCart'
 import { FavoritesProvider } from '~/commerce/hooks/useFavorites'
@@ -209,6 +210,7 @@ function AppProviders({ children }: { children: React.ReactNode }) {
                         <ScreenZoomRoot>
                           <AutomaticUpdateManager />
                           <InAppNotificationHost />
+                          <AppUsageTracker />
                           <AppShell>{children}</AppShell>
                         </ScreenZoomRoot>
                       </ScreenZoomProvider>

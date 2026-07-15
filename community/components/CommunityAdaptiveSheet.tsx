@@ -42,6 +42,7 @@ export function CommunityAdaptiveSheet({
             padding="$0"
             overflow="hidden"
             borderRadius={radius.card}
+            showClose={false}
           >
             <BottomSheetHeader title={title} onClose={() => onOpenChange(false)} />
             <YStack

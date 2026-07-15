@@ -26,7 +26,7 @@ import {
 /** Format an order amount using the order/shop currency (default INR). */
 export function formatOrderAmount(
   amount: number | string | null | undefined,
-  currency = ORDER_DEFAULTS.CURRENCY,
+  currency: string = ORDER_DEFAULTS.CURRENCY,
 ): string {
   const numeric = typeof amount === 'number' ? amount : Number(amount ?? 0)
   if (!Number.isFinite(numeric)) return formatCurrency(0, currency || ORDER_DEFAULTS.CURRENCY)

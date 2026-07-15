@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { Platform } from 'react-native'
-import { Slot, usePathname, useRouter } from 'one'
+import { Slot, useLocalSearchParams, usePathname, useRouter } from 'one'
 
 import { RequireVendorRole } from '~/components/auth/RouteGuard'
 import { Icons, ScrollView, Text, XStack, YStack } from '~/components/ui'
@@ -43,6 +43,9 @@ export function VendorLayout() {
   }, [dispatch])
 
   const active = getActiveVendorNavItem(pathname)
+  const params = useLocalSearchParams<{ section?: string }>()
+  const activeSubId =
+    active.id === 'settings' ? `settings-${params.section ?? 'general'}` : undefined
 
   function handleSelect(item: VendorNavItem) {
     setDrawerOpen(false)
@@ -96,6 +99,7 @@ export function VendorLayout() {
                 ui={ui}
                 collapsed={collapsed}
                 activeId={active.id}
+                activeSubId={activeSubId}
                 shopName={currentShop?.shop_name}
                 shopLogo={currentShop?.logo_url}
                 userName={profile?.full_name}
@@ -189,6 +193,7 @@ export function VendorLayout() {
                   ui={ui}
                   collapsed={false}
                   activeId={active.id}
+                  activeSubId={activeSubId}
                   shopName={currentShop?.shop_name}
                   shopLogo={currentShop?.logo_url}
                   userName={profile?.full_name}

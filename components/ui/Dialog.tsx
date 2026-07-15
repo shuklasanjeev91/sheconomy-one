@@ -1,5 +1,8 @@
-import { Dialog as TDialog, styled } from 'tamagui'
-import { getShadowStyle } from '~/config/tokens'
+import type { ComponentProps, ReactNode } from 'react'
+import { Dialog as TDialog, styled, XStack } from 'tamagui'
+
+import * as Icons from '@tamagui/lucide-icons'
+import { getShadowStyle, radius } from '~/config/tokens'
 
 /**
  * Restyled Tamagui Dialog — same compound API (`Dialog.Trigger`,
@@ -19,7 +22,7 @@ export const DialogOverlay = styled(
   } as any
 )
 
-export const DialogContent = styled(
+const StyledDialogContent = styled(
   TDialog.Content,
   {
     name: 'DialogContent',
@@ -37,6 +40,51 @@ export const DialogContent = styled(
     ...getShadowStyle('lg'),
   } as any
 )
+
+export function DialogCloseButton({ label = 'Close dialog' }: { label?: string }) {
+  return (
+    <Dialog.Close asChild>
+      <XStack
+        position="absolute"
+        top="$3"
+        right="$3"
+        zIndex={20}
+        width={36}
+        height={36}
+        alignItems="center"
+        justifyContent="center"
+        borderRadius={radius.pill}
+        cursor="pointer"
+        hoverStyle={{ backgroundColor: '$color3' }}
+        pressStyle={{ opacity: 0.75, scale: 0.94 }}
+        animation="quick"
+        aria-label={label}
+      >
+        <Icons.X size={20} color="$color11" />
+      </XStack>
+    </Dialog.Close>
+  )
+}
+
+export function DialogContent({
+  children,
+  showClose = true,
+  closeLabel,
+  ...props
+}: ComponentProps<typeof StyledDialogContent> & {
+  showClose?: boolean
+  closeLabel?: string
+  children?: ReactNode
+}) {
+  const paddingRight = props.padding === 0 || props.padding === '$0' ? props.paddingRight : showClose ? props.paddingRight ?? '$8' : props.paddingRight
+
+  return (
+    <StyledDialogContent position="relative" {...props} paddingRight={paddingRight}>
+      {showClose ? <DialogCloseButton label={closeLabel} /> : null}
+      {children}
+    </StyledDialogContent>
+  )
+}
 
 export const DialogTitle = styled(TDialog.Title, {
   name: 'DialogTitle',
