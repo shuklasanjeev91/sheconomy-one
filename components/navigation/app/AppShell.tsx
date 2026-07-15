@@ -14,7 +14,6 @@ import {
   isChatConversationPath,
   isChatPath,
   isCommercePath,
-  isCommunityPath,
 } from '~/lib/routes'
 import { authViewportStyle } from '~/components/auth/auth-layout'
 import { appShellStyle, lockedAppShellStyle, meetingViewportStyle } from '~/lib/platform/viewport'
@@ -91,16 +90,12 @@ export function AppShell({ children }: AppShellProps) {
   const showCommerceFooter = isDesktopWeb && isCommercePath(pathname)
 
   // Chat is a true two-pane app — lock the shell so panes get a definite height.
+  // Community / class / co-work / commerce use PageScroll (document on desktop web).
   const lockViewport = isChatPath(pathname)
-  // Community desktop also fills the column (internal feed ScrollView), but commerce /
-  // class / co-work on desktop web must use document scroll (no flex:1 clip).
   const stretchMainContent =
-    lockViewport ||
-    isCommunityPath(pathname) ||
-    Platform.OS !== 'web' ||
-    !isDesktopWeb
+    lockViewport || Platform.OS !== 'web' || !isDesktopWeb
   const clipShellOverflow =
-    lockViewport || isCommunityPath(pathname) || Platform.OS !== 'web' || !isDesktopWeb
+    lockViewport || Platform.OS !== 'web' || !isDesktopWeb
 
   // Open conversations keep the app header (shared back); hide bottom tabs only.
   const chatConversationMobile = !isDesktop && isChatConversationPath(pathname)

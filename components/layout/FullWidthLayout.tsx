@@ -48,8 +48,8 @@ export function FullWidthLayout({
 
   return (
     <YStack
-      flex={isDesktop ? undefined : flex ?? 1}
-      minHeight={isDesktop ? undefined : minHeight}
+      flex={flex !== undefined ? flex : isDesktop ? undefined : 1}
+      minHeight={minHeight !== undefined ? minHeight : undefined}
       width="100%"
       maxWidth="100%"
       alignSelf="stretch"

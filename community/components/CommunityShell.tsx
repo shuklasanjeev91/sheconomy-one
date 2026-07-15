@@ -1,9 +1,8 @@
 import { usePathname } from 'one'
-import { Platform } from 'react-native'
 
 import { useCommunityUi } from '~/community/lib/community-theme'
 import { COMMUNITY_LAYOUT } from '~/community/lib/layout'
-import { ScrollView, YStack } from '~/components/ui'
+import { YStack } from '~/components/ui'
 import { FullWidthLayout, PageColumns, PageSection } from '~/components/layout'
 import { LAYOUT_STRETCH } from '~/lib/layout/styles'
 import { isCommunityPath } from '~/lib/routes'
@@ -22,80 +21,26 @@ type CommunityShellProps = {
 
 /**
  * Full-width social layout: sticky side rails on desktop, single full-width feed on mobile.
- * Desktop community routes pin sidebars while the center feed scrolls independently.
+ * Uses page scroll (document on desktop web, PageScroll on mobile/native) so the feed
+ * never collapses inside a zero-height overflow:hidden pane.
  */
 export function CommunityShell({ children }: CommunityShellProps) {
   const communityUi = useCommunityUi()
   const pathname = usePathname()
-  const { isDesktop, isWide } = useAppLayout()
+  const { isWide } = useAppLayout()
   const showSidebars = isCommunityPath(pathname)
-  const usePinnedSidebars = showSidebars && isDesktop
-
-  if (usePinnedSidebars) {
-    return (
-      <FullWidthLayout
-        backgroundColor={communityUi.pageBg}
-        flex={1}
-        minHeight={0}
-        width="100%"
-      >
-        <PageSection
-          paddingVertical="$3"
-          width="100%"
-          flex={1}
-          minHeight={0}
-          style={{ flex: 1, minHeight: 0, overflow: 'hidden' } as const}
-        >
-          <PageColumns
-            gap={COMMUNITY_LAYOUT.columnGap}
-            width="100%"
-            height="100%"
-            maxHeight="100%"
-            overflow="hidden"
-            alignItems="stretch"
-          >
-            <CommunityLeftSidebar pin="viewport" />
-
-            <ScrollView
-              flex={1}
-              minWidth={0}
-              width="100%"
-              height="100%"
-              showsVerticalScrollIndicator
-              keyboardShouldPersistTaps="handled"
-              style={
-                Platform.OS === 'web'
-                  ? ({ overflowY: 'auto', minHeight: 0, flex: 1 } as const)
-                  : undefined
-              }
-              contentContainerStyle={{
-                width: '100%',
-                maxWidth: '100%',
-              }}
-            >
-              <YStack gap="$3" width="100%" paddingBottom="$4" {...LAYOUT_STRETCH}>
-                {children}
-              </YStack>
-            </ScrollView>
-
-            {isWide ? <CommunityRightSidebar pin="viewport" /> : null}
-          </PageColumns>
-        </PageSection>
-      </FullWidthLayout>
-    )
-  }
 
   return (
     <FullWidthLayout scroll backgroundColor={communityUi.pageBg}>
       <PageSection paddingVertical="$3">
         <PageColumns gap={COMMUNITY_LAYOUT.columnGap}>
-          {showSidebars ? <CommunityLeftSidebar /> : null}
+          {showSidebars ? <CommunityLeftSidebar pin="document" /> : null}
 
           <YStack flex={1} minWidth={0} gap="$3" {...LAYOUT_STRETCH}>
             {children}
           </YStack>
 
-          {showSidebars && isWide ? <CommunityRightSidebar /> : null}
+          {showSidebars && isWide ? <CommunityRightSidebar pin="document" /> : null}
         </PageColumns>
       </PageSection>
     </FullWidthLayout>
