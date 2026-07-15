@@ -32,6 +32,8 @@ export function InfiniteHorizontalSection({
       showsHorizontalScrollIndicator={false}
       onScroll={handleScroll}
       scrollEventThrottle={200}
+      style={{ flexGrow: 0 }}
+      contentContainerStyle={{ flexGrow: 0, alignItems: 'flex-start' }}
     >
       <XStack gap="$3" paddingRight="$5" alignItems="center">
         {children}

@@ -11,6 +11,8 @@ type CommerceSectionProps = {
   subtitle?: string
   actionLabel?: string
   actionHref?: Href
+  /** Custom header action (overrides actionLabel/actionHref when set). */
+  action?: ReactNode
   children: ReactNode
 }
 
@@ -20,6 +22,7 @@ export function CommerceSection({
   subtitle,
   actionLabel,
   actionHref,
+  action,
   children,
 }: CommerceSectionProps) {
   const ui = useAppUi()
@@ -53,7 +56,9 @@ export function CommerceSection({
             ) : null}
           </YStack>
         </XStack>
-        {actionLabel && actionHref ? (
+        {action ? (
+          action
+        ) : actionLabel && actionHref ? (
           <Link href={actionHref}>
             <Theme name={BRAND_THEME}>
               <XStack

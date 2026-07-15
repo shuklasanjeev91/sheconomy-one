@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { KeyboardAvoidingView, Linking, Platform } from 'react-native'
+import { KeyboardAvoidingView, Linking, Platform, Share } from 'react-native'
 import type { NativeScrollEvent, NativeSyntheticEvent, ScrollView as RNScrollView } from 'react-native'
 
 import { usePeerPresence } from '~/chat/hooks/usePeerPresence'
@@ -36,6 +36,8 @@ import {
   useAppToast,
 } from '~/components/ui'
 import { useIsDarkTheme } from '~/lib/theme/useAppUi'
+import { copyToClipboard } from '~/lib/platform/clipboard'
+import { BRAND_NAME } from '~/config/brand'
 
 import { CallOverlay } from './CallOverlay'
 import { ChatThreadHeader } from './ChatThreadHeader'
@@ -184,6 +186,7 @@ export function ChatThreadPane({
     reactionsByMessage,
     pollResultsByMessage,
     send,
+    resend,
     sendImage,
     sendFile,
     sendPoll,
@@ -414,6 +417,31 @@ export function ChatThreadPane({
       toast.show(next ? `Blocked ${chat.name}` : `Unblocked ${chat.name}`, { tone: 'default' })
     }
   }, [blocked, chat.name, chat.otherUserId, currentUserId, toast])
+
+  async function handleShareChatSummary() {
+    setMenuOpen(false)
+    const recent = visibleMessages
+      .filter((message) => !message.deletedAt && message.content.trim())
+      .slice(-30)
+    if (!recent.length) {
+      toast.show('No messages to share yet', { tone: 'info' })
+      return
+    }
+    const lines = recent.map((message) => {
+      const who = message.senderId === currentUserId ? 'You' : resolveSenderName(message.senderId)
+      const body = message.content.replace(/\s+/g, ' ').slice(0, 160)
+      return `${who}: ${body}`
+    })
+    const message = [`Chat with ${chat.name} · ${BRAND_NAME}`, '', ...lines].join('\n')
+    try {
+      await Share.share({ title: `Chat · ${chat.name}`, message })
+    } catch {
+      const copied = await copyToClipboard(message)
+      toast.show(copied ? 'Chat summary copied' : 'Could not share chat', {
+        tone: copied ? 'success' : 'danger',
+      })
+    }
+  }
 
   const callBack = useCallback(
     (message: ChatMessage) => {
@@ -740,6 +768,7 @@ export function ChatThreadPane({
                     }
                     onRequestActions={() => openActions(message)}
                     onReactionPress={(emoji) => react(message.id, emoji)}
+                    onRetry={() => void resend(message)}
                     onOpenFile={() => void openFile(message)}
                     onCallBack={() => callBack(message)}
                     isStarred={starredIds.has(message.id)}
@@ -825,6 +854,7 @@ export function ChatThreadPane({
         </XStack>
       ) : (
         <MessageComposer
+          conversationId={chat.id}
           onSend={(text) => {
             send(text, replyTarget)
             setReplyTarget(null)
@@ -950,6 +980,24 @@ export function ChatThreadPane({
             <Icons.Star size={20} color={theme.textSecondary} />
             <Text fontSize={15.5} fontWeight="600" color={theme.text}>
               Starred messages
+            </Text>
+          </XStack>
+
+          <XStack
+            onPress={() => void handleShareChatSummary()}
+            cursor="pointer"
+            alignItems="center"
+            gap={14}
+            paddingVertical={12}
+            paddingHorizontal={6}
+            borderRadius={10}
+            hoverStyle={{ backgroundColor: theme.listItemHover }}
+            pressStyle={{ backgroundColor: theme.listItemActive }}
+            animation="quick"
+          >
+            <Icons.Share2 size={20} color={theme.textSecondary} />
+            <Text fontSize={15.5} fontWeight="600" color={theme.text}>
+              Share chat summary
             </Text>
           </XStack>
 

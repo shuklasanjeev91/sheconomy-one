@@ -12,10 +12,17 @@ type ListingGridProps = {
   columns?: 2 | 3 | 4 | 5 | 6
   compact?: boolean
   personalize?: boolean
+  showQuickAdd?: boolean
 }
 
 /** Responsive listing grid — tight gaps, fluid columns. */
-export function ListingGrid({ listings, columns = 5, compact, personalize = true }: ListingGridProps) {
+export function ListingGrid({
+  listings,
+  columns = 5,
+  compact,
+  personalize = true,
+  showQuickAdd,
+}: ListingGridProps) {
   const marketplace = useOptionalMarketplacePersonalization()
 
   const visibleListings = useMemo(() => {
@@ -52,7 +59,7 @@ export function ListingGrid({ listings, columns = 5, compact, personalize = true
           minWidth={minWidth}
           maxWidth={columns === 2 ? '47%' : 280}
         >
-          <ListingCard listing={listing} compact={compact} />
+          <ListingCard listing={listing} compact={compact} showQuickAdd={showQuickAdd} />
         </XStack>
       ))}
     </XStack>

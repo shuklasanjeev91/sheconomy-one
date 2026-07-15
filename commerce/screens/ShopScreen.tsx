@@ -3,11 +3,14 @@ import { Link, useParams } from 'one'
 
 import { Button, Icons, Paragraph, Separator, Spinner, Text, XStack, YStack, useAppToast, useMedia } from '~/components/ui'
 import {
+  AvailableOffersCard,
   ListingGrid,
   LoadMoreEnd,
   LoadMoreSentinel,
   ReviewsSection,
   SectionTitle,
+  ShopAnnouncementBanner,
+  shopAnnouncementFromMetadata,
   ShopHero,
   ShopManagePanel,
   ShopOwnerPanel,
@@ -143,8 +146,16 @@ export function ShopScreen() {
     </YStack>
   )
 
+  const offersSection = (
+    <AvailableOffersCard
+      currency={shop.shop_currency ?? 'INR'}
+      shopId={shop.id}
+      title="Offers from this shop"
+    />
+  )
+
   const listingsSection = (
-    <YStack gap="$4" width="100%" flex={1} minWidth={0}>
+    <YStack gap="$4" width="100%" minWidth={0}>
       <XStack alignItems="flex-end" justifyContent="space-between" gap="$3" flexWrap="wrap">
         <SectionTitle title="Shop items" subtitle="Browse everything from this seller" />
         {listingsCount > 0 ? (
@@ -246,10 +257,19 @@ export function ShopScreen() {
           shopSlug={slug ?? shop.slug}
         />
 
+        {shopAnnouncementFromMetadata(shop.shop_metadata) ? (
+          <PageSection paddingTop="$4">
+            <ShopAnnouncementBanner
+              message={shopAnnouncementFromMetadata(shop.shop_metadata) ?? ''}
+            />
+          </PageSection>
+        ) : null}
+
         <PageSection paddingTop="$6" gap="$6">
           {isDesktop ? (
             <XStack gap="$6" alignItems="flex-start" width="100%">
               <YStack flex={1} minWidth={0} gap="$8">
+                {offersSection}
                 {listingsSection}
                 {reviewsSection}
               </YStack>
@@ -259,6 +279,7 @@ export function ShopScreen() {
             </XStack>
           ) : (
             <YStack gap="$6" width="100%">
+              {offersSection}
               {listingsSection}
               {sidebar}
               {reviewsSection}

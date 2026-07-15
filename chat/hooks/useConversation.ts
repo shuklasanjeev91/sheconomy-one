@@ -421,6 +421,51 @@ export function useConversation({ conversationId, currentUserId }: UseConversati
     [conversationId, currentUserId, setMessagesTracked, stopTyping],
   )
 
+  const resend = useCallback(
+    async (message: ChatMessage) => {
+      if (!conversationId || !currentUserId) return
+      if (message.status !== 'failed') return
+      // In-place retry for messages whose payload we still hold. Media retries
+      // need the original file, which optimistic failures don't retain.
+      if (message.type !== 'text' && message.type !== 'poll' && message.type !== 'event') return
+
+      setMessagesTracked((prev) =>
+        prev.map((m) => (m.id === message.id ? { ...m, status: 'sending' } : m)),
+      )
+
+      let messageId: string | null = null
+      let sendError: string | null = null
+
+      if (message.type === 'poll' && message.poll) {
+        const res = await sendPollMessage(conversationId, currentUserId, message.poll)
+        messageId = res.messageId
+        sendError = res.error
+      } else if (message.type === 'event' && message.event) {
+        const res = await sendEventMessage(conversationId, currentUserId, message.event)
+        messageId = res.messageId
+        sendError = res.error
+      } else {
+        const res = await sendMessage({
+          conversationId,
+          senderId: currentUserId,
+          content: message.content,
+          replyToId: message.replyToId ?? null,
+        })
+        messageId = res.messageId
+        sendError = res.error
+      }
+
+      setMessagesTracked((prev) =>
+        prev.map((m) => {
+          if (m.id !== message.id) return m
+          if (sendError || !messageId) return { ...m, status: 'failed' }
+          return { ...m, id: messageId, status: 'sent', optimistic: false }
+        }),
+      )
+    },
+    [conversationId, currentUserId, setMessagesTracked],
+  )
+
   const sendImage = useCallback(
     async (attachment: ChatComposerAttachment, replyTo?: ChatMessage | null) => {
       if (!conversationId || !currentUserId) return
@@ -755,6 +800,7 @@ export function useConversation({ conversationId, currentUserId }: UseConversati
     reactionsByMessage,
     pollResultsByMessage,
     send,
+    resend,
     sendImage,
     sendFile,
     sendPoll,

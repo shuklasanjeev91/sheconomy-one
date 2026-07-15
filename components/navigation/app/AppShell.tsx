@@ -28,7 +28,12 @@ type AppShellProps = {
 
 function useChromelessRoute() {
   const pathname = usePathname()
-  return pathname.startsWith('/ui-kit') || /\/co-work\/meeting\/[^/]+\/live/.test(pathname)
+  // Full-screen meeting lobby + live room — no app header/tabs (Zoom-style).
+  return (
+    pathname.startsWith('/ui-kit') ||
+    pathname.startsWith('/co-work/meeting/') ||
+    pathname === '/co-work/meeting'
+  )
 }
 
 function useCompactMobileTopBar() {

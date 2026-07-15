@@ -30,6 +30,10 @@ export type ListingDetail = Pick<
   | 'weight'
   | 'dimensions'
   | 'listing_metadata'
+  | 'mrp'
+  | 'price_includes_tax'
+  | 'tax_percent'
+  | 'product_info'
   | 'digital_file_url'
   | 'digital_file_type'
   | 'digital_file_size'
@@ -46,7 +50,16 @@ export type ListingImage = Pick<
 
 export type ListingShop = Pick<
   Tables<'shops'>,
-  'id' | 'shop_name' | 'logo_url' | 'shop_currency' | 'verified' | 'slug' | 'average_rating' | 'total_reviews' | 'shop_metadata'
+  | 'id'
+  | 'shop_name'
+  | 'logo_url'
+  | 'shop_currency'
+  | 'verified'
+  | 'slug'
+  | 'average_rating'
+  | 'total_reviews'
+  | 'shop_metadata'
+  | 'user_id'
 > & {
   delivery_profiles?: DeliveryProfile[] | null
   shipping_providers?: Array<{
@@ -82,6 +95,7 @@ const LISTING_SELECT = `
   id, slug, title, description, price, listing_type, listing_status, is_active,
   average_rating, total_reviews, stock, quantity, category, tags,
   shop_id, created_at, sku, weight, dimensions, listing_metadata,
+  mrp, price_includes_tax, tax_percent, product_info,
   digital_file_url, digital_file_type, digital_file_size, download_limit, shipping_required,
   listing_images(id, image_url, is_primary, display_order, alt_text, image_metadata),
   listing_variations(
@@ -98,7 +112,7 @@ const LISTING_SELECT = `
     )
   ),
   shops(
-    id, shop_name, logo_url, shop_currency, verified, slug, shop_metadata,
+    id, shop_name, logo_url, shop_currency, verified, slug, shop_metadata, user_id,
     average_rating, total_reviews,
     delivery_profiles(
       id, profile_name, processing_time_min, processing_time_max,

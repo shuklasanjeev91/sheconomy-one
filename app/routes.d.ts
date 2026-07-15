@@ -28,23 +28,34 @@ declare module 'one' {
         | `/admin`
         | `/admin/`
         | `/admin/analytics`
+        | `/admin/cart`
+        | `/admin/categories`
+        | `/admin/cms`
+        | `/admin/company-pages`
+        | `/admin/components/AdminShopsManager`
+        | `/admin/groups`
         | `/admin/layout`
         | `/admin/moderation`
         | `/admin/orders`
         | `/admin/payments`
         | `/admin/products`
+        | `/admin/sale-events`
         | `/admin/settings`
         | `/admin/shops`
         | `/admin/users`
         | `/auth`
+        | `/auth/import-contacts`
         | `/auth/sign-in`
         | `/auth/sign-up`
+        | `/auth/import-contacts`
         | `/auth/verify-gender`
         | `/browse`
         | `/cart`
         | `/category`
         | `/chat`
         | `/chat/`
+        | `/chat/calls`
+        | `/chat/groups`
         | `/checkout`
         | `/class`
         | `/class/`
@@ -57,6 +68,7 @@ declare module 'one' {
         | `/co-work/schedule`
         | `/community`
         | `/community/`
+        | `/community/analytics`
         | `/community/companies`
         | `/community/company`
         | `/community/company/create`
@@ -72,10 +84,12 @@ declare module 'one' {
         | `/community/network`
         | `/community/people`
         | `/community/post`
+        | `/community/saved`
         | `/community/stories`
         | `/community/stories/create`
         | `/create-my-shop`
         | `/favorites`
+        | `/help`
         | `/listing`
         | `/my-shops`
         | `/notifications`

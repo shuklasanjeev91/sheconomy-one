@@ -137,6 +137,75 @@ export async function logCall(input: {
   })
 }
 
+export type CallDirection = 'incoming' | 'outgoing'
+
+export type CallHistoryEntry = {
+  id: string
+  conversationId: string | null
+  peerId: string
+  peerName: string
+  peerAvatar: string | null
+  callType: CallType
+  status: CallStatus
+  direction: CallDirection
+  createdAt: string
+}
+
+/**
+ * Recent 1:1 calls involving the user (as caller or receiver), newest first,
+ * hydrated with the other participant's profile. Powers the Calls tab.
+ */
+export async function fetchCallHistory(
+  userId: string,
+  limit = 100,
+): Promise<CallHistoryEntry[]> {
+  const { data, error } = await supabase
+    .from('calls')
+    .select(CALL_SELECT)
+    .or(`caller_id.eq.${userId},receiver_id.eq.${userId}`)
+    .order('created_at', { ascending: false })
+    .limit(limit)
+
+  if (error || !data) return []
+
+  const rows = data as CallRow[]
+  const peerIds = Array.from(
+    new Set(rows.map((r) => (r.caller_id === userId ? r.receiver_id : r.caller_id))),
+  )
+
+  const profiles = new Map<string, { name: string; avatar: string | null }>()
+  if (peerIds.length) {
+    const { data: profs } = await supabase
+      .from('profiles')
+      .select('id, full_name, username, avatar_url')
+      .in('id', peerIds)
+    for (const p of profs ?? []) {
+      profiles.set(p.id, {
+        name: p.full_name ?? p.username ?? 'Unknown',
+        avatar: p.avatar_url ?? null,
+      })
+    }
+  }
+
+  return rows.map((row) => {
+    const call = mapCall(row)
+    const direction: CallDirection = row.caller_id === userId ? 'outgoing' : 'incoming'
+    const peerId = direction === 'outgoing' ? row.receiver_id : row.caller_id
+    const prof = profiles.get(peerId)
+    return {
+      id: call.id,
+      conversationId: call.conversationId,
+      peerId,
+      peerName: prof?.name ?? 'Unknown',
+      peerAvatar: prof?.avatar ?? null,
+      callType: call.callType,
+      status: call.status,
+      direction,
+      createdAt: call.createdAt,
+    }
+  })
+}
+
 export type CallerProfile = {
   id: string
   name: string

@@ -84,6 +84,53 @@ const NAV_GROUPS: AdminNavGroup[] = [
         icon: Icons.CreditCard,
         href: '/admin/payments' as Href,
       },
+      {
+        id: 'cart',
+        label: 'Cart',
+        description: 'Review carts, abandoned checkout activity, and cart issues.',
+        icon: Icons.ShoppingCart,
+        href: '/admin/cart' as Href,
+      },
+      {
+        id: 'categories',
+        label: 'Categories',
+        description: 'Manage taxonomy, category pages, and merchandising groups.',
+        icon: Icons.Package,
+        href: '/admin/categories' as Href,
+      },
+      {
+        id: 'sale-events',
+        label: 'Sale Events',
+        description: 'Plan promotional campaigns and sale collections.',
+        icon: Icons.BarChart3,
+        href: '/admin/sale-events' as Href,
+      },
+      {
+        id: 'groups',
+        label: 'Groups',
+        description: 'Moderate community groups and group commerce activity.',
+        icon: Icons.Users,
+        href: '/admin/groups' as Href,
+      },
+    ],
+  },
+  {
+    title: 'Content',
+    items: [
+      {
+        id: 'company-pages',
+        label: 'Company Pages',
+        description: 'Manage brand, company, and community business pages.',
+        icon: Icons.Store,
+        href: '/admin/company-pages' as Href,
+      },
+      {
+        id: 'cms',
+        label: 'CMS',
+        description: 'Edit platform content, landing pages, and editorial blocks.',
+        icon: Icons.Settings,
+        href: '/admin/cms' as Href,
+      },
     ],
   },
   {

@@ -1,7 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Link, useParams, useRouter } from 'one'
 import {
-  Avatar,
   Button,
   Icons,
   ScrollView,
@@ -15,20 +14,34 @@ import {
   useMedia,
 } from '~/components/ui'
 import {
+  AvailableOffersCard,
   CommercePanel,
   FavoriteButton,
+  GetItByChip,
+  ListingAskQuestion,
   ListingDetailsPanel,
   ListingFulfillmentPanel,
   ListingImage,
   ListingMobileGallery,
   ListingMobileStickyBuyBar,
   LISTING_MOBILE_STICKY_BAR_HEIGHT,
+  ListingPersonalizationNote,
+  ListingPriceBlock,
+  ListingQuantityStepper,
   ListingRecommendationsSections,
+  ListingReturnPolicyCard,
+  ListingSellerCard,
+  ListingShopPolicies,
   ListingVariantPicker,
+  LowStockHint,
   RatingSummary,
   ReviewsSection,
+  StockNotifyButton,
 } from '~/commerce/components'
+import { fetchListingReturnPolicy, type ListingReturnPolicy } from '~/commerce/lib/return-policies'
+import { findCartItemForListing } from '~/commerce/lib/cart-listing'
 import { useCart } from '~/commerce/hooks/useCart'
+import { recordListingView } from '~/commerce/lib/recently-viewed'
 import { useListingReviews } from '~/commerce/hooks/useListingReviews'
 import { useCanonicalListingSlug } from '~/commerce/hooks/useCanonicalSlug'
 import { PageCenter, PageScroll } from '~/components/layout'
@@ -45,12 +58,17 @@ import {
   groupListingVariations,
 } from '~/commerce/lib/listing-detail'
 import {
+  buildManufacturingSpecifications,
+  parseListingProductInfo,
+} from '~/commerce/lib/listing-product-info'
+import {
   buildListingFulfillmentInfo,
   isDigitalListing,
+  resolveDeliveryProfile,
 } from '~/commerce/lib/listing-fulfillment'
+import { buildListingShopPolicies } from '~/commerce/lib/shop-policies'
 import { buildShopShippingSummary } from '~/commerce/lib/shop-shipping'
-import { formatCurrency } from '~/lib/format'
-import { hasVisibleReviews, mergeReviewSummary } from '~/commerce/lib/reviews'
+import { mergeReviewSummary } from '~/commerce/lib/reviews'
 import { getShopSlug } from '~/lib/supabase/commerce'
 import { commerceRoutes } from '~/lib/routes'
 import { getListingShareUrl } from '~/lib/share'
@@ -72,7 +90,7 @@ export default function ListingDetailScreen() {
     averageRating: listing?.average_rating,
     totalReviews: listing?.total_reviews,
   })
-  const { addToCart } = useCart()
+  const { addToCart, items: cartItems, updateQuantity, removeItem } = useCart()
   const toast = useAppToast()
   const router = useRouter()
   const media = useMedia()
@@ -80,12 +98,33 @@ export default function ListingDetailScreen() {
 
   const [activeImageIndex, setActiveImageIndex] = useState(0)
   const [isAddingToCart, setIsAddingToCart] = useState(false)
+  const [isUpdatingQuantity, setIsUpdatingQuantity] = useState(false)
+  const [personalizationNote, setPersonalizationNote] = useState('')
+  const [returnPolicy, setReturnPolicy] = useState<ListingReturnPolicy | null>(null)
   const variationGroups = useMemo(() => groupListingVariations(variations), [variations])
   const [variantSelection, setVariantSelection] = useState<Record<string, string>>({})
 
   useEffect(() => {
     setVariantSelection(getDefaultVariantSelection(variationGroups))
   }, [listing?.id, variationGroups])
+
+  useEffect(() => {
+    if (listing?.id) recordListingView(listing.id)
+  }, [listing?.id])
+
+  useEffect(() => {
+    if (!listing?.id) {
+      setReturnPolicy(null)
+      return
+    }
+    let active = true
+    void fetchListingReturnPolicy(listing.id, listing.shop_id).then((policy) => {
+      if (active) setReturnPolicy(policy)
+    })
+    return () => {
+      active = false
+    }
+  }, [listing?.id, listing?.shop_id])
 
   if (isLoading) {
     return (
@@ -128,12 +167,14 @@ export default function ListingDetailScreen() {
   const displayStock = getVariantStock(listing.stock, selectedVariations)
   const selectedVariantId = selectedVariations[0]?.id ?? null
   const outOfStock = displayStock === 0
+  const cartItem = findCartItemForListing(cartItems, listing.id, selectedVariantId)
 
   async function handleAddToCart(goToCheckout = false) {
     setIsAddingToCart(true)
     const { error: cartError } = await addToCart(listing.id, {
       quantity: 1,
       variantId: selectedVariantId,
+      personalizationNote: personalizationNote.trim() || null,
     })
     setIsAddingToCart(false)
 
@@ -142,10 +183,29 @@ export default function ListingDetailScreen() {
       return
     }
 
+    setPersonalizationNote('')
     toast.show('Added to cart', { tone: 'success' })
     if (goToCheckout) {
-      router.push(commerceRoutes.cart)
+      router.push(commerceRoutes.checkout)
     }
+  }
+
+  async function handleQuantityChange(nextQuantity: number) {
+    if (!cartItem) return
+    setIsUpdatingQuantity(true)
+    const { error: qtyError } =
+      nextQuantity <= 0
+        ? await removeItem(cartItem.id)
+        : await updateQuantity(cartItem.id, nextQuantity)
+    setIsUpdatingQuantity(false)
+
+    if (qtyError) {
+      toast.show('Could not update quantity', { tone: 'danger', message: qtyError })
+    }
+  }
+
+  function goToCheckout() {
+    router.push(commerceRoutes.checkout)
   }
 
   const specifications = buildListingSpecifications({
@@ -156,9 +216,12 @@ export default function ListingDetailScreen() {
     listingType: listing.listing_type,
     attributes,
     tags: listing.tags,
+    productInfoSpecs: buildManufacturingSpecifications(
+      parseListingProductInfo(listing.product_info, listing.listing_metadata),
+    ),
   })
 
-  const fulfillmentInfo = buildListingFulfillmentInfo({
+  const fulfillmentInput = {
     listingType: listing.listing_type,
     shippingRequired: listing.shipping_required,
     price: displayPrice,
@@ -180,6 +243,15 @@ export default function ListingDetailScreen() {
           shipping_rates: listing.shops.shipping_rates,
         })
       : null,
+  }
+
+  const fulfillmentInfo = buildListingFulfillmentInfo(fulfillmentInput)
+  const deliveryProfile = resolveDeliveryProfile(fulfillmentInput)
+  const shopPolicies = buildListingShopPolicies({
+    fulfillment: fulfillmentInfo,
+    returnPolicy,
+    deliveryProfile,
+    currency,
   })
 
   const isDigital = isDigitalListing(listing.listing_type)
@@ -212,42 +284,23 @@ export default function ListingDetailScreen() {
     : null
 
   const shopCard = listing.shops ? (
-    <Link href={commerceRoutes.shop(getShopSlug(listing.shops))} asChild>
-      <XStack
-        gap="$3"
-        alignItems="center"
-        padding="$3.5"
-        borderRadius={isDesktop ? radius.card : radius.chip}
-        borderWidth={1}
-        borderColor={ui.borderSubtle}
-        cursor="pointer"
-        hoverStyle={{ backgroundColor: ui.navHover, ...getShadowStyle('md') }}
-        pressStyle={{ scale: 0.99 }}
-        backgroundColor={ui.surface}
-        marginHorizontal={isDesktop ? 0 : -16}
-        paddingHorizontal={isDesktop ? '$3.5' : '$4'}
-        style={getShadowStyle('sm')}
-      >
-        <Avatar
-          name={listing.shops.shop_name}
-          src={listing.shops.logo_url ?? undefined}
-          size="$5"
-        />
-        <YStack flex={1} gap={2}>
-          <Text fontWeight="500" fontSize={14} color={ui.text}>
-            {listing.shops.shop_name}
-          </Text>
-          <Text color={ui.textSecondary} fontSize={12}>
-            {listing.shops.verified ? 'Verified shop' : 'Visit shop'}
-          </Text>
-          {shopReviewSummary && hasVisibleReviews(shopReviewSummary) ? (
-            <RatingSummary summary={shopReviewSummary} size="sm" />
-          ) : null}
-        </YStack>
-        <Icons.ChevronRight size={18} color={ui.textSecondary} />
-      </XStack>
-    </Link>
+    <ListingSellerCard
+      shopId={listing.shops.id}
+      shopName={listing.shops.shop_name}
+      shopSlug={getShopSlug(listing.shops)}
+      logoUrl={listing.shops.logo_url}
+      verified={!!listing.shops.verified}
+      reviewSummary={shopReviewSummary}
+      ownerUserId={listing.shops.user_id}
+    />
   ) : null
+
+  const recommendationProps = {
+    listingId: listing.id,
+    shopId: listing.shop_id,
+    shopName: listing.shops?.shop_name ?? null,
+    shopSlug: listing.shops ? getShopSlug(listing.shops) : null,
+  }
 
   if (!isDesktop) {
     return (
@@ -264,9 +317,17 @@ export default function ListingDetailScreen() {
 
             <YStack paddingHorizontal="$4" gap="$5" paddingTop="$5">
               <YStack gap="$2.5">
-                <Text fontWeight="800" fontSize={28} color={ui.text} letterSpacing={-0.5} lineHeight={34}>
-                  {formatCurrency(displayPrice, currency)}
-                </Text>
+                <ListingPriceBlock
+                  price={displayPrice}
+                  mrp={listing.mrp}
+                  currency={currency}
+                  priceIncludesTax={listing.price_includes_tax}
+                  taxPercent={listing.tax_percent}
+                  size="lg"
+                />
+                {fulfillmentInfo?.kind === 'physical' && fulfillmentInfo.estimatedDeliveryLabel ? (
+                  <GetItByChip label={fulfillmentInfo.estimatedDeliveryLabel} />
+                ) : null}
                 <RatingSummary summary={reviewSummary} size="sm" />
               </YStack>
 
@@ -286,10 +347,31 @@ export default function ListingDetailScreen() {
               {fulfillmentInfo ? <ListingFulfillmentPanel info={fulfillmentInfo} compact /> : null}
 
               {displayStock != null ? (
-                <Text fontSize={13} color={displayStock > 0 ? ui.success : ui.error} fontWeight="500">
-                  {displayStock > 0 ? `${displayStock} in stock` : 'Out of stock'}
-                </Text>
-              ) : null}
+                <YStack gap="$2">
+                  <Text fontSize={13} color={displayStock > 0 ? ui.success : ui.error} fontWeight="500">
+                    {displayStock > 0 ? `${displayStock} in stock` : 'Out of stock'}
+                  </Text>
+                  <LowStockHint stock={displayStock} />
+                  <StockNotifyButton listingId={listing.id} outOfStock={outOfStock} />
+                  <ListingAskQuestion
+                    listingId={listing.id}
+                    shopId={listing.shop_id}
+                    sellerId={listing.shops?.user_id}
+                    listingTitle={listing.title}
+                  />
+                </YStack>
+              ) : (
+                <ListingAskQuestion
+                  listingId={listing.id}
+                  shopId={listing.shop_id}
+                  sellerId={listing.shops?.user_id}
+                  listingTitle={listing.title}
+                />
+              )}
+
+              {returnPolicy ? <ListingReturnPolicyCard policy={returnPolicy} /> : null}
+
+              <AvailableOffersCard currency={currency} shopId={listing.shop_id} compact />
 
               <Separator borderColor={ui.panelBorder} />
 
@@ -304,6 +386,11 @@ export default function ListingDetailScreen() {
                 }
               />
 
+              <ListingPersonalizationNote
+                value={personalizationNote}
+                onChange={setPersonalizationNote}
+              />
+
               {shopCard}
 
               {(listing.description?.trim() || specifications.length > 0) ? (
@@ -313,6 +400,13 @@ export default function ListingDetailScreen() {
                     description={listing.description}
                     specifications={specifications}
                   />
+                </YStack>
+              ) : null}
+
+              {shopPolicies ? (
+                <YStack gap="$4" paddingTop="$2">
+                  <Separator borderColor={ui.panelBorder} />
+                  <ListingShopPolicies policies={shopPolicies} />
                 </YStack>
               ) : null}
 
@@ -326,20 +420,30 @@ export default function ListingDetailScreen() {
               />
 
               <Separator borderColor={ui.panelBorder} />
-              <ListingRecommendationsSections listingId={listing.id} />
+              <ListingRecommendationsSections {...recommendationProps} />
             </YStack>
           </YStack>
         </PageScroll>
 
         <ListingMobileStickyBuyBar
           price={displayPrice}
+          mrp={listing.mrp}
+          priceIncludesTax={listing.price_includes_tax}
+          taxPercent={listing.tax_percent}
           currency={currency}
-          disabled={outOfStock}
+          disabled={outOfStock && !cartItem}
           isLoading={isAddingToCart}
+          inCart={!!cartItem}
+          quantity={cartItem?.quantity ?? 1}
+          maxQuantity={displayStock}
+          isUpdatingQuantity={isUpdatingQuantity}
           label="Add to cart"
           buyNowLabel={isDigital ? 'Download' : 'Buy now'}
           onPress={() => handleAddToCart(false)}
           onBuyNow={() => handleAddToCart(true)}
+          onIncreaseQuantity={() => handleQuantityChange((cartItem?.quantity ?? 1) + 1)}
+          onDecreaseQuantity={() => handleQuantityChange((cartItem?.quantity ?? 1) - 1)}
+          onCheckout={goToCheckout}
         />
       </YStack>
     )
@@ -422,17 +526,47 @@ export default function ListingDetailScreen() {
 
       <RatingSummary summary={reviewSummary} />
 
-      <Text fontWeight="800" fontSize={32} color={ui.text} letterSpacing={-0.6}>
-        {formatCurrency(displayPrice, currency)}
-      </Text>
+      <ListingPriceBlock
+        price={displayPrice}
+        mrp={listing.mrp}
+        currency={currency}
+        priceIncludesTax={listing.price_includes_tax}
+        taxPercent={listing.tax_percent}
+        size="lg"
+      />
+
+      {fulfillmentInfo?.kind === 'physical' && fulfillmentInfo.estimatedDeliveryLabel ? (
+        <GetItByChip label={fulfillmentInfo.estimatedDeliveryLabel} />
+      ) : null}
 
       {fulfillmentInfo ? <ListingFulfillmentPanel info={fulfillmentInfo} /> : null}
 
       {displayStock != null ? (
-        <Text fontSize={13} color={displayStock > 0 ? ui.success : ui.error} fontWeight="500">
-          {displayStock > 0 ? `${displayStock} in stock` : 'Out of stock'}
-        </Text>
-      ) : null}
+        <YStack gap="$2">
+          <Text fontSize={13} color={displayStock > 0 ? ui.success : ui.error} fontWeight="500">
+            {displayStock > 0 ? `${displayStock} in stock` : 'Out of stock'}
+          </Text>
+          <LowStockHint stock={displayStock} />
+          <StockNotifyButton listingId={listing.id} outOfStock={outOfStock} />
+          <ListingAskQuestion
+            listingId={listing.id}
+            shopId={listing.shop_id}
+            sellerId={listing.shops?.user_id}
+            listingTitle={listing.title}
+          />
+        </YStack>
+      ) : (
+        <ListingAskQuestion
+          listingId={listing.id}
+          shopId={listing.shop_id}
+          sellerId={listing.shops?.user_id}
+          listingTitle={listing.title}
+        />
+      )}
+
+      {returnPolicy ? <ListingReturnPolicyCard policy={returnPolicy} /> : null}
+
+      <AvailableOffersCard currency={currency} shopId={listing.shop_id} />
 
       <ListingVariantPicker
         groups={variationGroups}
@@ -444,33 +578,62 @@ export default function ListingDetailScreen() {
         }
       />
 
-      <XStack gap="$3" flexWrap="wrap">
-        <Theme name={BRAND_THEME}>
+      <ListingPersonalizationNote
+        value={personalizationNote}
+        onChange={setPersonalizationNote}
+      />
+
+      {cartItem ? (
+        <XStack gap="$3" flexWrap="wrap" alignItems="center">
+          <ListingQuantityStepper
+            quantity={cartItem.quantity}
+            maxQuantity={displayStock}
+            disabled={isUpdatingQuantity}
+            onDecrease={() => handleQuantityChange(cartItem.quantity - 1)}
+            onIncrease={() => handleQuantityChange(cartItem.quantity + 1)}
+          />
+          <Theme name={BRAND_THEME}>
+            <Button
+              tone="primary"
+              size="$5"
+              flex={1}
+              minWidth={200}
+              borderRadius={999}
+              onPress={goToCheckout}
+            >
+              Checkout
+            </Button>
+          </Theme>
+        </XStack>
+      ) : (
+        <XStack gap="$3" flexWrap="wrap">
+          <Theme name={BRAND_THEME}>
+            <Button
+              tone="primary"
+              size="$5"
+              flex={1}
+              minWidth={200}
+              borderRadius={999}
+              disabled={isAddingToCart || outOfStock}
+              onPress={() => handleAddToCart(false)}
+              icon={isAddingToCart ? <Spinner size="small" color="white" /> : undefined}
+            >
+              {outOfStock ? 'Out of stock' : isAddingToCart ? 'Adding…' : 'Add to cart'}
+            </Button>
+          </Theme>
           <Button
-            tone="primary"
+            tone="outline"
             size="$5"
+            borderRadius={999}
             flex={1}
             minWidth={200}
-            borderRadius={999}
             disabled={isAddingToCart || outOfStock}
-            onPress={() => handleAddToCart(false)}
-            icon={isAddingToCart ? <Spinner size="small" color="white" /> : undefined}
+            onPress={() => handleAddToCart(true)}
           >
-            {outOfStock ? 'Out of stock' : isAddingToCart ? 'Adding…' : 'Add to cart'}
+            {buyNowLabel}
           </Button>
-        </Theme>
-        <Button
-          tone="outline"
-          size="$5"
-          borderRadius={999}
-          flex={1}
-          minWidth={200}
-          disabled={isAddingToCart || outOfStock}
-          onPress={() => handleAddToCart(true)}
-        >
-          {buyNowLabel}
-        </Button>
-      </XStack>
+        </XStack>
+      )}
 
       {shopCard}
     </CommercePanel>
@@ -507,6 +670,13 @@ export default function ListingDetailScreen() {
           </>
         ) : null}
 
+        {shopPolicies ? (
+          <>
+            <Separator borderColor={ui.panelBorder} />
+            <ListingShopPolicies policies={shopPolicies} />
+          </>
+        ) : null}
+
         <Separator borderColor={ui.panelBorder} />
         <ReviewsSection
           title="Reviews for this item"
@@ -517,7 +687,7 @@ export default function ListingDetailScreen() {
         />
 
         <Separator borderColor={ui.panelBorder} />
-        <ListingRecommendationsSections listingId={listing.id} />
+        <ListingRecommendationsSections {...recommendationProps} />
       </YStack>
     </PageScroll>
   )

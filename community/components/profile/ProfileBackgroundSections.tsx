@@ -1,7 +1,8 @@
 import type { ReactNode } from 'react'
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 
 import type { ProfileDisplay } from '~/community/components/profile/types'
+import { endorseSkill, hasEndorsedSkill } from '~/community/lib/endorsements'
 import type { ProfileDetails, ProfileEducation, ProfileExperience, ProfileLanguage, ProfileSkill } from '~/community/lib/profile-details'
 import {
   formatDurationMonths,
@@ -69,6 +70,7 @@ import { JOB_TITLE_OPTIONS } from '~/lib/datasets/job-titles'
 import { getShadowStyle, radius } from '~/config/tokens'
 import { refreshProfiles } from '~/lib/profile/refresh'
 import { useAppUi } from '~/lib/theme/useAppUi'
+import { useSupabase } from '~/providers/SupabaseProvider'
 
 type SheetKind = 'about' | 'experience' | 'education' | 'skill' | 'language' | 'interests'
 
@@ -266,8 +268,10 @@ export function ProfileBackgroundSections({
       <SkillsSection
         items={details?.skills ?? []}
         isOwnProfile={isOwnProfile}
+        profileOwnerId={profile.id}
         onAdd={() => openSkill()}
         onEdit={openSkill}
+        onRefresh={onRefresh}
       />
       <LanguagesSection
         items={details?.languages ?? []}
@@ -663,13 +667,17 @@ function EducationRow({
 function SkillsSection({
   items,
   isOwnProfile,
+  profileOwnerId,
   onAdd,
   onEdit,
+  onRefresh,
 }: {
   items: ProfileSkill[]
   isOwnProfile: boolean
+  profileOwnerId: string
   onAdd: () => void
   onEdit: (row: ProfileSkill) => void
+  onRefresh: () => void
 }) {
   if (items.length === 0 && !isOwnProfile) return null
 
@@ -695,7 +703,9 @@ function SkillsSection({
               key={skill.id}
               skill={skill}
               isOwnProfile={isOwnProfile}
+              profileOwnerId={profileOwnerId}
               onEdit={() => onEdit(skill)}
+              onRefresh={onRefresh}
             />
           ))}
         </YStack>
@@ -707,14 +717,59 @@ function SkillsSection({
 function SkillRow({
   skill,
   isOwnProfile,
+  profileOwnerId,
   onEdit,
+  onRefresh,
 }: {
   skill: ProfileSkill
   isOwnProfile: boolean
+  profileOwnerId: string
   onEdit: () => void
+  onRefresh: () => void
 }) {
   const ui = useAppUi()
-  const endorsements = skill.endorsements_count ?? 0
+  const toast = useAppToast()
+  const { user } = useSupabase()
+  const [endorsed, setEndorsed] = useState(false)
+  const [endorsementCount, setEndorsementCount] = useState(skill.endorsements_count ?? 0)
+  const [isEndorsing, setIsEndorsing] = useState(false)
+
+  useEffect(() => {
+    setEndorsementCount(skill.endorsements_count ?? 0)
+  }, [skill.endorsements_count, skill.id])
+
+  useEffect(() => {
+    if (!user?.id || isOwnProfile || !skill.skill_name) {
+      setEndorsed(false)
+      return
+    }
+    let active = true
+    void hasEndorsedSkill(profileOwnerId, skill.skill_name, user.id).then((value) => {
+      if (active) setEndorsed(value)
+    })
+    return () => {
+      active = false
+    }
+  }, [isOwnProfile, profileOwnerId, skill.skill_name, user?.id])
+
+  async function handleEndorse() {
+    if (!user?.id || isOwnProfile || isEndorsing) return
+    setIsEndorsing(true)
+    const result = await endorseSkill({
+      skillOwnerId: profileOwnerId,
+      skillName: skill.skill_name,
+      endorserId: user.id,
+    })
+    setIsEndorsing(false)
+    if (result.error) {
+      toast.show('Could not update endorsement', { tone: 'danger', message: result.error })
+      return
+    }
+    setEndorsed(result.endorsed)
+    setEndorsementCount((count) => Math.max(0, count + (result.endorsed ? 1 : -1)))
+    onRefresh()
+  }
+
   const meta = [
     skill.proficiency_level,
     skill.years_of_experience != null ? `${skill.years_of_experience}+ yrs` : null,
@@ -733,13 +788,25 @@ function SkillRow({
             {meta}
           </Text>
         ) : null}
-        {endorsements > 0 ? (
+        {endorsementCount > 0 ? (
           <Text fontSize={13} color={ui.textMuted}>
-            {endorsements} endorsement{endorsements === 1 ? '' : 's'}
+            {endorsementCount} endorsement{endorsementCount === 1 ? '' : 's'}
           </Text>
         ) : null}
       </YStack>
-      {isOwnProfile ? <RowActions onEdit={onEdit} /> : null}
+      {isOwnProfile ? (
+        <RowActions onEdit={onEdit} />
+      ) : user ? (
+        <Button
+          size="$2"
+          tone={endorsed ? 'outline' : 'primary'}
+          borderRadius={999}
+          disabled={isEndorsing}
+          onPress={() => void handleEndorse()}
+        >
+          {isEndorsing ? '…' : endorsed ? 'Endorsed' : 'Endorse'}
+        </Button>
+      ) : null}
     </XStack>
   )
 }

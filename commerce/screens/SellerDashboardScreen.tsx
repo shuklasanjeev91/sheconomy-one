@@ -9,18 +9,21 @@ import { CreateListingForm } from '~/commerce/components/seller/CreateListingFor
 import { SellerListingsPanel } from '~/commerce/components/seller/SellerListingsPanel'
 import { SellerOverviewPanel } from '~/commerce/components/seller/SellerOverviewPanel'
 import { ShopSettingsPanel } from '~/commerce/components/seller/ShopSettingsPanel'
+import { ShopCommercePanel } from '~/commerce/components/seller/ShopCommercePanel'
 import { useShopDashboard } from '~/commerce/hooks/useShopDashboard'
 import { Button, Icons, Paragraph, Spinner, Text, XStack, YStack } from '~/components/ui'
+import { PushPermissionBanner } from '~/components/notifications/PushPermissionBanner'
 import { PageContent, PageCenter } from '~/components/layout'
 import { commerceRoutes } from '~/lib/routes'
 import { useVendorShops, type VendorShop } from '~/hooks/useVendorShops'
 import { useAppUi } from '~/lib/theme/useAppUi'
 
-type SellerTab = 'overview' | 'listings' | 'settings'
+type SellerTab = 'overview' | 'listings' | 'payments' | 'settings'
 
 const TABS: { id: SellerTab; label: string }[] = [
   { id: 'overview', label: 'Overview' },
   { id: 'listings', label: 'Listings' },
+  { id: 'payments', label: 'Payments & delivery' },
   { id: 'settings', label: 'Settings' },
 ]
 
@@ -71,6 +74,7 @@ export function SellerDashboardScreen() {
   return (
     <PageContent scroll paddingVertical="$4" paddingBottom="$10">
       <YStack gap="$5" width="100%">
+        <PushPermissionBanner />
         <XStack alignItems="flex-start" justifyContent="space-between" gap="$3" flexWrap="wrap">
           <CommercePageHeader
             title={activeShop.shop_name}
@@ -134,6 +138,10 @@ export function SellerDashboardScreen() {
                 setShowCreateListing(true)
                 setTab('listings')
               }}
+              onOpenListings={() => {
+                setShowCreateListing(false)
+                setTab('listings')
+              }}
             />
           ) : (
             <CommercePanel>
@@ -151,6 +159,8 @@ export function SellerDashboardScreen() {
             onAddListing={() => setShowCreateListing(true)}
           />
         ) : null}
+
+        {tab === 'payments' ? <ShopCommercePanel shop={activeShop} /> : null}
 
         {tab === 'settings' ? (
           <ShopSettingsPanel shop={activeShop} onUpdated={handleShopUpdated} />

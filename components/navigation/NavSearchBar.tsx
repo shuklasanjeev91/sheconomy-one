@@ -1,7 +1,8 @@
 import { useRouter } from 'one'
 import { useState } from 'react'
 
-import { Icons, Input, Theme, XStack, YStack } from '~/components/ui'
+import { recordSearchTerm } from '~/commerce/lib/search-history'
+import { Icons, Input, Theme, XStack } from '~/components/ui'
 import { BRAND_THEME } from '~/config/tokens'
 import { commerceRoutes } from '~/lib/routes'
 import { useAppUi } from '~/lib/theme/useAppUi'
@@ -28,6 +29,7 @@ export function NavSearchBar({
       router.push(commerceRoutes.search())
       return
     }
+    recordSearchTerm(trimmed)
     router.push(commerceRoutes.search(trimmed))
   }
 

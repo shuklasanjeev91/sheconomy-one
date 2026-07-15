@@ -40,9 +40,16 @@ export async function fetchCompanyBySlug(slugOrId: string): Promise<{
   return { data: (data as CompanyPage | null) ?? null, error: error?.message ?? null }
 }
 
+export type CompanyFilters = {
+  industry?: string
+  location?: string
+  size?: string
+}
+
 export async function fetchCompanies(
   page = 0,
   search = '',
+  filters: CompanyFilters = {},
 ): Promise<{ items: CompanyPage[]; hasMore: boolean; error: string | null }> {
   const from = page * COMPANY_PAGE_SIZE
   const to = from + COMPANY_PAGE_SIZE - 1
@@ -56,6 +63,13 @@ export async function fetchCompanies(
     query = query.or(`name.ilike.%${search.trim()}%,industry.ilike.%${search.trim()}%`)
   }
 
+  if (filters.industry) query = query.eq('industry', filters.industry)
+  if (filters.size) query = query.eq('size', filters.size)
+  if (filters.location) {
+    const value = filters.location.replace(/[%,]/g, '')
+    query = query.or(`location.eq.${value},headquarters.eq.${value}`)
+  }
+
   const { data, error, count } = await query.range(from, to)
   if (error) return { items: [], hasMore: false, error: error.message }
 
@@ -65,6 +79,46 @@ export async function fetchCompanies(
     hasMore: total ? to + 1 < total : (data?.length ?? 0) === COMPANY_PAGE_SIZE,
     error: null,
   }
+}
+
+export type CompanyFacets = {
+  industries: string[]
+  locations: string[]
+  sizes: string[]
+}
+
+/** Distinct filter option values across all pages (for stable filter menus). */
+export async function fetchCompanyFacets(): Promise<CompanyFacets> {
+  const industries = new Set<string>()
+  const locations = new Set<string>()
+  const sizes = new Set<string>()
+  const sorted = (set: Set<string>) => Array.from(set).sort((a, b) => a.localeCompare(b))
+
+  // Prefer the SECURITY DEFINER RPC (distinct across all rows); fall back to a
+  // bounded column scan if the function is not deployed in this environment.
+  const { data: facetRows, error } = await supabase.rpc('community_company_facets')
+  if (!error && facetRows) {
+    for (const row of facetRows as { facet: string; value: string }[]) {
+      if (row.facet === 'industry') industries.add(row.value)
+      else if (row.facet === 'location') locations.add(row.value)
+      else if (row.facet === 'size') sizes.add(row.value)
+    }
+    return { industries: sorted(industries), locations: sorted(locations), sizes: sorted(sizes) }
+  }
+
+  const { data } = await supabase
+    .from('companypages')
+    .select('industry, location, headquarters, size')
+    .limit(1000)
+
+  for (const row of (data ?? []) as Partial<CompanyPage>[]) {
+    if (row.industry?.trim()) industries.add(row.industry.trim())
+    if (row.location?.trim()) locations.add(row.location.trim())
+    if (row.headquarters?.trim()) locations.add(row.headquarters.trim())
+    if (row.size?.trim()) sizes.add(row.size.trim())
+  }
+
+  return { industries: sorted(industries), locations: sorted(locations), sizes: sorted(sizes) }
 }
 
 /**

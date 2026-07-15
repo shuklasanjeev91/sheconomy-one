@@ -2,6 +2,8 @@ import type { Href } from 'one'
 import type { ComponentType } from 'react'
 
 import { Icons } from '~/components/ui'
+import { openComposer } from '~/community/lib/composer-store'
+import { openNewChat } from '~/chat/lib/chat-actions-store'
 import type { AccessTier, AppFeature } from '~/lib/auth/access'
 import {
   chatRoutes,
@@ -11,6 +13,9 @@ import {
   communityRoutes,
   isCartPath,
   isChatPath,
+  isChatCallsPath,
+  isChatGroupsPath,
+  isChatConversationPath,
   isClassPath,
   isClassAudioPath,
   isClassProgramPath,
@@ -83,6 +88,11 @@ export type AppMobileTabItem = {
   label: string
   icon: AppNavIcon
   match?: (pathname: string) => boolean
+  /**
+   * When set, tapping the tab runs this action instead of navigating to `href`
+   * (e.g. opening the post composer overlay). `href` is kept as a fallback.
+   */
+  onPress?: () => void
 }
 
 /** Primary section tabs in the header / top bar. */
@@ -181,7 +191,9 @@ export function getHomeMobileTab(section: BottomTabSection): AppMobileTabItem {
         href: chatRoutes.home,
         label: 'Home',
         icon: Icons.Home,
-        match: (path) => isChatPath(path),
+        match: (path) =>
+          path === chatRoutes.home ||
+          (isChatConversationPath(path) && !isChatGroupsPath(path) && !isChatCallsPath(path)),
       }
     case 'class':
       return {
@@ -235,7 +247,8 @@ export function getAuthMobileTab(tier: AccessTier): AppMobileTabItem {
     href: routes.profile,
     label: 'You',
     icon: Icons.User,
-    match: (path) => isProfilePath(path),
+    // Profile, settings, and notifications are one shared account surface across tabs.
+    match: (path) => isProfilePath(path) || isNotificationsPath(path),
   }
 }
 
@@ -252,6 +265,7 @@ export const APP_COMMUNITY_MOBILE_TABS: AppMobileTabItem[] = [
     label: 'Create Post',
     icon: Icons.PlusCircle,
     match: (path) => path.startsWith('/community/create'),
+    onPress: () => openComposer(),
   },
   {
     href: communityRoutes.jobs,
@@ -261,8 +275,28 @@ export const APP_COMMUNITY_MOBILE_TABS: AppMobileTabItem[] = [
   },
 ]
 
-/** Bottom tabs — chat section (Home + You added automatically). */
-export const APP_CHAT_MOBILE_TABS: AppMobileTabItem[] = []
+/** Bottom tabs — chat section (Home + You added automatically). WhatsApp-style. */
+export const APP_CHAT_MOBILE_TABS: AppMobileTabItem[] = [
+  {
+    href: chatRoutes.groups,
+    label: 'Groups',
+    icon: Icons.Users,
+    match: (path) => isChatGroupsPath(path),
+  },
+  {
+    href: chatRoutes.home,
+    label: 'New chat',
+    icon: Icons.PenSquare,
+    match: () => false,
+    onPress: () => openNewChat(),
+  },
+  {
+    href: chatRoutes.calls,
+    label: 'Calls',
+    icon: Icons.Phone,
+    match: (path) => isChatCallsPath(path),
+  },
+]
 
 /** Bottom tabs — classes section (Home + You added automatically). */
 export const APP_CLASS_MOBILE_TABS: AppMobileTabItem[] = [
@@ -309,10 +343,13 @@ export function getMobileBottomTabSection(pathname: string): BottomTabSection | 
   if (isCommercePath(pathname)) return 'commerce'
   if (isCoWorkPath(pathname)) return 'co-work'
   if (isClassPath(pathname)) return 'class'
+  // Shared account destinations stay on community chrome (profile/network context)
   if (
     pathname.startsWith('/community') ||
     isNotificationsPath(pathname) ||
-    isProfilePath(pathname)
+    isProfilePath(pathname) ||
+    pathname === routes.settings ||
+    pathname.startsWith(`${String(routes.settings)}/`)
   ) {
     return 'community'
   }

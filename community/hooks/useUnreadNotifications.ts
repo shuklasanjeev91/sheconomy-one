@@ -1,8 +1,13 @@
 import { useCallback, useEffect, useState } from 'react'
 
-import { getUnreadCount } from '~/community/lib/notifications'
+import {
+  getUnreadCount,
+  subscribeUnreadCountChanged,
+} from '~/community/lib/notifications'
+import { supabase } from '~/lib/supabase/client'
 import { useSupabase } from '~/providers/SupabaseProvider'
 
+/** Live unread notification badge count (poll + realtime for all platforms). */
 export function useUnreadNotifications() {
   const { user } = useSupabase()
   const [count, setCount] = useState(0)
@@ -17,10 +22,39 @@ export function useUnreadNotifications() {
   }, [user])
 
   useEffect(() => {
-    refresh()
-    const interval = setInterval(refresh, 60_000)
-    return () => clearInterval(interval)
-  }, [refresh])
+    void refresh()
+    if (!user?.id) return
+
+    const interval = setInterval(() => {
+      void refresh()
+    }, 60_000)
+
+    const unsubscribe = subscribeUnreadCountChanged(() => {
+      void refresh()
+    })
+
+    const channel = supabase
+      .channel(`notifications-unread:${user.id}`)
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'notifications',
+          filter: `recipient_id=eq.${user.id}`,
+        },
+        () => {
+          void refresh()
+        },
+      )
+      .subscribe()
+
+    return () => {
+      clearInterval(interval)
+      unsubscribe()
+      void supabase.removeChannel(channel)
+    }
+  }, [refresh, user?.id])
 
   return { count, refresh }
 }

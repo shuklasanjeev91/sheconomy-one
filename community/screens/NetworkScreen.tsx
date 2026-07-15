@@ -11,9 +11,17 @@ import { UserListBottomSheet } from '~/community/components/UserListBottomSheet'
 import { useCommunityUi } from '~/community/lib/community-theme'
 import type { UserListKind } from '~/community/lib/user-lists'
 import { fetchDiscoverMembers, type NetworkMember } from '~/community/lib/network'
+import { inviteNetworkByEmail } from '~/community/lib/network-invites'
+import {
+  dismissNetworkSuggestion,
+  useDismissedNetworkSuggestions,
+} from '~/community/lib/dismissed-suggestions'
 import { useNetwork } from '~/community/hooks/useNetwork'
-import { Button, Icons, Input, Spinner, Text, XStack, YStack } from '~/components/ui'
+import { Button, Icons, Input, Spinner, Text, XStack, YStack, useAppToast } from '~/components/ui'
+import { useProfile } from '~/hooks/useProfile'
+import { buildAbsoluteUrl } from '~/lib/platform/url'
 import { communityRoutes, routes } from '~/lib/routes'
+import { getProfileShareUrl, shareViaSystem } from '~/lib/share'
 import { useSupabase } from '~/providers/SupabaseProvider'
 import { useAppUi } from '~/lib/theme/useAppUi'
 
@@ -23,10 +31,17 @@ export function NetworkScreen() {
   const communityUi = useCommunityUi()
   const ui = useAppUi()
   const { user, isLoading: authLoading } = useSupabase()
+  const { profile } = useProfile()
   const network = useNetwork()
+  const dismissedIds = useDismissedNetworkSuggestions()
+  const toast = useAppToast()
   const [guestSuggestions, setGuestSuggestions] = useState<NetworkMember[]>([])
   const [guestLoading, setGuestLoading] = useState(false)
   const [search, setSearch] = useState('')
+  const [inviteEmail, setInviteEmail] = useState('')
+  const [inviteMessage, setInviteMessage] = useState('')
+  const [inviteSending, setInviteSending] = useState(false)
+  const [inviteSharing, setInviteSharing] = useState(false)
   const [listSheetKind, setListSheetKind] = useState<UserListKind | null>(null)
   const [listSheetOpen, setListSheetOpen] = useState(false)
 
@@ -91,7 +106,10 @@ export function NetworkScreen() {
   }
 
   const sentIds = new Set(network.pendingSent.map((member) => member.user_id))
-  const visibleSuggestions = network.suggestions.filter((member) => !sentIds.has(member.user_id))
+  const dismissed = new Set(dismissedIds)
+  const visibleSuggestions = network.suggestions.filter(
+    (member) => !sentIds.has(member.user_id) && !dismissed.has(member.user_id),
+  )
   const query = search.trim().toLowerCase()
 
   function matchesSearch(member: NetworkMember) {
@@ -106,6 +124,8 @@ export function NetworkScreen() {
 
   return (
     <CommunityShell wide>
+
+
       <NetworkHero
         connectionsCount={network.connections.length}
         invitationsCount={network.pendingReceived.length}
@@ -128,6 +148,100 @@ export function NetworkScreen() {
         </XStack>
       </CommunityCard>
 
+      <ManageMyNetwork
+        connectionsCount={network.connections.length}
+        invitationsCount={network.pendingReceived.length}
+        suggestionsCount={visibleSuggestions.length}
+        onOpenConnections={() => openUserList('connections')}
+        onOpenInvitations={() => openUserList('pending-received')}
+      />
+
+      <CommunityCard padding={16} gap={12}>
+        <XStack gap="$2" alignItems="center">
+          <Icons.Mail size={18} color={communityUi.brand} />
+          <Text fontWeight="700" fontSize={16} color={ui.text}>
+            Invite by email
+          </Text>
+        </XStack>
+        <Text fontSize={13} color={ui.textMuted} lineHeight={18}>
+          Send a connection invite to someone already on {BRAND_NAME}, or save an invite for when they join.
+        </Text>
+        <Input
+          value={inviteEmail}
+          onChangeText={setInviteEmail}
+          placeholder="colleague@email.com"
+          autoCapitalize="none"
+          keyboardType="email-address"
+        />
+        <Input
+          value={inviteMessage}
+          onChangeText={setInviteMessage}
+          placeholder="Optional note (hi, let’s connect…)"
+        />
+        <XStack gap="$2" flexWrap="wrap">
+          <Button
+            alignSelf="flex-start"
+            tone="primary"
+            borderRadius={999}
+            disabled={inviteSending || !inviteEmail.trim()}
+            onPress={() => {
+              setInviteSending(true)
+              void inviteNetworkByEmail(inviteEmail, inviteMessage).then((result) => {
+                setInviteSending(false)
+                if (result.error || result.status === 'error') {
+                  toast.show('Could not send invite', {
+                    tone: 'danger',
+                    message: result.error || result.message,
+                  })
+                  return
+                }
+                toast.show(
+                  result.status === 'pending_signup' ? 'Invite saved' : 'Invitation sent',
+                  {
+                    tone: 'success',
+                    message: result.message,
+                  },
+                )
+                setInviteEmail('')
+                setInviteMessage('')
+                if (result.status === 'sent') void network.reload()
+              })
+            }}
+          >
+            {inviteSending ? 'Sending…' : 'Send invite'}
+          </Button>
+          <Button
+            alignSelf="flex-start"
+            tone="outline"
+            borderRadius={999}
+            icon={<Icons.Share2 size={15} />}
+            disabled={inviteSharing}
+            onPress={() => {
+              setInviteSharing(true)
+              const url = profile?.username
+                ? getProfileShareUrl(profile.username)
+                : buildAbsoluteUrl(communityRoutes.network)
+              const note =
+                inviteMessage.trim() ||
+                `Connect with me on ${BRAND_NAME}${profile?.full_name ? ` — ${profile.full_name}` : ''}`
+              void shareViaSystem({
+                url,
+                title: `Connect on ${BRAND_NAME}`,
+                text: note,
+              }).then((result) => {
+                setInviteSharing(false)
+                if (result === 'cancelled') return
+                toast.show(result === 'copied' ? 'Invite link copied' : 'Invite ready to share', {
+                  tone: 'success',
+                })
+              })
+            }}
+          >
+            {inviteSharing ? 'Sharing…' : 'Share invite link'}
+          </Button>
+        </XStack>
+      </CommunityCard>
+
       {network.error ? (
         <CommunityCard padding={16}>
           <Text color="$red10">{network.error}</Text>
@@ -143,9 +257,19 @@ export function NetworkScreen() {
       ) : null}
 
       {visibleSuggestions.length > 0 ? (
-        <NetworkSection title="Network suggestions" subtitle="Based on your industry and location">
+        <NetworkSection
+          title="People you may know"
+          subtitle="Based on your industry, location, and mutual connections"
+        >
           {visibleSuggestions.filter(matchesSearch).map((member) => (
-            <MemberRow key={member.user_id} member={member} />
+            <MemberRow
+              key={member.user_id}
+              member={member}
+              onDismiss={() => {
+                dismissNetworkSuggestion(member.user_id)
+                toast.show('Suggestion hidden', { tone: 'info' })
+              }}
+            />
           ))}
         </NetworkSection>
       ) : null}
@@ -221,7 +345,7 @@ function NetworkHero({
         subtitle={
           isGuest
             ? `Connect with women entrepreneurs, founders, and creators building on ${BRAND_NAME}.`
-            : 'Manage invitations, discover network suggestions, and grow your professional network.'
+            : 'Grow your professional circle with invitations, connections, and people you may know.'
         }
       />
 
@@ -234,7 +358,7 @@ function NetworkHero({
             onPress={connectionsCount > 0 ? onOpenConnections : undefined}
           />
           <StatPill
-            icon={Icons.Mail}
+            icon={Icons.UserPlus}
             label="Invitations"
             value={invitationsCount}
             onPress={invitationsCount > 0 ? onOpenInvitations : undefined}
@@ -242,6 +366,131 @@ function NetworkHero({
         </XStack>
       ) : null}
     </CommunityCard>
+  )
+}
+
+function ManageMyNetwork({
+  connectionsCount,
+  invitationsCount,
+  suggestionsCount,
+  onOpenConnections,
+  onOpenInvitations,
+}: {
+  connectionsCount: number
+  invitationsCount: number
+  suggestionsCount: number
+  onOpenConnections: () => void
+  onOpenInvitations: () => void
+}) {
+  const communityUi = useCommunityUi()
+
+  const tiles = [
+    {
+      label: 'Connections',
+      value: connectionsCount,
+      icon: Icons.Users,
+      onPress: onOpenConnections,
+      href: null as string | null,
+    },
+    {
+      label: 'Invitations',
+      value: invitationsCount,
+      icon: Icons.Mail,
+      onPress: onOpenInvitations,
+      href: null as string | null,
+    },
+    {
+      label: 'People you may know',
+      value: suggestionsCount,
+      icon: Icons.UserPlus,
+      onPress: null as (() => void) | null,
+      href: communityRoutes.peopleTab('suggestions'),
+    },
+    {
+      label: 'Groups',
+      value: null as number | null,
+      icon: Icons.Network,
+      onPress: null,
+      href: communityRoutes.groups,
+    },
+    {
+      label: 'Events',
+      value: null,
+      icon: Icons.Calendar,
+      onPress: null,
+      href: communityRoutes.events,
+    },
+    {
+      label: 'Saved posts',
+      value: null,
+      icon: Icons.Bookmark,
+      onPress: null,
+      href: communityRoutes.saved,
+    },
+    {
+      label: 'Pages',
+      value: null,
+      icon: Icons.Building2,
+      onPress: null,
+      href: communityRoutes.companies,
+    },
+  ]
+
+  return (
+    <CommunityWidget title="Manage my network" subtitle="Quick access to your professional graph">
+      <YStack gap={0}>
+        {tiles.map((tile) => {
+          const Icon = tile.icon
+          const row = (
+            <XStack
+              alignItems="center"
+              justifyContent="space-between"
+              paddingVertical={12}
+              paddingHorizontal={4}
+              borderBottomWidth={1}
+              borderBottomColor={communityUi.borderLight}
+              cursor="pointer"
+              hoverStyle={{ backgroundColor: communityUi.hoverBg }}
+              onPress={tile.onPress ?? undefined}
+            >
+              <XStack gap={12} alignItems="center" flex={1}>
+                <XStack
+                  width={36}
+                  height={36}
+                  borderRadius={8}
+                  backgroundColor={communityUi.accentMuted}
+                  alignItems="center"
+                  justifyContent="center"
+                >
+                  <Icon size={18} color={communityUi.brand} />
+                </XStack>
+                <Text fontSize={14} fontWeight="600" color={communityUi.text}>
+                  {tile.label}
+                </Text>
+              </XStack>
+              <XStack gap={8} alignItems="center">
+                {tile.value != null ? (
+                  <Text fontSize={14} fontWeight="700" color={communityUi.textMuted}>
+                    {tile.value}
+                  </Text>
+                ) : null}
+                <Icons.ChevronRight size={18} color={communityUi.textSubtle} />
+              </XStack>
+            </XStack>
+          )
+
+          if (tile.href) {
+            return (
+              <Link key={tile.label} href={tile.href as never}>
+                {row}
+              </Link>
+            )
+          }
+
+          return <YStack key={tile.label}>{row}</YStack>
+        })}
+      </YStack>
+    </CommunityWidget>
   )
 }
 

@@ -318,3 +318,22 @@ export async function fetchListingTypesByIds(
 export function cartRequiresShipping(listingTypes: Map<string, string>, listingIds: string[]) {
   return listingIds.some((id) => isPhysicalListing(listingTypes.get(id)))
 }
+
+/**
+ * Available stock per listing, matching the `create_customer_order` RPC which
+ * validates against `listings.quantity`. A `null` value means untracked/unlimited.
+ */
+export async function fetchListingStockByIds(
+  listingIds: string[],
+): Promise<Map<string, number | null>> {
+  if (!listingIds.length) return new Map()
+
+  const { supabase } = await import('~/lib/supabase/client')
+  const { data } = await supabase.from('listings').select('id, quantity').in('id', listingIds)
+
+  const map = new Map<string, number | null>()
+  for (const row of data ?? []) {
+    map.set(row.id, typeof row.quantity === 'number' ? row.quantity : null)
+  }
+  return map
+}

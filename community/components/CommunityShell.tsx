@@ -80,7 +80,6 @@ export function CommunityShell({ children }: CommunityShellProps) {
                   : undefined
               }
               contentContainerStyle={{
-                flexGrow: 1,
                 width: '100%',
                 maxWidth: '100%',
               }}

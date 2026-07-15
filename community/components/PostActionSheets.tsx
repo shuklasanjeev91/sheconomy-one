@@ -1,17 +1,26 @@
-import { useRef } from 'react'
+import { useEffect, useRef, useState } from 'react'
 
+import { SendPostSheet } from '~/chat/components/SendPostSheet'
 import { CommunityAdaptiveSheet } from '~/community/components/CommunityAdaptiveSheet'
 import { MentionInput } from '~/community/components/MentionInput'
 import { PostComments } from '~/community/components/PostComments'
-import { PostContentText } from '~/community/components/PostContentText'
 import { ProfileLink } from '~/community/components/ProfileLink'
+import { RepostPreviewCard } from '~/community/components/RepostPreviewCard'
 import type { usePostEngagement } from '~/community/hooks/usePostEngagement'
 import { BRAND_BLUE, REACTION_TYPES } from '~/community/lib/constants'
 import { useCommunityUi } from '~/community/lib/community-theme'
 import { mentionsToPlainText } from '~/community/lib/mentions'
+import { setPostFeatured } from '~/community/lib/featured-posts'
+import {
+  blockCommunityMember,
+  hideCommunityPost,
+  reportCommunityPost,
+} from '~/community/lib/moderation'
+import { unfollowProfile } from '~/community/lib/profile-follows'
+import { isPostSaved, saveCommunityPost, unsaveCommunityPost } from '~/community/lib/saved-posts'
 import { getPostShareUrl } from '~/community/lib/post-engagement'
 import type { CommunityPost } from '~/community/lib/community'
-import { ShareActionRow } from '~/components/share/ShareActionRow'
+import { collectPostMedia, postHasMedia } from '~/community/lib/post-media'
 import { ShareSheet } from '~/components/share/ShareSheet'
 import {
   Avatar,
@@ -26,6 +35,7 @@ import {
 import { chatRoutes, routes } from '~/lib/routes'
 import { copyShareLink } from '~/lib/share'
 import { useAppUi } from '~/lib/theme/useAppUi'
+import { useSupabase } from '~/providers/SupabaseProvider'
 
 import { useRouter } from 'one'
 
@@ -43,9 +53,37 @@ export function PostActionSheets({ post, engagement }: PostActionSheetsProps) {
   const ui = useAppUi()
   const router = useRouter()
   const toast = useAppToast()
+  const { user } = useSupabase()
+  const [sendOpen, setSendOpen] = useState(false)
+  const [shareOpen, setShareOpen] = useState(false)
+  const [isFeaturing, setIsFeaturing] = useState(false)
+  const [saved, setSaved] = useState(false)
+  const [savingAction, setSavingAction] = useState(false)
+
+  useEffect(() => {
+    if (!user?.id || engagement.activeSheet !== 'options') return
+    let active = true
+    void isPostSaved(user.id, post.id).then((value) => {
+      if (active) setSaved(value)
+    })
+    return () => {
+      active = false
+    }
+  }, [engagement.activeSheet, post.id, user?.id])
   const repostEncodedRef = useRef('')
   const shareUrl = getPostShareUrl(post.id)
   const authorName = post.author?.full_name || post.author?.username || 'member'
+  const isOwnPost = !!user?.id && user.id === post.user_id
+  const postSnippet = mentionsToPlainText(post.content).trim().slice(0, 140)
+  const sendContext = postSnippet
+    ? `${authorName} on ${BRAND_NAME}: "${postSnippet}"`
+    : `${authorName} on ${BRAND_NAME}`
+  const sendPreview = {
+    authorName,
+    authorAvatar: post.author?.avatar_url ?? post.company?.logo_url ?? post.group?.avatar_url,
+    snippet: postSnippet || null,
+    thumbUrl: collectPostMedia(post)[0]?.url ?? null,
+  }
 
   function requireAuth(action: string) {
     toast.show('Sign in required', {
@@ -54,6 +92,17 @@ export function PostActionSheets({ post, engagement }: PostActionSheetsProps) {
     })
     router.push(routes.signIn)
   }
+
+  useEffect(() => {
+    if (engagement.activeSheet !== 'send') return
+    if (!user?.id) {
+      requireAuth('send this post')
+      engagement.closeSheet()
+      return
+    }
+    setSendOpen(true)
+    engagement.closeSheet()
+  }, [engagement.activeSheet, user?.id])
 
   async function copyLink() {
     const copied = await copyShareLink(shareUrl)
@@ -179,6 +228,17 @@ export function PostActionSheets({ post, engagement }: PostActionSheetsProps) {
           commentDraft={engagement.commentDraft}
           isCommenting={engagement.isCommenting}
           onDraftChange={engagement.setCommentDraft}
+          suggestionContext={{
+            postType: post.post_type,
+            content: post.content,
+            authorName: authorName,
+            eventTitle: post.event_title,
+            celebrationTitle: post.celebration?.title ?? post.celebration?.occasion,
+            productTitle: post.product?.title,
+            shopName: post.shop?.name,
+            articleTitle: post.article_title,
+            hasMedia: postHasMedia(post),
+          }}
           onSubmit={(encoded) => {
             if (!engagement.isAuthenticated) {
               requireAuth('comment')
@@ -190,32 +250,76 @@ export function PostActionSheets({ post, engagement }: PostActionSheetsProps) {
               }
             })
           }}
+          onLikeComment={(commentId) => {
+            if (!engagement.isAuthenticated) {
+              requireAuth('react')
+              return
+            }
+            engagement.toggleCommentLike(commentId).then((result) => {
+              if (result?.error) {
+                toast.show('Could not like comment', { tone: 'danger', message: result.error })
+              }
+            })
+          }}
+          onReply={(parentId, encoded) => {
+            if (!engagement.isAuthenticated) {
+              requireAuth('comment')
+              return
+            }
+            return engagement.replyToComment(parentId, encoded).then((result) => {
+              if (result?.error) {
+                toast.show('Could not reply', { tone: 'danger', message: result.error })
+              }
+              return result
+            })
+          }}
         />
+      </CommunityAdaptiveSheet>
+
+      <CommunityAdaptiveSheet
+        open={engagement.activeSheet === 'repost-menu'}
+        onOpenChange={(open) => !open && engagement.closeSheet()}
+        title="Repost"
+        maxWidth={420}
+      >
+        <YStack gap="$1">
+          <SheetAction
+            icon={Icons.Repeat2}
+            label="Repost"
+            description="Instantly share this post to your feed"
+            onPress={() => {
+              if (!engagement.isAuthenticated) {
+                requireAuth('repost')
+                return
+              }
+              engagement.submitRepost('').then((result) => {
+                if (result?.error) {
+                  toast.show('Could not repost', { tone: 'danger', message: result.error })
+                  return
+                }
+                toast.show('Reposted', {
+                  tone: 'success',
+                  message: 'Shared to your feed.',
+                })
+              })
+            }}
+          />
+          <SheetAction
+            icon={Icons.Pencil}
+            label="Repost with your thoughts"
+            description="Add a comment before sharing"
+            onPress={() => engagement.openSheet('repost')}
+          />
+        </YStack>
       </CommunityAdaptiveSheet>
 
       <CommunityAdaptiveSheet
         open={engagement.activeSheet === 'repost'}
         onOpenChange={(open) => !open && engagement.closeSheet()}
-        title="Repost"
+        title="Repost with your thoughts"
         maxWidth={560}
       >
         <YStack gap="$4">
-          <Text fontSize={14} color={ui.textSecondary} lineHeight={22}>
-            Share this post with your network. Add your thoughts (optional).
-          </Text>
-          <YStack
-            padding="$3"
-            borderRadius={10}
-            borderWidth={1}
-            borderColor={ui.borderSubtle}
-            backgroundColor={ui.surfaceMuted}
-            gap="$2"
-          >
-            <Text fontSize={13} fontWeight="600" color={ui.text}>
-              {authorName}
-            </Text>
-            <PostContentText content={post.content} collapsible={false} fontSize={14} lineHeight={20} />
-          </YStack>
           <MentionInput
             multiline
             value={engagement.repostDraft}
@@ -223,58 +327,80 @@ export function PostActionSheets({ post, engagement }: PostActionSheetsProps) {
             onEncodedChange={(encoded) => {
               repostEncodedRef.current = encoded
             }}
-            placeholder="Add a comment…"
+            placeholder="What do you want to talk about?"
             suggestionsPlacement="top"
-            minHeight={100}
+            minHeight={110}
             backgroundColor={ui.surface}
           />
-          <Button
-            backgroundColor={BRAND_BLUE}
-            color="white"
-            borderRadius={999}
-            disabled={engagement.isReposting}
-            onPress={() => {
-              if (!engagement.isAuthenticated) {
-                requireAuth('repost')
-                return
-              }
-              engagement.submitRepost(repostEncodedRef.current || engagement.repostDraft).then((result) => {
-                if (result?.error) {
-                  toast.show('Could not repost', { tone: 'danger', message: result.error })
-                } else {
-                  toast.show('Reposted', { tone: 'success', message: 'Your repost is live.' })
+          <RepostPreviewCard post={post} />
+          <XStack justifyContent="flex-end" gap="$2">
+            <Button
+              backgroundColor="transparent"
+              color={ui.textSecondary}
+              borderRadius={999}
+              onPress={() => engagement.closeSheet()}
+            >
+              Cancel
+            </Button>
+            <Button
+              backgroundColor={BRAND_BLUE}
+              color="white"
+              borderRadius={999}
+              disabled={engagement.isReposting}
+              onPress={() => {
+                if (!engagement.isAuthenticated) {
+                  requireAuth('repost')
+                  return
                 }
-              })
-            }}
-            icon={engagement.isReposting ? <Spinner size="small" color="white" /> : undefined}
-          >
-            {engagement.isReposting ? 'Reposting…' : 'Repost'}
-          </Button>
+                engagement
+                  .submitRepost(repostEncodedRef.current || engagement.repostDraft)
+                  .then((result) => {
+                    if (result?.error) {
+                      toast.show('Could not repost', { tone: 'danger', message: result.error })
+                    } else {
+                      toast.show('Reposted', {
+                        tone: 'success',
+                        message: 'Your repost is live.',
+                      })
+                    }
+                  })
+              }}
+              icon={engagement.isReposting ? <Spinner size="small" color="white" /> : undefined}
+            >
+              {engagement.isReposting ? 'Posting…' : 'Post'}
+            </Button>
+          </XStack>
         </YStack>
       </CommunityAdaptiveSheet>
 
       <ShareSheet
-        open={engagement.activeSheet === 'share'}
-        onOpenChange={(open) => !open && engagement.closeSheet()}
+        open={shareOpen || engagement.activeSheet === 'share'}
+        onOpenChange={(open) => {
+          setShareOpen(open)
+          if (!open && engagement.activeSheet === 'share') engagement.closeSheet()
+        }}
         payload={{
           url: shareUrl,
           title: `${authorName} on ${BRAND_NAME}`,
           text: mentionsToPlainText(post.content).slice(0, 120),
         }}
-        title="Send post"
+        title="Share post"
         copyLabel="Copy link to post"
         copyToastMessage="Post link copied to clipboard."
-        extraActions={
-          <ShareActionRow
-            icon={Icons.Send}
-            label="Send in a message"
-            onPress={() => {
-              engagement.closeSheet()
-              router.push(chatRoutes.home)
-            }}
-          />
-        }
       />
+
+      {user?.id ? (
+        <SendPostSheet
+          open={sendOpen}
+          onOpenChange={setSendOpen}
+          currentUserId={user.id}
+          shareUrl={shareUrl}
+          contextText={sendContext}
+          preview={sendPreview}
+          onShareElsewhere={() => setShareOpen(true)}
+          onSent={(conversationId) => router.push(chatRoutes.conversation(conversationId))}
+        />
+      ) : null}
 
       <CommunityAdaptiveSheet
         open={engagement.activeSheet === 'options'}
@@ -283,12 +409,63 @@ export function PostActionSheets({ post, engagement }: PostActionSheetsProps) {
         maxWidth={480}
       >
         <YStack gap="$2">
+          {isOwnPost ? (
+            <SheetAction
+              icon={Icons.Star}
+              label={post.is_pinned ? 'Remove from Featured' : 'Add to Featured'}
+              onPress={() => {
+                if (!user?.id || isFeaturing) return
+                setIsFeaturing(true)
+                void setPostFeatured(post.id, user.id, !post.is_pinned).then((result) => {
+                  setIsFeaturing(false)
+                  if (result.error) {
+                    toast.show('Could not update Featured', {
+                      tone: 'danger',
+                      message: result.error,
+                    })
+                    return
+                  }
+                  post.is_pinned = !post.is_pinned
+                  toast.show(
+                    post.is_pinned ? 'Added to Featured' : 'Removed from Featured',
+                    { tone: 'success' },
+                  )
+                  engagement.closeSheet()
+                })
+              }}
+            />
+          ) : null}
           <SheetAction
             icon={Icons.Bookmark}
-            label="Save post"
+            label={saved ? 'Unsave post' : 'Save post'}
             onPress={() => {
-              toast.show('Saved', { tone: 'success', message: 'Post saved to your bookmarks.' })
-              engagement.closeSheet()
+              if (!user?.id) {
+                requireAuth('save posts')
+                return
+              }
+              if (savingAction) return
+              setSavingAction(true)
+              const action = saved
+                ? unsaveCommunityPost(user.id, post.id)
+                : saveCommunityPost(user.id, post.id)
+              void action.then((result) => {
+                setSavingAction(false)
+                if (result.error) {
+                  toast.show('Could not update saved posts', {
+                    tone: 'danger',
+                    message: result.error,
+                  })
+                  return
+                }
+                setSaved(!saved)
+                toast.show(saved ? 'Removed from Saved' : 'Saved', {
+                  tone: 'success',
+                  message: saved
+                    ? 'Post removed from your saved items.'
+                    : 'Post saved to your bookmarks.',
+                })
+                engagement.closeSheet()
+              })
             }}
           />
           <SheetAction icon={Icons.Link} label="Copy link to post" onPress={copyLink} />
@@ -296,27 +473,88 @@ export function PostActionSheets({ post, engagement }: PostActionSheetsProps) {
             icon={Icons.Flag}
             label="Report post"
             onPress={() => {
-              toast.show('Report submitted', {
-                tone: 'success',
-                message: `Thanks for helping keep ${BRAND_NAME} safe.`,
+              if (!user?.id) {
+                requireAuth('report posts')
+                return
+              }
+              void reportCommunityPost(user.id, post.id, 'spam').then((result) => {
+                if (result.error) {
+                  toast.show('Could not report post', { tone: 'danger', message: result.error })
+                  return
+                }
+                toast.show('Report submitted', {
+                  tone: 'success',
+                  message: `Thanks for helping keep ${BRAND_NAME} safe.`,
+                })
+                engagement.closeSheet()
               })
-              engagement.closeSheet()
             }}
           />
-          <SheetAction
-            icon={Icons.UserMinus}
-            label={`Unfollow ${authorName.split(' ')[0]}`}
-            onPress={() => {
-              toast.show('Unfollowed', { tone: 'default', message: 'You will see fewer posts from ${authorName}.' })
-              engagement.closeSheet()
-            }}
-          />
+          {!isOwnPost ? (
+            <SheetAction
+              icon={Icons.UserMinus}
+              label={`Unfollow ${authorName.split(' ')[0]}`}
+              onPress={() => {
+                if (!user?.id) {
+                  requireAuth('unfollow')
+                  return
+                }
+                void unfollowProfile(user.id, post.user_id).then((result) => {
+                  if (result.error) {
+                    toast.show('Could not unfollow', { tone: 'danger', message: result.error })
+                    return
+                  }
+                  toast.show('Unfollowed', {
+                    tone: 'default',
+                    message: `You will see fewer posts from ${authorName}.`,
+                  })
+                  engagement.closeSheet()
+                })
+              }}
+            />
+          ) : null}
+          {!isOwnPost ? (
+            <SheetAction
+              icon={Icons.UserX}
+              label={`Block ${authorName.split(' ')[0]}`}
+              onPress={() => {
+                if (!user?.id) {
+                  requireAuth('block members')
+                  return
+                }
+                void blockCommunityMember(user.id, post.user_id).then((result) => {
+                  if (result.error) {
+                    toast.show('Could not block', { tone: 'danger', message: result.error })
+                    return
+                  }
+                  toast.show('Member blocked', {
+                    tone: 'default',
+                    message: `${authorName} will no longer appear in your community feed.`,
+                  })
+                  engagement.closeSheet()
+                })
+              }}
+            />
+          ) : null}
           <SheetAction
             icon={Icons.EyeOff}
             label="Hide post"
             onPress={() => {
-              toast.show('Post hidden', { tone: 'default', message: 'This post will not appear in your feed.' })
-              engagement.closeSheet()
+              if (!user?.id) {
+                requireAuth('hide posts')
+                return
+              }
+              void hideCommunityPost(user.id, post.id).then((result) => {
+                if (result.error) {
+                  toast.show('Could not hide post', { tone: 'danger', message: result.error })
+                  return
+                }
+                toast.show('Post hidden', {
+                  tone: 'default',
+                  message: 'This post will not appear in your feed.',
+                })
+                engagement.closeSheet()
+              })
             }}
           />
         </YStack>
@@ -328,10 +566,12 @@ export function PostActionSheets({ post, engagement }: PostActionSheetsProps) {
 function SheetAction({
   icon: Icon,
   label,
+  description,
   onPress,
 }: {
   icon: typeof Icons.Link
   label: string
+  description?: string
   onPress: () => void
 }) {
   const ui = useAppUi()
@@ -347,10 +587,26 @@ function SheetAction({
       hoverStyle={{ backgroundColor: ui.surfaceHover }}
       onPress={onPress}
     >
-      <Icon size={20} color={ui.textSecondary} />
-      <Text fontSize={15} fontWeight="500" color={ui.text}>
-        {label}
-      </Text>
+      <YStack
+        width={40}
+        height={40}
+        borderRadius={999}
+        alignItems="center"
+        justifyContent="center"
+        backgroundColor={ui.surfaceMuted}
+      >
+        <Icon size={20} color={ui.textSecondary} />
+      </YStack>
+      <YStack flex={1} minWidth={0} gap={2}>
+        <Text fontSize={15} fontWeight="600" color={ui.text}>
+          {label}
+        </Text>
+        {description ? (
+          <Text fontSize={13} color={ui.textMuted} numberOfLines={2}>
+            {description}
+          </Text>
+        ) : null}
+      </YStack>
     </XStack>
   )
 }

@@ -14,6 +14,8 @@ type Preview = {
   description: string | null
   image: string | null
   siteName: string | null
+  video: string | null
+  videoType: string | null
 }
 
 /** Block requests to loopback / link-local / private networks to reduce SSRF risk. */
@@ -83,7 +85,30 @@ function extractPreview(html: string, baseUrl: string): Preview {
       /<meta[^>]+property=["']og:site_name["'][^>]+content=["']([^"']+)["']/i,
     ]) ?? new URL(baseUrl).hostname.replace(/^www\./, '')
 
-  return { url: baseUrl, title, description, image, siteName }
+  let video = metaContent(html, [
+    /<meta[^>]+property=["']og:video:secure_url["'][^>]+content=["']([^"']+)["']/i,
+    /<meta[^>]+content=["']([^"']+)["'][^>]+property=["']og:video:secure_url["']/i,
+    /<meta[^>]+property=["']og:video:url["'][^>]+content=["']([^"']+)["']/i,
+    /<meta[^>]+content=["']([^"']+)["'][^>]+property=["']og:video:url["']/i,
+    /<meta[^>]+property=["']og:video["'][^>]+content=["']([^"']+)["']/i,
+    /<meta[^>]+content=["']([^"']+)["'][^>]+property=["']og:video["']/i,
+    /<meta[^>]+name=["']twitter:player["'][^>]+content=["']([^"']+)["']/i,
+    /<meta[^>]+content=["']([^"']+)["'][^>]+name=["']twitter:player["']/i,
+  ])
+  if (video) {
+    try {
+      video = new URL(video, baseUrl).toString()
+    } catch {
+      video = null
+    }
+  }
+
+  const videoType = metaContent(html, [
+    /<meta[^>]+property=["']og:video:type["'][^>]+content=["']([^"']+)["']/i,
+    /<meta[^>]+content=["']([^"']+)["'][^>]+property=["']og:video:type["']/i,
+  ])
+
+  return { url: baseUrl, title, description, image, siteName, video, videoType }
 }
 
 Deno.serve(async (req) => {
@@ -97,6 +122,8 @@ Deno.serve(async (req) => {
     description: null,
     image: null,
     siteName: null,
+    video: null,
+    videoType: null,
   })
 
   try {

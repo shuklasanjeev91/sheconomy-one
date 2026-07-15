@@ -5,9 +5,12 @@ import { CommunitySuggestionSectionCard } from '~/community/components/Community
 import { StoriesStrip } from '~/community/components/StoriesStrip'
 import { CommunityShell } from '~/community/components/CommunityShell'
 import { FeedComposer } from '~/community/components/FeedComposer'
+import { FeedFilterChips } from '~/community/components/FeedFilterChips'
 import { FeedPostCard } from '~/community/components/FeedPostCard'
 import { FeedSortBar, type FeedSort } from '~/community/components/FeedSortBar'
 import { CommunityCard } from '~/community/components/CommunityCard'
+import { PushPermissionBanner } from '~/components/notifications/PushPermissionBanner'
+import type { FeedContentFilter } from '~/community/lib/community'
 import { useCommunityFeed } from '~/community/hooks/useCommunityFeed'
 import { useCommunitySuggestions } from '~/community/hooks/useCommunitySuggestions'
 import { useCommunityUi } from '~/community/lib/community-theme'
@@ -19,9 +22,14 @@ const SUGGESTION_INTERVAL = 3
 export function CommunityFeedScreen() {
   const communityUi = useCommunityUi()
   const [sort, setSort] = useState<FeedSort>('recent')
+  const [contentFilter, setContentFilter] = useState<FeedContentFilter | null>(null)
   const media = useMedia()
   const isDesktop = media.gtLg
-  const { items, isLoading, isLoadingMore, hasMore, error, loadMore } = useCommunityFeed(true, sort)
+  const { items, isLoading, isLoadingMore, hasMore, error, loadMore, refresh } = useCommunityFeed(
+    true,
+    sort,
+    contentFilter ?? undefined,
+  )
   const { sections } = useCommunitySuggestions(4)
 
   const feedEntries = useMemo(() => {
@@ -33,8 +41,10 @@ export function CommunityFeedScreen() {
 
   return (
     <CommunityShell>
+      <PushPermissionBanner />
       <StoriesStrip />
-      <FeedComposer />
+      {isDesktop ? <FeedComposer /> : null}
+      <FeedFilterChips value={contentFilter} onChange={setContentFilter} />
       <FeedSortBar value={sort} onChange={setSort} />
 
       {isLoading ? (

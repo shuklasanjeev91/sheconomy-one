@@ -60,9 +60,9 @@ const STEP_ICONS = {
 
 const SOCIAL_FIELDS = [
   { platform: 'instagram', label: 'Instagram URL', icon: Icons.Instagram, placeholder: 'https://instagram.com/yourshop' },
-  { platform: 'facebook', label: 'Facebook URL', icon: Icons.Facebook, placeholder: 'https://facebook.com/yourshop' },
+  { platform: 'facebook', label: 'Page URL', icon: Icons.Facebook, placeholder: 'https://…' },
   { platform: 'twitter', label: 'Twitter / X URL', icon: Icons.Twitter, placeholder: 'https://twitter.com/yourshop' },
-  { platform: 'linkedin', label: 'LinkedIn URL', icon: Icons.Linkedin, placeholder: 'https://linkedin.com/company/yourshop' },
+  { platform: 'linkedin', label: 'Profile URL', icon: Icons.Linkedin, placeholder: 'https://…' },
 ] as const
 
 type Phase = 'form' | 'success'

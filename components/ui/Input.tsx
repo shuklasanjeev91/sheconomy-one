@@ -89,12 +89,15 @@ export type FieldProps = {
   hint?: string
   required?: boolean
   children: React.ReactNode
+  /** Layout: let a field flex to share a row (applied to the wrapper, not the input). */
+  flex?: number
+  minWidth?: number
 }
 
 /** Label + control + error/hint text, stacked with consistent spacing. */
-export function Field({ label, error, hint, required, children }: FieldProps) {
+export function Field({ label, error, hint, required, children, flex, minWidth }: FieldProps) {
   return (
-    <YStack gap="$2">
+    <YStack gap="$2" flex={flex} minWidth={minWidth}>
       {label ? (
         <SizableText size="$3" fontWeight="600" color="$color12">
           {label}

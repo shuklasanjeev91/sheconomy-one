@@ -7,7 +7,12 @@ import { radius } from '~/config/tokens'
 import { useAppLayout } from '~/hooks/useAppLayout'
 import { useAppUi } from '~/lib/theme/useAppUi'
 
-const SHEET_MAX_HEIGHT_RATIO = 0.92
+const SHEET_MAX_HEIGHT_RATIO = 0.96
+// Approximate non-scrolling chrome heights so the scroll body can extend as
+// close to full screen as possible while still leaving room for these.
+const HANDLE_CHROME = 28
+const HEADER_CHROME = 52
+const FOOTER_CHROME = 88
 
 type BottomSheetHeaderProps = {
   title?: string
@@ -86,6 +91,11 @@ export function AppBottomSheet({
     [windowHeight],
   )
 
+  // Space taken by the handle/header/footer that sits outside the scroll body.
+  const chromeHeight =
+    (showHandle ? HANDLE_CHROME : 0) + HEADER_CHROME + (footer ? FOOTER_CHROME : 0)
+  const scrollMaxHeight = Math.max(200, maxSheetHeight - chromeHeight)
+
   const bottomInset = Math.max(16, safeBottom)
 
   const body = (
@@ -131,9 +141,10 @@ export function AppBottomSheet({
               width="100%"
               showsVerticalScrollIndicator
               keyboardShouldPersistTaps="handled"
+              maxHeight={scrollMaxHeight}
               {...(Platform.OS === 'web'
                 ? {
-                    maxHeight: `calc(${SHEET_MAX_HEIGHT_RATIO * 100}vh - 140px)` as unknown as number,
+                    maxHeight: `calc(${SHEET_MAX_HEIGHT_RATIO * 100}vh - ${chromeHeight}px)` as unknown as number,
                   }
                 : {})}
             >

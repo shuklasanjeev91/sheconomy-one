@@ -7,6 +7,9 @@ import { createCompanyPage } from '~/community/lib/companies'
 import { useCommunityUi } from '~/community/lib/community-theme'
 import { LocationPickerField } from '~/components/geo'
 import { Button, Spinner, Text, ValidatedTextField, YStack, useAppToast } from '~/components/ui'
+import { ImageUploadField, preparePickedImagesForUpload } from '~/components/media/ImageUploadField'
+import type { PickedImage } from '~/lib/media/pick-image'
+import { uploadPostImages } from '~/lib/supabase/storage-upload'
 import { useFormValidation } from '~/hooks/useFormValidation'
 import { communityRoutes } from '~/lib/routes'
 import { maxLength, minLength, optionalUrl, required, slug } from '~/lib/validation'
@@ -18,6 +21,7 @@ export function CreateCompanyScreen() {
   const toast = useAppToast()
   const { user } = useSupabase()
   const [location, setLocation] = useState('')
+  const [logo, setLogo] = useState<PickedImage[]>([])
   const [isSaving, setIsSaving] = useState(false)
 
   const form = useFormValidation(
@@ -28,7 +32,6 @@ export function CreateCompanyScreen() {
         industry: { validators: [required('Industry is required.'), minLength(2)] },
         tagline: { validators: [maxLength(120)] },
         website: { validators: [optionalUrl()] },
-        logoUrl: { validators: [optionalUrl()] },
       }),
       [],
     ),
@@ -39,6 +42,22 @@ export function CreateCompanyScreen() {
     if (!form.validateAll()) return
 
     setIsSaving(true)
+
+    let logoUrl = ''
+    if (logo[0]) {
+      const files = await preparePickedImagesForUpload(logo)
+      const { urls, error: uploadError } = await uploadPostImages(user.id, files)
+      if (uploadError || !urls[0]) {
+        setIsSaving(false)
+        toast.show('Could not upload logo', {
+          tone: 'danger',
+          message: uploadError ?? 'Try again shortly.',
+        })
+        return
+      }
+      logoUrl = urls[0]
+    }
+
     const { data, error } = await createCompanyPage(user.id, {
       name: form.fields.name.value.trim(),
       pageSlug: form.fields.slug.value.trim(),
@@ -48,7 +67,7 @@ export function CreateCompanyScreen() {
       tagline: form.fields.tagline.value.trim(),
       location: location.trim(),
       website: form.fields.website.value.trim(),
-      logoUrl: form.fields.logoUrl.value.trim(),
+      logoUrl,
     })
     setIsSaving(false)
     if (error || !data) {
@@ -76,7 +95,12 @@ export function CreateCompanyScreen() {
         <ValidatedTextField label="Tagline" field={form.fields.tagline} />
         <LocationPickerField value={location} onChange={setLocation} label="Location" />
         <ValidatedTextField label="Website" field={form.fields.website} placeholder="https://..." />
-        <ValidatedTextField label="Logo URL" field={form.fields.logoUrl} placeholder="https://..." />
+        <ImageUploadField
+          label="Logo (optional)"
+          hint="Upload a square logo for your page."
+          value={logo}
+          onChange={setLogo}
+        />
         <Button
           backgroundColor={communityUi.brand}
           color="white"

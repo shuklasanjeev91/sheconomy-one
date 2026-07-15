@@ -15,7 +15,7 @@ type MeetingControlsProps = {
   recording: boolean
   captionsActive: boolean
   isHost: boolean
-  panel: 'none' | 'chat' | 'people' | 'invite'
+  panel: 'none' | 'chat' | 'people' | 'invite' | 'info'
   onToggleAudio: () => void
   onToggleVideo: () => void
   onToggleScreen: () => void
@@ -24,7 +24,9 @@ type MeetingControlsProps = {
   onToggleCaptions: () => void
   onToggleChat: () => void
   onTogglePeople: () => void
+  onToggleInfo: () => void
   onToggleInvite?: () => void
+  onShare?: () => void
   onLeave: () => void
   onEnd: () => void
   onMuteAll?: () => void
@@ -126,30 +128,36 @@ export function MeetingControls({
   onToggleCaptions,
   onToggleChat,
   onTogglePeople,
+  onToggleInfo,
   onToggleInvite,
+  onShare,
   onLeave,
   onEnd,
   onMuteAll,
 }: MeetingControlsProps) {
   const { ui: coworkUi, gradients: coworkGradients, shadows: coworkShadows } = useCoWorkTheme()
-  const { isMobile, safeBottom } = useAppLayout()
-  const compact = isMobile
+  const { isMobile, isTablet, isDesktop } = useAppLayout()
+  // Compact icon-only dock on phones; tablets/desktops show labels and breathe.
+  const compact = isMobile && !isTablet && !isDesktop
+  const roomy = isTablet || isDesktop
+  // Meeting routes are chromeless + SafeArea — keep a tight dock pad only.
+  const bottomPad = '$2'
 
   return (
     <YStack
       width="100%"
-      paddingHorizontal="$3"
+      paddingHorizontal={roomy ? '$5' : '$3'}
       paddingTop="$2"
-      paddingBottom={safeBottom > 0 ? safeBottom : '$3'}
+      paddingBottom={bottomPad}
       alignItems="center"
     >
       <YStack
         width="100%"
-        maxWidth={960}
+        maxWidth={roomy ? 1100 : 960}
         borderRadius={coworkUi.radius.dock}
         borderWidth={1}
         borderColor={coworkUi.glassBorder}
-        paddingVertical="$2"
+        paddingVertical={roomy ? '$2.5' : '$2'}
         paddingHorizontal="$2"
         style={{
           ...coworkGlassStyle(coworkUi, true),
@@ -163,11 +171,11 @@ export function MeetingControls({
           style={{ width: '100%' }}
         >
           <XStack
-            minWidth={isMobile ? 520 : undefined}
+            minWidth={compact ? 640 : undefined}
             paddingHorizontal="$2"
             alignItems="center"
             justifyContent="center"
-            gap={isMobile ? '$1' : '$1.5'}
+            gap={roomy ? '$2' : compact ? '$1' : '$1.5'}
           >
             <ControlButton
               label={audioEnabled ? 'Mute' : 'Unmute'}
@@ -230,12 +238,28 @@ export function MeetingControls({
               compact={compact}
             />
             <ControlButton
-              label="People"
+              label="Participants"
               icon={Icons.Users}
               variant={panel === 'people' ? 'brand' : 'neutral'}
               onPress={onTogglePeople}
               compact={compact}
             />
+            <ControlButton
+              label="Info"
+              icon={Icons.Info}
+              variant={panel === 'info' ? 'brand' : 'neutral'}
+              onPress={onToggleInfo}
+              compact={compact}
+            />
+            {onShare ? (
+              <ControlButton
+                label="Share"
+                icon={Icons.Share2}
+                variant="neutral"
+                onPress={onShare}
+                compact={compact}
+              />
+            ) : null}
             {isHost && onToggleInvite ? (
               <ControlButton
                 label="Invite"
@@ -248,17 +272,6 @@ export function MeetingControls({
 
             <DockDivider />
 
-            <Button
-              tone="outline"
-              size={compact ? '$2' : '$3'}
-              borderRadius={999}
-              borderColor={coworkUi.glassBorder}
-              color={coworkUi.text}
-              backgroundColor="rgba(255,255,255,0.04)"
-              onPress={onLeave}
-            >
-              Leave
-            </Button>
             {isHost && onMuteAll ? (
               <Button
                 tone="outline"
@@ -272,16 +285,27 @@ export function MeetingControls({
                 Mute all
               </Button>
             ) : null}
+            <Button
+              tone="outline"
+              size={compact ? '$2' : '$3'}
+              borderRadius={999}
+              borderColor="rgba(244,63,104,0.45)"
+              color={coworkUi.danger}
+              backgroundColor={coworkUi.dangerMuted}
+              onPress={onLeave}
+            >
+              Leave
+            </Button>
             {isHost ? (
               <Button
                 tone="primary"
                 size={compact ? '$2' : '$3'}
                 borderRadius={999}
-                backgroundColor={coworkUi.brand}
+                backgroundColor={coworkUi.danger}
                 onPress={onEnd}
-                style={controlGradientStyle(coworkGradients.activeControl, coworkUi.brand)}
+                style={controlGradientStyle(coworkGradients.dangerControl, coworkUi.danger)}
               >
-                End room
+                End
               </Button>
             ) : null}
           </XStack>

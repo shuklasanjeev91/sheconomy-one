@@ -19,6 +19,7 @@ export type JobListing = {
   application_count: number
   benefits: string | null
   requirements: string | null
+  industry: string | null
   posted_by: string
   poster_name: string
   poster_avatar: string
@@ -52,8 +53,21 @@ export async function searchJobs(
 
   if (error) return { items: [], hasMore: false, error: error.message }
 
-  const items = (data ?? []) as JobListing[]
+  const items = await enrichWithIndustry((data ?? []) as JobListing[])
   return { items, hasMore: items.length === JOB_PAGE_SIZE, error: null }
+}
+
+/**
+ * The `search_jobs` RPC does not return the `industry` column, so we hydrate it
+ * from the base table in a single follow-up query. Keeps industry filtering
+ * fully functional without changing the remote function signature.
+ */
+async function enrichWithIndustry(items: JobListing[]): Promise<JobListing[]> {
+  if (!items.length) return items
+  const ids = items.map((job) => job.id)
+  const { data } = await supabase.from('jobs').select('id, industry').in('id', ids)
+  const industryById = new Map((data ?? []).map((row) => [row.id, row.industry as string | null]))
+  return items.map((job) => ({ ...job, industry: industryById.get(job.id) ?? job.industry ?? null }))
 }
 
 export async function searchJobsByCompany(
@@ -115,6 +129,7 @@ export async function fetchJob(
       application_count: row.applicants_count ?? 0,
       benefits: row.benefits,
       requirements: row.requirements,
+      industry: row.industry ?? null,
       posted_by: row.posted_by,
       poster_name: poster?.full_name ?? 'Recruiter',
       poster_avatar: poster?.avatar_url ?? '',
@@ -124,6 +139,60 @@ export async function fetchJob(
     },
     error: null,
   }
+}
+
+export async function fetchSavedJobs(
+  userId?: string,
+): Promise<{ items: JobListing[]; error: string | null }> {
+  const { data, error } = await supabase.rpc('get_saved_jobs', {
+    user_uuid: userId,
+  })
+  if (error) return { items: [], error: error.message }
+
+  const rows = (data ?? []) as Array<{
+    job_id: string
+    title: string
+    company_name: string
+    description: string
+    location: string
+    job_type: string
+    experience_level: string
+    salary_range: string | null
+    is_remote: boolean
+    is_active: boolean
+    is_applied: boolean
+    application_count: number
+    created_at: string
+    saved_at: string
+  }>
+
+  const items: JobListing[] = rows.map((row) => ({
+    id: row.job_id,
+    title: row.title,
+    company_name: row.company_name,
+    company_logo: null,
+    description: row.description,
+    location: row.location,
+    job_type: row.job_type,
+    experience_level: row.experience_level,
+    salary_range: row.salary_range,
+    is_remote: row.is_remote,
+    is_active: row.is_active,
+    is_applied: row.is_applied,
+    is_saved: true,
+    application_count: row.application_count,
+    benefits: null,
+    requirements: null,
+    industry: null,
+    posted_by: '',
+    poster_name: '',
+    poster_avatar: '',
+    created_at: row.created_at,
+    updated_at: row.saved_at,
+    expires_at: null,
+  }))
+
+  return { items, error: null }
 }
 
 export async function saveJob(jobId: string, userId: string): Promise<{ error: string | null }> {
