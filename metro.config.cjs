@@ -36,6 +36,11 @@ function pinNodeModule(extraNodeModules, name) {
   }
 }
 
+const MEDIAPIPE_FACE_DETECTION_STUB = path.join(
+  projectRoot,
+  'lib/metro-stubs/mediapipe-face-detection.js',
+)
+
 function withTamaguiDedupe(config) {
   const extraNodeModules = { ...(config.resolver?.extraNodeModules ?? {}) }
 
@@ -51,6 +56,11 @@ function withTamaguiDedupe(config) {
       ...config.resolver,
       extraNodeModules,
       resolveRequest(context, moduleName, platform) {
+        // Peer of @tensorflow-models/face-detection; unused with tfjs runtime.
+        if (moduleName === '@mediapipe/face_detection') {
+          return { type: 'sourceFile', filePath: MEDIAPIPE_FACE_DETECTION_STUB }
+        }
+
         if (moduleName === 'tamagui' || moduleName.startsWith('@tamagui/')) {
           try {
             return context.resolveRequest(
