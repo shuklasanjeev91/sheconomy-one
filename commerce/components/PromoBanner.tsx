@@ -1,6 +1,6 @@
-import { Link } from 'one'
 import type { Href } from 'one'
 
+import { AppLink } from '~/components/navigation/AppLink'
 import { Text, YStack } from '~/components/ui'
 import { useAppUi } from '~/lib/theme/useAppUi'
 
@@ -23,7 +23,7 @@ export function PromoBanner({
   const ui = useAppUi()
 
   return (
-    <Link href={href} asChild>
+    <AppLink href={href} asChild>
       <YStack
         flex={1}
         minWidth={200}
@@ -49,6 +49,6 @@ export function PromoBanner({
           {cta}
         </Text>
       </YStack>
-    </Link>
+    </AppLink>
   )
 }

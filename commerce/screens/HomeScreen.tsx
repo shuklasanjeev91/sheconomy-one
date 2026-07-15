@@ -1,5 +1,5 @@
-import { Link } from 'one'
 import { Platform } from 'react-native'
+import { AppLink } from '~/components/navigation/AppLink'
 
 import {
   AvailableOffersCard,
@@ -25,6 +25,7 @@ import {
   YStack,
 } from '~/components/ui'
 import { FullWidthLayout, PageCenter, PageSection } from '~/components/layout'
+import { NearbyShopsSection } from '~/components/location'
 import { PushPermissionBanner } from '~/components/notifications/PushPermissionBanner'
 import { BRAND_THEME, radius } from '~/config/tokens'
 import { useAppUi } from '~/lib/theme/useAppUi'
@@ -83,11 +84,11 @@ export function HomeScreen({ data, error, loading = false }: HomeScreenProps) {
                 </Text>
               </XStack>
               <Paragraph color={ui.textSecondary}>{error ?? 'Please try again shortly.'}</Paragraph>
-              <Link href={routes.home} asChild>
+              <AppLink href={routes.home} asChild>
                 <Button tone="primary" size="$4" alignSelf="flex-start" borderRadius={999}>
                   Browse shops
                 </Button>
-              </Link>
+              </AppLink>
             </YStack>
           </Card>
         </PageSection>
@@ -143,6 +144,7 @@ export function HomeScreen({ data, error, loading = false }: HomeScreenProps) {
           inset
         />
         <RecentlyViewedRail inset />
+        <NearbyShopsSection />
 
         <InfiniteListingSection
           kind="physical"
@@ -235,18 +237,18 @@ export function HomeScreen({ data, error, loading = false }: HomeScreenProps) {
                 </Paragraph>
               </YStack>
               <XStack gap="$3" flexWrap="wrap">
-                <Link href={`${routes.myShops}?create=1` as import('one').Href} asChild>
+                <AppLink href={`${routes.myShops}?create=1` as import('one').Href} asChild>
                   <Theme name={BRAND_THEME}>
                     <Button tone="primary" size="$4" borderRadius={999}>
                       Start selling
                     </Button>
                   </Theme>
-                </Link>
-                <Link href={commerceRoutes.shops} asChild>
+                </AppLink>
+                <AppLink href={commerceRoutes.shops} asChild>
                   <Button tone="outline" size="$4" borderRadius={999} backgroundColor={ui.surface}>
                     Browse shops
                   </Button>
-                </Link>
+                </AppLink>
               </XStack>
             </YStack>
           </PageSection>

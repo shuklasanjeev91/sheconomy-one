@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import type { ReactNode } from 'react'
-import { Link, useRouter } from 'one'
+import { useRouter } from 'one'
+import { AppLink } from '~/components/navigation/AppLink'
 import type { Href } from 'one'
 import type { GetProps } from 'tamagui'
 
@@ -126,11 +127,11 @@ export function VendorMyShopScreen() {
         <Text fontSize={14} color={ui.textSecondary} textAlign="center" maxWidth={360} lineHeight={20}>
           Create your storefront to start selling on SHEconomy and manage it from here.
         </Text>
-        <Link href={commerceRoutes.myShops} asChild>
+        <AppLink href={commerceRoutes.myShops} asChild>
           <Button tone="primary" size="$4" borderRadius={999} marginTop="$2">
             Go to My Shops
           </Button>
-        </Link>
+        </AppLink>
       </YStack>
     )
   }
@@ -276,16 +277,16 @@ function ShopHeaderBar({ ui, shop, isDesktop, previewHref, isDeleting, onDelete 
       </YStack>
 
       <XStack gap="$2" flexWrap="wrap" alignItems="center">
-        <Link href={previewHref} asChild>
+        <AppLink href={previewHref} asChild>
           <Button tone="outline" size="$3" borderRadius={999} icon={<Icons.Eye size={16} />}>
             Preview
           </Button>
-        </Link>
-        <Link href={vendorRoutes.editShop} asChild>
+        </AppLink>
+        <AppLink href={vendorRoutes.editShop} asChild>
           <Button tone="primary" size="$3" borderRadius={999} icon={<Icons.Pencil size={16} />}>
             Edit Shop
           </Button>
-        </Link>
+        </AppLink>
         <ConfirmDialog
           title="Delete this shop?"
           description="This permanently removes your storefront and its listings. This action cannot be undone."
@@ -770,21 +771,21 @@ function RightRail({ ui, shop, completion }: RightRailProps) {
       <Card ui={ui}>
         <SectionHeading ui={ui} icon={Icons.Zap} title="Quick Actions" />
         <YStack gap="$2" marginTop="$1">
-          <Link href={vendorRoutes.editShop} asChild>
+          <AppLink href={vendorRoutes.editShop} asChild>
             <Button tone="primary" size="$3" borderRadius={999} icon={<Icons.Pencil size={15} />}>
               Edit shop details
             </Button>
-          </Link>
-          <Link href={vendorRoutes.products} asChild>
+          </AppLink>
+          <AppLink href={vendorRoutes.products} asChild>
             <Button tone="outline" size="$3" borderRadius={999} icon={<Icons.Package size={15} />}>
               Manage products
             </Button>
-          </Link>
-          <Link href={vendorRoutes.orders} asChild>
+          </AppLink>
+          <AppLink href={vendorRoutes.orders} asChild>
             <Button tone="outline" size="$3" borderRadius={999} icon={<Icons.ShoppingBag size={15} />}>
               View orders
             </Button>
-          </Link>
+          </AppLink>
         </YStack>
       </Card>
     </>

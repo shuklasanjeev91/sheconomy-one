@@ -1,17 +1,23 @@
-import { useGlobalSearchParams } from 'one'
+import { useGlobalSearchParams, usePathname } from 'one'
 
 import {
   listingBrowseFiltersFromRouteParams,
   searchQueryFromRouteParams,
 } from '~/commerce/lib/filters'
-import { SearchScreen } from '~/commerce/screens/SearchScreen'
+import { UnifiedSearchScreen } from '~/components/search'
+import { searchScopeFromPath, searchScopeFromRouteParams } from '~/lib/search'
 
 export default function SearchPage() {
-  const params = useGlobalSearchParams()
+  const params = useGlobalSearchParams() as Record<string, string | string[] | undefined>
+  const pathname = usePathname()
+  const scope =
+    searchScopeFromRouteParams(params) ??
+    (pathname.startsWith('/search') ? 'all' : searchScopeFromPath(pathname))
 
   return (
-    <SearchScreen
+    <UnifiedSearchScreen
       query={searchQueryFromRouteParams(params)}
+      scope={scope}
       filters={listingBrowseFiltersFromRouteParams(params)}
     />
   )

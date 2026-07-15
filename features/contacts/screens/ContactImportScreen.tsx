@@ -36,7 +36,7 @@ export function ContactImportScreen({ returnTo }: ContactImportScreenProps) {
   )
 
   async function finish() {
-    await completeSignIn(returnTo)
+    await completeSignIn(returnTo, { skipOnboardingGate: true })
   }
 
   async function handlePick() {

@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { Link } from 'one'
+import { AppLink } from '~/components/navigation/AppLink'
 
 import { BRAND_BLUE } from '~/community/lib/constants'
 import {
@@ -106,7 +106,7 @@ export function FeaturedPostsSection({
                 borderColor={ui.borderSubtle}
                 backgroundColor={ui.surfaceMuted}
               >
-                <Link href={communityRoutes.post(post.id)} asChild>
+                <AppLink href={communityRoutes.post(post.id)} asChild>
                   <YStack flex={1} gap="$2" cursor="pointer" minWidth={0}>
                     {thumb ? (
                       <Image
@@ -125,7 +125,7 @@ export function FeaturedPostsSection({
                       View post
                     </Text>
                   </YStack>
-                </Link>
+                </AppLink>
                 {isOwnProfile ? (
                   <Button
                     size="$2"

@@ -1,4 +1,5 @@
-import { Link, useRouter } from 'one'
+import { useRouter } from 'one'
+import { AppLink } from '~/components/navigation/AppLink'
 import { useState } from 'react'
 
 import { PageContent, LAYOUT_STRETCH } from '~/components/layout'
@@ -178,7 +179,7 @@ export function CoWorkScreen() {
               Start instant meeting
             </Button>
           ) : null}
-          <Link href={coWorkRoutes.schedule} asChild>
+          <AppLink href={coWorkRoutes.schedule} asChild>
             <Button
               tone="outline"
               size="$4"
@@ -188,8 +189,8 @@ export function CoWorkScreen() {
             >
               Schedule
             </Button>
-          </Link>
-          <Link href={coWorkRoutes.meetings} asChild>
+          </AppLink>
+          <AppLink href={coWorkRoutes.meetings} asChild>
             <Button
               tone="outline"
               size="$4"
@@ -199,7 +200,7 @@ export function CoWorkScreen() {
             >
               My meetings
             </Button>
-          </Link>
+          </AppLink>
         </XStack>
 
         <YStack

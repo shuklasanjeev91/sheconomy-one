@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { Link } from 'one'
+import { AppLink } from '~/components/navigation/AppLink'
 
 import { CommunityShell } from '~/community/components/CommunityShell'
 import { ProfileLink } from '~/community/components/ProfileLink'
@@ -108,11 +108,11 @@ export function ProfileAnalyticsScreen() {
                 <Text fontSize={14} color={communityUi.textMuted} textAlign="center">
                   No profile views yet. Share your profile to grow your reach.
                 </Text>
-                <Link href={routes.profile} asChild>
+                <AppLink href={routes.profile} asChild>
                   <Button tone="secondary" size="$3" borderRadius={999}>
                     Open your profile
                   </Button>
-                </Link>
+                </AppLink>
               </YStack>
             ) : (
               <YStack gap="$2.5">
@@ -156,11 +156,11 @@ export function ProfileAnalyticsScreen() {
             )}
           </SurfaceCard>
 
-          <Link href={communityRoutes.peopleTab('suggestions')} asChild>
+          <AppLink href={communityRoutes.peopleTab('suggestions')} asChild>
             <Button tone="outline" size="$4" borderRadius={999} icon={<Icons.Users size={16} />}>
               People you may know
             </Button>
-          </Link>
+          </AppLink>
         </YStack>
       )}
     </CommunityShell>

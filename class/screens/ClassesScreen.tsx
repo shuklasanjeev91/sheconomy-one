@@ -1,5 +1,6 @@
 import { ClassShell } from '~/class/components/ClassShell'
 import { ContinueLearningRail } from '~/class/components/ContinueLearningRail'
+import { MyPlaylistsRail } from '~/class/components/MyPlaylistsRail'
 import { SavedProgramsRail } from '~/class/components/SavedProgramsRail'
 import { ProgramCard } from '~/class/components/ProgramCard'
 import { ProgramCategoryRow } from '~/class/components/ProgramCategoryRow'
@@ -136,6 +137,7 @@ export function ClassesScreen() {
       <PushPermissionBanner />
       <ContinueLearningRail />
       <SavedProgramsRail />
+      <MyPlaylistsRail mediaType={mediaTab} />
 
       <HorizontalScrollRow gap="$2">
         {(

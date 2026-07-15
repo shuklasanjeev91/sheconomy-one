@@ -8,15 +8,18 @@ import { ToastProvider, ToastViewport } from '@tamagui/toast'
 import type { ReactNode } from 'react'
 
 import { AppErrorBoundary } from '~/components/AppErrorBoundary'
+import { BiometricUnlockGate } from '~/components/auth/BiometricUnlockGate'
 import config from '~/config/tamagui.config'
 import { screenFillStyle } from '~/lib/platform/viewport'
 import { AppToasts } from '~/components/ui/Toast'
 import { AppUsageTracker } from '~/components/analytics/AppUsageTracker'
 import { AppShell } from '~/components/navigation/app/AppShell'
+import { RouteWarmup } from '~/components/navigation/RouteWarmup'
 import { CartProvider } from '~/commerce/hooks/useCart'
 import { FavoritesProvider } from '~/commerce/hooks/useFavorites'
 import { MarketplacePersonalizationProvider } from '~/commerce/context/MarketplacePersonalizationContext'
 import { useAppFonts } from '~/hooks/useAppFonts'
+import { RegionPreferencesProvider } from '~/lib/locale/RegionPreferencesContext'
 import { store } from '~/lib/store'
 import { PushNotificationsProvider } from '~/providers/PushNotificationsProvider'
 import { SupabaseProvider } from '~/providers/SupabaseProvider'
@@ -199,28 +202,35 @@ function AppProviders({ children }: { children: React.ReactNode }) {
   return (
     <ReduxProvider store={store}>
       <SupabaseProvider>
-        <PushNotificationsProvider>
-          <SchemeProvider>
-            <ThemedApp>
-              <CartProvider>
-                <FavoritesProvider>
-                  <MarketplacePersonalizationProvider>
-                    <AiAssistProvider>
-                      <ScreenZoomProvider>
-                        <ScreenZoomRoot>
-                          <AutomaticUpdateManager />
-                          <InAppNotificationHost />
-                          <AppUsageTracker />
-                          <AppShell>{children}</AppShell>
-                        </ScreenZoomRoot>
-                      </ScreenZoomProvider>
-                    </AiAssistProvider>
-                  </MarketplacePersonalizationProvider>
-                </FavoritesProvider>
-              </CartProvider>
-            </ThemedApp>
-          </SchemeProvider>
-        </PushNotificationsProvider>
+        <RegionPreferencesProvider>
+          <PushNotificationsProvider>
+            <SchemeProvider>
+              <ThemedApp>
+                <CartProvider>
+                  <FavoritesProvider>
+                    <MarketplacePersonalizationProvider>
+                      <AiAssistProvider>
+                        <ScreenZoomProvider>
+                          <ScreenZoomRoot>
+                            <AutomaticUpdateManager />
+                            <InAppNotificationHost />
+                            <AppUsageTracker />
+                            <BiometricUnlockGate>
+                              <AppErrorBoundary scope="AppShell">
+                                <RouteWarmup />
+                                <AppShell>{children}</AppShell>
+                              </AppErrorBoundary>
+                            </BiometricUnlockGate>
+                          </ScreenZoomRoot>
+                        </ScreenZoomProvider>
+                      </AiAssistProvider>
+                    </MarketplacePersonalizationProvider>
+                  </FavoritesProvider>
+                </CartProvider>
+              </ThemedApp>
+            </SchemeProvider>
+          </PushNotificationsProvider>
+        </RegionPreferencesProvider>
       </SupabaseProvider>
     </ReduxProvider>
   )

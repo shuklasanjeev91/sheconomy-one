@@ -170,5 +170,9 @@ export function normalizeAddressInput(data: AddressFormData | AddressInput): Add
     address_type: validated.address_type as AddressInput['address_type'],
     is_default: validated.is_default,
     address_label: validated.address_label?.trim() || null,
+    latitude: 'latitude' in data ? (data.latitude ?? null) : null,
+    longitude: 'longitude' in data ? (data.longitude ?? null) : null,
+    place_id: 'place_id' in data ? (data.place_id ?? null) : null,
+    source: 'source' in data ? (data.source ?? 'manual') : 'manual',
   }
 }

@@ -1,4 +1,5 @@
-import { Link, useLocalSearchParams, useRouter } from 'one'
+import { useLocalSearchParams, useRouter } from 'one'
+import { AppLink } from '~/components/navigation/AppLink'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
 import { AppPageHeader } from '~/components/layout/AppPageHeader'
@@ -472,11 +473,11 @@ export function HelpSupportScreen() {
                   <Text color={ui.textSecondary} lineHeight={20}>
                     Sign in to contact support so we can update you when your request is resolved.
                   </Text>
-                  <Link href={buildSignInUrl('/help') as never} asChild>
+                  <AppLink href={buildSignInUrl('/help') as never} asChild>
                     <Button tone="primary" borderRadius={999} alignSelf="flex-start">
                       Sign in to continue
                     </Button>
-                  </Link>
+                  </AppLink>
                 </YStack>
               ) : (
                 <>
@@ -584,11 +585,11 @@ export function HelpSupportScreen() {
               {!user ? (
                 <SurfaceCard padding="$4" borderRadius={radius.card}>
                   <Text color={ui.textSecondary}>Sign in to see your support requests.</Text>
-                  <Link href={buildSignInUrl('/help') as never} asChild>
+                  <AppLink href={buildSignInUrl('/help') as never} asChild>
                     <Button tone="primary" borderRadius={999} marginTop="$3" alignSelf="flex-start">
                       Sign in
                     </Button>
-                  </Link>
+                  </AppLink>
                 </SurfaceCard>
               ) : (
                 <>
@@ -715,11 +716,11 @@ export function HelpSupportScreen() {
           <SurfaceCard padding="$4" borderRadius={radius.card}>
             <XStack alignItems="center" gap="$2" flexWrap="wrap">
               <Icons.Settings size={16} color={ui.textMuted} />
-              <Link href={routes.settings}>
+              <AppLink href={routes.settings}>
                 <Text color={ui.brand} fontWeight="600">
                   Open Settings
                 </Text>
-              </Link>
+              </AppLink>
               <Text color={ui.textMuted}>for notification and account preferences.</Text>
             </XStack>
           </SurfaceCard>

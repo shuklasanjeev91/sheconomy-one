@@ -1,11 +1,12 @@
 import type { ReactNode } from 'react'
 import { Platform } from 'react-native'
-import { Redirect, usePathname } from 'one'
+import { usePathname } from 'one'
 
+import { SpaRedirect } from '~/components/navigation/SpaRedirect'
 import { AuthSignInFlow } from '~/components/auth/AuthSignInFlow'
 import { PageCenter } from '~/components/layout'
 import { Spinner, YStack } from '~/components/ui'
-import { getGuestSignInReturnTo } from '~/lib/auth/access'
+import { canAccessPath, getGuestSignInReturnTo } from '~/lib/auth/access'
 import { useAccess } from '~/hooks/useAccess'
 import { useAppLayout } from '~/hooks/useAppLayout'
 
@@ -16,7 +17,7 @@ type AppAccessGateProps = {
 /** Redirects users away from routes their access tier cannot use. */
 export function AppAccessGate({ children }: AppAccessGateProps) {
   const pathname = usePathname()
-  const { tier, isLoading, isAuthenticated, canAccessPath, getDeniedRedirect } = useAccess()
+  const { tier, isLoading, isAuthenticated, getDeniedRedirect } = useAccess()
   const { isDesktopWeb } = useAppLayout()
   const useDocumentScroll = Platform.OS === 'web' && isDesktopWeb
 
@@ -26,9 +27,9 @@ export function AppAccessGate({ children }: AppAccessGateProps) {
     canAccessPath('guest', pathname) &&
     getGuestSignInReturnTo('guest', pathname) === null
 
-  // Always wait for auth/profile to settle before tier redirects. Skipping this
-  // during account switch briefly treats users as male (gender unknown) and can
-  // yank chat/co-work into a blank redirect state.
+  // Wait for first profile settle before tier redirects (account-switch safety).
+  // Keep the previous tree mounted whenever possible — a full-screen spinner on
+  // every soft navigation feels like a 5–10s hang.
   if (isLoading && !guestCanBrowseWhileAuthLoads) {
     return (
       <PageCenter>
@@ -42,17 +43,18 @@ export function AppAccessGate({ children }: AppAccessGateProps) {
   }
 
   if (!canAccessPath(tier, pathname)) {
-    return <Redirect href={getDeniedRedirect(pathname)} />
+    return <SpaRedirect href={getDeniedRedirect(pathname)} />
   }
 
   return (
     <YStack
+      // Document-scroll pages (desktop web commerce/class/co-work) must not be
+      // flex-clipped — that traps content above the fold with nowhere to scroll.
       flex={useDocumentScroll ? undefined : 1}
       width="100%"
       maxWidth="100%"
       alignSelf="stretch"
-      minHeight={0}
-      // Avoid clipping scroll pages to a zero-height box on mobile web.
+      minHeight={useDocumentScroll ? undefined : 0}
       overflow={useDocumentScroll ? 'visible' : 'hidden'}
     >
       {children}

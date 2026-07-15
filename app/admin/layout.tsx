@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { Platform } from 'react-native'
-import { Redirect, Slot, usePathname, useRouter } from 'one'
+import { Slot, usePathname, useRouter } from 'one'
+import { SpaRedirect } from '~/components/navigation/SpaRedirect'
 import type { Href } from 'one'
 
 import { RequireAdmin } from '~/components/auth/RouteGuard'
@@ -343,7 +344,7 @@ export function AdminLayout() {
 }
 
 export default function AdminLayoutRoute() {
-  return <Redirect href="/admin" />
+  return <SpaRedirect href="/admin" />
 }
 
 type AdminSidebarProps = {

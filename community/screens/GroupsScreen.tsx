@@ -1,4 +1,5 @@
-import { Link, useRouter } from 'one'
+import { useRouter } from 'one'
+import { AppLink } from '~/components/navigation/AppLink'
 import { useEffect, useMemo, useState } from 'react'
 
 import { CommunityCard } from '~/community/components/CommunityCard'
@@ -193,7 +194,7 @@ function GroupSection({ title, items }: { title: string; items: Group[] }) {
         {title}
       </Text>
       {items.map((group) => (
-        <Link key={group.id} href={communityRoutes.group(group.id)}>
+        <AppLink key={group.id} href={communityRoutes.group(group.id)}>
           <XStack gap={12} paddingVertical={12} borderBottomWidth={1} borderBottomColor={communityUi.borderLight} alignItems="center">
             <Avatar name={group.title} src={group.avatar_url ?? undefined} size="$4" />
             <YStack flex={1} gap={2}>
@@ -205,7 +206,7 @@ function GroupSection({ title, items }: { title: string; items: Group[] }) {
               </Text>
             </YStack>
           </XStack>
-        </Link>
+        </AppLink>
       ))}
     </CommunityCard>
   )

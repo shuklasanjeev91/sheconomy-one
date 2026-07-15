@@ -15,6 +15,10 @@ type PageScrollProps = {
  * Cross-platform scroll container.
  * Web desktop: natural document flow (window scroll) so footer follows content.
  * Native + mobile web: flex ScrollView between sticky header and bottom tabs.
+ *
+ * Requires a stretch parent on mobile/native. Do not wrap document-scroll routes
+ * (desktop commerce/class/co-work) in `flex:1; minHeight:0` — that clips content
+ * and kills window scrolling.
  */
 export function PageScroll({ children }: PageScrollProps) {
   const { isDesktopWeb, mobileTabBarOffset } = useAppLayout()
@@ -60,15 +64,17 @@ export function PageScroll({ children }: PageScrollProps) {
           ? ({
               flex: 1,
               minHeight: 0,
+              height: '100%',
               overflowY: 'auto',
               WebkitOverflowScrolling: 'touch',
               marginBottom: bottomInset,
             } as const)
-          : ({ marginBottom: bottomInset } as const)
+          : ({ flex: 1, marginBottom: bottomInset } as const)
       }
       contentContainerStyle={{
         width: '100%',
         maxWidth: '100%',
+        flexGrow: 1,
         backgroundColor: ui.background,
         paddingBottom: 16,
       }}

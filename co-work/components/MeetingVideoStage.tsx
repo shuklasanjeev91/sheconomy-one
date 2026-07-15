@@ -6,35 +6,36 @@ import { TrackLoop } from '@livekit/components-react'
 
 import { useMeetingGalleryTracks } from '~/co-work/hooks/useMeetingGalleryTracks'
 import { meetingGalleryLayout } from '~/co-work/lib/meeting-gallery-layout'
+import { useAppLayout } from '~/hooks/useAppLayout'
 
 import { SheconomyParticipantTile } from './SheconomyParticipantTile'
 
-/** SHEconomy-branded video gallery — Meet/Zoom tiles + WhatsApp-style 1:1 PiP. */
+/** SHEconomy-branded video gallery — web LiveKit stage (native uses NativeLiveKitMeetingRoom). */
 export function MeetingVideoStage() {
+  const { isDesktop } = useAppLayout()
   const { width, height } = useWindowDimensions()
-  const { stageTracks, pipTrack, totalTiles, isDualCall } = useMeetingGalleryTracks()
+  const { stageTracks, pipTrack, totalTiles, hasScreenShare } = useMeetingGalleryTracks()
 
-  // Match web stage chrome (header + control dock padding in LiveKitMeetingRoom.web CSS).
-  const stageWidth = Math.max(width - 24, 1)
-  const stageHeight = Math.max(height - 88 - 112, 1)
+  const isLandscape = width > height
   const layout = useMemo(
-    () =>
-      meetingGalleryLayout(Math.max(stageTracks.length, 1), {
-        width: stageWidth,
-        height: stageHeight,
-      }),
-    [stageTracks.length, stageWidth, stageHeight],
+    () => meetingGalleryLayout(stageTracks.length, { isDesktop, isLandscape }),
+    [stageTracks.length, isDesktop, isLandscape],
   )
-  const solo = (stageTracks.length <= 1 && !pipTrack) || isDualCall
+  const solo = stageTracks.length <= 1 && !pipTrack
+  const galleryClass = hasScreenShare
+    ? 'sheconomy-video-gallery sheconomy-video-gallery--screen'
+    : solo
+      ? 'sheconomy-video-gallery sheconomy-video-gallery--solo'
+      : 'sheconomy-video-gallery'
 
   return (
     <div className="sheconomy-video-stage">
       <div
-        className={solo ? 'sheconomy-video-gallery sheconomy-video-gallery--solo' : 'sheconomy-video-gallery'}
+        className={galleryClass}
         style={
           {
-            '--gallery-cols': layout.columns,
-            '--gallery-rows': layout.rows,
+            '--gallery-cols': hasScreenShare ? 1 : layout.columns,
+            '--gallery-rows': hasScreenShare ? 1 : layout.rows,
           } as CSSProperties
         }
       >

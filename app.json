@@ -68,10 +68,20 @@
       ],
       "expo-secure-store",
       "expo-web-browser",
+      "expo-apple-authentication",
+      "expo-local-authentication",
       [
         "expo-contacts",
         {
           "contactsPermission": "Allow access so you can select contacts to connect with people you know. SHEconomy only uploads the contacts you choose."
+        }
+      ],
+      [
+        "expo-location",
+        {
+          "locationWhenInUsePermission": "Allow SHEconomy to use your location to autofill delivery addresses, check PIN availability, and show nearby shops. Precise location is optional.",
+          "isIosBackgroundLocationEnabled": false,
+          "isAndroidBackgroundLocationEnabled": false
         }
       ]
     ],
@@ -86,6 +96,7 @@
       "appleTeamId": "52H73QK4CL",
       "supportsTablet": true,
       "requireFullScreen": false,
+      "usesAppleSignIn": true,
       "associatedDomains": [
         "applinks:sheconomy-one-sanjeev-shuklas-projects.vercel.app"
       ],
@@ -94,7 +105,9 @@
           "remote-notification"
         ],
         "NSUserTrackingUsageDescription": "This permission is used to deliver personalized push notifications.",
+        "NSFaceIDUsageDescription": "Unlock SHEconomy with Face ID when biometric unlock is enabled.",
         "NSContactsUsageDescription": "Allow access so you can select contacts to connect with people you know. SHEconomy only uploads the contacts you choose.",
+        "NSLocationWhenInUseUsageDescription": "Allow SHEconomy to use your location to autofill delivery addresses, check PIN availability, and show nearby shops. Precise location is optional.",
         "UIDeviceFamily": [
           1,
           2
@@ -134,7 +147,9 @@
       ],
       "permissions": [
         "android.permission.RECORD_AUDIO",
-        "android.permission.CAMERA"
+        "android.permission.CAMERA",
+        "android.permission.ACCESS_COARSE_LOCATION",
+        "android.permission.ACCESS_FINE_LOCATION"
       ]
     },
     "extra": {

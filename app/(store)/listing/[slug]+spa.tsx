@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
-import { Link, useParams, useRouter } from 'one'
+import { useParams, useRouter } from 'one'
+import { AppLink } from '~/components/navigation/AppLink'
 import {
   Button,
   Icons,
@@ -45,7 +46,8 @@ import { useCart } from '~/commerce/hooks/useCart'
 import { recordListingView } from '~/commerce/lib/recently-viewed'
 import { useListingReviews } from '~/commerce/hooks/useListingReviews'
 import { useCanonicalListingSlug } from '~/commerce/hooks/useCanonicalSlug'
-import { PageCenter, PageScroll } from '~/components/layout'
+import { PageCenter, PageScroll, StickyRail } from '~/components/layout'
+import { DeliveryPinCheck } from '~/components/location'
 import { MOBILE_TAB_BAR_HEIGHT } from '~/components/navigation/constants'
 import { ShareButton } from '~/components/share'
 import { BRAND_THEME, getShadowStyle, radius } from '~/config/tokens'
@@ -144,11 +146,11 @@ export default function ListingDetailScreen() {
             Listing not found
           </Text>
           <Text color={ui.textSecondary}>{error ?? 'This listing could not be loaded.'}</Text>
-          <Link href={commerceRoutes.home} asChild>
+          <AppLink href={commerceRoutes.home} asChild>
             <Button tone="outline" size="$4" alignSelf="flex-start" borderRadius={999}>
               Browse marketplace
             </Button>
-          </Link>
+          </AppLink>
         </YStack>
       </PageScroll>
     )
@@ -348,6 +350,15 @@ export default function ListingDetailScreen() {
 
               {fulfillmentInfo ? <ListingFulfillmentPanel info={fulfillmentInfo} compact /> : null}
 
+              {fulfillmentInfo?.kind === 'physical' ? (
+                <DeliveryPinCheck
+                  shopId={listing.shop_id}
+                  listingId={listing.id}
+                  listingType={listing.listing_type}
+                  compact
+                />
+              ) : null}
+
               {displayStock != null ? (
                 <YStack gap="$2">
                   <Text fontSize={13} color={displayStock > 0 ? ui.success : ui.error} fontWeight="500">
@@ -452,83 +463,85 @@ export default function ListingDetailScreen() {
   }
 
   const imageGallery = (
-    <YStack flex={1.2} gap="$3" minWidth={0}>
-      <YStack
-        width="100%"
-        aspectRatio={1}
-        borderRadius={radius.card}
-        overflow="hidden"
-        backgroundColor={ui.imagePlaceholder}
-        position="relative"
-        borderWidth={1}
-        borderColor={ui.borderSubtle}
-        style={getShadowStyle('sm')}
-        cursor={activeGalleryUrls.length > 0 ? 'zoom-in' : undefined}
-        onPress={
-          activeGalleryUrls.length > 0
-            ? () => setGalleryLightboxOpen(true)
-            : undefined
-        }
-      >
-        {activeGalleryUrls.length > 0 ? (
-          <ListingImage
-            imageUrls={activeGalleryUrls}
-            alt={activeImage?.alt_text ?? listing.title}
-            width="100%"
-            height="100%"
-            objectFit="cover"
-            placeholderIconSize={48}
-          />
-        ) : (
-          <YStack flex={1} alignItems="center" justifyContent="center">
-            <Icons.Image size={48} color={ui.textMuted} />
-          </YStack>
-        )}
-        <FavoriteButton listingId={listing.id} size={20} />
-      </YStack>
+    <StickyRail flex={1.2} minWidth={0} width="100%" maxWidth="100%">
+      <YStack gap="$3" width="100%">
+        <YStack
+          width="100%"
+          aspectRatio={1}
+          borderRadius={radius.card}
+          overflow="hidden"
+          backgroundColor={ui.imagePlaceholder}
+          position="relative"
+          borderWidth={1}
+          borderColor={ui.borderSubtle}
+          style={getShadowStyle('sm')}
+          cursor={activeGalleryUrls.length > 0 ? 'zoom-in' : undefined}
+          onPress={
+            activeGalleryUrls.length > 0
+              ? () => setGalleryLightboxOpen(true)
+              : undefined
+          }
+        >
+          {activeGalleryUrls.length > 0 ? (
+            <ListingImage
+              imageUrls={activeGalleryUrls}
+              alt={activeImage?.alt_text ?? listing.title}
+              width="100%"
+              height="100%"
+              objectFit="cover"
+              placeholderIconSize={48}
+            />
+          ) : (
+            <YStack flex={1} alignItems="center" justifyContent="center">
+              <Icons.Image size={48} color={ui.textMuted} />
+            </YStack>
+          )}
+          <FavoriteButton listingId={listing.id} size={20} />
+        </YStack>
 
-      {sortedImages.length > 1 ? (
-        <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-          <XStack gap="$2">
-            {sortedImages.map((image, index) => (
-              <XStack
-                key={image.id}
-                width={72}
-                height={72}
-                borderRadius={radius.chip}
-                overflow="hidden"
-                borderWidth={activeImageIndex === index ? 2 : 1}
-                borderColor={activeImageIndex === index ? ui.text : ui.panelBorder}
-                cursor="pointer"
-                onPress={() => setActiveImageIndex(index)}
-              >
-                <ListingImage
-                  imageUrls={[image.image_url]}
-                  alt={image.alt_text ?? listing.title}
+        {sortedImages.length > 1 ? (
+          <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+            <XStack gap="$2">
+              {sortedImages.map((image, index) => (
+                <XStack
+                  key={image.id}
                   width={72}
                   height={72}
-                  objectFit="cover"
-                  placeholderIconSize={20}
-                />
-              </XStack>
-            ))}
-          </XStack>
-        </ScrollView>
-      ) : null}
+                  borderRadius={radius.chip}
+                  overflow="hidden"
+                  borderWidth={activeImageIndex === index ? 2 : 1}
+                  borderColor={activeImageIndex === index ? ui.text : ui.panelBorder}
+                  cursor="pointer"
+                  onPress={() => setActiveImageIndex(index)}
+                >
+                  <ListingImage
+                    imageUrls={[image.image_url]}
+                    alt={image.alt_text ?? listing.title}
+                    width={72}
+                    height={72}
+                    objectFit="cover"
+                    placeholderIconSize={20}
+                  />
+                </XStack>
+              ))}
+            </XStack>
+          </ScrollView>
+        ) : null}
 
-      {sortedImages.length > 0 ? (
-        <MediaLightbox
-          items={sortedImages.map((image) => ({
-            url: image.image_url,
-            kind: 'image' as const,
-            alt: image.alt_text ?? listing.title,
-          }))}
-          open={galleryLightboxOpen}
-          onOpenChange={setGalleryLightboxOpen}
-          initialIndex={activeImageIndex}
-        />
-      ) : null}
-    </YStack>
+        {sortedImages.length > 0 ? (
+          <MediaLightbox
+            items={sortedImages.map((image) => ({
+              url: image.image_url,
+              kind: 'image' as const,
+              alt: image.alt_text ?? listing.title,
+            }))}
+            open={galleryLightboxOpen}
+            onOpenChange={setGalleryLightboxOpen}
+            initialIndex={activeImageIndex}
+          />
+        ) : null}
+      </YStack>
+    </StickyRail>
   )
 
   const buyPanel = (
@@ -561,6 +574,15 @@ export default function ListingDetailScreen() {
       ) : null}
 
       {fulfillmentInfo ? <ListingFulfillmentPanel info={fulfillmentInfo} /> : null}
+
+      {fulfillmentInfo?.kind === 'physical' ? (
+        <DeliveryPinCheck
+          shopId={listing.shop_id}
+          listingId={listing.id}
+          listingType={listing.listing_type}
+          country={listing.shops ? undefined : 'IN'}
+        />
+      ) : null}
 
       {displayStock != null ? (
         <YStack gap="$2">

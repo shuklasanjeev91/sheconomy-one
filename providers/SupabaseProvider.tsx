@@ -1,7 +1,9 @@
 import { createContext, useContext, useEffect, useMemo, useState } from 'react'
-import { Platform } from 'react-native'
+import { AppState, Platform, type AppStateStatus } from 'react-native'
 import type { Session, User } from '@supabase/supabase-js'
 
+import { heartbeatLoginSession, recordLoginSession } from '~/features/auth/services/login-sessions'
+import { enrichProfileFromAuth } from '~/features/auth/services/profile-enrichment'
 import { supabase } from '~/lib/supabase'
 
 type SupabaseContextValue = {
@@ -19,9 +21,12 @@ export function SupabaseProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     let isMounted = true
 
-    const timeout = Platform.OS === 'web' ? null : setTimeout(() => {
-      if (isMounted) setIsLoading(false)
-    }, 2000)
+    const timeout =
+      Platform.OS === 'web'
+        ? null
+        : setTimeout(() => {
+            if (isMounted) setIsLoading(false)
+          }, 2000)
 
     supabase.auth
       .getSession()
@@ -29,6 +34,9 @@ export function SupabaseProvider({ children }: { children: React.ReactNode }) {
         if (!isMounted) return
         setSession(session)
         setIsLoading(false)
+        if (session?.user) {
+          void heartbeatLoginSession()
+        }
       })
       .catch(() => {
         if (isMounted) setIsLoading(false)
@@ -39,9 +47,15 @@ export function SupabaseProvider({ children }: { children: React.ReactNode }) {
 
     const {
       data: { subscription },
-    } = supabase.auth.onAuthStateChange((_event, nextSession) => {
+    } = supabase.auth.onAuthStateChange((event, nextSession) => {
       setSession(nextSession)
       setIsLoading(false)
+      if (event === 'SIGNED_IN' && nextSession?.user) {
+        const provider =
+          (nextSession.user.app_metadata?.provider as string | undefined) ?? null
+        void recordLoginSession({ provider })
+        void enrichProfileFromAuth(nextSession.user)
+      }
     })
 
     return () => {
@@ -50,6 +64,27 @@ export function SupabaseProvider({ children }: { children: React.ReactNode }) {
       subscription.unsubscribe()
     }
   }, [])
+
+  useEffect(() => {
+    if (!session?.user) return
+
+    if (Platform.OS === 'web') {
+      if (typeof document === 'undefined') return
+      const onVisible = () => {
+        if (document.visibilityState === 'visible') {
+          void heartbeatLoginSession()
+        }
+      }
+      document.addEventListener('visibilitychange', onVisible)
+      return () => document.removeEventListener('visibilitychange', onVisible)
+    }
+
+    const onChange = (state: AppStateStatus) => {
+      if (state === 'active') void heartbeatLoginSession()
+    }
+    const sub = AppState.addEventListener('change', onChange)
+    return () => sub.remove()
+  }, [session?.user?.id])
 
   const value = useMemo<SupabaseContextValue>(
     () => ({

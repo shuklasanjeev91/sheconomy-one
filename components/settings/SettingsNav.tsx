@@ -1,5 +1,6 @@
-import { Link, usePathname } from 'one'
+import { usePathname } from 'one'
 
+import { AppLink } from '~/components/navigation/AppLink'
 import { Icons, Text, XStack, YStack } from '~/components/ui'
 import { useAppUi } from '~/lib/theme/useAppUi'
 
@@ -54,7 +55,7 @@ export function SettingsNav({
                 const active = activeId === item.id
                 const Icon = item.icon
                 return (
-                  <Link key={item.id} href={item.href} asChild>
+                  <AppLink key={item.id} href={item.href} asChild>
                     <XStack
                       alignItems="center"
                       gap="$3"
@@ -83,7 +84,7 @@ export function SettingsNav({
                       </YStack>
                       {compact ? <Icons.ChevronRight size={16} color={ui.textMuted} /> : null}
                     </XStack>
-                  </Link>
+                  </AppLink>
                 )
               })}
             </YStack>

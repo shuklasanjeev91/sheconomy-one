@@ -1,5 +1,5 @@
-import { Link } from 'one'
 import { useCallback, useEffect, useMemo, useState } from 'react'
+import { AppLink } from '~/components/navigation/AppLink'
 
 import { CommunityCard } from '~/community/components/CommunityCard'
 import { CommunityPageHeader } from '~/community/components/CommunityPageHeader'
@@ -207,7 +207,7 @@ export function JobsScreen() {
           title="Jobs"
           subtitle="Find roles from women-led companies and founders in the network."
           actions={
-            <Link href={communityRoutes.jobCreate} asChild>
+            <AppLink href={communityRoutes.jobCreate} asChild>
               <Button
                 size="$3"
                 backgroundColor={communityUi.brand}
@@ -217,10 +217,9 @@ export function JobsScreen() {
               >
                 Post a job
               </Button>
-            </Link>
+            </AppLink>
           }
         />
-
 
         {user ? (
           <CommunityFilterPill
@@ -329,7 +328,7 @@ export function JobsScreen() {
             </Text>
           ) : (
             visibleItems.map((job) => (
-              <Link key={job.id} href={communityRoutes.job(job.id)}>
+              <AppLink key={job.id} href={communityRoutes.job(job.id)}>
                 <YStack
                   paddingVertical={12}
                   borderBottomWidth={1}
@@ -352,7 +351,7 @@ export function JobsScreen() {
                     {job.is_saved || showSavedOnly ? ' · Saved' : ''}
                   </Text>
                 </YStack>
-              </Link>
+              </AppLink>
             ))
           )}
           {hasMore && !showSavedOnly ? (

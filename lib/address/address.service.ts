@@ -54,7 +54,10 @@ function parseActionResult(payload: unknown, fallback: string): AddressActionRes
   return { success: false, message: fallback }
 }
 
-function toDbRow(input: AddressInput, userId: string): Omit<Address, 'id' | 'created_at' | 'updated_at' | 'address_metadata'> {
+function toDbRow(
+  input: AddressInput,
+  userId: string,
+): Omit<Address, 'id' | 'created_at' | 'updated_at' | 'address_metadata'> {
   return {
     user_id: userId,
     address_line_1: input.address_line_1.trim(),
@@ -66,6 +69,10 @@ function toDbRow(input: AddressInput, userId: string): Omit<Address, 'id' | 'cre
     address_type: input.address_type ?? ADDRESS_TYPE.HOME,
     is_default: Boolean(input.is_default),
     address_label: input.address_label?.trim() || null,
+    latitude: input.latitude ?? null,
+    longitude: input.longitude ?? null,
+    place_id: input.place_id?.trim() || null,
+    source: input.source ?? 'manual',
   }
 }
 
@@ -234,6 +241,10 @@ export async function updateAddress(
     if (normalised.address_type) patch.address_type = normalised.address_type
     if (normalised.is_default !== undefined) patch.is_default = normalised.is_default
     if (normalised.address_label !== undefined) patch.address_label = normalised.address_label
+    if (normalised.latitude !== undefined) patch.latitude = normalised.latitude
+    if (normalised.longitude !== undefined) patch.longitude = normalised.longitude
+    if (normalised.place_id !== undefined) patch.place_id = normalised.place_id
+    if (normalised.source !== undefined) patch.source = normalised.source
 
     const { data, error } = await supabase
       .from('addresses')

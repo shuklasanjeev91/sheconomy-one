@@ -51,6 +51,7 @@ export const ROUTE_ACCESS: ReadonlyArray<readonly [prefix: string, rule: RouteAc
 
   // --- Public auth plumbing ---
   ['/auth/callback', { access: 'PUBLIC' }],
+  ['/auth/complete-profile', { access: 'AUTH_ONLY' }],
   ['/auth/verify-gender', { access: 'AUTH_ONLY' }],
   ['/auth', { access: 'PUBLIC' }],
 

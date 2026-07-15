@@ -1,6 +1,5 @@
-import { Link } from 'one'
-
 import { Icons, Text, XStack, YStack } from '~/components/ui'
+import { AppLink } from '~/components/navigation/AppLink'
 import { radius } from '~/config/tokens'
 import { appRoutes } from '~/lib/routes'
 import { useAppUi } from '~/lib/theme/useAppUi'
@@ -40,11 +39,11 @@ export function CartRecoveryNudge({ itemCount }: CartRecoveryNudgeProps) {
           ? 'If you leave items behind, we send gentle reminders by in-app alert, email, push, and WhatsApp (based on your settings).'
           : 'Sign in so we can save your cart and send abandoned-cart reminders across email, in-app, and push.'}
       </Text>
-      <Link href={user ? appRoutes.settings : appRoutes.signIn} asChild>
+      <AppLink href={user ? appRoutes.settings : appRoutes.signIn} asChild>
         <Text fontSize={12} fontWeight="600" color={ui.brand} textDecorationLine="underline">
           {user ? 'Manage notification preferences' : 'Sign in to enable reminders'}
         </Text>
-      </Link>
+      </AppLink>
     </YStack>
   )
 }

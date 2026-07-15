@@ -1,4 +1,5 @@
-import { Link, useRouter } from 'one'
+import { useRouter } from 'one'
+import { AppLink } from '~/components/navigation/AppLink'
 import { Platform } from 'react-native'
 import { useCallback, useEffect, useState } from 'react'
 
@@ -113,11 +114,11 @@ export function CoWorkMeetingsScreen() {
             <Text color={coworkUi.textSecondary} textAlign="center">
               No upcoming meetings yet. Schedule one or start an instant session.
             </Text>
-            <Link href={coWorkRoutes.schedule} asChild>
+            <AppLink href={coWorkRoutes.schedule} asChild>
               <Button tone="primary" borderRadius={999}>
                 Schedule meeting
               </Button>
-            </Link>
+            </AppLink>
           </YStack>
         ) : null}
 

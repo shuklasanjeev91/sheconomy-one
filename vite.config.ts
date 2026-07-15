@@ -17,6 +17,7 @@ function loadProjectEnv(mode: string) {
     'EXPO_PUBLIC_SUPABASE_ANON_KEY',
     'EXPO_PUBLIC_WEB_APP_URL',
     'ONE_SERVER_URL',
+    'ONE_CACHE_KEY',
   ] as const
 
   const env = { ...fromFiles }
@@ -61,11 +62,16 @@ export default defineConfig(({ mode }) => {
         'expo-clipboard': fromProjectRoot('./lib/stubs/expo-clipboard.ts'),
         'expo-file-system/legacy': fromProjectRoot('./lib/stubs/expo-file-system-legacy.ts'),
         'expo-localization': fromProjectRoot('./lib/stubs/expo-localization.ts'),
+        // Published `@expo/log-box/utils.js` is CJS; Vite SSR eval throws `module is not defined`.
+        '@expo/log-box/utils': fromProjectRoot('./lib/stubs/expo-log-box-utils.ts'),
+        '@expo/log-box/utils.js': fromProjectRoot('./lib/stubs/expo-log-box-utils.ts'),
         '@react-native-community/datetimepicker': fromProjectRoot('./lib/stubs/datetimepicker.ts'),
         '@livekit/react-native': fromProjectRoot('./lib/stubs/livekit-react-native.ts'),
         '@livekit/react-native-webrtc': fromProjectRoot('./lib/stubs/react-native-webrtc.ts'),
         'react-native-webrtc': fromProjectRoot('./lib/stubs/react-native-webrtc.ts'),
         'react-native-webview': fromProjectRoot('./lib/stubs/react-native-webview.ts'),
+        // Published package ships JSX in `.js`; Rolldown parse fails during web build.
+        'react-native-qrcode-svg': fromProjectRoot('./lib/stubs/react-native-qrcode-svg.tsx'),
         'use-sync-external-store/with-selector': useSyncExternalStoreWithSelector,
         'use-sync-external-store/with-selector.js': useSyncExternalStoreWithSelector,
       },
@@ -139,6 +145,21 @@ export default defineConfig(({ mode }) => {
         // Rolldown dev bundle runs whatwg-fetch init before Request/Response exist;
         // defer Body.call to end of fetch.js (see patch below).
         patches: {
+          '@expo/log-box': {
+            // Root entry is pure CJS (`module.exports = require(...)`) and crashes Vite SSR.
+            'utils.js': (contents) => {
+              if (!contents || contents.includes('sheconomy-esm-log-box-utils')) return
+              return `// sheconomy-esm-log-box-utils
+export function withoutANSIColorStyles(message) {
+  if (typeof message !== 'string') return message
+  return message.replace(/[\\u001b\\u009b][[()#;?]*(?:[0-9]{1,4}(?:;[0-9]{0,4})*)?[0-9A-ORZcf-nqry=><]/g, '')
+}
+export function parseWebBuildErrors(input) {
+  return input
+}
+`
+            },
+          },
           vxrn: {
             'dist/config/getViteServerConfig.mjs': (contents) => {
               if (!contents || contents.includes('sheconomy-vite-ws')) return
@@ -210,32 +231,66 @@ export default defineConfig(({ mode }) => {
               )
             },
             // Never hard-reload the SPA shell when One marks a deploy "stale".
+            // Also never block tab/link navigation on cold preload waterfalls (100+ modules).
+            // NOTE: vxrn skips re-patch when file mtime matches stats — build sets VXRN_FORCE_PATCH=1.
             'dist/esm/router/router.mjs': (contents) => {
-              if (!contents || contents.includes('sheconomy-spa-no-hard-reload')) return
-              return contents.replace(
-                `  if (isVersionStale()) {
-    window.location.href = href;
-    return;
-  }`,
-                `  // sheconomy-spa-no-hard-reload: keep soft client navigation
+              if (!contents) return
+              let next = contents
+              if (!next.includes('sheconomy-spa-no-hard-reload')) {
+                next = next.replace(
+                  /if \(isVersionStale\(\)\) \{\s*window\.location\.href = href;\s*return;\s*\}/,
+                  `// sheconomy-spa-no-hard-reload: keep soft client navigation
   if (false && isVersionStale()) {
     window.location.href = href;
     return;
   }`,
+                )
+              }
+              if (!next.includes('sheconomy-nav-instant')) {
+                next = next.replace(
+                  /if \(\!\(normalizedPreloadPath in preloadedLoaderData\) && \!\(href in preloadedLoaderData\)\) await preloadRoute\(href, true\);/,
+                  `// sheconomy-nav-instant: do not await cold preload (was 5–10s per tab)
+if (!(normalizedPreloadPath in preloadedLoaderData) && !(href in preloadedLoaderData)) void preloadRoute(href, true);`,
+                )
+              }
+              return next === contents ? undefined : next
+            },
+            'dist/esm/router/router.native.js': (contents) => {
+              if (!contents || contents.includes('sheconomy-nav-instant')) return
+              return contents.replace(
+                /if \(\!\(normalizedPreloadPath in preloadedLoaderData\) && \!\(href in preloadedLoaderData\)\) await preloadRoute\(href, true\);/,
+                `// sheconomy-nav-instant: do not await cold preload (was 5–10s per tab)
+if (!(normalizedPreloadPath in preloadedLoaderData) && !(href in preloadedLoaderData)) void preloadRoute(href, true);`,
               )
             },
             'dist/cjs/router/router.cjs': (contents) => {
-              if (!contents || contents.includes('sheconomy-spa-no-hard-reload')) return
-              return contents.replace(
-                `  if ((0, import_skewProtection.isVersionStale)()) {
-    window.location.href = href;
-    return;
-  }`,
-                `  // sheconomy-spa-no-hard-reload: keep soft client navigation
+              if (!contents) return
+              let next = contents
+              if (!next.includes('sheconomy-spa-no-hard-reload')) {
+                next = next.replace(
+                  /if \(\(0, import_skewProtection\.isVersionStale\)\(\)\) \{\s*window\.location\.href = href;\s*return;\s*\}/,
+                  `// sheconomy-spa-no-hard-reload: keep soft client navigation
   if (false && (0, import_skewProtection.isVersionStale)()) {
     window.location.href = href;
     return;
   }`,
+                )
+              }
+              if (!next.includes('sheconomy-nav-instant')) {
+                next = next.replace(
+                  /if \(\!\(normalizedPreloadPath in preloadedLoaderData\) && \!\(href in preloadedLoaderData\)\) await preloadRoute\(href, true\);/,
+                  `// sheconomy-nav-instant: do not await cold preload (was 5–10s per tab)
+if (!(normalizedPreloadPath in preloadedLoaderData) && !(href in preloadedLoaderData)) void preloadRoute(href, true);`,
+                )
+              }
+              return next === contents ? undefined : next
+            },
+            'dist/cjs/router/router.native.js': (contents) => {
+              if (!contents || contents.includes('sheconomy-nav-instant')) return
+              return contents.replace(
+                /if \(\!\(normalizedPreloadPath in preloadedLoaderData\) && \!\(href in preloadedLoaderData\)\) await preloadRoute\(href, true\);/,
+                `// sheconomy-nav-instant: do not await cold preload (was 5–10s per tab)
+if (!(normalizedPreloadPath in preloadedLoaderData) && !(href in preloadedLoaderData)) void preloadRoute(href, true);`,
               )
             },
           },
@@ -300,6 +355,8 @@ export default defineConfig(({ mode }) => {
       'process.env.ONE_SERVER_URL': JSON.stringify(
         env.ONE_SERVER_URL ?? env.EXPO_PUBLIC_WEB_APP_URL ?? DEFAULT_APP_ORIGIN,
       ),
+      'process.env.ONE_CACHE_KEY': JSON.stringify(env.ONE_CACHE_KEY?.trim() || '202607151'),
+      'import.meta.env.ONE_CACHE_KEY': JSON.stringify(env.ONE_CACHE_KEY?.trim() || '202607151'),
     },
 
     ssr: {
@@ -316,6 +373,7 @@ export default defineConfig(({ mode }) => {
         'expo-audio',
         'expo-video',
         'react-native-webview',
+        'react-native-qrcode-svg',
       ],
       include: [
         '@tamagui/config',

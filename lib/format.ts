@@ -74,12 +74,24 @@ export function getListingCardTitle(listing: {
   return 'Listing'
 }
 
-export function formatCurrency(amount: number, currency = 'INR') {
-  return new Intl.NumberFormat('en-IN', {
-    style: 'currency',
-    currency,
-    maximumFractionDigits: amount % 1 === 0 ? 0 : 2,
-  }).format(amount)
+/**
+ * Format a money amount. Pass `locale` (e.g. en-US) to match the shopper's
+ * region preferences; defaults remain en-IN / INR for home market.
+ */
+export function formatCurrency(amount: number, currency = 'INR', locale = 'en-IN') {
+  try {
+    return new Intl.NumberFormat(locale, {
+      style: 'currency',
+      currency,
+      maximumFractionDigits: amount % 1 === 0 ? 0 : 2,
+    }).format(amount)
+  } catch {
+    return new Intl.NumberFormat('en-IN', {
+      style: 'currency',
+      currency: 'INR',
+      maximumFractionDigits: amount % 1 === 0 ? 0 : 2,
+    }).format(amount)
+  }
 }
 
 export function formatRating(rating: number | string | null | undefined) {

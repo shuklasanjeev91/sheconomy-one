@@ -337,6 +337,8 @@ export async function fetchPublishedPrograms(options?: {
   category?: string
   mediaType?: 'video' | 'audio'
   featuredOnly?: boolean
+  authorId?: string
+  externalAuthorId?: string
   limit?: number
 }): Promise<{ programs: Program[]; error: string | null }> {
   let query = supabase
@@ -357,6 +359,16 @@ export async function fetchPublishedPrograms(options?: {
     query = query.eq('featured', true)
   }
 
+  if (options?.authorId && options?.externalAuthorId) {
+    query = query.or(
+      `author_id.eq.${options.authorId},external_author_id.eq.${options.externalAuthorId}`,
+    )
+  } else if (options?.authorId) {
+    query = query.eq('author_id', options.authorId)
+  } else if (options?.externalAuthorId) {
+    query = query.eq('external_author_id', options.externalAuthorId)
+  }
+
   if (options?.limit) {
     query = query.limit(options.limit)
   }
@@ -371,6 +383,54 @@ export async function fetchPublishedPrograms(options?: {
     resolveByTitle: false,
   })
   return { programs, error: null }
+}
+
+/**
+ * YouTube-style Up Next: same category + media type first, then fill with same host.
+ */
+export async function fetchUpNextPrograms(
+  program: Pick<Program, 'id' | 'category' | 'media_type' | 'author_id' | 'external_author_id'>,
+  limit = 12,
+): Promise<{ programs: Program[]; error: string | null }> {
+  const mediaType = program.media_type === 'audio' ? 'audio' : 'video'
+  const seen = new Set<string>([program.id])
+  const ordered: Program[] = []
+  let lastError: string | null = null
+
+  const categoryResult = await fetchPublishedPrograms({
+    category: program.category || undefined,
+    mediaType,
+    limit: limit + 6,
+  })
+  if (categoryResult.error) lastError = categoryResult.error
+
+  for (const item of categoryResult.programs) {
+    if (seen.has(item.id)) continue
+    seen.add(item.id)
+    ordered.push(item)
+    if (ordered.length >= limit) {
+      return { programs: ordered, error: lastError }
+    }
+  }
+
+  if (program.author_id || program.external_author_id) {
+    const hostResult = await fetchPublishedPrograms({
+      mediaType,
+      authorId: program.author_id ?? undefined,
+      externalAuthorId: program.external_author_id ?? undefined,
+      limit: limit + 6,
+    })
+    if (hostResult.error) lastError = hostResult.error
+
+    for (const item of hostResult.programs) {
+      if (seen.has(item.id)) continue
+      seen.add(item.id)
+      ordered.push(item)
+      if (ordered.length >= limit) break
+    }
+  }
+
+  return { programs: ordered.slice(0, limit), error: lastError }
 }
 
 /** Fetch programs by id, preserving the caller's order. */

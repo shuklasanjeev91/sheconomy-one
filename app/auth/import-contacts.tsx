@@ -1,5 +1,6 @@
-import { Redirect, useLocalSearchParams } from 'one'
+import { useLocalSearchParams } from 'one'
 
+import { SpaRedirect } from '~/components/navigation/SpaRedirect'
 import { PageCenter } from '~/components/layout'
 import { Spinner } from '~/components/ui'
 import { ContactImportScreen } from '~/features/contacts/screens/ContactImportScreen'
@@ -21,7 +22,7 @@ export default function ImportContactsRoute() {
   }
 
   if (!isAuthenticated) {
-    return <Redirect href={appRoutes.signIn} />
+    return <SpaRedirect href={appRoutes.signIn} />
   }
 
   return <ContactImportScreen returnTo={params.returnTo ?? null} />

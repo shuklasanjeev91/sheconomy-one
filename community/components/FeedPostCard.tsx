@@ -1,5 +1,7 @@
-import { useEffect, useState } from 'react'
-import { Link, useRouter } from 'one'
+import { useEffect, useMemo, useState } from 'react'
+import { useRouter } from 'one'
+import { AppLink } from '~/components/navigation/AppLink'
+import { useThemeName } from 'tamagui'
 
 import { CommunityCard } from '~/community/components/CommunityCard'
 import { PostActionSheets } from '~/community/components/PostActionSheets'
@@ -23,6 +25,10 @@ import type {
 import { castPollVote } from '~/community/lib/polls'
 import { collectPostMedia, type PostMediaItem } from '~/community/lib/post-media'
 import { useCommunityUi } from '~/community/lib/community-theme'
+import {
+  getPostTypeSurface,
+  resolveFeedPostType,
+} from '~/community/lib/post-type-surface'
 import { Avatar, Button, Icons, Image, Text, XStack, YStack } from '~/components/ui'
 import { radius } from '~/config/tokens'
 import { commerceRoutes, communityRoutes, routes } from '~/lib/routes'
@@ -52,7 +58,17 @@ type FeedPostCardProps = {
 
 export function FeedPostCard({ post, linkToDetail = true }: FeedPostCardProps) {
   const communityUi = useCommunityUi()
+  const themeName = useThemeName()
   const router = useRouter()
+  const postSurface = useMemo(
+    () =>
+      getPostTypeSurface(
+        resolveFeedPostType(post),
+        communityUi,
+        themeName === 'dark' ? 'dark' : 'light',
+      ),
+    [communityUi, post, themeName],
+  )
 
   const engagement = usePostEngagement(
     post.id,
@@ -92,7 +108,13 @@ export function FeedPostCard({ post, linkToDetail = true }: FeedPostCardProps) {
 
   return (
     <>
-      <CommunityCard gap={0}>
+      <CommunityCard
+        gap={0}
+        backgroundColor={postSurface.backgroundColor}
+        borderColor={postSurface.borderColor}
+        borderLeftWidth={3}
+        borderLeftColor={postSurface.accentColor}
+      >
         {post.original_post_id || post.post_type === 'repost' ? (
           <XStack
             paddingHorizontal={16}
@@ -101,7 +123,7 @@ export function FeedPostCard({ post, linkToDetail = true }: FeedPostCardProps) {
             gap={6}
             alignItems="center"
           >
-            <Icons.Repeat size={14} color={communityUi.textMuted} />
+            <Icons.Repeat size={14} color={postSurface.accentColor} />
             <Text fontSize={12} fontWeight="600" color={communityUi.textMuted}>
               {authorName} reposted
             </Text>
@@ -110,13 +132,13 @@ export function FeedPostCard({ post, linkToDetail = true }: FeedPostCardProps) {
 
         <XStack paddingHorizontal={16} paddingTop={16} paddingBottom={12} gap={12} alignItems="flex-start">
           {post.company ? (
-            <Link href={communityRoutes.company(post.company.id)} asChild>
+            <AppLink href={communityRoutes.company(post.company.id)} asChild>
               <Avatar name={avatarName} src={avatarSrc} size="$4" cursor="pointer" />
-            </Link>
+            </AppLink>
           ) : post.group ? (
-            <Link href={communityRoutes.group(post.group.id)} asChild>
+            <AppLink href={communityRoutes.group(post.group.id)} asChild>
               <Avatar name={avatarName} src={avatarSrc} size="$4" cursor="pointer" />
-            </Link>
+            </AppLink>
           ) : (
             <ProfileLink userId={post.user_id} username={post.author?.username}>
               <Avatar name={avatarName} src={avatarSrc} size="$4" cursor="pointer" />
@@ -124,7 +146,7 @@ export function FeedPostCard({ post, linkToDetail = true }: FeedPostCardProps) {
           )}
           <YStack flex={1} gap={2} minWidth={0}>
             {post.company ? (
-              <Link href={communityRoutes.company(post.company.id)}>
+              <AppLink href={communityRoutes.company(post.company.id)}>
                 <Text
                   fontWeight="600"
                   fontSize={14}
@@ -134,9 +156,9 @@ export function FeedPostCard({ post, linkToDetail = true }: FeedPostCardProps) {
                 >
                   {authorName}
                 </Text>
-              </Link>
+              </AppLink>
             ) : post.group ? (
-              <Link href={communityRoutes.group(post.group.id)}>
+              <AppLink href={communityRoutes.group(post.group.id)}>
                 <Text
                   fontWeight="600"
                   fontSize={14}
@@ -146,7 +168,7 @@ export function FeedPostCard({ post, linkToDetail = true }: FeedPostCardProps) {
                 >
                   {authorName}
                 </Text>
-              </Link>
+              </AppLink>
             ) : (
               <ProfileLink userId={post.user_id} username={post.author?.username}>
                 <Text
@@ -184,7 +206,7 @@ export function FeedPostCard({ post, linkToDetail = true }: FeedPostCardProps) {
                 <Text fontSize={12} color={communityUi.textMuted}>
                   Posted in
                 </Text>
-                <Link href={communityRoutes.group(post.group.id)}>
+                <AppLink href={communityRoutes.group(post.group.id)}>
                   <Text
                     fontSize={12}
                     color={communityUi.textMuted}
@@ -195,7 +217,7 @@ export function FeedPostCard({ post, linkToDetail = true }: FeedPostCardProps) {
                   >
                     {post.group.title}
                   </Text>
-                </Link>
+                </AppLink>
               </XStack>
             ) : post.author?.headline ? (
               <Text fontSize={12} color={communityUi.textMuted} numberOfLines={1}>
@@ -204,7 +226,7 @@ export function FeedPostCard({ post, linkToDetail = true }: FeedPostCardProps) {
             ) : null}
             <XStack gap={4} alignItems="center">
               {linkToDetail ? (
-                <Link href={communityRoutes.post(post.id)}>
+                <AppLink href={communityRoutes.post(post.id)}>
                   <Text
                     fontSize={12}
                     color={communityUi.textSubtle}
@@ -213,7 +235,7 @@ export function FeedPostCard({ post, linkToDetail = true }: FeedPostCardProps) {
                   >
                     {formatPostTime(post.created_at)}
                   </Text>
-                </Link>
+                </AppLink>
               ) : (
                 <Text fontSize={12} color={communityUi.textSubtle}>
                   {formatPostTime(post.created_at)}
@@ -247,11 +269,11 @@ export function FeedPostCard({ post, linkToDetail = true }: FeedPostCardProps) {
           ) : null}
           {post.article_title ? (
             linkToDetail ? (
-              <Link href={communityRoutes.post(post.id)}>
+              <AppLink href={communityRoutes.post(post.id)}>
                 <Text fontSize={20} fontWeight="800" color={communityUi.text} letterSpacing={-0.3} lineHeight={26}>
                   {post.article_title}
                 </Text>
-              </Link>
+              </AppLink>
             ) : (
               <Text fontSize={20} fontWeight="800" color={communityUi.text} letterSpacing={-0.3} lineHeight={26}>
                 {post.article_title}
@@ -259,9 +281,9 @@ export function FeedPostCard({ post, linkToDetail = true }: FeedPostCardProps) {
             )
           ) : null}
           {linkToDetail ? (
-            <Link href={communityRoutes.post(post.id)}>
+            <AppLink href={communityRoutes.post(post.id)}>
               <PostContentText content={post.content} />
-            </Link>
+            </AppLink>
           ) : (
             <PostContentText content={post.content} />
           )}
@@ -585,9 +607,9 @@ function PostProductCard({ product }: { product: PostProduct }) {
 
   if (product.slug) {
     return (
-      <Link href={commerceRoutes.listing(product.slug)} asChild>
+      <AppLink href={commerceRoutes.listing(product.slug)} asChild>
         {card}
-      </Link>
+      </AppLink>
     )
   }
   return card
@@ -640,9 +662,9 @@ function PostShopCard({ shop }: { shop: PostShop }) {
 
   if (shop.slug) {
     return (
-      <Link href={commerceRoutes.shop(shop.slug)} asChild>
+      <AppLink href={commerceRoutes.shop(shop.slug)} asChild>
         {card}
-      </Link>
+      </AppLink>
     )
   }
   return card
@@ -906,7 +928,7 @@ function OriginalPostEmbed({ original }: { original: OriginalPostPreview }) {
   const communityUi = useCommunityUi()
 
   return (
-    <Link href={communityRoutes.post(original.id)}>
+    <AppLink href={communityRoutes.post(original.id)}>
       <YStack
         borderWidth={1}
         borderColor={communityUi.border}
@@ -954,6 +976,6 @@ function OriginalPostEmbed({ original }: { original: OriginalPostPreview }) {
           return <PostMediaCarousel items={originalMedia} height={180} fit="cover" rounded={false} />
         })()}
       </YStack>
-    </Link>
+    </AppLink>
   )
 }

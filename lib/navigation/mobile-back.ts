@@ -37,6 +37,7 @@ export function isMobileRootPath(pathname: string): boolean {
 export function shouldShowMobileBack(pathname: string): boolean {
   if (!pathname || pathname.startsWith('/ui-kit')) return false
   if (/\/co-work\/meeting\/[^/]+\/live/.test(pathname)) return false
+  if (/\/chat\/call\//.test(pathname)) return false
   if (pathname.startsWith('/auth/')) return false
   return !isMobileRootPath(pathname)
 }

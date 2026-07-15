@@ -1,5 +1,5 @@
-import { Link } from 'one'
 import { useEffect, useState } from 'react'
+import { AppLink } from '~/components/navigation/AppLink'
 
 import { Icons, Image, Text, XStack, YStack } from '~/components/ui'
 import { PageSection } from '~/components/layout'
@@ -32,7 +32,7 @@ export function SaleEventBanner({ inset = false }: SaleEventBannerProps) {
   const event = events[0]
 
   const content = (
-    <Link href={commerceRoutes.browse('featured')} asChild>
+    <AppLink href={commerceRoutes.browse('featured')} asChild>
       <XStack
         width="100%"
         minHeight={88}
@@ -79,7 +79,7 @@ export function SaleEventBanner({ inset = false }: SaleEventBannerProps) {
           <Icons.ChevronRight size={18} color={ui.textSecondary} />
         </YStack>
       </XStack>
-    </Link>
+    </AppLink>
   )
 
   return inset ? <PageSection>{content}</PageSection> : content

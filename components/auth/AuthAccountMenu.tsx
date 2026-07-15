@@ -1,5 +1,5 @@
-import { Link } from 'one'
 import type { Href } from 'one'
+import { AppLink } from '~/components/navigation/AppLink'
 import { useMemo } from 'react'
 
 import {
@@ -62,7 +62,7 @@ export function AuthUserMenuContent({ onClose }: AuthUserMenuContentProps) {
       getAccountMenuSections({
         tier,
         hasShops: shops.length > 0,
-        primaryShopId: shops[0]?.id,
+        primaryShopId: shops[0]?.id ?? null,
         omitChromeDuplicates: !isDesktop,
       }),
     [tier, shops, isDesktop],
@@ -406,7 +406,7 @@ export function AuthGuestMenuContent({ onClose, signInHref }: { onClose: () => v
         </YStack>
       ))}
 
-      <Link href={signInHref} asChild>
+      <AppLink href={signInHref} asChild>
         <XStack
           height={48}
           borderRadius={999}
@@ -423,7 +423,7 @@ export function AuthGuestMenuContent({ onClose, signInHref }: { onClose: () => v
             Sign in or create account
           </Text>
         </XStack>
-      </Link>
+      </AppLink>
     </YStack>
   )
 }

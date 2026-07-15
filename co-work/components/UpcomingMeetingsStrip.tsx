@@ -1,4 +1,5 @@
-import { Link, useRouter } from 'one'
+import { useRouter } from 'one'
+import { AppLink } from '~/components/navigation/AppLink'
 import { useEffect, useState } from 'react'
 
 import { CoWorkStatusPill } from '~/co-work/components/CoWorkUi'
@@ -96,11 +97,11 @@ export function UpcomingMeetingsStrip() {
         <Text fontWeight="800" fontSize={18} color={coworkUi.text} letterSpacing={-0.3}>
           Your upcoming meetings
         </Text>
-        <Link href={coWorkRoutes.meetings} asChild>
+        <AppLink href={coWorkRoutes.meetings} asChild>
           <Text fontSize={13} fontWeight="600" color={coworkUi.brand} cursor="pointer">
             See all
           </Text>
-        </Link>
+        </AppLink>
       </XStack>
 
       {loading ? (
@@ -120,11 +121,11 @@ export function UpcomingMeetingsStrip() {
             No meetings yet. Schedule one or start an instant session.
           </Text>
           <XStack gap="$2" flexWrap="wrap">
-            <Link href={coWorkRoutes.schedule} asChild>
+            <AppLink href={coWorkRoutes.schedule} asChild>
               <Button tone="primary" size="$3" borderRadius={999}>
                 Schedule
               </Button>
-            </Link>
+            </AppLink>
           </XStack>
         </YStack>
       ) : (

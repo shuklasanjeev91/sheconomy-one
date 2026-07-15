@@ -1,6 +1,5 @@
-import { Redirect } from 'one'
-
 import { AuthSignInFlow } from '~/components/auth/AuthSignInFlow'
+import { SpaRedirect } from '~/components/navigation/SpaRedirect'
 import { PageCenter } from '~/components/layout'
 import { Spinner } from '~/components/ui'
 import { useAuth } from '~/hooks/useAuth'
@@ -23,7 +22,7 @@ export default function SignInScreen() {
   }
 
   if (isAuthenticated) {
-    return <Redirect href={sanitizeReturnPath(getReturnToFromLocation()) as import('one').Href} />
+    return <SpaRedirect href={sanitizeReturnPath(getReturnToFromLocation()) as import('one').Href} />
   }
 
   return <AuthSignInFlow returnTo={getReturnToFromLocation()} />

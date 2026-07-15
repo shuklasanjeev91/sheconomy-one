@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
-import { Link } from 'one'
+import { AppLink } from '~/components/navigation/AppLink'
+
 import { Share } from 'react-native'
 
 import { CommercePanel } from '~/commerce/components'
@@ -106,11 +107,11 @@ export function SellerLowStockCard({ shopId }: SellerLowStockCardProps) {
           </XStack>
         ))}
       </YStack>
-      <Link href={vendorRoutes.products} asChild>
+      <AppLink href={vendorRoutes.products} asChild>
         <Button tone="outline" size="$3" borderRadius={999} alignSelf="flex-start">
           Manage inventory
         </Button>
-      </Link>
+      </AppLink>
     </CommercePanel>
   )
 }

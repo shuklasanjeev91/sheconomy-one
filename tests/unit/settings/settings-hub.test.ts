@@ -11,6 +11,7 @@ describe('settings hub routes', () => {
   it('builds section hrefs under /settings', () => {
     expect(String(appRoutes.settings)).toBe('/settings')
     expect(String(appRoutes.settingsSection('account'))).toBe('/settings/account')
+    expect(String(appRoutes.settingsSection('security'))).toBe('/settings/security')
     expect(String(appRoutes.settingsSection('co-work'))).toBe('/settings/co-work')
   })
 })

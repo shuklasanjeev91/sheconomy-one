@@ -1,6 +1,5 @@
-import { Link } from 'one'
-
 import { Image, XStack } from '~/components/ui'
+import { AppLink } from '~/components/navigation/AppLink'
 import { getSheconomyLogoUrl } from '~/lib/supabase/brand'
 import { routes } from '~/lib/routes'
 
@@ -15,7 +14,7 @@ export function NavLogo({ compact, href = routes.commerce.home }: NavLogoProps) 
   const logoUrl = getSheconomyLogoUrl(compact ? 'icon' : 'primary')
 
   return (
-    <Link href={href} replace asChild>
+    <AppLink href={href} replace asChild>
       <XStack
         alignItems="center"
         cursor="pointer"
@@ -31,6 +30,6 @@ export function NavLogo({ compact, href = routes.commerce.home }: NavLogoProps) 
           alt={`${BRAND_NAME} home`}
         />
       </XStack>
-    </Link>
+    </AppLink>
   )
 }

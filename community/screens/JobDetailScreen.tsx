@@ -1,4 +1,5 @@
-import { Link, useParams, useRouter } from 'one'
+import { useParams, useRouter } from 'one'
+import { AppLink } from '~/components/navigation/AppLink'
 import { useEffect, useState } from 'react'
 
 import { CommunityCard } from '~/community/components/CommunityCard'
