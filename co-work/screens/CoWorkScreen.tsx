@@ -93,6 +93,9 @@ export function CoWorkScreen() {
         title: `${hostLabel} meeting`,
         startNow: true,
       })
+      if (!meeting.meeting_code) {
+        throw new Error('Meeting was created without a join code. Please try again.')
+      }
       recordMeetingCode(meeting.meeting_code)
       router.push(coWorkRoutes.meetingLive(meeting.meeting_code))
     } catch (createError) {
