@@ -22,7 +22,7 @@ import type { ListingDetails } from '~/lib/listing/listing.service'
 import { LISTING_STATUS } from '~/lib/listing/listing.type'
 import { formatListingPrice, getPrimaryListingImage } from '~/lib/listing/listing.utils'
 import { overlayBackdropStyle } from '~/lib/layout/styles'
-import { commerceRoutes } from '~/lib/routes'
+import { commerceRoutes, vendorRoutes } from '~/lib/routes'
 import { useAppDispatch, useAppSelector } from '~/lib/store/hooks'
 import type { AppUiTokens } from '~/lib/theme/app-ui'
 
@@ -232,20 +232,13 @@ export function VendorListingDetailDrawer({
                     </Button>
                   </Link>
                 ) : null}
-                <Button
-                  tone="primary"
-                  size="$3"
-                  borderRadius={999}
-                  flex={isDesktop ? undefined : 1}
-                  onPress={() =>
-                    toast.show('Edit flow coming soon', {
-                      tone: 'info',
-                      message: 'Full listing editing will connect to the create flow in a follow-up.',
-                    })
-                  }
-                >
-                  Edit
-                </Button>
+                {listingId ? (
+                  <Link href={vendorRoutes.editListing(listingId)} asChild>
+                    <Button tone="primary" size="$3" borderRadius={999} flex={isDesktop ? undefined : 1}>
+                      Edit
+                    </Button>
+                  </Link>
+                ) : null}
               </XStack>
             </XStack>
           </YStack>
