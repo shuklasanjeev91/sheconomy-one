@@ -1,0 +1,257 @@
+import { Platform } from 'react-native'
+
+import {
+  FaceCaptureOverlay,
+  VerificationSteps,
+} from '~/components/gender-verification/GenderVerificationPanel'
+import { GenderVerificationErrorBoundary } from '~/components/gender-verification/GenderVerificationErrorBoundary'
+import { Button, Icons, ScrollView, Text, XStack, YStack } from '~/components/ui'
+import { getShadowStyle, radius } from '~/config/tokens'
+import { BRAND_NAME } from '~/config/brand'
+import { useAppLayout } from '~/hooks/useAppLayout'
+import { useGenderVerification } from '~/hooks/useGenderVerification'
+import { toFriendlyGenderError } from '~/lib/gender-verification'
+import { useAppUi } from '~/lib/theme/useAppUi'
+
+type GenderVerificationModalProps = {
+  open: boolean
+  /** Dismiss the modal (postpone verification). */
+  onClose: () => void
+  /** Fired once the member is verified — the host refreshes the profile here. */
+  onVerified: () => void
+}
+
+/**
+ * App-wide "Human Verification" popup. Reuses the shared liveness hook and panel
+ * (3-blink MediaPipe check + on-device gender estimate) but presents it as a
+ * dismissible modal instead of a full page. The flow is wrapped in
+ * `GenderVerificationErrorBoundary` so any failure — including a 413
+ * image-too-large — is shown with a friendly, actionable message.
+ */
+export function GenderVerificationModal({ open, onClose, onVerified }: GenderVerificationModalProps) {
+  if (!open) return null
+
+  // Mounted only while open so the camera stream is released on close (the
+  // liveness hook stops all tracks on unmount).
+  return <GenderVerificationModalShell onClose={onClose} onVerified={onVerified} />
+}
+
+function GenderVerificationModalShell({
+  onClose,
+  onVerified,
+}: Omit<GenderVerificationModalProps, 'open'>) {
+  const ui = useAppUi()
+  const { isDesktop } = useAppLayout()
+
+  return (
+    <YStack
+      position={Platform.OS === 'web' ? ('fixed' as never) : 'absolute'}
+      top={0}
+      left={0}
+      right={0}
+      bottom={0}
+      zIndex={200_000}
+      backgroundColor="rgba(0,0,0,0.55)"
+      alignItems="center"
+      justifyContent={isDesktop ? 'center' : 'flex-end'}
+      padding={isDesktop ? '$4' : 0}
+    >
+      <YStack
+        width="100%"
+        maxWidth={isDesktop ? 560 : undefined}
+        flex={isDesktop ? undefined : 1}
+        maxHeight={isDesktop ? '90%' : undefined}
+        backgroundColor={ui.surface}
+        borderRadius={isDesktop ? radius.card : 0}
+        borderWidth={isDesktop ? 1 : 0}
+        borderColor={ui.borderSubtle}
+        overflow="hidden"
+        style={isDesktop ? getShadowStyle('lg') : undefined}
+      >
+        <ModalHeader ui={ui} onClose={onClose} />
+        <ScrollView contentContainerStyle={{ padding: 20, gap: 20 }} showsVerticalScrollIndicator={false}>
+          <GenderVerificationErrorBoundary scope="Modal">
+            <VerificationFlow onClose={onClose} onVerified={onVerified} />
+          </GenderVerificationErrorBoundary>
+        </ScrollView>
+      </YStack>
+    </YStack>
+  )
+}
+
+function ModalHeader({
+  ui,
+  onClose,
+}: {
+  ui: ReturnType<typeof useAppUi>
+  onClose: () => void
+}) {
+  return (
+    <XStack
+      alignItems="center"
+      justifyContent="space-between"
+      paddingHorizontal="$4"
+      paddingVertical="$3.5"
+      borderBottomWidth={1}
+      borderBottomColor={ui.borderSubtle}
+      backgroundColor={ui.background}
+    >
+      <XStack alignItems="center" gap="$3" flex={1}>
+        <YStack
+          width={40}
+          height={40}
+          borderRadius={999}
+          alignItems="center"
+          justifyContent="center"
+          backgroundColor={ui.roseSurface}
+        >
+          <Icons.Shield size={20} color={ui.brand} />
+        </YStack>
+        <YStack flex={1}>
+          <Text fontSize={16} fontWeight="800" color={ui.text}>
+            Human verification
+          </Text>
+          <Text fontSize={12} color={ui.textMuted}>
+            Secure, women-first identity check
+          </Text>
+        </YStack>
+      </XStack>
+      <Button
+        size="$2"
+        circular
+        chromeless
+        onPress={onClose}
+        aria-label="Close verification"
+        icon={<Icons.X size={20} color={ui.textSecondary} />}
+      />
+    </XStack>
+  )
+}
+
+function VerificationFlow({
+  onClose,
+  onVerified,
+}: {
+  onClose: () => void
+  onVerified: () => void
+}) {
+  const ui = useAppUi()
+
+  const verification = useGenderVerification({ onVerified })
+
+  const isRunning =
+    verification.phase !== 'idle' &&
+    verification.phase !== 'error' &&
+    verification.phase !== 'success'
+
+  const friendlyError = verification.error ? toFriendlyGenderError(verification.error) : null
+
+  if (verification.phase === 'success') {
+    return (
+      <YStack alignItems="center" gap="$3" paddingVertical="$4">
+        <YStack
+          width={64}
+          height={64}
+          borderRadius={999}
+          alignItems="center"
+          justifyContent="center"
+          backgroundColor="rgba(22, 163, 74, 0.12)"
+        >
+          <Icons.ShieldCheck size={32} color="#16a34a" />
+        </YStack>
+        <Text fontSize={18} fontWeight="800" color={ui.text} textAlign="center">
+          You’re verified!
+        </Text>
+        <Text fontSize={14} color={ui.textMuted} textAlign="center" maxWidth={360} lineHeight={20}>
+          Full access to the {BRAND_NAME} community and seller tools is now unlocked.
+        </Text>
+        <Button tone="primary" size="$4" borderRadius={radius.pill} width="100%" onPress={onClose}>
+          Continue
+        </Button>
+      </YStack>
+    )
+  }
+
+  return (
+    <YStack gap="$4">
+      {verification.phase === 'idle' ? (
+        <YStack gap="$2">
+          <Text fontSize={15} color={ui.textSecondary} lineHeight={22}>
+            To keep {BRAND_NAME} women-first, we run a quick on-device liveness check. Center your
+            face, then blink naturally {verification.requiredBlinks} times when prompted. Your video
+            never leaves your device — only the verification result is saved.
+          </Text>
+        </YStack>
+      ) : null}
+
+      <VerificationSteps phase={verification.phase} />
+
+      <FaceCaptureOverlay
+        containerRef={verification.containerRef}
+        phase={verification.phase}
+        instruction={verification.instruction}
+        blinkCount={verification.blinkCount}
+        requiredBlinks={verification.requiredBlinks}
+        cameraRef={'cameraRef' in verification ? verification.cameraRef : undefined}
+        analyzerRef={'analyzerRef' in verification ? verification.analyzerRef : undefined}
+        cameraPermission={
+          'cameraPermission' in verification ? verification.cameraPermission : undefined
+        }
+        onCameraReady={'onCameraReady' in verification ? verification.onCameraReady : undefined}
+        onAnalyzerReady={'onAnalyzerReady' in verification ? verification.onAnalyzerReady : undefined}
+      />
+
+      {friendlyError ? (
+        <YStack
+          padding="$3"
+          borderRadius={radius.chip}
+          backgroundColor="rgba(180, 83, 9, 0.08)"
+          borderWidth={1}
+          borderColor="rgba(180, 83, 9, 0.2)"
+          gap="$1.5"
+        >
+          <XStack alignItems="center" gap="$2">
+            <Icons.AlertTriangle size={16} color="#b45309" />
+            <Text fontSize={13} fontWeight="700" color="#b45309">
+              Let’s try that again
+            </Text>
+          </XStack>
+          <Text color={ui.textSecondary} fontSize={13} lineHeight={19}>
+            {friendlyError}
+          </Text>
+        </YStack>
+      ) : null}
+
+      <YStack gap="$2.5">
+        <Button
+          tone="primary"
+          size="$4"
+          borderRadius={radius.pill}
+          disabled={isRunning || !verification.supported}
+          onPress={() => {
+            void verification.start()
+          }}
+          icon={verification.phase === 'idle' ? <Icons.Camera size={18} color={ui.onBrand} /> : undefined}
+        >
+          {verification.phase === 'idle'
+            ? 'Start verification'
+            : verification.phase === 'error'
+              ? 'Restarting…'
+              : 'Verification in progress…'}
+        </Button>
+
+        {verification.phase === 'error' ? (
+          <Button tone="outline" size="$4" borderRadius={radius.pill} onPress={verification.reset}>
+            Try again
+          </Button>
+        ) : null}
+
+        <Button chromeless size="$3" onPress={onClose}>
+          <Text color={ui.textMuted} fontSize={14}>
+            Maybe later
+          </Text>
+        </Button>
+      </YStack>
+    </YStack>
+  )
+}

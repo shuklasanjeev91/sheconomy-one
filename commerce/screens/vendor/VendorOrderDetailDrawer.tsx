@@ -14,6 +14,9 @@ import {
   useAppToast,
 } from '~/components/ui'
 import { getShadowStyle, radius } from '~/config/tokens'
+import { useLockBodyScroll } from '~/hooks/useLockBodyScroll'
+import { overlayBackdropStyle } from '~/lib/layout/styles'
+import { downloadOrderInvoice } from '~/lib/orders/order-invoice'
 import { formatOrderAmount, formatOrderDate } from '~/lib/orders/order.utils'
 import type { OrderPayment } from '~/lib/orders/payment.type'
 import type { OrderAddressSummary, VendorOrderItem } from '~/lib/orders/vendor-orders.type'
@@ -35,13 +38,6 @@ type VendorOrderDetailDrawerProps = {
   role: string | null
   onClose: () => void
   onAdvance: (item: VendorOrderItem, target: VendorOrderAction['target']) => void
-}
-
-function edgeRightStyle() {
-  return Platform.select({
-    web: { position: 'fixed' as const, top: 0, right: 0, bottom: 0 },
-    default: { position: 'absolute' as const, top: 0, right: 0, bottom: 0 },
-  })
 }
 
 function addressLines(address: OrderAddressSummary | null | undefined): string[] {
@@ -68,25 +64,40 @@ export function VendorOrderDetailDrawer({
 }: VendorOrderDetailDrawerProps) {
   const toast = useAppToast()
 
+  // Lock background scroll while open (web); no-op on native.
+  useLockBodyScroll(open)
+
   if (!open) return null
 
+  // Rendered as two fixed-position siblings (backdrop + panel) with a very high
+  // z-index — mirroring the proven overlay pattern used by the vendor layout and
+  // ListingFiltersShell. No Portal: portaling here detaches the subtree from the
+  // app's renderer/context (the "multiple renderers" warning) and swallows all
+  // pointer events, so the drawer becomes visible but un-clickable.
+  const panelPositionStyle =
+    Platform.OS === 'web'
+      ? ({ position: 'fixed' as const, top: 0, right: 0, bottom: 0, boxShadow: '-4px 0 24px rgba(0,0,0,0.18)' } as const)
+      : ({ position: 'absolute' as const, top: 0, right: 0, bottom: 0 } as const)
+
   return (
-    <YStack style={{ position: Platform.OS === 'web' ? ('fixed' as const) : ('absolute' as const), top: 0, left: 0, right: 0, bottom: 0 }} zIndex={400}>
+    <>
       <YStack
-        fullscreen
         backgroundColor="rgba(0,0,0,0.5)"
+        zIndex={100000}
+        cursor="pointer"
+        style={overlayBackdropStyle()}
         animation="quick"
         enterStyle={{ opacity: 0 }}
         onPress={onClose}
       />
       <YStack
-        style={edgeRightStyle()}
         width={isDesktop ? PANEL_WIDTH : '100%'}
         maxWidth="100%"
-        height="100%"
         backgroundColor={ui.background}
         borderLeftWidth={isDesktop ? 1 : 0}
         borderLeftColor={ui.borderSubtle}
+        zIndex={100001}
+        style={panelPositionStyle}
         animation="quick"
         enterStyle={{ x: PANEL_WIDTH }}
       >
@@ -108,12 +119,18 @@ export function VendorOrderDetailDrawer({
               if (email) void Linking.openURL(`mailto:${email}`).catch(() => undefined)
               else toast.show('No customer email on file', { tone: 'danger' })
             }}
-            onDownload={() =>
-              toast.show('Invoice export coming soon', {
-                tone: 'info',
-                message: 'PDF invoices will be available once billing export is enabled.',
-              })
-            }
+            onDownload={() => {
+              const result = downloadOrderInvoice(item, { brandColor: ui.brand })
+              if (!result.ok) {
+                toast.show('Download unavailable', {
+                  tone: result.reason === 'unsupported' ? 'info' : 'danger',
+                  message:
+                    result.reason === 'unsupported'
+                      ? 'Invoice download is available on the web dashboard.'
+                      : 'Could not open the invoice. Please try again.',
+                })
+              }
+            }}
           />
         ) : (
           <YStack flex={1} alignItems="center" justifyContent="center" padding="$6" gap="$2">
@@ -125,7 +142,7 @@ export function VendorOrderDetailDrawer({
           </YStack>
         )}
       </YStack>
-    </YStack>
+    </>
   )
 }
 
@@ -193,7 +210,13 @@ function DrawerBody({ ui, item, updating, payments, role, onClose, onAdvance, on
 
       <ScrollView
         flex={1}
+        minHeight={0}
         showsVerticalScrollIndicator={false}
+        style={
+          Platform.OS === 'web'
+            ? ({ overflowY: 'auto', overscrollBehavior: 'contain', minHeight: 0, flexBasis: 0 } as const)
+            : undefined
+        }
         contentContainerStyle={{ padding: 20, gap: 16 }}
       >
         {/* Status / total / date tiles */}

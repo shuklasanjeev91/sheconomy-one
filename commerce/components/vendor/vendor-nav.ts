@@ -13,7 +13,71 @@ export type VendorNavItem = {
   href: Href
   /** Whether the destination is a real, functional page (vs. a "coming soon" stub). */
   ready?: boolean
+  /** Nested rows revealed by expanding this item (e.g. Settings sections). */
+  children?: VendorNavItem[]
 }
+
+/** Build a `/vendor/settings?section=<id>` link for a settings sub-item. */
+function settingsHref(section: string): Href {
+  return `${String(vendorRoutes.settings)}?section=${section}` as Href
+}
+
+/**
+ * Settings sub-sections, surfaced as a dropdown under the main "Settings" item.
+ * Only **General** is functional today; the rest render a "coming soon" stub.
+ */
+const SETTINGS_CHILDREN: VendorNavItem[] = [
+  {
+    id: 'settings-general',
+    label: 'General',
+    description: 'Shop identity, hours, categories, and currency.',
+    icon: Icons.SlidersHorizontal,
+    href: settingsHref('general'),
+    ready: true,
+  },
+  {
+    id: 'settings-connect',
+    label: 'Connect',
+    description: 'Sync Shopify, Instagram, or ERP tools.',
+    icon: Icons.Share2,
+    href: settingsHref('connect'),
+  },
+  {
+    id: 'settings-payments',
+    label: 'Payments',
+    description: 'Payout accounts and tax documentation.',
+    icon: Icons.CreditCard,
+    href: settingsHref('payments'),
+  },
+  {
+    id: 'settings-notifications',
+    label: 'Notifications',
+    description: 'Order, marketing, and customer alerts.',
+    icon: Icons.Bell,
+    href: settingsHref('notifications'),
+  },
+  {
+    id: 'settings-security',
+    label: 'Security',
+    description: 'Sign-in, team access, and permissions.',
+    icon: Icons.ShieldCheck,
+    href: settingsHref('security'),
+  },
+  {
+    id: 'settings-shipping',
+    label: 'Shipping',
+    description: 'Delivery zones and courier partners.',
+    icon: Icons.Truck,
+    href: settingsHref('shipping'),
+  },
+  {
+    id: 'settings-returns',
+    label: 'Returns',
+    description: 'Return windows and refund rules.',
+    icon: Icons.Undo2,
+    href: settingsHref('returns'),
+  },
+]
 
 export type VendorNavGroup = {
   title: string
@@ -90,8 +154,9 @@ export const VENDOR_NAV_GROUPS: VendorNavGroup[] = [
         label: 'Shop settings',
         description: 'Storefront config — personal account prefs live at Account settings.',
         icon: Icons.Settings,
-        href: vendorRoutes.settings,
+        href: SETTINGS_CHILDREN[0].href,
         ready: true,
+        children: SETTINGS_CHILDREN,
       },
     ],
   },
@@ -107,7 +172,8 @@ export function getActiveVendorNavItem(pathname: string): VendorNavItem {
 
   return (
     VENDOR_NAV_ITEMS.find((item) => {
-      const href = String(item.href).replace(/\/+$/, '')
+      // Compare on the path only — nav hrefs may carry query strings (e.g. `?section=`).
+      const href = String(item.href).split('?')[0].replace(/\/+$/, '')
       return normalized === href || normalized.startsWith(`${href}/`)
     }) ?? VENDOR_NAV_ITEMS[0]
   )

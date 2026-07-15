@@ -16,6 +16,7 @@ import { appShellStyle, meetingViewportStyle } from '~/lib/platform/viewport'
 import { useAppUi } from '~/lib/theme/useAppUi'
 
 import { IncomingCallHost } from '~/chat/components/IncomingCallHost'
+import { GenderVerificationHost } from '~/components/gender-verification/GenderVerificationHost'
 
 import { AppDesktopHeader } from './AppDesktopHeader'
 import { AppMobileBottomTabs } from './AppMobileBottomTabs'
@@ -132,6 +133,7 @@ export function AppShell({ children }: AppShellProps) {
             {showCommerceFooter ? <CommerceDesktopFooter /> : null}
             {!isDesktop ? <AppMobileBottomTabs /> : null}
             <IncomingCallHost />
+            <GenderVerificationHost />
           </ScreenFill>
         </AppBarScrollProvider>
       </AppAccessGate>
