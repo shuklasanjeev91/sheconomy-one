@@ -4,7 +4,8 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "postinstall": "one patch || true",
+    "eas-build-pre-install": "corepack enable",
+    "postinstall": "one patch || true && node scripts/strip-datetimepicker-flow.cjs",
     "android": "one run:android",
     "build": "VXRN_FORCE_PATCH=1 ONE_CACHE_KEY=${ONE_CACHE_KEY:-202607151} one build && node scripts/patch-vercel-output.mjs",
     "build:web": "VXRN_FORCE_PATCH=1 ONE_CACHE_KEY=${ONE_CACHE_KEY:-202607151} one build && node scripts/patch-vercel-output.mjs",
@@ -99,8 +100,10 @@
   "devDependencies": {
     "@playwright/test": "^1.61.1",
     "@react-native-community/cli": "^20.1.2",
+    "@react-native/metro-config": "0.83.2",
     "@tamagui/vite-plugin": "2.4.0",
     "@types/react": "^19.2.2",
+    "eas-cli": "16.28.0",
     "typescript": "5.9.3",
     "vite": "^8.0.13",
     "vitest": "^3.2.4"

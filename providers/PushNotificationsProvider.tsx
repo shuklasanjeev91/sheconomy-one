@@ -4,6 +4,7 @@ import {
   useContext,
   useEffect,
   useMemo,
+  useRef,
   useState,
   type ReactNode,
 } from 'react'
@@ -13,6 +14,10 @@ import {
   registerPushDevice,
 } from '~/lib/notifications/push-devices'
 import pushClient from '~/lib/notifications/push-client'
+import {
+  markPushAutoPromptAttempted,
+  shouldAutoPromptPush,
+} from '~/lib/notifications/push-auto-prompt'
 import {
   getOneSignalAppId,
   pathFromNotificationUrl,
@@ -49,6 +54,7 @@ export function PushNotificationsProvider({ children }: { children: ReactNode })
   const [permissionGranted, setPermissionGranted] = useState(false)
   const [playerId, setPlayerId] = useState<string | null>(null)
   const [isBusy, setIsBusy] = useState(false)
+  const autoPromptStartedRef = useRef(false)
 
   const syncDevice = useCallback(async () => {
     if (!isConfigured || !user?.id) {
@@ -60,6 +66,9 @@ export function PushNotificationsProvider({ children }: { children: ReactNode })
       await pushClient.login(user.id)
       const permitted = await pushClient.getPermission()
       setPermissionGranted(permitted)
+      if (permitted) {
+        await pushClient.optIn()
+      }
       const id = await pushClient.getPlayerId()
       setPlayerId(id)
       if (permitted && id) {
@@ -77,11 +86,15 @@ export function PushNotificationsProvider({ children }: { children: ReactNode })
 
   useEffect(() => {
     if (!isConfigured) return
-    void pushClient.init()
+    const timer = setTimeout(() => {
+      void pushClient.init()
+    }, 1_500)
+    return () => clearTimeout(timer)
   }, [isConfigured])
 
   useEffect(() => {
     if (!user?.id) {
+      autoPromptStartedRef.current = false
       void pushClient.logout()
       setPlayerId(null)
       return
@@ -150,6 +163,36 @@ export function PushNotificationsProvider({ children }: { children: ReactNode })
       setIsBusy(false)
     }
   }, [isConfigured, user?.id])
+
+  useEffect(() => {
+    if (!isConfigured || !user?.id || autoPromptStartedRef.current) return
+
+    let cancelled = false
+    const timer = setTimeout(() => {
+      void (async () => {
+        if (cancelled || autoPromptStartedRef.current) return
+
+        const permitted = await pushClient.getPermission()
+        if (cancelled) return
+        if (permitted) {
+          await markPushAutoPromptAttempted(true)
+          return
+        }
+
+        const shouldPrompt = await shouldAutoPromptPush()
+        if (cancelled || !shouldPrompt) return
+
+        autoPromptStartedRef.current = true
+        const result = await enablePush()
+        await markPushAutoPromptAttempted(result.ok)
+      })()
+    }, 2_500)
+
+    return () => {
+      cancelled = true
+      clearTimeout(timer)
+    }
+  }, [enablePush, isConfigured, user?.id])
 
   const disablePush = useCallback(async () => {
     if (!user?.id) return { ok: false, error: 'Not signed in' }

@@ -1,12 +1,15 @@
 import { useEffect, useState } from 'react'
 
 import { Icons, Image, YStack } from '~/components/ui'
+import { ListingMediaPreview } from '~/components/media/ListingMediaPreview'
+import { listingMediaKind } from '~/commerce/lib/listing-media'
 import { getListingImageUrls } from '~/lib/listing-images'
 import { useAppUi } from '~/lib/theme/useAppUi'
 
 type ListingImageProps = {
   imageUrls?: string[] | null
   fallbackUrl?: string | null
+  imageType?: string | null
   alt: string
   width?: number | string
   height?: number | string
@@ -18,6 +21,7 @@ type ListingImageProps = {
 export function ListingImage({
   imageUrls,
   fallbackUrl,
+  imageType,
   alt,
   width = '100%',
   height = '100%',
@@ -29,6 +33,7 @@ export function ListingImage({
   const [activeIndex, setActiveIndex] = useState(0)
   const [failed, setFailed] = useState(false)
   const src = urls[activeIndex] ?? null
+  const kind = src ? listingMediaKind(src, imageType) : 'image'
 
   useEffect(() => {
     setActiveIndex(0)
@@ -47,6 +52,20 @@ export function ListingImage({
       >
         <Icons.Image size={placeholderIconSize} color={ui.brand} opacity={0.7} />
       </YStack>
+    )
+  }
+
+  if (kind === 'video') {
+    return (
+      <ListingMediaPreview
+        url={src}
+        kind="video"
+        alt={alt}
+        width={width}
+        height={height}
+        objectFit={objectFit}
+        placeholderIconSize={placeholderIconSize}
+      />
     )
   }
 

@@ -1,6 +1,11 @@
 import { useCallback, useRef } from 'react'
 import { findNodeHandle, NativeModules, Platform, View } from 'react-native'
 import Constants from 'expo-constants'
+
+import { ensureLiveKitNativeGlobals } from '~/lib/livekit/register-native-globals'
+
+ensureLiveKitNativeGlobals()
+
 import { useLocalParticipant, useRoomContext } from '@livekit/react-native'
 import { ScreenCapturePickerView } from '@livekit/react-native-webrtc'
 

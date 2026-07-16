@@ -250,9 +250,6 @@ function MenusDemo() {
             <ContextMenuItem>
               <Text>Copy</Text>
             </ContextMenuItem>
-            <ContextMenuItem>
-              <Text>Paste</Text>
-            </ContextMenuItem>
           </ContextMenuContent>
         </ContextMenu.Portal>
       </ContextMenu>

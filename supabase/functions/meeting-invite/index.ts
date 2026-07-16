@@ -1,6 +1,8 @@
 import 'jsr:@supabase/functions-js/edge-runtime.d.ts'
 import { createClient } from 'jsr:@supabase/supabase-js@2'
 
+import { appBaseUrl, sendResendEmail } from '../_shared/resend.ts'
+
 const BRAND_NAME = 'SHEconomy'
 const BRAND_COWORK_LABEL = `${BRAND_NAME} Co-Work`
 
@@ -38,31 +40,6 @@ function mergeInvitees(existing: Invitee[], next: Invitee[]) {
     map.set(inviteeKey(item), { ...item, invited_at: now, status: 'sent' })
   }
   return [...map.values()]
-}
-
-async function sendResendEmail(apiKey: string, payload: {
-  to: string
-  subject: string
-  html: string
-}) {
-  const response = await fetch('https://api.resend.com/emails', {
-    method: 'POST',
-    headers: {
-      Authorization: `Bearer ${apiKey}`,
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({
-      from: `${BRAND_COWORK_LABEL} <cowork@sheconomy.com>`,
-      to: [payload.to],
-      subject: payload.subject,
-      html: payload.html,
-    }),
-  })
-
-  if (!response.ok) {
-    const text = await response.text()
-    throw new Error(text || 'Email provider error')
-  }
 }
 
 Deno.serve(async (req) => {
@@ -152,7 +129,7 @@ Deno.serve(async (req) => {
       .maybeSingle()
 
     const hostName = hostProfile?.full_name || hostProfile?.username || `A ${BRAND_NAME} host`
-    const joinUrl = `${Deno.env.get('PUBLIC_APP_URL') ?? 'https://sheconomy.com'}/co-work/meeting/${meeting.meeting_code}`
+    const joinUrl = `${appBaseUrl()}/co-work/meeting/${meeting.meeting_code}`
     const when = meeting.scheduled_at
       ? new Date(meeting.scheduled_at).toLocaleString('en-IN', {
           timeZone: meeting.time_zone ?? 'Asia/Kolkata',
@@ -207,7 +184,12 @@ Deno.serve(async (req) => {
 
       if (resendKey) {
         try {
-          await sendResendEmail(resendKey, { to: email, subject, html })
+          await sendResendEmail(resendKey, {
+            to: email,
+            subject,
+            html,
+            from: `${BRAND_COWORK_LABEL} <cowork@sheconomy.com>`,
+          })
           emailsSent += 1
         } catch {
           mailtoLinks.push(`mailto:${email}`)

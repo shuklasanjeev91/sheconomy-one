@@ -1,6 +1,6 @@
 module.exports = {
   // Setting up and overriding some react-native CLI commands.
   // Necessary for building native iOS and Android apps,
-  // where Vite shall be used instead of Metro for JS bundling during the build precess.
+  // where Vite shall be used instead of Metro for JS bundling during the build process.
   commands: [...require('one/react-native-commands')],
 }

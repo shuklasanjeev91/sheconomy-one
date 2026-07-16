@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { AppLink } from '~/components/navigation/AppLink'
 
 import { ProfileLink } from '~/community/components/ProfileLink'
@@ -7,6 +7,7 @@ import {
   fetchRecentProfileViewers,
   type ProfileViewer,
 } from '~/community/lib/profile-views'
+import { ScreenSearchField } from '~/components/search'
 import {
   AppBottomSheet,
   Avatar,
@@ -19,6 +20,7 @@ import {
 } from '~/components/ui'
 import { getShadowStyle, radius } from '~/config/tokens'
 import { communityRoutes } from '~/lib/routes'
+import { filterBySearchQuery } from '~/lib/search'
 import { useAppUi } from '~/lib/theme/useAppUi'
 
 function formatViewedAt(value: string) {
@@ -47,6 +49,21 @@ export function WhoViewedYourProfileCard({
   const [open, setOpen] = useState(false)
   const [loading, setLoading] = useState(false)
   const [viewers, setViewers] = useState<ProfileViewer[]>([])
+  const [query, setQuery] = useState('')
+
+  const filteredViewers = useMemo(
+    () =>
+      filterBySearchQuery(viewers, query, (viewer) => [
+        viewer.fullName,
+        viewer.headline,
+        viewer.username,
+      ]),
+    [viewers, query],
+  )
+
+  useEffect(() => {
+    if (!open) setQuery('')
+  }, [open])
 
   useEffect(() => {
     if (!open) return
@@ -108,6 +125,12 @@ export function WhoViewedYourProfileCard({
         onOpenChange={setOpen}
         title="Who viewed your profile"
       >
+        <ScreenSearchField
+          value={query}
+          onChangeText={setQuery}
+          placeholder="Search viewers"
+          clearable
+        />
         {loading ? (
           <YStack alignItems="center" paddingVertical="$6">
             <Spinner size="large" />
@@ -118,9 +141,15 @@ export function WhoViewedYourProfileCard({
               No signed-in viewers in the last 30 days yet. Share your profile to get discovered.
             </Text>
           </YStack>
+        ) : filteredViewers.length === 0 ? (
+          <YStack gap="$2" padding="$2">
+            <Text fontSize={14} color={ui.textMuted} lineHeight={20}>
+              No viewers match your search.
+            </Text>
+          </YStack>
         ) : (
           <YStack gap="$3" padding="$2">
-            {viewers.map((viewer) => (
+            {filteredViewers.map((viewer) => (
               <XStack key={`${viewer.viewerId}-${viewer.viewedAt}`} gap="$3" alignItems="center">
                 <ProfileLink userId={viewer.viewerId} username={viewer.username}>
                   <Avatar

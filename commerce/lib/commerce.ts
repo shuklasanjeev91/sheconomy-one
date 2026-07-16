@@ -678,26 +678,99 @@ function mapShopSummaryRow(
   }
 }
 
-/** Full shop directory for browse page — includes address for country filters. */
+export type ShopBrowsePageFilters = {
+  sort?:
+    | 'name_asc'
+    | 'name_desc'
+    | 'rating_high'
+    | 'rating_low'
+    | 'country_asc'
+    | 'country_desc'
+  /** Raw shop country value (code or name); `all` / empty = no filter. */
+  country?: string
+}
+
+/** Paginated shop directory for browse — no hard cap; load via infinite scroll. */
+export async function fetchShopsBrowsePage(
+  page: number,
+  pageSize = COMMERCE_PAGE_SIZE,
+  filters: ShopBrowsePageFilters = {},
+): Promise<PaginatedResult<ShopSummary> & { totalCount: number }> {
+  const from = page * pageSize
+  const to = from + pageSize - 1
+  const sort = filters.sort ?? 'rating_high'
+  const country = filters.country && filters.country !== 'all' ? filters.country : null
+
+  const select = country
+    ? 'id, shop_name, slug, logo_url, shop_description, average_rating, total_reviews, verified, shop_currency, shop_addresses!inner(city, state, country)'
+    : SHOP_BROWSE_SELECT
+
+  let query = supabase.from('shops').select(select, { count: 'exact' }).eq('is_active', true)
+
+  if (country) {
+    query = query.eq('shop_addresses.country', country)
+  }
+
+  switch (sort) {
+    case 'name_asc':
+      query = query.order('shop_name', { ascending: true })
+      break
+    case 'name_desc':
+      query = query.order('shop_name', { ascending: false })
+      break
+    case 'rating_low':
+      query = query
+        .order('average_rating', { ascending: true, nullsFirst: false })
+        .order('total_reviews', { ascending: true, nullsFirst: false })
+      break
+    case 'country_asc':
+    case 'country_desc':
+      // Nested address sort is unreliable; fall back to name then filter client-side labels.
+      query = query.order('shop_name', { ascending: sort === 'country_asc' })
+      break
+    case 'rating_high':
+    default:
+      query = query
+        .order('average_rating', { ascending: false, nullsFirst: false })
+        .order('total_reviews', { ascending: false, nullsFirst: false })
+      break
+  }
+
+  const { data, error, count } = await query.range(from, to)
+
+  if (error) {
+    return {
+      items: [],
+      page,
+      pageSize,
+      hasMore: false,
+      error: error.message,
+      totalCount: 0,
+    }
+  }
+
+  const items = (data ?? []).map((row) =>
+    mapShopSummaryRow(row as ShopSummary & { shop_addresses?: unknown }),
+  )
+  const total = count ?? 0
+
+  return {
+    items,
+    page,
+    pageSize,
+    hasMore: total ? to + 1 < total : items.length === pageSize,
+    error: null,
+    totalCount: total,
+  }
+}
+
+/** @deprecated Prefer fetchShopsBrowsePage — kept for callers that need a one-shot sample. */
 export async function fetchAllShopsForBrowse(): Promise<{
   items: ShopSummary[]
   error: string | null
 }> {
-  const { data, error } = await supabase
-    .from('shops')
-    .select(SHOP_BROWSE_SELECT)
-    .eq('is_active', true)
-    .order('shop_name', { ascending: true })
-    .limit(500)
-
-  if (error) {
-    return { items: [], error: error.message }
-  }
-
-  return {
-    items: (data ?? []).map((row) => mapShopSummaryRow(row as ShopSummary & { shop_addresses?: unknown })),
-    error: null,
-  }
+  const result = await fetchShopsBrowsePage(0, COMMERCE_PAGE_SIZE)
+  return { items: result.items, error: result.error }
 }
 
 export async function fetchShopsPage(

@@ -2,7 +2,9 @@ import { useEffect, useMemo, useState } from 'react'
 
 import { CommunityAdaptiveSheet } from '~/community/components/CommunityAdaptiveSheet'
 import { useCommunityUi } from '~/community/lib/community-theme'
-import { Button, Icons, Input, ScrollView, Text, XStack, YStack } from '~/components/ui'
+import { ScreenSearchField } from '~/components/search'
+import { Button, Icons, ScrollView, Text, XStack, YStack } from '~/components/ui'
+import { filterBySearchQuery } from '~/lib/search'
 import { radius } from '~/config/tokens'
 
 export type FilterOption = {
@@ -135,7 +137,7 @@ export function CommunityFilterSheet({
   value,
   onApply,
   multi = false,
-  searchable = false,
+  searchable = true,
   searchPlaceholder = 'Search',
 }: CommunityFilterSheetProps) {
   const communityUi = useCommunityUi()
@@ -150,9 +152,8 @@ export function CommunityFilterSheet({
   }, [open, value])
 
   const visibleOptions = useMemo(() => {
-    if (!searchable || !query.trim()) return options
-    const q = query.trim().toLowerCase()
-    return options.filter((option) => option.label.toLowerCase().includes(q))
+    if (!searchable) return options
+    return filterBySearchQuery(options, query, (option) => [option.label, option.hint])
   }, [options, query, searchable])
 
   function toggle(optionValue: string) {
@@ -183,26 +184,12 @@ export function CommunityFilterSheet({
   return (
     <CommunityAdaptiveSheet open={open} onOpenChange={onOpenChange} title={title}>
       {searchable ? (
-        <XStack
-          alignItems="center"
-          gap={8}
-          paddingHorizontal={12}
-          paddingVertical={10}
-          borderRadius={radius.chip}
-          borderWidth={1}
-          borderColor={communityUi.borderLight}
-          backgroundColor={communityUi.inputBg}
-        >
-          <Icons.Search size={18} color={communityUi.textMuted} />
-          <Input
-            flex={1}
-            value={query}
-            onChangeText={setQuery}
-            placeholder={searchPlaceholder}
-            borderWidth={0}
-            backgroundColor="transparent"
-          />
-        </XStack>
+        <ScreenSearchField
+          value={query}
+          onChangeText={setQuery}
+          placeholder={searchPlaceholder}
+          clearable
+        />
       ) : null}
 
       <YStack gap={2}>

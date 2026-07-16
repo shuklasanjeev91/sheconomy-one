@@ -1,6 +1,8 @@
 import { useEffect, useRef, useState } from 'react'
 import { Platform } from 'react-native'
 
+import { AdaptiveTypeaheadPanel } from '~/components/search/AdaptiveTypeaheadPanel'
+import { SuggestSectionHeader } from '~/components/search/SuggestSectionHeader'
 import { Icons, Input, Spinner, Text, XStack, YStack } from '~/components/ui'
 import {
   autocompletePlaces,
@@ -30,6 +32,8 @@ export function AddressAutocompleteField({
   const [suggestions, setSuggestions] = useState<PlaceSuggestion[]>([])
   const [loading, setLoading] = useState(false)
   const [hidden, setHidden] = useState(false)
+  const [focused, setFocused] = useState(false)
+  const [panelOpen, setPanelOpen] = useState(false)
   const sessionToken = useRef(createPlacesSessionToken())
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
@@ -62,6 +66,18 @@ export function AddressAutocompleteField({
     }
   }, [query, country, disabled, hidden])
 
+  useEffect(() => {
+    if (!focused) {
+      setPanelOpen(false)
+      return
+    }
+    if (query.trim().length >= 2) {
+      setPanelOpen(loading || suggestions.length > 0)
+    } else {
+      setPanelOpen(false)
+    }
+  }, [focused, loading, query, suggestions.length])
+
   async function handleSelect(suggestion: PlaceSuggestion) {
     setLoading(true)
     const details = await getPlaceDetails(suggestion.placeId, {
@@ -73,13 +89,14 @@ export function AddressAutocompleteField({
       onResolved(details.data)
       setQuery(details.data.formatted || suggestion.description)
       setSuggestions([])
+      setPanelOpen(false)
     }
   }
 
   if (hidden) return null
 
   return (
-    <YStack gap="$2" width="100%" zIndex={20}>
+    <YStack gap="$2" width="100%" position="relative" zIndex={20}>
       <XStack
         alignItems="center"
         gap="$2"
@@ -97,6 +114,8 @@ export function AddressAutocompleteField({
           value={query}
           editable={!disabled}
           onChangeText={setQuery}
+          onFocus={() => setFocused(true)}
+          onBlur={() => setTimeout(() => setFocused(false), 180)}
           placeholder={placeholder}
           autoComplete={Platform.OS === 'web' ? ('street-address' as never) : undefined}
           textContentType={Platform.OS === 'ios' ? 'fullStreetAddress' : undefined}
@@ -104,21 +123,29 @@ export function AddressAutocompleteField({
         {loading ? <Spinner size="small" /> : null}
       </XStack>
 
-      {suggestions.length > 0 ? (
-        <YStack
-          borderWidth={1}
-          borderColor={ui.borderSubtle}
-          borderRadius={12}
-          backgroundColor={ui.surface}
-          overflow="hidden"
-        >
+      <AdaptiveTypeaheadPanel
+        open={panelOpen}
+        onOpenChange={setPanelOpen}
+        title="Addresses"
+        maxHeight={480}
+        zIndex={500}
+        searchValue={query}
+        onSearchChange={setQuery}
+        searchPlaceholder={placeholder}
+      >
+        <YStack gap="$1" width="100%" paddingBottom="$2" paddingTop="$2">
+          <SuggestSectionHeader label="ADDRESSES" />
+          {loading && suggestions.length === 0 ? (
+            <YStack padding="$4" alignItems="center">
+              <Spinner size="small" />
+            </YStack>
+          ) : null}
           {suggestions.map((suggestion) => (
             <YStack
               key={suggestion.placeId}
               paddingHorizontal="$3"
               paddingVertical="$3"
-              borderBottomWidth={1}
-              borderBottomColor={ui.borderSubtle}
+              borderRadius={10}
               cursor="pointer"
               hoverStyle={{ backgroundColor: ui.surfaceMuted }}
               onPress={() => void handleSelect(suggestion)}
@@ -127,14 +154,14 @@ export function AddressAutocompleteField({
                 {suggestion.mainText}
               </Text>
               {suggestion.secondaryText ? (
-                <Text fontSize={12} color={ui.textMuted} numberOfLines={1}>
+                <Text fontSize={12} color={ui.textMuted} numberOfLines={2}>
                   {suggestion.secondaryText}
                 </Text>
               ) : null}
             </YStack>
           ))}
         </YStack>
-      ) : null}
+      </AdaptiveTypeaheadPanel>
     </YStack>
   )
 }

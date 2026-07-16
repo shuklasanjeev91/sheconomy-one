@@ -1,4 +1,7 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
+
+import { ScreenSearchField } from '~/components/search'
+import { filterBySearchQuery } from '~/lib/search'
 
 import { useChatTheme } from '~/chat/lib/chat-theme'
 import type { ChatEventPayload } from '~/chat/lib/types'
@@ -16,6 +19,9 @@ import {
 } from '~/components/ui'
 import { pickImages, pickedImageToBlob, type PickedImage } from '~/lib/media/pick-image'
 import { uploadEventCoverImage } from '~/lib/supabase/storage-upload'
+import { MediaDropZone } from '~/components/media/MediaDropZone'
+import { UploadProgressBar } from '~/components/media/UploadProgressBar'
+import { useUploadProgress } from '~/hooks/useUploadProgress'
 
 type EventPickerSheetProps = {
   open: boolean
@@ -58,10 +64,23 @@ export function EventPickerSheet({ open, onOpenChange, currentUserId, onPick }: 
   const [location, setLocation] = useState('')
   const [cover, setCover] = useState<PickedImage | null>(null)
   const [picking, setPicking] = useState(false)
+  const [query, setQuery] = useState('')
+  const { progress: uploadProgress, track: trackUpload, reset: resetUpload } = useUploadProgress()
+  const filteredEvents = useMemo(
+    () =>
+      filterBySearchQuery(events, query, (event) => [
+        event.title,
+        event.location,
+        event.meeting_url,
+        formatWhen(event.start_time),
+      ]),
+    [events, query],
+  )
 
   useEffect(() => {
     if (!open) return
     setMode('pick')
+    setQuery('')
     setLoading(true)
     fetchUpcomingEvents(0).then((result) => {
       setEvents(result.items)
@@ -104,13 +123,19 @@ export function EventPickerSheet({ open, onOpenChange, currentUserId, onPick }: 
     let imageUrl: string | undefined
     if (cover) {
       const blob = await pickedImageToBlob(cover)
-      const { data: uploaded, error: uploadError } = await uploadEventCoverImage(currentUserId, {
-        blob,
-        mimeType: cover.mimeType || blob.type || 'image/jpeg',
-        fileName: cover.fileName,
-      })
+      trackUpload(1)
+      const { data: uploaded, error: uploadError } = await uploadEventCoverImage(
+        currentUserId,
+        {
+          blob,
+          mimeType: cover.mimeType || blob.type || 'image/jpeg',
+          fileName: cover.fileName,
+        },
+        { onProgress: trackUpload },
+      )
       if (uploadError || !uploaded) {
         setSaving(false)
+        resetUpload()
         toast.show('Could not upload cover image', { tone: 'danger', message: uploadError ?? undefined })
         return
       }
@@ -126,6 +151,7 @@ export function EventPickerSheet({ open, onOpenChange, currentUserId, onPick }: 
       isFree: true,
     })
     setSaving(false)
+    resetUpload()
     if (error || !data) {
       toast.show('Could not create event', { tone: 'danger', message: error ?? undefined })
       return
@@ -144,7 +170,14 @@ export function EventPickerSheet({ open, onOpenChange, currentUserId, onPick }: 
         </XStack>
 
         {mode === 'pick' ? (
-          loading ? (
+          <>
+            <ScreenSearchField
+              value={query}
+              onChangeText={setQuery}
+              placeholder="Search events"
+              clearable
+            />
+            {loading ? (
             <XStack paddingVertical={20} justifyContent="center">
               <Spinner color={chat.brand} />
             </XStack>
@@ -155,9 +188,16 @@ export function EventPickerSheet({ open, onOpenChange, currentUserId, onPick }: 
                 No upcoming events. Create one instead.
               </Text>
             </YStack>
+          ) : filteredEvents.length === 0 ? (
+            <YStack paddingVertical={20} alignItems="center" gap={6}>
+              <Icons.Search size={26} color={chat.textMuted} />
+              <Text fontSize={14} color={chat.textMuted}>
+                No events match your search.
+              </Text>
+            </YStack>
           ) : (
             <YStack gap={6} maxHeight={320}>
-              {events.map((event) => (
+              {filteredEvents.map((event) => (
                 <XStack
                   key={event.id}
                   onPress={() => {
@@ -196,7 +236,8 @@ export function EventPickerSheet({ open, onOpenChange, currentUserId, onPick }: 
                 </XStack>
               ))}
             </YStack>
-          )
+          )}
+          </>
         ) : (
           <YStack gap={10}>
             <Input
@@ -240,6 +281,15 @@ export function EventPickerSheet({ open, onOpenChange, currentUserId, onPick }: 
               borderColor={chat.border}
             />
 
+            <MediaDropZone
+              disabled={picking || saving}
+              accept="image"
+              maxCount={1}
+              label="Drop a cover image"
+              onDrop={(items) => {
+                if (items[0]) setCover(items[0])
+              }}
+            >
             {cover ? (
               <YStack borderRadius={12} overflow="hidden" position="relative">
                 <Image src={cover.uri} width="100%" height={150} objectFit="cover" alt="" />
@@ -282,12 +332,17 @@ export function EventPickerSheet({ open, onOpenChange, currentUserId, onPick }: 
                   <>
                     <Icons.Image size={18} color={chat.brand} />
                     <Text fontSize={14} fontWeight="600" color={chat.brand}>
-                      Add cover image
+                      Drop or add cover image
                     </Text>
                   </>
                 )}
               </XStack>
             )}
+            </MediaDropZone>
+
+            {uploadProgress != null && uploadProgress > 0 ? (
+              <UploadProgressBar progress={uploadProgress} label="Uploading cover…" compact />
+            ) : null}
 
             <XStack
               onPress={canCreate ? () => void handleCreate() : undefined}

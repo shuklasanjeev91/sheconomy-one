@@ -26,7 +26,6 @@ import {
   validateMobileNumber,
 } from '~/features/auth/validation'
 import { useFormValidation } from '~/hooks/useFormValidation'
-import { readFromClipboard } from '~/lib/platform/clipboard'
 import { isPhoneHintSupported, requestPhoneNumberHint } from '~/lib/platform/phone-hint'
 import { countryFlag, type Country } from '~/lib/phone/countries'
 import { formatPhoneForDisplay, parseE164Phone, validateNationalPhone } from '~/lib/phone/phone'
@@ -301,29 +300,6 @@ export function AuthOtpForm({ channel, onSuccess }: AuthOtpFormProps) {
             icon={isSubmitting ? <Spinner size="small" color="white" /> : undefined}
           >
             {isSubmitting ? 'Verifying…' : 'Continue'}
-          </Button>
-
-          <Button
-            tone="outline"
-            size="$3"
-            borderRadius={AUTH_LAYOUT.pillRadius}
-            disabled={isSubmitting}
-            icon={<Icons.ClipboardPaste size={16} />}
-            onPress={() => {
-              void (async () => {
-                const text = await readFromClipboard()
-                const code = text ? normalizeOtpDigits(text, OTP_LENGTH) : ''
-                if (!isCompleteOtp(code, OTP_LENGTH)) {
-                  toast.show('No verification code found on clipboard', { tone: 'warning' })
-                  return
-                }
-                setApiError(null)
-                form.fields.otpCode.onChange(code)
-                void handleVerifyOtp(code)
-              })()
-            }}
-          >
-            Paste code
           </Button>
 
           <XStack justifyContent="space-between" alignItems="center" flexWrap="wrap" gap="$2">

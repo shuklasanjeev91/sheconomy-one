@@ -1,13 +1,13 @@
 import { fail, ok, type ApiResult } from '~/lib/api'
 import { logger } from '~/lib/api/logger'
-import { fetchFeedExclusion } from '~/community/lib/moderation'
+import { getFeedExclusion } from '~/community/lib/moderation'
 import { supabase } from '~/lib/supabase/client'
 
 import { extractHashtags, extractMentions } from './post-text'
 import { notifyHashtagFollowers } from './hashtag-follows'
 import { isVideoMediaUrl, normalizeUrlList } from './post-media'
 
-export const COMMUNITY_PAGE_SIZE = 10
+export const COMMUNITY_PAGE_SIZE = 15
 
 export type CommunityAuthor = {
   full_name: string | null
@@ -632,11 +632,27 @@ async function enrichPostsWithOriginals(posts: CommunityPost[]): Promise<Communi
 }
 
 async function enrichPosts(posts: CommunityPost[]): Promise<CommunityPost[]> {
-  const withMeta = await enrichPostsWithPostMeta(posts)
-  const withUsernames = await enrichPostsWithUsernames(withMeta)
-  const withContext = await enrichPostsWithContext(withUsernames)
-  const withPolls = await enrichPostsWithPolls(withContext)
-  return enrichPostsWithOriginals(withPolls)
+  if (!posts.length) return posts
+
+  const [withMeta, withUsernames] = await Promise.all([
+    enrichPostsWithPostMeta(posts),
+    enrichPostsWithUsernames(posts),
+  ])
+  const merged = posts.map((post, index) => ({
+    ...withMeta[index],
+    author: withUsernames[index].author ?? withMeta[index].author,
+  }))
+
+  const [withContext, withPolls] = await Promise.all([
+    enrichPostsWithContext(merged),
+    enrichPostsWithPolls(merged),
+  ])
+  const withContextPolls = merged.map((post, index) => ({
+    ...withContext[index],
+    poll: withPolls[index].poll ?? null,
+  }))
+
+  return enrichPostsWithOriginals(withContextPolls)
 }
 
 /** Feed content filter used by the "Post type" pill on the main feed. */
@@ -650,11 +666,12 @@ type PostFilter = {
 
 async function applyFeedExclusions(posts: CommunityPost[]): Promise<CommunityPost[]> {
   const {
-    data: { user },
-  } = await supabase.auth.getUser()
-  if (!user?.id || posts.length === 0) return posts
+    data: { session },
+  } = await supabase.auth.getSession()
+  const userId = session?.user?.id
+  if (!userId || posts.length === 0) return posts
 
-  const { hiddenPostIds, blockedUserIds } = await fetchFeedExclusion(user.id)
+  const { hiddenPostIds, blockedUserIds } = await getFeedExclusion(userId)
   if (!hiddenPostIds.length && !blockedUserIds.length) return posts
 
   const hidden = new Set(hiddenPostIds)
@@ -1110,4 +1127,77 @@ export async function createCommunityPost(
   }
 
   return { id: postId, error: error?.message ?? null }
+}
+
+const NON_EDITABLE_POST_TYPES = new Set(['poll', 'event', 'celebration', 'product', 'service'])
+
+export type UpdatePostInput = {
+  content: string
+}
+
+/** Update text content on the author's own post (LinkedIn-style edit). */
+export async function updateCommunityPost(
+  userId: string,
+  postId: string,
+  input: UpdatePostInput,
+): Promise<{ error: string | null }> {
+  const content = input.content.trim()
+  if (!content) return { error: 'Post cannot be empty.' }
+
+  const { data: existing, error: fetchError } = await supabase
+    .from('posts')
+    .select('post_type, user_id, is_deleted')
+    .eq('id', postId)
+    .maybeSingle()
+
+  if (fetchError) return { error: fetchError.message }
+  if (!existing || existing.user_id !== userId) {
+    return { error: 'You can only edit your own posts.' }
+  }
+  if (existing.is_deleted) return { error: 'This post was deleted.' }
+  if (existing.post_type && NON_EDITABLE_POST_TYPES.has(existing.post_type)) {
+    return { error: 'This type of post cannot be edited.' }
+  }
+
+  const tags = extractHashtags(content)
+  const mentions = extractMentions(content)
+
+  const { error } = await supabase
+    .from('posts')
+    .update({
+      content,
+      tags: tags.length ? tags : null,
+      mentions: mentions.length ? mentions : null,
+      updated_at: new Date().toISOString(),
+    })
+    .eq('id', postId)
+    .eq('user_id', userId)
+
+  return { error: error?.message ?? null }
+}
+
+/** Soft-delete the author's own post. */
+export async function deleteCommunityPost(
+  userId: string,
+  postId: string,
+): Promise<{ error: string | null }> {
+  const { data: existing, error: fetchError } = await supabase
+    .from('posts')
+    .select('user_id, is_deleted')
+    .eq('id', postId)
+    .maybeSingle()
+
+  if (fetchError) return { error: fetchError.message }
+  if (!existing || existing.user_id !== userId) {
+    return { error: 'You can only delete your own posts.' }
+  }
+  if (existing.is_deleted) return { error: null }
+
+  const { error } = await supabase
+    .from('posts')
+    .update({ is_deleted: true, updated_at: new Date().toISOString() })
+    .eq('id', postId)
+    .eq('user_id', userId)
+
+  return { error: error?.message ?? null }
 }

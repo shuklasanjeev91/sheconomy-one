@@ -18,6 +18,7 @@ import type { VendorShop } from '~/hooks/useVendorShops'
 import type { GeoLocationParts } from '~/lib/geo'
 import type { PickedImage } from '~/lib/media/pick-image'
 import { uploadShopLogoImage } from '~/lib/supabase/storage-upload'
+import { useUploadProgress } from '~/hooks/useUploadProgress'
 import {
   Avatar,
   Button,
@@ -58,6 +59,7 @@ export function ShopSettingsPanel({ shop, onUpdated }: ShopSettingsPanelProps) {
   )
   const [isLoadingAddress, setIsLoadingAddress] = useState(false)
   const [isSaving, setIsSaving] = useState(false)
+  const { progress: uploadProgress, track: trackUpload, reset: resetUpload } = useUploadProgress()
 
   useEffect(() => {
     setShopName(shop.shop_name)
@@ -103,10 +105,14 @@ export function ShopSettingsPanel({ shop, onUpdated }: ShopSettingsPanelProps) {
     if (logoImages.length > 0) {
       try {
         const [file] = await preparePickedImagesForUpload(logoImages.slice(0, 1))
-        const { data, error: uploadError } = await uploadShopLogoImage(user.id, shop.id, file)
+        trackUpload(1)
+        const { data, error: uploadError } = await uploadShopLogoImage(user.id, shop.id, file, {
+          onProgress: trackUpload,
+        })
 
         if (uploadError || !data) {
           setIsSaving(false)
+          resetUpload()
           toast.show('Logo upload failed', { tone: 'danger', message: uploadError ?? 'Try again.' })
           return
         }
@@ -153,6 +159,7 @@ export function ShopSettingsPanel({ shop, onUpdated }: ShopSettingsPanelProps) {
     )
 
     setIsSaving(false)
+    resetUpload()
 
     if (addressError) {
       toast.show('Shop saved, location not updated', { tone: 'danger', message: addressError })
@@ -198,6 +205,8 @@ export function ShopSettingsPanel({ shop, onUpdated }: ShopSettingsPanelProps) {
           onChange={setLogoImages}
           disabled={isSaving}
           hint="Square images work best. Saved to shop storage when you tap Save."
+          uploadProgress={uploadProgress}
+          uploadLabel="Uploading logo…"
         />
         <Field label="Shop name" required>
           <Input value={shopName} onChangeText={setShopName} />

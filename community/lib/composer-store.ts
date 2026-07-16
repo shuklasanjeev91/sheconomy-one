@@ -7,6 +7,8 @@ export type ComposerOptions = {
   mode?: ComposerMode
   /** Immediately open the photo picker on mount. */
   media?: boolean
+  /** Immediately open the video picker on mount. */
+  video?: boolean
   /** Pre-fill a GIF url as the post media. */
   gifUrl?: string
   groupId?: string

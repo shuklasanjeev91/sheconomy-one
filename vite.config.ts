@@ -91,14 +91,9 @@ export default defineConfig(({ mode }) => {
         },
 
         native: {
-          bundler: 'metro',
+          // Vite is One's native release bundler (wired via react-native.config.cjs).
+          bundler: 'vite',
           suspendRoutes: false,
-          bundlerOptions: {
-            defaultConfigOverrides: (config) => {
-              const { withoutExpoStreamsPolyfillOnNative } = require('./lib/metro-expo-polyfill-fix.cjs')
-              return withoutExpoStreamsPolyfillOnNative(config)
-            },
-          },
         },
 
         web: {

@@ -3,7 +3,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import { AUTH_LAYOUT } from '~/components/auth/auth-layout'
 import { CountryCodePicker } from '~/components/auth/CountryCodePicker'
 import { NativeDateField } from '~/components/forms/NativeDateField'
-import { LocationPickerField } from '~/components/geo'
+import { LocationPickerField, GeoSelectField } from '~/components/geo'
 import { PageCenter } from '~/components/layout'
 import { AvatarCaptureField } from '~/components/media/AvatarCaptureField'
 import {
@@ -103,12 +103,14 @@ export function CompleteProfileFlow({ returnTo, isNewUser }: CompleteProfileFlow
   const [socialHintLine, setSocialHintLine] = useState<string | null>(null)
 
   const step = steps[stepIndex] ?? 'basics'
-  const countries = useMemo(() => {
-    const all = getAllGeoCountries()
-    const selected = all.find((c) => c.isoCode === countryCode)
-    if (!selected) return all
-    return [selected, ...all.filter((c) => c.isoCode !== countryCode)]
-  }, [countryCode])
+  const countryOptions = useMemo(
+    () =>
+      getAllGeoCountries().map((country) => ({
+        value: country.isoCode,
+        label: country.name,
+      })),
+    [],
+  )
 
   const reload = useCallback(async () => {
     if (!user?.id) return
@@ -554,40 +556,19 @@ export function CompleteProfileFlow({ returnTo, isNewUser }: CompleteProfileFlow
             </Button>
           </XStack>
 
-          <Field label="Country">
-            <YStack
-              borderWidth={1}
-              borderColor={ui.borderSubtle}
-              borderRadius={AUTH_LAYOUT.inputRadius}
-              maxHeight={160}
-              overflow="hidden"
-            >
-              {countries.slice(0, 60).map((c) => {
-                const selected = c.isoCode === countryCode
-                return (
-                  <XStack
-                    key={c.isoCode}
-                    paddingHorizontal="$3"
-                    paddingVertical="$2.5"
-                    backgroundColor={selected ? ui.surfaceMuted : 'transparent'}
-                    pressStyle={{ backgroundColor: ui.navHover }}
-                    cursor="pointer"
-                    onPress={() => {
-                      setCountryCode(c.isoCode)
-                      if (!locationLabel.trim()) setLocationLabel(c.name)
-                    }}
-                  >
-                    <Text color={ui.text}>
-                      {c.flag} {c.name}
-                    </Text>
-                  </XStack>
-                )
-              })}
-            </YStack>
-            <Text fontSize={12} color={ui.textMuted} marginTop="$2">
-              Selected: {getCountryName(countryCode)} ({countryCode})
-            </Text>
-          </Field>
+          <GeoSelectField
+            label="Country"
+            value={countryCode}
+            placeholder="Select your country"
+            options={countryOptions}
+            showFlags
+            sheetTitle="Select country"
+            searchPlaceholder="Search countries"
+            onChange={(code) => {
+              setCountryCode(code)
+              if (!locationLabel.trim()) setLocationLabel(getCountryName(code))
+            }}
+          />
 
           <LocationPickerField
             label="City / region"

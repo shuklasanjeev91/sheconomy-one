@@ -11,6 +11,7 @@ import {
 } from '~/community/components/CommunityFilters'
 import { fetchEventTypeFacets, fetchUpcomingEvents, type CommunityEvent } from '~/community/lib/events'
 import { useCommunityUi } from '~/community/lib/community-theme'
+import { LoadMoreSentinel } from '~/commerce/components/LoadMoreSentinel'
 import { Button, Icons, Image, ScrollView, Spinner, Text, XStack, YStack } from '~/components/ui'
 import { communityRoutes } from '~/lib/routes'
 
@@ -209,17 +210,12 @@ export function EventsScreen() {
               </CommunityCard>
             </AppLink>
           ))}
-          {hasMore ? (
-            <YStack alignItems="center" paddingVertical={12}>
-              {isLoadingMore ? (
-                <Spinner size="small" color={communityUi.brand} />
-              ) : (
-                <Text color={communityUi.brand} fontWeight="600" cursor="pointer" onPress={() => load(page + 1, true)}>
-                  Load more events
-                </Text>
-              )}
-            </YStack>
-          ) : null}
+          <LoadMoreSentinel
+            hasMore={hasMore}
+            isLoadingMore={isLoadingMore}
+            onLoadMore={() => void load(page + 1, true)}
+            label="Load more events"
+          />
         </YStack>
       )}
 

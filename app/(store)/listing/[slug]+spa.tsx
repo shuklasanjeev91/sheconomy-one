@@ -41,6 +41,7 @@ import {
   StockNotifyButton,
 } from '~/commerce/components'
 import { fetchListingReturnPolicy, type ListingReturnPolicy } from '~/commerce/lib/return-policies'
+import { listingMediaKind } from '~/commerce/lib/listing-media'
 import { findCartItemForListing } from '~/commerce/lib/cart-listing'
 import { useCart } from '~/commerce/hooks/useCart'
 import { recordListingView } from '~/commerce/lib/recently-viewed'
@@ -485,6 +486,7 @@ export default function ListingDetailScreen() {
           {activeGalleryUrls.length > 0 ? (
             <ListingImage
               imageUrls={activeGalleryUrls}
+              imageType={activeImage?.image_type}
               alt={activeImage?.alt_text ?? listing.title}
               width="100%"
               height="100%"
@@ -516,6 +518,7 @@ export default function ListingDetailScreen() {
                 >
                   <ListingImage
                     imageUrls={[image.image_url]}
+                    imageType={image.image_type}
                     alt={image.alt_text ?? listing.title}
                     width={72}
                     height={72}
@@ -532,7 +535,7 @@ export default function ListingDetailScreen() {
           <MediaLightbox
             items={sortedImages.map((image) => ({
               url: image.image_url,
-              kind: 'image' as const,
+              kind: listingMediaKind(image.image_url, image.image_type),
               alt: image.alt_text ?? listing.title,
             }))}
             open={galleryLightboxOpen}

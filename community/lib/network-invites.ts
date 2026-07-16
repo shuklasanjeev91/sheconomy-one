@@ -6,22 +6,32 @@ export type NetworkInviteResult = {
   invite_id?: string
   invitee_user_id?: string
   connection_id?: string
+  emailsSent?: number
+  emailError?: string | null
+  emailConfigured?: boolean
   error?: string
 }
 
-/** Invite an existing member by email, or queue an invite for signup matching. */
+/** Invite by email via edge function (RPC + Resend when configured). */
 export async function inviteNetworkByEmail(
   email: string,
   message?: string,
 ): Promise<NetworkInviteResult> {
-  const { data, error } = await supabase.rpc('invite_network_by_email', {
-    p_email: email.trim(),
-    p_message: message?.trim() || null,
+  const { data, error } = await supabase.functions.invoke('network-invite', {
+    body: {
+      email: email.trim(),
+      message: message?.trim() || undefined,
+    },
   })
 
   if (error) {
     return { status: 'error', error: error.message, message: error.message }
   }
 
-  return (data ?? {}) as NetworkInviteResult
+  const payload = (data ?? {}) as NetworkInviteResult
+  if (payload.error) {
+    return { status: 'error', error: payload.error, message: payload.error }
+  }
+
+  return payload
 }

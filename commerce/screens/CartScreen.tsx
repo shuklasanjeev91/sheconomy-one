@@ -171,7 +171,7 @@ export function CartScreen() {
     })
   }
 
-  if (isLoading || isChecking) {
+  if ((isLoading || isChecking) && cartItems.length === 0) {
     return (
       <FullWidthLayout>
         <PageSection paddingVertical="$10" alignItems="center">

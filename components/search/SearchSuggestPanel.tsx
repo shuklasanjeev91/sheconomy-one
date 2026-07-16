@@ -1,13 +1,15 @@
-import { AppBottomSheet, Icons, Spinner, Text, XStack, YStack } from '~/components/ui'
+import { Icons, Spinner, Text, XStack, YStack } from '~/components/ui'
+import { AdaptiveTypeaheadPanel } from '~/components/search/AdaptiveTypeaheadPanel'
 import { SearchHitRow } from '~/components/search/SearchHitRow'
+import { SuggestSectionHeader } from '~/components/search/SuggestSectionHeader'
 import type { SearchHit } from '~/lib/search'
-import { useAppLayout } from '~/hooks/useAppLayout'
 import { useAppUi } from '~/lib/theme/useAppUi'
 
 type SearchSuggestPanelProps = {
   open: boolean
   onOpenChange: (open: boolean) => void
   query: string
+  onQueryChange?: (value: string) => void
   recent: string[]
   hits: SearchHit[]
   loading: boolean
@@ -21,6 +23,7 @@ export function SearchSuggestPanel({
   open,
   onOpenChange,
   query,
+  onQueryChange,
   recent,
   hits,
   loading,
@@ -30,34 +33,17 @@ export function SearchSuggestPanel({
   onHitPress,
 }: SearchSuggestPanelProps) {
   const ui = useAppUi()
-  const { isDesktop } = useAppLayout()
   const trimmed = query.trim()
 
   const body = (
     <YStack gap="$3" width="100%" paddingBottom="$2" paddingTop="$2">
       {!trimmed && recent.length > 0 ? (
         <YStack gap="$1">
-          <XStack
-            alignItems="center"
-            justifyContent="space-between"
-            paddingHorizontal="$3"
-            paddingBottom="$1"
-          >
-            <Text fontSize={11} fontWeight="800" color={ui.textMuted} letterSpacing={0.4}>
-              RECENT SEARCHES
-            </Text>
-            {onClearRecent ? (
-              <Text
-                fontSize={12}
-                fontWeight="600"
-                color={ui.brand}
-                cursor="pointer"
-                onPress={onClearRecent}
-              >
-                Clear all
-              </Text>
-            ) : null}
-          </XStack>
+          <SuggestSectionHeader
+            label="RECENT SEARCHES"
+            actionLabel={onClearRecent ? 'Clear all' : undefined}
+            onAction={onClearRecent}
+          />
           {recent.map((term) => (
             <XStack
               key={term}
@@ -105,16 +91,7 @@ export function SearchSuggestPanel({
 
       {trimmed ? (
         <YStack gap="$1">
-          <Text
-            fontSize={11}
-            fontWeight="800"
-            color={ui.textMuted}
-            letterSpacing={0.4}
-            paddingHorizontal="$3"
-            paddingBottom="$1"
-          >
-            SUGGESTIONS
-          </Text>
+          <SuggestSectionHeader label="SUGGESTIONS" />
           {loading ? (
             <YStack padding="$4" alignItems="center">
               <Spinner size="small" />
@@ -146,36 +123,17 @@ export function SearchSuggestPanel({
     </YStack>
   )
 
-  if (isDesktop) {
-    if (!open) return null
-    return (
-      <YStack
-        position="absolute"
-        top="100%"
-        left={0}
-        right={0}
-        marginTop={8}
-        zIndex={400}
-        backgroundColor={ui.surface}
-        borderWidth={1}
-        borderColor={ui.borderSubtle}
-        borderRadius={20}
-        overflow="hidden"
-        maxHeight={440}
-        // @ts-expect-error web overflow scroll
-        style={{
-          boxShadow: '0 16px 48px rgba(16, 12, 14, 0.14)',
-          overflowY: 'auto',
-        }}
-      >
-        {body}
-      </YStack>
-    )
-  }
-
   return (
-    <AppBottomSheet open={open} onOpenChange={onOpenChange} title="Search" scrollable>
+    <AdaptiveTypeaheadPanel
+      open={open}
+      onOpenChange={onOpenChange}
+      title="Search"
+      maxHeight={440}
+      searchValue={query}
+      onSearchChange={onQueryChange}
+      searchPlaceholder="Search everywhere"
+    >
       {body}
-    </AppBottomSheet>
+    </AdaptiveTypeaheadPanel>
   )
 }

@@ -31,7 +31,12 @@ function formatWhen(meeting: Meeting) {
 }
 
 /** Upcoming hosted meetings on Co-Work home — web + native. */
-export function UpcomingMeetingsStrip() {
+export function UpcomingMeetingsStrip({
+  refreshKey = 0,
+}: {
+  /** Increment to force a reload (e.g. pull-to-refresh). */
+  refreshKey?: number
+}) {
   const { ui: coworkUi, shadows: coworkShadows } = useCoWorkTheme()
   const { user } = useSupabase()
   const router = useRouter()
@@ -87,7 +92,7 @@ export function UpcomingMeetingsStrip() {
     return () => {
       active = false
     }
-  }, [user?.id])
+  }, [refreshKey, user?.id])
 
   if (!user) return null
 

@@ -327,16 +327,22 @@ export async function uploadShopLogo(
   userId: string,
   shopId: string,
   file: ShopImageUpload,
+  options?: { onProgress?: (percent: number) => void },
 ): Promise<ShopServiceResponse<{ logo_url: string }>> {
   if (!userId || !shopId) return fail('User and shop are required')
 
   try {
     const blob = file.blob instanceof ArrayBuffer ? new Blob([file.blob]) : file.blob
-    const { data, error } = await uploadShopLogoImage(userId, shopId, {
-      blob: blob as Blob,
-      mimeType: file.mimeType,
-      fileName: file.fileName,
-    })
+    const { data, error } = await uploadShopLogoImage(
+      userId,
+      shopId,
+      {
+        blob: blob as Blob,
+        mimeType: file.mimeType,
+        fileName: file.fileName,
+      },
+      { onProgress: options?.onProgress },
+    )
 
     if (error || !data) return fail(error ?? 'Upload failed.')
 

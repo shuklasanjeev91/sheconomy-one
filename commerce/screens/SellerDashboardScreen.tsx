@@ -14,7 +14,6 @@ import { ShopSettingsPanel } from '~/commerce/components/seller/ShopSettingsPane
 import { ShopCommercePanel } from '~/commerce/components/seller/ShopCommercePanel'
 import { useShopDashboard } from '~/commerce/hooks/useShopDashboard'
 import { Button, Icons, Paragraph, Spinner, Text, XStack, YStack } from '~/components/ui'
-import { PushPermissionBanner } from '~/components/notifications/PushPermissionBanner'
 import { PageContent, PageCenter } from '~/components/layout'
 import { commerceRoutes } from '~/lib/routes'
 import { useVendorShops, type VendorShop } from '~/hooks/useVendorShops'
@@ -81,7 +80,6 @@ export function SellerDashboardScreen() {
   return (
     <PageContent scroll paddingVertical="$4" paddingBottom="$10">
       <YStack gap="$5" width="100%">
-        <PushPermissionBanner />
         <XStack alignItems="flex-start" justifyContent="space-between" gap="$3" flexWrap="wrap">
           <CommercePageHeader
             title={activeShop.shop_name}

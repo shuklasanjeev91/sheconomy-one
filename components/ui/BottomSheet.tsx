@@ -1,6 +1,6 @@
 import type { ReactNode } from 'react'
 import { useMemo } from 'react'
-import { Platform, useWindowDimensions } from 'react-native'
+import { Platform, useWindowDimensions, type NativeScrollEvent, type NativeSyntheticEvent } from 'react-native'
 
 import { Icons, Sheet, SheetFrame, SheetHandle, SheetOverlay, Text, XStack, YStack } from '~/components/ui'
 import { radius } from '~/config/tokens'
@@ -67,6 +67,7 @@ type AppBottomSheetProps = {
   showHandle?: boolean
   /** Wrap body in Sheet.ScrollView (disable for short static content). */
   scrollable?: boolean
+  onScroll?: (event: NativeSyntheticEvent<NativeScrollEvent>) => void
 }
 
 /**
@@ -81,6 +82,7 @@ export function AppBottomSheet({
   footer,
   showHandle = true,
   scrollable = true,
+  onScroll,
 }: AppBottomSheetProps) {
   const ui = useAppUi()
   const { safeBottom } = useAppLayout()
@@ -141,6 +143,8 @@ export function AppBottomSheet({
               width="100%"
               showsVerticalScrollIndicator
               keyboardShouldPersistTaps="handled"
+              onScroll={onScroll}
+              scrollEventThrottle={16}
               maxHeight={scrollMaxHeight}
               {...(Platform.OS === 'web'
                 ? {

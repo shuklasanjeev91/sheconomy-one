@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 
+import { AdaptiveTypeaheadPanel } from '~/components/search/AdaptiveTypeaheadPanel'
+import { SuggestSectionHeader } from '~/components/search/SuggestSectionHeader'
 import { Avatar, Button, Icons, Input, Spinner, Text, XStack, YStack, useAppToast } from '~/components/ui'
 import { CoWorkSectionLabel } from '~/co-work/components/CoWorkUi'
 import {
@@ -22,12 +24,14 @@ type MeetingInvitePickerProps = {
 }
 
 export function MeetingInvitePicker({ hostId, value, onChange, compact }: MeetingInvitePickerProps) {
-  const { ui: coworkUi, gradients: coworkGradients, shadows: coworkShadows } = useCoWorkTheme()
+  const { ui: coworkUi } = useCoWorkTheme()
   const toast = useAppToast()
   const [query, setQuery] = useState('')
   const [emailDraft, setEmailDraft] = useState('')
   const [candidates, setCandidates] = useState<MeetingInviteCandidate[]>([])
   const [loading, setLoading] = useState(false)
+  const [searchFocused, setSearchFocused] = useState(false)
+  const [panelOpen, setPanelOpen] = useState(false)
 
   const selectedKeys = useMemo(() => new Set(value.map(inviteeKey)), [value])
 
@@ -51,6 +55,14 @@ export function MeetingInvitePicker({ hostId, value, onChange, compact }: Meetin
     }, 250)
     return () => clearTimeout(timer)
   }, [loadCandidates])
+
+  useEffect(() => {
+    if (!searchFocused) {
+      setPanelOpen(false)
+      return
+    }
+    setPanelOpen(loading || candidates.length > 0)
+  }, [candidates.length, loading, searchFocused])
 
   function toggleCandidate(candidate: MeetingInviteCandidate) {
     const invitee = candidateToInvitee(candidate)
@@ -100,7 +112,7 @@ export function MeetingInvitePicker({ hostId, value, onChange, compact }: Meetin
         </XStack>
       </YStack>
 
-      <YStack gap="$2">
+      <YStack gap="$2" position="relative">
         <CoWorkSectionLabel>Search members & connections</CoWorkSectionLabel>
         <Input
           value={query}
@@ -110,39 +122,64 @@ export function MeetingInvitePicker({ hostId, value, onChange, compact }: Meetin
           borderColor={coworkUi.borderSoft}
           color={coworkUi.text}
           borderRadius={14}
+          onFocus={() => setSearchFocused(true)}
+          onBlur={() => setTimeout(() => setSearchFocused(false), 180)}
         />
         {loading ? <Spinner size="small" color={coworkUi.brand} /> : null}
-        <YStack gap="$2" maxHeight={compact ? 200 : 280}>
-          {candidates.map((candidate) => {
-            const active = selectedKeys.has(inviteeKey(candidateToInvitee(candidate)))
-            return (
-              <XStack
-                key={candidate.user_id}
-                alignItems="center"
-                gap="$3"
-                padding="$3"
-                borderRadius={14}
-                borderWidth={1}
-                borderColor={active ? coworkUi.borderAccent : coworkUi.borderSoft}
-                backgroundColor={active ? coworkUi.brandMuted : 'rgba(255,255,255,0.04)'}
-                onPress={() => toggleCandidate(candidate)}
-                cursor="pointer"
-                pressStyle={{ opacity: 0.9 }}
-              >
-                <Avatar name={candidate.full_name} src={candidate.avatar_url ?? undefined} size="$3" />
-                <YStack flex={1} gap={2}>
-                  <Text fontWeight="700" color={coworkUi.text} numberOfLines={1}>
-                    {candidate.full_name}
-                  </Text>
-                  <Text fontSize={12} color={coworkUi.textMuted} numberOfLines={1}>
-                    {candidate.headline || candidate.username || candidate.email || candidate.source}
-                  </Text>
-                </YStack>
-                {active ? <Icons.Check size={18} color={coworkUi.brandLight} /> : null}
-              </XStack>
-            )
-          })}
-        </YStack>
+
+        <AdaptiveTypeaheadPanel
+          open={panelOpen}
+          onOpenChange={setPanelOpen}
+          title="Invite people"
+          maxHeight={480}
+          zIndex={600}
+          searchValue={query}
+          onSearchChange={setQuery}
+          searchPlaceholder="Search members"
+        >
+          <YStack gap="$1" width="100%" paddingBottom="$2" paddingTop="$2">
+            <SuggestSectionHeader label="PEOPLE" />
+            {loading && candidates.length === 0 ? (
+              <YStack padding="$4" alignItems="center">
+                <Spinner size="small" color={coworkUi.brand} />
+              </YStack>
+            ) : null}
+            {candidates.map((candidate) => {
+              const active = selectedKeys.has(inviteeKey(candidateToInvitee(candidate)))
+              return (
+                <XStack
+                  key={candidate.user_id}
+                  alignItems="center"
+                  gap="$3"
+                  padding="$3"
+                  borderRadius={14}
+                  borderWidth={1}
+                  borderColor={active ? coworkUi.borderAccent : coworkUi.borderSoft}
+                  backgroundColor={active ? coworkUi.brandMuted : 'rgba(255,255,255,0.04)'}
+                  onPress={() => toggleCandidate(candidate)}
+                  cursor="pointer"
+                  pressStyle={{ opacity: 0.9 }}
+                >
+                  <Avatar name={candidate.full_name} src={candidate.avatar_url ?? undefined} size="$3" />
+                  <YStack flex={1} gap={2}>
+                    <Text fontWeight="700" color={coworkUi.text} numberOfLines={1}>
+                      {candidate.full_name}
+                    </Text>
+                    <Text fontSize={12} color={coworkUi.textMuted} numberOfLines={1}>
+                      {candidate.headline || candidate.username || candidate.email || candidate.source}
+                    </Text>
+                  </YStack>
+                  {active ? <Icons.Check size={18} color={coworkUi.brandLight} /> : null}
+                </XStack>
+              )
+            })}
+            {!loading && candidates.length === 0 ? (
+              <Text paddingHorizontal="$3" paddingVertical="$2" fontSize={13} color={coworkUi.textMuted}>
+                No members match your search.
+              </Text>
+            ) : null}
+          </YStack>
+        </AdaptiveTypeaheadPanel>
       </YStack>
 
       {value.length > 0 ? (

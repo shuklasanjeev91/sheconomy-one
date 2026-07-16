@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 
 import {
   addProgramToPlaylist,
@@ -7,8 +7,10 @@ import {
   type ProgramPlaylist,
 } from '~/class/lib/playlists'
 import type { Program } from '~/class/lib/programs'
+import { ScreenSearchField } from '~/components/search'
 import { useAuth } from '~/hooks/useAuth'
 import { AppBottomSheet, Button, Input, Spinner, Text, XStack, YStack, useAppToast } from '~/components/ui'
+import { filterBySearchQuery } from '~/lib/search'
 import { useAppUi } from '~/lib/theme/useAppUi'
 
 type SaveToPlaylistSheetProps = {
@@ -26,8 +28,17 @@ export function SaveToPlaylistSheet({ open, onOpenChange, program }: SaveToPlayl
   const [savingId, setSavingId] = useState<string | null>(null)
   const [newTitle, setNewTitle] = useState('')
   const [creating, setCreating] = useState(false)
+  const [query, setQuery] = useState('')
 
   const mediaType = program.media_type === 'audio' ? 'audio' : 'video'
+  const filteredPlaylists = useMemo(
+    () => filterBySearchQuery(playlists, query, (playlist) => [playlist.title]),
+    [playlists, query],
+  )
+
+  useEffect(() => {
+    if (!open) setQuery('')
+  }, [open])
 
   const load = useCallback(async () => {
     if (!isAuthenticated) {
@@ -121,6 +132,13 @@ export function SaveToPlaylistSheet({ open, onOpenChange, program }: SaveToPlayl
               Your playlists
             </Text>
 
+            <ScreenSearchField
+              value={query}
+              onChangeText={setQuery}
+              placeholder="Search playlists"
+              clearable
+            />
+
             {loading ? (
               <YStack paddingVertical="$4" alignItems="center">
                 <Spinner size="small" />
@@ -129,9 +147,13 @@ export function SaveToPlaylistSheet({ open, onOpenChange, program }: SaveToPlayl
               <Text fontSize={13} color={ui.textMuted}>
                 No playlists yet. Create one above.
               </Text>
+            ) : filteredPlaylists.length === 0 ? (
+              <Text fontSize={13} color={ui.textMuted}>
+                No playlists match your search.
+              </Text>
             ) : (
               <YStack gap="$2">
-                {playlists.map((playlist) => (
+                {filteredPlaylists.map((playlist) => (
                   <Button
                     key={playlist.id}
                     tone="ghost"

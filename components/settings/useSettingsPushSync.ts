@@ -1,4 +1,5 @@
 import { useAppToast } from '~/components/ui'
+import { resetPushAutoPromptDenial } from '~/lib/notifications/push-auto-prompt'
 import { usePushNotifications } from '~/providers/PushNotificationsProvider'
 
 /** Shared device push enable/disable used by notification preference panels. */
@@ -14,6 +15,7 @@ export function useSettingsPushSync() {
 
   async function syncDevicePush(enabled: boolean): Promise<boolean> {
     if (enabled) {
+      await resetPushAutoPromptDenial()
       const result = await enablePush()
       if (!result.ok) {
         toast.show('Could not enable push', { tone: 'danger', message: result.error })

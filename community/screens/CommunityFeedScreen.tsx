@@ -9,7 +9,6 @@ import { FeedFilterChips } from '~/community/components/FeedFilterChips'
 import { FeedPostCard } from '~/community/components/FeedPostCard'
 import { FeedSortBar, type FeedSort } from '~/community/components/FeedSortBar'
 import { CommunityCard } from '~/community/components/CommunityCard'
-import { PushPermissionBanner } from '~/components/notifications/PushPermissionBanner'
 import type { FeedContentFilter } from '~/community/lib/community'
 import { useCommunityFeed } from '~/community/hooks/useCommunityFeed'
 import { useCommunitySuggestions } from '~/community/hooks/useCommunitySuggestions'
@@ -25,12 +24,9 @@ export function CommunityFeedScreen() {
   const [contentFilter, setContentFilter] = useState<FeedContentFilter | null>(null)
   const media = useMedia()
   const isDesktop = media.gtLg
-  const { items, isLoading, isLoadingMore, hasMore, error, loadMore, refresh } = useCommunityFeed(
-    true,
-    sort,
-    contentFilter ?? undefined,
-  )
-  const { sections } = useCommunitySuggestions(4)
+  const { items, isLoading, isLoadingMore, isRefreshing, hasMore, error, loadMore, refresh, removeItem, patchItem } =
+    useCommunityFeed(true, sort, contentFilter ?? undefined)
+  const { sections, refresh: refreshSuggestions } = useCommunitySuggestions(4)
 
   const feedEntries = useMemo(() => {
     if (isDesktop || !sections.length) {
@@ -40,14 +36,19 @@ export function CommunityFeedScreen() {
   }, [isDesktop, items, sections])
 
   return (
-    <CommunityShell>
-      <PushPermissionBanner />
+    <CommunityShell
+      refreshing={isRefreshing}
+      onRefresh={async () => {
+        refresh()
+        refreshSuggestions()
+      }}
+    >
       <StoriesStrip />
       {isDesktop ? <FeedComposer /> : null}
       <FeedFilterChips value={contentFilter} onChange={setContentFilter} />
       <FeedSortBar value={sort} onChange={setSort} />
 
-      {isLoading ? (
+      {isLoading && items.length === 0 ? (
         <YStack alignItems="center" paddingVertical="$8">
           <Spinner size="large" color={communityUi.brand} />
         </YStack>
@@ -68,7 +69,14 @@ export function CommunityFeedScreen() {
         <>
           {feedEntries.map((entry) => {
             if (entry.type === 'post') {
-              return <FeedPostCard key={entry.post.id} post={entry.post} />
+              return (
+                <FeedPostCard
+                  key={entry.post.id}
+                  post={entry.post}
+                  onPostDeleted={removeItem}
+                  onPostUpdated={(postId, patch) => patchItem(postId, patch)}
+                />
+              )
             }
 
             return (
@@ -83,6 +91,7 @@ export function CommunityFeedScreen() {
             hasMore={hasMore}
             isLoadingMore={isLoadingMore}
             onLoadMore={loadMore}
+            rootMargin="480px"
           />
           {!hasMore ? <LoadMoreEnd /> : null}
         </>

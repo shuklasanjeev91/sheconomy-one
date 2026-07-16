@@ -16,7 +16,7 @@ const LIST_PANE_WIDTH = 380
 
 function CallDirectionIcon({ entry, color }: { entry: CallHistoryEntry; color: string }) {
   const missedColor = '#f2385a'
-  if (entry.status === 'missed' || entry.status === 'declined' || entry.status === 'canceled') {
+  if (entry.status === 'missed' || entry.status === 'declined') {
     return <Icons.PhoneMissed size={15} color={missedColor} />
   }
   if (entry.direction === 'incoming') {
@@ -26,8 +26,7 @@ function CallDirectionIcon({ entry, color }: { entry: CallHistoryEntry; color: s
 }
 
 function callSubtitle(entry: CallHistoryEntry): string {
-  const missed =
-    entry.status === 'missed' || entry.status === 'declined' || entry.status === 'canceled'
+  const missed = entry.status === 'missed' || entry.status === 'declined'
   const directionLabel = missed
     ? entry.direction === 'incoming'
       ? 'Missed'

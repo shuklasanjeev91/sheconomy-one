@@ -13,6 +13,7 @@ import { buildSignInUrl, getReturnToFromLocation, isSafeReturnPath } from '~/lib
 import { signOut as supabaseSignOut, type SignOutScope } from '~/lib/supabase/auth'
 import { supabase } from '~/lib/supabase'
 import { appRoutes, routes } from '~/lib/routes'
+import { clearCachedProfile } from '~/lib/profile/profile-cache'
 import { persistor, resetStore, store } from '~/lib/store'
 import { useSupabase } from '~/providers/SupabaseProvider'
 
@@ -23,6 +24,7 @@ async function clearLocalAppState() {
   } catch {
     // Purge failures are non-fatal — the in-memory reset already applied.
   }
+  await clearCachedProfile()
 }
 
 export type CompleteSignInOptions = {

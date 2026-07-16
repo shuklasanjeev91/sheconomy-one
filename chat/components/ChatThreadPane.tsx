@@ -180,6 +180,7 @@ export function ChatThreadPane({
     loadingOlder,
     loadOlder,
     sending,
+    uploadProgress,
     peerTyping,
     peerReadAt,
     reactionsByMessage,
@@ -872,6 +873,7 @@ export function ChatThreadPane({
           onCreateEvent={() => setEventPickerOpen(true)}
           onTyping={handleTyping}
           sending={sending}
+          uploadProgress={uploadProgress}
           replyTo={replyTarget}
           replySenderName={replyTarget ? resolveSenderName(replyTarget.senderId) : null}
           onCancelReply={() => setReplyTarget(null)}

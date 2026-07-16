@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 
 import { subscribeProfileRefresh } from '~/lib/profile/refresh'
+import { clearCachedProfile, readCachedProfile, writeCachedProfile } from '~/lib/profile/profile-cache'
 import { supabase } from '~/lib/supabase'
 import type { Tables } from '~/lib/supabase'
 import { useSupabase } from '~/providers/SupabaseProvider'
@@ -31,7 +32,7 @@ export type Profile = Pick<
   | 'gender'
 >
 
-const PROFILE_FETCH_TIMEOUT_MS = 4_000
+const PROFILE_FETCH_TIMEOUT_MS = 2_500
 
 /**
  * Loads the signed-in user's `profiles` row.
@@ -63,6 +64,7 @@ export function useProfile() {
       setProfileUserId(null)
       setError(null)
       setFetching(false)
+      void clearCachedProfile()
       return
     }
 
@@ -73,6 +75,13 @@ export function useProfile() {
     if (profileUserId !== userId) {
       setProfile(null)
     }
+
+    void readCachedProfile(userId).then((cached) => {
+      if (cancelled || fetchGen.current !== gen || !cached) return
+      setProfile(cached)
+      setProfileUserId(userId)
+      setFetching(true)
+    })
 
     const timeout = setTimeout(() => {
       if (cancelled || fetchGen.current !== gen) return
@@ -99,6 +108,7 @@ export function useProfile() {
         } else {
           setProfile(data)
           setError(null)
+          if (data) void writeCachedProfile(userId, data)
         }
         setProfileUserId(userId)
         setFetching(false)

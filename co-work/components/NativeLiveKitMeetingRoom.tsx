@@ -2,6 +2,10 @@ import { useEffect, useMemo, useState } from 'react'
 import { useWindowDimensions } from 'react-native'
 import { ConnectionState, RoomEvent, Track } from 'livekit-client'
 
+import { ensureLiveKitNativeGlobals } from '~/lib/livekit/register-native-globals'
+
+ensureLiveKitNativeGlobals()
+
 import {
   AudioSession,
   LiveKitRoom,

@@ -1,4 +1,5 @@
 import { CommercePageHeader } from '~/commerce/components'
+import { LoadMoreEnd, LoadMoreSentinel } from '~/commerce/components/LoadMoreSentinel'
 import { AppLink } from '~/components/navigation/AppLink'
 import { ShopFiltersBar } from '~/commerce/components/ShopFiltersBar'
 import { ShopGrid } from '~/commerce/components/ShopGrid'
@@ -15,11 +16,24 @@ import { BRAND_NAME } from '~/config/brand'
 export function ShopsBrowseScreen() {
   const ui = useAppUi()
   const media = useMedia()
-  const { items, totalCount, countries, filters, setFilters, isLoading, error } = useShopsBrowse()
+  const {
+    items,
+    totalCount,
+    countries,
+    filters,
+    setFilters,
+    isLoading,
+    isLoadingMore,
+    isRefreshing,
+    hasMore,
+    error,
+    loadMore,
+    refresh,
+  } = useShopsBrowse()
   const gridColumns = media.gtLg ? 5 : media.gtMd ? 4 : media.gtSm ? 3 : 2
 
   return (
-    <FullWidthLayout scroll>
+    <FullWidthLayout scroll onRefresh={() => refresh()} refreshing={isRefreshing}>
       <PageSection paddingVertical="$6" gap="$5" width="100%">
         <CommercePageHeader
           title="All shops"
@@ -28,7 +42,7 @@ export function ShopsBrowseScreen() {
 
         <NearbyShopsSection />
 
-        {!isLoading && !error && totalCount > 0 ? (
+        {!isLoading && !error && (totalCount > 0 || countries.length > 0) ? (
           <ShopFiltersBar
             filters={filters}
             countries={countries}
@@ -37,7 +51,7 @@ export function ShopsBrowseScreen() {
           />
         ) : null}
 
-        {isLoading ? (
+        {isLoading && items.length === 0 ? (
           <YStack alignItems="center" paddingVertical="$8">
             <Spinner size="large" />
           </YStack>
@@ -55,10 +69,10 @@ export function ShopsBrowseScreen() {
             style={getShadowStyle('sm')}
           >
             <Text fontWeight="700" fontSize={16} color={ui.text} letterSpacing={-0.2}>
-              {totalCount > 0 ? 'No shops match these filters' : 'No shops yet'}
+              {filters.country !== 'all' ? 'No shops match these filters' : 'No shops yet'}
             </Text>
             <Text fontSize={14} color={ui.textSecondary} textAlign="center" maxWidth={360}>
-              {totalCount > 0
+              {filters.country !== 'all'
                 ? 'Try another country or sort option.'
                 : 'Check back soon as new sellers join the marketplace.'}
             </Text>
@@ -71,7 +85,15 @@ export function ShopsBrowseScreen() {
             </AppLink>
           </YStack>
         ) : (
-          <ShopGrid shops={items} columns={gridColumns as 1 | 2 | 3 | 4 | 5 | 6} />
+          <>
+            <ShopGrid shops={items} columns={gridColumns as 1 | 2 | 3 | 4 | 5 | 6} />
+            <LoadMoreSentinel
+              hasMore={hasMore}
+              isLoadingMore={isLoadingMore}
+              onLoadMore={loadMore}
+            />
+            {!hasMore ? <LoadMoreEnd /> : null}
+          </>
         )}
       </PageSection>
     </FullWidthLayout>

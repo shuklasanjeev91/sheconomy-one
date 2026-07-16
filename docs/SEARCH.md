@@ -2,6 +2,18 @@
 
 Cross-platform omnibox (web, iOS, Android) with Amazon/Etsy-style typeahead and a federated `/search` results page.
 
+## Screen search bars
+
+Inline list screens use [`ScreenSearchField`](../components/search/ScreenSearchField.tsx) + [`useScreenSearch`](../hooks/useScreenSearch.ts):
+
+| Pattern | Screens |
+|---------|---------|
+| **Debounced API** (250ms) | Jobs, Companies, Groups, Vendor orders, GIF picker |
+| **Instant client filter** | Network, Notifications, Saved posts, User lists, Help FAQ |
+| **Submit → `/search`** | When `unifiedScope` is set (people, jobs, companies, groups, posts) |
+
+Shared helpers: [`lib/search/filter.ts`](../lib/search/filter.ts) (`textMatchesQuery`, `filterBySearchQuery`).
+
 ## Entry points
 
 | Surface | Behavior |

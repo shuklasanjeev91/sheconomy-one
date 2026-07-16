@@ -1,7 +1,7 @@
 import { LoadProgressBar, Slot } from 'one'
 import { Provider as ReduxProvider } from 'react-redux'
 import { SafeAreaProvider, useSafeAreaInsets } from 'react-native-safe-area-context'
-import { ActivityIndicator, Platform, View } from 'react-native'
+import { Platform } from 'react-native'
 import { TamaguiProvider, Theme, YStack } from 'tamagui'
 import { MetaTheme, SchemeProvider, useUserScheme } from '@vxrn/color-scheme'
 import { ToastProvider, ToastViewport } from '@tamagui/toast'
@@ -15,6 +15,7 @@ import { AppToasts } from '~/components/ui/Toast'
 import { AppUsageTracker } from '~/components/analytics/AppUsageTracker'
 import { AppShell } from '~/components/navigation/app/AppShell'
 import { RouteWarmup } from '~/components/navigation/RouteWarmup'
+import { AppBootstrapPrefetch } from '~/components/navigation/AppBootstrapPrefetch'
 import { CartProvider } from '~/commerce/hooks/useCart'
 import { FavoritesProvider } from '~/commerce/hooks/useFavorites'
 import { MarketplacePersonalizationProvider } from '~/commerce/context/MarketplacePersonalizationContext'
@@ -24,6 +25,7 @@ import { store } from '~/lib/store'
 import { PushNotificationsProvider } from '~/providers/PushNotificationsProvider'
 import { SupabaseProvider } from '~/providers/SupabaseProvider'
 import { InAppNotificationHost } from '~/components/notifications/InAppNotificationHost'
+import { PushForegroundNotificationHost } from '~/components/notifications/PushForegroundNotificationHost'
 import { AutomaticUpdateManager } from '~/components/system/AutomaticUpdateManager'
 import { AiAssistProvider } from '~/providers/AiAssistProvider'
 import { ScreenZoomProvider } from '~/lib/zoom/ScreenZoomContext'
@@ -179,25 +181,8 @@ img {
 }
 
 function AppProviders({ children }: { children: React.ReactNode }) {
-  const [fontsLoaded] = useAppFonts()
+  useAppFonts()
   const insets = useSafeAreaInsets()
-
-  if (!fontsLoaded) {
-    return (
-      <View
-        style={{
-          flex: 1,
-          alignItems: 'center',
-          justifyContent: 'center',
-          backgroundColor: '#fef5f9',
-          paddingTop: Platform.OS !== 'web' ? insets.top : 0,
-          paddingBottom: Platform.OS !== 'web' ? insets.bottom : 0,
-        }}
-      >
-        <ActivityIndicator size="large" color="#D01060" />
-      </View>
-    )
-  }
 
   return (
     <ReduxProvider store={store}>
@@ -214,10 +199,12 @@ function AppProviders({ children }: { children: React.ReactNode }) {
                           <ScreenZoomRoot>
                             <AutomaticUpdateManager />
                             <InAppNotificationHost />
+                            <PushForegroundNotificationHost />
                             <AppUsageTracker />
                             <BiometricUnlockGate>
                               <AppErrorBoundary scope="AppShell">
                                 <RouteWarmup />
+                                <AppBootstrapPrefetch />
                                 <AppShell>{children}</AppShell>
                               </AppErrorBoundary>
                             </BiometricUnlockGate>

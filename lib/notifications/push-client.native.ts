@@ -132,6 +132,48 @@ const nativePushClient: PushClient = {
     })()
     return () => unsubscribe()
   },
+
+  onForegroundNotification(handler: (payload: PushClickPayload) => void) {
+    let unsubscribe = () => {}
+    void (async () => {
+      try {
+        const { OneSignal } = await import('react-native-onesignal')
+        await this.init()
+        const listener = (event: {
+          preventDefault?: () => void
+          getNotification?: () => {
+            notificationId?: string
+            title?: string
+            body?: string
+            additionalData?: Record<string, unknown>
+            launchURL?: string
+          }
+        }) => {
+          event.preventDefault?.()
+          const notification = event.getNotification?.() ?? null
+          const data = notification?.additionalData ?? null
+          const url =
+            notification?.launchURL ||
+            (typeof data?.url === 'string' ? data.url : null) ||
+            (typeof data?.action_url === 'string' ? data.action_url : null)
+          handler({
+            url,
+            notificationId: notification?.notificationId ?? null,
+            title: notification?.title ?? null,
+            body: notification?.body ?? null,
+            data,
+          })
+        }
+        OneSignal.Notifications.addEventListener('foregroundWillDisplay', listener)
+        unsubscribe = () => {
+          OneSignal.Notifications.removeEventListener('foregroundWillDisplay', listener)
+        }
+      } catch {
+        // ignore
+      }
+    })()
+    return () => unsubscribe()
+  },
 }
 
 export default nativePushClient

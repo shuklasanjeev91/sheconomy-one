@@ -7,7 +7,6 @@ import {
   CommunityFilterPill,
 } from '~/community/components/CommunityFilters'
 import { FullWidthLayout, LAYOUT_STRETCH, PageSection } from '~/components/layout'
-import { PushPermissionBanner } from '~/components/notifications/PushPermissionBanner'
 import {
   fetchNotifications,
   markAllNotificationsRead,
@@ -17,38 +16,51 @@ import {
   type AppNotification,
   type NotificationProductFilter,
 } from '~/community/lib/notifications'
+import { LoadMoreSentinel } from '~/commerce/components/LoadMoreSentinel'
+import { ScreenSearchField } from '~/components/search'
+import { CACHE_KEYS } from '~/lib/bootstrap/app-prefetch'
+import { peekAppCache, readAppCache, writeAppCache } from '~/lib/cache/app-cache'
+import { filterBySearchQuery } from '~/lib/search'
 import { useCommunityUi } from '~/community/lib/community-theme'
-import { Avatar, Button, Icons, Input, ScrollView, Spinner, Text, XStack, YStack } from '~/components/ui'
+import { Avatar, Button, Icons, ScrollView, Spinner, Text, XStack, YStack } from '~/components/ui'
 import { supabase } from '~/lib/supabase/client'
 import { useAppUi } from '~/lib/theme/useAppUi'
 import { useSupabase } from '~/providers/SupabaseProvider'
+
+type NotificationsCache = {
+  items: AppNotification[]
+  hasMore: boolean
+  error: string | null
+}
 
 export function NotificationsScreen() {
   const communityUi = useCommunityUi()
   const ui = useAppUi()
   const router = useRouter()
   const { user } = useSupabase()
-  const [items, setItems] = useState<AppNotification[]>([])
+  const cacheKey = user?.id ? CACHE_KEYS.notifications(user.id) : null
+  const initial = cacheKey ? peekAppCache<NotificationsCache>(cacheKey) : null
+  const [items, setItems] = useState<AppNotification[]>(initial?.items ?? [])
   const [page, setPage] = useState(0)
-  const [hasMore, setHasMore] = useState(false)
-  const [isLoading, setIsLoading] = useState(true)
+  const [hasMore, setHasMore] = useState(initial?.hasMore ?? false)
+  const [isLoading, setIsLoading] = useState(!!user && !initial)
   const [isLoadingMore, setIsLoadingMore] = useState(false)
 
   const [product, setProduct] = useState<NotificationProductFilter>('')
   const [unreadOnly, setUnreadOnly] = useState(false)
   const [query, setQuery] = useState('')
 
-  const visibleItems = useMemo(() => {
-    const needle = query.trim().toLowerCase()
-    if (!needle) return items
-    return items.filter((item) => {
-      const haystack = [item.title, item.message, item.type, item.category, item.platform]
-        .filter(Boolean)
-        .join(' ')
-        .toLowerCase()
-      return haystack.includes(needle)
-    })
-  }, [items, query])
+  const visibleItems = useMemo(
+    () =>
+      filterBySearchQuery(items, query, (item) => [
+        item.title,
+        item.message,
+        item.type,
+        item.category,
+        item.platform,
+      ]),
+    [items, query],
+  )
 
   const load = useCallback(
     async (pageToLoad: number, append: boolean) => {
@@ -60,14 +72,39 @@ export function NotificationsScreen() {
       if (append) setIsLoadingMore(true)
       else setIsLoading(true)
       const result = await fetchNotifications(user.id, pageToLoad, { product, unreadOnly })
-      setItems((current) => (append ? [...current, ...result.items] : result.items))
+      const nextItems = append ? [...items, ...result.items] : result.items
+      setItems(nextItems)
       setHasMore(result.hasMore)
       setPage(pageToLoad)
       setIsLoading(false)
       setIsLoadingMore(false)
+      if (!append && cacheKey && !product && !unreadOnly) {
+        await writeAppCache(cacheKey, {
+          items: nextItems,
+          hasMore: result.hasMore,
+          error: result.error ?? null,
+        })
+      }
     },
-    [product, unreadOnly, user],
+    [cacheKey, items, product, unreadOnly, user],
   )
+
+  useEffect(() => {
+    if (!user?.id || !cacheKey) return
+    let cancelled = false
+    void (async () => {
+      const cached =
+        peekAppCache<NotificationsCache>(cacheKey) ??
+        (await readAppCache<NotificationsCache>(cacheKey))
+      if (cancelled || !cached || product || unreadOnly) return
+      setItems(cached.items)
+      setHasMore(cached.hasMore)
+      setIsLoading(false)
+    })()
+    return () => {
+      cancelled = true
+    }
+  }, [cacheKey, product, unreadOnly, user?.id])
 
   useEffect(() => {
     void load(0, false)
@@ -115,10 +152,9 @@ export function NotificationsScreen() {
   }
 
   return (
-    <FullWidthLayout scroll>
+    <FullWidthLayout scroll onRefresh={() => void load(0, false)}>
       <PageSection paddingVertical="$6" {...LAYOUT_STRETCH}>
         <YStack gap="$4" width="100%">
-          <PushPermissionBanner />
           <CommunityCard padding={18} gap={14} width="100%">
             <CommunityPageHeader
               title="Notifications"
@@ -132,33 +168,11 @@ export function NotificationsScreen() {
             />
             {user ? (
               <YStack gap={10}>
-                <XStack
-                  alignItems="center"
-                  gap={8}
-                  paddingHorizontal={12}
-                  minHeight={42}
-                  borderRadius={999}
-                  borderWidth={1}
-                  borderColor={communityUi.borderLight}
-                  backgroundColor={ui.surface}
-                >
-                  <Icons.Search size={16} color={ui.textMuted} />
-                  <Input
-                    flex={1}
-                    value={query}
-                    onChangeText={setQuery}
-                    placeholder="Search notifications"
-                    borderWidth={0}
-                    backgroundColor="transparent"
-                    height={40}
-                    paddingHorizontal={0}
-                  />
-                  {query ? (
-                    <XStack cursor="pointer" onPress={() => setQuery('')} padding={4}>
-                      <Icons.X size={14} color={ui.textMuted} />
-                    </XStack>
-                  ) : null}
-                </XStack>
+                <ScreenSearchField
+                  value={query}
+                  onChangeText={setQuery}
+                  placeholder="Search notifications"
+                />
                 <ScrollView horizontal showsHorizontalScrollIndicator={false}>
                   <XStack gap={8} alignItems="center" paddingVertical={2}>
                     {NOTIFICATION_PRODUCT_FILTERS.map((filter) => (
@@ -198,7 +212,7 @@ export function NotificationsScreen() {
             ) : null}
             {!user ? (
               <Text color={ui.textMuted}>Sign in to see your notifications.</Text>
-            ) : isLoading ? (
+            ) : isLoading && items.length === 0 ? (
               <YStack alignItems="center" paddingVertical="$6">
                 <Spinner size="large" color={communityUi.brand} />
               </YStack>
@@ -223,21 +237,12 @@ export function NotificationsScreen() {
                     onOpen={handleOpen}
                   />
                 ))}
-                {hasMore && !query.trim() ? (
-                  <YStack alignItems="center" paddingVertical={12}>
-                    {isLoadingMore ? (
-                      <Spinner size="small" color={communityUi.brand} />
-                    ) : (
-                      <Text
-                        color={communityUi.brand}
-                        fontWeight="600"
-                        cursor="pointer"
-                        onPress={() => void load(page + 1, true)}
-                      >
-                        Load more
-                      </Text>
-                    )}
-                  </YStack>
+                {!query.trim() ? (
+                  <LoadMoreSentinel
+                    hasMore={hasMore}
+                    isLoadingMore={isLoadingMore}
+                    onLoadMore={() => void load(page + 1, true)}
+                  />
                 ) : null}
               </YStack>
             )}

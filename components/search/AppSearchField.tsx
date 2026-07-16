@@ -83,7 +83,7 @@ export function AppSearchField({ compact, initialQuery = '', scope: scopeProp }:
         tier,
         pathname,
         scope: activeScope,
-        limit: 4,
+        limit: 12,
         userId: user?.id,
         latitude: userGeo.latitude,
         longitude: userGeo.longitude,
@@ -216,6 +216,10 @@ export function AppSearchField({ compact, initialQuery = '', scope: scopeProp }:
         open={open}
         onOpenChange={setOpen}
         query={query}
+        onQueryChange={(value) => {
+          setQuery(value)
+          if (!open) setOpen(true)
+        }}
         recent={history}
         hits={hits}
         loading={loading}

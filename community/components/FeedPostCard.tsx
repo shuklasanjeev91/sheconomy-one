@@ -54,9 +54,16 @@ type FeedPostCardProps = {
   post: CommunityPost
   /** When false, timestamps and content won't link to the post detail page. */
   linkToDetail?: boolean
+  onPostUpdated?: (postId: string, patch: Partial<CommunityPost>) => void
+  onPostDeleted?: (postId: string) => void
 }
 
-export function FeedPostCard({ post, linkToDetail = true }: FeedPostCardProps) {
+export function FeedPostCard({
+  post,
+  linkToDetail = true,
+  onPostUpdated,
+  onPostDeleted,
+}: FeedPostCardProps) {
   const communityUi = useCommunityUi()
   const themeName = useThemeName()
   const router = useRouter()
@@ -384,7 +391,12 @@ export function FeedPostCard({ post, linkToDetail = true }: FeedPostCardProps) {
         </XStack>
       </CommunityCard>
 
-      <PostActionSheets post={post} engagement={engagement} />
+      <PostActionSheets
+        post={post}
+        engagement={engagement}
+        onPostUpdated={onPostUpdated}
+        onPostDeleted={onPostDeleted}
+      />
 
       {mediaItems.length > 0 ? (
         <PostImageLightbox

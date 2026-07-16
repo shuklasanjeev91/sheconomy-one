@@ -1,5 +1,6 @@
 import { useParams, useRouter } from 'one'
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
+import { Platform } from 'react-native'
 
 import { fetchUserStories, markStoryViewed, type StorySlide } from '~/community/lib/stories'
 import { useCommunityUi } from '~/community/lib/community-theme'
@@ -7,7 +8,8 @@ import { Spinner, Text, XStack, YStack } from '~/components/ui'
 import { communityRoutes } from '~/lib/routes'
 import { useSupabase } from '~/providers/SupabaseProvider'
 
-const SLIDE_MS = 5000
+const TEXT_SLIDE_MS = 5000
+const VIDEO_SLIDE_MS = 15000
 
 export function StoryViewerScreen() {
   const communityUi = useCommunityUi()
@@ -17,6 +19,7 @@ export function StoryViewerScreen() {
   const [slides, setSlides] = useState<StorySlide[]>([])
   const [index, setIndex] = useState(0)
   const [isLoading, setIsLoading] = useState(true)
+  const advanceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   const load = useCallback(async () => {
     if (!userId) return
@@ -37,14 +40,26 @@ export function StoryViewerScreen() {
     markStoryViewed(slide.id, user.id)
   }, [index, slides, user])
 
+  const goNext = useCallback(() => {
+    if (index < slides.length - 1) setIndex((i) => i + 1)
+    else router.replace(communityRoutes.home)
+  }, [index, router, slides.length])
+
   useEffect(() => {
-    if (!slides.length) return
-    const timer = setTimeout(() => {
-      if (index < slides.length - 1) setIndex((i) => i + 1)
-      else router.replace(communityRoutes.home)
-    }, SLIDE_MS)
+    const slide = slides[index]
+    if (!slide) return
+
+    if (slide.media_type === 'video') {
+      if (advanceTimerRef.current) clearTimeout(advanceTimerRef.current)
+      advanceTimerRef.current = setTimeout(goNext, VIDEO_SLIDE_MS)
+      return () => {
+        if (advanceTimerRef.current) clearTimeout(advanceTimerRef.current)
+      }
+    }
+
+    const timer = setTimeout(goNext, TEXT_SLIDE_MS)
     return () => clearTimeout(timer)
-  }, [index, slides.length, router])
+  }, [goNext, index, slides])
 
   if (isLoading) {
     return (
@@ -97,13 +112,31 @@ export function StoryViewerScreen() {
         bottom={0}
         zIndex={3}
         cursor="pointer"
-        onPress={() => (index < slides.length - 1 ? setIndex(index + 1) : router.replace(communityRoutes.home))}
+        onPress={goNext}
       />
 
-      <YStack flex={1} alignItems="center" justifyContent="center" padding={24}>
+      <YStack flex={1} alignItems="center" justifyContent="center" padding={24} gap={16}>
         {slide.media_type === 'image' && slide.media_url ? (
           // eslint-disable-next-line jsx-a11y/alt-text
           <img src={slide.media_url} style={{ maxWidth: '100%', maxHeight: '80vh', objectFit: 'contain' }} />
+        ) : slide.media_type === 'video' && slide.media_url ? (
+          Platform.OS === 'web' ? (
+            <video
+              key={slide.id}
+              src={slide.media_url}
+              autoPlay
+              playsInline
+              controls
+              style={{ maxWidth: '100%', maxHeight: '80vh', objectFit: 'contain', background: '#000' }}
+              onEnded={goNext}
+            />
+          ) : (
+            <YStack width="100%" maxWidth={420} minHeight={280} alignItems="center" justifyContent="center">
+              <Text color="white" textAlign="center">
+                Video story — open on web to play inline.
+              </Text>
+            </YStack>
+          )
         ) : (
           <YStack
             width="100%"
@@ -120,6 +153,12 @@ export function StoryViewerScreen() {
             </Text>
           </YStack>
         )}
+
+        {slide.content && slide.media_type !== 'text' && slide.media_url ? (
+          <Text fontSize={15} color="white" textAlign="center" maxWidth={420}>
+            {slide.content}
+          </Text>
+        ) : null}
       </YStack>
     </YStack>
   )

@@ -9,6 +9,8 @@ type LoadMoreSentinelProps = {
   isLoadingMore: boolean
   onLoadMore: () => void
   label?: string
+  /** Distance before the sentinel enters view that triggers load (px). */
+  rootMargin?: string | number
 }
 
 export function LoadMoreSentinel({
@@ -16,23 +18,28 @@ export function LoadMoreSentinel({
   isLoadingMore,
   onLoadMore,
   label = 'Load more',
+  rootMargin = '240px',
 }: LoadMoreSentinelProps) {
   const ui = useAppUi()
   const { sentinelRef, supportsAutoLoad } = useInfiniteScroll(onLoadMore, {
     enabled: hasMore && !isLoadingMore,
+    rootMargin,
   })
 
   if (!hasMore && !isLoadingMore) return null
 
   return (
     <YStack
-      ref={sentinelRef as (node: unknown) => void}
+      ref={sentinelRef as never}
       width="100%"
       alignItems="center"
       justifyContent="center"
       paddingVertical="$4"
       gap="$2"
-      minHeight={supportsAutoLoad ? 1 : undefined}
+      minHeight={1}
+      onLayout={() => {
+        // Native: re-measure after layout so scrollY checks see the sentinel.
+      }}
     >
       {isLoadingMore ? (
         <Spinner size="small" />

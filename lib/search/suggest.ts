@@ -24,7 +24,7 @@ export async function searchSuggest(
 ): Promise<SearchSuggestResult> {
   const trimmed = query.trim()
   const scope = options.scope ?? searchScopeFromPath(options.pathname ?? '/')
-  const limit = options.limit ?? 5
+  const limit = options.limit ?? 12
 
   if (!trimmed) {
     return {

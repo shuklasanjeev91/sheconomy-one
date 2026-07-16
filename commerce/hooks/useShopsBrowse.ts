@@ -1,47 +1,81 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 
-import { fetchAllShopsForBrowse, type ShopSummary } from '~/commerce/lib/commerce'
+import { CACHE_KEYS } from '~/lib/bootstrap/app-prefetch'
 import {
-  applyShopBrowseFilters,
+  COMMERCE_PAGE_SIZE,
+  fetchShopsBrowsePage,
+  type ShopSummary,
+} from '~/commerce/lib/commerce'
+import {
   DEFAULT_SHOP_BROWSE_FILTERS,
   extractShopCountries,
   type ShopBrowseFilters,
 } from '~/commerce/lib/shop-filters'
+import { usePaginatedFeed } from '~/commerce/hooks/usePaginatedFeed'
+import { peekAppCache, writeAppCache } from '~/lib/cache/app-cache'
+
+const COUNTRIES_CACHE_KEY = `${CACHE_KEYS.shopsBrowse}:countries`
 
 export function useShopsBrowse() {
-  const [items, setItems] = useState<ShopSummary[]>([])
   const [filters, setFilters] = useState<ShopBrowseFilters>(DEFAULT_SHOP_BROWSE_FILTERS)
-  const [isLoading, setIsLoading] = useState(true)
-  const [error, setError] = useState<string | null>(null)
+  const [countries, setCountries] = useState<string[]>(
+    () => peekAppCache<string[]>(COUNTRIES_CACHE_KEY) ?? [],
+  )
 
-  const load = useCallback(async () => {
-    setIsLoading(true)
-    setError(null)
-    const result = await fetchAllShopsForBrowse()
-    if (result.error) {
-      setError(result.error)
-      setItems([])
-    } else {
-      setItems(result.items)
-    }
-    setIsLoading(false)
-  }, [])
+  const fetchPage = useCallback(
+    (page: number) =>
+      fetchShopsBrowsePage(page, COMMERCE_PAGE_SIZE, {
+        sort: filters.sort,
+        country: filters.country,
+      }),
+    [filters.country, filters.sort],
+  )
+
+  const feed = usePaginatedFeed<ShopSummary>({
+    fetchPage,
+    cacheKey: `${CACHE_KEYS.shopsBrowse}:${filters.sort}:${filters.country}`,
+  })
 
   useEffect(() => {
-    void load()
-  }, [load])
+    const fromItems = extractShopCountries(feed.items)
+    if (!fromItems.length) return
+    setCountries((current) => {
+      const next = Array.from(new Set([...current, ...fromItems])).sort((a, b) =>
+        a.localeCompare(b),
+      )
+      void writeAppCache(COUNTRIES_CACHE_KEY, next)
+      return next
+    })
+  }, [feed.items])
 
-  const countries = useMemo(() => extractShopCountries(items), [items])
-  const visibleItems = useMemo(() => applyShopBrowseFilters(items, filters), [filters, items])
+  useEffect(() => {
+    if (countries.length > 0) return
+    let cancelled = false
+    void fetchShopsBrowsePage(0, COMMERCE_PAGE_SIZE, { sort: 'name_asc' }).then((result) => {
+      if (cancelled || result.error) return
+      const next = extractShopCountries(result.items)
+      if (next.length) {
+        setCountries(next)
+        void writeAppCache(COUNTRIES_CACHE_KEY, next)
+      }
+    })
+    return () => {
+      cancelled = true
+    }
+  }, [countries.length])
 
   return {
-    items: visibleItems,
-    totalCount: items.length,
+    items: feed.items,
+    totalCount: feed.items.length,
+    hasMore: feed.hasMore,
+    isLoading: feed.isLoading,
+    isLoadingMore: feed.isLoadingMore,
+    isRefreshing: feed.isRefreshing,
     countries,
     filters,
     setFilters,
-    isLoading,
-    error,
-    refresh: load,
+    error: feed.error,
+    loadMore: feed.loadMore,
+    refresh: feed.refresh,
   }
 }

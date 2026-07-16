@@ -1,4 +1,8 @@
+export { AdaptiveTypeaheadPanel } from './AdaptiveTypeaheadPanel'
 export { AppSearchField } from './AppSearchField'
+export { OptionSearchSheet } from './OptionSearchSheet'
+export { ScreenSearchField } from './ScreenSearchField'
 export { SearchHitRow } from './SearchHitRow'
 export { SearchSuggestPanel } from './SearchSuggestPanel'
+export { SuggestSectionHeader } from './SuggestSectionHeader'
 export { UnifiedSearchScreen } from './UnifiedSearchScreen'

@@ -11,6 +11,8 @@ import {
 import { localChatQuickReplies } from '~/chat/lib/quick-replies'
 import type { ChatComposerAttachment, ChatMessage } from '~/chat/lib/types'
 import { HorizontalScrollRow } from '~/components/layout'
+import { MediaDropZone } from '~/components/media/MediaDropZone'
+import { UploadProgressBar } from '~/components/media/UploadProgressBar'
 import { Icons, Input, Spinner, Text, XStack, YStack, useAppToast } from '~/components/ui'
 import {
   cancelRecording,
@@ -18,7 +20,8 @@ import {
   startRecording,
   stopRecording,
 } from '~/lib/media/audio-recorder'
-import { captureImage, pickDocument, pickImages } from '~/lib/media/pick-image'
+import { captureImage, pickDocument, pickImages, pickMedia, pickVideos } from '~/lib/media/pick-image'
+import { sendPickedItemAsChatAttachment } from '~/lib/media/route-chat-attachment'
 
 import { AttachmentSheet } from './AttachmentSheet'
 import { EmojiPickerSheet } from './EmojiPickerSheet'
@@ -33,6 +36,7 @@ type MessageComposerProps = {
   onCreateEvent?: () => void
   onTyping: (text: string) => void
   sending?: boolean
+  uploadProgress?: number | null
   replyTo?: ChatMessage | null
   replySenderName?: string | null
   onCancelReply?: () => void
@@ -82,6 +86,7 @@ export function MessageComposer({
   onCreateEvent,
   onTyping,
   sending,
+  uploadProgress,
   replyTo,
   replySenderName,
   onCancelReply,
@@ -271,6 +276,48 @@ export function MessageComposer({
     }
   }
 
+  async function attachVideo() {
+    if (attaching) return
+    setAttaching(true)
+    try {
+      const picked = await pickVideos({ multiple: false, maxCount: 1 })
+      const first = picked[0]
+      if (first) {
+        onSendFile({
+          uri: first.uri,
+          mimeType: first.mimeType || 'video/mp4',
+          fileName: first.fileName ?? 'video.mp4',
+        })
+      }
+    } catch (error) {
+      toast.show('Could not open videos', {
+        message: error instanceof Error ? error.message : undefined,
+        tone: 'danger',
+      })
+    } finally {
+      setAttaching(false)
+    }
+  }
+
+  async function attachFromBrowse() {
+    if (attaching) return
+    setAttaching(true)
+    try {
+      const picked = await pickMedia({ accept: 'any', multiple: false, maxCount: 1 })
+      const first = picked[0]
+      if (first) {
+        sendPickedItemAsChatAttachment(first, { onSendImage, onSendFile })
+      }
+    } catch (error) {
+      toast.show('Could not open files', {
+        message: error instanceof Error ? error.message : undefined,
+        tone: 'danger',
+      })
+    } finally {
+      setAttaching(false)
+    }
+  }
+
   async function attachDocument() {
     if (attaching) return
     setAttaching(true)
@@ -313,6 +360,18 @@ export function MessageComposer({
     : []
 
   return (
+    <MediaDropZone
+      disabled={attaching || sending || recording || isEditing}
+      accept="any"
+      multiple={false}
+      maxCount={1}
+      label="Drop a file to send"
+      onDrop={(items) => {
+        const first = items[0]
+        if (!first) return
+        sendPickedItemAsChatAttachment(first, { onSendImage, onSendFile })
+      }}
+    >
     <YStack backgroundColor={theme.composerBg} paddingBottom={2}>
       {quickReplies.length > 0 ? (
         <YStack paddingHorizontal={8} paddingTop={8} gap={6}>
@@ -380,6 +439,12 @@ export function MessageComposer({
             <Icons.X size={18} color={theme.textSecondary} />
           </IconButton>
         </XStack>
+      ) : null}
+
+      {uploadProgress != null && uploadProgress > 0 ? (
+        <YStack paddingHorizontal={12} paddingTop={8}>
+          <UploadProgressBar progress={uploadProgress} label="Uploading attachment…" compact />
+        </YStack>
       ) : null}
 
       <XStack alignItems="flex-end" gap={7} paddingHorizontal={8} paddingVertical={8}>
@@ -517,12 +582,15 @@ export function MessageComposer({
       <AttachmentSheet
         open={attachOpen}
         onOpenChange={setAttachOpen}
+        onPickBrowse={() => void attachFromBrowse()}
         onPickGallery={() => void attachFromGallery()}
         onPickCamera={() => void attachFromCamera()}
+        onPickVideo={() => void attachVideo()}
         onPickDocument={() => void attachDocument()}
         onPickPoll={onCreatePoll}
         onPickEvent={onCreateEvent}
       />
     </YStack>
+    </MediaDropZone>
   )
 }

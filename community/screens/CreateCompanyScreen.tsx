@@ -10,6 +10,7 @@ import { Button, Spinner, Text, ValidatedTextField, YStack, useAppToast } from '
 import { ImageUploadField, preparePickedImagesForUpload } from '~/components/media/ImageUploadField'
 import type { PickedImage } from '~/lib/media/pick-image'
 import { uploadPostImages } from '~/lib/supabase/storage-upload'
+import { useUploadProgress } from '~/hooks/useUploadProgress'
 import { useFormValidation } from '~/hooks/useFormValidation'
 import { communityRoutes } from '~/lib/routes'
 import { maxLength, minLength, optionalUrl, required, slug } from '~/lib/validation'
@@ -23,6 +24,7 @@ export function CreateCompanyScreen() {
   const [location, setLocation] = useState('')
   const [logo, setLogo] = useState<PickedImage[]>([])
   const [isSaving, setIsSaving] = useState(false)
+  const { progress: uploadProgress, track: trackUpload, reset: resetUpload } = useUploadProgress()
 
   const form = useFormValidation(
     useMemo(
@@ -46,9 +48,13 @@ export function CreateCompanyScreen() {
     let logoUrl = ''
     if (logo[0]) {
       const files = await preparePickedImagesForUpload(logo)
-      const { urls, error: uploadError } = await uploadPostImages(user.id, files)
+      trackUpload(1)
+      const { urls, error: uploadError } = await uploadPostImages(user.id, files, {
+        onProgress: trackUpload,
+      })
       if (uploadError || !urls[0]) {
         setIsSaving(false)
+        resetUpload()
         toast.show('Could not upload logo', {
           tone: 'danger',
           message: uploadError ?? 'Try again shortly.',
@@ -70,6 +76,7 @@ export function CreateCompanyScreen() {
       logoUrl,
     })
     setIsSaving(false)
+    resetUpload()
     if (error || !data) {
       toast.show('Could not create page', { tone: 'danger', message: error ?? 'Try again.' })
       return
@@ -100,6 +107,8 @@ export function CreateCompanyScreen() {
           hint="Upload a square logo for your page."
           value={logo}
           onChange={setLogo}
+          uploadProgress={uploadProgress}
+          uploadLabel="Uploading logo…"
         />
         <Button
           backgroundColor={communityUi.brand}

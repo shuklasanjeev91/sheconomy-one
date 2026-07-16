@@ -1,4 +1,5 @@
 import { useNativeLoader } from '~/hooks/useNativeLoader'
+import { CACHE_KEYS } from '~/lib/bootstrap/app-prefetch'
 import { homeLoader, HomeScreen } from '~/commerce/screens/HomeScreen'
 
 /** Keep route export for One preload/SSR when available. */
@@ -12,7 +13,9 @@ export async function loader() {
  * (loader JS missing or not yet hydrated). Load on the client like native.
  */
 export default function StoreHomePage() {
-  const { data: result, loading, error: loadError } = useNativeLoader(homeLoader)
+  const { data: result, loading, error: loadError } = useNativeLoader(homeLoader, {
+    cacheKey: CACHE_KEYS.home,
+  })
 
   return (
     <HomeScreen

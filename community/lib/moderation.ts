@@ -9,6 +9,7 @@ export async function hideCommunityPost(
     { user_id: userId, post_id: postId },
     { onConflict: 'user_id,post_id' },
   )
+  invalidateFeedExclusionCache()
   return { error: error?.message ?? null }
 }
 
@@ -61,6 +62,7 @@ export async function blockCommunityMember(
       `and(follower_id.eq.${blockerId},following_id.eq.${blockedId}),and(follower_id.eq.${blockedId},following_id.eq.${blockerId})`,
     )
 
+  invalidateFeedExclusionCache()
   return { error: null }
 }
 
@@ -86,10 +88,21 @@ export async function reportCommunityMember(
   return { error: error?.message ?? null }
 }
 
+type FeedExclusionSnapshot = {
+  hiddenPostIds: string[]
+  blockedUserIds: string[]
+}
+
+let feedExclusionCache: { userId: string; snapshot: FeedExclusionSnapshot } | null = null
+
+export function invalidateFeedExclusionCache() {
+  feedExclusionCache = null
+}
+
 /** IDs the viewer has hidden or whose authors they blocked. */
 export async function fetchFeedExclusion(
   userId: string,
-): Promise<{ hiddenPostIds: string[]; blockedUserIds: string[] }> {
+): Promise<FeedExclusionSnapshot> {
   const [{ data: hidden }, { data: blocked }, { data: blockedBy }] = await Promise.all([
     supabase.from('community_hidden_posts').select('post_id').eq('user_id', userId),
     supabase.from('blocked_users').select('blocked_id').eq('blocker_id', userId),
@@ -105,4 +118,15 @@ export async function fetchFeedExclusion(
     hiddenPostIds: (hidden ?? []).map((row) => row.post_id),
     blockedUserIds: [...new Set(blockedUserIds)],
   }
+}
+
+/** Session-scoped cache so feed pagination does not re-query exclusions every page. */
+export async function getFeedExclusion(userId: string): Promise<FeedExclusionSnapshot> {
+  if (feedExclusionCache?.userId === userId) {
+    return feedExclusionCache.snapshot
+  }
+
+  const snapshot = await fetchFeedExclusion(userId)
+  feedExclusionCache = { userId, snapshot }
+  return snapshot
 }

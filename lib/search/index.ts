@@ -4,6 +4,7 @@ export * from './access'
 export * from './history'
 export * from './federate'
 export * from './suggest'
+export * from './filter'
 
 export function buildSearchHref(query?: string, scope?: string): string {
   const params = new URLSearchParams()

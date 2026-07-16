@@ -7,6 +7,7 @@ import {
   type ChatCandidate,
 } from '~/chat/lib/chats'
 import { useChatTheme } from '~/chat/lib/chat-theme'
+import { ScreenSearchField } from '~/components/search'
 import {
   AppBottomSheet,
   Avatar,
@@ -131,28 +132,12 @@ export function NewChatSheet({
       scrollable
     >
       <YStack gap={12} paddingBottom="$2">
-        <XStack
-          alignItems="center"
-          gap={8}
-          backgroundColor={theme.inputBg}
-          borderRadius={999}
-          borderWidth={1}
-          borderColor={theme.border}
-          paddingHorizontal={12}
-        >
-          <Icons.Search size={16} color={theme.textMuted} />
-          <Input
-            flex={1}
-            value={search}
-            onChangeText={setSearch}
-            placeholder="Search people"
-            placeholderTextColor={theme.textMuted}
-            borderWidth={0}
-            backgroundColor="transparent"
-            height={42}
-            paddingHorizontal={0}
-          />
-        </XStack>
+        <ScreenSearchField
+          value={search}
+          onChangeText={setSearch}
+          placeholder="Search people"
+          unifiedScope="people"
+        />
 
         <XStack
           alignSelf="flex-start"

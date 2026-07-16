@@ -105,7 +105,7 @@ export async function fetchUserStories(userId: string): Promise<StorySlide[]> {
 export async function createStory(
   userId: string,
   input: {
-    mediaType: 'text' | 'image'
+    mediaType: 'text' | 'image' | 'video'
     content?: string
     mediaUrl?: string
     backgroundColor?: string

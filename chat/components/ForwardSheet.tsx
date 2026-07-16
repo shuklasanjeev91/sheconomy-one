@@ -1,7 +1,11 @@
+import { useEffect, useMemo, useState } from 'react'
+
 import { useUserChats } from '~/chat/hooks/useUserChats'
 import { useChatTheme } from '~/chat/lib/chat-theme'
 import type { ChatSummary } from '~/chat/lib/types'
+import { ScreenSearchField } from '~/components/search'
 import { AppBottomSheet, Avatar, Icons, ScrollView, Spinner, Text, XStack, YStack } from '~/components/ui'
+import { filterBySearchQuery } from '~/lib/search'
 
 type ForwardSheetProps = {
   open: boolean
@@ -21,10 +25,28 @@ export function ForwardSheet({
 }: ForwardSheetProps) {
   const theme = useChatTheme()
   const { chats, isLoading } = useUserChats(open ? currentUserId : null)
-  const targets = chats.filter((c) => c.id !== fromConversationId)
+  const [query, setQuery] = useState('')
+  const targets = useMemo(
+    () => chats.filter((chat) => chat.id !== fromConversationId),
+    [chats, fromConversationId],
+  )
+  const filteredTargets = useMemo(
+    () => filterBySearchQuery(targets, query, (chat) => [chat.name]),
+    [targets, query],
+  )
+
+  useEffect(() => {
+    if (!open) setQuery('')
+  }, [open])
 
   return (
     <AppBottomSheet open={open} onOpenChange={onOpenChange} title="Forward to" scrollable={false}>
+      <ScreenSearchField
+        value={query}
+        onChangeText={setQuery}
+        placeholder="Search chats"
+        clearable
+      />
       {isLoading ? (
         <YStack paddingVertical={24} alignItems="center">
           <Spinner size="small" color={theme.brand} />
@@ -36,9 +58,16 @@ export function ForwardSheet({
             No other chats to forward to.
           </Text>
         </YStack>
+      ) : filteredTargets.length === 0 ? (
+        <YStack paddingVertical={24} alignItems="center" gap={6}>
+          <Icons.Search size={26} color={theme.textMuted} />
+          <Text fontSize={14} color={theme.textMuted}>
+            No chats match your search.
+          </Text>
+        </YStack>
       ) : (
         <ScrollView style={{ maxHeight: 360 }} showsVerticalScrollIndicator={false}>
-          {targets.map((chat) => (
+          {filteredTargets.map((chat) => (
             <XStack
               key={chat.id}
               onPress={() => onPick(chat)}

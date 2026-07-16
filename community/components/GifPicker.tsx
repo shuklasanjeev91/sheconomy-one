@@ -3,7 +3,9 @@ import { useEffect, useState } from 'react'
 import { CommunityAdaptiveSheet } from '~/community/components/CommunityAdaptiveSheet'
 import { searchGifs, type GifResult } from '~/community/lib/giphy'
 import { useCommunityUi } from '~/community/lib/community-theme'
-import { Icons, Image, Input, Spinner, Text, XStack, YStack } from '~/components/ui'
+import { ScreenSearchField } from '~/components/search'
+import { Image, Spinner, Text, XStack, YStack } from '~/components/ui'
+import { useScreenSearch } from '~/hooks/useScreenSearch'
 import { useAppUi } from '~/lib/theme/useAppUi'
 
 type GifPickerProps = {
@@ -15,7 +17,7 @@ type GifPickerProps = {
 export function GifPicker({ open, onOpenChange, onSelect }: GifPickerProps) {
   const communityUi = useCommunityUi()
   const ui = useAppUi()
-  const [query, setQuery] = useState('')
+  const { input: query, setInput: setQuery, debounced: debouncedQuery } = useScreenSearch()
   const [gifs, setGifs] = useState<GifResult[]>([])
   const [isLoading, setIsLoading] = useState(false)
 
@@ -24,19 +26,16 @@ export function GifPicker({ open, onOpenChange, onSelect }: GifPickerProps) {
 
     let active = true
     setIsLoading(true)
-    const timer = setTimeout(() => {
-      searchGifs(query).then((results) => {
-        if (!active) return
-        setGifs(results)
-        setIsLoading(false)
-      })
-    }, query ? 300 : 0)
+    void searchGifs(debouncedQuery).then((results) => {
+      if (!active) return
+      setGifs(results)
+      setIsLoading(false)
+    })
 
     return () => {
       active = false
-      clearTimeout(timer)
     }
-  }, [open, query])
+  }, [debouncedQuery, open])
 
   return (
     <CommunityAdaptiveSheet
@@ -46,27 +45,11 @@ export function GifPicker({ open, onOpenChange, onSelect }: GifPickerProps) {
       maxWidth={560}
     >
       <YStack gap="$3">
-        <XStack
-          gap="$2"
-          alignItems="center"
-          paddingHorizontal="$3"
-          paddingVertical="$2"
-          borderRadius={8}
-          borderWidth={1}
-          borderColor={communityUi.border}
-          backgroundColor={ui.surfaceMuted}
-        >
-          <Icons.Search size={18} color={ui.textMuted} />
-          <Input
-            flex={1}
-            value={query}
-            onChangeText={setQuery}
-            placeholder="Search GIFs"
-            borderWidth={0}
-            backgroundColor="transparent"
-            paddingHorizontal={0}
-          />
-        </XStack>
+        <ScreenSearchField
+          value={query}
+          onChangeText={setQuery}
+          placeholder="Search GIFs"
+        />
 
         {isLoading ? (
           <YStack alignItems="center" paddingVertical="$6">

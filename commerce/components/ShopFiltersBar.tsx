@@ -1,4 +1,4 @@
-import { useMemo, type ReactNode } from 'react'
+import { useMemo, useState, type ReactNode } from 'react'
 
 import {
   DEFAULT_SHOP_BROWSE_FILTERS,
@@ -7,14 +7,13 @@ import {
   type ShopBrowseFilters,
   type ShopSortOption,
 } from '~/commerce/lib/shop-filters'
+import { GeoSearchSheet } from '~/components/geo/GeoSearchSheet'
+import { OptionSearchSheet } from '~/components/search/OptionSearchSheet'
+import { getCountryName } from '~/lib/geo'
+import type { GeoOption } from '~/lib/geo'
 import {
   Button,
   Icons,
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectViewport,
   Text,
   XStack,
   YStack,
@@ -31,11 +30,23 @@ type ShopFiltersBarProps = {
 export function ShopFiltersBar({ filters, countries, resultCount, onChange }: ShopFiltersBarProps) {
   const ui = useAppUi()
   const activeCount = countActiveShopFilters(filters)
+  const [countryOpen, setCountryOpen] = useState(false)
+  const [sortOpen, setSortOpen] = useState(false)
 
-  const countryOptions = useMemo(
-    () => [{ value: 'all', label: 'All countries' }, ...countries.map((country) => ({ value: country, label: country }))],
+  const countryOptions = useMemo<GeoOption[]>(
+    () => [
+      { value: 'all', label: 'All countries' },
+      ...countries.map((country) => ({
+        value: country,
+        label: getCountryName(country, country),
+      })),
+    ],
     [countries],
   )
+  const selectedCountryLabel =
+    countryOptions.find((option) => option.value === filters.country)?.label ?? 'All countries'
+  const selectedSortLabel =
+    SHOP_SORT_OPTIONS.find((option) => option.value === filters.sort)?.label ?? 'Sort shops'
 
   function patch(next: Partial<ShopBrowseFilters>) {
     onChange({ ...filters, ...next })
@@ -70,43 +81,65 @@ export function ShopFiltersBar({ filters, countries, resultCount, onChange }: Sh
 
       <XStack gap="$3" flexWrap="wrap" alignItems="flex-end" width="100%">
         <FilterField label="Sort by" flex={1} minWidth={200}>
-          <Select
-            value={filters.sort}
-            onValueChange={(value) => patch({ sort: value as ShopSortOption })}
+          <XStack
+            alignItems="center"
+            justifyContent="space-between"
+            gap="$2"
+            paddingHorizontal="$3"
+            paddingVertical="$2.5"
+            borderRadius={12}
+            borderWidth={1}
+            borderColor={ui.borderSubtle}
+            backgroundColor={ui.surface}
+            cursor="pointer"
+            hoverStyle={{ backgroundColor: ui.surfaceMuted }}
+            onPress={() => setSortOpen(true)}
           >
-            <SelectTrigger width="100%" iconAfter={<Icons.ChevronDown size={16} />}>
-              <Select.Value placeholder="Sort shops" />
-            </SelectTrigger>
-            <SelectContent zIndex={300000}>
-              <SelectViewport>
-                {SHOP_SORT_OPTIONS.map((option, index) => (
-                  <SelectItem key={option.value} index={index} value={option.value}>
-                    <Select.ItemText>{option.label}</Select.ItemText>
-                  </SelectItem>
-                ))}
-              </SelectViewport>
-            </SelectContent>
-          </Select>
+            <Text flex={1} fontSize={14} color={ui.text} numberOfLines={1}>
+              {selectedSortLabel}
+            </Text>
+            <Icons.ChevronDown size={16} color={ui.textMuted} />
+          </XStack>
+          <OptionSearchSheet
+            open={sortOpen}
+            onOpenChange={setSortOpen}
+            title="Sort shops"
+            options={SHOP_SORT_OPTIONS}
+            value={filters.sort}
+            onSelect={(value) => patch({ sort: value as ShopSortOption })}
+            searchPlaceholder="Search sort options"
+          />
         </FilterField>
 
         <FilterField label="Country" flex={1} minWidth={200}>
-          <Select
-            value={filters.country}
-            onValueChange={(value) => patch({ country: value })}
+          <XStack
+            alignItems="center"
+            justifyContent="space-between"
+            gap="$2"
+            paddingHorizontal="$3"
+            paddingVertical="$2.5"
+            borderRadius={12}
+            borderWidth={1}
+            borderColor={ui.borderSubtle}
+            backgroundColor={ui.surface}
+            cursor="pointer"
+            hoverStyle={{ backgroundColor: ui.surfaceMuted }}
+            onPress={() => setCountryOpen(true)}
           >
-            <SelectTrigger width="100%" iconAfter={<Icons.ChevronDown size={16} />}>
-              <Select.Value placeholder="All countries" />
-            </SelectTrigger>
-            <SelectContent zIndex={300000}>
-              <SelectViewport>
-                {countryOptions.map((option, index) => (
-                  <SelectItem key={option.value} index={index} value={option.value}>
-                    <Select.ItemText>{option.label}</Select.ItemText>
-                  </SelectItem>
-                ))}
-              </SelectViewport>
-            </SelectContent>
-          </Select>
+            <Text flex={1} fontSize={14} color={ui.text} numberOfLines={1}>
+              {selectedCountryLabel}
+            </Text>
+            <Icons.ChevronDown size={16} color={ui.textMuted} />
+          </XStack>
+          <GeoSearchSheet
+            open={countryOpen}
+            onOpenChange={setCountryOpen}
+            title="Country"
+            options={countryOptions}
+            value={filters.country}
+            onSelect={(option) => patch({ country: option.value })}
+            searchPlaceholder="Search countries"
+          />
         </FilterField>
 
         {activeCount > 0 ? (

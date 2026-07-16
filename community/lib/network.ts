@@ -210,6 +210,14 @@ export type ProfileSuggestion = {
   headline: string | null
 }
 
+export type HashtagSuggestion = {
+  tag: string
+  usage_count?: number
+}
+
+export const MENTION_SUGGEST_PAGE_SIZE = 20
+export const HASHTAG_SUGGEST_PAGE_SIZE = 25
+
 /** Escape characters that would break a PostgREST `or(...)` filter value. */
 function sanitizeFilterValue(value: string): string {
   return value.replace(/[,()\\%]/g, ' ').trim()
@@ -219,13 +227,21 @@ function sanitizeFilterValue(value: string): string {
  * Search public profiles by name or username for the mention autocomplete.
  * With an empty query it returns well-connected profiles as default suggestions.
  */
-export async function searchProfiles(query: string, limit = 6): Promise<ProfileSuggestion[]> {
+export async function searchProfiles(
+  query: string,
+  limit = MENTION_SUGGEST_PAGE_SIZE,
+  offset = 0,
+): Promise<ProfileSuggestion[]> {
   const trimmed = query.trim()
+  const safeLimit = Math.max(1, Math.min(limit, 50))
+  const from = Math.max(0, offset)
+  const to = from + safeLimit - 1
+
   let request = supabase
     .from('profiles')
     .select('id, full_name, username, avatar_url, headline')
     .eq('is_deleted', false)
-    .limit(limit)
+    .range(from, to)
 
   const safe = sanitizeFilterValue(trimmed)
   if (safe) {
@@ -240,14 +256,23 @@ export async function searchProfiles(query: string, limit = 6): Promise<ProfileS
 }
 
 /** Suggest hashtags for the composer autocomplete, ordered by usage. */
-export async function suggestHashtags(query: string, limit = 8): Promise<string[]> {
+export async function suggestHashtags(
+  query: string,
+  limit = HASHTAG_SUGGEST_PAGE_SIZE,
+): Promise<HashtagSuggestion[]> {
   const prefix = query.trim().replace(/^#/, '')
+  const maxResults = Math.max(1, Math.min(limit, 50))
   const { data, error } = await supabase.rpc('get_hashtag_suggestions', {
     prefix,
-    max_results: limit,
+    max_results: maxResults,
   })
   if (error || !data) return []
-  return (data as { tag: string }[]).map((row) => row.tag).filter(Boolean)
+  return (data as { tag: string; usage_count?: number }[])
+    .map((row) => ({
+      tag: row.tag,
+      usage_count: row.usage_count ?? undefined,
+    }))
+    .filter((row) => Boolean(row.tag))
 }
 
 type ConnectionStatusRow = {
@@ -325,29 +350,38 @@ export async function fetchConnectionState(
 export async function fetchDiscoverMembers(
   excludeUserId?: string,
   limit = NETWORK_PAGE_SIZE,
-): Promise<{ items: NetworkMember[]; error: string | null }> {
+  page = 0,
+): Promise<{ items: NetworkMember[]; hasMore: boolean; error: string | null }> {
+  const from = page * limit
+  const to = from + limit - 1
+
   let query = supabase
     .from('profiles')
     .select(
       'id, full_name, username, headline, avatar_url, location, industry, is_verified, connections_count',
+      { count: 'exact' },
     )
     .eq('is_deleted', false)
     .not('full_name', 'is', null)
     .order('connections_count', { ascending: false, nullsFirst: false })
-    .limit(limit)
+    .range(from, to)
 
   if (excludeUserId) {
     query = query.neq('id', excludeUserId)
   }
 
-  const { data, error } = await query
+  const { data, error, count } = await query
 
   if (error) {
-    return { items: [], error: error.message }
+    return { items: [], hasMore: false, error: error.message }
   }
 
+  const items = ((data ?? []) as ProfileRow[]).map(mapProfileRow)
+  const total = count ?? 0
+
   return {
-    items: ((data ?? []) as ProfileRow[]).map(mapProfileRow),
+    items,
+    hasMore: total ? to + 1 < total : items.length === limit,
     error: null,
   }
 }

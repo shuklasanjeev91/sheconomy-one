@@ -131,7 +131,6 @@ export function ChatCallScreen({ code, callType, callId }: ChatCallScreenProps) 
           if (
             updated.status === 'ended' ||
             updated.status === 'declined' ||
-            updated.status === 'canceled' ||
             updated.status === 'missed'
           ) {
             hungUpRef.current = true

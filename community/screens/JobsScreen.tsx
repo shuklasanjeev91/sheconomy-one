@@ -11,9 +11,11 @@ import {
 } from '~/community/components/CommunityFilters'
 import { fetchSavedJobs, searchJobs, type JobListing } from '~/community/lib/jobs'
 import { useCommunityUi } from '~/community/lib/community-theme'
-import { Button, Icons, Input, ScrollView, Spinner, Text, XStack, YStack } from '~/components/ui'
-import { radius } from '~/config/tokens'
+import { LoadMoreSentinel } from '~/commerce/components/LoadMoreSentinel'
+import { ScreenSearchField } from '~/components/search'
+import { Button, Icons, ScrollView, Spinner, Text, XStack, YStack } from '~/components/ui'
 import { communityRoutes } from '~/lib/routes'
+import { useScreenSearch } from '~/hooks/useScreenSearch'
 import { useSupabase } from '~/providers/SupabaseProvider'
 
 const JOB_TYPE_OPTIONS: FilterOption[] = [
@@ -66,7 +68,7 @@ function labelForValue(options: FilterOption[], value: string): string | undefin
 export function JobsScreen() {
   const communityUi = useCommunityUi()
   const { user } = useSupabase()
-  const [search, setSearch] = useState('')
+  const { input: search, setInput: setSearch, debounced: searchQuery } = useScreenSearch()
   const [jobTypes, setJobTypes] = useState<string[]>([])
   const [experience, setExperience] = useState('')
   const [remote, setRemote] = useState('any')
@@ -89,7 +91,7 @@ export function JobsScreen() {
       if (append) setIsLoadingMore(true)
       else setIsLoading(true)
       const result = await searchJobs({
-        search,
+        search: searchQuery,
         jobType: jobTypes[0] ?? '',
         experience,
         isRemote: remote === 'remote',
@@ -101,7 +103,7 @@ export function JobsScreen() {
       setIsLoading(false)
       setIsLoadingMore(false)
     },
-    [experience, jobTypes, remote, search],
+    [experience, jobTypes, remote, searchQuery],
   )
 
   useEffect(() => {
@@ -230,25 +232,12 @@ export function JobsScreen() {
           />
         ) : null}
 
-        <XStack
-          gap={8}
-          alignItems="center"
-          padding={12}
-          borderRadius={radius.chip}
-          borderWidth={1}
-          borderColor={communityUi.borderLight}
-          backgroundColor={communityUi.inputBg}
-        >
-          <Icons.Search size={18} color={communityUi.textMuted} />
-          <Input
-            flex={1}
-            value={search}
-            onChangeText={setSearch}
-            placeholder="Search jobs, companies, skills"
-            borderWidth={0}
-            backgroundColor="transparent"
-          />
-        </XStack>
+        <ScreenSearchField
+          value={search}
+          onChangeText={setSearch}
+          placeholder="Search jobs, companies, skills"
+          unifiedScope="jobs"
+        />
 
         <ScrollView horizontal showsHorizontalScrollIndicator={false}>
           <XStack gap={8} alignItems="center" paddingVertical={2}>
@@ -354,21 +343,12 @@ export function JobsScreen() {
               </AppLink>
             ))
           )}
-          {hasMore && !showSavedOnly ? (
-            <YStack alignItems="center" paddingVertical={12}>
-              {isLoadingMore ? (
-                <Spinner size="small" color={communityUi.brand} />
-              ) : (
-                <Text
-                  color={communityUi.brand}
-                  fontWeight="600"
-                  cursor="pointer"
-                  onPress={() => load(page + 1, true)}
-                >
-                  Load more
-                </Text>
-              )}
-            </YStack>
+          {!showSavedOnly ? (
+            <LoadMoreSentinel
+              hasMore={hasMore}
+              isLoadingMore={isLoadingMore}
+              onLoadMore={() => void load(page + 1, true)}
+            />
           ) : null}
         </CommunityCard>
       )}

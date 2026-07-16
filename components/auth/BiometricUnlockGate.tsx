@@ -21,18 +21,20 @@ export function BiometricUnlockGate({ children }: { children: React.ReactNode })
   const ui = useAppUi()
   const { session, isLoading } = useSupabase()
   const { signOutLocal } = useAuth()
-  const [checking, setChecking] = useState(Platform.OS !== 'web')
+  const [checking, setChecking] = useState(false)
   const [locked, setLocked] = useState(false)
   const [label, setLabel] = useState('Biometrics')
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
   const evaluate = useCallback(async () => {
-    if (Platform.OS === 'web' || isLoading) {
+    if (Platform.OS === 'web') {
       setChecking(false)
       setLocked(false)
       return
     }
+    if (isLoading) return
+
     setChecking(true)
     const cap = await getBiometricCapability()
     setLabel(cap.label)
@@ -58,7 +60,7 @@ export function BiometricUnlockGate({ children }: { children: React.ReactNode })
   }, [session?.user])
 
   if (Platform.OS === 'web') return <>{children}</>
-  if (isLoading || checking) {
+  if (locked && (checking || busy)) {
     return (
       <PageCenter>
         <Spinner size="large" />

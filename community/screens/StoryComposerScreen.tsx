@@ -8,7 +8,8 @@ import { useCommunityUi } from '~/community/lib/community-theme'
 import { Button, Spinner, Text, TextArea, XStack, YStack, useAppToast } from '~/components/ui'
 import { ImageUploadField, preparePickedImagesForUpload } from '~/components/media/ImageUploadField'
 import type { PickedImage } from '~/lib/media/pick-image'
-import { uploadPostImages } from '~/lib/supabase/storage-upload'
+import { uploadPostImages, uploadPostVideos } from '~/lib/supabase/storage-upload'
+import { useUploadProgress } from '~/hooks/useUploadProgress'
 import { communityRoutes } from '~/lib/routes'
 import { useSupabase } from '~/providers/SupabaseProvider'
 
@@ -20,10 +21,14 @@ export function StoryComposerScreen() {
   const toast = useAppToast()
   const { user } = useSupabase()
   const [content, setContent] = useState('')
-  const [storyImage, setStoryImage] = useState<PickedImage[]>([])
+  const [storyMedia, setStoryMedia] = useState<PickedImage[]>([])
   const [bgColor, setBgColor] = useState(BG_COLORS[0])
-  const [mode, setMode] = useState<'text' | 'image'>('text')
+  const [mode, setMode] = useState<'text' | 'media'>('text')
   const [isPosting, setIsPosting] = useState(false)
+  const { progress: uploadProgress, track: trackUpload, reset: resetUpload } = useUploadProgress()
+
+  const picked = storyMedia[0]
+  const isVideoStory = picked?.mimeType?.startsWith('video/')
 
   async function handlePost() {
     if (!user) return
@@ -31,35 +36,61 @@ export function StoryComposerScreen() {
       toast.show('Add text', { tone: 'danger', message: 'Write something for your story.' })
       return
     }
-    if (mode === 'image' && !storyImage[0]) {
-      toast.show('Add image', { tone: 'danger', message: 'Choose an image for your story.' })
+    if (mode === 'media' && !picked) {
+      toast.show('Add media', { tone: 'danger', message: 'Choose a photo or video for your story.' })
       return
     }
 
     setIsPosting(true)
 
     let mediaUrl: string | undefined
-    if (mode === 'image' && storyImage[0]) {
-      const files = await preparePickedImagesForUpload(storyImage)
-      const { urls, error: uploadError } = await uploadPostImages(user.id, files)
-      if (uploadError || !urls[0]) {
-        setIsPosting(false)
-        toast.show('Could not upload image', {
-          tone: 'danger',
-          message: uploadError ?? 'Try again shortly.',
+    let mediaType: 'text' | 'image' | 'video' = 'text'
+
+    if (mode === 'media' && picked) {
+      const files = await preparePickedImagesForUpload([picked])
+      trackUpload(1)
+
+      if (isVideoStory) {
+        const { urls, error: uploadError } = await uploadPostVideos(user.id, files, {
+          onProgress: trackUpload,
         })
-        return
+        if (uploadError || !urls[0]) {
+          setIsPosting(false)
+          resetUpload()
+          toast.show('Could not upload video', {
+            tone: 'danger',
+            message: uploadError ?? 'Try again shortly.',
+          })
+          return
+        }
+        mediaUrl = urls[0]
+        mediaType = 'video'
+      } else {
+        const { urls, error: uploadError } = await uploadPostImages(user.id, files, {
+          onProgress: trackUpload,
+        })
+        if (uploadError || !urls[0]) {
+          setIsPosting(false)
+          resetUpload()
+          toast.show('Could not upload image', {
+            tone: 'danger',
+            message: uploadError ?? 'Try again shortly.',
+          })
+          return
+        }
+        mediaUrl = urls[0]
+        mediaType = 'image'
       }
-      mediaUrl = urls[0]
     }
 
     const result = await createStory(user.id, {
-      mediaType: mode,
-      content: mode === 'text' ? content : undefined,
+      mediaType,
+      content: mode === 'text' ? content : content.trim() || undefined,
       mediaUrl,
       backgroundColor: bgColor,
     })
     setIsPosting(false)
+    resetUpload()
 
     if (result.error) {
       toast.show('Could not post story', { tone: 'danger', message: result.error })
@@ -77,15 +108,23 @@ export function StoryComposerScreen() {
           Create a story
         </Text>
         <Text fontSize={14} color={communityUi.textMuted}>
-          Stories disappear after 24 hours.
+          Stories disappear after 24 hours. Share a text moment, photo, or video.
         </Text>
 
         <XStack gap={8}>
-          <Button size="$3" backgroundColor={mode === 'text' ? communityUi.brand : communityUi.divider} onPress={() => setMode('text')}>
+          <Button
+            size="$3"
+            backgroundColor={mode === 'text' ? communityUi.brand : communityUi.divider}
+            onPress={() => setMode('text')}
+          >
             Text
           </Button>
-          <Button size="$3" backgroundColor={mode === 'image' ? communityUi.brand : communityUi.divider} onPress={() => setMode('image')}>
-            Image
+          <Button
+            size="$3"
+            backgroundColor={mode === 'media' ? communityUi.brand : communityUi.divider}
+            onPress={() => setMode('media')}
+          >
+            Photo / Video
           </Button>
         </XStack>
 
@@ -122,10 +161,13 @@ export function StoryComposerScreen() {
         ) : (
           <>
             <ImageUploadField
-              label="Story image"
-              hint="Upload a photo for your story."
-              value={storyImage}
-              onChange={setStoryImage}
+              label="Story media"
+              hint="Upload a photo or video, or drag & drop on web."
+              accept="media"
+              value={storyMedia}
+              onChange={setStoryMedia}
+              uploadProgress={uploadProgress}
+              uploadLabel={isVideoStory ? 'Uploading video…' : 'Uploading story…'}
             />
             <TextArea value={content} onChangeText={setContent} placeholder="Optional caption" />
           </>

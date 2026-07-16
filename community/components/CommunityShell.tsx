@@ -17,6 +17,8 @@ type CommunityShellProps = {
   children: ReactNode
   /** @deprecated Feed is always full width between side rails. */
   wide?: boolean
+  onRefresh?: () => void | Promise<void>
+  refreshing?: boolean
 }
 
 /**
@@ -24,14 +26,19 @@ type CommunityShellProps = {
  * Uses page scroll (document on desktop web, PageScroll on mobile/native) so the feed
  * never collapses inside a zero-height overflow:hidden pane.
  */
-export function CommunityShell({ children }: CommunityShellProps) {
+export function CommunityShell({ children, onRefresh, refreshing }: CommunityShellProps) {
   const communityUi = useCommunityUi()
   const pathname = usePathname()
   const { isWide } = useAppLayout()
   const showSidebars = isCommunityPath(pathname)
 
   return (
-    <FullWidthLayout scroll backgroundColor={communityUi.pageBg}>
+    <FullWidthLayout
+      scroll
+      backgroundColor={communityUi.pageBg}
+      onRefresh={onRefresh}
+      refreshing={refreshing}
+    >
       <PageSection paddingVertical="$3">
         <PageColumns gap={COMMUNITY_LAYOUT.columnGap}>
           {showSidebars ? <CommunityLeftSidebar pin="document" /> : null}

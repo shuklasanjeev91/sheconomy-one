@@ -1,11 +1,12 @@
 import { useMemo, useState, type ReactNode } from 'react'
 
 import { ImageUploadField, preparePickedImagesForUpload } from '~/components/media/ImageUploadField'
+import { UploadProgressBar } from '~/components/media/UploadProgressBar'
 import { CommercePanel } from '~/commerce/components'
 import { createSellerListing } from '~/commerce/lib/seller-listings'
 import { serializeListingProductInfo } from '~/commerce/lib/listing-product-info'
 import type { Database } from '~/lib/supabase'
-import { uploadListingImages } from '~/lib/supabase/storage-upload'
+import { uploadListingImages, uploadListingVideos } from '~/lib/supabase/storage-upload'
 import type { PickedImage } from '~/lib/media/pick-image'
 import { useSupabase } from '~/providers/SupabaseProvider'
 import {
@@ -55,6 +56,7 @@ export function CreateListingForm({ shopId, onCreated, onCancel }: CreateListing
   const [listingType, setListingType] = useState<ListingType>('physical')
   const [publishNow, setPublishNow] = useState(false)
   const [isSaving, setIsSaving] = useState(false)
+  const [uploadProgress, setUploadProgress] = useState<number | null>(null)
 
   const [brand, setBrand] = useState('')
   const [manufacturerName, setManufacturerName] = useState('')
@@ -77,23 +79,63 @@ export function CreateListingForm({ shopId, onCreated, onCancel }: CreateListing
     if (!canSubmit || !user) return
 
     setIsSaving(true)
+    setUploadProgress(null)
 
-    let imageUrls: string[] = []
+    let media: Array<{ url: string; type: 'image' | 'video' }> = []
 
     if (images.length > 0) {
       try {
-        const files = await preparePickedImagesForUpload(images)
-        const { urls, error: uploadError } = await uploadListingImages(user.id, shopId, files)
+        setUploadProgress(0)
+        const photoItems = images.filter((item) => !item.mimeType?.startsWith('video/'))
+        const videoItems = images.filter((item) => item.mimeType?.startsWith('video/'))
 
-        if (uploadError) {
-          setIsSaving(false)
-          toast.show('Photo upload failed', { tone: 'danger', message: uploadError })
-          return
+        const photoFiles = photoItems.length ? await preparePickedImagesForUpload(photoItems) : []
+        const videoFiles = videoItems.length ? await preparePickedImagesForUpload(videoItems) : []
+
+        let photoUrls: string[] = []
+        let videoUrls: string[] = []
+
+        if (photoFiles.length) {
+          const { urls, error: uploadError } = await uploadListingImages(user.id, shopId, photoFiles, {
+            onProgress: setUploadProgress,
+          })
+          if (uploadError) {
+            setIsSaving(false)
+            setUploadProgress(null)
+            toast.show('Photo upload failed', { tone: 'danger', message: uploadError })
+            return
+          }
+          photoUrls = urls
         }
 
-        imageUrls = urls
+        if (videoFiles.length) {
+          const { urls, error: uploadError } = await uploadListingVideos(user.id, shopId, videoFiles, {
+            onProgress: setUploadProgress,
+          })
+          if (uploadError) {
+            setIsSaving(false)
+            setUploadProgress(null)
+            toast.show('Video upload failed', { tone: 'danger', message: uploadError })
+            return
+          }
+          videoUrls = urls
+        }
+
+        let photoIndex = 0
+        let videoIndex = 0
+        media = images.map((item) => {
+          if (item.mimeType?.startsWith('video/')) {
+            const url = videoUrls[videoIndex] ?? ''
+            videoIndex += 1
+            return { url, type: 'video' as const }
+          }
+          const url = photoUrls[photoIndex] ?? ''
+          photoIndex += 1
+          return { url, type: 'image' as const }
+        }).filter((item) => item.url)
       } catch (error) {
         setIsSaving(false)
+        setUploadProgress(null)
         toast.show('Photo upload failed', {
           tone: 'danger',
           message: error instanceof Error ? error.message : 'Try again.',
@@ -126,10 +168,11 @@ export function CreateListingForm({ shopId, onCreated, onCancel }: CreateListing
       listingType,
       quantity: listingType === 'digital' ? undefined : parsedQuantity,
       category,
-      imageUrls,
+      media,
       publish: publishNow,
     })
     setIsSaving(false)
+    setUploadProgress(null)
 
     if (error || !listing) {
       toast.show('Could not create listing', { tone: 'danger', message: error ?? 'Try again.' })
@@ -153,12 +196,16 @@ export function CreateListingForm({ shopId, onCreated, onCancel }: CreateListing
 
       <ValidatedBlock>
         <ImageUploadField
-          label="Photos"
+          label="Photos & videos"
+          hint="Add up to 5 photos or product videos. Drag & drop on web."
+          accept="media"
           multiple
           maxCount={5}
           value={images}
           onChange={setImages}
           disabled={isSaving}
+          uploadProgress={uploadProgress}
+          uploadLabel="Uploading media…"
         />
         <Field label="Title" required>
           <Input value={title} onChangeText={setTitle} placeholder="Hand-painted ceramic bowl" />
@@ -289,6 +336,9 @@ export function CreateListingForm({ shopId, onCreated, onCancel }: CreateListing
       </ValidatedBlock>
 
       <YStack gap="$2">
+        {uploadProgress != null && uploadProgress > 0 ? (
+          <UploadProgressBar progress={uploadProgress} label="Uploading photos…" compact />
+        ) : null}
         <Button
           tone="primary"
           size="$4"

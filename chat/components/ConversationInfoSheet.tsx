@@ -19,6 +19,7 @@ import {
 import { useChatTheme } from '~/chat/lib/chat-theme'
 import { formatLastSeen } from '~/chat/lib/time'
 import type { ChatSummary } from '~/chat/lib/types'
+import { ScreenSearchField } from '~/components/search'
 import { openExternalUrl } from '~/lib/platform/openUrl'
 import {
   AppBottomSheet,
@@ -32,8 +33,11 @@ import {
   YStack,
   useAppToast,
 } from '~/components/ui'
-import { pickImages, pickedImageToBlob } from '~/lib/media/pick-image'
+import { pickImages, pickedImageToBlob, type PickedImage } from '~/lib/media/pick-image'
 import { uploadGroupAvatarImage } from '~/lib/supabase/storage-upload'
+import { MediaDropZone } from '~/components/media/MediaDropZone'
+import { UploadProgressBar } from '~/components/media/UploadProgressBar'
+import { useUploadProgress } from '~/hooks/useUploadProgress'
 
 type ConversationInfoSheetProps = {
   open: boolean
@@ -81,6 +85,8 @@ export function ConversationInfoSheet({
   const [nameDraft, setNameDraft] = useState(chat.name)
   const [savingName, setSavingName] = useState(false)
   const [uploadingAvatar, setUploadingAvatar] = useState(false)
+  const { progress: avatarUploadProgress, track: trackAvatarUpload, reset: resetAvatarUpload } =
+    useUploadProgress()
 
   const myRole = chat.currentUserRole
   const canManage = isGroup && (myRole === 'owner' || myRole === 'admin')
@@ -137,19 +143,20 @@ export function ConversationInfoSheet({
     }
   }, [open, chat.id, chat.otherUserId, chat.name, isGroup, loadParticipants])
 
-  async function handlePickAvatar() {
-    if (uploadingAvatar) return
+  async function handleUploadAvatar(first: PickedImage) {
+    setUploadingAvatar(true)
+    trackAvatarUpload(1)
     try {
-      const picked = await pickImages({ multiple: false, maxCount: 1 })
-      const first = picked[0]
-      if (!first) return
-      setUploadingAvatar(true)
       const blob = await pickedImageToBlob(first)
-      const { data, error } = await uploadGroupAvatarImage(currentUserId, {
-        blob,
-        mimeType: first.mimeType || blob.type || 'image/jpeg',
-        fileName: first.fileName,
-      })
+      const { data, error } = await uploadGroupAvatarImage(
+        currentUserId,
+        {
+          blob,
+          mimeType: first.mimeType || blob.type || 'image/jpeg',
+          fileName: first.fileName,
+        },
+        { onProgress: trackAvatarUpload },
+      )
       if (error || !data) {
         toast.show('Could not upload image', { tone: 'danger', message: error ?? undefined })
         return
@@ -165,6 +172,19 @@ export function ConversationInfoSheet({
       toast.show('Could not update group photo', { tone: 'danger' })
     } finally {
       setUploadingAvatar(false)
+      resetAvatarUpload()
+    }
+  }
+
+  async function handlePickAvatar() {
+    if (uploadingAvatar) return
+    try {
+      const picked = await pickImages({ multiple: false, maxCount: 1 })
+      const first = picked[0]
+      if (!first) return
+      await handleUploadAvatar(first)
+    } catch {
+      toast.show('Could not update group photo', { tone: 'danger' })
     }
   }
 
@@ -254,6 +274,18 @@ export function ConversationInfoSheet({
         <YStack gap={16} paddingBottom={8}>
           {/* Header: avatar + name */}
           <YStack alignItems="center" gap={10} paddingTop={4}>
+            <MediaDropZone
+              disabled={!canManage || uploadingAvatar}
+              accept="image"
+              maxCount={1}
+              fill={false}
+              borderRadius={999}
+              label="Drop a group photo"
+              onDrop={(items) => {
+                const first = items[0]
+                if (first) void handleUploadAvatar(first)
+              }}
+            >
             <YStack
               onPress={canManage ? () => void handlePickAvatar() : undefined}
               cursor={canManage ? 'pointer' : 'default'}
@@ -282,6 +314,13 @@ export function ConversationInfoSheet({
                 </XStack>
               ) : null}
             </YStack>
+            </MediaDropZone>
+
+            {avatarUploadProgress != null && avatarUploadProgress > 0 ? (
+              <YStack width="100%" maxWidth={280}>
+                <UploadProgressBar progress={avatarUploadProgress} label="Uploading photo…" compact />
+              </YStack>
+            ) : null}
 
             {editingName ? (
               <XStack gap={8} alignItems="center" width="100%" maxWidth={320}>
@@ -660,29 +699,12 @@ function AddMembersView({
 
   return (
     <YStack gap={12} paddingBottom={8}>
-      <XStack
-        alignItems="center"
-        gap={8}
-        backgroundColor={theme.inputBg}
-        borderRadius={999}
-        borderWidth={1}
-        borderColor={theme.border}
-        paddingHorizontal={12}
-      >
-        <Icons.Search size={16} color={theme.textMuted} />
-        <Input
-          flex={1}
-          value={search}
-          onChangeText={setSearch}
-          placeholder="Search people"
-          placeholderTextColor={theme.textMuted}
-          borderWidth={0}
-          backgroundColor="transparent"
-          height={42}
-          paddingHorizontal={0}
-          color={theme.text}
-        />
-      </XStack>
+      <ScreenSearchField
+        value={search}
+        onChangeText={setSearch}
+        placeholder="Search people"
+        unifiedScope="people"
+      />
 
       {loading ? (
         <YStack paddingVertical={24} alignItems="center">

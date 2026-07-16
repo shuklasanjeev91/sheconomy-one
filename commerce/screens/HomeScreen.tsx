@@ -26,20 +26,18 @@ import {
 } from '~/components/ui'
 import { FullWidthLayout, PageCenter, PageSection } from '~/components/layout'
 import { NearbyShopsSection } from '~/components/location'
-import { PushPermissionBanner } from '~/components/notifications/PushPermissionBanner'
 import { BRAND_THEME, radius } from '~/config/tokens'
 import { useAppUi } from '~/lib/theme/useAppUi'
 import { useCategoriesFeed } from '~/commerce/hooks/useCategoriesFeed'
 import { useShopsFeed } from '~/commerce/hooks/useShopsFeed'
-import { fetchHomeBootstrap, type HomeBootstrapData } from '~/commerce/lib/commerce'
+import { type HomeBootstrapData } from '~/commerce/lib/commerce'
 import { commerceRoutes, routes } from '~/lib/routes'
 import { useAccess } from '~/hooks/useAccess'
 
 import { BRAND_NAME } from '~/config/brand'
 
-export async function homeLoader() {
-  return fetchHomeBootstrap()
-}
+export { homeLoader } from '~/commerce/lib/home-loader'
+export type { HomeBootstrapData }
 
 type HomeScreenProps = {
   data: HomeBootstrapData | null
@@ -103,17 +101,17 @@ export function HomeScreen({ data, error, loading = false }: HomeScreenProps) {
   })
 
   return (
-    <FullWidthLayout scroll>
+    <FullWidthLayout
+      scroll
+      onRefresh={async () => {
+        categoriesFeed.refresh()
+        shopsFeed.refresh()
+      }}
+      refreshing={categoriesFeed.isRefreshing || shopsFeed.isRefreshing}
+    >
       <YStack gap="$5" paddingBottom="$10" width="100%" backgroundColor={ui.background}>
         <PageSection bleed paddingTop="$4">
           <HomeHeroSlider slides={heroSlides} />
-        </PageSection>
-
-        <PageSection paddingTop="$2">
-          <PushPermissionBanner />
-        </PageSection>
-
-        <PageSection paddingTop="$2" gap="$3">
         </PageSection>
 
         {categoriesFeed.items.length > 0 ? (
@@ -128,7 +126,7 @@ export function HomeScreen({ data, error, loading = false }: HomeScreenProps) {
               ))}
             </InfiniteHorizontalSection>
           </PageSection>
-        ) : categoriesFeed.isLoading ? (
+        ) : categoriesFeed.isLoading && categoriesFeed.items.length === 0 ? (
           <PageSection paddingTop="$2">
             <Spinner size="small" />
           </PageSection>
@@ -195,7 +193,7 @@ export function HomeScreen({ data, error, loading = false }: HomeScreenProps) {
               </InfiniteHorizontalSection>
             </CommerceSection>
           </PageSection>
-        ) : shopsFeed.isLoading ? (
+        ) : shopsFeed.isLoading && shopsFeed.items.length === 0 ? (
           <PageSection>
             <Spinner size="small" />
           </PageSection>

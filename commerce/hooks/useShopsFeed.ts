@@ -1,5 +1,6 @@
 import { useCallback } from 'react'
 
+import { CACHE_KEYS } from '~/lib/bootstrap/app-prefetch'
 import {
   COMMERCE_HORIZONTAL_PAGE_SIZE,
   fetchShopsPage,
@@ -14,5 +15,9 @@ export function useShopsFeed(enabled = true) {
     [],
   )
 
-  return usePaginatedFeed<ShopSummary>({ fetchPage, enabled })
+  return usePaginatedFeed<ShopSummary>({
+    fetchPage,
+    enabled,
+    cacheKey: CACHE_KEYS.shops,
+  })
 }

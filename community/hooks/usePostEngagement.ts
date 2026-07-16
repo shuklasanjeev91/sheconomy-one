@@ -24,6 +24,8 @@ export type PostSheetType =
   | 'send'
   | 'share'
   | 'options'
+  | 'edit'
+  | 'delete-confirm'
   | null
 
 export function usePostEngagement(

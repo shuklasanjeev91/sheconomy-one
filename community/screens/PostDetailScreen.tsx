@@ -111,7 +111,12 @@ export function PostDetailScreen() {
             Share
           </Button>
         </XStack>
-        <FeedPostCard post={post} linkToDetail={false} />
+        <FeedPostCard
+          post={post}
+          linkToDetail={false}
+          onPostUpdated={(_postId, patch) => setPost((current) => (current ? { ...current, ...patch } : current))}
+          onPostDeleted={() => router.push(communityRoutes.home)}
+        />
       </YStack>
 
       <ShareSheet
