@@ -77,19 +77,26 @@ function mapParticipant(row: Record<string, unknown>): MeetingParticipant {
   }
 }
 
+function randomAlphaCode(length: number, alphabet = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'): string {
+  let result = ''
+  for (let i = 0; i < length; i++) {
+    result += alphabet[Math.floor(Math.random() * alphabet.length)]
+  }
+  return result
+}
+
 export async function generateMeetingCode(): Promise<string> {
   const { data, error } = await supabase.rpc('generate_meeting_code')
-  if (error) throw new Error(error.message)
-  return data as string
+  if (!error && typeof data === 'string' && data.trim()) {
+    return data.trim().toUpperCase()
+  }
+
+  // Fallback when the RPC is unavailable — keep the usual 9-character room code shape.
+  return `${randomAlphaCode(3)}${randomAlphaCode(3)}${randomAlphaCode(3)}`
 }
 
 function generateLiveKitRoomId(): string {
-  const chars = 'abcdefghijklmnopqrstuvwxyz0123456789'
-  let result = ''
-  for (let i = 0; i < 6; i++) {
-    result += chars[Math.floor(Math.random() * chars.length)]
-  }
-  return result
+  return randomAlphaCode(6, 'abcdefghijklmnopqrstuvwxyz0123456789')
 }
 
 export async function ensureMeetingRoomId(meeting: Meeting): Promise<Meeting> {
@@ -152,6 +159,29 @@ export async function fetchMeetingByCode(code: string): Promise<Meeting | null> 
   const meeting = mapMeeting(data as Record<string, unknown>)
   if (!meeting.room_id) return ensureMeetingRoomId(meeting)
   return meeting
+}
+
+/** Title / code / description search for omnibox + `/search`. */
+export async function searchMeetings(query: string, limit = 12): Promise<Meeting[]> {
+  const term = query.trim().replace(/[%*,]/g, '')
+  if (!term) return []
+
+  const codeGuess = term.toUpperCase().replace(/\s+/g, '')
+  if (/^[A-Z0-9]{4,12}$/.test(codeGuess)) {
+    const exact = await fetchMeetingByCode(codeGuess)
+    if (exact) return [exact]
+  }
+
+  const { data, error } = await supabase
+    .from('meetings')
+    .select(MEETING_SELECT)
+    .or(`title.ilike.%${term}%,meeting_code.ilike.%${term}%,description.ilike.%${term}%`)
+    .in('status', ['scheduled', 'instant', 'active'])
+    .order('scheduled_at', { ascending: true, nullsFirst: false })
+    .limit(limit)
+
+  if (error) throw new Error(error.message)
+  return (data ?? []).map((row) => mapMeeting(row as Record<string, unknown>))
 }
 
 export async function createMeeting(hostId: string, input: CreateMeetingInput): Promise<Meeting> {

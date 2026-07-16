@@ -1,6 +1,12 @@
 import { useLocalParticipant, useRoomContext } from '@livekit/components-react'
 
 import type { LiveKitMediaControls } from '~/co-work/lib/livekit-media-controls'
+import { setLocalScreenShareEnabled } from '~/co-work/lib/livekit-screen-share'
+
+/** Native-only UI — exported so web never crashes if a shared import path is used. */
+export function NativeScreenCapturePicker() {
+  return null
+}
 
 export function useLiveKitMediaControls(): LiveKitMediaControls {
   const room = useRoomContext()
@@ -24,7 +30,7 @@ export function useLiveKitMediaControls(): LiveKitMediaControls {
     },
     toggleVideo: () => void localParticipant.setCameraEnabled(!isCameraEnabled),
     toggleScreenShare: async () => {
-      await localParticipant.setScreenShareEnabled(!isScreenShareEnabled)
+      await setLocalScreenShareEnabled(localParticipant, !isScreenShareEnabled, 'web')
     },
   }
 }

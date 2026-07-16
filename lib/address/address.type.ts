@@ -1,4 +1,5 @@
 import type { Tables, TablesInsert, TablesUpdate } from '~/lib/supabase'
+import type { AddressSource } from '~/lib/location/types'
 
 /** Full `addresses` row from Supabase. */
 export type Address = Tables<'addresses'>
@@ -70,6 +71,10 @@ export type AddressFormData = {
   address_type: AddressType
   is_default: boolean
   address_label: string
+  latitude?: number | null
+  longitude?: number | null
+  place_id?: string | null
+  source?: AddressSource | null
 }
 
 export type AddressValidationResult = {
@@ -88,6 +93,10 @@ export type AddressInput = {
   address_type?: AddressType
   is_default?: boolean
   address_label?: string | null
+  latitude?: number | null
+  longitude?: number | null
+  place_id?: string | null
+  source?: AddressSource | null
 }
 
 /** Aggregated counts shown in the address stats panel. */
@@ -121,4 +130,8 @@ export const EMPTY_ADDRESS_FORM_DATA: AddressFormData = {
   address_type: ADDRESS_TYPE.HOME,
   is_default: false,
   address_label: '',
+  latitude: null,
+  longitude: null,
+  place_id: null,
+  source: 'manual',
 }

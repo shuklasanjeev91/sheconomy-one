@@ -2,7 +2,7 @@
 export const APP_SCHEME = 'sheconomy'
 
 /** Default production web origin when env vars are unset. */
-export const DEFAULT_APP_ORIGIN = 'https://sheconomy-one-sanjeev-shuklas-projects.vercel.app'
+export const DEFAULT_APP_ORIGIN = 'https://sheconomy-one-eight.vercel.app'
 
 function readEnvOrigin(): string | undefined {
   const candidates = [

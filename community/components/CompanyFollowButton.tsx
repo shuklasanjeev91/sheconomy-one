@@ -1,6 +1,5 @@
-import { Link } from 'one'
-
 import { useCompanyFollow } from '~/community/hooks/useCompanyFollow'
+import { AppLink } from '~/components/navigation/AppLink'
 import type { CompanyPage } from '~/community/lib/companies'
 import { useCommunityUi } from '~/community/lib/community-theme'
 import { Spinner, Text, XStack } from '~/components/ui'
@@ -16,9 +15,9 @@ export function CompanyFollowButton({ company }: { company?: CompanyPage | null 
 
   if (!follow.isAuthenticated) {
     return (
-      <Link href={routes.signIn} asChild>
+      <AppLink href={routes.signIn} asChild>
         <Chip label="Follow" primary />
-      </Link>
+      </AppLink>
     )
   }
 

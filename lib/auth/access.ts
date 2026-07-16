@@ -10,8 +10,9 @@ import {
   isCoWorkPath,
   isCommercePath,
   isCommunityPath,
-  isMyShopsPath,
+  isCreateShopPath,
   isNotificationsPath,
+  isVendorPath,
 } from '~/lib/routes'
 
 /** Guest, authenticated male, or authenticated female (full access). */
@@ -84,7 +85,7 @@ export function getPathFeature(pathname: string): AppFeature | 'auth' | 'public'
 }
 
 export function canAccessPath(tier: AccessTier, pathname: string): boolean {
-  if (isMyShopsPath(pathname) && !canManageShops(tier)) return false
+  if ((isCreateShopPath(pathname) || isVendorPath(pathname)) && !canManageShops(tier)) return false
 
   const area = getPathFeature(pathname)
   if (area === 'auth' || area === 'public') return true
@@ -111,7 +112,7 @@ export function sanitizeReturnPath(path: string | null | undefined, tier: Access
 export function getAccessDeniedRedirect(tier: AccessTier, pathname: string): Href {
   const feature = getPathFeature(pathname)
 
-  if (isMyShopsPath(pathname)) {
+  if (isCreateShopPath(pathname) || isVendorPath(pathname)) {
     if (tier === 'guest') return buildSignInUrl(pathname)
   }
 
@@ -140,7 +141,7 @@ export function getAccessDeniedRedirect(tier: AccessTier, pathname: string): Hre
 export function getGuestSignInReturnTo(tier: AccessTier, pathname: string): string | null {
   if (tier !== 'guest' || canAccessPath(tier, pathname)) return null
 
-  if (isMyShopsPath(pathname)) return pathname
+  if (isCreateShopPath(pathname) || isVendorPath(pathname)) return pathname
 
   const feature = getPathFeature(pathname)
   if (

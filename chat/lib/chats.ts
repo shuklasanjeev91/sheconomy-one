@@ -1,4 +1,5 @@
 import { supabase } from '~/lib/supabase/client'
+import { uploadBlobWithProgress, type UploadProgressHandler } from '~/lib/supabase/storage-upload-progress'
 
 import type {
   ChatEventPayload,
@@ -728,6 +729,10 @@ function extensionForMime(mime: string): string {
   if (mime.includes('webp')) return 'webp'
   if (mime.includes('gif')) return 'gif'
   if (mime.includes('heic')) return 'heic'
+  if (mime.includes('mp4') || mime.includes('m4v')) return 'mp4'
+  if (mime.includes('webm')) return 'webm'
+  if (mime.includes('quicktime') || mime.includes('mov')) return 'mov'
+  if (mime.startsWith('video/')) return 'mp4'
   return 'jpg'
 }
 
@@ -742,19 +747,21 @@ export async function uploadChatMedia(
   conversationId: string,
   userId: string,
   file: { blob: Blob; mimeType: string; fileName?: string },
+  options?: { onProgress?: UploadProgressHandler },
 ): Promise<{ data: UploadChatMediaResult | null; error: string | null }> {
   const ext = file.fileName?.split('.').pop()?.toLowerCase() ?? extensionForMime(file.mimeType)
   const rand = Math.random().toString(36).slice(2, 10)
-  // Path shape `chat/{conversationId}/...` satisfies the participant-scoped RLS policy.
   const path = `chat/${conversationId}/${userId}-${Date.now()}-${rand}.${ext}`
 
-  const { error } = await supabase.storage.from(CHAT_FILES_BUCKET).upload(path, file.blob, {
-    contentType: file.mimeType,
-    upsert: true,
-    cacheControl: '3600',
-  })
+  const { error } = await uploadBlobWithProgress(
+    CHAT_FILES_BUCKET,
+    path,
+    file.blob,
+    file.mimeType,
+    { upsert: true, onProgress: options?.onProgress },
+  )
 
-  if (error) return { data: null, error: error.message }
+  if (error) return { data: null, error }
 
   return {
     data: {

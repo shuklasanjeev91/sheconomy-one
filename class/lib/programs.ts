@@ -25,6 +25,7 @@ export type Program = {
   video_url: string | null
   audio_url: string | null
   media_type: string
+  language: string
   view_count: number
   like_count: number
   listen_count: number
@@ -51,6 +52,7 @@ const PROGRAM_SELECT = `
   video_url,
   audio_url,
   media_type,
+  language,
   view_count,
   like_count,
   listen_count,
@@ -72,6 +74,7 @@ type ProgramRow = {
   video_url: string | null
   audio_url: string | null
   media_type: string
+  language: string | null
   view_count: number | null
   like_count: number | null
   listen_count: number | null
@@ -244,6 +247,7 @@ function mapProgram(row: ProgramRow): Program {
     video_url: row.video_url,
     audio_url: row.audio_url,
     media_type: row.media_type,
+    language: (row.language ?? 'en').trim() || 'en',
     view_count: row.view_count ?? 0,
     like_count: row.like_count ?? 0,
     listen_count: row.listen_count ?? 0,
@@ -329,44 +333,161 @@ export async function fetchProgramCategories(): Promise<{
   return { categories, error: null }
 }
 
-export async function fetchPublishedPrograms(options?: {
+export const PROGRAM_PAGE_SIZE = 24
+
+export type ProgramsPageResult = {
+  programs: Program[]
+  page: number
+  pageSize: number
+  hasMore: boolean
+  error: string | null
+}
+
+type PublishedProgramFilters = {
   category?: string
   mediaType?: 'video' | 'audio'
   featuredOnly?: boolean
-  limit?: number
-}): Promise<{ programs: Program[]; error: string | null }> {
+  authorId?: string
+  externalAuthorId?: string
+  language?: string
+  sort?: 'default' | 'popular' | 'newest' | 'az'
+}
+
+/** Paginated published programs — use with infinite scroll (no hard catalog cap). */
+export async function fetchPublishedProgramsPage(
+  page: number,
+  pageSize = PROGRAM_PAGE_SIZE,
+  options?: PublishedProgramFilters,
+): Promise<ProgramsPageResult> {
+  const from = page * pageSize
+  const to = from + pageSize - 1
+
   let query = supabase
     .from('programs')
-    .select(PROGRAM_SELECT)
+    .select(PROGRAM_SELECT, { count: 'exact' })
     .not('published_at', 'is', null)
-    .order('published_at', { ascending: false })
 
   if (options?.category) {
     query = query.eq('category', options.category)
   }
-
   if (options?.mediaType) {
     query = query.eq('media_type', options.mediaType)
   }
-
   if (options?.featuredOnly) {
     query = query.eq('featured', true)
   }
-
-  if (options?.limit) {
-    query = query.limit(options.limit)
+  if (options?.language) {
+    query = query.eq('language', options.language)
+  }
+  if (options?.authorId && options?.externalAuthorId) {
+    query = query.or(
+      `author_id.eq.${options.authorId},external_author_id.eq.${options.externalAuthorId}`,
+    )
+  } else if (options?.authorId) {
+    query = query.eq('author_id', options.authorId)
+  } else if (options?.externalAuthorId) {
+    query = query.eq('external_author_id', options.externalAuthorId)
   }
 
-  const { data, error } = await query
+  switch (options?.sort) {
+    case 'popular':
+      query = query.order('view_count', { ascending: false, nullsFirst: false })
+      break
+    case 'az':
+      query = query.order('title', { ascending: true })
+      break
+    case 'newest':
+    case 'default':
+    default:
+      query = query.order('published_at', { ascending: false })
+      break
+  }
+
+  const { data, error, count } = await query.range(from, to)
 
   if (error) {
-    return { programs: [], error: error.message }
+    return { programs: [], page, pageSize, hasMore: false, error: error.message }
   }
 
   const programs = await enrichProgramAuthors((data as ProgramRow[]).map(mapProgram), {
     resolveByTitle: false,
   })
-  return { programs, error: null }
+  const total = count ?? 0
+
+  return {
+    programs,
+    page,
+    pageSize,
+    hasMore: total ? to + 1 < total : programs.length === pageSize,
+    error: null,
+  }
+}
+
+export async function fetchPublishedPrograms(options?: {
+  category?: string
+  mediaType?: 'video' | 'audio'
+  featuredOnly?: boolean
+  authorId?: string
+  externalAuthorId?: string
+  limit?: number
+}): Promise<{ programs: Program[]; error: string | null }> {
+  const limit = options?.limit ?? PROGRAM_PAGE_SIZE
+  const result = await fetchPublishedProgramsPage(0, limit, {
+    category: options?.category,
+    mediaType: options?.mediaType,
+    featuredOnly: options?.featuredOnly,
+    authorId: options?.authorId,
+    externalAuthorId: options?.externalAuthorId,
+  })
+  return { programs: result.programs, error: result.error }
+}
+
+/**
+ * YouTube-style Up Next: same category + media type first, then fill with same host.
+ */
+export async function fetchUpNextPrograms(
+  program: Pick<Program, 'id' | 'category' | 'media_type' | 'author_id' | 'external_author_id'>,
+  limit = 12,
+): Promise<{ programs: Program[]; error: string | null }> {
+  const mediaType = program.media_type === 'audio' ? 'audio' : 'video'
+  const seen = new Set<string>([program.id])
+  const ordered: Program[] = []
+  let lastError: string | null = null
+
+  const categoryResult = await fetchPublishedPrograms({
+    category: program.category || undefined,
+    mediaType,
+    limit: limit + 6,
+  })
+  if (categoryResult.error) lastError = categoryResult.error
+
+  for (const item of categoryResult.programs) {
+    if (seen.has(item.id)) continue
+    seen.add(item.id)
+    ordered.push(item)
+    if (ordered.length >= limit) {
+      return { programs: ordered, error: lastError }
+    }
+  }
+
+  if (program.author_id || program.external_author_id) {
+    const hostResult = await fetchPublishedPrograms({
+      mediaType,
+      authorId: program.author_id ?? undefined,
+      externalAuthorId: program.external_author_id ?? undefined,
+      limit: limit + 6,
+    })
+    if (hostResult.error) lastError = hostResult.error
+
+    for (const item of hostResult.programs) {
+      if (seen.has(item.id)) continue
+      seen.add(item.id)
+      ordered.push(item)
+      if (ordered.length >= limit) break
+    }
+  }
+
+  return { programs: ordered.slice(0, limit), error: lastError }
 }
 
 /** Fetch programs by id, preserving the caller's order. */
@@ -477,14 +598,31 @@ export async function recordProgramView(programId: string): Promise<void> {
 export function extractYoutubeVideoId(url: string): string | null {
   try {
     const parsed = new URL(url)
-    if (parsed.hostname.includes('youtu.be')) {
-      return parsed.pathname.replace('/', '') || null
+    const host = parsed.hostname.replace(/^www\./, '')
+    if (host === 'youtu.be') {
+      return parsed.pathname.split('/').filter(Boolean)[0] || null
     }
-    if (parsed.hostname.includes('youtube.com')) {
-      return parsed.searchParams.get('v') || parsed.pathname.split('/').pop() || null
+    if (host.includes('youtube.com') || host.includes('youtube-nocookie.com')) {
+      const segments = parsed.pathname.split('/').filter(Boolean)
+      return (
+        parsed.searchParams.get('v') ||
+        (segments[0] === 'shorts' || segments[0] === 'embed' || segments[0] === 'live'
+          ? segments[1]
+          : segments.pop()) ||
+        null
+      )
     }
   } catch {
     return null
   }
+  return null
+}
+
+/** Cover image for rails/cards — explicit image, then YouTube poster from video_url. */
+export function getProgramThumbnailUrl(program: Pick<Program, 'image_url' | 'video_url'>): string | null {
+  if (program.image_url?.trim()) return program.image_url.trim()
+  if (!program.video_url) return null
+  const id = extractYoutubeVideoId(program.video_url)
+  if (id) return `https://i.ytimg.com/vi/${id}/hqdefault.jpg`
   return null
 }

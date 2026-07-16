@@ -1,13 +1,39 @@
 import { useCallback } from 'react'
 import { usePathname, useRouter } from 'one'
 
+import {
+  revokeAllLoginSessions,
+  revokeCurrentLoginSession,
+  revokeOtherLoginSessions,
+} from '~/features/auth/services/login-sessions'
+import { needsProfileOnboarding } from '~/features/auth/services/onboarding'
+import { enrichProfileFromAuth } from '~/features/auth/services/profile-enrichment'
 import { getAccessTier, sanitizeReturnPath } from '~/lib/auth/access'
 import { buildSignInUrl, getReturnToFromLocation, isSafeReturnPath } from '~/lib/auth/redirect'
-import { signOut as supabaseSignOut } from '~/lib/supabase/auth'
+import { signOut as supabaseSignOut, type SignOutScope } from '~/lib/supabase/auth'
 import { supabase } from '~/lib/supabase'
-import { routes } from '~/lib/routes'
+import { appRoutes, routes } from '~/lib/routes'
+import { clearCachedProfile } from '~/lib/profile/profile-cache'
 import { persistor, resetStore, store } from '~/lib/store'
 import { useSupabase } from '~/providers/SupabaseProvider'
+
+async function clearLocalAppState() {
+  store.dispatch(resetStore())
+  try {
+    await persistor.purge()
+  } catch {
+    // Purge failures are non-fatal — the in-memory reset already applied.
+  }
+  await clearCachedProfile()
+}
+
+export type CompleteSignInOptions = {
+  provider?: string | null
+  /** Skip the /auth/complete-profile gate (after wizard finishes). */
+  skipOnboardingGate?: boolean
+  /** Route through contact import after onboarding for brand-new accounts. */
+  isNewUser?: boolean
+}
 
 export function useAuth() {
   const router = useRouter()
@@ -23,42 +49,80 @@ export function useAuth() {
     [pathname, router],
   )
 
-  const signOut = useCallback(async () => {
-    const { error } = await supabaseSignOut()
-    // Wipe cached per-account state so the next user doesn't inherit the
-    // previous session's shops/listings/etc. (reset in-memory, then clear
-    // persisted storage).
-    store.dispatch(resetStore())
-    try {
-      await persistor.purge()
-    } catch {
-      // Purge failures are non-fatal — the in-memory reset already applied.
-    }
-    router.replace(routes.home)
-    return { error: error?.message ?? null }
-  }, [router])
+  const signOut = useCallback(
+    async (options?: { scope?: SignOutScope }) => {
+      const scope = options?.scope ?? 'local'
 
-  const completeSignIn = useCallback(async (explicitReturnTo?: string | null) => {
-    const fromQuery = getReturnToFromLocation()
-    const returnTo =
-      explicitReturnTo && isSafeReturnPath(explicitReturnTo) ? explicitReturnTo : fromQuery
-    const {
-      data: { session },
-    } = await supabase.auth.getSession()
+      if (scope === 'global') {
+        await revokeAllLoginSessions()
+      } else if (scope === 'others') {
+        await revokeOtherLoginSessions()
+        const { error } = await supabaseSignOut({ scope: 'others' })
+        return { error: error?.message ?? null }
+      } else {
+        await revokeCurrentLoginSession()
+      }
 
-    let tier = getAccessTier(!!session?.user, false)
+      const { error } = await supabaseSignOut({ scope })
+      await clearLocalAppState()
+      router.replace(routes.home)
+      return { error: error?.message ?? null }
+    },
+    [router],
+  )
 
-    if (session?.user?.id) {
-      const { data } = await supabase
-        .from('profiles')
-        .select('gender')
-        .eq('id', session.user.id)
-        .maybeSingle()
-      tier = getAccessTier(true, data?.gender)
-    }
+  const signOutLocal = useCallback(() => signOut({ scope: 'local' }), [signOut])
+  const signOutGlobal = useCallback(() => signOut({ scope: 'global' }), [signOut])
+  const signOutOthers = useCallback(() => signOut({ scope: 'others' }), [signOut])
 
-    router.replace(sanitizeReturnPath(returnTo, tier) as import('one').Href)
-  }, [router])
+  const completeSignIn = useCallback(
+    async (explicitReturnTo?: string | null, options?: CompleteSignInOptions) => {
+      const fromQuery = getReturnToFromLocation()
+      const returnTo =
+        explicitReturnTo && isSafeReturnPath(explicitReturnTo)
+          ? explicitReturnTo
+          : String(fromQuery)
+
+      const { profile } = await enrichProfileFromAuth()
+
+      if (!options?.skipOnboardingGate && needsProfileOnboarding(profile)) {
+        router.replace({
+          pathname: '/auth/complete-profile',
+          params: {
+            returnTo: returnTo ?? '',
+            isNewUser: options?.isNewUser ? '1' : '0',
+          },
+        } as never)
+        return
+      }
+
+      if (options?.isNewUser) {
+        router.replace({
+          pathname: String(appRoutes.importContacts),
+          params: { returnTo: returnTo ?? '' },
+        } as never)
+        return
+      }
+
+      const {
+        data: { session },
+      } = await supabase.auth.getSession()
+
+      let tier = getAccessTier(!!session?.user, false)
+
+      if (session?.user?.id) {
+        const { data } = await supabase
+          .from('profiles')
+          .select('gender')
+          .eq('id', session.user.id)
+          .maybeSingle()
+        tier = getAccessTier(true, data?.gender)
+      }
+
+      router.replace(sanitizeReturnPath(returnTo, tier) as import('one').Href)
+    },
+    [router],
+  )
 
   return {
     session,
@@ -67,6 +131,9 @@ export function useAuth() {
     isAuthenticated,
     signIn,
     signOut,
+    signOutLocal,
+    signOutGlobal,
+    signOutOthers,
     completeSignIn,
   }
 }

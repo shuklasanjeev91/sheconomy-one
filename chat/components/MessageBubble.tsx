@@ -1,4 +1,4 @@
-import { Linking, Platform } from 'react-native'
+import { Platform } from 'react-native'
 
 import { useChatTheme } from '~/chat/lib/chat-theme'
 import { formatBubbleTime } from '~/chat/lib/time'
@@ -9,9 +9,11 @@ import { Avatar, Icons, Text, XStack, YStack } from '~/components/ui'
 
 import { ChatAudioMessage } from './ChatAudioMessage'
 import { ChatMediaImage } from './ChatMediaImage'
+import { ChatMediaVideo } from './ChatMediaVideo'
 import { EventMessage } from './EventMessage'
 import { LinkPreviewCard } from './LinkPreviewCard'
 import { PollMessage } from './PollMessage'
+import { openExternalUrl } from '~/lib/platform/openUrl'
 
 type MessageBubbleProps = {
   message: ChatMessage
@@ -122,7 +124,7 @@ function RichMessageText({
               color={linkColor}
               textDecorationLine="underline"
               onPress={() => {
-                Linking.openURL(segment).catch(() => {})
+                void openExternalUrl(segment)
               }}
             >
               {segment}
@@ -207,7 +209,12 @@ export function MessageBubble({
   const isImage = !isDeleted && message.type === 'image' && !!message.mediaUrl
   const isAudio =
     !isDeleted && message.type === 'file' && message.mediaType === 'audio' && !!message.mediaUrl
-  const isFile = !isDeleted && !isAudio && message.type === 'file' && !!message.mediaUrl
+  const isVideo =
+    !isDeleted &&
+    !!message.mediaUrl &&
+    (message.mediaType === 'video' ||
+      (message.type === 'file' && !!message.mediaType?.startsWith('video')))
+  const isFile = !isDeleted && !isAudio && !isVideo && message.type === 'file' && !!message.mediaUrl
   const hasText =
     !isDeleted && !isCall && !isPoll && !isEvent && message.content.trim().length > 0
   const quote = !isDeleted ? message.replyPreview : null
@@ -344,6 +351,7 @@ export function MessageBubble({
           ) : null}
 
           {isImage ? <ChatMediaImage path={message.mediaUrl as string} /> : null}
+          {isVideo ? <ChatMediaVideo path={message.mediaUrl as string} /> : null}
 
           {isAudio ? (
             <ChatAudioMessage

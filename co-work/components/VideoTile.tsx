@@ -39,7 +39,17 @@ export function VideoTile({
 
   useEffect(() => {
     if (Platform.OS === 'web') return
-    void import('@livekit/react-native-webrtc').then((module) => setRtcView(() => module.default))
+    let cancelled = false
+    void import('@livekit/react-native-webrtc')
+      .then((module) => {
+        if (!cancelled) setRtcView(() => module.default)
+      })
+      .catch(() => {
+        // Video tile falls back to avatar when the native RTC view cannot load.
+      })
+    return () => {
+      cancelled = true
+    }
   }, [])
 
   useEffect(() => {
@@ -68,9 +78,11 @@ export function VideoTile({
   return (
     <YStack
       flex={large ? 1 : undefined}
-      minWidth={large ? undefined : 160}
+      minWidth={large ? 0 : 160}
+      minHeight={large ? 0 : undefined}
       width={large ? '100%' : 200}
-      aspectRatio={16 / 9}
+      height={large ? '100%' : undefined}
+      aspectRatio={large ? undefined : 16 / 9}
       borderRadius={coworkUi.radius.tile}
       overflow="hidden"
       backgroundColor={coworkUi.tileBg}

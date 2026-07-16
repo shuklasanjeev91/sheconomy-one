@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useRef } from 'react'
 import { Platform } from 'react-native'
-import { Link, useRouter } from 'one'
+import { useRouter } from 'one'
 
+import { AppLink } from '~/components/navigation/AppLink'
 import { ChatListPane } from '~/chat/components/ChatListPane'
 import { ChatSectionTabs } from '~/chat/components/ChatSectionTabs'
 import { ChatThreadPane } from '~/chat/components/ChatThreadPane'
@@ -11,7 +12,6 @@ import { useUserChats } from '~/chat/hooks/useUserChats'
 import type { ChatSummary } from '~/chat/lib/types'
 import { useChatTheme } from '~/chat/lib/chat-theme'
 import { Button, Icons, Spinner, Text, XStack, YStack } from '~/components/ui'
-import { PushPermissionBanner } from '~/components/notifications/PushPermissionBanner'
 import { useAppLayout } from '~/hooks/useAppLayout'
 import { chatRoutes, routes } from '~/lib/routes'
 import { useSupabase } from '~/providers/SupabaseProvider'
@@ -27,7 +27,7 @@ type ChatScreenProps = {
 export function ChatScreen({ chatId = null, filter = 'all' }: ChatScreenProps) {
   const theme = useChatTheme()
   const router = useRouter()
-  const { isDesktop, isDesktopWeb, desktopHeaderHeight, mobileTabBarOffset } = useAppLayout()
+  const { isDesktop, mobileTabBarOffset } = useAppLayout()
   const { user, isLoading: authLoading } = useSupabase()
   const currentUserId = user?.id ?? null
 
@@ -60,15 +60,13 @@ export function ChatScreen({ chatId = null, filter = 'all' }: ChatScreenProps) {
     reloadedFor.current = null
   }, [currentUserId])
 
+  // Fill the AppShell content column (flex parent). Avoid calc(100dvh - header):
+  // that fights the profile nudge / footer and often collapses to a blank pane on web.
   const fillStyle =
-    Platform.OS === 'web'
-      ? isDesktopWeb
-        ? ({ height: `calc(100dvh - ${desktopHeaderHeight}px)` } as const)
-        : ({ flex: 1, minHeight: 0 } as const)
-      : undefined
+    Platform.OS === 'web' ? ({ flex: 1, minHeight: 0, width: '100%' } as const) : undefined
 
   // ---- Auth states ---------------------------------------------------------
-  if (authLoading) {
+  if (authLoading && chats.length === 0) {
     return (
       <YStack flex={1} minHeight={0} backgroundColor={theme.pageBg} alignItems="center" justifyContent="center" style={fillStyle}>
         <Spinner size="large" color={theme.brand} />
@@ -105,9 +103,9 @@ export function ChatScreen({ chatId = null, filter = 'all' }: ChatScreenProps) {
           Sign in to chat with your network in real time — send messages, share photos, and see when
           contacts are online.
         </Text>
-        <Link href={routes.signIn} asChild>
+        <AppLink href={routes.signIn} asChild>
           <Button tone="primary">Sign in to continue</Button>
-        </Link>
+        </AppLink>
       </YStack>
     )
   }
@@ -130,9 +128,6 @@ export function ChatScreen({ chatId = null, filter = 'all' }: ChatScreenProps) {
           minHeight={0}
         >
           <ChatSectionTabs />
-          <YStack paddingHorizontal={12} paddingBottom={8} gap={8}>
-            <PushPermissionBanner />
-          </YStack>
           <ChatListPane
             chats={visibleChats}
             isLoading={isLoading}
@@ -149,7 +144,6 @@ export function ChatScreen({ chatId = null, filter = 'all' }: ChatScreenProps) {
             <ChatThreadPane
               chat={activeChat}
               currentUserId={currentUserId}
-              showBack={false}
               onBack={() => router.push(chatRoutes.home)}
               onConversationChanged={reload}
             />
@@ -168,23 +162,15 @@ export function ChatScreen({ chatId = null, filter = 'all' }: ChatScreenProps) {
         <ChatThreadPane
           chat={activeChat}
           currentUserId={currentUserId}
-          showBack
           onBack={() => router.push(chatRoutes.home)}
           onConversationChanged={reload}
         />
-      ) : chatId && isLoading ? (
+      ) : chatId && isLoading && visibleChats.length === 0 ? (
         <YStack flex={1} alignItems="center" justifyContent="center">
           <Spinner size="large" color={theme.brand} />
         </YStack>
       ) : (
         <YStack flex={1} minHeight={0}>
-          <YStack paddingHorizontal={12} paddingTop={8} paddingBottom={4} gap={8}>
-            <PushPermissionBanner />
-            {!chatId ? (
-              <>
-              </>
-            ) : null}
-          </YStack>
           <ChatListPane
             chats={visibleChats}
             isLoading={isLoading}

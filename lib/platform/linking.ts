@@ -1,27 +1,18 @@
-import { Linking, Platform } from 'react-native'
+import type { Href } from 'one'
 
 import { APP_SCHEME, buildAppUrl, buildNativeSchemeUrl, resolveAppOrigin } from '~/config/app-origin'
 
-import { openExternalUrl } from './openUrl'
+import { navigateApp } from './navigate'
 
-/** Open a path in the native app (scheme) or web origin. */
+/**
+ * Open an in-app path via soft SPA routing on web, iOS, and Android.
+ * Use this from notifications / deep-link handlers while the app is running.
+ * (Out-of-app scheme handoff is handled by the OS / linking config, not here.)
+ */
 export async function openAppPath(path: string): Promise<boolean> {
-  if (Platform.OS === 'web') {
-    if (typeof window !== 'undefined') {
-      window.location.href = buildAppUrl(path)
-      return true
-    }
-    return false
-  }
-
-  const schemeUrl = buildNativeSchemeUrl(path)
-  const canOpenScheme = await Linking.canOpenURL(schemeUrl)
-  if (canOpenScheme) {
-    await Linking.openURL(schemeUrl)
-    return true
-  }
-
-  return openExternalUrl(buildAppUrl(path))
+  const normalized = path.startsWith('/') ? path : `/${path}`
+  navigateApp(normalized as Href)
+  return true
 }
 
 /** Parse an incoming deep link / universal link into an in-app path. */

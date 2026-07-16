@@ -21,6 +21,7 @@ import {
 import { ImageUploadField, preparePickedImagesForUpload } from '~/components/media/ImageUploadField'
 import type { PickedImage } from '~/lib/media/pick-image'
 import { uploadEventCoverImage } from '~/lib/supabase/storage-upload'
+import { useUploadProgress } from '~/hooks/useUploadProgress'
 import { LocationPickerField } from '~/components/geo'
 import { useFormValidation } from '~/hooks/useFormValidation'
 import { communityRoutes, routes } from '~/lib/routes'
@@ -52,6 +53,7 @@ export function CreateEventScreen() {
   const [eventLocation, setEventLocation] = useState('')
   const [venueDetail, setVenueDetail] = useState('')
   const [cover, setCover] = useState<PickedImage[]>([])
+  const { progress: uploadProgress, track: trackUpload, reset: resetUpload } = useUploadProgress()
 
   const form = useFormValidation(
     useMemo(
@@ -123,9 +125,13 @@ export function CreateEventScreen() {
     let coverUrl = ''
     if (cover[0]) {
       const [file] = await preparePickedImagesForUpload(cover)
-      const { data: uploaded, error: uploadError } = await uploadEventCoverImage(user.id, file)
+      trackUpload(1)
+      const { data: uploaded, error: uploadError } = await uploadEventCoverImage(user.id, file, {
+        onProgress: trackUpload,
+      })
       if (uploadError || !uploaded) {
         setIsSaving(false)
+        resetUpload()
         toast.show('Could not upload cover image', {
           tone: 'danger',
           message: uploadError ?? 'Try again shortly.',
@@ -156,6 +162,7 @@ export function CreateEventScreen() {
         .filter(Boolean),
     })
     setIsSaving(false)
+    resetUpload()
 
     if (error || !data) {
       toast.show('Could not create event', { tone: 'danger', message: error ?? 'Try again.' })
@@ -303,6 +310,8 @@ export function CreateEventScreen() {
           hint="Upload a banner attendees will see on the event."
           value={cover}
           onChange={setCover}
+          uploadProgress={uploadProgress}
+          uploadLabel="Uploading cover…"
         />
         <ValidatedTextField
           label="Tags (comma separated)"

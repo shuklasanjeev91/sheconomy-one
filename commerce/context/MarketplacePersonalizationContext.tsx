@@ -22,6 +22,7 @@ import {
 } from '~/commerce/lib/marketplace-personalization'
 import { useProfile } from '~/hooks/useProfile'
 import { useQueryParam } from '~/hooks/useQueryParams'
+import { useOptionalRegionPreferences } from '~/lib/locale'
 
 type MarketplacePersonalizationValue = {
   signals: MarketplaceSignals
@@ -47,6 +48,7 @@ export function MarketplacePersonalizationProvider({ children }: { children: Rea
   const searchQuery = useQueryParam('q')
   const { profile } = useProfile()
   const userGeo = useUserGeo(profile?.location)
+  const region = useOptionalRegionPreferences()
   const { items: cartItems } = useCart()
   const { favoriteIds } = useFavorites()
 
@@ -71,22 +73,29 @@ export function MarketplacePersonalizationProvider({ children }: { children: Rea
     }
   }, [])
 
+  const cartListingKey = cartItems.map((item) => item.listing_id).join('|')
+  const favoriteListingKey = favoriteIds.join('|')
+
   const signals = useMemo<MarketplaceSignals>(
     () => ({
-      userGeo,
+      userGeo: {
+        ...userGeo,
+        country: region?.countryCode ?? userGeo.country,
+      },
       searchQuery: readSearchQuery(pathname, searchQuery),
-      cartListingIds: new Set(cartItems.map((item) => item.listing_id)),
-      favoriteListingIds: new Set(favoriteIds),
+      cartListingIds: new Set(cartListingKey ? cartListingKey.split('|') : []),
+      favoriteListingIds: new Set(favoriteListingKey ? favoriteListingKey.split('|') : []),
       trendingIds,
       bestsellerRank,
       orderCounts,
     }),
     [
       userGeo,
+      region?.countryCode,
       pathname,
       searchQuery,
-      cartItems,
-      favoriteIds,
+      cartListingKey,
+      favoriteListingKey,
       trendingIds,
       bestsellerRank,
       orderCounts,

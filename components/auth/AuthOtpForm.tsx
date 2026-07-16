@@ -21,13 +21,14 @@ import { useOtpAutofill } from '~/features/auth/hooks/useOtpAutofill'
 import { sendAuthOtp, verifyAuthOtp } from '~/features/auth/services/auth-otp'
 import {
   isCompleteOtp,
+  normalizeOtpDigits,
   validateEmailAddress,
-  validateFullName,
   validateMobileNumber,
 } from '~/features/auth/validation'
 import { useFormValidation } from '~/hooks/useFormValidation'
+import { isPhoneHintSupported, requestPhoneNumberHint } from '~/lib/platform/phone-hint'
 import { countryFlag, type Country } from '~/lib/phone/countries'
-import { formatPhoneForDisplay, validateNationalPhone } from '~/lib/phone/phone'
+import { formatPhoneForDisplay, parseE164Phone, validateNationalPhone } from '~/lib/phone/phone'
 import { getSession, type OtpChannel, type PhoneAuthInput } from '~/lib/supabase/auth'
 import { email, otp, required } from '~/lib/validation'
 import { useAppUi } from '~/lib/theme/useAppUi'
@@ -37,20 +38,11 @@ const OTP_LENGTH = 6
 
 type AuthOtpFormProps = {
   channel: OtpChannel
-  fullName?: string
-  acceptedTerms?: boolean
   onSuccess?: (meta: { isNewUser: boolean }) => void
-  onRequireConsent?: () => void
 }
 
 /** Passwordless OTP sign-in — email or SMS, cross-platform with autofill. */
-export function AuthOtpForm({
-  channel,
-  fullName = '',
-  acceptedTerms = true,
-  onSuccess,
-  onRequireConsent,
-}: AuthOtpFormProps) {
+export function AuthOtpForm({ channel, onSuccess }: AuthOtpFormProps) {
   const ui = useAppUi()
   const toast = useAppToast()
   const [country, setCountry] = useState<Country>(DEFAULT_COUNTRY)
@@ -103,6 +95,21 @@ export function AuthOtpForm({
   }, [channel])
 
   useEffect(() => {
+    if (isEmail || otpSent || !isPhoneHintSupported()) return
+    let cancelled = false
+    void requestPhoneNumberHint().then((result) => {
+      if (cancelled || !result.phoneNumber) return
+      const parsed = parseE164Phone(result.phoneNumber)
+      if (!parsed) return
+      setCountry(parsed.country)
+      form.fields.identifier.onChange(parsed.nationalNumber)
+    })
+    return () => {
+      cancelled = true
+    }
+  }, [isEmail, otpSent])
+
+  useEffect(() => {
     if (resendIn <= 0) return
     const timer = setTimeout(() => setResendIn((value) => value - 1), 1000)
     return () => clearTimeout(timer)
@@ -130,17 +137,6 @@ export function AuthOtpForm({
 
   async function handleSendOtp() {
     setApiError(null)
-    if (!acceptedTerms) {
-      onRequireConsent?.()
-      return
-    }
-    if (fullName.trim()) {
-      const nameError = validateFullName(fullName)
-      if (nameError) {
-        setApiError(nameError)
-        return
-      }
-    }
 
     form.fields.identifier.touch()
     if (form.fields.identifier.validate()) return
@@ -152,7 +148,6 @@ export function AuthOtpForm({
     const result = await sendAuthOtp({
       channel,
       identifier: isEmail ? validated : phoneInput,
-      fullName: fullName.trim() || undefined,
       purpose: 'login',
     })
     setIsSubmitting(false)
@@ -282,20 +277,18 @@ export function AuthOtpForm({
             </Text>
           </YStack>
 
-          <Field label="Verification code" error={otpFieldError ?? apiError ?? undefined}>
-            <AuthInputShell invalid={!!otpFieldError || !!apiError}>
-              <OtpCodeInput
-                value={form.fields.otpCode.value}
-                onChange={(next) => {
-                  setApiError(null)
-                  form.fields.otpCode.onChange(next)
-                }}
-                length={OTP_LENGTH}
-                disabled={isSubmitting}
-                invalid={!!otpFieldError || !!apiError}
-                autoFocus
-              />
-            </AuthInputShell>
+          <Field error={otpFieldError ?? apiError ?? undefined}>
+            <OtpCodeInput
+              value={form.fields.otpCode.value}
+              onChange={(next) => {
+                setApiError(null)
+                form.fields.otpCode.onChange(next)
+              }}
+              length={OTP_LENGTH}
+              disabled={isSubmitting}
+              invalid={!!otpFieldError || !!apiError}
+              autoFocus
+            />
           </Field>
 
           <Button

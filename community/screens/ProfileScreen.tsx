@@ -95,7 +95,7 @@ export function ProfileScreen() {
             <ProfileActionButton
               label="My shops"
               variant="outline"
-              onPress={() => router.push(commerceRoutes.myShops)}
+              onPress={() => router.push(commerceRoutes.manageShop())}
             />
           </>
         }

@@ -35,3 +35,27 @@ export function readSessionValueSync(key: string): string | null {
   }
   return null
 }
+
+/** Durable key/value (localStorage on web, AsyncStorage on native). */
+export async function readPersistentValue(key: string): Promise<string | null> {
+  try {
+    if (Platform.OS === 'web' && typeof window !== 'undefined') {
+      return window.localStorage.getItem(key)
+    }
+    return await AsyncStorage.getItem(key)
+  } catch {
+    return null
+  }
+}
+
+export async function writePersistentValue(key: string, value: string): Promise<void> {
+  try {
+    if (Platform.OS === 'web' && typeof window !== 'undefined') {
+      window.localStorage.setItem(key, value)
+      return
+    }
+    await AsyncStorage.setItem(key, value)
+  } catch {
+    // ignore quota errors
+  }
+}

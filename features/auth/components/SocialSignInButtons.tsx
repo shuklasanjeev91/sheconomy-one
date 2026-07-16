@@ -4,7 +4,9 @@ import { Platform } from 'react-native'
 import { Button, Spinner, Text, XStack, YStack, useAppToast } from '~/components/ui'
 import {
   isAppleSignInAvailable,
+  isLinkedInSignInAvailable,
   startOAuthSignIn,
+  type OAuthProvider,
 } from '~/features/auth/services/oauth'
 import { useAppUi } from '~/lib/theme/useAppUi'
 
@@ -12,18 +14,21 @@ type SocialSignInButtonsProps = {
   disabled?: boolean
   requireConsent?: boolean
   acceptedTerms?: boolean
+  /** Called after a successful native / non-redirect social sign-in. */
+  onSuccess?: (provider: OAuthProvider) => void
 }
 
 export function SocialSignInButtons({
   disabled,
   requireConsent,
   acceptedTerms,
+  onSuccess,
 }: SocialSignInButtonsProps) {
   const ui = useAppUi()
   const toast = useAppToast()
-  const [busy, setBusy] = useState<'google' | 'apple' | null>(null)
+  const [busy, setBusy] = useState<OAuthProvider | null>(null)
 
-  async function handle(provider: 'google' | 'apple') {
+  async function handle(provider: OAuthProvider) {
     if (requireConsent && !acceptedTerms) {
       toast.show('Please accept Terms and Privacy to continue', { tone: 'warning' })
       return
@@ -33,7 +38,10 @@ export function SocialSignInButtons({
     setBusy(null)
     if (result.error) {
       toast.show(result.error, { tone: 'danger' })
+      return
     }
+    if (result.pendingRedirect) return
+    onSuccess?.(provider)
   }
 
   return (
@@ -69,6 +77,18 @@ export function SocialSignInButtons({
             : Platform.OS === 'ios'
               ? 'Sign in with Apple'
               : 'Continue with Apple'}
+        </Button>
+      ) : null}
+      {isLinkedInSignInAvailable() ? (
+        <Button
+          tone="outline"
+          size="$4"
+          borderRadius={999}
+          disabled={disabled || busy != null}
+          onPress={() => void handle('linkedin_oidc')}
+          icon={busy === 'linkedin_oidc' ? <Spinner size="small" /> : undefined}
+        >
+          {busy === 'linkedin_oidc' ? 'Connecting…' : 'Continue with LinkedIn'}
         </Button>
       ) : null}
     </YStack>

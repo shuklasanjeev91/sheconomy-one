@@ -1,6 +1,6 @@
 import type { ReactNode } from 'react'
+import { AppLink } from '~/components/navigation/AppLink'
 import { useEffect, useState } from 'react'
-import { Link } from 'one'
 
 import { CommunitySuggestionsSections } from '~/community/components/CommunitySuggestionsSections'
 import { CommunityWidget } from '~/community/components/CommunityWidget'
@@ -90,9 +90,9 @@ export function CommunityRightSidebar({ pin = 'document' }: { pin?: CommunitySid
             }
 
             return (
-              <Link key={item.label} href={item.href}>
+              <AppLink key={item.label} href={item.href}>
                 {row}
-              </Link>
+              </AppLink>
             )
           })}
         </YStack>
@@ -102,11 +102,11 @@ export function CommunityRightSidebar({ pin = 'document' }: { pin?: CommunitySid
         <CommunityWidget
           title="Invitations"
           headerActions={
-            <Link href={communityRoutes.peopleTab('pending-received')}>
+            <AppLink href={communityRoutes.peopleTab('pending-received')}>
               <Text fontSize={13} fontWeight="600" color={communityUi.brand}>
                 See all
               </Text>
-            </Link>
+            </AppLink>
           }
         >
           <YStack gap={0}>
@@ -121,16 +121,16 @@ export function CommunityRightSidebar({ pin = 'document' }: { pin?: CommunitySid
         <CommunityWidget
           title="Upcoming events"
           footer={
-            <Link href={communityRoutes.events}>
+            <AppLink href={communityRoutes.events}>
               <Text fontSize={14} fontWeight="600" color={communityUi.brand}>
                 See all events
               </Text>
-            </Link>
+            </AppLink>
           }
         >
           <YStack gap={8}>
             {upcomingEvents.map((event) => (
-              <Link key={event.id} href={communityRoutes.event(event.id)}>
+              <AppLink key={event.id} href={communityRoutes.event(event.id)}>
                 <YStack
                   gap={4}
                   paddingVertical={8}
@@ -147,7 +147,7 @@ export function CommunityRightSidebar({ pin = 'document' }: { pin?: CommunitySid
                     {event.is_online ? ' · Online' : ''}
                   </Text>
                 </YStack>
-              </Link>
+              </AppLink>
             ))}
           </YStack>
         </CommunityWidget>
@@ -158,20 +158,20 @@ export function CommunityRightSidebar({ pin = 'document' }: { pin?: CommunitySid
           title="Contacts"
           actions={
             <>
-              <Link href={communityRoutes.peopleTab('connections')}>
+              <AppLink href={communityRoutes.peopleTab('connections')}>
                 <HeaderIconButton icon={Icons.Search} label="Search contacts" />
-              </Link>
-              <Link href={communityRoutes.network}>
+              </AppLink>
+              <AppLink href={communityRoutes.network}>
                 <HeaderIconButton icon={Icons.MoreHorizontal} label="Network" />
-              </Link>
+              </AppLink>
             </>
           }
           footer={
-            <Link href={communityRoutes.peopleTab('connections')}>
+            <AppLink href={communityRoutes.peopleTab('connections')}>
               <Text fontSize={14} fontWeight="600" color={communityUi.brand}>
                 See all contacts
               </Text>
-            </Link>
+            </AppLink>
           }
         >
           <YStack gap={2}>

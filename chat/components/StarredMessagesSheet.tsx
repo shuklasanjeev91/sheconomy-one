@@ -1,11 +1,13 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 
 import { fetchStarredMessages } from '~/chat/lib/chats'
 import { mediaPreviewLabel } from '~/chat/lib/emoji'
 import { useChatTheme } from '~/chat/lib/chat-theme'
 import { formatListTimestamp } from '~/chat/lib/time'
 import type { ChatMessage } from '~/chat/lib/types'
+import { ScreenSearchField } from '~/components/search'
 import { AppBottomSheet, Icons, ScrollView, Spinner, Text, XStack, YStack } from '~/components/ui'
+import { filterBySearchQuery } from '~/lib/search'
 
 type StarredMessagesSheetProps = {
   open: boolean
@@ -30,6 +32,20 @@ export function StarredMessagesSheet({
   const theme = useChatTheme()
   const [items, setItems] = useState<ChatMessage[]>([])
   const [loading, setLoading] = useState(false)
+  const [query, setQuery] = useState('')
+
+  const filteredItems = useMemo(
+    () =>
+      filterBySearchQuery(items, query, (message) => [
+        preview(message),
+        resolveSenderName(message.senderId),
+      ]),
+    [items, query, resolveSenderName],
+  )
+
+  useEffect(() => {
+    if (!open) setQuery('')
+  }, [open])
 
   useEffect(() => {
     if (!open) return
@@ -47,6 +63,12 @@ export function StarredMessagesSheet({
 
   return (
     <AppBottomSheet open={open} onOpenChange={onOpenChange} title="Starred messages" scrollable={false}>
+      <ScreenSearchField
+        value={query}
+        onChangeText={setQuery}
+        placeholder="Search starred messages"
+        clearable
+      />
       {loading ? (
         <YStack paddingVertical={24} alignItems="center">
           <Spinner size="small" color={theme.brand} />
@@ -58,9 +80,16 @@ export function StarredMessagesSheet({
             No starred messages yet.
           </Text>
         </YStack>
+      ) : filteredItems.length === 0 ? (
+        <YStack paddingVertical={24} alignItems="center" gap={6}>
+          <Icons.Search size={26} color={theme.textMuted} />
+          <Text fontSize={14} color={theme.textMuted}>
+            No starred messages match your search.
+          </Text>
+        </YStack>
       ) : (
         <ScrollView style={{ maxHeight: 380 }} showsVerticalScrollIndicator={false}>
-          {items.map((message) => (
+          {filteredItems.map((message) => (
             <YStack
               key={message.id}
               paddingVertical={9}

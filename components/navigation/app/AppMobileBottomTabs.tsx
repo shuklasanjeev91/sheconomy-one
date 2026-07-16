@@ -1,4 +1,5 @@
-import { Link, usePathname } from 'one'
+import { usePathname } from 'one'
+import { AppLink } from '~/components/navigation/AppLink'
 import { useMemo } from 'react'
 import { Platform, useWindowDimensions } from 'react-native'
 
@@ -35,9 +36,8 @@ export function AppMobileBottomTabs() {
   const { tier } = useAccess()
   const { safeBottom } = useAppLayout()
   const { itemCount } = useCart()
-  const { shops } = useVendorShops()
+  const { shops, primaryShopId } = useVendorShops()
   const hasShops = shops.length > 0
-  const primaryShopId = shops[0]?.id ?? null
 
   const ui = useAppUi()
   const { ui: coworkUi } = useCoWorkTheme()
@@ -163,7 +163,7 @@ export function AppMobileBottomTabs() {
           }
 
           return (
-            <Link key={`${tab.label}-${String(tab.href)}`} href={tab.href} asChild>
+            <AppLink key={`${tab.label}-${String(tab.href)}`} href={tab.href} replace asChild>
               <MobileTabBarItem
                 flex={1}
                 minWidth={0}
@@ -179,7 +179,7 @@ export function AppMobileBottomTabs() {
               >
                 {iconNode}
               </MobileTabBarItem>
-            </Link>
+            </AppLink>
           )
         })}
       </XStack>

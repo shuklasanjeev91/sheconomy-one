@@ -1,5 +1,5 @@
-import { Link } from 'one'
 import { Platform, ScrollView } from 'react-native'
+import { AppLink } from '~/components/navigation/AppLink'
 import { LinearGradient } from 'expo-linear-gradient'
 
 import { useStoryRings } from '~/community/hooks/useStories'
@@ -41,7 +41,7 @@ export function StoriesStrip() {
         >
           <XStack gap="$3" paddingHorizontal="$3">
             {isAuthenticated ? (
-              <Link
+              <AppLink
                 href={ownRing ? communityRoutes.storyUser(profile!.id) : communityRoutes.storyCreate}
                 asChild
               >
@@ -68,11 +68,11 @@ export function StoriesStrip() {
                     {ownRing ? 'Your story' : 'Add story'}
                   </Text>
                 </YStack>
-              </Link>
+              </AppLink>
             ) : null}
 
             {otherRings.map((ring) => (
-              <Link key={ring.user_id} href={communityRoutes.storyUser(ring.user_id)} asChild>
+              <AppLink key={ring.user_id} href={communityRoutes.storyUser(ring.user_id)} asChild>
                 <YStack width={72} alignItems="center" gap={6} cursor="pointer">
                   <StoryRingAvatar
                     name={ring.full_name}
@@ -85,7 +85,7 @@ export function StoriesStrip() {
                     {ring.full_name.split(' ')[0]}
                   </Text>
                 </YStack>
-              </Link>
+              </AppLink>
             ))}
           </XStack>
         </ScrollView>

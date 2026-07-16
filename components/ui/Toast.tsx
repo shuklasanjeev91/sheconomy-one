@@ -1,5 +1,6 @@
 import type { ComponentType } from 'react'
 import { useMemo, useRef } from 'react'
+import { Pressable } from 'react-native'
 import type { ThemeName } from 'tamagui'
 import { Toast as TToast, useToastController, useToastState } from '@tamagui/toast'
 import { getShadowStyle } from '~/config/tokens'
@@ -14,6 +15,7 @@ export type ToastTone = 'default' | 'success' | 'warning' | 'danger' | 'info'
 declare module '@tamagui/toast' {
   interface CustomData {
     tone?: ToastTone
+    onPress?: () => void
   }
 }
 
@@ -40,12 +42,18 @@ export function useAppToast() {
     () => ({
       show: (
         title: string,
-        opts?: { message?: string; tone?: ToastTone; duration?: number }
+        opts?: {
+          message?: string
+          tone?: ToastTone
+          duration?: number
+          onPress?: () => void
+        },
       ) => {
         controllerRef.current.show(title, {
           message: opts?.message,
           tone: opts?.tone ?? 'default',
           duration: opts?.duration,
+          onPress: opts?.onPress,
         })
       },
       hide: (...args: Parameters<typeof controller.hide>) =>
@@ -64,6 +72,20 @@ export function AppToasts() {
   }
 
   const tone = (toast.tone as ToastTone) ?? 'default'
+  const onPress = toast.onPress as (() => void) | undefined
+
+  const content = (
+    <>
+      <AnyToast.Title fontWeight="700" fontSize="$4" color="$color12">
+        {toast.title}
+      </AnyToast.Title>
+      {toast.message ? (
+        <AnyToast.Description color="$color11" fontSize="$3">
+          {toast.message}
+        </AnyToast.Description>
+      ) : null}
+    </>
+  )
 
   return (
     <AnyToast
@@ -84,14 +106,13 @@ export function AppToasts() {
       exitStyle={{ opacity: 0, y: -12, scale: 0.98 }}
       {...getShadowStyle('md')}
     >
-      <AnyToast.Title fontWeight="700" fontSize="$4" color="$color12">
-        {toast.title}
-      </AnyToast.Title>
-      {toast.message ? (
-        <AnyToast.Description color="$color11" fontSize="$3">
-          {toast.message}
-        </AnyToast.Description>
-      ) : null}
+      {onPress ? (
+        <Pressable accessibilityRole="button" onPress={onPress}>
+          {content}
+        </Pressable>
+      ) : (
+        content
+      )}
     </AnyToast>
   )
 }

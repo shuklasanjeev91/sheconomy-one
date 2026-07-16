@@ -1,11 +1,10 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { Link } from 'one'
+import { AppLink } from '~/components/navigation/AppLink'
 
 import {
   Avatar,
   Button,
   Icons,
-  Input,
   Popover,
   PopoverContent,
   Spinner,
@@ -14,9 +13,11 @@ import {
   YStack,
   useAppToast,
 } from '~/components/ui'
+import { ScreenSearchField } from '~/components/search'
 import { getShadowStyle, radius } from '~/config/tokens'
 import { useAppLayout } from '~/hooks/useAppLayout'
 import { useProfile } from '~/hooks/useProfile'
+import { useScreenSearch } from '~/hooks/useScreenSearch'
 import { createTracking, selectDeliveryLoading } from '~/lib/orders/delivery.store'
 import { ORDER_STATUS, ORDER_STATUS_DISPLAY, type OrderStatus } from '~/lib/orders/order.constants'
 import { formatOrderAmount, formatOrderDate } from '~/lib/orders/order.utils'
@@ -46,7 +47,6 @@ import { VendorAddTrackingDrawer, type TrackingFormValues } from './VendorAddTra
 import { ActionButton, VendorOrderDetailDrawer } from './VendorOrderDetailDrawer'
 
 const PAGE_SIZE = 10
-const SEARCH_DEBOUNCE_MS = 350
 
 type StatusFilter = OrderStatus | 'all'
 type DatePreset = 'all' | '7d' | '30d'
@@ -104,8 +104,7 @@ export function VendorOrdersScreen() {
   const shopId = shop?.id ?? null
   const role = profile?.role ?? null
 
-  const [searchInput, setSearchInput] = useState('')
-  const [searchTerm, setSearchTerm] = useState('')
+  const { input: searchInput, setInput: setSearchInput, debounced: searchTerm } = useScreenSearch()
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('all')
   const [datePreset, setDatePreset] = useState<DatePreset>('all')
   const [page, setPage] = useState(1)
@@ -117,14 +116,9 @@ export function VendorOrdersScreen() {
   const pagination = isSearchMode ? searchPagination : listPagination
   const listLoading = isSearchMode ? loading.searching : loading.orders
 
-  // Debounce the raw search box into the applied search term.
   useEffect(() => {
-    const handle = setTimeout(() => {
-      setSearchTerm(searchInput)
-      setPage(1)
-    }, SEARCH_DEBOUNCE_MS)
-    return () => clearTimeout(handle)
-  }, [searchInput])
+    setPage(1)
+  }, [searchTerm])
 
   const loadPage = useCallback(() => {
     if (!shopId) return
@@ -330,34 +324,13 @@ export function VendorOrdersScreen() {
           style={getShadowStyle('sm')}
         >
           <XStack gap="$3" flexWrap="wrap" alignItems="center">
-            <XStack
-              flex={1}
-              minWidth={220}
-              alignItems="center"
-              gap="$2"
-              paddingHorizontal="$3"
-              borderRadius={999}
-              borderWidth={1}
-              borderColor={ui.borderSubtle}
-              backgroundColor={ui.surfaceMuted}
-            >
-              <Icons.Search size={16} color={ui.textMuted} />
-              <Input
-                flex={1}
-                borderWidth={0}
-                backgroundColor="transparent"
-                paddingHorizontal={0}
-                height="$4"
-                placeholder="Search order number or customer…"
+            <YStack flex={1} minWidth={220}>
+              <ScreenSearchField
                 value={searchInput}
                 onChangeText={setSearchInput}
+                placeholder="Search order number or customer…"
               />
-              {searchInput ? (
-                <YStack cursor="pointer" onPress={() => setSearchInput('')} pressStyle={{ opacity: 0.6 }}>
-                  <Icons.X size={15} color={ui.textMuted} />
-                </YStack>
-              ) : null}
-            </XStack>
+            </YStack>
 
             <FilterDropdown
               ui={ui}
@@ -944,11 +917,11 @@ function NoShopState({ ui }: { ui: AppUiTokens }) {
       <Text fontSize={14} color={ui.textSecondary} textAlign="center" maxWidth={360} lineHeight={20}>
         Create your storefront to start receiving and managing orders.
       </Text>
-      <Link href={commerceRoutes.myShops} asChild>
+      <AppLink href={commerceRoutes.manageShop()} asChild>
         <Button tone="primary" size="$4" borderRadius={999} marginTop="$2">
           Go to My Shops
         </Button>
-      </Link>
+      </AppLink>
     </YStack>
   )
 }

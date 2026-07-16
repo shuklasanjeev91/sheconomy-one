@@ -2,7 +2,7 @@ import { useRouter } from 'one'
 import { useState } from 'react'
 
 import { AppPage, LAYOUT_STRETCH } from '~/components/layout'
-import { Button, Icons, Input, Text, XStack, YStack, useAppToast } from '~/components/ui'
+import { Button, Icons, Input, Text, XStack, YStack } from '~/components/ui'
 import { CoWorkBrandChip, CoWorkIconBadge } from '~/co-work/components/CoWorkUi'
 import { DevicePrepCard } from '~/co-work/components/DevicePrepCard'
 import {
@@ -11,7 +11,6 @@ import {
   useRecentMeetingCodes,
 } from '~/co-work/lib/recent-meeting-codes'
 import { coworkGlassStyle, useCoWorkTheme } from '~/co-work/lib/theme'
-import { readFromClipboard } from '~/lib/platform/clipboard'
 import { controlGradientStyle, coworkBoxShadow, pageGradientStyle } from '~/lib/platform/crossStyles'
 import { coWorkRoutes } from '~/lib/routes'
 
@@ -20,24 +19,8 @@ import { BRAND_NAME } from '~/config/brand'
 export function CoWorkJoinScreen() {
   const { ui: coworkUi, gradients: coworkGradients, shadows: coworkShadows } = useCoWorkTheme()
   const router = useRouter()
-  const toast = useAppToast()
   const recentCodes = useRecentMeetingCodes()
   const [joinCode, setJoinCode] = useState('')
-
-  async function pasteCode() {
-    const text = await readFromClipboard()
-    if (!text) {
-      toast.show('Clipboard is empty', { tone: 'info' })
-      return
-    }
-    const normalized = text.replace(/[^a-zA-Z0-9]/g, '').toUpperCase()
-    if (!normalized) {
-      toast.show('No meeting code found', { tone: 'danger' })
-      return
-    }
-    setJoinCode(normalized)
-    toast.show('Code pasted', { tone: 'success' })
-  }
 
   function joinWithCode(code: string) {
     const normalized = code.replace(/\s/g, '').toUpperCase()
@@ -96,15 +79,6 @@ export function CoWorkJoinScreen() {
             textAlign="center"
           />
           <XStack gap="$2" flexWrap="wrap">
-            <Button
-              tone="outline"
-              size="$3"
-              borderRadius={999}
-              icon={<Icons.Copy size={16} />}
-              onPress={() => void pasteCode()}
-            >
-              Paste code
-            </Button>
             <Button
               tone="primary"
               size="$4"

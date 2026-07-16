@@ -10,12 +10,17 @@ import { DesktopScrollTracker } from '~/components/navigation/DesktopScrollTrack
 import { CommerceDesktopFooter } from '~/commerce/navigation/CommerceDesktopFooter'
 import { useAppLayout } from '~/hooks/useAppLayout'
 import { useAuthScreen } from '~/hooks/useAuthScreen'
-import { isChatConversationPath, isCommercePath } from '~/lib/routes'
+import {
+  isChatConversationPath,
+  isChatPath,
+  isCommercePath,
+} from '~/lib/routes'
 import { authViewportStyle } from '~/components/auth/auth-layout'
-import { appShellStyle, meetingViewportStyle } from '~/lib/platform/viewport'
+import { appShellStyle, lockedAppShellStyle, meetingViewportStyle } from '~/lib/platform/viewport'
 import { useAppUi } from '~/lib/theme/useAppUi'
 
 import { IncomingCallHost } from '~/chat/components/IncomingCallHost'
+import { ProfileOnboardingNudge } from '~/components/auth/ProfileOnboardingNudge'
 import { GenderVerificationHost } from '~/components/gender-verification/GenderVerificationHost'
 
 import { AppDesktopHeader } from './AppDesktopHeader'
@@ -32,7 +37,8 @@ function useChromelessRoute() {
   return (
     pathname.startsWith('/ui-kit') ||
     pathname.startsWith('/co-work/meeting/') ||
-    pathname === '/co-work/meeting'
+    pathname === '/co-work/meeting' ||
+    pathname.startsWith('/chat/call/')
   )
 }
 
@@ -43,6 +49,8 @@ function useCompactMobileTopBar() {
     pathname === '/community' ||
     pathname === '/chat' ||
     pathname === '/class' ||
+    pathname === '/class/video' ||
+    pathname === '/class/audio' ||
     pathname === '/co-work'
   ) {
     return false
@@ -57,9 +65,11 @@ function useCompactMobileTopBar() {
     pathname.startsWith('/favorites') ||
     pathname.startsWith('/cart') ||
     pathname.startsWith('/checkout') ||
-    pathname.startsWith('/my-shops') ||
+    pathname.startsWith('/create-my-shop') ||
     pathname.startsWith('/vendor') ||
     pathname.startsWith('/settings') ||
+    pathname.startsWith('/legal') ||
+    pathname.startsWith('/help') ||
     pathname.startsWith('/profile') ||
     pathname.startsWith('/notifications') ||
     pathname.startsWith('/community/') ||
@@ -78,11 +88,19 @@ export function AppShell({ children }: AppShellProps) {
   const authScreen = useAuthScreen()
   const compactMobileTopBar = useCompactMobileTopBar()
   const showCommerceFooter = isDesktopWeb && isCommercePath(pathname)
-  const stretchMainContent = Platform.OS !== 'web' || !isDesktopWeb
-  // Open conversations are full-screen on mobile: no app header/tabs.
-  const chatFullScreen = !isDesktop && isChatConversationPath(pathname)
 
-  if (chromeless || chatFullScreen || authScreen.chromeless) {
+  // Chat is a true two-pane app — lock the shell so panes get a definite height.
+  // Community / class / co-work / commerce use PageScroll (document on desktop web).
+  const lockViewport = isChatPath(pathname)
+  const stretchMainContent =
+    lockViewport || Platform.OS !== 'web' || !isDesktopWeb
+  const clipShellOverflow =
+    lockViewport || Platform.OS !== 'web' || !isDesktopWeb
+
+  // Open conversations keep the app header (shared back); hide bottom tabs only.
+  const chatConversationMobile = !isDesktop && isChatConversationPath(pathname)
+
+  if (chromeless || authScreen.chromeless) {
     return (
       <NativeSafeArea edges={['top', 'bottom']}>
         <ScreenFill
@@ -112,26 +130,29 @@ export function AppShell({ children }: AppShellProps) {
         <AppBarScrollProvider>
           <DesktopScrollTracker />
           <ScreenFill
-            flex={Platform.OS === 'web' ? undefined : 1}
+            flex={Platform.OS === 'web' && !stretchMainContent ? undefined : 1}
             flexDirection="column"
             position="relative"
             backgroundColor={ui.background}
-            overflow={Platform.OS === 'web' && isDesktopWeb ? 'visible' : 'hidden'}
-            style={appShellStyle(isDesktopWeb)}
+            overflow={clipShellOverflow ? 'hidden' : 'visible'}
+            style={lockViewport ? lockedAppShellStyle() : appShellStyle(isDesktopWeb)}
           >
             {isDesktop ? <AppDesktopHeader /> : null}
-            {!isDesktop ? <AppMobileHeader minimal={compactMobileTopBar} /> : null}
+            {!isDesktop ? <AppMobileHeader minimal={compactMobileTopBar || chatConversationMobile} /> : null}
+            <ProfileOnboardingNudge />
             <YStack
               flexGrow={stretchMainContent ? 1 : undefined}
               flex={stretchMainContent ? 1 : undefined}
               width="100%"
               maxWidth="100%"
-              minHeight={Platform.OS === 'web' && isDesktopWeb ? undefined : 0}
+              // Only constrain height when we intentionally fill; document-scroll
+              // pages must grow with content or the window cannot scroll.
+              minHeight={stretchMainContent ? 0 : undefined}
             >
               {children}
             </YStack>
             {showCommerceFooter ? <CommerceDesktopFooter /> : null}
-            {!isDesktop ? <AppMobileBottomTabs /> : null}
+            {!isDesktop && !chatConversationMobile ? <AppMobileBottomTabs /> : null}
             <IncomingCallHost />
             <GenderVerificationHost />
           </ScreenFill>

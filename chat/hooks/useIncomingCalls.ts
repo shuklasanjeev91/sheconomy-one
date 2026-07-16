@@ -84,9 +84,12 @@ export function useIncomingCalls(userId: string | null | undefined) {
   const accept = useCallback(async (): Promise<string | null> => {
     const call = incomingRef.current
     if (!call) return null
-    await updateCallStatus(call.id, 'accepted')
+    // DB check constraint uses `active` (not `accepted`) — this is what the
+    // caller watches for before leaving the ringing overlay.
+    await updateCallStatus(call.id, 'active')
+    const code = call.meetingCode
     clear()
-    return call.meetingCode
+    return code
   }, [clear])
 
   const decline = useCallback(async () => {

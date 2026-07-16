@@ -307,6 +307,32 @@ dispatch(verifyShop({ shopId, verified: true }))
 dispatch(resetShop())
 ```
 
+**Vendor settings → Connect (contact + shop address + socials)**
+
+The Connect section of `/vendor/settings?section=connect` is
+`commerce/screens/vendor/VendorConnectSettings.tsx`. It edits three things in
+one Save (single bottom save bar, web + mobile):
+
+| Data | Where it lives | How it saves |
+|------|----------------|--------------|
+| Phone / email / website | `shops.shop_phone_number`, `shop_email`, `website_url` | `dispatch(updateShop(...))` (optimistic) |
+| Social links | `shops.social_links` (JSONB) | Normalised via `validateSocialLinks()` then `updateShop` |
+| Physical address | `addresses` row linked by `shops.shop_address_id` | `upsertShopAddressDetails()` in `~/commerce/lib/shop-address` |
+
+Validation before save (field-level errors + a toast with the first message):
+
+- At least one of email / phone is required (`shop_contact` error).
+- Phone must be E.164, email/website use the shared shop field validators.
+- Social links must be valid URLs (an `https://` prefix is added for bare domains).
+- If any address field is filled, address line 1 (min 3 chars) plus
+  city/state/country/postal are required (`validateGeoLocationParts`).
+
+`upsertShopAddressDetails(shopId, userId, input)` stores full street details
+(`address_line_1`, `address_line_2`, geo parts) — unlike the older
+`upsertShopAddress`, which only keeps city-level data. On first save it inserts
+the `addresses` row and links it to `shops.shop_address_id`; afterwards it
+updates the same row in place.
+
 ---
 
 ## 11. Do / Don't

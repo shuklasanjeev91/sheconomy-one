@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { Link } from 'one'
+import { AppLink } from '~/components/navigation/AppLink'
 
 import { ProgramCard } from '~/class/components/ProgramCard'
 import {
@@ -66,11 +66,11 @@ export function ContinueLearningRail() {
           >
             Clear
           </Text>
-          <Link href={classRoutes.home}>
+          <AppLink href={classRoutes.home}>
             <Text fontSize={13} fontWeight="600" color={ui.brand}>
               Browse all
             </Text>
-          </Link>
+          </AppLink>
         </XStack>
       </XStack>
 

@@ -1,48 +1,42 @@
-import { Link, useRouter } from 'one'
-import { useState } from 'react'
+import { AppLink } from '~/components/navigation/AppLink'
 
 import { AuthButton } from '~/components/auth'
-import { recordSearchTerm } from '~/commerce/lib/search-history'
-import { Icons, Input, Text, XStack, YStack } from '~/components/ui'
+import { AppSearchField } from '~/components/search'
+import { Icons, Text, XStack, YStack } from '~/components/ui'
+import { AppHeaderBackButton } from '~/components/navigation/AppHeaderBackButton'
 import { NavCountBadge } from '~/components/navigation/NavCountBadge'
 import { NavLogo } from '~/components/navigation/NavLogo'
 import { useCart } from '~/commerce/hooks/useCart'
 import { useUnreadNotifications } from '~/community/hooks/useUnreadNotifications'
 import { commerceRoutes, routes } from '~/lib/routes'
 import { useAccess } from '~/hooks/useAccess'
+import { useAppBackNavigation } from '~/hooks/useAppBackNavigation'
 import { useProfile } from '~/hooks/useProfile'
 import { useVendorShops } from '~/hooks/useVendorShops'
 import { useAppLayout } from '~/hooks/useAppLayout'
-import { chromeSurfaceStyle, searchFieldStyle } from '~/lib/theme/surfaces'
+import { chromeSurfaceStyle } from '~/lib/theme/surfaces'
 
 import { AppCenterNavTabs } from './AppCenterNavTabs'
 import { AppMenuButton } from './AppMenuSheet'
 import { getAppColors } from './config'
 import { useAppUi } from '~/lib/theme/useAppUi'
 
-import { BRAND_NAME } from '~/config/brand'
-
-/** Desktop header — logo + search | icon-only center nav | utilities + avatar. */
+/** Desktop header — logo + unified search | icon-only center nav | utilities + avatar. */
 export function AppDesktopHeader() {
   const ui = useAppUi()
   const { gutter } = useAppLayout()
   const colors = getAppColors(ui)
   const { isAuthenticated } = useProfile()
   const { canManageShops } = useAccess()
-  const { shops, isLoading: shopsLoading } = useVendorShops()
+  const { shops, isLoading: shopsLoading, primaryShopId } = useVendorShops()
   const { itemCount } = useCart()
   const { count: unreadNotifications } = useUnreadNotifications()
-  const router = useRouter()
-  const [searchQuery, setSearchQuery] = useState('')
+  const { showBack } = useAppBackNavigation()
 
   const hasShops = shops.length > 0
+  const sellerHubHref =
+    hasShops && primaryShopId ? commerceRoutes.manageShop(primaryShopId) : commerceRoutes.createShop
   const showCreateShop = canManageShops && isAuthenticated && !shopsLoading && !hasShops
-
-  function submitSearch() {
-    const trimmed = searchQuery.trim()
-    if (trimmed) recordSearchTerm(trimmed)
-    router.push(trimmed ? commerceRoutes.search(trimmed) : commerceRoutes.search())
-  }
 
   return (
     <YStack
@@ -64,34 +58,12 @@ export function AppDesktopHeader() {
         height={60}
         gap="$3"
       >
-        <XStack alignItems="center" gap="$2" flex={1} minWidth={0}>
+        <XStack alignItems="center" gap="$2" flex={1} minWidth={0} overflow="visible">
+          {showBack ? <AppHeaderBackButton /> : null}
           <NavLogo compact href={commerceRoutes.home} />
-          <XStack
-            flex={1}
-            minWidth={0}
-            alignItems="center"
-            gap="$2"
-            height={40}
-            alignSelf="center"
-            paddingHorizontal="$3"
-            style={searchFieldStyle(ui)}
-          >
-            <Icons.Search size={16} color={colors.icon} />
-            <Input
-              flex={1}
-              unstyled
-              value={searchQuery}
-              onChangeText={setSearchQuery}
-              onSubmitEditing={submitSearch}
-              returnKeyType="search"
-              placeholder={`Search ${BRAND_NAME}`}
-              fontSize={15}
-              color={colors.text}
-              placeholderTextColor={colors.icon}
-              borderWidth={0}
-              backgroundColor="transparent"
-            />
-          </XStack>
+          <YStack flex={1} minWidth={120} justifyContent="center" overflow="visible">
+            <AppSearchField compact />
+          </YStack>
         </XStack>
 
         <XStack flex={1.5} justifyContent="center" minWidth={0} alignSelf="stretch">
@@ -109,11 +81,15 @@ export function AppDesktopHeader() {
           {isAuthenticated ? (
             <>
               <AppMenuButton mode="popover" size={40} />
-              {canManageShops ? (
-                <UtilityButton href={commerceRoutes.myShops} icon={Icons.Store} label="My shops" />
+              {canManageShops && !showCreateShop ? (
+                <UtilityButton
+                  href={sellerHubHref}
+                  icon={Icons.Store}
+                  label={hasShops ? 'Manage shop' : 'My shops'}
+                />
               ) : null}
               {showCreateShop ? (
-                <Link href={`${commerceRoutes.myShops}?create=1` as import('one').Href} asChild>
+                <AppLink href={commerceRoutes.createShop} asChild>
                   <XStack
                     height={40}
                     paddingHorizontal="$3"
@@ -129,7 +105,7 @@ export function AppDesktopHeader() {
                       Open shop
                     </Text>
                   </XStack>
-                </Link>
+                </AppLink>
               ) : null}
             </>
           ) : null}
@@ -141,9 +117,6 @@ export function AppDesktopHeader() {
               label="Notifications"
               badge={unreadNotifications}
             />
-          ) : null}
-          {isAuthenticated ? (
-            <UtilityButton href={routes.settings} icon={Icons.Settings} label="Settings" />
           ) : null}
           <AuthButton variant="header" />
         </XStack>
@@ -191,9 +164,9 @@ function UtilityButton({
 
   if (href) {
     return (
-      <Link href={href} asChild>
+      <AppLink href={href} asChild>
         {button}
-      </Link>
+      </AppLink>
     )
   }
   return button

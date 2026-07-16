@@ -79,6 +79,26 @@ export function searchFieldStyle(ui: AppUiTokens) {
   } as const
 }
 
+/**
+ * Etsy-style omnibox shell — white pill, strong border, brand CTA slot.
+ * Use with an overflow:hidden parent and a flush search button on the right.
+ */
+export function etsySearchFieldStyle(ui: AppUiTokens, focused?: boolean) {
+  return {
+    backgroundColor: ui.surface,
+    borderRadius: 999,
+    borderWidth: focused ? 2 : 2,
+    borderColor: focused ? ui.brand : ui.inputBorder,
+    overflow: 'hidden' as const,
+    ...(Platform.OS === 'web'
+      ? {
+          transition: 'border-color 0.15s ease, box-shadow 0.15s ease',
+          boxShadow: focused ? `0 0 0 3px ${ui.focusRing}` : '0 1px 2px rgba(16, 12, 14, 0.04)',
+        }
+      : {}),
+  } as const
+}
+
 /** Focus ring for inline search inputs on native + web. */
 export function searchFieldFocusStyle(ui: AppUiTokens) {
   return Platform.select({

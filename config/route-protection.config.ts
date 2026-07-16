@@ -51,6 +51,7 @@ export const ROUTE_ACCESS: ReadonlyArray<readonly [prefix: string, rule: RouteAc
 
   // --- Public auth plumbing ---
   ['/auth/callback', { access: 'PUBLIC' }],
+  ['/auth/complete-profile', { access: 'AUTH_ONLY' }],
   ['/auth/verify-gender', { access: 'AUTH_ONLY' }],
   ['/auth', { access: 'PUBLIC' }],
 
@@ -62,7 +63,7 @@ export const ROUTE_ACCESS: ReadonlyArray<readonly [prefix: string, rule: RouteAc
   ['/create-listing', { access: 'ROLE_BASED', roles: [USER_ROLES.ADMIN, USER_ROLES.VENDOR] }],
 
   // --- Any signed-in member ---
-  ['/my-shops', { access: 'AUTH_ONLY' }],
+  ['/create-my-shop', { access: 'AUTH_ONLY' }],
   ['/checkout', { access: 'AUTH_ONLY' }],
   ['/orders', { access: 'AUTH_ONLY' }],
   ['/payment-methods', { access: 'AUTH_ONLY' }],

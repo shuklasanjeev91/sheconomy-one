@@ -18,6 +18,8 @@ export { LAYOUT_STRETCH } from '~/lib/layout/styles'
 type FullWidthLayoutProps = {
   children: ReactNode
   scroll?: boolean
+  onRefresh?: () => void | Promise<void>
+  refreshing?: boolean
 } & GetProps<typeof YStack>
 
 /**
@@ -27,6 +29,8 @@ type FullWidthLayoutProps = {
 export function FullWidthLayout({
   children,
   scroll,
+  onRefresh,
+  refreshing,
   flex,
   minHeight,
   backgroundColor,
@@ -38,7 +42,7 @@ export function FullWidthLayout({
 
   if (scroll) {
     return (
-      <PageScroll>
+      <PageScroll onRefresh={onRefresh} refreshing={refreshing}>
         <YStack width="100%" maxWidth="100%" alignSelf="stretch" backgroundColor={bg}>
           {children}
         </YStack>
@@ -48,8 +52,8 @@ export function FullWidthLayout({
 
   return (
     <YStack
-      flex={isDesktop ? undefined : flex ?? 1}
-      minHeight={isDesktop ? undefined : minHeight}
+      flex={flex !== undefined ? flex : isDesktop ? undefined : 1}
+      minHeight={minHeight !== undefined ? minHeight : undefined}
       width="100%"
       maxWidth="100%"
       alignSelf="stretch"
@@ -143,6 +147,8 @@ type PageContentProps = {
   scroll?: boolean
   bleed?: boolean
   backgroundColor?: string
+  onRefresh?: () => void | Promise<void>
+  refreshing?: boolean
 } & GetProps<typeof YStack>
 
 /**
@@ -155,10 +161,17 @@ export function PageContent({
   backgroundColor,
   maxWidth,
   centered,
+  onRefresh,
+  refreshing,
   ...sectionProps
 }: PageContentProps & Pick<PageRailProps, 'maxWidth' | 'centered'>) {
   return (
-    <FullWidthLayout scroll={scroll} backgroundColor={backgroundColor}>
+    <FullWidthLayout
+      scroll={scroll}
+      backgroundColor={backgroundColor}
+      onRefresh={onRefresh}
+      refreshing={refreshing}
+    >
       <PageSection bleed={bleed} {...sectionProps}>
         <PageRail maxWidth={maxWidth} centered={centered} {...(maxWidth == null ? LAYOUT_STRETCH : {})}>
           {children}

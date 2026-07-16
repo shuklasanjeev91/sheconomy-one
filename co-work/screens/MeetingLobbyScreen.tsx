@@ -1,4 +1,5 @@
-import { Link, useRouter } from 'one'
+import { useRouter } from 'one'
+import { AppLink } from '~/components/navigation/AppLink'
 import { Platform } from 'react-native'
 import { useCallback, useEffect, useState } from 'react'
 
@@ -79,7 +80,9 @@ export function MeetingLobbyScreen({ code, startLive = false }: MeetingLobbyScre
     setVerified(true)
   }
 
-  if (isLoading || loadingMeeting) {
+  // Don't block the live room on profile hydrate once auth user is known —
+  // otherwise /meeting/…/live stays on a blank spinner until profile fetches.
+  if (loadingMeeting || (isLoading && !user)) {
     return (
       <PageCenter>
         <Spinner size="large" color={coworkUi.brand} />
@@ -250,9 +253,9 @@ export function MeetingLobbyScreen({ code, startLive = false }: MeetingLobbyScre
             </YStack>
           ) : null}
 
-          <Link href={coWorkRoutes.home} asChild>
-            <Button tone="ghost">Back to Co-Work</Button>
-          </Link>
+          <AppLink href={coWorkRoutes.home} asChild>
+            <Button tone="ghost">Open Co-Work</Button>
+          </AppLink>
         </YStack>
       </PageSection>
     </FullWidthLayout>

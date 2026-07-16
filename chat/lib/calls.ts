@@ -6,13 +6,13 @@ import type { Database } from '~/lib/supabase/database.types'
 type CallUpdate = Database['public']['Tables']['calls']['Update']
 
 export type CallType = 'audio' | 'video'
+/** Must match `calls_status_check` in Postgres. */
 export type CallStatus =
   | 'ringing'
-  | 'accepted'
+  | 'active'
   | 'declined'
   | 'missed'
   | 'ended'
-  | 'canceled'
 
 export type ChatCall = {
   id: string
@@ -64,6 +64,8 @@ export async function startCall(input: {
   callerId: string
   receiverId: string
   callType: CallType
+  receiverName?: string
+  receiverAvatar?: string | null
 }): Promise<{ call: ChatCall | null; error: string | null }> {
   try {
     const meeting = await createMeeting(input.callerId, {
@@ -74,14 +76,25 @@ export async function startCall(input: {
         waitingRoom: false,
         allowChat: false,
         allowRecording: false,
-        allowScreenShare: input.callType === 'video',
+        allowScreenShare: false,
+        allowHandRaise: false,
       },
       meetingOptions: {
         defaultVideo: input.callType === 'video',
         defaultAudio: true,
         layout: 'speaker',
         enableMeetingChat: false,
+        allowJoinBeforeHost: true,
       },
+      invitees: [
+        {
+          id: input.receiverId,
+          type: 'user',
+          name: input.receiverName?.trim() || 'Contact',
+          avatar: input.receiverAvatar ?? null,
+          status: 'pending',
+        },
+      ],
     })
 
     const { data, error } = await supabase
@@ -109,11 +122,25 @@ export async function startCall(input: {
 
 export async function updateCallStatus(callId: string, status: CallStatus): Promise<void> {
   const patch: CallUpdate = { status, updated_at: new Date().toISOString() }
-  if (status === 'accepted') patch.started_at = new Date().toISOString()
-  if (status === 'declined' || status === 'missed' || status === 'ended' || status === 'canceled') {
+  if (status === 'active') patch.started_at = new Date().toISOString()
+  if (status === 'declined' || status === 'missed' || status === 'ended') {
     patch.ended_at = new Date().toISOString()
   }
-  await supabase.from('calls').update(patch).eq('id', callId)
+  const { error } = await supabase.from('calls').update(patch).eq('id', callId)
+  if (error) {
+    throw new Error(error.message)
+  }
+}
+
+/** Fetch a single call row — used as a realtime fallback while the caller is ringing. */
+export async function fetchCallById(callId: string): Promise<ChatCall | null> {
+  const { data, error } = await supabase
+    .from('calls')
+    .select(CALL_SELECT)
+    .eq('id', callId)
+    .maybeSingle()
+  if (error || !data) return null
+  return mapCall(data as CallRow)
 }
 
 export type CallOutcome = 'answered' | 'missed' | 'declined'

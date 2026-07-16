@@ -1,11 +1,12 @@
 import type { ReactNode } from 'react'
 import type { Href } from 'one'
-import { Redirect, useRouter } from 'one'
 
 import { AuthSignInFlow } from '~/components/auth/AuthSignInFlow'
+import { SpaRedirect } from '~/components/navigation/SpaRedirect'
 import { PageCenter } from '~/components/layout'
 import { Button, Icons, Spinner, Text, YStack } from '~/components/ui'
 import { radius } from '~/config/tokens'
+import { replaceApp } from '~/lib/platform/navigate'
 import { useRouteProtection } from '~/hooks/useRouteProtection'
 import { useAppUi } from '~/lib/theme/useAppUi'
 import { USER_ROLES, type UserRole } from '~/lib/profile/profile.type'
@@ -77,12 +78,12 @@ export function RouteGuard({
   }
 
   if (decision.status === 'redirect') {
-    return <Redirect href={decision.href} />
+    return <SpaRedirect href={decision.href} />
   }
 
   // decision.status === 'denied'
   if (redirectOnDeny) {
-    return <Redirect href={decision.href} />
+    return <SpaRedirect href={decision.href} />
   }
 
   return <AccessDenied message={decision.message} homeHref={decision.href} />
@@ -122,7 +123,6 @@ type AccessDeniedProps = {
 /** Friendly, on-brand "you can't view this" screen with clear next actions. */
 export function AccessDenied({ message, homeHref }: AccessDeniedProps) {
   const ui = useAppUi()
-  const router = useRouter()
 
   return (
     <PageCenter>
@@ -152,17 +152,9 @@ export function AccessDenied({ message, homeHref }: AccessDeniedProps) {
             borderRadius={radius.pill}
             backgroundColor={ui.brand}
             color={ui.onBrand}
-            onPress={() => router.replace(homeHref)}
+            onPress={() => replaceApp(homeHref)}
           >
             Go to home
-          </Button>
-          <Button
-            chromeless
-            borderRadius={radius.pill}
-            color={ui.textSecondary}
-            onPress={() => router.back()}
-          >
-            Go back
           </Button>
         </YStack>
       </YStack>

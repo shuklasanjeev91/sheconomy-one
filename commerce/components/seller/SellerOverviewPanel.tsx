@@ -1,6 +1,5 @@
-import { Link } from 'one'
-
 import { SellerStatCard } from '~/commerce/components/seller/SellerStatCard'
+import { AppLink } from '~/components/navigation/AppLink'
 import { SellerDraftsCard } from '~/commerce/components/seller/SellerDraftsCard'
 import { SellerLowStockCard } from '~/commerce/components/seller/SellerLowStockCard'
 import { CommercePanel } from '~/commerce/components'
@@ -77,26 +76,26 @@ export function SellerOverviewPanel({
             <Button tone="primary" size="$3" borderRadius={999} onPress={onAddListing}>
               Add listing
             </Button>
-            <Link href={vendorRoutes.orders} asChild>
+            <AppLink href={vendorRoutes.orders} asChild>
               <Button tone="outline" size="$3" borderRadius={999} icon={<Icons.ShoppingBag size={15} />}>
                 Orders
               </Button>
-            </Link>
-            <Link href={vendorRoutes.createListing} asChild>
+            </AppLink>
+            <AppLink href={vendorRoutes.createListing} asChild>
               <Button tone="outline" size="$3" borderRadius={999} icon={<Icons.Plus size={15} />}>
                 Create listing
               </Button>
-            </Link>
-            <Link href={vendorRoutes.settings} asChild>
+            </AppLink>
+            <AppLink href={vendorRoutes.settings} asChild>
               <Button tone="outline" size="$3" borderRadius={999} icon={<Icons.Settings size={15} />}>
                 Settings
               </Button>
-            </Link>
-            <Link href={publicHref} asChild>
+            </AppLink>
+            <AppLink href={publicHref} asChild>
               <Button tone="outline" size="$3" borderRadius={999}>
                 View storefront
               </Button>
-            </Link>
+            </AppLink>
             <ShareButton
               size="$3"
               label="Share shop"

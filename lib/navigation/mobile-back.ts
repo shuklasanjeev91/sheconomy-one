@@ -20,7 +20,11 @@ const MOBILE_ROOT_PATHS = new Set([
   '/community',
   '/chat',
   '/class',
+  '/class/video',
+  '/class/audio',
   '/co-work',
+  /** Settings hub list — drill into sections, then back here. */
+  '/settings',
 ])
 
 export function isMobileRootPath(pathname: string): boolean {
@@ -33,6 +37,7 @@ export function isMobileRootPath(pathname: string): boolean {
 export function shouldShowMobileBack(pathname: string): boolean {
   if (!pathname || pathname.startsWith('/ui-kit')) return false
   if (/\/co-work\/meeting\/[^/]+\/live/.test(pathname)) return false
+  if (/\/chat\/call\//.test(pathname)) return false
   if (pathname.startsWith('/auth/')) return false
   return !isMobileRootPath(pathname)
 }
@@ -54,10 +59,13 @@ export function getMobileBackFallback(pathname: string): Href {
   if (pathname.startsWith('/cart') || pathname.startsWith('/checkout')) {
     return commerceRoutes.home
   }
-  if (pathname.startsWith('/my-shops')) {
+  if (pathname.startsWith('/vendor') || pathname.startsWith('/create-my-shop')) {
     return commerceRoutes.home
   }
-  if (pathname.startsWith('/settings') || pathname.startsWith('/profile') || pathname.startsWith('/notifications')) {
+  if (pathname.startsWith('/settings/')) {
+    return routes.settings
+  }
+  if (pathname === '/settings' || pathname.startsWith('/profile') || pathname.startsWith('/notifications')) {
     return communityRoutes.home
   }
   if (pathname.startsWith('/community')) {

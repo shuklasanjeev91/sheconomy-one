@@ -1,5 +1,5 @@
 import { useEffect, useState, type ReactNode } from 'react'
-import { Link } from 'one'
+import { AppLink } from '~/components/navigation/AppLink'
 
 import { Avatar, Icons, Image, Text, XStack, YStack } from '~/components/ui'
 import { radius } from '~/config/tokens'
@@ -69,7 +69,7 @@ export function ShopSpotlightCard({ shop, fill = false }: ShopSpotlightCardProps
     totalReviews > 0
 
   return (
-    <Link href={routes.shop(getShopSlug(shop))} asChild>
+    <AppLink href={routes.shop(getShopSlug(shop))} asChild>
       <YStack
         width={fill ? '100%' : 212}
         flex={fill ? 1 : undefined}
@@ -153,6 +153,6 @@ export function ShopSpotlightCard({ shop, fill = false }: ShopSpotlightCardProps
           ) : null}
         </YStack>
       </YStack>
-    </Link>
+    </AppLink>
   )
 }

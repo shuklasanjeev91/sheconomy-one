@@ -1,6 +1,5 @@
-import { Redirect } from 'one'
-
 import { RequireAuth } from '~/components/auth/RequireAuth'
+import { SpaRedirect } from '~/components/navigation/SpaRedirect'
 import { GenderVerificationScreen } from '~/components/gender-verification/GenderVerificationScreen'
 import { useAccess } from '~/hooks/useAccess'
 import { communityRoutes } from '~/lib/routes'
@@ -27,7 +26,7 @@ function VerifyGenderGate({ isLoading, isFemale }: { isLoading: boolean; isFemal
   }
 
   if (isFemale) {
-    return <Redirect href={communityRoutes.home} />
+    return <SpaRedirect href={communityRoutes.home} />
   }
 
   return <GenderVerificationScreen />

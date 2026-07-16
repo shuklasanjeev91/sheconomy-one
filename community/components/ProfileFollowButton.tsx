@@ -1,5 +1,5 @@
-import { Link } from 'one'
 import { useState } from 'react'
+import { AppLink } from '~/components/navigation/AppLink'
 
 import { useProfileFollow } from '~/community/hooks/useProfileFollow'
 import { useCommunityUi } from '~/community/lib/community-theme'
@@ -28,9 +28,9 @@ export function ProfileFollowButton({ targetUserId, size = 'md' }: ProfileFollow
 
   if (!follow.isAuthenticated) {
     return (
-      <Link href={routes.signIn} asChild>
+      <AppLink href={routes.signIn} asChild>
         <FollowChip label="Follow" variant="primary" size={size} />
-      </Link>
+      </AppLink>
     )
   }
 
@@ -38,7 +38,7 @@ export function ProfileFollowButton({ targetUserId, size = 'md' }: ProfileFollow
     <>
       <FollowChip
         label={follow.isFollowing ? 'Following' : 'Follow'}
-        variant={follow.isFollowing ? 'outline' : 'primary'}
+        variant="outline"
         size={size}
         disabled={follow.isToggling}
         isLoading={follow.isToggling}
@@ -49,8 +49,7 @@ export function ProfileFollowButton({ targetUserId, size = 'md' }: ProfileFollow
             void follow.toggleFollow()
           }
         }}
-      />
-      <ConfirmDialog
+      />      <ConfirmDialog
         open={confirmUnfollow}
         onOpenChange={setConfirmUnfollow}
         title="Unfollow?"

@@ -67,7 +67,7 @@ function productPlaybook(product: AiProduct): string {
     case 'shop':
       return [
         'Manage shop playbook:',
-        '- Hub: /my-shops → choose shop → listings, orders, policies, payouts.',
+        '- Hub: /vendor/myshop → listings, orders, policies, payouts.',
         '- New listing: create listing with clear title, photos, price, stock, shipping/return policy.',
         '- Fulfillment: open seller orders, mark shipped, add tracking when available.',
         '- Growth: restock low inventory, improve titles, run offers, reply to buyer questions fast.',
@@ -235,7 +235,7 @@ function productDeepLinks(product: AiProduct, searchQuery?: string | null): Deep
       ]
     case 'shop':
       return [
-        { label: 'My shops', href: '/my-shops' },
+        { label: 'My shop', href: '/vendor/myshop' },
         { label: 'Seller orders FAQ', href: '/help?product=shop&article=seller-orders' },
         { label: 'Help Center', href: helpHref(product) },
       ]
@@ -532,7 +532,7 @@ async function buildGrounding(
         .lte('stock', 5)
         .limit(5)
       facts.push(`Shops owned: ${(shops ?? []).map((s) => s.shop_name).join(', ')}`)
-      facts.push(`Manage shop hub: /my-shops`)
+      facts.push(`Manage shop hub: /vendor/myshop`)
       if (lowStock?.length) {
         facts.push(
           `Low-stock listings: ${lowStock
@@ -556,7 +556,7 @@ async function buildGrounding(
         .eq('is_active', true)
       facts.push(`Active listings across owned shops: ${activeListings ?? 0}`)
     } else {
-      facts.push('User has no shops yet. Create one at /create-my-shop or /my-shops.')
+      facts.push('User has no shops yet. Create one at /create-my-shop.')
     }
   }
 
@@ -683,7 +683,7 @@ function fallbackReply(product: AiProduct, message: string, facts: string[]): st
 
   if (intent === 'seller') {
     return [
-      shopFact ? `${shopFact}.` : 'Create or open your shop at /my-shops (or /create-my-shop).',
+      shopFact ? `${shopFact}.` : 'Create or open your shop at /create-my-shop (or /vendor/myshop).',
       activeListings ? `${activeListings}.` : null,
       stockFact ? `${stockFact}. Restock under Listings.` : 'Keep stock updated so listings stay visible.',
       'Manage orders, policies, and payouts from the seller hub. Help: ' + helpHref('shop'),
@@ -771,7 +771,7 @@ function fallbackReply(product: AiProduct, message: string, facts: string[]): st
     case 'shop':
       return [
         shopFact ? `${shopFact}.` : 'Create your shop at /create-my-shop.',
-        'Try: “manage new orders”, “low stock”, or “boost sales”. Hub: /my-shops.',
+        'Try: “manage new orders”, “low stock”, or “boost sales”. Hub: /vendor/myshop.',
       ].join(' ')
     case 'chat':
       return 'I can help with messaging, mute, and groups. Open /chat — try: “start a chat” or “mute a conversation”.'
@@ -1312,7 +1312,7 @@ Deno.serve(async (req) => {
         'Answer like a capable product expert: clear, warm, specific, and action-oriented (2–6 short sentences unless the user asks for detail).',
         'Stay on the user’s intent. For shopping, recommend Matching marketplace listings and /search?q=…. Do NOT dump account/settings or unrelated order lists unless asked.',
         'Use grounding facts for personalization. Never invent order numbers, stock, prices, meetings, or listings not in the facts.',
-        'Point to real in-app paths (/search, /listing/…, /orders, /cart, /community, /chat, /class, /co-work, /my-shops, /settings, /help).',
+        'Point to real in-app paths (/search, /listing/…, /orders, /cart, /community, /chat, /class, /co-work, /vendor/myshop, /create-my-shop, /settings, /help).',
         'Prefer concrete next steps. Never ask for passwords or full payment card numbers.',
         `Detected intent: ${intent}.`,
         `Product focus: ${effectiveProduct}.`,

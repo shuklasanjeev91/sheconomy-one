@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useRouter } from 'one'
 
 import {
@@ -6,6 +6,7 @@ import {
   requestIntroduction,
   type MutualIntroducer,
 } from '~/community/lib/introductions'
+import { ScreenSearchField } from '~/components/search'
 import {
   AppBottomSheet,
   Avatar,
@@ -21,12 +22,17 @@ import {
 import { buildSignInUrl } from '~/lib/auth/redirect'
 import { routes } from '~/lib/routes'
 import { useAppUi } from '~/lib/theme/useAppUi'
+import { filterBySearchQuery } from '~/lib/search'
 import { useSupabase } from '~/providers/SupabaseProvider'
 
 type IntroductionRequestButtonProps = {
   targetUserId: string
   targetUsername?: string | null
   targetDisplayName: string
+  /** Hide the default "Get intro" chip (use when opening from More menu). */
+  hideTrigger?: boolean
+  open?: boolean
+  onOpenChange?: (open: boolean) => void
 }
 
 /** Ask a mutual connection to introduce you (professional). */
@@ -34,17 +40,37 @@ export function IntroductionRequestButton({
   targetUserId,
   targetUsername,
   targetDisplayName,
+  hideTrigger = false,
+  open: openProp,
+  onOpenChange,
 }: IntroductionRequestButtonProps) {
   const ui = useAppUi()
   const toast = useAppToast()
   const router = useRouter()
   const { user } = useSupabase()
-  const [open, setOpen] = useState(false)
+  const [internalOpen, setInternalOpen] = useState(false)
+  const open = openProp ?? internalOpen
+  const setOpen = onOpenChange ?? setInternalOpen
   const [loading, setLoading] = useState(false)
   const [sending, setSending] = useState(false)
   const [introducers, setIntroducers] = useState<MutualIntroducer[]>([])
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [message, setMessage] = useState('')
+  const [query, setQuery] = useState('')
+
+  const filteredIntroducers = useMemo(
+    () =>
+      filterBySearchQuery(introducers, query, (person) => [
+        person.full_name,
+        person.headline,
+        person.username,
+      ]),
+    [introducers, query],
+  )
+
+  useEffect(() => {
+    if (!open) setQuery('')
+  }, [open])
 
   const signInRedirect = targetUsername
     ? routes.userProfile(targetUsername)
@@ -69,23 +95,25 @@ export function IntroductionRequestButton({
 
   return (
     <>
-      <Button
-        size="$3"
-        tone="outline"
-        borderRadius={999}
-        onPress={() => {
-          if (!user?.id) {
-            router.push(buildSignInUrl(signInRedirect) as never)
-            return
-          }
-          setOpen(true)
-        }}
-      >
-        Get intro
-      </Button>
+      {!hideTrigger ? (
+        <Button
+          size="$3"
+          tone="outline"
+          borderRadius={999}
+          onPress={() => {
+            if (!user?.id) {
+              router.push(buildSignInUrl(signInRedirect) as never)
+              return
+            }
+            setOpen(true)
+          }}
+        >
+          Get intro
+        </Button>
+      ) : null}
 
       <AppBottomSheet open={open} onOpenChange={setOpen} title="Ask for an introduction">
-        <YStack gap="$3" paddingBottom="$4">
+        <YStack gap="$3" paddingBottom="$4" paddingHorizontal="$4">
           <Text fontSize={14} color={ui.textMuted} lineHeight={20}>
             Ask a mutual connection to introduce you to {targetDisplayName}.
           </Text>
@@ -100,8 +128,19 @@ export function IntroductionRequestButton({
             </Text>
           ) : (
             <>
+              <ScreenSearchField
+                value={query}
+                onChangeText={setQuery}
+                placeholder="Search mutual connections"
+                clearable
+              />
               <YStack gap="$2">
-                {introducers.map((person) => {
+                {filteredIntroducers.length === 0 ? (
+                  <Text fontSize={14} color={ui.textMuted}>
+                    No connections match your search.
+                  </Text>
+                ) : null}
+                {filteredIntroducers.map((person) => {
                   const selected = selectedId === person.user_id
                   return (
                     <XStack

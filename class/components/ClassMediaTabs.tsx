@@ -1,5 +1,6 @@
-import { Link, usePathname } from 'one'
+import { usePathname } from 'one'
 
+import { AppLink } from '~/components/navigation/AppLink'
 import { Icons, Text, XStack } from '~/components/ui'
 import { classRoutes, isClassAudioPath } from '~/lib/routes'
 import { useAppUi } from '~/lib/theme/useAppUi'
@@ -7,12 +8,18 @@ import { useAppUi } from '~/lib/theme/useAppUi'
 const TABS = [
   { id: 'video' as const, label: 'Video', href: classRoutes.video, icon: Icons.Play },
   { id: 'audio' as const, label: 'Audio', href: classRoutes.audio, icon: Icons.Radio },
+  { id: 'playlists' as const, label: 'Playlists', href: classRoutes.playlists, icon: Icons.List },
 ]
 
 export function ClassMediaTabs() {
   const ui = useAppUi()
   const pathname = usePathname()
-  const activeTab = isClassAudioPath(pathname) ? 'audio' : 'video'
+  // Home (`/class`) and `/class/video` share the video catalogue.
+  const activeTab = pathname.includes('/class/playlists')
+    ? 'playlists'
+    : isClassAudioPath(pathname)
+      ? 'audio'
+      : 'video'
 
   return (
     <XStack
@@ -28,7 +35,7 @@ export function ClassMediaTabs() {
         const Icon = tab.icon
 
         return (
-          <Link key={tab.id} href={tab.href} asChild>
+          <AppLink key={tab.id} href={tab.href} asChild>
             <XStack
               gap="$2"
               paddingHorizontal="$4"
@@ -51,7 +58,7 @@ export function ClassMediaTabs() {
                 {tab.label}
               </Text>
             </XStack>
-          </Link>
+          </AppLink>
         )
       })}
     </XStack>

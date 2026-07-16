@@ -153,14 +153,117 @@ export async function suggestCompanyNames(query: string, limit = 12): Promise<st
   return names
 }
 
-export async function fetchMyCompanies(userId: string): Promise<CompanyPage[]> {
-  const { data } = await supabase
-    .from('companypages')
-    .select('*')
-    .eq('created_by', userId)
-    .order('created_at', { ascending: false })
+export type CompanyMemberRole = 'owner' | 'admin'
 
-  return (data ?? []) as CompanyPage[]
+export type CompanyMember = {
+  user_id: string
+  role: CompanyMemberRole
+  username: string | null
+  full_name: string
+  headline: string | null
+  avatar_url: string | null
+}
+
+export async function fetchCompanyMembership(
+  companyId: string,
+  userId: string,
+): Promise<{ role: CompanyMemberRole | null; isManager: boolean; isOwner: boolean }> {
+  const { data } = await supabase
+    .from('company_members')
+    .select('role')
+    .eq('company_id', companyId)
+    .eq('user_id', userId)
+    .maybeSingle()
+
+  const role = (data?.role as CompanyMemberRole | undefined) ?? null
+  if (role) {
+    return { role, isManager: true, isOwner: role === 'owner' }
+  }
+
+  // Fallback for pages created before company_members backfill / RLS lag.
+  const { data: company } = await supabase
+    .from('companypages')
+    .select('created_by')
+    .eq('id', companyId)
+    .maybeSingle()
+
+  if (company?.created_by === userId) {
+    return { role: 'owner', isManager: true, isOwner: true }
+  }
+
+  return { role: null, isManager: false, isOwner: false }
+}
+
+export async function fetchCompanyMembers(companyId: string): Promise<CompanyMember[]> {
+  const { data } = await supabase
+    .from('company_members')
+    .select('user_id, role')
+    .eq('company_id', companyId)
+    .order('role', { ascending: true })
+
+  const rows = (data ?? []).filter((row) => row.user_id) as { user_id: string; role: CompanyMemberRole }[]
+  if (!rows.length) return []
+
+  const { data: profiles } = await supabase
+    .from('profiles')
+    .select('id, username, full_name, headline, avatar_url')
+    .in(
+      'id',
+      rows.map((row) => row.user_id),
+    )
+
+  const profileById = new Map((profiles ?? []).map((profile) => [profile.id, profile]))
+
+  return rows.map((row) => {
+    const profile = profileById.get(row.user_id)
+    return {
+      user_id: row.user_id,
+      role: row.role,
+      username: profile?.username ?? null,
+      full_name: profile?.full_name ?? profile?.username ?? 'Member',
+      headline: profile?.headline ?? null,
+      avatar_url: profile?.avatar_url ?? null,
+    }
+  })
+}
+
+export async function setCompanyMemberRole(
+  companyId: string,
+  userId: string,
+  role: 'admin' | 'member',
+): Promise<{ error: string | null }> {
+  const { error } = await supabase.rpc('set_company_member_role', {
+    p_company_id: companyId,
+    p_user_id: userId,
+    p_role: role,
+  })
+  return { error: error?.message ?? null }
+}
+
+export async function fetchMyCompanies(userId: string): Promise<CompanyPage[]> {
+  const { data: memberships } = await supabase
+    .from('company_members')
+    .select('company_id')
+    .eq('user_id', userId)
+    .in('role', ['owner', 'admin'])
+
+  const memberIds = (memberships ?? []).map((row) => row.company_id).filter(Boolean) as string[]
+
+  const [{ data: byMembership }, { data: byCreator }] = await Promise.all([
+    memberIds.length
+      ? supabase.from('companypages').select('*').in('id', memberIds)
+      : Promise.resolve({ data: [] as CompanyPage[] }),
+    supabase.from('companypages').select('*').eq('created_by', userId),
+  ])
+
+  const byId = new Map<string, CompanyPage>()
+  for (const page of [...(byMembership ?? []), ...(byCreator ?? [])] as CompanyPage[]) {
+    byId.set(page.id, page)
+  }
+
+  return Array.from(byId.values()).sort(
+    (a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime(),
+  )
 }
 
 export type CreateCompanyInput = {
@@ -303,13 +406,8 @@ export async function updateCompanyPage(
   userId: string,
   input: UpdateCompanyInput,
 ): Promise<{ error: string | null }> {
-  const { data: company } = await supabase
-    .from('companypages')
-    .select('created_by')
-    .eq('id', companyId)
-    .maybeSingle()
-
-  if (!company || company.created_by !== userId) {
+  const membership = await fetchCompanyMembership(companyId, userId)
+  if (!membership.isManager) {
     return { error: 'You do not have permission to edit this page.' }
   }
 

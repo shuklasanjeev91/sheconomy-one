@@ -1,5 +1,6 @@
-import { Link, useRouter } from 'one'
-import { useEffect, useMemo, useState } from 'react'
+import { useRouter } from 'one'
+import { AppLink } from '~/components/navigation/AppLink'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 
 import { CommunityCard } from '~/community/components/CommunityCard'
 import { CommunityPageHeader } from '~/community/components/CommunityPageHeader'
@@ -11,9 +12,11 @@ import {
 } from '~/community/components/CommunityFilters'
 import { fetchGroupFacets, fetchGroups, fetchMyGroups, type Group } from '~/community/lib/groups'
 import { useCommunityUi } from '~/community/lib/community-theme'
-import { Avatar, Button, Icons, Input, ScrollView, Spinner, Text, XStack, YStack } from '~/components/ui'
+import { LoadMoreSentinel } from '~/commerce/components/LoadMoreSentinel'
+import { ScreenSearchField } from '~/components/search'
+import { Avatar, Button, Icons, ScrollView, Spinner, Text, XStack, YStack } from '~/components/ui'
 import { communityRoutes } from '~/lib/routes'
-import { radius } from '~/config/tokens'
+import { useScreenSearch } from '~/hooks/useScreenSearch'
 import { useSupabase } from '~/providers/SupabaseProvider'
 
 const TYPE_OPTIONS: FilterOption[] = [
@@ -31,10 +34,13 @@ export function GroupsScreen() {
   const communityUi = useCommunityUi()
   const router = useRouter()
   const { user } = useSupabase()
-  const [search, setSearch] = useState('')
+  const { input: search, setInput: setSearch, debounced: searchQuery } = useScreenSearch()
   const [mine, setMine] = useState<Group[]>([])
   const [discover, setDiscover] = useState<Group[]>([])
+  const [page, setPage] = useState(0)
+  const [hasMore, setHasMore] = useState(false)
   const [isLoading, setIsLoading] = useState(true)
+  const [isLoadingMore, setIsLoadingMore] = useState(false)
 
   const [groupType, setGroupType] = useState('')
   const [location, setLocation] = useState('')
@@ -55,18 +61,31 @@ export function GroupsScreen() {
       setIsLoading(true)
       const [myGroups, pages] = await Promise.all([
         user ? fetchMyGroups(user.id) : Promise.resolve([]),
-        fetchGroups(0, search, { groupType, location, industry }),
+        fetchGroups(0, searchQuery, { groupType, location, industry }),
       ])
       if (cancelled) return
       setMine(myGroups)
       setDiscover(pages.items)
+      setPage(0)
+      setHasMore(pages.hasMore)
       setIsLoading(false)
     }
-    load()
+    void load()
     return () => {
       cancelled = true
     }
-  }, [groupType, industry, location, search, user])
+  }, [groupType, industry, location, searchQuery, user])
+
+  const loadMore = useCallback(async () => {
+    if (isLoadingMore || !hasMore) return
+    setIsLoadingMore(true)
+    const next = page + 1
+    const result = await fetchGroups(next, searchQuery, { groupType, location, industry })
+    setDiscover((current) => [...current, ...result.items])
+    setPage(next)
+    setHasMore(result.hasMore)
+    setIsLoadingMore(false)
+  }, [groupType, hasMore, industry, isLoadingMore, location, page, searchQuery])
 
   const locationOptions = useMemo(() => toOptions(facets.locations), [facets.locations])
   const industryOptions = useMemo(() => toOptions(facets.industries), [facets.industries])
@@ -100,10 +119,13 @@ export function GroupsScreen() {
             ) : undefined
           }
         />
-        <XStack gap={8} alignItems="center" padding={12} borderRadius={radius.chip} borderWidth={1} borderColor={communityUi.borderLight} backgroundColor={communityUi.inputBg}>
-          <Icons.Search size={18} color={communityUi.textMuted} />
-          <Input flex={1} value={search} onChangeText={setSearch} placeholder="Search groups" borderWidth={0} backgroundColor="transparent" />
-        </XStack>
+        <ScreenSearchField
+          value={search}
+          onChangeText={setSearch}
+          placeholder="Search groups"
+          unifiedScope="groups"
+          variant="plain"
+        />
 
         <ScrollView horizontal showsHorizontalScrollIndicator={false}>
           <XStack gap={8} alignItems="center" paddingVertical={2}>
@@ -149,6 +171,11 @@ export function GroupsScreen() {
         <>
           {mine.length > 0 ? <GroupSection title="Your groups" items={mine} /> : null}
           <GroupSection title="Discover" items={filteredDiscover} />
+          <LoadMoreSentinel
+            hasMore={hasMore}
+            isLoadingMore={isLoadingMore}
+            onLoadMore={() => void loadMore()}
+          />
         </>
       )}
 
@@ -193,7 +220,7 @@ function GroupSection({ title, items }: { title: string; items: Group[] }) {
         {title}
       </Text>
       {items.map((group) => (
-        <Link key={group.id} href={communityRoutes.group(group.id)}>
+        <AppLink key={group.id} href={communityRoutes.group(group.id)}>
           <XStack gap={12} paddingVertical={12} borderBottomWidth={1} borderBottomColor={communityUi.borderLight} alignItems="center">
             <Avatar name={group.title} src={group.avatar_url ?? undefined} size="$4" />
             <YStack flex={1} gap={2}>
@@ -205,7 +232,7 @@ function GroupSection({ title, items }: { title: string; items: Group[] }) {
               </Text>
             </YStack>
           </XStack>
-        </Link>
+        </AppLink>
       ))}
     </CommunityCard>
   )

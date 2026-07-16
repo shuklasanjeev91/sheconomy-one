@@ -19,6 +19,7 @@ export type CreateListingInput = {
   category?: string
   imageUrl?: string
   imageUrls?: string[]
+  media?: Array<{ url: string; type: 'image' | 'video' }>
   publish?: boolean
 }
 
@@ -77,18 +78,22 @@ export async function createSellerListing(input: CreateListingInput) {
     return { listing: null, error: error?.message ?? 'Could not create listing.' }
   }
 
-  const imageUrls = (input.imageUrls?.length
-    ? input.imageUrls
-    : input.imageUrl?.trim()
-      ? [input.imageUrl.trim()]
-      : []
-  ).filter(Boolean)
+  const mediaItems =
+    input.media?.length
+      ? input.media
+      : (input.imageUrls?.length
+          ? input.imageUrls
+          : input.imageUrl?.trim()
+            ? [input.imageUrl.trim()]
+            : []
+        ).map((url) => ({ url, type: 'image' as const }))
 
-  if (imageUrls.length > 0) {
+  if (mediaItems.length > 0) {
     await supabase.from('listing_images').insert(
-      imageUrls.map((imageUrl, index) => ({
+      mediaItems.map((item, index) => ({
         listing_id: data.id,
-        image_url: imageUrl,
+        image_url: item.url,
+        image_type: item.type === 'video' ? 'video' : 'image',
         is_primary: index === 0,
         display_order: index,
       })),

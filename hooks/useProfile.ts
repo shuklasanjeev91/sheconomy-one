@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 
 import { subscribeProfileRefresh } from '~/lib/profile/refresh'
+import { clearCachedProfile, readCachedProfile, writeCachedProfile } from '~/lib/profile/profile-cache'
 import { supabase } from '~/lib/supabase'
 import type { Tables } from '~/lib/supabase'
 import { useSupabase } from '~/providers/SupabaseProvider'
@@ -31,7 +32,7 @@ export type Profile = Pick<
   | 'gender'
 >
 
-const PROFILE_FETCH_TIMEOUT_MS = 12_000
+const PROFILE_FETCH_TIMEOUT_MS = 2_500
 
 /**
  * Loads the signed-in user's `profiles` row.
@@ -63,6 +64,7 @@ export function useProfile() {
       setProfileUserId(null)
       setError(null)
       setFetching(false)
+      void clearCachedProfile()
       return
     }
 
@@ -73,6 +75,13 @@ export function useProfile() {
     if (profileUserId !== userId) {
       setProfile(null)
     }
+
+    void readCachedProfile(userId).then((cached) => {
+      if (cancelled || fetchGen.current !== gen || !cached) return
+      setProfile(cached)
+      setProfileUserId(userId)
+      setFetching(true)
+    })
 
     const timeout = setTimeout(() => {
       if (cancelled || fetchGen.current !== gen) return
@@ -99,6 +108,7 @@ export function useProfile() {
         } else {
           setProfile(data)
           setError(null)
+          if (data) void writeCachedProfile(userId, data)
         }
         setProfileUserId(userId)
         setFetching(false)
@@ -119,7 +129,10 @@ export function useProfile() {
     // eslint-disable-next-line react-hooks/exhaustive-deps -- clear previous identity only when userId changes
   }, [userId, authLoading, refreshToken])
 
-  const isLoading = authLoading || (!!userId && (fetching || !profileMatchesUser))
+  // Only block the shell while we lack a profile for the current user.
+  // Background refreshes must not remount AppAccessGate as a full-screen spinner
+  // (that felt like 5–10s hangs on every tab press).
+  const isLoading = authLoading || (!!userId && !profileMatchesUser)
 
   return {
     profile: profileMatchesUser ? profile : null,
@@ -127,5 +140,6 @@ export function useProfile() {
     isLoading,
     error,
     isAuthenticated: !!user,
+    isRefreshing: fetching && profileMatchesUser,
   }
 }

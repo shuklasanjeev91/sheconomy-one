@@ -1,13 +1,13 @@
-import { Link } from 'one'
 import { Platform } from 'react-native'
 
 import { Avatar, Button, Icons, Image, Text, XStack, YStack, useMedia } from '~/components/ui'
 import { ShopActionButtons } from '~/commerce/components/ShopActionButtons'
-import { RatingSummary } from '~/commerce/components/RatingSummary'
+import { StarRating } from '~/commerce/components/StarRating'
 import type { ReviewSummary } from '~/commerce/lib/reviews'
+import { AppLink } from '~/components/navigation/AppLink'
 import { ShareButton } from '~/components/share'
 import { getShopShareUrl } from '~/lib/share'
-import { getShadowStyle, radius } from '~/config/tokens'
+import { commerceRoutes } from '~/lib/routes'
 import { useAppUi } from '~/lib/theme/useAppUi'
 
 type ShopHeroProps = {
@@ -25,6 +25,11 @@ type ShopHeroProps = {
   shopSlug: string
 }
 
+/**
+ * Amazon-style storefront header.
+ * Logo overlap uses reserved padding so layout height never collapses
+ * (avoids Follow / ratings painting over tabs + Results).
+ */
 export function ShopHero({
   shopId,
   shopName,
@@ -42,16 +47,44 @@ export function ShopHero({
   const ui = useAppUi()
   const media = useMedia()
   const isDesktop = media.gtMd
-  const coverHeight = isDesktop ? 240 : 160
+  const bannerHeight = isDesktop ? 160 : 100
+  const logoSize = isDesktop ? 88 : 72
+  const logoOverlap = Math.round(logoSize / 2)
+  const rating = Number(reviewSummary?.averageRating ?? 0)
+  const reviewCount = reviewSummary?.totalReviews ?? 0
 
   return (
-    <YStack width="100%">
+    <YStack
+      width="100%"
+      backgroundColor={ui.surface}
+      borderBottomWidth={1}
+      borderBottomColor={ui.borderSubtle}
+      overflow="hidden"
+      zIndex={1}
+    >
+      <XStack
+        paddingHorizontal={isDesktop ? 24 : 16}
+        paddingTop="$3"
+        paddingBottom="$2"
+        gap="$2"
+        alignItems="center"
+        flexWrap="wrap"
+      >
+        <Crumb href={commerceRoutes.home} label="Home" />
+        <Icons.ChevronRight size={12} color={ui.textMuted} />
+        <Crumb href={commerceRoutes.shops} label="Shops" />
+        <Icons.ChevronRight size={12} color={ui.textMuted} />
+        <Text fontSize={13} color={ui.text} fontWeight="600" numberOfLines={1} flexShrink={1}>
+          {shopName}
+        </Text>
+      </XStack>
+
       <YStack
         width="100%"
-        height={coverHeight}
-        position="relative"
+        height={bannerHeight}
         overflow="hidden"
         backgroundColor={ui.imagePlaceholder}
+        position="relative"
       >
         {logoUrl ? (
           <Image src={logoUrl} width="100%" height="100%" objectFit="cover" />
@@ -63,7 +96,7 @@ export function ShopHero({
             style={
               Platform.OS === 'web'
                 ? {
-                    background: `linear-gradient(135deg, ${ui.brandDark} 0%, ${ui.brand} 55%, ${ui.brandLight} 100%)`,
+                    background: `linear-gradient(90deg, ${ui.brandDark} 0%, ${ui.brand} 45%, ${ui.brandLight} 100%)`,
                   }
                 : undefined
             }
@@ -74,136 +107,162 @@ export function ShopHero({
             position="absolute"
             inset={0}
             style={{
-              background: 'linear-gradient(180deg, rgba(0,0,0,0.02) 0%, rgba(0,0,0,0.55) 100%)',
+              background: 'linear-gradient(180deg, rgba(0,0,0,0.05) 0%, rgba(0,0,0,0.28) 100%)',
             }}
           />
         ) : (
-          <YStack position="absolute" inset={0} backgroundColor="rgba(0,0,0,0.28)" />
+          <YStack position="absolute" inset={0} backgroundColor="rgba(0,0,0,0.2)" />
         )}
       </YStack>
 
+      {/* paddingTop reserves logo overlap so sibling sections don't collide */}
       <YStack
         width="100%"
         paddingHorizontal={isDesktop ? 24 : 16}
-        marginTop={isDesktop ? -48 : -36}
+        paddingTop={logoOverlap + 12}
+        paddingBottom={isDesktop ? 20 : 16}
+        gap="$3"
         position="relative"
-        zIndex={1}
       >
-        <XStack
-          gap={isDesktop ? '$5' : '$3'}
-          alignItems={isDesktop ? 'flex-end' : 'flex-start'}
-          flexDirection={isDesktop ? 'row' : 'column'}
+        <YStack
+          position="absolute"
+          top={-logoOverlap}
+          left={isDesktop ? 24 : 16}
+          width={logoSize}
+          height={logoSize}
+          borderRadius={6}
+          overflow="hidden"
+          borderWidth={2}
+          borderColor={ui.surface}
+          backgroundColor={ui.surface}
+          zIndex={2}
         >
-          <XStack
-            borderWidth={4}
-            borderColor={ui.surface}
-            borderRadius={radius.pill}
-            overflow="hidden"
-            style={getShadowStyle('md')}
-          >
-            <Avatar name={shopName} src={logoUrl ?? undefined} size={isDesktop ? '$10' : '$8'} />
+          {logoUrl ? (
+            <Image src={logoUrl} width="100%" height="100%" objectFit="cover" />
+          ) : (
+            <YStack flex={1} alignItems="center" justifyContent="center" backgroundColor={ui.surfaceMuted}>
+              <Avatar name={shopName} size={isDesktop ? '$5' : '$4'} />
+            </YStack>
+          )}
+        </YStack>
+
+        {/* Clear the absolute logo on the first text row (desktop inline / mobile below) */}
+        <YStack
+          gap="$2"
+          width="100%"
+          paddingLeft={isDesktop ? logoSize + 16 : 0}
+          minHeight={isDesktop ? logoOverlap : undefined}
+        >
+          <XStack gap="$2" alignItems="center" flexWrap="wrap">
+            <Text
+              fontWeight="700"
+              fontSize={isDesktop ? 26 : 22}
+              color={ui.text}
+              letterSpacing={-0.3}
+              lineHeight={isDesktop ? 32 : 28}
+              flexShrink={1}
+            >
+              {shopName}
+            </Text>
+            {verified ? (
+              <XStack gap={4} alignItems="center" flexShrink={0}>
+                <Icons.BadgeCheck size={16} color={ui.brand} />
+                <Text fontSize={12} fontWeight="600" color={ui.brand}>
+                  Verified
+                </Text>
+              </XStack>
+            ) : null}
           </XStack>
 
-          <YStack flex={isDesktop ? 1 : undefined} gap="$3" width="100%" paddingTop={isDesktop ? 0 : '$1'}>
-            <YStack gap="$2">
-              <XStack gap="$2" alignItems="center" flexWrap="wrap">
-                <Text
-                  fontWeight="700"
-                  fontSize={isDesktop ? 34 : 28}
-                  color={ui.text}
-                  letterSpacing={-0.6}
-                  lineHeight={isDesktop ? 40 : 34}
-                >
-                  {shopName}
+          <XStack gap="$2" alignItems="center" flexWrap="wrap" rowGap="$1.5">
+            {hasReviews && reviewSummary ? (
+              <XStack gap="$1.5" alignItems="center" flexShrink={0}>
+                <Text fontSize={14} fontWeight="700" color={ui.danger}>
+                  {rating.toFixed(1)}
                 </Text>
-                {verified ? <ShopBadge tone="success" label="Verified shop" icon={Icons.BadgeCheck} /> : null}
+                <StarRating rating={rating} size={14} />
+                <Text fontSize={13} color={ui.link} fontWeight="500">
+                  {reviewCount.toLocaleString()} rating{reviewCount === 1 ? '' : 's'}
+                </Text>
               </XStack>
-
-              <XStack gap="$2" alignItems="center" flexWrap="wrap">
-                {hasReviews && reviewSummary ? (
-                  <RatingSummary summary={reviewSummary} size="sm" />
-                ) : null}
-                <ShopBadge label={`${listingsCount} ${listingsCount === 1 ? 'item' : 'items'}`} />
-                {country ? <ShopBadge icon={Icons.MapPin} label={country} /> : null}
-              </XStack>
-            </YStack>
-
-            {description ? (
-              <Text
-                color={ui.textSecondary}
-                fontSize={15}
-                lineHeight={24}
-                numberOfLines={isDesktop ? 3 : 4}
-              >
-                {description}
+            ) : (
+              <Text fontSize={13} color={ui.textMuted}>
+                No ratings yet
               </Text>
+            )}
+            <MetaDot />
+            <Text fontSize={13} color={ui.textSecondary} fontWeight="500">
+              {listingsCount}
+              {listingsCount === 1 ? ' product' : ' products'}
+            </Text>
+            {country ? (
+              <>
+                <MetaDot />
+                <XStack gap={4} alignItems="center">
+                  <Icons.MapPin size={12} color={ui.textMuted} />
+                  <Text fontSize={13} color={ui.textSecondary}>
+                    {country}
+                  </Text>
+                </XStack>
+              </>
             ) : null}
+          </XStack>
 
-            <XStack gap="$2" flexWrap="wrap" alignItems="center">
-              <ShopActionButtons shopId={shopId} ownerUserId={ownerUserId} />
-              <ShareButton
-                variant="outline"
-                label="Share"
-                sheetTitle="Share shop"
-                copyLabel="Copy shop link"
-                copyToastMessage="Shop link copied to clipboard."
-                payload={{
-                  url: getShopShareUrl(shopSlug),
-                  title: shopName,
-                  text: description ?? undefined,
-                }}
-              />
-              {websiteUrl ? (
-                <Link href={websiteUrl as never} target="_blank" asChild>
-                  <Button
-                    tone="ghost"
-                    size="$3"
-                    borderRadius={999}
-                    icon={<Icons.ExternalLink size={15} />}
-                  >
-                    Website
-                  </Button>
-                </Link>
-              ) : null}
-            </XStack>
-          </YStack>
+          {description ? (
+            <Text color={ui.textSecondary} fontSize={14} lineHeight={21} numberOfLines={2}>
+              {description}
+            </Text>
+          ) : null}
+        </YStack>
+
+        <XStack gap="$2" flexWrap="wrap" alignItems="center" width="100%">
+          <ShopActionButtons shopId={shopId} ownerUserId={ownerUserId} />
+          <ShareButton
+            variant="outline"
+            label="Share"
+            sheetTitle="Share shop"
+            copyLabel="Copy shop link"
+            copyToastMessage="Shop link copied to clipboard."
+            payload={{
+              url: getShopShareUrl(shopSlug),
+              title: shopName,
+              text: description ?? undefined,
+            }}
+          />
+          {websiteUrl ? (
+            <AppLink href={websiteUrl} external asChild>
+              <Button tone="ghost" size="$3" borderRadius={8} icon={<Icons.ExternalLink size={15} />}>
+                Website
+              </Button>
+            </AppLink>
+          ) : null}
         </XStack>
       </YStack>
     </YStack>
   )
 }
 
-function ShopBadge({
-  label,
-  icon: Icon,
-  tone = 'neutral',
-}: {
-  label: string
-  icon?: typeof Icons.MapPin
-  tone?: 'neutral' | 'success'
-}) {
+function MetaDot() {
   const ui = useAppUi()
-  const isSuccess = tone === 'success'
-
   return (
-    <XStack
-      gap={5}
-      alignItems="center"
-      paddingHorizontal="$2.5"
-      paddingVertical={5}
-      borderRadius={999}
-      backgroundColor={isSuccess ? ui.badgeSuccessBg : ui.chip}
-      borderWidth={1}
-      borderColor={isSuccess ? 'transparent' : ui.borderSubtle}
-    >
-      {Icon ? <Icon size={12} color={isSuccess ? ui.badgeSuccessText : ui.textMuted} /> : null}
+    <Text fontSize={13} color={ui.textMuted}>
+      ·
+    </Text>
+  )
+}
+
+function Crumb({ href, label }: { href: import('one').Href; label: string }) {
+  const ui = useAppUi()
+  return (
+    <AppLink href={href} asChild>
       <Text
-        fontSize={12}
-        fontWeight="500"
-        color={isSuccess ? ui.badgeSuccessText : ui.textSecondary}
+        fontSize={13}
+        color={ui.link}
+        cursor="pointer"
+        hoverStyle={{ textDecorationLine: 'underline', color: ui.brand }}
       >
         {label}
       </Text>
-    </XStack>
+    </AppLink>
   )
 }

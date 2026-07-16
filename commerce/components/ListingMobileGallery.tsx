@@ -2,16 +2,18 @@ import { useState } from 'react'
 import { Platform } from 'react-native'
 import type { NativeScrollEvent, NativeSyntheticEvent } from 'react-native'
 
+import { MediaLightbox } from '~/components/media/MediaLightbox'
 import { Icons, ScrollView, Text, XStack, YStack } from '~/components/ui'
-import { useMobileBackNavigation } from '~/hooks/useMobileBackNavigation'
 import { useAppUi } from '~/lib/theme/useAppUi'
 
 import { FavoriteButton } from './FavoriteButton'
 import { ListingImage } from './ListingImage'
+import { listingMediaKind } from '~/commerce/lib/listing-media'
 
 type GalleryImage = {
   id: string
   image_url: string
+  image_type?: string | null
   alt_text?: string | null
 }
 
@@ -45,8 +47,8 @@ export function ListingMobileGallery({
   onIndexChange,
 }: ListingMobileGalleryProps) {
   const ui = useAppUi()
-  const { goBack } = useMobileBackNavigation()
   const [viewportWidth, setViewportWidth] = useState(0)
+  const [lightboxOpen, setLightboxOpen] = useState(false)
 
   function handleScroll(event: NativeSyntheticEvent<NativeScrollEvent>) {
     if (!viewportWidth) return
@@ -71,10 +73,20 @@ export function ListingMobileGallery({
             width="100%"
             height="100%"
           >
-            {images.map((image) => (
-              <YStack key={image.id} width={viewportWidth || '100%'} height="100%">
+            {images.map((image, index) => (
+              <YStack
+                key={image.id}
+                width={viewportWidth || '100%'}
+                height="100%"
+                cursor="pointer"
+                onPress={() => {
+                  onIndexChange(index)
+                  setLightboxOpen(true)
+                }}
+              >
                 <ListingImage
                   imageUrls={[image.image_url]}
+                  imageType={image.image_type}
                   alt={image.alt_text ?? title}
                   width="100%"
                   height="100%"
@@ -89,26 +101,6 @@ export function ListingMobileGallery({
             <Icons.Image size={48} color={ui.textMuted} />
           </YStack>
         )}
-
-        <XStack
-          position="absolute"
-          top={12}
-          left={12}
-          zIndex={3}
-          width={44}
-          height={44}
-          borderRadius={999}
-          alignItems="center"
-          justifyContent="center"
-          cursor="pointer"
-          onPress={goBack}
-          aria-label="Go back"
-          pressStyle={{ scale: 0.94, opacity: 0.9 }}
-          animation="quick"
-          style={glassButtonStyle(ui)}
-        >
-          <Icons.ArrowLeft size={20} color={ui.text} />
-        </XStack>
 
         {images.length > 1 ? (
           <XStack
@@ -145,6 +137,19 @@ export function ListingMobileGallery({
             />
           ))}
         </XStack>
+      ) : null}
+
+      {images.length > 0 ? (
+        <MediaLightbox
+          items={images.map((image) => ({
+            url: image.image_url,
+            kind: listingMediaKind(image.image_url, image.image_type),
+            alt: image.alt_text ?? title,
+          }))}
+          open={lightboxOpen}
+          onOpenChange={setLightboxOpen}
+          initialIndex={activeIndex}
+        />
       ) : null}
     </YStack>
   )

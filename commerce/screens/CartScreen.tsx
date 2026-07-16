@@ -1,4 +1,5 @@
-import { Link, useRouter } from 'one'
+import { useRouter } from 'one'
+import { AppLink } from '~/components/navigation/AppLink'
 import { useEffect, useMemo, useState } from 'react'
 import { Share } from 'react-native'
 
@@ -170,7 +171,7 @@ export function CartScreen() {
     })
   }
 
-  if (isLoading || isChecking) {
+  if ((isLoading || isChecking) && cartItems.length === 0) {
     return (
       <FullWidthLayout>
         <PageSection paddingVertical="$10" alignItems="center">
@@ -267,7 +268,6 @@ export function CartScreen() {
           borderRadius={12}
           paddingBottom={showMobileBar ? COMMERCE_MOBILE_CHECKOUT_BAR_HEIGHT + 12 : undefined}
         >
-
 
           {items.length === 0 ? (
             <YStack gap="$8" width="100%">
@@ -514,7 +514,7 @@ function CartRow({
         <CommerceCheckbox checked={selected} onPress={onToggle} />
       </YStack>
 
-      <Link href={listingHref} asChild>
+      <AppLink href={listingHref} asChild>
         <YStack
           width={imageSize}
           height={imageSize}
@@ -528,10 +528,10 @@ function CartRow({
             <Image src={item.image_url} width={imageSize} height={imageSize} objectFit="contain" />
           ) : null}
         </YStack>
-      </Link>
+      </AppLink>
 
       <YStack flex={1} minWidth={0} gap="$1.5">
-        <Link href={listingHref} asChild>
+        <AppLink href={listingHref} asChild>
           <Text
             fontSize={isDesktop ? 18 : 15}
             color={c.link}
@@ -541,7 +541,7 @@ function CartRow({
           >
             {item.title}
           </Text>
-        </Link>
+        </AppLink>
 
         <Text fontSize={12} color={c.inStock}>
           {listingType && isDigitalListing(listingType) ? 'In stock · Instant download' : 'In stock'}

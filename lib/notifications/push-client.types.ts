@@ -27,5 +27,7 @@ export type PushClient = {
   optIn: () => Promise<void>
   /** Listen for notification taps (deep links). Returns unsubscribe. */
   onNotificationClick: (handler: (payload: PushClickPayload) => void) => () => void
+  /** Push received while the app is in the foreground. Returns unsubscribe. */
+  onForegroundNotification: (handler: (payload: PushClickPayload) => void) => () => void
   platform: PushPlatform
 }

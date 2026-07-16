@@ -1,7 +1,7 @@
 import type { ReactNode } from 'react'
 import { useEffect, useState } from 'react'
-import { Link } from 'one'
 
+import { LoadMoreSentinel } from '~/commerce/components/LoadMoreSentinel'
 import { FeedPostCard } from '~/community/components/FeedPostCard'
 import { UserListBottomSheet } from '~/community/components/UserListBottomSheet'
 import { ProfileBackgroundSections } from '~/community/components/profile/ProfileBackgroundSections'
@@ -9,6 +9,7 @@ import { FeaturedPostsSection } from '~/community/components/profile/FeaturedPos
 import { RecommendationsSection } from '~/community/components/profile/RecommendationsSection'
 import { WhoViewedYourProfileCard } from '~/community/components/profile/WhoViewedYourProfileCard'
 import type { ProfileDisplay } from '~/community/components/profile/types'
+import { AppLink } from '~/components/navigation/AppLink'
 import { useProfileDetails } from '~/community/hooks/useProfileDetails'
 import { useUserActivity } from '~/community/hooks/useUserActivity'
 import { BRAND_BLUE } from '~/community/lib/constants'
@@ -39,7 +40,10 @@ import type {
 } from '~/community/lib/user-activity'
 import { mergeProfileSocialLinks } from '~/community/lib/profile-details'
 import { htmlToPlainText } from '~/community/lib/post-text'
-import type { UserListKind } from '~/community/lib/user-lists'
+import {
+  fetchProfileNetworkCounts,
+  type UserListKind,
+} from '~/community/lib/user-lists'
 import {
   Avatar,
   Badge,
@@ -55,19 +59,26 @@ import {
 } from '~/components/ui'
 import { ShareButton } from '~/components/share'
 import { updateProfileImages } from '~/community/lib/profile-sections'
-import { pickImages, pickedImageToBlob } from '~/lib/media/pick-image'
+import { pickImages, pickedImageToBlob, type PickedImage } from '~/lib/media/pick-image'
 import { refreshProfiles } from '~/lib/profile/refresh'
 import { communityRoutes } from '~/lib/routes'
 import { getProfileShareUrl } from '~/lib/share'
 import { supabase } from '~/lib/supabase/client'
 import { uploadProfileAvatarImage, uploadProfileCoverImage } from '~/lib/supabase/storage-upload'
+import { MediaDropZone } from '~/components/media/MediaDropZone'
+import { UploadProgressBar } from '~/components/media/UploadProgressBar'
+import { useUploadProgress } from '~/hooks/useUploadProgress'
 import { getShadowStyle, radius } from '~/config/tokens'
 import { useAppUi } from '~/lib/theme/useAppUi'
+
+type ProfileHeaderActions =
+  | ReactNode
+  | ((helpers: { openUserList: (kind: UserListKind) => void }) => ReactNode)
 
 type ProfileViewProps = {
   profile: ProfileDisplay
   isOwnProfile?: boolean
-  headerActions?: ReactNode
+  headerActions?: ProfileHeaderActions
   sidebarFooter?: ReactNode
 }
 
@@ -208,7 +219,12 @@ export function ProfileView({
   }
 
   const displayName = profile.full_name || profile.username
-  const connectionsCount = profile.connections_count ?? 0
+  const [networkCounts, setNetworkCounts] = useState({
+    connections: profile.connections_count ?? 0,
+    followers: profile.follower_count ?? 0,
+    following: profile.following_count ?? 0,
+  })
+  const connectionsCount = networkCounts.connections
   const completion =
     details?.profileCompletion ?? profile.profile_completion_percentage ?? null
   const interests = details?.interests?.length
@@ -218,10 +234,34 @@ export function ProfileView({
   const [listSheetKind, setListSheetKind] = useState<UserListKind | null>(null)
   const [listSheetOpen, setListSheetOpen] = useState(false)
 
+  useEffect(() => {
+    let active = true
+    setNetworkCounts({
+      connections: profile.connections_count ?? 0,
+      followers: profile.follower_count ?? 0,
+      following: profile.following_count ?? 0,
+    })
+    void fetchProfileNetworkCounts(profile.id).then((counts) => {
+      if (!active) return
+      setNetworkCounts(counts)
+    })
+    return () => {
+      active = false
+    }
+  }, [
+    profile.id,
+    profile.connections_count,
+    profile.follower_count,
+    profile.following_count,
+  ])
+
   function openUserList(kind: UserListKind) {
     setListSheetKind(kind)
     setListSheetOpen(true)
   }
+
+  const resolvedHeaderActions =
+    typeof headerActions === 'function' ? headerActions({ openUserList }) : headerActions
 
   const profileRail = (
     <YStack
@@ -231,8 +271,9 @@ export function ProfileView({
       gap="$4"
     >
       <StatsSidebar
-        profile={profile}
         connectionsCount={connectionsCount}
+        followersCount={networkCounts.followers}
+        followingCount={networkCounts.following}
         isOwnProfile={isOwnProfile}
         analytics={analytics}
         onOpenList={openUserList}
@@ -306,7 +347,7 @@ export function ProfileView({
         profile={profile}
         displayName={displayName}
         connectionsCount={connectionsCount}
-        headerActions={headerActions}
+        headerActions={resolvedHeaderActions}
         isOwnProfile={isOwnProfile}
         openToWork={openToWork.enabled}
         openToServices={openToServices.enabled}
@@ -367,24 +408,25 @@ function ProfileHero({
   const toast = useAppToast()
   const [uploadingAvatar, setUploadingAvatar] = useState(false)
   const [uploadingCover, setUploadingCover] = useState(false)
+  const { progress: uploadProgress, track: trackUpload, reset: resetUpload } = useUploadProgress()
 
-  async function handlePickImage(kind: 'avatar' | 'cover') {
+  async function handleUploadImage(kind: 'avatar' | 'cover', first: PickedImage) {
     if (!profile.id) return
-    const busy = kind === 'avatar' ? uploadingAvatar : uploadingCover
-    if (busy) return
     const setBusy = kind === 'avatar' ? setUploadingAvatar : setUploadingCover
+    setBusy(true)
+    trackUpload(1)
     try {
-      const picked = await pickImages({ multiple: false, maxCount: 1 })
-      const first = picked[0]
-      if (!first) return
-      setBusy(true)
       const blob = await pickedImageToBlob(first)
       const upload = kind === 'avatar' ? uploadProfileAvatarImage : uploadProfileCoverImage
-      const { data, error } = await upload(profile.id, {
-        blob,
-        mimeType: first.mimeType || blob.type || 'image/jpeg',
-        fileName: first.fileName,
-      })
+      const { data, error } = await upload(
+        profile.id,
+        {
+          blob,
+          mimeType: first.mimeType || blob.type || 'image/jpeg',
+          fileName: first.fileName,
+        },
+        { onProgress: trackUpload },
+      )
       if (error || !data) {
         toast.show('Could not upload image', { tone: 'danger', message: error ?? undefined })
         return
@@ -405,6 +447,21 @@ function ProfileHero({
       toast.show('Could not update photo', { tone: 'danger' })
     } finally {
       setBusy(false)
+      resetUpload()
+    }
+  }
+
+  async function handlePickImage(kind: 'avatar' | 'cover') {
+    if (!profile.id) return
+    const busy = kind === 'avatar' ? uploadingAvatar : uploadingCover
+    if (busy) return
+    try {
+      const picked = await pickImages({ multiple: false, maxCount: 1 })
+      const first = picked[0]
+      if (!first) return
+      await handleUploadImage(kind, first)
+    } catch {
+      toast.show('Could not update photo', { tone: 'danger' })
     }
   }
 
@@ -417,12 +474,24 @@ function ProfileHero({
       overflow="hidden"
       style={getShadowStyle('sm')}
     >
-      <CoverBanner
-        coverUrl={profile.cover_url}
-        editable={isOwnProfile}
-        uploading={uploadingCover}
-        onEdit={() => void handlePickImage('cover')}
-      />
+      <MediaDropZone
+        disabled={!isOwnProfile || uploadingCover}
+        accept="image"
+        maxCount={1}
+        label="Drop a cover photo"
+        onDrop={(items) => {
+          const first = items[0]
+          if (first) void handleUploadImage('cover', first)
+        }}
+      >
+        <CoverBanner
+          coverUrl={profile.cover_url}
+          editable={isOwnProfile}
+          uploading={uploadingCover}
+          uploadProgress={uploadingCover ? uploadProgress : null}
+          onEdit={() => void handlePickImage('cover')}
+        />
+      </MediaDropZone>
 
       <YStack paddingHorizontal="$4" paddingBottom="$4">
         <XStack
@@ -433,6 +502,18 @@ function ProfileHero({
           gap="$3"
           width="100%"
         >
+          <MediaDropZone
+            disabled={!isOwnProfile || uploadingAvatar}
+            accept="image"
+            maxCount={1}
+            label="Drop a profile photo"
+            fill={false}
+            borderRadius={999}
+            onDrop={(items) => {
+              const first = items[0]
+              if (first) void handleUploadImage('avatar', first)
+            }}
+          >
           <YStack
             position="relative"
             flexShrink={0}
@@ -469,6 +550,12 @@ function ProfileHero({
               </XStack>
             ) : null}
           </YStack>
+          </MediaDropZone>
+          {uploadingAvatar && uploadProgress != null && uploadProgress > 0 ? (
+            <YStack width="100%" maxWidth={280} marginTop="$2">
+              <UploadProgressBar progress={uploadProgress} label="Uploading photo…" compact />
+            </YStack>
+          ) : null}
           <XStack
             gap="$2"
             flexWrap="wrap"
@@ -478,18 +565,20 @@ function ProfileHero({
             justifyContent="flex-end"
             minWidth={0}
           >
-            <ShareButton
-              variant="outline"
-              label="Share"
-              sheetTitle="Share profile"
-              copyLabel="Copy profile link"
-              copyToastMessage="Profile link copied to clipboard."
-              payload={{
-                url: getProfileShareUrl(profile.username),
-                title: displayName,
-                text: profile.headline ?? undefined,
-              }}
-            />
+            {isOwnProfile ? (
+              <ShareButton
+                variant="outline"
+                label="Share"
+                sheetTitle="Share profile"
+                copyLabel="Copy profile link"
+                copyToastMessage="Profile link copied to clipboard."
+                payload={{
+                  url: getProfileShareUrl(profile.username),
+                  title: displayName,
+                  text: profile.headline ?? undefined,
+                }}
+              />
+            ) : null}
             {headerActions}
           </XStack>
         </XStack>
@@ -540,18 +629,31 @@ function ProfileHero({
                 fontWeight="600"
                 color={BRAND_BLUE}
                 cursor="pointer"
-                hoverStyle={{ opacity: 0.85 }}
+                hoverStyle={{ opacity: 0.85, textDecorationLine: 'underline' }}
                 onPress={onOpenConnections}
+                accessibilityRole="link"
               >
                 {connectionsCount} connection{connectionsCount === 1 ? '' : 's'}
               </Text>
             ) : isOwnProfile ? (
-              <Link href={communityRoutes.network}>
+              <AppLink href={communityRoutes.network}>
                 <Text fontSize={14} fontWeight="600" color={BRAND_BLUE}>
                   Grow your network
                 </Text>
-              </Link>
-            ) : null}
+              </AppLink>
+            ) : (
+              <Text
+                fontSize={14}
+                fontWeight="600"
+                color={BRAND_BLUE}
+                cursor="pointer"
+                hoverStyle={{ opacity: 0.85, textDecorationLine: 'underline' }}
+                onPress={onOpenConnections}
+                accessibilityRole="link"
+              >
+                Connections
+              </Text>
+            )}
           </XStack>
 
           <Text fontSize={14} color={ui.textMuted}>
@@ -681,11 +783,11 @@ function ActivitySection({
           <YStack gap="$2" paddingVertical="$2">
             <Text color={ui.textMuted}>{emptyMessage}</Text>
             {isOwnProfile && activity.filter === 'posts' ? (
-              <Link href={communityRoutes.createPost}>
+              <AppLink href={communityRoutes.createPost}>
                 <Text color={BRAND_BLUE} fontWeight="600">
                   Create a post
                 </Text>
-              </Link>
+              </AppLink>
             ) : null}
           </YStack>
         ) : (
@@ -717,27 +819,12 @@ function ActivitySection({
                     )
                   })}
 
-            {activity.hasMore ? (
-              <XStack justifyContent="center" paddingTop="$1">
-                <XStack
-                  paddingHorizontal="$4"
-                  paddingVertical="$2.5"
-                  borderRadius={999}
-                  borderWidth={1}
-                  borderColor={ui.borderSubtle}
-                  cursor="pointer"
-                  alignItems="center"
-                  gap="$2"
-                  hoverStyle={{ backgroundColor: ui.surfaceMuted }}
-                  onPress={() => void activity.loadMore()}
-                >
-                  {activity.isLoadingMore ? <Spinner size="small" /> : null}
-                  <Text fontSize={14} fontWeight="600" color={ui.text}>
-                    {activity.isLoadingMore ? 'Loading…' : 'Show more activity'}
-                  </Text>
-                </XStack>
-              </XStack>
-            ) : null}
+            <LoadMoreSentinel
+              hasMore={activity.hasMore}
+              isLoadingMore={activity.isLoadingMore}
+              onLoadMore={() => void activity.loadMore()}
+              label="Show more activity"
+            />
           </YStack>
         )}
       </YStack>
@@ -784,14 +871,16 @@ function ActivityEntry({
 }
 
 function StatsSidebar({
-  profile,
   connectionsCount,
+  followersCount,
+  followingCount,
   isOwnProfile,
   analytics,
   onOpenList,
 }: {
-  profile: ProfileDisplay
   connectionsCount: number
+  followersCount: number
+  followingCount: number
   isOwnProfile: boolean
   analytics: ProfileAnalytics | null
   onOpenList: (kind: UserListKind) => void
@@ -801,12 +890,12 @@ function StatsSidebar({
       <YStack gap="$3">
         <StatRow
           label="Followers"
-          value={profile.follower_count ?? 0}
+          value={followersCount}
           onPress={() => onOpenList('followers')}
         />
         <StatRow
           label="Following"
-          value={profile.following_count ?? 0}
+          value={followingCount}
           onPress={() => onOpenList('following')}
         />
         <StatRow
@@ -1062,14 +1151,14 @@ function StatRow({
 
 function ExternalLink({ href, label }: { href: string; label: string }) {
   return (
-    <Link href={href} target="_blank">
+    <AppLink href={href} external>
       <XStack gap="$2" alignItems="center" cursor="pointer" hoverStyle={{ opacity: 0.85 }}>
         <Icons.ExternalLink size={14} color={BRAND_BLUE} />
         <Text color={BRAND_BLUE} fontSize={14} fontWeight="500" numberOfLines={1}>
           {label}
         </Text>
       </XStack>
-    </Link>
+    </AppLink>
   )
 }
 
@@ -1077,11 +1166,13 @@ function CoverBanner({
   coverUrl,
   editable = false,
   uploading = false,
+  uploadProgress = null,
   onEdit,
 }: {
   coverUrl?: string | null
   editable?: boolean
   uploading?: boolean
+  uploadProgress?: number | null
   onEdit?: () => void
 }) {
   const ui = useAppUi()
@@ -1125,6 +1216,12 @@ function CoverBanner({
             <Icons.Camera size={18} color="white" />
           )}
         </XStack>
+      ) : null}
+
+      {uploadProgress != null && uploadProgress > 0 ? (
+        <YStack position="absolute" left={12} right={12} bottom={12}>
+          <UploadProgressBar progress={uploadProgress} label="Uploading cover…" compact />
+        </YStack>
       ) : null}
     </YStack>
   )

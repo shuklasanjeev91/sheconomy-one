@@ -67,6 +67,7 @@ export function useConversation({ conversationId, currentUserId }: UseConversati
   const [hasMore, setHasMore] = useState(false)
   const [loadingOlder, setLoadingOlder] = useState(false)
   const [sending, setSending] = useState(false)
+  const [uploadProgress, setUploadProgress] = useState<number | null>(null)
   const [peerTyping, setPeerTyping] = useState(false)
   const [peerReadAt, setPeerReadAt] = useState<string | null>(null)
   const [reactionRows, setReactionRows] = useState<MessageReaction[]>([])
@@ -492,6 +493,7 @@ export function useConversation({ conversationId, currentUserId }: UseConversati
       }
       setMessagesTracked((prev) => [...prev, optimistic])
       setSending(true)
+      setUploadProgress(0)
 
       try {
         const blob = await pickedImageToBlob(attachment)
@@ -499,6 +501,7 @@ export function useConversation({ conversationId, currentUserId }: UseConversati
           conversationId,
           currentUserId,
           { blob, mimeType: attachment.mimeType, fileName: attachment.fileName },
+          { onProgress: setUploadProgress },
         )
 
         if (uploadError || !uploaded) {
@@ -532,6 +535,7 @@ export function useConversation({ conversationId, currentUserId }: UseConversati
         )
       } finally {
         setSending(false)
+        setUploadProgress(null)
       }
     },
     [conversationId, currentUserId, setMessagesTracked],
@@ -563,14 +567,20 @@ export function useConversation({ conversationId, currentUserId }: UseConversati
       }
       setMessagesTracked((prev) => [...prev, optimistic])
       setSending(true)
+      setUploadProgress(0)
 
       try {
         const blob = await pickedImageToBlob(attachment)
-        const { data: uploaded, error: uploadError } = await uploadChatMedia(conversationId, currentUserId, {
-          blob,
-          mimeType: attachment.mimeType,
-          fileName: attachment.fileName,
-        })
+        const { data: uploaded, error: uploadError } = await uploadChatMedia(
+          conversationId,
+          currentUserId,
+          {
+            blob,
+            mimeType: attachment.mimeType,
+            fileName: attachment.fileName,
+          },
+          { onProgress: setUploadProgress },
+        )
 
         if (uploadError || !uploaded) throw new Error(uploadError ?? 'Upload failed')
 
@@ -601,6 +611,7 @@ export function useConversation({ conversationId, currentUserId }: UseConversati
         )
       } finally {
         setSending(false)
+        setUploadProgress(null)
       }
     },
     [conversationId, currentUserId, setMessagesTracked],
@@ -795,6 +806,7 @@ export function useConversation({ conversationId, currentUserId }: UseConversati
     loadingOlder,
     loadOlder,
     sending,
+    uploadProgress,
     peerTyping,
     peerReadAt,
     reactionsByMessage,

@@ -414,3 +414,16 @@ export async function fetchGroupAdminUserIds(groupId: string): Promise<string[]>
 
   return (data ?? []).map((row) => row.user_id).filter(Boolean) as string[]
 }
+
+export async function setGroupMemberRole(
+  groupId: string,
+  userId: string,
+  role: 'admin' | 'member',
+): Promise<{ error: string | null }> {
+  const { error } = await supabase.rpc('set_community_group_member_role', {
+    p_group_id: groupId,
+    p_user_id: userId,
+    p_role: role,
+  })
+  return { error: error?.message ?? null }
+}

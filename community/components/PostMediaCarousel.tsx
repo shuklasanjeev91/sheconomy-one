@@ -92,7 +92,14 @@ export function PostMediaCarousel({
             {...(onPressImage ? { onPress: () => onPressImage(i) } : {})}
           >
             {width ? (
-              <PostMediaSlide item={item} width={width} height={height} fit={fit} />
+              <PostMediaSlide
+                item={item}
+                width={width}
+                height={height}
+                fit={fit}
+                posterUrl={slides.find((slide) => slide.kind === 'image')?.url ?? null}
+                autoplayInView={item.kind === 'video'}
+              />
             ) : null}
           </YStack>
         ))}

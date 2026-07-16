@@ -1,5 +1,5 @@
-import { Link } from 'one'
 import { Platform } from 'react-native'
+import { AppLink } from '~/components/navigation/AppLink'
 
 import {
   AvailableOffersCard,
@@ -25,20 +25,19 @@ import {
   YStack,
 } from '~/components/ui'
 import { FullWidthLayout, PageCenter, PageSection } from '~/components/layout'
-import { PushPermissionBanner } from '~/components/notifications/PushPermissionBanner'
+import { NearbyShopsSection } from '~/components/location'
 import { BRAND_THEME, radius } from '~/config/tokens'
 import { useAppUi } from '~/lib/theme/useAppUi'
 import { useCategoriesFeed } from '~/commerce/hooks/useCategoriesFeed'
 import { useShopsFeed } from '~/commerce/hooks/useShopsFeed'
-import { fetchHomeBootstrap, type HomeBootstrapData } from '~/commerce/lib/commerce'
+import { type HomeBootstrapData } from '~/commerce/lib/commerce'
 import { commerceRoutes, routes } from '~/lib/routes'
 import { useAccess } from '~/hooks/useAccess'
 
 import { BRAND_NAME } from '~/config/brand'
 
-export async function homeLoader() {
-  return fetchHomeBootstrap()
-}
+export { homeLoader } from '~/commerce/lib/home-loader'
+export type { HomeBootstrapData }
 
 type HomeScreenProps = {
   data: HomeBootstrapData | null
@@ -83,11 +82,11 @@ export function HomeScreen({ data, error, loading = false }: HomeScreenProps) {
                 </Text>
               </XStack>
               <Paragraph color={ui.textSecondary}>{error ?? 'Please try again shortly.'}</Paragraph>
-              <Link href={routes.home} asChild>
+              <AppLink href={routes.home} asChild>
                 <Button tone="primary" size="$4" alignSelf="flex-start" borderRadius={999}>
                   Browse shops
                 </Button>
-              </Link>
+              </AppLink>
             </YStack>
           </Card>
         </PageSection>
@@ -102,17 +101,17 @@ export function HomeScreen({ data, error, loading = false }: HomeScreenProps) {
   })
 
   return (
-    <FullWidthLayout scroll>
+    <FullWidthLayout
+      scroll
+      onRefresh={async () => {
+        categoriesFeed.refresh()
+        shopsFeed.refresh()
+      }}
+      refreshing={categoriesFeed.isRefreshing || shopsFeed.isRefreshing}
+    >
       <YStack gap="$5" paddingBottom="$10" width="100%" backgroundColor={ui.background}>
         <PageSection bleed paddingTop="$4">
           <HomeHeroSlider slides={heroSlides} />
-        </PageSection>
-
-        <PageSection paddingTop="$2">
-          <PushPermissionBanner />
-        </PageSection>
-
-        <PageSection paddingTop="$2" gap="$3">
         </PageSection>
 
         {categoriesFeed.items.length > 0 ? (
@@ -127,7 +126,7 @@ export function HomeScreen({ data, error, loading = false }: HomeScreenProps) {
               ))}
             </InfiniteHorizontalSection>
           </PageSection>
-        ) : categoriesFeed.isLoading ? (
+        ) : categoriesFeed.isLoading && categoriesFeed.items.length === 0 ? (
           <PageSection paddingTop="$2">
             <Spinner size="small" />
           </PageSection>
@@ -143,6 +142,7 @@ export function HomeScreen({ data, error, loading = false }: HomeScreenProps) {
           inset
         />
         <RecentlyViewedRail inset />
+        <NearbyShopsSection />
 
         <InfiniteListingSection
           kind="physical"
@@ -193,7 +193,7 @@ export function HomeScreen({ data, error, loading = false }: HomeScreenProps) {
               </InfiniteHorizontalSection>
             </CommerceSection>
           </PageSection>
-        ) : shopsFeed.isLoading ? (
+        ) : shopsFeed.isLoading && shopsFeed.items.length === 0 ? (
           <PageSection>
             <Spinner size="small" />
           </PageSection>
@@ -235,18 +235,18 @@ export function HomeScreen({ data, error, loading = false }: HomeScreenProps) {
                 </Paragraph>
               </YStack>
               <XStack gap="$3" flexWrap="wrap">
-                <Link href={`${routes.myShops}?create=1` as import('one').Href} asChild>
+                <AppLink href={commerceRoutes.createShop} asChild>
                   <Theme name={BRAND_THEME}>
                     <Button tone="primary" size="$4" borderRadius={999}>
                       Start selling
                     </Button>
                   </Theme>
-                </Link>
-                <Link href={commerceRoutes.shops} asChild>
+                </AppLink>
+                <AppLink href={commerceRoutes.shops} asChild>
                   <Button tone="outline" size="$4" borderRadius={999} backgroundColor={ui.surface}>
                     Browse shops
                   </Button>
-                </Link>
+                </AppLink>
               </XStack>
             </YStack>
           </PageSection>

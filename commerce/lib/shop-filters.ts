@@ -34,20 +34,26 @@ export function getShopCountryLabel(shop: ShopSummary) {
   return getCountryName(raw, raw)
 }
 
+/** Unique raw country values (codes/names) for server-side browse filters. */
 export function extractShopCountries(shops: ShopSummary[]) {
   const countries = new Set<string>()
   for (const shop of shops) {
-    const label = getShopCountryLabel(shop)
-    if (label !== 'Unknown') countries.add(label)
+    const raw = shop.country?.trim()
+    if (raw) countries.add(raw)
   }
-  return Array.from(countries).sort((a, b) => a.localeCompare(b))
+  return Array.from(countries).sort((a, b) =>
+    getCountryName(a, a).localeCompare(getCountryName(b, b)),
+  )
 }
 
 export function applyShopBrowseFilters(shops: ShopSummary[], filters: ShopBrowseFilters) {
   const filtered =
     filters.country === 'all'
       ? shops
-      : shops.filter((shop) => getShopCountryLabel(shop) === filters.country)
+      : shops.filter((shop) => {
+          const raw = shop.country?.trim()
+          return raw === filters.country || getShopCountryLabel(shop) === filters.country
+        })
 
   const sorted = [...filtered]
 

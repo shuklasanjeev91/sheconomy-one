@@ -1,10 +1,16 @@
 import { useCallback, useRef } from 'react'
 import { findNodeHandle, NativeModules, Platform, View } from 'react-native'
 import Constants from 'expo-constants'
+
+import { ensureLiveKitNativeGlobals } from '~/lib/livekit/register-native-globals'
+
+ensureLiveKitNativeGlobals()
+
 import { useLocalParticipant, useRoomContext } from '@livekit/react-native'
 import { ScreenCapturePickerView } from '@livekit/react-native-webrtc'
 
 import type { LiveKitMediaControls } from '~/co-work/lib/livekit-media-controls'
+import { setLocalScreenShareEnabled } from '~/co-work/lib/livekit-screen-share'
 
 type ScreenCapturePickerHandle = React.ElementRef<typeof ScreenCapturePickerView>
 
@@ -77,7 +83,7 @@ export function useLiveKitMediaControls(): LiveKitMediaControls {
     }
 
     try {
-      await localParticipant.setScreenShareEnabled(enabling)
+      await setLocalScreenShareEnabled(localParticipant, enabling, 'native')
     } catch (error) {
       if (isAbortOrCancelError(error)) {
         if (Platform.OS === 'ios') {

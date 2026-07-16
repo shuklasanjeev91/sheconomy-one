@@ -21,7 +21,9 @@ import {
   STORAGE_BUCKETS,
   getStoragePublicUrl,
   uploadStorageObject,
+  type UploadProgressHandler,
 } from '~/lib/supabase/storage-upload'
+import { uploadFilesWithAggregateProgress } from '~/lib/supabase/storage-upload-progress'
 
 import { fail, ok, resolveUserId, verifyListingManageAccess } from './listing.access'
 import { createListingError, LISTING_ERROR_CODES } from './listing.errors'
@@ -162,6 +164,7 @@ export type UploadedImage = {
 export async function uploadImage(
   file: ListingImageUpload,
   listingId?: string | null,
+  options?: { onProgress?: UploadProgressHandler },
 ): Promise<ListingServiceResponse<UploadedImage>> {
   const validationError = validateUploadFile(file)
   if (validationError) return fail(validationError)
@@ -178,6 +181,7 @@ export async function uploadImage(
       path,
       file.blob,
       file.mimeType,
+      { onProgress: options?.onProgress },
     )
     if (error || !data) return fail(error ?? 'Upload failed.')
 
@@ -199,7 +203,10 @@ export async function uploadImage(
 export async function batchUploadImages(
   files: ListingImageUpload[],
   listingId?: string | null,
-  onProgress?: (progress: { processed: number; total: number }) => void,
+  options?: {
+    onModerationProgress?: (progress: { processed: number; total: number }) => void
+    onUploadProgress?: UploadProgressHandler
+  },
 ): Promise<ListingServiceResponse<UploadedImage[]>> {
   if (!files.length) return fail('No files provided for upload.')
 
@@ -209,20 +216,29 @@ export async function batchUploadImages(
   try {
     await moderateImages(
       files.map((file) => file.blob),
-      onProgress,
+      options?.onModerationProgress,
     )
 
     const uploaded: UploadedImage[] = []
     const uploadedPaths: string[] = []
 
-    for (const file of files) {
-      const result = await uploadImage(file, listingId)
-      if (!result.success || !result.data) {
-        if (uploadedPaths.length) await rollbackUploadedImages(uploadedPaths)
-        return fail(result.error ?? 'Upload failed.')
-      }
-      uploaded.push(result.data)
-      uploadedPaths.push(result.data.path)
+    const { error: batchError } = await uploadFilesWithAggregateProgress(
+      files,
+      async (file, onFileProgress) => {
+        const result = await uploadImage(file, listingId, { onProgress: onFileProgress })
+        if (!result.success || !result.data) {
+          return { error: result.error ?? 'Upload failed.' }
+        }
+        uploaded.push(result.data)
+        uploadedPaths.push(result.data.path)
+        return { error: null }
+      },
+      options?.onUploadProgress,
+    )
+
+    if (batchError) {
+      if (uploadedPaths.length) await rollbackUploadedImages(uploadedPaths)
+      return fail(batchError)
     }
 
     return ok(uploaded)

@@ -166,6 +166,10 @@ export function addressToFormData(address: Address): AddressFormData {
     address_type: (address.address_type as AddressType) || ADDRESS_TYPE.HOME,
     is_default: Boolean(address.is_default),
     address_label: address.address_label ?? '',
+    latitude: address.latitude ?? null,
+    longitude: address.longitude ?? null,
+    place_id: address.place_id ?? null,
+    source: (address.source as AddressFormData['source']) ?? 'manual',
   }
 }
 
@@ -180,6 +184,10 @@ export function createEmptyAddressFormData(): AddressFormData {
     address_type: ADDRESS_TYPE.HOME,
     is_default: false,
     address_label: '',
+    latitude: null,
+    longitude: null,
+    place_id: null,
+    source: 'manual',
   }
 }
 

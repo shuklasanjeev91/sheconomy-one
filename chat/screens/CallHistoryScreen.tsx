@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useState } from 'react'
 import { Platform } from 'react-native'
-import { Link, useRouter } from 'one'
+import { useRouter } from 'one'
 
+import { AppLink } from '~/components/navigation/AppLink'
 import { ChatSectionTabs } from '~/chat/components/ChatSectionTabs'
 import { fetchCallHistory, type CallHistoryEntry } from '~/chat/lib/calls'
 import { useChatTheme } from '~/chat/lib/chat-theme'
@@ -15,7 +16,7 @@ const LIST_PANE_WIDTH = 380
 
 function CallDirectionIcon({ entry, color }: { entry: CallHistoryEntry; color: string }) {
   const missedColor = '#f2385a'
-  if (entry.status === 'missed' || entry.status === 'declined' || entry.status === 'canceled') {
+  if (entry.status === 'missed' || entry.status === 'declined') {
     return <Icons.PhoneMissed size={15} color={missedColor} />
   }
   if (entry.direction === 'incoming') {
@@ -25,8 +26,7 @@ function CallDirectionIcon({ entry, color }: { entry: CallHistoryEntry; color: s
 }
 
 function callSubtitle(entry: CallHistoryEntry): string {
-  const missed =
-    entry.status === 'missed' || entry.status === 'declined' || entry.status === 'canceled'
+  const missed = entry.status === 'missed' || entry.status === 'declined'
   const directionLabel = missed
     ? entry.direction === 'incoming'
       ? 'Missed'
@@ -42,7 +42,7 @@ function callSubtitle(entry: CallHistoryEntry): string {
 export function CallHistoryScreen() {
   const theme = useChatTheme()
   const router = useRouter()
-  const { isDesktop, isDesktopWeb, desktopHeaderHeight, mobileTabBarOffset } = useAppLayout()
+  const { isDesktop, mobileTabBarOffset } = useAppLayout()
   const { user, isLoading: authLoading } = useSupabase()
   const currentUserId = user?.id ?? null
 
@@ -62,11 +62,7 @@ export function CallHistoryScreen() {
   }, [load])
 
   const fillStyle =
-    Platform.OS === 'web'
-      ? isDesktopWeb
-        ? ({ height: `calc(100dvh - ${desktopHeaderHeight}px)` } as const)
-        : ({ flex: 1, minHeight: 0 } as const)
-      : undefined
+    Platform.OS === 'web' ? ({ flex: 1, minHeight: 0, width: '100%' } as const) : undefined
 
   if (authLoading) {
     return (
@@ -97,9 +93,9 @@ export function CallHistoryScreen() {
         <Text fontSize={14} color={theme.textMuted} textAlign="center" lineHeight={20} maxWidth={340}>
           Sign in to see your recent voice and video calls and call your contacts back.
         </Text>
-        <Link href={routes.signIn} asChild>
+        <AppLink href={routes.signIn} asChild>
           <Button tone="primary">Sign in to continue</Button>
-        </Link>
+        </AppLink>
       </YStack>
     )
   }

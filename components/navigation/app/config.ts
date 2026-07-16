@@ -18,8 +18,8 @@ import {
   isChatConversationPath,
   isClassPath,
   isClassAudioPath,
-  isClassProgramPath,
-  isClassVideoHomePath,
+  isClassHomePath,
+  isClassVideoPath,
   isCoWorkPath,
   isCoWorkHomePath,
   isCoWorkSchedulePath,
@@ -30,7 +30,8 @@ import {
   isCommercePath,
   isCommerceShopsPath,
   isCommunityPath,
-  isMyShopsPath,
+  isManageShopPath,
+  isCreateShopPath,
   isCommunityFeedPath,
   isJobsPath,
   isNotificationsPath,
@@ -147,7 +148,7 @@ export function getCommerceMobileTabs({
   const sellerHref =
     hasShops && primaryShopId
       ? commerceRoutes.manageShop(primaryShopId)
-      : commerceRoutes.myShops
+      : commerceRoutes.createShop
 
   return [
     {
@@ -160,7 +161,7 @@ export function getCommerceMobileTabs({
       href: sellerHref,
       label: hasShops ? 'Manage shop' : 'Create shop',
       icon: hasShops ? Icons.Settings : Icons.PlusCircle,
-      match: (path) => isMyShopsPath(path),
+      match: (path) => (hasShops ? isManageShopPath(path) : isCreateShopPath(path)),
     },
   ]
 }
@@ -200,7 +201,7 @@ export function getHomeMobileTab(section: BottomTabSection): AppMobileTabItem {
         href: classRoutes.home,
         label: 'Home',
         icon: Icons.Home,
-        match: (path) => isClassPath(path),
+        match: (path) => isClassHomePath(path),
       }
     case 'co-work':
       return {
@@ -298,13 +299,13 @@ export const APP_CHAT_MOBILE_TABS: AppMobileTabItem[] = [
   },
 ]
 
-/** Bottom tabs — classes section (Home + You added automatically). */
+/** Bottom tabs — classes: Video + Audio (Home covers hub / program detail). */
 export const APP_CLASS_MOBILE_TABS: AppMobileTabItem[] = [
   {
     href: classRoutes.video,
     label: 'Video',
     icon: Icons.Play,
-    match: (path) => isClassVideoHomePath(path),
+    match: (path) => isClassVideoPath(path),
   },
   {
     href: classRoutes.audio,

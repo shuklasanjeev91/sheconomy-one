@@ -26,6 +26,7 @@ export function CommunityComposerHost() {
           initialMode={options.mode}
           initialGifUrl={options.gifUrl}
           autoPickMedia={options.media}
+          autoPickVideo={options.video}
           initialGroupId={options.groupId}
           initialCompanyId={options.companyId}
         />

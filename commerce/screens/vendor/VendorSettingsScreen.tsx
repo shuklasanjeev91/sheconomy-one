@@ -26,13 +26,14 @@ import { PageCenter } from '~/components/layout'
 import { ImageUploadField, preparePickedImagesForUpload } from '~/components/media/ImageUploadField'
 import { getShadowStyle, radius } from '~/config/tokens'
 import { useAppLayout } from '~/hooks/useAppLayout'
+import { useUploadProgress } from '~/hooks/useUploadProgress'
 import type { PickedImage } from '~/lib/media/pick-image'
+import * as shopService from '~/lib/shop/shop.service'
 import {
   loadFormFromShop,
   loadMyShops,
   updateShop,
   updateShopField,
-  uploadShopLogo,
   validateForm,
 } from '~/lib/shop/shop.store'
 import {
@@ -57,6 +58,7 @@ import {
   type SettingsSection,
   type SettingsSectionId,
 } from '~/commerce/components/vendor/settings-nav'
+import { VendorConnectSettings } from './VendorConnectSettings'
 
 type IconType = (typeof Icons)[keyof typeof Icons]
 
@@ -142,6 +144,10 @@ export function VendorSettingsScreen() {
     return <GeneralSettings ui={ui} shop={shop} isDesktop={isDesktop} safeBottom={safeBottom} />
   }
 
+  if (section.id === 'connect') {
+    return <VendorConnectSettings ui={ui} shop={shop} isDesktop={isDesktop} safeBottom={safeBottom} />
+  }
+
   return (
     <YStack flex={1} minHeight={0} width="100%" maxWidth="100%">
       <SectionHeader ui={ui} section={section} isDesktop={isDesktop} />
@@ -202,6 +208,7 @@ function GeneralSettings({ ui, shop, isDesktop, safeBottom }: GeneralSettingsPro
 
   const [tagline, setTagline] = useState(() => readTagline(shop))
   const [logoImages, setLogoImages] = useState<PickedImage[]>([])
+  const { progress: uploadProgress, track: trackUpload, reset: resetUpload } = useUploadProgress()
   const [editingHours, setEditingHours] = useState(
     () => Object.keys((shop.shop_hours as Record<string, string> | null) ?? {}).length > 0,
   )
@@ -272,9 +279,17 @@ function GeneralSettings({ ui, shop, isDesktop, safeBottom }: GeneralSettingsPro
       }
       try {
         const [file] = await preparePickedImagesForUpload(logoImages.slice(0, 1))
-        await dispatch(uploadShopLogo({ userId: user.id, shopId: shop.id, file })).unwrap()
+        trackUpload(1)
+        const response = await shopService.uploadShopLogo(user.id, shop.id, file, {
+          onProgress: trackUpload,
+        })
+        if (!response.success) {
+          throw new Error(response.error ?? 'Logo upload failed')
+        }
+        resetUpload()
         setLogoImages([])
       } catch (error) {
+        resetUpload()
         toast.show('Logo upload failed', {
           tone: 'danger',
           message: error instanceof Error ? error.message : String(error),
@@ -335,8 +350,10 @@ function GeneralSettings({ ui, shop, isDesktop, safeBottom }: GeneralSettingsPro
                 label=""
                 value={logoImages}
                 onChange={setLogoImages}
-                disabled={isUpdating}
+                disabled={isUpdating || (uploadProgress != null && uploadProgress > 0)}
                 hint="Square images work best."
+                uploadProgress={uploadProgress}
+                uploadLabel="Uploading logo…"
               />
             </YStack>
             <YStack flex={1} minWidth={0} gap="$3.5" width={isDesktop ? undefined : '100%'}>

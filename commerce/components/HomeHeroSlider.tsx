@@ -1,13 +1,14 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import type { NativeScrollEvent, NativeSyntheticEvent } from 'react-native'
-import { Link } from 'one'
+
 import type { Href } from 'one'
+import { AppLink } from '~/components/navigation/AppLink'
 import { Platform } from 'react-native'
 
 import { BrandGradient, Button, Icons, Image, ScrollView, Text, XStack, YStack } from '~/components/ui'
 import { BRAND_NAME } from '~/config/brand'
 import type { CommerceStats, HomeHeroImageSet } from '~/commerce/lib/commerce'
-import { commerceRoutes, routes } from '~/lib/routes'
+import { commerceRoutes } from '~/lib/routes'
 import { useAppLayout } from '~/hooks/useAppLayout'
 import { useAppUi } from '~/lib/theme/useAppUi'
 import { motion } from '~/lib/theme/motion'
@@ -95,7 +96,7 @@ export function buildHomeHeroSlides(
       title: 'Open your shop today',
       subtitle: `Reach shoppers nationwide on ${BRAND_NAME} in minutes`,
       cta: 'Open your shop',
-      href: `${routes.myShops}?create=1` as Href,
+      href: commerceRoutes.createShop,
       gradient: 'brand',
       images: images.sell.length ? images.sell : images.shops,
     })
@@ -315,7 +316,7 @@ function HeroSlidePanel({ slide, width, height, isDesktop, isActive, ui }: HeroS
             </Text>
           </YStack>
 
-          <Link href={slide.href} asChild>
+          <AppLink href={slide.href} asChild>
             <Button
               tone="primary"
               size={isDesktop ? '$4' : '$3'}
@@ -330,7 +331,7 @@ function HeroSlidePanel({ slide, width, height, isDesktop, isActive, ui }: HeroS
             >
               {slide.cta}
             </Button>
-          </Link>
+          </AppLink>
         </YStack>
 
         {isDesktop ? <HeroThumbStrip images={slide.images} /> : null}

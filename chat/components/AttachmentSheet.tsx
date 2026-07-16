@@ -6,9 +6,11 @@ import { AppBottomSheet, Icons, Text, XStack, YStack } from '~/components/ui'
 type AttachmentSheetProps = {
   open: boolean
   onOpenChange: (open: boolean) => void
+  onPickBrowse?: () => void
   onPickGallery: () => void
   onPickCamera: () => void
   onPickDocument: () => void
+  onPickVideo?: () => void
   onPickPoll?: () => void
   onPickEvent?: () => void
 }
@@ -50,9 +52,11 @@ function AttachTile({
 export function AttachmentSheet({
   open,
   onOpenChange,
+  onPickBrowse,
   onPickGallery,
   onPickCamera,
   onPickDocument,
+  onPickVideo,
   onPickPoll,
   onPickEvent,
 }: AttachmentSheetProps) {
@@ -73,6 +77,14 @@ export function AttachmentSheet({
   return (
     <AppBottomSheet open={open} onOpenChange={onOpenChange} title="Share" scrollable={false}>
       <XStack gap={16} paddingVertical={8} paddingHorizontal={4} flexWrap="wrap">
+        {onPickBrowse ? (
+          <AttachTile
+            icon={<Icons.Upload size={26} color="#ffffff" />}
+            label="Browse"
+            color="#2ecc71"
+            onPress={() => pick(onPickBrowse)}
+          />
+        ) : null}
         <AttachTile
           icon={<Icons.Image size={26} color="#ffffff" />}
           label="Gallery"
@@ -85,6 +97,14 @@ export function AttachmentSheet({
           color="#f2385a"
           onPress={() => pick(onPickCamera)}
         />
+        {onPickVideo ? (
+          <AttachTile
+            icon={<Icons.Video size={26} color="#ffffff" />}
+            label="Video"
+            color="#e74c3c"
+            onPress={() => pick(onPickVideo)}
+          />
+        ) : null}
         <AttachTile
           icon={<Icons.FileText size={26} color="#ffffff" />}
           label="Document"

@@ -1,7 +1,9 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 
 import { CommunityAdaptiveSheet } from '~/community/components/CommunityAdaptiveSheet'
+import { ScreenSearchField } from '~/components/search'
 import { Field, Icons, ScrollView, Text, XStack, YStack } from '~/components/ui'
+import { filterBySearchQuery } from '~/lib/search/filter'
 import { useAppUi } from '~/lib/theme/useAppUi'
 
 type MonthYearFieldProps = {
@@ -134,6 +136,17 @@ function DropdownButton({
 }) {
   const ui = useAppUi()
   const [open, setOpen] = useState(false)
+  const [query, setQuery] = useState('')
+
+  useEffect(() => {
+    if (!open) setQuery('')
+  }, [open])
+
+  const filteredOptions = useMemo(
+    () => filterBySearchQuery(options, query, (option) => [option.label]),
+    [options, query],
+  )
+  const searchable = options.length > 12
 
   return (
     <>
@@ -161,9 +174,22 @@ function DropdownButton({
       </XStack>
 
       <CommunityAdaptiveSheet open={open} onOpenChange={setOpen} title={title} maxWidth={360}>
+        {searchable ? (
+          <ScreenSearchField
+            value={query}
+            onChangeText={setQuery}
+            placeholder={`Search ${placeholder.toLowerCase()}`}
+            clearable
+          />
+        ) : null}
         <ScrollView maxHeight={360} width="100%" keyboardShouldPersistTaps="handled">
           <YStack gap="$1" width="100%">
-            {options.map((option) => {
+            {filteredOptions.length === 0 ? (
+              <Text color={ui.textMuted} paddingVertical="$3" paddingHorizontal="$3">
+                No matches found.
+              </Text>
+            ) : null}
+            {filteredOptions.map((option) => {
               const selected = option.value === value
               return (
                 <XStack
