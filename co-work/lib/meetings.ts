@@ -77,19 +77,26 @@ function mapParticipant(row: Record<string, unknown>): MeetingParticipant {
   }
 }
 
+function randomAlphaCode(length: number, alphabet = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'): string {
+  let result = ''
+  for (let i = 0; i < length; i++) {
+    result += alphabet[Math.floor(Math.random() * alphabet.length)]
+  }
+  return result
+}
+
 export async function generateMeetingCode(): Promise<string> {
   const { data, error } = await supabase.rpc('generate_meeting_code')
-  if (error) throw new Error(error.message)
-  return data as string
+  if (!error && typeof data === 'string' && data.trim()) {
+    return data.trim().toUpperCase()
+  }
+
+  // Fallback when the RPC is unavailable — keep the usual 9-character room code shape.
+  return `${randomAlphaCode(3)}${randomAlphaCode(3)}${randomAlphaCode(3)}`
 }
 
 function generateLiveKitRoomId(): string {
-  const chars = 'abcdefghijklmnopqrstuvwxyz0123456789'
-  let result = ''
-  for (let i = 0; i < 6; i++) {
-    result += chars[Math.floor(Math.random() * chars.length)]
-  }
-  return result
+  return randomAlphaCode(6, 'abcdefghijklmnopqrstuvwxyz0123456789')
 }
 
 export async function ensureMeetingRoomId(meeting: Meeting): Promise<Meeting> {

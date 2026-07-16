@@ -1,5 +1,5 @@
-import { VendorCreateListingScreen } from '~/commerce/screens/vendor/VendorCreateListingScreen'
+import { VendorListingPublishScreen } from '~/commerce/screens/vendor/VendorListingPublishScreen'
 
 export default function VendorCreateListingRoute() {
-  return <VendorCreateListingScreen />
+  return <VendorListingPublishScreen />
 }

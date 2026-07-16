@@ -1,6 +1,5 @@
 import { useRouter } from 'one'
 import { AppLink } from '~/components/navigation/AppLink'
-import { Platform } from 'react-native'
 import { useState } from 'react'
 
 import { PageContent, LAYOUT_STRETCH } from '~/components/layout'
@@ -89,10 +88,14 @@ export function CoWorkScreen() {
     if (!user) return
     setCreating(true)
     try {
+      const hostLabel = profile?.full_name?.trim() || profile?.username?.trim() || BRAND_NAME
       const meeting = await createMeeting(user.id, {
-        title: `${profile?.full_name || BRAND_NAME}'s meeting`,
+        title: `${hostLabel} meeting`,
         startNow: true,
       })
+      if (!meeting.meeting_code) {
+        throw new Error('Meeting was created without a join code. Please try again.')
+      }
       recordMeetingCode(meeting.meeting_code)
       router.push(coWorkRoutes.meetingLive(meeting.meeting_code))
     } catch (createError) {

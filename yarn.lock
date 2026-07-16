@@ -10566,14 +10566,13 @@ __metadata:
   languageName: node
   linkType: hard
 
-"expo-apple-authentication@npm:^57.0.0":
-  version: 57.0.0
-  resolution: "expo-apple-authentication@npm:57.0.0"
+"expo-apple-authentication@npm:~55.0.13":
+  version: 55.0.14
+  resolution: "expo-apple-authentication@npm:55.0.14"
   peerDependencies:
     expo: "*"
-    react: "*"
     react-native: "*"
-  checksum: 10/fa8d7639d2258e598004aa9408c81acd8fd95ddc6e7272142613992aab876cf761e6d6cda83c6183ad324f81b72de384b2cfe494416457ff8bee91ebacbb5a03
+  checksum: 10/db073b409e45918cedf1851f1c248b790eb4f137220f7970f33b3c81ac940aae761c66fb55f31f2b2048b626a7e0593b30700be663f725bed4e6134afbdb3ebb
   languageName: node
   linkType: hard
 
@@ -10767,14 +10766,14 @@ __metadata:
   languageName: node
   linkType: hard
 
-"expo-local-authentication@npm:^57.0.0":
-  version: 57.0.0
-  resolution: "expo-local-authentication@npm:57.0.0"
+"expo-local-authentication@npm:~55.0.13":
+  version: 55.0.15
+  resolution: "expo-local-authentication@npm:55.0.15"
   dependencies:
     invariant: "npm:^2.2.4"
   peerDependencies:
     expo: "*"
-  checksum: 10/7474e3156915284cb4d2366a765c31b0d41eb801d24bad06363b8b92bdbd04a75af7e3928769a8de93c834203382c4746c6a8d6b6feec76c93416c32ed4a075c
+  checksum: 10/5c93b9622b51f040ebda5f7fe19a32e129e01df00b5287e6c830cb9f5dd8703995352177c4d9e4c717c96dd44cc1de7361fde1fcb6903d4afe60804758b9130c
   languageName: node
   linkType: hard
 
@@ -16750,7 +16749,7 @@ __metadata:
     date-fns: "npm:^4.4.0"
     eas-cli: "npm:16.28.0"
     expo: "npm:~55.0.7"
-    expo-apple-authentication: "npm:^57.0.0"
+    expo-apple-authentication: "npm:~55.0.13"
     expo-audio: "npm:~55.0.15"
     expo-camera: "npm:~55.0.20"
     expo-clipboard: "npm:~55.0.14"
@@ -16761,7 +16760,7 @@ __metadata:
     expo-image-picker: "npm:~55.0.10"
     expo-linear-gradient: "npm:~55.0.15"
     expo-livekit-screen-share: "npm:^0.2.1"
-    expo-local-authentication: "npm:^57.0.0"
+    expo-local-authentication: "npm:~55.0.13"
     expo-localization: "npm:~55.0.16"
     expo-location: "npm:~55.1.11"
     expo-secure-store: "npm:~55.0.15"

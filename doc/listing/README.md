@@ -1,6 +1,6 @@
 # Listing Store — Developer Guide
 
-Everything listing-related lives in **`lib/listing/`** and is exposed through the
+Everything listing-related lives in `lib/listing/` and is exposed through the
 same **Redux Toolkit** store used by profiles and shops. This guide is for UI
 developers who want to read listing state and dispatch listing actions from
 screens/components — whether you're building **buyer** (browse/search/detail),
@@ -14,27 +14,31 @@ surfaces.
 
 ---
 
+
+
 ## 1. File map
 
-| File | What it holds |
-|------|---------------|
-| `lib/listing/listing.type.ts` | All TypeScript types + constants (`Listing`, `ListingUpdate`, `ListingFormData`, `LISTING_TYPES`, `LISTING_STATUS`, `LISTING_TYPE_OPTIONS`, `getDefaultListingFormData`, …) |
-| `lib/listing/listing.errors.ts` | **Centralised listing error handling** — `ListingError`, `LISTING_ERROR_CODES`, `toFriendlyListingError()` |
-| `lib/listing/listing.validation.ts` | **Zod** schema (`listingSchema`) + field validators for `useFormValidation` + `validateCategoryData` |
-| `lib/listing/listing.utils.ts` | Pure helpers (price, slug, availability, filter/sort, images, weight/dimensions, `canManageListing`) |
-| `lib/listing/listing.access.ts` | Shared response (`ok`/`fail`) + access helpers (`verifyListingManageAccess`, `isAdminUser`) used by every service |
-| `lib/listing/listing.service.ts` | Typed Supabase data-access (listings + RPCs + admin). You normally **don't** call these directly — dispatch thunks. |
-| `lib/listing/listing-images.service.ts` | Image upload + **pluggable NSFW moderation hook** + CRUD |
-| `lib/listing/listing-variations.service.ts` | Variations CRUD + `replaceVariations` |
-| `lib/listing/listing-attributes.service.ts` | Attributes CRUD + `replaceAttributes` |
-| `lib/listing/listing-materials.service.ts` | Materials CRUD + `replaceMaterials` |
-| `lib/listing/listing.store.ts` | Main Redux slice, thunks, sync actions. **Your main entry point.** |
-| `lib/listing/listing-images.store.ts` | Separate slice for a listing's images |
-| `lib/listing/listing-variations.store.ts` | Separate slice for a listing's variations |
-| `lib/listing/listing-attributes.store.ts` | Separate slice for a listing's attributes |
-| `lib/listing/listing-materials.store.ts` | Separate slice for a listing's materials |
-| `commerce/components/ListingErrorBoundary.tsx` | Error boundary that renders friendly listing errors + a retry action |
-| `lib/store/hooks.ts` | **Typed hooks: `useAppDispatch`, `useAppSelector`** |
+
+| File                                           | What it holds                                                                                                                                                               |
+| ---------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `lib/listing/listing.type.ts`                  | All TypeScript types + constants (`Listing`, `ListingUpdate`, `ListingFormData`, `LISTING_TYPES`, `LISTING_STATUS`, `LISTING_TYPE_OPTIONS`, `getDefaultListingFormData`, …) |
+| `lib/listing/listing.errors.ts`                | **Centralised listing error handling** — `ListingError`, `LISTING_ERROR_CODES`, `toFriendlyListingError()`                                                                  |
+| `lib/listing/listing.validation.ts`            | **Zod** schema (`listingSchema`) + field validators for `useFormValidation` + `validateCategoryData`                                                                        |
+| `lib/listing/listing.utils.ts`                 | Pure helpers (price, slug, availability, filter/sort, images, weight/dimensions, `canManageListing`)                                                                        |
+| `lib/listing/listing.access.ts`                | Shared response (`ok`/`fail`) + access helpers (`verifyListingManageAccess`, `isAdminUser`) used by every service                                                           |
+| `lib/listing/listing.service.ts`               | Typed Supabase data-access (listings + RPCs + admin). You normally **don't** call these directly — dispatch thunks.                                                         |
+| `lib/listing/listing-images.service.ts`        | Image upload + **pluggable NSFW moderation hook** + CRUD                                                                                                                    |
+| `lib/listing/listing-variations.service.ts`    | Variations CRUD + `replaceVariations`                                                                                                                                       |
+| `lib/listing/listing-attributes.service.ts`    | Attributes CRUD + `replaceAttributes`                                                                                                                                       |
+| `lib/listing/listing-materials.service.ts`     | Materials CRUD + `replaceMaterials`                                                                                                                                         |
+| `lib/listing/listing.store.ts`                 | Main Redux slice, thunks, sync actions. **Your main entry point.**                                                                                                          |
+| `lib/listing/listing-images.store.ts`          | Separate slice for a listing's images                                                                                                                                       |
+| `lib/listing/listing-variations.store.ts`      | Separate slice for a listing's variations                                                                                                                                   |
+| `lib/listing/listing-attributes.store.ts`      | Separate slice for a listing's attributes                                                                                                                                   |
+| `lib/listing/listing-materials.store.ts`       | Separate slice for a listing's materials                                                                                                                                    |
+| `commerce/components/ListingErrorBoundary.tsx` | Error boundary that renders friendly listing errors + a retry action                                                                                                        |
+| `lib/store/hooks.ts`                           | **Typed hooks:** `useAppDispatch`**,** `useAppSelector`                                                                                                                     |
+
 
 The Redux `<Provider>` is already wired at the app root (`app/_layout.tsx`). The
 main listing slice persists `myListings` + `formData` so the seller catalogue
@@ -44,16 +48,20 @@ and an in-progress draft paint instantly on reload.
 
 Data sources (all migrated directly from the old `listingService`, no reliance on `~/commerce`):
 
-| Concern | Source |
-|---------|--------|
-| Public browse feed / by-type / category | `active_listings_view` (`getPublicListings`, `getListingsByType`, `getCategoryListings`) |
-| Full-text search | `search_listings` RPC (routed through `getPublicListings` when a search term is set) |
-| Hydrate by ids | `active_listings_view` with `listings` fallback (`getListingsByIds`) |
-| Featured feed | `active_listings_view` filtered by `is_featured` (`getFeaturedListings`) |
-| Storage upload | `~/lib/supabase/storage-upload` |
+
+| Concern                                                    | Source                                                                                                                                                                   |
+| ---------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Public browse feed / by-type / category                    | `active_listings_view` (`getPublicListings`, `getListingsByType`, `getCategoryListings`)                                                                                 |
+| Full-text search                                           | `search_listings` RPC (routed through `getPublicListings` when a search term is set)                                                                                     |
+| Hydrate by ids                                             | `active_listings_view` with `listings` fallback (`getListingsByIds`)                                                                                                     |
+| Featured feed                                              | `active_listings_view` filtered by `is_featured` (`getFeaturedListings`)                                                                                                 |
+| Storage upload                                             | `~/lib/supabase/storage-upload`                                                                                                                                          |
 | Shop catalogue / sections / stock / recommendations / tags | Postgres RPCs (`get_shop_listings`, `get_shop_sections_with_counts`, `update_listing_stock`, `get_listing_recommendations`, `get_popular_tags`, `admin_search_listings`) |
 
+
 ---
+
+
 
 ## 2. The 30-second version
 
@@ -90,52 +98,64 @@ API rejects it, the previous status is restored and `s.listing.error` is set.
 
 ---
 
+
+
 ## 3. State shape
+
+
 
 ### Main slice — `useAppSelector((s) => s.listing.<field>)`
 
-| Field | Type | Meaning |
-|-------|------|---------|
-| `myListings` | `Listing[]` | Listings across the user's shops (persisted) |
-| `shopListings` | `ShopListingRow[]` | One shop's catalogue via `get_shop_listings` (owner/admin view) |
-| `publicListings` | `PublicListing[]` | Public browse/search results (rows from `active_listings_view`, paginated) |
-| `adminListings` | `AdminListingRow[]` | Admin "all listings" search results |
-| `currentListing` | `ListingDetails \| null` | Full detail (view row + category assignments) |
-| `featuredListings` | `PublicListing[]` | Recommended/featured feed |
-| `popularTags` | `PopularTag[]` | Popular marketplace tags |
-| `recommendations` | `RecommendedListing[]` | Related listings for `currentListing` |
-| `platformStats` | `PlatformListingStats \| null` | Admin counts (total/active/draft/featured/by-type) |
-| `formData` | `ListingFormData` | Create/edit form buffer (persisted) |
-| `validation` | `{ isValid; errors }` | Result of `validateForm` |
-| `isLoading` / `isLoadingListings` / `isLoadingDetails` / `isCreating` / `isUpdating` / `isDeleting` | `boolean` | In-flight flags |
-| `error` | `string \| null` | Last **friendly** error message (cleared on next action) |
-| `totalPublicListings` / `hasMorePublicListings` / `publicOffset` | pagination | Public feed paging (offset-based) |
+
+| Field                                                                                               | Type                          | Meaning                                                                    |
+| --------------------------------------------------------------------------------------------------- | ----------------------------- | -------------------------------------------------------------------------- |
+| `myListings`                                                                                        | `Listing[]`                   | Listings across the user's shops (persisted)                               |
+| `shopListings`                                                                                      | `ShopListingRow[]`            | One shop's catalogue via `get_shop_listings` (owner/admin view)            |
+| `publicListings`                                                                                    | `PublicListing[]`             | Public browse/search results (rows from `active_listings_view`, paginated) |
+| `adminListings`                                                                                     | `AdminListingRow[]`           | Admin "all listings" search results                                        |
+| `currentListing`                                                                                    | `ListingDetails | null`       | Full detail (view row + category assignments)                              |
+| `featuredListings`                                                                                  | `PublicListing[]`             | Recommended/featured feed                                                  |
+| `popularTags`                                                                                       | `PopularTag[]`                | Popular marketplace tags                                                   |
+| `recommendations`                                                                                   | `RecommendedListing[]`        | Related listings for `currentListing`                                      |
+| `platformStats`                                                                                     | `PlatformListingStats | null` | Admin counts (total/active/draft/featured/by-type)                         |
+| `formData`                                                                                          | `ListingFormData`             | Create/edit form buffer (persisted)                                        |
+| `validation`                                                                                        | `{ isValid; errors }`         | Result of `validateForm`                                                   |
+| `isLoading` / `isLoadingListings` / `isLoadingDetails` / `isCreating` / `isUpdating` / `isDeleting` | `boolean`                     | In-flight flags                                                            |
+| `error`                                                                                             | `string | null`               | Last **friendly** error message (cleared on next action)                   |
+| `totalPublicListings` / `hasMorePublicListings` / `publicOffset`                                    | pagination                    | Public feed paging (offset-based)                                          |
+
+
+
 
 ### Child slices (separate reducers)
 
-| Slice | Selector root | State |
-|-------|---------------|-------|
-| Images | `s.listingImages` | `{ items: ListingImage[]; isLoading; isUploading; isMutating; error }` |
-| Variations | `s.listingVariations` | `{ items: ListingVariation[]; isLoading; isMutating; error }` |
-| Attributes | `s.listingAttributes` | `{ items: ListingAttribute[]; isLoading; isMutating; error }` |
-| Materials | `s.listingMaterials` | `{ items: ListingMaterial[]; isLoading; isMutating; error }` |
+
+| Slice      | Selector root         | State                                                                  |
+| ---------- | --------------------- | ---------------------------------------------------------------------- |
+| Images     | `s.listingImages`     | `{ items: ListingImage[]; isLoading; isUploading; isMutating; error }` |
+| Variations | `s.listingVariations` | `{ items: ListingVariation[]; isLoading; isMutating; error }`          |
+| Attributes | `s.listingAttributes` | `{ items: ListingAttribute[]; isLoading; isMutating; error }`          |
+| Materials  | `s.listingMaterials`  | `{ items: ListingMaterial[]; isLoading; isMutating; error }`           |
+
 
 Each child slice also stores `byListingId` so you can tell which listing the
 loaded collection belongs to.
 
 ---
 
+
+
 ## 4. How optimistic UI works (important)
 
 Every **mutation** thunk follows the same three-phase lifecycle:
 
-1. **`pending`** → the change is applied to Redux state **right away** so the UI
-   updates instantly. `createListing` inserts a temporary row with a `temp-…`
+1. `pending` → the change is applied to Redux state **right away** so the UI
+  updates instantly. `createListing` inserts a temporary row with a `temp-…`
    id; add/update/delete on children patch the collection immediately.
-2. **`fulfilled`** → the optimistic value is reconciled with the **authoritative
-   server row** (temp row swapped for the real one, patches replaced).
-3. **`rejected`** → the change is **rolled back** to the previous state and
-   `error` is set (already a friendly message).
+2. `fulfilled` → the optimistic value is reconciled with the **authoritative
+  server row** (temp row swapped for the real one, patches replaced).
+3. `rejected` → the change is **rolled back** to the previous state and
+  `error` is set (already a friendly message).
 
 Snapshots used for rollback are kept outside Redux state (keyed by the thunk's
 `requestId`), so state stays serializable.
@@ -154,59 +174,77 @@ mutation or refetch after a write.
 
 ---
 
+
+
 ## 5. Async thunks (dispatch these)
+
+
 
 ### Buyer / public — `~/lib/listing/listing.store`
 
-| Thunk | Arg | Does |
-|-------|-----|------|
-| `loadPublicListings` | `{ filters?: ListingFilters, pagination?: ListingPagination }` | Filterable browse feed from `active_listings_view`; `pagination.offset > 0` **appends** |
-| `searchListings` | `{ query, filters?, pagination? }` | Full-text search via the `search_listings` RPC; `pagination.offset > 0` appends |
-| `loadListingDetails` | `{ listingId?, slug? }` | Loads `currentListing` (detail + categories) |
-| `loadFeaturedListings` | `limit?: number` | Loads `featuredListings` |
-| `loadPopularTags` | `limit?: number` | Loads `popularTags` |
-| `loadRecommendations` | `{ listingId, limit? }` | Loads `recommendations` |
+
+| Thunk                  | Arg                                                            | Does                                                                                    |
+| ---------------------- | -------------------------------------------------------------- | --------------------------------------------------------------------------------------- |
+| `loadPublicListings`   | `{ filters?: ListingFilters, pagination?: ListingPagination }` | Filterable browse feed from `active_listings_view`; `pagination.offset > 0` **appends** |
+| `searchListings`       | `{ query, filters?, pagination? }`                             | Full-text search via the `search_listings` RPC; `pagination.offset > 0` appends         |
+| `loadListingDetails`   | `{ listingId?, slug? }`                                        | Loads `currentListing` (detail + categories)                                            |
+| `loadFeaturedListings` | `limit?: number`                                               | Loads `featuredListings`                                                                |
+| `loadPopularTags`      | `limit?: number`                                               | Loads `popularTags`                                                                     |
+| `loadRecommendations`  | `{ listingId, limit? }`                                        | Loads `recommendations`                                                                 |
+
+
+
 
 ### Vendor
 
-| Thunk | Arg | Does |
-|-------|-----|------|
-| `loadMyListings` | `{ query?, userId? }` | Listings across the user's shops → `myListings` |
-| `loadShopListings` | `{ shopId, query? }` | One shop's catalogue → `shopListings` |
-| `createListing` | `{ formData, userId? }` | Creates listing + child rows, optimistic |
-| `updateListing` | `{ listingId, updates: ListingUpdate, userId? }` | Patches main row, optimistic |
-| `updateListingWithDetails` | `{ listingId, formData, userId? }` | Main row + provided child collections (full replace), optimistic |
-| `deleteListing` | `{ listingId, userId? }` | Deletes (children cascade), optimistic |
-| `setListingStatus` | `{ listingId, status, userId? }` | draft/active/paused/sold_out/archived, optimistic |
-| `setListingActive` | `{ listingId, isActive, userId? }` | Toggle active, optimistic |
-| `setListingFeatured` | `{ listingId, isFeatured, userId? }` | Toggle featured, optimistic |
-| `adjustStock` | `{ listingId, quantityChange, variationId? }` | Atomic stock change (RPC), optimistic |
+
+| Thunk                      | Arg                                              | Does                                                             |
+| -------------------------- | ------------------------------------------------ | ---------------------------------------------------------------- |
+| `loadMyListings`           | `{ query?, userId? }`                            | Listings across the user's shops → `myListings`                  |
+| `loadShopListings`         | `{ shopId, query? }`                             | One shop's catalogue → `shopListings`                            |
+| `createListing`            | `{ formData, userId? }`                          | Creates listing + child rows, optimistic                         |
+| `updateListing`            | `{ listingId, updates: ListingUpdate, userId? }` | Patches main row, optimistic                                     |
+| `updateListingWithDetails` | `{ listingId, formData, userId? }`               | Main row + provided child collections (full replace), optimistic |
+| `deleteListing`            | `{ listingId, userId? }`                         | Deletes (children cascade), optimistic                           |
+| `setListingStatus`         | `{ listingId, status, userId? }`                 | draft/active/paused/sold_out/archived, optimistic                |
+| `setListingActive`         | `{ listingId, isActive, userId? }`               | Toggle active, optimistic                                        |
+| `setListingFeatured`       | `{ listingId, isFeatured, userId? }`             | Toggle featured, optimistic                                      |
+| `adjustStock`              | `{ listingId, quantityChange, variationId? }`    | Atomic stock change (RPC), optimistic                            |
+
+
+
 
 ### Admin
 
-| Thunk | Arg | Does |
-|-------|-----|------|
-| `loadAdminListings` | `{ query? }` | Search across **all** shops (`admin_search_listings`) → `adminListings`; `query.offset > 0` appends |
-| `adminUpdateListing` | `{ listingId, updates, userId? }` | Update any listing, optimistic |
-| `setListingFeatured` | `{ listingId, isFeatured }` | Also usable by admin to feature any listing |
-| `loadPlatformListingStats` | `userId?` | Loads `platformStats` (admin only) |
+
+| Thunk                      | Arg                               | Does                                                                                                |
+| -------------------------- | --------------------------------- | --------------------------------------------------------------------------------------------------- |
+| `loadAdminListings`        | `{ query? }`                      | Search across **all** shops (`admin_search_listings`) → `adminListings`; `query.offset > 0` appends |
+| `adminUpdateListing`       | `{ listingId, updates, userId? }` | Update any listing, optimistic                                                                      |
+| `setListingFeatured`       | `{ listingId, isFeatured }`       | Also usable by admin to feature any listing                                                         |
+| `loadPlatformListingStats` | `userId?`                         | Loads `platformStats` (admin only)                                                                  |
+
 
 > Admin thunks read/write across **all** listings; authorisation is enforced by
 > Supabase RLS. Use `canManageListing(shopUserId, userId, role)` from
 > `listing.utils` to gate admin/owner UI.
 
+
+
 ### Child collections
 
 Images — `~/lib/listing/listing-images.store`:
 
-| Thunk | Arg |
-|-------|-----|
-| `loadImages` | `listingId` |
-| `addImage` | `{ listingId, imageUrl, isPrimary?, displayOrder?, userId? }` |
-| `uploadImage` | `{ listingId, file: ListingImageUpload, isPrimary?, displayOrder?, altText?, userId? }` |
-| `updateImage` | `{ imageId, updates, userId? }` |
-| `deleteImage` | `{ imageId, userId? }` |
-| `reorderImages` | `{ listingId, order: string[], userId? }` |
+
+| Thunk           | Arg                                                                                     |
+| --------------- | --------------------------------------------------------------------------------------- |
+| `loadImages`    | `listingId`                                                                             |
+| `addImage`      | `{ listingId, imageUrl, isPrimary?, displayOrder?, userId? }`                           |
+| `uploadImage`   | `{ listingId, file: ListingImageUpload, isPrimary?, displayOrder?, altText?, userId? }` |
+| `updateImage`   | `{ imageId, updates, userId? }`                                                         |
+| `deleteImage`   | `{ imageId, userId? }`                                                                  |
+| `reorderImages` | `{ listingId, order: string[], userId? }`                                               |
+
 
 Variations / Attributes / Materials — symmetric APIs from their stores:
 `load*(listingId)`, `add*({ listingId, <row>, userId? })`,
@@ -214,30 +252,36 @@ Variations / Attributes / Materials — symmetric APIs from their stores:
 
 ---
 
+
+
 ## 6. Sync actions (pure UI / form state)
 
 Imported from `~/lib/listing/listing.store`:
 
-| Action | Arg | Does |
-|--------|-----|------|
-| `setListingFormData` | `Partial<ListingFormData>` | Merge into the form buffer |
-| `updateListingField` | `{ field, value }` | Set one form field |
-| `initFormForType` | `ListingType` | Reset the form to defaults for a type (physical/digital/service) |
-| `loadFormFromListing` | `ListingFormData` | Seed the form from an existing listing |
-| `resetListingFormData` | — | Clear the form + validation |
-| `validateForm` | — | Run Zod validation → `s.listing.validation` |
-| `setCurrentListing` | `ListingDetails \| null` | Set the viewed detail |
-| `clearListingError` | — | Clear the error banner |
-| `resetListings` | — | Reset the whole slice (e.g. on sign-out) |
+
+| Action                 | Arg                        | Does                                                             |
+| ---------------------- | -------------------------- | ---------------------------------------------------------------- |
+| `setListingFormData`   | `Partial<ListingFormData>` | Merge into the form buffer                                       |
+| `updateListingField`   | `{ field, value }`         | Set one form field                                               |
+| `initFormForType`      | `ListingType`              | Reset the form to defaults for a type (physical/digital/service) |
+| `loadFormFromListing`  | `ListingFormData`          | Seed the form from an existing listing                           |
+| `resetListingFormData` | —                          | Clear the form + validation                                      |
+| `validateForm`         | —                          | Run Zod validation → `s.listing.validation`                      |
+| `setCurrentListing`    | `ListingDetails | null`    | Set the viewed detail                                            |
+| `clearListingError`    | —                          | Clear the error banner                                           |
+| `resetListings`        | —                          | Reset the whole slice (e.g. on sign-out)                         |
+
 
 Child slices each expose a `reset*` action (`resetImages`, `resetVariations`,
 `resetAttributes`, `resetMaterials`).
 
 ---
 
+
+
 ## 7. Errors & toasts (meaningful messages)
 
-Every service failure is routed through **`toFriendlyListingError`**, so
+Every service failure is routed through `toFriendlyListingError`, so
 `s.listing.error` is always human-readable. To show a toast, `unwrap()` the thunk:
 
 ```tsx
@@ -273,6 +317,8 @@ Need to classify an error yourself? Use `classifyListingError(error)` →
 
 ---
 
+
+
 ## 8. Validation (Zod + form fields)
 
 For full-object validation, use the Zod schema via `validateListingData`. It
@@ -306,24 +352,30 @@ Helpers: `validateListingCore(data)` (title/type/price only),
 
 ---
 
+
+
 ## 9. Display & domain helpers (`listing.utils`)
 
-| Helper | Does |
-|--------|------|
-| `formatListingPrice(price, currency)` | Money formatting (wraps `~/lib/format`), "Free" for 0 |
-| `generateListingSlug(title)` | URL-friendly slug |
-| `getListingTypeInfo` / `getListingStatusInfo` / `getServiceTypeInfo` / `getDigitalFileTypeInfo` | Option lookups for labels/icons |
-| `checkListingAvailability(listing)` | `{ available, reason }` (active/status/stock aware) |
-| `isProductOutOfStock(listing)` | Quick stock check |
-| `filterListings` / `sortListings` | Pure client-side list ops |
-| `getPrimaryListingImage` / `hasListingImage` | Resolve the hero image |
-| `generateSuggestedTags(title)` | Simple tag suggestions |
-| `formatFileSize` / `convertWeightToKg` / `formatWeight` / `formatDimensions` / `calculateShippingWeight` | Physical/digital formatting |
-| `validateImageFile(file)` | Client-side pre-upload check |
-| `canManageListing(shopUserId, userId, role)` | Owner / admin gate for UI |
-| `prepareListingDataForSubmission(formData)` | Clean form → `listings` insert payload (used by the service) |
+
+| Helper                                                                                                   | Does                                                         |
+| -------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------ |
+| `formatListingPrice(price, currency)`                                                                    | Money formatting (wraps `~/lib/format`), "Free" for 0        |
+| `generateListingSlug(title)`                                                                             | URL-friendly slug                                            |
+| `getListingTypeInfo` / `getListingStatusInfo` / `getServiceTypeInfo` / `getDigitalFileTypeInfo`          | Option lookups for labels/icons                              |
+| `checkListingAvailability(listing)`                                                                      | `{ available, reason }` (active/status/stock aware)          |
+| `isProductOutOfStock(listing)`                                                                           | Quick stock check                                            |
+| `filterListings` / `sortListings`                                                                        | Pure client-side list ops                                    |
+| `getPrimaryListingImage` / `hasListingImage`                                                             | Resolve the hero image                                       |
+| `generateSuggestedTags(title)`                                                                           | Simple tag suggestions                                       |
+| `formatFileSize` / `convertWeightToKg` / `formatWeight` / `formatDimensions` / `calculateShippingWeight` | Physical/digital formatting                                  |
+| `validateImageFile(file)`                                                                                | Client-side pre-upload check                                 |
+| `canManageListing(shopUserId, userId, role)`                                                             | Owner / admin gate for UI                                    |
+| `prepareListingDataForSubmission(formData)`                                                              | Clean form → `listings` insert payload (used by the service) |
+
 
 ---
+
+
 
 ## 10. Image moderation (NSFW hook)
 
@@ -356,6 +408,8 @@ After that, `uploadImage` / `batchUploadImages` automatically reject
 inappropriate images with `LISTING_ERROR_CODES.NSFW_CONTENT`.
 
 ---
+
+
 
 ## 11. Common recipes
 
@@ -414,6 +468,8 @@ dispatch(resetMaterials())
 
 ---
 
+
+
 ## 12. Do / Don't
 
 - ✅ Dispatch thunks/actions; read via `useAppSelector`.
@@ -424,3 +480,4 @@ dispatch(resetMaterials())
 - ❌ Don't call `listing*.service.*` directly from components (bypasses the store/optimistic layer).
 - ❌ Don't store `Blob`/`File` in Redux — pass them only as thunk args (e.g. `uploadImage`).
 - ❌ Don't skip moderation by uploading straight to storage — always go through the images service.
+

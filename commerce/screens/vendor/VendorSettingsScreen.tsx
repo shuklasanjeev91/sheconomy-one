@@ -58,6 +58,7 @@ import {
   type SettingsSection,
   type SettingsSectionId,
 } from '~/commerce/components/vendor/settings-nav'
+import { VendorConnectSettings } from './VendorConnectSettings'
 
 type IconType = (typeof Icons)[keyof typeof Icons]
 
@@ -141,6 +142,10 @@ export function VendorSettingsScreen() {
 
   if (section.id === 'general') {
     return <GeneralSettings ui={ui} shop={shop} isDesktop={isDesktop} safeBottom={safeBottom} />
+  }
+
+  if (section.id === 'connect') {
+    return <VendorConnectSettings ui={ui} shop={shop} isDesktop={isDesktop} safeBottom={safeBottom} />
   }
 
   return (

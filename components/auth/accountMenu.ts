@@ -14,6 +14,7 @@ import {
   commerceRoutes,
   communityRoutes,
   routes,
+  vendorRoutes,
 } from '~/lib/routes'
 
 export type AccountMenuItem = {
@@ -124,12 +125,7 @@ export function getAccountQuickActions({
 export function getAccountMenuSections({
   tier,
   hasShops,
-  primaryShopId,
-  omitChromeDuplicates = false,
-}: Pick<
-  AccountMenuOptions,
-  'tier' | 'hasShops' | 'primaryShopId' | 'omitChromeDuplicates'
->): AccountMenuSection[] {
+}: Pick<AccountMenuOptions, 'tier' | 'hasShops' | 'primaryShopId'>): AccountMenuSection[] {
   const sections: AccountMenuSection[] = []
 
   sections.push({
@@ -191,10 +187,9 @@ export function getAccountMenuSections({
   })
 
   if (canManageShops(tier)) {
-    const shopManagerHref =
-      hasShops && primaryShopId
-        ? commerceRoutes.manageShop(primaryShopId)
-        : (`${commerceRoutes.myShops}?create=1` as Href)
+    const shopManagerHref = hasShops
+      ? vendorRoutes.myShop
+      : (`${commerceRoutes.myShops}?create=1` as Href)
 
     sections.push({
       id: 'shop-manager',

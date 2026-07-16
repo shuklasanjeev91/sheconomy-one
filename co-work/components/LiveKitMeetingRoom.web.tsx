@@ -36,8 +36,8 @@ function getSheconomyLivekitCss(ui: CoWorkUiTokens, shadows: CoWorkShadows) {
     width: 100%;
     height: 100%;
     min-height: 0;
-    background: transparent;
-    padding: 72px 12px 108px;
+    background: #0c080a;
+    padding: 88px 12px 112px;
     box-sizing: border-box;
   }
   .sheconomy-video-gallery {
@@ -47,42 +47,45 @@ function getSheconomyLivekitCss(ui: CoWorkUiTokens, shadows: CoWorkShadows) {
     width: 100%;
     height: 100%;
     min-height: 0;
-    gap: 12px;
+    gap: 10px;
     box-sizing: border-box;
     align-items: stretch;
     justify-items: stretch;
   }
   .sheconomy-video-gallery--solo {
     display: flex;
-    align-items: center;
-    justify-content: center;
+    align-items: stretch;
+    justify-content: stretch;
   }
   .sheconomy-video-gallery--solo .sheconomy-participant-tile {
-    width: min(100%, 72rem, calc((100dvh - 200px) * 16 / 9));
-    height: min(100%, calc(100dvh - 200px));
+    width: 100%;
+    height: 100%;
+    max-width: 100%;
     max-height: 100%;
-    flex: none;
+    flex: 1;
   }
   .sheconomy-video-pip {
     position: absolute;
     right: 20px;
     bottom: 120px;
-    width: min(28vw, 220px);
+    width: min(28vw, 240px);
     aspect-ratio: 16 / 9;
     z-index: 15;
     border-radius: ${ui.radius.tile}px;
     overflow: hidden;
-    border: 2px solid ${ui.brand};
+    border: 1px solid ${ui.glassBorder};
     box-shadow: ${shadows.tile};
-    pointer-events: none;
+    background: ${ui.tileBg};
+    pointer-events: auto;
   }
   .sheconomy-video-pip .sheconomy-participant-tile {
     width: 100%;
     height: 100%;
+    border-radius: ${ui.radius.tile}px;
   }
   @media (max-width: 768px) {
     .sheconomy-video-pip {
-      width: min(36vw, 140px);
+      width: min(40vw, 148px);
       right: 12px;
       bottom: 112px;
     }

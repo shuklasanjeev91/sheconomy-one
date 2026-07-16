@@ -38,9 +38,10 @@ const SETTINGS_CHILDREN: VendorNavItem[] = [
   {
     id: 'settings-connect',
     label: 'Connect',
-    description: 'Sync Shopify, Instagram, or ERP tools.',
+    description: 'Contact details, shop address, and social platforms.',
     icon: Icons.Share2,
     href: settingsHref('connect'),
+    ready: true,
   },
   {
     id: 'settings-payments',

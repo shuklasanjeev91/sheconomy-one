@@ -77,6 +77,7 @@ export const vendorRoutes = {
   /** "Edit Shop" opens the General tab of the shop Settings page. */
   editShop: '/vendor/settings?section=general' as Href,
   createListing: '/vendor/create-listing' as Href,
+  editListing: (id: string) => `/vendor/create-listing?id=${encodeURIComponent(id)}` as Href,
   products: '/vendor/products' as Href,
   orders: '/vendor/orders' as Href,
   analytics: '/vendor/analytics' as Href,

@@ -32,3 +32,7 @@ import { startNativeBootstrapPrefetch } from '~/lib/bootstrap/app-prefetch'
 
 globalThis.global = globalThis
 startNativeBootstrapPrefetch()
+
+// Do NOT call LiveKit `registerGlobals()` here. It starts WebRTC threads immediately
+// and can race Hermes GC on cold start (SIGSEGV on the `hades` thread). Globals are
+// registered lazily via `ensureLiveKitGlobals()` when entering a meeting room.
