@@ -22,8 +22,8 @@ export type SettingsSection = {
 }
 
 /**
- * The shop-settings sidebar navigation. Only **General** is implemented today;
- * the remaining sections render a "coming soon" placeholder and are built out
+ * The shop-settings sidebar navigation. Sections marked `ready` are
+ * implemented; the rest render a "coming soon" placeholder and are built out
  * incrementally. Shared across web + mobile so the two stay in sync.
  */
 export const SETTINGS_SECTIONS: readonly SettingsSection[] = [
@@ -37,8 +37,9 @@ export const SETTINGS_SECTIONS: readonly SettingsSection[] = [
   {
     id: 'connect',
     label: 'Connect',
-    description: 'Connect Shopify, Instagram, or ERP tools to sync inventory and sales data.',
+    description: 'Manage your contact details, shop address, and social platforms.',
     icon: Icons.Share2,
+    ready: true,
   },
   {
     id: 'payments',
