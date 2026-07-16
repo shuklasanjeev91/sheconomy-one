@@ -235,7 +235,7 @@ export function HomeScreen({ data, error, loading = false }: HomeScreenProps) {
                 </Paragraph>
               </YStack>
               <XStack gap="$3" flexWrap="wrap">
-                <AppLink href={`${routes.myShops}?create=1` as import('one').Href} asChild>
+                <AppLink href={commerceRoutes.createShop} asChild>
                   <Theme name={BRAND_THEME}>
                     <Button tone="primary" size="$4" borderRadius={999}>
                       Start selling

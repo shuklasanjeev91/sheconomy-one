@@ -51,10 +51,10 @@ const NON_COMMERCE_PREFIXES = [
 
 export const commerceRoutes = {
   home: '/' as Href,
-  myShops: '/my-shops' as Href,
   /** Guided multi-step seller onboarding for any signed-in member without a shop. */
   createShop: '/create-my-shop' as Href,
-  manageShop: (shopId: string) => `/my-shops/${encodeURIComponent(shopId)}` as Href,
+  /** Seller hub — vendor console (`/vendor/myshop`). */
+  manageShop: (_shopId?: string) => '/vendor/myshop' as Href,
   shops: '/shops' as Href,
   cart: appRoutes.cart,
   checkout: appRoutes.checkout,
@@ -181,7 +181,8 @@ export const routes = {
   coWork: coWorkRoutes,
   app: appRoutes,
   home: commerceRoutes.home,
-  myShops: commerceRoutes.myShops,
+  createShop: commerceRoutes.createShop,
+  manageShop: commerceRoutes.manageShop,
   profile: appRoutes.profile,
   userProfile: appRoutes.userProfile,
   settings: appRoutes.settings,
@@ -229,7 +230,9 @@ export function isCommerceHomePath(pathname: string) {
     !isCommerceShopsPath(pathname) &&
     !isCommerceFavoritesPath(pathname) &&
     !isCommerceBuyerAccountPath(pathname) &&
-    !isMyShopsPath(pathname)
+    !isVendorPath(pathname) &&
+    pathname !== '/create-my-shop' &&
+    !pathname.startsWith('/create-my-shop/')
   )
 }
 
@@ -372,12 +375,17 @@ export function isHomePath(pathname: string) {
   return pathname === '/' || pathname === '/community'
 }
 
-export function isMyShopsPath(pathname: string) {
-  return pathname === '/my-shops' || pathname.startsWith('/my-shops/')
+/** Seller hub — vendor console (`/vendor/*`). */
+export function isManageShopPath(pathname: string) {
+  return isVendorPath(pathname)
 }
 
 export function isVendorPath(pathname: string) {
   return pathname === '/vendor' || pathname.startsWith('/vendor/')
+}
+
+export function isCreateShopPath(pathname: string) {
+  return pathname === '/create-my-shop' || pathname.startsWith('/create-my-shop/')
 }
 
 export function isProfilePath(pathname: string) {

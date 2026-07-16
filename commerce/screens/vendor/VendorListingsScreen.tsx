@@ -55,7 +55,7 @@ export function VendorListingsScreen() {
         <Text fontSize={14} color={ui.textSecondary} textAlign="center" maxWidth={360}>
           Create your storefront to start managing products and inventory.
         </Text>
-        <Link href={commerceRoutes.myShops} asChild>
+        <Link href={commerceRoutes.manageShop()} asChild>
           <Button tone="primary" size="$4" borderRadius={999}>
             Go to My Shops
           </Button>

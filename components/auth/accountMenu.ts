@@ -14,7 +14,6 @@ import {
   commerceRoutes,
   communityRoutes,
   routes,
-  vendorRoutes,
 } from '~/lib/routes'
 
 export type AccountMenuItem = {
@@ -125,7 +124,8 @@ export function getAccountQuickActions({
 export function getAccountMenuSections({
   tier,
   hasShops,
-}: Pick<AccountMenuOptions, 'tier' | 'hasShops' | 'primaryShopId'>): AccountMenuSection[] {
+  omitChromeDuplicates = false,
+}: Pick<AccountMenuOptions, 'tier' | 'hasShops' | 'primaryShopId' | 'omitChromeDuplicates'>): AccountMenuSection[] {
   const sections: AccountMenuSection[] = []
 
   sections.push({
@@ -188,8 +188,8 @@ export function getAccountMenuSections({
 
   if (canManageShops(tier)) {
     const shopManagerHref = hasShops
-      ? vendorRoutes.myShop
-      : (`${commerceRoutes.myShops}?create=1` as Href)
+      ? commerceRoutes.manageShop()
+      : commerceRoutes.createShop
 
     sections.push({
       id: 'shop-manager',
@@ -394,7 +394,7 @@ export function getGuestAccountMenuSections(
           icon: Icons.PlusCircle,
           label: 'Open a shop',
           description: 'Seller tools and storefront setup',
-          href: commerceRoutes.myShops,
+          href: commerceRoutes.createShop,
         },
       ],
     },

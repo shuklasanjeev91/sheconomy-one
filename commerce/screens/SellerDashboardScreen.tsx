@@ -46,7 +46,7 @@ export function SellerDashboardScreen() {
   const activeShop = localShop ?? shop
 
   if (!isAuthenticated) {
-    return <SpaRedirect href={commerceRoutes.myShops} />
+    return <SpaRedirect href={commerceRoutes.manageShop()} />
   }
 
   if (isLoading) {
@@ -58,12 +58,12 @@ export function SellerDashboardScreen() {
   }
 
   if (!shopId || !activeShop) {
-    // Prefer the owner's real hub over bouncing to /my-shops (which would redirect again).
+    // Prefer the owner's real hub over bouncing to create-shop.
     const fallbackShopId = shops[0]?.id
     if (fallbackShopId && fallbackShopId !== shopId) {
       return <SpaRedirect href={commerceRoutes.manageShop(fallbackShopId)} />
     }
-    return <SpaRedirect href={`${commerceRoutes.myShops}?create=1`} />
+    return <SpaRedirect href={commerceRoutes.createShop} />
   }
 
   function handleShopUpdated(next: VendorShop) {
@@ -87,7 +87,7 @@ export function SellerDashboardScreen() {
           />
           <XStack gap="$2" flexWrap="wrap">
             {shops.length > 1 ? (
-              <AppLink href={commerceRoutes.myShops} asChild>
+              <AppLink href={commerceRoutes.manageShop()} asChild>
                 <Button tone="outline" size="$3" borderRadius={999}>
                   Switch shop
                 </Button>

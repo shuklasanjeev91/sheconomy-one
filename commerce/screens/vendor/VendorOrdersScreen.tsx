@@ -917,7 +917,7 @@ function NoShopState({ ui }: { ui: AppUiTokens }) {
       <Text fontSize={14} color={ui.textSecondary} textAlign="center" maxWidth={360} lineHeight={20}>
         Create your storefront to start receiving and managing orders.
       </Text>
-      <AppLink href={commerceRoutes.myShops} asChild>
+      <AppLink href={commerceRoutes.manageShop()} asChild>
         <Button tone="primary" size="$4" borderRadius={999} marginTop="$2">
           Go to My Shops
         </Button>

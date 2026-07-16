@@ -27,7 +27,7 @@ export function CommerceDesktopFooter() {
 
   const sellerHubHref: Href = primaryShopId
     ? commerceRoutes.manageShop(primaryShopId)
-    : commerceRoutes.myShops
+    : commerceRoutes.createShop
 
   return (
     <YStack width="100%" flexShrink={0} marginTop="auto">
@@ -67,7 +67,9 @@ export function CommerceDesktopFooter() {
               <YStack gap="$2">
                 {column.links.map((link) => {
                   const href =
-                    link.href === commerceRoutes.myShops ? sellerHubHref : link.href
+                    link.href === commerceRoutes.createShop || link.href === commerceRoutes.manageShop()
+                      ? sellerHubHref
+                      : link.href
                   return (
                     <AppLink key={`${column.title}-${link.label}`} href={href} asChild>
                       <Text

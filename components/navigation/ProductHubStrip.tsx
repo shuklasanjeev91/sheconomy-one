@@ -1,10 +1,10 @@
-import { useRouter } from 'one'
 import type { Href } from 'one'
 import type { ComponentType } from 'react'
 
 import { HorizontalScrollRow } from '~/components/layout'
 import { Text, XStack, YStack } from '~/components/ui'
 import { radius } from '~/config/tokens'
+import { navigateApp } from '~/lib/platform/navigate'
 import { useAppUi } from '~/lib/theme/useAppUi'
 
 export type ProductHubItem = {
@@ -24,11 +24,10 @@ type ProductHubStripProps = {
 
 /**
  * Cross-platform shortcut strip (web + iOS + Android).
- * Pure navigation / actions — no web-only APIs.
+ * Soft SPA navigation only — no hard reloads.
  */
 export function ProductHubStrip({ title = 'Shortcuts', items }: ProductHubStripProps) {
   const ui = useAppUi()
-  const router = useRouter()
 
   if (items.length === 0) return null
 
@@ -37,7 +36,7 @@ export function ProductHubStrip({ title = 'Shortcuts', items }: ProductHubStripP
       item.onPress()
       return
     }
-    if (item.href) router.push(item.href as never)
+    if (item.href) navigateApp(item.href)
   }
 
   return (

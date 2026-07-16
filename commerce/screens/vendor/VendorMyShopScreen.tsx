@@ -127,9 +127,9 @@ export function VendorMyShopScreen() {
         <Text fontSize={14} color={ui.textSecondary} textAlign="center" maxWidth={360} lineHeight={20}>
           Create your storefront to start selling on SHEconomy and manage it from here.
         </Text>
-        <AppLink href={commerceRoutes.myShops} asChild>
+        <AppLink href={commerceRoutes.createShop} asChild>
           <Button tone="primary" size="$4" borderRadius={999} marginTop="$2">
-            Go to My Shops
+            Create your shop
           </Button>
         </AppLink>
       </YStack>
@@ -163,7 +163,7 @@ export function VendorMyShopScreen() {
     try {
       await dispatch(deleteShop(shop.id)).unwrap()
       toast.show('Shop deleted', { tone: 'success' })
-      router.replace(commerceRoutes.myShops)
+      router.replace(commerceRoutes.createShop)
     } catch (error) {
       toast.show('Could not delete shop', {
         tone: 'danger',

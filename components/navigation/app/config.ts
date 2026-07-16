@@ -30,7 +30,8 @@ import {
   isCommercePath,
   isCommerceShopsPath,
   isCommunityPath,
-  isMyShopsPath,
+  isManageShopPath,
+  isCreateShopPath,
   isCommunityFeedPath,
   isJobsPath,
   isNotificationsPath,
@@ -147,7 +148,7 @@ export function getCommerceMobileTabs({
   const sellerHref =
     hasShops && primaryShopId
       ? commerceRoutes.manageShop(primaryShopId)
-      : commerceRoutes.myShops
+      : commerceRoutes.createShop
 
   return [
     {
@@ -160,7 +161,7 @@ export function getCommerceMobileTabs({
       href: sellerHref,
       label: hasShops ? 'Manage shop' : 'Create shop',
       icon: hasShops ? Icons.Settings : Icons.PlusCircle,
-      match: (path) => isMyShopsPath(path),
+      match: (path) => (hasShops ? isManageShopPath(path) : isCreateShopPath(path)),
     },
   ]
 }

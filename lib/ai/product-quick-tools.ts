@@ -200,7 +200,7 @@ export function productQuickTools(product: AiProduct): ProductQuickTool[] {
           label: 'New orders',
           description: 'Fulfill sales',
           prompt: 'Show me how to manage new shop orders',
-          href: commerceRoutes.myShops,
+          href: commerceRoutes.manageShop(),
           autoSend: true,
         },
         {
