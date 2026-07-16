@@ -25,7 +25,11 @@ import { bindRemoteScreenShareQuality } from '~/co-work/lib/livekit-screen-share
 import { composeMeetingStageTracks } from '~/co-work/lib/meeting-stage-tracks'
 import { useCoWorkTheme } from '~/co-work/lib/theme'
 import { fetchLiveKitConfig, type LiveKitConfig } from '~/lib/livekit/config'
+import { ensureLiveKitGlobals } from '~/lib/livekit/ensure-globals'
 import { useAppLayout } from '~/hooks/useAppLayout'
+
+// Register WebRTC globals once this meeting module loads (lazy join path).
+ensureLiveKitGlobals()
 
 type NativeLiveKitMeetingRoomProps = {
   meetingId: string
@@ -183,30 +187,38 @@ function NativeLiveKitMeetingContent({
     if (!room) return
 
     const reinforceVoiceProcessing = async () => {
-      if (!room.localParticipant.isMicrophoneEnabled) return
-      await room.localParticipant.setMicrophoneEnabled(true, {
-        echoCancellation: true,
-        noiseSuppression: true,
-        autoGainControl: true,
-      })
+      try {
+        if (!room.localParticipant.isMicrophoneEnabled) return
+        await room.localParticipant.setMicrophoneEnabled(true, {
+          echoCancellation: true,
+          noiseSuppression: true,
+          autoGainControl: true,
+        })
+      } catch {
+        // Permission denial / missing device — room stays connected without reinforcement.
+      }
     }
 
     const reinforceCallMedia = async () => {
-      if (mediaMode === 'audio') {
-        if (room.localParticipant.isCameraEnabled) {
-          await room.localParticipant.setCameraEnabled(false)
+      try {
+        if (mediaMode === 'audio') {
+          if (room.localParticipant.isCameraEnabled) {
+            await room.localParticipant.setCameraEnabled(false)
+          }
+          if (!room.localParticipant.isMicrophoneEnabled) {
+            await room.localParticipant.setMicrophoneEnabled(true, {
+              echoCancellation: true,
+              noiseSuppression: true,
+              autoGainControl: true,
+            })
+          }
+          return
         }
-        if (!room.localParticipant.isMicrophoneEnabled) {
-          await room.localParticipant.setMicrophoneEnabled(true, {
-            echoCancellation: true,
-            noiseSuppression: true,
-            autoGainControl: true,
-          })
+        if (mediaMode === 'video' && !room.localParticipant.isCameraEnabled) {
+          await room.localParticipant.setCameraEnabled(true)
         }
-        return
-      }
-      if (mediaMode === 'video' && !room.localParticipant.isCameraEnabled) {
-        await room.localParticipant.setCameraEnabled(true)
+      } catch {
+        // Same as above — do not reject into an unhandled fatal on device.
       }
     }
 
