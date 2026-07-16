@@ -114,8 +114,8 @@ export function AuthAccountButton({
           pressStyle={{ opacity: 0.85 }}
           animation="quick"
           onPress={() => setMenuOpen(true)}
+          role="button"
           aria-label={isAuthenticated ? 'Account menu' : 'Sign in'}
-          accessibilityRole="button"
         >
           {trigger}
         </XStack>

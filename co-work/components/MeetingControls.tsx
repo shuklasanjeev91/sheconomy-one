@@ -1,6 +1,7 @@
 import { Platform } from 'react-native'
 
 import { Button, Icons, ScrollView, Text, XStack, YStack } from '~/components/ui'
+import { MeetingReactionTray } from '~/co-work/components/MeetingReactionTray'
 import { useAppLayout } from '~/hooks/useAppLayout'
 import { coworkGlassStyle, useCoWorkTheme } from '~/co-work/lib/theme'
 import { controlGradientStyle, coworkBoxShadow } from '~/lib/platform/crossStyles'
@@ -16,10 +17,15 @@ type MeetingControlsProps = {
   captionsActive: boolean
   isHost: boolean
   panel: 'none' | 'chat' | 'people' | 'invite' | 'info'
+  unreadChatCount?: number
+  raisedHandCount?: number
+  reactionTrayOpen?: boolean
   onToggleAudio: () => void
   onToggleVideo: () => void
   onToggleScreen: () => void
   onToggleHand: () => void
+  onToggleReactions?: () => void
+  onSendReaction?: (emoji: string) => void
   onToggleRecord: () => void
   onToggleCaptions: () => void
   onToggleChat: () => void
@@ -40,12 +46,14 @@ function ControlButton({
   variant,
   onPress,
   compact,
+  badgeCount,
 }: {
   label: string
   icon: typeof Icons.Mic
   variant: ControlVariant
   onPress: () => void
   compact?: boolean
+  badgeCount?: number
 }) {
   const { ui: coworkUi, gradients: coworkGradients } = useCoWorkTheme()
   const styles = {
@@ -79,23 +87,49 @@ function ControlButton({
     },
   }[variant]
 
+  const badge =
+    badgeCount && badgeCount > 0 ? (badgeCount > 9 ? '9+' : String(badgeCount)) : null
+
   return (
     <YStack alignItems="center" gap={compact ? 0 : 4} minWidth={compact ? 46 : 52} flexShrink={0}>
-      <Button
-        aria-label={label}
-        width={compact ? 46 : 52}
-        height={compact ? 46 : 52}
-        padding={0}
-        borderRadius={coworkUi.radius.control}
-        borderWidth={1}
-        borderColor={styles.border}
-        backgroundColor={styles.bg}
-        hoverStyle={{ opacity: 0.92, scale: 1.02 }}
-        pressStyle={{ opacity: 0.86, scale: 0.96 }}
-        onPress={onPress}
-        style={styles.webBg ? controlGradientStyle(styles.webBg, styles.bg) : undefined}
-        icon={<Icon size={compact ? 18 : 20} color={styles.icon} />}
-      />
+      <YStack position="relative">
+        <Button
+          aria-label={label}
+          width={compact ? 46 : 52}
+          height={compact ? 46 : 52}
+          padding={0}
+          borderRadius={coworkUi.radius.control}
+          borderWidth={1}
+          borderColor={styles.border}
+          backgroundColor={styles.bg}
+          hoverStyle={{ opacity: 0.92, scale: 1.02 }}
+          pressStyle={{ opacity: 0.86, scale: 0.96 }}
+          onPress={onPress}
+          style={styles.webBg ? controlGradientStyle(styles.webBg, styles.bg) : undefined}
+          icon={<Icon size={compact ? 18 : 20} color={styles.icon} />}
+        />
+        {badge ? (
+          <YStack
+            position="absolute"
+            top={-4}
+            right={-4}
+            minWidth={18}
+            height={18}
+            paddingHorizontal={5}
+            borderRadius={999}
+            alignItems="center"
+            justifyContent="center"
+            backgroundColor={coworkUi.danger}
+            borderWidth={1}
+            borderColor="rgba(255,255,255,0.35)"
+            zIndex={2}
+          >
+            <Text fontSize={10} fontWeight="800" color="#fff">
+              {badge}
+            </Text>
+          </YStack>
+        ) : null}
+      </YStack>
       {!compact ? (
         <Text fontSize={10} fontWeight="600" color={styles.label} textAlign="center" numberOfLines={1}>
           {label}
@@ -120,10 +154,15 @@ export function MeetingControls({
   captionsActive,
   isHost,
   panel,
+  unreadChatCount = 0,
+  raisedHandCount = 0,
+  reactionTrayOpen = false,
   onToggleAudio,
   onToggleVideo,
   onToggleScreen,
   onToggleHand,
+  onToggleReactions,
+  onSendReaction,
   onToggleRecord,
   onToggleCaptions,
   onToggleChat,
@@ -153,7 +192,8 @@ export function MeetingControls({
     >
       <YStack
         width="100%"
-        maxWidth={roomy ? 1100 : 960}
+        maxWidth="100%"
+        position="relative"
         borderRadius={coworkUi.radius.dock}
         borderWidth={1}
         borderColor={coworkUi.glassBorder}
@@ -164,6 +204,9 @@ export function MeetingControls({
           ...coworkBoxShadow(coworkShadows, 'dock'),
         }}
       >
+        {onToggleReactions && onSendReaction ? (
+          <MeetingReactionTray open={reactionTrayOpen} onSelect={onSendReaction} />
+        ) : null}
         <ScrollView
           horizontal
           showsHorizontalScrollIndicator={false}
@@ -171,7 +214,7 @@ export function MeetingControls({
           style={{ width: '100%' }}
         >
           <XStack
-            minWidth={compact ? 640 : undefined}
+            minWidth={compact ? 700 : undefined}
             paddingHorizontal="$2"
             alignItems="center"
             justifyContent="center"
@@ -212,6 +255,15 @@ export function MeetingControls({
               onPress={onToggleHand}
               compact={compact}
             />
+            {onToggleReactions ? (
+              <ControlButton
+                label="React"
+                icon={Icons.Smile}
+                variant={reactionTrayOpen ? 'brand' : 'neutral'}
+                onPress={onToggleReactions}
+                compact={compact}
+              />
+            ) : null}
             {caps.supportsRecording ? (
               <ControlButton
                 label={recording ? 'Stop rec.' : 'Record'}
@@ -233,16 +285,18 @@ export function MeetingControls({
             <ControlButton
               label="Chat"
               icon={Icons.MessageSquare}
-              variant={panel === 'chat' ? 'brand' : 'neutral'}
+              variant={panel === 'chat' || unreadChatCount > 0 ? 'brand' : 'neutral'}
               onPress={onToggleChat}
               compact={compact}
+              badgeCount={unreadChatCount}
             />
             <ControlButton
               label="Participants"
               icon={Icons.Users}
-              variant={panel === 'people' ? 'brand' : 'neutral'}
+              variant={panel === 'people' || raisedHandCount > 0 ? 'brand' : 'neutral'}
               onPress={onTogglePeople}
               compact={compact}
+              badgeCount={raisedHandCount}
             />
             <ControlButton
               label="Info"

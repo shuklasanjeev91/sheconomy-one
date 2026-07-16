@@ -115,7 +115,9 @@ export function PublicProfileScreen() {
             borderWidth={1}
             borderColor={ui.border}
             backgroundColor={ui.surface}
-            maxWidth={480}
+            width="100%"
+            maxWidth="100%"
+            alignSelf="stretch"
           >
             <Text fontWeight="600" fontSize={22} color={ui.text}>
               Profile not found

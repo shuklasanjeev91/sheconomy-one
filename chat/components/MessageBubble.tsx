@@ -168,11 +168,17 @@ function StatusTicks({
   color: string
   readColor: string
 }) {
-  if (status === 'sending') return <Icons.Clock size={13} color={color} />
-  if (status === 'failed') return <Icons.AlertCircle size={13} color="#ef4444" />
-  if (status === 'read') return <Icons.CheckCheck size={15} color={readColor} />
-  if (status === 'delivered') return <Icons.CheckCheck size={15} color={color} />
-  return <Icons.Check size={15} color={color} />
+  // WhatsApp-style: clock → ✓ → ✓✓ → blue ✓✓
+  if (status === 'sending') return <Icons.Clock size={13} color={color} strokeWidth={2.4} />
+  if (status === 'failed') return <Icons.AlertCircle size={13} color="#ef4444" strokeWidth={2.4} />
+  if (status === 'read') {
+    return <Icons.CheckCheck size={15} color={readColor} strokeWidth={2.6} />
+  }
+  if (status === 'delivered') {
+    return <Icons.CheckCheck size={15} color={color} strokeWidth={2.6} />
+  }
+  // sent (server accepted, not yet delivered)
+  return <Icons.Check size={15} color={color} strokeWidth={2.6} />
 }
 
 export function MessageBubble({
@@ -495,7 +501,7 @@ export function MessageBubble({
                   </Text>
                 </XStack>
               ) : (
-                <StatusTicks status={effectiveStatus} color={metaColor} readColor={chat.tickRead} />
+                <StatusTicks status={effectiveStatus} color={chat.tick} readColor={chat.tickRead} />
               )
             ) : null}
           </XStack>

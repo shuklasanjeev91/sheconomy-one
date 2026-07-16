@@ -2,6 +2,10 @@ import type { Room } from 'livekit-client'
 import { useCallback, useEffect, useRef, useState } from 'react'
 
 import {
+  startLiveKitCloudRecording,
+  stopLiveKitCloudRecording,
+} from '~/co-work/lib/livekit-recording-client'
+import {
   buildLiveKitRecordingStream,
   downloadCaptionTranscript,
   downloadMeetingRecording,
@@ -12,22 +16,23 @@ import { hasMediaRecorder, isNativeRuntime } from '~/lib/platform/capabilities'
 
 type UseMeetingRecordingOptions = {
   room: Room | null | undefined
+  meetingId?: string
   meetingCode: string
   enabled: boolean
   autoStart?: boolean
   captionLines?: string[]
-  onStarted?: () => void
+  onStarted?: (mode?: 'cloud' | 'local' | 'audio-only') => void
   onStopped?: () => void
   onError?: (message: string) => void
 }
 
-/** LiveKit shims global MediaRecorder on native — prefer expo-audio there instead. */
-function shouldUseNativeAudioRecording() {
+function shouldPreferNativeLocalAudio() {
   return isNativeRuntime()
 }
 
 export function useMeetingRecording({
   room,
+  meetingId,
   meetingCode,
   enabled,
   autoStart = false,
@@ -41,6 +46,7 @@ export function useMeetingRecording({
   const chunksRef = useRef<Blob[]>([])
   const autoStartedRef = useRef(false)
   const nativeRecordingRef = useRef(false)
+  const cloudRecordingIdRef = useRef<string | null>(null)
   const startingRef = useRef(false)
 
   const stopWebRecorder = useCallback(() => {
@@ -48,6 +54,27 @@ export function useMeetingRecording({
   }, [])
 
   const stopRecording = useCallback(async () => {
+    if (cloudRecordingIdRef.current && meetingId && room?.name) {
+      const recordingId = cloudRecordingIdRef.current
+      cloudRecordingIdRef.current = null
+      try {
+        await stopLiveKitCloudRecording({
+          meetingId,
+          roomName: room.name,
+          recordingId,
+        })
+        if (captionLines.length > 0) {
+          await downloadCaptionTranscript(captionLines, meetingCode)
+        }
+        setRecording(false)
+        onStopped?.()
+      } catch (error) {
+        onError?.(error instanceof Error ? error.message : 'Could not stop cloud recording')
+        setRecording(false)
+      }
+      return
+    }
+
     if (nativeRecordingRef.current) {
       nativeRecordingRef.current = false
       try {
@@ -66,7 +93,59 @@ export function useMeetingRecording({
     }
 
     stopWebRecorder()
-  }, [captionLines, meetingCode, onError, onStopped, stopWebRecorder])
+  }, [captionLines, meetingCode, meetingId, onError, onStopped, room?.name, stopWebRecorder])
+
+  const startLocalNativeAudio = useCallback(async () => {
+    const { startNativeAudioRecording } = await import('~/co-work/lib/native-audio-recording')
+    await startNativeAudioRecording()
+    nativeRecordingRef.current = true
+    setRecording(true)
+    onStarted?.('audio-only')
+    return true
+  }, [onStarted])
+
+  const startWebLocalRecorder = useCallback(async () => {
+    if (!hasMediaRecorder()) {
+      onError?.('Recording is not supported in this browser')
+      return false
+    }
+    if (!room) {
+      onError?.('Connect to the meeting before recording')
+      return false
+    }
+
+    const stream = buildLiveKitRecordingStream(room)
+    if (stream.getTracks().length === 0) {
+      onError?.('Turn on your camera or mic to record')
+      return false
+    }
+
+    const hasVideo = stream.getVideoTracks().length > 0
+    const mimeType = getMeetingRecorderMimeType(hasVideo)
+    const recorder = new MediaRecorder(stream, mimeType ? { mimeType } : undefined)
+    chunksRef.current = []
+
+    recorder.ondataavailable = (event) => {
+      if (event.data.size > 0) chunksRef.current.push(event.data)
+    }
+
+    recorder.onstop = () => {
+      const blob = new Blob(chunksRef.current, { type: mimeType || 'audio/webm' })
+      void downloadMeetingRecording(blob, meetingCode, 'webm')
+      if (captionLines.length > 0) {
+        void downloadCaptionTranscript(captionLines, meetingCode)
+      }
+      setRecording(false)
+      recorderRef.current = null
+      onStopped?.()
+    }
+
+    recorder.start(1000)
+    recorderRef.current = recorder
+    setRecording(true)
+    onStarted?.('local')
+    return true
+  }, [captionLines, meetingCode, onError, onStarted, onStopped, room])
 
   const startRecording = useCallback(async () => {
     if (startingRef.current) return false
@@ -83,65 +162,31 @@ export function useMeetingRecording({
         return true
       }
 
-      // On iOS/Android, LiveKit installs a limited MediaRecorder shim that cannot
-      // save meeting recordings. Always use expo-audio there.
-      if (shouldUseNativeAudioRecording()) {
-        try {
-          const { startNativeAudioRecording } = await import('~/co-work/lib/native-audio-recording')
-          await startNativeAudioRecording()
-          nativeRecordingRef.current = true
+      // Prefer cloud egress on all platforms when meeting + room are known.
+      if (meetingId && room?.name) {
+        const cloud = await startLiveKitCloudRecording({
+          meetingId,
+          roomName: room.name,
+        })
+        if (cloud.ok && cloud.recordingId && !cloud.useLocalFallback) {
+          cloudRecordingIdRef.current = cloud.recordingId
           setRecording(true)
-          onStarted?.()
+          onStarted?.('cloud')
           return true
+        }
+      }
+
+      if (shouldPreferNativeLocalAudio()) {
+        try {
+          return await startLocalNativeAudio()
         } catch (error) {
           onError?.(error instanceof Error ? error.message : 'Could not start recording')
           return false
         }
       }
 
-      if (!hasMediaRecorder()) {
-        onError?.('Recording is not supported in this browser')
-        return false
-      }
-
-      if (!room) {
-        onError?.('Connect to the meeting before recording')
-        return false
-      }
-
-      const stream = buildLiveKitRecordingStream(room)
-      if (stream.getTracks().length === 0) {
-        onError?.('Turn on your camera or mic to record')
-        return false
-      }
-
       try {
-        const hasVideo = stream.getVideoTracks().length > 0
-        const mimeType = getMeetingRecorderMimeType(hasVideo)
-        const recorder = new MediaRecorder(stream, mimeType ? { mimeType } : undefined)
-        chunksRef.current = []
-
-        recorder.ondataavailable = (event) => {
-          if (event.data.size > 0) chunksRef.current.push(event.data)
-        }
-
-        recorder.onstop = () => {
-          const blob = new Blob(chunksRef.current, { type: mimeType || 'audio/webm' })
-          const extension = hasVideo ? 'webm' : 'webm'
-          void downloadMeetingRecording(blob, meetingCode, extension)
-          if (captionLines.length > 0) {
-            void downloadCaptionTranscript(captionLines, meetingCode)
-          }
-          setRecording(false)
-          recorderRef.current = null
-          onStopped?.()
-        }
-
-        recorder.start(1000)
-        recorderRef.current = recorder
-        setRecording(true)
-        onStarted?.()
-        return true
+        return await startWebLocalRecorder()
       } catch (error) {
         onError?.(error instanceof Error ? error.message : 'Could not start recording')
         return false
@@ -149,7 +194,16 @@ export function useMeetingRecording({
     } finally {
       startingRef.current = false
     }
-  }, [captionLines, meetingCode, onError, onStarted, onStopped, recording, room, stopRecording])
+  }, [
+    meetingId,
+    onError,
+    onStarted,
+    recording,
+    room?.name,
+    startLocalNativeAudio,
+    startWebLocalRecorder,
+    stopRecording,
+  ])
 
   const toggleRecording = useCallback(() => {
     void startRecording()
@@ -165,12 +219,13 @@ export function useMeetingRecording({
         )
         nativeRecordingRef.current = false
       }
+      cloudRecordingIdRef.current = null
     }
   }, [])
 
   useEffect(() => {
     if (!enabled || !autoStart || autoStartedRef.current) return
-    if (!room && !shouldUseNativeAudioRecording()) return
+    if (!room && !shouldPreferNativeLocalAudio()) return
     autoStartedRef.current = true
     void startRecording()
   }, [autoStart, enabled, room, startRecording])

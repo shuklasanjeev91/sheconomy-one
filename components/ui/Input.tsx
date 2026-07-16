@@ -1,4 +1,5 @@
 import { forwardRef } from 'react'
+import { Platform } from 'react-native'
 import type { GetProps } from 'tamagui'
 import { Input as TInput, TextArea as TTextArea, YStack, SizableText } from 'tamagui'
 import { BRAND_THEME } from '~/config/tokens'
@@ -29,10 +30,44 @@ const sharedFieldStyle = {
   },
 } as const
 
-export const Input = forwardRef<any, GetProps<typeof TInput> & { invalid?: boolean }>(function Input(
-  { invalid, ...props },
-  ref,
-) {
+type FieldControlExtra = {
+  invalid?: boolean
+  /** RN TextInput API — mapped to `readOnly` on web (Tamagui does not strip it). */
+  editable?: boolean
+  accessibilityLabel?: string
+  accessibilityHint?: string
+  accessibilityRole?: string
+}
+
+/**
+ * Tamagui's web Input forwards unknown RN props onto the DOM node.
+ * Map / strip them so React does not warn about `editable` / accessibility*.
+ */
+function webSafeFieldProps<T extends FieldControlExtra>(props: T): T {
+  if (Platform.OS !== 'web') return props
+
+  const {
+    editable,
+    accessibilityLabel,
+    accessibilityHint,
+    accessibilityRole: _accessibilityRole,
+    ...rest
+  } = props
+
+  return {
+    ...rest,
+    ...(editable === false ? { readOnly: true } : null),
+    ...(accessibilityLabel ? { 'aria-label': accessibilityLabel } : null),
+    ...(accessibilityHint ? { title: accessibilityHint } : null),
+  } as T
+}
+
+export const Input = forwardRef<
+  any,
+  GetProps<typeof TInput> & FieldControlExtra
+>(function Input({ invalid, ...props }, ref) {
+  const safeProps = webSafeFieldProps(props)
+
   return (
     <TInput
       ref={ref}
@@ -50,37 +85,40 @@ export const Input = forwardRef<any, GetProps<typeof TInput> & { invalid?: boole
             },
           }
         : null)}
-      {...props}
+      {...safeProps}
     />
   )
 })
 Input.displayName = 'Input'
 
-export const TextArea = forwardRef<any, GetProps<typeof TTextArea> & { invalid?: boolean }>(
-  function TextArea({ invalid, ...props }, ref) {
-    return (
-      <TTextArea
-        ref={ref}
-        theme={BRAND_THEME}
-        minHeight={100}
-        paddingVertical="$3"
-        {...sharedFieldStyle}
-        {...(invalid
-          ? {
-              borderColor: '$red8',
-              focusStyle: {
-                borderColor: '$red9',
-                backgroundColor: '$background',
-                outlineWidth: 0,
-                borderWidth: 1.5,
-              },
-            }
-          : null)}
-        {...props}
-      />
-    )
-  },
-)
+export const TextArea = forwardRef<
+  any,
+  GetProps<typeof TTextArea> & FieldControlExtra
+>(function TextArea({ invalid, ...props }, ref) {
+  const safeProps = webSafeFieldProps(props)
+
+  return (
+    <TTextArea
+      ref={ref}
+      theme={BRAND_THEME}
+      minHeight={100}
+      paddingVertical="$3"
+      {...sharedFieldStyle}
+      {...(invalid
+        ? {
+            borderColor: '$red8',
+            focusStyle: {
+              borderColor: '$red9',
+              backgroundColor: '$background',
+              outlineWidth: 0,
+              borderWidth: 1.5,
+            },
+          }
+        : null)}
+      {...safeProps}
+    />
+  )
+})
 TextArea.displayName = 'TextArea'
 
 export type FieldProps = {

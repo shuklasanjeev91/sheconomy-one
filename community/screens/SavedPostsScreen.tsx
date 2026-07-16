@@ -20,15 +20,16 @@ import { getPostShareUrl } from '~/lib/share'
 import { useAppUi } from '~/lib/theme/useAppUi'
 import { useSupabase } from '~/providers/SupabaseProvider'
 
-type SavedTypeFilter = 'all' | 'text' | 'media' | 'poll' | 'event' | 'article'
+type SavedTypeFilter = 'all' | 'text' | 'media' | 'poll' | 'event' | 'article' | 'celebration'
 
 const TYPE_FILTERS: Array<{ id: SavedTypeFilter; label: string }> = [
   { id: 'all', label: 'All' },
   { id: 'text', label: 'Updates' },
   { id: 'media', label: 'Media' },
-  { id: 'poll', label: 'Polls' },
-  { id: 'event', label: 'Events' },
   { id: 'article', label: 'Articles' },
+  { id: 'event', label: 'Events' },
+  { id: 'celebration', label: 'Celebrations' },
+  { id: 'poll', label: 'Polls' },
 ]
 
 function matchesType(post: CommunityPost, filter: SavedTypeFilter) {

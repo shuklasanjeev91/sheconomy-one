@@ -1,4 +1,4 @@
-import { useCallback, useRef } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { findNodeHandle, NativeModules, Platform, View } from 'react-native'
 import Constants from 'expo-constants'
 
@@ -9,6 +9,10 @@ ensureLiveKitNativeGlobals()
 import { useLocalParticipant, useRoomContext } from '@livekit/react-native'
 import { ScreenCapturePickerView } from '@livekit/react-native-webrtc'
 
+import {
+  CALL_AUDIO_CAPTURE,
+  toggleCallSpeaker,
+} from '~/co-work/lib/livekit-call-audio'
 import type { LiveKitMediaControls } from '~/co-work/lib/livekit-media-controls'
 import { setLocalScreenShareEnabled } from '~/co-work/lib/livekit-screen-share'
 
@@ -64,10 +68,15 @@ async function showIosBroadcastPicker() {
   await manager.show(reactTag)
 }
 
-export function useLiveKitMediaControls(): LiveKitMediaControls {
+export function useLiveKitMediaControls(preferSpeaker = true): LiveKitMediaControls {
   const room = useRoomContext()
   const { localParticipant, isMicrophoneEnabled, isCameraEnabled, isScreenShareEnabled } =
     useLocalParticipant()
+  const [speakerOn, setSpeakerOn] = useState(preferSpeaker)
+
+  useEffect(() => {
+    setSpeakerOn(preferSpeaker)
+  }, [preferSpeaker])
 
   const screenSharingRef = useRef(isScreenShareEnabled)
   screenSharingRef.current = isScreenShareEnabled
@@ -106,21 +115,25 @@ export function useLiveKitMediaControls(): LiveKitMediaControls {
     }
   }, [localParticipant])
 
+  const toggleSpeaker = useCallback(async () => {
+    const next = !speakerOn
+    await toggleCallSpeaker(next)
+    setSpeakerOn(next)
+  }, [speakerOn])
+
   return {
     room,
     localParticipant,
     audioEnabled: isMicrophoneEnabled,
     videoEnabled: isCameraEnabled,
     screenSharing: isScreenShareEnabled,
+    speakerOn,
     toggleAudio: () => {
       const next = !isMicrophoneEnabled
-      void localParticipant.setMicrophoneEnabled(next, {
-        echoCancellation: true,
-        noiseSuppression: true,
-        autoGainControl: true,
-      })
+      void localParticipant.setMicrophoneEnabled(next, { ...CALL_AUDIO_CAPTURE })
     },
     toggleVideo: () => void localParticipant.setCameraEnabled(!isCameraEnabled),
     toggleScreenShare,
+    toggleSpeaker,
   }
 }

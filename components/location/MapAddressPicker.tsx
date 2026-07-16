@@ -41,7 +41,7 @@ function buildMapHtml(coords: LatLng) {
 <body>
   <div id="map"></div>
   <div id="pin">📍</div>
-  <div id="hint">Drag the map to place the pin, then confirm below.</div>
+  <div id="hint">Drag the map to place the pin, then confirm below. Map tiles need network access.</div>
   <script>
     const start = { lat: ${coords.latitude}, lng: ${coords.longitude} };
     let lat = start.lat, lng = start.lng;

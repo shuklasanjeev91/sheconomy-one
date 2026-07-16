@@ -493,12 +493,19 @@ export async function sendPollMessage(
   senderId: string,
   poll: ChatPollPayload,
 ): Promise<{ messageId: string | null; error: string | null }> {
+  // WhatsApp/legacy-compatible payload: list previews and older clients read
+  // `[Poll]` + `metadata.type`, while modern bubbles use `message_type='poll'`.
   return sendMessage({
     conversationId,
     senderId,
-    content: poll.question,
+    content: `[Poll] ${poll.question}`,
     type: 'poll',
-    metadata: { question: poll.question, options: poll.options },
+    metadata: {
+      type: 'poll',
+      question: poll.question,
+      options: poll.options,
+      votes: {},
+    },
   })
 }
 
@@ -511,9 +518,10 @@ export async function sendEventMessage(
   return sendMessage({
     conversationId,
     senderId,
-    content: event.title,
+    content: `[Event] ${event.title}`,
     type: 'event',
     metadata: {
+      type: 'event',
       eventId: event.eventId,
       title: event.title,
       startTime: event.startTime,
@@ -678,6 +686,17 @@ export async function clearConversation(
     .update({ cleared_at: new Date().toISOString() })
     .eq('conversation_id', conversationId)
     .eq('user_id', userId)
+  return { error: error?.message ?? null }
+}
+
+export async function markConversationDelivered(
+  conversationId: string,
+  userId: string,
+): Promise<{ error: string | null }> {
+  const { error } = await supabase.rpc('mark_messages_as_delivered', {
+    p_chat_room_id: conversationId,
+    p_user_id: userId,
+  })
   return { error: error?.message ?? null }
 }
 

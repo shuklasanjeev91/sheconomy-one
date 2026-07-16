@@ -9,12 +9,10 @@
  *     the migrated TensorFlow classifier (`lib/nsfwjs`) and screens every
  *     upload through it — mirroring how the legacy `listingImagesService` used
  *     the classifier directly. A custom moderator can be swapped in with
- *     `registerImageModerator(...)`. On native (or if analysis fails) uploads
- *     proceed (fail-open), exactly like the legacy service did when analysis
- *     was unavailable. No image is uploaded before it is moderated.
+ *     `registerImageModerator(...)`. On native, uploads use the server
+ *     `moderate_image` ai-assist path. If moderation cannot run, uploads are
+ *     blocked (fail closed). No image is uploaded before it is moderated.
  */
-
-import { Platform } from 'react-native'
 
 import { supabase } from '~/lib/supabase'
 import {
@@ -78,7 +76,6 @@ export function getImageModerator(): ImageModerator | null {
  */
 async function resolveModerator(): Promise<ImageModerator | null> {
   if (activeModerator) return activeModerator
-  if (Platform.OS !== 'web') return null
 
   if (!defaultModeratorPromise) {
     defaultModeratorPromise = import('../nsfwjs/listing-image-moderator')
@@ -91,8 +88,7 @@ async function resolveModerator(): Promise<ImageModerator | null> {
 /**
  * Screen a batch of images. Resolves when all are approved; throws a
  * `ListingError(NSFW_CONTENT)` if any is rejected. If no moderator is available
- * (native, or the classifier failed to load) we fail open (approve) — mirroring
- * the legacy behaviour.
+ * we reject the upload (fail closed) so native and web share one safety policy.
  */
 async function moderateImages(
   images: (Blob | File)[],
@@ -100,7 +96,12 @@ async function moderateImages(
 ): Promise<void> {
   if (images.length === 0) return
   const moderator = await resolveModerator()
-  if (!moderator) return
+  if (!moderator) {
+    throw createListingError(
+      LISTING_ERROR_CODES.NSFW_CONTENT,
+      'Image moderation is unavailable. Please try again.',
+    )
+  }
 
   let results: ImageModerationResult[]
   if (images.length > 1 && moderator.analyzeBatch) {

@@ -199,7 +199,7 @@ export function ChatThreadPane({
   } = useConversation({ conversationId: chat.id, currentUserId })
 
   const { outgoing, start: startOutgoingCall, cancel: cancelOutgoingCall } = useOutgoingCall(currentUserId)
-  const canCall = chat.type === 'direct' && !!chat.otherUserId
+  const canCall = chat.type === 'direct' ? !!chat.otherUserId : chat.type === 'group'
 
   const isMuted = mutedOverride ?? chat.isMuted
 

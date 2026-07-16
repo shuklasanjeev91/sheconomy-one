@@ -9,6 +9,9 @@ type CommunityAdaptiveSheetProps = {
   children: ReactNode
   /** Kept for call-site compatibility; sheets are always bottom-anchored. */
   maxWidth?: number
+  /** Use a taller sheet for article / event / celebration writers. */
+  tall?: boolean
+  footer?: ReactNode
 }
 
 /**
@@ -20,9 +23,17 @@ export function CommunityAdaptiveSheet({
   onOpenChange,
   title,
   children,
+  tall = false,
+  footer,
 }: CommunityAdaptiveSheetProps) {
   return (
-    <AppBottomSheet open={open} onOpenChange={onOpenChange} title={title}>
+    <AppBottomSheet
+      open={open}
+      onOpenChange={onOpenChange}
+      title={title}
+      footer={footer}
+      maxHeightRatio={tall ? 0.96 : undefined}
+    >
       {children}
     </AppBottomSheet>
   )

@@ -359,9 +359,9 @@ export function CreateShopScreen() {
               paddingHorizontal: isDesktop ? 32 : 16,
               paddingTop: 24,
               paddingBottom: (isDesktop ? 40 : 32) + safeBottom,
-              maxWidth: 780,
+              maxWidth: '100%',
               width: '100%',
-              alignSelf: 'center',
+              alignSelf: 'stretch',
             }}
           >
             <ProgressHeader ui={ui} stepIndex={stepIndex} total={steps.length} percent={completionPercentage} />

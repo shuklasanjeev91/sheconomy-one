@@ -1,5 +1,3 @@
-import { Platform } from 'react-native'
-
 import { supabase } from '~/lib/supabase/client'
 
 export type PasskeyInfo = {
@@ -11,17 +9,11 @@ export type PasskeyInfo = {
 
 /**
  * Feature-detect WebAuthn / platform authenticators.
- * Web: PublicKeyCredential. Native: enable when host provides WebAuthn (SDK path).
+ * Only enable when the runtime actually exposes PublicKeyCredential.
  */
 export function isPasskeySignInSupported(): boolean {
-  if (Platform.OS === 'web') {
-    if (typeof window === 'undefined') return false
-    return typeof window.PublicKeyCredential !== 'undefined'
-  }
-
-  // Native: Supabase passkey API can run where the runtime bridges WebAuthn
-  // (newer Expo / RN hosts). Prefer showing the CTA; failures toast gracefully.
-  return Platform.OS === 'ios' || Platform.OS === 'android'
+  if (typeof globalThis === 'undefined') return false
+  return typeof (globalThis as { PublicKeyCredential?: unknown }).PublicKeyCredential !== 'undefined'
 }
 
 export async function signInWithPasskey(): Promise<{ error: string | null }> {

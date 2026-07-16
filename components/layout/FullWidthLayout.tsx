@@ -97,7 +97,7 @@ type PageRailProps = {
   centered?: boolean
 } & GetProps<typeof YStack>
 
-/** Full-width content rail — stretches edge-to-edge unless `maxWidth` is set. */
+/** Full-width content rail — stretches edge-to-edge unless `maxWidth` is set (forms only). */
 export function PageRail({
   children,
   maxWidth,
@@ -109,7 +109,7 @@ export function PageRail({
   return (
     <YStack
       {...LAYOUT_STRETCH}
-      maxWidth={maxWidth ?? APP_LAYOUT.contentMaxWidth}
+      {...(constrained ? { maxWidth, width: '100%' as const } : null)}
       alignSelf={constrained && centered ? 'center' : 'stretch'}
       {...props}
     >

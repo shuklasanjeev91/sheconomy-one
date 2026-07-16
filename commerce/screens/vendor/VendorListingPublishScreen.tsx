@@ -391,8 +391,8 @@ function VendorListingPublishContent() {
       <YStack
         flex={1}
         width="100%"
-        maxWidth={1200}
-        alignSelf="center"
+        maxWidth="100%"
+        alignSelf="stretch"
         paddingHorizontal={isDesktop ? '$6' : '$4'}
         paddingTop={isDesktop ? '$5' : '$3'}
         paddingBottom="$2"

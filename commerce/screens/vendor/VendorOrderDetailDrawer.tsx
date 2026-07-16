@@ -16,7 +16,7 @@ import {
 import { getShadowStyle, radius } from '~/config/tokens'
 import { useLockBodyScroll } from '~/hooks/useLockBodyScroll'
 import { overlayBackdropStyle } from '~/lib/layout/styles'
-import { downloadOrderInvoice } from '~/lib/orders/order-invoice'
+import { shareOrderInvoice } from '~/lib/orders/order-invoice'
 import { openMailtoLink } from '~/lib/platform/openMailto'
 import { formatOrderAmount, formatOrderDate } from '~/lib/orders/order.utils'
 import type { OrderPayment } from '~/lib/orders/payment.type'
@@ -121,16 +121,17 @@ export function VendorOrderDetailDrawer({
               else toast.show('No customer email on file', { tone: 'danger' })
             }}
             onDownload={() => {
-              const result = downloadOrderInvoice(item, { brandColor: ui.brand })
-              if (!result.ok) {
-                toast.show('Download unavailable', {
-                  tone: result.reason === 'unsupported' ? 'info' : 'danger',
-                  message:
-                    result.reason === 'unsupported'
-                      ? 'Invoice download is available on the web dashboard.'
-                      : 'Could not open the invoice. Please try again.',
-                })
-              }
+              void shareOrderInvoice(item, { brandColor: ui.brand }).then((result) => {
+                if (!result.ok) {
+                  toast.show('Invoice unavailable', {
+                    tone: result.reason === 'unsupported' ? 'info' : 'danger',
+                    message:
+                      result.reason === 'unsupported'
+                        ? 'Sharing is not available on this device.'
+                        : 'Could not open the invoice. Please try again.',
+                  })
+                }
+              })
             }}
           />
         ) : (

@@ -61,6 +61,7 @@ import { ShareButton } from '~/components/share'
 import { updateProfileImages } from '~/community/lib/profile-sections'
 import { pickImages, pickedImageToBlob, type PickedImage } from '~/lib/media/pick-image'
 import { refreshProfiles } from '~/lib/profile/refresh'
+import { patchCachedProfile } from '~/lib/profile/profile-cache'
 import { communityRoutes } from '~/lib/routes'
 import { getProfileShareUrl } from '~/lib/share'
 import { supabase } from '~/lib/supabase/client'
@@ -408,7 +409,21 @@ function ProfileHero({
   const toast = useAppToast()
   const [uploadingAvatar, setUploadingAvatar] = useState(false)
   const [uploadingCover, setUploadingCover] = useState(false)
+  /** Optimistic local URL so the photo appears immediately after upload. */
+  const [localAvatarUrl, setLocalAvatarUrl] = useState<string | null>(null)
+  const [localCoverUrl, setLocalCoverUrl] = useState<string | null>(null)
   const { progress: uploadProgress, track: trackUpload, reset: resetUpload } = useUploadProgress()
+
+  const avatarUrl = localAvatarUrl ?? profile.avatar_url
+  const coverUrl = localCoverUrl ?? profile.cover_url
+
+  useEffect(() => {
+    setLocalAvatarUrl(null)
+  }, [profile.avatar_url])
+
+  useEffect(() => {
+    setLocalCoverUrl(null)
+  }, [profile.cover_url])
 
   async function handleUploadImage(kind: 'avatar' | 'cover', first: PickedImage) {
     if (!profile.id) return
@@ -427,23 +442,37 @@ function ProfileHero({
         },
         { onProgress: trackUpload },
       )
-      if (error || !data) {
+      if (error || !data?.publicUrl) {
         toast.show('Could not upload image', { tone: 'danger', message: error ?? undefined })
         return
       }
-      const { error: updateError } = await updateProfileImages(
+      const publicUrl = data.publicUrl
+      if (kind === 'avatar') setLocalAvatarUrl(publicUrl)
+      else setLocalCoverUrl(publicUrl)
+
+      const { error: updateError, data: saved } = await updateProfileImages(
         profile.id,
-        kind === 'avatar' ? { avatar_url: data.publicUrl } : { cover_url: data.publicUrl },
+        kind === 'avatar' ? { avatar_url: publicUrl } : { cover_url: publicUrl },
       )
-      if (updateError) {
-        toast.show('Could not update photo', { tone: 'danger', message: updateError })
+      if (updateError || !saved) {
+        if (kind === 'avatar') setLocalAvatarUrl(null)
+        else setLocalCoverUrl(null)
+        toast.show('Could not update photo', { tone: 'danger', message: updateError ?? undefined })
         return
       }
+
+      // Keep the signed-in profile cache in sync so tab bar / composer pick up the photo.
+      await patchCachedProfile(profile.id, {
+        avatar_url: saved.avatar_url,
+        cover_url: saved.cover_url,
+      })
       toast.show(kind === 'avatar' ? 'Profile photo updated' : 'Cover photo updated', {
         tone: 'success',
       })
       refreshProfiles()
     } catch {
+      if (kind === 'avatar') setLocalAvatarUrl(null)
+      else setLocalCoverUrl(null)
       toast.show('Could not update photo', { tone: 'danger' })
     } finally {
       setBusy(false)
@@ -485,7 +514,7 @@ function ProfileHero({
         }}
       >
         <CoverBanner
-          coverUrl={profile.cover_url}
+          coverUrl={coverUrl}
           editable={isOwnProfile}
           uploading={uploadingCover}
           uploadProgress={uploadingCover ? uploadProgress : null}
@@ -522,7 +551,7 @@ function ProfileHero({
           >
             <Avatar
               name={displayName}
-              src={profile.avatar_url ?? undefined}
+              src={avatarUrl}
               size="$10"
               borderWidth={4}
               borderColor={ui.surface}

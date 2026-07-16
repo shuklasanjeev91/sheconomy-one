@@ -82,7 +82,7 @@ export function ListingPublishPageHeader({ ui, headline, subtitle }: ListingPubl
       <Text fontSize={28} fontWeight="800" color={ui.text} letterSpacing={-0.6} fontFamily="$heading">
         {headline}
       </Text>
-      <Text fontSize={14} color={ui.textSecondary} lineHeight={21} maxWidth={720}>
+      <Text fontSize={14} color={ui.textSecondary} lineHeight={21} maxWidth="100%">
         {subtitle}
       </Text>
     </YStack>

@@ -66,6 +66,8 @@ export default defineConfig(({ mode }) => {
         '@expo/log-box/utils': fromProjectRoot('./lib/stubs/expo-log-box-utils.ts'),
         '@expo/log-box/utils.js': fromProjectRoot('./lib/stubs/expo-log-box-utils.ts'),
         '@react-native-community/datetimepicker': fromProjectRoot('./lib/stubs/datetimepicker.ts'),
+        '@react-native-voice/voice': fromProjectRoot('./lib/stubs/react-native-voice.ts'),
+        'expo-print': fromProjectRoot('./lib/stubs/expo-print.ts'),
         '@livekit/react-native': fromProjectRoot('./lib/stubs/livekit-react-native.ts'),
         '@livekit/react-native-webrtc': fromProjectRoot('./lib/stubs/react-native-webrtc.ts'),
         'react-native-webrtc': fromProjectRoot('./lib/stubs/react-native-webrtc.ts'),
@@ -74,6 +76,10 @@ export default defineConfig(({ mode }) => {
         'react-native-qrcode-svg': fromProjectRoot('./lib/stubs/react-native-qrcode-svg.tsx'),
         'use-sync-external-store/with-selector': useSyncExternalStoreWithSelector,
         'use-sync-external-store/with-selector.js': useSyncExternalStoreWithSelector,
+        // Package "main" is Node (needs tfjs-node); force browser ESM for web/SSR.
+        '@vladmandic/human': fromProjectRoot(
+          './node_modules/@vladmandic/human/dist/human.esm.js',
+        ),
       },
     },
 
@@ -380,6 +386,7 @@ if (!(normalizedPreloadPath in preloadedLoaderData) && !(href in preloadedLoader
         '@tensorflow/tfjs-backend-webgl',
         '@tensorflow-models/face-landmarks-detection',
         '@vladmandic/face-api',
+        '@vladmandic/human',
       ],
     },
 

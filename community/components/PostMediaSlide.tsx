@@ -136,13 +136,8 @@ export function PostMediaSlide({
     )
   }
 
-  if (isGifUrl(item.url) && Platform.OS === 'web') {
-    return (
-      <YStack width={frameWidth} height={height} alignItems="center" justifyContent="center">
-        {/* eslint-disable-next-line jsx-a11y/alt-text */}
-        <img src={item.url} style={{ width: '100%', height: '100%', objectFit: fit }} />
-      </YStack>
-    )
+  if (isGifUrl(item.url)) {
+    return <Image src={item.url} width={frameWidth} height={height} objectFit={fit} alt="" />
   }
 
   return <Image src={item.url} width={frameWidth} height={height} objectFit={fit} alt="" />

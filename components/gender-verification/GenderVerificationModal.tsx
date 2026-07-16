@@ -60,7 +60,8 @@ function GenderVerificationModalShell({
         width="100%"
         maxWidth={isDesktop ? 560 : undefined}
         flex={isDesktop ? undefined : 1}
-        maxHeight={isDesktop ? '90%' : undefined}
+        maxHeight={isDesktop ? '90%' : '100%'}
+        minHeight={0}
         backgroundColor={ui.surface}
         borderRadius={isDesktop ? radius.card : 0}
         borderWidth={isDesktop ? 1 : 0}
@@ -69,7 +70,19 @@ function GenderVerificationModalShell({
         style={isDesktop ? getShadowStyle('lg') : undefined}
       >
         <ModalHeader ui={ui} onClose={onClose} />
-        <ScrollView contentContainerStyle={{ padding: 20, gap: 20 }} showsVerticalScrollIndicator={false}>
+        <ScrollView
+          flex={1}
+          width="100%"
+          minHeight={0}
+          showsVerticalScrollIndicator={false}
+          keyboardShouldPersistTaps="handled"
+          contentContainerStyle={{
+            flexGrow: 1,
+            padding: 20,
+            paddingBottom: 28,
+            gap: 20,
+          }}
+        >
           <GenderVerificationErrorBoundary scope="Modal">
             <VerificationFlow onClose={onClose} onVerified={onVerified} />
           </GenderVerificationErrorBoundary>
@@ -177,9 +190,9 @@ function VerificationFlow({
       {verification.phase === 'idle' ? (
         <YStack gap="$2">
           <Text fontSize={15} color={ui.textSecondary} lineHeight={22}>
-            To keep {BRAND_NAME} women-first, we run a quick on-device liveness check. Center your
-            face, then blink naturally {verification.requiredBlinks} times when prompted. Your video
-            never leaves your device — only the verification result is saved.
+            Keep {BRAND_NAME} women-first with a live face check. Center your face and blink
+            naturally {verification.requiredBlinks} times — photos and screen replays are rejected.
+            Video stays on your device.
           </Text>
         </YStack>
       ) : null}
@@ -192,6 +205,7 @@ function VerificationFlow({
         instruction={verification.instruction}
         blinkCount={verification.blinkCount}
         requiredBlinks={verification.requiredBlinks}
+        tracking={verification.tracking}
         cameraRef={'cameraRef' in verification ? verification.cameraRef : undefined}
         analyzerRef={'analyzerRef' in verification ? verification.analyzerRef : undefined}
         cameraPermission={

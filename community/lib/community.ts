@@ -118,6 +118,8 @@ export type CommunityPost = {
   event_end_time: string | null
   event_location: string | null
   event_rsvp_enabled: boolean | null
+  /** Linked directory event id when feed event was synced to `events`. */
+  community_event_id: string | null
   poll: CommunityPoll | null
   listing_id: string | null
   celebration: PostCelebration | null
@@ -126,6 +128,7 @@ export type CommunityPost = {
   link: PostLinkPreview | null
   /** Present when post_type is article. */
   article_title: string | null
+  article_tags: string[] | null
   original_post_id: string | null
   repost_comment: string | null
   originalPost: OriginalPostPreview | null
@@ -170,12 +173,17 @@ export type CreatePostInput = {
   postType?: string | null
   /** professional long-form article headline stored in post_data. */
   articleTitle?: string | null
+  articleTags?: string[] | null
+  /** Directory `events.id` when this feed post is linked to a calendar event. */
+  communityEventId?: string | null
   eventTitle?: string | null
   eventDescription?: string | null
   eventStartTime?: string | null
   eventEndTime?: string | null
   eventLocation?: string | null
   eventRsvpEnabled?: boolean
+  eventMeetingUrl?: string | null
+  eventIsOnline?: boolean
   poll?: {
     question: string
     options: string[]
@@ -269,6 +277,7 @@ function mapPost(row: PostRow, username?: string | null): CommunityPost {
     event_end_time: row.event_end_time,
     event_location: row.event_location,
     event_rsvp_enabled: row.event_rsvp_enabled,
+    community_event_id: null,
     poll: null,
     listing_id: null,
     celebration: null,
@@ -276,6 +285,7 @@ function mapPost(row: PostRow, username?: string | null): CommunityPost {
     shop: null,
     link: null,
     article_title: null,
+    article_tags: null,
     original_post_id: row.original_post_id ?? null,
     repost_comment: row.repost_comment ?? null,
     originalPost: null,
@@ -421,6 +431,11 @@ async function enrichPostsWithPostMeta(posts: CommunityPost[]): Promise<Communit
     const postData = toRecord(meta?.post_data)
     const articleTitle =
       typeof postData?.article_title === 'string' ? postData.article_title : null
+    const communityEventId =
+      typeof postData?.community_event_id === 'string' ? postData.community_event_id : null
+    const articleTags = Array.isArray(postData?.article_tags)
+      ? (postData.article_tags as unknown[]).filter((tag): tag is string => typeof tag === 'string')
+      : null
     return {
       ...post,
       company_id: meta?.company_id ?? null,
@@ -431,6 +446,8 @@ async function enrichPostsWithPostMeta(posts: CommunityPost[]): Promise<Communit
       shop: mapShop(meta?.service_data),
       link: mapLinkPreview(meta?.link_preview_data),
       article_title: articleTitle,
+      article_tags: articleTags?.length ? articleTags : null,
+      community_event_id: communityEventId,
       image_url: meta?.image_url ?? post.image_url,
       image_urls: normalizeUrlList(meta?.image_urls).length
         ? normalizeUrlList(meta?.image_urls)
@@ -482,6 +499,36 @@ async function enrichPostsWithContext(posts: CommunityPost[]): Promise<Community
     company: post.company_id ? companyById.get(post.company_id) ?? null : null,
     group: post.group_id ? groupById.get(post.group_id) ?? null : null,
   }))
+}
+
+/** Map UI day lengths to the `polls.duration` check constraint values. */
+function toCommunityPollDuration(durationDays: number): {
+  duration: '1day' | '3days' | '1week' | '2weeks'
+  expiresAt: string
+} {
+  const days = durationDays > 0 ? durationDays : 1
+  if (days <= 1) {
+    return {
+      duration: '1day',
+      expiresAt: new Date(Date.now() + 1 * 24 * 60 * 60 * 1000).toISOString(),
+    }
+  }
+  if (days <= 3) {
+    return {
+      duration: '3days',
+      expiresAt: new Date(Date.now() + 3 * 24 * 60 * 60 * 1000).toISOString(),
+    }
+  }
+  if (days <= 7) {
+    return {
+      duration: '1week',
+      expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(),
+    }
+  }
+  return {
+    duration: '2weeks',
+    expiresAt: new Date(Date.now() + 14 * 24 * 60 * 60 * 1000).toISOString(),
+  }
 }
 
 /** Attach normalized poll data (options, counts, this viewer's vote) to poll posts. */
@@ -548,11 +595,13 @@ export async function fetchPollsForPosts(
 }
 
 async function enrichPostsWithPolls(posts: CommunityPost[]): Promise<CommunityPost[]> {
-  const pollPostIds = posts.filter((post) => post.post_type === 'poll').map((post) => post.id)
+  // Attach by polls.post_id for every loaded post so we still render if
+  // post_type was wrong historically, as long as a polls row exists.
+  const pollPostIds = posts.map((post) => post.id)
   if (!pollPostIds.length) return posts
   const pollByPost = await fetchPollsForPosts(pollPostIds)
   if (!pollByPost.size) return posts
-  return posts.map((post) => ({ ...post, poll: pollByPost.get(post.id) ?? null }))
+  return posts.map((post) => ({ ...post, poll: pollByPost.get(post.id) ?? post.poll ?? null }))
 }
 
 async function enrichPostsWithOriginals(posts: CommunityPost[]): Promise<CommunityPost[]> {
@@ -656,7 +705,13 @@ async function enrichPosts(posts: CommunityPost[]): Promise<CommunityPost[]> {
 }
 
 /** Feed content filter used by the "Post type" pill on the main feed. */
-export type FeedContentFilter = 'photos' | 'polls' | 'events' | 'text'
+export type FeedContentFilter =
+  | 'photos'
+  | 'polls'
+  | 'events'
+  | 'text'
+  | 'articles'
+  | 'celebrations'
 
 type PostFilter = {
   companyId?: string
@@ -706,6 +761,10 @@ async function fetchPostsPage(
     query = query.eq('post_type', 'poll')
   } else if (filter?.feed === 'events') {
     query = query.eq('post_type', 'event')
+  } else if (filter?.feed === 'articles') {
+    query = query.eq('post_type', 'article')
+  } else if (filter?.feed === 'celebrations') {
+    query = query.eq('post_type', 'celebration')
   } else if (filter?.feed === 'text') {
     query = query
       .is('image_url', null)
@@ -713,7 +772,7 @@ async function fetchPostsPage(
       .is('media_urls', null)
       .is('video_url', null)
       .is('video_urls', null)
-      .not('post_type', 'in', '(poll,event)')
+      .not('post_type', 'in', '(poll,event,article,celebration)')
   }
 
   query =
@@ -1006,11 +1065,24 @@ export async function createCommunityPost(
               : 'post')
 
   const postData =
-    postType === 'article' && input.articleTitle?.trim()
-      ? { article_title: input.articleTitle.trim(), ...(mediaUrl ? { media_url: mediaUrl } : {}) }
-      : mediaUrl
-        ? { media_url: mediaUrl }
-        : {}
+    postType === 'article'
+      ? {
+          ...(input.articleTitle?.trim()
+            ? { article_title: input.articleTitle.trim() }
+            : {}),
+          ...(input.articleTags?.length
+            ? { article_tags: input.articleTags.map((tag) => tag.trim()).filter(Boolean) }
+            : {}),
+          ...(mediaUrl ? { media_url: mediaUrl } : {}),
+        }
+      : input.communityEventId
+        ? {
+            community_event_id: input.communityEventId,
+            ...(mediaUrl ? { media_url: mediaUrl } : {}),
+          }
+        : mediaUrl
+          ? { media_url: mediaUrl }
+          : {}
 
   const { data, error } = await supabase
     .from('posts')
@@ -1099,14 +1171,13 @@ export async function createCommunityPost(
   }
 
   if (postId && hasPoll && input.poll) {
-    const durationDays = input.poll.durationDays > 0 ? input.poll.durationDays : 1
-    const expiresAt = new Date(Date.now() + durationDays * 24 * 60 * 60 * 1000).toISOString()
+    const { duration, expiresAt } = toCommunityPollDuration(input.poll.durationDays)
     const { data: pollRow, error: pollError } = await supabase
       .from('polls')
       .insert({
         post_id: postId,
         question: pollQuestion || content || 'Poll',
-        duration: `${durationDays}d`,
+        duration,
         expires_at: expiresAt,
         is_active: true,
         total_votes: 0,
@@ -1114,15 +1185,26 @@ export async function createCommunityPost(
       .select('id')
       .maybeSingle()
 
-    if (!pollError && pollRow) {
-      await supabase.from('poll_options').insert(
-        pollOptions.slice(0, 4).map((text, index) => ({
-          poll_id: pollRow.id,
-          option_text: text,
-          position: index,
-          vote_count: 0,
-        })),
-      )
+    if (pollError || !pollRow) {
+      await supabase.from('posts').delete().eq('id', postId)
+      return {
+        id: null,
+        error: pollError?.message ?? 'Could not create poll. Try again.',
+      }
+    }
+
+    const { error: optionsError } = await supabase.from('poll_options').insert(
+      pollOptions.slice(0, 4).map((text, index) => ({
+        poll_id: pollRow.id,
+        option_text: text,
+        position: index,
+        vote_count: 0,
+      })),
+    )
+
+    if (optionsError) {
+      await supabase.from('posts').delete().eq('id', postId)
+      return { id: null, error: optionsError.message }
     }
   }
 

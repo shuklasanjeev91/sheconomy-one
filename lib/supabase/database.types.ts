@@ -16789,6 +16789,41 @@ export type Database = {
           view_count: number
         }[]
       }
+      get_story_feed: {
+        Args: never
+        Returns: {
+          background_color: string
+          content: string
+          created_at: string
+          expires_at: string
+          id: string
+          media_type: string
+          media_url: string
+          text_color: string
+          user_avatar: string
+          user_id: string
+          user_name: string
+          user_username: string
+          user_viewed: boolean
+          view_count: number
+        }[]
+      }
+      get_user_stories_with_views: {
+        Args: { target_user_id: string }
+        Returns: {
+          background_color: string
+          content: string
+          created_at: string
+          expires_at: string
+          id: string
+          media_type: string
+          media_url: string
+          text_color: string
+          user_id: string
+          user_viewed: boolean
+          view_count: number
+        }[]
+      }
       get_support_stats: {
         Args: { p_user_id: string }
         Returns: {

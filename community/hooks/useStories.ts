@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 
 import { fetchStoryRings, type StoryRing } from '~/community/lib/stories'
+import { subscribeStoryRefresh } from '~/community/lib/story-refresh'
 import { useSupabase } from '~/providers/SupabaseProvider'
 
 export function useStoryRings() {
@@ -15,14 +16,23 @@ export function useStoryRings() {
       return
     }
     setIsLoading(true)
-    const data = await fetchStoryRings(user.id)
-    setRings(data)
-    setIsLoading(false)
+    try {
+      const data = await fetchStoryRings(user.id)
+      setRings(data)
+    } catch {
+      setRings([])
+    } finally {
+      setIsLoading(false)
+    }
   }, [user])
 
   useEffect(() => {
-    load()
+    void load()
   }, [load])
+
+  useEffect(() => subscribeStoryRefresh(() => {
+    void load()
+  }), [load])
 
   return { rings, isLoading, refresh: load }
 }

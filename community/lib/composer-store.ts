@@ -1,7 +1,14 @@
 import { useSyncExternalStore } from 'react'
 
 /** How the composer should open (which tool is pre-armed). */
-export type ComposerMode = 'text' | 'poll' | 'event' | 'celebration' | 'product' | 'shop'
+export type ComposerMode =
+  | 'text'
+  | 'poll'
+  | 'event'
+  | 'celebration'
+  | 'product'
+  | 'shop'
+  | 'article'
 
 export type ComposerOptions = {
   mode?: ComposerMode
@@ -13,6 +20,26 @@ export type ComposerOptions = {
   gifUrl?: string
   groupId?: string
   companyId?: string
+}
+
+/** Sheet title for the shared community composer by mode. */
+export function composerSheetTitle(mode?: ComposerMode): string {
+  switch (mode) {
+    case 'article':
+      return 'Write article'
+    case 'event':
+      return 'Create event'
+    case 'celebration':
+      return 'Celebrate an occasion'
+    case 'poll':
+      return 'Create a poll'
+    case 'product':
+      return 'Share a product'
+    case 'shop':
+      return 'Promote your shop'
+    default:
+      return 'Create a post'
+  }
 }
 
 type ComposerState = {
@@ -29,7 +56,7 @@ function emit() {
   for (const listener of listeners) listener()
 }
 
-/** Open the shared community post composer (bottom sheet on mobile, dialog on desktop). */
+/** Open the shared community post composer (bottom sheet on web / iOS / Android). */
 export function openComposer(options: ComposerOptions = {}) {
   state = { open: true, options }
   emit()

@@ -104,6 +104,7 @@ export const communityRoutes = {
   settings: appRoutes.settings,
   createPost: '/community/create' as Href,
   post: (id: string) => `/community/post/${encodeURIComponent(id)}` as Href,
+  article: (id: string) => `/community/article/${encodeURIComponent(id)}` as Href,
   jobs: '/community/jobs' as Href,
   jobCreate: '/community/jobs/create' as Href,
   job: (id: string) => `/community/jobs/${encodeURIComponent(id)}` as Href,

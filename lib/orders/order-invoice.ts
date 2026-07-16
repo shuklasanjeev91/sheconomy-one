@@ -224,7 +224,7 @@ export function buildOrderInvoiceHtml(item: VendorOrderItem, options: OrderInvoi
 /**
  * Render the invoice into a hidden iframe and trigger the browser print dialog
  * (whose "Save as PDF" destination downloads the invoice). Web-only; returns
- * `{ ok: false, reason: 'unsupported' }` on native so callers can show a toast.
+ * `{ ok: false, reason: 'unsupported' }` on native — use `shareOrderInvoice` there.
  */
 export function downloadOrderInvoice(item: VendorOrderItem, options: OrderInvoiceOptions = {}): InvoiceResult {
   if (typeof document === 'undefined' || typeof window === 'undefined') {
@@ -280,4 +280,40 @@ export function downloadOrderInvoice(item: VendorOrderItem, options: OrderInvoic
   }
 
   return { ok: true }
+}
+
+/**
+ * Cross-platform invoice share/print:
+ * - web → browser print / Save as PDF
+ * - iOS/Android → expo-print PDF + expo-sharing
+ */
+export async function shareOrderInvoice(
+  item: VendorOrderItem,
+  options: OrderInvoiceOptions = {},
+): Promise<InvoiceResult> {
+  if (!item) return { ok: false, reason: 'no-data' }
+
+  if (typeof document !== 'undefined' && typeof window !== 'undefined') {
+    return downloadOrderInvoice(item, options)
+  }
+
+  try {
+    const html = buildOrderInvoiceHtml(item, options)
+    const Print = await import('expo-print')
+    const Sharing = await import('expo-sharing')
+    const file = await Print.printToFileAsync({ html })
+    if (!file?.uri) return { ok: false, reason: 'blocked' }
+
+    const canShare = await Sharing.isAvailableAsync()
+    if (!canShare) return { ok: false, reason: 'unsupported' }
+
+    await Sharing.shareAsync(file.uri, {
+      mimeType: 'application/pdf',
+      dialogTitle: `Invoice ${item.orders?.order_number ?? item.id}`,
+      UTI: 'com.adobe.pdf',
+    })
+    return { ok: true }
+  } catch {
+    return { ok: false, reason: 'blocked' }
+  }
 }

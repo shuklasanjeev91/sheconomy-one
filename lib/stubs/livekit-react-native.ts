@@ -33,7 +33,22 @@ export function isTrackReference() {
   return false
 }
 
+export const AndroidAudioTypePresets = {
+  communication: {},
+  media: {},
+}
+
 export const AudioSession = {
+  configureAudio: async () => {},
   startAudioSession: async () => {},
   stopAudioSession: async () => {},
+  setDefaultRemoteAudioTrackVolume: async () => {},
+  getAudioOutputs: async () => [] as string[],
+  selectAudioOutput: async () => {},
+  showAudioRoutePicker: async () => {},
+  setAppleAudioConfiguration: async () => {},
+}
+
+export function setupIOSAudioManagement() {
+  return () => {}
 }

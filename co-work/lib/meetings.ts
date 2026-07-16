@@ -363,7 +363,11 @@ export async function joinMeetingParticipant(
 export async function admitParticipant(participantId: string): Promise<void> {
   const { error } = await supabase
     .from('meeting_participants')
-    .update({ status: 'admitted', joined_at: new Date().toISOString() })
+    .update({
+      status: 'admitted',
+      joined_at: new Date().toISOString(),
+      left_at: null,
+    })
     .eq('id', participantId)
 
   if (error) throw new Error(error.message)
@@ -451,7 +455,17 @@ export async function sendMeetingChatMessage(
     .single()
 
   if (error) throw new Error(error.message)
-  return data as MeetingChatMessage
+
+  const { data: profile } = await supabase
+    .from('profiles')
+    .select('full_name, username, avatar_url')
+    .eq('id', senderId)
+    .maybeSingle()
+
+  return {
+    ...(data as MeetingChatMessage),
+    sender: profile ?? null,
+  }
 }
 
 import { buildAbsoluteUrl } from '~/lib/platform/url'

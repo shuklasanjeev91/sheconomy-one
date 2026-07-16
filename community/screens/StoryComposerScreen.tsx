@@ -4,6 +4,7 @@ import { useState } from 'react'
 import { CommunityCard } from '~/community/components/CommunityCard'
 import { CommunityShell } from '~/community/components/CommunityShell'
 import { createStory } from '~/community/lib/stories'
+import { refreshStories } from '~/community/lib/story-refresh'
 import { useCommunityUi } from '~/community/lib/community-theme'
 import { Button, Spinner, Text, TextArea, XStack, YStack, useAppToast } from '~/components/ui'
 import { ImageUploadField, preparePickedImagesForUpload } from '~/components/media/ImageUploadField'
@@ -98,6 +99,7 @@ export function StoryComposerScreen() {
     }
 
     toast.show('Story posted', { tone: 'success' })
+    refreshStories()
     router.replace(communityRoutes.home)
   }
 

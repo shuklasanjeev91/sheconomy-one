@@ -128,7 +128,9 @@ export function ShopScreen() {
             borderWidth={1}
             borderColor={ui.borderSubtle}
             backgroundColor={ui.surface}
-            maxWidth={480}
+            width="100%"
+            maxWidth="100%"
+            alignSelf="stretch"
             style={getShadowStyle('sm')}
           >
             <Text fontWeight="600" fontSize={22} color={ui.text}>
@@ -415,7 +417,7 @@ export function ShopScreen() {
           ) : null}
 
           {tab === 'reviews' ? (
-            <YStack gap="$4" width="100%" maxWidth={900}>
+            <YStack gap="$4" width="100%" maxWidth="100%" alignSelf="stretch">
               {hasReviews ? (
                 <ReviewsSection
                   title="Customer reviews"

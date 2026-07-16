@@ -146,6 +146,7 @@ declare module 'one' {
         | `/class/playlists/${OneRouter.SingleRoutePart<T>}`
         | `/co-work/meeting/${OneRouter.SingleRoutePart<T>}`
         | `/co-work/meeting/${OneRouter.SingleRoutePart<T>}/live`
+        | `/community/article/${OneRouter.SingleRoutePart<T>}`
         | `/community/company/${OneRouter.SingleRoutePart<T>}`
         | `/community/events/${OneRouter.SingleRoutePart<T>}`
         | `/community/group/${OneRouter.SingleRoutePart<T>}`
@@ -173,6 +174,7 @@ declare module 'one' {
         | `/class/playlists/[id]`
         | `/co-work/meeting/[code]`
         | `/co-work/meeting/[code]/live`
+        | `/community/article/[id]`
         | `/community/company/[slug]`
         | `/community/events/[id]`
         | `/community/group/[id]`
@@ -201,6 +203,7 @@ declare module 'one' {
         '/class/playlists/[id]': RouteInfo<{ id: string }>
         '/co-work/meeting/[code]': RouteInfo<{ code: string }>
         '/co-work/meeting/[code]/live': RouteInfo<{ code: string }>
+        '/community/article/[id]': RouteInfo<{ id: string }>
         '/community/company/[slug]': RouteInfo<{ slug: string }>
         '/community/events/[id]': RouteInfo<{ id: string }>
         '/community/group/[id]': RouteInfo<{ id: string }>

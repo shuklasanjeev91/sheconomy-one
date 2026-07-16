@@ -16,7 +16,9 @@ export default function ChatCallRoute() {
   }>()
   const code = readRouteParam(params.code)
   const typeRaw = readRouteParam(params.type).toLowerCase()
-  const callType: CallType = typeRaw === 'audio' ? 'audio' : 'video'
+  // Default to audio. Only treat as video when explicitly requested — missing
+  // query params previously turned voice calls into video on some platforms.
+  const callType: CallType = typeRaw === 'video' ? 'video' : 'audio'
   const callId = readRouteParam(params.callId) || undefined
 
   return <ChatCallScreen code={code} callType={callType} callId={callId} />

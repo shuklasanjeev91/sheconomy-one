@@ -24,71 +24,89 @@ export type StorySlide = {
   view_count: number | null
 }
 
-export async function fetchStoryRings(viewerId: string): Promise<StoryRing[]> {
-  const { data: following } = await supabase
-    .from('follows')
-    .select('following_id')
-    .eq('follower_id', viewerId)
-    .eq('status', 'active')
+type StoryFeedRow = {
+  id: string
+  user_id: string
+  user_name: string | null
+  user_avatar: string | null
+  user_username: string | null
+  content: string | null
+  media_url: string | null
+  media_type: string | null
+  background_color: string | null
+  text_color: string | null
+  view_count: number | null
+  user_viewed: boolean | null
+  created_at: string | null
+  expires_at: string | null
+}
 
-  const { data: connections } = await supabase.rpc('get_user_connections', {
-    target_user_id: viewerId,
-    connection_status: 'accepted',
-  })
+type UserStoryRow = {
+  id: string
+  user_id: string
+  content: string | null
+  media_url: string | null
+  media_type: string | null
+  background_color: string | null
+  text_color: string | null
+  view_count: number | null
+  user_viewed: boolean | null
+  created_at: string | null
+  expires_at: string | null
+}
 
-  const networkIds = new Set<string>([viewerId])
-  for (const row of following ?? []) networkIds.add(row.following_id)
-  for (const row of (connections as { user_id: string }[] | null) ?? []) {
-    if (row.user_id) networkIds.add(row.user_id)
+/** Aggregate active stories into Instagram-style rings (own + network). */
+export async function fetchStoryRings(_viewerId?: string): Promise<StoryRing[]> {
+  const { data, error } = await supabase.rpc('get_story_feed')
+  if (error || !data?.length) return []
+
+  const rows = data as StoryFeedRow[]
+  const byUser = new Map<string, StoryRing>()
+
+  for (const row of rows) {
+    const existing = byUser.get(row.user_id)
+    const unseen = !(row.user_viewed ?? false)
+    if (!existing) {
+      byUser.set(row.user_id, {
+        user_id: row.user_id,
+        full_name: row.user_name?.trim() || row.user_username || 'Member',
+        username: row.user_username,
+        avatar_url: row.user_avatar,
+        has_unseen: unseen,
+        story_count: 1,
+      })
+      continue
+    }
+    existing.story_count += 1
+    if (unseen) existing.has_unseen = true
   }
 
-  const now = new Date().toISOString()
-  const { data: stories } = await supabase
-    .from('stories')
-    .select('id, user_id')
-    .in('user_id', [...networkIds])
-    .eq('is_active', true)
-    .gt('expires_at', now)
-
-  if (!stories?.length) return []
-
-  const storyUserIds = [...new Set(stories.map((s) => s.user_id))]
-  const storyIds = stories.map((s) => s.id)
-
-  const [{ data: profiles }, { data: views }] = await Promise.all([
-    supabase
-      .from('profiles')
-      .select('id, full_name, username, avatar_url')
-      .in('id', storyUserIds)
-      .eq('is_deleted', false),
-    supabase.from('story_views').select('story_id').eq('viewer_id', viewerId).in('story_id', storyIds),
-  ])
-
-  const viewedIds = new Set((views ?? []).map((v) => v.story_id))
-  const countByUser = new Map<string, number>()
-  const unseenByUser = new Map<string, boolean>()
-
-  for (const story of stories) {
-    countByUser.set(story.user_id, (countByUser.get(story.user_id) ?? 0) + 1)
-    if (!viewedIds.has(story.id)) unseenByUser.set(story.user_id, true)
-  }
-
-  return (profiles ?? [])
-    .map((profile) => ({
-      user_id: profile.id,
-      full_name: profile.full_name ?? profile.username ?? 'Member',
-      username: profile.username,
-      avatar_url: profile.avatar_url,
-      has_unseen: unseenByUser.get(profile.id) ?? false,
-      story_count: countByUser.get(profile.id) ?? 0,
-    }))
-    .filter((ring) => ring.story_count > 0)
-    .sort((a, b) => Number(b.has_unseen) - Number(a.has_unseen))
+  return [...byUser.values()].sort((a, b) => Number(b.has_unseen) - Number(a.has_unseen))
 }
 
 export async function fetchUserStories(userId: string): Promise<StorySlide[]> {
+  const { data, error } = await supabase.rpc('get_user_stories_with_views', {
+    target_user_id: userId,
+  })
+
+  if (!error && data) {
+    return (data as UserStoryRow[]).map((row) => ({
+      id: row.id,
+      user_id: row.user_id,
+      content: row.content,
+      media_type: row.media_type,
+      media_url: row.media_url,
+      background_color: row.background_color,
+      text_color: row.text_color,
+      created_at: row.created_at,
+      expires_at: row.expires_at,
+      view_count: row.view_count,
+    }))
+  }
+
+  // Fallback for older backends without the RPC.
   const now = new Date().toISOString()
-  const { data, error } = await supabase
+  const { data: legacy } = await supabase
     .from('stories')
     .select(
       'id, user_id, content, media_type, media_url, background_color, text_color, created_at, expires_at, view_count',
@@ -98,8 +116,7 @@ export async function fetchUserStories(userId: string): Promise<StorySlide[]> {
     .gt('expires_at', now)
     .order('created_at', { ascending: true })
 
-  if (error) return []
-  return (data ?? []) as StorySlide[]
+  return (legacy ?? []) as StorySlide[]
 }
 
 export async function createStory(
@@ -125,6 +142,7 @@ export async function createStory(
       text_color: input.textColor ?? '#ffffff',
       is_active: true,
       expires_at: expiresAt,
+      // Visible to connections/followers via get_story_feed RLS/RPC.
       privacy_level: 'connections',
     })
     .select('id')
@@ -143,7 +161,8 @@ export async function markStoryViewed(
     viewed_at: new Date().toISOString(),
   })
 
-  if (error) {
+  // Unique / already-viewed is fine — treat as success.
+  if (error && !/duplicate|unique/i.test(error.message)) {
     return { error: error.message }
   }
   return { error: null }

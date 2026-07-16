@@ -4,7 +4,8 @@ import { Platform } from 'react-native'
 
 import { fetchUserStories, markStoryViewed, type StorySlide } from '~/community/lib/stories'
 import { useCommunityUi } from '~/community/lib/community-theme'
-import { Spinner, Text, XStack, YStack } from '~/components/ui'
+import { Image, Spinner, Text, XStack, YStack } from '~/components/ui'
+import { NativeVideoFile } from '~/lib/native/NativeMediaPlayers'
 import { communityRoutes } from '~/lib/routes'
 import { useSupabase } from '~/providers/SupabaseProvider'
 
@@ -117,8 +118,11 @@ export function StoryViewerScreen() {
 
       <YStack flex={1} alignItems="center" justifyContent="center" padding={24} gap={16}>
         {slide.media_type === 'image' && slide.media_url ? (
-          // eslint-disable-next-line jsx-a11y/alt-text
-          <img src={slide.media_url} style={{ maxWidth: '100%', maxHeight: '80vh', objectFit: 'contain' }} />
+          <Image
+            source={{ uri: slide.media_url }}
+            style={{ width: '100%', maxWidth: 520, height: '80%', maxHeight: 640 }}
+            resizeMode="contain"
+          />
         ) : slide.media_type === 'video' && slide.media_url ? (
           Platform.OS === 'web' ? (
             <video
@@ -131,10 +135,8 @@ export function StoryViewerScreen() {
               onEnded={goNext}
             />
           ) : (
-            <YStack width="100%" maxWidth={420} minHeight={280} alignItems="center" justifyContent="center">
-              <Text color="white" textAlign="center">
-                Video story — open on web to play inline.
-              </Text>
+            <YStack width="100%" maxWidth={420}>
+              <NativeVideoFile uri={slide.media_url} autoPlay onEnded={goNext} />
             </YStack>
           )
         ) : (

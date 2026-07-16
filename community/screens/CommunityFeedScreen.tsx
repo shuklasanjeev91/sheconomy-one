@@ -14,6 +14,7 @@ import { useCommunityFeed } from '~/community/hooks/useCommunityFeed'
 import { useCommunitySuggestions } from '~/community/hooks/useCommunitySuggestions'
 import { useCommunityUi } from '~/community/lib/community-theme'
 import { interleaveFeedWithSuggestions } from '~/community/lib/interleave-feed-suggestions'
+import { refreshStories } from '~/community/lib/story-refresh'
 import { Spinner, Text, YStack, useMedia } from '~/components/ui'
 
 const SUGGESTION_INTERVAL = 3
@@ -41,6 +42,7 @@ export function CommunityFeedScreen() {
       onRefresh={async () => {
         refresh()
         refreshSuggestions()
+        refreshStories()
       }}
     >
       <StoriesStrip />

@@ -40,12 +40,18 @@ export async function completeGenderVerificationSession(input: {
   }
 
   const payload = data as Record<string, unknown> | null
-  const ok = payload?.success === true || payload?.verified === true
+  // RPC returns `{ ok: true }` on success; keep legacy keys for older backends.
+  const ok =
+    payload?.ok === true || payload?.success === true || payload?.verified === true
 
   return {
     result: {
       ok,
-      message: String(payload?.message ?? (ok ? 'Verification complete.' : 'Verification failed.')),
+      message: String(
+        payload?.message ??
+          payload?.error ??
+          (ok ? 'Verification complete.' : 'Verification failed.'),
+      ),
       verified: ok,
     } satisfies CompleteVerificationResult,
     error: null as string | null,
