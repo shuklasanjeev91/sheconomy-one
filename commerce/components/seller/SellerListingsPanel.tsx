@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react'
-import { Link } from 'one'
+import { AppLink } from '~/components/navigation/AppLink'
 
 import { CommercePanel } from '~/commerce/components'
 import { useSellerListings } from '~/commerce/hooks/useSellerListings'
@@ -168,11 +168,11 @@ export function SellerListingsPanel({ shopId, onAddListing }: SellerListingsPane
                 </XStack>
 
                 <XStack gap="$2" flexWrap="wrap">
-                  <Link href={href} asChild>
+                  <AppLink href={href} asChild>
                     <Button tone="outline" size="$2.5" borderRadius={999}>
                       Preview
                     </Button>
-                  </Link>
+                  </AppLink>
                   {listing.listingStatus === 'draft' || listing.listingStatus === 'paused' ? (
                     <Button
                       tone="primary"

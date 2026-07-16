@@ -1,5 +1,5 @@
 import { useMemo } from 'react'
-import { Linking, Platform } from 'react-native'
+import { Platform } from 'react-native'
 
 import {
   Avatar,
@@ -17,6 +17,7 @@ import { getShadowStyle, radius } from '~/config/tokens'
 import { useLockBodyScroll } from '~/hooks/useLockBodyScroll'
 import { overlayBackdropStyle } from '~/lib/layout/styles'
 import { downloadOrderInvoice } from '~/lib/orders/order-invoice'
+import { openMailtoLink } from '~/lib/platform/openMailto'
 import { formatOrderAmount, formatOrderDate } from '~/lib/orders/order.utils'
 import type { OrderPayment } from '~/lib/orders/payment.type'
 import type { OrderAddressSummary, VendorOrderItem } from '~/lib/orders/vendor-orders.type'
@@ -116,7 +117,7 @@ export function VendorOrderDetailDrawer({
             onAdvance={onAdvance}
             onContact={() => {
               const email = item.orders?.profiles?.email
-              if (email) void Linking.openURL(`mailto:${email}`).catch(() => undefined)
+              if (email) void openMailtoLink(`mailto:${email}`)
               else toast.show('No customer email on file', { tone: 'danger' })
             }}
             onDownload={() => {

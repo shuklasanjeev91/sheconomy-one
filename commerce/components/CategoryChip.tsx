@@ -1,6 +1,5 @@
-import { Link } from 'one'
-
 import { Text, YStack } from '~/components/ui'
+import { AppLink } from '~/components/navigation/AppLink'
 import { getShadowStyle, radius } from '~/config/tokens'
 import type { CategorySummary } from '~/lib/supabase/commerce'
 import { getCategorySlug } from '~/lib/supabase/commerce'
@@ -24,7 +23,7 @@ export function CategoryChip({ category }: CategoryChipProps) {
       : category.category
 
   return (
-    <Link href={commerceRoutes.category(getCategorySlug(category))} asChild>
+    <AppLink href={commerceRoutes.category(getCategorySlug(category))} asChild>
       <YStack
         width={108}
         alignItems="center"
@@ -72,6 +71,6 @@ export function CategoryChip({ category }: CategoryChipProps) {
           </Text>
         ) : null}
       </YStack>
-    </Link>
+    </AppLink>
   )
 }

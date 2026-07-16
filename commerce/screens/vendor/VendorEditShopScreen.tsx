@@ -136,32 +136,14 @@ export function VendorEditShopScreen() {
       paddingBottom={(isDesktop ? 32 : 24) + safeBottom}
     >
       {/* Header */}
-      <XStack alignItems="center" gap="$3">
-        <YStack
-          width={40}
-          height={40}
-          borderRadius={radius.chip}
-          alignItems="center"
-          justifyContent="center"
-          cursor="pointer"
-          borderWidth={1}
-          borderColor={ui.borderSubtle}
-          backgroundColor={ui.surface}
-          hoverStyle={{ backgroundColor: ui.surfaceMuted }}
-          pressStyle={{ opacity: 0.7 }}
-          onPress={() => router.replace(vendorRoutes.myShop)}
-        >
-          <Icons.ChevronLeft size={20} color={ui.text} />
-        </YStack>
-        <YStack>
-          <Text fontSize={isDesktop ? 24 : 20} fontWeight="800" color={ui.text} letterSpacing={-0.4}>
-            Edit Shop
-          </Text>
-          <Text fontSize={13} color={ui.textSecondary}>
-            Update the details shoppers see on your storefront.
-          </Text>
-        </YStack>
-      </XStack>
+      <YStack gap="$1">
+        <Text fontSize={isDesktop ? 24 : 20} fontWeight="800" color={ui.text} letterSpacing={-0.4}>
+          Edit Shop
+        </Text>
+        <Text fontSize={13} color={ui.textSecondary}>
+          Update the details shoppers see on your storefront.
+        </Text>
+      </YStack>
 
       {/* Basics */}
       <YStack

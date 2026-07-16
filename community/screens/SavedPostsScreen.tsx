@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
-import { Link } from 'one'
+import { AppLink } from '~/components/navigation/AppLink'
+
 import { Share } from 'react-native'
 
 import { CommunityPageHeader } from '~/community/components/CommunityPageHeader'
@@ -200,11 +201,11 @@ export function SavedPostsScreen() {
       ) : !user ? (
         <YStack gap="$3" paddingVertical="$6">
           <Text color={ui.textMuted}>Sign in to save posts for later.</Text>
-          <Link href={routes.signIn} asChild>
+          <AppLink href={routes.signIn} asChild>
             <Button alignSelf="flex-start" tone="primary" borderRadius={999}>
               Sign in
             </Button>
-          </Link>
+          </AppLink>
         </YStack>
       ) : error ? (
         <Text color="$red10">{error}</Text>
@@ -214,11 +215,11 @@ export function SavedPostsScreen() {
           <Text color={ui.textMuted}>
             No saved posts yet. Open any post’s options menu and tap Save post.
           </Text>
-          <Link href={communityRoutes.home} asChild>
+          <AppLink href={communityRoutes.home} asChild>
             <Button alignSelf="flex-start" tone="outline" borderRadius={999}>
               Browse feed
             </Button>
-          </Link>
+          </AppLink>
         </YStack>
       ) : visible.length === 0 ? (
         <YStack gap="$2" paddingVertical="$6" alignItems="center">

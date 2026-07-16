@@ -30,6 +30,23 @@ export function appShellStyle(isDesktop: boolean) {
   }
 }
 
+/**
+ * Locked app shell for pane apps (chat / community / class / co-work).
+ * Gives flex children a definite height so they cannot collapse to a blank pane.
+ */
+export function lockedAppShellStyle() {
+  if (Platform.OS !== 'web') return undefined
+  return {
+    height: '100dvh' as const,
+    minHeight: '100dvh' as const,
+    maxHeight: '100dvh' as const,
+    width: '100%' as const,
+    display: 'flex' as const,
+    flexDirection: 'column' as const,
+    overflow: 'hidden' as const,
+  }
+}
+
 /** Locked viewport for live meeting — prevents scroll and keeps controls on screen. */
 export function meetingViewportStyle() {
   return Platform.select({

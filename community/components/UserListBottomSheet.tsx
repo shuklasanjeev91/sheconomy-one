@@ -11,6 +11,8 @@ type UserListBottomSheetProps = {
   userId: string
   isOwnProfile?: boolean
   subjectName?: string
+  /** Profile counter — sheet uses live total so they stay aligned. */
+  expectedCount?: number | null
 }
 
 export function UserListBottomSheet({
@@ -27,7 +29,11 @@ export function UserListBottomSheet({
   if (!kind) return null
 
   const meta = USER_LIST_META[kind]
-  const title = isOwnProfile ? meta.title : `${subjectName ?? 'Member'} · ${meta.title}`
+  const liveCount = list.isLoading ? null : list.totalCount
+  const countLabel = liveCount == null ? '' : ` (${liveCount})`
+  const title = isOwnProfile
+    ? `${meta.title}${countLabel}`
+    : `${subjectName ?? 'Member'} · ${meta.title}${countLabel}`
 
   return (
     <AppBottomSheet open={open} onOpenChange={onOpenChange} title={title} scrollable>
@@ -35,6 +41,11 @@ export function UserListBottomSheet({
         <Text fontSize={14} color={communityUi.textMuted} lineHeight={20}>
           {meta.description}
         </Text>
+        {list.error ? (
+          <Text fontSize={13} color={communityUi.danger ?? '#b91c1c'}>
+            {list.error}
+          </Text>
+        ) : null}
         <UserList
           items={list.items}
           isLoading={list.isLoading}

@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
+import { AppLink } from '~/components/navigation/AppLink'
 
 import { CommercePageHeader, CommercePanel } from '~/commerce/components'
 import {
@@ -13,7 +14,6 @@ import { copyToClipboard } from '~/lib/platform/clipboard'
 import { commerceRoutes } from '~/lib/routes'
 import { useProfile } from '~/hooks/useProfile'
 import { useAppUi } from '~/lib/theme/useAppUi'
-import { Link } from 'one'
 
 type OrderStatusFilter = 'all' | 'processing' | 'shipped' | 'delivered' | 'cancelled'
 
@@ -106,7 +106,6 @@ export function OrderHistoryScreen() {
             subtitle="Track purchases, delivery status, and payments"
           />
 
-
           <HorizontalScrollRow gap="$2">
               {ORDER_FILTERS.map((filter) => {
                 const active = statusFilter === filter.id
@@ -146,11 +145,11 @@ export function OrderHistoryScreen() {
               <Text color={ui.textSecondary} fontSize={14} textAlign="center">
                 When you buy from a shop, your orders will show up here.
               </Text>
-              <Link href={commerceRoutes.home} asChild>
+              <AppLink href={commerceRoutes.home} asChild>
                 <Button tone="primary" size="$3" borderRadius={999}>
                   Start shopping
                 </Button>
-              </Link>
+              </AppLink>
             </CommercePanel>
           ) : visibleOrders.length === 0 ? (
             <CommercePanel padding="$6" alignItems="center" gap="$2">

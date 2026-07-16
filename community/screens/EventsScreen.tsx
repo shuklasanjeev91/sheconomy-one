@@ -1,5 +1,5 @@
-import { Link } from 'one'
 import { useCallback, useEffect, useMemo, useState } from 'react'
+import { AppLink } from '~/components/navigation/AppLink'
 
 import { CommunityCard } from '~/community/components/CommunityCard'
 import { CommunityPageHeader } from '~/community/components/CommunityPageHeader'
@@ -107,7 +107,7 @@ export function EventsScreen() {
           title="Events"
           subtitle={`Discover meetups, workshops, and online sessions from the ${BRAND_NAME} network.`}
           actions={
-            <Link href={communityRoutes.eventCreate}>
+            <AppLink href={communityRoutes.eventCreate}>
               <Button
                 backgroundColor={communityUi.brand}
                 color="white"
@@ -116,7 +116,7 @@ export function EventsScreen() {
               >
                 Create event
               </Button>
-            </Link>
+            </AppLink>
           }
         />
 
@@ -175,16 +175,16 @@ export function EventsScreen() {
           <Text color={communityUi.textMuted} textAlign="center">
             Host a session for your network or community group.
           </Text>
-          <Link href={communityRoutes.eventCreate}>
+          <AppLink href={communityRoutes.eventCreate}>
             <Text color={communityUi.brand} fontWeight="600">
               Create the first event
             </Text>
-          </Link>
+          </AppLink>
         </CommunityCard>
       ) : (
         <YStack gap={12}>
           {visibleItems.map((event) => (
-            <Link key={event.id} href={communityRoutes.event(event.id)}>
+            <AppLink key={event.id} href={communityRoutes.event(event.id)}>
               <CommunityCard padding={0} overflow="hidden">
                 {event.image_url ? (
                   <Image src={event.image_url} width="100%" height={160} />
@@ -207,7 +207,7 @@ export function EventsScreen() {
                   </XStack>
                 </YStack>
               </CommunityCard>
-            </Link>
+            </AppLink>
           ))}
           {hasMore ? (
             <YStack alignItems="center" paddingVertical={12}>

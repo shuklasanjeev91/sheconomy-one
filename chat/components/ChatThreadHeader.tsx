@@ -8,8 +8,6 @@ type ChatThreadHeaderProps = {
   chat: ChatSummary
   presence: PeerPresence
   peerTyping: boolean
-  showBack: boolean
-  onBack: () => void
   onOpenMenu?: () => void
   onOpenInfo?: () => void
   onSearch?: () => void
@@ -21,8 +19,6 @@ export function ChatThreadHeader({
   chat,
   presence,
   peerTyping,
-  showBack,
-  onBack,
   onOpenMenu,
   onOpenInfo,
   onSearch,
@@ -75,24 +71,6 @@ export function ChatThreadHeader({
       borderBottomWidth={1}
       borderBottomColor={theme.border}
     >
-      {showBack ? (
-        <XStack
-          onPress={onBack}
-          cursor="pointer"
-          width={38}
-          height={38}
-          borderRadius={999}
-          alignItems="center"
-          justifyContent="center"
-          hoverStyle={{ backgroundColor: theme.listItemHover }}
-          pressStyle={{ scale: 0.92 }}
-          animation="quick"
-          aria-label="Back"
-        >
-          <Icons.ChevronLeft size={24} color={theme.text} />
-        </XStack>
-      ) : null}
-
       <XStack
         flex={1}
         minWidth={0}

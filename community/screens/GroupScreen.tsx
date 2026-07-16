@@ -1,4 +1,5 @@
-import { Link, useParams } from 'one'
+import { useParams } from 'one'
+import { AppLink } from '~/components/navigation/AppLink'
 import { useCallback, useEffect, useMemo, useState } from 'react'
 
 import { AboutDetailRow } from '~/community/components/AboutDetailRow'
@@ -8,6 +9,7 @@ import { EntityPageHero } from '~/community/components/EntityPageHero'
 import { EntityPageTabs } from '~/community/components/EntityPageTabs'
 import { FeedPostCard } from '~/community/components/FeedPostCard'
 import { ProfileLink } from '~/community/components/ProfileLink'
+import { EntityAdminRoster, type EntityAdminRosterPerson } from '~/community/components/EntityAdminRoster'
 import { UserList } from '~/community/components/UserList'
 import { LoadMoreEnd, LoadMoreSentinel } from '~/commerce/components/LoadMoreSentinel'
 import { fetchGroupPostsPage } from '~/community/lib/community'
@@ -25,6 +27,7 @@ import {
   joinGroup,
   leaveGroup,
   respondToGroupJoinRequest,
+  setGroupMemberRole,
   updateGroup,
   type Group,
   type GroupJoinRequest,
@@ -67,6 +70,7 @@ export function GroupScreen() {
   const [tab, setTab] = useState<Tab>('discussion')
   const [posts, setPosts] = useState<CommunityPost[]>([])
   const [members, setMembers] = useState<UserListMember[]>([])
+  const [memberPeople, setMemberPeople] = useState<EntityAdminRosterPerson[]>([])
   const [joinRequests, setJoinRequests] = useState<GroupJoinRequest[]>([])
   const [groupEvents, setGroupEvents] = useState<CommunityEvent[]>([])
   const [isMember, setIsMember] = useState(false)
@@ -79,12 +83,13 @@ export function GroupScreen() {
   const [isToggling, setIsToggling] = useState(false)
   const [isEditing, setIsEditing] = useState(false)
   const [isSaving, setIsSaving] = useState(false)
+  const [busyRoleUserId, setBusyRoleUserId] = useState<string | null>(null)
   const [editTitle, setEditTitle] = useState('')
   const [editDescription, setEditDescription] = useState('')
   const [editRules, setEditRules] = useState('')
   const [editLocation, setEditLocation] = useState('')
 
-  const isAdmin = memberRole === 'admin'
+  const isAdmin = memberRole === 'admin' || (!!user && group?.created_by === user.id)
 
   const reload = useCallback(async () => {
     if (!id) return
@@ -116,6 +121,22 @@ export function GroupScreen() {
           connection_status: null,
           is_sender: false,
         })),
+      )
+      setMemberPeople(
+        memberRows
+          .filter((member) => member.user_id)
+          .map((member) => ({
+            user_id: member.user_id!,
+            role: member.role === 'admin' ? 'admin' : 'member',
+            username: member.profile?.username ?? null,
+            full_name: member.profile?.full_name ?? member.profile?.username ?? 'Member',
+            headline: member.profile?.headline ?? null,
+            avatar_url: member.profile?.avatar_url ?? null,
+          }))
+          .sort((a, b) => {
+            if (a.role === b.role) return a.full_name.localeCompare(b.full_name)
+            return a.role === 'admin' ? -1 : 1
+          }),
       )
       setIsMember(membership.isMember)
       setIsPending(membership.isPending)
@@ -210,6 +231,23 @@ export function GroupScreen() {
     }
   }
 
+  async function handleToggleGroupAdmin(person: EntityAdminRosterPerson) {
+    if (!group || !isAdmin) return
+    const nextRole = person.role === 'admin' ? 'member' : 'admin'
+    setBusyRoleUserId(person.user_id)
+    setMemberPeople((prev) =>
+      prev.map((row) => (row.user_id === person.user_id ? { ...row, role: nextRole } : row)),
+    )
+    const { error } = await setGroupMemberRole(group.id, person.user_id, nextRole)
+    setBusyRoleUserId(null)
+    if (error) {
+      toast.show('Could not change role', { tone: 'danger', message: error })
+      reload()
+      return
+    }
+    toast.show(nextRole === 'admin' ? 'Admin assigned' : 'Admin removed', { tone: 'success' })
+  }
+
   if (isLoading) {
     return (
       <CommunityShell wide>
@@ -269,22 +307,22 @@ export function GroupScreen() {
                 }}
               />
               {isMember ? (
-                <Link href={`${communityRoutes.createPost}?groupId=${group.id}` as never}>
+                <AppLink href={`${communityRoutes.createPost}?groupId=${group.id}` as never}>
                   <Button backgroundColor={communityUi.brand} color="white" borderRadius={999}>
                     Start a post
                   </Button>
-                </Link>
+                </AppLink>
               ) : null}
               {isAdmin ? (
                 <Button tone="outline" borderRadius={999} onPress={() => setIsEditing((value) => !value)}>
                   {isEditing ? 'Cancel edit' : 'Manage group'}
                 </Button>
               ) : null}
-              <Link href={communityRoutes.eventCreate}>
+              <AppLink href={communityRoutes.eventCreate}>
                 <Button tone="outline" borderRadius={999}>
                   Create event
                 </Button>
-              </Link>
+              </AppLink>
             </>
           }
         />
@@ -331,11 +369,11 @@ export function GroupScreen() {
                 <Text fontSize={15} fontWeight="600" color={communityUi.text}>
                   Start a conversation
                 </Text>
-                <Link href={`${communityRoutes.createPost}?groupId=${group.id}` as never}>
+                <AppLink href={`${communityRoutes.createPost}?groupId=${group.id}` as never}>
                   <Text fontSize={14} fontWeight="600" color={communityUi.brand}>
                     Write something to the group
                   </Text>
-                </Link>
+                </AppLink>
               </CommunityCard>
             ) : null}
             {posts.length === 0 ? (
@@ -395,9 +433,26 @@ export function GroupScreen() {
         ) : null}
 
         {tab === 'members' ? (
-          <CommunityCard padding={12}>
-            <UserList items={members} showConnect showFollow searchable />
-          </CommunityCard>
+          <YStack gap={12}>
+            {isAdmin ? (
+              <CommunityCard padding={16}>
+                <EntityAdminRoster
+                  title="Group admins"
+                  subtitle="Admins can edit the group, manage join requests, and assign other admins."
+                  people={memberPeople}
+                  currentUserId={user?.id}
+                  canManageRoles
+                  lockedRoles={[]}
+                  busyUserId={busyRoleUserId}
+                  emptyMessage="No members yet."
+                  onToggleAdmin={(person) => void handleToggleGroupAdmin(person)}
+                />
+              </CommunityCard>
+            ) : null}
+            <CommunityCard padding={12}>
+              <UserList items={members} showConnect showFollow searchable />
+            </CommunityCard>
+          </YStack>
         ) : null}
 
         {tab === 'events' ? (
@@ -406,11 +461,11 @@ export function GroupScreen() {
               <Text fontSize={15} fontWeight="600" color={communityUi.text}>
                 Upcoming group events
               </Text>
-              <Link href={communityRoutes.eventCreate}>
+              <AppLink href={communityRoutes.eventCreate}>
                 <Text fontSize={13} fontWeight="600" color={communityUi.brand}>
                   Create
                 </Text>
-              </Link>
+              </AppLink>
             </XStack>
             {groupEvents.length === 0 ? (
               <Text color={communityUi.textMuted} padding={12}>
@@ -418,7 +473,7 @@ export function GroupScreen() {
               </Text>
             ) : (
               groupEvents.map((event) => (
-                <Link key={event.id} href={communityRoutes.event(event.id)}>
+                <AppLink key={event.id} href={communityRoutes.event(event.id)}>
                   <YStack paddingVertical={12} paddingHorizontal={8} borderBottomWidth={1} borderBottomColor={communityUi.borderLight} gap={4}>
                     <Text fontWeight="600" color={communityUi.text}>
                       {event.title}
@@ -428,7 +483,7 @@ export function GroupScreen() {
                       {event.is_online ? ' · Online' : event.location ? ` · ${event.location}` : ''}
                     </Text>
                   </YStack>
-                </Link>
+                </AppLink>
               ))
             )}
           </CommunityCard>

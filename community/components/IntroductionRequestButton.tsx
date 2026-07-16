@@ -27,6 +27,10 @@ type IntroductionRequestButtonProps = {
   targetUserId: string
   targetUsername?: string | null
   targetDisplayName: string
+  /** Hide the default "Get intro" chip (use when opening from More menu). */
+  hideTrigger?: boolean
+  open?: boolean
+  onOpenChange?: (open: boolean) => void
 }
 
 /** Ask a mutual connection to introduce you (professional). */
@@ -34,12 +38,17 @@ export function IntroductionRequestButton({
   targetUserId,
   targetUsername,
   targetDisplayName,
+  hideTrigger = false,
+  open: openProp,
+  onOpenChange,
 }: IntroductionRequestButtonProps) {
   const ui = useAppUi()
   const toast = useAppToast()
   const router = useRouter()
   const { user } = useSupabase()
-  const [open, setOpen] = useState(false)
+  const [internalOpen, setInternalOpen] = useState(false)
+  const open = openProp ?? internalOpen
+  const setOpen = onOpenChange ?? setInternalOpen
   const [loading, setLoading] = useState(false)
   const [sending, setSending] = useState(false)
   const [introducers, setIntroducers] = useState<MutualIntroducer[]>([])
@@ -69,23 +78,25 @@ export function IntroductionRequestButton({
 
   return (
     <>
-      <Button
-        size="$3"
-        tone="outline"
-        borderRadius={999}
-        onPress={() => {
-          if (!user?.id) {
-            router.push(buildSignInUrl(signInRedirect) as never)
-            return
-          }
-          setOpen(true)
-        }}
-      >
-        Get intro
-      </Button>
+      {!hideTrigger ? (
+        <Button
+          size="$3"
+          tone="outline"
+          borderRadius={999}
+          onPress={() => {
+            if (!user?.id) {
+              router.push(buildSignInUrl(signInRedirect) as never)
+              return
+            }
+            setOpen(true)
+          }}
+        >
+          Get intro
+        </Button>
+      ) : null}
 
       <AppBottomSheet open={open} onOpenChange={setOpen} title="Ask for an introduction">
-        <YStack gap="$3" paddingBottom="$4">
+        <YStack gap="$3" paddingBottom="$4" paddingHorizontal="$4">
           <Text fontSize={14} color={ui.textMuted} lineHeight={20}>
             Ask a mutual connection to introduce you to {targetDisplayName}.
           </Text>

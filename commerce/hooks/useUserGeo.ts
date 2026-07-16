@@ -1,106 +1,87 @@
 import { useEffect, useState } from 'react'
-import { Platform } from 'react-native'
 
 import {
   inferCountryFromLocale,
   parseProfileLocation,
   type UserGeo,
 } from '~/commerce/lib/marketplace-personalization'
-import { readSessionValue, readSessionValueSync, writeSessionValue } from '~/lib/platform/storage'
+import { useOptionalRegionPreferences } from '~/lib/locale/RegionPreferencesContext'
+import {
+  getCurrentPosition,
+  readStoredUserGeo,
+  readStoredUserGeoSync,
+  writeStoredUserGeo,
+} from '~/lib/location'
 
-const GEO_STORAGE_KEY = 'sheconomy:user-geo'
-
-type StoredGeo = UserGeo & { capturedAt?: string }
-
-function readStoredGeo(): UserGeo {
-  try {
-    const raw = readSessionValueSync(GEO_STORAGE_KEY)
-    if (!raw) return {}
-    return JSON.parse(raw) as StoredGeo
-  } catch {
-    return {}
-  }
+function sameGeo(a: UserGeo, b: UserGeo): boolean {
+  return (
+    a.latitude === b.latitude &&
+    a.longitude === b.longitude &&
+    a.city === b.city &&
+    a.state === b.state &&
+    a.country === b.country &&
+    a.postal_code === b.postal_code
+  )
 }
 
+/**
+ * Session geo for marketplace personalization.
+ * Merges region prefs, profile location, stored coords, and optional device capture.
+ */
 export function useUserGeo(profileLocation?: string | null) {
+  const region = useOptionalRegionPreferences()
+  const countryCode = region?.countryCode
   const [geo, setGeo] = useState<UserGeo>(() => ({
     country: inferCountryFromLocale(),
-    ...readStoredGeo(),
+    ...readStoredUserGeoSync(),
     ...parseProfileLocation(profileLocation),
   }))
 
   useEffect(() => {
-    void readSessionValue(GEO_STORAGE_KEY).then((raw) => {
-      if (!raw) return
-      try {
-        const stored = JSON.parse(raw) as StoredGeo
-        setGeo((current) => ({ ...current, ...stored }))
-      } catch {
-        // ignore parse errors
-      }
+    void readStoredUserGeo().then((stored) => {
+      if (!stored || Object.keys(stored).length === 0) return
+      setGeo((current) => {
+        const next = { ...current, ...stored }
+        return sameGeo(current, next) ? current : next
+      })
     })
   }, [])
 
   useEffect(() => {
-    setGeo((current) => ({
-      country: current.country ?? inferCountryFromLocale(),
-      ...parseProfileLocation(profileLocation),
-      ...current,
-    }))
-  }, [profileLocation])
+    const fromProfile = parseProfileLocation(profileLocation)
+    setGeo((current) => {
+      const next: UserGeo = {
+        ...fromProfile,
+        ...current,
+        country: countryCode ?? current.country ?? inferCountryFromLocale(),
+      }
+      return sameGeo(current, next) ? current : next
+    })
+  }, [profileLocation, countryCode])
 
   useEffect(() => {
     if (geo.latitude != null && geo.longitude != null) return
 
-    if (Platform.OS === 'web' && typeof navigator !== 'undefined' && navigator.geolocation) {
-      navigator.geolocation.getCurrentPosition(
-        (position) => {
-          const next = {
-            latitude: position.coords.latitude,
-            longitude: position.coords.longitude,
-            country: geo.country ?? inferCountryFromLocale(),
-          }
-          void writeSessionValue(GEO_STORAGE_KEY, JSON.stringify({ ...next, capturedAt: new Date().toISOString() }))
-          setGeo((current) => ({ ...current, ...next }))
-        },
-        () => undefined,
-        { maximumAge: 15 * 60 * 1000, timeout: 8000 },
-      )
-      return
-    }
-
-    if (Platform.OS !== 'web') {
-      let cancelled = false
-
-      void (async () => {
-        try {
-          const Location = await import('expo-location')
-          const permission = await Location.requestForegroundPermissionsAsync()
-          if (!permission.granted || cancelled) return
-
-          const position = await Location.getCurrentPositionAsync({
-            accuracy: Location.Accuracy.Balanced,
-          })
-
-          if (cancelled) return
-
-          const next = {
-            latitude: position.coords.latitude,
-            longitude: position.coords.longitude,
-            country: geo.country ?? inferCountryFromLocale(),
-          }
-          void writeSessionValue(GEO_STORAGE_KEY, JSON.stringify({ ...next, capturedAt: new Date().toISOString() }))
-          setGeo((current) => ({ ...current, ...next }))
-        } catch {
-          // location unavailable — locale fallback remains
-        }
-      })()
-
-      return () => {
-        cancelled = true
+    let cancelled = false
+    void (async () => {
+      const position = await getCurrentPosition({ accuracy: 'approximate', persist: true })
+      if (cancelled || !position.coords) return
+      const next = {
+        latitude: position.coords.latitude,
+        longitude: position.coords.longitude,
+        country: geo.country ?? countryCode ?? inferCountryFromLocale(),
       }
+      void writeStoredUserGeo(next)
+      setGeo((current) => {
+        const merged = { ...current, ...next }
+        return sameGeo(current, merged) ? current : merged
+      })
+    })()
+
+    return () => {
+      cancelled = true
     }
-  }, [geo.country, geo.latitude, geo.longitude])
+  }, [geo.country, geo.latitude, geo.longitude, countryCode])
 
   return geo
 }

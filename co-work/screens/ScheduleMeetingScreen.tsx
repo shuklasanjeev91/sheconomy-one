@@ -1,4 +1,5 @@
-import { Link, useRouter } from 'one'
+import { useRouter } from 'one'
+import { AppLink } from '~/components/navigation/AppLink'
 import { useMemo, useState } from 'react'
 
 import { RequireAuth } from '~/components/auth/RequireAuth'
@@ -344,9 +345,9 @@ export function ScheduleMeetingScreen() {
           </Button>
         </YStack>
 
-        <Link href={coWorkRoutes.home} asChild>
-          <Button tone="ghost">Back to Co-Work</Button>
-        </Link>
+        <AppLink href={coWorkRoutes.home} asChild>
+          <Button tone="ghost">Open Co-Work</Button>
+        </AppLink>
       </YStack>
     </AppPage>
   )

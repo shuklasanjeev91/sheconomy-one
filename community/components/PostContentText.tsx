@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react'
-import { Link } from 'one'
+import { AppLink } from '~/components/navigation/AppLink'
 
 import {
   htmlToPlainText,
@@ -83,7 +83,7 @@ function PostTextSegments({ segments }: { segments: PostTextSegment[] }) {
 
         if (segment.type === 'hashtag') {
           return (
-            <Link key={index} href={communityRoutes.hashtag(segment.tag)}>
+            <AppLink key={index} href={communityRoutes.hashtag(segment.tag)} asChild>
               <Text
                 fontWeight="600"
                 color={communityUi.brand}
@@ -92,12 +92,12 @@ function PostTextSegments({ segments }: { segments: PostTextSegment[] }) {
               >
                 {segment.value}
               </Text>
-            </Link>
+            </AppLink>
           )
         }
 
         return (
-          <Link key={index} href={communityRoutes.userProfile(segment.handle)}>
+          <AppLink key={index} href={communityRoutes.userProfile(segment.handle)} asChild>
             <Text
               fontWeight="600"
               color={communityUi.brand}
@@ -106,7 +106,7 @@ function PostTextSegments({ segments }: { segments: PostTextSegment[] }) {
             >
               {segment.value}
             </Text>
-          </Link>
+          </AppLink>
         )
       })}
     </>

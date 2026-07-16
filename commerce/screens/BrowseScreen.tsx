@@ -1,5 +1,6 @@
-import { Link, useParams } from 'one'
+import { useParams } from 'one'
 
+import { AppLink } from '~/components/navigation/AppLink'
 import { Button, YStack } from '~/components/ui'
 import { InfiniteListingSection, CommercePageHeader } from '~/commerce/components'
 import { BROWSE_FEED_LABELS, isBrowseFeedKind } from '~/lib/supabase/commerce'
@@ -15,11 +16,11 @@ export function BrowseScreen() {
         <PageSection paddingVertical="$8">
           <YStack gap="$4">
             <CommercePageHeader title="Browse page not found" subtitle="This collection doesn't exist." />
-            <Link href={commerceRoutes.home} asChild>
+            <AppLink href={commerceRoutes.home} asChild>
               <Button tone="outline" size="$4" alignSelf="flex-start" borderRadius={999}>
-                Back to home
+                Browse marketplace
               </Button>
-            </Link>
+            </AppLink>
           </YStack>
         </PageSection>
       </FullWidthLayout>

@@ -401,7 +401,6 @@ export function CreateShopScreen() {
                 borderRadius={999}
                 disabled={stepIndex === 0}
                 onPress={() => goToStep(stepIndex - 1)}
-                icon={<Icons.ArrowLeft size={16} color={ui.text} />}
               >
                 Previous
               </Button>

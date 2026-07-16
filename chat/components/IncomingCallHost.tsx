@@ -1,7 +1,7 @@
 import { useRouter } from 'one'
 
 import { useIncomingCalls } from '~/chat/hooks/useIncomingCalls'
-import { coWorkRoutes } from '~/lib/routes'
+import { chatRoutes } from '~/lib/routes'
 import { useSupabase } from '~/providers/SupabaseProvider'
 
 import { CallOverlay } from './CallOverlay'
@@ -25,8 +25,17 @@ export function IncomingCallHost() {
       variant="incoming"
       statusText={incoming.callType === 'video' ? 'Incoming video call…' : 'Incoming voice call…'}
       onAccept={() => {
+        const callType = incoming.callType
+        const callId = incoming.id
         void accept().then((code) => {
-          if (code) router.push(coWorkRoutes.meetingLive(code))
+          if (code) {
+            router.push(
+              chatRoutes.call(code, {
+                type: callType,
+                callId,
+              }),
+            )
+          }
         })
       }}
       onDecline={() => void decline()}

@@ -1,5 +1,6 @@
-import { Link, useRouter } from 'one'
+import { useRouter } from 'one'
 
+import { AppLink } from '~/components/navigation/AppLink'
 import { CommunityCard } from '~/community/components/CommunityCard'
 import { CommunityPageHeader } from '~/community/components/CommunityPageHeader'
 import { CommunityShell } from '~/community/components/CommunityShell'
@@ -61,7 +62,7 @@ export function StoriesScreen() {
       ) : (
         <CommunityCard padding={12} gap={8}>
           {rings.map((ring) => (
-            <Link key={ring.user_id} href={communityRoutes.storyUser(ring.user_id)} asChild>
+            <AppLink key={ring.user_id} href={communityRoutes.storyUser(ring.user_id)} asChild>
               <XStack
                 gap={12}
                 alignItems="center"
@@ -83,18 +84,18 @@ export function StoriesScreen() {
                 </YStack>
                 <Icons.ChevronRight size={18} color={communityUi.textMuted} />
               </XStack>
-            </Link>
+            </AppLink>
           ))}
         </CommunityCard>
       )}
 
       {isAuthenticated && profile?.id && rings.some((ring) => ring.user_id === profile.id) ? (
         <CommunityCard padding={16}>
-          <Link href={communityRoutes.storyUser(profile.id)} asChild>
+          <AppLink href={communityRoutes.storyUser(profile.id)} asChild>
             <Button backgroundColor={communityUi.divider} color={communityUi.text} borderRadius={999}>
               View your story
             </Button>
-          </Link>
+          </AppLink>
         </CommunityCard>
       ) : null}
     </CommunityShell>

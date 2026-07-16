@@ -1,6 +1,5 @@
 import type { ReactNode } from 'react'
 import { useEffect, useState } from 'react'
-import { Link } from 'one'
 
 import { FeedPostCard } from '~/community/components/FeedPostCard'
 import { UserListBottomSheet } from '~/community/components/UserListBottomSheet'
@@ -9,6 +8,7 @@ import { FeaturedPostsSection } from '~/community/components/profile/FeaturedPos
 import { RecommendationsSection } from '~/community/components/profile/RecommendationsSection'
 import { WhoViewedYourProfileCard } from '~/community/components/profile/WhoViewedYourProfileCard'
 import type { ProfileDisplay } from '~/community/components/profile/types'
+import { AppLink } from '~/components/navigation/AppLink'
 import { useProfileDetails } from '~/community/hooks/useProfileDetails'
 import { useUserActivity } from '~/community/hooks/useUserActivity'
 import { BRAND_BLUE } from '~/community/lib/constants'
@@ -39,7 +39,10 @@ import type {
 } from '~/community/lib/user-activity'
 import { mergeProfileSocialLinks } from '~/community/lib/profile-details'
 import { htmlToPlainText } from '~/community/lib/post-text'
-import type { UserListKind } from '~/community/lib/user-lists'
+import {
+  fetchProfileNetworkCounts,
+  type UserListKind,
+} from '~/community/lib/user-lists'
 import {
   Avatar,
   Badge,
@@ -64,10 +67,14 @@ import { uploadProfileAvatarImage, uploadProfileCoverImage } from '~/lib/supabas
 import { getShadowStyle, radius } from '~/config/tokens'
 import { useAppUi } from '~/lib/theme/useAppUi'
 
+type ProfileHeaderActions =
+  | ReactNode
+  | ((helpers: { openUserList: (kind: UserListKind) => void }) => ReactNode)
+
 type ProfileViewProps = {
   profile: ProfileDisplay
   isOwnProfile?: boolean
-  headerActions?: ReactNode
+  headerActions?: ProfileHeaderActions
   sidebarFooter?: ReactNode
 }
 
@@ -208,7 +215,12 @@ export function ProfileView({
   }
 
   const displayName = profile.full_name || profile.username
-  const connectionsCount = profile.connections_count ?? 0
+  const [networkCounts, setNetworkCounts] = useState({
+    connections: profile.connections_count ?? 0,
+    followers: profile.follower_count ?? 0,
+    following: profile.following_count ?? 0,
+  })
+  const connectionsCount = networkCounts.connections
   const completion =
     details?.profileCompletion ?? profile.profile_completion_percentage ?? null
   const interests = details?.interests?.length
@@ -218,10 +230,34 @@ export function ProfileView({
   const [listSheetKind, setListSheetKind] = useState<UserListKind | null>(null)
   const [listSheetOpen, setListSheetOpen] = useState(false)
 
+  useEffect(() => {
+    let active = true
+    setNetworkCounts({
+      connections: profile.connections_count ?? 0,
+      followers: profile.follower_count ?? 0,
+      following: profile.following_count ?? 0,
+    })
+    void fetchProfileNetworkCounts(profile.id).then((counts) => {
+      if (!active) return
+      setNetworkCounts(counts)
+    })
+    return () => {
+      active = false
+    }
+  }, [
+    profile.id,
+    profile.connections_count,
+    profile.follower_count,
+    profile.following_count,
+  ])
+
   function openUserList(kind: UserListKind) {
     setListSheetKind(kind)
     setListSheetOpen(true)
   }
+
+  const resolvedHeaderActions =
+    typeof headerActions === 'function' ? headerActions({ openUserList }) : headerActions
 
   const profileRail = (
     <YStack
@@ -231,8 +267,9 @@ export function ProfileView({
       gap="$4"
     >
       <StatsSidebar
-        profile={profile}
         connectionsCount={connectionsCount}
+        followersCount={networkCounts.followers}
+        followingCount={networkCounts.following}
         isOwnProfile={isOwnProfile}
         analytics={analytics}
         onOpenList={openUserList}
@@ -306,7 +343,7 @@ export function ProfileView({
         profile={profile}
         displayName={displayName}
         connectionsCount={connectionsCount}
-        headerActions={headerActions}
+        headerActions={resolvedHeaderActions}
         isOwnProfile={isOwnProfile}
         openToWork={openToWork.enabled}
         openToServices={openToServices.enabled}
@@ -478,18 +515,20 @@ function ProfileHero({
             justifyContent="flex-end"
             minWidth={0}
           >
-            <ShareButton
-              variant="outline"
-              label="Share"
-              sheetTitle="Share profile"
-              copyLabel="Copy profile link"
-              copyToastMessage="Profile link copied to clipboard."
-              payload={{
-                url: getProfileShareUrl(profile.username),
-                title: displayName,
-                text: profile.headline ?? undefined,
-              }}
-            />
+            {isOwnProfile ? (
+              <ShareButton
+                variant="outline"
+                label="Share"
+                sheetTitle="Share profile"
+                copyLabel="Copy profile link"
+                copyToastMessage="Profile link copied to clipboard."
+                payload={{
+                  url: getProfileShareUrl(profile.username),
+                  title: displayName,
+                  text: profile.headline ?? undefined,
+                }}
+              />
+            ) : null}
             {headerActions}
           </XStack>
         </XStack>
@@ -540,18 +579,31 @@ function ProfileHero({
                 fontWeight="600"
                 color={BRAND_BLUE}
                 cursor="pointer"
-                hoverStyle={{ opacity: 0.85 }}
+                hoverStyle={{ opacity: 0.85, textDecorationLine: 'underline' }}
                 onPress={onOpenConnections}
+                accessibilityRole="link"
               >
                 {connectionsCount} connection{connectionsCount === 1 ? '' : 's'}
               </Text>
             ) : isOwnProfile ? (
-              <Link href={communityRoutes.network}>
+              <AppLink href={communityRoutes.network}>
                 <Text fontSize={14} fontWeight="600" color={BRAND_BLUE}>
                   Grow your network
                 </Text>
-              </Link>
-            ) : null}
+              </AppLink>
+            ) : (
+              <Text
+                fontSize={14}
+                fontWeight="600"
+                color={BRAND_BLUE}
+                cursor="pointer"
+                hoverStyle={{ opacity: 0.85, textDecorationLine: 'underline' }}
+                onPress={onOpenConnections}
+                accessibilityRole="link"
+              >
+                Connections
+              </Text>
+            )}
           </XStack>
 
           <Text fontSize={14} color={ui.textMuted}>
@@ -681,11 +733,11 @@ function ActivitySection({
           <YStack gap="$2" paddingVertical="$2">
             <Text color={ui.textMuted}>{emptyMessage}</Text>
             {isOwnProfile && activity.filter === 'posts' ? (
-              <Link href={communityRoutes.createPost}>
+              <AppLink href={communityRoutes.createPost}>
                 <Text color={BRAND_BLUE} fontWeight="600">
                   Create a post
                 </Text>
-              </Link>
+              </AppLink>
             ) : null}
           </YStack>
         ) : (
@@ -784,14 +836,16 @@ function ActivityEntry({
 }
 
 function StatsSidebar({
-  profile,
   connectionsCount,
+  followersCount,
+  followingCount,
   isOwnProfile,
   analytics,
   onOpenList,
 }: {
-  profile: ProfileDisplay
   connectionsCount: number
+  followersCount: number
+  followingCount: number
   isOwnProfile: boolean
   analytics: ProfileAnalytics | null
   onOpenList: (kind: UserListKind) => void
@@ -801,12 +855,12 @@ function StatsSidebar({
       <YStack gap="$3">
         <StatRow
           label="Followers"
-          value={profile.follower_count ?? 0}
+          value={followersCount}
           onPress={() => onOpenList('followers')}
         />
         <StatRow
           label="Following"
-          value={profile.following_count ?? 0}
+          value={followingCount}
           onPress={() => onOpenList('following')}
         />
         <StatRow
@@ -1062,14 +1116,14 @@ function StatRow({
 
 function ExternalLink({ href, label }: { href: string; label: string }) {
   return (
-    <Link href={href} target="_blank">
+    <AppLink href={href} external>
       <XStack gap="$2" alignItems="center" cursor="pointer" hoverStyle={{ opacity: 0.85 }}>
         <Icons.ExternalLink size={14} color={BRAND_BLUE} />
         <Text color={BRAND_BLUE} fontSize={14} fontWeight="500" numberOfLines={1}>
           {label}
         </Text>
       </XStack>
-    </Link>
+    </AppLink>
   )
 }
 

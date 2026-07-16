@@ -1,5 +1,5 @@
-import { Link } from 'one'
 import type { ReactNode } from 'react'
+import { AppLink } from '~/components/navigation/AppLink'
 import { useEffect, useState } from 'react'
 
 import { CommunityShell } from '~/community/components/CommunityShell'
@@ -78,7 +78,7 @@ export function NetworkScreen() {
           <Text fontSize={16} color={ui.textMuted} lineHeight={24}>
             Sign in to send connection requests, accept invitations, and grow your network.
           </Text>
-          <Link href={routes.signIn} asChild>
+          <AppLink href={routes.signIn} asChild>
             <Button
               alignSelf="flex-start"
               backgroundColor={communityUi.brand}
@@ -88,7 +88,7 @@ export function NetworkScreen() {
             >
               Sign in
             </Button>
-          </Link>
+          </AppLink>
         </CommunityCard>
         <NetworkSection title="Explore the network">
           {guestLoading ? (
@@ -124,7 +124,6 @@ export function NetworkScreen() {
 
   return (
     <CommunityShell wide>
-
 
       <NetworkHero
         connectionsCount={network.connections.length}
@@ -298,11 +297,11 @@ export function NetworkScreen() {
                 : 'You have not added any connections yet. Explore suggestions above or visit the feed.'}
             </Text>
             {!query ? (
-              <Link href={communityRoutes.home}>
+              <AppLink href={communityRoutes.home}>
                 <Text color={communityUi.brand} fontWeight="600">
                   Go to feed
                 </Text>
-              </Link>
+              </AppLink>
             ) : null}
           </YStack>
         ) : (
@@ -481,9 +480,9 @@ function ManageMyNetwork({
 
           if (tile.href) {
             return (
-              <Link key={tile.label} href={tile.href as never}>
+              <AppLink key={tile.label} href={tile.href as never}>
                 {row}
-              </Link>
+              </AppLink>
             )
           }
 

@@ -1,5 +1,5 @@
-import { Link } from 'one'
 import { useState } from 'react'
+import { AppLink } from '~/components/navigation/AppLink'
 
 import { useProfileConnection } from '~/community/hooks/useProfileConnection'
 import { ConfirmDialog, Icons, Spinner, Text, XStack } from '~/components/ui'
@@ -43,9 +43,9 @@ export function ProfileConnectButton({
 
   if (!connection.isAuthenticated) {
     return (
-      <Link href={routes.signIn} asChild>
+      <AppLink href={routes.signIn} asChild>
         <ConnectChip label="Connect" variant="outline-primary" size={size} fullWidth={fullWidth} />
-      </Link>
+      </AppLink>
     )
   }
 

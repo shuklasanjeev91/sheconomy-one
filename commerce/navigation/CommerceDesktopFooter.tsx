@@ -1,93 +1,127 @@
-import { Link } from 'one'
-import { Linking } from 'react-native'
+import type { Href } from 'one'
 
-import { Icons, Separator, Text, XStack, YStack } from '~/components/ui'
+import { RegionPreferencesTrigger } from '~/components/locale'
+import { AppLink } from '~/components/navigation/AppLink'
+import { Icons, Text, XStack, YStack } from '~/components/ui'
 import { BRAND_NAME, BRAND_SOCIAL } from '~/config/brand'
-
-import { COMMERCE_FOOTER_COLUMNS, COMMERCE_FOOTER_LEGAL } from './config'
 import { NavLogo } from '~/components/navigation/NavLogo'
 import { commerceRoutes } from '~/lib/routes'
 import { useAppLayout } from '~/hooks/useAppLayout'
-import { useAppUi } from '~/lib/theme/useAppUi'
+import { useVendorShops } from '~/hooks/useVendorShops'
+import { useAppUi, useIsDarkTheme } from '~/lib/theme/useAppUi'
+import { openExternalUrl } from '~/lib/platform/openUrl'
 
+import { COMMERCE_FOOTER_COLUMNS, COMMERCE_FOOTER_LEGAL } from './config'
+
+/** Etsy-like marketplace footer: link columns + dark locale/legal bar. */
 export function CommerceDesktopFooter() {
   const ui = useAppUi()
+  const isDark = useIsDarkTheme()
   const { gutter } = useAppLayout()
+  const { primaryShopId } = useVendorShops()
+
+  const barBg = isDark ? '#12080e' : '#2F2340'
+  const barText = 'rgba(255, 255, 255, 0.88)'
+  const barMuted = 'rgba(255, 255, 255, 0.62)'
+  const barHover = '#ffffff'
+
+  const sellerHubHref: Href = primaryShopId
+    ? commerceRoutes.manageShop(primaryShopId)
+    : commerceRoutes.myShops
 
   return (
-    <YStack
-      backgroundColor={ui.panelBg}
-      borderTopWidth={1}
-      borderTopColor={ui.panelBorder}
-      width="100%"
-      flexShrink={0}
-    >
-      <XStack
+    <YStack width="100%" flexShrink={0} marginTop="auto">
+      <YStack
+        backgroundColor={ui.surfaceMuted}
+        borderTopWidth={1}
+        borderTopColor={ui.panelBorder}
         width="100%"
-        paddingHorizontal={gutter}
-        paddingVertical="$8"
-        gap="$8"
-        flexWrap="wrap"
       >
-        <YStack flex={1} minWidth={220} gap="$4">
-          <NavLogo href={commerceRoutes.home} />
-          <Text color={ui.textSecondary} fontSize={13} lineHeight={20} maxWidth={280}>
-            A women-led commerce platform to discover unique shops, buy with confidence, and grow your
-            business on {BRAND_NAME}.
-          </Text>
-          <XStack gap="$3">
-            <FooterSocial icon={Icons.Instagram} label="Instagram" href={BRAND_SOCIAL.instagram} />
-            <FooterSocial icon={Icons.Twitter} label="Twitter" href={BRAND_SOCIAL.twitter} />
-          </XStack>
-        </YStack>
-
-        {COMMERCE_FOOTER_COLUMNS.map((column) => (
-          <YStack key={column.title} minWidth={140} gap="$3" flex={1}>
-            <Text fontWeight="500" fontSize={14} color={ui.text}>
-              {column.title}
+        <XStack
+          width="100%"
+          maxWidth={1400}
+          alignSelf="center"
+          paddingHorizontal={gutter}
+          paddingTop="$8"
+          paddingBottom="$7"
+          gap="$6"
+          flexWrap="wrap"
+        >
+          <YStack flexBasis={200} flexGrow={1} flexShrink={1} minWidth={180} gap="$3" paddingRight="$4">
+            <NavLogo href={commerceRoutes.home} />
+            <Text color={ui.textSecondary} fontSize={13} lineHeight={20} maxWidth={260}>
+              Discover independent shops, buy with confidence, and grow your business on{' '}
+              {BRAND_NAME}.
             </Text>
-            {column.links.map((link) => (
-              <Link key={`${column.title}-${link.label}`} href={link.href} asChild>
-                <Text
-                  fontSize={13}
-                  color={ui.textSecondary}
-                  cursor="pointer"
-                  hoverStyle={{ textDecorationLine: 'underline', color: ui.text }}
-                >
-                  {link.label}
-                </Text>
-              </Link>
-            ))}
+            <XStack gap="$2" marginTop="$1">
+              <FooterSocial icon={Icons.Instagram} label="Instagram" href={BRAND_SOCIAL.instagram} />
+              <FooterSocial icon={Icons.Twitter} label="Twitter / X" href={BRAND_SOCIAL.twitter} />
+            </XStack>
           </YStack>
-        ))}
-      </XStack>
 
-      <Separator backgroundColor={ui.panelBorder} />
+          {COMMERCE_FOOTER_COLUMNS.map((column) => (
+            <YStack key={column.title} flexBasis={140} flexGrow={1} flexShrink={1} minWidth={130} gap="$3">
+              <Text fontWeight="700" fontSize={13} letterSpacing={0.4} color={ui.text}>
+                {column.title}
+              </Text>
+              <YStack gap="$2">
+                {column.links.map((link) => {
+                  const href =
+                    link.href === commerceRoutes.myShops ? sellerHubHref : link.href
+                  return (
+                    <AppLink key={`${column.title}-${link.label}`} href={href} asChild>
+                      <Text
+                        fontSize={13}
+                        color={ui.textSecondary}
+                        cursor="pointer"
+                        hoverStyle={{ textDecorationLine: 'underline', color: ui.text }}
+                      >
+                        {link.label}
+                      </Text>
+                    </AppLink>
+                  )
+                })}
+              </YStack>
+            </YStack>
+          ))}
+        </XStack>
+      </YStack>
 
       <XStack
         width="100%"
+        backgroundColor={barBg}
         paddingHorizontal={gutter}
-        paddingVertical="$4"
+        paddingVertical="$3.5"
         justifyContent="space-between"
         alignItems="center"
         flexWrap="wrap"
         gap="$3"
       >
-        <Text fontSize={12} color={ui.textMuted}>
-          © {new Date().getFullYear()} {BRAND_NAME}. All rights reserved.
-        </Text>
-        <XStack gap="$4" flexWrap="wrap">
+        <XStack
+          flex={1}
+          minWidth={220}
+          alignItems="center"
+          gap="$3"
+          flexWrap="wrap"
+        >
+          <RegionPreferencesTrigger variant="footerBar" />
+          <Text fontSize={12} color={barMuted}>
+            © {new Date().getFullYear()} {BRAND_NAME}
+          </Text>
+        </XStack>
+
+        <XStack gap="$4" flexWrap="wrap" alignItems="center">
           {COMMERCE_FOOTER_LEGAL.map((link) => (
-            <Link key={link.label} href={link.href} asChild>
+            <AppLink key={link.label} href={link.href} asChild>
               <Text
                 fontSize={12}
-                color={ui.textMuted}
+                color={barText}
                 cursor="pointer"
-                hoverStyle={{ color: ui.text, textDecorationLine: 'underline' }}
+                hoverStyle={{ color: barHover, textDecorationLine: 'underline' }}
               >
                 {link.label}
               </Text>
-            </Link>
+            </AppLink>
           ))}
         </XStack>
       </XStack>
@@ -111,15 +145,17 @@ function FooterSocial({
       width={36}
       height={36}
       borderRadius={999}
-      backgroundColor={ui.panelBorder}
+      backgroundColor={ui.surface}
+      borderWidth={1}
+      borderColor={ui.borderSubtle}
       alignItems="center"
       justifyContent="center"
       cursor="pointer"
-      hoverStyle={{ backgroundColor: ui.borderSubtle }}
+      hoverStyle={{ backgroundColor: ui.surfaceHover }}
       pressStyle={{ scale: 0.96 }}
       aria-label={label}
       onPress={() => {
-        void Linking.openURL(href)
+        void openExternalUrl(href)
       }}
     >
       <Icon size={18} color={ui.text} />

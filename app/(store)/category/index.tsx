@@ -1,8 +1,7 @@
-import { Redirect } from 'one'
-
 import { commerceRoutes } from '~/lib/routes'
+import { SpaRedirect } from '~/components/navigation/SpaRedirect'
 
 /** `/category` without a slug has nothing to show — go to the storefront. */
 export default function CategoryIndexRedirect() {
-  return <Redirect href={commerceRoutes.home} />
+  return <SpaRedirect href={commerceRoutes.home} />
 }

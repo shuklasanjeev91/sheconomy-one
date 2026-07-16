@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useRef } from 'react'
 import { Platform } from 'react-native'
-import { Link, useRouter } from 'one'
+import { useRouter } from 'one'
 
+import { AppLink } from '~/components/navigation/AppLink'
 import { ChatListPane } from '~/chat/components/ChatListPane'
 import { ChatSectionTabs } from '~/chat/components/ChatSectionTabs'
 import { ChatThreadPane } from '~/chat/components/ChatThreadPane'
@@ -27,7 +28,7 @@ type ChatScreenProps = {
 export function ChatScreen({ chatId = null, filter = 'all' }: ChatScreenProps) {
   const theme = useChatTheme()
   const router = useRouter()
-  const { isDesktop, isDesktopWeb, desktopHeaderHeight, mobileTabBarOffset } = useAppLayout()
+  const { isDesktop, mobileTabBarOffset } = useAppLayout()
   const { user, isLoading: authLoading } = useSupabase()
   const currentUserId = user?.id ?? null
 
@@ -60,12 +61,10 @@ export function ChatScreen({ chatId = null, filter = 'all' }: ChatScreenProps) {
     reloadedFor.current = null
   }, [currentUserId])
 
+  // Fill the AppShell content column (flex parent). Avoid calc(100dvh - header):
+  // that fights the profile nudge / footer and often collapses to a blank pane on web.
   const fillStyle =
-    Platform.OS === 'web'
-      ? isDesktopWeb
-        ? ({ height: `calc(100dvh - ${desktopHeaderHeight}px)` } as const)
-        : ({ flex: 1, minHeight: 0 } as const)
-      : undefined
+    Platform.OS === 'web' ? ({ flex: 1, minHeight: 0, width: '100%' } as const) : undefined
 
   // ---- Auth states ---------------------------------------------------------
   if (authLoading) {
@@ -105,9 +104,9 @@ export function ChatScreen({ chatId = null, filter = 'all' }: ChatScreenProps) {
           Sign in to chat with your network in real time — send messages, share photos, and see when
           contacts are online.
         </Text>
-        <Link href={routes.signIn} asChild>
+        <AppLink href={routes.signIn} asChild>
           <Button tone="primary">Sign in to continue</Button>
-        </Link>
+        </AppLink>
       </YStack>
     )
   }
@@ -149,7 +148,6 @@ export function ChatScreen({ chatId = null, filter = 'all' }: ChatScreenProps) {
             <ChatThreadPane
               chat={activeChat}
               currentUserId={currentUserId}
-              showBack={false}
               onBack={() => router.push(chatRoutes.home)}
               onConversationChanged={reload}
             />
@@ -168,7 +166,6 @@ export function ChatScreen({ chatId = null, filter = 'all' }: ChatScreenProps) {
         <ChatThreadPane
           chat={activeChat}
           currentUserId={currentUserId}
-          showBack
           onBack={() => router.push(chatRoutes.home)}
           onConversationChanged={reload}
         />

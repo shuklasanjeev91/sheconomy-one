@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { KeyboardAvoidingView, Linking, Platform, Share } from 'react-native'
+import { KeyboardAvoidingView, Platform, Share } from 'react-native'
 import type { NativeScrollEvent, NativeSyntheticEvent, ScrollView as RNScrollView } from 'react-native'
 
 import { usePeerPresence } from '~/chat/hooks/usePeerPresence'
@@ -24,6 +24,7 @@ import { getSenderColor } from '~/chat/lib/sender-color'
 import { isNewDay, formatDaySeparator } from '~/chat/lib/time'
 import type { ChatMessage, ChatSummary } from '~/chat/lib/types'
 import { useChatTheme } from '~/chat/lib/chat-theme'
+import { openExternalUrl } from '~/lib/platform/openUrl'
 import {
   AppBottomSheet,
   Icons,
@@ -55,7 +56,6 @@ import { TypingBubble } from './TypingBubble'
 type ChatThreadPaneProps = {
   chat: ChatSummary
   currentUserId: string
-  showBack: boolean
   onBack: () => void
   /** Notify the parent (list) to refresh after mute/clear changes. */
   onConversationChanged?: () => void
@@ -109,7 +109,6 @@ function HeaderIconButton({
 export function ChatThreadPane({
   chat,
   currentUserId,
-  showBack,
   onBack,
   onConversationChanged,
 }: ChatThreadPaneProps) {
@@ -271,7 +270,7 @@ export function ChatThreadPane({
   const openFile = useCallback(async (message: ChatMessage) => {
     if (!message.mediaUrl) return
     const url = await getChatMediaUrl(message.mediaUrl)
-    if (url) void Linking.openURL(url)
+    if (url) void openExternalUrl(url)
   }, [])
 
   // Load which of the loaded messages are starred.
@@ -679,8 +678,6 @@ export function ChatThreadPane({
           chat={{ ...chat, isMuted }}
           presence={presence}
           peerTyping={peerTyping}
-          showBack={showBack}
-          onBack={onBack}
           onSearch={() => setSearchOpen(true)}
           onOpenMenu={() => setMenuOpen(true)}
           onOpenInfo={() => setInfoOpen(true)}

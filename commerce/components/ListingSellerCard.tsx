@@ -1,6 +1,7 @@
 import { useState } from 'react'
-import { Link, useRouter } from 'one'
+import { useRouter } from 'one'
 
+import { AppLink } from '~/components/navigation/AppLink'
 import { ShopActionButtons } from '~/commerce/components/ShopActionButtons'
 import { RatingSummary } from '~/commerce/components/RatingSummary'
 import { hasVisibleReviews, type ReviewSummary } from '~/commerce/lib/reviews'
@@ -85,7 +86,7 @@ export function ListingSellerCard({
         </Text>
       </XStack>
 
-      <Link href={commerceRoutes.shop(shopSlug)} asChild>
+      <AppLink href={commerceRoutes.shop(shopSlug)} asChild>
         <XStack gap="$3" alignItems="center" cursor="pointer" pressStyle={{ opacity: 0.9 }}>
           <Avatar name={shopName} src={logoUrl ?? undefined} size="$5" />
           <YStack flex={1} minWidth={0} gap={3}>
@@ -105,7 +106,7 @@ export function ListingSellerCard({
           </YStack>
           <Icons.ChevronRight size={18} color={ui.textSecondary} />
         </XStack>
-      </Link>
+      </AppLink>
 
       <XStack gap="$2" flexWrap="wrap" alignItems="center">
         <ShopActionButtons shopId={shopId} ownerUserId={ownerUserId} />

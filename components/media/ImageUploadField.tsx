@@ -13,6 +13,7 @@ import {
   useAppToast,
 } from '~/components/ui'
 import {
+  captureImage,
   pickImages,
   pickedImageToBlob,
   type PickedImage,
@@ -27,6 +28,8 @@ type ImageUploadFieldProps = {
   value: PickedImage[]
   onChange: (images: PickedImage[]) => void
   disabled?: boolean
+  /** Show native camera affordance (ignored on web or when multiple). */
+  allowCamera?: boolean
 }
 
 export function ImageUploadField({
@@ -37,12 +40,14 @@ export function ImageUploadField({
   value,
   onChange,
   disabled = false,
+  allowCamera = false,
 }: ImageUploadFieldProps) {
   const ui = useAppUi()
   const toast = useAppToast()
   const [isPicking, setIsPicking] = useState(false)
 
   const canAddMore = value.length < maxCount
+  const showCamera = allowCamera && !multiple && Platform.OS !== 'web'
 
   const handlePick = useCallback(async () => {
     if (disabled || !canAddMore) return
@@ -66,6 +71,23 @@ export function ImageUploadField({
       setIsPicking(false)
     }
   }, [canAddMore, disabled, maxCount, multiple, onChange, toast, value])
+
+  const handleCamera = useCallback(async () => {
+    if (disabled || !canAddMore || !showCamera) return
+    setIsPicking(true)
+    try {
+      const shot = await captureImage()
+      if (!shot) return
+      onChange([shot])
+    } catch (error) {
+      toast.show('Could not take photo', {
+        tone: 'danger',
+        message: error instanceof Error ? error.message : 'Try again.',
+      })
+    } finally {
+      setIsPicking(false)
+    }
+  }, [canAddMore, disabled, onChange, showCamera, toast])
 
   function removeAt(index: number) {
     const next = value.filter((_, i) => i !== index)
@@ -97,24 +119,39 @@ export function ImageUploadField({
         ) : null}
 
         {canAddMore ? (
-          <Button
-            tone="outline"
-            size="$3"
-            borderRadius={12}
-            disabled={disabled || isPicking}
-            onPress={() => void handlePick()}
-            icon={isPicking ? <Spinner size="small" /> : <Icons.Upload size={18} />}
-          >
-            {isPicking
-              ? 'Opening library…'
-              : value.length > 0
-                ? multiple
-                  ? 'Add another photo'
-                  : 'Replace photo'
-                : Platform.OS === 'web'
-                  ? 'Upload photo'
-                  : 'Choose photo'}
-          </Button>
+          <XStack gap="$2" flexWrap="wrap">
+            <Button
+              tone="outline"
+              size="$3"
+              borderRadius={12}
+              disabled={disabled || isPicking}
+              onPress={() => void handlePick()}
+              icon={isPicking ? <Spinner size="small" /> : <Icons.Upload size={18} />}
+            >
+              {isPicking
+                ? 'Opening…'
+                : value.length > 0
+                  ? multiple
+                    ? 'Add another photo'
+                    : 'Replace photo'
+                  : Platform.OS === 'web'
+                    ? 'Upload photo'
+                    : 'Choose photo'}
+            </Button>
+            {showCamera ? (
+              <Button
+                tone="outline"
+                size="$3"
+                borderRadius={12}
+                disabled={disabled || isPicking}
+                onPress={() => void handleCamera()}
+                icon={<Icons.Camera size={18} />}
+                accessibilityLabel="Take photo with camera"
+              >
+                Take photo
+              </Button>
+            ) : null}
+          </XStack>
         ) : null}
       </YStack>
     </Field>

@@ -1,8 +1,13 @@
 import { ClassShell } from '~/class/components/ClassShell'
 import { ContinueLearningRail } from '~/class/components/ContinueLearningRail'
+import { MyPlaylistsRail } from '~/class/components/MyPlaylistsRail'
 import { SavedProgramsRail } from '~/class/components/SavedProgramsRail'
 import { ProgramCard } from '~/class/components/ProgramCard'
 import { ProgramCategoryRow } from '~/class/components/ProgramCategoryRow'
+import {
+  collectProgramLanguages,
+  formatProgramLanguage,
+} from '~/class/lib/languages'
 import {
   fetchProgramCategories,
   fetchPublishedPrograms,
@@ -10,16 +15,11 @@ import {
   type Program,
   type ProgramCategory,
 } from '~/class/lib/programs'
-import {
-  clearProgramSearchHistory,
-  recordProgramSearchTerm,
-  useProgramSearchHistory,
-} from '~/class/lib/program-search-history'
 import { PushPermissionBanner } from '~/components/notifications/PushPermissionBanner'
 import { HorizontalScrollRow } from '~/components/layout'
-import { Icons, Input, Spinner, Text, XStack, YStack, useMedia } from '~/components/ui'
+import { Icons, Spinner, Text, XStack, YStack, useMedia } from '~/components/ui'
 import { getShadowStyle, radius } from '~/config/tokens'
-import { classRoutes, isClassAudioPath } from '~/lib/routes'
+import { isClassAudioPath } from '~/lib/routes'
 import { useAppUi } from '~/lib/theme/useAppUi'
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { usePathname } from 'one'
@@ -37,13 +37,12 @@ export function ClassesScreen() {
   const pathname = usePathname()
   const mediaTab = mediaTabFromPath(pathname)
   const cardWidth = media.gtLg ? 320 : media.gtMd ? 300 : 260
-  const searchHistory = useProgramSearchHistory()
 
   const [categories, setCategories] = useState<ProgramCategory[]>([])
   const [programs, setPrograms] = useState<Program[]>([])
   const [featured, setFeatured] = useState<Program[]>([])
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null)
-  const [search, setSearch] = useState('')
+  const [selectedLanguage, setSelectedLanguage] = useState<string | null>(null)
   const [sort, setSort] = useState<ProgramSort>('default')
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -84,19 +83,21 @@ export function ClassesScreen() {
 
   useEffect(() => {
     setSelectedCategory(null)
+    setSelectedLanguage(null)
+    setSort('default')
     void load()
   }, [load])
 
+  const languageCodes = useMemo(() => collectProgramLanguages(programs), [programs])
+
   const filteredPrograms = useMemo(() => {
-    const needle = search.trim().toLowerCase()
     const next = programs.filter((program) => {
       if (selectedCategory && program.category !== selectedCategory) return false
-      if (!needle) return true
-      const haystack = [program.title, program.description, program.category, program.author?.full_name]
-        .filter(Boolean)
-        .join(' ')
-        .toLowerCase()
-      return haystack.includes(needle)
+      if (selectedLanguage) {
+        const code = (program.language ?? 'en').trim().toLowerCase() || 'en'
+        if (code !== selectedLanguage) return false
+      }
+      return true
     })
 
     if (sort === 'popular') {
@@ -113,14 +114,7 @@ export function ClassesScreen() {
       return [...next].sort((a, b) => a.title.localeCompare(b.title))
     }
     return next
-  }, [programs, search, selectedCategory, sort])
-
-  useEffect(() => {
-    const trimmed = search.trim()
-    if (trimmed.length < 2) return
-    const timer = setTimeout(() => recordProgramSearchTerm(trimmed), 600)
-    return () => clearTimeout(timer)
-  }, [search])
+  }, [programs, selectedCategory, selectedLanguage, sort])
 
   const grouped = useMemo(
     () => groupProgramsByCategory(filteredPrograms, categories),
@@ -135,78 +129,15 @@ export function ClassesScreen() {
     return ['All', ...Array.from(names).sort((a, b) => a.localeCompare(b))]
   }, [programs])
 
+  const hasActiveFilters =
+    Boolean(selectedCategory) || Boolean(selectedLanguage) || sort !== 'default'
+
   return (
     <ClassShell>
       <PushPermissionBanner />
       <ContinueLearningRail />
       <SavedProgramsRail />
-
-      <XStack
-        alignItems="center"
-        gap="$2"
-        width="100%"
-        paddingHorizontal="$3"
-        minHeight={44}
-        borderRadius={999}
-        borderWidth={1}
-        borderColor={ui.borderSubtle}
-        backgroundColor={ui.surface}
-      >
-        <Icons.Search size={16} color={ui.textMuted} />
-        <Input
-          flex={1}
-          value={search}
-          onChangeText={setSearch}
-          placeholder={`Search ${mediaTab} programs`}
-          borderWidth={0}
-          backgroundColor="transparent"
-          height={40}
-          fontSize={14}
-          paddingHorizontal={0}
-        />
-        {search ? (
-          <XStack cursor="pointer" onPress={() => setSearch('')} padding={4}>
-            <Icons.X size={14} color={ui.textMuted} />
-          </XStack>
-        ) : null}
-      </XStack>
-
-      {!search.trim() && searchHistory.length > 0 ? (
-        <XStack alignItems="center" gap="$2" width="100%" flexWrap="wrap">
-          <Text fontSize={12} fontWeight="600" color={ui.textMuted}>
-            Recent
-          </Text>
-          <HorizontalScrollRow gap="$2">
-            {searchHistory.map((term) => (
-              <XStack
-                key={term}
-                paddingHorizontal="$3"
-                paddingVertical={7}
-                borderRadius={999}
-                borderWidth={1}
-                borderColor={ui.borderSubtle}
-                backgroundColor={ui.surface}
-                cursor="pointer"
-                onPress={() => setSearch(term)}
-                pressStyle={{ opacity: 0.85 }}
-              >
-                <Text fontSize={12} fontWeight="600" color={ui.text} numberOfLines={1}>
-                  {term}
-                </Text>
-              </XStack>
-            ))}
-          </HorizontalScrollRow>
-          <Text
-            fontSize={12}
-            fontWeight="600"
-            color={ui.textMuted}
-            cursor="pointer"
-            onPress={() => clearProgramSearchHistory()}
-          >
-            Clear
-          </Text>
-        </XStack>
-      ) : null}
+      <MyPlaylistsRail mediaType={mediaTab} />
 
       <HorizontalScrollRow gap="$2">
         {(
@@ -226,30 +157,35 @@ export function ClassesScreen() {
         ))}
       </HorizontalScrollRow>
 
+      {languageCodes.length > 1 ? (
+        <HorizontalScrollRow gap="$2">
+          <CategoryChip
+            label="All languages"
+            active={!selectedLanguage}
+            onPress={() => setSelectedLanguage(null)}
+          />
+          {languageCodes.map((code) => (
+            <CategoryChip
+              key={code}
+              label={formatProgramLanguage(code)}
+              active={selectedLanguage === code}
+              onPress={() => setSelectedLanguage(code)}
+            />
+          ))}
+        </HorizontalScrollRow>
+      ) : null}
+
       {categoryChips.length > 1 ? (
-        media.gtMd ? (
-          <XStack gap="$2" flexWrap="wrap" width="100%">
-            {categoryChips.map((chip) => (
-              <CategoryChip
-                key={chip}
-                label={chip}
-                active={chip === 'All' ? !selectedCategory : selectedCategory === chip}
-                onPress={() => setSelectedCategory(chip === 'All' ? null : chip)}
-              />
-            ))}
-          </XStack>
-        ) : (
-          <HorizontalScrollRow gap="$2">
-            {categoryChips.map((chip) => (
-              <CategoryChip
-                key={chip}
-                label={chip}
-                active={chip === 'All' ? !selectedCategory : selectedCategory === chip}
-                onPress={() => setSelectedCategory(chip === 'All' ? null : chip)}
-              />
-            ))}
-          </HorizontalScrollRow>
-        )
+        <HorizontalScrollRow gap="$2">
+          {categoryChips.map((chip) => (
+            <CategoryChip
+              key={chip}
+              label={chip}
+              active={chip === 'All' ? !selectedCategory : selectedCategory === chip}
+              onPress={() => setSelectedCategory(chip === 'All' ? null : chip)}
+            />
+          ))}
+        </HorizontalScrollRow>
       ) : null}
 
       {error ? (
@@ -282,15 +218,15 @@ export function ClassesScreen() {
             Published {mediaTab} programs will appear here by category.
           </Text>
         </YStack>
-      ) : selectedCategory || search.trim() || sort !== 'default' ? (
+      ) : hasActiveFilters ? (
         filteredPrograms.length === 0 ? (
           <YStack alignItems="center" gap="$2" paddingVertical="$8" width="100%">
-            <Icons.Search size={36} color={ui.textMuted} />
+            <Icons.Filter size={36} color={ui.textMuted} />
             <Text fontSize={15} fontWeight="700" color={ui.text}>
               No matching programs
             </Text>
             <Text fontSize={13} color={ui.textSecondary}>
-              Try another search or category.
+              Try another language or category.
             </Text>
           </YStack>
         ) : (

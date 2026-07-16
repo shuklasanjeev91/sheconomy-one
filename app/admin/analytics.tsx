@@ -1,5 +1,6 @@
-import { AdminSectionPage } from './layout'
+import { SpaRedirect } from '~/components/navigation/SpaRedirect'
+
 
 export default function AdminAnalyticsPage() {
-  return <AdminSectionPage sectionId="analytics" />
+  return <SpaRedirect href="/admin" />
 }

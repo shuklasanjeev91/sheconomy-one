@@ -59,7 +59,11 @@ export type Database = {
           created_at: string
           id: string
           is_default: boolean
+          latitude: number | null
+          longitude: number | null
+          place_id: string | null
           postal_code: string
+          source: string | null
           state: string
           updated_at: string
           user_id: string
@@ -75,7 +79,11 @@ export type Database = {
           created_at?: string
           id?: string
           is_default?: boolean
+          latitude?: number | null
+          longitude?: number | null
+          place_id?: string | null
           postal_code: string
+          source?: string | null
           state: string
           updated_at?: string
           user_id: string
@@ -91,7 +99,11 @@ export type Database = {
           created_at?: string
           id?: string
           is_default?: boolean
+          latitude?: number | null
+          longitude?: number | null
+          place_id?: string | null
           postal_code?: string
+          source?: string | null
           state?: string
           updated_at?: string
           user_id?: string
@@ -2986,6 +2998,41 @@ export type Database = {
             columns: ["follower_id"]
             isOneToOne: false
             referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      company_members: {
+        Row: {
+          company_id: string
+          created_at: string
+          created_by: string | null
+          id: string
+          role: string
+          user_id: string
+        }
+        Insert: {
+          company_id: string
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          role: string
+          user_id: string
+        }
+        Update: {
+          company_id?: string
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          role?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "company_members_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companypages"
             referencedColumns: ["id"]
           },
         ]
@@ -17477,6 +17524,14 @@ export type Database = {
         Returns: Json
       }
       set_default_address: { Args: { address_id: string }; Returns: Json }
+      set_community_group_member_role: {
+        Args: { p_group_id: string; p_role: string; p_user_id: string }
+        Returns: undefined
+      }
+      set_company_member_role: {
+        Args: { p_company_id: string; p_role: string; p_user_id: string }
+        Returns: undefined
+      }
       set_group_participant_role: {
         Args: { p_conversation_id: string; p_role: string; p_user_id: string }
         Returns: undefined

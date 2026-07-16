@@ -787,6 +787,43 @@ export async function fetchCommunityFeedPage(
   return fetchPostsPage(page, pageSize, sort, feed ? { feed } : undefined)
 }
 
+/** Lightweight content search for omnibox + `/search`. */
+export async function searchPosts(
+  query: string,
+  limit = 12,
+): Promise<Array<{
+  id: string
+  content: string
+  image_url: string | null
+  author_name: string | null
+  author_avatar: string | null
+  created_at: string | null
+}>> {
+  const term = query.trim().replace(/[%*,]/g, '')
+  if (term.length < 2) return []
+
+  const { data, error } = await supabase
+    .from('posts_with_stats')
+    .select('id, content, image_url, author_name, author_avatar, created_at')
+    .ilike('content', `%${term}%`)
+    .order('created_at', { ascending: false })
+    .limit(limit)
+
+  if (error) {
+    logger.warn('searchPosts failed', { message: error.message })
+    return []
+  }
+
+  return (data ?? []).map((row) => ({
+    id: row.id as string,
+    content: (row.content as string | null) ?? '',
+    image_url: (row.image_url as string | null) ?? null,
+    author_name: (row.author_name as string | null) ?? null,
+    author_avatar: (row.author_avatar as string | null) ?? null,
+    created_at: (row.created_at as string | null) ?? null,
+  }))
+}
+
 export async function fetchPostById(id: string): Promise<ApiResult<CommunityPost>> {
   const { data, error } = await supabase
     .from('posts_with_stats')

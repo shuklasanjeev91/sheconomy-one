@@ -6,16 +6,31 @@ export const appRoutes = {
   signIn: '/auth/sign-in' as Href,
   signUp: '/auth/sign-in' as Href,
   importContacts: '/auth/import-contacts' as Href,
+  completeProfile: '/auth/complete-profile' as Href,
   verifyGender: '/auth/verify-gender' as Href,
   notifications: '/notifications' as Href,
   profile: '/profile' as Href,
   userProfile: (handle: string) => `/profile/${encodeURIComponent(handle)}` as Href,
   settings: '/settings' as Href,
+  settingsSection: (section: string) =>
+    `/settings/${encodeURIComponent(section)}` as Href,
   help: '/help' as Href,
   helpProduct: (product: string) =>
     `/help?product=${encodeURIComponent(product)}` as Href,
+  legalTerms: '/legal/terms' as Href,
+  legalPrivacy: '/legal/privacy' as Href,
+  legalCookies: '/legal/cookies' as Href,
+  legalAds: '/legal/ads' as Href,
   cart: '/cart' as Href,
   checkout: '/checkout' as Href,
+  /** Unified omnibox results — optional `scope`: all | listings | shops | people | … */
+  search: (query?: string, scope?: string) => {
+    const params = new URLSearchParams()
+    if (query?.trim()) params.set('q', query.trim())
+    if (scope && scope !== 'all') params.set('scope', scope)
+    const search = params.toString()
+    return (search ? `/search?${search}` : '/search') as Href
+  },
 } as const
 
 /** Reserved prefixes — everything else is the commerce storefront. */
@@ -30,6 +45,7 @@ const NON_COMMERCE_PREFIXES = [
   '/profile',
   '/settings',
   '/help',
+  '/legal',
   '/vendor',
 ] as const
 
@@ -47,8 +63,7 @@ export const commerceRoutes = {
   orders: '/orders' as Href,
   paymentMethods: '/payment-methods' as Href,
   addresses: '/addresses' as Href,
-  search: (query?: string) =>
-    (query ? `/search?q=${encodeURIComponent(query)}` : '/search') as Href,
+  search: (query?: string, scope?: string) => appRoutes.search(query, scope ?? 'listings'),
   category: (slug: string) => `/category/${encodeURIComponent(slug)}` as Href,
   browse: (kind: string) => `/browse/${kind}` as Href,
   listing: (slug: string) => `/listing/${encodeURIComponent(slug)}` as Href,
@@ -114,13 +129,33 @@ export const chatRoutes = {
   groups: '/chat/groups' as Href,
   calls: '/chat/calls' as Href,
   conversation: (id: string) => `/chat/${encodeURIComponent(id)}` as Href,
+  /** WhatsApp-style 1:1 LiveKit call (audio or video). */
+  call: (code: string, options?: { type?: 'audio' | 'video'; callId?: string }) => {
+    const params = new URLSearchParams()
+    if (options?.type) params.set('type', options.type)
+    if (options?.callId) params.set('callId', options.callId)
+    const query = params.toString()
+    return (
+      query
+        ? `/chat/call/${encodeURIComponent(code)}?${query}`
+        : `/chat/call/${encodeURIComponent(code)}`
+    ) as Href
+  },
 } as const
 
 export const classRoutes = {
   home: '/class' as Href,
-  video: '/class' as Href,
+  video: '/class/video' as Href,
   audio: '/class/audio' as Href,
-  program: (slug: string) => `/class/${encodeURIComponent(slug)}` as Href,
+  playlists: '/class/playlists' as Href,
+  playlist: (id: string) => `/class/playlists/${encodeURIComponent(id)}` as Href,
+  program: (slug: string, options?: { playlist?: string }) => {
+    const base = `/class/${encodeURIComponent(slug)}`
+    if (options?.playlist) {
+      return `${base}?playlist=${encodeURIComponent(options.playlist)}` as Href
+    }
+    return base as Href
+  },
 } as const
 
 export const coWorkRoutes = {
@@ -150,6 +185,7 @@ export const routes = {
   profile: appRoutes.profile,
   userProfile: appRoutes.userProfile,
   settings: appRoutes.settings,
+  settingsSection: appRoutes.settingsSection,
   help: appRoutes.help,
   notifications: appRoutes.notifications,
   cart: appRoutes.cart,
@@ -227,12 +263,18 @@ export function isChatCallsPath(pathname: string) {
   return pathname === '/chat/calls'
 }
 
+/** Active 1:1 LiveKit call (`/chat/call/{code}`). */
+export function isChatCallPath(pathname: string) {
+  return pathname === '/chat/call' || pathname.startsWith('/chat/call/')
+}
+
 /** A specific conversation thread (`/chat/{id}`) — rendered full-screen on mobile. */
 export function isChatConversationPath(pathname: string) {
   return (
     /^\/chat\/[^/]+/.test(pathname) &&
     !isChatGroupsPath(pathname) &&
-    !isChatCallsPath(pathname)
+    !isChatCallsPath(pathname) &&
+    !isChatCallPath(pathname)
   )
 }
 
@@ -244,13 +286,33 @@ export function isClassAudioPath(pathname: string) {
   return pathname === '/class/audio' || pathname.startsWith('/class/audio/')
 }
 
+export function isClassVideoPath(pathname: string) {
+  return pathname === '/class/video' || pathname.startsWith('/class/video/')
+}
+
+export function isClassPlaylistsPath(pathname: string) {
+  return pathname === '/class/playlists' || pathname.startsWith('/class/playlists/')
+}
+
+/** Class home tab — `/class` hub and program detail pages (not Video/Audio/Playlist lists). */
+export function isClassHomePath(pathname: string) {
+  if (!isClassPath(pathname)) return false
+  if (isClassAudioPath(pathname) || isClassVideoPath(pathname) || isClassPlaylistsPath(pathname)) {
+    return false
+  }
+  return true
+}
+
+/** @deprecated Prefer isClassVideoPath — kept for older call sites. */
 export function isClassVideoHomePath(pathname: string) {
-  return pathname === '/class' || pathname === '/class/'
+  return isClassVideoPath(pathname) || pathname === '/class' || pathname === '/class/'
 }
 
 export function isClassProgramPath(pathname: string) {
   if (!pathname.startsWith('/class/')) return false
-  if (isClassAudioPath(pathname)) return false
+  if (isClassAudioPath(pathname) || isClassVideoPath(pathname) || isClassPlaylistsPath(pathname)) {
+    return false
+  }
   return true
 }
 

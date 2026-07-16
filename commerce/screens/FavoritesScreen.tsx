@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
-import { Link } from 'one'
+import { AppLink } from '~/components/navigation/AppLink'
+
 import { Share } from 'react-native'
 
 import { ListingBrowseView, RecentlyViewedRail } from '~/commerce/components'
@@ -140,11 +141,11 @@ export function FavoritesScreen() {
 
         {!isLoading && items.length === 0 ? (
           <YStack gap="$3">
-            <Link href={commerceRoutes.home} asChild>
+            <AppLink href={commerceRoutes.home} asChild>
               <Button tone="primary" size="$3" borderRadius={999} alignSelf="flex-start">
                 Discover products
               </Button>
-            </Link>
+            </AppLink>
             <RecentlyViewedRail />
           </YStack>
         ) : null}

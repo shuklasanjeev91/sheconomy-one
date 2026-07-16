@@ -1,9 +1,10 @@
-import type { ReactNode } from 'react'
+import { forwardRef, type ReactNode } from 'react'
+import type { ElementRef } from 'react'
 
 import { NavCountBadge } from '~/components/navigation/NavCountBadge'
 import { Text, YStack } from '~/components/ui'
 
-export type MobileTabBarItemProps = {
+type MobileTabBarItemProps = {
   label: string
   isFocused: boolean
   activeColor: string
@@ -18,25 +19,34 @@ export type MobileTabBarItemProps = {
   showLabel?: boolean
 }
 
+type YStackRef = ElementRef<typeof YStack>
+
 /** Shared mobile bottom-tab cell — icon slot + label + optional badge. */
-export function MobileTabBarItem({
-  label,
-  isFocused,
-  activeColor,
-  inactiveColor,
-  activePillBg,
-  badge,
-  badgeBorderColor,
-  children,
-  onPress,
-  accessibilityLabel,
-  showLabel = true,
-  ...props
-}: MobileTabBarItemProps & Record<string, unknown>) {
+export const MobileTabBarItem = forwardRef<
+  YStackRef,
+  MobileTabBarItemProps & Record<string, unknown>
+>(function MobileTabBarItem(
+  {
+    label,
+    isFocused,
+    activeColor,
+    inactiveColor,
+    activePillBg,
+    badge,
+    badgeBorderColor,
+    children,
+    onPress,
+    accessibilityLabel,
+    showLabel = true,
+    ...props
+  },
+  ref,
+) {
   const compactLabel = label.length > 9
 
   return (
     <YStack
+      ref={ref}
       {...props}
       flex={1}
       alignItems="center"
@@ -49,7 +59,7 @@ export function MobileTabBarItem({
       animation="quick"
       pressStyle={{ opacity: 0.82, scale: 0.97 }}
       onPress={onPress}
-      aria-label={accessibilityLabel ?? label}
+      accessibilityLabel={accessibilityLabel ?? label}
       role="tab"
       aria-selected={isFocused}
     >
@@ -64,6 +74,7 @@ export function MobileTabBarItem({
         borderRadius={18}
         backgroundColor={isFocused ? activePillBg : 'transparent'}
         animation="quick"
+        pointerEvents="none"
       >
         <YStack
           width={32}
@@ -97,4 +108,4 @@ export function MobileTabBarItem({
       </YStack>
     </YStack>
   )
-}
+})

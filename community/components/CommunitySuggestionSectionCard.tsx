@@ -1,6 +1,5 @@
-import { Link } from 'one'
-
 import { CommunitySuggestionRow } from '~/community/components/CommunitySuggestionRow'
+import { AppLink } from '~/components/navigation/AppLink'
 import { CommunityWidget } from '~/community/components/CommunityWidget'
 import type { SuggestionSection } from '~/community/hooks/useCommunitySuggestions'
 import { useCommunityUi } from '~/community/lib/community-theme'
@@ -24,11 +23,11 @@ export function CommunitySuggestionSectionCard({
     <CommunityWidget
       title={section.title}
       footer={
-        <Link href={section.seeAllHref as never}>
+        <AppLink href={section.seeAllHref as never}>
           <Text fontSize={14} fontWeight="600" color={communityUi.brand}>
             See all
           </Text>
-        </Link>
+        </AppLink>
       }
     >
       <YStack gap={0}>

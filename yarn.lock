@@ -3533,6 +3533,20 @@ __metadata:
   languageName: node
   linkType: hard
 
+"@react-native-google-signin/google-signin@npm:^16.1.2":
+  version: 16.1.2
+  resolution: "@react-native-google-signin/google-signin@npm:16.1.2"
+  peerDependencies:
+    expo: ">=52.0.40"
+    react: "*"
+    react-native: "*"
+  peerDependenciesMeta:
+    expo:
+      optional: true
+  checksum: 10/89635fd62d0b823a81727563dd631290d392694965167136c474c779e9380ed1126e1111269302b827c02d89d35a9795feb5091176cdef21fe4b813522e13b84
+  languageName: node
+  linkType: hard
+
 "@react-native-masked-view/masked-view@npm:^0.3.2":
   version: 0.3.2
   resolution: "@react-native-masked-view/masked-view@npm:0.3.2"
@@ -8669,6 +8683,13 @@ __metadata:
   languageName: node
   linkType: hard
 
+"dijkstrajs@npm:^1.0.1":
+  version: 1.0.3
+  resolution: "dijkstrajs@npm:1.0.3"
+  checksum: 10/0d8429699a6d5897ed371de494ef3c7072e8052b42abbd978e686a9b8689e70af005fa3e93e93263ee3653673ff5f89c36db830a57ae7c2e088cb9c496307507
+  languageName: node
+  linkType: hard
+
 "dir-glob@npm:^3.0.1":
   version: 3.0.1
   resolution: "dir-glob@npm:3.0.1"
@@ -9367,6 +9388,17 @@ __metadata:
   languageName: node
   linkType: hard
 
+"expo-apple-authentication@npm:^57.0.0":
+  version: 57.0.0
+  resolution: "expo-apple-authentication@npm:57.0.0"
+  peerDependencies:
+    expo: "*"
+    react: "*"
+    react-native: "*"
+  checksum: 10/fa8d7639d2258e598004aa9408c81acd8fd95ddc6e7272142613992aab876cf761e6d6cda83c6183ad324f81b72de384b2cfe494416457ff8bee91ebacbb5a03
+  languageName: node
+  linkType: hard
+
 "expo-asset@npm:~55.0.17":
   version: 55.0.17
   resolution: "expo-asset@npm:55.0.17"
@@ -9554,6 +9586,17 @@ __metadata:
     "@livekit/react-native": ">=2.0.0"
     expo: ">=51.0.0"
   checksum: 10/a390088318f5585374e16b9de4212a55d7f30911f3569295f6aed7165a0e8c2496a3635cfaca7fcf9d0b3882994f5d5b0a783b467d3073e54a497e60a5d39431
+  languageName: node
+  linkType: hard
+
+"expo-local-authentication@npm:^57.0.0":
+  version: 57.0.0
+  resolution: "expo-local-authentication@npm:57.0.0"
+  dependencies:
+    invariant: "npm:^2.2.4"
+  peerDependencies:
+    expo: "*"
+  checksum: 10/7474e3156915284cb4d2366a765c31b0d41eb801d24bad06363b8b92bdbd04a75af7e3928769a8de93c834203382c4746c6a8d6b6feec76c93416c32ed4a075c
   languageName: node
   linkType: hard
 
@@ -11952,7 +11995,7 @@ __metadata:
   languageName: node
   linkType: hard
 
-"loose-envify@npm:^1.0.0":
+"loose-envify@npm:^1.0.0, loose-envify@npm:^1.4.0":
   version: 1.4.0
   resolution: "loose-envify@npm:1.4.0"
   dependencies:
@@ -12726,7 +12769,7 @@ __metadata:
   languageName: node
   linkType: hard
 
-"object-assign@npm:^4.1.0":
+"object-assign@npm:^4.1.0, object-assign@npm:^4.1.1":
   version: 4.1.1
   resolution: "object-assign@npm:4.1.1"
   checksum: 10/fcc6e4ea8c7fe48abfbb552578b1c53e0d194086e2e6bbbf59e0a536381a292f39943c6e9628af05b5528aa5e3318bb30d6b2e53cadaf5b8fe9e12c4b69af23f
@@ -13415,6 +13458,13 @@ __metadata:
   languageName: node
   linkType: hard
 
+"pngjs@npm:^5.0.0":
+  version: 5.0.0
+  resolution: "pngjs@npm:5.0.0"
+  checksum: 10/345781644740779752505af2fea3e9043f6c7cc349b18e1fb8842796360d1624791f0c24d33c0f27b05658373f90ffaa177a849e932e5fea1f540cef3975f3c9
+  languageName: node
+  linkType: hard
+
 "possible-typed-array-names@npm:^1.0.0, possible-typed-array-names@npm:^1.1.0":
   version: 1.1.0
   resolution: "possible-typed-array-names@npm:1.1.0"
@@ -13525,10 +13575,34 @@ __metadata:
   languageName: node
   linkType: hard
 
+"prop-types@npm:^15.8.0":
+  version: 15.8.1
+  resolution: "prop-types@npm:15.8.1"
+  dependencies:
+    loose-envify: "npm:^1.4.0"
+    object-assign: "npm:^4.1.1"
+    react-is: "npm:^16.13.1"
+  checksum: 10/7d959caec002bc964c86cdc461ec93108b27337dabe6192fb97d69e16a0c799a03462713868b40749bfc1caf5f57ef80ac3e4ffad3effa636ee667582a75e2c0
+  languageName: node
+  linkType: hard
+
 "punycode@npm:^2.1.1":
   version: 2.3.1
   resolution: "punycode@npm:2.3.1"
   checksum: 10/febdc4362bead22f9e2608ff0171713230b57aff9dddc1c273aa2a651fbd366f94b7d6a71d78342a7c0819906750351ca7f2edd26ea41b626d87d6a13d1bd059
+  languageName: node
+  linkType: hard
+
+"qrcode@npm:^1.5.4":
+  version: 1.5.4
+  resolution: "qrcode@npm:1.5.4"
+  dependencies:
+    dijkstrajs: "npm:^1.0.1"
+    pngjs: "npm:^5.0.0"
+    yargs: "npm:^15.3.1"
+  bin:
+    qrcode: bin/qrcode
+  checksum: 10/9a1b61760e4ea334545a0f54bbc11c537aba0a17cf52cab9fa1b07f8a1337eed0bc6f7fde41b197f2c82c249bc48728983bfaf861bb7ecb29dc597b2ae33c424
   languageName: node
   linkType: hard
 
@@ -13655,7 +13729,7 @@ __metadata:
   languageName: node
   linkType: hard
 
-"react-is@npm:^16.7.0":
+"react-is@npm:^16.13.1, react-is@npm:^16.7.0":
   version: 16.13.1
   resolution: "react-is@npm:16.13.1"
   checksum: 10/5aa564a1cde7d391ac980bedee21202fc90bdea3b399952117f54fb71a932af1e5902020144fb354b4690b2414a0c7aafe798eb617b76a3d441d956db7726fdf
@@ -13732,6 +13806,31 @@ __metadata:
   peerDependencies:
     react-native: ">=0.79.0"
   checksum: 10/cb01dd6e097ab1909410caa20de8299965aae40e5b08085359cb3ef88898d009f47847eb507b5035e1e8e6cc1d0e60aa6c8185616b81854e8b6345f31121278f
+  languageName: node
+  linkType: hard
+
+"react-native-otp-verify@npm:^1.2.0":
+  version: 1.2.0
+  resolution: "react-native-otp-verify@npm:1.2.0"
+  peerDependencies:
+    react: "*"
+    react-native: "*"
+  checksum: 10/6d6c5479f7610e5e4f1bcfbb3abb6ab8632d268574d46cd78a213539743f5c9c41a5249eeeb0ae52f259fc07475f3acf3b6cf3dbcc7f67ab63e30c54c15b0998
+  languageName: node
+  linkType: hard
+
+"react-native-qrcode-svg@npm:^6.3.21":
+  version: 6.3.21
+  resolution: "react-native-qrcode-svg@npm:6.3.21"
+  dependencies:
+    prop-types: "npm:^15.8.0"
+    qrcode: "npm:^1.5.4"
+    text-encoding: "npm:^0.7.0"
+  peerDependencies:
+    react: "*"
+    react-native: ">=0.63.4"
+    react-native-svg: ">=14.0.0"
+  checksum: 10/83ce3e00502b42ecf7b5a1a3ef4323120532e0635e640ca00b0a5b69b7b61fd117e29604339af3b4a2d869bf00a701f85329f9a123afa81595798f9d7956c181
   languageName: node
   linkType: hard
 
@@ -14746,6 +14845,7 @@ __metadata:
     "@react-native-async-storage/async-storage": "npm:^3.1.1"
     "@react-native-community/cli": "npm:^20.1.2"
     "@react-native-community/datetimepicker": "npm:^9.1.0"
+    "@react-native-google-signin/google-signin": "npm:^16.1.2"
     "@react-navigation/native": "npm:~7.2.2"
     "@reduxjs/toolkit": "npm:^2.12.0"
     "@supabase/supabase-js": "npm:^2.110.0"
@@ -14768,6 +14868,7 @@ __metadata:
     country-state-city: "npm:^3.2.1"
     date-fns: "npm:^4.4.0"
     expo: "npm:~55.0.7"
+    expo-apple-authentication: "npm:^57.0.0"
     expo-audio: "npm:~55.0.15"
     expo-camera: "npm:~55.0.20"
     expo-clipboard: "npm:~55.0.14"
@@ -14778,6 +14879,7 @@ __metadata:
     expo-image-picker: "npm:~55.0.10"
     expo-linear-gradient: "npm:~55.0.15"
     expo-livekit-screen-share: "npm:^0.2.1"
+    expo-local-authentication: "npm:^57.0.0"
     expo-localization: "npm:~55.0.16"
     expo-location: "npm:~55.1.11"
     expo-secure-store: "npm:~55.0.15"
@@ -14793,6 +14895,8 @@ __metadata:
     react-native: "npm:0.83.2"
     react-native-gesture-handler: "npm:~2.30.0"
     react-native-onesignal: "npm:^5.5.4"
+    react-native-otp-verify: "npm:^1.2.0"
+    react-native-qrcode-svg: "npm:^6.3.21"
     react-native-reanimated: "npm:~4.2.1"
     react-native-safe-area-context: "npm:~5.6.2"
     react-native-screens: "npm:~4.23.0"
@@ -15433,6 +15537,13 @@ __metadata:
     glob: "npm:^7.1.4"
     minimatch: "npm:^3.0.4"
   checksum: 10/8fccb2cb6c8fcb6bb4115394feb833f8b6cf4b9503ec2485c2c90febf435cac62abe882a0c5c51a37b9bbe70640cdd05acf5f45e486ac4583389f4b0855f69e5
+  languageName: node
+  linkType: hard
+
+"text-encoding@npm:^0.7.0":
+  version: 0.7.0
+  resolution: "text-encoding@npm:0.7.0"
+  checksum: 10/c61b7a59a54c58f0714da0ef4c1f65732821bb1f761e6f21c3e681e51c6dd56fdefa4fcfccd3254bf47132d87420fbc9898da21a804c89e87861f4e1478d5f18
   languageName: node
   linkType: hard
 
@@ -16629,7 +16740,7 @@ __metadata:
   languageName: node
   linkType: hard
 
-"yargs@npm:^15.1.0":
+"yargs@npm:^15.1.0, yargs@npm:^15.3.1":
   version: 15.4.1
   resolution: "yargs@npm:15.4.1"
   dependencies:

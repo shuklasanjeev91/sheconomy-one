@@ -1,6 +1,5 @@
-import { Link } from 'one'
-
 import { Button, Icons, Text, XStack, YStack } from '~/components/ui'
+import { AppLink } from '~/components/navigation/AppLink'
 import { useAppLayout } from '~/hooks/useAppLayout'
 import { vendorRoutes } from '~/lib/routes'
 import { useAppUi } from '~/lib/theme/useAppUi'
@@ -46,16 +45,16 @@ export function VendorCreateListingScreen() {
       </YStack>
 
       <XStack gap="$3" flexWrap="wrap" justifyContent="center">
-        <Link href={vendorRoutes.home} asChild>
+        <AppLink href={vendorRoutes.home} asChild>
           <Button tone="primary" size="$4" borderRadius={999} icon={<Icons.LayoutDashboard size={16} color="white" />}>
             Go to dashboard
           </Button>
-        </Link>
-        <Link href={vendorRoutes.myShop} asChild>
+        </AppLink>
+        <AppLink href={vendorRoutes.myShop} asChild>
           <Button tone="ghost" size="$4" borderRadius={999} icon={<Icons.Store size={16} color={ui.text} />}>
             View my shop
           </Button>
-        </Link>
+        </AppLink>
       </XStack>
     </YStack>
   )

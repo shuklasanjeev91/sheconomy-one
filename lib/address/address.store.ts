@@ -211,6 +211,10 @@ function buildOptimisticAddress(requestId: string, input: AddressFormData | Addr
     is_default: Boolean(input.is_default),
     address_label: input.address_label || null,
     address_metadata: null,
+    latitude: input.latitude ?? null,
+    longitude: input.longitude ?? null,
+    place_id: input.place_id ?? null,
+    source: input.source ?? 'manual',
     created_at: now,
     updated_at: now,
   }

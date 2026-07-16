@@ -1,25 +1,38 @@
 import { Platform } from 'react-native'
+import { usePathname } from 'one'
 
 import { Icons, YStack } from '~/components/ui'
 import { radius } from '~/config/tokens'
 import { useAppLayout } from '~/hooks/useAppLayout'
+import { isChatConversationPath, isChatPath } from '~/lib/routes'
 import { useAppUi } from '~/lib/theme/useAppUi'
 import { useAiAssist } from '~/providers/AiAssistProvider'
+
+/** Space to clear ChatListPane’s “new message” FAB (58px) + gap. */
+const CHAT_COMPOSE_FAB_CLEARANCE = 72
 
 /**
  * Floating entry for signed-in AI assistant — shared web / iOS / Android.
  * Sits above the mobile tab bar and bottom-right on desktop.
+ * On the chat inbox list it stacks above the compose FAB so the two don’t overlap.
  */
 export function AiAssistFab() {
   const ui = useAppUi()
+  const pathname = usePathname()
   const { openAssist, open } = useAiAssist()
   const { isDesktop, mobileTabBarOffset, safeRight, safeBottom } = useAppLayout()
 
   if (open) return null
 
-  const bottom = isDesktop
-    ? Math.max(safeBottom, 24)
-    : Math.max(mobileTabBarOffset + 12, safeBottom + 12)
+  // Mobile chat list also shows the PenSquare compose FAB at the same corner.
+  const stackAboveChatCompose =
+    !isDesktop && isChatPath(pathname) && !isChatConversationPath(pathname)
+
+  const bottom =
+    (isDesktop
+      ? Math.max(safeBottom, 24)
+      : Math.max(mobileTabBarOffset + 12, safeBottom + 12)) +
+    (stackAboveChatCompose ? CHAT_COMPOSE_FAB_CLEARANCE : 0)
   const right = Math.max(safeRight, 16)
 
   return (

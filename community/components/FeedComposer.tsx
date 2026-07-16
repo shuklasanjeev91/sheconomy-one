@@ -1,4 +1,5 @@
-import { Link, useRouter } from 'one'
+import { useRouter } from 'one'
+import { AppLink } from '~/components/navigation/AppLink'
 import { useState } from 'react'
 import type { Href } from 'one'
 
@@ -44,9 +45,9 @@ export function FeedComposer({ onGifSelect }: FeedComposerProps) {
     <>
       <CommunityCard padding={16} gap={12}>
         <XStack gap={10} alignItems="center">
-          <Link href={(isAuthenticated ? communityRoutes.profile : routes.signIn) as Href} asChild>
+          <AppLink href={(isAuthenticated ? communityRoutes.profile : routes.signIn) as Href} asChild>
             <Avatar name={name} src={profile?.avatar_url ?? undefined} size="$4" cursor="pointer" />
-          </Link>
+          </AppLink>
           <XStack
             flex={1}
             backgroundColor={communityUi.pageBg}

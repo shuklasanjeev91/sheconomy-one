@@ -64,6 +64,8 @@ export async function startCall(input: {
   callerId: string
   receiverId: string
   callType: CallType
+  receiverName?: string
+  receiverAvatar?: string | null
 }): Promise<{ call: ChatCall | null; error: string | null }> {
   try {
     const meeting = await createMeeting(input.callerId, {
@@ -74,14 +76,25 @@ export async function startCall(input: {
         waitingRoom: false,
         allowChat: false,
         allowRecording: false,
-        allowScreenShare: input.callType === 'video',
+        allowScreenShare: false,
+        allowHandRaise: false,
       },
       meetingOptions: {
         defaultVideo: input.callType === 'video',
         defaultAudio: true,
         layout: 'speaker',
         enableMeetingChat: false,
+        allowJoinBeforeHost: true,
       },
+      invitees: [
+        {
+          id: input.receiverId,
+          type: 'user',
+          name: input.receiverName?.trim() || 'Contact',
+          avatar: input.receiverAvatar ?? null,
+          status: 'pending',
+        },
+      ],
     })
 
     const { data, error } = await supabase

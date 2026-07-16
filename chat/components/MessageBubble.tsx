@@ -1,4 +1,4 @@
-import { Linking, Platform } from 'react-native'
+import { Platform } from 'react-native'
 
 import { useChatTheme } from '~/chat/lib/chat-theme'
 import { formatBubbleTime } from '~/chat/lib/time'
@@ -12,6 +12,7 @@ import { ChatMediaImage } from './ChatMediaImage'
 import { EventMessage } from './EventMessage'
 import { LinkPreviewCard } from './LinkPreviewCard'
 import { PollMessage } from './PollMessage'
+import { openExternalUrl } from '~/lib/platform/openUrl'
 
 type MessageBubbleProps = {
   message: ChatMessage
@@ -122,7 +123,7 @@ function RichMessageText({
               color={linkColor}
               textDecorationLine="underline"
               onPress={() => {
-                Linking.openURL(segment).catch(() => {})
+                void openExternalUrl(segment)
               }}
             >
               {segment}

@@ -10,6 +10,7 @@ import { MeetingVideoStage } from '~/co-work/components/MeetingVideoStage'
 import { useLiveKitMediaControls } from '~/co-work/hooks/useLiveKitMediaControls.web'
 import { fetchLiveKitCredentials } from '~/co-work/lib/livekit'
 import { getLiveKitRoomOptions } from '~/co-work/lib/livekit-room-options'
+import { bindRemoteScreenShareQuality } from '~/co-work/lib/livekit-screen-share'
 import type { LiveKitMediaControls, LiveKitMeetingRoomProps } from '~/co-work/lib/livekit-media-controls'
 import { useCoWorkTheme, type CoWorkShadows, type CoWorkUiTokens } from '~/co-work/lib/theme'
 import { fetchLiveKitConfig, type LiveKitConfig } from '~/lib/livekit/config'
@@ -105,6 +106,23 @@ function getSheconomyLivekitCss(ui: CoWorkUiTokens, shadows: CoWorkShadows) {
     height: 100% !important;
     object-fit: cover !important;
     object-position: center center;
+    background: #0c080a;
+  }
+  .sheconomy-participant-tile[data-lk-source='screen_share'] video,
+  .sheconomy-participant-tile[data-lk-source='screen_share'] .lk-video-track,
+  .sheconomy-video-gallery--screen .sheconomy-participant-tile[data-lk-source='screen_share'] video {
+    object-fit: contain !important;
+    background: #0c080a;
+  }
+  .sheconomy-video-gallery--screen {
+    display: flex;
+    align-items: stretch;
+    justify-content: center;
+  }
+  .sheconomy-video-gallery--screen .sheconomy-participant-tile[data-lk-source='screen_share'] {
+    width: 100%;
+    height: 100%;
+    flex: 1 1 auto;
   }
   .sheconomy-video-gallery .lk-participant-placeholder {
     background: ${ui.tileBg};
@@ -157,6 +175,7 @@ export function LiveKitMeetingRoom({
   roomId,
   displayName,
   enabled,
+  mediaMode = 'meeting',
   onDisconnected,
   overlay,
 }: LiveKitMeetingRoomProps) {
@@ -226,6 +245,28 @@ export function LiveKitMeetingRoom({
     )
   }
 
+  if (error) {
+    return (
+      <ScreenFill padding="$4" backgroundColor={coworkUi.pageBg} gap="$3">
+        <Text color={coworkUi.danger} fontWeight="700">
+          Could not join video room
+        </Text>
+        <Text color={coworkUi.textSecondary} lineHeight={22}>
+          {error}
+        </Text>
+        <Text
+          color={coworkUi.brand}
+          fontWeight="600"
+          cursor="pointer"
+          onPress={() => void loadCredentials()}
+        >
+          Try again
+        </Text>
+        {overlay?.(null)}
+      </ScreenFill>
+    )
+  }
+
   if (loading || !credentials) {
     return (
       <ScreenCenter backgroundColor={coworkUi.pageBg}>
@@ -234,14 +275,6 @@ export function LiveKitMeetingRoom({
           Joining Co-Work room…
         </Text>
       </ScreenCenter>
-    )
-  }
-
-  if (error) {
-    return (
-      <ScreenFill padding="$4" backgroundColor={coworkUi.pageBg}>
-        <Text color={coworkUi.danger}>{error}</Text>
-      </ScreenFill>
     )
   }
 
@@ -256,8 +289,8 @@ export function LiveKitMeetingRoom({
         token={credentials.token}
         connect
         audio
-        video
-        options={getLiveKitRoomOptions()}
+        video={mediaMode !== 'audio'}
+        options={getLiveKitRoomOptions('web')}
         onDisconnected={onDisconnected}
         style={{
           flex: 1,
@@ -270,7 +303,7 @@ export function LiveKitMeetingRoom({
           background: 'transparent',
         }}
       >
-        <WebLiveKitMeetingContent overlay={overlay} />
+        <WebLiveKitMeetingContent overlay={overlay} mediaMode={mediaMode} />
       </LiveKitRoom>
       <style>{getSheconomyLivekitCss(coworkUi, coworkShadows)}</style>
     </ScreenFill>
@@ -279,8 +312,10 @@ export function LiveKitMeetingRoom({
 
 function WebLiveKitMeetingContent({
   overlay,
+  mediaMode = 'meeting',
 }: {
   overlay?: (liveKit: LiveKitMediaControls | null) => React.ReactNode
+  mediaMode?: import('~/co-work/lib/livekit-media-controls').LiveKitMediaMode
 }) {
   const liveKit = useLiveKitMediaControls()
 
@@ -298,15 +333,43 @@ function WebLiveKitMeetingContent({
       })
     }
 
-    room.on(RoomEvent.Connected, reinforceVoiceProcessing)
-    if (room.state === ConnectionState.Connected) {
+    const reinforceCallMedia = async () => {
+      // Voice calls must never leave camera on; video calls prefer camera on.
+      if (mediaMode === 'audio') {
+        if (room.localParticipant.isCameraEnabled) {
+          await room.localParticipant.setCameraEnabled(false)
+        }
+        if (!room.localParticipant.isMicrophoneEnabled) {
+          await room.localParticipant.setMicrophoneEnabled(true, {
+            echoCancellation: true,
+            noiseSuppression: true,
+            autoGainControl: true,
+          })
+        }
+        return
+      }
+      if (mediaMode === 'video' && !room.localParticipant.isCameraEnabled) {
+        await room.localParticipant.setCameraEnabled(true)
+      }
+    }
+
+    const unbindScreenShare = bindRemoteScreenShareQuality(room)
+
+    const onConnected = () => {
       void reinforceVoiceProcessing()
+      void reinforceCallMedia()
+    }
+
+    room.on(RoomEvent.Connected, onConnected)
+    if (room.state === ConnectionState.Connected) {
+      onConnected()
     }
 
     return () => {
-      room.off(RoomEvent.Connected, reinforceVoiceProcessing)
+      room.off(RoomEvent.Connected, onConnected)
+      unbindScreenShare()
     }
-  }, [liveKit.room])
+  }, [liveKit.room, mediaMode])
 
   return (
     <YStack flex={1} width="100%" height="100%" position="relative" style={{ minHeight: 0, overflow: 'hidden' }}>

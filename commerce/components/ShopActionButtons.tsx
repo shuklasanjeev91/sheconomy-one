@@ -33,7 +33,7 @@ export function ShopActionButtons({ shopId, ownerUserId }: ShopActionButtonsProp
         <Button
           tone={follow.isFollowing ? 'outline' : 'primary'}
           size="$3"
-          borderRadius={999}
+          borderRadius={8}
           paddingHorizontal="$5"
           disabled={follow.isToggling}
           onPress={follow.toggleFollow}

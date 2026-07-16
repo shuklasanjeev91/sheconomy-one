@@ -1,9 +1,10 @@
 import { useEffect, useState } from 'react'
-import { Linking, Platform } from 'react-native'
+import { Platform } from 'react-native'
 
 import { fetchLinkPreview, getVideoEmbed, type LinkPreview } from '~/chat/lib/link-preview'
 import { useChatTheme } from '~/chat/lib/chat-theme'
 import { Icons, Image, Text, YStack } from '~/components/ui'
+import { openExternalUrl } from '~/lib/platform/openUrl'
 
 type LinkPreviewCardProps = {
   url: string
@@ -40,7 +41,7 @@ export function LinkPreviewCard({ url, isOwn }: LinkPreviewCardProps) {
   const showPlayer = playing && embed && isWeb
 
   const openLink = () => {
-    Linking.openURL(preview.url).catch(() => {})
+    void openExternalUrl(preview.url)
   }
 
   return (
