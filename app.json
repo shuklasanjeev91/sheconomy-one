@@ -149,7 +149,9 @@
         "android.permission.RECORD_AUDIO",
         "android.permission.CAMERA",
         "android.permission.ACCESS_COARSE_LOCATION",
-        "android.permission.ACCESS_FINE_LOCATION"
+        "android.permission.ACCESS_FINE_LOCATION",
+        "android.permission.BLUETOOTH_CONNECT",
+        "android.permission.MODIFY_AUDIO_SETTINGS"
       ]
     },
     "extra": {
