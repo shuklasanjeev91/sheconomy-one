@@ -47,7 +47,6 @@ declare module 'one' {
         | `/auth/import-contacts`
         | `/auth/sign-in`
         | `/auth/sign-up`
-        | `/auth/import-contacts`
         | `/auth/verify-gender`
         | `/browse`
         | `/cart`

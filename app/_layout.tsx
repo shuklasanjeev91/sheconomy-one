@@ -197,18 +197,24 @@ function AppProviders({ children }: { children: React.ReactNode }) {
   return (
     <ReduxProvider store={store}>
       <SupabaseProvider>
-        <SchemeProvider>
-          <ThemedApp>
-            <CartProvider>
-              <FavoritesProvider>
-                <MarketplacePersonalizationProvider>
-                  <AppUsageTracker />
-                  <AppShell>{children}</AppShell>
-                </MarketplacePersonalizationProvider>
-              </FavoritesProvider>
-            </CartProvider>
-          </ThemedApp>
-        </SchemeProvider>
+        <PushNotificationsProvider>
+          <SchemeProvider>
+            <ThemedApp>
+              <CartProvider>
+                <FavoritesProvider>
+                  <MarketplacePersonalizationProvider>
+                    <AppUsageTracker />
+                    <AiAssistProvider>
+                      <AutomaticUpdateManager />
+                      <InAppNotificationHost />
+                      <AppShell>{children}</AppShell>
+                    </AiAssistProvider>
+                  </MarketplacePersonalizationProvider>
+                </FavoritesProvider>
+              </CartProvider>
+            </ThemedApp>
+          </SchemeProvider>
+        </PushNotificationsProvider>
       </SupabaseProvider>
     </ReduxProvider>
   )
