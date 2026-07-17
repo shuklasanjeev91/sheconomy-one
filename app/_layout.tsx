@@ -13,6 +13,8 @@ import config from '~/config/tamagui.config'
 import { screenFillStyle } from '~/lib/platform/viewport'
 import { AppToasts } from '~/components/ui/Toast'
 import { AppUsageTracker } from '~/components/analytics/AppUsageTracker'
+import { ExternalAnalyticsScripts } from '~/components/analytics/ExternalAnalyticsScripts'
+import { ExternalAnalyticsTracker } from '~/components/analytics/ExternalAnalyticsTracker'
 import { AppShell } from '~/components/navigation/app/AppShell'
 import { RouteWarmup } from '~/components/navigation/RouteWarmup'
 import { AppBootstrapPrefetch } from '~/components/navigation/AppBootstrapPrefetch'
@@ -31,6 +33,7 @@ import { AiAssistProvider } from '~/providers/AiAssistProvider'
 import { ScreenZoomProvider } from '~/lib/zoom/ScreenZoomContext'
 import { ScreenZoomRoot } from '~/components/media/ScreenZoomRoot'
 import { ConnectivityProvider } from '~/providers/ConnectivityProvider'
+import { RouteSeoProvider } from '~/components/seo/RouteSeo'
 
 function NativeRootShell({ children }: { children: ReactNode }) {
   if (Platform.OS === 'web') {
@@ -63,6 +66,11 @@ export default function Layout() {
           <link rel="apple-touch-icon" href="/apple-touch-icon.png" sizes="80x80" />
           <MetaTheme lightColor="#fef5f9" darkColor="#1c0f14" />
           <meta name="theme-color" content="#D01060" />
+          <meta
+            name="google-site-verification"
+            content="-NBqtpzczzj-BY1yV4J8jtUZZAjChrU5HUFYuYIcMtI"
+          />
+          <ExternalAnalyticsScripts />
           <style
             dangerouslySetInnerHTML={{
               __html: `
@@ -202,12 +210,15 @@ function AppProviders({ children }: { children: React.ReactNode }) {
                             <InAppNotificationHost />
                             <PushForegroundNotificationHost />
                             <AppUsageTracker />
+                            <ExternalAnalyticsTracker />
                             <BiometricUnlockGate>
                               <ConnectivityProvider>
                                 <AppErrorBoundary scope="AppShell">
-                                  <RouteWarmup />
-                                  <AppBootstrapPrefetch />
-                                  <AppShell>{children}</AppShell>
+                                  <RouteSeoProvider>
+                                    <RouteWarmup />
+                                    <AppBootstrapPrefetch />
+                                    <AppShell>{children}</AppShell>
+                                  </RouteSeoProvider>
                                 </AppErrorBoundary>
                               </ConnectivityProvider>
                             </BiometricUnlockGate>

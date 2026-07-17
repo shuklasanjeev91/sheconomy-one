@@ -28,6 +28,7 @@ import { getShadowStyle, radius } from '~/config/tokens'
 import { classRoutes } from '~/lib/routes'
 import { getProgramShareUrl } from '~/lib/share'
 import { useAppUi } from '~/lib/theme/useAppUi'
+import { usePageSeo } from '~/components/seo/RouteSeo'
 
 const NEXT_COUNTDOWN_SECONDS = 5
 
@@ -52,6 +53,19 @@ export function ProgramScreen() {
   const [countdown, setCountdown] = useState<number | null>(null)
   const countdownRef = useRef<ReturnType<typeof setInterval> | null>(null)
   const nextProgramRef = useRef<Program | null>(null)
+
+  usePageSeo(
+    useMemo(() => {
+      if (!program) return null
+      return {
+        title: program.title,
+        description:
+          program.description?.replace(/\s+/g, ' ').trim().slice(0, 200) ||
+          `Watch or listen to ${program.title} on SHEconomy Classes.`,
+        image: program.image_url,
+      }
+    }, [program]),
+  )
 
   const clearCountdown = useCallback(() => {
     if (countdownRef.current) {

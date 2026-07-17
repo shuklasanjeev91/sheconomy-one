@@ -75,6 +75,7 @@ import {
 import { maxLength, minLength, required } from '~/lib/validation'
 import { useAppLayout } from '~/hooks/useAppLayout'
 import { useAppUi } from '~/lib/theme/useAppUi'
+import { trackCommerceEvent } from '~/lib/analytics'
 
 const SUMMARY_WIDTH = 320
 
@@ -118,6 +119,20 @@ export function CheckoutScreen() {
     items,
     isSelected,
   )
+
+  useEffect(() => {
+    if (!selectedItems.length || !cart?.id) return
+    trackCommerceEvent('begin_checkout', {
+      currency: cart.currency ?? 'INR',
+      value: total,
+      items: selectedItems.map((item) => ({
+        id: item.listing_id,
+        name: item.listing_id,
+        price: item.unit_price ?? undefined,
+        quantity: item.quantity,
+      })),
+    })
+  }, [cart?.id, selectedItems.length])
 
   const orderShops = useMemo(() => {
     const map = new Map<string, string>()
@@ -385,6 +400,17 @@ export function CheckoutScreen() {
       }
 
       setOrderPlaced(true)
+      trackCommerceEvent('purchase', {
+        currency,
+        value: total,
+        transactionId: orderNumbers[0] ?? cart.id,
+        items: selectedItems.map((item) => ({
+          id: item.listing_id,
+          name: item.listing_id,
+          price: item.unit_price ?? undefined,
+          quantity: item.quantity,
+        })),
+      })
       await clearCartItems(cart.id)
 
       if (checkoutUrl && mode === 'online') {

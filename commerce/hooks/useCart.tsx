@@ -27,6 +27,7 @@ import {
   autoApplyBestOffer,
   reconcileCartDiscount,
 } from '~/commerce/lib/discounts'
+import { trackCommerceEvent } from '~/lib/analytics'
 import { supabase } from '~/lib/supabase/client'
 import { useSupabase } from '~/providers/SupabaseProvider'
 
@@ -187,6 +188,17 @@ export function CartProvider({ children }: { children: ReactNode }) {
       if (addError) {
         return { error: addError }
       }
+
+      trackCommerceEvent('add_to_cart', {
+        currency: 'INR',
+        items: [
+          {
+            id: listingId,
+            name: listingId,
+            quantity: options?.quantity ?? 1,
+          },
+        ],
+      })
 
       await loadCart()
       return { error: null }

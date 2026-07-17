@@ -43,6 +43,7 @@ import { useVendorShops } from '~/hooks/useVendorShops'
 import { useProfile } from '~/hooks/useProfile'
 import { commerceRoutes } from '~/lib/routes'
 import { useAppUi } from '~/lib/theme/useAppUi'
+import { usePageSeo } from '~/components/seo/RouteSeo'
 
 type ShopTab = 'products' | 'about' | 'reviews'
 type ShopSort = 'featured' | 'price-asc' | 'price-desc' | 'newest' | 'rating'
@@ -107,6 +108,19 @@ export function ShopScreen() {
   const sortedListings = useMemo(
     () => sortListings(listingsFeed.items, sort),
     [listingsFeed.items, sort],
+  )
+
+  usePageSeo(
+    useMemo(() => {
+      if (!shop) return null
+      return {
+        title: shop.shop_name,
+        description:
+          shop.shop_description?.trim().slice(0, 200) ||
+          `Shop ${shop.shop_name} on SHEconomy — browse products from this women-led business.`,
+        image: shop.logo_url ?? null,
+      }
+    }, [shop]),
   )
 
   if (isLoading) {

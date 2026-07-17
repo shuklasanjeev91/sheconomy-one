@@ -1,6 +1,6 @@
 import { useParams, useRouter } from 'one'
 import { AppLink } from '~/components/navigation/AppLink'
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 
 import { CommunityCard } from '~/community/components/CommunityCard'
 import { CommunityShell } from '~/community/components/CommunityShell'
@@ -12,6 +12,7 @@ import { ShareButton } from '~/components/share'
 import { routes } from '~/lib/routes'
 import { getJobShareUrl } from '~/lib/share'
 import { useSupabase } from '~/providers/SupabaseProvider'
+import { usePageSeo } from '~/components/seo/RouteSeo'
 
 export function JobDetailScreen() {
   const communityUi = useCommunityUi()
@@ -23,6 +24,19 @@ export function JobDetailScreen() {
   const [coverLetter, setCoverLetter] = useState('')
   const [isLoading, setIsLoading] = useState(true)
   const [isSaving, setIsSaving] = useState(false)
+
+  usePageSeo(
+    useMemo(() => {
+      if (!job) return null
+      return {
+        title: `${job.title} at ${job.company_name}`,
+        description:
+          job.description?.replace(/\s+/g, ' ').trim().slice(0, 200) ||
+          `${job.title} — ${job.location}${job.is_remote ? ' (Remote)' : ''}. Apply on SHEconomy.`,
+        image: job.company_logo,
+      }
+    }, [job]),
+  )
 
   useEffect(() => {
     if (!id) return

@@ -13,6 +13,7 @@ import { fetchCategoryBySlug, getCategorySlug, type CategorySummary } from '~/li
 import { commerceRoutes } from '~/lib/routes'
 import { FullWidthLayout, PageSection } from '~/components/layout'
 import { useAppUi } from '~/lib/theme/useAppUi'
+import { usePageSeo } from '~/components/seo/RouteSeo'
 
 export function CategoryScreen({ filters: initialFilters = {} }: { filters?: ListingBrowseFilters }) {
   const ui = useAppUi()
@@ -48,6 +49,18 @@ export function CategoryScreen({ filters: initialFilters = {} }: { filters?: Lis
   const { facets, isLoading: facetsLoading } = useCategoryFilterFacets(category?.category_id)
 
   const filterKey = useMemo(() => JSON.stringify(filters), [filters])
+
+  usePageSeo(
+    useMemo(() => {
+      if (!category) return null
+      const name = category.seo_name || category.category
+      return {
+        title: name,
+        description: `Shop ${name} from women-led businesses on SHEconomy.`,
+        image: category.category_image_url,
+      }
+    }, [category]),
+  )
 
   function updateFilters(next: ListingBrowseFilters) {
     if (!category) return

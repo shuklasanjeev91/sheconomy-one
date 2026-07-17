@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useParams, useRouter } from 'one'
 
 import { AppLink } from '~/components/navigation/AppLink'
@@ -23,6 +23,7 @@ import { supabase } from '~/lib/supabase/client'
 import { useSupabase } from '~/providers/SupabaseProvider'
 import { communityRoutes, routes } from '~/lib/routes'
 import { useAppUi } from '~/lib/theme/useAppUi'
+import { usePageSeo } from '~/components/seo/RouteSeo'
 
 export function PublicProfileScreen() {
   const ui = useAppUi()
@@ -34,6 +35,22 @@ export function PublicProfileScreen() {
   const [error, setError] = useState<string | null>(null)
   const [creatorMode, setCreatorMode] = useState(false)
   const [mutualCount, setMutualCount] = useState(0)
+
+  usePageSeo(
+    useMemo(() => {
+      if (!profile) return null
+      const name = profile.full_name || profile.username
+      return {
+        title: name,
+        description:
+          profile.headline?.trim() ||
+          profile.bio?.replace(/\s+/g, ' ').trim().slice(0, 200) ||
+          `See ${name}'s profile on SHEconomy.`,
+        image: profile.avatar_url,
+        type: 'profile' as const,
+      }
+    }, [profile]),
+  )
 
   useEffect(() => {
     if (!handle) return

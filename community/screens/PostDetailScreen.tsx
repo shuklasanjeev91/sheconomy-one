@@ -1,6 +1,6 @@
 import { useParams, useRouter } from 'one'
 import { AppLink } from '~/components/navigation/AppLink'
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 
 import { SendPostSheet } from '~/chat/components/SendPostSheet'
 import { CommunityCard } from '~/community/components/CommunityCard'
@@ -18,6 +18,7 @@ import { useAutoRefresh } from '~/lib/cache/useAutoRefresh'
 import { chatRoutes, communityRoutes } from '~/lib/routes'
 import { getPostShareUrl } from '~/lib/share'
 import { useSupabase } from '~/providers/SupabaseProvider'
+import { usePageSeo } from '~/components/seo/RouteSeo'
 
 export function PostDetailScreen() {
   const communityUi = useCommunityUi()
@@ -44,6 +45,20 @@ export function PostDetailScreen() {
       setIsLoading(false)
     })
   }, [id])
+
+  usePageSeo(
+    useMemo(() => {
+      if (!post) return null
+      const author = post.author?.full_name || post.author?.username || 'Community member'
+      const snippet = mentionsToPlainText(post.content).replace(/\s+/g, ' ').trim().slice(0, 200)
+      return {
+        title: `${author} on ${BRAND_NAME}`,
+        description: snippet || undefined,
+        image: collectPostMedia(post)[0]?.url ?? post.author?.avatar_url ?? null,
+        type: 'article' as const,
+      }
+    }, [post]),
+  )
 
   // Edits made from other screens refresh this detail view in place.
   useAutoRefresh(INVALIDATION_TOPICS.communityPosts, () => {

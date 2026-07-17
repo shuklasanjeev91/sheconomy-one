@@ -1,6 +1,6 @@
 import { useParams } from 'one'
 import { AppLink } from '~/components/navigation/AppLink'
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 
 import { CommunityCard } from '~/community/components/CommunityCard'
 import { CommunityShell } from '~/community/components/CommunityShell'
@@ -13,6 +13,7 @@ import { ProfileLink } from '~/community/components/ProfileLink'
 import { PostContentText } from '~/community/components/PostContentText'
 import { collectPostMedia } from '~/community/lib/post-media'
 import { PostMediaCarousel } from '~/community/components/PostMediaCarousel'
+import { usePageSeo } from '~/components/seo/RouteSeo'
 
 /**
  * LinkedIn-style article reader — full-width headline + body with engagement below.
@@ -38,6 +39,18 @@ export function ArticleDetailScreen() {
       setIsLoading(false)
     })
   }, [id])
+
+  usePageSeo(
+    useMemo(() => {
+      if (!post) return null
+      return {
+        title: post.article_title || 'Article',
+        description: post.content.replace(/\s+/g, ' ').trim().slice(0, 200) || undefined,
+        image: collectPostMedia(post)[0]?.url ?? post.author?.avatar_url ?? null,
+        type: 'article' as const,
+      }
+    }, [post]),
+  )
 
   if (isLoading) {
     return (

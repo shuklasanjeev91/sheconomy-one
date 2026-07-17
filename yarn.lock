@@ -3498,6 +3498,20 @@ __metadata:
   languageName: node
   linkType: hard
 
+"@microsoft/react-native-clarity@npm:^4.6.3":
+  version: 4.6.3
+  resolution: "@microsoft/react-native-clarity@npm:4.6.3"
+  peerDependencies:
+    react: "*"
+    react-native: "*"
+    react-native-svg: ">=14.0.0"
+  peerDependenciesMeta:
+    react-native-svg:
+      optional: true
+  checksum: 10/33597e710cd4cc5259edbfaab9b0e674077bb9399f9688e818b75261bb7787fba443bde971225e625609742d4b75203fd13fdedb416c230e53edef311fec56db
+  languageName: node
+  linkType: hard
+
 "@napi-rs/nice-android-arm-eabi@npm:1.1.1":
   version: 1.1.1
   resolution: "@napi-rs/nice-android-arm-eabi@npm:1.1.1"
@@ -7853,6 +7867,69 @@ __metadata:
     "@urql/core": "npm:>=4.0.0"
     wonka: "npm:^6.3.2"
   checksum: 10/ab75d305df9406907992accbcf8e2b1e1ffe1645b3ac547401e00da94d7ced3c58235b68753925e5fed057dc71ac9c9de3865806f728d2253641acef31fc2103
+  languageName: node
+  linkType: hard
+
+"@vercel/analytics@npm:^2.0.1":
+  version: 2.0.1
+  resolution: "@vercel/analytics@npm:2.0.1"
+  peerDependencies:
+    "@remix-run/react": ^2
+    "@sveltejs/kit": ^1 || ^2
+    next: ">= 13"
+    nuxt: ">= 3"
+    react: ^18 || ^19 || ^19.0.0-rc
+    svelte: ">= 4"
+    vue: ^3
+    vue-router: ^4
+  peerDependenciesMeta:
+    "@remix-run/react":
+      optional: true
+    "@sveltejs/kit":
+      optional: true
+    next:
+      optional: true
+    nuxt:
+      optional: true
+    react:
+      optional: true
+    svelte:
+      optional: true
+    vue:
+      optional: true
+    vue-router:
+      optional: true
+  checksum: 10/ffef3eea08992e40e08d0fc9900396a9433855a4aaca90602bfea935c26faa30b6d208c034b6e249fb8a69c81cb5a11aa3acd725d5b9067fb30a4508879c6383
+  languageName: node
+  linkType: hard
+
+"@vercel/speed-insights@npm:^2.0.0":
+  version: 2.0.0
+  resolution: "@vercel/speed-insights@npm:2.0.0"
+  peerDependencies:
+    "@sveltejs/kit": ^1 || ^2
+    next: ">= 13"
+    nuxt: ">= 3"
+    react: ^18 || ^19 || ^19.0.0-rc
+    svelte: ">= 4"
+    vue: ^3
+    vue-router: ^4
+  peerDependenciesMeta:
+    "@sveltejs/kit":
+      optional: true
+    next:
+      optional: true
+    nuxt:
+      optional: true
+    react:
+      optional: true
+    svelte:
+      optional: true
+    vue:
+      optional: true
+    vue-router:
+      optional: true
+  checksum: 10/c8bb85c8e9972b1536d19bb36b8cdecfd85b4391b508a8e9f70cc7e55e09266e19896bad45f889fe5da0430884c83bc8628b7d822f0ffd975ec329cab18ea4b5
   languageName: node
   linkType: hard
 
@@ -17967,6 +18044,7 @@ __metadata:
     "@livekit/react-native-expo-plugin": "npm:^1.0.2"
     "@livekit/react-native-webrtc": "npm:^144.1.1"
     "@mediapipe/face_mesh": "npm:~0.4.0"
+    "@microsoft/react-native-clarity": "npm:^4.6.3"
     "@playwright/test": "npm:^1.61.1"
     "@react-native-async-storage/async-storage": "npm:^3.1.1"
     "@react-native-community/cli": "npm:^20.1.2"
@@ -17991,6 +18069,8 @@ __metadata:
     "@tensorflow/tfjs": "npm:^4.22.0"
     "@tensorflow/tfjs-backend-webgl": "npm:^4.22.0"
     "@types/react": "npm:^19.2.2"
+    "@vercel/analytics": "npm:^2.0.1"
+    "@vercel/speed-insights": "npm:^2.0.0"
     "@vladmandic/face-api": "npm:^1.7.15"
     "@vladmandic/human": "npm:^3.3.5"
     "@vxrn/color-scheme": "npm:1.20.1"
