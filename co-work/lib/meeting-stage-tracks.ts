@@ -76,6 +76,20 @@ export function composeMeetingStageTracks(
     }
   }
 
+  // Exactly 3 people: equal stacked gallery (no PiP). Keep 1:1 WhatsApp PiP for 2.
+  if (cameras.length === 3) {
+    const stageTracks = [
+      ...remoteCameras,
+      ...(localCamera ? [localCamera] : []),
+    ]
+    return {
+      stageTracks: stageTracks.length === 3 ? stageTracks : cameras,
+      pipTrack: null,
+      totalTiles: 3,
+      hasScreenShare: false,
+    }
+  }
+
   const stageTracks =
     remoteCameras.length > 0 ? remoteCameras : localCamera ? [localCamera] : cameras
   const pipTrack = remoteCameras.length > 0 ? localCamera : null
