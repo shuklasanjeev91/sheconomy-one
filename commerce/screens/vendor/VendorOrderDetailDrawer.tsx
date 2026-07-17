@@ -17,11 +17,18 @@ import { getShadowStyle, radius } from '~/config/tokens'
 import { useLockBodyScroll } from '~/hooks/useLockBodyScroll'
 import { overlayBackdropStyle } from '~/lib/layout/styles'
 import { shareOrderInvoice } from '~/lib/orders/order-invoice'
+import type { EnrichedOrderIssue } from '~/lib/orders/order-issue.type'
 import { openMailtoLink } from '~/lib/platform/openMailto'
 import { formatOrderAmount, formatOrderDate } from '~/lib/orders/order.utils'
 import type { OrderPayment } from '~/lib/orders/payment.type'
 import type { OrderAddressSummary, VendorOrderItem } from '~/lib/orders/vendor-orders.type'
 import type { AppUiTokens } from '~/lib/theme/app-ui'
+import {
+  issueStatusLabel,
+  issueTypeLabel,
+  isCancellationIssueType,
+  isOpenIssueStatus,
+} from '~/commerce/lib/customer-order-lifecycle'
 
 import { OrderStatusBadge } from '~/commerce/components/vendor/OrderStatusBadge'
 import { getVendorOrderActions, type VendorOrderAction } from '~/commerce/components/vendor/vendor-order-actions'
@@ -36,6 +43,7 @@ type VendorOrderDetailDrawerProps = {
   loading: boolean
   updating: boolean
   payments: OrderPayment[]
+  issues?: EnrichedOrderIssue[]
   role: string | null
   onClose: () => void
   onAdvance: (item: VendorOrderItem, target: VendorOrderAction['target']) => void
@@ -59,6 +67,7 @@ export function VendorOrderDetailDrawer({
   loading,
   updating,
   payments,
+  issues = [],
   role,
   onClose,
   onAdvance,
@@ -112,6 +121,7 @@ export function VendorOrderDetailDrawer({
             item={item}
             updating={updating}
             payments={payments}
+            issues={issues}
             role={role}
             onClose={onClose}
             onAdvance={onAdvance}
@@ -153,6 +163,7 @@ type DrawerBodyProps = {
   item: VendorOrderItem
   updating: boolean
   payments: OrderPayment[]
+  issues: EnrichedOrderIssue[]
   role: string | null
   onClose: () => void
   onAdvance: (item: VendorOrderItem, target: VendorOrderAction['target']) => void
@@ -160,7 +171,18 @@ type DrawerBodyProps = {
   onDownload: () => void
 }
 
-function DrawerBody({ ui, item, updating, payments, role, onClose, onAdvance, onContact, onDownload }: DrawerBodyProps) {
+function DrawerBody({
+  ui,
+  item,
+  updating,
+  payments,
+  issues,
+  role,
+  onClose,
+  onAdvance,
+  onContact,
+  onDownload,
+}: DrawerBodyProps) {
   const order = item.orders
   const currency = order?.currency ?? 'INR'
   const customer = order?.profiles
@@ -168,6 +190,11 @@ function DrawerBody({ ui, item, updating, payments, role, onClose, onAdvance, on
   const lines = addressLines(address)
   const actions = useMemo(() => getVendorOrderActions(item.item_status, role), [item.item_status, role])
   const payment = payments[0] ?? null
+  const openIssues = useMemo(
+    () => issues.filter((issue) => isOpenIssueStatus(issue.status)),
+    [issues],
+  )
+  const hasOpenCancellation = openIssues.some((issue) => isCancellationIssueType(issue.issue_type))
 
   const variation = item.variation_details as Record<string, unknown> | null
   const variationLabel =
@@ -323,6 +350,58 @@ function DrawerBody({ ui, item, updating, payments, role, onClose, onAdvance, on
             </Text>
           </XStack>
         </Section>
+
+        {/* Customer requests (cancellation / support) */}
+        {issues.length > 0 ? (
+          <Section ui={ui} label="Customer requests">
+            {hasOpenCancellation ? (
+              <XStack
+                gap="$2"
+                padding="$3"
+                borderRadius={radius.chip}
+                backgroundColor="#fef3c7"
+                marginBottom="$2"
+                alignItems="flex-start"
+              >
+                <Icons.AlertTriangle size={16} color="#92600a" />
+                <Text fontSize={12.5} color="#92600a" fontWeight="600" flex={1}>
+                  Open cancellation request — review before shipping.
+                </Text>
+              </XStack>
+            ) : null}
+            <YStack gap="$3">
+              {issues.map((issue) => (
+                <YStack
+                  key={issue.id}
+                  gap={4}
+                  padding="$3"
+                  borderRadius={radius.chip}
+                  backgroundColor={ui.surfaceMuted}
+                  borderWidth={1}
+                  borderColor={ui.borderSubtle}
+                >
+                  <XStack justifyContent="space-between" gap="$2" alignItems="center">
+                    <Text fontSize={13} fontWeight="800" color={ui.text} flex={1}>
+                      {issueTypeLabel(issue.issue_type)}
+                    </Text>
+                    <Text fontSize={11} fontWeight="700" color={ui.textMuted}>
+                      {issueStatusLabel(issue.status)}
+                    </Text>
+                  </XStack>
+                  <Text fontSize={12} color={ui.textSecondary} numberOfLines={4}>
+                    {issue.description}
+                  </Text>
+                  <Text fontSize={11} color={ui.textMuted}>
+                    {formatOrderDate(issue.created_at, true)}
+                    {issue.reported_by_profile?.full_name
+                      ? ` · ${issue.reported_by_profile.full_name}`
+                      : ''}
+                  </Text>
+                </YStack>
+              ))}
+            </YStack>
+          </Section>
+        ) : null}
 
         {/* Payment summary */}
         <Section ui={ui} label="Payment Summary">

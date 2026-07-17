@@ -98,6 +98,8 @@ const ROUTE_RULES: RouteRule[] = [
   { path: '/checkout', seo: { title: 'Checkout', noindex: true } },
   { path: '/favorites', seo: { title: 'Favorites', noindex: true } },
   { path: '/orders', seo: { title: 'Your Orders', noindex: true } },
+  { path: '/orders/success', seo: { title: 'Order Confirmed', noindex: true } },
+  { path: '/orders/', seo: { title: 'Order Details', noindex: true } },
   { path: '/addresses', seo: { title: 'Saved Addresses', noindex: true } },
   { path: '/payment-methods', seo: { title: 'Payment Methods', noindex: true } },
   {

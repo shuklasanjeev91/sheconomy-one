@@ -3,7 +3,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { CommunityAdaptiveSheet } from '~/community/components/CommunityAdaptiveSheet'
 import { ScreenSearchField } from '~/components/search/ScreenSearchField'
 import { Icons, Text, XStack, YStack } from '~/components/ui'
-import { filterBySearchQuery } from '~/lib/search'
+import { SHEET_SEARCH_MIN_ITEMS, filterBySearchQuery } from '~/lib/search'
 import { useAppUi } from '~/lib/theme/useAppUi'
 
 export type OptionSearchItem = {
@@ -39,19 +39,23 @@ export function OptionSearchSheet({
     if (!open) setQuery('')
   }, [open])
 
+  const searchable = options.length >= SHEET_SEARCH_MIN_ITEMS
+
   const filtered = useMemo(
-    () => filterBySearchQuery(options, query, (option) => [option.label, option.hint]),
-    [options, query],
+    () => (searchable ? filterBySearchQuery(options, query, (option) => [option.label, option.hint]) : options),
+    [options, query, searchable],
   )
 
   return (
     <CommunityAdaptiveSheet open={open} onOpenChange={onOpenChange} title={title} maxWidth={420}>
-      <ScreenSearchField
-        value={query}
-        onChangeText={setQuery}
-        placeholder={searchPlaceholder}
-        clearable
-      />
+      {searchable ? (
+        <ScreenSearchField
+          value={query}
+          onChangeText={setQuery}
+          placeholder={searchPlaceholder}
+          clearable
+        />
+      ) : null}
       <YStack gap="$1" width="100%">
         {filtered.length === 0 ? (
           <Text fontSize={14} color={ui.textMuted} paddingVertical="$3">

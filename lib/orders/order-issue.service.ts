@@ -247,6 +247,29 @@ export async function getVendorIssues(
   }
 }
 
+/** Issues attached to a single order (buyer or vendor with access via RLS). */
+export async function getIssuesByOrder(
+  orderId: string,
+  userId?: string | null,
+): Promise<OrderServiceResponse<EnrichedOrderIssue[]>> {
+  const id = await resolveUserId(userId)
+  if (!id) return fail('User not authenticated')
+  if (!orderId) return fail('Order ID is required')
+
+  try {
+    const { data, error } = await supabase
+      .from('order_issues')
+      .select(ISSUE_DETAIL_SELECT)
+      .eq('order_id', orderId)
+      .order('created_at', { ascending: false })
+
+    if (error) return fail(error, 'Failed to fetch order issues')
+    return ok((data as unknown as EnrichedOrderIssue[]) ?? [])
+  } catch (error) {
+    return fail(error, 'An unexpected error occurred while fetching order issues')
+  }
+}
+
 /** Full detail for a single issue. */
 export async function getIssueDetails(
   issueId: string,

@@ -41,6 +41,7 @@ import {
   type UserAddress,
 } from '~/commerce/lib/checkout'
 import { clearCartItems, type CartItemRow } from '~/commerce/lib/cart'
+import { savePendingOrderSuccess } from '~/commerce/lib/customer-orders'
 import { computeSelectedTotals, useCartSelection } from '~/commerce/lib/cart-selection'
 import { fetchBuyerPaymentMethods } from '~/commerce/lib/buyer-account'
 import {
@@ -338,6 +339,7 @@ export function CheckoutScreen() {
         groups.set(item.shop_id, list)
       }
 
+      const orderIds: string[] = []
       const orderNumbers: string[] = []
       let checkoutUrl: string | null = null
       for (const [shopId, shopItems] of groups.entries()) {
@@ -378,6 +380,7 @@ export function CheckoutScreen() {
           setIsSubmitting(false)
           return
         }
+        if (data?.orderId) orderIds.push(data.orderId)
         if (data?.orderNumber) orderNumbers.push(data.orderNumber)
         if (!checkoutUrl && data?.checkoutUrl) checkoutUrl = data.checkoutUrl
       }
@@ -403,7 +406,7 @@ export function CheckoutScreen() {
       trackCommerceEvent('purchase', {
         currency,
         value: total,
-        transactionId: orderNumbers[0] ?? cart.id,
+        transactionId: orderNumbers[0] ?? orderIds[0] ?? cart.id,
         items: selectedItems.map((item) => ({
           id: item.listing_id,
           name: item.listing_id,
@@ -413,12 +416,30 @@ export function CheckoutScreen() {
       })
       await clearCartItems(cart.id)
 
-      if (checkoutUrl && mode === 'online') {
+      const awaitingExternalPayment = Boolean(checkoutUrl && mode === 'online')
+      if (orderIds.length > 0) {
+        await savePendingOrderSuccess({
+          orderIds,
+          orderNumbers,
+          createdAt: Date.now(),
+          paymentMode: mode,
+          awaitingExternalPayment,
+        })
+      }
+
+      const successHref = commerceRoutes.orderSuccess(orderIds)
+
+      if (awaitingExternalPayment && checkoutUrl) {
         const opened = await openExternalUrl(checkoutUrl)
-        if (opened) {
-          void refresh()
-          return
+        router.replace(successHref)
+        void refresh()
+        if (!opened) {
+          toast.show('Payment page blocked', {
+            tone: 'info',
+            message: 'Your order is saved — open the payment link from your email if needed.',
+          })
         }
+        return
       }
 
       toast.show('Order placed', {
@@ -430,7 +451,7 @@ export function CheckoutScreen() {
               ? `Order ${orderNumbers[0]} has been placed.`
               : 'Your order has been placed.',
       })
-      router.replace(commerceRoutes.home)
+      router.replace(successHref)
       void refresh()
     } catch {
       toast.show('Checkout failed', { tone: 'danger', message: 'Please try again.' })

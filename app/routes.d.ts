@@ -18,6 +18,7 @@ declare module 'one' {
         | `/(store)/favorites`
         | `/(store)/listing`
         | `/(store)/orders`
+        | `/(store)/orders/success`
         | `/(store)/payment-methods`
         | `/(store)/search`
         | `/(store)/shop`
@@ -104,6 +105,7 @@ declare module 'one' {
         | `/listing`
         | `/notifications`
         | `/orders`
+        | `/orders/success`
         | `/payment-methods`
         | `/profile`
         | `/search`
@@ -141,6 +143,7 @@ declare module 'one' {
         | `/(store)/browse/${OneRouter.SingleRoutePart<T>}`
         | `/(store)/category/${OneRouter.SingleRoutePart<T>}`
         | `/(store)/listing/${OneRouter.SingleRoutePart<T>}`
+        | `/(store)/orders/${OneRouter.SingleRoutePart<T>}`
         | `/(store)/shop/${OneRouter.SingleRoutePart<T>}`
         | `/admin/blog/${OneRouter.SingleRoutePart<T>}`
         | `/browse/${OneRouter.SingleRoutePart<T>}`
@@ -162,6 +165,7 @@ declare module 'one' {
         | `/community/post/${OneRouter.SingleRoutePart<T>}`
         | `/community/stories/${OneRouter.SingleRoutePart<T>}`
         | `/listing/${OneRouter.SingleRoutePart<T>}`
+        | `/orders/${OneRouter.SingleRoutePart<T>}`
         | `/profile/${OneRouter.SingleRoutePart<T>}`
         | `/profile/${OneRouter.SingleRoutePart<T>}/connections`
         | `/profile/${OneRouter.SingleRoutePart<T>}/followers`
@@ -171,6 +175,7 @@ declare module 'one' {
         | `/(store)/browse/[kind]`
         | `/(store)/category/[slug]`
         | `/(store)/listing/[slug]`
+        | `/(store)/orders/[id]`
         | `/(store)/shop/[slug]`
         | `/admin/blog/[id]`
         | `/browse/[kind]`
@@ -192,6 +197,7 @@ declare module 'one' {
         | `/community/post/[id]`
         | `/community/stories/[userId]`
         | `/listing/[slug]`
+        | `/orders/[id]`
         | `/profile/[username]`
         | `/profile/[username]/connections`
         | `/profile/[username]/followers`
@@ -202,6 +208,7 @@ declare module 'one' {
         '/(store)/browse/[kind]': RouteInfo<{ kind: string }>
         '/(store)/category/[slug]': RouteInfo<{ slug: string }>
         '/(store)/listing/[slug]': RouteInfo<{ slug: string }>
+        '/(store)/orders/[id]': RouteInfo<{ id: string }>
         '/(store)/shop/[slug]': RouteInfo<{ slug: string }>
         '/admin/blog/[id]': RouteInfo<{ id: string }>
         '/browse/[kind]': RouteInfo<{ kind: string }>
@@ -223,6 +230,7 @@ declare module 'one' {
         '/community/post/[id]': RouteInfo<{ id: string }>
         '/community/stories/[userId]': RouteInfo<{ userId: string }>
         '/listing/[slug]': RouteInfo<{ slug: string }>
+        '/orders/[id]': RouteInfo<{ id: string }>
         '/profile/[username]': RouteInfo<{ username: string }>
         '/profile/[username]/connections': RouteInfo<{ username: string }>
         '/profile/[username]/followers': RouteInfo<{ username: string }>

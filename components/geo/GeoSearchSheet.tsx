@@ -4,6 +4,7 @@ import { KeyboardAvoidingView, Platform } from 'react-native'
 import { CommunityAdaptiveSheet } from '~/community/components/CommunityAdaptiveSheet'
 import { Icons, Input, ScrollView, Text, XStack, YStack } from '~/components/ui'
 import { countryFlagEmoji, filterGeoOptions, type GeoOption } from '~/lib/geo'
+import { SHEET_SEARCH_MIN_ITEMS } from '~/lib/search'
 import { useAppUi } from '~/lib/theme/useAppUi'
 
 type GeoSearchSheetProps = {
@@ -38,30 +39,34 @@ export function GeoSearchSheet({
     setQuery('')
   }
 
+  const showSearch = options.length >= SHEET_SEARCH_MIN_ITEMS || query.length > 0
+
   const listMaxHeight = Platform.OS === 'web' ? 420 : 360
   const sheetBody = (
     <YStack gap="$3" width="100%">
-        <XStack
-          alignItems="center"
-          gap="$2"
-          paddingHorizontal="$3"
-          paddingVertical="$2"
-          borderRadius={12}
-          borderWidth={1}
-          borderColor={ui.borderSubtle}
-          backgroundColor={ui.surfaceMuted}
-        >
-          <Icons.Search size={18} color={ui.textMuted} />
-          <Input
-            flex={1}
-            borderWidth={0}
-            backgroundColor="transparent"
-            placeholder={searchPlaceholder}
-            value={query}
-            onChangeText={setQuery}
-            autoFocus
-          />
-        </XStack>
+        {showSearch ? (
+          <XStack
+            alignItems="center"
+            gap="$2"
+            paddingHorizontal="$3"
+            paddingVertical="$2"
+            borderRadius={12}
+            borderWidth={1}
+            borderColor={ui.borderSubtle}
+            backgroundColor={ui.surfaceMuted}
+          >
+            <Icons.Search size={18} color={ui.textMuted} />
+            <Input
+              flex={1}
+              borderWidth={0}
+              backgroundColor="transparent"
+              placeholder={searchPlaceholder}
+              value={query}
+              onChangeText={setQuery}
+              autoFocus
+            />
+          </XStack>
+        ) : null}
 
         <ScrollView maxHeight={listMaxHeight} width="100%" keyboardShouldPersistTaps="handled">
           <YStack gap="$1" width="100%">

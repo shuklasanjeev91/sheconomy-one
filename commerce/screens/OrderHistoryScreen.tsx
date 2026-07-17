@@ -1,19 +1,21 @@
 import { useCallback, useEffect, useState } from 'react'
+import { useRouter } from 'one'
 import { AppLink } from '~/components/navigation/AppLink'
 
 import { CommercePageHeader, CommercePanel } from '~/commerce/components'
+import { OrderStatusBadge } from '~/commerce/components/vendor/OrderStatusBadge'
 import {
   fetchCustomerOrderHistory,
   type CustomerOrderHistoryRow,
 } from '~/commerce/lib/buyer-account'
 import { Button, Icons, Spinner, Text, XStack, YStack, useAppToast } from '~/components/ui'
 import { FullWidthLayout, HorizontalScrollRow, PageSection } from '~/components/layout'
-import { radius } from '~/config/tokens'
 import { formatCurrency } from '~/lib/format'
 import { copyToClipboard } from '~/lib/platform/clipboard'
 import { commerceRoutes } from '~/lib/routes'
 import { useProfile } from '~/hooks/useProfile'
 import { useAppUi } from '~/lib/theme/useAppUi'
+import { getOrderStatusDisplay } from '~/lib/orders/order.utils'
 
 type OrderStatusFilter = 'all' | 'processing' | 'shipped' | 'delivered' | 'cancelled'
 
@@ -33,7 +35,9 @@ function matchesStatusFilter(status: string | null, filter: OrderStatusFilter) {
       normalized.includes('process') ||
       normalized.includes('pending') ||
       normalized.includes('paid') ||
-      normalized.includes('confirm')
+      normalized.includes('confirm') ||
+      normalized.includes('awaiting') ||
+      normalized.includes('hold')
     )
   }
   return normalized.includes(filter)
@@ -46,14 +50,10 @@ function formatOrderDate(value: string | null) {
   return date.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })
 }
 
-function statusLabel(status: string | null) {
-  if (!status) return 'Processing'
-  return status.replace(/_/g, ' ').replace(/\b\w/g, (char) => char.toUpperCase())
-}
-
 export function OrderHistoryScreen() {
   const ui = useAppUi()
   const toast = useAppToast()
+  const router = useRouter()
   const { user } = useProfile()
   const [orders, setOrders] = useState<CustomerOrderHistoryRow[]>([])
   const [isLoading, setIsLoading] = useState(true)
@@ -66,10 +66,11 @@ export function OrderHistoryScreen() {
     const summary = [
       label,
       order.shop_names ?? 'Shop',
-      statusLabel(order.order_status),
+      getOrderStatusDisplay(order.order_status).label,
       formatOrderDate(order.created_at),
       formatCurrency(order.total_amount ?? 0, order.currency ?? 'INR'),
       order.item_count ? `${order.item_count} items` : null,
+      order.tracking_numbers ? `Tracking ${order.tracking_numbers}` : null,
     ]
       .filter(Boolean)
       .join(' · ')
@@ -98,7 +99,7 @@ export function OrderHistoryScreen() {
   }, [load])
 
   return (
-    <FullWidthLayout scroll>
+    <FullWidthLayout scroll onRefresh={load}>
       <PageSection paddingVertical="$6">
         <YStack gap="$5" width="100%">
           <CommercePageHeader
@@ -107,27 +108,29 @@ export function OrderHistoryScreen() {
           />
 
           <HorizontalScrollRow gap="$2">
-              {ORDER_FILTERS.map((filter) => {
-                const active = statusFilter === filter.id
-                return (
-                  <XStack
-                    key={filter.id}
-                    paddingHorizontal={12}
-                    paddingVertical={7}
-                    borderRadius={999}
-                    borderWidth={1}
-                    borderColor={active ? ui.brand : ui.borderSubtle}
-                    backgroundColor={active ? ui.surfaceMuted : ui.surface}
-                    cursor="pointer"
-                    onPress={() => setStatusFilter(filter.id)}
-                  >
-                    <Text fontSize={12} fontWeight="700" color={active ? ui.brand : ui.textMuted}>
-                      {filter.label}
-                    </Text>
-                  </XStack>
-                )
-              })}
-            </HorizontalScrollRow>
+            {ORDER_FILTERS.map((filter) => {
+              const active = statusFilter === filter.id
+              return (
+                <XStack
+                  key={filter.id}
+                  paddingHorizontal={12}
+                  paddingVertical={7}
+                  borderRadius={999}
+                  borderWidth={1}
+                  borderColor={active ? ui.brand : ui.borderSubtle}
+                  backgroundColor={active ? ui.surfaceMuted : ui.surface}
+                  cursor="pointer"
+                  onPress={() => setStatusFilter(filter.id)}
+                  accessibilityRole="button"
+                  accessibilityState={{ selected: active }}
+                >
+                  <Text fontSize={12} fontWeight="700" color={active ? ui.brand : ui.textMuted}>
+                    {filter.label}
+                  </Text>
+                </XStack>
+              )
+            })}
+          </HorizontalScrollRow>
 
           {isLoading ? (
             <YStack alignItems="center" paddingVertical="$8">
@@ -163,7 +166,7 @@ export function OrderHistoryScreen() {
           ) : (
             <YStack gap="$3" width="100%">
               {visibleOrders.map((order) => (
-                <CommercePanel key={order.order_id} padding="$4" gap="$2">
+                <CommercePanel key={order.order_id} padding="$4" gap="$3">
                   <XStack justifyContent="space-between" alignItems="flex-start" gap="$3">
                     <YStack flex={1} gap={4}>
                       <Text fontWeight="700" fontSize={15} color={ui.text}>
@@ -173,40 +176,40 @@ export function OrderHistoryScreen() {
                         {order.shop_names ?? 'Sheconomy shop'}
                         {order.item_count ? ` · ${order.item_count} items` : ''}
                       </Text>
+                      {order.tracking_numbers ? (
+                        <Text fontSize={11} color={ui.textMuted} numberOfLines={1}>
+                          Tracking: {order.tracking_numbers}
+                        </Text>
+                      ) : null}
                     </YStack>
                     <Text fontWeight="800" fontSize={15} color={ui.text}>
                       {formatCurrency(order.total_amount ?? 0, order.currency ?? 'INR')}
                     </Text>
                   </XStack>
                   <XStack justifyContent="space-between" alignItems="center" gap="$2" flexWrap="wrap">
-                    <XStack
-                      paddingHorizontal="$2.5"
-                      paddingVertical="$1"
-                      borderRadius={radius.pill}
-                      backgroundColor={ui.chip}
+                    <OrderStatusBadge status={order.order_status} size="sm" />
+                    <Text fontSize={12} color={ui.textMuted}>
+                      {formatOrderDate(order.created_at)}
+                    </Text>
+                  </XStack>
+                  <XStack gap="$2" flexWrap="wrap">
+                    <Button
+                      tone="primary"
+                      size="$3"
+                      borderRadius={999}
+                      onPress={() => router.push(commerceRoutes.order(order.order_id))}
                     >
-                      <Text fontSize={12} fontWeight="600" color={ui.text}>
-                        {statusLabel(order.order_status)}
-                      </Text>
-                    </XStack>
-                    <XStack alignItems="center" gap="$3">
-                      <Text fontSize={12} color={ui.textMuted}>
-                        {formatOrderDate(order.created_at)}
-                      </Text>
-                      <XStack
-                        onPress={() => void handleCopyOrder(order)}
-                        cursor="pointer"
-                        alignItems="center"
-                        gap="$1"
-                        pressStyle={{ opacity: 0.8 }}
-                        hitSlop={8}
-                      >
-                        <Icons.Copy size={13} color={ui.brand} />
-                        <Text fontSize={12} fontWeight="600" color={ui.brand}>
-                          Copy
-                        </Text>
-                      </XStack>
-                    </XStack>
+                      View order
+                    </Button>
+                    <Button
+                      tone="outline"
+                      size="$3"
+                      borderRadius={999}
+                      icon={<Icons.Copy size={13} />}
+                      onPress={() => void handleCopyOrder(order)}
+                    >
+                      Copy
+                    </Button>
                   </XStack>
                 </CommercePanel>
               ))}

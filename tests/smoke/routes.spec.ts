@@ -18,6 +18,7 @@ const smokeRoutes = [
   '/checkout',
   '/favorites',
   '/orders',
+  '/orders/success',
   '/addresses',
   '/payment-methods',
   '/create-my-shop',

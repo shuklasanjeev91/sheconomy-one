@@ -61,6 +61,13 @@ export const commerceRoutes = {
   favorites: '/favorites' as Href,
   wishlist: '/favorites' as Href,
   orders: '/orders' as Href,
+  order: (id: string) => `/orders/${encodeURIComponent(id)}` as Href,
+  orderSuccess: (orderIds?: string[]) => {
+    if (!orderIds?.length) return '/orders/success' as Href
+    const params = new URLSearchParams()
+    params.set('ids', orderIds.join(','))
+    return `/orders/success?${params.toString()}` as Href
+  },
   paymentMethods: '/payment-methods' as Href,
   addresses: '/addresses' as Href,
   search: (query?: string, scope?: string) => appRoutes.search(query, scope ?? 'listings'),

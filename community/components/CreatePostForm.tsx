@@ -50,7 +50,7 @@ import { pickImages, pickMedia, pickVideos, releasePickedImage, type PickedImage
 import { splitPostMediaItems } from '~/lib/media/split-post-media'
 import { communityRoutes, routes } from '~/lib/routes'
 import { uploadEventCoverImage, uploadPostImages, uploadPostVideos } from '~/lib/supabase/storage-upload'
-import { filterBySearchQuery } from '~/lib/search'
+import { SHEET_SEARCH_MIN_ITEMS, filterBySearchQuery } from '~/lib/search'
 import { maxLength, optionalUrl } from '~/lib/validation'
 
 const MAX_POST_LENGTH = 3000
@@ -1298,12 +1298,14 @@ export function CreatePostForm({
                 <EmptyPickerHint icon={Icons.Package} message="No active listings in this shop yet." />
               ) : (
                 <YStack gap={8}>
-                  <ScreenSearchField
-                    value={listingSearchQuery}
-                    onChangeText={setListingSearchQuery}
-                    placeholder="Search listings"
-                    clearable
-                  />
+                  {listings.length >= SHEET_SEARCH_MIN_ITEMS || listingSearchQuery.length > 0 ? (
+                    <ScreenSearchField
+                      value={listingSearchQuery}
+                      onChangeText={setListingSearchQuery}
+                      placeholder="Search listings"
+                      clearable
+                    />
+                  ) : null}
                   {filteredListings.length === 0 ? (
                     <Text fontSize={13} color={communityUi.textMuted}>
                       No listings match your search.
@@ -1343,12 +1345,14 @@ export function CreatePostForm({
                 />
               ) : (
                 <YStack gap={8}>
-                  <ScreenSearchField
-                    value={shopSearchQuery}
-                    onChangeText={setShopSearchQuery}
-                    placeholder="Search shops"
-                    clearable
-                  />
+                  {shops.length >= SHEET_SEARCH_MIN_ITEMS || shopSearchQuery.length > 0 ? (
+                    <ScreenSearchField
+                      value={shopSearchQuery}
+                      onChangeText={setShopSearchQuery}
+                      placeholder="Search shops"
+                      clearable
+                    />
+                  ) : null}
                   {filteredShops.length === 0 ? (
                     <Text fontSize={13} color={communityUi.textMuted}>
                       No shops match your search.
