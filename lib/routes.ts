@@ -163,6 +163,7 @@ export const coWorkRoutes = {
   home: '/co-work' as Href,
   meeting: (code: string) => `/co-work/meeting/${encodeURIComponent(code)}` as Href,
   meetingLive: (code: string) => `/co-work/meeting/${encodeURIComponent(code)}/live` as Href,
+  recording: (token: string) => `/co-work/recording/${encodeURIComponent(token)}` as Href,
   schedule: '/co-work/schedule' as Href,
   meetings: '/co-work/meetings' as Href,
   join: '/co-work/join' as Href,

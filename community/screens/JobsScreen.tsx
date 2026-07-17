@@ -14,6 +14,8 @@ import { useCommunityUi } from '~/community/lib/community-theme'
 import { LoadMoreSentinel } from '~/commerce/components/LoadMoreSentinel'
 import { ScreenSearchField } from '~/components/search'
 import { Button, Icons, ScrollView, Spinner, Text, XStack, YStack } from '~/components/ui'
+import { INVALIDATION_TOPICS } from '~/lib/cache/invalidation'
+import { useAutoRefresh } from '~/lib/cache/useAutoRefresh'
 import { communityRoutes } from '~/lib/routes'
 import { useScreenSearch } from '~/hooks/useScreenSearch'
 import { useSupabase } from '~/providers/SupabaseProvider'
@@ -87,9 +89,9 @@ export function JobsScreen() {
   const [isLoadingMore, setIsLoadingMore] = useState(false)
 
   const load = useCallback(
-    async (pageToLoad: number, append: boolean) => {
+    async (pageToLoad: number, append: boolean, silent = false) => {
       if (append) setIsLoadingMore(true)
-      else setIsLoading(true)
+      else if (!silent) setIsLoading(true)
       const result = await searchJobs({
         search: searchQuery,
         jobType: jobTypes[0] ?? '',
@@ -109,6 +111,11 @@ export function JobsScreen() {
   useEffect(() => {
     load(0, false)
   }, [load])
+
+  // New jobs posted elsewhere show up without a manual route reload.
+  useAutoRefresh(INVALIDATION_TOPICS.communityJobs, () => {
+    void load(0, false, true)
+  })
 
   useEffect(() => {
     if (!user?.id) {

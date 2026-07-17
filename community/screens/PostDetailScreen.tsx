@@ -13,6 +13,8 @@ import { collectPostMedia } from '~/community/lib/post-media'
 import { ShareSheet } from '~/components/share'
 import { Button, Icons, Spinner, Text, XStack, YStack } from '~/components/ui'
 import { BRAND_NAME } from '~/config/brand'
+import { INVALIDATION_TOPICS } from '~/lib/cache/invalidation'
+import { useAutoRefresh } from '~/lib/cache/useAutoRefresh'
 import { chatRoutes, communityRoutes } from '~/lib/routes'
 import { getPostShareUrl } from '~/lib/share'
 import { useSupabase } from '~/providers/SupabaseProvider'
@@ -42,6 +44,17 @@ export function PostDetailScreen() {
       setIsLoading(false)
     })
   }, [id])
+
+  // Edits made from other screens refresh this detail view in place.
+  useAutoRefresh(INVALIDATION_TOPICS.communityPosts, () => {
+    if (!id) return
+    void fetchPostById(id).then((result) => {
+      if (result.ok) {
+        setPost(result.data)
+        setError(null)
+      }
+    })
+  })
 
   if (isLoading) {
     return (

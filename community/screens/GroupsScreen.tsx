@@ -15,6 +15,8 @@ import { useCommunityUi } from '~/community/lib/community-theme'
 import { LoadMoreSentinel } from '~/commerce/components/LoadMoreSentinel'
 import { ScreenSearchField } from '~/components/search'
 import { Avatar, Button, Icons, ScrollView, Spinner, Text, XStack, YStack } from '~/components/ui'
+import { INVALIDATION_TOPICS } from '~/lib/cache/invalidation'
+import { useAutoRefresh } from '~/lib/cache/useAutoRefresh'
 import { communityRoutes } from '~/lib/routes'
 import { useScreenSearch } from '~/hooks/useScreenSearch'
 import { useSupabase } from '~/providers/SupabaseProvider'
@@ -75,6 +77,20 @@ export function GroupsScreen() {
       cancelled = true
     }
   }, [groupType, industry, location, searchQuery, user])
+
+  // Newly created groups appear without a manual route reload.
+  useAutoRefresh(INVALIDATION_TOPICS.communityGroups, () => {
+    void (async () => {
+      const [myGroups, pages] = await Promise.all([
+        user ? fetchMyGroups(user.id) : Promise.resolve([]),
+        fetchGroups(0, searchQuery, { groupType, location, industry }),
+      ])
+      setMine(myGroups)
+      setDiscover(pages.items)
+      setPage(0)
+      setHasMore(pages.hasMore)
+    })()
+  })
 
   const loadMore = useCallback(async () => {
     if (isLoadingMore || !hasMore) return

@@ -15,8 +15,12 @@ import { MeetingLiveCaptions } from '~/co-work/components/MeetingLiveCaptions'
 import { MeetingLiveSignalsProvider } from '~/co-work/components/MeetingLiveSignalsContext'
 import { MeetingParticipantsPanel } from '~/co-work/components/MeetingParticipantsPanel'
 import { MeetingReactionsOverlay } from '~/co-work/components/MeetingReactionsOverlay'
+import { MeetingRecordingsPanel } from '~/co-work/components/MeetingRecordingsPanel'
 import { useLiveCaptions } from '~/co-work/hooks/useLiveCaptions'
-import { useMeetingRecording } from '~/co-work/hooks/useMeetingRecording'
+import {
+  useMeetingRecording,
+  useMeetingRecordingIndicator,
+} from '~/co-work/hooks/useMeetingRecording'
 import { useMeetingPresence } from '~/co-work/hooks/useMeetingPresence'
 import { getMediaCapabilities } from '~/co-work/lib/media'
 import { supportsLiveKitVideo } from '~/lib/platform/capabilities'
@@ -171,26 +175,42 @@ function MeetingRoomOverlay({
     enabled: allowRecording && isHost,
     autoStart: autoRecord,
     captionLines: captions.transcriptLines,
-    onStarted: (mode) => {
-      if (mode === 'audio-only') {
-        toast.show('Recording started (audio-only on this device)', {
-          tone: 'info',
-          message: 'Cloud video recording is used when egress is configured.',
-        })
-        return
-      }
-      toast.show(mode === 'cloud' ? 'Cloud recording started' : 'Recording started', {
+    onStarted: () => {
+      toast.show('Cloud recording started', {
         tone: 'success',
+        message: 'Audio and video are being saved for the whole room.',
       })
     },
-    onStopped: () => toast.show('Recording saved', { tone: 'success' }),
-    onError: (message) => toast.show(message, { tone: 'error' }),
+    onStopped: (status) =>
+      toast.show(
+        status === 'processing' ? 'Recording processing' : 'Recording stopped',
+        {
+          tone: 'success',
+          message:
+            status === 'processing'
+              ? 'Your shareable MP4 link will appear in Recordings when ready.'
+              : undefined,
+        },
+      ),
+    onReady: () =>
+      toast.show('Recording ready', {
+        tone: 'success',
+        message: 'Open Recordings to share a revocable link.',
+      }),
+    onError: (message) => toast.show(message, { tone: 'danger' }),
   })
+
+  const recordingIndicator = useMeetingRecordingIndicator(
+    meeting.id,
+    allowRecording && !isHost,
+  )
 
   const showError = presence.error && presence.error !== dismissedError
   // Full-bleed side panels only on phones — tablets keep a Zoom-style right dock.
   const panelFullWidth = narrowPhone
-  const recording = recordingSession.recording
+  const recording = isHost
+    ? recordingSession.recording || recordingSession.isProcessing
+    : recordingIndicator.isRecording
 
   useEffect(() => {
     if (!liveKit) {
@@ -414,7 +434,16 @@ function MeetingRoomOverlay({
                 >
                   {title}
                 </Text>
-                {recording ? <CoWorkStatusPill label="REC" tone="danger" /> : null}
+                {recording ? (
+                  <CoWorkStatusPill
+                    label={
+                      isHost && recordingSession.isProcessing
+                        ? 'Processing'
+                        : 'REC'
+                    }
+                    tone={isHost && recordingSession.isProcessing ? 'warning' : 'danger'}
+                  />
+                ) : null}
                 {captions.active ? <CoWorkStatusPill label="CC" tone="brand" /> : null}
                 {presence.handRaised ? <CoWorkStatusPill label="✋" tone="coral" /> : null}
               </XStack>
@@ -485,6 +514,13 @@ function MeetingRoomOverlay({
             />
           </XStack>
         </XStack>
+
+        {!isHost && recordingIndicator.isRecording ? (
+          <CoWorkAlertBanner
+            tone="danger"
+            message="This meeting is being recorded by the host."
+          />
+        ) : null}
 
         {presence.realtimeDegraded ? (
           <CoWorkAlertBanner
@@ -569,6 +605,33 @@ function MeetingRoomOverlay({
                   }
                 : undefined
             }
+            onOpenRecordings={
+              isHost && allowRecording
+                ? () => {
+                    presence.setPanel('recordings')
+                  }
+                : undefined
+            }
+            fullWidth={panelFullWidth}
+          />
+        </YStack>
+      ) : null}
+
+      {isHost && presence.panel === 'recordings' ? (
+        <YStack
+          position={overlayPosition}
+          top={panelTop}
+          right={panelFullWidth ? 0 : 12}
+          left={panelFullWidth ? 0 : undefined}
+          bottom={panelBottom}
+          zIndex={25}
+          pointerEvents="auto"
+        >
+          <MeetingRecordingsPanel
+            meetingId={meeting.id}
+            meetingTitle={title}
+            isHost={isHost}
+            onClose={() => presence.setPanel('none')}
             fullWidth={panelFullWidth}
           />
         </YStack>
@@ -626,7 +689,7 @@ function MeetingRoomOverlay({
             ...caps,
             supportsVideo: !!liveKit || caps.supportsVideo,
             supportsScreenShare: !!liveKit || caps.supportsScreenShare,
-            supportsRecording: isHost && allowRecording && (caps.supportsRecording || !!liveKit),
+            supportsRecording: isHost && allowRecording && !!liveKit,
             supportsLiveCaptions: caps.supportsLiveCaptions,
           }}
           audioEnabled={liveKit?.audioEnabled ?? true}
@@ -663,12 +726,22 @@ function MeetingRoomOverlay({
           onShare={() => setShareOpen(true)}
           onMuteAll={isHost ? () => presence.muteAll() : undefined}
           onLeave={() => {
-            void presence.leave()
-            router.replace(coWorkRoutes.home)
+            void (async () => {
+              if (isHost && recordingSession.recording) {
+                await recordingSession.stopRecording()
+              }
+              await presence.leave()
+              router.replace(coWorkRoutes.home)
+            })()
           }}
           onEnd={() => {
-            void presence.hostEnd()
-            router.replace(coWorkRoutes.home)
+            void (async () => {
+              if (recordingSession.recording) {
+                await recordingSession.stopRecording()
+              }
+              await presence.hostEnd()
+              router.replace(coWorkRoutes.home)
+            })()
           }}
         />
       </YStack>

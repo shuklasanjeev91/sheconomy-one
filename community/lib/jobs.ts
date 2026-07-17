@@ -1,3 +1,4 @@
+import { INVALIDATION_TOPICS, invalidateCache } from '~/lib/cache/invalidation'
 import { supabase } from '~/lib/supabase/client'
 
 export const JOB_PAGE_SIZE = 20
@@ -271,6 +272,8 @@ export async function createJob(
   if (error) {
     return { data: null, error: error.message }
   }
+
+  invalidateCache(INVALIDATION_TOPICS.communityJobs)
 
   return { data, error: null }
 }

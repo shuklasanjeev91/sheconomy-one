@@ -6493,34 +6493,61 @@ export type Database = {
         Row: {
           created_at: string | null
           duration_seconds: number | null
+          ended_at: string | null
+          error_message: string | null
           file_size_bytes: number | null
+          host_id: string | null
           id: string
+          layout: string | null
           meeting_id: string
           recording_sid: string | null
-          recording_url: string
+          recording_url: string | null
+          share_created_at: string | null
+          share_revoked_at: string | null
+          share_token_hash: string | null
+          started_at: string | null
           status: string
+          storage_path: string | null
           updated_at: string | null
         }
         Insert: {
           created_at?: string | null
           duration_seconds?: number | null
+          ended_at?: string | null
+          error_message?: string | null
           file_size_bytes?: number | null
+          host_id?: string | null
           id?: string
+          layout?: string | null
           meeting_id: string
           recording_sid?: string | null
-          recording_url: string
+          recording_url?: string | null
+          share_created_at?: string | null
+          share_revoked_at?: string | null
+          share_token_hash?: string | null
+          started_at?: string | null
           status?: string
+          storage_path?: string | null
           updated_at?: string | null
         }
         Update: {
           created_at?: string | null
           duration_seconds?: number | null
+          ended_at?: string | null
+          error_message?: string | null
           file_size_bytes?: number | null
+          host_id?: string | null
           id?: string
+          layout?: string | null
           meeting_id?: string
           recording_sid?: string | null
-          recording_url?: string
+          recording_url?: string | null
+          share_created_at?: string | null
+          share_revoked_at?: string | null
+          share_token_hash?: string | null
+          started_at?: string | null
           status?: string
+          storage_path?: string | null
           updated_at?: string | null
         }
         Relationships: []

@@ -1,3 +1,4 @@
+import { INVALIDATION_TOPICS, invalidateCache } from '~/lib/cache/invalidation'
 import { supabase } from '~/lib/supabase/client'
 
 export const EVENT_PAGE_SIZE = 20
@@ -253,6 +254,10 @@ export async function createEvent(
     })
     .select('*')
     .maybeSingle()
+
+  if (!error && data) {
+    invalidateCache(INVALIDATION_TOPICS.communityEvents)
+  }
 
   return { data: (data as CommunityEvent | null) ?? null, error: error?.message ?? null }
 }

@@ -50,7 +50,9 @@ export function useMeetingPresence({
 
   const [participants, setParticipants] = useState<MeetingParticipant[]>([])
   const [chatMessages, setChatMessages] = useState<MeetingChatMessage[]>([])
-  const [panel, setPanel] = useState<'none' | 'chat' | 'people' | 'invite' | 'info'>('none')
+  const [panel, setPanel] = useState<
+    'none' | 'chat' | 'people' | 'invite' | 'info' | 'recordings'
+  >('none')
   const [error, setError] = useState<string | null>(null)
   const [isConnecting, setIsConnecting] = useState(false)
   const [handRaised, setHandRaised] = useState(false)
@@ -423,7 +425,7 @@ export function useMeetingPresence({
     mediaHandlersRef.current = handlers
   }, [])
 
-  const togglePanel = useCallback((next: 'chat' | 'people' | 'invite' | 'info') => {
+  const togglePanel = useCallback((next: 'chat' | 'people' | 'invite' | 'info' | 'recordings') => {
     setPanel((current) => {
       const opening = current !== next
       if (opening && next === 'chat') {
@@ -434,13 +436,16 @@ export function useMeetingPresence({
     })
   }, [])
 
-  const setPanelSafe = useCallback((next: 'none' | 'chat' | 'people' | 'invite' | 'info') => {
-    if (next === 'chat') {
-      setUnreadChatCount(0)
-      setLatestChatNotice(null)
-    }
-    setPanel(next)
-  }, [])
+  const setPanelSafe = useCallback(
+    (next: 'none' | 'chat' | 'people' | 'invite' | 'info' | 'recordings') => {
+      if (next === 'chat') {
+        setUnreadChatCount(0)
+        setLatestChatNotice(null)
+      }
+      setPanel(next)
+    },
+    [],
+  )
 
   const retryRealtime = useCallback(() => {
     setError(null)

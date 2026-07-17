@@ -16,7 +16,7 @@ type MeetingControlsProps = {
   recording: boolean
   captionsActive: boolean
   isHost: boolean
-  panel: 'none' | 'chat' | 'people' | 'invite' | 'info'
+  panel: 'none' | 'chat' | 'people' | 'invite' | 'info' | 'recordings'
   unreadChatCount?: number
   raisedHandCount?: number
   reactionTrayOpen?: boolean

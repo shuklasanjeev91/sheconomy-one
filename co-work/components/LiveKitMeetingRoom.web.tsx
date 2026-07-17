@@ -1,10 +1,10 @@
 import { useCallback, useEffect, useState } from 'react'
-import { ConnectionState, RoomEvent } from 'livekit-client'
+import { ConnectionState, RoomEvent, type Room } from 'livekit-client'
 
 import { LiveKitRoom, RoomAudioRenderer } from '@livekit/components-react'
 import '@livekit/components-styles'
 
-import { Spinner, Text, YStack } from '~/components/ui'
+import { Icons, Spinner, Text, XStack, YStack } from '~/components/ui'
 import { ScreenCenter, ScreenFill } from '~/components/layout'
 import { MeetingVideoStage } from '~/co-work/components/MeetingVideoStage'
 import { useLiveKitMediaControls } from '~/co-work/hooks/useLiveKitMediaControls.web'
@@ -350,6 +350,51 @@ export function LiveKitMeetingRoom({
   )
 }
 
+/**
+ * Browsers block audio element playback until the page gets a user gesture
+ * (autoplay policy). LiveKit reports this via `canPlaybackAudio`; remote
+ * participants stay silent until `room.startAudio()` runs inside a gesture.
+ * This hits hosts hardest: they land in the room via navigation (start
+ * meeting / call accepted) without clicking anything on the meeting page.
+ */
+function useWebAudioPlaybackUnlock(room: Room | undefined) {
+  const [audioBlocked, setAudioBlocked] = useState(false)
+
+  useEffect(() => {
+    if (!room) return
+
+    const syncPlaybackStatus = () => setAudioBlocked(!room.canPlaybackAudio)
+
+    room.on(RoomEvent.AudioPlaybackStatusChanged, syncPlaybackStatus)
+    syncPlaybackStatus()
+
+    return () => {
+      room.off(RoomEvent.AudioPlaybackStatusChanged, syncPlaybackStatus)
+    }
+  }, [room])
+
+  const unlockAudio = useCallback(() => {
+    if (!room) return
+    void room.startAudio().catch(() => {
+      // Still blocked — the banner stays visible for another explicit tap.
+    })
+  }, [room])
+
+  // Any interaction anywhere on the page counts as the unlocking gesture.
+  useEffect(() => {
+    if (!audioBlocked || typeof document === 'undefined') return
+    const handler = () => unlockAudio()
+    document.addEventListener('pointerdown', handler, { capture: true })
+    document.addEventListener('keydown', handler, { capture: true })
+    return () => {
+      document.removeEventListener('pointerdown', handler, { capture: true })
+      document.removeEventListener('keydown', handler, { capture: true })
+    }
+  }, [audioBlocked, unlockAudio])
+
+  return { audioBlocked, unlockAudio }
+}
+
 function WebLiveKitMeetingContent({
   overlay,
   mediaMode = 'meeting',
@@ -360,6 +405,7 @@ function WebLiveKitMeetingContent({
   avatarUrl?: string | null
 }) {
   const liveKit = useLiveKitMediaControls()
+  const { audioBlocked, unlockAudio } = useWebAudioPlaybackUnlock(liveKit.room)
 
   useEffect(() => {
     const room = liveKit.room
@@ -431,6 +477,32 @@ function WebLiveKitMeetingContent({
         {mediaMode === 'audio' ? null : <MeetingVideoStage />}
         <RoomAudioRenderer />
       </YStack>
+      {audioBlocked ? (
+        <XStack
+          position="absolute"
+          top={16}
+          alignSelf="center"
+          zIndex={300}
+          alignItems="center"
+          gap="$2"
+          paddingVertical="$2"
+          paddingHorizontal="$4"
+          borderRadius={999}
+          backgroundColor="rgba(12, 8, 10, 0.9)"
+          borderWidth={1}
+          borderColor="rgba(255,255,255,0.25)"
+          cursor="pointer"
+          pointerEvents="auto"
+          onPress={unlockAudio}
+          role="button"
+          aria-label="Enable meeting audio"
+        >
+          <Icons.Volume2 size={16} color="#fff" />
+          <Text fontSize={13} fontWeight="700" color="#fff">
+            Tap to enable audio
+          </Text>
+        </XStack>
+      ) : null}
       <YStack
         position="absolute"
         top={0}

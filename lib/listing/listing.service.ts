@@ -15,6 +15,7 @@
  * visibility / write permission is enforced by Supabase RLS.
  */
 
+import { INVALIDATION_TOPICS, invalidateCache } from '~/lib/cache/invalidation'
 import { supabase } from '~/lib/supabase'
 import type { Database } from '~/lib/supabase'
 
@@ -568,10 +569,23 @@ export async function createListing(
 
     await persistListingChildren(listing.id, formData, id)
 
+    invalidateListingCaches()
+
     return ok<Listing | null>(listing)
   } catch (error) {
     return fail(error)
   }
+}
+
+/** Refresh every browse/category/shop feed that can show this listing. */
+function invalidateListingCaches() {
+  invalidateCache(
+    'feed:categories',
+    'feed:shops',
+    'route:shops-browse',
+    'route:home',
+    INVALIDATION_TOPICS.commerceListings,
+  )
 }
 
 // ============= UPDATE =============
@@ -601,6 +615,7 @@ export async function updateListing(
       .single()
 
     if (error) return fail(error)
+    invalidateListingCaches()
     return ok(data)
   } catch (error) {
     return fail(error)
@@ -644,6 +659,7 @@ export async function updateListingWithDetails(
       const { data } = await supabase.from('listings').select('*').eq('id', listingId).maybeSingle()
       updated = data ?? null
     }
+    invalidateListingCaches()
     return ok<Listing | null>(updated)
   } catch (error) {
     return fail(error)
@@ -699,6 +715,7 @@ export async function deleteListing(
 
     const { error } = await supabase.from('listings').delete().eq('id', listingId)
     if (error) return fail(error)
+    invalidateListingCaches()
     return ok({ id: listingId })
   } catch (error) {
     return fail(error)

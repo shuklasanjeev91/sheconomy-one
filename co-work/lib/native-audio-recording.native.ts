@@ -1,9 +1,24 @@
 import { isNativeRuntime } from '~/lib/platform/capabilities'
 
+import { configureLiveKitCallAudio } from '~/co-work/lib/livekit-call-audio'
+
 let nativeRecorder: {
   stop: () => Promise<void>
   uri: string | null
 } | null = null
+
+/**
+ * expo-audio's setAudioModeAsync reconfigures the OS audio session and breaks
+ * LiveKit's in-call routing (remote participants go silent for the recorder —
+ * i.e. the host). Re-assert the call session after any recorder transition.
+ */
+async function restoreCallAudioSession() {
+  try {
+    await configureLiveKitCallAudio('meeting')
+  } catch {
+    // Best-effort: without a live room there is nothing to restore.
+  }
+}
 
 async function loadNativeRecordingModules() {
   const [expoAudio, audioModule, sharing] = await Promise.all([
@@ -46,6 +61,10 @@ export async function startNativeAudioRecording() {
   await recorder.prepareToRecordAsync()
   recorder.record()
   nativeRecorder = recorder
+
+  // setAudioModeAsync above replaced the call audio session — restore it so
+  // the recording host keeps hearing remote participants.
+  await restoreCallAudioSession()
 }
 
 export async function stopNativeAudioRecording(meetingCode: string) {
@@ -55,6 +74,7 @@ export async function stopNativeAudioRecording(meetingCode: string) {
   nativeRecorder = null
   const { Sharing } = await loadNativeRecordingModules()
   await recording.stop()
+  await restoreCallAudioSession()
   const uri = recording.uri
   if (!uri) return
 
@@ -75,4 +95,5 @@ export async function cancelNativeAudioRecording() {
   const recording = nativeRecorder
   nativeRecorder = null
   await recording.stop()
+  await restoreCallAudioSession()
 }

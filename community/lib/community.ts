@@ -1,6 +1,7 @@
 import { fail, ok, type ApiResult } from '~/lib/api'
 import { logger } from '~/lib/api/logger'
 import { getFeedExclusion } from '~/community/lib/moderation'
+import { INVALIDATION_TOPICS, invalidateCache } from '~/lib/cache/invalidation'
 import { supabase } from '~/lib/supabase/client'
 
 import { extractHashtags, extractMentions } from './post-text'
@@ -1208,7 +1209,19 @@ export async function createCommunityPost(
     }
   }
 
+  if (postId) invalidateCommunityPostCaches()
+
   return { id: postId, error: error?.message ?? null }
+}
+
+/** Every feed/list showing posts revalidates without a manual route reload. */
+function invalidateCommunityPostCaches() {
+  invalidateCache(
+    'feed:community',
+    INVALIDATION_TOPICS.communityPosts,
+    INVALIDATION_TOPICS.userActivity,
+    INVALIDATION_TOPICS.savedPosts,
+  )
 }
 
 const NON_EDITABLE_POST_TYPES = new Set(['poll', 'event', 'celebration', 'product', 'service'])
@@ -1255,6 +1268,8 @@ export async function updateCommunityPost(
     .eq('id', postId)
     .eq('user_id', userId)
 
+  if (!error) invalidateCommunityPostCaches()
+
   return { error: error?.message ?? null }
 }
 
@@ -1280,6 +1295,8 @@ export async function deleteCommunityPost(
     .update({ is_deleted: true, updated_at: new Date().toISOString() })
     .eq('id', postId)
     .eq('user_id', userId)
+
+  if (!error) invalidateCommunityPostCaches()
 
   return { error: error?.message ?? null }
 }

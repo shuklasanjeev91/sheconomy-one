@@ -20,6 +20,8 @@ import { useCommunityUi } from '~/community/lib/community-theme'
 import { LoadMoreSentinel } from '~/commerce/components/LoadMoreSentinel'
 import { ScreenSearchField } from '~/components/search'
 import { Avatar, Button, Icons, ScrollView, Spinner, Text, XStack, YStack } from '~/components/ui'
+import { INVALIDATION_TOPICS } from '~/lib/cache/invalidation'
+import { useAutoRefresh } from '~/lib/cache/useAutoRefresh'
 import { communityRoutes } from '~/lib/routes'
 import { useScreenSearch } from '~/hooks/useScreenSearch'
 import { useSupabase } from '~/providers/SupabaseProvider'
@@ -76,6 +78,20 @@ export function CompaniesScreen() {
       cancelled = true
     }
   }, [industry, location, searchQuery, size, user])
+
+  // Newly created company pages appear without a manual route reload.
+  useAutoRefresh(INVALIDATION_TOPICS.communityCompanies, () => {
+    void (async () => {
+      const [myPages, pages] = await Promise.all([
+        user ? fetchMyCompanies(user.id) : Promise.resolve([]),
+        fetchCompanies(0, searchQuery, { industry, location, size }),
+      ])
+      setMine(myPages)
+      setDiscover(pages.items)
+      setPage(0)
+      setHasMore(pages.hasMore)
+    })()
+  })
 
   const loadMore = useCallback(async () => {
     if (isLoadingMore || !hasMore) return
