@@ -27,11 +27,15 @@ declare module 'one' {
         | `/admin`
         | `/admin/`
         | `/admin/analytics`
+        | `/admin/blog`
         | `/admin/cart`
         | `/admin/categories`
         | `/admin/cms`
         | `/admin/company-pages`
+        | `/admin/components/AdminBlogDetail`
+        | `/admin/components/AdminBlogManager`
         | `/admin/components/AdminShopsManager`
+        | `/admin/components/CmsCoverImage`
         | `/admin/groups`
         | `/admin/layout`
         | `/admin/moderation`
@@ -138,6 +142,7 @@ declare module 'one' {
         | `/(store)/category/${OneRouter.SingleRoutePart<T>}`
         | `/(store)/listing/${OneRouter.SingleRoutePart<T>}`
         | `/(store)/shop/${OneRouter.SingleRoutePart<T>}`
+        | `/admin/blog/${OneRouter.SingleRoutePart<T>}`
         | `/browse/${OneRouter.SingleRoutePart<T>}`
         | `/category/${OneRouter.SingleRoutePart<T>}`
         | `/chat/${OneRouter.SingleRoutePart<T>}`
@@ -167,6 +172,7 @@ declare module 'one' {
         | `/(store)/category/[slug]`
         | `/(store)/listing/[slug]`
         | `/(store)/shop/[slug]`
+        | `/admin/blog/[id]`
         | `/browse/[kind]`
         | `/category/[slug]`
         | `/chat/[id]`
@@ -197,6 +203,7 @@ declare module 'one' {
         '/(store)/category/[slug]': RouteInfo<{ slug: string }>
         '/(store)/listing/[slug]': RouteInfo<{ slug: string }>
         '/(store)/shop/[slug]': RouteInfo<{ slug: string }>
+        '/admin/blog/[id]': RouteInfo<{ id: string }>
         '/browse/[kind]': RouteInfo<{ kind: string }>
         '/category/[slug]': RouteInfo<{ slug: string }>
         '/chat/[id]': RouteInfo<{ id: string }>

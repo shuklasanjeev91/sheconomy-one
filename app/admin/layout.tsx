@@ -125,6 +125,13 @@ const NAV_GROUPS: AdminNavGroup[] = [
         icon: Icons.Settings,
         href: '/admin/cms' as Href,
       },
+      {
+        id: 'blog',
+        label: 'Blog',
+        description: 'Browse CMS posts, engagement, authors, and article details.',
+        icon: Icons.FileText,
+        href: '/admin/blog' as Href,
+      },
     ],
   },
   {
