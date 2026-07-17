@@ -30,6 +30,25 @@ const sharedFieldStyle = {
   },
 } as const
 
+/**
+ * Fields embedded borderless inside a decorated container (search pills,
+ * composers) must not draw their own focus border/glow/background — the
+ * container owns the focus ring.
+ */
+const embeddedFieldStyle = {
+  focusStyle: {
+    borderWidth: 0,
+    backgroundColor: 'transparent',
+    outlineWidth: 0,
+    shadowOpacity: 0,
+  },
+  hoverStyle: {},
+} as const
+
+function isEmbeddedField(props: { borderWidth?: unknown; unstyled?: boolean }): boolean {
+  return props.borderWidth === 0 || props.unstyled === true
+}
+
 type FieldControlExtra = {
   invalid?: boolean
   /** RN TextInput API — mapped to `readOnly` on web (Tamagui does not strip it). */
@@ -85,6 +104,7 @@ export const Input = forwardRef<
             },
           }
         : null)}
+      {...(isEmbeddedField(props) ? embeddedFieldStyle : null)}
       {...safeProps}
     />
   )
@@ -115,6 +135,7 @@ export const TextArea = forwardRef<
             },
           }
         : null)}
+      {...(isEmbeddedField(props) ? embeddedFieldStyle : null)}
       {...safeProps}
     />
   )

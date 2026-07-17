@@ -3,7 +3,7 @@ import { useEffect, useRef, useState } from 'react'
 import { Platform } from 'react-native'
 
 import { SearchSuggestPanel } from '~/components/search/SearchSuggestPanel'
-import { Icons, Input, Text, XStack, YStack } from '~/components/ui'
+import { Icons, Input, XStack, YStack } from '~/components/ui'
 import { useAccess } from '~/hooks/useAccess'
 import { useAppLayout } from '~/hooks/useAppLayout'
 import { useUserGeo } from '~/commerce/hooks/useUserGeo'
@@ -13,7 +13,6 @@ import {
   recordAppSearchTerm,
   removeAppSearchTerm,
   SEARCH_SCOPE_LABELS,
-  SEARCH_SCOPE_PLACEHOLDERS,
   searchScopeFromPath,
   searchScopeFromRouteParams,
   searchSuggest,
@@ -32,7 +31,7 @@ type AppSearchFieldProps = {
 }
 
 /**
- * Omnibox with visible active scope chip, suggestions, and clear control.
+ * Omnibox with suggestions and a clear control; scope stays implicit from the route.
  */
 export function AppSearchField({ compact, initialQuery = '', scope: scopeProp }: AppSearchFieldProps) {
   const ui = useAppUi()
@@ -57,10 +56,7 @@ export function AppSearchField({ compact, initialQuery = '', scope: scopeProp }:
 
   const fieldHeight = compact ? 40 : isDesktop ? 44 : 42
   const showFocusRing = focused || open
-  const placeholder =
-    activeScope === 'all'
-      ? 'Search for anything'
-      : SEARCH_SCOPE_PLACEHOLDERS[activeScope]
+  const placeholder = 'Search for anything'
 
   useEffect(() => {
     setQuery(initialQuery)
@@ -160,23 +156,6 @@ export function AppSearchField({ compact, initialQuery = '', scope: scopeProp }:
           : {})}
       >
         <Icons.Search size={compact ? 16 : 18} color={ui.textMuted} flexShrink={0} />
-
-        {activeScope !== 'all' ? (
-          <XStack
-            paddingHorizontal={8}
-            paddingVertical={4}
-            borderRadius={999}
-            backgroundColor={ui.chip}
-            flexShrink={0}
-            accessibilityRole="text"
-            accessibilityLabel={`Searching in ${SEARCH_SCOPE_LABELS[activeScope]}`}
-            testID="app-search-scope-chip"
-          >
-            <Text fontSize={11} fontWeight="700" color={ui.text}>
-              {SEARCH_SCOPE_LABELS[activeScope]}
-            </Text>
-          </XStack>
-        ) : null}
 
         <Input
           flex={1}
