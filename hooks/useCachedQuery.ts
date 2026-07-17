@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 
 import { peekAppCache, readAppCache, writeAppCache } from '~/lib/cache/app-cache'
 import { useAutoRefresh } from '~/lib/cache/useAutoRefresh'
+import { useOnReconnect } from '~/providers/ConnectivityProvider'
 
 type UseCachedQueryOptions<T> = {
   cacheKey: string | null
@@ -16,6 +17,8 @@ type CachedQueryResult<T> = {
   isLoading: boolean
   isRefreshing: boolean
   error: string | null
+  /** True when we have cached data but the latest network fetch failed. */
+  showingCached: boolean
   refresh: () => Promise<void>
 }
 
@@ -56,11 +59,15 @@ export function useCachedQuery<T>({
         if (fetchGen.current !== gen) return
         setData(value)
         hasDataRef.current = true
+        setError(null)
         await writeAppCache(cacheKey, value)
       } catch (err) {
         if (fetchGen.current !== gen) return
-        // Background revalidation failures keep the current content visible.
-        if (!silent) setError(err instanceof Error ? err.message : String(err))
+        // Keep cached content visible; surface a soft error only when needed.
+        const message = err instanceof Error ? err.message : String(err)
+        if (!silent || !hasDataRef.current) {
+          setError(message)
+        }
       } finally {
         if (fetchGen.current === gen) {
           setIsLoading(false)
@@ -110,5 +117,12 @@ export function useCachedQuery<T>({
     await run(hasDataRef.current ? 'refresh' : 'initial')
   }, [run])
 
-  return { data, isLoading, isRefreshing, error, refresh }
+  useOnReconnect(() => {
+    if (!enabled || !cacheKey) return
+    void run(hasDataRef.current ? 'silent' : 'initial')
+  })
+
+  const showingCached = !!data && !!error
+
+  return { data, isLoading, isRefreshing, error, showingCached, refresh }
 }

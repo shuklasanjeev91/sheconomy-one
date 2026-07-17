@@ -413,6 +413,7 @@ export function useConversation({ conversationId, currentUserId }: UseConversati
         editedAt: null,
         poll: null,
         event: null,
+        storyReply: null,
         optimistic: true,
       }
       setMessagesTracked((prev) => [...prev, optimistic])
@@ -504,6 +505,7 @@ export function useConversation({ conversationId, currentUserId }: UseConversati
         editedAt: null,
         poll: null,
         event: null,
+        storyReply: null,
         optimistic: true,
       }
       setMessagesTracked((prev) => [...prev, optimistic])
@@ -578,6 +580,7 @@ export function useConversation({ conversationId, currentUserId }: UseConversati
         editedAt: null,
         poll: null,
         event: null,
+        storyReply: null,
         optimistic: true,
       }
       setMessagesTracked((prev) => [...prev, optimistic])
@@ -696,6 +699,7 @@ export function useConversation({ conversationId, currentUserId }: UseConversati
         editedAt: null,
         poll,
         event: null,
+        storyReply: null,
         optimistic: true,
       }
       setMessagesTracked((prev) => [...prev, optimistic])
@@ -744,6 +748,7 @@ export function useConversation({ conversationId, currentUserId }: UseConversati
         editedAt: null,
         poll: null,
         event,
+        storyReply: null,
         optimistic: true,
       }
       setMessagesTracked((prev) => [...prev, optimistic])

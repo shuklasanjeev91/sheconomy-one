@@ -1,3 +1,6 @@
+import { createDirectConversation, sendMessage } from '~/chat/lib/chats'
+import { refreshStories } from '~/community/lib/story-refresh'
+import { STORAGE_BUCKETS } from '~/lib/supabase/storage-upload'
 import { supabase } from '~/lib/supabase/client'
 
 const STORY_TTL_HOURS = 24
@@ -22,6 +25,15 @@ export type StorySlide = {
   created_at: string | null
   expires_at: string | null
   view_count: number | null
+  user_viewed?: boolean
+}
+
+export type StoryViewer = {
+  viewer_id: string
+  full_name: string
+  username: string | null
+  avatar_url: string | null
+  viewed_at: string | null
 }
 
 type StoryFeedRow = {
@@ -56,7 +68,7 @@ type UserStoryRow = {
 }
 
 /** Aggregate active stories into Instagram-style rings (own + network). */
-export async function fetchStoryRings(_viewerId?: string): Promise<StoryRing[]> {
+export async function fetchStoryRings(viewerId?: string): Promise<StoryRing[]> {
   const { data, error } = await supabase.rpc('get_story_feed')
   if (error || !data?.length) return []
 
@@ -65,7 +77,9 @@ export async function fetchStoryRings(_viewerId?: string): Promise<StoryRing[]> 
 
   for (const row of rows) {
     const existing = byUser.get(row.user_id)
-    const unseen = !(row.user_viewed ?? false)
+    // Own stories never show as "unseen" for the author (WhatsApp-style).
+    const unseen =
+      viewerId && row.user_id === viewerId ? false : !(row.user_viewed ?? false)
     if (!existing) {
       byUser.set(row.user_id, {
         user_id: row.user_id,
@@ -101,6 +115,7 @@ export async function fetchUserStories(userId: string): Promise<StorySlide[]> {
       created_at: row.created_at,
       expires_at: row.expires_at,
       view_count: row.view_count,
+      user_viewed: row.user_viewed ?? false,
     }))
   }
 
@@ -116,7 +131,7 @@ export async function fetchUserStories(userId: string): Promise<StorySlide[]> {
     .gt('expires_at', now)
     .order('created_at', { ascending: true })
 
-  return (legacy ?? []) as StorySlide[]
+  return ((legacy ?? []) as StorySlide[]).map((row) => ({ ...row, user_viewed: false }))
 }
 
 export async function createStory(
@@ -148,6 +163,8 @@ export async function createStory(
     .select('id')
     .maybeSingle()
 
+  if (!error && data?.id) refreshStories()
+
   return { id: data?.id ?? null, error: error?.message ?? null }
 }
 
@@ -165,5 +182,92 @@ export async function markStoryViewed(
   if (error && !/duplicate|unique/i.test(error.message)) {
     return { error: error.message }
   }
+
+  // Ring colors update immediately after watching.
+  refreshStories()
   return { error: null }
+}
+
+export async function deleteStory(
+  storyId: string,
+  userId: string,
+): Promise<{ error: string | null }> {
+  const { error } = await supabase
+    .from('stories')
+    .update({ is_active: false, updated_at: new Date().toISOString() })
+    .eq('id', storyId)
+    .eq('user_id', userId)
+
+  if (!error) refreshStories()
+  return { error: error?.message ?? null }
+}
+
+export async function fetchStoryViewers(storyId: string): Promise<{
+  items: StoryViewer[]
+  error: string | null
+}> {
+  const { data, error } = await supabase.rpc('get_story_viewers', {
+    p_story_id: storyId,
+  })
+  if (error) return { items: [], error: error.message }
+  return {
+    items: ((data ?? []) as StoryViewer[]).map((row) => ({
+      viewer_id: row.viewer_id,
+      full_name: row.full_name,
+      username: row.username,
+      avatar_url: row.avatar_url,
+      viewed_at: row.viewed_at,
+    })),
+    error: null,
+  }
+}
+
+/** Reply to a story with a DM that references the story (WhatsApp-style). */
+export async function replyToStory(input: {
+  authorId: string
+  senderId: string
+  storyId: string
+  text: string
+  previewUrl?: string | null
+  previewText?: string | null
+}): Promise<{ conversationId: string | null; error: string | null }> {
+  const content = input.text.trim()
+  if (!content) return { conversationId: null, error: 'Write a reply first.' }
+
+  const { conversationId, error: convoError } = await createDirectConversation(input.authorId)
+  if (convoError || !conversationId) {
+    return { conversationId: null, error: convoError ?? 'Could not open chat.' }
+  }
+
+  const { error: sendError } = await sendMessage({
+    conversationId,
+    senderId: input.senderId,
+    content,
+    type: 'text',
+    metadata: {
+      type: 'story_reply',
+      storyId: input.storyId,
+      authorId: input.authorId,
+      previewUrl: input.previewUrl ?? null,
+      previewText: input.previewText ?? null,
+    },
+  })
+
+  if (sendError) return { conversationId, error: sendError }
+  return { conversationId, error: null }
+}
+
+/** Best-effort delete of a public post-images object after a failed story insert. */
+export async function deleteStoryMediaUrl(publicUrl: string | undefined | null): Promise<void> {
+  if (!publicUrl) return
+  const marker = `/object/public/${STORAGE_BUCKETS.postImages}/`
+  const idx = publicUrl.indexOf(marker)
+  if (idx < 0) return
+  const path = decodeURIComponent(publicUrl.slice(idx + marker.length))
+  if (!path) return
+  try {
+    await supabase.storage.from(STORAGE_BUCKETS.postImages).remove([path])
+  } catch {
+    // Best-effort cleanup.
+  }
 }

@@ -5,7 +5,7 @@ import { useCallback, useEffect, useState } from 'react'
 
 import { RequireAuth } from '~/components/auth/RequireAuth'
 import { AppPage, LAYOUT_STRETCH } from '~/components/layout'
-import { Button, Icons, Spinner, Text, XStack, YStack } from '~/components/ui'
+import { Button, Icons, ScreenState, Text, XStack, YStack } from '~/components/ui'
 import { CoWorkBrandChip, CoWorkStatusPill } from '~/co-work/components/CoWorkUi'
 import { fetchHostedMeetings, formatMeetingCode } from '~/co-work/lib/meetings'
 import { coworkGlassStyle, useCoWorkTheme } from '~/co-work/lib/theme'
@@ -88,39 +88,16 @@ export function CoWorkMeetingsScreen() {
           </Text>
         </YStack>
 
-        {loading ? (
-          <YStack alignItems="center" padding="$6">
-            <Spinner size="large" color={coworkUi.brand} />
-          </YStack>
-        ) : null}
-
-        {error ? (
-          <YStack padding="$4" borderRadius={coworkUi.radius.card} backgroundColor={coworkUi.dangerMuted}>
-            <Text color={coworkUi.danger}>{error}</Text>
-          </YStack>
-        ) : null}
-
-        {!loading && !error && meetings.length === 0 ? (
-          <YStack
-            padding="$5"
-            gap="$3"
-            borderRadius={coworkUi.radius.card}
-            borderWidth={1}
-            borderColor={coworkUi.glassBorder}
-            alignItems="center"
-            style={coworkGlassStyle(coworkUi, true)}
-          >
-            <Icons.Video size={32} color={coworkUi.textMuted} />
-            <Text color={coworkUi.textSecondary} textAlign="center">
-              No upcoming meetings yet. Schedule one or start an instant session.
-            </Text>
-            <AppLink href={coWorkRoutes.schedule} asChild>
-              <Button tone="primary" borderRadius={999}>
-                Schedule meeting
-              </Button>
-            </AppLink>
-          </YStack>
-        ) : null}
+        <ScreenState
+          loading={loading}
+          error={error}
+          empty={!loading && meetings.length === 0}
+          emptyTitle="No upcoming meetings yet"
+          emptyMessage="Schedule one or start an instant session."
+          emptyActionLabel="Schedule meeting"
+          onEmptyAction={() => router.push(coWorkRoutes.schedule as never)}
+          onRetry={() => void load()}
+        />
 
         <YStack gap="$3">
           {meetings.map((meeting) => (

@@ -8,19 +8,19 @@ import { FeedComposer } from '~/community/components/FeedComposer'
 import { FeedFilterChips } from '~/community/components/FeedFilterChips'
 import { FeedPostCard } from '~/community/components/FeedPostCard'
 import { FeedSortBar, type FeedSort } from '~/community/components/FeedSortBar'
-import { CommunityCard } from '~/community/components/CommunityCard'
 import type { FeedContentFilter } from '~/community/lib/community'
 import { useCommunityFeed } from '~/community/hooks/useCommunityFeed'
 import { useCommunitySuggestions } from '~/community/hooks/useCommunitySuggestions'
-import { useCommunityUi } from '~/community/lib/community-theme'
 import { interleaveFeedWithSuggestions } from '~/community/lib/interleave-feed-suggestions'
 import { refreshStories } from '~/community/lib/story-refresh'
-import { Spinner, Text, YStack, useMedia } from '~/components/ui'
+import { ScreenState, useMedia } from '~/components/ui'
+import { useRouter } from 'one'
+import { communityRoutes } from '~/lib/routes'
 
 const SUGGESTION_INTERVAL = 3
 
 export function CommunityFeedScreen() {
-  const communityUi = useCommunityUi()
+  const router = useRouter()
   const [sort, setSort] = useState<FeedSort>('recent')
   const [contentFilter, setContentFilter] = useState<FeedContentFilter | null>(null)
   const media = useMedia()
@@ -28,6 +28,7 @@ export function CommunityFeedScreen() {
   const { items, isLoading, isLoadingMore, isRefreshing, hasMore, error, loadMore, refresh, removeItem, patchItem } =
     useCommunityFeed(true, sort, contentFilter ?? undefined)
   const { sections, refresh: refreshSuggestions } = useCommunitySuggestions(4)
+  const showingCached = items.length > 0 && !!error
 
   const feedEntries = useMemo(() => {
     if (isDesktop || !sections.length) {
@@ -50,54 +51,49 @@ export function CommunityFeedScreen() {
       <FeedFilterChips value={contentFilter} onChange={setContentFilter} />
       <FeedSortBar value={sort} onChange={setSort} />
 
-      {isLoading && items.length === 0 ? (
-        <YStack alignItems="center" paddingVertical="$8">
-          <Spinner size="large" color={communityUi.brand} />
-        </YStack>
-      ) : error ? (
-        <CommunityCard padding={16}>
-          <Text color={communityUi.textMuted}>{error}</Text>
-        </CommunityCard>
-      ) : items.length === 0 ? (
-        <CommunityCard padding={24} alignItems="center" gap={8}>
-          <Text fontWeight="600" fontSize={16} color={communityUi.text}>
-            Your feed is quiet
-          </Text>
-          <Text color={communityUi.textMuted} fontSize={14} textAlign="center">
-            Be the first to share an update with your network.
-          </Text>
-        </CommunityCard>
-      ) : (
-        <>
-          {feedEntries.map((entry) => {
-            if (entry.type === 'post') {
+      <ScreenState
+        loading={isLoading && items.length === 0}
+        error={error}
+        empty={!isLoading && items.length === 0}
+        showingCached={showingCached}
+        emptyTitle="Your feed is quiet"
+        emptyMessage="Be the first to share an update with your network."
+        emptyActionLabel="Create post"
+        onEmptyAction={() => router.push(communityRoutes.createPost as never)}
+        onRetry={refresh}
+      >
+        {items.length > 0 ? (
+          <>
+            {feedEntries.map((entry) => {
+              if (entry.type === 'post') {
+                return (
+                  <FeedPostCard
+                    key={entry.post.id}
+                    post={entry.post}
+                    onPostDeleted={removeItem}
+                    onPostUpdated={(postId, patch) => patchItem(postId, patch)}
+                  />
+                )
+              }
+
               return (
-                <FeedPostCard
-                  key={entry.post.id}
-                  post={entry.post}
-                  onPostDeleted={removeItem}
-                  onPostUpdated={(postId, patch) => patchItem(postId, patch)}
+                <CommunitySuggestionSectionCard
+                  key={`suggestion-${entry.section.kind}-${entry.slot}`}
+                  section={entry.section}
+                  limit={3}
                 />
               )
-            }
-
-            return (
-              <CommunitySuggestionSectionCard
-                key={`suggestion-${entry.section.kind}-${entry.slot}`}
-                section={entry.section}
-                limit={3}
-              />
-            )
-          })}
-          <LoadMoreSentinel
-            hasMore={hasMore}
-            isLoadingMore={isLoadingMore}
-            onLoadMore={loadMore}
-            rootMargin="480px"
-          />
-          {!hasMore ? <LoadMoreEnd /> : null}
-        </>
-      )}
+            })}
+            <LoadMoreSentinel
+              hasMore={hasMore}
+              isLoadingMore={isLoadingMore}
+              onLoadMore={loadMore}
+              rootMargin="480px"
+            />
+            {!hasMore ? <LoadMoreEnd /> : null}
+          </>
+        ) : null}
+      </ScreenState>
     </CommunityShell>
   )
 }

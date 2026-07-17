@@ -3,7 +3,7 @@ import { useEffect, useRef, useState } from 'react'
 import { Platform } from 'react-native'
 
 import { SearchSuggestPanel } from '~/components/search/SearchSuggestPanel'
-import { Icons, Input, XStack, YStack } from '~/components/ui'
+import { Icons, Input, Text, XStack, YStack } from '~/components/ui'
 import { useAccess } from '~/hooks/useAccess'
 import { useAppLayout } from '~/hooks/useAppLayout'
 import { useUserGeo } from '~/commerce/hooks/useUserGeo'
@@ -12,6 +12,7 @@ import {
   clearAppSearchHistory,
   recordAppSearchTerm,
   removeAppSearchTerm,
+  SEARCH_SCOPE_LABELS,
   SEARCH_SCOPE_PLACEHOLDERS,
   searchScopeFromPath,
   searchScopeFromRouteParams,
@@ -31,8 +32,7 @@ type AppSearchFieldProps = {
 }
 
 /**
- * Minimal omnibox: search icon · input · clear.
- * Scope defaults from the active tab (not shown in the bar).
+ * Omnibox with visible active scope chip, suggestions, and clear control.
  */
 export function AppSearchField({ compact, initialQuery = '', scope: scopeProp }: AppSearchFieldProps) {
   const ui = useAppUi()
@@ -161,11 +161,29 @@ export function AppSearchField({ compact, initialQuery = '', scope: scopeProp }:
       >
         <Icons.Search size={compact ? 16 : 18} color={ui.textMuted} flexShrink={0} />
 
+        {activeScope !== 'all' ? (
+          <XStack
+            paddingHorizontal={8}
+            paddingVertical={4}
+            borderRadius={999}
+            backgroundColor={ui.chip}
+            flexShrink={0}
+            accessibilityRole="text"
+            accessibilityLabel={`Searching in ${SEARCH_SCOPE_LABELS[activeScope]}`}
+            testID="app-search-scope-chip"
+          >
+            <Text fontSize={11} fontWeight="700" color={ui.text}>
+              {SEARCH_SCOPE_LABELS[activeScope]}
+            </Text>
+          </XStack>
+        ) : null}
+
         <Input
           flex={1}
           minWidth={0}
           unstyled
           value={query}
+          accessibilityLabel={`Search ${SEARCH_SCOPE_LABELS[activeScope]}`}
           onChangeText={(value) => {
             setQuery(value)
             if (!open) setOpen(true)

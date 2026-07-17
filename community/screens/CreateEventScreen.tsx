@@ -23,7 +23,10 @@ import type { PickedImage } from '~/lib/media/pick-image'
 import { uploadEventCoverImage } from '~/lib/supabase/storage-upload'
 import { useUploadProgress } from '~/hooks/useUploadProgress'
 import { LocationPickerField } from '~/components/geo'
+import { clearFormDraft } from '~/lib/drafts/form-draft'
+import { useFormDraft } from '~/hooks/useFormDraft'
 import { useFormValidation } from '~/hooks/useFormValidation'
+import { useUnsavedChangesGuard } from '~/hooks/useUnsavedChangesGuard'
 import { communityRoutes, routes } from '~/lib/routes'
 import {
   dateYmd,
@@ -40,6 +43,7 @@ import { useSupabase } from '~/providers/SupabaseProvider'
 import { BRAND_NAME } from '~/config/brand'
 
 const EVENT_TYPES = ['meetup', 'workshop', 'webinar', 'networking', 'conference', 'other']
+const EVENT_DRAFT_KEY = 'community-create-event'
 
 export function CreateEventScreen() {
   const communityUi = useCommunityUi()
@@ -79,6 +83,43 @@ export function CreateEventScreen() {
       [isFree, isOnline],
     ),
   )
+
+  const draftValue = useMemo(
+    () => ({
+      values: form.values,
+      eventType,
+      isOnline,
+      isFree,
+      eventLocation,
+      venueDetail,
+      shareToFeed,
+    }),
+    [eventLocation, eventType, form.values, isFree, isOnline, shareToFeed, venueDetail],
+  )
+  const isDraftDirty = Boolean(
+    form.values.title?.trim() ||
+      form.values.description?.trim() ||
+      eventLocation.trim() ||
+      venueDetail.trim(),
+  )
+  useFormDraft({
+    key: user ? EVENT_DRAFT_KEY : null,
+    value: draftValue,
+    isDirty: () => isDraftDirty,
+    onRestored: (draft) => {
+      if (!draft?.values) return
+      for (const [key, value] of Object.entries(draft.values)) {
+        form.fields[key as keyof typeof form.fields]?.setValue(String(value ?? ''))
+      }
+      if (typeof draft.eventType === 'string') setEventType(draft.eventType)
+      if (typeof draft.isOnline === 'boolean') setIsOnline(draft.isOnline)
+      if (typeof draft.isFree === 'boolean') setIsFree(draft.isFree)
+      if (typeof draft.eventLocation === 'string') setEventLocation(draft.eventLocation)
+      if (typeof draft.venueDetail === 'string') setVenueDetail(draft.venueDetail)
+      if (typeof draft.shareToFeed === 'boolean') setShareToFeed(draft.shareToFeed)
+    },
+  })
+  useUnsavedChangesGuard({ isDirty: isDraftDirty && !isSaving })
 
   if (!user) {
     return (
@@ -175,6 +216,7 @@ export function CreateEventScreen() {
     toast.show(shareToFeed ? 'Event created and shared to feed' : 'Event created', {
       tone: 'success',
     })
+    await clearFormDraft(EVENT_DRAFT_KEY)
     router.replace(communityRoutes.event(event.id))
   }
 

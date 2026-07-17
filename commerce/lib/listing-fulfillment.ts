@@ -273,22 +273,22 @@ export function getListingCardFulfillmentLabel(input: ListingFulfillmentInput): 
 }
 
 export function buildListingFulfillmentInputFromSummary(listing: {
-  listing_type: string
-  price: number
-  currency?: string
+  listing_type?: string | null
+  price?: number | null
+  currency?: string | null
   shipping_required?: boolean | null
-  listing_metadata?: Json | null
-  listing_delivery_profiles?: DeliveryProfile[]
+  listing_metadata?: Json | unknown | null
+  listing_delivery_profiles?: DeliveryProfile[] | null
   shop_shipping?: ShopShippingSummary | null
   shop_address?: { city?: string | null; state?: string | null } | null
 }): ListingFulfillmentInput {
   return {
-    listingType: listing.listing_type,
-    price: listing.price,
-    currency: listing.currency,
+    listingType: listing.listing_type ?? 'physical',
+    price: listing.price ?? 0,
+    currency: listing.currency ?? undefined,
     shippingRequired: listing.shipping_required,
-    listingMetadata: listing.listing_metadata,
-    listingDeliveryProfiles: listing.listing_delivery_profiles,
+    listingMetadata: (listing.listing_metadata ?? null) as Json | null,
+    listingDeliveryProfiles: listing.listing_delivery_profiles ?? undefined,
     shopShipping: listing.shop_shipping,
     shipsFromCity: listing.shop_address?.city ?? listing.shop_address?.state ?? null,
   }

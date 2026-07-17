@@ -20,6 +20,7 @@ import {
   CartRecoveryNudge,
   CartShopOffers,
   CartFreeShippingBar,
+  ListingQuantityStepper,
   ListingRecommendationsSections,
   RecentlyViewedRail,
   ShopPartnerChips,
@@ -48,7 +49,8 @@ const SUMMARY_WIDTH = 300
 export function CartScreen() {
   const c = useCommercePalette()
   const { isDesktop } = useAppLayout()
-  const { cart, items: cartItems, isLoading, error, updateQuantity, removeItem } = useCart()
+  const { cart, items: cartItems, isLoading, error, updateQuantity, removeItem, addToCart } =
+    useCart()
   const { items, isChecking, hasInactiveItems } = useStorefrontCartItems(cartItems)
   const { favoriteIds, isFavorite, toggleFavorite } = useFavorites()
   const toast = useAppToast()
@@ -154,8 +156,30 @@ export function CartScreen() {
   }
 
   async function handleRemove(itemId: string) {
+    const removed = cartItems.find((item) => item.id === itemId)
     const { error: removeError } = await removeItem(itemId)
-    if (removeError) toast.show('Could not remove item', { tone: 'danger', message: removeError })
+    if (removeError) {
+      toast.show('Could not remove item', { tone: 'danger', message: removeError })
+      return
+    }
+    toast.show('Removed from cart', {
+      tone: 'default',
+      duration: 6000,
+      actionLabel: 'Undo',
+      onAction: () => {
+        if (!removed?.listing_id) return
+        void addToCart(removed.listing_id, {
+          quantity: removed.quantity,
+          variantId: removed.variant_id,
+        }).then((result) => {
+          if (result.error) {
+            toast.show('Could not restore item', { tone: 'danger', message: result.error })
+            return
+          }
+          toast.show('Item restored', { tone: 'success' })
+        })
+      },
+    })
   }
 
   async function handleSaveForLater(itemId: string, listingId: string) {
@@ -569,52 +593,20 @@ function CartRow({
         ) : null}
 
         <XStack gap="$3" alignItems="center" flexWrap="wrap" paddingTop="$1">
-          <XStack
-            alignItems="center"
-            backgroundColor={c.surfaceMuted}
-            borderColor={c.border}
-            borderWidth={1}
-            borderRadius={8}
-            overflow="hidden"
-          >
-            <Text
-              onPress={() =>
-                item.quantity <= 1
-                  ? onRemove(item.id)
-                  : onQuantityChange(item.id, item.quantity - 1)
-              }
-              width={34}
-              height={30}
-              textAlign="center"
-              lineHeight={30}
-              fontSize={16}
-              color={c.text}
-              cursor="pointer"
-              hoverStyle={{ backgroundColor: c.surfaceHover }}
-            >
-              {item.quantity <= 1 ? '🗑' : '−'}
-            </Text>
-            <Text minWidth={30} textAlign="center" fontSize={14} fontWeight="600" color={c.text}>
-              {item.quantity}
-            </Text>
-            <Text
-              onPress={() => {
-                if (atMax) return
-                onQuantityChange(item.id, item.quantity + 1)
-              }}
-              width={34}
-              height={30}
-              textAlign="center"
-              lineHeight={30}
-              fontSize={16}
-              color={atMax ? c.secondary : c.text}
-              opacity={atMax ? 0.4 : 1}
-              cursor={atMax ? 'not-allowed' : 'pointer'}
-              hoverStyle={atMax ? undefined : { backgroundColor: c.surfaceHover }}
-            >
-              +
-            </Text>
-          </XStack>
+          <ListingQuantityStepper
+            size="sm"
+            quantity={item.quantity}
+            maxQuantity={maxQuantity}
+            onDecrease={() =>
+              item.quantity <= 1
+                ? onRemove(item.id)
+                : onQuantityChange(item.id, item.quantity - 1)
+            }
+            onIncrease={() => {
+              if (atMax) return
+              onQuantityChange(item.id, item.quantity + 1)
+            }}
+          />
 
           <Text height={16} width={1} backgroundColor={c.border} />
           <CommerceLink onPress={() => onSaveForLater(item.id, item.listing_id)}>

@@ -5,7 +5,7 @@ import { formatBubbleTime } from '~/chat/lib/time'
 import { mediaPreviewLabel } from '~/chat/lib/emoji'
 import { extractFirstUrl } from '~/chat/lib/link-preview'
 import type { ChatMessage, PollResult, ReactionGroup } from '~/chat/lib/types'
-import { Avatar, Icons, Text, XStack, YStack } from '~/components/ui'
+import { Avatar, Icons, Image, Text, XStack, YStack } from '~/components/ui'
 
 import { ChatAudioMessage } from './ChatAudioMessage'
 import { ChatMediaImage } from './ChatMediaImage'
@@ -14,6 +14,8 @@ import { EventMessage } from './EventMessage'
 import { LinkPreviewCard } from './LinkPreviewCard'
 import { PollMessage } from './PollMessage'
 import { openExternalUrl } from '~/lib/platform/openUrl'
+import { communityRoutes } from '~/lib/routes'
+import { pressNavigate } from '~/components/navigation/AppLink'
 
 type MessageBubbleProps = {
   message: ChatMessage
@@ -441,6 +443,52 @@ export function MessageBubble({
 
           {isEvent && message.event ? (
             <EventMessage event={message.event} isOwn={isOwn} currentUserId={currentUserId ?? null} />
+          ) : null}
+
+          {message.storyReply ? (
+            <XStack
+              alignItems="center"
+              gap={8}
+              paddingVertical={4}
+              paddingHorizontal={2}
+              marginBottom={2}
+              maxWidth={240}
+              cursor={message.storyReply.authorId ? 'pointer' : 'default'}
+              onPress={
+                message.storyReply.authorId
+                  ? () => pressNavigate(communityRoutes.storyUser(message.storyReply!.authorId as string))
+                  : undefined
+              }
+              accessibilityLabel="Open story reply"
+            >
+              <YStack
+                width={40}
+                height={40}
+                borderRadius={8}
+                overflow="hidden"
+                backgroundColor={chat.reactionBg}
+                alignItems="center"
+                justifyContent="center"
+              >
+                {message.storyReply.previewUrl ? (
+                  <Image
+                    source={{ uri: message.storyReply.previewUrl }}
+                    style={{ width: 40, height: 40 }}
+                    resizeMode="cover"
+                  />
+                ) : (
+                  <Icons.Image size={18} color={chat.brand} />
+                )}
+              </YStack>
+              <YStack flex={1} minWidth={0} gap={1}>
+                <Text fontSize={11} fontWeight="700" color={chat.brand}>
+                  Story reply
+                </Text>
+                <Text fontSize={12} color={metaColor} numberOfLines={2}>
+                  {message.storyReply.previewText?.trim() || 'Replied to a story'}
+                </Text>
+              </YStack>
+            </XStack>
           ) : null}
 
           {previewUrl ? <LinkPreviewCard url={previewUrl} isOwn={isOwn} /> : null}

@@ -358,11 +358,21 @@ function ChatCallOverlay({
         </CallControlButton>
 
         <CallControlButton
-          label={liveKit?.speakerOn ? 'Speaker' : 'Phone'}
-          color={liveKit?.speakerOn ? ACCEPT : MUTED}
-          onPress={() => void liveKit?.toggleSpeaker()}
+          label={
+            Platform.OS === 'web'
+              ? 'Speaker'
+              : liveKit?.speakerOn
+                ? 'Speaker'
+                : 'Phone'
+          }
+          color={liveKit?.speakerOn || Platform.OS === 'web' ? ACCEPT : MUTED}
+          onPress={() => {
+            // Web has no earpiece route — output is OS/browser managed.
+            if (Platform.OS === 'web') return
+            void liveKit?.toggleSpeaker()
+          }}
         >
-          {liveKit?.speakerOn ? (
+          {liveKit?.speakerOn || Platform.OS === 'web' ? (
             <Icons.Volume2 size={24} color="#fff" />
           ) : (
             <Icons.Phone size={24} color="#fff" />

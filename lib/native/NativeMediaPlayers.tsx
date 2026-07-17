@@ -10,29 +10,51 @@ type NativeVideoFileProps = {
   uri: string
   posterUri?: string | null
   autoPlay?: boolean
+  /** When true, pauses playback (e.g. hold-to-pause in story viewer). */
+  paused?: boolean
   onEnded?: () => void
+  onDurationMs?: (durationMs: number) => void
 }
 
 export function NativeVideoFile({
   uri,
   posterUri = null,
   autoPlay = false,
+  paused = false,
   onEnded,
+  onDurationMs,
 }: NativeVideoFileProps) {
   const player = useVideoPlayer(uri, (instance) => {
     instance.loop = false
   })
   const onEndedRef = useRef(onEnded)
   onEndedRef.current = onEnded
+  const onDurationMsRef = useRef(onDurationMs)
+  onDurationMsRef.current = onDurationMs
 
   useEffect(() => {
+    if (paused) {
+      try {
+        player.pause()
+      } catch {
+        // Ignore pause failures.
+      }
+      return
+    }
     if (!autoPlay) return
     try {
       player.play()
     } catch {
       // Autoplay may be blocked until user gesture on some devices.
     }
-  }, [autoPlay, player])
+  }, [autoPlay, paused, player])
+
+  useEffect(() => {
+    const duration = player.duration
+    if (Number.isFinite(duration) && duration > 0) {
+      onDurationMsRef.current?.(Math.round(duration * 1000))
+    }
+  }, [player.duration])
 
   useEventListener(player, 'playToEnd', () => {
     onEndedRef.current?.()

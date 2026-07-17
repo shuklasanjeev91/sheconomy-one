@@ -4111,6 +4111,16 @@ __metadata:
   languageName: node
   linkType: hard
 
+"@react-native-community/netinfo@npm:^12.0.1":
+  version: 12.0.1
+  resolution: "@react-native-community/netinfo@npm:12.0.1"
+  peerDependencies:
+    react: "*"
+    react-native: ">=0.59"
+  checksum: 10/4eb5ee009bca74c601c65370ad95ea6f42357bb822bed15e404b1720d891ce43098432cc724dbb8a9e0d9e5f48ba70e2280732e484ba1b5f5434d4d8bacc671b
+  languageName: node
+  linkType: hard
+
 "@react-native-google-signin/google-signin@npm:^16.1.2":
   version: 16.1.2
   resolution: "@react-native-google-signin/google-signin@npm:16.1.2"
@@ -10761,6 +10771,15 @@ __metadata:
   languageName: node
   linkType: hard
 
+"expo-haptics@npm:^57.0.1":
+  version: 57.0.1
+  resolution: "expo-haptics@npm:57.0.1"
+  peerDependencies:
+    expo: "*"
+  checksum: 10/ab929015052baa286483a55ebaec43efdcf6c4427a4b4a3c3daa9a1ed69f7bff391aeb7a72eedfc2f98965e256bb1c8b6c5498a7ce254f0e717324ee789186e4
+  languageName: node
+  linkType: hard
+
 "expo-image-loader@npm:~55.0.1":
   version: 55.0.1
   resolution: "expo-image-loader@npm:55.0.1"
@@ -16828,6 +16847,7 @@ __metadata:
     "@react-native-async-storage/async-storage": "npm:^3.1.1"
     "@react-native-community/cli": "npm:^20.1.2"
     "@react-native-community/datetimepicker": "npm:^9.1.0"
+    "@react-native-community/netinfo": "npm:^12.0.1"
     "@react-native-google-signin/google-signin": "npm:^16.1.2"
     "@react-native-voice/voice": "npm:^3.2.4"
     "@react-native/metro-config": "npm:0.83.2"
@@ -16863,6 +16883,7 @@ __metadata:
     expo-document-picker: "npm:~55.0.14"
     expo-file-system: "npm:~55.0.23"
     expo-font: "npm:~55.0.8"
+    expo-haptics: "npm:^57.0.1"
     expo-image-picker: "npm:~55.0.10"
     expo-linear-gradient: "npm:~55.0.15"
     expo-livekit-screen-share: "npm:^0.2.1"

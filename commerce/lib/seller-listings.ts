@@ -1,5 +1,5 @@
 import { supabase } from '~/lib/supabase'
-import type { Database, Tables } from '~/lib/supabase'
+import type { Database, Tables, TablesUpdate } from '~/lib/supabase'
 import { slugifyTitle } from '~/commerce/lib/seo-urls'
 import { INVALIDATION_TOPICS, invalidateCache } from '~/lib/cache/invalidation'
 
@@ -119,7 +119,7 @@ export async function createSellerListing(input: CreateListingInput) {
 }
 
 export async function updateSellerListing(listingId: string, shopId: string, input: UpdateListingInput) {
-  const payload: Tables<'listings'>['Update'] = {}
+  const payload: TablesUpdate<'listings'> = {}
 
   if (input.title != null) {
     payload.title = input.title.trim()

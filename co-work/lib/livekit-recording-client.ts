@@ -56,10 +56,32 @@ export type MeetingRecordingShareResult = {
   error?: string
 }
 
+/**
+ * supabase-js wraps non-2xx responses in a FunctionsHttpError whose message is
+ * the unhelpful "Edge Function returned a non-2xx status code". The real,
+ * user-facing reason (e.g. "Cloud recording is not configured…") is in the
+ * response body, so read it from error.context when available.
+ */
+async function readFunctionErrorMessage(error: unknown, fallback: string): Promise<string> {
+  if (error && typeof error === 'object' && 'context' in error) {
+    const context = (error as { context?: unknown }).context
+    if (typeof Response !== 'undefined' && context instanceof Response) {
+      try {
+        const body = (await context.clone().json()) as { error?: unknown }
+        if (typeof body?.error === 'string' && body.error.trim()) return body.error
+      } catch {
+        // Body was not JSON — fall through to the generic message.
+      }
+    }
+  }
+  if (error instanceof Error && error.message) return error.message
+  return fallback
+}
+
 async function invokeRecordingControl(body: Record<string, unknown>): Promise<LiveKitRecordingControlResult> {
   const { data, error } = await supabase.functions.invoke('livekit-recording', { body })
   if (error) {
-    return { ok: false, error: error.message }
+    return { ok: false, error: await readFunctionErrorMessage(error, 'Recording control failed') }
   }
   return (data ?? { ok: false, error: 'Recording control failed' }) as LiveKitRecordingControlResult
 }
@@ -67,7 +89,7 @@ async function invokeRecordingControl(body: Record<string, unknown>): Promise<Li
 async function invokeRecordingShare(body: Record<string, unknown>): Promise<MeetingRecordingShareResult> {
   const { data, error } = await supabase.functions.invoke('meeting-recording-share', { body })
   if (error) {
-    return { ok: false, error: error.message }
+    return { ok: false, error: await readFunctionErrorMessage(error, 'Recording share failed') }
   }
   return (data ?? { ok: false, error: 'Recording share failed' }) as MeetingRecordingShareResult
 }

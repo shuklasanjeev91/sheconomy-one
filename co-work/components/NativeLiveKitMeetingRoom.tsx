@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useWindowDimensions } from 'react-native'
 import { ConnectionState, RoomEvent, Track } from 'livekit-client'
 
@@ -26,10 +26,10 @@ import { ScreenCenter, ScreenFill } from '~/components/layout'
 import {
   applyPreferredCallAudioOutput,
   bindIosCallAudioManagement,
-  CALL_AUDIO_CAPTURE,
   configureLiveKitCallAudio,
   stopLiveKitCallAudio,
 } from '~/co-work/lib/livekit-call-audio'
+import { reinforceCallMediaOnConnect } from '~/co-work/lib/livekit-call-media'
 import type { LiveKitMediaControls } from '~/co-work/lib/livekit-media-controls'
 import {
   NativeScreenCapturePicker,
@@ -83,15 +83,29 @@ export function NativeLiveKitMeetingRoom({
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
   const [audioReady, setAudioReady] = useState(false)
+  const [audioError, setAudioError] = useState<string | null>(null)
 
   useEffect(() => {
     let cancelled = false
+    setAudioReady(false)
+    setAudioError(null)
     void (async () => {
       try {
         await configureLiveKitCallAudio(mediaMode)
-        if (!cancelled) setAudioReady(true)
-      } catch {
-        if (!cancelled) setAudioReady(true)
+        if (!cancelled) {
+          setAudioReady(true)
+          setAudioError(null)
+        }
+      } catch (err) {
+        if (!cancelled) {
+          // Do not join with a broken session — remote audio often goes silent.
+          setAudioReady(false)
+          setAudioError(
+            err instanceof Error
+              ? err.message
+              : 'Could not start call audio. Check microphone permissions and try again.',
+          )
+        }
       }
     })()
     return () => {
@@ -159,6 +173,39 @@ export function NativeLiveKitMeetingRoom({
     )
   }
 
+  if (audioError) {
+    return (
+      <ScreenFill padding="$4" backgroundColor="#0c080a" gap="$3">
+        <Text color={coworkUi.danger} fontWeight="700">
+          Could not start call audio
+        </Text>
+        <Text color={coworkUi.textSecondary} lineHeight={22}>
+          {audioError}
+        </Text>
+        <Text
+          color={coworkUi.brand}
+          fontWeight="600"
+          onPress={() => {
+            setAudioError(null)
+            setAudioReady(false)
+            void configureLiveKitCallAudio(mediaMode)
+              .then(() => setAudioReady(true))
+              .catch((err) =>
+                setAudioError(
+                  err instanceof Error
+                    ? err.message
+                    : 'Could not start call audio. Check microphone permissions and try again.',
+                ),
+              )
+          }}
+        >
+          Try again
+        </Text>
+        {overlay?.(null)}
+      </ScreenFill>
+    )
+  }
+
   if (error) {
     return (
       <ScreenFill padding="$4" backgroundColor="#0c080a" gap="$3">
@@ -213,53 +260,24 @@ function NativeLiveKitMeetingContent({
 }) {
   const preferSpeaker = mediaMode !== 'audio'
   const liveKit = useLiveKitMediaControls(preferSpeaker)
+  const micForcedRef = useRef(false)
 
   useEffect(() => {
     const room = liveKit.room
     if (!room) return
 
     const unbindIos = bindIosCallAudioManagement(preferSpeaker)
-
-    const reinforceVoiceProcessing = async () => {
-      try {
-        await room.localParticipant.setMicrophoneEnabled(true, { ...CALL_AUDIO_CAPTURE })
-        await applyPreferredCallAudioOutput(mediaMode)
-      } catch {
-        // Permission denial / missing device — room stays connected without reinforcement.
-      }
-    }
-
-    const reinforceCallMedia = async () => {
-      try {
-        if (mediaMode === 'audio') {
-          if (room.localParticipant.isCameraEnabled) {
-            await room.localParticipant.setCameraEnabled(false)
-          }
-          if (!room.localParticipant.isMicrophoneEnabled) {
-            await room.localParticipant.setMicrophoneEnabled(true, { ...CALL_AUDIO_CAPTURE })
-          }
-          return
-        }
-        if (mediaMode === 'video' && !room.localParticipant.isCameraEnabled) {
-          await room.localParticipant.setCameraEnabled(true)
-        }
-        if (!room.localParticipant.isMicrophoneEnabled) {
-          await room.localParticipant.setMicrophoneEnabled(true, { ...CALL_AUDIO_CAPTURE })
-        }
-      } catch {
-        // Same as above — do not reject into an unhandled fatal on device.
-      }
-    }
+    const unbindScreenShare = bindRemoteScreenShareQuality(room)
 
     const boostRemoteAudio = (publication: { setVolume?: (v: number) => void; kind?: string }) => {
       try {
-        publication.setVolume?.(1)
+        if (publication.kind === 'audio' || publication.setVolume) {
+          publication.setVolume?.(1)
+        }
       } catch {
         // Older publications may not expose setVolume.
       }
     }
-
-    const unbindScreenShare = bindRemoteScreenShareQuality(room)
 
     const syncAvatarMetadata = async () => {
       if (!avatarUrl) return
@@ -271,16 +289,26 @@ function NativeLiveKitMeetingContent({
     }
 
     const onConnected = () => {
-      void reinforceVoiceProcessing()
-      void reinforceCallMedia()
-      void syncAvatarMetadata()
+      const forceMic = !micForcedRef.current
+      micForcedRef.current = true
+      void (async () => {
+        await reinforceCallMediaOnConnect(room, mediaMode, { forceMicEnable: forceMic })
+        try {
+          await applyPreferredCallAudioOutput(mediaMode)
+        } catch {
+          // Routing is best-effort; AEC still works on the default path.
+        }
+        await syncAvatarMetadata()
+      })()
     }
 
     const onTrackSubscribed = (
-      _track: unknown,
+      track: { kind?: string },
       publication: { setVolume?: (v: number) => void; kind?: string },
     ) => {
-      boostRemoteAudio(publication)
+      if (track.kind === 'audio' || publication.kind === 'audio') {
+        boostRemoteAudio(publication)
+      }
     }
 
     room.on(RoomEvent.Connected, onConnected)

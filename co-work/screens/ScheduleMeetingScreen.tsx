@@ -5,6 +5,9 @@ import { useMemo, useState } from 'react'
 import { RequireAuth } from '~/components/auth/RequireAuth'
 import { AppPage, LAYOUT_STRETCH } from '~/components/layout'
 import { Button, Field, Icons, Input, Spinner, Text, XStack, YStack, useAppToast } from '~/components/ui'
+import { clearFormDraft } from '~/lib/drafts/form-draft'
+import { useFormDraft } from '~/hooks/useFormDraft'
+import { useUnsavedChangesGuard } from '~/hooks/useUnsavedChangesGuard'
 import { CoWorkBrandChip } from '~/co-work/components/CoWorkUi'
 import { MeetingAiDraftPanel } from '~/co-work/components/MeetingAiDraftPanel'
 import { defaultScheduleDateTime, ScheduleDateTimeField } from '~/co-work/components/ScheduleDateTimeField'
@@ -22,6 +25,8 @@ import { openMailtoLink } from '~/lib/platform/openMailto'
 import { useProfile } from '~/hooks/useProfile'
 
 import { BRAND_NAME } from '~/config/brand'
+
+const MEETING_DRAFT_KEY = 'cowork-schedule-meeting'
 
 const REPEAT_OPTIONS: { label: string; value: MeetingRepeat }[] = [
   { label: 'Does not repeat', value: null },
@@ -60,24 +65,100 @@ export function ScheduleMeetingScreen() {
 
   const timeZone = useMemo(() => Intl.DateTimeFormat().resolvedOptions().timeZone, [])
 
+  const draftValue = useMemo(
+    () => ({
+      title,
+      description,
+      scheduledAt,
+      maxParticipants,
+      passcode,
+      waitingRoom,
+      muteOnJoin,
+      videoOffOnJoin,
+      authenticatedOnly,
+      allowScreenShare,
+      allowChat,
+      allowRecording,
+      allowHandRaise,
+      defaultVideo,
+      defaultAudio,
+      allowJoinBeforeHost,
+      autoRecord,
+      isRecurring,
+      repeat,
+    }),
+    [
+      allowChat,
+      allowHandRaise,
+      allowJoinBeforeHost,
+      allowRecording,
+      allowScreenShare,
+      authenticatedOnly,
+      autoRecord,
+      defaultAudio,
+      defaultVideo,
+      description,
+      isRecurring,
+      maxParticipants,
+      muteOnJoin,
+      passcode,
+      repeat,
+      scheduledAt,
+      title,
+      videoOffOnJoin,
+      waitingRoom,
+    ],
+  )
+  const isDraftDirty = Boolean(title.trim() || description.trim())
+  useFormDraft({
+    key: user ? MEETING_DRAFT_KEY : null,
+    value: draftValue,
+    isDirty: () => isDraftDirty,
+    onRestored: (draft) => {
+      if (!draft) return
+      if (typeof draft.title === 'string') setTitle(draft.title)
+      if (typeof draft.description === 'string') setDescription(draft.description)
+      if (typeof draft.scheduledAt === 'string') setScheduledAt(draft.scheduledAt)
+      if (typeof draft.maxParticipants === 'string') setMaxParticipants(draft.maxParticipants)
+      if (typeof draft.passcode === 'string') setPasscode(draft.passcode)
+      if (typeof draft.waitingRoom === 'boolean') setWaitingRoom(draft.waitingRoom)
+      if (typeof draft.muteOnJoin === 'boolean') setMuteOnJoin(draft.muteOnJoin)
+      if (typeof draft.videoOffOnJoin === 'boolean') setVideoOffOnJoin(draft.videoOffOnJoin)
+      if (typeof draft.authenticatedOnly === 'boolean') setAuthenticatedOnly(draft.authenticatedOnly)
+      if (typeof draft.allowScreenShare === 'boolean') setAllowScreenShare(draft.allowScreenShare)
+      if (typeof draft.allowChat === 'boolean') setAllowChat(draft.allowChat)
+      if (typeof draft.allowRecording === 'boolean') setAllowRecording(draft.allowRecording)
+      if (typeof draft.allowHandRaise === 'boolean') setAllowHandRaise(draft.allowHandRaise)
+      if (typeof draft.defaultVideo === 'boolean') setDefaultVideo(draft.defaultVideo)
+      if (typeof draft.defaultAudio === 'boolean') setDefaultAudio(draft.defaultAudio)
+      if (typeof draft.allowJoinBeforeHost === 'boolean') {
+        setAllowJoinBeforeHost(draft.allowJoinBeforeHost)
+      }
+      if (typeof draft.autoRecord === 'boolean') setAutoRecord(draft.autoRecord)
+      if (typeof draft.isRecurring === 'boolean') setIsRecurring(draft.isRecurring)
+      if (draft.repeat !== undefined) setRepeat(draft.repeat)
+    },
+  })
+  useUnsavedChangesGuard({ isDirty: isDraftDirty && !saving })
+
   if (!isAuthenticated || !user) {
     return <RequireAuth redirectTo={coWorkRoutes.schedule} />
   }
 
   async function handleSchedule() {
     if (!title.trim()) {
-      toast.show('Add a meeting title', { tone: 'error' })
+      toast.show('Add a meeting title', { tone: 'danger' })
       return
     }
 
     const capacity = Number.parseInt(maxParticipants, 10)
     if (!Number.isFinite(capacity) || capacity < 2 || capacity > 500) {
-      toast.show('Capacity must be between 2 and 500', { tone: 'error' })
+      toast.show('Capacity must be between 2 and 500', { tone: 'danger' })
       return
     }
 
     if (!scheduledAt) {
-      toast.show('Choose a date and time', { tone: 'error' })
+      toast.show('Choose a date and time', { tone: 'danger' })
       return
     }
 
@@ -138,6 +219,7 @@ export function ScheduleMeetingScreen() {
           toast.show('Meeting scheduled — open the lobby to resend invites', { tone: 'info' })
         }
       } else {
+        await clearFormDraft(MEETING_DRAFT_KEY)
         toast.show('Meeting scheduled', { tone: 'success' })
       }
 
@@ -154,7 +236,7 @@ export function ScheduleMeetingScreen() {
       router.push(coWorkRoutes.meeting(meeting.meeting_code))
     } catch (scheduleError) {
       toast.show('Could not schedule meeting', {
-        tone: 'error',
+        tone: 'danger',
         message: scheduleError instanceof Error ? scheduleError.message : undefined,
       })
     } finally {

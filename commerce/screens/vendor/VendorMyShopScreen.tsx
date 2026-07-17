@@ -11,6 +11,7 @@ import {
   ConfirmDialog,
   Icons,
   LinearGradient,
+  ScreenState,
   Spinner,
   Text,
   XStack,
@@ -66,6 +67,7 @@ export function VendorMyShopScreen() {
   const shop = useAppSelector((s) => s.shop.currentShop)
   const stats = useAppSelector((s) => s.shop.shopStats)
   const isLoadingShops = useAppSelector((s) => s.shop.isLoadingShops)
+  const shopError = useAppSelector((s) => s.shop.error)
   const isUpdating = useAppSelector((s) => s.shop.isUpdating)
   const isDeleting = useAppSelector((s) => s.shop.isDeleting)
   const analytics = useAppSelector(selectVendorAnalytics)
@@ -99,12 +101,27 @@ export function VendorMyShopScreen() {
 
   const completion = useMemo(() => getShopCompletionPercentage(shop), [shop])
   const totalOrders = analytics?.total_orders ?? null
+  const retryLoadShops = () => {
+    void dispatch(loadMyShops(undefined))
+  }
 
   if (!shop && isLoadingShops) {
     return (
       <PageCenter>
         <Spinner size="large" />
       </PageCenter>
+    )
+  }
+
+  if (!shop && shopError) {
+    return (
+      <ScreenState
+        error={shopError}
+        empty
+        errorTitle="Couldn’t load your shop"
+        onRetry={retryLoadShops}
+        minHeight={360}
+      />
     )
   }
 

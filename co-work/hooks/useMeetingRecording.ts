@@ -48,6 +48,19 @@ export function useMeetingRecording({
   const startingRef = useRef(false)
   const autoStartedRef = useRef(false)
   const pollTimerRef = useRef<ReturnType<typeof setInterval> | null>(null)
+  const readyNotifiedRef = useRef<string | null>(null)
+
+  // Screens pass inline arrows for these callbacks; keep them in refs so
+  // refreshStatus stays referentially stable and effects don't re-fire (and
+  // spam the edge function) on every render.
+  const onStartedRef = useRef(onStarted)
+  onStartedRef.current = onStarted
+  const onStoppedRef = useRef(onStopped)
+  onStoppedRef.current = onStopped
+  const onReadyRef = useRef(onReady)
+  onReadyRef.current = onReady
+  const onErrorRef = useRef(onError)
+  onErrorRef.current = onError
 
   const clearPoll = useCallback(() => {
     if (pollTimerRef.current) {
@@ -82,21 +95,24 @@ export function useMeetingRecording({
         reconcile,
       })
       if (!result.ok) {
-        if (result.error) onError?.(result.error)
+        // Status polling errors are transient — never toast them at the user.
         return result
       }
       const rows = result.recordings ?? (result.recording ? [result.recording] : [])
       applyRecordingState(rows)
       const ready = rows.find((row) => row.status === 'ready')
-      if (ready) onReady?.(ready)
+      if (ready && readyNotifiedRef.current !== ready.id) {
+        readyNotifiedRef.current = ready.id
+        onReadyRef.current?.(ready)
+      }
       return result
     },
-    [applyRecordingState, enabled, meetingId, onError, onReady],
+    [applyRecordingState, enabled, meetingId],
   )
 
   const stopRecording = useCallback(async () => {
     if (!meetingId || !room?.name) {
-      onError?.('Connect to the meeting before stopping recording')
+      onErrorRef.current?.('Connect to the meeting before stopping recording')
       return false
     }
 
@@ -107,7 +123,7 @@ export function useMeetingRecording({
     })
 
     if (!result.ok) {
-      onError?.(result.error || 'Could not stop cloud recording')
+      onErrorRef.current?.(result.error || 'Could not stop cloud recording')
       return false
     }
 
@@ -116,10 +132,10 @@ export function useMeetingRecording({
     if (captionLines.length > 0) {
       void downloadCaptionTranscript(captionLines, meetingCode)
     }
-    onStopped?.(result.status ?? 'processing')
+    onStoppedRef.current?.(result.status ?? 'processing')
     void refreshStatus(true)
     return true
-  }, [captionLines, meetingCode, meetingId, onError, onStopped, refreshStatus, room?.name])
+  }, [captionLines, meetingCode, meetingId, refreshStatus, room?.name])
 
   const startRecording = useCallback(async () => {
     if (startingRef.current) return false
@@ -127,11 +143,11 @@ export function useMeetingRecording({
 
     try {
       if (!enabled) {
-        onError?.('Recording is disabled for this meeting')
+        onErrorRef.current?.('Recording is disabled for this meeting')
         return false
       }
       if (!meetingId || !room?.name) {
-        onError?.('Connect to the meeting before recording')
+        onErrorRef.current?.('Connect to the meeting before recording')
         return false
       }
 
@@ -145,7 +161,7 @@ export function useMeetingRecording({
       })
 
       if (!cloud.ok || !cloud.recordingId) {
-        onError?.(cloud.error || 'Could not start cloud recording')
+        onErrorRef.current?.(cloud.error || 'Could not start cloud recording')
         return false
       }
 
@@ -159,13 +175,13 @@ export function useMeetingRecording({
         recordingSid: cloud.recordingSid,
         storagePath: cloud.storagePath,
       })
-      onStarted?.('cloud')
+      onStartedRef.current?.('cloud')
       void refreshStatus(false)
       return true
     } finally {
       startingRef.current = false
     }
-  }, [enabled, meetingId, onError, onStarted, recording, refreshStatus, room?.name, status, stopRecording])
+  }, [enabled, meetingId, recording, refreshStatus, room?.name, status, stopRecording])
 
   const toggleRecording = useCallback(() => {
     void startRecording()

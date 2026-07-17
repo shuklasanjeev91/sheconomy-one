@@ -3,6 +3,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { peekAppCache, readAppCache, writeAppCache } from '~/lib/cache/app-cache'
 import { useAutoRefresh } from '~/lib/cache/useAutoRefresh'
 import type { PaginatedResult } from '~/lib/supabase/commerce'
+import { useOnReconnect } from '~/providers/ConnectivityProvider'
 
 type PaginatedCacheSnapshot<T> = {
   items: T[]
@@ -68,11 +69,9 @@ export function usePaginatedFeed<T extends { id: string }>({
       const result = await fetchPage(pageToLoad)
 
       if (result.error) {
-        if (silent && hasItemsRef.current) {
-          // Background revalidation failed — keep showing current content.
-        } else {
-          setError(result.error)
-          if (!append) setItems([])
+        // Preserve cached / already-loaded content instead of wiping the list.
+        setError(result.error)
+        if (!append && !hasItemsRef.current) {
           setHasMore(false)
         }
       } else {
@@ -167,6 +166,11 @@ export function usePaginatedFeed<T extends { id: string }>({
     loadPage(0, false)
   }, [enabled, loadPage])
 
+  useOnReconnect(() => {
+    if (!enabled || inFlightRef.current) return
+    void loadPage(0, false, true)
+  })
+
   const removeItem = useCallback((id: string) => {
     setItems((current) => current.filter((item) => item.id !== id))
   }, [])
@@ -177,6 +181,8 @@ export function usePaginatedFeed<T extends { id: string }>({
     )
   }, [])
 
+  const showingCached = items.length > 0 && !!error
+
   return {
     items,
     isLoading,
@@ -184,6 +190,7 @@ export function usePaginatedFeed<T extends { id: string }>({
     isLoadingMore,
     hasMore,
     error,
+    showingCached,
     loadMore,
     refresh,
     removeItem,

@@ -35,7 +35,7 @@ export function InfiniteListingSection({
 }: InfiniteListingSectionProps) {
   const ui = useAppUi()
   const media = useMedia()
-  const gridColumns = media.gtLg ? 6 : media.gtMd ? 5 : media.gtSm ? 3 : 2
+  const gridColumns = media.gtLg ? 6 : media.gtMd ? 5 : media.gtSm ? 4 : media.gtXs ? 3 : 2
   const { items, isLoading, isLoadingMore, hasMore, error, loadMore } = useListingFeed({
     kind,
     shopId,

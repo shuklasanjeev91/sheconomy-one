@@ -95,7 +95,7 @@ export function ShopScreen() {
   const { user } = useProfile()
   const { updateShop } = useVendorShops()
   const toast = useAppToast()
-  const gridColumns = media.gtLg ? 4 : media.gtMd ? 3 : media.gtSm ? 3 : 2
+  const gridColumns = media.gtLg ? 4 : media.gtMd ? 3 : media.gtXs ? 3 : 2
 
   const [shopName, setShopName] = useState('')
   const [shopDescription, setShopDescription] = useState('')

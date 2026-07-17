@@ -66,6 +66,114 @@ export async function blockCommunityMember(
   return { error: null }
 }
 
+/** Unblock a member previously blocked by the viewer. */
+export async function unblockCommunityMember(
+  blockerId: string,
+  blockedId: string,
+): Promise<{ error: string | null }> {
+  const { error } = await supabase
+    .from('blocked_users')
+    .delete()
+    .eq('blocker_id', blockerId)
+    .eq('blocked_id', blockedId)
+
+  invalidateFeedExclusionCache()
+  return { error: error?.message ?? null }
+}
+
+export type BlockedMember = {
+  id: string
+  blockedId: string
+  createdAt: string
+  fullName: string | null
+  username: string | null
+  avatarUrl: string | null
+}
+
+/** List members the viewer has blocked, with profile context for settings UI. */
+export async function listBlockedMembers(blockerId: string): Promise<{
+  members: BlockedMember[]
+  error: string | null
+}> {
+  const { data, error } = await supabase
+    .from('blocked_users')
+    .select(
+      'id, blocked_id, created_at, profile:profiles!blocked_users_blocked_id_fkey(id, full_name, username, avatar_url)',
+    )
+    .eq('blocker_id', blockerId)
+    .order('created_at', { ascending: false })
+
+  if (error) {
+    // Fallback without join if the FK alias differs across environments.
+    const fallback = await supabase
+      .from('blocked_users')
+      .select('id, blocked_id, created_at')
+      .eq('blocker_id', blockerId)
+      .order('created_at', { ascending: false })
+
+    if (fallback.error) {
+      return { members: [], error: fallback.error.message }
+    }
+
+    const ids = (fallback.data ?? []).map((row) => row.blocked_id)
+    const profiles =
+      ids.length === 0
+        ? []
+        : (
+            await supabase
+              .from('profiles')
+              .select('id, full_name, username, avatar_url')
+              .in('id', ids)
+          ).data ?? []
+
+    const byId = new Map(profiles.map((p) => [p.id, p]))
+    return {
+      members: (fallback.data ?? []).map((row) => {
+        const profile = byId.get(row.blocked_id)
+        return {
+          id: row.id,
+          blockedId: row.blocked_id,
+          createdAt: row.created_at,
+          fullName: profile?.full_name ?? null,
+          username: profile?.username ?? null,
+          avatarUrl: profile?.avatar_url ?? null,
+        }
+      }),
+      error: null,
+    }
+  }
+
+  return {
+    members: (data ?? []).map((row: any) => {
+      const profile = Array.isArray(row.profile) ? row.profile[0] : row.profile
+      return {
+        id: row.id,
+        blockedId: row.blocked_id,
+        createdAt: row.created_at,
+        fullName: profile?.full_name ?? null,
+        username: profile?.username ?? null,
+        avatarUrl: profile?.avatar_url ?? null,
+      }
+    }),
+    error: null,
+  }
+}
+
+/** Undo a hide — used by undo toasts after hide-post. */
+export async function unhideCommunityPost(
+  userId: string,
+  postId: string,
+): Promise<{ error: string | null }> {
+  const { error } = await supabase
+    .from('community_hidden_posts')
+    .delete()
+    .eq('user_id', userId)
+    .eq('post_id', postId)
+
+  invalidateFeedExclusionCache()
+  return { error: error?.message ?? null }
+}
+
 /** Report a member for review. */
 export async function reportCommunityMember(
   reporterId: string,

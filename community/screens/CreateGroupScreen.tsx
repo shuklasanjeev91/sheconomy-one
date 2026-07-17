@@ -6,10 +6,15 @@ import { CommunityShell } from '~/community/components/CommunityShell'
 import { createGroup } from '~/community/lib/groups'
 import { useCommunityUi } from '~/community/lib/community-theme'
 import { Button, Spinner, Text, ValidatedTextArea, ValidatedTextField, XStack, YStack, useAppToast } from '~/components/ui'
+import { clearFormDraft } from '~/lib/drafts/form-draft'
+import { useFormDraft } from '~/hooks/useFormDraft'
 import { useFormValidation } from '~/hooks/useFormValidation'
+import { useUnsavedChangesGuard } from '~/hooks/useUnsavedChangesGuard'
 import { communityRoutes } from '~/lib/routes'
 import { maxLength, minLength, required } from '~/lib/validation'
 import { useSupabase } from '~/providers/SupabaseProvider'
+
+const GROUP_DRAFT_KEY = 'community-create-group'
 
 export function CreateGroupScreen() {
   const communityUi = useCommunityUi()
@@ -36,6 +41,29 @@ export function CreateGroupScreen() {
     ),
   )
 
+  const draftValue = useMemo(
+    () => ({ values: form.values, groupType }),
+    [form.values, groupType],
+  )
+  const isDraftDirty = Boolean(
+    form.values.name?.trim() || form.values.title?.trim() || form.values.description?.trim(),
+  )
+  useFormDraft({
+    key: user ? GROUP_DRAFT_KEY : null,
+    value: draftValue,
+    isDirty: () => isDraftDirty,
+    onRestored: (draft) => {
+      if (!draft?.values) return
+      for (const [key, value] of Object.entries(draft.values)) {
+        form.fields[key as keyof typeof form.fields]?.setValue(String(value ?? ''))
+      }
+      if (draft.groupType === 'public' || draft.groupType === 'private') {
+        setGroupType(draft.groupType)
+      }
+    },
+  })
+  useUnsavedChangesGuard({ isDirty: isDraftDirty && !isSaving })
+
   async function handleCreate() {
     if (!user) return
     if (!form.validateAll()) return
@@ -52,6 +80,7 @@ export function CreateGroupScreen() {
       toast.show('Could not create group', { tone: 'danger', message: error ?? 'Try again.' })
       return
     }
+    await clearFormDraft(GROUP_DRAFT_KEY)
     router.replace(communityRoutes.group(data.id))
   }
 

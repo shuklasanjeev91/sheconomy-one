@@ -73,7 +73,7 @@ export function FavoritesScreen() {
       setError(null)
     } catch {
       setError('Could not load your favorites.')
-      setItems([])
+      // Keep any previously loaded wishlist items visible for retry.
     } finally {
       setIsLoading(false)
     }
@@ -135,6 +135,7 @@ export function FavoritesScreen() {
           hasMore={false}
           error={error}
           onLoadMore={() => {}}
+          onRetry={() => void loadFavorites()}
           emptyMessage="Your wishlist is empty."
           showQuickAdd
         />

@@ -1,5 +1,6 @@
 import type { ReactNode } from 'react'
 import { useEffect, useState } from 'react'
+import { Platform } from 'react-native'
 
 import { LoadMoreSentinel } from '~/commerce/components/LoadMoreSentinel'
 import { FeedPostCard } from '~/community/components/FeedPostCard'
@@ -1216,9 +1217,13 @@ function CoverBanner({
         <YStack
           height={200}
           width="100%"
-          style={{
-            background: 'linear-gradient(135deg, #004182 0%, #0a66c2 50%, #378fe9 100%)',
-          }}
+          style={
+            Platform.OS === 'web'
+              ? {
+                  background: 'linear-gradient(135deg, #004182 0%, #0a66c2 50%, #378fe9 100%)',
+                }
+              : { backgroundColor: BRAND_BLUE }
+          }
         />
       )}
 

@@ -42,6 +42,7 @@ import {
 import { persistStorage } from '~/lib/store/storage'
 import { useAppDispatch, useAppSelector } from '~/lib/store/hooks'
 import { useAppUi } from '~/lib/theme/useAppUi'
+import { useUnsavedChangesGuard } from '~/hooks/useUnsavedChangesGuard'
 
 /** Local-storage key holding the in-progress seller-setup draft. */
 const DRAFT_STORAGE_KEY = 'sheconomy:create-shop-draft'
@@ -148,6 +149,14 @@ export function CreateShopScreen() {
     if (!hydrated || phase === 'success') return
     void persistStorage.setItem(DRAFT_STORAGE_KEY, JSON.stringify(formData))
   }, [formData, hydrated, phase])
+
+  useUnsavedChangesGuard({
+    isDirty:
+      hydrated &&
+      phase !== 'success' &&
+      !isSubmitting &&
+      Boolean(formData.shop_name?.trim() || formData.shop_description?.trim()),
+  })
 
   // Redirect users who shouldn't see the flow (vendors / existing shop owners).
   useEffect(() => {
@@ -368,7 +377,7 @@ export function CreateShopScreen() {
 
             <YStack
               backgroundColor={ui.surface}
-              borderRadius={radius.xl}
+              borderRadius={radius.surface}
               borderWidth={1}
               borderColor={ui.borderSubtle}
               padding={isDesktop ? '$6' : '$4'}
@@ -495,7 +504,7 @@ function StepSidebar({
               gap="$3"
               paddingVertical="$3"
               paddingHorizontal="$3"
-              borderRadius={radius.md}
+              borderRadius={radius.chip}
               cursor="pointer"
               backgroundColor={isActive ? ui.roseSurface : 'transparent'}
               hoverStyle={{ backgroundColor: isActive ? ui.roseSurface : ui.surfaceMuted }}
@@ -537,7 +546,7 @@ function StepSidebar({
           gap="$2"
           borderWidth={1}
           borderColor={ui.borderSubtle}
-          borderRadius={radius.md}
+          borderRadius={radius.chip}
           paddingVertical="$2.5"
           paddingHorizontal="$3"
         >
@@ -573,7 +582,7 @@ function StepHeader({ ui, step }: { ui: Ui; step: ShopCreationStep }) {
   const Icon = stepIconFor(step.icon)
   return (
     <XStack gap="$3" alignItems="center">
-      <YStack width={48} height={48} borderRadius={radius.md} alignItems="center" justifyContent="center" backgroundColor={ui.roseSurface}>
+      <YStack width={48} height={48} borderRadius={radius.chip} alignItems="center" justifyContent="center" backgroundColor={ui.roseSurface}>
         <Icon size={24} color={ui.brand} />
       </YStack>
       <YStack flex={1} minWidth={0}>
@@ -605,7 +614,7 @@ function Callout({
   const border = tone === 'warning' ? 'rgba(217, 119, 6, 0.28)' : 'rgba(208, 16, 96, 0.2)'
   const titleColor = tone === 'warning' ? '#b45309' : ui.brand
   return (
-    <XStack gap="$3" padding="$3.5" borderRadius={radius.md} backgroundColor={bg} borderWidth={1} borderColor={border}>
+    <XStack gap="$3" padding="$3.5" borderRadius={radius.chip} backgroundColor={bg} borderWidth={1} borderColor={border}>
       <YStack marginTop={1}>{icon}</YStack>
       <YStack flex={1} minWidth={0} gap="$1">
         <Text fontSize={14} fontWeight="700" color={titleColor}>
@@ -824,7 +833,7 @@ function CategoriesStep({ ui, formData, onToggle }: { ui: Ui; formData: ShopForm
               gap="$2.5"
               paddingVertical="$3"
               paddingHorizontal="$3.5"
-              borderRadius={radius.md}
+              borderRadius={radius.chip}
               borderWidth={1.5}
               borderColor={isSelected ? ui.brand : ui.borderSubtle}
               backgroundColor={isSelected ? ui.roseSurface : ui.surface}
@@ -893,7 +902,7 @@ function CurrencyStep({
               gap="$3"
               paddingVertical="$3.5"
               paddingHorizontal="$3.5"
-              borderRadius={radius.md}
+              borderRadius={radius.chip}
               borderWidth={1.5}
               borderColor={isSelected ? ui.brand : ui.borderSubtle}
               backgroundColor={isSelected ? ui.roseSurface : ui.surface}
@@ -957,7 +966,7 @@ function SocialStep({
               <Text fontSize={13} fontWeight="600" color={ui.text}>
                 {label}
               </Text>
-              <XStack alignItems="center" gap="$2" borderWidth={1} borderColor={error ? ui.error : ui.borderSubtle} borderRadius={radius.md} paddingLeft="$3" backgroundColor={ui.surface}>
+              <XStack alignItems="center" gap="$2" borderWidth={1} borderColor={error ? ui.error : ui.borderSubtle} borderRadius={radius.chip} paddingLeft="$3" backgroundColor={ui.surface}>
                 <Icon size={16} color={ui.icon} />
                 <Input
                   flex={1}
@@ -1002,7 +1011,7 @@ function SuccessOverlay({
         width="100%"
         maxWidth={420}
         backgroundColor={ui.surface}
-        borderRadius={radius.xl}
+        borderRadius={radius.surface}
         borderWidth={1}
         borderColor={ui.borderSubtle}
         padding="$6"

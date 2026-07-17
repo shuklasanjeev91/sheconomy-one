@@ -6,6 +6,7 @@ import type {
   ChatMessage,
   ChatMessageType,
   ChatPollPayload,
+  ChatStoryReplyPayload,
   ChatSummary,
   ChatType,
   MessageReaction,
@@ -93,6 +94,20 @@ function parseEventPayload(metadata: unknown): ChatEventPayload | null {
     location: typeof raw.location === 'string' ? raw.location : null,
     imageUrl: typeof raw.imageUrl === 'string' ? raw.imageUrl : null,
     isStatic: !eventId,
+  }
+}
+
+function parseStoryReplyPayload(metadata: unknown): ChatStoryReplyPayload | null {
+  if (!metadata || typeof metadata !== 'object') return null
+  const raw = metadata as Record<string, unknown>
+  if (raw.type !== 'story_reply') return null
+  const storyId = typeof raw.storyId === 'string' ? raw.storyId : null
+  if (!storyId) return null
+  return {
+    storyId,
+    authorId: typeof raw.authorId === 'string' ? raw.authorId : null,
+    previewUrl: typeof raw.previewUrl === 'string' ? raw.previewUrl : null,
+    previewText: typeof raw.previewText === 'string' ? raw.previewText : null,
   }
 }
 
@@ -305,6 +320,7 @@ export function mapMessage(row: MessageRow): ChatMessage {
       editedAt: row.edited_at,
       poll: legacy.poll,
       event: legacy.event,
+      storyReply: null,
     }
   }
 
@@ -326,6 +342,7 @@ export function mapMessage(row: MessageRow): ChatMessage {
     editedAt: row.edited_at,
     poll: type === 'poll' ? parsePollPayload(row.metadata) : null,
     event: type === 'event' ? parseEventPayload(row.metadata) : null,
+    storyReply: type === 'text' ? parseStoryReplyPayload(row.metadata) : null,
   }
 }
 

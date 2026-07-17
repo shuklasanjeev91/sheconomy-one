@@ -1,5 +1,6 @@
 import { useLocalSearchParams } from 'one'
 
+import { AppErrorBoundary } from '~/components/AppErrorBoundary'
 import { ChatCallScreen } from '~/chat/screens/ChatCallScreen'
 import type { CallType } from '~/chat/lib/calls'
 
@@ -21,5 +22,9 @@ export default function ChatCallRoute() {
   const callType: CallType = typeRaw === 'video' ? 'video' : 'audio'
   const callId = readRouteParam(params.callId) || undefined
 
-  return <ChatCallScreen code={code} callType={callType} callId={callId} />
+  return (
+    <AppErrorBoundary scope="ChatCall">
+      <ChatCallScreen code={code} callType={callType} callId={callId} />
+    </AppErrorBoundary>
+  )
 }

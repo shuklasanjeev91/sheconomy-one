@@ -30,6 +30,7 @@ import { AutomaticUpdateManager } from '~/components/system/AutomaticUpdateManag
 import { AiAssistProvider } from '~/providers/AiAssistProvider'
 import { ScreenZoomProvider } from '~/lib/zoom/ScreenZoomContext'
 import { ScreenZoomRoot } from '~/components/media/ScreenZoomRoot'
+import { ConnectivityProvider } from '~/providers/ConnectivityProvider'
 
 function NativeRootShell({ children }: { children: ReactNode }) {
   if (Platform.OS === 'web') {
@@ -202,11 +203,13 @@ function AppProviders({ children }: { children: React.ReactNode }) {
                             <PushForegroundNotificationHost />
                             <AppUsageTracker />
                             <BiometricUnlockGate>
-                              <AppErrorBoundary scope="AppShell">
-                                <RouteWarmup />
-                                <AppBootstrapPrefetch />
-                                <AppShell>{children}</AppShell>
-                              </AppErrorBoundary>
+                              <ConnectivityProvider>
+                                <AppErrorBoundary scope="AppShell">
+                                  <RouteWarmup />
+                                  <AppBootstrapPrefetch />
+                                  <AppShell>{children}</AppShell>
+                                </AppErrorBoundary>
+                              </ConnectivityProvider>
                             </BiometricUnlockGate>
                           </ScreenZoomRoot>
                         </ScreenZoomProvider>

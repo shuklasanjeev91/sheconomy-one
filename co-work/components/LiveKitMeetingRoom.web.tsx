@@ -1,5 +1,5 @@
-import { useCallback, useEffect, useState } from 'react'
-import { ConnectionState, RoomEvent, type Room } from 'livekit-client'
+import { useCallback, useEffect, useRef, useState } from 'react'
+import { ConnectionState, RoomEvent, Track, type Room } from 'livekit-client'
 
 import { LiveKitRoom, RoomAudioRenderer } from '@livekit/components-react'
 import '@livekit/components-styles'
@@ -9,7 +9,7 @@ import { ScreenCenter, ScreenFill } from '~/components/layout'
 import { MeetingVideoStage } from '~/co-work/components/MeetingVideoStage'
 import { useLiveKitMediaControls } from '~/co-work/hooks/useLiveKitMediaControls.web'
 import { fetchLiveKitCredentials } from '~/co-work/lib/livekit'
-import { CALL_AUDIO_CAPTURE } from '~/co-work/lib/livekit-call-audio'
+import { reinforceCallMediaOnConnect } from '~/co-work/lib/livekit-call-media'
 import { buildParticipantMetadata } from '~/co-work/lib/participant-avatar'
 import { getLiveKitRoomOptions } from '~/co-work/lib/livekit-room-options'
 import { bindRemoteScreenShareQuality } from '~/co-work/lib/livekit-screen-share'
@@ -360,24 +360,40 @@ export function LiveKitMeetingRoom({
 function useWebAudioPlaybackUnlock(room: Room | undefined) {
   const [audioBlocked, setAudioBlocked] = useState(false)
 
-  useEffect(() => {
-    if (!room) return
-
-    const syncPlaybackStatus = () => setAudioBlocked(!room.canPlaybackAudio)
-
-    room.on(RoomEvent.AudioPlaybackStatusChanged, syncPlaybackStatus)
-    syncPlaybackStatus()
-
-    return () => {
-      room.off(RoomEvent.AudioPlaybackStatusChanged, syncPlaybackStatus)
-    }
-  }, [room])
-
   const unlockAudio = useCallback(() => {
     if (!room) return
     void room.startAudio().catch(() => {
       // Still blocked — the banner stays visible for another explicit tap.
     })
+  }, [room])
+
+  useEffect(() => {
+    if (!room) return
+
+    const syncPlaybackStatus = () => setAudioBlocked(!room.canPlaybackAudio)
+
+    // Best-effort unlock on connect and whenever a remote audio track arrives.
+    // If the browser still blocks, the banner stays until a user gesture.
+    const tryStart = () => {
+      void room.startAudio().catch(() => {})
+      syncPlaybackStatus()
+    }
+
+    const onTrackSubscribed = (track: { kind?: string }) => {
+      if (track.kind === Track.Kind.Audio) tryStart()
+    }
+
+    room.on(RoomEvent.AudioPlaybackStatusChanged, syncPlaybackStatus)
+    room.on(RoomEvent.Connected, tryStart)
+    room.on(RoomEvent.TrackSubscribed, onTrackSubscribed as never)
+    syncPlaybackStatus()
+    if (room.state === ConnectionState.Connected) tryStart()
+
+    return () => {
+      room.off(RoomEvent.AudioPlaybackStatusChanged, syncPlaybackStatus)
+      room.off(RoomEvent.Connected, tryStart)
+      room.off(RoomEvent.TrackSubscribed, onTrackSubscribed as never)
+    }
   }, [room])
 
   // Any interaction anywhere on the page counts as the unlocking gesture.
@@ -404,36 +420,13 @@ function WebLiveKitMeetingContent({
   mediaMode?: import('~/co-work/lib/livekit-media-controls').LiveKitMediaMode
   avatarUrl?: string | null
 }) {
-  const liveKit = useLiveKitMediaControls()
+  const liveKit = useLiveKitMediaControls(mediaMode !== 'audio')
   const { audioBlocked, unlockAudio } = useWebAudioPlaybackUnlock(liveKit.room)
+  const micForcedRef = useRef(false)
 
   useEffect(() => {
     const room = liveKit.room
     if (!room) return
-
-    const reinforceVoiceProcessing = async () => {
-      // Always (re)publish mic with AEC/NS so both sides hear each other.
-      await room.localParticipant.setMicrophoneEnabled(true, { ...CALL_AUDIO_CAPTURE })
-    }
-
-    const reinforceCallMedia = async () => {
-      // Voice calls must never leave camera on; video calls prefer camera on.
-      if (mediaMode === 'audio') {
-        if (room.localParticipant.isCameraEnabled) {
-          await room.localParticipant.setCameraEnabled(false)
-        }
-        if (!room.localParticipant.isMicrophoneEnabled) {
-          await room.localParticipant.setMicrophoneEnabled(true, { ...CALL_AUDIO_CAPTURE })
-        }
-        return
-      }
-      if (mediaMode === 'video' && !room.localParticipant.isCameraEnabled) {
-        await room.localParticipant.setCameraEnabled(true)
-      }
-      if (!room.localParticipant.isMicrophoneEnabled) {
-        await room.localParticipant.setMicrophoneEnabled(true, { ...CALL_AUDIO_CAPTURE })
-      }
-    }
 
     const unbindScreenShare = bindRemoteScreenShareQuality(room)
 
@@ -447,9 +440,11 @@ function WebLiveKitMeetingContent({
     }
 
     const onConnected = () => {
-      void reinforceVoiceProcessing()
-      void reinforceCallMedia()
+      const forceMic = !micForcedRef.current
+      micForcedRef.current = true
+      void reinforceCallMediaOnConnect(room, mediaMode, { forceMicEnable: forceMic })
       void syncAvatarMetadata()
+      void room.startAudio().catch(() => {})
     }
 
     room.on(RoomEvent.Connected, onConnected)

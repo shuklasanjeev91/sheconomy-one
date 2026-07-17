@@ -111,6 +111,7 @@ export function CategoryScreen({ filters: initialFilters = {} }: { filters?: Lis
               hasMore={listingsFeed.hasMore}
               error={listingsFeed.error}
               onLoadMore={listingsFeed.loadMore}
+              onRetry={listingsFeed.refresh}
               emptyMessage={`No listings in ${category.category} yet.`}
             />
           </ListingFiltersShell>

@@ -1,6 +1,6 @@
-import AsyncStorage from '@react-native-async-storage/async-storage'
+import { clearFormDraft, loadFormDraft, saveFormDraft } from '~/lib/drafts/form-draft'
 
-const STORAGE_KEY = 'sheconomy:compose-draft'
+const DRAFT_KEY = 'community-compose'
 
 export type ComposeDraft = {
   content: string
@@ -16,25 +16,29 @@ export async function saveComposeDraft(draft: Omit<ComposeDraft, 'updatedAt'>): 
     await clearComposeDraft()
     return
   }
-  const payload: ComposeDraft = {
-    ...draft,
-    updatedAt: new Date().toISOString(),
-  }
-  await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(payload))
+  await saveFormDraft(DRAFT_KEY, {
+    content: draft.content,
+    articleTitle: draft.articleTitle,
+    mode: draft.mode,
+  })
 }
 
 export async function loadComposeDraft(): Promise<ComposeDraft | null> {
-  try {
-    const raw = await AsyncStorage.getItem(STORAGE_KEY)
-    if (!raw) return null
-    const parsed = JSON.parse(raw) as ComposeDraft
-    if (!parsed || typeof parsed.content !== 'string') return null
-    return parsed
-  } catch {
-    return null
+  const envelope = await loadFormDraft<{
+    content: string
+    articleTitle?: string
+    mode?: string
+  }>(DRAFT_KEY)
+  if (!envelope) return null
+  if (typeof envelope.data.content !== 'string') return null
+  return {
+    content: envelope.data.content,
+    articleTitle: envelope.data.articleTitle,
+    mode: envelope.data.mode,
+    updatedAt: envelope.updatedAt,
   }
 }
 
 export async function clearComposeDraft(): Promise<void> {
-  await AsyncStorage.removeItem(STORAGE_KEY).catch(() => {})
+  await clearFormDraft(DRAFT_KEY)
 }
