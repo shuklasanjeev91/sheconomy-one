@@ -27,7 +27,7 @@ export function StickyRail({
   style,
   ...props
 }: StickyRailProps) {
-  const { isDesktopWeb } = useAppLayout()
+  const { isDesktopWeb, isDesktop } = useAppLayout()
 
   if (pin === 'viewport') {
     return (
@@ -48,15 +48,23 @@ export function StickyRail({
     )
   }
 
-  const stickyStyle = isDesktopWeb ? stickyRailStyle({ scrollable }) : undefined
+  // Sticky whenever the rail sits beside content on web. Wide windows scroll
+  // the document (offset below the sticky app header); narrower desktop
+  // windows scroll an inner container that already starts below the header,
+  // so `position: sticky` pins against that container with a small offset.
+  const stickyActive = Platform.OS === 'web' && isDesktop
+  const stickyTop = isDesktopWeb ? STICKY_RAIL_TOP : 16
+  const stickyStyle = stickyActive
+    ? stickyRailStyle({ scrollable, top: stickyTop })
+    : undefined
 
   return (
     <YStack
       flexShrink={0}
       alignSelf="flex-start"
-      position={isDesktopWeb ? 'sticky' : undefined}
-      top={isDesktopWeb ? STICKY_RAIL_TOP : undefined}
-      zIndex={isDesktopWeb ? 5 : undefined}
+      position={stickyActive ? 'sticky' : undefined}
+      top={stickyActive ? stickyTop : undefined}
+      zIndex={stickyActive ? 5 : undefined}
       style={
         stickyStyle || style
           ? { ...(stickyStyle ?? {}), ...(style as object) }

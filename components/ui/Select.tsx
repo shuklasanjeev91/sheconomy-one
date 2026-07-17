@@ -1,4 +1,7 @@
+import type { ComponentProps, ReactNode } from 'react'
 import { Select as TSelect, styled } from 'tamagui'
+
+import { NativeFullscreenAdapt } from '~/components/ui/NativeFullscreenAdapt'
 import { getShadowStyle } from '~/config/tokens'
 
 /** Same compound API as Tamagui's Select — restyled trigger + content. */
@@ -14,7 +17,7 @@ export const SelectTrigger = styled(TSelect.Trigger, {
   height: '$4.5',
 })
 
-export const SelectContent = styled(
+const StyledSelectContent = styled(
   TSelect.Content,
   {
     zIndex: 200_000,
@@ -35,3 +38,19 @@ export const SelectItem = styled(TSelect.Item, {
   borderRadius: '$4',
   paddingHorizontal: '$3',
 })
+
+/**
+ * Select dropdown content. On iOS/Android automatically adapts into a
+ * full-screen sheet so every Select in the app covers the device.
+ */
+export function SelectContent({
+  children,
+  ...props
+}: ComponentProps<typeof StyledSelectContent> & { children?: ReactNode }) {
+  return (
+    <>
+      <NativeFullscreenAdapt />
+      <StyledSelectContent {...props}>{children}</StyledSelectContent>
+    </>
+  )
+}

@@ -1,14 +1,20 @@
+import type { ComponentProps, ReactNode } from 'react'
 import { Menu as TMenu, ContextMenu as TContextMenu, styled } from 'tamagui'
+
+import { NativeFullscreenAdapt } from '~/components/ui/NativeFullscreenAdapt'
 import { getShadowStyle } from '~/config/tokens'
+import { isNativeFullscreenOverlay } from '~/lib/platform/native-fullscreen'
+import { useAppLayout } from '~/hooks/useAppLayout'
 
 /**
  * Dropdown menu (`Menu`) and right-click menu (`ContextMenu`) share the same
  * anatomy in Tamagui — restyle both content/item surfaces once, reuse twice.
+ * On iOS/Android content adapts into a full-screen sheet.
  */
 export const Menu = TMenu
 export const ContextMenu = TContextMenu
 
-export const MenuContent = styled(
+const StyledMenuContent = styled(
   TMenu.Content,
   {
     name: 'MenuContent',
@@ -34,7 +40,7 @@ export const MenuItem = styled(TMenu.Item, {
   hoverStyle: { backgroundColor: '$color4' },
 })
 
-export const ContextMenuContent = styled(
+const StyledContextMenuContent = styled(
   TContextMenu.Content,
   {
     name: 'ContextMenuContent',
@@ -59,3 +65,48 @@ export const ContextMenuItem = styled(TContextMenu.Item, {
   backgroundColor: 'transparent',
   hoverStyle: { backgroundColor: '$color4' },
 })
+
+function useNativeFullscreenContentProps() {
+  const { safeTop, safeBottom } = useAppLayout()
+  if (!isNativeFullscreenOverlay) return null
+  return {
+    width: '100%' as const,
+    maxWidth: '100%' as const,
+    minWidth: '100%' as const,
+    borderRadius: 0,
+    borderWidth: 0,
+    paddingTop: Math.max(safeTop, 16),
+    paddingBottom: Math.max(safeBottom, 16),
+    flex: 1,
+  }
+}
+
+export function MenuContent({
+  children,
+  ...props
+}: ComponentProps<typeof StyledMenuContent> & { children?: ReactNode }) {
+  const nativeProps = useNativeFullscreenContentProps()
+  return (
+    <>
+      <NativeFullscreenAdapt />
+      <StyledMenuContent {...props} {...nativeProps}>
+        {children}
+      </StyledMenuContent>
+    </>
+  )
+}
+
+export function ContextMenuContent({
+  children,
+  ...props
+}: ComponentProps<typeof StyledContextMenuContent> & { children?: ReactNode }) {
+  const nativeProps = useNativeFullscreenContentProps()
+  return (
+    <>
+      <NativeFullscreenAdapt />
+      <StyledContextMenuContent {...props} {...nativeProps}>
+        {children}
+      </StyledContextMenuContent>
+    </>
+  )
+}

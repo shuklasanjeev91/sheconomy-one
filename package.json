@@ -6,7 +6,7 @@
   "main": "one/metro-entry",
   "scripts": {
     "eas-build-pre-install": "corepack enable",
-    "postinstall": "one patch || true && node scripts/strip-datetimepicker-flow.cjs",
+    "postinstall": "one patch || true && node scripts/strip-datetimepicker-flow.cjs && node scripts/patch-react-native-voice-android.cjs",
     "android": "one run:android",
     "build": "VXRN_FORCE_PATCH=1 ONE_CACHE_KEY=${ONE_CACHE_KEY:-202607151} one build && node scripts/patch-vercel-output.mjs",
     "build:web": "VXRN_FORCE_PATCH=1 ONE_CACHE_KEY=${ONE_CACHE_KEY:-202607151} one build && node scripts/patch-vercel-output.mjs",
@@ -22,7 +22,9 @@
     "test:smoke:ui": "playwright test --ui",
     "test:unit": "vitest run",
     "test:unit:watch": "vitest",
-    "supabase:types": "supabase gen types typescript --project-id zsaqrrzwygzwrlzgymxk > lib/supabase/database.types.ts"
+    "supabase:types": "supabase gen types typescript --project-id zsaqrrzwygzwrlzgymxk > lib/supabase/database.types.ts",
+    "desktop:dev": "electron electron/main.cjs",
+    "desktop:build:win": "electron-builder --projectDir electron --win --x64 --config electron-builder.yml"
   },
   "dependencies": {
     "@babel/runtime": "^7.26.0",
@@ -110,6 +112,8 @@
     "@tamagui/vite-plugin": "2.4.0",
     "@types/react": "^19.2.2",
     "eas-cli": "16.28.0",
+    "electron": "^37.2.0",
+    "electron-builder": "^26.0.12",
     "typescript": "5.9.3",
     "vite": "^8.0.13",
     "vitest": "^3.2.4"

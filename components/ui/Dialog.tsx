@@ -1,13 +1,17 @@
 import type { ComponentProps, ReactNode } from 'react'
+import { Platform } from 'react-native'
 import { Dialog as TDialog, styled, XStack } from 'tamagui'
 
 import * as Icons from '@tamagui/lucide-icons'
 import { getShadowStyle, radius } from '~/config/tokens'
+import { isNativeFullscreenOverlay } from '~/lib/platform/native-fullscreen'
+import { useAppLayout } from '~/hooks/useAppLayout'
 
 /**
  * Restyled Tamagui Dialog — same compound API (`Dialog.Trigger`,
  * `Dialog.Content`, …), just with a softer overlay + a premium elevated
  * content card and default enter/exit animations wired up.
+ * On iOS/Android the content covers the full device screen.
  */
 export const Dialog = TDialog
 
@@ -76,10 +80,31 @@ export function DialogContent({
   closeLabel?: string
   children?: ReactNode
 }) {
-  const paddingRight = props.padding === 0 || props.padding === '$0' ? props.paddingRight : showClose ? props.paddingRight ?? '$8' : props.paddingRight
+  const { safeTop, safeBottom } = useAppLayout()
+  const paddingRight =
+    props.padding === 0 || props.padding === '$0'
+      ? props.paddingRight
+      : showClose
+        ? props.paddingRight ?? '$8'
+        : props.paddingRight
+
+  const nativeFullscreenProps =
+    isNativeFullscreenOverlay
+      ? {
+          width: '100%' as const,
+          height: '100%' as const,
+          maxWidth: '100%' as const,
+          maxHeight: '100%' as const,
+          borderRadius: 0,
+          borderWidth: 0,
+          paddingTop: Math.max(safeTop, 16),
+          paddingBottom: Math.max(safeBottom, 16),
+          ...(Platform.OS !== 'web' ? { flex: 1 } : null),
+        }
+      : null
 
   return (
-    <StyledDialogContent position="relative" {...props} paddingRight={paddingRight}>
+    <StyledDialogContent position="relative" {...props} {...nativeFullscreenProps} paddingRight={paddingRight}>
       {showClose ? <DialogCloseButton label={closeLabel} /> : null}
       {children}
     </StyledDialogContent>

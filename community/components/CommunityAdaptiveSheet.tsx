@@ -17,6 +17,7 @@ type CommunityAdaptiveSheetProps = {
 /**
  * App-wide sheet surface — always a bottom sheet on web, iOS, and Android
  * (including desktop web). Never opens as a centered dialog/modal.
+ * On iOS/Android AppBottomSheet covers the full device screen.
  */
 export function CommunityAdaptiveSheet({
   open,
