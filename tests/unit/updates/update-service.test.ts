@@ -239,8 +239,8 @@ describe('runUpdateCheck', () => {
       updates: mockUpdates(),
       getNativeAppVersion: () => '1.10.0',
       fetchRemoteConfig: async () => ({
-        minimumSupportedVersion: '1.20.0',
-        latestVersion: '1.20.1',
+        "minimumSupportedVersion": "5.0.14",
+        "latestVersion": "6.0",
         critical: false,
         maintenanceMode: false,
       }),

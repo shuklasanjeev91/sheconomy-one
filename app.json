@@ -3,7 +3,7 @@
     "name": "SHEconomy",
     "slug": "sheconomy",
     "owner": "sheconomy",
-    "version": "1.20.1",
+    "version": "6.0",
     "scheme": "sheconomy",
     "platforms": [
       "ios",
@@ -88,6 +88,7 @@
     },
     "ios": {
       "bundleIdentifier": "com.sheconomy.ecommerce",
+      "buildNumber": "96",
       "appleTeamId": "52H73QK4CL",
       "supportsTablet": true,
       "requireFullScreen": false,
@@ -97,6 +98,7 @@
         "applinks:sheconomy-one-sanjeev-shuklas-projects.vercel.app"
       ],
       "infoPlist": {
+        "CFBundleDisplayName": "SHEconomy",
         "UIBackgroundModes": [
           "remote-notification",
           "remote-notification"
@@ -134,6 +136,7 @@
     },
     "android": {
       "package": "com.sheconomy.ecommerce",
+      "versionCode": 102,
       "softwareKeyboardLayoutMode": "resize",
       "intentFilters": [
         {
