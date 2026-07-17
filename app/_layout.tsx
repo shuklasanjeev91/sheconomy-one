@@ -187,26 +187,6 @@ function AppProviders({ children }: { children: React.ReactNode }) {
   return (
     <ReduxProvider store={store}>
       <SupabaseProvider>
-<<<<<<< HEAD
-        <PushNotificationsProvider>
-          <SchemeProvider>
-            <ThemedApp>
-              <CartProvider>
-                <FavoritesProvider>
-                  <MarketplacePersonalizationProvider>
-                    <AppUsageTracker />
-                    <AiAssistProvider>
-                      <AutomaticUpdateManager />
-                      <InAppNotificationHost />
-                      <AppShell>{children}</AppShell>
-                    </AiAssistProvider>
-                  </MarketplacePersonalizationProvider>
-                </FavoritesProvider>
-              </CartProvider>
-            </ThemedApp>
-          </SchemeProvider>
-        </PushNotificationsProvider>
-=======
         <RegionPreferencesProvider>
           <PushNotificationsProvider>
             <SchemeProvider>
@@ -238,7 +218,6 @@ function AppProviders({ children }: { children: React.ReactNode }) {
             </SchemeProvider>
           </PushNotificationsProvider>
         </RegionPreferencesProvider>
->>>>>>> 9f127e4930b1a81b4e69c1bd6dc674442dde1db0
       </SupabaseProvider>
     </ReduxProvider>
   )
