@@ -72,21 +72,30 @@ export function NotificationsScreen() {
       if (append) setIsLoadingMore(true)
       else setIsLoading(true)
       const result = await fetchNotifications(user.id, pageToLoad, { product, unreadOnly })
-      const nextItems = append ? [...items, ...result.items] : result.items
-      setItems(nextItems)
+      if (append) {
+        // Functional update keeps `items` out of this callback's deps —
+        // otherwise every fetch recreates `load` and the mount effect
+        // refetches page 0 in a loop, resetting the list while scrolling.
+        setItems((current) => {
+          const seen = new Set(current.map((item) => item.id))
+          return [...current, ...result.items.filter((item) => !seen.has(item.id))]
+        })
+      } else {
+        setItems(result.items)
+        if (cacheKey && !product && !unreadOnly) {
+          await writeAppCache(cacheKey, {
+            items: result.items,
+            hasMore: result.hasMore,
+            error: result.error ?? null,
+          })
+        }
+      }
       setHasMore(result.hasMore)
       setPage(pageToLoad)
       setIsLoading(false)
       setIsLoadingMore(false)
-      if (!append && cacheKey && !product && !unreadOnly) {
-        await writeAppCache(cacheKey, {
-          items: nextItems,
-          hasMore: result.hasMore,
-          error: result.error ?? null,
-        })
-      }
     },
-    [cacheKey, items, product, unreadOnly, user],
+    [cacheKey, product, unreadOnly, user],
   )
 
   useEffect(() => {
@@ -132,11 +141,29 @@ export function NotificationsScreen() {
     }
   }, [load, user?.id])
 
+  const persistReadState = useCallback(
+    (mapper: (item: AppNotification) => AppNotification) => {
+      setItems((current) => {
+        const next = current.map(mapper)
+        // Keep the offline cache in sync so a refresh doesn't resurrect
+        // already-read rows from stale cached data.
+        if (cacheKey) {
+          const cached = peekAppCache<NotificationsCache>(cacheKey)
+          void writeAppCache(cacheKey, {
+            items: (cached?.items ?? next).map(mapper),
+            hasMore: cached?.hasMore ?? hasMore,
+            error: cached?.error ?? null,
+          })
+        }
+        return next
+      })
+    },
+    [cacheKey, hasMore],
+  )
+
   async function handleOpen(notification: AppNotification) {
     if (!notification.read) {
-      setItems((current) =>
-        current.map((item) => (item.id === notification.id ? { ...item, read: true } : item)),
-      )
+      persistReadState((item) => (item.id === notification.id ? { ...item, read: true } : item))
       await markNotificationRead(notification.id, user?.id)
     }
     const path = resolveNotificationPath(notification)
@@ -147,7 +174,7 @@ export function NotificationsScreen() {
 
   async function handleMarkAll() {
     if (!user) return
-    setItems((current) => current.map((item) => ({ ...item, read: true })))
+    persistReadState((item) => ({ ...item, read: true }))
     await markAllNotificationsRead(user.id)
   }
 

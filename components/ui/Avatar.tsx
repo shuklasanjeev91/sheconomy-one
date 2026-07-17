@@ -91,6 +91,9 @@ export const Avatar = forwardRef<any, AvatarProps>(function Avatar(
     <YStack
       ref={ref}
       theme={BRAND_THEME}
+      // Explicit relative positioning: on web the absolute-inset fallback and
+      // photo layers would otherwise anchor to the page, not this circle.
+      position="relative"
       width={px}
       height={px}
       borderRadius={999}

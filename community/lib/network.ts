@@ -178,10 +178,43 @@ export async function fetchPublicProfile(
     return { data: data as PublicProfile, error: null }
   }
 
-  // Fallback for legacy mentions stored as a display name (e.g.
-  // "@Archena_S_Agarwal"). Try resolving by full_name with underscores treated
-  // as spaces. Uses a wildcard-free ilike for a case-insensitive exact match.
   if (!isUuid(normalized)) {
+    // Case-insensitive exact username match (wildcard-free ilike).
+    const { data: byUsername } = await supabase
+      .from('profiles')
+      .select(PUBLIC_PROFILE_SELECT)
+      .eq('is_deleted', false)
+      .ilike('username', normalized)
+      .limit(1)
+      .maybeSingle()
+    if (byUsername) {
+      return { data: byUsername as PublicProfile, error: null }
+    }
+
+    // Renamed accounts: old links (notifications, emails, shares) embed the
+    // username from send time. username_history maps it to the profile.
+    const { data: historyRow } = await supabase
+      .from('username_history')
+      .select('profile_id')
+      .ilike('username', normalized)
+      .order('changed_at', { ascending: false })
+      .limit(1)
+      .maybeSingle()
+    if (historyRow?.profile_id) {
+      const { data: byHistory } = await supabase
+        .from('profiles')
+        .select(PUBLIC_PROFILE_SELECT)
+        .eq('is_deleted', false)
+        .eq('id', historyRow.profile_id)
+        .maybeSingle()
+      if (byHistory) {
+        return { data: byHistory as PublicProfile, error: null }
+      }
+    }
+
+    // Fallback for legacy mentions stored as a display name (e.g.
+    // "@Archena_S_Agarwal"). Try resolving by full_name with underscores
+    // treated as spaces.
     const nameGuess = normalized.replace(/_+/g, ' ').trim()
     if (nameGuess) {
       const { data: byName } = await supabase
