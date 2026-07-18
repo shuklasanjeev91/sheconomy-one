@@ -54,6 +54,7 @@
     "core-js": "^3.38.1",
     "country-state-city": "^3.2.1",
     "date-fns": "^4.4.0",
+    "exceljs": "^4.4.0",
     "expo": "~55.0.7",
     "expo-apple-authentication": "~55.0.13",
     "expo-audio": "~55.0.15",

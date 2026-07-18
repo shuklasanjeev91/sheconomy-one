@@ -103,6 +103,7 @@ export const VENDOR_NAV_GROUPS: VendorNavGroup[] = [
         description: 'Manage listings and inventory.',
         icon: Icons.Package,
         href: vendorRoutes.products,
+        ready: true,
       },
       {
         id: 'orders',
@@ -170,6 +171,11 @@ export function getActiveVendorNavItem(pathname: string): VendorNavItem {
   const normalized = pathname.replace(/\/+$/, '') || '/vendor'
 
   if (normalized === '/vendor') return VENDOR_NAV_ITEMS[0]
+
+  // Create/edit listing flows live under Products, not My Shop.
+  if (normalized === '/vendor/create-listing') {
+    return VENDOR_NAV_ITEMS.find((item) => item.id === 'products') ?? VENDOR_NAV_ITEMS[0]
+  }
 
   return (
     VENDOR_NAV_ITEMS.find((item) => {

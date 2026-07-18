@@ -19,6 +19,7 @@ import { listingAttributesReducer } from '~/lib/listing/listing-attributes.store
 import { listingImagesReducer } from '~/lib/listing/listing-images.store'
 import { listingMaterialsReducer } from '~/lib/listing/listing-materials.store'
 import { listingPublishReducer } from '~/lib/listing/listing-publish.store'
+import { listingBulkImportReducer } from '~/lib/listing/listing-bulk-import.store'
 import { listingVariationsReducer } from '~/lib/listing/listing-variations.store'
 import { deliveryReducer } from '~/lib/orders/delivery.store'
 import { fulfillmentReducer } from '~/lib/orders/fulfillment.store'
@@ -73,6 +74,7 @@ const appReducer = combineReducers({
   listingAttributes: listingAttributesReducer,
   listingMaterials: listingMaterialsReducer,
   listingPublish: listingPublishReducer,
+  listingBulkImport: listingBulkImportReducer,
   vendorOrders: vendorOrdersReducer,
   payment: paymentReducer,
   orderIssues: orderIssuesReducer,

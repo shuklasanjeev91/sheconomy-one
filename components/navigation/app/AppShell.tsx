@@ -14,6 +14,7 @@ import {
   isChatConversationPath,
   isChatPath,
   isCommercePath,
+  isCreateShopPath,
 } from '~/lib/routes'
 import { authViewportStyle } from '~/components/auth/auth-layout'
 import { appShellStyle, lockedAppShellStyle, meetingViewportStyle } from '~/lib/platform/viewport'
@@ -87,7 +88,8 @@ export function AppShell({ children }: AppShellProps) {
   const chromeless = useChromelessRoute()
   const authScreen = useAuthScreen()
   const compactMobileTopBar = useCompactMobileTopBar()
-  const showCommerceFooter = isDesktopWeb && isCommercePath(pathname)
+  const showCommerceFooter =
+    isDesktopWeb && isCommercePath(pathname) && !isCreateShopPath(pathname)
 
   // Chat is a true two-pane app — lock the shell so panes get a definite height.
   // Community / class / co-work / commerce use PageScroll (document on desktop web).

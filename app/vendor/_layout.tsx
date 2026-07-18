@@ -6,8 +6,6 @@ import { RequireVendorRole } from '~/components/auth/RouteGuard'
 import { Icons, ScrollView, Text, XStack, YStack } from '~/components/ui'
 import { getShadowStyle, radius } from '~/config/tokens'
 import { useAppLayout } from '~/hooks/useAppLayout'
-import { useAuth } from '~/hooks/useAuth'
-import { useProfile } from '~/hooks/useProfile'
 import { edgePanelPositionStyle, overlayBackdropStyle } from '~/lib/layout/styles'
 import { loadMyShops } from '~/lib/shop/shop.store'
 import { useAppDispatch, useAppSelector } from '~/lib/store/hooks'
@@ -27,8 +25,6 @@ export function VendorLayout() {
   const router = useRouter()
   const pathname = usePathname()
   const dispatch = useAppDispatch()
-  const { signOut } = useAuth()
-  const { profile } = useProfile()
 
   const [collapsed, setCollapsed] = useState(false)
   const [drawerOpen, setDrawerOpen] = useState(false)
@@ -50,11 +46,6 @@ export function VendorLayout() {
   function handleSelect(item: VendorNavItem) {
     setDrawerOpen(false)
     router.push(item.href)
-  }
-
-  function handleLogout() {
-    setDrawerOpen(false)
-    void signOut()
   }
 
   const desktopHeight =
@@ -102,11 +93,8 @@ export function VendorLayout() {
                 activeSubId={activeSubId}
                 shopName={currentShop?.shop_name}
                 shopLogo={currentShop?.logo_url}
-                userName={profile?.full_name}
-                userSubtitle="Vendor account"
                 onSelect={handleSelect}
                 onToggleCollapse={() => setCollapsed((value) => !value)}
-                onLogout={handleLogout}
               />
             </YStack>
           ) : null}
@@ -196,11 +184,8 @@ export function VendorLayout() {
                   activeSubId={activeSubId}
                   shopName={currentShop?.shop_name}
                   shopLogo={currentShop?.logo_url}
-                  userName={profile?.full_name}
-                  userSubtitle="Vendor account"
                   onSelect={handleSelect}
                   onClose={() => setDrawerOpen(false)}
-                  onLogout={handleLogout}
                 />
               </YStack>
             </YStack>

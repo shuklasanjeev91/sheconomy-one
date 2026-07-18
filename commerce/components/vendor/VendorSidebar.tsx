@@ -17,12 +17,9 @@ type VendorSidebarProps = {
   activeSubId?: string
   shopName?: string | null
   shopLogo?: string | null
-  userName?: string | null
-  userSubtitle?: string | null
   onSelect: (item: VendorNavItem) => void
   onToggleCollapse?: () => void
   onClose?: () => void
-  onLogout?: () => void
 }
 
 export function VendorSidebar({
@@ -32,12 +29,9 @@ export function VendorSidebar({
   activeSubId,
   shopName,
   shopLogo,
-  userName,
-  userSubtitle,
   onSelect,
   onToggleCollapse,
   onClose,
-  onLogout,
 }: VendorSidebarProps) {
   return (
     <YStack flex={1} minHeight={0}>
@@ -135,52 +129,8 @@ export function VendorSidebar({
         </YStack>
       </ScrollView>
 
-      {/* Footer: user card + collapse + logout */}
-      <YStack borderTopWidth={1} borderTopColor={ui.borderSubtle} padding={collapsed ? '$2' : '$3'} gap="$2">
-        <XStack
-          alignItems="center"
-          gap="$2.5"
-          padding="$2"
-          borderRadius={radius.chip}
-          justifyContent={collapsed ? 'center' : 'flex-start'}
-        >
-          <Avatar size="$3" name={userName ?? 'Vendor'} />
-          {!collapsed ? (
-            <YStack flex={1} minWidth={0}>
-              <Text fontSize={13} fontWeight="700" color={ui.text} numberOfLines={1}>
-                {userName || 'Vendor'}
-              </Text>
-              <Text fontSize={11} color={ui.textMuted} numberOfLines={1}>
-                {userSubtitle || 'Signed in'}
-              </Text>
-            </YStack>
-          ) : null}
-        </XStack>
-
-        {onLogout ? (
-          <XStack
-            alignItems="center"
-            justifyContent={collapsed ? 'center' : 'flex-start'}
-            gap="$2.5"
-            paddingVertical="$2"
-            paddingHorizontal={collapsed ? 0 : '$2'}
-            borderRadius={radius.chip}
-            cursor="pointer"
-            animation="quick"
-            hoverStyle={{ backgroundColor: ui.surfaceMuted }}
-            pressStyle={{ opacity: 0.8 }}
-            onPress={onLogout}
-          >
-            <Icons.LogOut size={18} color={ui.textSecondary} />
-            {!collapsed ? (
-              <Text fontSize={13} fontWeight="600" color={ui.textSecondary}>
-                Log out
-              </Text>
-            ) : null}
-          </XStack>
-        ) : null}
-
-        {onToggleCollapse ? (
+      {onToggleCollapse ? (
+        <YStack borderTopWidth={1} borderTopColor={ui.borderSubtle} padding={collapsed ? '$2' : '$3'}>
           <XStack
             alignItems="center"
             justifyContent={collapsed ? 'center' : 'flex-start'}
@@ -204,8 +154,8 @@ export function VendorSidebar({
               </>
             )}
           </XStack>
-        ) : null}
-      </YStack>
+        </YStack>
+      ) : null}
     </YStack>
   )
 }

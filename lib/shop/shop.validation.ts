@@ -1,12 +1,16 @@
 import { z } from 'zod'
 
+import { DEFAULT_COUNTRY } from '~/lib/phone/countries'
+import {
+  parseE164Phone,
+  validateNationalPhone,
+} from '~/lib/phone/phone'
 import {
   compose,
   email as emailValidator,
   maxLength,
   minLength,
   optionalUrl,
-  pattern,
   required,
   type Validator,
 } from '~/lib/validation'
@@ -20,8 +24,6 @@ import {
 
 // ============= SHARED PRIMITIVES =============
 
-/** E.164 phone format, e.g. +919876543210. */
-const PHONE_E164_REGEX = /^\+[1-9]\d{6,14}$/
 /** Simple but strict-enough email format. */
 const EMAIL_REGEX = /^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}$/
 /** URL that must include an http(s) scheme. */
@@ -31,6 +33,24 @@ const SUPPORTED_CURRENCY_CODES = SUPPORTED_CURRENCIES.map((currency) => currency
 
 function isSupportedCurrency(code: string): boolean {
   return SUPPORTED_CURRENCY_CODES.includes(code as (typeof SUPPORTED_CURRENCY_CODES)[number])
+}
+
+/** Country-aware phone validation — matches auth sign-in rules (E.164 in storage). */
+export function validateShopPhoneNumber(value: string): string | null {
+  const trimmed = value.trim()
+  if (!trimmed) return null
+
+  if (trimmed.startsWith('+')) {
+    const parsed = parseE164Phone(trimmed)
+    if (!parsed) {
+      return 'Please enter a valid phone number with country code.'
+    }
+    const result = validateNationalPhone(parsed.nationalNumber, parsed.country)
+    return result.ok ? null : result.error
+  }
+
+  const result = validateNationalPhone(trimmed, DEFAULT_COUNTRY)
+  return result.ok ? null : result.error
 }
 
 // ============= FIELD VALIDATORS (for `useFormValidation`) =============
@@ -60,10 +80,7 @@ export const shopEmailValidator: Validator = compose(
   maxLength(SHOP_VALIDATION.EMAIL.MAX_LENGTH, 'Email address is too long.'),
 )
 
-export const shopPhoneValidator: Validator = pattern(
-  PHONE_E164_REGEX,
-  'Please enter a valid phone number with country code (e.g., +919876543210).',
-)
+export const shopPhoneValidator: Validator = (value: string) => validateShopPhoneNumber(value)
 
 export const websiteUrlValidator: Validator = optionalUrl(
   'Please enter a valid URL starting with http:// or https://.',
@@ -98,10 +115,13 @@ export function validateShopField(
 const phoneSchema = z
   .string()
   .trim()
-  .refine(
-    (val) => !val || PHONE_E164_REGEX.test(val),
-    'Please enter a valid phone number with country code (e.g., +919876543210).',
-  )
+  .superRefine((val, ctx) => {
+    if (!val) return
+    const error = validateShopPhoneNumber(val)
+    if (error) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, message: error })
+    }
+  })
   .optional()
   .default('')
 
