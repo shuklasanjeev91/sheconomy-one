@@ -20,6 +20,7 @@ import { useAppLayout } from '~/hooks/useAppLayout'
 import { chatRoutes } from '~/lib/routes'
 import { supportsLiveKitVideo } from '~/lib/platform/capabilities'
 import { meetingViewportStyle } from '~/lib/platform/viewport'
+import { brandColors } from '~/config/brand-colors'
 import { supabase } from '~/lib/supabase/client'
 
 type ChatCallScreenProps = {
@@ -28,7 +29,7 @@ type ChatCallScreenProps = {
   callId?: string
 }
 
-const ACCEPT = '#25d366'
+const ACCEPT = brandColors.primary
 const DECLINE = '#f2385a'
 const MUTED = '#4a3a42'
 const SURFACE = '#0f0a0d'

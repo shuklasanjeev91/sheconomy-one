@@ -54,8 +54,9 @@ function useExploreTiles(): MenuTile[] {
  */
 function useUtilityTiles(): MenuTile[] {
   const { isAuthenticated } = useProfile()
+  const ui = useAppUi()
   if (!isAuthenticated) {
-    return [{ label: 'Sign in', icon: Icons.LogIn, href: routes.signIn, color: '#0a66c2' }]
+    return [{ label: 'Sign in', icon: Icons.LogIn, href: routes.signIn, color: ui.brand }]
   }
   return []
 }

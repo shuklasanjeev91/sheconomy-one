@@ -25,31 +25,31 @@ export type CommunityUiTokens = {
 }
 
 const communityUiLight: CommunityUiTokens = {
-  brand: '#0a66c2',
-  brandHover: '#004182',
-  brandLight: '#70b5f9',
-  pageBg: '#f4f2f0',
+  brand: brandColors.primary,
+  brandHover: brandColors.primaryDark,
+  brandLight: brandColors.primaryLight,
+  pageBg: sheconomyLight.sheconomy2,
   cardBg: '#ffffff',
-  border: '#e8e4e6',
-  borderLight: '#f0ecef',
+  border: sheconomyLight.sheconomy5,
+  borderLight: sheconomyLight.sheconomy4,
   text: 'rgba(0,0,0,0.9)',
   textMuted: 'rgba(0,0,0,0.6)',
   textSubtle: 'rgba(0,0,0,0.45)',
   divider: 'rgba(0,0,0,0.08)',
-  bannerGradient: 'linear-gradient(180deg, #004182 0%, #0a66c2 100%)',
+  bannerGradient: `linear-gradient(180deg, ${brandColors.primaryDark} 0%, ${brandColors.primary} 100%)`,
   cardRadius: 18,
   cardShadow: '0 1px 2px rgba(208, 16, 96, 0.04), 0 8px 24px rgba(16, 12, 14, 0.06)',
   reactionBarShadow: '0 12px 32px rgba(16, 12, 14, 0.12), 0 0 0 1px rgba(0,0,0,0.04)',
   inputBg: '#ffffff',
   inputBorder: '#c8c8c8',
   hoverBg: 'rgba(0,0,0,0.04)',
-  accentMuted: 'rgba(10, 102, 194, 0.1)',
+  accentMuted: 'rgba(208, 16, 96, 0.1)',
 }
 
 const communityUiDark: CommunityUiTokens = {
-  brand: '#8ec5f7',
-  brandHover: '#b3d9fb',
-  brandLight: brandColors.primaryLight,
+  brand: brandColors.primaryLight,
+  brandHover: '#f6639e',
+  brandLight: '#f6639e',
   pageBg: sheconomyDark.sheconomy1,
   cardBg: sheconomyDark.sheconomy3,
   border: sheconomyDark.sheconomy6,
@@ -65,7 +65,7 @@ const communityUiDark: CommunityUiTokens = {
   inputBg: sheconomyDark.sheconomy4,
   inputBorder: sheconomyDark.sheconomy7,
   hoverBg: sheconomyDark.sheconomy5,
-  accentMuted: 'rgba(142, 197, 247, 0.14)',
+  accentMuted: 'rgba(232, 56, 112, 0.14)',
 }
 
 export function getCommunityUi(scheme: 'light' | 'dark'): CommunityUiTokens {

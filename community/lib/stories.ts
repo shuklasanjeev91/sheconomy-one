@@ -1,5 +1,6 @@
 import { createDirectConversation, sendMessage } from '~/chat/lib/chats'
 import { refreshStories } from '~/community/lib/story-refresh'
+import { brandColors } from '~/config/brand-colors'
 import { STORAGE_BUCKETS } from '~/lib/supabase/storage-upload'
 import { supabase } from '~/lib/supabase/client'
 
@@ -153,7 +154,7 @@ export async function createStory(
       media_type: input.mediaType,
       content: input.content ?? null,
       media_url: input.mediaUrl ?? null,
-      background_color: input.backgroundColor ?? '#0a66c2',
+      background_color: input.backgroundColor ?? brandColors.primary,
       text_color: input.textColor ?? '#ffffff',
       is_active: true,
       expires_at: expiresAt,

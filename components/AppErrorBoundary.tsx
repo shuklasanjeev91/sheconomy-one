@@ -1,4 +1,4 @@
-import { Component, type ErrorInfo, type ReactNode } from 'react'
+import { Component, Fragment, type ErrorInfo, type ReactNode } from 'react'
 import { Platform } from 'react-native'
 
 import { Button, Text, XStack, YStack } from '~/components/ui'
@@ -15,6 +15,8 @@ type Props = {
 type State = {
   error: Error | null
   supportRef: string | null
+  /** Bumps to remount children after a recoverable DOM mutation error. */
+  remountKey: number
 }
 
 function buildSupportRef(scope?: string) {
@@ -23,14 +25,37 @@ function buildSupportRef(scope?: string) {
   return `${scopePart}-${stamp}`
 }
 
-export class AppErrorBoundary extends Component<Props, State> {
-  state: State = { error: null, supportRef: null }
+/** Browser translation / portal teardown can orphan nodes React still tries to remove. */
+function isBenignDomMutationError(error: Error) {
+  const message = error.message ?? ''
+  return (
+    error.name === 'NotFoundError' ||
+    /Failed to execute '(removeChild|insertBefore)' on 'Node'/i.test(message) ||
+    /The node to be removed is not a child of this node/i.test(message)
+  )
+}
 
-  static getDerivedStateFromError(error: Error): Partial<State> {
+export class AppErrorBoundary extends Component<Props, State> {
+  state: State = { error: null, supportRef: null, remountKey: 0 }
+
+  static getDerivedStateFromError(error: Error): Partial<State> | null {
+    if (Platform.OS === 'web' && isBenignDomMutationError(error)) {
+      return { error: null, supportRef: null, remountKey: Date.now() }
+    }
     return { error, supportRef: buildSupportRef() }
   }
 
   componentDidCatch(error: Error, info: ErrorInfo) {
+    if (Platform.OS === 'web' && isBenignDomMutationError(error)) {
+      logger.warn('Recovered from benign DOM mutation error', {
+        scope: this.props.scope,
+        message: error.message,
+        componentStack: info.componentStack,
+        platform: Platform.OS,
+      })
+      return
+    }
+
     const supportRef = this.state.supportRef ?? buildSupportRef(this.props.scope)
     if (!this.state.supportRef) {
       this.setState({ supportRef })
@@ -46,11 +71,11 @@ export class AppErrorBoundary extends Component<Props, State> {
   }
 
   private handleRetry = () => {
-    this.setState({ error: null, supportRef: null })
+    this.setState({ error: null, supportRef: null, remountKey: Date.now() })
   }
 
   private handleGoHome = () => {
-    this.setState({ error: null, supportRef: null })
+    this.setState({ error: null, supportRef: null, remountKey: Date.now() })
     try {
       replaceApp(appRoutes.home)
     } catch {
@@ -71,7 +96,9 @@ export class AppErrorBoundary extends Component<Props, State> {
   }
 
   render() {
-    if (!this.state.error) return this.props.children
+    if (!this.state.error) {
+      return <Fragment key={this.state.remountKey}>{this.props.children}</Fragment>
+    }
 
     const isDev = typeof __DEV__ !== 'undefined' ? __DEV__ : process.env.NODE_ENV !== 'production'
     const supportRef = this.state.supportRef ?? 'UNKNOWN'
@@ -115,8 +142,8 @@ export class AppErrorBoundary extends Component<Props, State> {
             fontWeight="700"
             selectable
             onPress={() => void this.handleCopyRef()}
-            accessibilityRole="button"
-            accessibilityLabel={`Copy support reference ${supportRef}`}
+            role="button"
+            aria-label={`Copy support reference ${supportRef}`}
           >
             {supportRef}
           </Text>

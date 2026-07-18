@@ -160,7 +160,7 @@ function FooterSocial({
         void openExternalUrl(href)
       }}
     >
-      <Icon size={18} color={ui.text} />
+      <Icon size={18} color={ui.brand} />
     </XStack>
   )
 }

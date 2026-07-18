@@ -77,9 +77,10 @@ export function FavoriteButton({ listingId, size = 18 }: FavoriteButtonProps) {
             }
           })
         }}
-        accessibilityRole="button"
-        accessibilityLabel={saved ? 'Remove from wishlist' : 'Add to wishlist'}
-        accessibilityState={{ selected: saved, disabled: pending }}
+        role="button"
+        aria-label={saved ? 'Remove from wishlist' : 'Add to wishlist'}
+        aria-pressed={saved}
+        aria-disabled={pending}
         data-listing-id={listingId}
       >
         <Icons.Heart
@@ -88,11 +89,13 @@ export function FavoriteButton({ listingId, size = 18 }: FavoriteButtonProps) {
           fill={saved ? ui.brand : 'transparent'}
         />
       </XStack>
-      <WishlistMoveSheet
-        open={moveOpen}
-        listingId={listingId}
-        onOpenChange={setMoveOpen}
-      />
+      {moveOpen ? (
+        <WishlistMoveSheet
+          open={moveOpen}
+          listingId={listingId}
+          onOpenChange={setMoveOpen}
+        />
+      ) : null}
     </>
   )
 }

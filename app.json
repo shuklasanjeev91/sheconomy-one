@@ -84,7 +84,7 @@
     "splash": {
       "image": "./public/splash.png",
       "resizeMode": "contain",
-      "backgroundColor": "#000000"
+      "backgroundColor": "#FEF5F9"
     },
     "ios": {
       "bundleIdentifier": "com.sheconomy.ecommerce",

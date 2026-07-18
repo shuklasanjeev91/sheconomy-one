@@ -54,7 +54,7 @@ export function FeedComposer() {
 
         <YStack borderTopWidth={1} borderTopColor={communityUi.borderLight} paddingTop={8}>
           <HorizontalScrollRow gap={0}>
-            <ComposerAction icon={Icons.Image} label="Photo" color="#70b5f9" onPress={() => compose({ media: true })} />
+            <ComposerAction icon={Icons.Image} label="Photo" color={communityUi.brandLight} onPress={() => compose({ media: true })} />
             <ComposerAction icon={Icons.Video} label="Video" color="#e74c3c" onPress={() => compose({ video: true })} />
             <ComposerAction icon={Icons.Calendar} label="Event" color="#e7a33e" onPress={() => compose({ mode: 'event' })} />
             <ComposerAction
@@ -66,7 +66,7 @@ export function FeedComposer() {
             <ComposerAction
               icon={Icons.Newspaper}
               label="Article"
-              color="#0a66c2"
+              color={communityUi.brand}
               onPress={() => compose({ mode: 'article' })}
             />
             <ComposerAction icon={Icons.BarChart2} label="Poll" color="#7fc15e" onPress={() => compose({ mode: 'poll' })} />

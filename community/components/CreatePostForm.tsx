@@ -1487,7 +1487,7 @@ export function CreatePostForm({
         <YStack gap={4}>
           <MoreOptionRow
             icon={Icons.Newspaper}
-            tint="#0a66c2"
+            tint={communityUi.brand}
             title="Write an article"
             description="Long-form thought leadership for your network"
             onPress={() => {
@@ -1519,7 +1519,7 @@ export function CreatePostForm({
           />
           <MoreOptionRow
             icon={Icons.Tag}
-            tint="#0a66c2"
+            tint={communityUi.brand}
             title="Share a product"
             description="Feature a listing from your shop"
             onPress={() => {

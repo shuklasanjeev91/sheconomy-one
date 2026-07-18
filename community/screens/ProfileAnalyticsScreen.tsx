@@ -82,7 +82,7 @@ export function ProfileAnalyticsScreen() {
             <StatChip
               label="Unique viewers"
               value={analytics?.uniqueViewersCount ?? 0}
-              color="#0a66c2"
+              color={communityUi.brand}
             />
             <StatChip
               label="Engagement"

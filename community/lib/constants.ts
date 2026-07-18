@@ -1,12 +1,21 @@
-export const BRAND_BLUE = '#0a66c2'
-export const INSTAGRAM_GRADIENT = 'linear-gradient(45deg, #f58529, #dd2a7b, #8134af)'
+import { brandColors, sheconomyLight } from '~/config/brand-colors'
+
+/** Brand story / marketing gradient (replaces Instagram-style ring). */
+export const BRAND_STORY_GRADIENT = `linear-gradient(45deg, ${brandColors.coral}, ${brandColors.primary}, ${brandColors.primaryDark})`
+
+/** @deprecated Use `BRAND_STORY_GRADIENT`. */
+export const INSTAGRAM_GRADIENT = BRAND_STORY_GRADIENT
+
+/** @deprecated Prefer `brandColors.primary` or `useCommunityUi().brand`. */
+export const BRAND_BLUE = brandColors.primary
 
 export const REACTION_TYPES = [
-  { type: 'like', label: 'Like', emoji: '👍', color: '#0a66c2' },
-  { type: 'celebrate', label: 'Celebrate', emoji: '👏', color: '#44712e' },
-  { type: 'love', label: 'Love', emoji: '❤️', color: '#df704d' },
-  { type: 'insightful', label: 'Insightful', emoji: '💡', color: '#f5b800' },
-  { type: 'funny', label: 'Funny', emoji: '😂', color: '#57c5ce' },
+  { type: 'like', label: 'Like', emoji: '👍', color: brandColors.primary },
+  { type: 'celebrate', label: 'Celebrate', emoji: '👏', color: brandColors.coral },
+  { type: 'love', label: 'Love', emoji: '❤️', color: brandColors.primaryLight },
+  { type: 'insightful', label: 'Insightful', emoji: '💡', color: sheconomyLight.sheconomy8 },
+  { type: 'funny', label: 'Funny', emoji: '😂', color: brandColors.primaryDark },
 ] as const
 
 export type ReactionType = (typeof REACTION_TYPES)[number]['type']
+

@@ -23,12 +23,21 @@ import { uploadPostImages, uploadPostVideos } from '~/lib/supabase/storage-uploa
 import { useFormDraft } from '~/hooks/useFormDraft'
 import { useUnsavedChangesGuard } from '~/hooks/useUnsavedChangesGuard'
 import { useUploadProgress } from '~/hooks/useUploadProgress'
+import { brandColors } from '~/config/brand-colors'
 import { communityRoutes } from '~/lib/routes'
 import { useSupabase } from '~/providers/SupabaseProvider'
 
 const STORY_DRAFT_KEY = 'community-story-caption'
 
-const BG_COLORS = ['#0a66c2', '#e41e3f', '#42b72a', '#8b5cf6', '#e67e22', '#111827']
+/** Lead with brand primary; remaining swatches stay on the SHEconomy palette. */
+const BG_COLORS = [
+  brandColors.primary,
+  brandColors.primaryDark,
+  brandColors.coral,
+  brandColors.primaryLight,
+  brandColors.roseSurface,
+  '#1a0a12',
+]
 
 export function StoryComposerScreen() {
   const communityUi = useCommunityUi()

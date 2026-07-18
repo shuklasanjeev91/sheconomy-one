@@ -59,7 +59,7 @@ export const MobileTabBarItem = forwardRef<
       animation="quick"
       pressStyle={{ opacity: 0.82, scale: 0.97 }}
       onPress={onPress}
-      accessibilityLabel={accessibilityLabel ?? label}
+      aria-label={accessibilityLabel ?? label}
       role="tab"
       aria-selected={isFocused}
     >

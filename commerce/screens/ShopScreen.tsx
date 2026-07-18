@@ -261,7 +261,7 @@ export function ShopScreen(props: { initial?: ShopLoaderResult | null } = {}) {
                 paddingHorizontal="$3"
                 paddingVertical="$3"
                 borderBottomWidth={2}
-                borderBottomColor={active ? '#E47911' : 'transparent'}
+                borderBottomColor={active ? ui.brand : 'transparent'}
                 cursor="pointer"
                 onPress={() => setTab(item.id)}
                 hoverStyle={{ opacity: 0.85 }}

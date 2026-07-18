@@ -108,7 +108,17 @@ export default function ListingDetailScreen() {
   const toast = useAppToast()
   const router = useRouter()
   const media = useMedia()
-  const isDesktop = media.gtMd
+  /**
+   * SSR always paints the mobile tree (`gtMd` defaults false). Switching to the
+   * desktop tree on the first client media update unmounts portal hosts
+   * (ShareSheet / MediaLightbox) mid-reconcile and can throw removeChild.
+   * Wait until after mount before allowing the desktop branch.
+   */
+  const [layoutReady, setLayoutReady] = useState(false)
+  useEffect(() => {
+    setLayoutReady(true)
+  }, [])
+  const isDesktop = layoutReady && media.gtMd
 
   usePageSeo(
     useMemo(() => {
@@ -138,6 +148,10 @@ export default function ListingDetailScreen() {
   const [returnPolicy, setReturnPolicy] = useState<ListingReturnPolicy | null>(null)
   const variationGroups = useMemo(() => groupListingVariations(variations), [variations])
   const [variantSelection, setVariantSelection] = useState<Record<string, string>>({})
+
+  useEffect(() => {
+    setGalleryLightboxOpen(false)
+  }, [isDesktop])
 
   useEffect(() => {
     setVariantSelection(getDefaultVariantSelection(variationGroups))

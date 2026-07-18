@@ -14,6 +14,7 @@ import { AppLink } from '~/components/navigation/AppLink'
 import { useProfileDetails } from '~/community/hooks/useProfileDetails'
 import { useUserActivity } from '~/community/hooks/useUserActivity'
 import { BRAND_BLUE } from '~/community/lib/constants'
+import { brandColors } from '~/config/brand-colors'
 import type { CommunityPost } from '~/community/lib/community'
 import {
   parseCreatorMode,
@@ -1220,7 +1221,7 @@ function CoverBanner({
           style={
             Platform.OS === 'web'
               ? {
-                  background: 'linear-gradient(135deg, #004182 0%, #0a66c2 50%, #378fe9 100%)',
+                  background: `linear-gradient(135deg, ${brandColors.primaryDark} 0%, ${brandColors.primary} 50%, ${brandColors.primaryLight} 100%)`,
                 }
               : { backgroundColor: BRAND_BLUE }
           }

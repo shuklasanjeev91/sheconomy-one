@@ -3,6 +3,7 @@ import { AppLink } from '~/components/navigation/AppLink'
 import { suggestionKindLabel } from '~/community/lib/community-personalization'
 import { useCommunityUi } from '~/community/lib/community-theme'
 import { Avatar, Icons, Text, XStack, YStack } from '~/components/ui'
+import { brandColors } from '~/config/brand-colors'
 
 const KIND_ICON: Record<SuggestionKind, typeof Icons.User> = {
   person: Icons.User,
@@ -15,13 +16,13 @@ const KIND_ICON: Record<SuggestionKind, typeof Icons.User> = {
 }
 
 const KIND_COLOR: Record<SuggestionKind, string> = {
-  person: '#1877f2',
-  listing: '#f02849',
-  shop: '#42b72a',
-  company: '#0a66c2',
-  group: '#14b8a6',
-  job: '#e67e22',
-  event: '#8b5cf6',
+  person: brandColors.primary,
+  listing: brandColors.primaryLight,
+  shop: brandColors.coral,
+  company: brandColors.primaryDark,
+  group: brandColors.coral,
+  job: brandColors.coral,
+  event: brandColors.primaryLight,
 }
 
 export function CommunitySuggestionRow({

@@ -3,9 +3,10 @@ import { AppLink, pressNavigate } from '~/components/navigation/AppLink'
 import { LinearGradient } from 'expo-linear-gradient'
 
 import { useStoryRings } from '~/community/hooks/useStories'
-import { BRAND_BLUE } from '~/community/lib/constants'
+import { BRAND_BLUE, BRAND_STORY_GRADIENT } from '~/community/lib/constants'
 import { useCommunityUi } from '~/community/lib/community-theme'
 import { Avatar, Icons, Spinner, Text, XStack, YStack } from '~/components/ui'
+import { brandColors } from '~/config/brand-colors'
 import { communityRoutes } from '~/lib/routes'
 import { useProfile } from '~/hooks/useProfile'
 
@@ -128,7 +129,7 @@ export function StoriesStrip() {
   )
 }
 
-const STORY_RING_COLORS = ['#f58529', '#dd2a7b', '#8134af'] as const
+const STORY_RING_COLORS = [brandColors.coral, brandColors.primary, brandColors.primaryDark] as const
 
 function StoryRingAvatar({
   name,
@@ -162,7 +163,7 @@ function StoryRingAvatar({
       <YStack
         padding={2}
         borderRadius={999}
-        style={{ background: 'linear-gradient(45deg, #f58529, #dd2a7b, #8134af)' }}
+        style={{ background: BRAND_STORY_GRADIENT }}
       >
         {inner}
       </YStack>

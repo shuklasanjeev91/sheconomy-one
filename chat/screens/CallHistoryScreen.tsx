@@ -22,7 +22,7 @@ function CallDirectionIcon({ entry, color }: { entry: CallHistoryEntry; color: s
     return <Icons.PhoneMissed size={15} color={missedColor} />
   }
   if (entry.direction === 'incoming') {
-    return <Icons.PhoneIncoming size={15} color="#25d366" />
+    return <Icons.PhoneIncoming size={15} color={color} />
   }
   return <Icons.PhoneOutgoing size={15} color={color} />
 }
@@ -202,7 +202,7 @@ export function CallHistoryScreen() {
                     {entry.peerName}
                   </Text>
                   <XStack alignItems="center" gap={5}>
-                    <CallDirectionIcon entry={entry} color={theme.textMuted} />
+                    <CallDirectionIcon entry={entry} color={theme.brand} />
                     <Text fontSize={13} color={theme.textMuted} numberOfLines={1}>
                       {callSubtitle(entry)}
                     </Text>
