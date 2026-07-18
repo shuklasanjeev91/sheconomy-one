@@ -3,46 +3,6 @@
  * (SHEPay → PayU Hosted bridge vs seller-direct gateway).
  */
 
-/** Amazon-style instruments shown on checkout (SHEPay → PayU `pg`). */
-export type CheckoutPaymentInstrument = 'upi' | 'card' | 'netbanking' | 'wallet'
-
-export const CHECKOUT_PAYMENT_INSTRUMENTS: ReadonlyArray<{
-  id: CheckoutPaymentInstrument
-  title: string
-  subtitle: string
-  /** PayU `_payment` `pg` value for Hosted / preferred mode. */
-  payuPg: string
-}> = [
-  {
-    id: 'upi',
-    title: 'UPI',
-    subtitle: 'Google Pay, PhonePe, Paytm & other UPI apps',
-    payuPg: 'UPI',
-  },
-  {
-    id: 'card',
-    title: 'Credit / Debit card',
-    subtitle: 'Visa, Mastercard, RuPay & more',
-    payuPg: 'CC',
-  },
-  {
-    id: 'netbanking',
-    title: 'Net banking',
-    subtitle: 'All major banks',
-    payuPg: 'NB',
-  },
-  {
-    id: 'wallet',
-    title: 'Wallets',
-    subtitle: 'Paytm, Amazon Pay & other wallets',
-    payuPg: 'CASH',
-  },
-]
-
-export function payuPgForInstrument(instrument: CheckoutPaymentInstrument): string {
-  return CHECKOUT_PAYMENT_INSTRUMENTS.find((row) => row.id === instrument)?.payuPg ?? 'CC'
-}
-
 export type OnlinePaymentCopy = {
   title: string
   subtitle: string
@@ -54,7 +14,7 @@ export type DirectPaymentShop = {
   gateway: string
 }
 
-/** Buyer-facing online radio label from who collects payment (seller-direct only carts). */
+/** Buyer-facing online radio label from who collects payment. */
 export function onlinePaymentOptionCopy(input: {
   shepayShops: { shopName: string }[]
   directShops: DirectPaymentShop[]
@@ -78,8 +38,8 @@ export function onlinePaymentOptionCopy(input: {
 
   if (hasShepay && !hasDirect) {
     return {
-      title: 'Pay online with SHEPay',
-      subtitle: "You'll complete payment securely on PayU",
+      title: 'Pay online',
+      subtitle: 'UPI, cards, net banking & wallets on the next secure PayU page',
     }
   }
 
@@ -87,17 +47,6 @@ export function onlinePaymentOptionCopy(input: {
     title: 'Pay online',
     subtitle: 'SHEPay (PayU) for some shops · pay other sellers via their own gateway',
   }
-}
-
-/**
- * Show Amazon-style UPI / card / NB / wallet when SHEPay is in the cart
- * (or when there is no seller-direct-only path).
- */
-export function shouldShowCheckoutInstruments(input: {
-  shepayShops: unknown[]
-  directShops: unknown[]
-}): boolean {
-  return input.shepayShops.length > 0
 }
 
 /** Shipping line for a shop: connected partner label or SHEDelivery default. */

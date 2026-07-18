@@ -42,23 +42,12 @@ import {
 } from '~/commerce/lib/checkout'
 import { ensureShepayCheckoutUrl } from '~/commerce/lib/shepay'
 import {
-  CHECKOUT_PAYMENT_INSTRUMENTS,
   checkoutShippingLabel,
   onlinePaymentOptionCopy,
-  payuPgForInstrument,
   resolvePostCheckoutNext,
-  shouldShowCheckoutInstruments,
-  type CheckoutPaymentInstrument,
 } from '~/commerce/lib/checkout-payment-route'
 import { savePendingOrderSuccess } from '~/commerce/lib/customer-orders'
 import { computeSelectedTotals, useCartSelection } from '~/commerce/lib/cart-selection'
-import { fetchBuyerPaymentMethods } from '~/commerce/lib/buyer-account'
-import {
-  parsePaymentMethod,
-  paymentMethodSubtitle,
-  paymentMethodTitle,
-  type ParsedPaymentMethod,
-} from '~/commerce/lib/payment-methods'
 import { cartRequiresShipping, fetchListingTypesByIds } from '~/commerce/lib/listing-fulfillment'
 import { paymentCollectionFor } from '~/commerce/lib/shop-commerce'
 import { deliveryEstimateLabel } from '~/commerce/lib/delivery-estimate'
@@ -115,9 +104,6 @@ export function CheckoutScreen() {
   const [notesByShop, setNotesByShop] = useState<Record<string, string>>({})
   const [giftByShop, setGiftByShop] = useState<Record<string, boolean>>({})
   const [paymentMethod, setPaymentMethod] = useState<CheckoutPaymentMode>('online')
-  const [paymentInstrument, setPaymentInstrument] = useState<CheckoutPaymentInstrument>('upi')
-  const [savedPaymentMethods, setSavedPaymentMethods] = useState<ParsedPaymentMethod[]>([])
-  const [selectedSavedPaymentId, setSelectedSavedPaymentId] = useState<string | null>(null)
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [orderPlaced, setOrderPlaced] = useState(false)
   const [isLoadingAddresses, setIsLoadingAddresses] = useState(true)
@@ -185,19 +171,6 @@ export function CheckoutScreen() {
       }),
     [paymentGroups],
   )
-  const showCheckoutInstruments = useMemo(
-    () =>
-      shouldShowCheckoutInstruments({
-        shepayShops: paymentGroups.shepay,
-        directShops: paymentGroups.direct,
-      }),
-    [paymentGroups],
-  )
-  const showSavedPaymentRadios =
-    paymentMethod === 'online' &&
-    savedPaymentMethods.length > 0 &&
-    paymentGroups.shepay.length === 0 &&
-    !showCheckoutInstruments
 
   useEffect(() => {
     const ids = items.map((item) => item.listing_id)
@@ -226,14 +199,6 @@ export function CheckoutScreen() {
       })
       .catch(() => toast.show('Could not load addresses', { tone: 'danger' }))
       .finally(() => setIsLoadingAddresses(false))
-
-    void fetchBuyerPaymentMethods(user.id).then(({ methods, error }) => {
-      const parsed = (methods ?? []).map(parsePaymentMethod)
-      setSavedPaymentMethods(parsed)
-      const defaultMethod = parsed.find((method) => method.is_default) ?? parsed[0] ?? null
-      setSelectedSavedPaymentId(defaultMethod?.id ?? null)
-      if (error) toast.show('Could not load payment methods', { tone: 'danger', message: error })
-    })
   }, [isAuthenticated, toast, user])
 
   if (!isAuthenticated) {
@@ -377,7 +342,6 @@ export function CheckoutScreen() {
       if (mode === 'online' && hasShepaySteps && !checkoutUrl) {
         const shepay = await ensureShepayCheckoutUrl(result.data.paymentSteps, {
           paymentMethodId: null,
-          payuPg: payuPgForInstrument(paymentInstrument),
         })
         shepayError = shepay.error
         checkoutUrl = shepay.checkoutUrl
@@ -795,7 +759,7 @@ export function CheckoutScreen() {
                         title="SHEPay (PayU hosted)"
                         detail={`${paymentGroups.shepay
                           .map((shop) => shop.shopName)
-                          .join(', ')} · card, UPI, net banking on PayU`}
+                          .join(', ')} · choose UPI, card, or net banking on PayU`}
                       />
                     ) : null}
                     {paymentGroups.direct.map((group) => (
@@ -822,63 +786,12 @@ export function CheckoutScreen() {
                     </Text>
                   </XStack>
                 ) : null}
-                {showCheckoutInstruments && paymentMethod === 'online' ? (
-                  <YStack gap="$2">
-                    {CHECKOUT_PAYMENT_INSTRUMENTS.map((instrument) => (
-                      <PaymentOption
-                        key={instrument.id}
-                        selected={paymentInstrument === instrument.id}
-                        title={instrument.title}
-                        subtitle={
-                          paymentGroups.direct.length
-                            ? `${instrument.subtitle} · then pay seller gateways if needed`
-                            : `${instrument.subtitle} · secured by SHEPay (PayU)`
-                        }
-                        onPress={() => {
-                          setPaymentMethod('online')
-                          setPaymentInstrument(instrument.id)
-                        }}
-                      />
-                    ))}
-                  </YStack>
-                ) : (
-                  <PaymentOption
-                    selected={paymentMethod === 'online'}
-                    title={onlineCopy.title}
-                    subtitle={onlineCopy.subtitle}
-                    onPress={() => setPaymentMethod('online')}
-                  />
-                )}
-                {showSavedPaymentRadios ? (
-                  <YStack gap="$2" paddingLeft="$6">
-                    {savedPaymentMethods.map((method) => {
-                      const selected = selectedSavedPaymentId === method.id
-                      return (
-                        <XStack
-                          key={method.id}
-                          gap="$3"
-                          alignItems="center"
-                          padding="$2.5"
-                          borderRadius={10}
-                          borderWidth={1}
-                          borderColor={selected ? c.brand : c.border}
-                          cursor="pointer"
-                          onPress={() => setSelectedSavedPaymentId(method.id)}
-                        >
-                          <CommerceRadio selected={selected} size={16} />
-                          <YStack flex={1} minWidth={0}>
-                            <Text fontSize={13} fontWeight="600" color={c.text} numberOfLines={1}>
-                              {paymentMethodTitle(method)}
-                            </Text>
-                            <Text fontSize={12} color={c.secondary} numberOfLines={1}>
-                              {paymentMethodSubtitle(method)}
-                            </Text>
-                          </YStack>
-                        </XStack>
-                      )
-                    })}
-                  </YStack>
-                ) : null}
+                <PaymentOption
+                  selected={paymentMethod === 'online'}
+                  title={onlineCopy.title}
+                  subtitle={onlineCopy.subtitle}
+                  onPress={() => setPaymentMethod('online')}
+                />
 
                 {needsShipping ? (
                   <PaymentOption
@@ -888,12 +801,6 @@ export function CheckoutScreen() {
                     onPress={() => setPaymentMethod('cod')}
                   />
                 ) : null}
-
-                <AppLink href={commerceRoutes.paymentMethods} asChild>
-                  <Text fontSize={13} color={c.link} cursor="pointer" paddingTop="$1">
-                    Manage payment methods
-                  </Text>
-                </AppLink>
               </SectionCard>
 
               <SectionCard step={3} title="Review your order">

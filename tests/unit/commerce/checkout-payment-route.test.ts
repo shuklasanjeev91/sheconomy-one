@@ -4,9 +4,7 @@ import {
   checkoutShippingLabel,
   isAppPayUBridgeUrl,
   onlinePaymentOptionCopy,
-  payuPgForInstrument,
   resolvePostCheckoutNext,
-  shouldShowCheckoutInstruments,
   toInAppPayUHref,
 } from '~/commerce/lib/checkout-payment-route'
 
@@ -28,7 +26,7 @@ describe('onlinePaymentOptionCopy', () => {
       shepayShops: [{ shopName: 'Platform Shop' }],
       directShops: [],
     })
-    expect(copy.title).toBe('Pay online with SHEPay')
+    expect(copy.title).toBe('Pay online')
     expect(copy.subtitle.toLowerCase()).toContain('payu')
   })
 
@@ -46,35 +44,6 @@ describe('checkoutShippingLabel', () => {
   it('defaults to SHEDelivery', () => {
     expect(checkoutShippingLabel(null)).toBe('SHEDelivery')
     expect(checkoutShippingLabel({ shippingLabel: 'Shiprocket' })).toBe('Shiprocket')
-  })
-})
-
-describe('shouldShowCheckoutInstruments', () => {
-  it('shows Amazon-style instruments when SHEPay shops are present', () => {
-    expect(
-      shouldShowCheckoutInstruments({
-        shepayShops: [{ shopName: 'A' }],
-        directShops: [],
-      }),
-    ).toBe(true)
-  })
-
-  it('hides instruments for seller-direct-only carts', () => {
-    expect(
-      shouldShowCheckoutInstruments({
-        shepayShops: [],
-        directShops: [{ shopId: '1' }],
-      }),
-    ).toBe(false)
-  })
-})
-
-describe('payuPgForInstrument', () => {
-  it('maps checkout instruments to PayU pg codes', () => {
-    expect(payuPgForInstrument('upi')).toBe('UPI')
-    expect(payuPgForInstrument('card')).toBe('CC')
-    expect(payuPgForInstrument('netbanking')).toBe('NB')
-    expect(payuPgForInstrument('wallet')).toBe('CASH')
   })
 })
 
