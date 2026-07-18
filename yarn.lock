@@ -7844,6 +7844,15 @@ __metadata:
   languageName: node
   linkType: hard
 
+"@types/ws@npm:^8":
+  version: 8.18.1
+  resolution: "@types/ws@npm:8.18.1"
+  dependencies:
+    "@types/node": "npm:*"
+  checksum: 10/1ce05e3174dcacf28dae0e9b854ef1c9a12da44c7ed73617ab6897c5cbe4fccbb155a20be5508ae9a7dde2f83bd80f5cf3baa386b934fc4b40889ec963e94f3a
+  languageName: node
+  linkType: hard
+
 "@types/yargs-parser@npm:*":
   version: 21.0.3
   resolution: "@types/yargs-parser@npm:21.0.3"
@@ -18444,6 +18453,7 @@ __metadata:
     "@tensorflow/tfjs": "npm:^4.22.0"
     "@tensorflow/tfjs-backend-webgl": "npm:^4.22.0"
     "@types/react": "npm:^19.2.2"
+    "@types/ws": "npm:^8"
     "@vercel/analytics": "npm:^2.0.1"
     "@vercel/speed-insights": "npm:^2.0.0"
     "@vladmandic/face-api": "npm:^1.7.15"
@@ -18503,6 +18513,7 @@ __metadata:
     typescript: "npm:5.9.3"
     vite: "npm:^8.0.13"
     vitest: "npm:^3.2.4"
+    ws: "npm:^8.18.0"
     zod: "npm:^4.4.3"
   languageName: unknown
   linkType: soft
@@ -20722,6 +20733,21 @@ __metadata:
     utf-8-validate:
       optional: true
   checksum: 10/486141e4a01bb75883f9ba39317309c2427e24db1cb75e340fad6e5886b65c03d994a34209f0e4ba06dd6cb9ec95dd1b6a09c52c05eed9a34d6376f4fbbf617c
+  languageName: node
+  linkType: hard
+
+"ws@npm:^8.18.0":
+  version: 8.21.1
+  resolution: "ws@npm:8.21.1"
+  peerDependencies:
+    bufferutil: ^4.0.1
+    utf-8-validate: ">=5.0.2"
+  peerDependenciesMeta:
+    bufferutil:
+      optional: true
+    utf-8-validate:
+      optional: true
+  checksum: 10/8493bc543072763d7bacffb2282c9d7954dc5c599c9df4c2d15f91c217f63e293a33ffc70756e3f2bf8c5d85bc6069ad7d9983c382d4713c807b083ffb1b1719
   languageName: node
   linkType: hard
 

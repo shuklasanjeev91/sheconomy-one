@@ -4,6 +4,9 @@
   "private": true,
   "type": "module",
   "main": "one/metro-entry",
+  "engines": {
+    "node": "22.x"
+  },
   "scripts": {
     "eas-build-pre-install": "corepack enable",
     "postinstall": "one patch || true && node scripts/strip-datetimepicker-flow.cjs && node scripts/patch-react-native-voice-android.cjs",
@@ -111,6 +114,7 @@
     "react-redux": "^9.3.0",
     "redux-persist": "^6.0.0",
     "tamagui": "2.4.0",
+    "ws": "^8.18.0",
     "zod": "^4.4.3"
   },
   "devDependencies": {
@@ -119,6 +123,7 @@
     "@react-native/metro-config": "0.83.2",
     "@tamagui/vite-plugin": "2.4.0",
     "@types/react": "^19.2.2",
+    "@types/ws": "^8",
     "eas-cli": "16.28.0",
     "electron": "^37.2.0",
     "electron-builder": "^26.0.12",
