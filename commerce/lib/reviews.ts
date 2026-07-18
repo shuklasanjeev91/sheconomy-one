@@ -345,3 +345,19 @@ export function hasVisibleReviews(summary: ReviewSummary) {
     averageRating > 0
   )
 }
+
+/** Submit a verified-purchase review via the secure marketplace RPC. */
+export async function createVerifiedPurchaseReview(input: {
+  orderItemId: string
+  rating: number
+  title?: string | null
+  reviewText: string
+  reviewImages?: string[]
+}): Promise<{ reviewId: string | null; error: string | null }> {
+  const { submitVerifiedListingReview } = await import('~/commerce/lib/customer-order-trust')
+  const result = await submitVerifiedListingReview(input)
+  return {
+    reviewId: result.data?.reviewId ?? null,
+    error: result.error,
+  }
+}

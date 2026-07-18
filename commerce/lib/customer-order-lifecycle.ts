@@ -58,12 +58,29 @@ export type CustomerOrderActionEligibility = {
   hasOpenCancellationRequest: boolean
 }
 
+export type CustomerItemTrustEligibility = {
+  canReview: boolean
+  reviewBlockedReason: string | null
+  canReturn: boolean
+  returnBlockedReason: string | null
+  canDownload: boolean
+  downloadBlockedReason: string | null
+  hasOpenReturnRequest: boolean
+  hasReview: boolean
+}
+
+export type RefundStatusLike = 'requested' | 'processing' | 'approved' | 'completed' | 'rejected' | string
+
+export const RETURN_WINDOW_DAYS = 30
+
 export type PendingOrderSuccessSnapshot = {
   orderIds: string[]
   orderNumbers: string[]
   createdAt: number
   paymentMode?: string | null
   awaitingExternalPayment?: boolean
+  checkoutGroupId?: string | null
+  checkoutUrl?: string | null
 }
 
 export const PENDING_ORDER_SUCCESS_KEY = 'commerce:pending-order-success'
@@ -92,6 +109,133 @@ export function isOpenIssueStatus(status: string | null | undefined): boolean {
 
 export function isCancellationIssueType(issueType: string | null | undefined): boolean {
   return issueType === ORDER_ISSUE_TYPE.CANCELLATION_REQUEST
+}
+
+export function isReturnIssueType(issueType: string | null | undefined): boolean {
+  return (
+    issueType === ORDER_ISSUE_TYPE.RETURN_REQUEST || issueType === ORDER_ISSUE_TYPE.REFUND_REQUEST
+  )
+}
+
+export function findOpenReturnRequest<T extends { issue_type?: string | null; status?: string | null; order_item_id?: string | null }>(
+  issues: T[] | null | undefined,
+  orderItemId?: string | null,
+): T | null {
+  if (!issues?.length) return null
+  return (
+    issues.find(
+      (issue) =>
+        isReturnIssueType(issue.issue_type) &&
+        isOpenIssueStatus(issue.status) &&
+        (!orderItemId || issue.order_item_id === orderItemId),
+    ) ?? null
+  )
+}
+
+export function isDeliveredOrCompletedStatus(status: string | null | undefined): boolean {
+  return status === ORDER_STATUS.DELIVERED || status === ORDER_STATUS.COMPLETED
+}
+
+export function isDigitalListingType(listingType: string | null | undefined): boolean {
+  return listingType === 'digital' || listingType === 'service'
+}
+
+export function isDownloadUrlSafe(url: string | null | undefined): boolean {
+  return Boolean(sanitizeCarrierTrackingUrl(url))
+}
+
+export function isWithinReturnWindow(
+  deliveredAt: string | null | undefined,
+  now = Date.now(),
+  windowDays = RETURN_WINDOW_DAYS,
+): boolean {
+  if (!deliveredAt) return false
+  const deliveredMs = new Date(deliveredAt).getTime()
+  if (!Number.isFinite(deliveredMs)) return false
+  return now - deliveredMs <= windowDays * 24 * 60 * 60 * 1000
+}
+
+export function refundStatusLabel(status: RefundStatusLike | null | undefined): string {
+  if (!status) return 'Unknown'
+  return String(status).replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase())
+}
+
+export function getCustomerItemTrustEligibility(input: {
+  orderStatus: string | null | undefined
+  itemStatus: string | null | undefined
+  listingType?: string | null
+  digitalDownloadUrl?: string | null
+  downloadExpiresAt?: string | null
+  hasReview?: boolean | null
+  deliveredAt?: string | null
+  issues?: Array<{
+    issue_type?: string | null
+    status?: string | null
+    order_item_id?: string | null
+  }> | null
+  refunds?: Array<{
+    order_item_id?: string | null
+    refund_status?: string | null
+  }> | null
+  orderItemId: string
+  now?: number
+}): CustomerItemTrustEligibility {
+  const now = input.now ?? Date.now()
+  const delivered =
+    isDeliveredOrCompletedStatus(input.itemStatus) ||
+    isDeliveredOrCompletedStatus(input.orderStatus)
+  const digital =
+    isDigitalListingType(input.listingType) || Boolean(input.digitalDownloadUrl?.trim())
+  const openReturn = findOpenReturnRequest(input.issues, input.orderItemId)
+  const activeRefund = (input.refunds ?? []).find(
+    (refund) =>
+      refund.order_item_id === input.orderItemId &&
+      ['requested', 'processing', 'approved', 'completed'].includes(String(refund.refund_status)),
+  )
+  const hasReview = Boolean(input.hasReview)
+
+  let reviewBlockedReason: string | null = null
+  if (hasReview) reviewBlockedReason = 'You already reviewed this item.'
+  else if (!delivered) reviewBlockedReason = 'You can review this item after delivery.'
+
+  let returnBlockedReason: string | null = null
+  if (digital) returnBlockedReason = 'Digital purchases cannot be returned here.'
+  else if (!delivered) returnBlockedReason = 'Returns are available after delivery.'
+  else if (openReturn) returnBlockedReason = 'A return request is already open for this item.'
+  else if (activeRefund) returnBlockedReason = 'A refund is already in progress for this item.'
+  else if (!isWithinReturnWindow(input.deliveredAt ?? null, now)) {
+    returnBlockedReason = `Returns are available for ${RETURN_WINDOW_DAYS} days after delivery.`
+  }
+
+  let downloadBlockedReason: string | null = null
+  if (!input.digitalDownloadUrl?.trim()) {
+    downloadBlockedReason = 'No digital download is available for this item.'
+  } else if (!isDownloadUrlSafe(input.digitalDownloadUrl)) {
+    downloadBlockedReason = 'Download link is invalid.'
+  } else if (
+    input.orderStatus === ORDER_STATUS.CANCELLED ||
+    input.orderStatus === ORDER_STATUS.REFUNDED ||
+    input.itemStatus === ORDER_STATUS.CANCELLED ||
+    input.itemStatus === ORDER_STATUS.REFUNDED
+  ) {
+    downloadBlockedReason = 'Download is unavailable for cancelled or refunded orders.'
+  } else if (
+    input.downloadExpiresAt &&
+    new Date(input.downloadExpiresAt).getTime() < now
+  ) {
+    downloadBlockedReason = 'This download link has expired.'
+  }
+
+  return {
+    canReview: !reviewBlockedReason,
+    reviewBlockedReason,
+    canReturn: !returnBlockedReason,
+    returnBlockedReason,
+    canDownload: !downloadBlockedReason,
+    downloadBlockedReason,
+    hasOpenReturnRequest: Boolean(openReturn),
+    hasReview,
+  }
 }
 
 export function findOpenCancellationRequest<T extends { issue_type?: string | null; status?: string | null }>(
@@ -352,6 +496,12 @@ export function parsePendingOrderSuccess(
       createdAt: parsed.createdAt,
       paymentMode: parsed.paymentMode ?? null,
       awaitingExternalPayment: Boolean(parsed.awaitingExternalPayment),
+      checkoutGroupId:
+        typeof parsed.checkoutGroupId === 'string' && parsed.checkoutGroupId
+          ? parsed.checkoutGroupId
+          : null,
+      checkoutUrl:
+        typeof parsed.checkoutUrl === 'string' && parsed.checkoutUrl ? parsed.checkoutUrl : null,
     }
   } catch {
     return null
@@ -387,7 +537,20 @@ export function issueStatusLabel(status: IssueStatus | string | null | undefined
 export function issueTypeLabel(issueType: string | null | undefined): string {
   if (!issueType) return 'Issue'
   if (issueType === ORDER_ISSUE_TYPE.CANCELLATION_REQUEST) return 'Cancellation request'
+  if (issueType === ORDER_ISSUE_TYPE.RETURN_REQUEST) return 'Return request'
+  if (issueType === ORDER_ISSUE_TYPE.REFUND_REQUEST) return 'Refund request'
   return String(issueType).replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase())
+}
+
+export function returnReasonOptions(): Array<{ value: string; label: string }> {
+  return [
+    { value: 'defective', label: 'Item arrived defective or damaged' },
+    { value: 'wrong_item', label: 'Wrong item received' },
+    { value: 'not_as_described', label: 'Not as described' },
+    { value: 'size_fit', label: 'Size / fit issue' },
+    { value: 'changed_mind', label: 'Changed my mind' },
+    { value: 'other', label: 'Something else' },
+  ]
 }
 
 export type ReorderItemLike = {

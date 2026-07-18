@@ -5,13 +5,19 @@
 
 import {
   evaluateReorderCandidates as evaluateReorderCandidatesPure,
+  getCustomerItemTrustEligibility,
   getCustomerOrderActionEligibility,
   PENDING_ORDER_SUCCESS_KEY,
   parsePendingOrderSuccess,
   sanitizeCarrierTrackingUrl,
   serializePendingOrderSuccess,
+  type CustomerItemTrustEligibility,
   type PendingOrderSuccessSnapshot,
 } from '~/commerce/lib/customer-order-lifecycle'
+import {
+  fetchRefundsForOrderItems,
+  type CustomerRefundRow,
+} from '~/commerce/lib/customer-order-trust'
 import { createOrderIssue } from '~/lib/orders/order-issue.service'
 import {
   ISSUE_PRIORITY,
@@ -79,6 +85,7 @@ export type CustomerOrderDetail = {
   status_logs: OrderStatusLog[]
   payments: OrderPayment[]
   issues: OrderIssue[]
+  refunds: CustomerRefundRow[]
   shop_name: string | null
   payment_status: PaymentStatus | null
   payment_mode: PaymentMode | null
@@ -95,6 +102,9 @@ export type CustomerOrderItem = {
   item_status: OrderStatus
   variation_details: Json | null
   digital_download_url: string | null
+  download_expires_at: string | null
+  download_attempts: number | null
+  has_review: boolean
   listing_slug: string | null
   listing_type: string | null
   image_url: string | null
@@ -236,6 +246,9 @@ function mapOrderItem(row: CustomerOrderItemRow): CustomerOrderItem {
     item_status: row.item_status,
     variation_details: row.variation_details,
     digital_download_url: row.digital_download_url,
+    download_expires_at: row.download_expires_at ?? null,
+    download_attempts: row.download_attempts ?? null,
+    has_review: Boolean(row.has_review),
     listing_slug: listing?.slug ?? null,
     listing_type: listing?.listing_type ?? null,
     image_url: primaryImageUrl(listing?.listing_images),
@@ -269,7 +282,10 @@ function mapDelivery(
   }
 }
 
-function mapDetail(raw: Record<string, unknown>): CustomerOrderDetail {
+function mapDetail(
+  raw: Record<string, unknown>,
+  refunds: CustomerRefundRow[] = [],
+): CustomerOrderDetail {
   const itemsRaw = (raw.order_items as CustomerOrderItemRow[] | null) ?? []
   const items = itemsRaw.map(mapOrderItem)
   const deliveriesRaw = (raw.order_delivery as CustomerOrderDelivery[] | null) ?? []
@@ -312,6 +328,7 @@ function mapDetail(raw: Record<string, unknown>): CustomerOrderDetail {
     status_logs: statusLogs,
     payments,
     issues,
+    refunds,
     shop_name: shopNames.join(', ') || null,
     payment_status: (primaryPayment?.payment_status as PaymentStatus | null) ?? null,
     payment_mode: (primaryPayment?.payment_mode as PaymentMode | null) ?? null,
@@ -334,7 +351,13 @@ export async function fetchCustomerOrderDetail(
   if (error) return { order: null, error: error.message }
   if (!data) return { order: null, error: 'Order not found' }
 
-  return { order: mapDetail(data as unknown as Record<string, unknown>), error: null }
+  const raw = data as unknown as Record<string, unknown>
+  const itemIds = ((raw.order_items as Array<{ id?: string }> | null) ?? [])
+    .map((item) => item.id)
+    .filter((id): id is string => Boolean(id))
+  const { refunds } = await fetchRefundsForOrderItems(itemIds)
+
+  return { order: mapDetail(raw, refunds), error: null }
 }
 
 export async function fetchCustomerOrdersByIds(
@@ -426,6 +449,24 @@ export function getOrderEligibility(order: CustomerOrderDetail) {
     orderStatus: order.order_status,
     paymentStatus: order.payment_status,
     issues: order.issues,
+  })
+}
+
+export function getItemTrustEligibility(
+  order: CustomerOrderDetail,
+  item: CustomerOrderItem,
+): CustomerItemTrustEligibility {
+  return getCustomerItemTrustEligibility({
+    orderStatus: order.order_status,
+    itemStatus: item.item_status,
+    listingType: item.listing_type,
+    digitalDownloadUrl: item.digital_download_url,
+    downloadExpiresAt: item.download_expires_at,
+    hasReview: item.has_review,
+    deliveredAt: order.delivered_at,
+    issues: order.issues,
+    refunds: order.refunds,
+    orderItemId: item.id,
   })
 }
 
@@ -539,6 +580,11 @@ export function subscribeCustomerOrderChanges(
     .on(
       'postgres_changes',
       { event: '*', schema: 'public', table: 'order_issues', filter: `order_id=eq.${orderId}` },
+      () => onChange(),
+    )
+    .on(
+      'postgres_changes',
+      { event: '*', schema: 'public', table: 'order_items', filter: `order_id=eq.${orderId}` },
       () => onChange(),
     )
     .subscribe()

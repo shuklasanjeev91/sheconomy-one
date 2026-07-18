@@ -2,7 +2,7 @@ import { useRouter } from 'one'
 import { SpaRedirect } from '~/components/navigation/SpaRedirect'
 import { AppLink } from '~/components/navigation/AppLink'
 import type { ReactNode } from 'react'
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 
 import {
   Field,
@@ -32,15 +32,13 @@ import {
 } from '~/commerce/components'
 import {
   checkCartStock,
-  createOrderFromCart,
+  createAtomicMarketplaceCheckout,
   fetchUserAddresses,
   saveUserAddress,
   type CheckoutAddressInput,
-  type CheckoutLineItem,
   type CheckoutPaymentMode,
   type UserAddress,
 } from '~/commerce/lib/checkout'
-import { clearCartItems, type CartItemRow } from '~/commerce/lib/cart'
 import { savePendingOrderSuccess } from '~/commerce/lib/customer-orders'
 import { computeSelectedTotals, useCartSelection } from '~/commerce/lib/cart-selection'
 import { fetchBuyerPaymentMethods } from '~/commerce/lib/buyer-account'
@@ -112,6 +110,7 @@ export function CheckoutScreen() {
   const [orderPlaced, setOrderPlaced] = useState(false)
   const [isLoadingAddresses, setIsLoadingAddresses] = useState(true)
   const [listingTypes, setListingTypes] = useState<Map<string, string>>(new Map())
+  const checkoutAttemptKey = useRef<string | null>(null)
 
   const availableIds = useMemo(() => items.map((item) => item.id), [items])
   const { isSelected, noneSelected } = useCartSelection(availableIds)
@@ -305,85 +304,40 @@ export function CheckoutScreen() {
       }
 
       const mode: CheckoutPaymentMode = needsShipping ? paymentMethod : 'online'
-      const savedPaymentMethodId =
-        mode === 'online' ? selectedSavedPaymentId ?? undefined : undefined
-
-      const toLineItem = (item: CartItemRow): CheckoutLineItem => ({
-        listingId: item.listing_id,
-        quantity: item.quantity,
-        unitPrice: item.unit_price,
-        variationDetails: item.variant_id
-          ? {
-              variant_id: item.variant_id,
-              variant_name: item.variant_name,
-              variant_value: item.variant_value,
-            }
-          : undefined,
+      const selectionKey = selectedItems
+        .map((item) => item.id)
+        .sort()
+        .join(',')
+      if (
+        !checkoutAttemptKey.current ||
+        !checkoutAttemptKey.current.includes(`:${selectionKey}:`)
+      ) {
+        checkoutAttemptKey.current = `${user.id}:${cart.id}:${selectionKey}:${Date.now()}`
+      }
+      const result = await createAtomicMarketplaceCheckout({
+        cartId: cart.id,
+        cartItemIds: selectedItems.map((item) => item.id),
+        shippingAddressId,
+        billingAddressId: shippingAddressId,
+        paymentMode: mode,
+        idempotencyKey: checkoutAttemptKey.current,
+        notesByShop,
+        giftShopIds: Object.entries(giftByShop)
+          .filter(([, enabled]) => enabled)
+          .map(([shopId]) => shopId),
       })
-
-      const discountMeta = cart.applied_discount_id
-        ? {
-            profileId: cart.applied_discount_id,
-            name: cart.applied_discount_name,
-            type: cart.applied_discount_type,
-          }
-        : null
-
-      // marketplace: buyer pays once (platform-collected), but each shop gets its
-      // own receipt/order. Group selected items per shop and create one order per
-      // shop, splitting any order-level discount proportionally by subtotal.
-      const groups = new Map<string, CartItemRow[]>()
-      for (const item of selectedItems) {
-        const list = groups.get(item.shop_id) ?? []
-        list.push(item)
-        groups.set(item.shop_id, list)
-      }
-
-      const orderIds: string[] = []
-      const orderNumbers: string[] = []
-      let checkoutUrl: string | null = null
-      for (const [shopId, shopItems] of groups.entries()) {
-        const shopSubtotal = shopItems.reduce(
-          (sum, item) => sum + item.unit_price * item.quantity,
-          0,
-        )
-        const shopDiscount =
-          subtotal > 0 ? Math.round(((discount * shopSubtotal) / subtotal) * 100) / 100 : 0
-        const shopTotal = Math.max(0, shopSubtotal - shopDiscount)
-
-        const partnerInfo = shopPartners.get(shopId)
-        const collection = paymentCollectionFor(partnerInfo)
-
-        const { data, error } = await createOrderFromCart({
-          userId: user.id,
-          cartId: cart.id,
-          shippingAddressId,
-          customerNotes: notesByShop[shopId]?.trim() || undefined,
-          paymentMode: mode,
-          savedPaymentMethodId,
-          currency,
-          items: shopItems.map(toLineItem),
-          subtotalAmount: shopSubtotal,
-          discountAmount: shopDiscount,
-          totalAmount: shopTotal,
-          discount: shopDiscount > 0 ? discountMeta : null,
-          paymentRouting: {
-            collection,
-            gateway: partnerInfo?.paymentLabel ?? null,
-            shopId,
-            commissionApplies: collection === 'shepay',
-          },
-          isGift: !!giftByShop[shopId],
+      if (result.error || !result.data) {
+        toast.show('Checkout failed', {
+          tone: 'danger',
+          message: result.error ?? 'Please try again.',
         })
-        if (error) {
-          toast.show('Checkout failed', { tone: 'danger', message: error })
-          setIsSubmitting(false)
-          return
-        }
-        if (data?.orderId) orderIds.push(data.orderId)
-        if (data?.orderNumber) orderNumbers.push(data.orderNumber)
-        if (!checkoutUrl && data?.checkoutUrl) checkoutUrl = data.checkoutUrl
+        setIsSubmitting(false)
+        return
       }
+
+      const { orderIds, orderNumbers, checkoutGroupId } = result.data
+      const checkoutUrl =
+        result.data.paymentSteps.find((step) => step.checkoutUrl)?.checkoutUrl ?? null
 
       const usedAddress =
         addresses.find((row) => row.id === shippingAddressId) ??
@@ -414,9 +368,7 @@ export function CheckoutScreen() {
           quantity: item.quantity,
         })),
       })
-      await clearCartItems(cart.id)
-
-      const awaitingExternalPayment = Boolean(checkoutUrl && mode === 'online')
+      const awaitingExternalPayment = Boolean(mode === 'online')
       if (orderIds.length > 0) {
         await savePendingOrderSuccess({
           orderIds,
@@ -424,6 +376,8 @@ export function CheckoutScreen() {
           createdAt: Date.now(),
           paymentMode: mode,
           awaitingExternalPayment,
+          checkoutGroupId,
+          checkoutUrl,
         })
       }
 

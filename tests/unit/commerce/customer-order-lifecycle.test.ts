@@ -110,10 +110,14 @@ describe('pending order success snapshot', () => {
       orderNumbers: ['100', '101'],
       createdAt: Date.now(),
       awaitingExternalPayment: true,
+      checkoutGroupId: 'grp-1',
+      checkoutUrl: 'https://pay.example/resume',
     })
     const parsed = parsePendingOrderSuccess(raw)
     expect(parsed?.orderIds).toEqual(['a', 'b'])
     expect(parsed?.awaitingExternalPayment).toBe(true)
+    expect(parsed?.checkoutGroupId).toBe('grp-1')
+    expect(parsed?.checkoutUrl).toBe('https://pay.example/resume')
 
     expect(
       parsePendingOrderSuccess(

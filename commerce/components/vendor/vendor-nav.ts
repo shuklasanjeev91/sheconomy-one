@@ -103,6 +103,7 @@ export const VENDOR_NAV_GROUPS: VendorNavGroup[] = [
         description: 'Manage listings and inventory.',
         icon: Icons.Package,
         href: vendorRoutes.products,
+        ready: true,
       },
       {
         id: 'orders',
@@ -123,6 +124,7 @@ export const VENDOR_NAV_GROUPS: VendorNavGroup[] = [
         description: 'Traffic, sales, and engagement trends.',
         icon: Icons.BarChart3,
         href: vendorRoutes.analytics,
+        ready: true,
       },
       {
         id: 'delivery',
@@ -130,6 +132,7 @@ export const VENDOR_NAV_GROUPS: VendorNavGroup[] = [
         description: 'Shipping options and fulfilment.',
         icon: Icons.Truck,
         href: vendorRoutes.delivery,
+        ready: true,
       },
       {
         id: 'ads',
@@ -137,6 +140,7 @@ export const VENDOR_NAV_GROUPS: VendorNavGroup[] = [
         description: 'Campaigns and promotions.',
         icon: Icons.Megaphone,
         href: vendorRoutes.ads,
+        ready: true,
       },
       {
         id: 'reviews',
@@ -144,6 +148,7 @@ export const VENDOR_NAV_GROUPS: VendorNavGroup[] = [
         description: 'Customer ratings and feedback.',
         icon: Icons.Star,
         href: vendorRoutes.reviews,
+        ready: true,
       },
     ],
   },

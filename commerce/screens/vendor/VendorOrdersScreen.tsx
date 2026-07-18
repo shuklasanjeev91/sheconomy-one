@@ -466,6 +466,10 @@ export function VendorOrdersScreen() {
         role={role}
         onClose={closeDetail}
         onAdvance={handleAdvance}
+        onIssuesChanged={() => {
+          if (drawerItem) openDetail(drawerItem)
+          loadPage()
+        }}
       />
 
       <VendorAddTrackingDrawer

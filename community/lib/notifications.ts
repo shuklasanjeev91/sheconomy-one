@@ -1,3 +1,4 @@
+import { resolveMarketplaceTrustNotificationPath } from '~/lib/notifications/marketplace-notification-path'
 import { pathFromNotificationUrl } from '~/lib/notifications/push-config'
 import { supabase } from '~/lib/supabase/client'
 import {
@@ -48,6 +49,14 @@ export function resolveNotificationPath(notification: AppNotification): string |
   const contextId = notification.context_id?.trim() || null
   const type = (notification.type ?? '').toLowerCase()
 
+  const trustPath = resolveMarketplaceTrustNotificationPath({
+    type: notification.type,
+    contextType: notification.context_type,
+    contextId: notification.context_id,
+    actionUrl: notification.action_url,
+  })
+  if (trustPath) return trustPath
+
   // Profile links in action_url embed the username from send time, which
   // breaks after a rename. The context uuid is stable, so prefer it.
   if ((contextType === 'profile' || contextType === 'user') && contextId) {
@@ -79,7 +88,12 @@ export function resolveNotificationPath(notification: AppNotification): string |
       return chatRoutes.conversation(contextId)
     }
     if (contextType === 'order' || type.includes('order')) {
-      return type.includes('vendor') ? vendorRoutes.orders : commerceRoutes.orders
+      if (type.includes('vendor') || type.includes('seller') || type.includes('return_requested')) {
+        return vendorRoutes.orders
+      }
+      // Prefer the exact order detail when context_id is an order uuid.
+      if (contextId) return commerceRoutes.order(contextId)
+      return commerceRoutes.orders
     }
     if (contextType === 'listing' || type.includes('listing') || type.includes('stock')) {
       return commerceRoutes.listing(contextId)
@@ -220,7 +234,7 @@ export async function fetchNotifications(
         'type.like.shop_*',
         'type.like.listing_*',
         'type.like.cart_*',
-        'type.in.(new_order,order_update,shop_follow,shop_new_follower,sale_event_announcement,sale_event_enrollment_request)',
+        'type.in.(new_order,order_update,shop_follow,shop_new_follower,sale_event_announcement,sale_event_enrollment_request,order_return_requested_seller,order_issue_resolved_buyer,order_refund_pending_buyer,listing_review_received_seller)',
         'context_type.in.(order,listing,shop)',
       ].join(','),
     )

@@ -6,20 +6,28 @@ import { CommercePageHeader, CommercePanel } from '~/commerce/components'
 import { CancelOrderSheet, OrderSupportSheet } from '~/commerce/components/OrderActionSheets'
 import { OrderPackageCard } from '~/commerce/components/OrderPackageCard'
 import { OrderTimeline } from '~/commerce/components/OrderTimeline'
+import {
+  ReturnOrderItemSheet,
+  WriteReviewSheet,
+} from '~/commerce/components/OrderTrustSheets'
 import { OrderStatusBadge } from '~/commerce/components/vendor/OrderStatusBadge'
 import {
   evaluateReorderCandidates,
   fetchCustomerOrderDetail,
+  getItemTrustEligibility,
   getOrderEligibility,
   subscribeCustomerOrderChanges,
   type CustomerOrderDetail,
+  type CustomerOrderItem,
 } from '~/commerce/lib/customer-orders'
 import {
   buildCustomerOrderTimeline,
   formatEstimatedDelivery,
   issueStatusLabel,
   issueTypeLabel,
+  refundStatusLabel,
 } from '~/commerce/lib/customer-order-lifecycle'
+import { fetchOrderDigitalDownload } from '~/commerce/lib/customer-order-trust'
 import { useCart } from '~/commerce/hooks/useCart'
 import {
   Button,
@@ -37,6 +45,7 @@ import { formatCurrency } from '~/lib/format'
 import { shareCustomerOrderInvoice } from '~/lib/orders/order-invoice'
 import { formatOrderAmount, formatOrderDate } from '~/lib/orders/order.utils'
 import type { OrderAddressSummary } from '~/lib/orders/vendor-orders.type'
+import { openExternalUrl } from '~/lib/platform/openUrl'
 import { commerceRoutes } from '~/lib/routes'
 import { useProfile } from '~/hooks/useProfile'
 import { useAppUi } from '~/lib/theme/useAppUi'
@@ -78,6 +87,9 @@ export function OrderDetailScreen({ orderId }: OrderDetailScreenProps) {
   const [error, setError] = useState<string | null>(null)
   const [cancelOpen, setCancelOpen] = useState(false)
   const [supportOpen, setSupportOpen] = useState(false)
+  const [returnItem, setReturnItem] = useState<CustomerOrderItem | null>(null)
+  const [reviewItem, setReviewItem] = useState<CustomerOrderItem | null>(null)
+  const [downloadingItemId, setDownloadingItemId] = useState<string | null>(null)
   const [reordering, setReordering] = useState(false)
   const [invoicing, setInvoicing] = useState(false)
 
@@ -158,6 +170,28 @@ export function OrderDetailScreen({ orderId }: OrderDetailScreenProps) {
       tone: 'danger',
       message: skipped[0]?.reason ?? 'Those listings are unavailable.',
     })
+  }
+
+  async function handleDownload(item: CustomerOrderItem) {
+    setDownloadingItemId(item.id)
+    const result = await fetchOrderDigitalDownload(item.id)
+    setDownloadingItemId(null)
+    if (result.error || !result.data) {
+      toast.show('Download unavailable', {
+        tone: 'danger',
+        message: result.error ?? 'Could not open the download.',
+      })
+      return
+    }
+    const opened = await openExternalUrl(result.data.url)
+    if (!opened) {
+      toast.show('Could not open download', {
+        tone: 'danger',
+        message: 'Your device blocked the download link.',
+      })
+      return
+    }
+    void load({ soft: true })
   }
 
   async function handleInvoice() {
@@ -251,53 +285,116 @@ export function OrderDetailScreen({ orderId }: OrderDetailScreenProps) {
                   Items
                 </Text>
                 <YStack gap="$3">
-                  {order.items.map((item) => (
-                    <XStack key={item.id} gap="$3" alignItems="flex-start">
+                  {order.items.map((item) => {
+                    const trust = getItemTrustEligibility(order, item)
+                    const itemRefund = order.refunds.find((refund) => refund.order_item_id === item.id)
+                    return (
                       <YStack
-                        width={64}
-                        height={64}
-                        borderRadius={10}
-                        overflow="hidden"
-                        backgroundColor={ui.imagePlaceholder}
-                        alignItems="center"
-                        justifyContent="center"
+                        key={item.id}
+                        gap="$2"
+                        paddingBottom="$3"
+                        borderBottomWidth={1}
+                        borderBottomColor={ui.borderSubtle}
                       >
-                        {item.image_url ? (
-                          <Image
-                            source={{ uri: item.image_url }}
+                        <XStack gap="$3" alignItems="flex-start">
+                          <YStack
                             width={64}
                             height={64}
-                            resizeMode="cover"
-                          />
-                        ) : (
-                          <Icons.Image size={22} color={ui.textMuted} />
-                        )}
-                      </YStack>
-                      <YStack flex={1} minWidth={0} gap={3}>
-                        {item.listing_slug ? (
-                          <AppLink href={commerceRoutes.listing(item.listing_slug)} asChild>
-                            <Text fontSize={14} fontWeight="700" color={ui.text} numberOfLines={2}>
-                              {item.product_title}
+                            borderRadius={10}
+                            overflow="hidden"
+                            backgroundColor={ui.imagePlaceholder}
+                            alignItems="center"
+                            justifyContent="center"
+                          >
+                            {item.image_url ? (
+                              <Image
+                                source={{ uri: item.image_url }}
+                                width={64}
+                                height={64}
+                                resizeMode="cover"
+                              />
+                            ) : (
+                              <Icons.Image size={22} color={ui.textMuted} />
+                            )}
+                          </YStack>
+                          <YStack flex={1} minWidth={0} gap={3}>
+                            {item.listing_slug ? (
+                              <AppLink href={commerceRoutes.listing(item.listing_slug)} asChild>
+                                <Text fontSize={14} fontWeight="700" color={ui.text} numberOfLines={2}>
+                                  {item.product_title}
+                                </Text>
+                              </AppLink>
+                            ) : (
+                              <Text fontSize={14} fontWeight="700" color={ui.text} numberOfLines={2}>
+                                {item.product_title}
+                              </Text>
+                            )}
+                            <Text fontSize={12} color={ui.textMuted}>
+                              Qty {item.quantity}
+                              {variationLabel(item.variation_details)
+                                ? ` · ${variationLabel(item.variation_details)}`
+                                : ''}
                             </Text>
-                          </AppLink>
-                        ) : (
-                          <Text fontSize={14} fontWeight="700" color={ui.text} numberOfLines={2}>
-                            {item.product_title}
+                            <OrderStatusBadge status={item.item_status} size="sm" />
+                            {itemRefund ? (
+                              <Text fontSize={11} color={ui.textSecondary}>
+                                Refund {refundStatusLabel(itemRefund.refund_status)} ·{' '}
+                                {formatOrderAmount(itemRefund.refund_amount, order.currency)}
+                              </Text>
+                            ) : null}
+                            {trust.hasReview ? (
+                              <Text fontSize={11} color={ui.textMuted}>
+                                Review submitted
+                              </Text>
+                            ) : null}
+                          </YStack>
+                          <Text fontSize={14} fontWeight="800" color={ui.text}>
+                            {formatOrderAmount(item.total_price, order.currency)}
                           </Text>
-                        )}
-                        <Text fontSize={12} color={ui.textMuted}>
-                          Qty {item.quantity}
-                          {variationLabel(item.variation_details)
-                            ? ` · ${variationLabel(item.variation_details)}`
-                            : ''}
-                        </Text>
-                        <OrderStatusBadge status={item.item_status} size="sm" />
+                        </XStack>
+                        <XStack gap="$2" flexWrap="wrap">
+                          {trust.canDownload ? (
+                            <Button
+                              tone="primary"
+                              size="$3"
+                              borderRadius={999}
+                              disabled={downloadingItemId === item.id}
+                              icon={<Icons.Download size={14} />}
+                              onPress={() => void handleDownload(item)}
+                            >
+                              {downloadingItemId === item.id ? 'Opening…' : 'Download'}
+                            </Button>
+                          ) : null}
+                          {trust.canReview ? (
+                            <Button
+                              tone="outline"
+                              size="$3"
+                              borderRadius={999}
+                              icon={<Icons.Star size={14} />}
+                              onPress={() => setReviewItem(item)}
+                            >
+                              Write a review
+                            </Button>
+                          ) : null}
+                          {trust.canReturn ? (
+                            <Button
+                              tone="outline"
+                              size="$3"
+                              borderRadius={999}
+                              icon={<Icons.PackageMinus size={14} />}
+                              onPress={() => setReturnItem(item)}
+                            >
+                              Return item
+                            </Button>
+                          ) : trust.hasOpenReturnRequest ? (
+                            <Text fontSize={12} color={ui.textMuted}>
+                              Return request pending
+                            </Text>
+                          ) : null}
+                        </XStack>
                       </YStack>
-                      <Text fontSize={14} fontWeight="800" color={ui.text}>
-                        {formatOrderAmount(item.total_price, order.currency)}
-                      </Text>
-                    </XStack>
-                  ))}
+                    )
+                  })}
                 </YStack>
               </CommercePanel>
 
@@ -482,6 +579,26 @@ export function OrderDetailScreen({ orderId }: OrderDetailScreenProps) {
                     orderId={order.id}
                     orderNumber={order.order_number}
                     userId={user.id}
+                    onSubmitted={() => void load({ soft: true })}
+                  />
+                  <ReturnOrderItemSheet
+                    open={Boolean(returnItem)}
+                    onOpenChange={(next) => {
+                      if (!next) setReturnItem(null)
+                    }}
+                    orderId={order.id}
+                    userId={user.id}
+                    item={returnItem}
+                    onSubmitted={() => void load({ soft: true })}
+                  />
+                  <WriteReviewSheet
+                    open={Boolean(reviewItem)}
+                    onOpenChange={(next) => {
+                      if (!next) setReviewItem(null)
+                    }}
+                    orderId={order.id}
+                    userId={user.id}
+                    item={reviewItem}
                     onSubmitted={() => void load({ soft: true })}
                   />
                 </>
