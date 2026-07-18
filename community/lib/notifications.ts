@@ -234,7 +234,7 @@ export async function fetchNotifications(
         'type.like.shop_*',
         'type.like.listing_*',
         'type.like.cart_*',
-        'type.in.(new_order,order_update,shop_follow,shop_new_follower,sale_event_announcement,sale_event_enrollment_request,order_return_requested_seller,order_issue_resolved_buyer,order_refund_pending_buyer,listing_review_received_seller)',
+        'type.in.(new_order,order_update,shop_follow,shop_new_follower,shop_follower_new_listing,sale_event_announcement,sale_event_enrollment_request,order_return_requested_seller,order_issue_resolved_buyer,order_refund_pending_buyer,listing_review_received_seller)',
         'context_type.in.(order,listing,shop)',
       ].join(','),
     )

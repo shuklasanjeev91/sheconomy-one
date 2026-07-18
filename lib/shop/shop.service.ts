@@ -79,14 +79,24 @@ export async function getMyShops(userId?: string | null): Promise<ShopServiceRes
   if (!id) return fail('User not authenticated')
 
   try {
-    const { data, error } = await supabase
+    const query = supabase
       .from('shops')
       .select('*')
       .eq('user_id', id)
       .order('created_at', { ascending: false })
 
-    if (error) return fail(error)
-    return ok(data ?? [])
+    const result = await Promise.race([
+      query,
+      new Promise<{ data: null; error: { message: string } }>((resolve) => {
+        setTimeout(
+          () => resolve({ data: null, error: { message: 'Shop list timed out' } }),
+          8_000,
+        )
+      }),
+    ])
+
+    if (result.error) return fail(result.error)
+    return ok(result.data ?? [])
   } catch (error) {
     return fail(error)
   }

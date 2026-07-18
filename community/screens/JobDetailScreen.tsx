@@ -5,7 +5,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { CommunityCard } from '~/community/components/CommunityCard'
 import { CommunityShell } from '~/community/components/CommunityShell'
 import { ProfileLink } from '~/community/components/ProfileLink'
-import { applyToJob, fetchJob, saveJob, unsaveJob, type JobListing } from '~/community/lib/jobs'
+import { applyToJob, fetchJob, fetchJobApplicants, saveJob, unsaveJob, type JobApplicant, type JobListing } from '~/community/lib/jobs'
 import { useCommunityUi } from '~/community/lib/community-theme'
 import { Avatar, Button, Spinner, Text, TextArea, XStack, YStack, useAppToast } from '~/components/ui'
 import { ShareButton } from '~/components/share'
@@ -24,6 +24,8 @@ export function JobDetailScreen() {
   const [coverLetter, setCoverLetter] = useState('')
   const [isLoading, setIsLoading] = useState(true)
   const [isSaving, setIsSaving] = useState(false)
+  const [applicants, setApplicants] = useState<JobApplicant[]>([])
+  const isOwner = !!user && !!job && job.posted_by === user.id
 
   usePageSeo(
     useMemo(() => {
@@ -46,6 +48,16 @@ export function JobDetailScreen() {
       setIsLoading(false)
     })
   }, [id, user?.id])
+
+  useEffect(() => {
+    if (!job || !user || job.posted_by !== user.id) {
+      setApplicants([])
+      return
+    }
+    void fetchJobApplicants(job.id).then((result) => {
+      setApplicants(result.items)
+    })
+  }, [job, user])
 
   async function handleApply() {
     if (!user || !job) return
@@ -188,6 +200,43 @@ export function JobDetailScreen() {
           </YStack>
         ) : null}
       </CommunityCard>
+
+      {isOwner ? (
+        <CommunityCard padding={16} gap={12}>
+          <Text fontWeight="700" color={communityUi.text}>
+            Applicants ({applicants.length})
+          </Text>
+          {applicants.length === 0 ? (
+            <Text fontSize={14} color={communityUi.textMuted}>
+              No applications yet.
+            </Text>
+          ) : (
+            applicants.map((applicant) => (
+              <YStack key={applicant.id} gap={4} paddingVertical={8} borderTopWidth={1} borderTopColor={communityUi.divider}>
+                <ProfileLink userId={applicant.user_id}>
+                  <XStack gap={8} alignItems="center" cursor="pointer">
+                    <Avatar name={applicant.full_name} src={applicant.avatar_url || undefined} size="$3" />
+                    <YStack flex={1} minWidth={0}>
+                      <Text fontWeight="600" color={communityUi.text}>
+                        {applicant.full_name}
+                      </Text>
+                      <Text fontSize={12} color={communityUi.textMuted}>
+                        {applicant.status}
+                        {applicant.headline ? ` · ${applicant.headline}` : ''}
+                      </Text>
+                    </YStack>
+                  </XStack>
+                </ProfileLink>
+                {applicant.cover_letter ? (
+                  <Text fontSize={13} color={communityUi.textMuted} numberOfLines={3}>
+                    {applicant.cover_letter}
+                  </Text>
+                ) : null}
+              </YStack>
+            ))
+          )}
+        </CommunityCard>
+      ) : null}
     </CommunityShell>
   )
 }

@@ -49,6 +49,7 @@ const SETTINGS_CHILDREN: VendorNavItem[] = [
     description: 'Payout accounts and tax documentation.',
     icon: Icons.CreditCard,
     href: settingsHref('payments'),
+    ready: true,
   },
   {
     id: 'settings-notifications',
@@ -70,6 +71,7 @@ const SETTINGS_CHILDREN: VendorNavItem[] = [
     description: 'Delivery zones and courier partners.',
     icon: Icons.Truck,
     href: settingsHref('shipping'),
+    ready: true,
   },
   {
     id: 'settings-returns',
@@ -77,6 +79,7 @@ const SETTINGS_CHILDREN: VendorNavItem[] = [
     description: 'Return windows and refund rules.',
     icon: Icons.Undo2,
     href: settingsHref('returns'),
+    ready: true,
   },
 ]
 

@@ -39,6 +39,7 @@ import {
   type CheckoutPaymentMode,
   type UserAddress,
 } from '~/commerce/lib/checkout'
+import { ensureShepayCheckoutUrl } from '~/commerce/lib/shepay'
 import { savePendingOrderSuccess } from '~/commerce/lib/customer-orders'
 import { computeSelectedTotals, useCartSelection } from '~/commerce/lib/cart-selection'
 import { fetchBuyerPaymentMethods } from '~/commerce/lib/buyer-account'
@@ -336,8 +337,21 @@ export function CheckoutScreen() {
       }
 
       const { orderIds, orderNumbers, checkoutGroupId } = result.data
-      const checkoutUrl =
+      let checkoutUrl =
         result.data.paymentSteps.find((step) => step.checkoutUrl)?.checkoutUrl ?? null
+
+      if (mode === 'online' && !checkoutUrl) {
+        const shepay = await ensureShepayCheckoutUrl(result.data.paymentSteps, {
+          paymentMethodId: selectedSavedPaymentId,
+        })
+        if (shepay.error) {
+          toast.show('Payment setup incomplete', {
+            tone: 'danger',
+            message: shepay.error,
+          })
+        }
+        checkoutUrl = shepay.checkoutUrl
+      }
 
       const usedAddress =
         addresses.find((row) => row.id === shippingAddressId) ??

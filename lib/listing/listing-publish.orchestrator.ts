@@ -34,9 +34,7 @@ import { generateUniqueSku, normalizeSku } from './sku.utils'
 import { LISTING_STATUS, LISTING_TYPES } from './listing.type'
 import type { ListingCategoryInput, ListingFormData } from './listing.type'
 
-// NOTE: shop sections are not migrated yet. Once `shop-sections.service` lands,
-// import it here and flesh out `addToShopSections` (see that step below):
-// import { addListingToSection } from '~/lib/shop/shop-sections.service'
+// Shop sections — attach via existing save_shop_section RPC / vendor-operations.
 
 // ============= TYPES =============
 
@@ -532,18 +530,56 @@ async function processListingTags(listingId: string, tags: string[] = []): Promi
  * below with the per-section loop (mirroring the other batch steps). This step
  * is optional, so it currently no-ops without failing the publish.
  */
-async function addToShopSections(_listingId: string, shopSections: string[] = []): Promise<StepResult> {
+async function addToShopSections(listingId: string, shopSections: string[] = []): Promise<StepResult> {
   if (!shopSections || shopSections.length === 0) {
     return { success: true, message: 'No shop sections specified', sections_added: 0 }
   }
 
-  // TODO(shop-sections): wire up `addListingToSection(sectionId, listingId)` once
-  // the shop sections service is migrated. Skipping keeps publishing unblocked.
+  const { saveVendorShopSection } = await import('~/commerce/lib/vendor-operations')
+  let added = 0
+  let skipped = 0
+
+  for (const sectionId of shopSections) {
+    const { data: section } = await supabase
+      .from('shop_sections')
+      .select('id, shop_id, section_name, description, is_active, listing_sections(listing_id)')
+      .eq('id', sectionId)
+      .maybeSingle()
+
+    if (!section) {
+      skipped += 1
+      continue
+    }
+
+    const existingIds = (section.listing_sections ?? []).map(
+      (link: { listing_id: string }) => link.listing_id,
+    )
+    if (existingIds.includes(listingId)) {
+      skipped += 1
+      continue
+    }
+
+    const { error } = await saveVendorShopSection({
+      shopId: section.shop_id,
+      sectionId: section.id,
+      name: section.section_name,
+      description: section.description,
+      active: section.is_active ?? true,
+      listingIds: [...existingIds, listingId],
+    })
+
+    if (error) skipped += 1
+    else added += 1
+  }
+
   return {
     success: true,
-    sections_added: 0,
-    sections_skipped: shopSections.length,
-    message: 'Shop sections service not available yet; sections skipped',
+    sections_added: added,
+    sections_skipped: skipped,
+    message:
+      added > 0
+        ? `Added listing to ${added} shop section(s)`
+        : 'Shop sections skipped or already linked',
   }
 }
 

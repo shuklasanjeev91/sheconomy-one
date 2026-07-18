@@ -225,6 +225,107 @@ export async function applyToJob(
   return { error: error?.message ?? null }
 }
 
+export type JobApplicant = {
+  id: string
+  user_id: string
+  status: string
+  cover_letter: string | null
+  created_at: string | null
+  full_name: string
+  avatar_url: string | null
+  headline: string | null
+}
+
+export async function fetchJobApplicants(
+  jobId: string,
+): Promise<{ items: JobApplicant[]; error: string | null }> {
+  const { data, error } = await supabase
+    .from('job_applications')
+    .select('id, user_id, status, cover_letter, created_at')
+    .eq('job_id', jobId)
+    .order('created_at', { ascending: false })
+    .limit(100)
+
+  if (error) return { items: [], error: error.message }
+  const rows = data ?? []
+  if (!rows.length) return { items: [], error: null }
+
+  const { data: profiles } = await supabase
+    .from('profiles')
+    .select('id, full_name, username, avatar_url, headline')
+    .in(
+      'id',
+      rows.map((row) => row.user_id),
+    )
+  const byId = new Map((profiles ?? []).map((profile) => [profile.id, profile]))
+
+  return {
+    items: rows.map((row) => {
+      const profile = byId.get(row.user_id)
+      return {
+        id: row.id,
+        user_id: row.user_id,
+        status: row.status,
+        cover_letter: row.cover_letter,
+        created_at: row.created_at,
+        full_name: profile?.full_name || profile?.username || 'Applicant',
+        avatar_url: profile?.avatar_url ?? null,
+        headline: profile?.headline ?? null,
+      }
+    }),
+    error: null,
+  }
+}
+
+export type MyJobApplication = {
+  id: string
+  status: string
+  created_at: string | null
+  cover_letter: string | null
+  job: Pick<JobListing, 'id' | 'title' | 'company_name' | 'location' | 'job_type'> | null
+}
+
+export async function fetchMyJobApplications(
+  userId: string,
+): Promise<{ items: MyJobApplication[]; error: string | null }> {
+  const { data, error } = await supabase
+    .from('job_applications')
+    .select('id, status, created_at, cover_letter, job_id')
+    .eq('user_id', userId)
+    .order('created_at', { ascending: false })
+    .limit(50)
+
+  if (error) return { items: [], error: error.message }
+  const rows = data ?? []
+  if (!rows.length) return { items: [], error: null }
+
+  const jobIds = [...new Set(rows.map((row) => row.job_id))]
+  const { data: jobs } = await supabase
+    .from('jobs')
+    .select('id, title, company_name, location, job_type')
+    .in('id', jobIds)
+  const byId = new Map((jobs ?? []).map((job) => [job.id, job]))
+
+  return {
+    items: rows.map((row) => ({
+      id: row.id,
+      status: row.status,
+      created_at: row.created_at,
+      cover_letter: row.cover_letter,
+      job: byId.get(row.job_id)
+        ? {
+            id: byId.get(row.job_id)!.id,
+            title: byId.get(row.job_id)!.title,
+            company_name: byId.get(row.job_id)!.company_name,
+            location: byId.get(row.job_id)!.location,
+            job_type: byId.get(row.job_id)!.job_type,
+          }
+        : null,
+    })),
+    error: null,
+  }
+}
+
 export type CreateJobInput = {
   title: string
   companyName: string

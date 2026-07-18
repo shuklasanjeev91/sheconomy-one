@@ -24,6 +24,49 @@ type GetCurrentPositionOptions = {
   timeoutMs?: number
 }
 
+function geolocationErrorMessage(error: unknown): {
+  message: string
+  permission: LocationPermissionStatus
+} {
+  // Browser GeolocationPositionError is not an instanceof Error.
+  const code =
+    error && typeof error === 'object' && 'code' in error
+      ? Number((error as { code?: number }).code)
+      : null
+  const rawMessage =
+    error instanceof Error
+      ? error.message
+      : error && typeof error === 'object' && 'message' in error
+        ? String((error as { message?: unknown }).message ?? '')
+        : ''
+
+  // 1 PERMISSION_DENIED, 2 POSITION_UNAVAILABLE, 3 TIMEOUT
+  if (code === 1) {
+    return {
+      message:
+        permissionDeniedMessage('denied') ??
+        'Location permission was denied. Allow location for this site and try again.',
+      permission: 'denied',
+    }
+  }
+  if (code === 2) {
+    return {
+      message: 'Location is temporarily unavailable. Try again or enter your address manually.',
+      permission: 'granted',
+    }
+  }
+  if (code === 3 || /timeout/i.test(rawMessage)) {
+    return {
+      message: 'Location request timed out. Try again, or choose your address on the map.',
+      permission: 'undetermined',
+    }
+  }
+  if (rawMessage.trim()) {
+    return { message: rawMessage.trim(), permission: 'denied' }
+  }
+  return { message: 'Could not read location.', permission: 'denied' }
+}
+
 /**
  * Soft current-position request for web + native.
  * Never throws; never requests background location.
@@ -112,12 +155,12 @@ export async function getCurrentPosition(
       error: null,
     }
   } catch (error) {
-    const message = error instanceof Error ? error.message : 'Could not read location.'
+    const mapped = geolocationErrorMessage(error)
     return {
       coords: null,
       accuracy: null,
-      permission: 'denied',
-      error: message,
+      permission: mapped.permission,
+      error: mapped.message,
     }
   }
 }

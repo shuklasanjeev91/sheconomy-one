@@ -1167,6 +1167,7 @@ export type Database = {
           item_metadata: Json
           listing_id: string
           quantity: number
+          saved_for_later: boolean
           shop_id: string
           shop_name: string
           title: string
@@ -1186,6 +1187,7 @@ export type Database = {
           item_metadata?: Json
           listing_id: string
           quantity: number
+          saved_for_later?: boolean
           shop_id: string
           shop_name: string
           title: string
@@ -1204,6 +1206,7 @@ export type Database = {
           image_url?: string | null
           item_metadata?: Json
           listing_id?: string
+          saved_for_later?: boolean
           quantity?: number
           shop_id?: string
           shop_name?: string

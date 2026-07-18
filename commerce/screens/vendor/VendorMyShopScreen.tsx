@@ -27,6 +27,7 @@ import { loadVendorAnalytics, selectVendorAnalytics } from '~/lib/orders/vendor-
 import { openExternalUrl as openPlatformUrl } from '~/lib/platform/openUrl'
 import { commerceRoutes, vendorRoutes } from '~/lib/routes'
 import { deleteShop, loadMyShops, loadShopStats, updateShop } from '~/lib/shop/shop.store'
+import { getShopFollowerCount } from '~/lib/shop/shop.service'
 import type { Shop, ShopStats } from '~/lib/shop/shop.type'
 import { formatShopHours, getShopCompletionPercentage } from '~/lib/shop/shop.utils'
 import { useAppDispatch, useAppSelector } from '~/lib/store/hooks'
@@ -47,9 +48,8 @@ const SOCIAL_ICONS: Record<string, IconType> = {
   website: Icons.Globe,
 }
 
-/** Illustrative weekday engagement heights for the placeholder chart (0–1). */
-const ENGAGEMENT_SAMPLE = [0.35, 0.55, 0.4, 0.7, 0.5, 0.85, 0.6]
-const ENGAGEMENT_DAYS = ['M', 'T', 'W', 'T', 'F', 'S', 'S']
+/** Last 7 days order counts (index 0 = 6 days ago). */
+const ENGAGEMENT_DAYS = ['D-6', 'D-5', 'D-4', 'D-3', 'D-2', 'D-1', 'Today']
 
 function openExternalUrl(url: string | null | undefined) {
   if (!url) return
@@ -73,16 +73,35 @@ export function VendorMyShopScreen() {
   const analytics = useAppSelector(selectVendorAnalytics)
 
   const [address, setAddress] = useState<ShopAddressDetails | null>(null)
+  const [followerCount, setFollowerCount] = useState<number | null>(null)
+  /** Avoid an infinite spinner when `loadMyShops` hangs (network / RLS). */
+  const [loadTimedOut, setLoadTimedOut] = useState(false)
 
   useEffect(() => {
     if (!shop) void dispatch(loadMyShops(undefined))
   }, [dispatch, shop])
 
   useEffect(() => {
+    if (shop || !isLoadingShops) {
+      setLoadTimedOut(false)
+      return
+    }
+    const timer = setTimeout(() => setLoadTimedOut(true), 8_000)
+    return () => clearTimeout(timer)
+  }, [shop, isLoadingShops])
+
+  useEffect(() => {
     if (!shop?.id) return
     void dispatch(loadShopStats(shop.id))
     // All-time order totals for this shop (since the shop was created).
     void dispatch(loadVendorAnalytics({ vendorId: shop.id, filters: { date_from: shop.created_at } }))
+    let active = true
+    void getShopFollowerCount(shop.id).then((result) => {
+      if (active && result.success) setFollowerCount(result.data ?? 0)
+    })
+    return () => {
+      active = false
+    }
   }, [dispatch, shop?.id, shop?.created_at])
 
   useEffect(() => {
@@ -101,11 +120,13 @@ export function VendorMyShopScreen() {
 
   const completion = useMemo(() => getShopCompletionPercentage(shop), [shop])
   const totalOrders = analytics?.total_orders ?? null
+  const engagementSeries = analytics?.engagement_series ?? [0, 0, 0, 0, 0, 0, 0]
   const retryLoadShops = () => {
+    setLoadTimedOut(false)
     void dispatch(loadMyShops(undefined))
   }
 
-  if (!shop && isLoadingShops) {
+  if (!shop && isLoadingShops && !loadTimedOut) {
     return (
       <PageCenter>
         <Spinner size="large" />
@@ -113,10 +134,10 @@ export function VendorMyShopScreen() {
     )
   }
 
-  if (!shop && shopError) {
+  if (!shop && (shopError || loadTimedOut)) {
     return (
       <ScreenState
-        error={shopError}
+        error={shopError ?? (loadTimedOut ? 'Shop list timed out. Check your connection and try again.' : null)}
         empty
         errorTitle="Couldn’t load your shop"
         onRetry={retryLoadShops}
@@ -216,6 +237,7 @@ export function VendorMyShopScreen() {
               stats={stats}
               address={address}
               totalOrders={totalOrders}
+              engagementSeries={engagementSeries}
               isDesktop={isDesktop}
             />
             <DangerZone
@@ -239,6 +261,7 @@ export function VendorMyShopScreen() {
             stats={stats}
             address={address}
             totalOrders={totalOrders}
+            engagementSeries={engagementSeries}
             isDesktop={isDesktop}
           />
           <RightRail ui={ui} shop={shop} completion={completion} />
@@ -339,14 +362,16 @@ type MainColumnProps = {
   stats: ShopStats | null
   address: ShopAddressDetails | null
   totalOrders: number | null
+  engagementSeries: number[]
   isDesktop: boolean
 }
 
-function MainColumn({ ui, shop, stats, address, totalOrders, isDesktop }: MainColumnProps) {
+function MainColumn({ ui, shop, stats, address, totalOrders, engagementSeries, isDesktop }: MainColumnProps) {
   const categories = Array.isArray(shop.shop_categories) ? (shop.shop_categories as string[]) : []
   const socialLinks = (shop.social_links as Record<string, string> | null) ?? {}
   const socialEntries = Object.entries(socialLinks).filter(([, url]) => Boolean(url))
   const hours = formatShopHours(shop.shop_hours as Record<string, string> | null)
+  const maxEngagement = Math.max(1, ...engagementSeries)
 
   const activeProducts = stats?.activeListings ?? 0
   const totalListings = stats?.totalListings ?? 0
@@ -475,7 +500,13 @@ function MainColumn({ ui, shop, stats, address, totalOrders, isDesktop }: MainCo
           hint={reviewsLabel}
           real={rating != null && rating > 0}
         />
-        <StatTile ui={ui} icon={Icons.Users} label="Followers" value="1.2k" />
+        <StatTile
+          ui={ui}
+          icon={Icons.Users}
+          label="Followers"
+          value={followerCount == null ? '—' : String(followerCount)}
+          real={followerCount != null}
+        />
       </XStack>
 
       {/* Address + Contact */}
@@ -556,23 +587,25 @@ function MainColumn({ ui, shop, stats, address, totalOrders, isDesktop }: MainCo
         </Card>
       </XStack>
 
-      {/* Recent engagement (placeholder chart) */}
+      {/* Recent engagement from order analytics */}
       <Card ui={ui}>
         <XStack alignItems="center" justifyContent="space-between">
-          <SectionHeading ui={ui} icon={Icons.Activity} title="Recent Engagement" noMargin />
-          <SampleBadge ui={ui} />
+          <SectionHeading ui={ui} icon={Icons.Activity} title="Orders · last 7 days" noMargin />
+          <Text fontSize={11} fontWeight="700" color={ui.textMuted}>
+            Live
+          </Text>
         </XStack>
         <XStack alignItems="flex-end" justifyContent="space-between" height={120} marginTop="$3" gap="$2">
-          {ENGAGEMENT_SAMPLE.map((value, index) => (
+          {engagementSeries.map((value, index) => (
             <YStack key={index} flex={1} alignItems="center" gap="$1.5">
               <YStack
                 width="100%"
                 maxWidth={26}
-                height={Math.max(8, value * 96)}
+                height={Math.max(8, (value / maxEngagement) * 96)}
                 borderRadius={8}
-                backgroundColor={index === ENGAGEMENT_SAMPLE.length - 2 ? ui.brand : ui.roseSurface}
+                backgroundColor={index === engagementSeries.length - 1 ? ui.brand : ui.roseSurface}
               />
-              <Text fontSize={11} color={ui.textMuted} fontWeight="600">
+              <Text fontSize={10} color={ui.textMuted} fontWeight="600">
                 {ENGAGEMENT_DAYS[index]}
               </Text>
             </YStack>

@@ -7,7 +7,7 @@ import { RequireAuth } from '~/components/auth/RequireAuth'
 import { AppPage, LAYOUT_STRETCH } from '~/components/layout'
 import { Button, Icons, ScreenState, Text, XStack, YStack } from '~/components/ui'
 import { CoWorkBrandChip, CoWorkStatusPill } from '~/co-work/components/CoWorkUi'
-import { fetchHostedMeetings, formatMeetingCode } from '~/co-work/lib/meetings'
+import { fetchMyMeetings, formatMeetingCode } from '~/co-work/lib/meetings'
 import { coworkGlassStyle, useCoWorkTheme } from '~/co-work/lib/theme'
 import { coworkBoxShadow, pageGradientStyle } from '~/lib/platform/crossStyles'
 import type { Meeting } from '~/co-work/lib/types'
@@ -54,7 +54,7 @@ export function CoWorkMeetingsScreen() {
     setLoading(true)
     setError(null)
     try {
-      setMeetings(await fetchHostedMeetings(user.id))
+      setMeetings(await fetchMyMeetings(user.id))
     } catch (loadError) {
       setError(loadError instanceof Error ? loadError.message : 'Failed to load meetings')
     } finally {

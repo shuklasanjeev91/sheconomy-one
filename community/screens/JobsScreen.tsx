@@ -9,7 +9,7 @@ import {
   CommunityFilterSheet,
   type FilterOption,
 } from '~/community/components/CommunityFilters'
-import { fetchSavedJobs, searchJobs, type JobListing } from '~/community/lib/jobs'
+import { fetchMyJobApplications, fetchSavedJobs, searchJobs, type JobListing, type MyJobApplication } from '~/community/lib/jobs'
 import { useCommunityUi } from '~/community/lib/community-theme'
 import { LoadMoreSentinel } from '~/commerce/components/LoadMoreSentinel'
 import { ScreenSearchField } from '~/components/search'
@@ -80,6 +80,8 @@ export function JobsScreen() {
   const [sort, setSort] = useState('recent')
   const [activeSheet, setActiveSheet] = useState<ActiveSheet>(null)
   const [showSavedOnly, setShowSavedOnly] = useState(false)
+  const [showMyApplications, setShowMyApplications] = useState(false)
+  const [myApplications, setMyApplications] = useState<MyJobApplication[]>([])
 
   const [items, setItems] = useState<JobListing[]>([])
   const [savedJobs, setSavedJobs] = useState<JobListing[]>([])
@@ -120,11 +122,15 @@ export function JobsScreen() {
   useEffect(() => {
     if (!user?.id) {
       setSavedJobs([])
+      setMyApplications([])
       return
     }
     let active = true
     void fetchSavedJobs(user.id).then((result) => {
       if (active) setSavedJobs(result.items)
+    })
+    void fetchMyJobApplications(user.id).then((result) => {
+      if (active) setMyApplications(result.items)
     })
     return () => {
       active = false
@@ -231,12 +237,30 @@ export function JobsScreen() {
         />
 
         {user ? (
-          <CommunityFilterPill
-            label={savedJobs.length ? `Saved (${savedJobs.length})` : 'Saved'}
-            summary="Saved jobs"
-            active={showSavedOnly}
-            onPress={() => setShowSavedOnly((value) => !value)}
-          />
+          <XStack gap={8} flexWrap="wrap">
+            <CommunityFilterPill
+              label={savedJobs.length ? `Saved (${savedJobs.length})` : 'Saved'}
+              summary="Saved jobs"
+              active={showSavedOnly}
+              onPress={() => {
+                setShowMyApplications(false)
+                setShowSavedOnly((value) => !value)
+              }}
+            />
+            <CommunityFilterPill
+              label={
+                myApplications.length
+                  ? `My applications (${myApplications.length})`
+                  : 'My applications'
+              }
+              summary="Applications you submitted"
+              active={showMyApplications}
+              onPress={() => {
+                setShowSavedOnly(false)
+                setShowMyApplications((value) => !value)
+              }}
+            />
+          </XStack>
         ) : null}
 
         <ScreenSearchField
@@ -316,6 +340,41 @@ export function JobsScreen() {
         <YStack alignItems="center" paddingVertical="$8">
           <Spinner size="large" color={communityUi.brand} />
         </YStack>
+      ) : showMyApplications ? (
+        <CommunityCard padding={12} gap={0}>
+          {myApplications.length === 0 ? (
+            <Text color={communityUi.textMuted} padding={12}>
+              You haven’t applied to any jobs yet.
+            </Text>
+          ) : (
+            myApplications.map((application) => (
+              <AppLink
+                key={application.id}
+                href={application.job ? communityRoutes.job(application.job.id) : communityRoutes.jobs}
+              >
+                <YStack
+                  paddingVertical={12}
+                  borderBottomWidth={1}
+                  borderBottomColor={communityUi.borderLight}
+                  gap={4}
+                >
+                  <Text fontSize={16} fontWeight="600" color={communityUi.text}>
+                    {application.job?.title ?? 'Job'}
+                  </Text>
+                  <Text fontSize={14} color={communityUi.textMuted}>
+                    {application.job?.company_name ?? 'Company'}
+                  </Text>
+                  <Text fontSize={13} color={communityUi.textMuted}>
+                    Status: {application.status}
+                    {application.job
+                      ? ` · ${application.job.location} · ${application.job.job_type}`
+                      : ''}
+                  </Text>
+                </YStack>
+              </AppLink>
+            ))
+          )}
+        </CommunityCard>
       ) : (
         <CommunityCard padding={12} gap={0}>
           {visibleItems.length === 0 ? (

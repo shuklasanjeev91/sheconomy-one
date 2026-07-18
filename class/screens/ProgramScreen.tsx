@@ -20,6 +20,8 @@ import {
 } from '~/class/lib/programs'
 import { recordProgramLocalView } from '~/class/lib/recently-viewed-programs'
 import { isProgramSaved, toggleSavedProgram, useSavedPrograms } from '~/class/lib/saved-programs'
+import { enrollInCourse } from '~/class/lib/enrollment'
+import { useSupabase } from '~/providers/SupabaseProvider'
 import { SectionTitle } from '~/commerce/components'
 import { FullWidthLayout, PageCenter } from '~/components/layout'
 import { ShareButton } from '~/components/share'
@@ -37,6 +39,7 @@ export function ProgramScreen() {
   const media = useMedia()
   const toast = useAppToast()
   const router = useRouter()
+  const { user } = useSupabase()
   const { slug } = useParams<{ slug: string }>()
   const params = useLocalSearchParams<{ playlist?: string }>()
   const playlistId = typeof params.playlist === 'string' ? params.playlist : null
@@ -51,6 +54,7 @@ export function ProgramScreen() {
   const [playlistTitle, setPlaylistTitle] = useState<string | null>(null)
   const [saveSheetOpen, setSaveSheetOpen] = useState(false)
   const [countdown, setCountdown] = useState<number | null>(null)
+  const [isEnrolling, setIsEnrolling] = useState(false)
   const countdownRef = useRef<ReturnType<typeof setInterval> | null>(null)
   const nextProgramRef = useRef<Program | null>(null)
 
@@ -325,6 +329,35 @@ export function ProgramScreen() {
                 <Text fontSize={13} color={ui.textMuted}>
                   {statsLine}
                 </Text>
+              ) : null}
+
+              {user ? (
+                <Button
+                  tone="primary"
+                  size="$3"
+                  borderRadius={999}
+                  alignSelf="flex-start"
+                  disabled={isEnrolling}
+                  icon={isEnrolling ? <Spinner size="small" color="white" /> : undefined}
+                  onPress={async () => {
+                    setIsEnrolling(true)
+                    const result = await enrollInCourse({
+                      courseId: program.id,
+                      userId: user.id,
+                    })
+                    setIsEnrolling(false)
+                    if (result.error) {
+                      toast.show('Could not enroll', { tone: 'danger', message: result.error })
+                      return
+                    }
+                    toast.show('Enrolled', {
+                      tone: 'success',
+                      message: 'You will get updates when new lessons are published.',
+                    })
+                  }}
+                >
+                  {isEnrolling ? 'Enrolling…' : 'Enroll in this program'}
+                </Button>
               ) : null}
 
               {hasProgramAuthor(program) ? (

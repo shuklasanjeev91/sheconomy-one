@@ -16,8 +16,11 @@ declare module 'one' {
         | `/(store)/category`
         | `/(store)/checkout`
         | `/(store)/favorites`
+        | `/(store)/following`
         | `/(store)/listing`
         | `/(store)/orders`
+        | `/(store)/orders/payu`
+        | `/(store)/orders/payu-return`
         | `/(store)/orders/success`
         | `/(store)/payment-methods`
         | `/(store)/search`
@@ -97,6 +100,7 @@ declare module 'one' {
         | `/community/stories/create`
         | `/create-my-shop`
         | `/favorites`
+        | `/following`
         | `/help`
         | `/legal/ads`
         | `/legal/cookies`
@@ -105,6 +109,8 @@ declare module 'one' {
         | `/listing`
         | `/notifications`
         | `/orders`
+        | `/orders/payu`
+        | `/orders/payu-return`
         | `/orders/success`
         | `/payment-methods`
         | `/profile`

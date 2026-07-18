@@ -23,6 +23,8 @@ import { FavoritesProvider } from '~/commerce/hooks/useFavorites'
 import { MarketplacePersonalizationProvider } from '~/commerce/context/MarketplacePersonalizationContext'
 import { useAppFonts } from '~/hooks/useAppFonts'
 import { RegionPreferencesProvider } from '~/lib/locale/RegionPreferencesContext'
+import { CurrencyRatesProvider } from '~/lib/currency/CurrencyRatesProvider'
+import { UserLocationProvider } from '~/lib/location'
 import { store } from '~/lib/store'
 import { PushNotificationsProvider } from '~/providers/PushNotificationsProvider'
 import { SupabaseProvider } from '~/providers/SupabaseProvider'
@@ -197,40 +199,44 @@ function AppProviders({ children }: { children: React.ReactNode }) {
     <ReduxProvider store={store}>
       <SupabaseProvider>
         <RegionPreferencesProvider>
-          <PushNotificationsProvider>
-            <SchemeProvider>
-              <ThemedApp>
-                <CartProvider>
-                  <FavoritesProvider>
-                    <MarketplacePersonalizationProvider>
-                      <AiAssistProvider>
-                        <ScreenZoomProvider>
-                          <ScreenZoomRoot>
-                            <AutomaticUpdateManager />
-                            <InAppNotificationHost />
-                            <PushForegroundNotificationHost />
-                            <AppUsageTracker />
-                            <ExternalAnalyticsTracker />
-                            <BiometricUnlockGate>
-                              <ConnectivityProvider>
-                                <AppErrorBoundary scope="AppShell">
-                                  <RouteSeoProvider>
-                                    <RouteWarmup />
-                                    <AppBootstrapPrefetch />
-                                    <AppShell>{children}</AppShell>
-                                  </RouteSeoProvider>
-                                </AppErrorBoundary>
-                              </ConnectivityProvider>
-                            </BiometricUnlockGate>
-                          </ScreenZoomRoot>
-                        </ScreenZoomProvider>
-                      </AiAssistProvider>
-                    </MarketplacePersonalizationProvider>
-                  </FavoritesProvider>
-                </CartProvider>
-              </ThemedApp>
-            </SchemeProvider>
-          </PushNotificationsProvider>
+          <UserLocationProvider>
+            <CurrencyRatesProvider>
+              <PushNotificationsProvider>
+                <SchemeProvider>
+                  <ThemedApp>
+                    <CartProvider>
+                      <FavoritesProvider>
+                        <MarketplacePersonalizationProvider>
+                          <AiAssistProvider>
+                            <ScreenZoomProvider>
+                              <ScreenZoomRoot>
+                                <AutomaticUpdateManager />
+                                <InAppNotificationHost />
+                                <PushForegroundNotificationHost />
+                                <AppUsageTracker />
+                                <ExternalAnalyticsTracker />
+                                <BiometricUnlockGate>
+                                  <ConnectivityProvider>
+                                    <AppErrorBoundary scope="AppShell">
+                                      <RouteSeoProvider>
+                                        <RouteWarmup />
+                                        <AppBootstrapPrefetch />
+                                        <AppShell>{children}</AppShell>
+                                      </RouteSeoProvider>
+                                    </AppErrorBoundary>
+                                  </ConnectivityProvider>
+                                </BiometricUnlockGate>
+                              </ScreenZoomRoot>
+                            </ScreenZoomProvider>
+                          </AiAssistProvider>
+                        </MarketplacePersonalizationProvider>
+                      </FavoritesProvider>
+                    </CartProvider>
+                  </ThemedApp>
+                </SchemeProvider>
+              </PushNotificationsProvider>
+            </CurrencyRatesProvider>
+          </UserLocationProvider>
         </RegionPreferencesProvider>
       </SupabaseProvider>
     </ReduxProvider>

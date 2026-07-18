@@ -8,7 +8,7 @@ import { Spinner, Text, Theme, YStack, useMedia } from '~/components/ui'
 import { BRAND_THEME, getShadowStyle, radius } from '~/config/tokens'
 import { commerceRoutes } from '~/lib/routes'
 import { FullWidthLayout, PageSection } from '~/components/layout'
-import { NearbyShopsSection } from '~/components/location'
+import { NearbyShopsSection, NearYouLocationChip } from '~/components/location'
 import { useAppUi } from '~/lib/theme/useAppUi'
 
 import { BRAND_NAME } from '~/config/brand'
@@ -40,6 +40,7 @@ export function ShopsBrowseScreen() {
           subtitle={`Discover women-led storefronts across ${BRAND_NAME}`}
         />
 
+        <NearYouLocationChip />
         <NearbyShopsSection />
 
         {!isLoading && !error && (totalCount > 0 || countries.length > 0) ? (

@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useMemo } from 'react'
 
 import {
   inferCountryFromLocale,
@@ -6,82 +6,31 @@ import {
   type UserGeo,
 } from '~/commerce/lib/marketplace-personalization'
 import { useOptionalRegionPreferences } from '~/lib/locale/RegionPreferencesContext'
-import {
-  getCurrentPosition,
-  readStoredUserGeo,
-  readStoredUserGeoSync,
-  writeStoredUserGeo,
-} from '~/lib/location'
-
-function sameGeo(a: UserGeo, b: UserGeo): boolean {
-  return (
-    a.latitude === b.latitude &&
-    a.longitude === b.longitude &&
-    a.city === b.city &&
-    a.state === b.state &&
-    a.country === b.country &&
-    a.postal_code === b.postal_code
-  )
-}
+import { useOptionalUserLocation } from '~/lib/location'
 
 /**
- * Session geo for marketplace personalization.
- * Merges region prefs, profile location, stored coords, and optional device capture.
+ * Session geo for marketplace personalization / search.
+ * Prefers the shared UserLocationProvider snapshot; falls back to profile + locale.
  */
-export function useUserGeo(profileLocation?: string | null) {
+export function useUserGeo(profileLocation?: string | null): UserGeo {
   const region = useOptionalRegionPreferences()
-  const countryCode = region?.countryCode
-  const [geo, setGeo] = useState<UserGeo>(() => ({
-    country: inferCountryFromLocale(),
-    ...readStoredUserGeoSync(),
-    ...parseProfileLocation(profileLocation),
-  }))
+  const location = useOptionalUserLocation()
+  const fromProfile = useMemo(() => parseProfileLocation(profileLocation), [profileLocation])
 
-  useEffect(() => {
-    void readStoredUserGeo().then((stored) => {
-      if (!stored || Object.keys(stored).length === 0) return
-      setGeo((current) => {
-        const next = { ...current, ...stored }
-        return sameGeo(current, next) ? current : next
-      })
-    })
-  }, [])
+  return useMemo(() => {
+    const country =
+      location?.country ??
+      region?.countryCode ??
+      fromProfile.country ??
+      inferCountryFromLocale()
 
-  useEffect(() => {
-    const fromProfile = parseProfileLocation(profileLocation)
-    setGeo((current) => {
-      const next: UserGeo = {
-        ...fromProfile,
-        ...current,
-        country: countryCode ?? current.country ?? inferCountryFromLocale(),
-      }
-      return sameGeo(current, next) ? current : next
-    })
-  }, [profileLocation, countryCode])
-
-  useEffect(() => {
-    if (geo.latitude != null && geo.longitude != null) return
-
-    let cancelled = false
-    void (async () => {
-      const position = await getCurrentPosition({ accuracy: 'approximate', persist: true })
-      if (cancelled || !position.coords) return
-      const next = {
-        latitude: position.coords.latitude,
-        longitude: position.coords.longitude,
-        country: geo.country ?? countryCode ?? inferCountryFromLocale(),
-      }
-      void writeStoredUserGeo(next)
-      setGeo((current) => {
-        const merged = { ...current, ...next }
-        return sameGeo(current, merged) ? current : merged
-      })
-    })()
-
-    return () => {
-      cancelled = true
+    return {
+      latitude: location?.latitude ?? fromProfile.latitude ?? null,
+      longitude: location?.longitude ?? fromProfile.longitude ?? null,
+      city: location?.city ?? fromProfile.city ?? null,
+      state: location?.state ?? fromProfile.state ?? null,
+      country,
+      postal_code: location?.postal_code ?? fromProfile.postal_code ?? null,
     }
-  }, [geo.country, geo.latitude, geo.longitude, countryCode])
-
-  return geo
+  }, [location, region?.countryCode, fromProfile])
 }

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 
 import { CACHE_KEYS } from '~/lib/bootstrap/app-prefetch'
 import {
@@ -13,14 +13,30 @@ import {
 } from '~/commerce/lib/shop-filters'
 import { usePaginatedFeed } from '~/commerce/hooks/usePaginatedFeed'
 import { peekAppCache, writeAppCache } from '~/lib/cache/app-cache'
+import { getFollowedShops } from '~/lib/shop/shop.service'
+import { useSupabase } from '~/providers/SupabaseProvider'
 
 const COUNTRIES_CACHE_KEY = `${CACHE_KEYS.shopsBrowse}:countries`
 
 export function useShopsBrowse() {
+  const { user } = useSupabase()
   const [filters, setFilters] = useState<ShopBrowseFilters>(DEFAULT_SHOP_BROWSE_FILTERS)
+  const [followedIds, setFollowedIds] = useState<Set<string>>(new Set())
   const [countries, setCountries] = useState<string[]>(
     () => peekAppCache<string[]>(COUNTRIES_CACHE_KEY) ?? [],
   )
+
+  useEffect(() => {
+    if (!user?.id || !filters.followingOnly) return
+    let cancelled = false
+    void getFollowedShops(user.id).then((result) => {
+      if (cancelled) return
+      setFollowedIds(new Set((result.data ?? []).map((shop) => shop.id)))
+    })
+    return () => {
+      cancelled = true
+    }
+  }, [filters.followingOnly, user?.id])
 
   const fetchPage = useCallback(
     (page: number) =>
@@ -35,6 +51,11 @@ export function useShopsBrowse() {
     fetchPage,
     cacheKey: `${CACHE_KEYS.shopsBrowse}:${filters.sort}:${filters.country}`,
   })
+
+  const items = useMemo(() => {
+    if (!filters.followingOnly) return feed.items
+    return feed.items.filter((shop) => followedIds.has(shop.id))
+  }, [feed.items, filters.followingOnly, followedIds])
 
   useEffect(() => {
     const fromItems = extractShopCountries(feed.items)
@@ -65,9 +86,9 @@ export function useShopsBrowse() {
   }, [countries.length])
 
   return {
-    items: feed.items,
-    totalCount: feed.items.length,
-    hasMore: feed.hasMore,
+    items,
+    totalCount: items.length,
+    hasMore: filters.followingOnly ? false : feed.hasMore,
     isLoading: feed.isLoading,
     isLoadingMore: feed.isLoadingMore,
     isRefreshing: feed.isRefreshing,

@@ -75,6 +75,7 @@ export const commerceRoutes = {
   browse: (kind: string) => `/browse/${kind}` as Href,
   listing: (slug: string) => `/listing/${encodeURIComponent(slug)}` as Href,
   shop: (slug: string) => `/shop/${encodeURIComponent(slug)}` as Href,
+  following: '/following' as Href,
 } as const
 
 /** Vendor console — a seller's own storefront management section. */
