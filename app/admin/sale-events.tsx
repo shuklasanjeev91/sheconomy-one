@@ -1,5 +1,15 @@
-import { AdminSectionPage } from './layout'
+import { SaleEventErrorBoundary } from '~/commerce/components/SaleEventErrorBoundary'
+import { useAppDispatch } from '~/lib/store/hooks'
+import { loadEvents } from '~/lib/sale-event'
+
+import { AdminSaleEventsManager } from './components/AdminSaleEventsManager'
 
 export default function AdminSaleEventsPage() {
-  return <AdminSectionPage sectionId="sale-events" />
+  const dispatch = useAppDispatch()
+
+  return (
+    <SaleEventErrorBoundary scope="AdminSaleEvents" onReset={() => dispatch(loadEvents())}>
+      <AdminSaleEventsManager />
+    </SaleEventErrorBoundary>
+  )
 }

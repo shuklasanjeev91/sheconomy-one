@@ -34,6 +34,7 @@ declare module 'one' {
         | `/admin/company-pages`
         | `/admin/components/AdminBlogDetail`
         | `/admin/components/AdminBlogManager`
+        | `/admin/components/AdminSaleEventsManager`
         | `/admin/components/AdminShopsManager`
         | `/admin/components/CmsCoverImage`
         | `/admin/groups`

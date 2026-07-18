@@ -12,6 +12,7 @@ import {
 
 import { addressReducer } from '~/lib/address/address.store'
 import { cmsReducer } from '~/lib/cms/cms.store'
+import { saleReducer } from '~/lib/sale-event/sale-event.store'
 import { profileCompletionReducer, profileReducer } from '~/lib/profile/profile.store'
 import { shopReducer } from '~/lib/shop/shop.store'
 import { listingReducer } from '~/lib/listing/listing.store'
@@ -80,6 +81,7 @@ const appReducer = combineReducers({
   fulfillment: fulfillmentReducer,
   delivery: deliveryReducer,
   cms: cmsReducer,
+  sale: saleReducer,
 })
 
 /** Dispatched on sign-out to wipe all in-memory state back to initial. */
