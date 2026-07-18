@@ -11,7 +11,7 @@ export type ShepayPayuCreateResult = {
 /** Create a PayU SHEPay session for a checkout payment step (collection=shepay). */
 export async function createShepayPayuSession(
   paymentStepId: string,
-  options?: { paymentMethodId?: string | null },
+  options?: { paymentMethodId?: string | null; payuPg?: string | null },
 ): Promise<{
   data: ShepayPayuCreateResult | null
   error: string | null
@@ -20,6 +20,7 @@ export async function createShepayPayuSession(
     body: {
       payment_step_id: paymentStepId,
       payment_method_id: options?.paymentMethodId ?? null,
+      pg: options?.payuPg ?? null,
     },
   })
 
@@ -37,7 +38,7 @@ export async function createShepayPayuSession(
 /** For each SHEPay step without a URL, create a PayU session and return the first checkout URL. */
 export async function ensureShepayCheckoutUrl(
   paymentSteps: Array<{ id: string; collection?: string; checkoutUrl?: string | null }>,
-  options?: { paymentMethodId?: string | null },
+  options?: { paymentMethodId?: string | null; payuPg?: string | null },
 ): Promise<{ checkoutUrl: string | null; error: string | null }> {
   const shepaySteps = paymentSteps.filter((step) => step.collection === 'shepay')
 

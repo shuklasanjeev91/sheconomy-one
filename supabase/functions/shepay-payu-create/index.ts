@@ -8,6 +8,8 @@ type CreateBody = {
   payment_step_id?: string
   checkout_group_id?: string
   payment_method_id?: string | null
+  /** Preferred PayU payment mode: UPI | CC | NB | CASH */
+  pg?: string | null
 }
 
 function formatAmount(amount: number): string {
@@ -131,6 +133,11 @@ Deno.serve(async (request) => {
     surl: `${appBase}/orders/payu-return?status=success`,
     furl: `${appBase}/orders/payu-return?status=failure`,
     service_provider: 'payu_paisa',
+  }
+
+  const pg = body.pg ? String(body.pg).trim().toUpperCase() : ''
+  if (pg && ['UPI', 'CC', 'DC', 'NB', 'CASH', 'EMI'].includes(pg)) {
+    fields.pg = pg
   }
 
   const actionUrl = `${payuBase}/_payment`

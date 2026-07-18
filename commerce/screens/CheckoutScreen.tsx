@@ -32,6 +32,7 @@ import {
 } from '~/commerce/components'
 import {
   checkCartStock,
+  cancelCheckoutPayment,
   createAtomicMarketplaceCheckout,
   fetchUserAddresses,
   saveUserAddress,
@@ -40,6 +41,15 @@ import {
   type UserAddress,
 } from '~/commerce/lib/checkout'
 import { ensureShepayCheckoutUrl } from '~/commerce/lib/shepay'
+import {
+  CHECKOUT_PAYMENT_INSTRUMENTS,
+  checkoutShippingLabel,
+  onlinePaymentOptionCopy,
+  payuPgForInstrument,
+  resolvePostCheckoutNext,
+  shouldShowCheckoutInstruments,
+  type CheckoutPaymentInstrument,
+} from '~/commerce/lib/checkout-payment-route'
 import { savePendingOrderSuccess } from '~/commerce/lib/customer-orders'
 import { computeSelectedTotals, useCartSelection } from '~/commerce/lib/cart-selection'
 import { fetchBuyerPaymentMethods } from '~/commerce/lib/buyer-account'
@@ -105,6 +115,7 @@ export function CheckoutScreen() {
   const [notesByShop, setNotesByShop] = useState<Record<string, string>>({})
   const [giftByShop, setGiftByShop] = useState<Record<string, boolean>>({})
   const [paymentMethod, setPaymentMethod] = useState<CheckoutPaymentMode>('online')
+  const [paymentInstrument, setPaymentInstrument] = useState<CheckoutPaymentInstrument>('upi')
   const [savedPaymentMethods, setSavedPaymentMethods] = useState<ParsedPaymentMethod[]>([])
   const [selectedSavedPaymentId, setSelectedSavedPaymentId] = useState<string | null>(null)
   const [isSubmitting, setIsSubmitting] = useState(false)
@@ -166,6 +177,27 @@ export function CheckoutScreen() {
   }, [orderShops, shopPartners])
 
   const paymentStepCount = (paymentGroups.shepay.length ? 1 : 0) + paymentGroups.direct.length
+  const onlineCopy = useMemo(
+    () =>
+      onlinePaymentOptionCopy({
+        shepayShops: paymentGroups.shepay,
+        directShops: paymentGroups.direct,
+      }),
+    [paymentGroups],
+  )
+  const showCheckoutInstruments = useMemo(
+    () =>
+      shouldShowCheckoutInstruments({
+        shepayShops: paymentGroups.shepay,
+        directShops: paymentGroups.direct,
+      }),
+    [paymentGroups],
+  )
+  const showSavedPaymentRadios =
+    paymentMethod === 'online' &&
+    savedPaymentMethods.length > 0 &&
+    paymentGroups.shepay.length === 0 &&
+    !showCheckoutInstruments
 
   useEffect(() => {
     const ids = items.map((item) => item.listing_id)
@@ -339,17 +371,15 @@ export function CheckoutScreen() {
       const { orderIds, orderNumbers, checkoutGroupId } = result.data
       let checkoutUrl =
         result.data.paymentSteps.find((step) => step.checkoutUrl)?.checkoutUrl ?? null
+      let shepayError: string | null = null
+      const hasShepaySteps = result.data.paymentSteps.some((step) => step.collection === 'shepay')
 
-      if (mode === 'online' && !checkoutUrl) {
+      if (mode === 'online' && hasShepaySteps && !checkoutUrl) {
         const shepay = await ensureShepayCheckoutUrl(result.data.paymentSteps, {
-          paymentMethodId: selectedSavedPaymentId,
+          paymentMethodId: null,
+          payuPg: payuPgForInstrument(paymentInstrument),
         })
-        if (shepay.error) {
-          toast.show('Payment setup incomplete', {
-            tone: 'danger',
-            message: shepay.error,
-          })
-        }
+        shepayError = shepay.error
         checkoutUrl = shepay.checkoutUrl
       }
 
@@ -370,6 +400,25 @@ export function CheckoutScreen() {
         void rememberRecentAddress(usedAddress as never).then(setRecentAddresses)
       }
 
+      const next = resolvePostCheckoutNext({
+        mode,
+        checkoutUrl,
+        shepayError,
+        hasShepaySteps,
+      })
+
+      if (next.kind === 'cancel_and_stay') {
+        if (checkoutGroupId) {
+          await cancelCheckoutPayment(checkoutGroupId)
+        }
+        toast.show('Payment setup incomplete', {
+          tone: 'danger',
+          message: next.error,
+        })
+        setIsSubmitting(false)
+        return
+      }
+
       setOrderPlaced(true)
       trackCommerceEvent('purchase', {
         currency,
@@ -382,7 +431,11 @@ export function CheckoutScreen() {
           quantity: item.quantity,
         })),
       })
-      const awaitingExternalPayment = Boolean(mode === 'online')
+
+      const awaitingExternalPayment = next.kind === 'payu_bridge' || next.kind === 'external_pay'
+      const pendingUrl =
+        next.kind === 'payu_bridge' ? next.href : next.kind === 'external_pay' ? next.url : null
+
       if (orderIds.length > 0) {
         await savePendingOrderSuccess({
           orderIds,
@@ -391,20 +444,26 @@ export function CheckoutScreen() {
           paymentMode: mode,
           awaitingExternalPayment,
           checkoutGroupId,
-          checkoutUrl,
+          checkoutUrl: pendingUrl,
         })
       }
 
       const successHref = commerceRoutes.orderSuccess(orderIds)
 
-      if (awaitingExternalPayment && checkoutUrl) {
-        const opened = await openExternalUrl(checkoutUrl)
+      if (next.kind === 'payu_bridge') {
+        void refresh()
+        router.replace(next.href as never)
+        return
+      }
+
+      if (next.kind === 'external_pay') {
+        const opened = await openExternalUrl(next.url)
         router.replace(successHref)
         void refresh()
         if (!opened) {
-          toast.show('Payment page blocked', {
+          toast.show('Complete payment', {
             tone: 'info',
-            message: 'Your order is saved — open the payment link from your email if needed.',
+            message: 'Allow pop-ups, or use Resume payment on the next screen.',
           })
         }
         return
@@ -733,10 +792,10 @@ export function CheckoutScreen() {
                     {paymentGroups.shepay.length ? (
                       <PaymentRouteRow
                         icon={<Icons.ShieldCheck size={14} color={c.brand} />}
-                        title="SHEconomy Payments (SHEPay)"
+                        title="SHEPay (PayU hosted)"
                         detail={`${paymentGroups.shepay
                           .map((shop) => shop.shopName)
-                          .join(', ')} · collected securely by SHEconomy`}
+                          .join(', ')} · card, UPI, net banking on PayU`}
                       />
                     ) : null}
                     {paymentGroups.direct.map((group) => (
@@ -763,17 +822,34 @@ export function CheckoutScreen() {
                     </Text>
                   </XStack>
                 ) : null}
-                <PaymentOption
-                  selected={paymentMethod === 'online'}
-                  title="Credit/Debit card, UPI, Net banking, Wallet"
-                  subtitle={
-                    paymentGroups.direct.length && !paymentGroups.shepay.length
-                      ? 'Paid directly to the seller — 0% commission'
-                      : 'Processed securely (SHEPay for SHEconomy-powered shops)'
-                  }
-                  onPress={() => setPaymentMethod('online')}
-                />
-                {paymentMethod === 'online' && savedPaymentMethods.length > 0 ? (
+                {showCheckoutInstruments && paymentMethod === 'online' ? (
+                  <YStack gap="$2">
+                    {CHECKOUT_PAYMENT_INSTRUMENTS.map((instrument) => (
+                      <PaymentOption
+                        key={instrument.id}
+                        selected={paymentInstrument === instrument.id}
+                        title={instrument.title}
+                        subtitle={
+                          paymentGroups.direct.length
+                            ? `${instrument.subtitle} · then pay seller gateways if needed`
+                            : `${instrument.subtitle} · secured by SHEPay (PayU)`
+                        }
+                        onPress={() => {
+                          setPaymentMethod('online')
+                          setPaymentInstrument(instrument.id)
+                        }}
+                      />
+                    ))}
+                  </YStack>
+                ) : (
+                  <PaymentOption
+                    selected={paymentMethod === 'online'}
+                    title={onlineCopy.title}
+                    subtitle={onlineCopy.subtitle}
+                    onPress={() => setPaymentMethod('online')}
+                  />
+                )}
+                {showSavedPaymentRadios ? (
                   <YStack gap="$2" paddingLeft="$6">
                     {savedPaymentMethods.map((method) => {
                       const selected = selectedSavedPaymentId === method.id
@@ -849,10 +925,12 @@ export function CheckoutScreen() {
                         </Text>
                       </XStack>
                       <ShopRatingBadge info={shopHeaders.get(shop.shopId)} />
-                      <XStack alignItems="center" gap="$1.5">
+                      <XStack alignItems="center" gap="$1.5" flexWrap="wrap">
                         <Icons.Truck size={13} color={c.inStock} />
                         <Text fontSize={12} color={c.inStock} fontWeight="600">
                           {deliveryEstimateLabel()}
+                          {' · '}
+                          {checkoutShippingLabel(shopPartners.get(shop.shopId))}
                         </Text>
                       </XStack>
                       <ShopPartnerChips info={shopPartners.get(shop.shopId)} />
