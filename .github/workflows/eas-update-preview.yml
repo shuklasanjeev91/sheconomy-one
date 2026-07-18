@@ -1,0 +1,57 @@
+# Publish a PR preview OTA with QR / comment via EAS Update --auto.
+# Requires repo secret EXPO_TOKEN from https://expo.dev/settings/access-tokens
+name: EAS Update (PR preview)
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
+
+concurrency:
+  group: eas-update-preview-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  preview:
+    name: Publish PR preview
+    if: github.event.pull_request.draft == false
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
+    steps:
+      - name: Check for EXPO_TOKEN
+        run: |
+          if [ -z "${{ secrets.EXPO_TOKEN }}" ]; then
+            echo "Add repository secret EXPO_TOKEN (Expo access token)."
+            echo "https://docs.expo.dev/eas-update/github-actions/"
+            exit 1
+          fi
+
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Enable Corepack (Yarn 4)
+        run: corepack enable
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22.14.0
+          cache: yarn
+
+      - name: Setup EAS
+        uses: expo/expo-github-action@v8
+        with:
+          eas-version: latest
+          token: ${{ secrets.EXPO_TOKEN }}
+
+      - name: Install dependencies
+        run: yarn install --immutable
+        env:
+          YARN_ENABLE_GLOBAL_CACHE: 'false'
+          YARN_NODE_LINKER: node-modules
+
+      - name: Create preview
+        uses: expo/expo-github-action/preview@v8
+        with:
+          command: eas update --auto --non-interactive

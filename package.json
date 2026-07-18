@@ -24,7 +24,11 @@
     "test:unit:watch": "vitest",
     "supabase:types": "supabase gen types typescript --project-id zsaqrrzwygzwrlzgymxk > lib/supabase/database.types.ts",
     "desktop:dev": "electron electron/main.cjs",
-    "desktop:build:win": "electron-builder --projectDir electron --win --x64 --config electron-builder.yml"
+    "desktop:build:win": "electron-builder --projectDir electron --win --x64 --config electron-builder.yml",
+    "update:development": "eas update --channel development --non-interactive",
+    "update:preview": "eas update --channel preview --non-interactive",
+    "update:production": "eas update --channel production --non-interactive",
+    "update:auto": "eas update --auto --non-interactive"
   },
   "dependencies": {
     "@babel/runtime": "^7.26.0",
