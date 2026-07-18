@@ -40,6 +40,7 @@ export function usePaginatedFeed<T extends { id: string }>({
   const [isLoadingMore, setIsLoadingMore] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const inFlightRef = useRef(false)
+  const fetchGenerationRef = useRef(0)
   const hasItemsRef = useRef((initialSnapshot?.items?.length ?? 0) > 0)
   hasItemsRef.current = items.length > 0
 
@@ -53,8 +54,11 @@ export function usePaginatedFeed<T extends { id: string }>({
 
   const loadPage = useCallback(
     async (pageToLoad: number, append: boolean, silent = false) => {
-      if (!enabled || inFlightRef.current) return
+      if (!enabled) return
+      // Non-append loads always win (tab/filter change); append still respects in-flight.
+      if (append && inFlightRef.current) return
 
+      const generation = append ? fetchGenerationRef.current : ++fetchGenerationRef.current
       inFlightRef.current = true
       if (append) {
         setIsLoadingMore(true)
@@ -67,6 +71,11 @@ export function usePaginatedFeed<T extends { id: string }>({
       }
 
       const result = await fetchPage(pageToLoad)
+
+      // Stale response after tab/filter change — ignore.
+      if (generation !== fetchGenerationRef.current) {
+        return
+      }
 
       if (result.error) {
         // Preserve cached / already-loaded content instead of wiping the list.
@@ -103,7 +112,9 @@ export function usePaginatedFeed<T extends { id: string }>({
       setIsLoading(false)
       setIsRefreshing(false)
       setIsLoadingMore(false)
-      inFlightRef.current = false
+      if (generation === fetchGenerationRef.current) {
+        inFlightRef.current = false
+      }
     },
     [cacheKey, enabled, fetchPage, persistFirstPage],
   )
@@ -121,6 +132,9 @@ export function usePaginatedFeed<T extends { id: string }>({
     }
 
     let cancelled = false
+    // Invalidate any in-flight response from the previous key/fetcher.
+    fetchGenerationRef.current += 1
+    inFlightRef.current = false
 
     void (async () => {
       if (cacheKey) {
@@ -133,7 +147,18 @@ export function usePaginatedFeed<T extends { id: string }>({
           setPage(cached.page)
           setHasMore(cached.hasMore)
           setIsLoading(false)
+        } else {
+          // Drop previous tab/filter results so we never flash the wrong media type.
+          setItems([])
+          setPage(0)
+          setHasMore(true)
+          setIsLoading(true)
         }
+      } else {
+        setItems([])
+        setPage(0)
+        setHasMore(true)
+        setIsLoading(true)
       }
 
       if (!cancelled) {
@@ -147,12 +172,14 @@ export function usePaginatedFeed<T extends { id: string }>({
     // eslint-disable-next-line react-hooks/exhaustive-deps -- reload when key/enabled/fetcher changes
   }, [cacheKey, enabled, fetchPage])
 
-  // Silently revalidate when related data is mutated elsewhere in the app or
-  // when the user navigates back to this screen.
-  useAutoRefresh([cacheKey, ...(watchKeys ?? [])], () => {
+  // Silently revalidate when related data is mutated elsewhere in the app.
+  // Pending invalidations flush when the screen is focused again (see useAutoRefresh).
+  const silentRefresh = useCallback(() => {
     if (!enabled || inFlightRef.current) return
     void loadPage(0, false, true)
-  })
+  }, [enabled, loadPage])
+
+  useAutoRefresh([cacheKey, ...(watchKeys ?? [])], silentRefresh)
 
   const loadMore = useCallback(() => {
     if (!enabled || !hasMore || isLoading || isLoadingMore || isRefreshing || inFlightRef.current) {

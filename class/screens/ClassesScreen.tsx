@@ -3,9 +3,8 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 
 import { ClassShell } from '~/class/components/ClassShell'
 import { ContinueLearningRail } from '~/class/components/ContinueLearningRail'
-import { MyPlaylistsRail } from '~/class/components/MyPlaylistsRail'
 import { SavedProgramsRail } from '~/class/components/SavedProgramsRail'
-import { ProgramCard } from '~/class/components/ProgramCard'
+import { ProgramCardGrid } from '~/class/components/ProgramCardGrid'
 import { ProgramCategoryRow } from '~/class/components/ProgramCategoryRow'
 import {
   collectProgramLanguages,
@@ -23,32 +22,25 @@ import {
 import { LoadMoreEnd, LoadMoreSentinel } from '~/commerce/components/LoadMoreSentinel'
 import { usePaginatedFeed } from '~/commerce/hooks/usePaginatedFeed'
 import { CACHE_KEYS } from '~/lib/bootstrap/app-prefetch'
-import { HorizontalScrollRow } from '~/components/layout'
-import { Icons, Spinner, Text, XStack, YStack, useMedia } from '~/components/ui'
+import { Icons, Spinner, Text, XStack, YStack } from '~/components/ui'
 import { getShadowStyle, radius } from '~/config/tokens'
-import { mediaTabFromPath, type MediaTab } from '~/class/lib/media-tab'
+import { mediaTabFromPath } from '~/class/lib/media-tab'
 import { useAppUi } from '~/lib/theme/useAppUi'
-
-type ProgramSort = 'default' | 'popular' | 'newest' | 'az'
 
 export function ClassesScreen() {
   const ui = useAppUi()
-  const media = useMedia()
   const pathname = usePathname()
   const mediaTab = mediaTabFromPath(pathname)
-  const cardWidth = media.gtLg ? 320 : media.gtMd ? 300 : media.gtSm ? 240 : 168
 
   const [categories, setCategories] = useState<ProgramCategory[]>([])
   const [featured, setFeatured] = useState<Program[]>([])
   const [metaError, setMetaError] = useState<string | null>(null)
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null)
   const [selectedLanguage, setSelectedLanguage] = useState<string | null>(null)
-  const [sort, setSort] = useState<ProgramSort>('default')
 
   useEffect(() => {
     setSelectedCategory(null)
     setSelectedLanguage(null)
-    setSort('default')
   }, [mediaTab])
 
   useEffect(() => {
@@ -74,7 +66,6 @@ export function ClassesScreen() {
         mediaType: mediaTab,
         category: selectedCategory ?? undefined,
         language: selectedLanguage ?? undefined,
-        sort,
       })
       return {
         items: result.programs,
@@ -84,15 +75,23 @@ export function ClassesScreen() {
         error: result.error,
       }
     },
-    [mediaTab, selectedCategory, selectedLanguage, sort],
+    [mediaTab, selectedCategory, selectedLanguage],
   )
 
   const feed = usePaginatedFeed<Program>({
     fetchPage,
-    cacheKey: `${mediaTab === 'audio' ? CACHE_KEYS.classesAudio : CACHE_KEYS.classesVideo}:${selectedCategory ?? 'all'}:${selectedLanguage ?? 'all'}:${sort}`,
+    cacheKey: `${mediaTab === 'audio' ? CACHE_KEYS.classesAudio : CACHE_KEYS.classesVideo}:${selectedCategory ?? 'all'}:${selectedLanguage ?? 'all'}`,
   })
 
-  const programs = feed.items
+  // Defense: only show programs that match the active Video/Audio tab.
+  const programs = useMemo(
+    () => feed.items.filter((program) => program.media_type === mediaTab),
+    [feed.items, mediaTab],
+  )
+  const featuredForTab = useMemo(
+    () => featured.filter((program) => program.media_type === mediaTab),
+    [featured, mediaTab],
+  )
   const error = metaError ?? feed.error
   const languageCodes = useMemo(() => collectProgramLanguages(programs), [programs])
 
@@ -112,35 +111,15 @@ export function ClassesScreen() {
     return ['All', ...Array.from(names).sort((a, b) => a.localeCompare(b))]
   }, [categories, programs])
 
-  const hasActiveFilters =
-    Boolean(selectedCategory) || Boolean(selectedLanguage) || sort !== 'default'
+  const hasActiveFilters = Boolean(selectedCategory) || Boolean(selectedLanguage)
 
   return (
     <ClassShell refreshing={feed.isRefreshing} onRefresh={() => feed.refresh()}>
-      <ContinueLearningRail />
-      <SavedProgramsRail />
-      <MyPlaylistsRail mediaType={mediaTab} />
-
-      <HorizontalScrollRow gap="$2">
-        {(
-          [
-            { id: 'default', label: 'For you' },
-            { id: 'popular', label: 'Popular' },
-            { id: 'newest', label: 'Newest' },
-            { id: 'az', label: 'A–Z' },
-          ] as const
-        ).map((option) => (
-          <CategoryChip
-            key={option.id}
-            label={option.label}
-            active={sort === option.id}
-            onPress={() => setSort(option.id)}
-          />
-        ))}
-      </HorizontalScrollRow>
+      <ContinueLearningRail mediaType={mediaTab} />
+      <SavedProgramsRail mediaType={mediaTab} />
 
       {languageCodes.length > 1 || selectedLanguage ? (
-        <HorizontalScrollRow gap="$2">
+        <XStack flexWrap="wrap" gap="$2" width="100%">
           <CategoryChip
             label="All languages"
             active={!selectedLanguage}
@@ -154,11 +133,11 @@ export function ClassesScreen() {
               onPress={() => setSelectedLanguage(code)}
             />
           ))}
-        </HorizontalScrollRow>
+        </XStack>
       ) : null}
 
       {categoryChips.length > 1 ? (
-        <HorizontalScrollRow gap="$2">
+        <XStack flexWrap="wrap" gap="$2" width="100%">
           {categoryChips.map((chip) => (
             <CategoryChip
               key={chip}
@@ -167,7 +146,7 @@ export function ClassesScreen() {
               onPress={() => setSelectedCategory(chip === 'All' ? null : chip)}
             />
           ))}
-        </HorizontalScrollRow>
+        </XStack>
       ) : null}
 
       {error ? (
@@ -204,11 +183,7 @@ export function ClassesScreen() {
         </YStack>
       ) : hasActiveFilters ? (
         <YStack gap="$4" width="100%">
-          <XStack flexWrap="wrap" gap="$4" width="100%">
-            {programs.map((program) => (
-              <ProgramCard key={program.id} program={program} width={cardWidth} />
-            ))}
-          </XStack>
+          <ProgramCardGrid programs={programs} />
           <LoadMoreSentinel
             hasMore={feed.hasMore}
             isLoadingMore={feed.isLoadingMore}
@@ -218,7 +193,7 @@ export function ClassesScreen() {
         </YStack>
       ) : (
         <YStack gap="$6" width="100%">
-          {featured.length ? (
+          {featuredForTab.length ? (
             <ProgramCategoryRow
               category={{
                 id: 'featured',
@@ -226,8 +201,7 @@ export function ClassesScreen() {
                 description: null,
                 thumbnail_url: null,
               }}
-              programs={featured}
-              cardWidth={cardWidth}
+              programs={featuredForTab}
             />
           ) : null}
 
@@ -236,7 +210,6 @@ export function ClassesScreen() {
               key={row.category.id}
               category={row.category}
               programs={row.programs}
-              cardWidth={cardWidth}
             />
           ))}
 

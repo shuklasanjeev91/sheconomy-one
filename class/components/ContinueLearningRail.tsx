@@ -1,27 +1,29 @@
 import { useEffect, useState } from 'react'
 import { AppLink } from '~/components/navigation/AppLink'
 
-import { ProgramCard } from '~/class/components/ProgramCard'
+import { ProgramCardGrid } from '~/class/components/ProgramCardGrid'
 import {
   clearRecentlyViewedPrograms,
   useRecentlyViewedPrograms,
 } from '~/class/lib/recently-viewed-programs'
 import { fetchProgramsByIds, type Program } from '~/class/lib/programs'
-import { HorizontalScrollRow } from '~/components/layout'
-import { Spinner, Text, XStack, YStack, useMedia } from '~/components/ui'
+import type { MediaTab } from '~/class/lib/media-tab'
+import { Spinner, Text, XStack, YStack } from '~/components/ui'
 import { classRoutes } from '~/lib/routes'
 import { useAppUi } from '~/lib/theme/useAppUi'
 import { useSupabase } from '~/providers/SupabaseProvider'
 
-/** Resume recently viewed programs — YouTube-style continue watching. */
-export function ContinueLearningRail() {
+type ContinueLearningRailProps = {
+  mediaType?: MediaTab
+}
+
+/** Resume recently viewed programs — filtered to the active Video/Audio tab. */
+export function ContinueLearningRail({ mediaType }: ContinueLearningRailProps) {
   const ui = useAppUi()
-  const media = useMedia()
   const { user } = useSupabase()
   const recentIds = useRecentlyViewedPrograms()
   const [programs, setPrograms] = useState<Program[]>([])
   const [loading, setLoading] = useState(false)
-  const cardWidth = media.gtLg ? 300 : media.gtMd ? 280 : media.gtSm ? 240 : 168
 
   useEffect(() => {
     if (!user || recentIds.length === 0) {
@@ -30,10 +32,13 @@ export function ContinueLearningRail() {
     }
     let active = true
     setLoading(true)
-    void fetchProgramsByIds(recentIds.slice(0, 8))
+    void fetchProgramsByIds(recentIds.slice(0, 12))
       .then((result) => {
         if (!active) return
-        setPrograms(result.programs)
+        const next = mediaType
+          ? result.programs.filter((program) => program.media_type === mediaType)
+          : result.programs
+        setPrograms(next.slice(0, 8))
       })
       .catch(() => {
         if (active) setPrograms([])
@@ -44,7 +49,7 @@ export function ContinueLearningRail() {
     return () => {
       active = false
     }
-  }, [user, recentIds])
+  }, [user, recentIds, mediaType])
 
   if (!user) return null
   if (!loading && programs.length === 0) return null
@@ -53,7 +58,7 @@ export function ContinueLearningRail() {
     <YStack gap="$3" width="100%">
       <XStack alignItems="center" justifyContent="space-between" gap="$2">
         <Text fontSize={16} fontWeight="700" color={ui.text} letterSpacing={-0.2}>
-          Continue watching
+          {mediaType === 'audio' ? 'Continue listening' : 'Continue watching'}
         </Text>
         <XStack alignItems="center" gap="$3">
           <Text
@@ -66,7 +71,7 @@ export function ContinueLearningRail() {
           >
             Clear
           </Text>
-          <AppLink href={classRoutes.home}>
+          <AppLink href={mediaType === 'audio' ? classRoutes.audio : classRoutes.home}>
             <Text fontSize={13} fontWeight="600" color={ui.brand}>
               Browse all
             </Text>
@@ -79,11 +84,7 @@ export function ContinueLearningRail() {
           <Spinner size="small" color={ui.brand} />
         </XStack>
       ) : (
-        <HorizontalScrollRow gap="$3">
-          {programs.map((program) => (
-            <ProgramCard key={program.id} program={program} width={cardWidth} />
-          ))}
-        </HorizontalScrollRow>
+        <ProgramCardGrid programs={programs} />
       )}
     </YStack>
   )

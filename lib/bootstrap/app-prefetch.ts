@@ -72,11 +72,11 @@ export function startDeferredTabPrefetch(): void {
   })
   prefetchAppCache(CACHE_KEYS.classesVideo, () => fetchClassesBootstrap('video'))
   prefetchAppCache(CACHE_KEYS.classesAudio, () => fetchClassesBootstrap('audio'))
-  prefetchAppCache(`${CACHE_KEYS.classesVideo}:all:all:default`, async () => {
+  prefetchAppCache(`${CACHE_KEYS.classesVideo}:all:all`, async () => {
     const result = await fetchPublishedProgramsPage(0, PROGRAM_PAGE_SIZE, { mediaType: 'video' })
     return toPageSnapshot(result.programs, 0, result.hasMore)
   })
-  prefetchAppCache(`${CACHE_KEYS.classesAudio}:all:all:default`, async () => {
+  prefetchAppCache(`${CACHE_KEYS.classesAudio}:all:all`, async () => {
     const result = await fetchPublishedProgramsPage(0, PROGRAM_PAGE_SIZE, { mediaType: 'audio' })
     return toPageSnapshot(result.programs, 0, result.hasMore)
   })

@@ -1,27 +1,29 @@
 import { useEffect, useState } from 'react'
 import { Share } from 'react-native'
 
-import { ProgramCard } from '~/class/components/ProgramCard'
+import { ProgramCardGrid } from '~/class/components/ProgramCardGrid'
 import { fetchProgramsByIds, getProgramSlug, type Program } from '~/class/lib/programs'
+import type { MediaTab } from '~/class/lib/media-tab'
 import { useSavedPrograms } from '~/class/lib/saved-programs'
-import { HorizontalScrollRow } from '~/components/layout'
-import { Spinner, Text, XStack, YStack, useAppToast, useMedia } from '~/components/ui'
+import { Spinner, Text, XStack, YStack, useAppToast } from '~/components/ui'
 import { BRAND_NAME } from '~/config/brand'
 import { copyToClipboard } from '~/lib/platform/clipboard'
 import { getProgramShareUrl } from '~/lib/share'
 import { useAppUi } from '~/lib/theme/useAppUi'
 import { useSupabase } from '~/providers/SupabaseProvider'
 
-/** Bookmarked programs rail — AsyncStorage so it works offline on all platforms. */
-export function SavedProgramsRail() {
+type SavedProgramsRailProps = {
+  mediaType?: MediaTab
+}
+
+/** Bookmarked programs — filtered to the active Video/Audio tab. */
+export function SavedProgramsRail({ mediaType }: SavedProgramsRailProps) {
   const ui = useAppUi()
   const toast = useAppToast()
-  const media = useMedia()
   const { user } = useSupabase()
   const savedIds = useSavedPrograms()
   const [programs, setPrograms] = useState<Program[]>([])
   const [loading, setLoading] = useState(false)
-  const cardWidth = media.gtLg ? 300 : media.gtMd ? 280 : media.gtSm ? 240 : 168
 
   useEffect(() => {
     if (!user || savedIds.length === 0) {
@@ -30,10 +32,13 @@ export function SavedProgramsRail() {
     }
     let active = true
     setLoading(true)
-    void fetchProgramsByIds(savedIds.slice(0, 8))
+    void fetchProgramsByIds(savedIds.slice(0, 12))
       .then((result) => {
         if (!active) return
-        setPrograms(result.programs)
+        const next = mediaType
+          ? result.programs.filter((program) => program.media_type === mediaType)
+          : result.programs
+        setPrograms(next.slice(0, 8))
       })
       .catch(() => {
         if (active) setPrograms([])
@@ -44,7 +49,7 @@ export function SavedProgramsRail() {
     return () => {
       active = false
     }
-  }, [user, savedIds])
+  }, [user, savedIds, mediaType])
 
   async function handleShareSaved() {
     if (!programs.length) return
@@ -87,11 +92,7 @@ export function SavedProgramsRail() {
       {loading && programs.length === 0 ? (
         <Spinner size="small" color={ui.brand} />
       ) : (
-        <HorizontalScrollRow gap="$3">
-          {programs.map((program) => (
-            <ProgramCard key={program.id} program={program} width={cardWidth} />
-          ))}
-        </HorizontalScrollRow>
+        <ProgramCardGrid programs={programs} />
       )}
     </YStack>
   )

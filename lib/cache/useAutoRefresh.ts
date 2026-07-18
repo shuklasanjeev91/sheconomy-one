@@ -14,10 +14,11 @@ function normalizeKeys(watch: WatchKeys): string[] {
 /**
  * Silently re-runs `refresh` when:
  * 1. a matching cache key is invalidated by a mutation anywhere in the app, or
- * 2. the screen regains navigation focus (stale-while-revalidate on return).
+ * 2. an invalidation arrived while this screen was blurred (flush on focus).
  *
- * `refresh` should not flip full-screen loading states; existing content stays
- * visible while fresh data loads.
+ * Important: do NOT refresh on every useFocusEffect re-subscribe. One's
+ * navigation object identity can change across re-renders; refreshing then
+ * caused setState loops and hook crashes (e.g. Class Audio tab).
  */
 export function useAutoRefresh(watch: WatchKeys, refresh: () => void): void {
   const refreshRef = useRef(refresh)
@@ -27,7 +28,6 @@ export function useAutoRefresh(watch: WatchKeys, refresh: () => void): void {
 
   // Outside a navigator focus events never fire, so default to "focused".
   const focusedRef = useRef(true)
-  const hadFirstFocusRef = useRef(false)
   const pendingRef = useRef(false)
 
   useEffect(() => {
@@ -45,12 +45,11 @@ export function useAutoRefresh(watch: WatchKeys, refresh: () => void): void {
 
   useFocusEffect(() => {
     focusedRef.current = true
-    if (hadFirstFocusRef.current || pendingRef.current) {
-      // Returning to an already-mounted screen: revalidate in the background.
+    // Only flush a queued invalidation — never refresh on effect re-attach.
+    if (pendingRef.current) {
+      pendingRef.current = false
       refreshRef.current()
     }
-    hadFirstFocusRef.current = true
-    pendingRef.current = false
     return () => {
       focusedRef.current = false
     }
