@@ -101,11 +101,32 @@ export function OrderSuccessScreen() {
   }, [load])
 
   const headline = useMemo(() => {
-    if (awaitingPayment && orders.some((o) => o.payment_status !== 'completed' && o.payment_status !== 'paid')) {
-      return 'Order placed — finish payment if needed'
+    if (
+      awaitingPayment &&
+      orders.some((o) => o.payment_status !== 'completed' && o.payment_status !== 'paid')
+    ) {
+      return 'Complete your payment'
     }
     return orders.length > 1 ? 'Your packages are confirmed' : 'Order confirmed'
   }, [awaitingPayment, orders])
+
+  const subtitle = useMemo(() => {
+    if (
+      awaitingPayment &&
+      orders.some((o) => o.payment_status !== 'completed' && o.payment_status !== 'paid')
+    ) {
+      return 'Your order is reserved until payment succeeds. Continue on PayU or the seller gateway, or cancel to release stock.'
+    }
+    return 'Save your order numbers. You can track every package from Your orders.'
+  }, [awaitingPayment, orders])
+
+  async function openPaymentUrl(url: string) {
+    if (url.includes('/orders/payu')) {
+      router.replace(url as never)
+      return true
+    }
+    return openExternalUrl(url)
+  }
 
   async function handleResumePayment() {
     if (!checkoutGroupId || paymentBusy) return
@@ -127,7 +148,7 @@ export function OrderSuccessScreen() {
         if (pending) {
           await savePendingOrderSuccess({ ...pending, checkoutUrl: nextUrl })
         }
-        const opened = await openExternalUrl(nextUrl)
+        const opened = await openPaymentUrl(nextUrl)
         if (!opened) {
           toast.show('Payment page blocked', {
             tone: 'info',
@@ -137,7 +158,7 @@ export function OrderSuccessScreen() {
       } else {
         toast.show('Payment link not ready', {
           tone: 'info',
-          message: 'Your order is saved. Try again in a moment.',
+          message: 'Your order is reserved. Try again in a moment.',
         })
       }
     } finally {
@@ -175,17 +196,17 @@ export function OrderSuccessScreen() {
         <YStack gap="$5" width="100%">
           <CommercePageHeader
             title={headline}
-            subtitle="Save your order numbers. You can track every package from Your orders."
+            subtitle={subtitle}
           />
 
           {awaitingPayment && checkoutGroupId ? (
             <CommercePanel padding="$4" gap="$3">
               <Text fontWeight="700" fontSize={15} color={ui.text}>
-                Complete payment
+                Payment required
               </Text>
               <Text fontSize={13} color={ui.textSecondary} lineHeight={18}>
-                Your multi-shop order is reserved. Resume the payment provider, or cancel to release
-                stock and restore cart items.
+                Finish checkout on PayU (SHEPay) or the seller’s payment page. Cancel releases
+                reserved stock and returns items to your cart.
               </Text>
               <XStack gap="$2" flexWrap="wrap">
                 <Button
@@ -195,7 +216,7 @@ export function OrderSuccessScreen() {
                   disabled={paymentBusy}
                   onPress={() => void handleResumePayment()}
                 >
-                  {paymentBusy ? 'Working…' : 'Resume payment'}
+                  {paymentBusy ? 'Working…' : checkoutUrl?.includes('/orders/payu') ? 'Continue to PayU' : 'Resume payment'}
                 </Button>
                 <Button
                   tone="outline"
