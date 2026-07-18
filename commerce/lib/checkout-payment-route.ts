@@ -65,14 +65,56 @@ export type PostCheckoutNext =
   | { kind: 'success' }
   | { kind: 'cancel_and_stay'; error: string }
 
-/** True when URL points at our in-app PayU form-POST bridge. */
+/** True when URL points at our in-app PayU form-POST bridge (not payu-return). */
 export function isAppPayUBridgeUrl(url: string): boolean {
   try {
     const parsed = new URL(url, 'https://sheconomy.local')
-    return /\/orders\/payu\/?$/.test(parsed.pathname) || parsed.pathname.includes('/orders/payu')
+    return /\/orders\/payu\/?$/.test(parsed.pathname)
   } catch {
-    return url.includes('/orders/payu')
+    const path = url.split('?')[0] ?? url
+    return /\/orders\/payu\/?$/.test(path)
   }
+}
+
+export type OrderPaymentLike = {
+  payment_status?: string | null
+  payment_mode?: string | null
+  order_status?: string | null
+}
+
+/** Paid or cancelled — no further online payment action required. */
+export function isOrderPaymentSettled(order: OrderPaymentLike): boolean {
+  if (order.order_status === 'cancelled') return true
+  const status = (order.payment_status ?? '').toLowerCase()
+  return status === 'completed' || status === 'paid'
+}
+
+/**
+ * Online holds still needing payment. COD and settled/cancelled orders are excluded.
+ * Driven by DB payment_status — not session flags.
+ */
+export function ordersAwaitingOnlinePayment(orders: OrderPaymentLike[]): boolean {
+  if (!orders.length) return false
+  return orders.some((order) => {
+    const mode = (order.payment_mode ?? '').toLowerCase()
+    if (mode === 'cod' || mode === 'cash_on_delivery') return false
+    return !isOrderPaymentSettled(order)
+  })
+}
+
+export function orderSuccessHeadline(input: {
+  orders: OrderPaymentLike[]
+  awaitingPayment: boolean
+}): string {
+  if (input.awaitingPayment) return 'Complete your payment'
+  return input.orders.length > 1 ? 'Your packages are confirmed' : 'Order confirmed'
+}
+
+export function orderSuccessSubtitle(input: { awaitingPayment: boolean }): string {
+  if (input.awaitingPayment) {
+    return 'Your order is reserved until payment succeeds. Continue on PayU or the seller gateway, or cancel to release stock.'
+  }
+  return 'Save your order numbers. You can track every package from Your orders.'
 }
 
 /** Prefer a same-origin path+query for One router navigation. */

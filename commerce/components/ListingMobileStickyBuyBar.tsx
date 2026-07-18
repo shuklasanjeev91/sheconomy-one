@@ -4,9 +4,9 @@ import { Button, Spinner, Theme, XStack, YStack } from '~/components/ui'
 import { ListingPriceBlock } from '~/commerce/components/ListingPriceBlock'
 import { ListingQuantityStepper } from '~/commerce/components/ListingQuantityStepper'
 import { BRAND_THEME, getShadowStyle } from '~/config/tokens'
-import { MOBILE_TAB_BAR_HEIGHT } from '~/components/navigation/constants'
 import { bottomBarPositionStyle } from '~/lib/layout/styles'
 import { chromeSurfaceStyle } from '~/lib/theme/surfaces'
+import { useAppLayout } from '~/hooks/useAppLayout'
 import { useAppUi } from '~/lib/theme/useAppUi'
 
 type ListingMobileStickyBuyBarProps = {
@@ -55,6 +55,7 @@ export function ListingMobileStickyBuyBar({
   onCheckout,
 }: ListingMobileStickyBuyBarProps) {
   const ui = useAppUi()
+  const { mobileTabBarOffset } = useAppLayout()
 
   return (
     <XStack
@@ -68,7 +69,7 @@ export function ListingMobileStickyBuyBar({
       gap="$3"
       width="100%"
       style={{
-        ...bottomBarPositionStyle(MOBILE_TAB_BAR_HEIGHT),
+        ...bottomBarPositionStyle(mobileTabBarOffset),
         ...getShadowStyle('md'),
         ...chromeSurfaceStyle(ui),
         ...(Platform.OS === 'web'

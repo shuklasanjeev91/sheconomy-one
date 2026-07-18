@@ -94,6 +94,8 @@ export function AppShell({ children }: AppShellProps) {
   // Chat is a true two-pane app — lock the shell so panes get a definite height.
   // Community / class / co-work / commerce use PageScroll (document on desktop web).
   const lockViewport = isChatPath(pathname)
+  /** Desktop web document pages: grow with content; sticky footer via flexGrow (no minHeight:0). */
+  const documentDesktop = Platform.OS === 'web' && isDesktopWeb && !lockViewport
   const stretchMainContent =
     lockViewport || Platform.OS !== 'web' || !isDesktopWeb
   const clipShellOverflow =
@@ -133,6 +135,7 @@ export function AppShell({ children }: AppShellProps) {
           <DesktopScrollTracker />
           <ScreenFill
             flex={Platform.OS === 'web' && !stretchMainContent ? undefined : 1}
+            flexGrow={documentDesktop ? 1 : undefined}
             flexDirection="column"
             position="relative"
             backgroundColor={ui.background}
@@ -143,12 +146,13 @@ export function AppShell({ children }: AppShellProps) {
             {!isDesktop ? <AppMobileHeader minimal={compactMobileTopBar || chatConversationMobile} /> : null}
             <ProfileOnboardingNudge />
             <YStack
-              flexGrow={stretchMainContent ? 1 : undefined}
+              // Sticky footer: main grows to fill short viewports; document desktop
+              // must NOT use minHeight:0 or content is clipped and window scroll dies.
+              flexGrow={1}
+              flexShrink={0}
               flex={stretchMainContent ? 1 : undefined}
               width="100%"
               maxWidth="100%"
-              // Only constrain height when we intentionally fill; document-scroll
-              // pages must grow with content or the window cannot scroll.
               minHeight={stretchMainContent ? 0 : undefined}
             >
               {children}

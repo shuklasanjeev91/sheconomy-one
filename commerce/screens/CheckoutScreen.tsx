@@ -384,17 +384,6 @@ export function CheckoutScreen() {
       }
 
       setOrderPlaced(true)
-      trackCommerceEvent('purchase', {
-        currency,
-        value: total,
-        transactionId: orderNumbers[0] ?? orderIds[0] ?? cart.id,
-        items: selectedItems.map((item) => ({
-          id: item.listing_id,
-          name: item.listing_id,
-          price: item.unit_price ?? undefined,
-          quantity: item.quantity,
-        })),
-      })
 
       const awaitingExternalPayment = next.kind === 'payu_bridge' || next.kind === 'external_pay'
       const pendingUrl =
@@ -432,6 +421,18 @@ export function CheckoutScreen() {
         }
         return
       }
+
+      trackCommerceEvent('purchase', {
+        currency,
+        value: total,
+        transactionId: orderNumbers[0] ?? orderIds[0] ?? cart.id,
+        items: selectedItems.map((item) => ({
+          id: item.listing_id,
+          name: item.listing_id,
+          price: item.unit_price ?? undefined,
+          quantity: item.quantity,
+        })),
+      })
 
       toast.show('Order placed', {
         tone: 'success',

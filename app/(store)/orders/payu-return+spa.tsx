@@ -1,13 +1,22 @@
 import { useRouter, useLocalSearchParams } from 'one'
 import { useEffect, useState } from 'react'
 
+import { cancelCheckoutPayment } from '~/commerce/lib/checkout'
+import {
+  clearPendingOrderSuccess,
+  loadPendingOrderSuccess,
+  savePendingOrderSuccess,
+} from '~/commerce/lib/customer-orders'
 import { Spinner, Text, YStack } from '~/components/ui'
 import { FullWidthLayout } from '~/components/layout'
-import { loadPendingOrderSuccess } from '~/commerce/lib/customer-orders'
 import { commerceRoutes } from '~/lib/routes'
 import { useAppUi } from '~/lib/theme/useAppUi'
 
-/** PayU surl/furl landing — send buyer to order success (awaiting until webhook settles). */
+/**
+ * PayU surl/furl landing.
+ * Success → order success (awaiting until webhook settles).
+ * Failure → cancel hold when possible, then pending/fail UX (never “confirmed”).
+ */
 export default function PayUReturnRoute() {
   const ui = useAppUi()
   const router = useRouter()
@@ -17,15 +26,45 @@ export default function PayUReturnRoute() {
   useEffect(() => {
     let cancelled = false
     void (async () => {
-      const ok = params.status === 'success'
-      setMessage(ok ? 'Payment received' : 'Payment was not completed')
+      const status = (params.status ?? '').toLowerCase()
+      const ok = status === 'success'
+
       const pending = await loadPendingOrderSuccess()
       if (cancelled) return
+
+      if (!ok) {
+        setMessage('Payment was not completed')
+        if (pending?.checkoutGroupId) {
+          await cancelCheckoutPayment(pending.checkoutGroupId)
+          await clearPendingOrderSuccess()
+          if (cancelled) return
+          router.replace(commerceRoutes.cart)
+          return
+        }
+        if (pending?.orderIds?.length) {
+          await savePendingOrderSuccess({
+            ...pending,
+            awaitingExternalPayment: true,
+          })
+          if (cancelled) return
+          router.replace(commerceRoutes.orderSuccess(pending.orderIds))
+          return
+        }
+        router.replace(commerceRoutes.cart)
+        return
+      }
+
+      setMessage('Payment received — confirming…')
       if (pending?.orderIds?.length) {
+        await savePendingOrderSuccess({
+          ...pending,
+          awaitingExternalPayment: true,
+        })
+        if (cancelled) return
         router.replace(commerceRoutes.orderSuccess(pending.orderIds))
         return
       }
-      router.replace(ok ? commerceRoutes.orders : commerceRoutes.cart)
+      router.replace(commerceRoutes.orders)
     })()
     return () => {
       cancelled = true
@@ -40,7 +79,7 @@ export default function PayUReturnRoute() {
           {message}
         </Text>
         <Text color={ui.textSecondary} textAlign="center">
-          Taking you back to your order…
+          Taking you back…
         </Text>
       </YStack>
     </FullWidthLayout>

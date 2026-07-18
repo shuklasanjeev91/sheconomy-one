@@ -101,9 +101,17 @@ body {
 @media (min-width: 1021px) {
   html, body {
     height: auto;
-    min-height: 100%;
+    min-height: 100vh;
+    min-height: 100dvh;
     overflow-y: auto;
     scroll-behavior: smooth;
+  }
+  /* Sticky footer: shell fills the viewport so footer sits after content (or at bottom when short). */
+  #root {
+    min-height: 100vh;
+    min-height: 100dvh;
+    display: flex;
+    flex-direction: column;
   }
 }
 ::selection {

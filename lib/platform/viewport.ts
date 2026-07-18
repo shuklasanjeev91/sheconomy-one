@@ -14,7 +14,10 @@ export function appShellStyle(isDesktop: boolean) {
 
   if (isDesktop) {
     return {
-      minHeight: '100vh' as const,
+      // Fill viewport so CommerceDesktopFooter sits after page content
+      // (bottom of short pages, end of long pages).
+      flexGrow: 1,
+      minHeight: '100dvh' as const,
       width: '100%' as const,
       display: 'flex' as const,
       flexDirection: 'column' as const,

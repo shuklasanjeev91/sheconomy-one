@@ -1,10 +1,17 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useRouter } from 'one'
 import { AppLink } from '~/components/navigation/AppLink'
 
 import { CommercePageHeader, CommercePanel } from '~/commerce/components'
 import { OrderStatusBadge } from '~/commerce/components/vendor/OrderStatusBadge'
 import { cancelCheckoutPayment, resumeCheckoutPayment } from '~/commerce/lib/checkout'
+import {
+  isAppPayUBridgeUrl,
+  isOrderPaymentSettled,
+  orderSuccessHeadline,
+  orderSuccessSubtitle,
+  ordersAwaitingOnlinePayment,
+} from '~/commerce/lib/checkout-payment-route'
 import { firstCheckoutUrlFromSteps } from '~/commerce/lib/checkout-utils'
 import {
   clearPendingOrderSuccess,
@@ -22,6 +29,10 @@ import { openExternalUrl } from '~/lib/platform/openUrl'
 import { commerceRoutes } from '~/lib/routes'
 import { useProfile } from '~/hooks/useProfile'
 import { useAppUi } from '~/lib/theme/useAppUi'
+import { trackCommerceEvent } from '~/lib/analytics'
+
+const PAYMENT_POLL_MS = 2500
+const PAYMENT_POLL_MAX = 12
 
 function parseIdsFromSearch(): string[] {
   if (typeof window === 'undefined') return []
@@ -45,10 +56,12 @@ export function OrderSuccessScreen() {
   const [orders, setOrders] = useState<CustomerOrderSummary[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
-  const [awaitingPayment, setAwaitingPayment] = useState(false)
   const [checkoutGroupId, setCheckoutGroupId] = useState<string | null>(null)
   const [checkoutUrl, setCheckoutUrl] = useState<string | null>(null)
   const [paymentBusy, setPaymentBusy] = useState(false)
+  const [confirmingPayment, setConfirmingPayment] = useState(false)
+  const purchaseTracked = useRef(false)
+  const pollCount = useRef(0)
 
   const load = useCallback(async () => {
     if (!user?.id) {
@@ -64,8 +77,6 @@ export function OrderSuccessScreen() {
     if (!ids.length && pending?.orderIds?.length) {
       ids = pending.orderIds
     }
-    const stillAwaiting = Boolean(pending?.awaitingExternalPayment)
-    setAwaitingPayment(stillAwaiting)
     setCheckoutGroupId(pending?.checkoutGroupId ?? null)
     setCheckoutUrl(pending?.checkoutUrl ?? null)
 
@@ -82,17 +93,25 @@ export function OrderSuccessScreen() {
     setIsLoading(false)
 
     const paymentSettled =
-      result.orders.length > 0 &&
-      result.orders.every(
-        (order) =>
-          order.payment_status === 'completed' ||
-          order.payment_status === 'paid' ||
-          order.order_status === 'cancelled',
-      )
+      result.orders.length > 0 && result.orders.every((order) => isOrderPaymentSettled(order))
 
-    if (result.orders.length > 0 && (!stillAwaiting || paymentSettled)) {
+    if (paymentSettled) {
       await clearPendingOrderSuccess()
-      if (paymentSettled) setAwaitingPayment(false)
+      if (!purchaseTracked.current) {
+        purchaseTracked.current = true
+        const primary = result.orders[0]
+        trackCommerceEvent('purchase', {
+          currency: primary?.currency ?? 'INR',
+          value: result.orders.reduce((sum, row) => sum + (row.total_amount ?? 0), 0),
+          transactionId: primary?.order_number ?? primary?.id,
+          items: result.orders.map((row) => ({
+            id: row.id,
+            name: row.order_number ?? row.id,
+            price: row.total_amount ?? undefined,
+            quantity: row.item_count ?? 1,
+          })),
+        })
+      }
     }
   }, [user?.id])
 
@@ -100,28 +119,48 @@ export function OrderSuccessScreen() {
     void load()
   }, [load])
 
-  const headline = useMemo(() => {
-    if (
-      awaitingPayment &&
-      orders.some((o) => o.payment_status !== 'completed' && o.payment_status !== 'paid')
-    ) {
-      return 'Complete your payment'
-    }
-    return orders.length > 1 ? 'Your packages are confirmed' : 'Order confirmed'
-  }, [awaitingPayment, orders])
+  const awaitingPayment = useMemo(() => ordersAwaitingOnlinePayment(orders), [orders])
 
-  const subtitle = useMemo(() => {
-    if (
-      awaitingPayment &&
-      orders.some((o) => o.payment_status !== 'completed' && o.payment_status !== 'paid')
-    ) {
-      return 'Your order is reserved until payment succeeds. Continue on PayU or the seller gateway, or cancel to release stock.'
+  useEffect(() => {
+    if (!awaitingPayment || !user?.id) {
+      setConfirmingPayment(false)
+      return
     }
-    return 'Save your order numbers. You can track every package from Your orders.'
-  }, [awaitingPayment, orders])
+
+    setConfirmingPayment(true)
+    pollCount.current = 0
+    const timer = setInterval(() => {
+      pollCount.current += 1
+      if (pollCount.current > PAYMENT_POLL_MAX) {
+        clearInterval(timer)
+        setConfirmingPayment(false)
+        return
+      }
+      void load()
+    }, PAYMENT_POLL_MS)
+
+    return () => clearInterval(timer)
+  }, [awaitingPayment, load, user?.id])
+
+  useEffect(() => {
+    if (!awaitingPayment) setConfirmingPayment(false)
+  }, [awaitingPayment])
+
+  const headline = useMemo(
+    () => orderSuccessHeadline({ orders, awaitingPayment }),
+    [awaitingPayment, orders],
+  )
+
+  const subtitle = useMemo(
+    () =>
+      confirmingPayment && awaitingPayment
+        ? 'Confirming payment with your bank… this usually takes a few seconds.'
+        : orderSuccessSubtitle({ awaitingPayment }),
+    [awaitingPayment, confirmingPayment],
+  )
 
   async function openPaymentUrl(url: string) {
-    if (url.includes('/orders/payu')) {
+    if (isAppPayUBridgeUrl(url) || /\/orders\/payu(\?|$)/.test(url)) {
       router.replace(url as never)
       return true
     }
@@ -146,7 +185,7 @@ export function OrderSuccessScreen() {
         setCheckoutUrl(nextUrl)
         const pending = await loadPendingOrderSuccess()
         if (pending) {
-          await savePendingOrderSuccess({ ...pending, checkoutUrl: nextUrl })
+          await savePendingOrderSuccess({ ...pending, checkoutUrl: nextUrl, awaitingExternalPayment: true })
         }
         const opened = await openPaymentUrl(nextUrl)
         if (!opened) {
@@ -176,14 +215,12 @@ export function OrderSuccessScreen() {
         return
       }
       await clearPendingOrderSuccess()
-      setAwaitingPayment(false)
       setCheckoutGroupId(null)
       setCheckoutUrl(null)
       toast.show('Checkout cancelled', {
         tone: 'success',
         message: 'Reserved stock was released and items can return to your cart.',
       })
-      await load()
       router.replace(commerceRoutes.cart)
     } finally {
       setPaymentBusy(false)
@@ -194,10 +231,7 @@ export function OrderSuccessScreen() {
     <FullWidthLayout scroll>
       <PageSection paddingVertical="$6">
         <YStack gap="$5" width="100%">
-          <CommercePageHeader
-            title={headline}
-            subtitle={subtitle}
-          />
+          <CommercePageHeader title={headline} subtitle={subtitle} />
 
           {awaitingPayment && checkoutGroupId ? (
             <CommercePanel padding="$4" gap="$3">
@@ -216,7 +250,11 @@ export function OrderSuccessScreen() {
                   disabled={paymentBusy}
                   onPress={() => void handleResumePayment()}
                 >
-                  {paymentBusy ? 'Working…' : checkoutUrl?.includes('/orders/payu') ? 'Continue to PayU' : 'Resume payment'}
+                  {paymentBusy
+                    ? 'Working…'
+                    : checkoutUrl && isAppPayUBridgeUrl(checkoutUrl)
+                      ? 'Continue to PayU'
+                      : 'Resume payment'}
                 </Button>
                 <Button
                   tone="outline"
@@ -232,7 +270,7 @@ export function OrderSuccessScreen() {
           ) : null}
 
           <ScreenState
-            loading={isLoading}
+            loading={isLoading && orders.length === 0}
             error={error}
             empty={!isLoading && !error && orders.length === 0}
             emptyTitle="No recent order found"
@@ -244,6 +282,7 @@ export function OrderSuccessScreen() {
             <YStack gap="$3" width="100%">
               {orders.map((order) => {
                 const eta = formatEstimatedDelivery(order.estimated_delivery_date)
+                const unpaid = ordersAwaitingOnlinePayment([order])
                 const paymentLine = [order.payment_mode, order.payment_status]
                   .filter(Boolean)
                   .join(' · ')
@@ -260,7 +299,9 @@ export function OrderSuccessScreen() {
                           {order.item_count ? ` · ${order.item_count} items` : ''}
                         </Text>
                         <Text fontSize={12} color={ui.textMuted}>
-                          Placed {formatOrderDate(order.created_at, true)}
+                          {unpaid
+                            ? `Awaiting payment · reserved ${formatOrderDate(order.created_at, true)}`
+                            : `Placed ${formatOrderDate(order.created_at, true)}`}
                         </Text>
                       </YStack>
                       <YStack alignItems="flex-end" gap="$2">
@@ -278,7 +319,7 @@ export function OrderSuccessScreen() {
                             Payment: {paymentLine}
                           </Text>
                         ) : null}
-                        {eta ? (
+                        {eta && !unpaid ? (
                           <Text fontSize={12} color={ui.textSecondary}>
                             Estimated delivery: {eta}
                           </Text>
@@ -292,16 +333,18 @@ export function OrderSuccessScreen() {
                           View order
                         </Button>
                       </AppLink>
-                      <AppLink href={commerceRoutes.order(order.id)} asChild>
-                        <Button
-                          tone="outline"
-                          size="$3"
-                          borderRadius={999}
-                          icon={<Icons.Truck size={14} />}
-                        >
-                          Track package
-                        </Button>
-                      </AppLink>
+                      {!unpaid ? (
+                        <AppLink href={commerceRoutes.order(order.id)} asChild>
+                          <Button
+                            tone="outline"
+                            size="$3"
+                            borderRadius={999}
+                            icon={<Icons.Truck size={14} />}
+                          >
+                            Track package
+                          </Button>
+                        </AppLink>
+                      ) : null}
                     </XStack>
                   </CommercePanel>
                 )

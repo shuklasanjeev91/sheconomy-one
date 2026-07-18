@@ -49,7 +49,6 @@ import { useListingReviews } from '~/commerce/hooks/useListingReviews'
 import { useCanonicalListingSlug } from '~/commerce/hooks/useCanonicalSlug'
 import { PageCenter, PageScroll, StickyRail } from '~/components/layout'
 import { DeliveryPinCheck } from '~/components/location'
-import { MOBILE_TAB_BAR_HEIGHT } from '~/components/navigation/constants'
 import { ShareButton } from '~/components/share'
 import { BRAND_THEME, getShadowStyle, radius } from '~/config/tokens'
 import { useListing } from '~/hooks/useListing'
@@ -297,7 +296,8 @@ export default function ListingDetailScreen() {
 
   const isDigital = isDigitalListing(listing.listing_type)
   const buyNowLabel = isDigital ? 'Buy & download' : 'Buy it now'
-  const mobileBottomInset = MOBILE_TAB_BAR_HEIGHT + LISTING_MOBILE_STICKY_BAR_HEIGHT + 16
+  /** PageScroll already insets for the tab bar; only clear the sticky buy bar. */
+  const mobileBottomInset = LISTING_MOBILE_STICKY_BAR_HEIGHT + 16
   const listingShareSlug = slug ?? listing.id
   const listingShareButton = (
     <ShareButton

@@ -1,10 +1,12 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { Platform } from 'react-native'
 import { useRouter } from 'one'
 
 import {
   Button,
   Icons,
   Input,
+  ScrollView,
   Spinner,
   Text,
   TextArea,
@@ -12,20 +14,10 @@ import {
   YStack,
   useAppToast,
 } from '~/components/ui'
-import { CountryCodePicker, DEFAULT_COUNTRY } from '~/components/auth/CountryCodePicker'
-import { PageScroll, StickyRail } from '~/components/layout'
 import { getShadowStyle, radius } from '~/config/tokens'
 import { useAppLayout } from '~/hooks/useAppLayout'
 import { useAuth } from '~/hooks/useAuth'
 import { useProfile } from '~/hooks/useProfile'
-import type { Country } from '~/lib/phone/countries'
-import {
-  formatPhoneForDisplay,
-  nationalDigits,
-  parseE164Phone,
-  toE164Phone,
-  validateNationalPhone,
-} from '~/lib/phone/phone'
 import { overlayBackdropStyle } from '~/lib/layout/styles'
 import { refreshProfiles } from '~/lib/profile/refresh'
 import { USER_ROLES } from '~/lib/profile/profile.type'
@@ -355,16 +347,10 @@ export function CreateShopScreen() {
 
   const isLastStep = stepIndex === steps.length - 1
 
-  const formBody = (
-    <XStack width="100%" alignItems="flex-start" alignSelf="center" maxWidth={1200}>
-      {isDesktop ? (
-        <StickyRail
-          width={248}
-          flexShrink={0}
-          backgroundColor={ui.surface}
-          borderRightWidth={1}
-          borderRightColor={ui.borderSubtle}
-        >
+  return (
+    <YStack flex={1} width="100%" backgroundColor={ui.background} minHeight={0}>
+      <XStack flex={1} minHeight={0} alignItems="stretch">
+        {isDesktop ? (
           <StepSidebar
             ui={ui}
             steps={steps}
@@ -372,95 +358,88 @@ export function CreateShopScreen() {
             stepCompletion={stepCompletion}
             onSelect={goToStep}
           />
-        </StickyRail>
-      ) : null}
+        ) : null}
 
-      <YStack
-        flex={1}
-        flexGrow={1}
-        flexShrink={1}
-        minWidth={0}
-        paddingHorizontal={isDesktop ? '$8' : '$4'}
-        paddingTop="$6"
-        paddingBottom={(isDesktop ? 40 : 32) + safeBottom}
-      >
-        <ProgressHeader ui={ui} stepIndex={stepIndex} total={steps.length} percent={completionPercentage} />
-
-        <YStack
-          width="100%"
-          backgroundColor={ui.surface}
-          borderRadius={radius.surface}
-          borderWidth={1}
-          borderColor={ui.borderSubtle}
-          padding={isDesktop ? '$6' : '$4'}
-          gap="$5"
-          style={getShadowStyle('sm')}
-        >
-          <StepHeader ui={ui} step={currentStep} />
-
-          {currentStep.id === 'basicInfo' ? (
-            <BasicInfoStep ui={ui} formData={formData} errors={errors} touched={touched} setField={setField} onBlur={handleBlur} />
-          ) : null}
-          {currentStep.id === 'contact' ? (
-            <ContactStep ui={ui} formData={formData} errors={errors} touched={touched} setField={setField} onBlur={handleBlur} accountEmail={user?.email ?? null} />
-          ) : null}
-          {currentStep.id === 'categories' ? (
-            <CategoriesStep ui={ui} formData={formData} onToggle={toggleCategory} />
-          ) : null}
-          {currentStep.id === 'currency' ? (
-            <CurrencyStep ui={ui} formData={formData} showAll={showAllCurrencies} onShowAll={() => setShowAllCurrencies(true)} onSelect={(code) => setField('shop_currency', code)} />
-          ) : null}
-          {currentStep.id === 'socialMedia' ? (
-            <SocialStep ui={ui} formData={formData} errors={errors} onChange={setSocialLink} />
-          ) : null}
-        </YStack>
-
-        <XStack
-          marginTop="$5"
-          gap="$3"
-          flexDirection={isDesktop ? 'row' : 'column-reverse'}
-          justifyContent="space-between"
-        >
-          <Button
-            tone="ghost"
-            size="$4"
-            borderRadius={999}
-            disabled={stepIndex === 0}
-            onPress={() => goToStep(stepIndex - 1)}
+        <YStack flex={1} minWidth={0}>
+          <ScrollView
+            flex={1}
+            showsVerticalScrollIndicator={false}
+            contentContainerStyle={{
+              paddingHorizontal: isDesktop ? 32 : 16,
+              paddingTop: 24,
+              paddingBottom: (isDesktop ? 40 : 32) + safeBottom,
+              maxWidth: '100%',
+              width: '100%',
+              alignSelf: 'stretch',
+            }}
           >
-            Previous
-          </Button>
+            <ProgressHeader ui={ui} stepIndex={stepIndex} total={steps.length} percent={completionPercentage} />
 
-          {isLastStep ? (
-            <Button
-              tone="primary"
-              size="$4"
-              borderRadius={999}
-              disabled={isSubmitting}
-              onPress={handleSubmit}
-              icon={isSubmitting ? <Spinner size="small" color="white" /> : <Icons.Store size={16} color="white" />}
+            <YStack
+              backgroundColor={ui.surface}
+              borderRadius={radius.surface}
+              borderWidth={1}
+              borderColor={ui.borderSubtle}
+              padding={isDesktop ? '$6' : '$4'}
+              gap="$5"
+              style={getShadowStyle('sm')}
             >
-              {isSubmitting ? 'Creating shop…' : 'Create My Shop'}
-            </Button>
-          ) : (
-            <Button
-              tone="primary"
-              size="$4"
-              borderRadius={999}
-              onPress={handleNext}
-              iconAfter={<Icons.ArrowRight size={16} color="white" />}
-            >
-              Next Step
-            </Button>
-          )}
-        </XStack>
-      </YStack>
-    </XStack>
-  )
+              <StepHeader ui={ui} step={currentStep} />
 
-  return (
-    <YStack width="100%" backgroundColor={ui.background}>
-      <PageScroll>{formBody}</PageScroll>
+              {currentStep.id === 'basicInfo' ? (
+                <BasicInfoStep ui={ui} formData={formData} errors={errors} touched={touched} setField={setField} onBlur={handleBlur} />
+              ) : null}
+              {currentStep.id === 'contact' ? (
+                <ContactStep ui={ui} formData={formData} errors={errors} touched={touched} setField={setField} onBlur={handleBlur} accountEmail={user?.email ?? null} />
+              ) : null}
+              {currentStep.id === 'categories' ? (
+                <CategoriesStep ui={ui} formData={formData} onToggle={toggleCategory} />
+              ) : null}
+              {currentStep.id === 'currency' ? (
+                <CurrencyStep ui={ui} formData={formData} showAll={showAllCurrencies} onShowAll={() => setShowAllCurrencies(true)} onSelect={(code) => setField('shop_currency', code)} />
+              ) : null}
+              {currentStep.id === 'socialMedia' ? (
+                <SocialStep ui={ui} formData={formData} errors={errors} onChange={setSocialLink} />
+              ) : null}
+            </YStack>
+
+            <XStack marginTop="$5" gap="$3" flexDirection={isDesktop ? 'row' : 'column-reverse'} justifyContent="space-between">
+              <Button
+                tone="ghost"
+                size="$4"
+                borderRadius={999}
+                disabled={stepIndex === 0}
+                onPress={() => goToStep(stepIndex - 1)}
+              >
+                Previous
+              </Button>
+
+              {isLastStep ? (
+                <Button
+                  tone="primary"
+                  size="$4"
+                  borderRadius={999}
+                  disabled={isSubmitting}
+                  onPress={handleSubmit}
+                  icon={isSubmitting ? <Spinner size="small" color="white" /> : <Icons.Store size={16} color="white" />}
+                >
+                  {isSubmitting ? 'Creating shop…' : 'Create My Shop'}
+                </Button>
+              ) : (
+                <Button
+                  tone="primary"
+                  size="$4"
+                  borderRadius={999}
+                  onPress={handleNext}
+                  iconAfter={<Icons.ArrowRight size={16} color="white" />}
+                >
+                  Next Step
+                </Button>
+              )}
+            </XStack>
+          </ScrollView>
+        </YStack>
+      </XStack>
 
       {phase === 'success' ? (
         <SuccessOverlay
@@ -494,7 +473,16 @@ function StepSidebar({
   onSelect: (index: number) => void
 }) {
   return (
-    <YStack paddingHorizontal="$4" paddingVertical="$5" gap="$4" width="100%">
+    <YStack
+      width={248}
+      backgroundColor={ui.surface}
+      borderRightWidth={1}
+      borderRightColor={ui.borderSubtle}
+      paddingHorizontal="$4"
+      paddingVertical="$5"
+      gap="$4"
+      style={Platform.OS === 'web' ? ({ position: 'sticky', top: 0 } as const) : undefined}
+    >
       <YStack gap="$1">
         <Text fontSize={20} fontWeight="800" color={ui.brand} letterSpacing={-0.4}>
           Seller Setup
@@ -552,7 +540,7 @@ function StepSidebar({
         })}
       </YStack>
 
-      <YStack>
+      <YStack flex={1} justifyContent="flex-end">
         <XStack
           alignItems="center"
           gap="$2"
@@ -626,7 +614,7 @@ function Callout({
   const border = tone === 'warning' ? 'rgba(217, 119, 6, 0.28)' : 'rgba(208, 16, 96, 0.2)'
   const titleColor = tone === 'warning' ? '#b45309' : ui.brand
   return (
-    <XStack gap="$3" padding="$3.5" borderRadius={radius.card} backgroundColor={bg} borderWidth={1} borderColor={border}>
+    <XStack gap="$3" padding="$3.5" borderRadius={radius.chip} backgroundColor={bg} borderWidth={1} borderColor={border}>
       <YStack marginTop={1}>{icon}</YStack>
       <YStack flex={1} minWidth={0} gap="$1">
         <Text fontSize={14} fontWeight="700" color={titleColor}>
@@ -753,109 +741,21 @@ function ContactStep({
 }: StepBodyProps & { accountEmail: string | null }) {
   const emailRequired = !formData.shop_phone_number?.trim()
   const phoneRequired = !formData.shop_email?.trim()
-
-  const [phoneCountry, setPhoneCountry] = useState<Country>(() => {
-    const parsed = parseE164Phone(formData.shop_phone_number?.trim() ?? '')
-    return parsed?.country ?? DEFAULT_COUNTRY
-  })
-  const [phoneNational, setPhoneNational] = useState(() => {
-    const parsed = parseE164Phone(formData.shop_phone_number?.trim() ?? '')
-    return parsed?.nationalNumber ?? ''
-  })
-
-  useEffect(() => {
-    if (phoneNational.trim()) return
-    const e164 = formData.shop_phone_number?.trim()
-    if (!e164) return
-    const parsed = parseE164Phone(e164)
-    if (parsed) {
-      setPhoneCountry(parsed.country)
-      setPhoneNational(parsed.nationalNumber)
-    }
-  }, [formData.shop_phone_number, phoneNational])
-
-  const syncPhoneToForm = useCallback(
-    (country: Country, national: string) => {
-      const digits = nationalDigits(national).slice(0, country.maxLength)
-      if (!digits) {
-        setField('shop_phone_number', '')
-        return
-      }
-      const result = validateNationalPhone(digits, country)
-      setField('shop_phone_number', result.ok ? result.e164 : toE164Phone(country, digits))
-    },
-    [setField],
-  )
-
-  const handlePhoneCountryChange = useCallback(
-    (country: Country) => {
-      setPhoneCountry(country)
-      const trimmed = phoneNational.slice(0, country.maxLength)
-      setPhoneNational(trimmed)
-      syncPhoneToForm(country, trimmed)
-    },
-    [phoneNational, syncPhoneToForm],
-  )
-
-  const handlePhoneNationalChange = useCallback(
-    (value: string) => {
-      const digits = nationalDigits(value).slice(0, phoneCountry.maxLength)
-      setPhoneNational(digits)
-      syncPhoneToForm(phoneCountry, digits)
-    },
-    [phoneCountry, syncPhoneToForm],
-  )
-
-  const phoneHint =
-    phoneCountry.minLength === phoneCountry.maxLength
-      ? `${phoneCountry.maxLength}-digit mobile number for ${phoneCountry.name}.`
-      : `${phoneCountry.minLength}–${phoneCountry.maxLength}-digit mobile number for ${phoneCountry.name}.`
-
   return (
     <YStack gap="$4">
       <Callout ui={ui} tone="warning" icon={<Icons.Info size={18} color="#b45309" />} title="Contact information required">
         Provide at least one contact method (email or phone) so customers can reach you.
       </Callout>
 
-      <FieldShell
-        ui={ui}
-        label="Phone Number"
-        required={phoneRequired}
-        error={touched.shop_phone_number ? errors.shop_phone_number : undefined}
-        hint={phoneHint}
-      >
-        <XStack
-          alignItems="center"
-          gap="$2"
-          borderWidth={1}
-          borderColor={touched.shop_phone_number && errors.shop_phone_number ? ui.error : ui.borderSubtle}
-          borderRadius={radius.chip}
-          backgroundColor={ui.surface}
-          overflow="hidden"
-        >
-          <CountryCodePicker value={phoneCountry} onChange={handlePhoneCountryChange} compact />
-          <YStack width={1} height={28} backgroundColor={ui.borderSubtle} />
-          <Input
-            flex={1}
-            borderWidth={0}
-            backgroundColor="transparent"
-            autoCapitalize="none"
-            autoComplete="tel"
-            textContentType="telephoneNumber"
-            keyboardType="phone-pad"
-            placeholder={phoneCountry.placeholder}
-            value={phoneNational}
-            onChangeText={handlePhoneNationalChange}
-            onBlur={() => onBlur('shop_phone_number')}
-            invalid={Boolean(touched.shop_phone_number && errors.shop_phone_number)}
-            maxLength={phoneCountry.maxLength}
-          />
-        </XStack>
-        {phoneNational && !errors.shop_phone_number ? (
-          <Text fontSize={12} color={ui.textMuted} marginTop="$1">
-            {formatPhoneForDisplay(toE164Phone(phoneCountry, phoneNational), phoneCountry)}
-          </Text>
-        ) : null}
+      <FieldShell ui={ui} label="Phone Number" required={phoneRequired} error={touched.shop_phone_number ? errors.shop_phone_number : undefined} hint="Include your country code, e.g. +919876543210.">
+        <Input
+          value={formData.shop_phone_number}
+          onChangeText={(value) => setField('shop_phone_number', value.replace(/(?!^)\+/g, '').replace(/[^\d+]/g, ''))}
+          onBlur={() => onBlur('shop_phone_number')}
+          placeholder="+91 98765 43210"
+          keyboardType="phone-pad"
+          invalid={Boolean(touched.shop_phone_number && errors.shop_phone_number)}
+        />
       </FieldShell>
 
       <FieldShell
@@ -1121,8 +1021,8 @@ function SuccessOverlay({
         flex={nativeFullscreen ? 1 : undefined}
         height={nativeFullscreen ? '100%' : undefined}
         backgroundColor={ui.surface}
-        borderRadius={radius.surface}
-        borderWidth={1}
+        borderRadius={nativeFullscreen ? 0 : radius.surface}
+        borderWidth={nativeFullscreen ? 0 : 1}
         borderColor={ui.borderSubtle}
         padding="$6"
         gap="$4"

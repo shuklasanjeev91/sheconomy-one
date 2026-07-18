@@ -40,7 +40,6 @@ import {
   useAppToast,
 } from '~/components/ui'
 import { FullWidthLayout, PageSection } from '~/components/layout'
-import { MOBILE_TAB_BAR_HEIGHT } from '~/components/navigation/constants'
 import { formatCurrency } from '~/lib/format'
 import { shareCustomerOrderInvoice } from '~/lib/orders/order-invoice'
 import { formatOrderAmount, formatOrderDate } from '~/lib/orders/order.utils'
@@ -239,7 +238,8 @@ export function OrderDetailScreen({ orderId }: OrderDetailScreenProps) {
     }
   }
 
-  const bottomPad = isDesktop ? 32 : MOBILE_TAB_BAR_HEIGHT + 24
+  /** PageScroll already insets for the tab bar + safe area. */
+  const bottomPad = isDesktop ? 32 : 24
 
   return (
     <FullWidthLayout

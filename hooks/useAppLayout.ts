@@ -23,6 +23,8 @@ export function useAppLayout() {
         ? APP_LAYOUT.railPaddingTablet
         : APP_LAYOUT.railPaddingMobile
 
+  const mobileTabBarOffset = APP_LAYOUT.mobileTabBarHeight + insets.bottom
+
   return {
     isDesktop,
     isDesktopWeb,
@@ -37,7 +39,13 @@ export function useAppLayout() {
     safeBottom: insets.bottom,
     safeLeft: insets.left,
     safeRight: insets.right,
-    mobileTabBarOffset: APP_LAYOUT.mobileTabBarHeight + insets.bottom,
+    /** Tab bar height + home-indicator / safe bottom — use for scroll viewport inset. */
+    mobileTabBarOffset,
+    /**
+     * Offset for sticky CTAs sitting above the tab bar.
+     * Pass sticky bar height so content padding clears both layers.
+     */
+    bottomChromeOffset: (stickyBarHeight = 0) => mobileTabBarOffset + stickyBarHeight,
     mobileHeaderTotalHeight: APP_LAYOUT.mobileHeaderHeight + (isNative ? insets.top : 0),
     desktopHeaderHeight: APP_LAYOUT.desktopHeaderHeight,
     mobileHeaderHeight: APP_LAYOUT.mobileHeaderHeight,

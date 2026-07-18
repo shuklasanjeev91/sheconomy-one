@@ -53,7 +53,6 @@ type VendorListingsProductsTabProps = {
   shopId: string
   currency: string
   isDesktop: boolean
-  refreshNonce?: number
   onOpenListing: (listingId: string) => void
 }
 
@@ -62,7 +61,6 @@ export function VendorListingsProductsTab({
   shopId,
   currency,
   isDesktop,
-  refreshNonce = 0,
   onOpenListing,
 }: VendorListingsProductsTabProps) {
   const dispatch = useAppDispatch()
@@ -117,7 +115,7 @@ export function VendorListingsProductsTab({
 
   useEffect(() => {
     void fetchPage()
-  }, [fetchPage, refreshNonce])
+  }, [fetchPage])
 
   const rangeStart = rows.length === 0 ? 0 : (page - 1) * PAGE_SIZE + 1
   const rangeEnd = (page - 1) * PAGE_SIZE + rows.length

@@ -179,11 +179,6 @@ export function getActiveVendorNavItem(pathname: string): VendorNavItem {
 
   if (normalized === '/vendor') return VENDOR_NAV_ITEMS[0]
 
-  // Create/edit listing flows live under Products, not My Shop.
-  if (normalized === '/vendor/create-listing') {
-    return VENDOR_NAV_ITEMS.find((item) => item.id === 'products') ?? VENDOR_NAV_ITEMS[0]
-  }
-
   return (
     VENDOR_NAV_ITEMS.find((item) => {
       // Compare on the path only — nav hrefs may carry query strings (e.g. `?section=`).

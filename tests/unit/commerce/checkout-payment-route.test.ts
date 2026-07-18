@@ -3,7 +3,11 @@ import { describe, expect, it } from 'vitest'
 import {
   checkoutShippingLabel,
   isAppPayUBridgeUrl,
+  isOrderPaymentSettled,
   onlinePaymentOptionCopy,
+  orderSuccessHeadline,
+  orderSuccessSubtitle,
+  ordersAwaitingOnlinePayment,
   resolvePostCheckoutNext,
   toInAppPayUHref,
 } from '~/commerce/lib/checkout-payment-route'
@@ -44,6 +48,63 @@ describe('checkoutShippingLabel', () => {
   it('defaults to SHEDelivery', () => {
     expect(checkoutShippingLabel(null)).toBe('SHEDelivery')
     expect(checkoutShippingLabel({ shippingLabel: 'Shiprocket' })).toBe('Shiprocket')
+  })
+})
+
+describe('isAppPayUBridgeUrl', () => {
+  it('matches PayU bridge only, not payu-return', () => {
+    expect(isAppPayUBridgeUrl('/orders/payu?action=x')).toBe(true)
+    expect(isAppPayUBridgeUrl('https://sheconomy.com/orders/payu')).toBe(true)
+    expect(isAppPayUBridgeUrl('/orders/payu-return?status=success')).toBe(false)
+    expect(isAppPayUBridgeUrl('https://sheconomy.com/orders/payu-return')).toBe(false)
+  })
+})
+
+describe('ordersAwaitingOnlinePayment', () => {
+  it('detects unpaid online holds from DB status', () => {
+    expect(
+      ordersAwaitingOnlinePayment([
+        { payment_mode: 'online', payment_status: 'pending', order_status: 'pending' },
+      ]),
+    ).toBe(true)
+    expect(
+      ordersAwaitingOnlinePayment([
+        { payment_mode: 'online', payment_status: 'completed', order_status: 'confirmed' },
+      ]),
+    ).toBe(false)
+    expect(
+      ordersAwaitingOnlinePayment([
+        { payment_mode: 'cod', payment_status: 'pending', order_status: 'pending' },
+      ]),
+    ).toBe(false)
+  })
+
+  it('treats cancelled as settled', () => {
+    expect(
+      isOrderPaymentSettled({
+        payment_mode: 'online',
+        payment_status: 'pending',
+        order_status: 'cancelled',
+      }),
+    ).toBe(true)
+  })
+})
+
+describe('orderSuccessHeadline', () => {
+  it('never confirms while awaiting payment', () => {
+    expect(
+      orderSuccessHeadline({
+        awaitingPayment: true,
+        orders: [{ payment_status: 'pending' }],
+      }),
+    ).toBe('Complete your payment')
+    expect(
+      orderSuccessHeadline({
+        awaitingPayment: false,
+        orders: [{ payment_status: 'paid' }],
+      }),
+    ).toBe('Order confirmed')
+    expect(orderSuccessSubtitle({ awaitingPayment: true }).toLowerCase()).toContain('reserved')
   })
 })
 

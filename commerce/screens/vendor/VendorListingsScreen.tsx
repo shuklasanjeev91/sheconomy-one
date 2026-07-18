@@ -10,7 +10,6 @@ import { commerceRoutes, vendorRoutes } from '~/lib/routes'
 import { useAppDispatch, useAppSelector } from '~/lib/store/hooks'
 import { useAppUi } from '~/lib/theme/useAppUi'
 
-import { VendorBulkImportDrawer } from './VendorBulkImportDrawer'
 import { VendorListingDetailDrawer } from './VendorListingDetailDrawer'
 import { VendorListingsProductsTab } from './VendorListingsProductsTab'
 import { VendorListingsSectionsTab } from './VendorListingsSectionsTab'
@@ -26,8 +25,6 @@ export function VendorListingsScreen() {
 
   const [activeTab, setActiveTab] = useState<InventoryTab>('product')
   const [selectedListingId, setSelectedListingId] = useState<string | null>(null)
-  const [bulkImportOpen, setBulkImportOpen] = useState(false)
-  const [productsRefreshNonce, setProductsRefreshNonce] = useState(0)
 
   if (!shop && isLoadingShops) {
     return (
@@ -89,39 +86,13 @@ export function VendorListingsScreen() {
             </Text>
           </YStack>
 
-          {activeTab === 'section' ? (
-            <Button
-              tone="primary"
-              size="$3"
-              borderRadius={999}
-              icon={<Icons.Plus size={16} />}
-              onPress={() =>
-                toast.show('Shop sections coming soon', {
-                  tone: 'info',
-                  message: 'Section creation will be available after the shop sections migration.',
-                })
-              }
-            >
-              New Section
-            </Button>
-          ) : (
-            <XStack gap="$2" flexWrap="wrap">
-              <Button
-                tone="outline"
-                size="$3"
-                borderRadius={999}
-                icon={<Icons.Upload size={16} color={ui.textSecondary} />}
-                onPress={() => setBulkImportOpen(true)}
-              >
-                Import
+          {activeTab !== 'section' ? (
+            <Link href={vendorRoutes.createListing} asChild>
+              <Button tone="primary" size="$3" borderRadius={999} icon={<Icons.Plus size={16} />}>
+                Add Product
               </Button>
-              <Link href={vendorRoutes.createListing} asChild>
-                <Button tone="primary" size="$3" borderRadius={999} icon={<Icons.Plus size={16} />}>
-                  Add Product
-                </Button>
-              </Link>
-            </XStack>
-          )}
+            </Link>
+          ) : null}
         </XStack>
 
         <InventoryTabs ui={ui} activeTab={activeTab} onChange={setActiveTab} isDesktop={isDesktop} />
@@ -132,7 +103,6 @@ export function VendorListingsScreen() {
             shopId={shop.id}
             currency={currency}
             isDesktop={isDesktop}
-            refreshNonce={productsRefreshNonce}
             onOpenListing={setSelectedListingId}
           />
         ) : (
@@ -153,16 +123,6 @@ export function VendorListingsScreen() {
         isDesktop={isDesktop}
         safeBottom={safeBottom}
         onClose={() => setSelectedListingId(null)}
-      />
-
-      <VendorBulkImportDrawer
-        ui={ui}
-        open={bulkImportOpen}
-        isDesktop={isDesktop}
-        shopId={shop.id}
-        safeBottom={safeBottom}
-        onClose={() => setBulkImportOpen(false)}
-        onImportComplete={() => setProductsRefreshNonce((n) => n + 1)}
       />
     </>
   )
