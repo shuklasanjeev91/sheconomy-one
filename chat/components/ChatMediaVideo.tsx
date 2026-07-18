@@ -1,9 +1,10 @@
-import { useEffect, useState } from 'react'
 import { Platform } from 'react-native'
 
 import { getChatMediaUrl } from '~/chat/lib/chats'
 import { useChatTheme } from '~/chat/lib/chat-theme'
-import { Icons, Spinner, Text, YStack } from '~/components/ui'
+import { Icons, Spinner, YStack } from '~/components/ui'
+import { NativeVideoFile } from '~/lib/native/NativeMediaPlayers'
+import { useEffect, useState } from 'react'
 
 type ChatMediaVideoProps = {
   path: string
@@ -55,11 +56,8 @@ export function ChatMediaVideo({ path, width = 260, height = 200 }: ChatMediaVid
           style={{ width: '100%', height: '100%', objectFit: 'contain', background: '#000' }}
         />
       ) : url ? (
-        <YStack alignItems="center" gap={8} padding="$3">
-          <Icons.Video size={28} color="white" />
-          <Text fontSize={12} color="white" textAlign="center">
-            Video attached — open to play
-          </Text>
+        <YStack width="100%" height="100%">
+          <NativeVideoFile uri={url} autoPlay={false} />
         </YStack>
       ) : failed ? (
         <Icons.VideoOff size={26} color={chat.textMuted} />

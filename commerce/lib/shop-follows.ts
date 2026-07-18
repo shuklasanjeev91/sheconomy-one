@@ -23,18 +23,20 @@ export async function fetchShopFollowState(
   return { isFollowing: !!data, error: null }
 }
 
+/** Upsert an active follow; unique (user_id, shop_id) conflicts become active follows. */
 export async function followShop(
   userId: string,
   shopId: string,
 ): Promise<{ error: string | null }> {
-  const { isFollowing } = await fetchShopFollowState(userId, shopId)
-  if (isFollowing) return { error: null }
-
-  const { error } = await supabase.from('shop_follows').insert({
-    user_id: userId,
-    shop_id: shopId,
-    status: 'active',
-  })
+  const { error } = await supabase.from('shop_follows').upsert(
+    {
+      user_id: userId,
+      shop_id: shopId,
+      status: 'active',
+      updated_at: new Date().toISOString(),
+    },
+    { onConflict: 'user_id,shop_id' },
+  )
 
   return { error: error?.message ?? null }
 }

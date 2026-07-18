@@ -13,6 +13,7 @@ import {
   SaleEventBanner,
   ShopSpotlightCard,
 } from '~/commerce/components'
+import { FollowedShopsRail } from '~/commerce/components/FollowedShopsRail'
 import {
   Button,
   Card,
@@ -25,7 +26,7 @@ import {
   YStack,
 } from '~/components/ui'
 import { FullWidthLayout, PageCenter, PageSection } from '~/components/layout'
-import { NearbyShopsSection } from '~/components/location'
+import { NearbyShopsSection, NearYouLocationChip } from '~/components/location'
 import { BRAND_THEME, radius } from '~/config/tokens'
 import { useAppUi } from '~/lib/theme/useAppUi'
 import { useCategoriesFeed } from '~/commerce/hooks/useCategoriesFeed'
@@ -142,6 +143,8 @@ export function HomeScreen({ data, error, loading = false }: HomeScreenProps) {
           inset
         />
         <RecentlyViewedRail inset />
+        <FollowedShopsRail inset />
+        <NearYouLocationChip />
         <NearbyShopsSection />
 
         <InfiniteListingSection

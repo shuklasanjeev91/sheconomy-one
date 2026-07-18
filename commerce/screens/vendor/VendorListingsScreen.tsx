@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { Link } from 'one'
 
-import { Button, Icons, Spinner, Text, XStack, YStack, useAppToast } from '~/components/ui'
+import { Button, Icons, Spinner, Text, XStack, YStack } from '~/components/ui'
 import { PageCenter } from '~/components/layout'
 import { useAppLayout } from '~/hooks/useAppLayout'
 import { loadMyShops } from '~/lib/shop/shop.store'
@@ -21,8 +21,6 @@ export function VendorListingsScreen() {
   const ui = useAppUi()
   const { isDesktop, safeBottom } = useAppLayout()
   const dispatch = useAppDispatch()
-  const toast = useAppToast()
-
   const shop = useAppSelector((s) => s.shop.currentShop)
   const isLoadingShops = useAppSelector((s) => s.shop.isLoadingShops)
 
@@ -138,7 +136,12 @@ export function VendorListingsScreen() {
             onOpenListing={setSelectedListingId}
           />
         ) : (
-          <VendorListingsSectionsTab ui={ui} isDesktop={isDesktop} safeBottom={safeBottom} />
+          <VendorListingsSectionsTab
+            ui={ui}
+            shopId={shop.id}
+            isDesktop={isDesktop}
+            safeBottom={safeBottom}
+          />
         )}
       </YStack>
 

@@ -10,7 +10,7 @@ import type { Program } from '~/class/lib/programs'
 import { ScreenSearchField } from '~/components/search'
 import { useAuth } from '~/hooks/useAuth'
 import { AppBottomSheet, Button, Input, Spinner, Text, XStack, YStack, useAppToast } from '~/components/ui'
-import { filterBySearchQuery } from '~/lib/search'
+import { SHEET_SEARCH_MIN_ITEMS, filterBySearchQuery } from '~/lib/search'
 import { useAppUi } from '~/lib/theme/useAppUi'
 
 type SaveToPlaylistSheetProps = {
@@ -132,12 +132,14 @@ export function SaveToPlaylistSheet({ open, onOpenChange, program }: SaveToPlayl
               Your playlists
             </Text>
 
-            <ScreenSearchField
-              value={query}
-              onChangeText={setQuery}
-              placeholder="Search playlists"
-              clearable
-            />
+            {playlists.length >= SHEET_SEARCH_MIN_ITEMS || query.length > 0 ? (
+              <ScreenSearchField
+                value={query}
+                onChangeText={setQuery}
+                placeholder="Search playlists"
+                clearable
+              />
+            ) : null}
 
             {loading ? (
               <YStack paddingVertical="$4" alignItems="center">

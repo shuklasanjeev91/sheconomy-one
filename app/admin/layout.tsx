@@ -125,6 +125,13 @@ const NAV_GROUPS: AdminNavGroup[] = [
         icon: Icons.Settings,
         href: '/admin/cms' as Href,
       },
+      {
+        id: 'blog',
+        label: 'Blog',
+        description: 'Browse CMS posts, engagement, authors, and article details.',
+        icon: Icons.FileText,
+        href: '/admin/blog' as Href,
+      },
     ],
   },
   {
@@ -316,15 +323,15 @@ export function AdminLayout() {
           <YStack
             key="admin-drawer"
             style={edgePanelPositionStyle()}
-            width={DRAWER_WIDTH}
-            maxWidth="85%"
+            width={Platform.OS === 'web' ? DRAWER_WIDTH : '100%'}
+            maxWidth={Platform.OS === 'web' ? '85%' : '100%'}
             height="100%"
             backgroundColor={ui.surface}
-            borderRightWidth={1}
+            borderRightWidth={Platform.OS === 'web' ? 1 : 0}
             borderRightColor={ui.borderSubtle}
             zIndex={1}
             animation="quick"
-            enterStyle={{ x: -DRAWER_WIDTH }}
+            enterStyle={{ x: Platform.OS === 'web' ? -DRAWER_WIDTH : -40 }}
           >
             <YStack paddingTop={Platform.OS !== 'web' ? safeTop : 0} flex={1} minHeight={0}>
               <AdminSidebar

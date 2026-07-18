@@ -142,6 +142,16 @@ export function ShopFiltersBar({ filters, countries, resultCount, onChange }: Sh
           />
         </FilterField>
 
+        <Button
+          tone={filters.followingOnly ? 'primary' : 'outline'}
+          size="$3"
+          borderRadius={999}
+          onPress={() => patch({ followingOnly: !filters.followingOnly })}
+          icon={<Icons.Heart size={14} />}
+        >
+          Following
+        </Button>
+
         {activeCount > 0 ? (
           <Button
             tone="ghost"

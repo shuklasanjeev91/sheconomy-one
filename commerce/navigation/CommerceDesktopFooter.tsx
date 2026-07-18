@@ -39,8 +39,8 @@ export function CommerceDesktopFooter() {
       >
         <XStack
           width="100%"
-          maxWidth={1400}
-          alignSelf="center"
+          maxWidth="100%"
+          alignSelf="stretch"
           paddingHorizontal={gutter}
           paddingTop="$8"
           paddingBottom="$7"

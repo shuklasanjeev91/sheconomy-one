@@ -26,15 +26,10 @@ import { CACHE_KEYS } from '~/lib/bootstrap/app-prefetch'
 import { HorizontalScrollRow } from '~/components/layout'
 import { Icons, Spinner, Text, XStack, YStack, useMedia } from '~/components/ui'
 import { getShadowStyle, radius } from '~/config/tokens'
-import { isClassAudioPath } from '~/lib/routes'
+import { mediaTabFromPath, type MediaTab } from '~/class/lib/media-tab'
 import { useAppUi } from '~/lib/theme/useAppUi'
 
-type MediaTab = 'video' | 'audio'
 type ProgramSort = 'default' | 'popular' | 'newest' | 'az'
-
-function mediaTabFromPath(pathname: string): MediaTab {
-  return isClassAudioPath(pathname) ? 'audio' : 'video'
-}
 
 export function ClassesScreen() {
   const ui = useAppUi()

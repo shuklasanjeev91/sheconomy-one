@@ -114,9 +114,25 @@ export function ChatListPane({
   async function toggleArchive() {
     if (!actionsChat) return
     const chat = actionsChat
+    const nextArchived = !chat.isArchived
     closeActions()
-    await setConversationArchived(chat.id, currentUserId, !chat.isArchived)
+    await setConversationArchived(chat.id, currentUserId, nextArchived)
     onChanged?.()
+    if (nextArchived) {
+      toast.show('Chat archived', {
+        tone: 'default',
+        duration: 6000,
+        actionLabel: 'Undo',
+        onAction: () => {
+          void setConversationArchived(chat.id, currentUserId, false).then(() => {
+            onChanged?.()
+            toast.show('Chat restored', { tone: 'success' })
+          })
+        },
+      })
+    } else {
+      toast.show('Chat unarchived', { tone: 'success' })
+    }
   }
 
   async function togglePin() {

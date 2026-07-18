@@ -5,7 +5,14 @@ import { Share } from 'react-native'
 
 import { ListingBrowseView, RecentlyViewedRail } from '~/commerce/components'
 import { useFavorites } from '~/commerce/hooks/useFavorites'
-import { Button, Icons, Spinner, Text, XStack, YStack, useAppToast } from '~/components/ui'
+import {
+  createWishlistCollection,
+  fetchWishlistCollections,
+  fetchWishlistListingIdsInCollection,
+  type WishlistCollection,
+} from '~/commerce/lib/wishlist'
+import { WishlistMoveSheet } from '~/commerce/components/WishlistMoveSheet'
+import { Button, Icons, Input, Spinner, Text, XStack, YStack, useAppToast } from '~/components/ui'
 import { FullWidthLayout, PageSection } from '~/components/layout'
 import { BRAND_NAME } from '~/config/brand'
 import { formatCurrency } from '~/lib/format'
@@ -13,14 +20,21 @@ import { copyToClipboard } from '~/lib/platform/clipboard'
 import { fetchListingsByIds, type ListingSummary } from '~/lib/supabase/commerce'
 import { commerceRoutes } from '~/lib/routes'
 import { useAppUi } from '~/lib/theme/useAppUi'
+import { useSupabase } from '~/providers/SupabaseProvider'
 
 export function FavoritesScreen() {
   const ui = useAppUi()
   const toast = useAppToast()
+  const { user } = useSupabase()
   const { favoriteIds, isLoading: isFavoritesLoading } = useFavorites()
   const [items, setItems] = useState<ListingSummary[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const [collections, setCollections] = useState<WishlistCollection[]>([])
+  const [activeCollectionId, setActiveCollectionId] = useState<string | null>(null)
+  const [newCollectionName, setNewCollectionName] = useState('')
+  const [isCreatingCollection, setIsCreatingCollection] = useState(false)
+  const [moveListingId, setMoveListingId] = useState<string | null>(null)
 
   async function handleShareWishlist() {
     if (!items.length) {
@@ -54,35 +68,66 @@ export function FavoritesScreen() {
     }
   }
 
-  const loadFavorites = useCallback(async () => {
-    if (!favoriteIds.length) {
-      setItems([])
-      setIsLoading(false)
-      setError(null)
+  const loadCollections = useCallback(async () => {
+    if (!user?.id) {
+      setCollections([])
       return
     }
+    const result = await fetchWishlistCollections(user.id)
+    if (!result.error) setCollections(result.collections)
+  }, [user?.id])
 
+  const loadFavorites = useCallback(async () => {
     setIsLoading(true)
     try {
-      const listings = await fetchListingsByIds(favoriteIds)
-      const order = new Map(favoriteIds.map((id, index) => [id, index]))
-      const sorted = [...listings].sort(
-        (a, b) => (order.get(a.id) ?? 0) - (order.get(b.id) ?? 0),
-      )
+      let ids = favoriteIds
+      if (user?.id && activeCollectionId) {
+        const scoped = await fetchWishlistListingIdsInCollection(user.id, activeCollectionId)
+        if (!scoped.error) ids = scoped.listingIds
+      }
+
+      if (!ids.length) {
+        setItems([])
+        setError(null)
+        setIsLoading(false)
+        return
+      }
+
+      const listings = await fetchListingsByIds(ids)
+      const order = new Map(ids.map((id, index) => [id, index]))
+      const sorted = [...listings].sort((a, b) => (order.get(a.id) ?? 0) - (order.get(b.id) ?? 0))
       setItems(sorted)
       setError(null)
     } catch {
       setError('Could not load your favorites.')
-      setItems([])
     } finally {
       setIsLoading(false)
     }
-  }, [favoriteIds])
+  }, [activeCollectionId, favoriteIds, user?.id])
+
+  useEffect(() => {
+    void loadCollections()
+  }, [loadCollections])
 
   useEffect(() => {
     if (isFavoritesLoading) return
     void loadFavorites()
   }, [isFavoritesLoading, loadFavorites])
+
+  async function handleCreateCollection() {
+    if (!user?.id || !newCollectionName.trim()) return
+    setIsCreatingCollection(true)
+    const result = await createWishlistCollection(user.id, newCollectionName)
+    setIsCreatingCollection(false)
+    if (result.error) {
+      toast.show('Could not create collection', { tone: 'danger', message: result.error })
+      return
+    }
+    setNewCollectionName('')
+    await loadCollections()
+    if (result.collection) setActiveCollectionId(result.collection.id)
+    toast.show('Collection created', { tone: 'success' })
+  }
 
   if (isFavoritesLoading) {
     return (
@@ -105,7 +150,7 @@ export function FavoritesScreen() {
             <Text fontSize={14} color={ui.textSecondary}>
               {items.length > 0
                 ? `${items.length} saved ${items.length === 1 ? 'item' : 'items'}`
-                : 'Items you save will appear here'}
+                : 'Tap the heart on any listing to save it here'}
             </Text>
           </YStack>
           <XStack alignItems="center" gap="$2">
@@ -122,6 +167,50 @@ export function FavoritesScreen() {
             ) : null}
           </XStack>
         </XStack>
+
+        {user ? (
+          <YStack gap="$2">
+            <XStack gap="$2" flexWrap="wrap">
+              <Button
+                size="$2"
+                tone={activeCollectionId === null ? 'primary' : 'outline'}
+                borderRadius={999}
+                onPress={() => setActiveCollectionId(null)}
+              >
+                All
+              </Button>
+              {collections.map((collection) => (
+                <Button
+                  key={collection.id}
+                  size="$2"
+                  tone={activeCollectionId === collection.id ? 'primary' : 'outline'}
+                  borderRadius={999}
+                  onPress={() => setActiveCollectionId(collection.id)}
+                >
+                  {collection.name}
+                </Button>
+              ))}
+            </XStack>
+            <XStack gap="$2" alignItems="center">
+              <Input
+                flex={1}
+                value={newCollectionName}
+                placeholder="New collection name"
+                onChangeText={setNewCollectionName}
+              />
+              <Button
+                size="$3"
+                tone="outline"
+                borderRadius={999}
+                disabled={isCreatingCollection || !newCollectionName.trim()}
+                onPress={() => void handleCreateCollection()}
+              >
+                Add
+              </Button>
+            </XStack>
+          </YStack>
+        ) : null}
+
         <ListingBrowseView
           title="Saved items"
           subtitle={
@@ -135,17 +224,65 @@ export function FavoritesScreen() {
           hasMore={false}
           error={error}
           onLoadMore={() => {}}
-          emptyMessage="Your wishlist is empty."
+          onRetry={() => void loadFavorites()}
+          emptyMessage="Your wishlist is empty. Save items with the heart, or move them here from Saved for later on your cart."
           showQuickAdd
+        />
+
+        {user && items.length > 0 ? (
+          <YStack gap="$2" paddingTop="$2">
+            <Text fontSize={14} fontWeight="700" color={ui.text}>
+              Organize
+            </Text>
+            {items.slice(0, 20).map((item) => (
+              <XStack key={item.id} alignItems="center" gap="$2" justifyContent="space-between">
+                <Text flex={1} fontSize={13} color={ui.textSecondary} numberOfLines={1}>
+                  {item.title}
+                </Text>
+                <Button
+                  size="$2"
+                  tone="outline"
+                  borderRadius={999}
+                  onPress={() => setMoveListingId(item.id)}
+                >
+                  Move
+                </Button>
+              </XStack>
+            ))}
+          </YStack>
+        ) : null}
+
+        <WishlistMoveSheet
+          open={!!moveListingId}
+          listingId={moveListingId}
+          onOpenChange={(open) => {
+            if (!open) setMoveListingId(null)
+          }}
+          onMoved={() => {
+            void loadCollections()
+            void loadFavorites()
+          }}
         />
 
         {!isLoading && items.length === 0 ? (
           <YStack gap="$3">
-            <AppLink href={commerceRoutes.home} asChild>
-              <Button tone="primary" size="$3" borderRadius={999} alignSelf="flex-start">
-                Discover products
-              </Button>
-            </AppLink>
+            <XStack gap="$2" flexWrap="wrap">
+              <AppLink href={commerceRoutes.home} asChild>
+                <Button tone="primary" size="$3" borderRadius={999} alignSelf="flex-start">
+                  Discover products
+                </Button>
+              </AppLink>
+              <AppLink href={commerceRoutes.cart} asChild>
+                <Button tone="outline" size="$3" borderRadius={999} alignSelf="flex-start">
+                  View cart
+                </Button>
+              </AppLink>
+              <AppLink href={commerceRoutes.following} asChild>
+                <Button tone="outline" size="$3" borderRadius={999} alignSelf="flex-start">
+                  Shops you follow
+                </Button>
+              </AppLink>
+            </XStack>
             <RecentlyViewedRail />
           </YStack>
         ) : null}

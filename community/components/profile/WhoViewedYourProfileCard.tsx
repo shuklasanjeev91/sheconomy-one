@@ -20,7 +20,7 @@ import {
 } from '~/components/ui'
 import { getShadowStyle, radius } from '~/config/tokens'
 import { communityRoutes } from '~/lib/routes'
-import { filterBySearchQuery } from '~/lib/search'
+import { SHEET_SEARCH_MIN_ITEMS, filterBySearchQuery } from '~/lib/search'
 import { useAppUi } from '~/lib/theme/useAppUi'
 
 function formatViewedAt(value: string) {
@@ -125,12 +125,14 @@ export function WhoViewedYourProfileCard({
         onOpenChange={setOpen}
         title="Who viewed your profile"
       >
-        <ScreenSearchField
-          value={query}
-          onChangeText={setQuery}
-          placeholder="Search viewers"
-          clearable
-        />
+        {viewers.length >= SHEET_SEARCH_MIN_ITEMS || query.length > 0 ? (
+          <ScreenSearchField
+            value={query}
+            onChangeText={setQuery}
+            placeholder="Search viewers"
+            clearable
+          />
+        ) : null}
         {loading ? (
           <YStack alignItems="center" paddingVertical="$6">
             <Spinner size="large" />

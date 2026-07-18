@@ -1,6 +1,12 @@
 /** Shared debounce interval for screen search bars (matches header omnibox). */
 export const SEARCH_DEBOUNCE_MS = 250
 
+/**
+ * Minimum number of list items before a bottom-sheet picker shows an inline
+ * search bar. Short lists (sort menus, small filter sets) stay search-free.
+ */
+export const SHEET_SEARCH_MIN_ITEMS = 10
+
 /** True when any haystack part contains the trimmed query (case-insensitive). */
 export function textMatchesQuery(
   query: string,

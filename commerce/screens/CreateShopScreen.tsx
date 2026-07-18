@@ -50,6 +50,7 @@ import {
 import { persistStorage } from '~/lib/store/storage'
 import { useAppDispatch, useAppSelector } from '~/lib/store/hooks'
 import { useAppUi } from '~/lib/theme/useAppUi'
+import { useUnsavedChangesGuard } from '~/hooks/useUnsavedChangesGuard'
 
 /** Local-storage key holding the in-progress seller-setup draft. */
 const DRAFT_STORAGE_KEY = 'sheconomy:create-shop-draft'
@@ -156,6 +157,14 @@ export function CreateShopScreen() {
     if (!hydrated || phase === 'success') return
     void persistStorage.setItem(DRAFT_STORAGE_KEY, JSON.stringify(formData))
   }, [formData, hydrated, phase])
+
+  useUnsavedChangesGuard({
+    isDirty:
+      hydrated &&
+      phase !== 'success' &&
+      !isSubmitting &&
+      Boolean(formData.shop_name?.trim() || formData.shop_description?.trim()),
+  })
 
   // Redirect users who shouldn't see the flow (vendors / existing shop owners).
   useEffect(() => {
@@ -1095,12 +1104,22 @@ function SuccessOverlay({
   onSkip: () => void
   onContinue: () => void
 }) {
+  const nativeFullscreen = Platform.OS === 'ios' || Platform.OS === 'android'
+
   return (
-    <YStack style={overlayBackdropStyle()} zIndex={500} alignItems="center" justifyContent="center" padding="$4">
+    <YStack
+      style={overlayBackdropStyle()}
+      zIndex={500}
+      alignItems="center"
+      justifyContent={nativeFullscreen ? 'flex-start' : 'center'}
+      padding={nativeFullscreen ? 0 : '$4'}
+    >
       <YStack fullscreen backgroundColor="rgba(10, 10, 15, 0.55)" animation="quick" enterStyle={{ opacity: 0 }} />
       <YStack
         width="100%"
-        maxWidth={420}
+        maxWidth={nativeFullscreen ? '100%' : 420}
+        flex={nativeFullscreen ? 1 : undefined}
+        height={nativeFullscreen ? '100%' : undefined}
         backgroundColor={ui.surface}
         borderRadius={radius.surface}
         borderWidth={1}
@@ -1108,10 +1127,11 @@ function SuccessOverlay({
         padding="$6"
         gap="$4"
         alignItems="center"
+        justifyContent={nativeFullscreen ? 'center' : undefined}
         zIndex={1}
         animation="quick"
         enterStyle={{ opacity: 0, scale: 0.96, y: 8 }}
-        style={getShadowStyle('lg')}
+        style={nativeFullscreen ? undefined : getShadowStyle('lg')}
       >
         <YStack width={72} height={72} borderRadius={999} alignItems="center" justifyContent="center" backgroundColor={ui.roseSurface}>
           <Icons.PartyPopper size={34} color={ui.brand} />

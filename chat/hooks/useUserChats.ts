@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
-import { fetchUserChats } from '~/chat/lib/chats'
+import { fetchUserChats, markConversationDelivered } from '~/chat/lib/chats'
 import type { ChatSummary } from '~/chat/lib/types'
 import { CACHE_KEYS } from '~/lib/bootstrap/app-prefetch'
 import { peekAppCache, readAppCache, writeAppCache } from '~/lib/cache/app-cache'
@@ -92,8 +92,23 @@ export function useUserChats(userId: string | null | undefined) {
 
     const channel = supabase
       .channel(`chat-list:${userId}`)
-      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'messages' }, () =>
-        scheduleReload(),
+      .on(
+        'postgres_changes',
+        { event: 'INSERT', schema: 'public', table: 'messages' },
+        (payload) => {
+          const row = payload.new as
+            | { conversation_id?: string; sender_id?: string }
+            | undefined
+          // Peer received the message on-device while browsing the inbox → gray ✓✓.
+          if (
+            row?.conversation_id &&
+            row.sender_id &&
+            row.sender_id !== userId
+          ) {
+            void markConversationDelivered(row.conversation_id, userId)
+          }
+          scheduleReload()
+        },
       )
       .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'conversations' }, () =>
         scheduleReload(),
@@ -112,6 +127,10 @@ export function useUserChats(userId: string | null | undefined) {
           filter: `user_id=eq.${userId}`,
         },
         () => scheduleReload(),
+      )
+      // Sender sees ✓ → ✓✓ → blue ✓✓ as peer delivery/read updates arrive.
+      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'messages' }, () =>
+        scheduleReload(),
       )
       .subscribe()
 

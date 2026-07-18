@@ -10,6 +10,7 @@ import { MentionInput } from '~/community/components/MentionInput'
 import { PostComposeAiBar } from '~/community/components/PostComposeAiBar'
 import { PostLinkPreviewCard } from '~/community/components/PostLinkPreviewCard'
 import { createCommunityPost, type PostLinkPreview } from '~/community/lib/community'
+import { createEventAndFeedPost } from '~/community/lib/events'
 import {
   clearComposeDraft,
   loadComposeDraft,
@@ -40,6 +41,7 @@ import {
 import { ImageUploadField, preparePickedImagesForUpload } from '~/components/media/ImageUploadField'
 import { MediaDropZone } from '~/components/media/MediaDropZone'
 import { UploadProgressBar } from '~/components/media/UploadProgressBar'
+import { NativeVideoFile } from '~/lib/native/NativeMediaPlayers'
 import { ScreenSearchField } from '~/components/search'
 import { useFormValidation } from '~/hooks/useFormValidation'
 import { useQueryParam } from '~/hooks/useQueryParams'
@@ -48,7 +50,7 @@ import { pickImages, pickMedia, pickVideos, releasePickedImage, type PickedImage
 import { splitPostMediaItems } from '~/lib/media/split-post-media'
 import { communityRoutes, routes } from '~/lib/routes'
 import { uploadEventCoverImage, uploadPostImages, uploadPostVideos } from '~/lib/supabase/storage-upload'
-import { filterBySearchQuery } from '~/lib/search'
+import { SHEET_SEARCH_MIN_ITEMS, filterBySearchQuery } from '~/lib/search'
 import { maxLength, optionalUrl } from '~/lib/validation'
 
 const MAX_POST_LENGTH = 3000
@@ -154,7 +156,11 @@ export function CreatePostForm({
   const [eventTitle, setEventTitle] = useState('')
   const [eventDate, setEventDate] = useState('')
   const [eventTime, setEventTime] = useState('')
+  const [eventEndDate, setEventEndDate] = useState('')
+  const [eventEndTime, setEventEndTime] = useState('')
   const [eventLocation, setEventLocation] = useState('')
+  const [eventIsOnline, setEventIsOnline] = useState(false)
+  const [eventMeetingUrl, setEventMeetingUrl] = useState('')
   const [eventRsvp, setEventRsvp] = useState(true)
   const [eventCover, setEventCover] = useState<PickedImage[]>([])
 
@@ -163,6 +169,8 @@ export function CreatePostForm({
   const [celebrationTitle, setCelebrationTitle] = useState('')
   const [celebrationCover, setCelebrationCover] = useState<PickedImage[]>([])
   const [articleTitle, setArticleTitle] = useState('')
+  const [articleTags, setArticleTags] = useState('')
+  const [articleCover, setArticleCover] = useState<PickedImage[]>([])
 
   // Product / Shop (seller data)
   const { shops } = useVendorShops()
@@ -510,7 +518,11 @@ export function CreatePostForm({
         visibility,
         companyId: targetCompanyId,
         groupId: targetGroupId,
-        poll: { question: content, options: pollOptions, durationDays: pollDurationDays },
+        poll: {
+          question: content.trim() || finalContent.trim(),
+          options: filledPollOptions,
+          durationDays: pollDurationDays,
+        },
       })
     } else if (composeMode === 'celebration') {
       const occasionMeta = CELEBRATION_OCCASIONS.find((o) => o.value === occasion)
@@ -574,6 +586,16 @@ export function CreatePostForm({
     } else if (composeMode === 'event') {
       const startIso =
         eventDate && eventTime ? new Date(`${eventDate}T${eventTime}`).toISOString() : null
+      const endIso =
+        eventEndDate && eventEndTime
+          ? new Date(`${eventEndDate}T${eventEndTime}`).toISOString()
+          : undefined
+
+      if (!startIso) {
+        setIsPosting(false)
+        toast.show('Add a start date and time', { tone: 'danger' })
+        return
+      }
 
       let coverUrl: string | null = null
       if (eventCover[0]) {
@@ -593,23 +615,32 @@ export function CreatePostForm({
         coverUrl = uploaded.publicUrl
       }
 
-      result = await createCommunityPost(user.id, {
-        content: finalContent,
-        imageUrl: coverUrl,
+      const locationLabel = eventIsOnline
+        ? eventMeetingUrl.trim() || 'Online'
+        : eventLocation.trim() || undefined
+
+      const synced = await createEventAndFeedPost(user.id, {
+        title: eventTitle.trim(),
+        description: finalContent.trim() || undefined,
+        startTime: startIso,
+        endTime: endIso,
+        isOnline: eventIsOnline,
+        location: eventIsOnline ? undefined : locationLabel,
+        meetingUrl: eventIsOnline ? eventMeetingUrl.trim() || undefined : undefined,
+        imageUrl: coverUrl ?? undefined,
+        isFree: true,
+        shareToFeed: true,
         visibility,
-        companyId: targetCompanyId,
-        groupId: targetGroupId,
-        eventTitle: eventTitle.trim(),
-        eventDescription: finalContent.trim() || null,
-        eventStartTime: startIso,
-        eventLocation: eventLocation.trim() || null,
-        eventRsvpEnabled: eventRsvp,
+        rsvpEnabled: eventRsvp,
       })
+
+      result = { id: synced.postId, error: synced.error }
     } else if (composeMode === 'article') {
       let mediaUrls: string[] = []
-      if (photos.length) {
+      const coverSource = articleCover.length ? articleCover : photos
+      if (coverSource.length) {
         setUploadProgress(0)
-        const files = await preparePickedImagesForUpload(photos)
+        const files = await preparePickedImagesForUpload(coverSource)
         const { urls, error: uploadError } = await uploadPostImages(user.id, files, {
           onProgress: setUploadProgress,
         })
@@ -623,7 +654,12 @@ export function CreatePostForm({
         }
         mediaUrls = urls
       }
-      const finalImageUrl = mediaUrls.length ? null : imageUrl || null
+      const finalImageUrl = mediaUrls.length ? mediaUrls[0] : imageUrl || null
+      const tags = articleTags
+        .split(',')
+        .map((tag) => tag.trim())
+        .filter(Boolean)
+        .slice(0, 8)
       result = await createCommunityPost(user.id, {
         content: finalContent,
         imageUrl: finalImageUrl,
@@ -633,6 +669,7 @@ export function CreatePostForm({
         groupId: targetGroupId,
         postType: 'article',
         articleTitle: articleTitle.trim(),
+        articleTags: tags.length ? tags : null,
       })
     } else {
       let mediaUrls: string[] = []
@@ -818,7 +855,7 @@ export function CreatePostForm({
         >
         <YStack paddingHorizontal={16} paddingBottom={12} gap={12}>
           {composeMode === 'article' ? (
-            <YStack gap="$2">
+            <YStack gap="$3">
               <Text fontSize={13} fontWeight="600" color={communityUi.textMuted}>
                 Article headline
               </Text>
@@ -832,6 +869,21 @@ export function CreatePostForm({
                 backgroundColor="transparent"
                 paddingHorizontal={0}
               />
+              <ImageUploadField
+                label="Cover image"
+                hint="Optional hero image for your article."
+                value={articleCover}
+                onChange={setArticleCover}
+                uploadProgress={uploadProgress}
+                uploadLabel="Uploading cover…"
+              />
+              <Field label="Topics (optional)" hint="Comma-separated, up to 8">
+                <Input
+                  value={articleTags}
+                  onChangeText={setArticleTags}
+                  placeholder="Leadership, Growth, Community"
+                />
+              </Field>
             </YStack>
           ) : null}
 
@@ -947,12 +999,7 @@ export function CreatePostForm({
                       controls={false}
                     />
                   ) : (
-                    <YStack flex={1} alignItems="center" justifyContent="center" backgroundColor="#111">
-                      <Icons.Video size={32} color="white" />
-                      <Text fontSize={12} color="white" marginTop={6} numberOfLines={1}>
-                        {video.fileName ?? 'Video'}
-                      </Text>
-                    </YStack>
+                    <NativeVideoFile uri={video.uri} autoPlay={false} />
                   )}
                   <YStack
                     position="absolute"
@@ -996,8 +1043,13 @@ export function CreatePostForm({
               backgroundColor={communityUi.pageBg}
               position="relative"
             >
-              {/* eslint-disable-next-line jsx-a11y/alt-text */}
-              <img src={imageUrl} style={{ width: '100%', maxHeight: 320, objectFit: 'contain' }} />
+              <Image
+                src={imageUrl}
+                width="100%"
+                maxHeight={320}
+                objectFit="contain"
+                alt="GIF preview"
+              />
               <YStack
                 position="absolute"
                 top={8}
@@ -1093,7 +1145,7 @@ export function CreatePostForm({
               <XStack gap={12} flexWrap="wrap">
                 <DateTimeField
                   mode="date"
-                  label="Date"
+                  label="Start date"
                   minDate={new Date()}
                   value={eventDate}
                   onChange={setEventDate}
@@ -1102,16 +1154,56 @@ export function CreatePostForm({
                 />
                 <DateTimeField
                   mode="time"
-                  label="Time"
+                  label="Start time"
                   value={eventTime}
                   onChange={setEventTime}
                   flex={1}
                   minWidth={150}
                 />
               </XStack>
-              <Field label="Location (optional)">
-                <Input value={eventLocation} onChangeText={setEventLocation} placeholder="Venue, city or online link" />
-              </Field>
+              <XStack gap={12} flexWrap="wrap">
+                <DateTimeField
+                  mode="date"
+                  label="End date (optional)"
+                  minDate={new Date()}
+                  value={eventEndDate}
+                  onChange={setEventEndDate}
+                  flex={1}
+                  minWidth={150}
+                />
+                <DateTimeField
+                  mode="time"
+                  label="End time"
+                  value={eventEndTime}
+                  onChange={setEventEndTime}
+                  flex={1}
+                  minWidth={150}
+                />
+              </XStack>
+              <XStack gap={10} alignItems="center">
+                <Switch checked={eventIsOnline} onCheckedChange={setEventIsOnline} />
+                <Text fontSize={14} color={communityUi.text}>
+                  Online event
+                </Text>
+              </XStack>
+              {eventIsOnline ? (
+                <Field label="Meeting link">
+                  <Input
+                    value={eventMeetingUrl}
+                    onChangeText={setEventMeetingUrl}
+                    placeholder="https://meet.example.com/…"
+                    autoCapitalize="none"
+                  />
+                </Field>
+              ) : (
+                <Field label="Location (optional)">
+                  <Input
+                    value={eventLocation}
+                    onChangeText={setEventLocation}
+                    placeholder="Venue, city"
+                  />
+                </Field>
+              )}
               <ImageUploadField
                 label="Cover image (optional)"
                 hint="Add a banner attendees will see on the event."
@@ -1126,14 +1218,20 @@ export function CreatePostForm({
                   Allow RSVPs
                 </Text>
               </XStack>
+              <Text fontSize={12} color={communityUi.textMuted}>
+                Shared to your feed and listed under Events.
+              </Text>
             </YStack>
           ) : null}
 
           {/* Celebration editor */}
           {composeMode === 'celebration' ? (
             <YStack gap={12}>
-              <Text fontSize={13} fontWeight="600" color={communityUi.textMuted}>
+              <Text fontSize={15} fontWeight="700" color={communityUi.text}>
                 What are you celebrating?
+              </Text>
+              <Text fontSize={13} color={communityUi.textMuted} lineHeight={18}>
+                Share a milestone with your network — friends can congratulate you.
               </Text>
               <XStack gap={8} flexWrap="wrap">
                 {CELEBRATION_OCCASIONS.map((item) => (
@@ -1150,7 +1248,8 @@ export function CreatePostForm({
                   value={celebrationTitle}
                   onChangeText={setCelebrationTitle}
                   placeholder={
-                    CELEBRATION_OCCASIONS.find((o) => o.value === occasion)?.placeholder ?? 'Share the news'
+                    CELEBRATION_OCCASIONS.find((o) => o.value === occasion)?.placeholder ??
+                    'Share the news'
                   }
                   maxLength={120}
                 />
@@ -1199,12 +1298,14 @@ export function CreatePostForm({
                 <EmptyPickerHint icon={Icons.Package} message="No active listings in this shop yet." />
               ) : (
                 <YStack gap={8}>
-                  <ScreenSearchField
-                    value={listingSearchQuery}
-                    onChangeText={setListingSearchQuery}
-                    placeholder="Search listings"
-                    clearable
-                  />
+                  {listings.length >= SHEET_SEARCH_MIN_ITEMS || listingSearchQuery.length > 0 ? (
+                    <ScreenSearchField
+                      value={listingSearchQuery}
+                      onChangeText={setListingSearchQuery}
+                      placeholder="Search listings"
+                      clearable
+                    />
+                  ) : null}
                   {filteredListings.length === 0 ? (
                     <Text fontSize={13} color={communityUi.textMuted}>
                       No listings match your search.
@@ -1244,12 +1345,14 @@ export function CreatePostForm({
                 />
               ) : (
                 <YStack gap={8}>
-                  <ScreenSearchField
-                    value={shopSearchQuery}
-                    onChangeText={setShopSearchQuery}
-                    placeholder="Search shops"
-                    clearable
-                  />
+                  {shops.length >= SHEET_SEARCH_MIN_ITEMS || shopSearchQuery.length > 0 ? (
+                    <ScreenSearchField
+                      value={shopSearchQuery}
+                      onChangeText={setShopSearchQuery}
+                      placeholder="Search shops"
+                      clearable
+                    />
+                  ) : null}
                   {filteredShops.length === 0 ? (
                     <Text fontSize={13} color={communityUi.textMuted}>
                       No shops match your search.

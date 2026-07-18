@@ -4,10 +4,20 @@ import { supabase } from '~/lib/supabase/client'
 
 import type { SignalPayload } from './types'
 
+export type MeetingChatInsertRow = {
+  id: string
+  meeting_id: string
+  sender_id: string
+  message_text: string
+  message_type: string
+  created_at: string | null
+  is_deleted?: boolean | null
+}
+
 export type SignalingHandlers = {
   onSignal: (payload: SignalPayload) => void
   onParticipantChange?: () => void
-  onChatMessage?: () => void
+  onChatMessage?: (row?: MeetingChatInsertRow) => void
 }
 
 /** Channel name passed to supabase.channel() */
@@ -63,7 +73,10 @@ function attachMeetingChannelListeners(
     .on(
       'postgres_changes',
       { event: 'INSERT', schema: 'public', table: 'meeting_chat_messages', filter: `meeting_id=eq.${meetingId}` },
-      () => handlers.onChatMessage?.(),
+      (payload) => {
+        const row = payload.new as MeetingChatInsertRow | null
+        handlers.onChatMessage?.(row ?? undefined)
+      },
     )
 }
 

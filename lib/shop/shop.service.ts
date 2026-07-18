@@ -24,6 +24,7 @@ import {
   unfollowShop as unfollowShopCore,
 } from '~/commerce/lib/shop-follows'
 import { fetchShopDashboard, type ShopDashboardData } from '~/commerce/lib/seller-dashboard'
+import { INVALIDATION_TOPICS, invalidateCache } from '~/lib/cache/invalidation'
 import { supabase } from '~/lib/supabase'
 import { uploadShopLogoImage } from '~/lib/supabase/storage-upload'
 
@@ -78,14 +79,24 @@ export async function getMyShops(userId?: string | null): Promise<ShopServiceRes
   if (!id) return fail('User not authenticated')
 
   try {
-    const { data, error } = await supabase
+    const query = supabase
       .from('shops')
       .select('*')
       .eq('user_id', id)
       .order('created_at', { ascending: false })
 
-    if (error) return fail(error)
-    return ok(data ?? [])
+    const result = await Promise.race([
+      query,
+      new Promise<{ data: null; error: { message: string } }>((resolve) => {
+        setTimeout(
+          () => resolve({ data: null, error: { message: 'Shop list timed out' } }),
+          8_000,
+        )
+      }),
+    ])
+
+    if (result.error) return fail(result.error)
+    return ok(result.data ?? [])
   } catch (error) {
     return fail(error)
   }
@@ -249,6 +260,8 @@ export async function createShop(
     if (error) return fail(error)
     if (!shopId) return fail('Shop creation did not return an id.')
 
+    invalidateShopCaches()
+
     // Persist any additional fields the create form collected.
     const extras = buildExtraUpdate(formData)
     if (Object.keys(extras).length > 0) {
@@ -260,6 +273,16 @@ export async function createShop(
   } catch (error) {
     return fail(error)
   }
+}
+
+/** Refresh every browse/home feed that can show this shop. */
+function invalidateShopCaches() {
+  invalidateCache(
+    'feed:shops',
+    'route:shops-browse',
+    'route:home',
+    INVALIDATION_TOPICS.commerceShops,
+  )
 }
 
 /** Pick the columns beyond name/description/currency that create can also set. */
@@ -299,6 +322,7 @@ export async function updateShop(
       .single()
 
     if (error) return fail(error)
+    invalidateShopCaches()
     return ok(data)
   } catch (error) {
     return fail(error)
@@ -316,6 +340,7 @@ export async function deleteShop(shopId: string): Promise<ShopServiceResponse<{ 
       .eq('id', shopId)
 
     if (error) return fail(error)
+    invalidateShopCaches()
     return ok({ id: shopId })
   } catch (error) {
     return fail(error)

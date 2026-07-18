@@ -19,7 +19,7 @@ export function NotificationsSettingsPanel() {
           title={`${pushPlatformLabel()} push`}
           subtitle={
             !pushConfigured
-              ? 'OneSignal App ID not configured — push needs a production build on iOS/Android'
+              ? 'OneSignal App ID not configured — use a development or production app build (not Expo Go) on iOS/Android'
               : permissionGranted
                 ? 'Enabled for this browser or app install'
                 : 'Turn on to get alerts across Commerce, Community, Chat, Class, and Co-Work'

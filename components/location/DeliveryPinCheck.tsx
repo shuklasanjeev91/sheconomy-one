@@ -1,9 +1,9 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Platform } from 'react-native'
 
 import { Icons, Input, Spinner, Text, XStack, YStack } from '~/components/ui'
 import { getPostalCodeLabel, getPostalCodePlaceholder } from '~/lib/geo'
-import { checkDeliveryAvailability } from '~/lib/location'
+import { checkDeliveryAvailability, useOptionalUserLocation } from '~/lib/location'
 import { useAppUi } from '~/lib/theme/useAppUi'
 
 type DeliveryPinCheckProps = {
@@ -27,10 +27,21 @@ export function DeliveryPinCheck({
   compact,
 }: DeliveryPinCheckProps) {
   const ui = useAppUi()
-  const [postal, setPostal] = useState(initialPostal)
+  const location = useOptionalUserLocation()
+  const [postal, setPostal] = useState(initialPostal || location?.postal_code || '')
   const [busy, setBusy] = useState(false)
   const [message, setMessage] = useState<string | null>(null)
   const [ok, setOk] = useState<boolean | null>(null)
+
+  useEffect(() => {
+    if (initialPostal) return
+    if (location?.postal_code) {
+      setPostal((current) => current || location.postal_code || '')
+    }
+  }, [initialPostal, location?.postal_code])
+
+  const resolvedCountry = country || location?.country || 'IN'
+  const resolvedState = state ?? location?.state ?? null
 
   if (listingType === 'digital') {
     return (
@@ -48,8 +59,8 @@ export function DeliveryPinCheck({
     setMessage(null)
     const result = await checkDeliveryAvailability({
       postalCode: postal,
-      country,
-      state,
+      country: resolvedCountry,
+      state: resolvedState,
       shopId,
       listingId,
       listingType,
@@ -78,7 +89,7 @@ export function DeliveryPinCheck({
           minWidth={140}
           value={postal}
           onChangeText={setPostal}
-          placeholder={getPostalCodePlaceholder(country)}
+          placeholder={getPostalCodePlaceholder(resolvedCountry)}
           autoComplete={Platform.OS === 'web' ? ('postal-code' as never) : undefined}
           textContentType={Platform.OS === 'ios' ? 'postalCode' : undefined}
           onSubmitEditing={() => void handleCheck()}
@@ -98,7 +109,7 @@ export function DeliveryPinCheck({
             <Spinner size="small" color="white" />
           ) : (
             <Text fontSize={13} fontWeight="700" color={ui.onBrand}>
-              Check {getPostalCodeLabel(country)}
+              Check {getPostalCodeLabel(resolvedCountry)}
             </Text>
           )}
         </XStack>

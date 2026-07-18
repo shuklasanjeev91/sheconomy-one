@@ -1,7 +1,9 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 
 import { peekAppCache, readAppCache, writeAppCache } from '~/lib/cache/app-cache'
+import { useAutoRefresh } from '~/lib/cache/useAutoRefresh'
 import type { PaginatedResult } from '~/lib/supabase/commerce'
+import { useOnReconnect } from '~/providers/ConnectivityProvider'
 
 type PaginatedCacheSnapshot<T> = {
   items: T[]
@@ -19,12 +21,15 @@ type UsePaginatedFeedOptions<T> = {
   fetchPage: (page: number) => Promise<PaginatedResult<T>>
   enabled?: boolean
   cacheKey?: string
+  /** Extra invalidation topics that should silently refresh this feed. */
+  watchKeys?: string[]
 }
 
 export function usePaginatedFeed<T extends { id: string }>({
   fetchPage,
   enabled = true,
   cacheKey,
+  watchKeys,
 }: UsePaginatedFeedOptions<T>) {
   const initialSnapshot = cacheKey ? peekAppCache<PaginatedCacheSnapshot<T>>(cacheKey) : null
   const [items, setItems] = useState<T[]>(initialSnapshot?.items ?? [])
@@ -47,12 +52,14 @@ export function usePaginatedFeed<T extends { id: string }>({
   )
 
   const loadPage = useCallback(
-    async (pageToLoad: number, append: boolean) => {
+    async (pageToLoad: number, append: boolean, silent = false) => {
       if (!enabled || inFlightRef.current) return
 
       inFlightRef.current = true
       if (append) {
         setIsLoadingMore(true)
+      } else if (silent && hasItemsRef.current) {
+        // Background revalidation: keep current content, no spinners.
       } else if (hasItemsRef.current) {
         setIsRefreshing(true)
       } else {
@@ -62,24 +69,35 @@ export function usePaginatedFeed<T extends { id: string }>({
       const result = await fetchPage(pageToLoad)
 
       if (result.error) {
+        // Preserve cached / already-loaded content instead of wiping the list.
         setError(result.error)
-        if (!append) setItems([])
-        setHasMore(false)
+        if (!append && !hasItemsRef.current) {
+          setHasMore(false)
+        }
       } else {
         setError(null)
+        const silentMerge = !append && silent && hasItemsRef.current
         setItems((current) => {
-          const nextItems = append ? mergeUnique(current, result.items) : result.items
+          // Silent revalidation keeps already-loaded pages below the fresh
+          // first page so scroll position and pagination are preserved.
+          const nextItems = append
+            ? mergeUnique(current, result.items)
+            : silentMerge
+              ? mergeUnique(result.items, current)
+              : result.items
           if (!append && cacheKey) {
             void persistFirstPage({
-              items: nextItems,
-              page: pageToLoad,
+              items: result.items,
+              page: 0,
               hasMore: result.hasMore,
             })
           }
           return nextItems
         })
-        setPage(pageToLoad)
-        setHasMore(result.hasMore)
+        if (!silentMerge) {
+          setPage(pageToLoad)
+          setHasMore(result.hasMore)
+        }
       }
 
       setIsLoading(false)
@@ -129,6 +147,13 @@ export function usePaginatedFeed<T extends { id: string }>({
     // eslint-disable-next-line react-hooks/exhaustive-deps -- reload when key/enabled/fetcher changes
   }, [cacheKey, enabled, fetchPage])
 
+  // Silently revalidate when related data is mutated elsewhere in the app or
+  // when the user navigates back to this screen.
+  useAutoRefresh([cacheKey, ...(watchKeys ?? [])], () => {
+    if (!enabled || inFlightRef.current) return
+    void loadPage(0, false, true)
+  })
+
   const loadMore = useCallback(() => {
     if (!enabled || !hasMore || isLoading || isLoadingMore || isRefreshing || inFlightRef.current) {
       return
@@ -141,6 +166,11 @@ export function usePaginatedFeed<T extends { id: string }>({
     loadPage(0, false)
   }, [enabled, loadPage])
 
+  useOnReconnect(() => {
+    if (!enabled || inFlightRef.current) return
+    void loadPage(0, false, true)
+  })
+
   const removeItem = useCallback((id: string) => {
     setItems((current) => current.filter((item) => item.id !== id))
   }, [])
@@ -151,6 +181,8 @@ export function usePaginatedFeed<T extends { id: string }>({
     )
   }, [])
 
+  const showingCached = items.length > 0 && !!error
+
   return {
     items,
     isLoading,
@@ -158,6 +190,7 @@ export function usePaginatedFeed<T extends { id: string }>({
     isLoadingMore,
     hasMore,
     error,
+    showingCached,
     loadMore,
     refresh,
     removeItem,

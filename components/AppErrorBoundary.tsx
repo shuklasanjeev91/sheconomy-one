@@ -1,8 +1,10 @@
 import { Component, type ErrorInfo, type ReactNode } from 'react'
 import { Platform } from 'react-native'
 
-import { Button, Text, YStack } from '~/components/ui'
+import { Button, Text, XStack, YStack } from '~/components/ui'
 import { logger } from '~/lib/api'
+import { appRoutes } from '~/lib/routes'
+import { replaceApp } from '~/lib/platform/navigate'
 
 type Props = {
   children: ReactNode
@@ -12,18 +14,30 @@ type Props = {
 
 type State = {
   error: Error | null
+  supportRef: string | null
+}
+
+function buildSupportRef(scope?: string) {
+  const stamp = Date.now().toString(36).toUpperCase()
+  const scopePart = (scope ?? 'APP').replace(/[^a-zA-Z0-9]/g, '').slice(0, 12).toUpperCase()
+  return `${scopePart}-${stamp}`
 }
 
 export class AppErrorBoundary extends Component<Props, State> {
-  state: State = { error: null }
+  state: State = { error: null, supportRef: null }
 
-  static getDerivedStateFromError(error: Error): State {
-    return { error }
+  static getDerivedStateFromError(error: Error): Partial<State> {
+    return { error, supportRef: buildSupportRef() }
   }
 
   componentDidCatch(error: Error, info: ErrorInfo) {
+    const supportRef = this.state.supportRef ?? buildSupportRef(this.props.scope)
+    if (!this.state.supportRef) {
+      this.setState({ supportRef })
+    }
     logger.error('Unhandled render error', {
       scope: this.props.scope,
+      supportRef,
       message: error.message,
       stack: error.stack,
       componentStack: info.componentStack,
@@ -32,12 +46,35 @@ export class AppErrorBoundary extends Component<Props, State> {
   }
 
   private handleRetry = () => {
-    // Remount children in-place — never full browser reload (that kills Vite SPA state).
-    this.setState({ error: null })
+    this.setState({ error: null, supportRef: null })
+  }
+
+  private handleGoHome = () => {
+    this.setState({ error: null, supportRef: null })
+    try {
+      replaceApp(appRoutes.home)
+    } catch {
+      // Navigation may be unavailable during catastrophic failures.
+    }
+  }
+
+  private handleCopyRef = async () => {
+    const ref = this.state.supportRef
+    if (!ref) return
+    try {
+      if (Platform.OS === 'web' && typeof navigator !== 'undefined' && navigator.clipboard) {
+        await navigator.clipboard.writeText(ref)
+      }
+    } catch {
+      /* ignore */
+    }
   }
 
   render() {
     if (!this.state.error) return this.props.children
+
+    const isDev = typeof __DEV__ !== 'undefined' ? __DEV__ : process.env.NODE_ENV !== 'production'
+    const supportRef = this.state.supportRef ?? 'UNKNOWN'
 
     return (
       <YStack
@@ -53,11 +90,50 @@ export class AppErrorBoundary extends Component<Props, State> {
           Something went wrong
         </Text>
         <Text fontSize={14} color="$color10" textAlign="center" maxWidth={420} lineHeight={22}>
-          {this.state.error.message || 'An unexpected error occurred. Please try again.'}
+          We hit an unexpected problem. Your work is safe — try again, or head home and continue.
         </Text>
-        <Button size="$4" theme="active" borderRadius={999} onPress={this.handleRetry}>
-          Try again
-        </Button>
+        {isDev ? (
+          <Text fontSize={12} color="$color9" textAlign="center" maxWidth={480}>
+            {this.state.error.message}
+          </Text>
+        ) : null}
+        <YStack
+          padding="$3"
+          borderRadius="$4"
+          borderWidth={1}
+          borderColor="$borderColor"
+          gap="$2"
+          width="100%"
+          maxWidth={360}
+          alignItems="center"
+        >
+          <Text fontSize={12} color="$color10">
+            Support reference
+          </Text>
+          <Text
+            fontSize={14}
+            fontWeight="700"
+            selectable
+            onPress={() => void this.handleCopyRef()}
+            accessibilityRole="button"
+            accessibilityLabel={`Copy support reference ${supportRef}`}
+          >
+            {supportRef}
+          </Text>
+          {Platform.OS === 'web' ? (
+            <Text fontSize={12} color="$color9">
+              Tap to copy
+            </Text>
+          ) : null}
+        </YStack>
+        <XStack gap="$3" flexWrap="wrap" justifyContent="center">
+          <Button size="$4" theme="active" borderRadius={999} onPress={this.handleRetry}>
+            Try again
+          </Button>
+          <Button size="$4" tone="outline" borderRadius={999} onPress={this.handleGoHome}>
+            Go home
+          </Button>
+        </XStack>
       </YStack>
     )
   }

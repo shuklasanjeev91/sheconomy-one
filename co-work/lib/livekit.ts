@@ -21,6 +21,7 @@ export async function fetchLiveKitCredentials(
   meetingId: string,
   roomName: string,
   displayName: string,
+  avatarUrl?: string | null,
 ): Promise<LiveKitCredentials> {
   if (!roomName) {
     throw new Error('Meeting room is not ready yet. Please try again in a moment.')
@@ -40,6 +41,7 @@ export async function fetchLiveKitCredentials(
       meetingId,
       displayName,
       roomName,
+      ...(avatarUrl ? { avatarUrl } : {}),
     },
   })
 

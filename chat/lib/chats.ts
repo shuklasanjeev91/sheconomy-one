@@ -6,6 +6,7 @@ import type {
   ChatMessage,
   ChatMessageType,
   ChatPollPayload,
+  ChatStoryReplyPayload,
   ChatSummary,
   ChatType,
   MessageReaction,
@@ -93,6 +94,20 @@ function parseEventPayload(metadata: unknown): ChatEventPayload | null {
     location: typeof raw.location === 'string' ? raw.location : null,
     imageUrl: typeof raw.imageUrl === 'string' ? raw.imageUrl : null,
     isStatic: !eventId,
+  }
+}
+
+function parseStoryReplyPayload(metadata: unknown): ChatStoryReplyPayload | null {
+  if (!metadata || typeof metadata !== 'object') return null
+  const raw = metadata as Record<string, unknown>
+  if (raw.type !== 'story_reply') return null
+  const storyId = typeof raw.storyId === 'string' ? raw.storyId : null
+  if (!storyId) return null
+  return {
+    storyId,
+    authorId: typeof raw.authorId === 'string' ? raw.authorId : null,
+    previewUrl: typeof raw.previewUrl === 'string' ? raw.previewUrl : null,
+    previewText: typeof raw.previewText === 'string' ? raw.previewText : null,
   }
 }
 
@@ -305,6 +320,7 @@ export function mapMessage(row: MessageRow): ChatMessage {
       editedAt: row.edited_at,
       poll: legacy.poll,
       event: legacy.event,
+      storyReply: null,
     }
   }
 
@@ -326,6 +342,7 @@ export function mapMessage(row: MessageRow): ChatMessage {
     editedAt: row.edited_at,
     poll: type === 'poll' ? parsePollPayload(row.metadata) : null,
     event: type === 'event' ? parseEventPayload(row.metadata) : null,
+    storyReply: type === 'text' ? parseStoryReplyPayload(row.metadata) : null,
   }
 }
 
@@ -493,12 +510,19 @@ export async function sendPollMessage(
   senderId: string,
   poll: ChatPollPayload,
 ): Promise<{ messageId: string | null; error: string | null }> {
+  // WhatsApp/legacy-compatible payload: list previews and older clients read
+  // `[Poll]` + `metadata.type`, while modern bubbles use `message_type='poll'`.
   return sendMessage({
     conversationId,
     senderId,
-    content: poll.question,
+    content: `[Poll] ${poll.question}`,
     type: 'poll',
-    metadata: { question: poll.question, options: poll.options },
+    metadata: {
+      type: 'poll',
+      question: poll.question,
+      options: poll.options,
+      votes: {},
+    },
   })
 }
 
@@ -511,9 +535,10 @@ export async function sendEventMessage(
   return sendMessage({
     conversationId,
     senderId,
-    content: event.title,
+    content: `[Event] ${event.title}`,
     type: 'event',
     metadata: {
+      type: 'event',
       eventId: event.eventId,
       title: event.title,
       startTime: event.startTime,
@@ -678,6 +703,17 @@ export async function clearConversation(
     .update({ cleared_at: new Date().toISOString() })
     .eq('conversation_id', conversationId)
     .eq('user_id', userId)
+  return { error: error?.message ?? null }
+}
+
+export async function markConversationDelivered(
+  conversationId: string,
+  userId: string,
+): Promise<{ error: string | null }> {
+  const { error } = await supabase.rpc('mark_messages_as_delivered', {
+    p_chat_room_id: conversationId,
+    p_user_id: userId,
+  })
   return { error: error?.message ?? null }
 }
 

@@ -13,23 +13,30 @@ export function getAllGeoCountries(): ICountry[] {
   return countriesCache
 }
 
+function toIsoString(value: unknown): string {
+  return typeof value === 'string' ? value.trim() : ''
+}
+
 export function getCountryByCode(isoCode: string): ICountry | undefined {
-  if (!isoCode.trim()) return undefined
-  return Country.getCountryByCode(isoCode.trim().toUpperCase())
+  const code = toIsoString(isoCode)
+  if (!code) return undefined
+  return Country.getCountryByCode(code.toUpperCase())
 }
 
 export function getCountryName(isoCode: string, fallback?: string | null): string {
-  if (!isoCode.trim()) return fallback?.trim() || ''
-  const byCode = getCountryByCode(isoCode)
+  const code = toIsoString(isoCode)
+  const fallbackText = toIsoString(fallback)
+  if (!code) return fallbackText || ''
+  const byCode = getCountryByCode(code)
   if (byCode) return byCode.name
   const byName = getAllGeoCountries().find(
-    (country) => country.name.toLowerCase() === isoCode.trim().toLowerCase(),
+    (country) => country.name.toLowerCase() === code.toLowerCase(),
   )
-  return byName?.name ?? fallback?.trim() ?? isoCode.trim()
+  return byName?.name ?? fallbackText ?? code
 }
 
 export function resolveCountryCode(value: string | null | undefined): string {
-  const raw = value?.trim()
+  const raw = toIsoString(value)
   if (!raw) return getDefaultCountryCode()
   if (getCountryByCode(raw)) return raw.toUpperCase()
   const byName = getAllGeoCountries().find(
@@ -52,7 +59,7 @@ export function getStatesOfCountry(countryCode: string): IState[] {
 }
 
 export function getStateByName(countryCode: string, stateName: string): IState | undefined {
-  const normalized = stateName.trim().toLowerCase()
+  const normalized = toIsoString(stateName).toLowerCase()
   if (!normalized) return undefined
   return getStatesOfCountry(countryCode).find((state) => state.name.toLowerCase() === normalized)
 }
@@ -104,7 +111,7 @@ export function filterGeoOptions(options: GeoOption[], query: string, limit = 80
 export function countryFlagEmoji(isoCode: string): string {
   const country = getCountryByCode(isoCode)
   if (country?.flag) return country.flag
-  const code = isoCode.toUpperCase()
+  const code = toIsoString(isoCode).toUpperCase()
   if (code.length !== 2) return '🏳️'
   return String.fromCodePoint(...[...code].map((char) => 0x1f1e6 - 65 + char.charCodeAt(0)))
 }

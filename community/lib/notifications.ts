@@ -1,3 +1,4 @@
+import { resolveMarketplaceTrustNotificationPath } from '~/lib/notifications/marketplace-notification-path'
 import { pathFromNotificationUrl } from '~/lib/notifications/push-config'
 import { supabase } from '~/lib/supabase/client'
 import {
@@ -44,12 +45,26 @@ export function subscribeUnreadCountChanged(listener: UnreadListener) {
 
 /** Resolve in-app path from action_url, with type/context fallbacks. */
 export function resolveNotificationPath(notification: AppNotification): string | null {
-  const fromUrl = pathFromNotificationUrl(notification.action_url)
-  if (fromUrl) return fromUrl
-
   const contextType = (notification.context_type ?? '').toLowerCase()
   const contextId = notification.context_id?.trim() || null
   const type = (notification.type ?? '').toLowerCase()
+
+  const trustPath = resolveMarketplaceTrustNotificationPath({
+    type: notification.type,
+    contextType: notification.context_type,
+    contextId: notification.context_id,
+    actionUrl: notification.action_url,
+  })
+  if (trustPath) return trustPath
+
+  // Profile links in action_url embed the username from send time, which
+  // breaks after a rename. The context uuid is stable, so prefer it.
+  if ((contextType === 'profile' || contextType === 'user') && contextId) {
+    return communityRoutes.userProfile(contextId)
+  }
+
+  const fromUrl = pathFromNotificationUrl(notification.action_url)
+  if (fromUrl) return fromUrl
 
   if (contextId) {
     if (
@@ -73,7 +88,12 @@ export function resolveNotificationPath(notification: AppNotification): string |
       return chatRoutes.conversation(contextId)
     }
     if (contextType === 'order' || type.includes('order')) {
-      return type.includes('vendor') ? vendorRoutes.orders : commerceRoutes.orders
+      if (type.includes('vendor') || type.includes('seller') || type.includes('return_requested')) {
+        return vendorRoutes.orders
+      }
+      // Prefer the exact order detail when context_id is an order uuid.
+      if (contextId) return commerceRoutes.order(contextId)
+      return commerceRoutes.orders
     }
     if (contextType === 'listing' || type.includes('listing') || type.includes('stock')) {
       return commerceRoutes.listing(contextId)
@@ -128,7 +148,6 @@ export function resolveNotificationPath(notification: AppNotification): string |
 export type NotificationProductFilter =
   | ''
   | 'commerce'
-  | 'shop'
   | 'community'
   | 'chat'
   | 'class'
@@ -139,8 +158,7 @@ export const NOTIFICATION_PRODUCT_FILTERS: Array<{
   label: string
 }> = [
   { key: '', label: 'All' },
-  { key: 'commerce', label: 'Commerce' },
-  { key: 'shop', label: 'Shop' },
+  { key: 'commerce', label: 'Shop' },
   { key: 'community', label: 'Community' },
   { key: 'chat', label: 'Chat' },
   { key: 'class', label: 'Class' },
@@ -153,6 +171,23 @@ export type NotificationFilters = {
   product?: NotificationProductFilter
   unreadOnly?: boolean
 }
+
+/**
+ * Fan-out broadcast types about other users' activity (someone else posted,
+ * opened a shop, updated their profile…). These are addressed to everyone and
+ * drown out notifications that are actually about the signed-in user, so the
+ * inbox and the unread badge skip them.
+ */
+const BROADCAST_TYPES = [
+  'new_post',
+  'connection_new_post',
+  'friend_activity',
+  'new_program',
+  'new_listing',
+  'new_shop',
+  'new_shop_alert',
+  'profile_update',
+]
 
 const VENDOR_TYPES = [
   'new_order_vendor',
@@ -182,17 +217,26 @@ export async function fetchNotifications(
       { count: 'exact' },
     )
     .eq('recipient_id', userId)
+    .not('type', 'in', `(${BROADCAST_TYPES.join(',')})`)
 
   if (filters.category) query = query.eq('category', filters.category)
   if (filters.unreadOnly) query = query.eq('read', false)
 
   if (filters.product === 'commerce') {
-    query = query
-      .eq('platform', 'marketplace')
-      .not('type', 'in', `(${VENDOR_TYPES.join(',')})`)
-  } else if (filters.product === 'shop') {
+    // One "Shop" tab for all commerce: buyer + vendor. Most order/shop/listing
+    // notifications are stored with platform 'unified', so match by type and
+    // context too, not just platform 'marketplace'.
     query = query.or(
-      `type.in.(${VENDOR_TYPES.join(',')}),and(platform.eq.unified,type.eq.order_status_update_vendor)`,
+      [
+        'platform.eq.marketplace',
+        `type.in.(${VENDOR_TYPES.join(',')})`,
+        'type.like.order_*',
+        'type.like.shop_*',
+        'type.like.listing_*',
+        'type.like.cart_*',
+        'type.in.(new_order,order_update,shop_follow,shop_new_follower,shop_follower_new_listing,sale_event_announcement,sale_event_enrollment_request,order_return_requested_seller,order_issue_resolved_buyer,order_refund_pending_buyer,listing_review_received_seller)',
+        'context_type.in.(order,listing,shop)',
+      ].join(','),
     )
   } else if (filters.product === 'community') {
     query = query.eq('platform', 'community').not('type', 'ilike', 'meeting_%')
@@ -254,6 +298,7 @@ export async function getUnreadCount(userId: string): Promise<number> {
     .select('id', { count: 'exact', head: true })
     .eq('recipient_id', userId)
     .eq('read', false)
+    .not('type', 'in', `(${BROADCAST_TYPES.join(',')})`)
 
   return count ?? 0
 }

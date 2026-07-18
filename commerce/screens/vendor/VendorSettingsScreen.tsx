@@ -59,6 +59,10 @@ import {
   type SettingsSectionId,
 } from '~/commerce/components/vendor/settings-nav'
 import { VendorConnectSettings } from './VendorConnectSettings'
+import { ShopCommercePanel } from '~/commerce/components/seller/ShopCommercePanel'
+import { VendorReturnsSettingsPanel } from '~/commerce/components/seller/VendorReturnsSettingsPanel'
+import { AppLink } from '~/components/navigation/AppLink'
+import { appRoutes } from '~/lib/routes'
 
 type IconType = (typeof Icons)[keyof typeof Icons]
 
@@ -148,10 +152,183 @@ export function VendorSettingsScreen() {
     return <VendorConnectSettings ui={ui} shop={shop} isDesktop={isDesktop} safeBottom={safeBottom} />
   }
 
+  if (section.id === 'payments' || section.id === 'shipping') {
+    return (
+      <YStack flex={1} minHeight={0} width="100%" maxWidth="100%">
+        <SectionHeader ui={ui} section={section} isDesktop={isDesktop} />
+        <YStack
+          flex={1}
+          paddingHorizontal={isDesktop ? '$6' : '$4'}
+          paddingBottom={safeBottom + 24}
+        >
+          <ShopCommercePanel shop={shop as never} />
+        </YStack>
+      </YStack>
+    )
+  }
+
+  if (section.id === 'returns') {
+    return (
+      <YStack flex={1} minHeight={0} width="100%" maxWidth="100%">
+        <SectionHeader ui={ui} section={section} isDesktop={isDesktop} />
+        <YStack
+          flex={1}
+          paddingHorizontal={isDesktop ? '$6' : '$4'}
+          paddingBottom={safeBottom + 24}
+        >
+          <VendorReturnsSettingsPanel shopId={shop.id} />
+        </YStack>
+      </YStack>
+    )
+  }
+
+  if (section.id === 'notifications') {
+    return (
+      <YStack flex={1} minHeight={0} width="100%" maxWidth="100%">
+        <SectionHeader ui={ui} section={section} isDesktop={isDesktop} />
+        <YStack
+          flex={1}
+          paddingHorizontal={isDesktop ? '$6' : '$4'}
+          paddingBottom={safeBottom + 24}
+        >
+          <VendorNotificationsPanel shop={shop} ui={ui} />
+        </YStack>
+      </YStack>
+    )
+  }
+
+  if (section.id === 'security') {
+    return (
+      <YStack flex={1} minHeight={0} width="100%" maxWidth="100%">
+        <SectionHeader ui={ui} section={section} isDesktop={isDesktop} />
+        <YStack
+          flex={1}
+          gap="$4"
+          paddingHorizontal={isDesktop ? '$6' : '$4'}
+          paddingBottom={safeBottom + 24}
+        >
+          <Text fontSize={14} color={ui.textSecondary} maxWidth={520}>
+            Shop sign-in and recovery are managed on your account security page. Team roles for
+            multi-user shops will appear here when available.
+          </Text>
+          <AppLink href={appRoutes.settingsSection('security')} asChild>
+            <Button tone="primary" size="$4" borderRadius={999} alignSelf="flex-start" icon={<Icons.ShieldCheck size={16} />}>
+              Open account security
+            </Button>
+          </AppLink>
+          <AppLink href={appRoutes.settingsSection('notifications')} asChild>
+            <Button tone="outline" size="$3" borderRadius={999} alignSelf="flex-start">
+              Account notification preferences
+            </Button>
+          </AppLink>
+        </YStack>
+      </YStack>
+    )
+  }
+
   return (
     <YStack flex={1} minHeight={0} width="100%" maxWidth="100%">
       <SectionHeader ui={ui} section={section} isDesktop={isDesktop} />
       <ComingSoonSection ui={ui} section={section} isDesktop={isDesktop} />
+    </YStack>
+  )
+}
+
+// ============================================================================
+// Notifications
+// ============================================================================
+
+type VendorNotifPrefs = {
+  order_email: boolean
+  low_stock_email: boolean
+  marketing_insights: boolean
+  customer_messages: boolean
+}
+
+function readVendorNotifPrefs(shop: Shop): VendorNotifPrefs {
+  const metadata = (shop.shop_metadata as Record<string, unknown> | null) ?? {}
+  const raw = (metadata.vendor_notifications as Record<string, unknown> | null) ?? {}
+  return {
+    order_email: raw.order_email !== false,
+    low_stock_email: raw.low_stock_email !== false,
+    marketing_insights: Boolean(raw.marketing_insights),
+    customer_messages: raw.customer_messages !== false,
+  }
+}
+
+function VendorNotificationsPanel({ shop, ui }: { shop: Shop; ui: AppUiTokens }) {
+  const dispatch = useAppDispatch()
+  const toast = useAppToast()
+  const [prefs, setPrefs] = useState(() => readVendorNotifPrefs(shop))
+  const [saving, setSaving] = useState(false)
+
+  useEffect(() => {
+    setPrefs(readVendorNotifPrefs(shop))
+  }, [shop])
+
+  async function save(next: VendorNotifPrefs) {
+    setPrefs(next)
+    setSaving(true)
+    const metadata = {
+      ...((shop.shop_metadata as Record<string, unknown> | null) ?? {}),
+      vendor_notifications: next,
+    }
+    try {
+      await dispatch(
+        updateShop({
+          shopId: shop.id,
+          updates: { shop_metadata: metadata as ShopUpdate['shop_metadata'] },
+        }),
+      ).unwrap()
+      toast.show('Notification preferences saved', { tone: 'success' })
+    } catch (error) {
+      toast.show('Could not save preferences', {
+        tone: 'danger',
+        message: error instanceof Error ? error.message : 'Try again.',
+      })
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  const rows: Array<{ key: keyof VendorNotifPrefs; label: string; hint: string }> = [
+    { key: 'order_email', label: 'Order updates', hint: 'Email when orders need packing or ship.' },
+    { key: 'low_stock_email', label: 'Low stock alerts', hint: 'Warn when inventory runs low.' },
+    { key: 'customer_messages', label: 'Customer messages', hint: 'Notify on new shop questions.' },
+    { key: 'marketing_insights', label: 'Marketing insights', hint: 'Weekly tips and performance digests.' },
+  ]
+
+  return (
+    <YStack gap="$3" maxWidth={560}>
+      {rows.map((row) => (
+        <XStack
+          key={row.key}
+          alignItems="center"
+          justifyContent="space-between"
+          gap="$3"
+          padding="$3.5"
+          borderRadius={radius.card}
+          borderWidth={1}
+          borderColor={ui.borderSubtle}
+          backgroundColor={ui.surface}
+        >
+          <YStack flex={1} minWidth={0} gap={2}>
+            <Text fontSize={14} fontWeight="700" color={ui.text}>
+              {row.label}
+            </Text>
+            <Text fontSize={12} color={ui.textMuted}>
+              {row.hint}
+            </Text>
+          </YStack>
+          <Switch
+            checked={prefs[row.key]}
+            disabled={saving}
+            onCheckedChange={(checked) => void save({ ...prefs, [row.key]: checked })}
+          >
+            <Switch.Thumb />
+          </Switch>
+        </XStack>
+      ))}
     </YStack>
   )
 }

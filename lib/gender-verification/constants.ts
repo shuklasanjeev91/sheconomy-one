@@ -1,12 +1,27 @@
 export const GENDER_VERIFICATION = {
+  /** Natural blinks required for liveness (close → open cycles). */
   requiredBlinks: 3,
-  earBlinkThreshold: 0.21,
-  earOpenThreshold: 0.25,
-  minLivenessScore: 0.72,
-  minGenderConfidence: 0.62,
+  /** Fallback EAR when adaptive baseline is not ready yet (legacy). */
+  earBlinkThreshold: 0.2,
+  earOpenThreshold: 0.26,
+  /** Reject micro-flicker / sensor noise. */
+  minClosedMs: 80,
+  /** Reject intentional long squint / eyes held shut. */
+  maxClosedMs: 900,
+  /** Avoid counting the same blink twice. */
+  minBlinkGapMs: 320,
+  minLivenessScore: 0.7,
+  /** Human anti-spoof / liveness model floors (photo rejection). */
+  minLiveScore: 0.45,
+  minRealScore: 0.45,
+  minGenderConfidence: 0.55,
   sessionMinutes: 15,
+  /** Native camera sample rate — must be fast enough to catch a natural blink. */
+  nativeFrameIntervalMs: 140,
   faceApiModelBaseUrl: 'https://cdn.jsdelivr.net/npm/@vladmandic/face-api@1.7.15/model',
+  humanModelBaseUrl: 'https://cdn.jsdelivr.net/npm/@vladmandic/human@3.3.6/models/',
 } as const
+
 
 /**
  * UX config for the app-wide verification prompt (the modal that opens on its
@@ -51,3 +66,16 @@ export type LivenessMetrics = {
   livenessScore: number
   faceCentered: boolean
 }
+
+/** Live camera tracking feedback for the verify-gender UI. */
+export type FaceTrackingStatus = {
+  faceDetected: boolean
+  faceCentered: boolean
+  eyesClosed: boolean
+  calibrated: boolean
+  avgEar: number | null
+  liveScore?: number
+  realScore?: number
+  facingCamera?: boolean
+}
+

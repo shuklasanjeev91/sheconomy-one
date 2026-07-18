@@ -19,6 +19,7 @@ import {
 } from '~/co-work/lib/signaling'
 import type { Meeting, MeetingChatMessage, MeetingParticipant, SignalPayload } from '~/co-work/lib/types'
 import type { LiveCaptionLine } from '~/co-work/lib/live-captions'
+import type { FloatingMeetingReaction } from '~/co-work/lib/meeting-reactions'
 
 type UseMeetingPresenceOptions = {
   meeting: Meeting
@@ -49,13 +50,31 @@ export function useMeetingPresence({
 
   const [participants, setParticipants] = useState<MeetingParticipant[]>([])
   const [chatMessages, setChatMessages] = useState<MeetingChatMessage[]>([])
-  const [panel, setPanel] = useState<'none' | 'chat' | 'people' | 'invite' | 'info'>('none')
+  const [panel, setPanel] = useState<
+    'none' | 'chat' | 'people' | 'invite' | 'info' | 'recordings'
+  >('none')
   const [error, setError] = useState<string | null>(null)
   const [isConnecting, setIsConnecting] = useState(false)
   const [handRaised, setHandRaised] = useState(false)
   const [raisedHands, setRaisedHands] = useState<Record<string, boolean>>({})
   const [liveCaptions, setLiveCaptions] = useState<LiveCaptionLine[]>([])
   const [realtimeDegraded, setRealtimeDegraded] = useState(false)
+  const [unreadChatCount, setUnreadChatCount] = useState(0)
+  const [latestChatNotice, setLatestChatNotice] = useState<{
+    id: string
+    title: string
+    message: string
+  } | null>(null)
+  const [latestHandNotice, setLatestHandNotice] = useState<{
+    id: string
+    title: string
+    message: string
+  } | null>(null)
+  const [floatingReactions, setFloatingReactions] = useState<FloatingMeetingReaction[]>([])
+  const displayNameByUserRef = useRef<Record<string, string>>({})
+
+  const panelRef = useRef(panel)
+  panelRef.current = panel
 
   const selfParticipant = participants.find((p) => p.user_id === userId)
   const isWaiting = selfParticipant?.status === 'waiting'
@@ -64,12 +83,46 @@ export function useMeetingPresence({
   const refreshParticipants = useCallback(async () => {
     const rows = await fetchMeetingParticipants(meeting.id)
     setParticipants(rows)
+    displayNameByUserRef.current = Object.fromEntries(
+      rows.map((row) => {
+        const name =
+          row.profile?.full_name?.trim() ||
+          row.profile?.username?.trim() ||
+          'Participant'
+        return [row.user_id, name]
+      }),
+    )
   }, [meeting.id])
 
   const refreshChat = useCallback(async () => {
     const rows = await fetchMeetingChat(meeting.id)
     setChatMessages(rows)
   }, [meeting.id])
+
+  const ingestRemoteChatMessage = useCallback(
+    (message: MeetingChatMessage) => {
+      if (!message?.id || message.sender_id === userId) return
+
+      let isNew = false
+      setChatMessages((prev) => {
+        if (prev.some((row) => row.id === message.id)) return prev
+        isNew = true
+        return [...prev, message]
+      })
+
+      if (!isNew || panelRef.current === 'chat') return
+
+      setUnreadChatCount((count) => count + 1)
+      const senderName =
+        message.sender?.full_name || message.sender?.username || 'Someone'
+      setLatestChatNotice({
+        id: message.id,
+        title: `${senderName} in chat`,
+        message: message.message_text,
+      })
+    },
+    [userId],
+  )
 
   const stopPolling = useCallback(() => {
     if (pollRef.current) {
@@ -90,8 +143,48 @@ export function useMeetingPresence({
     if (channelRef.current) broadcastSignal(channelRef.current, payload)
   }, [])
 
+  const pushFloatingReaction = useCallback(
+    (input: { from: string; emoji: string; name?: string; timestamp?: number }) => {
+      const createdAt = input.timestamp ?? Date.now()
+      const id = `${input.from}-${createdAt}-${Math.random().toString(36).slice(2, 7)}`
+      const name =
+        input.name?.trim() ||
+        displayNameByUserRef.current[input.from] ||
+        (input.from === userId ? 'You' : 'Participant')
+      setFloatingReactions((prev) => [
+        ...prev.slice(-18),
+        {
+          id,
+          emoji: input.emoji,
+          from: input.from,
+          name,
+          createdAt,
+          lane: Math.floor(Math.random() * 80),
+        },
+      ])
+    },
+    [userId],
+  )
+
+  const expireFloatingReaction = useCallback((id: string) => {
+    setFloatingReactions((prev) => prev.filter((row) => row.id !== id))
+  }, [])
+
   const handleSignal = useCallback(
     (payload: SignalPayload) => {
+      if (payload.type === 'chat' && payload.from !== userId) {
+        ingestRemoteChatMessage(payload.message)
+        return
+      }
+      if (payload.type === 'reaction') {
+        pushFloatingReaction({
+          from: payload.from,
+          emoji: payload.emoji,
+          name: payload.name,
+          timestamp: payload.timestamp,
+        })
+        return
+      }
       if (payload.type === 'mute-all' && payload.from !== userId) {
         mediaHandlersRef.current.onMuteAll?.()
         return
@@ -104,6 +197,8 @@ export function useMeetingPresence({
             userId: payload.from,
             speaker: payload.speaker,
             text: payload.text,
+            originalText: payload.text,
+            sourceLang: payload.sourceLang ?? null,
             isFinal: true,
             timestamp: payload.timestamp,
           },
@@ -111,12 +206,23 @@ export function useMeetingPresence({
         return
       }
       if (payload.type !== 'presence' || payload.from === userId) return
-      setRaisedHands((prev) => ({
-        ...prev,
-        [payload.from]: !!payload.hand,
-      }))
+
+      const handUp = !!payload.hand
+      setRaisedHands((prev) => {
+        if (!!prev[payload.from] === handUp) return prev
+        return { ...prev, [payload.from]: handUp }
+      })
+
+      if (handUp) {
+        const name = displayNameByUserRef.current[payload.from] || 'Someone'
+        setLatestHandNotice({
+          id: `${payload.from}-${Date.now()}`,
+          title: `${name} raised a hand`,
+          message: 'Open Participants to see raised hands',
+        })
+      }
     },
-    [userId],
+    [ingestRemoteChatMessage, pushFloatingReaction, userId],
   )
 
   const connect = useCallback(async () => {
@@ -134,7 +240,20 @@ export function useMeetingPresence({
       const channel = await joinMeetingChannel(meeting.id, userId, {
         onSignal: handleSignal,
         onParticipantChange: () => void refreshParticipants(),
-        onChatMessage: () => void refreshChat(),
+        onChatMessage: (row) => {
+          if (row?.id && !row.is_deleted) {
+            ingestRemoteChatMessage({
+              id: row.id,
+              meeting_id: row.meeting_id,
+              sender_id: row.sender_id,
+              message_text: row.message_text,
+              message_type: row.message_type,
+              created_at: row.created_at,
+              sender: null,
+            })
+          }
+          void refreshChat()
+        },
       })
 
       if (generation !== connectGenerationRef.current) {
@@ -169,6 +288,7 @@ export function useMeetingPresence({
   }, [
     enabled,
     handleSignal,
+    ingestRemoteChatMessage,
     isHost,
     meeting,
     refreshChat,
@@ -201,10 +321,38 @@ export function useMeetingPresence({
 
   const sendChat = useCallback(
     async (text: string) => {
-      await sendMeetingChatMessage(meeting.id, userId, text)
-      await refreshChat()
+      const message = await sendMeetingChatMessage(meeting.id, userId, text)
+      setChatMessages((prev) => {
+        if (prev.some((row) => row.id === message.id)) return prev
+        return [...prev, message]
+      })
+      sendSignal({ type: 'chat', from: userId, message })
     },
-    [meeting.id, refreshChat, userId],
+    [meeting.id, sendSignal, userId],
+  )
+
+  const clearChatNotice = useCallback(() => {
+    setLatestChatNotice(null)
+  }, [])
+
+  const clearHandNotice = useCallback(() => {
+    setLatestHandNotice(null)
+  }, [])
+
+  const sendReaction = useCallback(
+    (emoji: string, name: string) => {
+      const timestamp = Date.now()
+      const payload: SignalPayload = {
+        type: 'reaction',
+        from: userId,
+        emoji,
+        name: name.trim() || 'You',
+        timestamp,
+      }
+      pushFloatingReaction(payload)
+      sendSignal(payload)
+    },
+    [pushFloatingReaction, sendSignal, userId],
   )
 
   const admit = useCallback(
@@ -236,6 +384,7 @@ export function useMeetingPresence({
     const next = !handRaisedRef.current
     handRaisedRef.current = next
     setHandRaised(next)
+    setRaisedHands((prev) => ({ ...prev, [userId]: next }))
     sendSignal({
       type: 'presence',
       from: userId,
@@ -251,7 +400,7 @@ export function useMeetingPresence({
   }, [sendSignal, userId])
 
   const broadcastCaption = useCallback(
-    (text: string, speaker: string) => {
+    (text: string, speaker: string, sourceLang?: string) => {
       sendSignal({
         type: 'caption',
         from: userId,
@@ -259,6 +408,7 @@ export function useMeetingPresence({
         text,
         isFinal: true,
         timestamp: Date.now(),
+        sourceLang: sourceLang || undefined,
       })
     },
     [sendSignal, userId],
@@ -275,9 +425,27 @@ export function useMeetingPresence({
     mediaHandlersRef.current = handlers
   }, [])
 
-  const togglePanel = useCallback((next: 'chat' | 'people' | 'invite' | 'info') => {
-    setPanel((current) => (current === next ? 'none' : next))
+  const togglePanel = useCallback((next: 'chat' | 'people' | 'invite' | 'info' | 'recordings') => {
+    setPanel((current) => {
+      const opening = current !== next
+      if (opening && next === 'chat') {
+        setUnreadChatCount(0)
+        setLatestChatNotice(null)
+      }
+      return opening ? next : 'none'
+    })
   }, [])
+
+  const setPanelSafe = useCallback(
+    (next: 'none' | 'chat' | 'people' | 'invite' | 'info' | 'recordings') => {
+      if (next === 'chat') {
+        setUnreadChatCount(0)
+        setLatestChatNotice(null)
+      }
+      setPanel(next)
+    },
+    [],
+  )
 
   const retryRealtime = useCallback(() => {
     setError(null)
@@ -296,7 +464,15 @@ export function useMeetingPresence({
     raisedHands,
     liveCaptions,
     realtimeDegraded,
-    setPanel,
+    unreadChatCount,
+    latestChatNotice,
+    clearChatNotice,
+    latestHandNotice,
+    clearHandNotice,
+    floatingReactions,
+    expireFloatingReaction,
+    sendReaction,
+    setPanel: setPanelSafe,
     togglePanel,
     sendChat,
     admit,

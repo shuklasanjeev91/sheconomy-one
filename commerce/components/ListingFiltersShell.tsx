@@ -229,6 +229,21 @@ export function ListingFiltersShell({
 
           <XStack flex={1} minWidth={8} />
 
+          {activeCount > 0 ? (
+            <Button
+              tone="ghost"
+              size="$3"
+              borderRadius={999}
+              flexShrink={0}
+              minHeight={44}
+              onPress={clearDraft}
+              accessibilityLabel={`Clear ${activeCount} filters`}
+              testID="clear-listing-filters"
+            >
+              Clear filters ({activeCount})
+            </Button>
+          ) : null}
+
           {showSortToolbar ? (
             <ListingSortMenu
               value={currentSort}

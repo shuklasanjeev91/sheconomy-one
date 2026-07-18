@@ -45,7 +45,7 @@ export type ListingDetail = Pick<
 
 export type ListingImage = Pick<
   Tables<'listing_images'>,
-  'id' | 'image_url' | 'is_primary' | 'display_order' | 'alt_text'
+  'id' | 'image_url' | 'is_primary' | 'display_order' | 'alt_text' | 'image_type'
 >
 
 export type ListingShop = Pick<
@@ -97,7 +97,7 @@ const LISTING_SELECT = `
   shop_id, created_at, sku, weight, dimensions, listing_metadata,
   mrp, price_includes_tax, tax_percent, product_info,
   digital_file_url, digital_file_type, digital_file_size, download_limit, shipping_required,
-  listing_images(id, image_url, is_primary, display_order, alt_text, image_metadata),
+  listing_images(id, image_url, is_primary, display_order, alt_text, image_type, image_metadata),
   listing_variations(
     id, variation_name, variation_value, price_adjustment, stock, sku,
     is_available, display_order

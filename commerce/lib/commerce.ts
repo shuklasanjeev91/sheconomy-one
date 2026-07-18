@@ -632,7 +632,7 @@ export async function fetchListingFeedPage(
   }
 
   const { data, error, count } = await applyListingBrowseFilters(
-    query,
+    query as unknown as BrowseFilterQuery,
     browseFilters,
     kind === 'latest' ? 'newest' : 'relevance',
   ).range(from, to)
@@ -1007,7 +1007,10 @@ export async function fetchCategoryListingsPage(
     baseQuery = baseQuery.in('shop_id', filters.shopIds)
   }
 
-  const { data, error, count } = await applyListingBrowseFilters(baseQuery, filters).range(from, to)
+  const { data, error, count } = await applyListingBrowseFilters(
+    baseQuery as unknown as BrowseFilterQuery,
+    filters,
+  ).range(from, to)
 
   if (error) {
     return { items: [], page, pageSize, hasMore: false, error: error.message }
@@ -1048,17 +1051,25 @@ export {
   type ListingFulfillmentInfo,
 } from '~/commerce/lib/listing-fulfillment'
 
-function applyListingBrowseFilters<
-  T extends {
-    eq: (col: string, val: unknown) => T
-    gte: (col: string, val: unknown) => T
-    lte: (col: string, val: unknown) => T
-    order: (
-      col: string,
-      opts: { ascending: boolean; nullsFirst?: boolean },
-    ) => T
-  },
->(query: T, filters?: ListingBrowseFilters, defaultSort: ListingSort = 'newest'): T {
+type BrowseFilterQuery = {
+  eq: (col: string, val: unknown) => BrowseFilterQuery
+  gte: (col: string, val: unknown) => BrowseFilterQuery
+  lte: (col: string, val: unknown) => BrowseFilterQuery
+  order: (
+    col: string,
+    opts: { ascending: boolean; nullsFirst?: boolean },
+  ) => BrowseFilterQuery
+  range: (
+    from: number,
+    to: number,
+  ) => PromiseLike<{ data: unknown; error: { message: string } | null; count: number | null }>
+}
+
+function applyListingBrowseFilters(
+  query: BrowseFilterQuery,
+  filters?: ListingBrowseFilters,
+  defaultSort: ListingSort = 'newest',
+): BrowseFilterQuery {
   let next = query
 
   if (filters?.listingType) {

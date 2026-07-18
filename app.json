@@ -71,6 +71,13 @@
           "isIosBackgroundLocationEnabled": false,
           "isAndroidBackgroundLocationEnabled": false
         }
+      ],
+      [
+        "@react-native-voice/voice",
+        {
+          "microphonePermission": "Allow SHEconomy to use the microphone for live meeting captions.",
+          "speechRecognitionPermission": "Allow SHEconomy to convert speech to live captions in meetings."
+        }
       ]
     ],
     "icon": "./public/app-icon.png",

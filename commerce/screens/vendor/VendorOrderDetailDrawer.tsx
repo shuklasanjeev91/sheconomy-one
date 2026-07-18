@@ -1,4 +1,4 @@
-import { useMemo } from 'react'
+import { useMemo, useState } from 'react'
 import { Platform } from 'react-native'
 
 import {
@@ -6,6 +6,7 @@ import {
   Button,
   Icons,
   Image,
+  Input,
   ScrollView,
   Spinner,
   Text,
@@ -16,12 +17,24 @@ import {
 import { getShadowStyle, radius } from '~/config/tokens'
 import { useLockBodyScroll } from '~/hooks/useLockBodyScroll'
 import { overlayBackdropStyle } from '~/lib/layout/styles'
-import { downloadOrderInvoice } from '~/lib/orders/order-invoice'
+import { shareOrderInvoice } from '~/lib/orders/order-invoice'
+import type { EnrichedOrderIssue } from '~/lib/orders/order-issue.type'
 import { openMailtoLink } from '~/lib/platform/openMailto'
 import { formatOrderAmount, formatOrderDate } from '~/lib/orders/order.utils'
 import type { OrderPayment } from '~/lib/orders/payment.type'
 import type { OrderAddressSummary, VendorOrderItem } from '~/lib/orders/vendor-orders.type'
 import type { AppUiTokens } from '~/lib/theme/app-ui'
+import {
+  issueStatusLabel,
+  issueTypeLabel,
+  isCancellationIssueType,
+  isOpenIssueStatus,
+  isReturnIssueType,
+} from '~/commerce/lib/customer-order-lifecycle'
+import {
+  confirmOrderReturnReceived,
+  resolveOrderIssueRequest,
+} from '~/commerce/lib/customer-order-trust'
 
 import { OrderStatusBadge } from '~/commerce/components/vendor/OrderStatusBadge'
 import { getVendorOrderActions, type VendorOrderAction } from '~/commerce/components/vendor/vendor-order-actions'
@@ -36,9 +49,12 @@ type VendorOrderDetailDrawerProps = {
   loading: boolean
   updating: boolean
   payments: OrderPayment[]
+  issues?: EnrichedOrderIssue[]
   role: string | null
   onClose: () => void
   onAdvance: (item: VendorOrderItem, target: VendorOrderAction['target']) => void
+  /** Refresh issues / item after seller resolves a request. */
+  onIssuesChanged?: () => void
 }
 
 function addressLines(address: OrderAddressSummary | null | undefined): string[] {
@@ -59,9 +75,11 @@ export function VendorOrderDetailDrawer({
   loading,
   updating,
   payments,
+  issues = [],
   role,
   onClose,
   onAdvance,
+  onIssuesChanged,
 }: VendorOrderDetailDrawerProps) {
   const toast = useAppToast()
 
@@ -112,25 +130,28 @@ export function VendorOrderDetailDrawer({
             item={item}
             updating={updating}
             payments={payments}
+            issues={issues}
             role={role}
             onClose={onClose}
             onAdvance={onAdvance}
+            onIssuesChanged={onIssuesChanged}
             onContact={() => {
               const email = item.orders?.profiles?.email
               if (email) void openMailtoLink(`mailto:${email}`)
               else toast.show('No customer email on file', { tone: 'danger' })
             }}
             onDownload={() => {
-              const result = downloadOrderInvoice(item, { brandColor: ui.brand })
-              if (!result.ok) {
-                toast.show('Download unavailable', {
-                  tone: result.reason === 'unsupported' ? 'info' : 'danger',
-                  message:
-                    result.reason === 'unsupported'
-                      ? 'Invoice download is available on the web dashboard.'
-                      : 'Could not open the invoice. Please try again.',
-                })
-              }
+              void shareOrderInvoice(item, { brandColor: ui.brand }).then((result) => {
+                if (!result.ok) {
+                  toast.show('Invoice unavailable', {
+                    tone: result.reason === 'unsupported' ? 'info' : 'danger',
+                    message:
+                      result.reason === 'unsupported'
+                        ? 'Sharing is not available on this device.'
+                        : 'Could not open the invoice. Please try again.',
+                  })
+                }
+              })
             }}
           />
         ) : (
@@ -152,14 +173,32 @@ type DrawerBodyProps = {
   item: VendorOrderItem
   updating: boolean
   payments: OrderPayment[]
+  issues: EnrichedOrderIssue[]
   role: string | null
   onClose: () => void
   onAdvance: (item: VendorOrderItem, target: VendorOrderAction['target']) => void
+  onIssuesChanged?: () => void
   onContact: () => void
   onDownload: () => void
 }
 
-function DrawerBody({ ui, item, updating, payments, role, onClose, onAdvance, onContact, onDownload }: DrawerBodyProps) {
+function DrawerBody({
+  ui,
+  item,
+  updating,
+  payments,
+  issues,
+  role,
+  onClose,
+  onAdvance,
+  onIssuesChanged,
+  onContact,
+  onDownload,
+}: DrawerBodyProps) {
+  const toast = useAppToast()
+  const [note, setNote] = useState('')
+  const [resolvingId, setResolvingId] = useState<string | null>(null)
+  const [confirmingReturn, setConfirmingReturn] = useState(false)
   const order = item.orders
   const currency = order?.currency ?? 'INR'
   const customer = order?.profiles
@@ -167,6 +206,60 @@ function DrawerBody({ ui, item, updating, payments, role, onClose, onAdvance, on
   const lines = addressLines(address)
   const actions = useMemo(() => getVendorOrderActions(item.item_status, role), [item.item_status, role])
   const payment = payments[0] ?? null
+  const openIssues = useMemo(
+    () => issues.filter((issue) => isOpenIssueStatus(issue.status)),
+    [issues],
+  )
+  const hasOpenCancellation = openIssues.some((issue) => isCancellationIssueType(issue.issue_type))
+  const hasOpenReturn = openIssues.some((issue) => isReturnIssueType(issue.issue_type))
+  const acceptedReturn = useMemo(
+    () =>
+      issues.find(
+        (issue) =>
+          isReturnIssueType(issue.issue_type) &&
+          (issue.status === 'resolved' || issue.resolution_action === 'accepted') &&
+          issue.resolution_action !== 'return_received',
+      ) ?? null,
+    [issues],
+  )
+
+  async function handleResolve(issue: EnrichedOrderIssue, decision: 'accept' | 'reject') {
+    setResolvingId(issue.id)
+    const result = await resolveOrderIssueRequest({
+      issueId: issue.id,
+      decision,
+      resolutionNote: note,
+    })
+    setResolvingId(null)
+    if (result.error) {
+      toast.show('Could not update request', { tone: 'danger', message: result.error })
+      return
+    }
+    toast.show(decision === 'accept' ? 'Request accepted' : 'Request declined', {
+      tone: 'success',
+    })
+    setNote('')
+    onIssuesChanged?.()
+  }
+
+  async function handleConfirmReturn() {
+    setConfirmingReturn(true)
+    const result = await confirmOrderReturnReceived({
+      orderItemId: item.id,
+      note,
+    })
+    setConfirmingReturn(false)
+    if (result.error) {
+      toast.show('Could not confirm return', { tone: 'danger', message: result.error })
+      return
+    }
+    toast.show('Return received — refund pending', {
+      tone: 'success',
+      message: 'Gateway disbursement remains admin-controlled.',
+    })
+    setNote('')
+    onIssuesChanged?.()
+  }
 
   const variation = item.variation_details as Record<string, unknown> | null
   const variationLabel =
@@ -322,6 +415,131 @@ function DrawerBody({ ui, item, updating, payments, role, onClose, onAdvance, on
             </Text>
           </XStack>
         </Section>
+
+        {/* Customer requests (cancellation / return / support) */}
+        {issues.length > 0 ? (
+          <Section ui={ui} label="Customer requests">
+            {hasOpenCancellation ? (
+              <XStack
+                gap="$2"
+                padding="$3"
+                borderRadius={radius.chip}
+                backgroundColor="#fef3c7"
+                marginBottom="$2"
+                alignItems="flex-start"
+              >
+                <Icons.AlertTriangle size={16} color="#92600a" />
+                <Text fontSize={12.5} color="#92600a" fontWeight="600" flex={1}>
+                  Open cancellation request — review before shipping.
+                </Text>
+              </XStack>
+            ) : null}
+            {hasOpenReturn ? (
+              <XStack
+                gap="$2"
+                padding="$3"
+                borderRadius={radius.chip}
+                backgroundColor="#e0f2fe"
+                marginBottom="$2"
+                alignItems="flex-start"
+              >
+                <Icons.Package size={16} color="#075985" />
+                <Text fontSize={12.5} color="#075985" fontWeight="600" flex={1}>
+                  Open return request — accept to authorize the return, then confirm receipt to
+                  create a pending refund.
+                </Text>
+              </XStack>
+            ) : null}
+            {(openIssues.length > 0 || acceptedReturn) ? (
+              <YStack gap="$2" marginBottom="$2">
+                <Text fontSize={11} fontWeight="700" color={ui.textMuted}>
+                  Resolution note (optional)
+                </Text>
+                <Input
+                  value={note}
+                  onChangeText={setNote}
+                  placeholder="Add a note for the customer…"
+                />
+              </YStack>
+            ) : null}
+            <YStack gap="$3">
+              {issues.map((issue) => {
+                const open =
+                  isOpenIssueStatus(issue.status) &&
+                  (isCancellationIssueType(issue.issue_type) || isReturnIssueType(issue.issue_type))
+                return (
+                  <YStack
+                    key={issue.id}
+                    gap={4}
+                    padding="$3"
+                    borderRadius={radius.chip}
+                    backgroundColor={ui.surfaceMuted}
+                    borderWidth={1}
+                    borderColor={ui.borderSubtle}
+                  >
+                    <XStack justifyContent="space-between" gap="$2" alignItems="center">
+                      <Text fontSize={13} fontWeight="800" color={ui.text} flex={1}>
+                        {issueTypeLabel(issue.issue_type)}
+                      </Text>
+                      <Text fontSize={11} fontWeight="700" color={ui.textMuted}>
+                        {issueStatusLabel(issue.status)}
+                      </Text>
+                    </XStack>
+                    <Text fontSize={12} color={ui.textSecondary} numberOfLines={4}>
+                      {issue.description}
+                    </Text>
+                    {issue.resolution_note ? (
+                      <Text fontSize={11} color={ui.textMuted}>
+                        Note: {issue.resolution_note}
+                      </Text>
+                    ) : null}
+                    <Text fontSize={11} color={ui.textMuted}>
+                      {formatOrderDate(issue.created_at, true)}
+                      {issue.reported_by_profile?.full_name
+                        ? ` · ${issue.reported_by_profile.full_name}`
+                        : ''}
+                    </Text>
+                    {open ? (
+                      <XStack gap="$2" marginTop="$2" flexWrap="wrap">
+                        <Button
+                          tone="primary"
+                          size="$3"
+                          borderRadius={999}
+                          disabled={resolvingId === issue.id}
+                          onPress={() => void handleResolve(issue, 'accept')}
+                        >
+                          {resolvingId === issue.id ? 'Updating…' : 'Accept'}
+                        </Button>
+                        <Button
+                          tone="outline"
+                          size="$3"
+                          borderRadius={999}
+                          disabled={resolvingId === issue.id}
+                          onPress={() => void handleResolve(issue, 'reject')}
+                        >
+                          Decline
+                        </Button>
+                      </XStack>
+                    ) : null}
+                  </YStack>
+                )
+              })}
+            </YStack>
+            {acceptedReturn && isReturnIssueType(acceptedReturn.issue_type) ? (
+              <Button
+                tone="primary"
+                size="$3"
+                borderRadius={999}
+                marginTop="$2"
+                disabled={confirmingReturn}
+                icon={<Icons.CheckCircle2 size={15} />}
+                onPress={() => void handleConfirmReturn()}
+              >
+                {confirmingReturn ? 'Confirming…' : 'Confirm return received · pending refund'}
+              </Button>
+            ) : null}
+          </Section>
+        ) : null}
 
         {/* Payment summary */}
         <Section ui={ui} label="Payment Summary">

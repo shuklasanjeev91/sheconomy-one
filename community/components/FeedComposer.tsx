@@ -5,6 +5,7 @@ import type { Href } from 'one'
 import { CommunityCard } from '~/community/components/CommunityCard'
 import { openComposer, type ComposerOptions } from '~/community/lib/composer-store'
 import { useCommunityUi } from '~/community/lib/community-theme'
+import { HorizontalScrollRow } from '~/components/layout'
 import { Avatar, Icons, Text, XStack, YStack } from '~/components/ui'
 import { communityRoutes, routes } from '~/lib/routes'
 import { buildSignInUrl } from '~/lib/auth/redirect'
@@ -29,8 +30,8 @@ export function FeedComposer() {
   return (
     <CommunityCard padding={16} gap={12}>
         <XStack gap={10} alignItems="center">
-          <AppLink href={(isAuthenticated ? communityRoutes.profile : routes.signIn) as Href} asChild>
-            <Avatar name={name} src={profile?.avatar_url ?? undefined} size="$4" cursor="pointer" />
+          <AppLink href={(isAuthenticated ? communityRoutes.profile : routes.signIn) as Href}>
+            <Avatar name={name} src={profile?.avatar_url} size="$4" cursor="pointer" />
           </AppLink>
           <XStack
             flex={1}
@@ -51,13 +52,26 @@ export function FeedComposer() {
           </XStack>
         </XStack>
 
-        <XStack borderTopWidth={1} borderTopColor={communityUi.borderLight} paddingTop={8}>
-          <ComposerAction icon={Icons.Image} label="Photo" color="#70b5f9" onPress={() => compose({ media: true })} />
-          <ComposerAction icon={Icons.Video} label="Video" color="#e74c3c" onPress={() => compose({ video: true })} />
-          <ComposerAction icon={Icons.Calendar} label="Event" color="#e7a33e" onPress={() => compose({ mode: 'event' })} />
-          <ComposerAction icon={Icons.PartyPopper} label="Celebrate" color="#c37dda" onPress={() => compose({ mode: 'celebration' })} />
-          <ComposerAction icon={Icons.BarChart2} label="Poll" color="#7fc15e" onPress={() => compose({ mode: 'poll' })} />
-        </XStack>
+        <YStack borderTopWidth={1} borderTopColor={communityUi.borderLight} paddingTop={8}>
+          <HorizontalScrollRow gap={0}>
+            <ComposerAction icon={Icons.Image} label="Photo" color="#70b5f9" onPress={() => compose({ media: true })} />
+            <ComposerAction icon={Icons.Video} label="Video" color="#e74c3c" onPress={() => compose({ video: true })} />
+            <ComposerAction icon={Icons.Calendar} label="Event" color="#e7a33e" onPress={() => compose({ mode: 'event' })} />
+            <ComposerAction
+              icon={Icons.PartyPopper}
+              label="Celebrate"
+              color="#c37dda"
+              onPress={() => compose({ mode: 'celebration' })}
+            />
+            <ComposerAction
+              icon={Icons.Newspaper}
+              label="Article"
+              color="#0a66c2"
+              onPress={() => compose({ mode: 'article' })}
+            />
+            <ComposerAction icon={Icons.BarChart2} label="Poll" color="#7fc15e" onPress={() => compose({ mode: 'poll' })} />
+          </HorizontalScrollRow>
+        </YStack>
       </CommunityCard>
   )
 }
@@ -76,7 +90,8 @@ function ComposerAction({
   const communityUi = useCommunityUi()
   return (
     <YStack
-      flex={1}
+      minWidth={64}
+      paddingHorizontal={6}
       alignItems="center"
       justifyContent="center"
       paddingVertical={8}
@@ -87,9 +102,10 @@ function ComposerAction({
       onPress={onPress}
       accessibilityLabel={label}
       aria-label={label}
+      role="button"
     >
       <Icon size={22} color={color} />
-      <Text fontSize={12} fontWeight="600" color={communityUi.textMuted} marginTop={4} display="none" $gtMd={{ display: 'flex' }}>
+      <Text fontSize={12} fontWeight="600" color={communityUi.textMuted} marginTop={4} numberOfLines={1}>
         {label}
       </Text>
     </YStack>

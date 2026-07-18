@@ -49,6 +49,7 @@ const SETTINGS_CHILDREN: VendorNavItem[] = [
     description: 'Payout accounts and tax documentation.',
     icon: Icons.CreditCard,
     href: settingsHref('payments'),
+    ready: true,
   },
   {
     id: 'settings-notifications',
@@ -70,6 +71,7 @@ const SETTINGS_CHILDREN: VendorNavItem[] = [
     description: 'Delivery zones and courier partners.',
     icon: Icons.Truck,
     href: settingsHref('shipping'),
+    ready: true,
   },
   {
     id: 'settings-returns',
@@ -77,6 +79,7 @@ const SETTINGS_CHILDREN: VendorNavItem[] = [
     description: 'Return windows and refund rules.',
     icon: Icons.Undo2,
     href: settingsHref('returns'),
+    ready: true,
   },
 ]
 
@@ -124,6 +127,7 @@ export const VENDOR_NAV_GROUPS: VendorNavGroup[] = [
         description: 'Traffic, sales, and engagement trends.',
         icon: Icons.BarChart3,
         href: vendorRoutes.analytics,
+        ready: true,
       },
       {
         id: 'delivery',
@@ -131,6 +135,7 @@ export const VENDOR_NAV_GROUPS: VendorNavGroup[] = [
         description: 'Shipping options and fulfilment.',
         icon: Icons.Truck,
         href: vendorRoutes.delivery,
+        ready: true,
       },
       {
         id: 'ads',
@@ -138,6 +143,7 @@ export const VENDOR_NAV_GROUPS: VendorNavGroup[] = [
         description: 'Campaigns and promotions.',
         icon: Icons.Megaphone,
         href: vendorRoutes.ads,
+        ready: true,
       },
       {
         id: 'reviews',
@@ -145,6 +151,7 @@ export const VENDOR_NAV_GROUPS: VendorNavGroup[] = [
         description: 'Customer ratings and feedback.',
         icon: Icons.Star,
         href: vendorRoutes.reviews,
+        ready: true,
       },
     ],
   },

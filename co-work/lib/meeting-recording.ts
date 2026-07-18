@@ -5,6 +5,10 @@ import { shareBlob } from '~/lib/platform/shareBlob'
 
 import { isNativeAudioRecordingSupported } from './native-audio-recording'
 
+/**
+ * Local/device recording helpers remain for development fallbacks only.
+ * Production Co-Work meetings use LiveKit RoomComposite cloud egress instead.
+ */
 export function isMeetingRecordingSupported() {
   return hasMediaRecorder() || isNativeAudioRecordingSupported()
 }
@@ -12,9 +16,13 @@ export function isMeetingRecordingSupported() {
 function addParticipantTracks(
   stream: MediaStream,
   seen: Set<string>,
-  participant: { trackPublications: Iterable<{ track?: { mediaStreamTrack?: MediaStreamTrack | null } | null }> },
+  participant: {
+    trackPublications: Map<string, { track?: { mediaStreamTrack?: MediaStreamTrack | null } | null }>
+  },
 ) {
-  for (const publication of participant.trackPublications) {
+  // trackPublications is a Map — iterate values(), not the Map itself
+  // (which yields [sid, publication] pairs and silently adds no tracks).
+  for (const publication of participant.trackPublications.values()) {
     const track = publication.track?.mediaStreamTrack
     if (!track || seen.has(track.id)) continue
     seen.add(track.id)
@@ -22,15 +30,51 @@ function addParticipantTracks(
   }
 }
 
-/** Combine local + remote LiveKit tracks into one recordable stream. */
-export function buildLiveKitRecordingStream(room: Room): MediaStream {
-  const stream = new MediaStream()
+export type RecordingStreamBundle = {
+  stream: MediaStream
+  /** Release the audio mixer once recording stops. */
+  cleanup: () => void
+}
+
+/**
+ * Combine local + remote LiveKit tracks into one recordable stream.
+ * MediaRecorder only records the first audio track of a stream, so all voices
+ * (host + participants) are mixed into a single track via WebAudio.
+ */
+export function buildLiveKitRecordingStream(room: Room): RecordingStreamBundle {
+  const raw = new MediaStream()
   const seen = new Set<string>()
 
-  addParticipantTracks(stream, seen, room.localParticipant)
-  room.remoteParticipants.forEach((participant) => addParticipantTracks(stream, seen, participant))
+  addParticipantTracks(raw, seen, room.localParticipant)
+  room.remoteParticipants.forEach((participant) => addParticipantTracks(raw, seen, participant))
 
-  return stream
+  const audioTracks = raw.getAudioTracks()
+  const videoTracks = raw.getVideoTracks()
+
+  let mixedAudio = audioTracks
+  let cleanup = () => {}
+
+  if (audioTracks.length > 1 && typeof AudioContext !== 'undefined') {
+    try {
+      const context = new AudioContext()
+      const destination = context.createMediaStreamDestination()
+      const sources = audioTracks.map((track) => {
+        const source = context.createMediaStreamSource(new MediaStream([track]))
+        source.connect(destination)
+        return source
+      })
+      mixedAudio = destination.stream.getAudioTracks()
+      cleanup = () => {
+        for (const source of sources) source.disconnect()
+        void context.close()
+      }
+    } catch {
+      // WebAudio unavailable — fall back to raw tracks (first voice only).
+      mixedAudio = audioTracks
+    }
+  }
+
+  return { stream: new MediaStream([...mixedAudio, ...videoTracks]), cleanup }
 }
 
 export function getMeetingRecorderMimeType(hasVideo: boolean): string {

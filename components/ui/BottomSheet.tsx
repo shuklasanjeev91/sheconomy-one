@@ -5,9 +5,10 @@ import { Platform, useWindowDimensions, type NativeScrollEvent, type NativeSynth
 import { Icons, Sheet, SheetFrame, SheetHandle, SheetOverlay, Text, XStack, YStack } from '~/components/ui'
 import { radius } from '~/config/tokens'
 import { useAppLayout } from '~/hooks/useAppLayout'
+import { isNativeFullscreenOverlay } from '~/lib/platform/native-fullscreen'
 import { useAppUi } from '~/lib/theme/useAppUi'
 
-const SHEET_MAX_HEIGHT_RATIO = 0.96
+const DEFAULT_SHEET_MAX_HEIGHT_RATIO = 0.92
 // Approximate non-scrolling chrome heights so the scroll body can extend as
 // close to full screen as possible while still leaving room for these.
 const HANDLE_CHROME = 28
@@ -68,11 +69,14 @@ type AppBottomSheetProps = {
   /** Wrap body in Sheet.ScrollView (disable for short static content). */
   scrollable?: boolean
   onScroll?: (event: NativeSyntheticEvent<NativeScrollEvent>) => void
+  /** Fraction of viewport height (0–1). Web only — native always fills the screen. */
+  maxHeightRatio?: number
 }
 
 /**
- * Cross-platform bottom sheet — fits content up to ~92% viewport, scrolls when needed,
- * safe-area padding on native, and always shows a close icon.
+ * Cross-platform bottom sheet.
+ * - Web: fits content up to ~92% viewport, scrolls when needed.
+ * - iOS / Android: always covers the full device screen.
  */
 export function AppBottomSheet({
   open,
@@ -83,19 +87,26 @@ export function AppBottomSheet({
   showHandle = true,
   scrollable = true,
   onScroll,
+  maxHeightRatio = DEFAULT_SHEET_MAX_HEIGHT_RATIO,
 }: AppBottomSheetProps) {
   const ui = useAppUi()
-  const { safeBottom } = useAppLayout()
+  const { safeBottom, safeTop } = useAppLayout()
   const { height: windowHeight } = useWindowDimensions()
+  const nativeFullscreen = isNativeFullscreenOverlay
+
+  const sheetRatio = Math.min(0.98, Math.max(0.5, maxHeightRatio))
 
   const maxSheetHeight = useMemo(
-    () => Math.round(windowHeight * SHEET_MAX_HEIGHT_RATIO),
-    [windowHeight],
+    () => (nativeFullscreen ? windowHeight : Math.round(windowHeight * sheetRatio)),
+    [windowHeight, sheetRatio, nativeFullscreen],
   )
 
   // Space taken by the handle/header/footer that sits outside the scroll body.
   const chromeHeight =
-    (showHandle ? HANDLE_CHROME : 0) + HEADER_CHROME + (footer ? FOOTER_CHROME : 0)
+    (showHandle ? HANDLE_CHROME : 0) +
+    HEADER_CHROME +
+    (footer ? FOOTER_CHROME : 0) +
+    (nativeFullscreen ? safeTop : 0)
   const scrollMaxHeight = Math.max(200, maxSheetHeight - chromeHeight)
 
   const bottomInset = Math.max(16, safeBottom)
@@ -116,7 +127,9 @@ export function AppBottomSheet({
       onOpenChange={onOpenChange}
       modal
       dismissOnSnapToBottom
-      snapPointsMode="fit"
+      {...(nativeFullscreen
+        ? { snapPoints: [100], snapPointsMode: 'percent' as const }
+        : { snapPointsMode: 'fit' as const })}
       zIndex={100_000}
       animation="quick"
     >
@@ -124,12 +137,23 @@ export function AppBottomSheet({
       <SheetFrame
         padding="$0"
         backgroundColor={ui.surface}
-        borderTopLeftRadius={radius.surface}
-        borderTopRightRadius={radius.surface}
+        borderTopLeftRadius={nativeFullscreen ? 0 : radius.surface}
+        borderTopRightRadius={nativeFullscreen ? 0 : radius.surface}
         overflow="hidden"
         maxHeight={maxSheetHeight}
+        {...(nativeFullscreen
+          ? {
+              height: windowHeight,
+              flex: 1,
+              width: '100%',
+            }
+          : {})}
       >
-        <YStack width="100%" maxHeight={maxSheetHeight}>
+        <YStack
+          width="100%"
+          maxHeight={maxSheetHeight}
+          {...(nativeFullscreen ? { flex: 1, height: '100%', paddingTop: safeTop } : {})}
+        >
           {showHandle ? (
             <YStack paddingTop="$2.5" paddingBottom="$1" alignItems="center" width="100%">
               <SheetHandle />
@@ -141,21 +165,24 @@ export function AppBottomSheet({
           {scrollable ? (
             <Sheet.ScrollView
               width="100%"
+              flex={nativeFullscreen ? 1 : undefined}
               showsVerticalScrollIndicator
               keyboardShouldPersistTaps="handled"
               onScroll={onScroll}
               scrollEventThrottle={16}
-              maxHeight={scrollMaxHeight}
+              maxHeight={nativeFullscreen ? undefined : scrollMaxHeight}
               {...(Platform.OS === 'web'
                 ? {
-                    maxHeight: `calc(${SHEET_MAX_HEIGHT_RATIO * 100}vh - ${chromeHeight}px)` as unknown as number,
+                    maxHeight: `calc(${sheetRatio * 100}vh - ${chromeHeight}px)` as unknown as number,
                   }
                 : {})}
             >
               {body}
             </Sheet.ScrollView>
           ) : (
-            body
+            <YStack flex={nativeFullscreen ? 1 : undefined} width="100%">
+              {body}
+            </YStack>
           )}
 
           {footer ? (

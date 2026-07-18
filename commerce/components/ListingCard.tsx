@@ -8,6 +8,7 @@ import { getListingSlug } from '~/lib/supabase/commerce'
 import type { ListingSummary } from '~/lib/supabase/commerce'
 import { routes } from '~/lib/routes'
 import { useCart } from '~/commerce/hooks/useCart'
+import { useAsyncAction } from '~/hooks/useAsyncAction'
 import { useThemedShadowStyle } from '~/lib/theme/useThemedShadowStyle'
 
 import { FavoriteButton } from './FavoriteButton'
@@ -190,7 +191,7 @@ function QuickAddButton({ listing }: { listing: ListingSummary }) {
   const { addToCart } = useCart()
   const toast = useAppToast()
   const router = useRouter()
-  const [adding, setAdding] = useState(false)
+  const { run, pending } = useAsyncAction()
 
   return (
     <Button
@@ -198,25 +199,29 @@ function QuickAddButton({ listing }: { listing: ListingSummary }) {
       tone="primary"
       borderRadius={999}
       width="100%"
-      disabled={adding}
+      minHeight={44}
+      disabled={pending}
+      accessibilityLabel={`Add ${listing.title} to cart`}
       icon={<Icons.ShoppingCart size={14} />}
-      onPress={async () => {
-        setAdding(true)
-        const { error } = await addToCart(listing.id)
-        setAdding(false)
-        if (error) {
-          // Likely needs variant/option selection — send them to the product page.
-          toast.show('Choose options', {
-            tone: 'default',
-            message: 'Select options on the product page to add it.',
-          })
-          router.push(routes.listing(getListingSlug(listing)))
-          return
-        }
-        toast.show('Added to cart', { tone: 'success' })
+      onPress={() => {
+        void run(
+          async () => {
+            const { error } = await addToCart(listing.id)
+            if (error) {
+              toast.show('Choose options', {
+                tone: 'default',
+                message: 'Select options on the product page to add it.',
+              })
+              router.push(routes.listing(getListingSlug(listing)))
+              return
+            }
+            toast.show('Added to cart', { tone: 'success' })
+          },
+          { haptic: 'success', errorTitle: 'Could not add to cart' },
+        )
       }}
     >
-      {adding ? 'Adding…' : 'Add to cart'}
+      {pending ? 'Adding…' : 'Add to cart'}
     </Button>
   )
 }

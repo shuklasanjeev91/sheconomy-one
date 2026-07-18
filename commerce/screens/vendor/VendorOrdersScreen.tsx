@@ -19,6 +19,8 @@ import { useAppLayout } from '~/hooks/useAppLayout'
 import { useProfile } from '~/hooks/useProfile'
 import { useScreenSearch } from '~/hooks/useScreenSearch'
 import { createTracking, selectDeliveryLoading } from '~/lib/orders/delivery.store'
+import { getIssuesByOrder } from '~/lib/orders/order-issue.service'
+import type { EnrichedOrderIssue } from '~/lib/orders/order-issue.type'
 import { ORDER_STATUS, ORDER_STATUS_DISPLAY, type OrderStatus } from '~/lib/orders/order.constants'
 import { formatOrderAmount, formatOrderDate } from '~/lib/orders/order.utils'
 import { selectOrderPayments, getOrderPayments } from '~/lib/orders/payment.store'
@@ -110,6 +112,7 @@ export function VendorOrdersScreen() {
   const [page, setPage] = useState(1)
   const [selectedItemId, setSelectedItemId] = useState<string | null>(null)
   const [trackingItem, setTrackingItem] = useState<VendorOrderItem | null>(null)
+  const [orderIssues, setOrderIssues] = useState<EnrichedOrderIssue[]>([])
 
   const isSearchMode = searchTerm.trim().length > 0
   const orders = isSearchMode ? searchResults : listOrders
@@ -181,11 +184,21 @@ export function VendorOrdersScreen() {
 
   const openDetail = (item: VendorOrderItem) => {
     setSelectedItemId(item.id)
+    setOrderIssues([])
     void dispatch(loadVendorOrderItem({ orderItemId: item.id }))
-    if (item.order_id) void dispatch(getOrderPayments({ orderId: item.order_id }))
+    if (item.order_id) {
+      void dispatch(getOrderPayments({ orderId: item.order_id }))
+      void getIssuesByOrder(item.order_id).then((response) => {
+        if (response.success && response.data) setOrderIssues(response.data)
+        else setOrderIssues([])
+      })
+    }
   }
 
-  const closeDetail = () => setSelectedItemId(null)
+  const closeDetail = () => {
+    setSelectedItemId(null)
+    setOrderIssues([])
+  }
 
   const handleAdvance = async (item: VendorOrderItem, target: VendorOrderAction['target']) => {
     // Shipping requires tracking info: open the Add-Tracking drawer instead of
@@ -449,9 +462,14 @@ export function VendorOrdersScreen() {
         loading={loading.item}
         updating={loading.updatingStatus}
         payments={payments}
+        issues={orderIssues}
         role={role}
         onClose={closeDetail}
         onAdvance={handleAdvance}
+        onIssuesChanged={() => {
+          if (drawerItem) openDetail(drawerItem)
+          loadPage()
+        }}
       />
 
       <VendorAddTrackingDrawer

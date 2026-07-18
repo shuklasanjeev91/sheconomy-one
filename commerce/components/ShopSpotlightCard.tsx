@@ -1,4 +1,4 @@
-import { useEffect, useState, type ReactNode } from 'react'
+import { useEffect, useState } from 'react'
 import { AppLink } from '~/components/navigation/AppLink'
 
 import { Avatar, Icons, Image, Text, XStack, YStack } from '~/components/ui'
@@ -19,6 +19,7 @@ type ShopSpotlightCardProps = {
   fill?: boolean
 }
 
+/** Banner art — logos are contained (not cover-cropped) so bad uploads don't dominate. */
 function ShopBanner({ logoUrl, shopName }: { logoUrl: string | null; shopName: string }) {
   const ui = useAppUi()
   const [failed, setFailed] = useState(false)
@@ -36,14 +37,16 @@ function ShopBanner({ logoUrl, shopName }: { logoUrl: string | null; shopName: s
   }
 
   return (
-    <Image
-      src={logoUrl}
-      alt={shopName}
-      width="100%"
-      height="100%"
-      objectFit="cover"
-      onError={() => setFailed(true)}
-    />
+    <YStack flex={1} width="100%" height="100%" backgroundColor={ui.roseSurface} alignItems="center" justifyContent="center">
+      <Image
+        src={logoUrl}
+        alt={shopName}
+        width="100%"
+        height="100%"
+        objectFit="contain"
+        onError={() => setFailed(true)}
+      />
+    </YStack>
   )
 }
 
@@ -68,12 +71,17 @@ export function ShopSpotlightCard({ shop, fill = false }: ShopSpotlightCardProps
     averageRating > 0 &&
     totalReviews > 0
 
+  // Banner + avatar overhang + name/rating/verified need room; previous fill minHeight
+  // left ~72px under a 148px banner and clipped the rating row.
+  const bannerHeight = fill ? 112 : 120
+  const avatarOverlap = 22
+
   return (
     <AppLink href={routes.shop(getShopSlug(shop))} asChild>
       <YStack
         width={fill ? '100%' : 212}
         flex={fill ? 1 : undefined}
-        minHeight={fill ? 220 : undefined}
+        minHeight={fill ? 268 : undefined}
         cursor="pointer"
         animation="quick"
         borderRadius={radius.card}
@@ -87,20 +95,24 @@ export function ShopSpotlightCard({ shop, fill = false }: ShopSpotlightCardProps
       >
         <YStack
           width="100%"
-          height={fill ? 148 : 128}
-          overflow="hidden"
+          height={bannerHeight}
+          overflow="visible"
           backgroundColor={ui.imagePlaceholder}
           position="relative"
+          zIndex={1}
         >
-          <ShopBanner logoUrl={shop.logo_url} shopName={shop.shop_name} />
+          <YStack width="100%" height="100%" overflow="hidden">
+            <ShopBanner logoUrl={shop.logo_url} shopName={shop.shop_name} />
+          </YStack>
           <XStack
             position="absolute"
-            bottom={-22}
+            bottom={-avatarOverlap}
             left="$3"
             borderWidth={3}
             borderColor={ui.surface}
             borderRadius={radius.pill}
             overflow="hidden"
+            zIndex={2}
             style={cardShadow}
           >
             <Avatar name={shop.shop_name} src={shop.logo_url ?? undefined} size="$5" />
@@ -109,42 +121,41 @@ export function ShopSpotlightCard({ shop, fill = false }: ShopSpotlightCardProps
 
         <YStack
           flex={fill ? 1 : undefined}
-          paddingTop="$6"
+          minHeight={fill ? 140 : undefined}
+          paddingTop={avatarOverlap + 12}
           paddingHorizontal="$3"
-          paddingBottom="$3"
-          gap={5}
-          justifyContent="space-between"
+          paddingBottom="$4"
+          gap="$2"
+          justifyContent="flex-start"
         >
-          <YStack gap={5}>
-            <Text fontWeight="700" fontSize={14} numberOfLines={1} color={ui.text} letterSpacing={-0.2}>
-              {shop.shop_name}
-            </Text>
-            {location ? (
-              <XStack gap={4} alignItems="center">
-                <Icons.MapPin size={12} color={ui.textMuted} />
-                <Text fontSize={11} color={ui.textMuted} numberOfLines={1} flex={1}>
-                  {location}
-                </Text>
-              </XStack>
-            ) : null}
-            {hasRating ? (
-              <XStack gap={4} alignItems="center" flexWrap="wrap">
-                <StarRating rating={averageRating ?? 0} size={11} />
-                <Text fontSize={12} color={ui.textSecondary} fontWeight="600">
-                  {formatRating(averageRating)}
-                </Text>
-                <Text fontSize={11} color={ui.textMuted}>
-                  ({totalReviews} {totalReviews === 1 ? 'review' : 'reviews'})
-                </Text>
-              </XStack>
-            ) : (
-              <Text fontSize={11} color={ui.textMuted}>
-                New shop
-              </Text>
-            )}
-          </YStack>
-          {shop.verified ? (
+          <Text fontWeight="700" fontSize={14} numberOfLines={2} color={ui.text} letterSpacing={-0.2} lineHeight={18}>
+            {shop.shop_name}
+          </Text>
+          {location ? (
             <XStack gap={4} alignItems="center">
+              <Icons.MapPin size={12} color={ui.textMuted} />
+              <Text fontSize={11} color={ui.textMuted} numberOfLines={1} flex={1}>
+                {location}
+              </Text>
+            </XStack>
+          ) : null}
+          {hasRating ? (
+            <XStack gap={4} alignItems="center" flexWrap="wrap" minHeight={18}>
+              <StarRating rating={averageRating ?? 0} size={11} />
+              <Text fontSize={12} color={ui.textSecondary} fontWeight="600">
+                {formatRating(averageRating)}
+              </Text>
+              <Text fontSize={11} color={ui.textMuted}>
+                ({totalReviews} {totalReviews === 1 ? 'review' : 'reviews'})
+              </Text>
+            </XStack>
+          ) : (
+            <Text fontSize={11} color={ui.textMuted} minHeight={18}>
+              New shop
+            </Text>
+          )}
+          {shop.verified ? (
+            <XStack gap={4} alignItems="center" marginTop={2}>
               <Icons.BadgeCheck size={13} color={ui.brand} />
               <Text fontSize={11} color={ui.textMuted} fontWeight="600">
                 Verified shop

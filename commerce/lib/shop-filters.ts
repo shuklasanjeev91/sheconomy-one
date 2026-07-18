@@ -12,11 +12,14 @@ export type ShopSortOption =
 export type ShopBrowseFilters = {
   sort: ShopSortOption
   country: string
+  /** When true, only shops the signed-in user follows. */
+  followingOnly: boolean
 }
 
 export const DEFAULT_SHOP_BROWSE_FILTERS: ShopBrowseFilters = {
   sort: 'rating_high',
   country: 'all',
+  followingOnly: false,
 }
 
 export const SHOP_SORT_OPTIONS: { value: ShopSortOption; label: string }[] = [
@@ -101,5 +104,6 @@ export function countActiveShopFilters(filters: ShopBrowseFilters) {
   let count = 0
   if (filters.sort !== DEFAULT_SHOP_BROWSE_FILTERS.sort) count += 1
   if (filters.country !== 'all') count += 1
+  if (filters.followingOnly) count += 1
   return count
 }

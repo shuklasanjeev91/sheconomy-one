@@ -111,8 +111,8 @@ export function LegalDocumentScreen({ kind }: LegalDocumentScreenProps) {
     >
       <YStack
         width="100%"
-        maxWidth={720}
-        alignSelf="center"
+        maxWidth="100%"
+        alignSelf="stretch"
         paddingHorizontal={gutter}
         paddingTop="$8"
         gap="$5"

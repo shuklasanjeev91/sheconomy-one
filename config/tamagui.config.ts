@@ -31,6 +31,7 @@ const tamaguiConfig = createTamagui({
       md: false,
       lg: false,
       xl: false,
+      gtXs: false,
       gtSm: false,
       gtMd: false,
       gtLg: false,

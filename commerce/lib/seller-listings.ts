@@ -1,6 +1,19 @@
 import { supabase } from '~/lib/supabase'
-import type { Database, Tables } from '~/lib/supabase'
+import type { Database, Tables, TablesUpdate } from '~/lib/supabase'
 import { slugifyTitle } from '~/commerce/lib/seo-urls'
+import { INVALIDATION_TOPICS, invalidateCache } from '~/lib/cache/invalidation'
+
+/** Refresh every browse/category/home feed that can show seller inventory. */
+function invalidateSellerCatalogueCaches() {
+  invalidateCache(
+    'feed:categories',
+    'feed:shops',
+    'route:shops-browse',
+    'route:home',
+    INVALIDATION_TOPICS.commerceListings,
+    INVALIDATION_TOPICS.commerceShops,
+  )
+}
 
 type ListingType = Database['public']['Enums']['listing_type_enum']
 type ListingStatus = Database['public']['Enums']['listing_status_enum']
@@ -100,11 +113,13 @@ export async function createSellerListing(input: CreateListingInput) {
     )
   }
 
+  invalidateSellerCatalogueCaches()
+
   return { listing: data, error: null as string | null }
 }
 
 export async function updateSellerListing(listingId: string, shopId: string, input: UpdateListingInput) {
-  const payload: Tables<'listings'>['Update'] = {}
+  const payload: TablesUpdate<'listings'> = {}
 
   if (input.title != null) {
     payload.title = input.title.trim()
@@ -137,6 +152,8 @@ export async function updateSellerListing(listingId: string, shopId: string, inp
     return { listing: null, error: error.message }
   }
 
+  invalidateSellerCatalogueCaches()
+
   return { listing: data, error: null as string | null }
 }
 
@@ -162,6 +179,8 @@ export async function updateShopProfile(shopId: string, userId: string, input: U
   if (error) {
     return { shop: null, error: error.message }
   }
+
+  invalidateSellerCatalogueCaches()
 
   return { shop: data, error: null as string | null }
 }

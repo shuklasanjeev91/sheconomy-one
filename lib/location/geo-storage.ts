@@ -1,3 +1,6 @@
+import AsyncStorage from '@react-native-async-storage/async-storage'
+import { Platform } from 'react-native'
+
 import { readSessionValue, readSessionValueSync, writeSessionValue } from '~/lib/platform/storage'
 
 import type { LatLng } from './types'
@@ -37,6 +40,18 @@ export async function readStoredUserGeo(): Promise<StoredUserGeo> {
 export async function writeStoredUserGeo(geo: StoredUserGeo): Promise<void> {
   const next = { ...geo, capturedAt: new Date().toISOString() }
   await writeSessionValue(USER_GEO_STORAGE_KEY, JSON.stringify(next))
+}
+
+export async function clearStoredUserGeo(): Promise<void> {
+  try {
+    if (Platform.OS === 'web' && typeof window !== 'undefined') {
+      window.sessionStorage.removeItem(USER_GEO_STORAGE_KEY)
+      return
+    }
+    await AsyncStorage.removeItem(USER_GEO_STORAGE_KEY)
+  } catch {
+    // ignore
+  }
 }
 
 export function coordsFromStoredGeo(geo: StoredUserGeo): LatLng | null {

@@ -832,7 +832,7 @@ function collectApiKeys(): Array<{ source: string; key: string }> {
 async function callOpenAIOnce(
   apiKey: string,
   model: string,
-  messages: Array<{ role: string; content: string }>,
+  messages: Array<{ role: string; content: unknown }>,
 ): Promise<{ answer: string | null; error: string | null }> {
   const baseUrl = (Deno.env.get('OPENAI_BASE_URL')?.trim() || 'https://api.openai.com/v1').replace(
     /\/$/,
@@ -1036,6 +1036,105 @@ function parseMeetingDraftJson(raw: string | null): {
   } catch {
     return null
   }
+}
+
+function parseTranslateJson(
+  raw: string | null,
+): { translatedText: string; detectedSourceLang: string | null } | null {
+  if (!raw) return null
+  const trimmed = raw
+    .trim()
+    .replace(/^```json\s*/i, '')
+    .replace(/^```\s*/i, '')
+    .replace(/```$/i, '')
+  try {
+    const parsed = JSON.parse(trimmed) as Record<string, unknown>
+    const translatedText =
+      typeof parsed.translatedText === 'string'
+        ? parsed.translatedText.trim()
+        : typeof parsed.text === 'string'
+          ? parsed.text.trim()
+          : ''
+    if (!translatedText) return null
+    const detected =
+      typeof parsed.detectedSourceLang === 'string' && parsed.detectedSourceLang.trim()
+        ? parsed.detectedSourceLang.trim().toLowerCase().slice(0, 12)
+        : null
+    return { translatedText, detectedSourceLang: detected }
+  } catch {
+    // Model sometimes returns plain translated text.
+    if (trimmed && !trimmed.startsWith('{')) {
+      return { translatedText: trimmed, detectedSourceLang: null }
+    }
+    return null
+  }
+}
+
+function parseModerateImageJson(
+  raw: string | null,
+): { verdict: 'approved' | 'rejected'; reasons: string[]; confidence: number } | null {
+  if (!raw) return null
+  const trimmed = raw
+    .trim()
+    .replace(/^```json\s*/i, '')
+    .replace(/^```\s*/i, '')
+    .replace(/```$/i, '')
+  try {
+    const parsed = JSON.parse(trimmed) as Record<string, unknown>
+    const verdict = parsed.verdict === 'rejected' ? 'rejected' : parsed.verdict === 'approved' ? 'approved' : null
+    if (!verdict) return null
+    const reasons = Array.isArray(parsed.reasons)
+      ? parsed.reasons.map((item) => String(item).trim()).filter(Boolean)
+      : []
+    const confidence =
+      typeof parsed.confidence === 'number' && Number.isFinite(parsed.confidence)
+        ? Math.max(0, Math.min(1, parsed.confidence))
+        : 0.8
+    return { verdict, reasons, confidence }
+  } catch {
+    return null
+  }
+}
+
+async function callOpenAIVision(
+  systemPrompt: string,
+  imageDataUrl: string,
+): Promise<OpenAICallResult> {
+  const keys = collectApiKeys()
+  if (!keys.length) {
+    return { answer: null, model: null, error: 'missing_openai_api_key', keySource: null }
+  }
+
+  const preferredModel = Deno.env.get('OPENAI_MODEL')?.trim() || 'gpt-4o-mini'
+  const models = [...new Set([preferredModel, 'gpt-4o-mini', 'gpt-4o'])]
+  const messages = [
+    { role: 'system', content: systemPrompt },
+    {
+      role: 'user',
+      content: [
+        { type: 'text', text: 'Moderate this listing image.' },
+        { type: 'image_url', image_url: { url: imageDataUrl } },
+      ],
+    },
+  ]
+
+  let lastError: string | null = null
+  for (const { source, key } of keys) {
+    for (const model of models) {
+      try {
+        const result = await callOpenAIOnce(key, model, messages)
+        if (result.answer) {
+          return { answer: result.answer, model, error: null, keySource: source }
+        }
+        lastError = result.error
+        if (result.error?.startsWith('401') || result.error?.startsWith('403')) break
+      } catch (err) {
+        lastError = err instanceof Error ? err.message : 'openai_fetch_failed'
+      }
+    }
+  }
+
+  return { answer: null, model: null, error: lastError, keySource: keys[0]?.source ?? null }
 }
 
 function fallbackMeetingDraft(prompt: string, _timeZone: string) {
@@ -1419,8 +1518,106 @@ Deno.serve(async (req) => {
       })
     }
 
+    if (action === 'translate') {
+      const text = typeof body.message === 'string' ? body.message.trim() : ''
+      if (!text) return json({ error: 'message required' }, 400)
+
+      const targetLang =
+        typeof context.target_lang === 'string' && context.target_lang.trim()
+          ? context.target_lang.trim().toLowerCase()
+          : 'en'
+      const sourceLang =
+        typeof context.source_lang === 'string' && context.source_lang.trim()
+          ? context.source_lang.trim().toLowerCase()
+          : 'auto'
+      const targetLabel =
+        typeof context.target_label === 'string' && context.target_label.trim()
+          ? context.target_label.trim()
+          : targetLang
+
+      // Fast path: identical language codes and short ASCII-only English → skip model.
+      if (sourceLang !== 'auto' && sourceLang === targetLang) {
+        return json({
+          text,
+          translatedText: text,
+          detectedSourceLang: sourceLang,
+          targetLang,
+          usedFallback: false,
+          skipped: true,
+          product: 'cowork',
+        })
+      }
+
+      const systemPrompt = [
+        'You are a live meeting caption translator (Zoom / Google Meet style).',
+        'Detect the source language automatically unless source is provided.',
+        `Translate the caption into ${targetLabel} (BCP-47/base code: ${targetLang}).`,
+        'Return ONLY JSON: {"translatedText":"...","detectedSourceLang":"xx"}',
+        'Keep speaker meaning, names, numbers, and punctuation. Do not add commentary.',
+        'If the text is already in the target language, return it unchanged.',
+        sourceLang !== 'auto' ? `Hint source language code: ${sourceLang}.` : '',
+      ]
+        .filter(Boolean)
+        .join('\n')
+
+      const completion = await callOpenAI(systemPrompt, [], text)
+      const parsed = parseTranslateJson(completion.answer)
+      if (parsed?.translatedText) {
+        return json({
+          text,
+          translatedText: parsed.translatedText,
+          detectedSourceLang: parsed.detectedSourceLang ?? sourceLang,
+          targetLang,
+          usedFallback: false,
+          product: 'cowork',
+        })
+      }
+
+      // Fallback: return original so captions never go blank mid-call.
+      return json({
+        text,
+        translatedText: text,
+        detectedSourceLang: sourceLang === 'auto' ? null : sourceLang,
+        targetLang,
+        usedFallback: true,
+        product: 'cowork',
+      })
+    }
+
+    if (action === 'moderate_image') {
+      const dataUrl = typeof body.message === 'string' ? body.message.trim() : ''
+      if (!dataUrl.startsWith('data:image/')) {
+        return json({ error: 'message must be a data:image URL' }, 400)
+      }
+
+      const systemPrompt = [
+        'You are a marketplace listing image safety moderator for a women-focused commerce platform.',
+        'Reject sexual content, pornography, graphic violence, hate symbols, and illegal goods imagery.',
+        'Approve normal product photos, fashion, food, crafts, and lifestyle images.',
+        'Return ONLY JSON: {"verdict":"approved"|"rejected","reasons":["..."],"confidence":0-1}',
+      ].join('\n')
+
+      const completion = await callOpenAIVision(systemPrompt, dataUrl)
+      const parsed = parseModerateImageJson(completion.answer)
+      if (parsed) {
+        return json({ ...parsed, usedFallback: false, product: 'commerce' })
+      }
+
+      // Fail closed when the model does not respond cleanly.
+      return json({
+        verdict: 'rejected',
+        reasons: ['moderation_unavailable'],
+        confidence: 1,
+        usedFallback: true,
+        product: 'commerce',
+      })
+    }
+
     return json(
-      { error: 'Unknown action. Use suggestions | chat | feedback | comment_suggestions | meeting_draft.' },
+      {
+        error:
+          'Unknown action. Use suggestions | chat | feedback | comment_suggestions | meeting_draft | post_draft | translate | moderate_image.',
+      },
       400,
     )
   } catch (error) {

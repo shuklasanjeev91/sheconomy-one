@@ -43,6 +43,7 @@ import { useVendorShops } from '~/hooks/useVendorShops'
 import { useProfile } from '~/hooks/useProfile'
 import { commerceRoutes } from '~/lib/routes'
 import { useAppUi } from '~/lib/theme/useAppUi'
+import { usePageSeo } from '~/components/seo/RouteSeo'
 
 type ShopTab = 'products' | 'about' | 'reviews'
 type ShopSort = 'featured' | 'price-asc' | 'price-desc' | 'newest' | 'rating'
@@ -95,7 +96,7 @@ export function ShopScreen() {
   const { user } = useProfile()
   const { updateShop } = useVendorShops()
   const toast = useAppToast()
-  const gridColumns = media.gtLg ? 4 : media.gtMd ? 3 : media.gtSm ? 3 : 2
+  const gridColumns = media.gtLg ? 4 : media.gtMd ? 3 : media.gtXs ? 3 : 2
 
   const [shopName, setShopName] = useState('')
   const [shopDescription, setShopDescription] = useState('')
@@ -107,6 +108,19 @@ export function ShopScreen() {
   const sortedListings = useMemo(
     () => sortListings(listingsFeed.items, sort),
     [listingsFeed.items, sort],
+  )
+
+  usePageSeo(
+    useMemo(() => {
+      if (!shop) return null
+      return {
+        title: shop.shop_name,
+        description:
+          shop.shop_description?.trim().slice(0, 200) ||
+          `Shop ${shop.shop_name} on SHEconomy — browse products from this women-led business.`,
+        image: shop.logo_url ?? null,
+      }
+    }, [shop]),
   )
 
   if (isLoading) {
@@ -128,7 +142,9 @@ export function ShopScreen() {
             borderWidth={1}
             borderColor={ui.borderSubtle}
             backgroundColor={ui.surface}
-            maxWidth={480}
+            width="100%"
+            maxWidth="100%"
+            alignSelf="stretch"
             style={getShadowStyle('sm')}
           >
             <Text fontWeight="600" fontSize={22} color={ui.text}>
@@ -415,7 +431,7 @@ export function ShopScreen() {
           ) : null}
 
           {tab === 'reviews' ? (
-            <YStack gap="$4" width="100%" maxWidth={900}>
+            <YStack gap="$4" width="100%" maxWidth="100%" alignSelf="stretch">
               {hasReviews ? (
                 <ReviewsSection
                   title="Customer reviews"

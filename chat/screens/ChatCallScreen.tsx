@@ -3,7 +3,7 @@ import { Platform } from 'react-native'
 import { useRouter } from 'one'
 
 import type { CallType } from '~/chat/lib/calls'
-import { mapCall, updateCallStatus } from '~/chat/lib/calls'
+import { endCallsForMeetingCode, fetchCallById, mapCall, updateCallStatus } from '~/chat/lib/calls'
 import { Avatar, Icons, Spinner, Text, XStack, YStack } from '~/components/ui'
 import { ScreenCenter, ScreenFill } from '~/components/layout'
 import { RequireAuth } from '~/components/auth/RequireAuth'
@@ -48,9 +48,26 @@ export function ChatCallScreen({ code, callType, callId }: ChatCallScreenProps) 
   const [loading, setLoading] = useState(true)
   const [joined, setJoined] = useState(false)
   const [elapsed, setElapsed] = useState(0)
+  const [resolvedCallType, setResolvedCallType] = useState<CallType>(callType)
   const hungUpRef = useRef(false)
 
-  const mediaMode = callType === 'audio' ? 'audio' : 'video'
+  useEffect(() => {
+    setResolvedCallType(callType)
+  }, [callType])
+
+  // Prefer DB truth over flaky query params (native routers sometimes drop `?type=`).
+  useEffect(() => {
+    if (!callId) return
+    let cancelled = false
+    void fetchCallById(callId).then((row) => {
+      if (!cancelled && row) setResolvedCallType(row.callType)
+    })
+    return () => {
+      cancelled = true
+    }
+  }, [callId])
+
+  const mediaMode = resolvedCallType === 'audio' ? 'audio' : 'video'
   const isHost = !!meeting && !!user && meeting.host_id === user.id
   const peerLabel = useMemo(() => {
     if (!meeting) return 'Call'
@@ -79,6 +96,11 @@ export function ChatCallScreen({ code, callType, callId }: ChatCallScreenProps) 
           return
         }
         setMeeting(row)
+        if (row.meeting_options?.defaultVideo === false) {
+          setResolvedCallType('audio')
+        } else if (row.meeting_options?.defaultVideo === true && !callId) {
+          setResolvedCallType('video')
+        }
       } catch (loadError) {
         if (cancelled) return
         setError(loadError instanceof Error ? loadError.message : 'Could not join the call.')
@@ -148,7 +170,11 @@ export function ChatCallScreen({ code, callType, callId }: ChatCallScreenProps) 
     if (hungUpRef.current) return
     hungUpRef.current = true
     try {
-      if (callId) await updateCallStatus(callId, 'ended')
+      if (meeting?.meeting_code) {
+        await endCallsForMeetingCode(meeting.meeting_code)
+      } else if (callId) {
+        await updateCallStatus(callId, 'ended')
+      }
       if (meeting && user) {
         await leaveMeetingParticipant(meeting.id, user.id)
         if (meeting.host_id === user.id) {
@@ -206,7 +232,7 @@ export function ChatCallScreen({ code, callType, callId }: ChatCallScreenProps) 
     return (
       <ScreenCenter backgroundColor={SURFACE} padding="$6" gap="$3">
         <Text color="#fff" textAlign="center">
-          Allow microphone{callType === 'video' ? ' and camera' : ''} access to continue this call.
+          Allow microphone{resolvedCallType === 'video' ? ' and camera' : ''} access to continue this call.
         </Text>
       </ScreenCenter>
     )
@@ -233,6 +259,7 @@ export function ChatCallScreen({ code, callType, callId }: ChatCallScreenProps) 
         meetingId={meeting.id}
         roomId={meeting.room_id}
         displayName={profile?.full_name || profile?.username || 'You'}
+        avatarUrl={profile?.avatar_url}
         isHost={isHost}
         enabled
         mediaMode={mediaMode}
@@ -241,7 +268,7 @@ export function ChatCallScreen({ code, callType, callId }: ChatCallScreenProps) 
         }}
         overlay={(liveKit) => (
           <ChatCallOverlay
-            callType={callType}
+            callType={resolvedCallType}
             peerName={peerLabel}
             peerAvatar={peerAvatar}
             elapsed={elapsed}
@@ -328,6 +355,28 @@ function ChatCallOverlay({
           onPress={() => liveKit?.toggleAudio()}
         >
           {muted ? <Icons.MicOff size={24} color="#fff" /> : <Icons.Mic size={24} color="#fff" />}
+        </CallControlButton>
+
+        <CallControlButton
+          label={
+            Platform.OS === 'web'
+              ? 'Speaker'
+              : liveKit?.speakerOn
+                ? 'Speaker'
+                : 'Phone'
+          }
+          color={liveKit?.speakerOn || Platform.OS === 'web' ? ACCEPT : MUTED}
+          onPress={() => {
+            // Web has no earpiece route — output is OS/browser managed.
+            if (Platform.OS === 'web') return
+            void liveKit?.toggleSpeaker()
+          }}
+        >
+          {liveKit?.speakerOn || Platform.OS === 'web' ? (
+            <Icons.Volume2 size={24} color="#fff" />
+          ) : (
+            <Icons.Phone size={24} color="#fff" />
+          )}
         </CallControlButton>
 
         {showVideoChrome ? (

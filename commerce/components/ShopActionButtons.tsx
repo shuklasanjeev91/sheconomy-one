@@ -1,5 +1,5 @@
 import { useShopFollow } from '~/commerce/hooks/useShopFollow'
-import { Button, Spinner, Theme, XStack } from '~/components/ui'
+import { Button, Spinner, Theme, XStack, useAppToast } from '~/components/ui'
 import { BRAND_THEME } from '~/config/tokens'
 
 type ShopActionButtonsProps = {
@@ -9,6 +9,7 @@ type ShopActionButtonsProps = {
 
 /** Shop actions — Follow for signed-in visitors (not the shop owner). */
 export function ShopActionButtons({ shopId, ownerUserId }: ShopActionButtonsProps) {
+  const toast = useAppToast()
   const follow = useShopFollow(shopId)
 
   if (!follow.isAuthenticated) {
@@ -36,7 +37,16 @@ export function ShopActionButtons({ shopId, ownerUserId }: ShopActionButtonsProp
           borderRadius={8}
           paddingHorizontal="$5"
           disabled={follow.isToggling}
-          onPress={follow.toggleFollow}
+          onPress={async () => {
+            const wasFollowing = follow.isFollowing
+            const result = await follow.toggleFollow()
+            if (result.error) {
+              toast.show(wasFollowing ? 'Could not unfollow' : 'Could not follow shop', {
+                tone: 'danger',
+                message: result.error,
+              })
+            }
+          }}
           icon={follow.isToggling ? <Spinner size="small" /> : undefined}
         >
           {follow.isFollowing ? 'Following' : 'Follow shop'}

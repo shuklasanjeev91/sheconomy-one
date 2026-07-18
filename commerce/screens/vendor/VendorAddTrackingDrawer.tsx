@@ -26,8 +26,14 @@ import {
   getTrackingFormat,
   validateTrackingNumber,
 } from '~/lib/orders/tracking.validation'
-import type { VendorOrderItem } from '~/lib/orders/vendor-orders.type'
+import type { OrderAddressSummary, VendorOrderItem } from '~/lib/orders/vendor-orders.type'
 import type { AppUiTokens } from '~/lib/theme/app-ui'
+import {
+  createSheDeliveryShipment,
+  isSheDeliveryCourier,
+  sheDeliveryPartnerFromCourier,
+} from '~/commerce/lib/shedelivery'
+import { fetchShopAddressDetails } from '~/commerce/lib/shop-address'
 
 const PANEL_WIDTH = 520
 
@@ -133,11 +139,13 @@ function TrackingForm({ ui, item, submitting, onClose, onSubmit }: TrackingFormP
   const [note, setNote] = useState('')
   const [notifyCustomer, setNotifyCustomer] = useState(true)
   const [touched, setTouched] = useState(false)
+  const [creatingShipment, setCreatingShipment] = useState(false)
 
   const courierLabel = useMemo(
     () => COURIER_OPTIONS.find((o) => o.value === courierSlug)?.label ?? 'Select a courier…',
     [courierSlug],
   )
+  const sheDeliveryPartner = sheDeliveryPartnerFromCourier(courierSlug)
 
   // Formatting tip based on the currently selected courier.
   const formatTip = useMemo(() => {
@@ -170,7 +178,9 @@ function TrackingForm({ ui, item, submitting, onClose, onSubmit }: TrackingFormP
     if (trackingNumber.trim().length === 0) {
       toast.show('Tracking number required', {
         tone: 'danger',
-        message: 'Enter the tracking ID before marking as shipped.',
+        message: isSheDeliveryCourier(courierSlug)
+          ? 'Create a SHEdelivery shipment or paste the AWB.'
+          : 'Enter the tracking ID before marking as shipped.',
       })
       return
     }
@@ -189,6 +199,70 @@ function TrackingForm({ ui, item, submitting, onClose, onSubmit }: TrackingFormP
       custom_tracking_url: customUrl.trim() ? customUrl.trim() : null,
       note: note.trim() ? note.trim() : null,
       notify_customer: notifyCustomer,
+    })
+  }
+
+  async function handleCreateSheDelivery() {
+    if (!sheDeliveryPartner) return
+    const order = item.orders
+    const address = (item.shipping_address ??
+      order?.shipping_address ??
+      item.billing_address ??
+      order?.billing_address ??
+      {}) as OrderAddressSummary
+    const customer = order?.profiles
+    const shopId = item.vendor_id
+    if (!order?.id || !shopId) {
+      toast.show('Missing order details', { tone: 'danger', message: 'Cannot create shipment.' })
+      return
+    }
+    const deliveryPostcode = String(address.postal_code ?? '').trim()
+    if (!deliveryPostcode) {
+      toast.show('Missing delivery pincode', {
+        tone: 'danger',
+        message: 'Customer address needs a postal code for SHEdelivery.',
+      })
+      return
+    }
+    setCreatingShipment(true)
+    const shopAddress = await fetchShopAddressDetails(shopId)
+    const pickupPostcode = String(shopAddress.address?.postal_code ?? deliveryPostcode).trim()
+    const result = await createSheDeliveryShipment({
+      orderId: order.id,
+      orderNumber: order.order_number,
+      shopId,
+      partner: sheDeliveryPartner,
+      pickupPostcode,
+      deliveryPostcode,
+      weightKg: 0.5,
+      paymentMethod: 'prepaid',
+      customerName: customer?.full_name ?? 'Customer',
+      customerPhone: customer?.phone ?? '0000000000',
+      customerEmail: customer?.email ?? undefined,
+      addressLine1: String(address.address_line_1 ?? 'Address'),
+      addressLine2: address.address_line_2 ?? undefined,
+      city: String(address.city ?? ''),
+      state: String(address.state ?? ''),
+      country: address.country ?? 'India',
+      items: [
+        {
+          name: item.product_title ?? item.listings?.title ?? item.listing?.title ?? 'Item',
+          units: item.quantity ?? 1,
+          sellingPrice: Number(item.unit_price ?? item.total_price ?? 0),
+        },
+      ],
+    })
+    setCreatingShipment(false)
+    if (result.error || !result.data) {
+      toast.show('SHEdelivery failed', { tone: 'danger', message: result.error ?? 'Try again.' })
+      return
+    }
+    const awb = result.data.awb || result.data.shipmentId
+    setTrackingNumber(awb)
+    if (result.data.trackingUrl) setCustomUrl(result.data.trackingUrl)
+    toast.show('Shipment created', {
+      tone: 'success',
+      message: 'Tracking filled — review and mark shipped.',
     })
   }
 
@@ -381,6 +455,19 @@ function TrackingForm({ ui, item, submitting, onClose, onSubmit }: TrackingFormP
               </Button>
             </XStack>
             {trackingError ? <FieldError text={trackingError} /> : null}
+            {sheDeliveryPartner ? (
+              <Button
+                tone="outline"
+                size="$3"
+                borderRadius={999}
+                alignSelf="flex-start"
+                disabled={creatingShipment || submitting}
+                icon={creatingShipment ? undefined : <Icons.Truck size={14} />}
+                onPress={() => void handleCreateSheDelivery()}
+              >
+                {creatingShipment ? 'Creating shipment…' : 'Create SHEdelivery shipment'}
+              </Button>
+            ) : null}
           </YStack>
 
           {/* Dates */}

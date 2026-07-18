@@ -22,7 +22,7 @@ import {
 import { buildSignInUrl } from '~/lib/auth/redirect'
 import { routes } from '~/lib/routes'
 import { useAppUi } from '~/lib/theme/useAppUi'
-import { filterBySearchQuery } from '~/lib/search'
+import { SHEET_SEARCH_MIN_ITEMS, filterBySearchQuery } from '~/lib/search'
 import { useSupabase } from '~/providers/SupabaseProvider'
 
 type IntroductionRequestButtonProps = {
@@ -128,12 +128,14 @@ export function IntroductionRequestButton({
             </Text>
           ) : (
             <>
-              <ScreenSearchField
-                value={query}
-                onChangeText={setQuery}
-                placeholder="Search mutual connections"
-                clearable
-              />
+              {introducers.length >= SHEET_SEARCH_MIN_ITEMS || query.length > 0 ? (
+                <ScreenSearchField
+                  value={query}
+                  onChangeText={setQuery}
+                  placeholder="Search mutual connections"
+                  clearable
+                />
+              ) : null}
               <YStack gap="$2">
                 {filteredIntroducers.length === 0 ? (
                   <Text fontSize={14} color={ui.textMuted}>

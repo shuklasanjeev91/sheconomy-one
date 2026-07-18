@@ -3,7 +3,8 @@ import { Platform } from 'react-native'
 
 import type { Profile } from '~/hooks/useProfile'
 
-const PROFILE_CACHE_KEY = 'sheconomy:profile-cache-v1'
+/** Bumped when avatar_url caching semantics change (invalidate stale empty avatars). */
+const PROFILE_CACHE_KEY = 'sheconomy:profile-cache-v2'
 
 type CachedProfileEntry = {
   userId: string
@@ -61,4 +62,20 @@ export async function clearCachedProfile(): Promise<void> {
   } catch {
     // ignore
   }
+}
+
+/**
+ * Merge fields into the cached profile (e.g. after avatar upload) without waiting
+ * for a network round-trip.
+ */
+export async function patchCachedProfile(
+  userId: string,
+  patch: Partial<Profile>,
+): Promise<void> {
+  if (!userId) return
+  const current = (await readCachedProfile(userId)) ?? memoryCache?.profile
+  if (!current || current.id !== userId) {
+    return
+  }
+  await writeCachedProfile(userId, { ...current, ...patch })
 }

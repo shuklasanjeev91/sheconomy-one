@@ -97,7 +97,7 @@ export function ContactImportScreen({ returnTo }: ContactImportScreenProps) {
   return (
     <FullWidthLayout scroll>
       <PageSection paddingVertical="$6" {...LAYOUT_STRETCH}>
-        <YStack gap="$4" maxWidth={520} width="100%" alignSelf="center">
+        <YStack gap="$4" width="100%" maxWidth="100%" alignSelf="stretch">
           <YStack gap="$2">
             <Text fontSize={24} fontWeight="800" color={ui.text} letterSpacing={-0.4}>
               Find people you know

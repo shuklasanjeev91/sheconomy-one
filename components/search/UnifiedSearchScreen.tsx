@@ -16,7 +16,8 @@ import {
 } from '~/commerce/lib/search-history'
 import { SearchHitRow } from '~/components/search/SearchHitRow'
 import { FullWidthLayout, HorizontalScrollRow, PageSection } from '~/components/layout'
-import { Button, Spinner, Text, XStack, YStack } from '~/components/ui'
+import { Button, EmptyState, Spinner, Text, XStack, YStack } from '~/components/ui'
+import { countActiveFilters, hasActiveFilters } from '~/commerce/lib/filters'
 import { useAccess } from '~/hooks/useAccess'
 import { useProfile } from '~/hooks/useProfile'
 import {
@@ -186,7 +187,9 @@ export function UnifiedSearchScreen({
                 <XStack
                   key={item}
                   paddingHorizontal="$3.5"
-                  paddingVertical="$2"
+                  paddingVertical="$2.5"
+                  minHeight={44}
+                  alignItems="center"
                   borderRadius={999}
                   borderWidth={1}
                   borderColor={active ? ui.brand : ui.borderSubtle}
@@ -194,6 +197,10 @@ export function UnifiedSearchScreen({
                   cursor="pointer"
                   onPress={() => setScope(item)}
                   pressStyle={{ opacity: 0.9 }}
+                  accessibilityRole="button"
+                  accessibilityLabel={`Search scope ${SEARCH_SCOPE_LABELS[item]}`}
+                  accessibilityState={{ selected: active }}
+                  testID={`search-scope-${item}`}
                 >
                   <Text
                     fontSize={13}
@@ -206,6 +213,25 @@ export function UnifiedSearchScreen({
               )
             })}
           </HorizontalScrollRow>
+          {scope === 'listings' && hasActiveFilters(filters) ? (
+            <XStack alignItems="center" justifyContent="space-between" gap="$2">
+              <Text fontSize={13} color={ui.textMuted}>
+                {countActiveFilters(filters)} active filter
+                {countActiveFilters(filters) === 1 ? '' : 's'}
+              </Text>
+              <Button
+                size="$3"
+                tone="ghost"
+                borderRadius={999}
+                minHeight={44}
+                onPress={() => updateFilters({})}
+                accessibilityLabel="Clear filters"
+                testID="clear-search-filters"
+              >
+                Clear filters
+              </Button>
+            </XStack>
+          ) : null}
         </YStack>
 
         {gated ? (
@@ -305,6 +331,7 @@ export function UnifiedSearchScreen({
               hasMore={listingsFeed.hasMore}
               error={listingsFeed.error}
               onLoadMore={listingsFeed.loadMore}
+              onRetry={listingsFeed.refresh}
               emptyMessage={`No listing results for “${query}”.`}
             />
           </ListingFiltersShell>
@@ -339,7 +366,12 @@ export function UnifiedSearchScreen({
                 })}
                 {!loading &&
                 visibleSections.every((section) => section.pick(result).length === 0) ? (
-                  <Text color={ui.textSecondary}>No results for “{query}”.</Text>
+                  <EmptyState
+                    title={`No results for “${query}”`}
+                    message="Try another keyword, switch scope, or clear filters. Recent searches above can help you restart quickly."
+                    actionLabel="Search all"
+                    onAction={() => setScope('all')}
+                  />
                 ) : null}
               </>
             ) : null}

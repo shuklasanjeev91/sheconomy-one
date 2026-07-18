@@ -8,6 +8,7 @@ import { useCommunityUi } from '~/community/lib/community-theme'
 import { fetchProfileAnalytics } from '~/community/lib/profile-views'
 import { Avatar, Image, Text, XStack, YStack } from '~/components/ui'
 import { useProfile } from '~/hooks/useProfile'
+import { pageGradientStyle } from '~/lib/platform/crossStyles'
 import { communityRoutes, routes } from '~/lib/routes'
 
 /** professional profile identity card for the community left rail. */
@@ -40,7 +41,11 @@ export function CommunityIdentityCard() {
         overflow="hidden"
         marginBottom={8}
       >
-        <YStack height={56} width="100%" style={{ background: communityUi.bannerGradient }} />
+        <YStack
+          height={56}
+          width="100%"
+          style={pageGradientStyle(communityUi.bannerGradient, communityUi.brand)}
+        />
         <YStack paddingHorizontal={12} paddingBottom={14} gap={8} marginTop={-28}>
           <Avatar name="Guest" size="$5" borderWidth={2} borderColor={communityUi.cardBg} />
           <YStack gap={4}>
@@ -85,7 +90,11 @@ export function CommunityIdentityCard() {
             {profile.cover_url ? (
               <Image src={profile.cover_url} width="100%" height={56} objectFit="cover" alt="" />
             ) : (
-              <YStack height={56} width="100%" style={{ background: communityUi.bannerGradient }} />
+              <YStack
+                height={56}
+                width="100%"
+                style={pageGradientStyle(communityUi.bannerGradient, communityUi.brand)}
+              />
             )}
           </YStack>
           <YStack paddingHorizontal={12} paddingBottom={10} gap={6} marginTop={-28}>

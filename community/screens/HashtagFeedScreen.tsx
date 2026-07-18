@@ -1,4 +1,4 @@
-import { useCallback } from 'react'
+import { useCallback, useMemo } from 'react'
 import { useParams, useRouter } from 'one'
 
 import { LoadMoreEnd, LoadMoreSentinel } from '~/commerce/components/LoadMoreSentinel'
@@ -14,6 +14,7 @@ import { buildSignInUrl } from '~/lib/auth/redirect'
 import { communityRoutes } from '~/lib/routes'
 import { getHashtagShareUrl } from '~/lib/share'
 import { useAppUi } from '~/lib/theme/useAppUi'
+import { usePageSeo } from '~/components/seo/RouteSeo'
 
 export function HashtagFeedScreen() {
   const ui = useAppUi()
@@ -22,6 +23,16 @@ export function HashtagFeedScreen() {
   const { tag } = useParams<{ tag: string }>()
   const normalizedTag = decodeURIComponent(tag ?? '').replace(/^#/, '')
   const follow = useHashtagFollow(normalizedTag)
+
+  usePageSeo(
+    useMemo(() => {
+      if (!normalizedTag) return null
+      return {
+        title: `#${normalizedTag}`,
+        description: `Posts tagged #${normalizedTag} from the SHEconomy community.`,
+      }
+    }, [normalizedTag]),
+  )
 
   const fetchPage = useCallback(
     (page: number) => fetchHashtagFeedPage(normalizedTag, page),

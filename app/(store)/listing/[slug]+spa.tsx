@@ -77,6 +77,8 @@ import { getShopSlug } from '~/lib/supabase/commerce'
 import { commerceRoutes } from '~/lib/routes'
 import { getListingShareUrl } from '~/lib/share'
 import { useAppUi } from '~/lib/theme/useAppUi'
+import { usePageSeo } from '~/components/seo/RouteSeo'
+import { trackCommerceEvent } from '~/lib/analytics'
 
 import { BRAND_SHOP_LABEL } from '~/config/brand'
 
@@ -100,6 +102,26 @@ export default function ListingDetailScreen() {
   const media = useMedia()
   const isDesktop = media.gtMd
 
+  usePageSeo(
+    useMemo(() => {
+      if (!listing) return null
+      const primaryImage =
+        images.find((image) => image.is_primary)?.image_url ?? images[0]?.image_url ?? null
+      const plainDescription = (listing.description ?? '')
+        .replace(/<[^>]+>/g, ' ')
+        .replace(/\s+/g, ' ')
+        .trim()
+        .slice(0, 200)
+      return {
+        title: listing.title,
+        description: plainDescription || undefined,
+        image: primaryImage,
+        type: 'product' as const,
+        canonicalPath: String(commerceRoutes.listing(slug ?? listing.slug ?? listing.id)),
+      }
+    }, [listing, images, slug]),
+  )
+
   const [activeImageIndex, setActiveImageIndex] = useState(0)
   const [galleryLightboxOpen, setGalleryLightboxOpen] = useState(false)
   const [isAddingToCart, setIsAddingToCart] = useState(false)
@@ -114,7 +136,21 @@ export default function ListingDetailScreen() {
   }, [listing?.id, variationGroups])
 
   useEffect(() => {
-    if (listing?.id) recordListingView(listing.id)
+    if (!listing?.id) return
+    recordListingView(listing.id)
+    trackCommerceEvent('view_item', {
+      currency: listing.shops?.shop_currency ?? 'INR',
+      value: listing.price ?? undefined,
+      items: [
+        {
+          id: listing.id,
+          name: listing.title,
+          category: listing.category ?? undefined,
+          price: listing.price ?? undefined,
+          quantity: 1,
+        },
+      ],
+    })
   }, [listing?.id])
 
   useEffect(() => {

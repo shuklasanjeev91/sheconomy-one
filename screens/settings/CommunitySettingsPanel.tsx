@@ -1,14 +1,15 @@
 import { useEffect, useState } from 'react'
 
-import { useAppToast } from '~/components/ui'
+import { Separator, Text, useAppToast } from '~/components/ui'
 import { ChannelPrefsCard } from '~/components/settings/ChannelPrefsCard'
-import { SettingsPanel } from '~/components/settings/SettingsPanel'
+import { PreferenceRow, SettingsPanel } from '~/components/settings/SettingsPanel'
 import { useSettingsPushSync } from '~/components/settings/useSettingsPushSync'
 import {
   fetchCommunityNotificationPrefs,
   saveCommunityNotificationPrefs,
   type CommunityNotificationPrefs,
 } from '~/lib/notifications/community-preferences'
+import { Icons } from '~/components/ui'
 import { useSupabase } from '~/providers/SupabaseProvider'
 
 const DEFAULT: CommunityNotificationPrefs = {
@@ -16,6 +17,8 @@ const DEFAULT: CommunityNotificationPrefs = {
   emailEnabled: true,
   pushEnabled: true,
   whatsappEnabled: false,
+  digestEmailEnabled: true,
+  mentionsEnabled: true,
 }
 
 export function CommunitySettingsPanel() {
@@ -82,7 +85,34 @@ export function CommunitySettingsPanel() {
         emailSubtitle="Connections, intros, mentions, and digests"
         whatsappSubtitle="Invites, intros, and RSVPs via your account phone"
         onChange={(key, value) => void updatePref(key, value)}
+        extraRows={
+          <>
+            <Separator />
+            <PreferenceRow
+              icon={Icons.Bell}
+              title="Mentions"
+              subtitle="When someone @mentions you in a post or comment"
+              checked={prefs.mentionsEnabled}
+              disabled={saving}
+              onCheckedChange={(checked) => void updatePref('mentionsEnabled', checked)}
+            />
+            <Separator />
+            <PreferenceRow
+              icon={Icons.Mail}
+              title="Email digests"
+              subtitle="Weekly community and network suggestion digests"
+              checked={prefs.digestEmailEnabled}
+              disabled={saving}
+              onCheckedChange={(checked) => void updatePref('digestEmailEnabled', checked)}
+            />
+          </>
+        }
       />
+      {!prefs.digestEmailEnabled ? (
+        <Text fontSize={12} color="$color10" paddingHorizontal="$1">
+          Digests are off — you will still get immediate alerts for other community activity.
+        </Text>
+      ) : null}
     </SettingsPanel>
   )
 }

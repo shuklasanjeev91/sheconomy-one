@@ -70,6 +70,62 @@ export type CheckoutResult = {
   raw: unknown
 }
 
+export type {
+  AtomicCheckoutResult,
+  CheckoutPaymentStep,
+} from '~/commerce/lib/checkout-utils'
+export {
+  firstCheckoutUrlFromSteps,
+  parseAtomicCheckoutPayload,
+} from '~/commerce/lib/checkout-utils'
+
+import {
+  parseAtomicCheckoutPayload,
+  type AtomicCheckoutResult,
+} from '~/commerce/lib/checkout-utils'
+
+/**
+ * Creates every selected shop order in one database transaction. Pricing,
+ * coupon eligibility, ownership, and inventory are re-derived while rows are
+ * locked by the server.
+ */
+export async function createAtomicMarketplaceCheckout(input: {
+  cartId: string
+  cartItemIds: string[]
+  shippingAddressId: string
+  billingAddressId?: string | null
+  paymentMode: CheckoutPaymentMode
+  idempotencyKey: string
+  notesByShop?: Record<string, string>
+  giftShopIds?: string[]
+}): Promise<{ data: AtomicCheckoutResult | null; error: string | null }> {
+  const { data, error } = await supabase.rpc('atomic_marketplace_checkout' as never, {
+    p_cart_id: input.cartId,
+    p_cart_item_ids: input.cartItemIds,
+    p_shipping_address_id: input.shippingAddressId,
+    p_billing_address_id: input.billingAddressId ?? input.shippingAddressId,
+    p_payment_mode: input.paymentMode,
+    p_idempotency_key: input.idempotencyKey,
+    p_notes_by_shop: input.notesByShop ?? {},
+    p_gift_shop_ids: input.giftShopIds ?? [],
+  } as never)
+
+  if (error) return { data: null, error: error.message }
+  return parseAtomicCheckoutPayload(data as Record<string, unknown> | null)
+}
+
+export async function resumeCheckoutPayment(checkoutGroupId: string) {
+  return supabase.rpc('resume_checkout_payment' as never, {
+    p_checkout_group_id: checkoutGroupId,
+  } as never)
+}
+
+export async function cancelCheckoutPayment(checkoutGroupId: string) {
+  return supabase.rpc('cancel_checkout_payment' as never, {
+    p_checkout_group_id: checkoutGroupId,
+  } as never)
+}
+
 export async function createOrderFromCart(
   input: CheckoutInput,
 ): Promise<{ data: CheckoutResult | null; error: string | null }> {
@@ -125,7 +181,7 @@ export async function createOrderFromCart(
   orderData.order_metadata = orderMetadata
 
   const { data, error } = await supabase.rpc('create_customer_order', {
-    order_data: orderData,
+    order_data: orderData as never,
   })
 
   if (error) {

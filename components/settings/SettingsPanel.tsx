@@ -91,11 +91,13 @@ export function PreferenceRow({
           ) : null}
         </YStack>
       </XStack>
-      {checked == null ? (
-        <Switch defaultChecked={defaultChecked} disabled={disabled} />
-      ) : (
-        <Switch checked={checked} disabled={disabled} onCheckedChange={onCheckedChange} />
-      )}
+      {typeof onCheckedChange === 'function' || checked != null || defaultChecked != null ? (
+        checked == null ? (
+          <Switch defaultChecked={defaultChecked} disabled={disabled} />
+        ) : (
+          <Switch checked={checked} disabled={disabled} onCheckedChange={onCheckedChange} />
+        )
+      ) : null}
     </XStack>
   )
 }

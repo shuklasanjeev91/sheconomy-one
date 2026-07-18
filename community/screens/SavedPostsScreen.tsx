@@ -13,6 +13,8 @@ import { HorizontalScrollRow } from '~/components/layout'
 import { ScreenSearchField } from '~/components/search'
 import { Button, Icons, Spinner, Text, XStack, YStack, useAppToast } from '~/components/ui'
 import { filterBySearchQuery } from '~/lib/search'
+import { INVALIDATION_TOPICS } from '~/lib/cache/invalidation'
+import { useAutoRefresh } from '~/lib/cache/useAutoRefresh'
 import { BRAND_NAME } from '~/config/brand'
 import { copyToClipboard } from '~/lib/platform/clipboard'
 import { communityRoutes, routes } from '~/lib/routes'
@@ -20,15 +22,16 @@ import { getPostShareUrl } from '~/lib/share'
 import { useAppUi } from '~/lib/theme/useAppUi'
 import { useSupabase } from '~/providers/SupabaseProvider'
 
-type SavedTypeFilter = 'all' | 'text' | 'media' | 'poll' | 'event' | 'article'
+type SavedTypeFilter = 'all' | 'text' | 'media' | 'poll' | 'event' | 'article' | 'celebration'
 
 const TYPE_FILTERS: Array<{ id: SavedTypeFilter; label: string }> = [
   { id: 'all', label: 'All' },
   { id: 'text', label: 'Updates' },
   { id: 'media', label: 'Media' },
-  { id: 'poll', label: 'Polls' },
-  { id: 'event', label: 'Events' },
   { id: 'article', label: 'Articles' },
+  { id: 'event', label: 'Events' },
+  { id: 'celebration', label: 'Celebrations' },
+  { id: 'poll', label: 'Polls' },
 ]
 
 function matchesType(post: CommunityPost, filter: SavedTypeFilter) {
@@ -49,13 +52,13 @@ export function SavedPostsScreen() {
   const [query, setQuery] = useState('')
   const [typeFilter, setTypeFilter] = useState<SavedTypeFilter>('all')
 
-  async function reload() {
+  async function reload(silent = false) {
     if (!user?.id) {
       setItems([])
       setLoading(false)
       return
     }
-    setLoading(true)
+    if (!silent) setLoading(true)
     const result = await fetchSavedCommunityPosts(user.id)
     setItems(result.items)
     setError(result.error)
@@ -67,6 +70,12 @@ export function SavedPostsScreen() {
     void reload()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [authLoading, user?.id])
+
+  // Saving/unsaving a post anywhere updates this list without a route reload.
+  useAutoRefresh([INVALIDATION_TOPICS.savedPosts, INVALIDATION_TOPICS.communityPosts], () => {
+    if (authLoading) return
+    void reload(true)
+  })
 
   const visible = useMemo(() => {
     const typed = items.filter((post) => matchesType(post, typeFilter))

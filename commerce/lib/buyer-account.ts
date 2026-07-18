@@ -7,11 +7,15 @@ export type CustomerOrderHistoryRow = {
   order_number: string | null
   order_status: string | null
   payment_status: string | null
+  payment_mode: string | null
   total_amount: number | null
   currency: string | null
   shop_names: string | null
   item_count: number | null
   created_at: string | null
+  tracking_numbers: string | null
+  progress_percentage: number | null
+  delivered_at: string | null
 }
 
 export type BuyerPaymentMethod = Tables<'buyer_payment_methods'>
@@ -30,7 +34,7 @@ export async function fetchCustomerOrderHistory(userId: string): Promise<{
   const { data, error } = await supabase
     .from('customer_order_history_view')
     .select(
-      'order_id, order_number, order_status, payment_status, total_amount, currency, shop_names, item_count, created_at',
+      'order_id, order_number, order_status, payment_status, payment_mode, total_amount, currency, shop_names, item_count, created_at, tracking_numbers, progress_percentage, delivered_at',
     )
     .eq('customer_id', userId)
     .order('created_at', { ascending: false })
@@ -48,11 +52,15 @@ export async function fetchCustomerOrderHistory(userId: string): Promise<{
       order_number: row.order_number,
       order_status: row.order_status,
       payment_status: row.payment_status,
+      payment_mode: row.payment_mode,
       total_amount: row.total_amount,
       currency: row.currency,
       shop_names: row.shop_names,
       item_count: row.item_count,
       created_at: row.created_at,
+      tracking_numbers: row.tracking_numbers,
+      progress_percentage: row.progress_percentage,
+      delivered_at: row.delivered_at,
     })
   }
 

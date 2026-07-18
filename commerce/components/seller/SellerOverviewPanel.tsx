@@ -7,6 +7,7 @@ import type { ShopDashboardData } from '~/commerce/lib/seller-dashboard'
 import { ShareButton } from '~/components/share'
 import { Button, Icons, Text, XStack, YStack } from '~/components/ui'
 import { BRAND_NAME } from '~/config/brand'
+import { formatCurrency } from '~/lib/format'
 import { commerceRoutes, vendorRoutes } from '~/lib/routes'
 import { getShopShareUrl } from '~/lib/share'
 import { useAppUi } from '~/lib/theme/useAppUi'
@@ -17,14 +18,6 @@ type SellerOverviewPanelProps = {
   dashboard: ShopDashboardData
   onAddListing: () => void
   onOpenListings: () => void
-}
-
-function formatCurrency(value: number, currency = 'INR') {
-  return new Intl.NumberFormat('en-IN', {
-    style: 'currency',
-    currency,
-    maximumFractionDigits: 0,
-  }).format(value)
 }
 
 export function SellerOverviewPanel({

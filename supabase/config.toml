@@ -385,3 +385,27 @@ s3_region = "env(S3_REGION)"
 s3_access_key = "env(S3_ACCESS_KEY)"
 # Configures AWS_SECRET_ACCESS_KEY for S3 bucket
 s3_secret_key = "env(S3_SECRET_KEY)"
+
+# Payment providers auth via HMAC (`x-commerce-signature`), not Supabase JWTs.
+[functions.commerce-payment-webhook]
+verify_jwt = false
+
+# PayU SHEPay webhook verifies reverse hash (no JWT).
+[functions.shepay-payu-webhook]
+verify_jwt = false
+
+# SHEDelivery partner tracking webhooks (no JWT).
+[functions.shedelivery-webhook]
+verify_jwt = false
+
+# Authenticated SHEPay session create (JWT required — default).
+[functions.shepay-payu-create]
+verify_jwt = true
+
+# Authenticated SHEDelivery create shipment (JWT required — default).
+[functions.shedelivery-create-shipment]
+verify_jwt = true
+
+# Public FX table for storefront display (API key stays in function secrets).
+[functions.exchange-rates]
+verify_jwt = false

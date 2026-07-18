@@ -1,4 +1,5 @@
 import { supabase } from '~/lib/supabase/client'
+import { reverseGeocodeNominatim } from '~/lib/location/nominatim'
 
 import type { LatLng, PlaceSuggestion, ResolvedAddress } from './types'
 
@@ -74,10 +75,22 @@ export async function getPlaceDetails(
 export async function reverseGeocode(
   coords: LatLng,
 ): Promise<PlacesResponse<ResolvedAddress>> {
-  return invokePlaces<ResolvedAddress>('reverse', {
+  const primary = await invokePlaces<ResolvedAddress>('reverse', {
     latitude: coords.latitude,
     longitude: coords.longitude,
   })
+  if (primary.data) return primary
+
+  // Places edge may be undeployed / missing Google key — fall back for display.
+  const fallback = await reverseGeocodeNominatim(coords)
+  if (fallback.data) {
+    return { data: fallback.data, error: null, unavailable: primary.unavailable }
+  }
+  return {
+    data: null,
+    error: primary.error || fallback.error || 'Could not resolve that location.',
+    unavailable: primary.unavailable,
+  }
 }
 
 export async function forwardGeocode(

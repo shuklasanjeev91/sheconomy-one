@@ -1,19 +1,21 @@
 import { AudioPresets, ScreenSharePresets, type RoomOptions } from 'livekit-client'
 
+import { CALL_AUDIO_CAPTURE } from '~/co-work/lib/livekit-call-audio'
+
 type LiveKitRoomPlatform = 'web' | 'native'
 
 /**
- * Shared LiveKit room options for co-work meetings.
- * Tuned so screen share + camera works across web↔web, native↔native, and cross-platform.
+ * Shared LiveKit room options for co-work meetings and chat calls.
+ * Tuned for clear speech (AEC/NS/AGC), reliable web↔native video, and Bluetooth-friendly capture.
  */
 export function getLiveKitRoomOptions(platform: LiveKitRoomPlatform = 'web'): RoomOptions {
   const shared: RoomOptions = {
     dynacast: true,
     audioCaptureDefaults: {
-      echoCancellation: true,
-      noiseSuppression: true,
-      autoGainControl: true,
-      voiceIsolation: platform === 'web',
+      ...CALL_AUDIO_CAPTURE,
+      channelCount: 1,
+      // Prefer voice-processing path over music/raw mic where the browser supports it.
+      ...(platform === 'web' ? { voiceIsolation: true } : {}),
     },
     videoCaptureDefaults: {
       resolution: { width: 1280, height: 720, frameRate: 24 },

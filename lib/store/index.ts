@@ -11,6 +11,7 @@ import {
 } from 'redux-persist'
 
 import { addressReducer } from '~/lib/address/address.store'
+import { cmsReducer } from '~/lib/cms/cms.store'
 import { profileCompletionReducer, profileReducer } from '~/lib/profile/profile.store'
 import { shopReducer } from '~/lib/shop/shop.store'
 import { listingReducer } from '~/lib/listing/listing.store'
@@ -80,6 +81,7 @@ const appReducer = combineReducers({
   orderIssues: orderIssuesReducer,
   fulfillment: fulfillmentReducer,
   delivery: deliveryReducer,
+  cms: cmsReducer,
 })
 
 /** Dispatched on sign-out to wipe all in-memory state back to initial. */

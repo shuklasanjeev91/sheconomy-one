@@ -274,10 +274,11 @@ export function useMeetingSession({
 
   const sendChat = useCallback(
     async (text: string) => {
-      await sendMeetingChatMessage(meeting.id, userId, text)
+      const message = await sendMeetingChatMessage(meeting.id, userId, text)
       await refreshChat()
+      sendSignal({ type: 'chat', from: userId, message })
     },
-    [meeting.id, refreshChat, userId],
+    [meeting.id, refreshChat, sendSignal, userId],
   )
 
   const admit = useCallback(

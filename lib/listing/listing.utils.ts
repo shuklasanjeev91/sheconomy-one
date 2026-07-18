@@ -27,7 +27,7 @@ export function generateListingSlug(title: string | null | undefined): string {
 
 // ============= PRICE / MONEY =============
 
-/** Format a listing price for display, using the shop currency (default INR). */
+/** Format a listing price for display (converted into the shopper currency). */
 export function formatListingPrice(
   price: number | string | null | undefined,
   currencyCode = 'INR',

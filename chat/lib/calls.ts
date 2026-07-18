@@ -67,11 +67,52 @@ export async function startCall(input: {
   receiverName?: string
   receiverAvatar?: string | null
 }): Promise<{ call: ChatCall | null; error: string | null }> {
+  return startMultiPartyCall({
+    conversationId: input.conversationId,
+    callerId: input.callerId,
+    receivers: [
+      {
+        id: input.receiverId,
+        name: input.receiverName,
+        avatar: input.receiverAvatar,
+      },
+    ],
+    callType: input.callType,
+    title: input.callType === 'video' ? 'Video call' : 'Voice call',
+    maxParticipants: 2,
+  })
+}
+
+/**
+ * WhatsApp-style group / multi-party call: one LiveKit room, one ringing row
+ * per callee so each device can accept independently (1:many / many:many).
+ */
+export async function startMultiPartyCall(input: {
+  conversationId: string
+  callerId: string
+  receivers: { id: string; name?: string; avatar?: string | null }[]
+  callType: CallType
+  title?: string
+  maxParticipants?: number
+}): Promise<{ call: ChatCall | null; error: string | null }> {
+  const receivers = input.receivers.filter((r) => r.id && r.id !== input.callerId)
+  if (!receivers.length) {
+    return { call: null, error: 'No one to call.' }
+  }
+
   try {
     const meeting = await createMeeting(input.callerId, {
-      title: input.callType === 'video' ? 'Video call' : 'Voice call',
+      title:
+        input.title ??
+        (input.callType === 'video'
+          ? receivers.length > 1
+            ? 'Group video call'
+            : 'Video call'
+          : receivers.length > 1
+            ? 'Group voice call'
+            : 'Voice call'),
       startNow: true,
-      maxParticipants: 2,
+      maxParticipants: input.maxParticipants ?? Math.max(receivers.length + 1, 8),
       securitySettings: {
         waitingRoom: false,
         allowChat: false,
@@ -86,38 +127,46 @@ export async function startCall(input: {
         enableMeetingChat: false,
         allowJoinBeforeHost: true,
       },
-      invitees: [
-        {
-          id: input.receiverId,
-          type: 'user',
-          name: input.receiverName?.trim() || 'Contact',
-          avatar: input.receiverAvatar ?? null,
-          status: 'pending',
-        },
-      ],
+      invitees: receivers.map((receiver) => ({
+        id: receiver.id,
+        type: 'user' as const,
+        name: receiver.name?.trim() || 'Contact',
+        avatar: receiver.avatar ?? null,
+        status: 'pending' as const,
+      })),
     })
 
-    const { data, error } = await supabase
-      .from('calls')
-      .insert({
-        conversation_id: input.conversationId,
-        caller_id: input.callerId,
-        receiver_id: input.receiverId,
-        call_type: input.callType,
-        status: 'ringing',
-        meeting_code: meeting.meeting_code,
-      })
-      .select(CALL_SELECT)
-      .single()
+    const rows = receivers.map((receiver) => ({
+      conversation_id: input.conversationId,
+      caller_id: input.callerId,
+      receiver_id: receiver.id,
+      call_type: input.callType,
+      status: 'ringing' as const,
+      meeting_code: meeting.meeting_code,
+    }))
+
+    const { data, error } = await supabase.from('calls').insert(rows).select(CALL_SELECT)
 
     if (error) return { call: null, error: error.message }
-    return { call: mapCall(data as CallRow), error: null }
+    const first = (data as CallRow[] | null)?.[0]
+    if (!first) return { call: null, error: 'Could not create the call.' }
+    return { call: mapCall(first), error: null }
   } catch (error) {
     return {
       call: null,
       error: error instanceof Error ? error.message : 'Could not start the call.',
     }
   }
+}
+
+/** End every ringing/active call that shares this meeting room (group hangup). */
+export async function endCallsForMeetingCode(meetingCode: string): Promise<void> {
+  const { error } = await supabase
+    .from('calls')
+    .update({ status: 'ended', ended_at: new Date().toISOString(), updated_at: new Date().toISOString() })
+    .eq('meeting_code', meetingCode)
+    .in('status', ['ringing', 'active'])
+  if (error) throw new Error(error.message)
 }
 
 export async function updateCallStatus(callId: string, status: CallStatus): Promise<void> {

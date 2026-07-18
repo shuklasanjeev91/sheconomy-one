@@ -196,7 +196,7 @@ export function PaymentMethodsScreen() {
   return (
     <FullWidthLayout scroll>
       <PageSection paddingVertical="$6">
-        <YStack gap="$5" width="100%" maxWidth={720} alignSelf="center">
+        <YStack gap="$5" width="100%" maxWidth="100%" alignSelf="stretch">
           <CommercePageHeader
             title="Payment methods"
             subtitle="Save debit cards, credit cards, and UPI IDs for faster checkout"

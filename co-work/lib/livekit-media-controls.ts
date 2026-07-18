@@ -6,9 +6,12 @@ export type LiveKitMediaControls = {
   audioEnabled: boolean
   videoEnabled: boolean
   screenSharing: boolean
+  /** True when local output is forced to the loudspeaker (vs earpiece / BT). */
+  speakerOn: boolean
   toggleAudio: () => void
   toggleVideo: () => void
   toggleScreenShare: () => void | Promise<void>
+  toggleSpeaker: () => void | Promise<void>
 }
 
 /** `audio` = voice-only publish; `video` / `meeting` enable camera on join. */
@@ -18,6 +21,8 @@ export type LiveKitMeetingRoomProps = {
   meetingId: string
   roomId: string
   displayName: string
+  /** Profile image shown on camera-off tiles for this local participant. */
+  avatarUrl?: string | null
   isHost: boolean
   enabled: boolean
   mediaMode?: LiveKitMediaMode

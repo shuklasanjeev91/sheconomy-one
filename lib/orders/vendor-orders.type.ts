@@ -168,6 +168,8 @@ export type VendorOrderAnalytics = {
   total_items: number
   average_order_value: number
   status_distribution: Record<string, number>
+  /** Last 7 calendar days (Mon→Sun order of current week window), order counts. */
+  engagement_series: number[]
   period: DateRange
 }
 

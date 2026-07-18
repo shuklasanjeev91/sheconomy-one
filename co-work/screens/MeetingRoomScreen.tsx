@@ -12,9 +12,15 @@ import { MeetingControls } from '~/co-work/components/MeetingControls'
 import { MeetingInfoPanel } from '~/co-work/components/MeetingInfoPanel'
 import { MeetingInvitePanel } from '~/co-work/components/MeetingInvitePanel'
 import { MeetingLiveCaptions } from '~/co-work/components/MeetingLiveCaptions'
+import { MeetingLiveSignalsProvider } from '~/co-work/components/MeetingLiveSignalsContext'
 import { MeetingParticipantsPanel } from '~/co-work/components/MeetingParticipantsPanel'
+import { MeetingReactionsOverlay } from '~/co-work/components/MeetingReactionsOverlay'
+import { MeetingRecordingsPanel } from '~/co-work/components/MeetingRecordingsPanel'
 import { useLiveCaptions } from '~/co-work/hooks/useLiveCaptions'
-import { useMeetingRecording } from '~/co-work/hooks/useMeetingRecording'
+import {
+  useMeetingRecording,
+  useMeetingRecordingIndicator,
+} from '~/co-work/hooks/useMeetingRecording'
 import { useMeetingPresence } from '~/co-work/hooks/useMeetingPresence'
 import { getMediaCapabilities } from '~/co-work/lib/media'
 import { supportsLiveKitVideo } from '~/lib/platform/capabilities'
@@ -88,29 +94,36 @@ export function MeetingRoomScreen(props: MeetingRoomScreenProps) {
   }
 
   return (
-    <LiveKitMeetingRoom
-      meetingId={props.meeting.id}
-      roomId={props.meeting.room_id ?? ''}
-      displayName={props.displayName}
-      isHost={props.isHost}
-      enabled={!presence.isWaiting}
-      onDisconnected={() => {
-        void presence.leave()
-      }}
-      overlay={
-        useLiveKit
-          ? (liveKit) => (
-              <MeetingRoomOverlay
-                {...props}
-                presence={presence}
-                caps={caps}
-                title={title}
-                liveKit={liveKit}
-              />
-            )
-          : () => <MeetingRoomOverlay {...props} presence={presence} caps={caps} title={title} />
-      }
-    />
+    <MeetingLiveSignalsProvider
+      localUserId={props.userId}
+      handRaised={presence.handRaised}
+      raisedHands={presence.raisedHands}
+    >
+      <LiveKitMeetingRoom
+        meetingId={props.meeting.id}
+        roomId={props.meeting.room_id ?? ''}
+        displayName={props.displayName}
+        avatarUrl={props.avatarUrl}
+        isHost={props.isHost}
+        enabled={!presence.isWaiting}
+        onDisconnected={() => {
+          void presence.leave()
+        }}
+        overlay={
+          useLiveKit
+            ? (liveKit) => (
+                <MeetingRoomOverlay
+                  {...props}
+                  presence={presence}
+                  caps={caps}
+                  title={title}
+                  liveKit={liveKit}
+                />
+              )
+            : () => <MeetingRoomOverlay {...props} presence={presence} caps={caps} title={title} />
+        }
+      />
+    </MeetingLiveSignalsProvider>
   )
 }
 
@@ -136,6 +149,7 @@ function MeetingRoomOverlay({
   const [dismissedError, setDismissedError] = useState<string | null>(null)
   const [meetingState, setMeetingState] = useState(meeting)
   const [shareOpen, setShareOpen] = useState(false)
+  const [reactionTrayOpen, setReactionTrayOpen] = useState(false)
 
   const allowRecording = meeting.security_settings?.allowRecording !== false
   const autoRecord = !!meeting.meeting_options?.autoRecord && isHost && allowRecording
@@ -150,24 +164,53 @@ function MeetingRoomOverlay({
     displayName,
     enabled: true,
     remoteCaptions: presence.liveCaptions,
-    onFinalCaption: (text) => presence.broadcastCaption(text, displayName),
+    onFinalCaption: (text, sourceLang) =>
+      presence.broadcastCaption(text, displayName, sourceLang),
   })
 
   const recordingSession = useMeetingRecording({
     room: liveKit?.room,
+    meetingId: meeting.id,
     meetingCode: meeting.meeting_code,
     enabled: allowRecording && isHost,
     autoStart: autoRecord,
     captionLines: captions.transcriptLines,
-    onStarted: () => toast.show('Recording started', { tone: 'success' }),
-    onStopped: () => toast.show('Recording saved to your device', { tone: 'success' }),
-    onError: (message) => toast.show(message, { tone: 'error' }),
+    onStarted: () => {
+      toast.show('Cloud recording started', {
+        tone: 'success',
+        message: 'Audio and video are being saved for the whole room.',
+      })
+    },
+    onStopped: (status) =>
+      toast.show(
+        status === 'processing' ? 'Recording processing' : 'Recording stopped',
+        {
+          tone: 'success',
+          message:
+            status === 'processing'
+              ? 'Your shareable MP4 link will appear in Recordings when ready.'
+              : undefined,
+        },
+      ),
+    onReady: () =>
+      toast.show('Recording ready', {
+        tone: 'success',
+        message: 'Open Recordings to share a revocable link.',
+      }),
+    onError: (message) => toast.show(message, { tone: 'danger' }),
   })
+
+  const recordingIndicator = useMeetingRecordingIndicator(
+    meeting.id,
+    allowRecording && !isHost,
+  )
 
   const showError = presence.error && presence.error !== dismissedError
   // Full-bleed side panels only on phones — tablets keep a Zoom-style right dock.
   const panelFullWidth = narrowPhone
-  const recording = recordingSession.recording
+  const recording = isHost
+    ? recordingSession.recording || recordingSession.isProcessing
+    : recordingIndicator.isRecording
 
   useEffect(() => {
     if (!liveKit) {
@@ -184,6 +227,45 @@ function MeetingRoomOverlay({
     })
     return () => presence.registerMediaHandlers({})
   }, [liveKit, presence.registerMediaHandlers, presence.syncMediaState])
+
+  useEffect(() => {
+    const notice = presence.latestChatNotice
+    if (!notice) return
+    toast.show(notice.title, {
+      tone: 'info',
+      message: notice.message,
+      duration: 4500,
+      onPress: () => presence.togglePanel('chat'),
+    })
+    presence.clearChatNotice()
+  }, [
+    presence.latestChatNotice,
+    presence.clearChatNotice,
+    presence.togglePanel,
+    toast,
+  ])
+
+  useEffect(() => {
+    const notice = presence.latestHandNotice
+    if (!notice) return
+    toast.show(notice.title, {
+      tone: 'info',
+      message: notice.message,
+      duration: 4000,
+      onPress: () => presence.togglePanel('people'),
+    })
+    presence.clearHandNotice()
+  }, [
+    presence.latestHandNotice,
+    presence.clearHandNotice,
+    presence.togglePanel,
+    toast,
+  ])
+
+  const raisedHandCount = useMemo(
+    () => Object.values(presence.raisedHands).filter(Boolean).length,
+    [presence.raisedHands],
+  )
 
   const toggleRecording = useCallback(() => {
     if (!allowRecording) {
@@ -212,15 +294,33 @@ function MeetingRoomOverlay({
     const turningOn = !captions.active
     captions.toggleCaptions()
     if (turningOn && !captions.canPublish) {
-      toast.show('Viewing live captions from the meeting', { tone: 'success' })
+      toast.show(`Viewing captions in ${captions.targetLangName}`, {
+        tone: 'success',
+        message: 'Speech from others is auto-translated to your language',
+      })
       return
     }
-    toast.show(turningOn ? 'Live captions on' : 'Live captions off', { tone: 'success' })
+    toast.show(turningOn ? `Live captions on · ${captions.targetLangName}` : 'Live captions off', {
+      tone: 'success',
+      message: turningOn
+        ? 'Other languages are translated to your default language'
+        : undefined,
+    })
   }, [captions, toast])
 
   const toggleScreenShare = useCallback(async () => {
     if (!liveKit) {
       toast.show('Connect to the meeting to share your screen', { tone: 'info' })
+      return
+    }
+    if (!caps.supportsScreenShare) {
+      toast.show('Screen share is not available on this device', {
+        tone: 'info',
+        message:
+          Platform.OS === 'web'
+            ? 'Use Chrome or Edge, or update your browser to enable screen sharing.'
+            : 'Rebuild the app with the screen-share broadcast extension enabled.',
+      })
       return
     }
 
@@ -249,13 +349,24 @@ function MeetingRoomOverlay({
         message: message || 'Allow screen recording when prompted, then try again.',
       })
     }
-  }, [liveKit, toast])
+  }, [caps.supportsScreenShare, liveKit, toast])
 
   const toggleHand = useCallback(() => {
     const raising = !presence.handRaised
     presence.toggleHandRaise()
-    toast.show(raising ? 'Hand raised — visible in Participants' : 'Hand lowered', { tone: 'success' })
+    toast.show(raising ? 'Hand raised' : 'Hand lowered', {
+      tone: 'success',
+      message: raising ? 'Others can see your raised hand on your tile' : undefined,
+    })
   }, [presence, toast])
+
+  const sendReaction = useCallback(
+    (emoji: string) => {
+      presence.sendReaction(emoji, displayName)
+      setReactionTrayOpen(false)
+    },
+    [displayName, presence],
+  )
 
   const copyMeetingId = useCallback(() => {
     void copyShareLink(meeting.meeting_code.replace(/\s/g, '')).then((copied) => {
@@ -323,7 +434,16 @@ function MeetingRoomOverlay({
                 >
                   {title}
                 </Text>
-                {recording ? <CoWorkStatusPill label="REC" tone="danger" /> : null}
+                {recording ? (
+                  <CoWorkStatusPill
+                    label={
+                      isHost && recordingSession.isProcessing
+                        ? 'Processing'
+                        : 'REC'
+                    }
+                    tone={isHost && recordingSession.isProcessing ? 'warning' : 'danger'}
+                  />
+                ) : null}
                 {captions.active ? <CoWorkStatusPill label="CC" tone="brand" /> : null}
                 {presence.handRaised ? <CoWorkStatusPill label="✋" tone="coral" /> : null}
               </XStack>
@@ -394,6 +514,13 @@ function MeetingRoomOverlay({
             />
           </XStack>
         </XStack>
+
+        {!isHost && recordingIndicator.isRecording ? (
+          <CoWorkAlertBanner
+            tone="danger"
+            message="This meeting is being recorded by the host."
+          />
+        ) : null}
 
         {presence.realtimeDegraded ? (
           <CoWorkAlertBanner
@@ -478,6 +605,33 @@ function MeetingRoomOverlay({
                   }
                 : undefined
             }
+            onOpenRecordings={
+              isHost && allowRecording
+                ? () => {
+                    presence.setPanel('recordings')
+                  }
+                : undefined
+            }
+            fullWidth={panelFullWidth}
+          />
+        </YStack>
+      ) : null}
+
+      {isHost && presence.panel === 'recordings' ? (
+        <YStack
+          position={overlayPosition}
+          top={panelTop}
+          right={panelFullWidth ? 0 : 12}
+          left={panelFullWidth ? 0 : undefined}
+          bottom={panelBottom}
+          zIndex={25}
+          pointerEvents="auto"
+        >
+          <MeetingRecordingsPanel
+            meetingId={meeting.id}
+            meetingTitle={title}
+            isHost={isHost}
+            onClose={() => presence.setPanel('none')}
             fullWidth={panelFullWidth}
           />
         </YStack>
@@ -509,6 +663,13 @@ function MeetingRoomOverlay({
         currentCaption={captions.currentCaption}
         lines={captions.visibleLines}
         error={captions.error}
+        targetLangName={captions.targetLangName}
+        showingTranslation={captions.showingTranslation}
+      />
+
+      <MeetingReactionsOverlay
+        reactions={presence.floatingReactions}
+        onExpire={presence.expireFloatingReaction}
       />
 
       <YStack
@@ -528,7 +689,7 @@ function MeetingRoomOverlay({
             ...caps,
             supportsVideo: !!liveKit || caps.supportsVideo,
             supportsScreenShare: !!liveKit || caps.supportsScreenShare,
-            supportsRecording: isHost && allowRecording && (caps.supportsRecording || !!liveKit),
+            supportsRecording: isHost && allowRecording && !!liveKit,
             supportsLiveCaptions: caps.supportsLiveCaptions,
           }}
           audioEnabled={liveKit?.audioEnabled ?? true}
@@ -539,6 +700,9 @@ function MeetingRoomOverlay({
           captionsActive={captions.active}
           isHost={isHost}
           panel={presence.panel}
+          unreadChatCount={presence.unreadChatCount}
+          raisedHandCount={raisedHandCount}
+          reactionTrayOpen={reactionTrayOpen}
           onToggleAudio={() => {
             if (!liveKit) return
             void presence.syncMediaState({ is_muted: liveKit.audioEnabled })
@@ -551,6 +715,8 @@ function MeetingRoomOverlay({
           }}
           onToggleScreen={() => void toggleScreenShare()}
           onToggleHand={toggleHand}
+          onToggleReactions={() => setReactionTrayOpen((open) => !open)}
+          onSendReaction={sendReaction}
           onToggleRecord={toggleRecording}
           onToggleCaptions={toggleCaptions}
           onToggleChat={() => presence.togglePanel('chat')}
@@ -560,12 +726,22 @@ function MeetingRoomOverlay({
           onShare={() => setShareOpen(true)}
           onMuteAll={isHost ? () => presence.muteAll() : undefined}
           onLeave={() => {
-            void presence.leave()
-            router.replace(coWorkRoutes.home)
+            void (async () => {
+              if (isHost && recordingSession.recording) {
+                await recordingSession.stopRecording()
+              }
+              await presence.leave()
+              router.replace(coWorkRoutes.home)
+            })()
           }}
           onEnd={() => {
-            void presence.hostEnd()
-            router.replace(coWorkRoutes.home)
+            void (async () => {
+              if (recordingSession.recording) {
+                await recordingSession.stopRecording()
+              }
+              await presence.hostEnd()
+              router.replace(coWorkRoutes.home)
+            })()
           }}
         />
       </YStack>

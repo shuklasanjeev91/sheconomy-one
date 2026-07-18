@@ -129,7 +129,8 @@ export function VendorEditShopScreen() {
   return (
     <YStack
       width="100%"
-      maxWidth={720}
+      maxWidth="100%"
+      alignSelf="stretch"
       gap="$5"
       paddingHorizontal={isDesktop ? '$6' : '$4'}
       paddingTop={isDesktop ? '$6' : '$4'}
