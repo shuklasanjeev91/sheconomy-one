@@ -287,14 +287,14 @@ export function getAccountMenuSections({
 
     sections.push({
       id: 'classes',
-      title: 'Classes',
-      subtitle: 'Learning programs',
+      title: 'Class',
+      subtitle: 'Videos and audio to watch',
       items: [
-        item(tier, 'video', Icons.Play, 'Video classes', classRoutes.video, 'class', {
-          description: 'Watch programs and lessons',
+        item(tier, 'video', Icons.Play, 'Video', classRoutes.home, 'class', {
+          description: 'Browse and play recorded videos',
         }),
-        item(tier, 'audio', Icons.Radio, 'Audio classes', classRoutes.audio, 'class', {
-          description: 'Listen on the go',
+        item(tier, 'audio', Icons.Radio, 'Audio', classRoutes.audio, 'class', {
+          description: 'Browse and play recorded audio',
         }),
       ],
     })

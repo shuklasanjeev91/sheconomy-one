@@ -194,12 +194,12 @@ export function ClassesScreen() {
         >
           <Icons.Radio size={44} color={ui.brand} opacity={0.85} />
           <Text fontSize={16} fontWeight="700" color={ui.text} letterSpacing={-0.2}>
-            {hasActiveFilters ? 'No matching programs' : `No ${mediaTab} programs yet`}
+            {hasActiveFilters ? 'No matching videos' : `No ${mediaTab} yet`}
           </Text>
           <Text fontSize={14} color={ui.textSecondary} textAlign="center" paddingHorizontal="$4">
             {hasActiveFilters
               ? 'Try another language or category.'
-              : `Published ${mediaTab} programs will appear here by category.`}
+              : `Published ${mediaTab} recordings will show here — tap one to play.`}
           </Text>
         </YStack>
       ) : hasActiveFilters ? (

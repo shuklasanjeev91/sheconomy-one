@@ -172,7 +172,7 @@ const ROUTE_RULES: RouteRule[] = [
     path: '/class',
     seo: {
       title: 'Classes',
-      description: 'Learn with audio and video programs from SHEconomy — business, skills, and wellness classes.',
+      description: 'Watch recorded videos and listen to audio on SHEconomy Class — browse, play, and continue watching.',
     },
   },
   { path: '/class/audio', seo: { title: 'Audio Classes' } },

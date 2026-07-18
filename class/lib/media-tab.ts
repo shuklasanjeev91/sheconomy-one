@@ -2,16 +2,20 @@ import { isClassAudioPath, isClassHomePath, isClassVideoPath } from '~/lib/route
 
 export type MediaTab = 'video' | 'audio'
 
-/** Catalog browse tab from path (`/class/video` vs `/class/audio`). Home hub is not a catalog tab. */
+/**
+ * Catalog media type from path.
+ * `/class` and `/class/video` → video; `/class/audio` → audio (YouTube-style Class home).
+ */
 export function mediaTabFromPath(pathname: string): MediaTab {
   return isClassAudioPath(pathname) ? 'audio' : 'video'
 }
 
-/** True when the path should show the full media catalog (not the learn hub). */
+/** True when the path shows the published Video/Audio catalog. */
 export function isClassCatalogBrowsePath(pathname: string): boolean {
-  return isClassVideoPath(pathname) || isClassAudioPath(pathname)
+  return isClassHomePath(pathname) || isClassVideoPath(pathname) || isClassAudioPath(pathname)
 }
 
-export function shouldShowClassLearnHub(pathname: string): boolean {
-  return isClassHomePath(pathname)
+/** @deprecated Class home is the catalog; learn-hub mode was removed. */
+export function shouldShowClassLearnHub(_pathname: string): boolean {
+  return false
 }

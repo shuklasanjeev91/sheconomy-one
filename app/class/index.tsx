@@ -1,1 +1,1 @@
-export { ClassHubScreen as default } from '~/class/screens/ClassHubScreen'
+export { ClassesScreen as default } from '~/class/screens/ClassesScreen'

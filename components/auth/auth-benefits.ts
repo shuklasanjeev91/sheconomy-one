@@ -29,8 +29,8 @@ export const AUTH_BENEFIT_SLIDES: AuthBenefitSlide[] = [
   },
   {
     icon: Radio,
-    title: 'Learn with Classes',
-    body: 'Watch video programs and listen to audio sessions from experts in the community.',
+    title: 'Watch Class',
+    body: 'Browse recorded video and audio — tap to play anytime, like a media library built into SHEconomy.',
   },
   {
     icon: Calendar,

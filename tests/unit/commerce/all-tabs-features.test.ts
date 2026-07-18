@@ -87,10 +87,11 @@ describe('class media tab / hub', () => {
     expect(mediaTabFromPath('/class')).toBe('video')
   })
 
-  it('learn hub is home path; catalog is video/audio', () => {
-    expect(shouldShowClassLearnHub('/class')).toBe(true)
+  it('class home is the video catalog (YouTube-style)', () => {
+    expect(shouldShowClassLearnHub('/class')).toBe(false)
     expect(shouldShowClassLearnHub('/class/video')).toBe(false)
     expect(isClassCatalogBrowsePath('/class/video')).toBe(true)
-    expect(isClassCatalogBrowsePath('/class')).toBe(false)
+    expect(isClassCatalogBrowsePath('/class')).toBe(true)
+    expect(isClassCatalogBrowsePath('/class/audio')).toBe(true)
   })
 })

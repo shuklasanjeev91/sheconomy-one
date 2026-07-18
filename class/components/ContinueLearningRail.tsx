@@ -13,7 +13,7 @@ import { classRoutes } from '~/lib/routes'
 import { useAppUi } from '~/lib/theme/useAppUi'
 import { useSupabase } from '~/providers/SupabaseProvider'
 
-/** Resume recently viewed programs — AsyncStorage so it works offline on all platforms. */
+/** Resume recently viewed programs — YouTube-style continue watching. */
 export function ContinueLearningRail() {
   const ui = useAppUi()
   const media = useMedia()
@@ -53,7 +53,7 @@ export function ContinueLearningRail() {
     <YStack gap="$3" width="100%">
       <XStack alignItems="center" justifyContent="space-between" gap="$2">
         <Text fontSize={16} fontWeight="700" color={ui.text} letterSpacing={-0.2}>
-          Continue learning
+          Continue watching
         </Text>
         <XStack alignItems="center" gap="$3">
           <Text
