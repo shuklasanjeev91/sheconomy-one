@@ -124,7 +124,12 @@ type PageColumnsProps = {
 } & GetProps<typeof YStack>
 
 /** Responsive multi-column row that stretches edge-to-edge. */
-export function PageColumns({ children, gap = '$4', ...props }: PageColumnsProps) {
+export function PageColumns({
+  children,
+  gap = '$4',
+  alignItems = 'flex-start',
+  ...props
+}: PageColumnsProps) {
   const { isDesktop } = useAppLayout()
 
   return (
@@ -132,7 +137,7 @@ export function PageColumns({ children, gap = '$4', ...props }: PageColumnsProps
       width="100%"
       maxWidth="100%"
       flexDirection={isDesktop ? 'row' : 'column'}
-      alignItems="flex-start"
+      alignItems={alignItems}
       gap={gap}
       alignSelf="stretch"
       {...props}

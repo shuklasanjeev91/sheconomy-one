@@ -1,6 +1,9 @@
 import { useCallback } from 'react'
 
 import {
+  categoryListingsCacheKey,
+} from '~/commerce/lib/category-loader'
+import {
   COMMERCE_PAGE_SIZE,
   fetchCategoryListingsPage,
   type ListingBrowseFilters,
@@ -18,7 +21,7 @@ type UseCategoryListingsOptions = {
 
 export function useCategoryListings({
   categoryId,
-  filters,
+  filters = {},
   pageSize = COMMERCE_PAGE_SIZE,
   enabled = true,
 }: UseCategoryListingsOptions) {
@@ -38,5 +41,11 @@ export function useCategoryListings({
     [categoryId, filters, pageSize],
   )
 
-  return usePaginatedFeed<ListingSummary>({ fetchPage, enabled: enabled && !!categoryId })
+  const cacheKey = categoryId ? categoryListingsCacheKey(categoryId, filters) : undefined
+
+  return usePaginatedFeed<ListingSummary>({
+    fetchPage,
+    enabled: enabled && !!categoryId,
+    cacheKey,
+  })
 }

@@ -25,7 +25,7 @@ export function PlaylistDetailScreen() {
   const [data, setData] = useState<PlaylistWithPrograms | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
-  const cardWidth = media.gtLg ? 280 : 240
+  const cardWidth = media.gtLg ? 280 : media.gtSm ? 220 : 168
 
   useEffect(() => {
     if (!playlistId) return

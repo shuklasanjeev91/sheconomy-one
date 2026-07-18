@@ -36,8 +36,14 @@ declare module 'one' {
         | `/admin/categories`
         | `/admin/cms`
         | `/admin/company-pages`
+        | `/admin/components/AdminAnalyticsManager`
         | `/admin/components/AdminBlogDetail`
         | `/admin/components/AdminBlogManager`
+        | `/admin/components/AdminCmsManager`
+        | `/admin/components/AdminCompanyPagesManager`
+        | `/admin/components/AdminGroupsManager`
+        | `/admin/components/AdminSaleEventsManager`
+        | `/admin/components/AdminSettingsManager`
         | `/admin/components/AdminShopsManager`
         | `/admin/components/CmsCoverImage`
         | `/admin/groups`

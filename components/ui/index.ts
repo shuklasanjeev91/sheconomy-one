@@ -61,19 +61,10 @@ export {
   Circle,
   Form,
   Group,
-  H1,
-  H2,
-  H3,
-  H4,
-  H5,
-  H6,
   Image,
-  Paragraph,
   Portal,
   ScrollView,
-  SizableText,
   Square,
-  Text,
   Theme,
   Unspaced,
   VisuallyHidden,
@@ -83,6 +74,19 @@ export {
   useMedia,
   useTheme,
 } from 'tamagui'
+
+export {
+  Text,
+  Paragraph,
+  SizableText,
+  H1,
+  H2,
+  H3,
+  H4,
+  H5,
+  H6,
+  MAX_FONT_SIZE_MULTIPLIER,
+} from './Text'
 
 export { LinearGradient } from 'tamagui/linear-gradient'
 export { FocusScope } from '@tamagui/focus-scope'

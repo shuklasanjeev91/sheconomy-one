@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { useParams, useRouter } from 'one'
+import { useLoader, useParams, useRouter } from 'one'
 import { AppLink } from '~/components/navigation/AppLink'
 import {
   Button,
@@ -52,6 +52,7 @@ import { DeliveryPinCheck } from '~/components/location'
 import { ShareButton } from '~/components/share'
 import { BRAND_THEME, getShadowStyle, radius } from '~/config/tokens'
 import { useListing } from '~/hooks/useListing'
+import { listingLoader } from '~/commerce/lib/listing-loader'
 import {
   buildListingSpecifications,
   getDefaultVariantSelection,
@@ -81,10 +82,18 @@ import { trackCommerceEvent } from '~/lib/analytics'
 
 import { BRAND_SHOP_LABEL } from '~/config/brand'
 
+export async function loader(props: Parameters<typeof listingLoader>[0]) {
+  return listingLoader(props)
+}
+
 export default function ListingDetailScreen() {
   const ui = useAppUi()
   const { slug } = useParams<{ slug: string }>()
-  const { listing, images, variations, attributes, deliveryProfiles, isLoading, error } = useListing(slug)
+  const loaderResult = useLoader(loader)
+  const { listing, images, variations, attributes, deliveryProfiles, isLoading, error } = useListing(
+    slug,
+    loaderResult,
+  )
   useCanonicalListingSlug(slug, listing)
   const {
     reviews,

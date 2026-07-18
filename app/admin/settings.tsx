@@ -1,5 +1,5 @@
-import { AdminSectionPage } from './layout'
+import { AdminSettingsManager } from './components/AdminSettingsManager'
 
 export default function AdminSettingsPage() {
-  return <AdminSectionPage sectionId="settings" />
+  return <AdminSettingsManager />
 }

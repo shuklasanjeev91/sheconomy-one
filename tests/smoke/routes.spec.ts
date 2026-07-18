@@ -88,8 +88,37 @@ const smokeRoutes = [
   '/vendor/settings',
 ] as const
 
+type CrashGuards = {
+  pageErrors: string[]
+  serverErrors: string[]
+}
+
+/** Attach listeners before navigation — catch JS crashes and document 5xx. */
+function attachCrashGuards(page: Page): CrashGuards {
+  const guards: CrashGuards = { pageErrors: [], serverErrors: [] }
+
+  page.on('pageerror', (error) => {
+    guards.pageErrors.push(error.message)
+  })
+
+  page.on('response', (response) => {
+    const url = response.url()
+    const status = response.status()
+    // Only flag navigations / HTML documents — ignore flaky third-party pixels.
+    const isDocument =
+      response.request().resourceType() === 'document' ||
+      url.includes(page.url().split('?')[0] || '')
+    if (status >= 500 && isDocument) {
+      guards.serverErrors.push(`${status} ${url}`)
+    }
+  })
+
+  return guards
+}
+
 /** One SPA injects <body> via client JS — wait for hydrated app chrome. */
 async function gotoAndHydrate(page: Page, path: string) {
+  const guards = attachCrashGuards(page)
   const response = await page.goto(path, { waitUntil: 'domcontentloaded' })
   await page.waitForFunction(
     () => {
@@ -102,53 +131,80 @@ async function gotoAndHydrate(page: Page, path: string) {
     undefined,
     { timeout: 45_000 },
   )
-  return response
+  return { response, guards }
+}
+
+function assertNoCrashes(path: string, guards: CrashGuards) {
+  expect(guards.pageErrors, `uncaught pageerror on ${path}: ${guards.pageErrors.join(' | ')}`).toEqual(
+    [],
+  )
+  expect(
+    guards.serverErrors,
+    `document 5xx on ${path}: ${guards.serverErrors.join(' | ')}`,
+  ).toEqual([])
 }
 
 test.describe('public route smoke', () => {
   for (const path of smokeRoutes) {
     test(`loads ${path} without server error`, async ({ page }) => {
-      const response = await gotoAndHydrate(page, path)
+      const { response, guards } = await gotoAndHydrate(page, path)
       expect(response, `no response for ${path}`).not.toBeNull()
       expect(response!.status(), `unexpected status for ${path}`).toBeLessThan(500)
+      assertNoCrashes(path, guards)
       await expect(page.locator('body')).toBeAttached()
     })
   }
 })
 
-test('marketplace home renders storefront chrome', async ({ page }) => {
-  await gotoAndHydrate(page, '/')
-  await expect(page.locator('body')).toContainText(/shop|market|search|sign in/i)
+test.describe('tab home landmarks', () => {
+  test('commerce home renders storefront chrome', async ({ page }) => {
+    const { guards } = await gotoAndHydrate(page, '/')
+    assertNoCrashes('/', guards)
+    await expect(page.locator('body')).toContainText(/shop|market|search|sign in/i)
+    await expect(page.getByTestId('tab-home-commerce')).toBeAttached()
+  })
+
+  test('community home renders feed chrome', async ({ page }) => {
+    const { guards } = await gotoAndHydrate(page, '/community')
+    assertNoCrashes('/community', guards)
+    await expect(page.locator('body')).toContainText(/community|feed|post|network|sign in/i)
+  })
+
+  test('chat home is reachable', async ({ page }) => {
+    const { guards } = await gotoAndHydrate(page, '/chat')
+    assertNoCrashes('/chat', guards)
+    await expect(page.locator('body')).toContainText(/chat|message|sign in|conversation/i)
+  })
+
+  test('class home is reachable', async ({ page }) => {
+    const { guards } = await gotoAndHydrate(page, '/class')
+    assertNoCrashes('/class', guards)
+    await expect(page.locator('body')).toContainText(/class|learn|video|audio|program|sign in/i)
+  })
+
+  test('co-work home is reachable', async ({ page }) => {
+    const { guards } = await gotoAndHydrate(page, '/co-work')
+    assertNoCrashes('/co-work', guards)
+    await expect(page.locator('body')).toContainText(/co-?work|meeting|join|sign in/i)
+  })
 })
 
 test('sign-in route renders OTP flow', async ({ page }) => {
-  await gotoAndHydrate(page, '/auth/sign-in')
+  const { guards } = await gotoAndHydrate(page, '/auth/sign-in')
+  assertNoCrashes('/auth/sign-in', guards)
   await expect(page.locator('body')).toContainText(/sign in|phone|otp|continue/i)
 })
 
 test('gender verification route is reachable', async ({ page }) => {
-  const response = await gotoAndHydrate(page, '/auth/verify-gender')
+  const { response, guards } = await gotoAndHydrate(page, '/auth/verify-gender')
   expect(response?.status()).toBeLessThan(500)
+  assertNoCrashes('/auth/verify-gender', guards)
   await expect(page.locator('body')).toBeAttached()
 })
 
-test('community home renders feed chrome', async ({ page }) => {
-  await gotoAndHydrate(page, '/community')
-  await expect(page.locator('body')).toContainText(/community|feed|post|network|sign in/i)
-})
-
-test('chat home is reachable', async ({ page }) => {
-  await gotoAndHydrate(page, '/chat')
-  await expect(page.locator('body')).toContainText(/chat|message|sign in|conversation/i)
-})
-
-test('co-work home is reachable', async ({ page }) => {
-  await gotoAndHydrate(page, '/co-work')
-  await expect(page.locator('body')).toContainText(/co-?work|meeting|join|sign in/i)
-})
-
 test('search scope chips are visible and switchable', async ({ page }) => {
-  await gotoAndHydrate(page, '/search')
+  const { guards } = await gotoAndHydrate(page, '/search')
+  assertNoCrashes('/search', guards)
   const allScope = page.getByTestId('search-scope-all')
   await expect(allScope).toBeVisible({ timeout: 20_000 })
   await page.getByTestId('search-scope-listings').click()
@@ -156,18 +212,20 @@ test('search scope chips are visible and switchable', async ({ page }) => {
 })
 
 test('privacy settings exposes blocked members section', async ({ page }) => {
-  await gotoAndHydrate(page, '/settings/privacy')
+  const { guards } = await gotoAndHydrate(page, '/settings/privacy')
+  assertNoCrashes('/settings/privacy', guards)
   await expect(page.locator('body')).toContainText(/privacy|blocked|sign in|biometric/i)
 })
 
 test('empty cart offers a next action', async ({ page }) => {
-  await gotoAndHydrate(page, '/cart')
+  const { guards } = await gotoAndHydrate(page, '/cart')
+  assertNoCrashes('/cart', guards)
   await expect(page.locator('body')).toContainText(/cart|empty|browse|sign in|shop/i)
 })
 
 test('offline connectivity helper stays available to the shell', async ({ page }) => {
-  await gotoAndHydrate(page, '/')
-  // Banner is only mounted when offline; assert the page still hydrates under a forced offline flag.
+  const { guards } = await gotoAndHydrate(page, '/')
+  assertNoCrashes('/', guards)
   await page.evaluate(() => {
     window.dispatchEvent(new Event('offline'))
   })

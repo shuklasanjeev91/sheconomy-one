@@ -36,7 +36,7 @@ export function ClassesScreen() {
   const media = useMedia()
   const pathname = usePathname()
   const mediaTab = mediaTabFromPath(pathname)
-  const cardWidth = media.gtLg ? 320 : media.gtMd ? 300 : 260
+  const cardWidth = media.gtLg ? 320 : media.gtMd ? 300 : media.gtSm ? 240 : 168
 
   const [categories, setCategories] = useState<ProgramCategory[]>([])
   const [featured, setFeatured] = useState<Program[]>([])

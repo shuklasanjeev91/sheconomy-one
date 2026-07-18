@@ -15316,6 +15316,17 @@ export type Database = {
       }
     }
     Views: {
+      categories_with_counts: {
+        Row: {
+          category: string | null
+          category_icon: string | null
+          category_id: string | null
+          category_image_url: string | null
+          product_count: number | null
+          seo_name: string | null
+        }
+        Relationships: []
+      }
       active_listings_view: {
         Row: {
           booking_duration_minutes: number | null

@@ -16,7 +16,7 @@ export function RelatedProgramsRail({ program }: RelatedProgramsRailProps) {
   const media = useMedia()
   const [items, setItems] = useState<Program[]>([])
   const [loading, setLoading] = useState(false)
-  const cardWidth = media.gtLg ? 280 : 240
+  const cardWidth = media.gtLg ? 280 : media.gtSm ? 220 : 168
 
   useEffect(() => {
     let active = true

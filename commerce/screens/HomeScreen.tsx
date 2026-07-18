@@ -25,6 +25,7 @@ import {
   XStack,
   YStack,
 } from '~/components/ui'
+import { IdleMount } from '~/components/IdleMount'
 import { FullWidthLayout, PageCenter, PageSection } from '~/components/layout'
 import { NearbyShopsSection, NearYouLocationChip } from '~/components/location'
 import { BRAND_THEME, radius } from '~/config/tokens'
@@ -110,7 +111,13 @@ export function HomeScreen({ data, error, loading = false }: HomeScreenProps) {
       }}
       refreshing={categoriesFeed.isRefreshing || shopsFeed.isRefreshing}
     >
-      <YStack gap="$5" paddingBottom="$10" width="100%" backgroundColor={ui.background}>
+      <YStack
+        gap="$5"
+        paddingBottom="$10"
+        width="100%"
+        backgroundColor={ui.background}
+        testID="tab-home-commerce"
+      >
         <PageSection bleed paddingTop="$4">
           <HomeHeroSlider slides={heroSlides} />
         </PageSection>
@@ -134,18 +141,20 @@ export function HomeScreen({ data, error, loading = false }: HomeScreenProps) {
         ) : null}
 
         {/* These return null when empty — do not wrap in PageSection or empty gaps stack. */}
-        <SaleEventBanner inset />
-        <AvailableOffersCard
-          title="Offers for you"
-          maxItems={8}
-          layout="row"
-          bordered={false}
-          inset
-        />
-        <RecentlyViewedRail inset />
-        <FollowedShopsRail inset />
-        <NearYouLocationChip />
-        <NearbyShopsSection />
+        <IdleMount>
+          <SaleEventBanner inset />
+          <AvailableOffersCard
+            title="Offers for you"
+            maxItems={8}
+            layout="row"
+            bordered={false}
+            inset
+          />
+          <RecentlyViewedRail inset />
+          <FollowedShopsRail inset />
+          <NearYouLocationChip />
+          <NearbyShopsSection />
+        </IdleMount>
 
         <InfiniteListingSection
           kind="physical"
@@ -229,7 +238,7 @@ export function HomeScreen({ data, error, loading = false }: HomeScreenProps) {
               }}
             >
               <YStack gap="$2" width="100%">
-                <Text fontWeight="800" fontSize={22} color={ui.text} letterSpacing={-0.4}>
+                <Text fontWeight="800" fontSize={20} color={ui.text} letterSpacing={-0.4}>
                   Ready to start selling?
                 </Text>
                 <Paragraph color={ui.textSecondary} fontSize={15} lineHeight={22}>

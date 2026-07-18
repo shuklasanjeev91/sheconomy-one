@@ -1,6 +1,7 @@
 import type { ReactNode } from 'react'
 import type { GetProps, ThemeName } from 'tamagui'
-import { SizableText, Theme, XStack } from 'tamagui'
+import { Theme, XStack } from 'tamagui'
+import { SizableText } from './Text'
 
 import { BRAND_THEME, radius } from '~/config/tokens'
 

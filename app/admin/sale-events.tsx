@@ -1,5 +1,5 @@
-import { AdminSectionPage } from './layout'
+import { AdminSaleEventsManager } from './components/AdminSaleEventsManager'
 
 export default function AdminSaleEventsPage() {
-  return <AdminSectionPage sectionId="sale-events" />
+  return <AdminSaleEventsManager />
 }

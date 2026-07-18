@@ -21,7 +21,7 @@ export function SavedProgramsRail() {
   const savedIds = useSavedPrograms()
   const [programs, setPrograms] = useState<Program[]>([])
   const [loading, setLoading] = useState(false)
-  const cardWidth = media.gtLg ? 300 : media.gtMd ? 280 : 240
+  const cardWidth = media.gtLg ? 300 : media.gtMd ? 280 : media.gtSm ? 240 : 168
 
   useEffect(() => {
     if (!user || savedIds.length === 0) {

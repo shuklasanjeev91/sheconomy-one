@@ -1,0 +1,120 @@
+openapi: 3.0.3
+info:
+  title: SHEconomy REST Gateway
+  version: 1.0.0
+  description: |
+    Thin JWT façade over Supabase PostgREST/RPCs for partners and non-JS clients.
+    The Expo app continues to use the Supabase client directly.
+servers:
+  - url: /functions/v1/rest-gateway
+security:
+  - bearerAuth: []
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+  schemas:
+    ApiResult:
+      type: object
+      required: [ok, data, error]
+      properties:
+        ok:
+          type: boolean
+        data:
+          nullable: true
+        error:
+          type: string
+          nullable: true
+paths:
+  /health:
+    get:
+      security: []
+      summary: Health check
+      responses:
+        '200':
+          description: Gateway is up
+  /openapi.json:
+    get:
+      security: []
+      summary: OpenAPI document
+      responses:
+        '200':
+          description: OpenAPI 3 JSON
+  /v1/me:
+    get:
+      summary: Current user profile
+      responses:
+        '200':
+          description: ApiResult profile
+  /v1/listings:
+    get:
+      summary: List active listings
+      parameters:
+        - name: q
+          in: query
+          schema:
+            type: string
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 20
+      responses:
+        '200':
+          description: ApiResult listing array
+  /v1/listings/{slug}:
+    get:
+      summary: Get listing by slug
+      parameters:
+        - name: slug
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: ApiResult listing
+  /v1/shops/{slug}:
+    get:
+      summary: Get shop by slug
+      parameters:
+        - name: slug
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: ApiResult shop
+  /v1/cart:
+    get:
+      summary: Active cart for the authenticated user
+      responses:
+        '200':
+          description: ApiResult cart
+  /v1/orders:
+    get:
+      summary: Buyer orders
+      responses:
+        '200':
+          description: ApiResult order array
+  /v1/posts:
+    get:
+      summary: Community feed posts
+      responses:
+        '200':
+          description: ApiResult post array
+  /v1/notifications:
+    get:
+      summary: User notifications
+      responses:
+        '200':
+          description: ApiResult notification array
+  /v1/meetings:
+    get:
+      summary: Co-Work meetings hosted by the user
+      responses:
+        '200':
+          description: ApiResult meeting array

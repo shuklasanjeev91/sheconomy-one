@@ -1,1 +1,1 @@
-export { PublicProfileScreen } from '~/community/screens/PublicProfileScreen'
+export { PublicProfileScreen as default } from '~/community/screens/PublicProfileScreen'

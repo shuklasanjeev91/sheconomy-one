@@ -1,4 +1,5 @@
-import { Text, XStack, YStack } from 'tamagui'
+import { XStack, YStack } from 'tamagui'
+import { Text } from './Text'
 
 import { Spinner } from '~/components/ui/Spinner'
 import { useAppUi } from '~/lib/theme/useAppUi'

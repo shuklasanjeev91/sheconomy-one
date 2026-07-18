@@ -20,7 +20,7 @@ export function ClassHubScreen() {
   const { user } = useSupabase()
   const [enrolled, setEnrolled] = useState<Program[]>([])
   const [loadingEnrolled, setLoadingEnrolled] = useState(false)
-  const cardWidth = media.gtLg ? 300 : media.gtMd ? 280 : 240
+  const cardWidth = media.gtLg ? 300 : media.gtMd ? 280 : media.gtSm ? 240 : 168
 
   useEffect(() => {
     if (!user?.id) {

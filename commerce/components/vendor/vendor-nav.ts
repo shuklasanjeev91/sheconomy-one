@@ -24,7 +24,7 @@ function settingsHref(section: string): Href {
 
 /**
  * Settings sub-sections, surfaced as a dropdown under the main "Settings" item.
- * Only **General** is functional today; the rest render a "coming soon" stub.
+ * All sections below are implemented in VendorSettingsScreen.
  */
 const SETTINGS_CHILDREN: VendorNavItem[] = [
   {
@@ -57,6 +57,7 @@ const SETTINGS_CHILDREN: VendorNavItem[] = [
     description: 'Order, marketing, and customer alerts.',
     icon: Icons.Bell,
     href: settingsHref('notifications'),
+    ready: true,
   },
   {
     id: 'settings-security',
@@ -64,6 +65,7 @@ const SETTINGS_CHILDREN: VendorNavItem[] = [
     description: 'Sign-in, team access, and permissions.',
     icon: Icons.ShieldCheck,
     href: settingsHref('security'),
+    ready: true,
   },
   {
     id: 'settings-shipping',

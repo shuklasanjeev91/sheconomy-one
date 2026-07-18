@@ -35,6 +35,7 @@ import { useListingFeed } from '~/commerce/hooks/useListingFeed'
 import { useShop } from '~/commerce/hooks/useShop'
 import { useShopReviews } from '~/commerce/hooks/useShopReviews'
 import type { ListingSummary } from '~/commerce/lib/commerce'
+import type { ShopLoaderResult } from '~/commerce/lib/shop-loader'
 import { hasVisibleReviews } from '~/commerce/lib/reviews'
 import { formatShopCountry } from '~/commerce/lib/shop-location'
 import { FullWidthLayout, PageCenter, PageSection, StickyRail } from '~/components/layout'
@@ -76,12 +77,13 @@ function sortListings(items: ListingSummary[], sort: ShopSort): ListingSummary[]
   }
 }
 
-export function ShopScreen() {
+export function ShopScreen(props: { initial?: ShopLoaderResult | null } = {}) {
+  const { initial } = props
   const ui = useAppUi()
   const { slug } = useParams<{ slug: string }>()
   const media = useMedia()
   const isDesktop = media.gtMd
-  const { shop, isLoading, error, refresh } = useShop(slug)
+  const { shop, isLoading, error, refresh } = useShop(slug, initial)
   useCanonicalShopSlug(slug, shop)
   const {
     reviews: shopReviews,

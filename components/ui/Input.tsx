@@ -1,7 +1,8 @@
 import { forwardRef } from 'react'
 import { Platform } from 'react-native'
 import type { GetProps } from 'tamagui'
-import { Input as TInput, TextArea as TTextArea, YStack, SizableText } from 'tamagui'
+import { Input as TInput, TextArea as TTextArea, YStack } from 'tamagui'
+import { SizableText } from './Text'
 import { BRAND_THEME } from '~/config/tokens'
 
 const sharedFieldStyle = {

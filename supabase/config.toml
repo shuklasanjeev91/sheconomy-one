@@ -409,3 +409,6 @@ verify_jwt = true
 # Public FX table for storefront display (API key stays in function secrets).
 [functions.exchange-rates]
 verify_jwt = false
+
+[functions.rest-gateway]
+verify_jwt = true

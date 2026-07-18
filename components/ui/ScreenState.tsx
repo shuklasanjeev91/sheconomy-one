@@ -1,5 +1,6 @@
 import type { ReactNode } from 'react'
-import { Text, YStack } from 'tamagui'
+import { YStack } from 'tamagui'
+import { Text } from './Text'
 
 import { Button } from '~/components/ui/Button'
 import { Spinner } from '~/components/ui/Spinner'

@@ -33,12 +33,23 @@ export function StickyRail({
     return (
       <YStack
         flexShrink={0}
+        alignSelf="stretch"
         height="100%"
         maxHeight="100%"
-        overflow="scroll"
+        minHeight={0}
+        overflow="hidden"
         style={
           Platform.OS === 'web'
-            ? ({ overflowY: 'auto', minHeight: 0, ...(style as object) } as const)
+            ? ({
+                height: '100%',
+                maxHeight: '100%',
+                minHeight: 0,
+                overflowY: 'auto',
+                overflowX: 'hidden',
+                overscrollBehavior: 'contain',
+                WebkitOverflowScrolling: 'touch',
+                ...(style as object),
+              } as const)
             : (style as object)
         }
         {...props}
@@ -62,12 +73,17 @@ export function StickyRail({
     <YStack
       flexShrink={0}
       alignSelf="flex-start"
-      position={stickyActive ? 'sticky' : undefined}
-      top={stickyActive ? stickyTop : undefined}
       zIndex={stickyActive ? 5 : undefined}
       style={
-        stickyStyle || style
-          ? { ...(stickyStyle ?? {}), ...(style as object) }
+        stickyActive || style
+          ? {
+              ...(stickyStyle ?? {}),
+              // Prefer CSS sticky via style — Tamagui `position` can drop `sticky` on web.
+              ...(stickyActive
+                ? ({ position: 'sticky', top: stickyTop, zIndex: 5 } as const)
+                : null),
+              ...(style as object),
+            }
           : undefined
       }
       {...props}

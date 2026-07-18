@@ -2,6 +2,7 @@ import type { ReactNode } from 'react'
 import { AppLink } from '~/components/navigation/AppLink'
 import { useEffect, useState } from 'react'
 
+import { IdleMount } from '~/components/IdleMount'
 import { CommunitySuggestionsSections } from '~/community/components/CommunitySuggestionsSections'
 import { CommunityWidget } from '~/community/components/CommunityWidget'
 import { MemberRow } from '~/community/components/MemberRow'
@@ -15,6 +16,7 @@ import { COMMUNITY_LAYOUT } from '~/community/lib/layout'
 import { StickyRail } from '~/components/layout'
 import { Avatar, Icons, Text, XStack, YStack } from '~/components/ui'
 import { useAppLayout } from '~/hooks/useAppLayout'
+import { scheduleIdle } from '~/lib/schedule-idle'
 import { communityRoutes } from '~/lib/routes'
 import { useSupabase } from '~/providers/SupabaseProvider'
 
@@ -28,10 +30,12 @@ export function CommunityRightSidebar({ pin = 'document' }: { pin?: CommunitySid
   const [upcomingEvents, setUpcomingEvents] = useState<CommunityEvent[]>([])
 
   useEffect(() => {
-    fetchUpcomingEvents(0).then((result) => {
-      if (!result.error) {
-        setUpcomingEvents(result.items.slice(0, 3))
-      }
+    return scheduleIdle(() => {
+      fetchUpcomingEvents(0).then((result) => {
+        if (!result.error) {
+          setUpcomingEvents(result.items.slice(0, 3))
+        }
+      })
     })
   }, [])
 
@@ -49,7 +53,9 @@ export function CommunityRightSidebar({ pin = 'document' }: { pin?: CommunitySid
       scrollable={pin === 'document'}
       pin={pin}
     >
-      <CommunitySuggestionsSections perKindLimit={4} />
+      <IdleMount>
+        <CommunitySuggestionsSections perKindLimit={4} />
+      </IdleMount>
 
       <CommunityWidget title="Quick links">
         <YStack gap={2}>

@@ -3,6 +3,7 @@ import { AppLink } from '~/components/navigation/AppLink'
 import { useState } from 'react'
 
 import { PageContent, LAYOUT_STRETCH } from '~/components/layout'
+import { IdleMount } from '~/components/IdleMount'
 import { DevicePrepCard } from '~/co-work/components/DevicePrepCard'
 import { UpcomingMeetingsStrip } from '~/co-work/components/UpcomingMeetingsStrip'
 import {
@@ -131,8 +132,10 @@ export function CoWorkScreen() {
       onRefresh={() => setMeetingsRefreshKey((key) => key + 1)}
     >
       <YStack gap="$7" width="100%" {...LAYOUT_STRETCH}>
-        <DevicePrepCard />
-        <UpcomingMeetingsStrip refreshKey={meetingsRefreshKey} />
+        <IdleMount>
+          <DevicePrepCard />
+          <UpcomingMeetingsStrip refreshKey={meetingsRefreshKey} />
+        </IdleMount>
         <YStack gap="$4" position="relative">
           <CoWorkBrandChip label={BRAND_COWORK_LABEL} />
           <Text

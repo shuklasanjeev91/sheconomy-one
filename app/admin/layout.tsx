@@ -138,6 +138,13 @@ const NAV_GROUPS: AdminNavGroup[] = [
     title: 'System',
     items: [
       {
+        id: 'analytics',
+        label: 'Analytics',
+        description: 'Platform metrics and category trends.',
+        icon: Icons.BarChart3,
+        href: '/admin/analytics' as Href,
+      },
+      {
         id: 'moderation',
         label: 'Moderation',
         description: 'Reports, flags, and safety tools.',

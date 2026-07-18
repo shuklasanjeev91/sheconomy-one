@@ -208,19 +208,21 @@ export function VendorSettingsScreen() {
           paddingBottom={safeBottom + 24}
         >
           <Text fontSize={14} color={ui.textSecondary} maxWidth={520}>
-            Shop sign-in and recovery are managed on your account security page. Team roles for
-            multi-user shops will appear here when available.
+            Shop sign-in and recovery are managed on your account security page. Invite teammates
+            below to collaborate on this shop.
           </Text>
           <AppLink href={appRoutes.settingsSection('security')} asChild>
-            <Button tone="primary" size="$4" borderRadius={999} alignSelf="flex-start" icon={<Icons.ShieldCheck size={16} />}>
+            <Button
+              tone="primary"
+              size="$4"
+              borderRadius={999}
+              alignSelf="flex-start"
+              icon={<Icons.ShieldCheck size={16} />}
+            >
               Open account security
             </Button>
           </AppLink>
-          <AppLink href={appRoutes.settingsSection('notifications')} asChild>
-            <Button tone="outline" size="$3" borderRadius={999} alignSelf="flex-start">
-              Account notification preferences
-            </Button>
-          </AppLink>
+          <VendorTeamRolesPanel shop={shop} ui={ui} />
         </YStack>
       </YStack>
     )
@@ -324,11 +326,175 @@ function VendorNotificationsPanel({ shop, ui }: { shop: Shop; ui: AppUiTokens })
             checked={prefs[row.key]}
             disabled={saving}
             onCheckedChange={(checked) => void save({ ...prefs, [row.key]: checked })}
-          >
-            <Switch.Thumb />
-          </Switch>
+          />
         </XStack>
       ))}
+    </YStack>
+  )
+}
+
+type ShopTeamMember = {
+  email: string
+  role: 'owner' | 'manager' | 'staff'
+  invited_at: string
+}
+
+function readTeamMembers(shop: Shop): ShopTeamMember[] {
+  const metadata = (shop.shop_metadata as Record<string, unknown> | null) ?? {}
+  const raw = metadata.team_members
+  if (!Array.isArray(raw)) return []
+  return raw
+    .map((row) => {
+      if (!row || typeof row !== 'object') return null
+      const item = row as Record<string, unknown>
+      const email = typeof item.email === 'string' ? item.email.trim().toLowerCase() : ''
+      const role =
+        item.role === 'owner' || item.role === 'manager' || item.role === 'staff'
+          ? item.role
+          : 'staff'
+      const invited_at =
+        typeof item.invited_at === 'string' ? item.invited_at : new Date().toISOString()
+      if (!email) return null
+      return { email, role, invited_at }
+    })
+    .filter(Boolean) as ShopTeamMember[]
+}
+
+function VendorTeamRolesPanel({ shop, ui }: { shop: Shop; ui: AppUiTokens }) {
+  const dispatch = useAppDispatch()
+  const toast = useAppToast()
+  const [members, setMembers] = useState(() => readTeamMembers(shop))
+  const [email, setEmail] = useState('')
+  const [role, setRole] = useState<ShopTeamMember['role']>('staff')
+  const [saving, setSaving] = useState(false)
+
+  useEffect(() => {
+    setMembers(readTeamMembers(shop))
+  }, [shop])
+
+  async function persist(next: ShopTeamMember[]) {
+    setSaving(true)
+    const metadata = {
+      ...((shop.shop_metadata as Record<string, unknown> | null) ?? {}),
+      team_members: next,
+    }
+    try {
+      await dispatch(
+        updateShop({
+          shopId: shop.id,
+          updates: { shop_metadata: metadata as ShopUpdate['shop_metadata'] },
+        }),
+      ).unwrap()
+      setMembers(next)
+      toast.show('Team updated', { tone: 'success' })
+    } catch (error) {
+      toast.show('Could not update team', {
+        tone: 'danger',
+        message: error instanceof Error ? error.message : 'Try again.',
+      })
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  async function invite() {
+    const nextEmail = email.trim().toLowerCase()
+    if (!nextEmail || !nextEmail.includes('@')) {
+      toast.show('Enter a valid email', { tone: 'danger' })
+      return
+    }
+    if (members.some((member) => member.email === nextEmail)) {
+      toast.show('Already invited', { tone: 'info' })
+      return
+    }
+    await persist([
+      ...members,
+      { email: nextEmail, role, invited_at: new Date().toISOString() },
+    ])
+    setEmail('')
+    setRole('staff')
+  }
+
+  return (
+    <YStack
+      gap="$3"
+      maxWidth={560}
+      padding="$4"
+      borderRadius={radius.card}
+      borderWidth={1}
+      borderColor={ui.borderSubtle}
+      backgroundColor={ui.surface}
+    >
+      <Text fontSize={16} fontWeight="700" color={ui.text}>
+        Team roles
+      </Text>
+      <Text fontSize={13} color={ui.textMuted}>
+        Invite collaborators by email. Roles are stored on the shop until full account linking
+        ships.
+      </Text>
+      <XStack gap="$2" flexWrap="wrap" alignItems="center">
+        <Input
+          flex={1}
+          minWidth={180}
+          value={email}
+          onChangeText={setEmail}
+          placeholder="teammate@email.com"
+          autoCapitalize="none"
+        />
+        <Select value={role} onValueChange={(value) => setRole(value as ShopTeamMember['role'])}>
+          <SelectTrigger width={130}>
+            <Select.Value placeholder="Role" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectViewport>
+              {(['manager', 'staff'] as const).map((value) => (
+                <SelectItem key={value} value={value} index={0}>
+                  {value}
+                </SelectItem>
+              ))}
+            </SelectViewport>
+          </SelectContent>
+        </Select>
+        <Button size="$3" disabled={saving} onPress={() => void invite()}>
+          {saving ? <Spinner size="small" /> : <Text>Invite</Text>}
+        </Button>
+      </XStack>
+      {members.length === 0 ? (
+        <Text fontSize={13} color={ui.textMuted}>
+          No teammates invited yet.
+        </Text>
+      ) : (
+        members.map((member) => (
+          <XStack
+            key={member.email}
+            alignItems="center"
+            justifyContent="space-between"
+            gap="$2"
+            paddingVertical="$2"
+            borderTopWidth={1}
+            borderColor={ui.borderSubtle}
+          >
+            <YStack flex={1} minWidth={0}>
+              <Text fontSize={14} fontWeight="600" color={ui.text} numberOfLines={1}>
+                {member.email}
+              </Text>
+              <Text fontSize={12} color={ui.textMuted}>
+                {member.role} · invited {new Date(member.invited_at).toLocaleDateString()}
+              </Text>
+            </YStack>
+            <Button
+              size="$2"
+              chromeless
+              disabled={saving}
+              onPress={() =>
+                void persist(members.filter((item) => item.email !== member.email))
+              }
+            >
+              <Text color={ui.danger}>Remove</Text>
+            </Button>
+          </XStack>
+        ))
+      )}
     </YStack>
   )
 }
@@ -399,6 +565,8 @@ function GeneralSettings({ ui, shop, isDesktop, safeBottom }: GeneralSettingsPro
 
   const errors = validation.errors
   const categories = form.shop_categories ?? []
+  const [customCategory, setCustomCategory] = useState('')
+  const [addingCategory, setAddingCategory] = useState(false)
   const categoryOptions = useMemo(
     () => Array.from(new Set<string>([...categories, ...COMMON_SHOP_CATEGORIES])),
     [categories],
@@ -425,6 +593,25 @@ function GeneralSettings({ ui, shop, isDesktop, safeBottom }: GeneralSettingsPro
       return
     }
     setField('shop_categories', [...categories, category])
+  }
+
+  function addCustomCategory() {
+    const next = customCategory.trim()
+    if (!next) return
+    if (categories.some((item) => item.toLowerCase() === next.toLowerCase())) {
+      toast.show('Category already selected', { tone: 'info' })
+      return
+    }
+    if (categories.length >= SHOP_VALIDATION.CATEGORIES.MAX_SELECTED) {
+      toast.show('Category limit reached', {
+        tone: 'info',
+        message: `You can select up to ${SHOP_VALIDATION.CATEGORIES.MAX_SELECTED} categories.`,
+      })
+      return
+    }
+    setField('shop_categories', [...categories, next])
+    setCustomCategory('')
+    setAddingCategory(false)
   }
 
   function setDayOpen(dayKey: string, open: boolean) {
@@ -675,30 +862,50 @@ function GeneralSettings({ ui, shop, isDesktop, safeBottom }: GeneralSettingsPro
                 </XStack>
               )
             })}
-            <XStack
-              alignItems="center"
-              gap="$1.5"
-              paddingHorizontal="$3"
-              paddingVertical="$2"
-              borderRadius={999}
-              borderWidth={1}
-              borderStyle="dashed"
-              cursor="pointer"
-              borderColor={ui.borderSubtle}
-              backgroundColor="transparent"
-              pressStyle={{ opacity: 0.7 }}
-              onPress={() =>
-                toast.show('Custom categories coming soon', {
-                  tone: 'info',
-                  message: 'You’ll be able to add your own categories here.',
-                })
-              }
-            >
-              <Icons.Plus size={13} color={ui.textSecondary} />
-              <Text fontSize={12.5} fontWeight="700" color={ui.textSecondary}>
-                Add New
-              </Text>
-            </XStack>
+            {addingCategory ? (
+              <XStack alignItems="center" gap="$2" flexBasis="100%" width="100%">
+                <Input
+                  flex={1}
+                  value={customCategory}
+                  onChangeText={setCustomCategory}
+                  placeholder="Custom category name"
+                  autoFocus
+                />
+                <Button size="$2" onPress={addCustomCategory}>
+                  <Text>Add</Text>
+                </Button>
+                <Button
+                  size="$2"
+                  chromeless
+                  onPress={() => {
+                    setAddingCategory(false)
+                    setCustomCategory('')
+                  }}
+                >
+                  <Text>Cancel</Text>
+                </Button>
+              </XStack>
+            ) : (
+              <XStack
+                alignItems="center"
+                gap="$1.5"
+                paddingHorizontal="$3"
+                paddingVertical="$2"
+                borderRadius={999}
+                borderWidth={1}
+                borderStyle="dashed"
+                cursor="pointer"
+                borderColor={ui.borderSubtle}
+                backgroundColor="transparent"
+                pressStyle={{ opacity: 0.7 }}
+                onPress={() => setAddingCategory(true)}
+              >
+                <Icons.Plus size={13} color={ui.textSecondary} />
+                <Text fontSize={12.5} fontWeight="700" color={ui.textSecondary}>
+                  Add New
+                </Text>
+              </XStack>
+            )}
           </XStack>
         </Card>
 

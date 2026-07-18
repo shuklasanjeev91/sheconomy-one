@@ -1,7 +1,8 @@
 import { forwardRef, useEffect, useState } from 'react'
 import { Image as RNImage, Platform, type StyleProp, type ViewStyle } from 'react-native'
 import type { GetProps } from 'tamagui'
-import { SizableText, YStack } from 'tamagui'
+import { YStack } from 'tamagui'
+import { SizableText } from './Text'
 import { BRAND_THEME } from '~/config/tokens'
 
 type SizeToken = '$1' | '$2' | '$2.5' | '$3' | '$4' | '$5' | '$6' | '$7' | '$8' | '$10'

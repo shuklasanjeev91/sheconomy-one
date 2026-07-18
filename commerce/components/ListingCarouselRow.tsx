@@ -11,7 +11,7 @@ type ListingCarouselRowProps = {
 /** Horizontal listing row for product detail recommendations. */
 export function ListingCarouselRow({ listings, compact = true }: ListingCarouselRowProps) {
   const media = useMedia()
-  const cardWidth = media.gtLg ? 220 : media.gtMd ? 200 : 168
+  const cardWidth = media.gtLg ? 220 : media.gtMd ? 200 : media.gtSm ? 168 : 160
 
   if (!listings.length) return null
 

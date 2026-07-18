@@ -1,5 +1,5 @@
-import { AdminSectionPage } from './layout'
+import { AdminCompanyPagesManager } from './components/AdminCompanyPagesManager'
 
 export default function AdminCompanyPagesPage() {
-  return <AdminSectionPage sectionId="company-pages" />
+  return <AdminCompanyPagesManager />
 }

@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react'
 import { Platform } from 'react-native'
+import { CameraView, useCameraPermissions } from 'expo-camera'
 
 import {
   Button,
@@ -140,6 +141,29 @@ function TrackingForm({ ui, item, submitting, onClose, onSubmit }: TrackingFormP
   const [notifyCustomer, setNotifyCustomer] = useState(true)
   const [touched, setTouched] = useState(false)
   const [creatingShipment, setCreatingShipment] = useState(false)
+  const [scanning, setScanning] = useState(false)
+  const [cameraPermission, requestCameraPermission] = useCameraPermissions()
+
+  async function openBarcodeScanner() {
+    if (Platform.OS === 'web') {
+      toast.show('Barcode scan is available in the mobile app', {
+        tone: 'info',
+        message: 'On iOS/Android, Scan opens the camera to read AWB barcodes.',
+      })
+      return
+    }
+    if (!cameraPermission?.granted) {
+      const result = await requestCameraPermission()
+      if (!result.granted) {
+        toast.show('Camera permission needed', {
+          tone: 'danger',
+          message: 'Allow camera access to scan tracking barcodes.',
+        })
+        return
+      }
+    }
+    setScanning(true)
+  }
 
   const courierLabel = useMemo(
     () => COURIER_OPTIONS.find((o) => o.value === courierSlug)?.label ?? 'Select a courier…',
@@ -442,18 +466,47 @@ function TrackingForm({ ui, item, submitting, onClose, onSubmit }: TrackingFormP
                 tone="ghost"
                 size="$2"
                 borderRadius={radius.chip}
-                onPress={() =>
-                  toast.show('Barcode scan coming soon', {
-                    tone: 'info',
-                    message: 'You will be able to scan the AWB label from your camera.',
-                  })
-                }
+                onPress={() => void openBarcodeScanner()}
               >
                 <Text fontSize={12} fontWeight="700" color={ui.textSecondary}>
                   Scan
                 </Text>
               </Button>
             </XStack>
+            {scanning && Platform.OS !== 'web' ? (
+              <YStack
+                height={220}
+                borderRadius={radius.card}
+                overflow="hidden"
+                borderWidth={1}
+                borderColor={ui.borderSubtle}
+                position="relative"
+              >
+                <CameraView
+                  style={{ flex: 1, width: '100%', height: '100%' }}
+                  facing="back"
+                  barcodeScannerSettings={{
+                    barcodeTypes: ['code128', 'code39', 'ean13', 'ean8', 'qr', 'upc_a', 'upc_e'],
+                  }}
+                  onBarcodeScanned={(event) => {
+                    const value = event.data?.trim()
+                    if (!value) return
+                    setTrackingNumber(value)
+                    setScanning(false)
+                    toast.show('Barcode scanned', { tone: 'success' })
+                  }}
+                />
+                <Button
+                  position="absolute"
+                  top={8}
+                  right={8}
+                  size="$2"
+                  onPress={() => setScanning(false)}
+                >
+                  <Text>Close</Text>
+                </Button>
+              </YStack>
+            ) : null}
             {trackingError ? <FieldError text={trackingError} /> : null}
             {sheDeliveryPartner ? (
               <Button
