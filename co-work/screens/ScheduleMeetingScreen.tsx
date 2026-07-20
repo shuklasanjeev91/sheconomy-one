@@ -62,8 +62,27 @@ export function ScheduleMeetingScreen() {
   const [repeat, setRepeat] = useState<MeetingRepeat>(null)
   const [invitees, setInvitees] = useState<MeetingInvitee[]>([])
   const [saving, setSaving] = useState(false)
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({})
 
   const timeZone = useMemo(() => Intl.DateTimeFormat().resolvedOptions().timeZone, [])
+
+  function onTitleChange(value: string) {
+    setTitle(value)
+    setFieldErrors((current) => ({
+      ...current,
+      title: value.trim() ? '' : 'Add a meeting title',
+    }))
+  }
+
+  function onMaxParticipantsChange(value: string) {
+    setMaxParticipants(value)
+    const capacity = Number.parseInt(value, 10)
+    const invalid = !Number.isFinite(capacity) || capacity < 2 || capacity > 500
+    setFieldErrors((current) => ({
+      ...current,
+      maxParticipants: invalid ? 'Capacity must be between 2 and 500' : '',
+    }))
+  }
 
   const draftValue = useMemo(
     () => ({
@@ -147,12 +166,17 @@ export function ScheduleMeetingScreen() {
 
   async function handleSchedule() {
     if (!title.trim()) {
+      setFieldErrors((current) => ({ ...current, title: 'Add a meeting title' }))
       toast.show('Add a meeting title', { tone: 'danger' })
       return
     }
 
     const capacity = Number.parseInt(maxParticipants, 10)
     if (!Number.isFinite(capacity) || capacity < 2 || capacity > 500) {
+      setFieldErrors((current) => ({
+        ...current,
+        maxParticipants: 'Capacity must be between 2 and 500',
+      }))
       toast.show('Capacity must be between 2 and 500', { tone: 'danger' })
       return
     }
@@ -285,15 +309,16 @@ export function ScheduleMeetingScreen() {
           }}
         >
           <ScheduleSection title="Details">
-            <Field label="Title">
+            <Field label="Title" error={fieldErrors.title || undefined} required>
               <Input
                 value={title}
-                onChangeText={setTitle}
+                onChangeText={onTitleChange}
                 placeholder={`${profile?.full_name || 'Team'} sync`}
                 backgroundColor="rgba(255,255,255,0.05)"
-                borderColor={coworkUi.borderSoft}
+                borderColor={fieldErrors.title ? coworkUi.danger : coworkUi.borderSoft}
                 color={coworkUi.text}
                 borderRadius={14}
+                invalid={Boolean(fieldErrors.title)}
               />
             </Field>
             <Field label="Description">
@@ -314,15 +339,16 @@ export function ScheduleMeetingScreen() {
                 Invitees will see the meeting time in this timezone.
               </Text>
             </Field>
-            <Field label="Max participants">
+            <Field label="Max participants" error={fieldErrors.maxParticipants || undefined}>
               <Input
                 value={maxParticipants}
-                onChangeText={setMaxParticipants}
+                onChangeText={onMaxParticipantsChange}
                 keyboardType="number-pad"
                 backgroundColor="rgba(255,255,255,0.05)"
-                borderColor={coworkUi.borderSoft}
+                borderColor={fieldErrors.maxParticipants ? coworkUi.danger : coworkUi.borderSoft}
                 color={coworkUi.text}
                 borderRadius={14}
+                invalid={Boolean(fieldErrors.maxParticipants)}
               />
             </Field>
           </ScheduleSection>

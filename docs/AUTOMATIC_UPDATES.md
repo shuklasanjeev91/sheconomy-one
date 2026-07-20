@@ -109,8 +109,8 @@ Example remote JSON (`public/update-config.example.json`):
 
 ```json
 {
-  "minimumSupportedVersion": "1.20.0",
-  "latestVersion": "1.20.1",
+  "minimumSupportedVersion": "5.0.14",
+  "latestVersion": "6.0",
   "critical": false,
   "maintenanceMode": false,
   "maintenanceMessage": "We are performing scheduled maintenance. Please try again shortly."

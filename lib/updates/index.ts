@@ -10,7 +10,12 @@ export {
   readUpdateMetadata,
   writeUpdateMetadata,
 } from '~/lib/updates/metadata'
-export { getNativeAppVersion } from '~/lib/updates/native-app-version'
+export {
+  getAppDisplayName,
+  getAppVersionLabel,
+  getNativeAppVersion,
+  getNativeBuildNumber,
+} from '~/lib/updates/native-app-version'
 export {
   fetchRemoteUpdateConfig,
   getAndroidPlayStoreUrl,

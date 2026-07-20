@@ -96,7 +96,7 @@ OpenAPI: `GET /functions/v1/rest-gateway/openapi.json`
 - Sale events → `sale_events`
 
 ### Existing edge functions (not replaced)
-`ai-assist`, `cleanup-expired-stories`, `commerce-payment-webhook`, `dispatch-notifications`, `exchange-rates`, `link-preview`, `livekit-*`, `meeting-invite`, `meeting-recording-share`, `network-invite`, `places`, `qr-login-redeem`, `shedelivery-*`, `shepay-*`, **`rest-gateway`**
+`ai-assist`, `cleanup-expired-stories`, `commerce-payment-webhook`, `dispatch-notifications`, `exchange-rates`, `link-preview`, `livekit-*`, `meeting-invite`, `meeting-recording-share`, `network-invite`, `places`, `qr-login-redeem`, `shedelivery-*`, `shepay-*`, `visual-commerce`, **`rest-gateway`**
 
 ---
 

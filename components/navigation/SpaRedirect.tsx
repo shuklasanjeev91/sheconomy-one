@@ -28,11 +28,17 @@ function isAlreadyAtHref(pathname: string, href: string): boolean {
   return currentQuery === targetQuery
 }
 
+function isNavigatorNotReadyError(error: unknown): boolean {
+  const message = error instanceof Error ? error.message : String(error ?? '')
+  return /navigate before mounting the Root Layout|Root Layout/i.test(message)
+}
+
 /**
  * Soft SPA redirect via `router.replace` — never hard-reloads the shell.
  * Drop-in for One's `<Redirect href=… />` on web, iOS, and Android.
  *
  * Guards against same-path replace loops that blank the app (max update depth).
+ * Retries when the root navigator is not mounted yet (common on cold auth routes).
  */
 export function SpaRedirect({ href }: SpaRedirectProps) {
   const pathname = usePathname()
@@ -42,8 +48,34 @@ export function SpaRedirect({ href }: SpaRedirectProps) {
   useEffect(() => {
     if (didNavigate.current) return
     if (isAlreadyAtHref(pathname, target)) return
-    didNavigate.current = true
-    replaceApp(target)
+
+    let cancelled = false
+    let attempts = 0
+    const maxAttempts = 30
+    let timer: ReturnType<typeof setTimeout> | undefined
+
+    const tryNavigate = () => {
+      if (cancelled || didNavigate.current) return
+      try {
+        replaceApp(target)
+        didNavigate.current = true
+      } catch (error) {
+        attempts += 1
+        if (attempts >= maxAttempts || !isNavigatorNotReadyError(error)) {
+          console.warn('[SpaRedirect] replace failed', target, error)
+          return
+        }
+        timer = setTimeout(tryNavigate, 50)
+      }
+    }
+
+    // Defer past the current commit so Root Layout can finish mounting.
+    timer = setTimeout(tryNavigate, 0)
+
+    return () => {
+      cancelled = true
+      if (timer) clearTimeout(timer)
+    }
   }, [pathname, target])
 
   return (

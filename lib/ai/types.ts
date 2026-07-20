@@ -111,3 +111,17 @@ export type PostDraftResult = {
   content: string
   usedFallback: boolean
 }
+
+export type ShopDraftParams = {
+  /** Seed: category, vibe, current name, or free-text brief. */
+  prompt?: string
+  categories?: string[]
+  currentName?: string | null
+  currentDescription?: string | null
+}
+
+export type ShopDraftResult = {
+  names: string[]
+  description: string
+  usedFallback: boolean
+}

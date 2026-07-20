@@ -104,17 +104,18 @@ export function VendorSettingsScreen() {
   const dispatch = useAppDispatch()
 
   const shop = useAppSelector((s) => s.shop.currentShop)
-  const isLoadingShops = useAppSelector((s) => s.shop.isLoadingShops)
+  const isLoadingMyShops = useAppSelector((s) => s.shop.isLoadingMyShops)
+  const myShopsLoaded = useAppSelector((s) => s.shop.myShopsLoaded)
 
   const params = useLocalSearchParams<{ section?: string }>()
   const activeId = resolveSectionId(params.section)
   const section = getSettingsSection(activeId)
 
   useEffect(() => {
-    if (!shop) void dispatch(loadMyShops(undefined))
-  }, [dispatch, shop])
+    if (!shop && !myShopsLoaded) void dispatch(loadMyShops(undefined))
+  }, [dispatch, shop, myShopsLoaded])
 
-  if (!shop && isLoadingShops) {
+  if (!shop && (isLoadingMyShops || !myShopsLoaded)) {
     return (
       <PageCenter>
         <Spinner size="large" />

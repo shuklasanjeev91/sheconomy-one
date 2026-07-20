@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
 import { AdaptiveTypeaheadPanel } from '~/components/search/AdaptiveTypeaheadPanel'
 import { SuggestSectionHeader } from '~/components/search/SuggestSectionHeader'
@@ -15,6 +15,7 @@ import {
 } from '~/co-work/lib/invites'
 import { useCoWorkTheme } from '~/co-work/lib/theme'
 import type { MeetingInviteCandidate, MeetingInvitee } from '~/co-work/lib/types'
+import { useAppLayout } from '~/hooks/useAppLayout'
 
 type MeetingInvitePickerProps = {
   hostId: string
@@ -26,12 +27,14 @@ type MeetingInvitePickerProps = {
 export function MeetingInvitePicker({ hostId, value, onChange, compact }: MeetingInvitePickerProps) {
   const { ui: coworkUi } = useCoWorkTheme()
   const toast = useAppToast()
+  const { isDesktop } = useAppLayout()
   const [query, setQuery] = useState('')
   const [emailDraft, setEmailDraft] = useState('')
   const [candidates, setCandidates] = useState<MeetingInviteCandidate[]>([])
   const [loading, setLoading] = useState(false)
   const [searchFocused, setSearchFocused] = useState(false)
   const [panelOpen, setPanelOpen] = useState(false)
+  const blurCloseRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   const selectedKeys = useMemo(() => new Set(value.map(inviteeKey)), [value])
 
@@ -56,13 +59,46 @@ export function MeetingInvitePicker({ hostId, value, onChange, compact }: Meetin
     return () => clearTimeout(timer)
   }, [loadCandidates])
 
+  // Desktop: keep the anchored dropdown tied to input focus + results.
+  // Mobile: the bottom sheet owns open/close — opening it blurs the field, so
+  // we must not auto-close on blur (that caused open→close flicker).
   useEffect(() => {
+    if (!isDesktop) return
     if (!searchFocused) {
       setPanelOpen(false)
       return
     }
-    setPanelOpen(loading || candidates.length > 0)
-  }, [candidates.length, loading, searchFocused])
+    setPanelOpen(true)
+  }, [isDesktop, searchFocused])
+
+  useEffect(() => {
+    return () => {
+      if (blurCloseRef.current) clearTimeout(blurCloseRef.current)
+    }
+  }, [])
+
+  function handleSearchFocus() {
+    if (blurCloseRef.current) clearTimeout(blurCloseRef.current)
+    setSearchFocused(true)
+    setPanelOpen(true)
+  }
+
+  function handleSearchBlur() {
+    setSearchFocused(false)
+    // Mobile sheet stays open until the user dismisses it or picks people.
+    if (!isDesktop) return
+    blurCloseRef.current = setTimeout(() => setPanelOpen(false), 180)
+  }
+
+  function handlePanelOpenChange(open: boolean) {
+    setPanelOpen(open)
+    if (!open) setSearchFocused(false)
+  }
+
+  function handleQueryChange(next: string) {
+    setQuery(next)
+    if (!panelOpen) setPanelOpen(true)
+  }
 
   function toggleCandidate(candidate: MeetingInviteCandidate) {
     const invitee = candidateToInvitee(candidate)
@@ -112,29 +148,29 @@ export function MeetingInvitePicker({ hostId, value, onChange, compact }: Meetin
         </XStack>
       </YStack>
 
-      <YStack gap="$2" position="relative">
+      <YStack gap="$2" position="relative" zIndex={panelOpen && isDesktop ? 600 : undefined}>
         <CoWorkSectionLabel>Search members & connections</CoWorkSectionLabel>
         <Input
           value={query}
-          onChangeText={setQuery}
+          onChangeText={handleQueryChange}
           placeholder="Name, username, or email"
           backgroundColor="rgba(255,255,255,0.05)"
           borderColor={coworkUi.borderSoft}
           color={coworkUi.text}
           borderRadius={14}
-          onFocus={() => setSearchFocused(true)}
-          onBlur={() => setTimeout(() => setSearchFocused(false), 180)}
+          onFocus={handleSearchFocus}
+          onBlur={handleSearchBlur}
         />
-        {loading ? <Spinner size="small" color={coworkUi.brand} /> : null}
+        {loading && !panelOpen ? <Spinner size="small" color={coworkUi.brand} /> : null}
 
         <AdaptiveTypeaheadPanel
           open={panelOpen}
-          onOpenChange={setPanelOpen}
+          onOpenChange={handlePanelOpenChange}
           title="Invite people"
           maxHeight={480}
           zIndex={600}
           searchValue={query}
-          onSearchChange={setQuery}
+          onSearchChange={handleQueryChange}
           searchPlaceholder="Search members"
         >
           <YStack gap="$1" width="100%" paddingBottom="$2" paddingTop="$2">

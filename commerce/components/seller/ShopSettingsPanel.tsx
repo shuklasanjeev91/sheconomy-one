@@ -7,6 +7,7 @@ import {
   updateShopAnnouncement,
 } from '~/commerce/components/ShopAnnouncementBanner'
 import { LocationFields } from '~/components/geo'
+import { PhoneInput } from '~/components/forms/PhoneInput'
 import {
   fetchShopAddressForOwner,
   shopAddressInputFromRow,
@@ -229,7 +230,7 @@ export function ShopSettingsPanel({ shop, onUpdated }: ShopSettingsPanelProps) {
           <Input value={shopEmail} onChangeText={setShopEmail} autoCapitalize="none" keyboardType="email-address" />
         </Field>
         <Field label="Phone">
-          <Input value={shopPhone} onChangeText={setShopPhone} keyboardType="phone-pad" />
+          <PhoneInput value={shopPhone} onChange={setShopPhone} />
         </Field>
         <Field label="Website">
           <Input value={websiteUrl} onChangeText={setWebsiteUrl} autoCapitalize="none" />

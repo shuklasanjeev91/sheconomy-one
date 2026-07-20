@@ -20,7 +20,8 @@ export type GalleryLayoutOptions = {
  * - 1: full stage
  * - 2: side-by-side on tablet+ / stacked on narrow phones
  *   (1:1 LiveKit calls use WhatsApp-style PiP instead of this grid)
- * - 3–4: 2×2 (two on top, rest below)
+ * - 3: three equal stacked rows (full-width bands) — not a 2×2 grid
+ * - 4: 2×2
  * - 5–6: 2×3
  * - 7–9: 3×3 when wide enough, else 2×N
  *
@@ -45,10 +46,10 @@ export function meetingGalleryLayout(
   }
 
   if (count === 3) {
-    // Only use three-across when the stage is clearly landscape — never on
-    // portrait iPad (that was the tall-strip bug).
+    // Wide landscape: three-across. Portrait / tablet: three equal stacked rows
+    // (avoids tall skinny columns and uneven 2×2 + empty slot).
     if (wideLandscape) return { columns: 3, rows: 1 }
-    return { columns: 2, rows: 2 }
+    return { columns: 1, rows: 3 }
   }
 
   if (count === 4) return { columns: 2, rows: 2 }
