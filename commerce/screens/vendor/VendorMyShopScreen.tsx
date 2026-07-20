@@ -243,6 +243,7 @@ export function VendorMyShopScreen() {
               stats={stats}
               address={address}
               totalOrders={totalOrders}
+              followerCount={followerCount}
               engagementSeries={engagementSeries}
               isDesktop={isDesktop}
             />
@@ -273,6 +274,7 @@ export function VendorMyShopScreen() {
             stats={stats}
             address={address}
             totalOrders={totalOrders}
+            followerCount={followerCount}
             engagementSeries={engagementSeries}
             isDesktop={isDesktop}
           />
@@ -318,21 +320,7 @@ function ShopHeaderBar({ ui, shop, isDesktop, previewHref, isDeleting, onDelete 
       gap="$3"
       flexWrap="wrap"
     >
-      <YStack gap="$1" minWidth={0}>
-        <XStack alignItems="center" gap="$1.5">
-          <Icons.Store size={14} color={ui.textMuted} />
-          <Text fontSize={12} fontWeight="600" color={ui.textMuted} letterSpacing={0.2}>
-            Shop Management
-          </Text>
-          <Icons.ChevronRight size={13} color={ui.textMuted} />
-          <Text fontSize={12} fontWeight="700" color={ui.brand} numberOfLines={1}>
-            {shop.shop_name}
-          </Text>
-        </XStack>
-        <Text fontSize={isDesktop ? 26 : 22} fontWeight="800" color={ui.text} letterSpacing={-0.5}>
-          My Shop
-        </Text>
-      </YStack>
+   
 
       <XStack gap="$2" flexWrap="wrap" alignItems="center">
         <AppLink href={previewHref} asChild>
@@ -380,11 +368,21 @@ type MainColumnProps = {
   stats: ShopStats | null
   address: ShopAddressDetails | null
   totalOrders: number | null
+  followerCount: number | null
   engagementSeries: number[]
   isDesktop: boolean
 }
 
-function MainColumn({ ui, shop, stats, address, totalOrders, engagementSeries, isDesktop }: MainColumnProps) {
+function MainColumn({
+  ui,
+  shop,
+  stats,
+  address,
+  totalOrders,
+  followerCount,
+  engagementSeries,
+  isDesktop,
+}: MainColumnProps) {
   const categories = Array.isArray(shop.shop_categories) ? (shop.shop_categories as string[]) : []
   const socialLinks = (shop.social_links as Record<string, string> | null) ?? {}
   const socialEntries = Object.entries(socialLinks).filter(([, url]) => Boolean(url))

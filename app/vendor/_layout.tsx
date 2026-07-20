@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { Platform } from 'react-native'
-import { Slot, useLocalSearchParams, usePathname, useRouter } from 'one'
+import { Slot, useGlobalSearchParams, usePathname, useRouter } from 'one'
 
 import { RequireVendorRole } from '~/components/auth/RouteGuard'
 import { Icons, ScrollView, Text, XStack, YStack } from '~/components/ui'
@@ -14,7 +14,11 @@ import { useAppDispatch, useAppSelector } from '~/lib/store/hooks'
 import { useAppUi } from '~/lib/theme/useAppUi'
 
 import { VendorSidebar } from '~/commerce/components/vendor/VendorSidebar'
-import { getActiveVendorNavItem, type VendorNavItem } from '~/commerce/components/vendor/vendor-nav'
+import {
+  getActiveVendorNavItem,
+  resolveVendorSettingsActiveSubId,
+  type VendorNavItem,
+} from '~/commerce/components/vendor/vendor-nav'
 
 const EXPANDED_WIDTH = 268
 const COLLAPSED_WIDTH = 80
@@ -43,9 +47,8 @@ export function VendorLayout() {
   }, [dispatch])
 
   const active = getActiveVendorNavItem(pathname)
-  const params = useLocalSearchParams<{ section?: string }>()
-  const activeSubId =
-    active.id === 'settings' ? `settings-${params.section ?? 'general'}` : undefined
+  const globalParams = useGlobalSearchParams() as Record<string, string | string[] | undefined>
+  const activeSubId = resolveVendorSettingsActiveSubId(pathname, globalParams.section)
 
   function handleSelect(item: VendorNavItem) {
     setDrawerOpen(false)

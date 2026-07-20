@@ -93,6 +93,8 @@ export const vendorRoutes = {
   ads: '/vendor/ads' as Href,
   reviews: '/vendor/reviews' as Href,
   settings: '/vendor/settings' as Href,
+  settingsSection: (section: string) =>
+    `/vendor/settings?section=${encodeURIComponent(section)}` as Href,
 } as const
 
 export const communityRoutes = {
