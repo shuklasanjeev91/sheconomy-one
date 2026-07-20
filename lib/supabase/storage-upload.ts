@@ -12,6 +12,7 @@ export const STORAGE_BUCKETS = {
   listingImages: 'listing-images',
   shopImages: 'shop-images',
   postImages: 'post-images',
+  visualPreviews: 'visual-previews',
 } as const
 
 const MAX_IMAGE_BYTES = 8 * 1024 * 1024
@@ -334,4 +335,22 @@ export async function uploadShopLogoImage(
   const path = `${userId}/shops/${shopId}/logo/${Date.now()}-${randomSuffix()}.${ext}`
 
   return uploadStorageObject(STORAGE_BUCKETS.shopImages, path, file.blob, file.mimeType, options)
+}
+
+/** Upload a user selfie / room photo for Gemini visual preview (private bucket). */
+export async function uploadVisualPreviewInput(
+  userId: string,
+  file: { blob: Blob; mimeType: string; fileName?: string },
+  options?: { onProgress?: UploadProgressHandler },
+) {
+  const ext = file.fileName?.split('.').pop() ?? extensionForMime(file.mimeType)
+  const path = `${userId}/inputs/${Date.now()}-${randomSuffix()}.${ext}`
+
+  return uploadStorageObject(
+    STORAGE_BUCKETS.visualPreviews,
+    path,
+    file.blob,
+    file.mimeType,
+    { ...options, maxBytes: 7 * 1024 * 1024 },
+  )
 }

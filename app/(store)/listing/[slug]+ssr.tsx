@@ -39,6 +39,7 @@ import {
   RatingSummary,
   ReviewsSection,
   StockNotifyButton,
+  ListingVisualPreviewButtons,
 } from '~/commerce/components'
 import { fetchListingReturnPolicy, type ListingReturnPolicy } from '~/commerce/lib/return-policies'
 import { listingMediaKind } from '~/commerce/lib/listing-media'
@@ -337,6 +338,23 @@ export default function ListingDetailScreen() {
     />
   )
 
+  const visualPreviewButtons = (
+    <ListingVisualPreviewButtons
+      listingId={listing.id}
+      listingTitle={listing.title}
+      category={listing.category}
+      tags={Array.isArray(listing.tags) ? listing.tags : null}
+      listingMetadata={
+        listing.listing_metadata && typeof listing.listing_metadata === 'object'
+          ? (listing.listing_metadata as Record<string, unknown>)
+          : null
+      }
+      hasPrimaryImage={sortedImages.length > 0}
+      listingImageUrl={sortedImages[0]?.image_url ?? null}
+      listingShareUrl={getListingShareUrl(listingShareSlug)}
+    />
+  )
+
   const shopReviewSummary = listing.shops
     ? mergeReviewSummary(
         {
@@ -432,14 +450,18 @@ export default function ListingDetailScreen() {
                     sellerId={listing.shops?.user_id}
                     listingTitle={listing.title}
                   />
+                  {visualPreviewButtons}
                 </YStack>
               ) : (
-                <ListingAskQuestion
-                  listingId={listing.id}
-                  shopId={listing.shop_id}
-                  sellerId={listing.shops?.user_id}
-                  listingTitle={listing.title}
-                />
+                <YStack gap="$2">
+                  <ListingAskQuestion
+                    listingId={listing.id}
+                    shopId={listing.shop_id}
+                    sellerId={listing.shops?.user_id}
+                    listingTitle={listing.title}
+                  />
+                  {visualPreviewButtons}
+                </YStack>
               )}
 
               {returnPolicy ? <ListingReturnPolicyCard policy={returnPolicy} /> : null}
@@ -659,14 +681,18 @@ export default function ListingDetailScreen() {
             sellerId={listing.shops?.user_id}
             listingTitle={listing.title}
           />
+          {visualPreviewButtons}
         </YStack>
       ) : (
-        <ListingAskQuestion
-          listingId={listing.id}
-          shopId={listing.shop_id}
-          sellerId={listing.shops?.user_id}
-          listingTitle={listing.title}
-        />
+        <YStack gap="$2">
+          <ListingAskQuestion
+            listingId={listing.id}
+            shopId={listing.shop_id}
+            sellerId={listing.shops?.user_id}
+            listingTitle={listing.title}
+          />
+          {visualPreviewButtons}
+        </YStack>
       )}
 
       {returnPolicy ? <ListingReturnPolicyCard policy={returnPolicy} /> : null}

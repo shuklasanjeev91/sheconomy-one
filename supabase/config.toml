@@ -412,3 +412,7 @@ verify_jwt = false
 
 [functions.rest-gateway]
 verify_jwt = true
+
+# Gemini visual try-on / view-in-space (JWT required — default).
+[functions.visual-commerce]
+verify_jwt = true

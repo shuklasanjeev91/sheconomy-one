@@ -4,7 +4,7 @@ import { Platform } from 'react-native'
 import { AUTH_COPY } from '~/components/auth/auth-copy'
 import { AUTH_LAYOUT } from '~/components/auth/auth-layout'
 import { AuthStepProgress } from '~/components/auth/AuthMethodTabs'
-import { CountryCodePicker, DEFAULT_COUNTRY } from '~/components/auth/CountryCodePicker'
+import { PhoneInput } from '~/components/forms/PhoneInput'
 import {
   Button,
   Field,
@@ -23,13 +23,12 @@ import {
   isCompleteOtp,
   normalizeOtpDigits,
   validateEmailAddress,
-  validateMobileNumber,
 } from '~/features/auth/validation'
 import { useFormValidation } from '~/hooks/useFormValidation'
 import { isPhoneHintSupported, requestPhoneNumberHint } from '~/lib/platform/phone-hint'
-import { countryFlag, type Country } from '~/lib/phone/countries'
-import { formatPhoneForDisplay, parseE164Phone, validateNationalPhone } from '~/lib/phone/phone'
-import { getSession, type OtpChannel, type PhoneAuthInput } from '~/lib/supabase/auth'
+import { DEFAULT_COUNTRY } from '~/lib/phone/countries'
+import { formatPhoneForDisplay, isValidPhone, parseE164Phone } from '~/lib/phone/phone'
+import { getSession, type OtpChannel } from '~/lib/supabase/auth'
 import { email, otp, required } from '~/lib/validation'
 import { useAppUi } from '~/lib/theme/useAppUi'
 
@@ -45,8 +44,6 @@ type AuthOtpFormProps = {
 export function AuthOtpForm({ channel, onSuccess }: AuthOtpFormProps) {
   const ui = useAppUi()
   const toast = useAppToast()
-  const [country, setCountry] = useState<Country>(DEFAULT_COUNTRY)
-  const [phoneE164, setPhoneE164] = useState('')
   const [otpSent, setOtpSent] = useState(false)
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [apiError, setApiError] = useState<string | null>(null)
@@ -63,7 +60,8 @@ export function AuthOtpForm({ channel, onSuccess }: AuthOtpFormProps) {
           ? [required('Enter your email address.'), email()]
           : [
               required('Enter your mobile number.'),
-              (value: string) => validateMobileNumber(value, country),
+              (value: string) =>
+                isValidPhone(value.trim()) ? null : 'Enter a valid mobile number.',
             ],
       },
       otpCode: {
@@ -74,23 +72,16 @@ export function AuthOtpForm({ channel, onSuccess }: AuthOtpFormProps) {
         ],
       },
     }),
-    [country, isEmail],
+    [isEmail],
   )
 
   const form = useFormValidation(schema)
 
-  const phoneInput = useMemo<PhoneAuthInput>(
-    () => ({ country, nationalNumber: form.fields.identifier.value }),
-    [country, form.fields.identifier.value],
-  )
-
   useEffect(() => {
     form.resetAll()
     setOtpSent(false)
-    setPhoneE164('')
     setApiError(null)
     setResendIn(0)
-    setCountry(DEFAULT_COUNTRY)
     verifyingRef.current = false
   }, [channel])
 
@@ -101,8 +92,9 @@ export function AuthOtpForm({ channel, onSuccess }: AuthOtpFormProps) {
       if (cancelled || !result.phoneNumber) return
       const parsed = parseE164Phone(result.phoneNumber)
       if (!parsed) return
-      setCountry(parsed.country)
-      form.fields.identifier.onChange(parsed.nationalNumber)
+      form.fields.identifier.onChange(
+        `${parsed.country.dialCode}${parsed.nationalNumber}`,
+      )
     })
     return () => {
       cancelled = true
@@ -125,14 +117,13 @@ export function AuthOtpForm({ channel, onSuccess }: AuthOtpFormProps) {
       }
       return form.fields.identifier.value.trim().toLowerCase()
     }
-    const result = validateNationalPhone(form.fields.identifier.value, country)
-    if (!result.ok) {
+    const e164 = form.fields.identifier.value.trim()
+    if (!isValidPhone(e164)) {
       form.fields.identifier.touch()
       form.fields.identifier.validate()
       return null
     }
-    setPhoneE164(result.e164)
-    return result.e164
+    return e164
   }
 
   async function handleSendOtp() {
@@ -147,7 +138,7 @@ export function AuthOtpForm({ channel, onSuccess }: AuthOtpFormProps) {
     setIsSubmitting(true)
     const result = await sendAuthOtp({
       channel,
-      identifier: isEmail ? validated : phoneInput,
+      identifier: validated,
       purpose: 'login',
     })
     setIsSubmitting(false)
@@ -163,7 +154,7 @@ export function AuthOtpForm({ channel, onSuccess }: AuthOtpFormProps) {
       tone: 'success',
       message: isEmail
         ? 'Check your inbox for the verification code.'
-        : `Code sent to ${formatPhoneForDisplay(validated, country)}`,
+        : `Code sent to ${formatPhoneForDisplay(validated)}`,
     })
   }
 
@@ -187,7 +178,7 @@ export function AuthOtpForm({ channel, onSuccess }: AuthOtpFormProps) {
 
       const result = await verifyAuthOtp({
         channel,
-        identifier: isEmail ? validated : phoneInput,
+        identifier: validated,
         otp: code,
       })
 
@@ -207,14 +198,7 @@ export function AuthOtpForm({ channel, onSuccess }: AuthOtpFormProps) {
       toast.show(isNewUser ? AUTH_COPY.welcomeNew : AUTH_COPY.welcomeBack, { tone: 'success' })
       onSuccess?.({ isNewUser })
     },
-    [
-      channel,
-      form.fields.otpCode,
-      isEmail,
-      onSuccess,
-      phoneInput,
-      toast,
-    ],
+    [channel, form.fields.otpCode, isEmail, onSuccess, toast],
   )
 
   const onAutofillCode = useCallback(
@@ -245,7 +229,6 @@ export function AuthOtpForm({ channel, onSuccess }: AuthOtpFormProps) {
   function resetOtpStep() {
     setOtpSent(false)
     form.fields.otpCode.reset()
-    setPhoneE164('')
     setResendIn(0)
     setApiError(null)
     verifyingRef.current = false
@@ -253,7 +236,7 @@ export function AuthOtpForm({ channel, onSuccess }: AuthOtpFormProps) {
 
   const displayIdentifier = isEmail
     ? form.fields.identifier.value.trim().toLowerCase()
-    : formatPhoneForDisplay(phoneE164 || form.fields.identifier.value, country)
+    : formatPhoneForDisplay(form.fields.identifier.value)
 
   const identifierError = form.fields.identifier.showError ? form.fields.identifier.error : null
   const otpFieldError = form.fields.otpCode.showError ? form.fields.otpCode.error : null
@@ -349,31 +332,18 @@ export function AuthOtpForm({ channel, onSuccess }: AuthOtpFormProps) {
                 />
               </AuthInputShell>
             ) : (
-              <AuthInputShell invalid={!!identifierError} row>
-                <CountryCodePicker value={country} onChange={setCountry} compact />
-                <YStack width={1} height={28} backgroundColor={ui.borderSubtle} />
-                <Input
-                  flex={1}
-                  borderWidth={0}
-                  backgroundColor="transparent"
-                  autoCapitalize="none"
-                  autoComplete="tel"
-                  textContentType="telephoneNumber"
-                  keyboardType="phone-pad"
-                  placeholder={country.placeholder}
-                  value={form.fields.identifier.value}
-                  onChangeText={form.fields.identifier.onChange}
-                  onBlur={form.fields.identifier.onBlur}
-                  invalid={!!identifierError}
-                  maxLength={country.maxLength + 4}
-                  {...(Platform.OS === 'web' ? ({ autoComplete: 'tel' } as object) : {})}
-                />
-              </AuthInputShell>
+              <PhoneInput
+                value={form.fields.identifier.value}
+                onChange={form.fields.identifier.onChange}
+                onBlur={form.fields.identifier.onBlur}
+                invalid={!!identifierError}
+                compact
+                defaultCountry={DEFAULT_COUNTRY}
+              />
             )}
             {!isEmail && form.fields.identifier.value && !identifierError ? (
               <Text fontSize={12} color={ui.textMuted} marginTop={6}>
-                Sending to {formatPhoneForDisplay(form.fields.identifier.value, country)}
-                {countryFlag(country) ? ` ${countryFlag(country)}` : ''}
+                Sending to {formatPhoneForDisplay(form.fields.identifier.value)}
               </Text>
             ) : null}
           </Field>

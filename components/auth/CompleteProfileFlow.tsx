@@ -1,8 +1,8 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 
 import { AUTH_LAYOUT } from '~/components/auth/auth-layout'
-import { CountryCodePicker } from '~/components/auth/CountryCodePicker'
 import { NativeDateField } from '~/components/forms/NativeDateField'
+import { PhoneInput } from '~/components/forms/PhoneInput'
 import { LocationPickerField, GeoSelectField } from '~/components/geo'
 import { PageCenter } from '~/components/layout'
 import { AvatarCaptureField } from '~/components/media/AvatarCaptureField'
@@ -49,8 +49,8 @@ import { isCompleteOtp, normalizeOtpDigits } from '~/features/auth/validation'
 import { useAuth } from '~/hooks/useAuth'
 import { getAllGeoCountries, getCountryName } from '~/lib/geo/data'
 import { appRoutes, commerceRoutes } from '~/lib/routes'
-import { DEFAULT_COUNTRY, findCountryByIso2, type Country } from '~/lib/phone/countries'
-import { validateNationalPhone } from '~/lib/phone/phone'
+import { DEFAULT_COUNTRY, findCountryByIso2 } from '~/lib/phone/countries'
+import { isValidPhone } from '~/lib/phone/phone'
 import { supabase } from '~/lib/supabase/client'
 import { useAppUi } from '~/lib/theme/useAppUi'
 import { useRouter } from 'one'
@@ -89,8 +89,8 @@ export function CompleteProfileFlow({ returnTo, isNewUser }: CompleteProfileFlow
 
   const [fullName, setFullName] = useState('')
   const [avatarUrl, setAvatarUrl] = useState<string | null>(null)
-  const [country, setCountry] = useState<Country>(DEFAULT_COUNTRY)
-  const [phoneNational, setPhoneNational] = useState('')
+  const [phoneE164, setPhoneE164] = useState('')
+  const [phoneDefaultCountry, setPhoneDefaultCountry] = useState(DEFAULT_COUNTRY)
   const [otpSent, setOtpSent] = useState(false)
   const [otpCode, setOtpCode] = useState('')
   const [timezone, setTimezone] = useState(detectDeviceTimezone())
@@ -136,7 +136,7 @@ export function CompleteProfileFlow({ returnTo, isNewUser }: CompleteProfileFlow
       if (row.country_code) {
         setCountryCode(row.country_code)
         const phoneCountry = findCountryByIso2(row.country_code)
-        if (phoneCountry) setCountry(phoneCountry)
+        if (phoneCountry) setPhoneDefaultCountry(phoneCountry)
       }
       if (row.preferred_language) setLanguage(row.preferred_language)
       else setLanguage(await detectPreferredLanguage())
@@ -254,25 +254,25 @@ export function CompleteProfileFlow({ returnTo, isNewUser }: CompleteProfileFlow
   }
 
   async function sendPhoneCode() {
-    const validated = validateNationalPhone(phoneNational, country)
-    if (!validated.ok) {
-      toast.show(validated.error, { tone: 'warning' })
+    const e164 = phoneE164.trim()
+    if (!isValidPhone(e164)) {
+      toast.show('Enter a valid mobile number.', { tone: 'warning' })
       return
     }
     setBusy(true)
-    const { error } = await supabase.auth.updateUser({ phone: validated.e164 })
+    const { error } = await supabase.auth.updateUser({ phone: e164 })
     setBusy(false)
     if (error) {
       toast.show(error.message, { tone: 'danger' })
       return
     }
     setOtpSent(true)
-    toast.show('Code sent', { tone: 'success', message: `Sent to ${validated.e164}` })
+    toast.show('Code sent', { tone: 'success', message: `Sent to ${e164}` })
   }
 
   async function verifyPhoneCode() {
-    const validated = validateNationalPhone(phoneNational, country)
-    if (!validated.ok) return
+    const e164 = phoneE164.trim()
+    if (!isValidPhone(e164)) return
     const code = normalizeOtpDigits(otpCode)
     if (!isCompleteOtp(code)) {
       toast.show('Enter the 6-digit code', { tone: 'warning' })
@@ -280,13 +280,13 @@ export function CompleteProfileFlow({ returnTo, isNewUser }: CompleteProfileFlow
     }
     setBusy(true)
     const { error } = await supabase.auth.verifyOtp({
-      phone: validated.e164,
+      phone: e164,
       token: code,
       type: 'phone_change',
     })
     if (error) {
       const retry = await supabase.auth.verifyOtp({
-        phone: validated.e164,
+        phone: e164,
         token: code,
         type: 'sms',
       })
@@ -298,7 +298,7 @@ export function CompleteProfileFlow({ returnTo, isNewUser }: CompleteProfileFlow
     }
     await supabase
       .from('profiles')
-      .update({ phone: validated.e164, phone_verified: true } as never)
+      .update({ phone: e164, phone_verified: true } as never)
       .eq('id', user!.id)
     await bumpCompletion()
     setBusy(false)
@@ -319,7 +319,7 @@ export function CompleteProfileFlow({ returnTo, isNewUser }: CompleteProfileFlow
     if (result.countryCode) {
       setCountryCode(result.countryCode)
       const phoneCountry = findCountryByIso2(result.countryCode)
-      if (phoneCountry) setCountry(phoneCountry)
+      if (phoneCountry) setPhoneDefaultCountry(phoneCountry)
     }
     if (result.locationLabel) setLocationLabel(result.locationLabel)
     if (result.error && !result.latitude) {
@@ -487,24 +487,12 @@ export function CompleteProfileFlow({ returnTo, isNewUser }: CompleteProfileFlow
                 Verify a mobile number for account recovery and SMS alerts (optional but
                 recommended).
               </Text>
-              <XStack gap="$2" alignItems="center">
-                <CountryCodePicker value={country} onChange={setCountry} compact />
-                <Input
-                  flex={1}
-                  value={phoneNational}
-                  onChangeText={setPhoneNational}
-                  placeholder="Mobile number"
-                  keyboardType="phone-pad"
-                  inputMode="tel"
-                  autoComplete="tel"
-                  {...({ textContentType: 'telephoneNumber' } as object)}
-                  returnKeyType="done"
-                  enterKeyHint="done"
-                  accessibilityLabel="Mobile number"
-                  height={52}
-                  borderRadius={AUTH_LAYOUT.inputRadius}
-                />
-              </XStack>
+              <PhoneInput
+                value={phoneE164}
+                onChange={setPhoneE164}
+                defaultCountry={phoneDefaultCountry}
+                compact
+              />
               <XStack gap="$2">
                 <Button
                   tone="primary"

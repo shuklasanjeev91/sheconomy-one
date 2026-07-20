@@ -1,4 +1,5 @@
 import { validatePostalCode } from '~/lib/geo'
+import { isValidPhone } from '~/lib/phone/phone'
 
 export type Validator = (value: string) => string | null
 
@@ -107,6 +108,14 @@ export function positiveNumber(message = 'Enter a number greater than 0.'): Vali
     if (!value.trim()) return null
     const num = Number(value)
     return Number.isFinite(num) && num > 0 ? null : message
+  }
+}
+
+/** E.164 / national phone — delegates to `lib/phone` country rules. */
+export function phone(message = 'Enter a valid mobile number with country code.'): Validator {
+  return (value: string) => {
+    if (!value.trim()) return null
+    return isValidPhone(value.trim()) ? null : message
   }
 }
 

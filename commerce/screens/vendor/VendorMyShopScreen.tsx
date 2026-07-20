@@ -72,7 +72,8 @@ export function VendorMyShopScreen() {
 
   const shop = useAppSelector((s) => s.shop.currentShop)
   const stats = useAppSelector((s) => s.shop.shopStats)
-  const isLoadingShops = useAppSelector((s) => s.shop.isLoadingShops)
+  const isLoadingMyShops = useAppSelector((s) => s.shop.isLoadingMyShops)
+  const myShopsLoaded = useAppSelector((s) => s.shop.myShopsLoaded)
   const shopError = useAppSelector((s) => s.shop.error)
   const isUpdating = useAppSelector((s) => s.shop.isUpdating)
   const isDeleting = useAppSelector((s) => s.shop.isDeleting)
@@ -80,21 +81,10 @@ export function VendorMyShopScreen() {
 
   const [address, setAddress] = useState<ShopAddressDetails | null>(null)
   const [followerCount, setFollowerCount] = useState<number | null>(null)
-  /** Avoid an infinite spinner when `loadMyShops` hangs (network / RLS). */
-  const [loadTimedOut, setLoadTimedOut] = useState(false)
 
   useEffect(() => {
-    if (!shop) void dispatch(loadMyShops(undefined))
-  }, [dispatch, shop])
-
-  useEffect(() => {
-    if (shop || !isLoadingShops) {
-      setLoadTimedOut(false)
-      return
-    }
-    const timer = setTimeout(() => setLoadTimedOut(true), 8_000)
-    return () => clearTimeout(timer)
-  }, [shop, isLoadingShops])
+    if (!shop && !myShopsLoaded) void dispatch(loadMyShops(undefined))
+  }, [dispatch, shop, myShopsLoaded])
 
   useEffect(() => {
     if (!shop?.id) return
@@ -128,11 +118,12 @@ export function VendorMyShopScreen() {
   const totalOrders = analytics?.total_orders ?? null
   const engagementSeries = analytics?.engagement_series ?? [0, 0, 0, 0, 0, 0, 0]
   const retryLoadShops = () => {
-    setLoadTimedOut(false)
     void dispatch(loadMyShops(undefined))
   }
 
-  if (!shop && isLoadingShops && !loadTimedOut) {
+  // Only block the first paint while the owner's shops are in flight.
+  // Never gate on the shared public/admin `isLoadingShops` flag.
+  if (!shop && (isLoadingMyShops || !myShopsLoaded)) {
     return (
       <PageCenter>
         <Spinner size="large" />
@@ -140,10 +131,10 @@ export function VendorMyShopScreen() {
     )
   }
 
-  if (!shop && (shopError || loadTimedOut)) {
+  if (!shop && shopError) {
     return (
       <ScreenState
-        error={shopError ?? (loadTimedOut ? 'Shop list timed out. Check your connection and try again.' : null)}
+        error={shopError}
         empty
         errorTitle="Couldn’t load your shop"
         onRetry={retryLoadShops}
@@ -242,6 +233,7 @@ export function VendorMyShopScreen() {
               shop={shop}
               stats={stats}
               address={address}
+              followerCount={followerCount}
               totalOrders={totalOrders}
               engagementSeries={engagementSeries}
               isDesktop={isDesktop}
@@ -272,6 +264,7 @@ export function VendorMyShopScreen() {
             shop={shop}
             stats={stats}
             address={address}
+            followerCount={followerCount}
             totalOrders={totalOrders}
             engagementSeries={engagementSeries}
             isDesktop={isDesktop}
@@ -379,12 +372,22 @@ type MainColumnProps = {
   shop: Shop
   stats: ShopStats | null
   address: ShopAddressDetails | null
+  followerCount: number | null
   totalOrders: number | null
   engagementSeries: number[]
   isDesktop: boolean
 }
 
-function MainColumn({ ui, shop, stats, address, totalOrders, engagementSeries, isDesktop }: MainColumnProps) {
+function MainColumn({
+  ui,
+  shop,
+  stats,
+  address,
+  followerCount,
+  totalOrders,
+  engagementSeries,
+  isDesktop,
+}: MainColumnProps) {
   const categories = Array.isArray(shop.shop_categories) ? (shop.shop_categories as string[]) : []
   const socialLinks = (shop.social_links as Record<string, string> | null) ?? {}
   const socialEntries = Object.entries(socialLinks).filter(([, url]) => Boolean(url))

@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import type { ReactNode } from 'react'
 
 import { Field, Icons, Input, Spinner, Text, XStack, YStack, useAppToast } from '~/components/ui'
+import { PhoneInput } from '~/components/forms/PhoneInput'
 import { LocationFields } from '~/components/geo'
 import { radius } from '~/config/tokens'
 import {
@@ -89,6 +90,49 @@ export function VendorConnectSettings({ ui, shop, isDesktop, safeBottom }: Vendo
   const [errors, setErrors] = useState<Record<string, string>>({})
 
   const isSaving = isUpdating || isSavingAddress
+
+  function setPhoneValue(value: string) {
+    setPhone(value)
+    const { error } = validateShopField('shop_phone_number', value)
+    setErrors((current) => {
+      const next = { ...current }
+      if (error) next.shop_phone_number = error
+      else delete next.shop_phone_number
+      delete next.shop_contact
+      return next
+    })
+  }
+
+  function setEmailValue(value: string) {
+    setEmail(value)
+    const { error } = validateShopField('shop_email', value)
+    setErrors((current) => {
+      const next = { ...current }
+      if (error) next.shop_email = error
+      else delete next.shop_email
+      delete next.shop_contact
+      return next
+    })
+  }
+
+  function setWebsiteValue(value: string) {
+    setWebsite(value)
+    if (!value.trim()) {
+      setErrors((current) => {
+        const next = { ...current }
+        delete next.website_url
+        return next
+      })
+      return
+    }
+    const { error } = validateShopField('website_url', ensureHttps(value))
+    setErrors((current) => {
+      const next = { ...current }
+      if (error) next.website_url = error
+      else delete next.website_url
+      return next
+    })
+  }
 
   // Re-seed local fields when a different shop row is loaded.
   useEffect(() => {
@@ -254,12 +298,10 @@ export function VendorConnectSettings({ ui, shop, isDesktop, safeBottom }: Vendo
           <YStack gap="$3.5">
             <ContactFieldRow ui={ui} icon={Icons.Phone}>
               <Field label="Business Phone" error={errors.shop_phone_number} flex={1}>
-                <Input
+                <PhoneInput
                   value={phone}
-                  onChangeText={setPhone}
-                  placeholder="+919876543210"
-                  keyboardType="phone-pad"
-                  autoCapitalize="none"
+                  onChange={setPhoneValue}
+                  invalid={Boolean(errors.shop_phone_number)}
                 />
               </Field>
             </ContactFieldRow>
@@ -267,7 +309,7 @@ export function VendorConnectSettings({ ui, shop, isDesktop, safeBottom }: Vendo
               <Field label="Public Email" error={errors.shop_email} flex={1}>
                 <Input
                   value={email}
-                  onChangeText={setEmail}
+                  onChangeText={setEmailValue}
                   placeholder="hello@yourshop.com"
                   keyboardType="email-address"
                   autoCapitalize="none"
@@ -278,7 +320,7 @@ export function VendorConnectSettings({ ui, shop, isDesktop, safeBottom }: Vendo
               <Field label="Brand Website" error={errors.website_url} flex={1}>
                 <Input
                   value={website}
-                  onChangeText={setWebsite}
+                  onChangeText={setWebsiteValue}
                   placeholder="https://www.yourshop.com"
                   keyboardType="url"
                   autoCapitalize="none"

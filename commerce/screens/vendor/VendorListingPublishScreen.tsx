@@ -22,6 +22,7 @@ import {
   type ListingFormData,
   type ListingType,
 } from '~/lib/listing/listing.type'
+import { validateListingField } from '~/lib/listing/listing.validation'
 import {
   initFormForType,
   loadFormFromListing,
@@ -181,6 +182,16 @@ function VendorListingPublishContent() {
     <K extends keyof ListingFormData>(field: K, value: ListingFormData[K]) => {
       dispatch(updateListingField({ field, value }))
       setLastSavedAt(new Date().toISOString())
+      // Realtime field errors for string-backed publish fields.
+      if (typeof value === 'string') {
+        const { error } = validateListingField(field, value)
+        setStepErrors((current) => {
+          const next = { ...current }
+          if (error) next[field as string] = error
+          else delete next[field as string]
+          return next
+        })
+      }
     },
     [dispatch],
   )

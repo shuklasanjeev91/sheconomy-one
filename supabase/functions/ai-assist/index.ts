@@ -1221,6 +1221,48 @@ function fallbackPostDraft(prompt: string, mode: string) {
   }
 }
 
+function parseShopDraftJson(
+  raw: string | null,
+): { names: string[]; description: string } | null {
+  if (!raw) return null
+  const trimmed = raw.trim().replace(/^```json\s*/i, '').replace(/^```\s*/i, '').replace(/```$/i, '')
+  try {
+    const parsed = JSON.parse(trimmed) as Record<string, unknown>
+    const names = Array.isArray(parsed.names)
+      ? parsed.names.map((item) => String(item).trim()).filter((item) => item.length >= 2 && item.length <= 80)
+      : []
+    const description =
+      typeof parsed.description === 'string' ? parsed.description.trim().slice(0, 1000) : ''
+    if (!names.length) return null
+    return { names, description }
+  } catch {
+    return null
+  }
+}
+
+function fallbackShopDraft(input: {
+  prompt: string
+  categories: string[]
+  currentName: string
+}): { names: string[]; description: string } {
+  const category = input.categories[0] || 'handmade goods'
+  const seed = input.currentName.trim() || input.prompt.trim().slice(0, 28) || 'Studio'
+  const base = seed.replace(/[^a-zA-Z0-9\s&'-]/g, '').trim() || 'Velvet'
+  const names = [
+    `${base} Collective`,
+    `The ${base} Shop`,
+    `${base} & Co.`,
+    `Maison ${base}`,
+    `${base} Atelier`,
+    `Little ${base}`,
+  ].map((name) => name.slice(0, 40))
+
+  return {
+    names,
+    description: `A women-owned shop for ${category.toLowerCase()}. Thoughtfully made pieces, honest details, and a warm welcome for every shopper.`,
+  }
+}
+
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response('ok', { headers: corsHeaders })
@@ -1348,6 +1390,47 @@ Deno.serve(async (req) => {
         return json({ ...parsed, usedFallback: false, product: 'community' })
       }
       return json({ ...fallback, usedFallback: true, product: 'community' })
+    }
+
+    if (action === 'shop_draft') {
+      const prompt =
+        typeof body.message === 'string' && body.message.trim()
+          ? body.message.trim()
+          : 'Suggest shop names and a short description for a women-owned storefront'
+      const categories = Array.isArray(context.categories)
+        ? context.categories.map((item) => String(item).trim()).filter(Boolean).slice(0, 5)
+        : []
+      const currentName =
+        typeof context.current_name === 'string' ? context.current_name.trim() : ''
+      const currentDescription =
+        typeof context.current_description === 'string'
+          ? context.current_description.trim()
+          : ''
+
+      const fallback = fallbackShopDraft({ prompt, categories, currentName })
+      const systemPrompt = [
+        'You help women entrepreneurs name and describe their SHEconomy storefront.',
+        'Return ONLY JSON with keys: names (string array of 4-6 unique shop names), description (one warm storefront blurb, 80-220 characters).',
+        'Names must be brandable, memorable, under 40 characters, no trademarked brands, no ALL CAPS spam.',
+        'Description should mention what they sell and who they serve. No hashtag spam. No markdown fences.',
+        categories.length ? `Categories: ${categories.join(', ')}.` : '',
+        currentName ? `Current name draft: ${currentName}.` : '',
+        currentDescription ? `Current description draft: ${currentDescription.slice(0, 280)}.` : '',
+      ]
+        .filter(Boolean)
+        .join('\n')
+
+      const completion = await callOpenAI(systemPrompt, [], prompt)
+      const parsed = parseShopDraftJson(completion.answer)
+      if (parsed && parsed.names.length) {
+        return json({
+          names: parsed.names.slice(0, 6),
+          description: parsed.description || fallback.description,
+          usedFallback: false,
+          product: 'shop',
+        })
+      }
+      return json({ ...fallback, usedFallback: true, product: 'shop' })
     }
 
     if (action === 'feedback') {
@@ -1616,7 +1699,7 @@ Deno.serve(async (req) => {
     return json(
       {
         error:
-          'Unknown action. Use suggestions | chat | feedback | comment_suggestions | meeting_draft | post_draft | translate | moderate_image.',
+          'Unknown action. Use suggestions | chat | feedback | comment_suggestions | meeting_draft | post_draft | shop_draft | translate | moderate_image.',
       },
       400,
     )

@@ -92,7 +92,8 @@ export function VendorOrdersScreen() {
   const { profile } = useProfile()
 
   const shop = useAppSelector((s) => s.shop.currentShop)
-  const isLoadingShops = useAppSelector((s) => s.shop.isLoadingShops)
+  const isLoadingMyShops = useAppSelector((s) => s.shop.isLoadingMyShops)
+  const myShopsLoaded = useAppSelector((s) => s.shop.myShopsLoaded)
   const listOrders = useAppSelector(selectVendorOrders)
   const listPagination = useAppSelector(selectVendorPagination)
   const loading = useAppSelector(selectVendorOrdersLoading)
@@ -265,7 +266,7 @@ export function VendorOrdersScreen() {
       ? currentItem
       : orders.find((item) => item.id === selectedItemId) ?? null
 
-  if (!shop && isLoadingShops) {
+  if (!shop && (isLoadingMyShops || !myShopsLoaded)) {
     return (
       <YStack flex={1} alignItems="center" justifyContent="center" minHeight={360}>
         <Spinner size="large" />

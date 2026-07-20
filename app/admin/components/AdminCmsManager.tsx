@@ -46,6 +46,7 @@ export function AdminCmsManager() {
   const [tab, setTab] = useState<CmsTab>('categories')
   const [search, setSearch] = useState('')
   const [newName, setNewName] = useState('')
+  const [nameError, setNameError] = useState('')
   const [saving, setSaving] = useState(false)
   const [pendingDelete, setPendingDelete] = useState<{
     kind: 'category' | 'tag'
@@ -89,7 +90,10 @@ export function AdminCmsManager() {
 
   async function handleCreate() {
     const name = newName.trim()
-    if (!name) return
+    if (!name) {
+      setNameError(tab === 'categories' ? 'Enter a category name' : 'Enter a tag name')
+      return
+    }
     setSaving(true)
     try {
       if (tab === 'categories') {
@@ -100,6 +104,7 @@ export function AdminCmsManager() {
         toast.show('Tag created', { tone: 'success' })
       }
       setNewName('')
+      setNameError('')
     } catch (error) {
       toast.show(error instanceof Error ? error.message : 'Could not create', { tone: 'danger' })
     } finally {
@@ -174,7 +179,10 @@ export function AdminCmsManager() {
             size="$2"
             chromeless={tab !== id}
             backgroundColor={tab === id ? ui.brand : ui.surfaceMuted}
-            onPress={() => setTab(id)}
+            onPress={() => {
+              setTab(id)
+              setNameError('')
+            }}
           >
             <Text color={tab === id ? ui.onBrand : ui.text} fontWeight="600">
               {label}
@@ -191,18 +199,37 @@ export function AdminCmsManager() {
       />
 
       {tab !== 'redirects' ? (
-        <XStack gap="$2" alignItems="center">
-          <Input
-            flex={1}
-            value={newName}
-            onChangeText={setNewName}
-            placeholder={tab === 'categories' ? 'New category name' : 'New tag name'}
-            backgroundColor={ui.surface}
-          />
-          <Button size="$3" disabled={saving || !newName.trim()} onPress={() => void handleCreate()}>
-            {saving ? <Spinner size="small" /> : <Text>Add</Text>}
-          </Button>
-        </XStack>
+        <YStack gap="$1.5">
+          <XStack gap="$2" alignItems="center">
+            <Input
+              flex={1}
+              value={newName}
+              onChangeText={(value) => {
+                setNewName(value)
+                if (nameError) {
+                  setNameError(
+                    value.trim()
+                      ? ''
+                      : tab === 'categories'
+                        ? 'Enter a category name'
+                        : 'Enter a tag name',
+                  )
+                }
+              }}
+              placeholder={tab === 'categories' ? 'New category name' : 'New tag name'}
+              backgroundColor={ui.surface}
+              invalid={Boolean(nameError)}
+            />
+            <Button size="$3" disabled={saving || !newName.trim()} onPress={() => void handleCreate()}>
+              {saving ? <Spinner size="small" /> : <Text>Add</Text>}
+            </Button>
+          </XStack>
+          {nameError ? (
+            <Text fontSize={12} color={ui.danger}>
+              {nameError}
+            </Text>
+          ) : null}
+        </YStack>
       ) : null}
 
       {contentError ? <Text color={ui.danger}>{contentError}</Text> : null}
