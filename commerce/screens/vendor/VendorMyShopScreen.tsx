@@ -235,6 +235,7 @@ export function VendorMyShopScreen() {
               address={address}
               followerCount={followerCount}
               totalOrders={totalOrders}
+              followerCount={followerCount}
               engagementSeries={engagementSeries}
               isDesktop={isDesktop}
             />
@@ -266,6 +267,7 @@ export function VendorMyShopScreen() {
             address={address}
             followerCount={followerCount}
             totalOrders={totalOrders}
+            followerCount={followerCount}
             engagementSeries={engagementSeries}
             isDesktop={isDesktop}
           />
@@ -311,21 +313,7 @@ function ShopHeaderBar({ ui, shop, isDesktop, previewHref, isDeleting, onDelete 
       gap="$3"
       flexWrap="wrap"
     >
-      <YStack gap="$1" minWidth={0}>
-        <XStack alignItems="center" gap="$1.5">
-          <Icons.Store size={14} color={ui.textMuted} />
-          <Text fontSize={12} fontWeight="600" color={ui.textMuted} letterSpacing={0.2}>
-            Shop Management
-          </Text>
-          <Icons.ChevronRight size={13} color={ui.textMuted} />
-          <Text fontSize={12} fontWeight="700" color={ui.brand} numberOfLines={1}>
-            {shop.shop_name}
-          </Text>
-        </XStack>
-        <Text fontSize={isDesktop ? 26 : 22} fontWeight="800" color={ui.text} letterSpacing={-0.5}>
-          My Shop
-        </Text>
-      </YStack>
+   
 
       <XStack gap="$2" flexWrap="wrap" alignItems="center">
         <AppLink href={previewHref} asChild>
@@ -374,6 +362,7 @@ type MainColumnProps = {
   address: ShopAddressDetails | null
   followerCount: number | null
   totalOrders: number | null
+  followerCount: number | null
   engagementSeries: number[]
   isDesktop: boolean
 }
@@ -383,8 +372,8 @@ function MainColumn({
   shop,
   stats,
   address,
-  followerCount,
   totalOrders,
+  followerCount,
   engagementSeries,
   isDesktop,
 }: MainColumnProps) {

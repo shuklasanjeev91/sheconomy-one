@@ -43,8 +43,8 @@ export const SETTINGS_SECTIONS: readonly SettingsSection[] = [
   },
   {
     id: 'payments',
-    label: 'Payments',
-    description: 'Manage how you receive funds, connected bank accounts, and tax documentation.',
+    label: 'Payment Methods',
+    description: 'Manage how you receive funds from your customers worldwide.',
     icon: Icons.CreditCard,
     ready: true,
   },
@@ -65,14 +65,14 @@ export const SETTINGS_SECTIONS: readonly SettingsSection[] = [
   {
     id: 'shipping',
     label: 'Shipping',
-    description: 'Set up delivery zones, international rates, and preferred courier partners.',
+    description: 'Configure delivery fees, free-shipping thresholds, processing times, and zone-based rates.',
     icon: Icons.Truck,
     ready: true,
   },
   {
     id: 'returns',
-    label: 'Returns',
-    description: 'Define return windows, refund rules, and reverse-logistics preferences.',
+    label: 'Return Policies',
+    description: 'Manage return windows, refund rules, and reverse-logistics preferences.',
     icon: Icons.Undo2,
     ready: true,
   },

@@ -59,8 +59,9 @@ import {
   type SettingsSectionId,
 } from '~/commerce/components/vendor/settings-nav'
 import { VendorConnectSettings } from './VendorConnectSettings'
-import { ShopCommercePanel } from '~/commerce/components/seller/ShopCommercePanel'
-import { VendorReturnsSettingsPanel } from '~/commerce/components/seller/VendorReturnsSettingsPanel'
+import { VendorPaymentSettings } from './VendorPaymentSettings'
+import { VendorReturnPolicySettings } from './VendorReturnPolicySettings'
+import { VendorShippingPolicySettings } from './VendorShippingPolicySettings'
 import { AppLink } from '~/components/navigation/AppLink'
 import { appRoutes } from '~/lib/routes'
 
@@ -153,33 +154,29 @@ export function VendorSettingsScreen() {
     return <VendorConnectSettings ui={ui} shop={shop} isDesktop={isDesktop} safeBottom={safeBottom} />
   }
 
-  if (section.id === 'payments' || section.id === 'shipping') {
+  if (section.id === 'payments') {
+    return <VendorPaymentSettings ui={ui} shop={shop} isDesktop={isDesktop} safeBottom={safeBottom} />
+  }
+
+  if (section.id === 'shipping') {
     return (
-      <YStack flex={1} minHeight={0} width="100%" maxWidth="100%">
-        <SectionHeader ui={ui} section={section} isDesktop={isDesktop} />
-        <YStack
-          flex={1}
-          paddingHorizontal={isDesktop ? '$6' : '$4'}
-          paddingBottom={safeBottom + 24}
-        >
-          <ShopCommercePanel shop={shop as never} />
-        </YStack>
-      </YStack>
+      <VendorShippingPolicySettings
+        ui={ui}
+        shop={shop}
+        isDesktop={isDesktop}
+        safeBottom={safeBottom}
+      />
     )
   }
 
   if (section.id === 'returns') {
     return (
-      <YStack flex={1} minHeight={0} width="100%" maxWidth="100%">
-        <SectionHeader ui={ui} section={section} isDesktop={isDesktop} />
-        <YStack
-          flex={1}
-          paddingHorizontal={isDesktop ? '$6' : '$4'}
-          paddingBottom={safeBottom + 24}
-        >
-          <VendorReturnsSettingsPanel shopId={shop.id} />
-        </YStack>
-      </YStack>
+      <VendorReturnPolicySettings
+        ui={ui}
+        shop={shop}
+        isDesktop={isDesktop}
+        safeBottom={safeBottom}
+      />
     )
   }
 

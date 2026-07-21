@@ -26,6 +26,9 @@ import { deliveryReducer } from '~/lib/orders/delivery.store'
 import { fulfillmentReducer } from '~/lib/orders/fulfillment.store'
 import { orderIssuesReducer } from '~/lib/orders/order-issue.store'
 import { paymentReducer } from '~/lib/orders/payment.store'
+import { vendorPaymentReducer } from '~/lib/payment/payment.store'
+import { returnPolicyReducer } from '~/lib/return-policy/return-policy.store'
+import { shippingPolicyReducer } from '~/lib/shipping-policy/shipping-policy.store'
 import { vendorOrdersReducer } from '~/lib/orders/vendor-orders.store'
 
 import { persistStorage } from './storage'
@@ -77,6 +80,9 @@ const appReducer = combineReducers({
   listingPublish: listingPublishReducer,
   listingBulkImport: listingBulkImportReducer,
   vendorOrders: vendorOrdersReducer,
+  vendorPayment: vendorPaymentReducer,
+  returnPolicy: returnPolicyReducer,
+  shippingPolicy: shippingPolicyReducer,
   payment: paymentReducer,
   orderIssues: orderIssuesReducer,
   fulfillment: fulfillmentReducer,
