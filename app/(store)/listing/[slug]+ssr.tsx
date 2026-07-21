@@ -774,7 +774,7 @@ export default function ListingDetailScreen() {
     <PageScroll>
       <YStack
         padding="$4"
-        paddingBottom="$10"
+        paddingBottom="$2"
         width="100%"
         gap="$5"
       >

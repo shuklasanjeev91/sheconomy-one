@@ -7,9 +7,8 @@
  * legacy `{ isValid, errors[] }` shape.
  */
 
-import { z } from 'zod'
-
 import { FULFILLMENT_STATUS } from './order.constants'
+import { z } from '~/lib/zod'
 
 const fulfillmentStatusValues = Object.values(FULFILLMENT_STATUS) as [string, ...string[]]
 export const fulfillmentStatusSchema = z.enum(fulfillmentStatusValues)

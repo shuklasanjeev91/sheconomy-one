@@ -66,18 +66,18 @@ export const ContextMenuItem = styled(TContextMenu.Item, {
   hoverStyle: { backgroundColor: '$color4' },
 })
 
-function useNativeFullscreenContentProps() {
-  const { safeTop, safeBottom } = useAppLayout()
-  if (!isNativeFullscreenOverlay) return null
+function useOverlaySheetContentProps() {
+  const { safeTop } = useAppLayout()
   return {
     width: '100%' as const,
     maxWidth: '100%' as const,
     minWidth: '100%' as const,
-    borderRadius: 0,
-    borderWidth: 0,
+    borderRadius: isNativeFullscreenOverlay ? 0 : undefined,
+    borderWidth: isNativeFullscreenOverlay ? 0 : undefined,
     paddingTop: Math.max(safeTop, 16),
-    paddingBottom: Math.max(safeBottom, 16),
-    flex: 1,
+    paddingBottom: 0,
+    marginBottom: 0,
+    ...(isNativeFullscreenOverlay ? { flex: 1 } : null),
   }
 }
 
@@ -85,11 +85,11 @@ export function MenuContent({
   children,
   ...props
 }: ComponentProps<typeof StyledMenuContent> & { children?: ReactNode }) {
-  const nativeProps = useNativeFullscreenContentProps()
+  const sheetProps = useOverlaySheetContentProps()
   return (
     <>
       <NativeFullscreenAdapt />
-      <StyledMenuContent {...props} {...nativeProps}>
+      <StyledMenuContent {...props} {...sheetProps}>
         {children}
       </StyledMenuContent>
     </>
@@ -100,11 +100,11 @@ export function ContextMenuContent({
   children,
   ...props
 }: ComponentProps<typeof StyledContextMenuContent> & { children?: ReactNode }) {
-  const nativeProps = useNativeFullscreenContentProps()
+  const sheetProps = useOverlaySheetContentProps()
   return (
     <>
       <NativeFullscreenAdapt />
-      <StyledContextMenuContent {...props} {...nativeProps}>
+      <StyledContextMenuContent {...props} {...sheetProps}>
         {children}
       </StyledContextMenuContent>
     </>

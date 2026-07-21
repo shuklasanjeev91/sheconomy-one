@@ -1,6 +1,7 @@
 import { Link } from 'one'
 import type { Href } from 'one'
 import { Children, cloneElement, isValidElement, type ReactElement, type ReactNode } from 'react'
+import { Platform } from 'react-native'
 
 import { XStack } from '~/components/ui'
 import { navigateApp } from '~/lib/platform/navigate'
@@ -25,6 +26,28 @@ export function AppLink({ href, children, replace, asChild, external }: AppLinkP
   const inApp = !external ? inAppPathFromUrl(hrefStr) : null
 
   if (inApp) {
+    // On native, always use imperative navigation. One Link + Radix Slot can
+    // attach onPress to Text (non-pressable) or lose pushes inside sheets.
+    if (Platform.OS !== 'web') {
+      const go = () => navigateApp(inApp as Href, { replace })
+
+      if (asChild && isValidElement(children)) {
+        const child = Children.only(children) as ReactElement<{ onPress?: () => void }>
+        return cloneElement(child, {
+          onPress: () => {
+            go()
+            child.props.onPress?.()
+          },
+        })
+      }
+
+      return (
+        <XStack cursor="pointer" onPress={go} role="link">
+          {children}
+        </XStack>
+      )
+    }
+
     return (
       <Link href={inApp as Href} replace={replace} asChild={asChild}>
         {children as ReactElement}
@@ -40,8 +63,8 @@ export function AppLink({ href, children, replace, asChild, external }: AppLinkP
     const child = Children.only(children) as ReactElement<{ onPress?: () => void }>
     return cloneElement(child, {
       onPress: () => {
-        child.props.onPress?.()
         open()
+        child.props.onPress?.()
       },
     })
   }

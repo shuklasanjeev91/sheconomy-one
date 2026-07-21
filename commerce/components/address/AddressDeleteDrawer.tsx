@@ -1,14 +1,16 @@
-import { Platform } from 'react-native'
-
-import { Button, Icons, Spinner, Text, XStack, YStack } from '~/components/ui'
+import {
+  AppBottomSheet,
+  Button,
+  Icons,
+  Spinner,
+  Text,
+  XStack,
+  YStack,
+} from '~/components/ui'
 import { radius } from '~/config/tokens'
-import { useLockBodyScroll } from '~/hooks/useLockBodyScroll'
-import { overlayBackdropStyle } from '~/lib/layout/styles'
 import type { Address } from '~/lib/address/address.type'
 import { formatAddressString, getAddressTypeLabel } from '~/lib/address/address.utils'
 import type { AppUiTokens } from '~/lib/theme/app-ui'
-
-const PANEL_WIDTH = 420
 
 type AddressDeleteDrawerProps = {
   ui: AppUiTokens
@@ -23,44 +25,40 @@ type AddressDeleteDrawerProps = {
 export function AddressDeleteDrawer({
   ui,
   open,
-  isDesktop,
   address,
   submitting,
   onClose,
   onConfirm,
 }: AddressDeleteDrawerProps) {
-  useLockBodyScroll(open && Boolean(address))
-
-  if (!open || !address) return null
-
-  const panelPositionStyle =
-    Platform.OS === 'web'
-      ? ({ position: 'fixed' as const, top: 0, right: 0, bottom: 0, boxShadow: '-4px 0 24px rgba(0,0,0,0.18)' } as const)
-      : ({ position: 'absolute' as const, top: 0, right: 0, bottom: 0 } as const)
-
   return (
-    <>
-      <YStack
-        backgroundColor="rgba(0,0,0,0.5)"
-        zIndex={100000}
-        cursor="pointer"
-        style={overlayBackdropStyle()}
-        animation="quick"
-        enterStyle={{ opacity: 0 }}
-        onPress={submitting ? undefined : onClose}
-      />
-      <YStack
-        width={isDesktop ? PANEL_WIDTH : '100%'}
-        maxWidth="100%"
-        backgroundColor={ui.background}
-        borderLeftWidth={isDesktop ? 1 : 0}
-        borderLeftColor={ui.borderSubtle}
-        zIndex={100001}
-        style={panelPositionStyle}
-        animation="quick"
-        enterStyle={{ x: PANEL_WIDTH }}
-      >
-        <YStack flex={1} padding="$5" gap="$4" justifyContent="center">
+    <AppBottomSheet
+      open={open && Boolean(address)}
+      onOpenChange={(next) => {
+        if (!next && !submitting) onClose()
+      }}
+      title="Delete address?"
+      scrollable={false}
+      footer={
+        <XStack gap="$2" width="100%">
+          <Button tone="outline" size="$4" borderRadius={999} flex={1} disabled={submitting} onPress={onClose}>
+            Cancel
+          </Button>
+          <Button
+            tone="primary"
+            size="$4"
+            borderRadius={999}
+            flex={1}
+            disabled={submitting || !address}
+            onPress={onConfirm}
+            icon={submitting ? <Spinner size="small" color="white" /> : <Icons.Trash2 size={16} />}
+          >
+            {submitting ? 'Deleting…' : 'Delete'}
+          </Button>
+        </XStack>
+      }
+    >
+      {address ? (
+        <YStack gap="$4" width="100%">
           <YStack
             width={56}
             height={56}
@@ -73,14 +71,9 @@ export function AddressDeleteDrawer({
             <Icons.AlertTriangle size={26} color={ui.brand} />
           </YStack>
 
-          <YStack gap="$2" alignItems="center">
-            <Text fontSize={20} fontWeight="800" color={ui.text} textAlign="center">
-              Delete address?
-            </Text>
-            <Text fontSize={14} color={ui.textSecondary} textAlign="center" maxWidth={320} lineHeight={20}>
-              This action cannot be undone. Orders already linked to this address are not affected.
-            </Text>
-          </YStack>
+          <Text fontSize={14} color={ui.textSecondary} textAlign="center" lineHeight={20}>
+            This action cannot be undone. Orders already linked to this address are not affected.
+          </Text>
 
           <YStack
             gap="$1.5"
@@ -103,31 +96,7 @@ export function AddressDeleteDrawer({
             ) : null}
           </YStack>
         </YStack>
-
-        <XStack
-          gap="$2"
-          paddingHorizontal="$4"
-          paddingVertical="$3"
-          borderTopWidth={1}
-          borderTopColor={ui.borderSubtle}
-          backgroundColor={ui.surface}
-        >
-          <Button tone="outline" size="$4" borderRadius={999} flex={1} disabled={submitting} onPress={onClose}>
-            Cancel
-          </Button>
-          <Button
-            tone="primary"
-            size="$4"
-            borderRadius={999}
-            flex={1}
-            disabled={submitting}
-            onPress={onConfirm}
-            icon={submitting ? <Spinner size="small" color="white" /> : <Icons.Trash2 size={16} />}
-          >
-            {submitting ? 'Deleting…' : 'Delete'}
-          </Button>
-        </XStack>
-      </YStack>
-    </>
+      ) : null}
+    </AppBottomSheet>
   )
 }

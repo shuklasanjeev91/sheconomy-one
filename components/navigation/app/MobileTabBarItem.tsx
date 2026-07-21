@@ -56,7 +56,6 @@ export const MobileTabBarItem = forwardRef<
       width="100%"
       paddingVertical={2}
       cursor="pointer"
-      animation="quick"
       pressStyle={{ opacity: 0.82, scale: 0.97 }}
       onPress={onPress}
       aria-label={accessibilityLabel ?? label}
@@ -73,7 +72,6 @@ export const MobileTabBarItem = forwardRef<
         paddingHorizontal={4}
         borderRadius={18}
         backgroundColor={isFocused ? activePillBg : 'transparent'}
-        animation="quick"
         pointerEvents="none"
       >
         <YStack

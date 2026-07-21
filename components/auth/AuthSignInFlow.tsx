@@ -1,4 +1,4 @@
-import { useCallback, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { Platform } from 'react-native'
 
 import { AUTH_COPY } from '~/components/auth/auth-copy'
@@ -28,7 +28,14 @@ export function AuthSignInFlow({ returnTo }: AuthSignInFlowProps) {
   const [mode, setMode] = useState<AuthMethod>('email')
   const [passkeyBusy, setPasskeyBusy] = useState(false)
   const [showQrLogin, setShowQrLogin] = useState(false)
+  // Delay One Tap so its iframe cannot steal focus from email/phone fields.
+  const [oneTapReady, setOneTapReady] = useState(false)
   const passkeysAvailable = isPasskeySignInSupported()
+
+  useEffect(() => {
+    const timer = setTimeout(() => setOneTapReady(true), 2500)
+    return () => clearTimeout(timer)
+  }, [])
 
   const finishSocial = useCallback(() => {
     void completeSignIn(returnTo, { provider: 'google' })
@@ -63,7 +70,7 @@ export function AuthSignInFlow({ returnTo }: AuthSignInFlowProps) {
       }
     >
       <YStack gap="$5">
-        <GoogleOneTap enabled onSuccess={finishSocial} />
+        <GoogleOneTap enabled={oneTapReady} onSuccess={finishSocial} />
 
         <AuthMethodTabs value={mode} onChange={setMode} />
         <AuthOtpForm

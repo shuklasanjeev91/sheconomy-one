@@ -14,6 +14,21 @@ type AppAccessGateProps = {
   children: ReactNode
 }
 
+function Shell({ children, documentScroll }: { children: ReactNode; documentScroll: boolean }) {
+  return (
+    <YStack
+      flex={documentScroll ? undefined : 1}
+      width="100%"
+      maxWidth="100%"
+      alignSelf="stretch"
+      minHeight={documentScroll ? undefined : 0}
+      overflow={documentScroll ? 'visible' : 'hidden'}
+    >
+      {children}
+    </YStack>
+  )
+}
+
 /** Redirects users away from routes their access tier cannot use. */
 export function AppAccessGate({ children }: AppAccessGateProps) {
   const pathname = usePathname()
@@ -22,15 +37,17 @@ export function AppAccessGate({ children }: AppAccessGateProps) {
   const useDocumentScroll = Platform.OS === 'web' && isDesktopWeb
 
   const guestSignInReturnTo = getGuestSignInReturnTo(tier, pathname)
-  const guestCanBrowseWhileAuthLoads =
-    !isAuthenticated &&
-    canAccessPath('guest', pathname) &&
-    getGuestSignInReturnTo('guest', pathname) === null
+  const guestCanBrowsePath =
+    canAccessPath('guest', pathname) && getGuestSignInReturnTo('guest', pathname) === null
+  const guestCanBrowseWhileAuthLoads = !isAuthenticated && guestCanBrowsePath
 
-  // Wait for first profile settle before tier redirects (account-switch safety).
-  // Keep the previous tree mounted whenever possible — a full-screen spinner on
-  // every soft navigation feels like a 5–10s hang.
-  if (isLoading && !guestCanBrowseWhileAuthLoads) {
+  // While auth/profile settle: keep browsing public commerce (and other
+  // guest-safe paths) instead of blanking the whole app with a spinner.
+  // That spinner made tab switches and back presses feel hung for seconds.
+  if (isLoading) {
+    if (guestCanBrowseWhileAuthLoads || guestCanBrowsePath) {
+      return <Shell documentScroll={useDocumentScroll}>{children}</Shell>
+    }
     return (
       <PageCenter>
         <Spinner size="large" />
@@ -38,7 +55,7 @@ export function AppAccessGate({ children }: AppAccessGateProps) {
     )
   }
 
-  if (!isLoading && guestSignInReturnTo) {
+  if (guestSignInReturnTo) {
     return <AuthSignInFlow returnTo={guestSignInReturnTo} />
   }
 
@@ -46,18 +63,5 @@ export function AppAccessGate({ children }: AppAccessGateProps) {
     return <SpaRedirect href={getDeniedRedirect(pathname)} />
   }
 
-  return (
-    <YStack
-      // Document-scroll pages (desktop web commerce/class/co-work) must not be
-      // flex-clipped — that traps content above the fold with nowhere to scroll.
-      flex={useDocumentScroll ? undefined : 1}
-      width="100%"
-      maxWidth="100%"
-      alignSelf="stretch"
-      minHeight={useDocumentScroll ? undefined : 0}
-      overflow={useDocumentScroll ? 'visible' : 'hidden'}
-    >
-      {children}
-    </YStack>
-  )
+  return <Shell documentScroll={useDocumentScroll}>{children}</Shell>
 }

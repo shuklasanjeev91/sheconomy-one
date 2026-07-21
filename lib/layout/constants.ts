@@ -6,7 +6,11 @@ export const APP_LAYOUT = {
   railPaddingWide: 32,
   sectionGapMobile: 20,
   sectionGapDesktop: 28,
-  mobileTabBarHeight: 88,
+  /**
+   * Mobile tab dock content height only (icons + labels + dock padding).
+   * Safe-area / home-indicator is added separately in `useAppLayout`.
+   */
+  mobileTabBarHeight: 56,
   desktopHeaderHeight: 60,
   mobileHeaderHeight: 96,
   stickyTopDesktop: 60,

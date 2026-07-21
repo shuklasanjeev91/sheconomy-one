@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 
 import {
   prefetchNativeLoader,
@@ -16,13 +16,18 @@ type UseNativeLoaderOptions = {
   cacheKey?: string
 }
 
-/** Run a route loader on native — Metro serves empty loader stubs in dev. */
+/**
+ * Run a route loader on native — Metro serves empty loader stubs in dev.
+ * Loader identity must not retrigger fetches (call sites often pass inline lambdas).
+ */
 export function useNativeLoader<T>(
   loader: () => Promise<T>,
   options: UseNativeLoaderOptions = {},
 ): LoaderResult<T> {
   const { cacheKey } = options
   const cached = cacheKey ? readNativeLoaderCache<T>(cacheKey) : undefined
+  const loaderRef = useRef(loader)
+  loaderRef.current = loader
 
   const [data, setData] = useState<T | null>(cached?.data ?? null)
   const [loading, setLoading] = useState(!cached?.data && !cached?.error)
@@ -37,6 +42,8 @@ export function useNativeLoader<T>(
       setError(err)
       setLoading(false)
     }
+
+    const run = () => loaderRef.current()
 
     if (cacheKey) {
       const entry = readNativeLoaderCache<T>(cacheKey)
@@ -54,7 +61,7 @@ export function useNativeLoader<T>(
           cancelled = true
         }
       }
-      prefetchNativeLoader(cacheKey, loader)
+      prefetchNativeLoader(cacheKey, run)
       const next = readNativeLoaderCache<T>(cacheKey)
       if (next?.promise) {
         next.promise
@@ -68,14 +75,15 @@ export function useNativeLoader<T>(
       }
     }
 
-    loader()
+    run()
       .then((value) => finish(value, null))
       .catch((err) => finish(null, err instanceof Error ? err.message : String(err)))
 
     return () => {
       cancelled = true
     }
-  }, [cacheKey, loader])
+    // Intentionally omit `loader` — identity changes every render at call sites.
+  }, [cacheKey])
 
   return { data, loading, error }
 }

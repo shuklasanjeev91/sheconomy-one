@@ -408,7 +408,7 @@ export function StoryViewerScreen() {
         }}
       />
 
-      <YStack flex={1} alignItems="center" justifyContent="center" padding={24} gap={16} paddingBottom={88}>
+      <YStack flex={1} alignItems="center" justifyContent="center" padding={24} gap={16} paddingBottom={56}>
         {slide.media_type === 'image' && slide.media_url ? (
           <Image
             source={{ uri: slide.media_url }}

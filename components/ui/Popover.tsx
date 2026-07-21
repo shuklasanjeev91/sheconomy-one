@@ -32,30 +32,29 @@ export const PopoverArrow = styled(TPopover.Arrow, {
 })
 
 /**
- * Popover content. On iOS/Android adapts into a full-screen sheet.
+ * Popover content. Always adapts into a bottom sheet on web, iOS, and Android.
  */
 export function PopoverContent({
   children,
   ...props
 }: ComponentProps<typeof StyledPopoverContent> & { children?: ReactNode }) {
-  const { safeTop, safeBottom } = useAppLayout()
+  const { safeTop } = useAppLayout()
 
-  const nativeProps = isNativeFullscreenOverlay
-    ? {
-        width: '100%' as const,
-        maxWidth: '100%' as const,
-        borderRadius: 0,
-        borderWidth: 0,
-        paddingTop: Math.max(safeTop, 16),
-        paddingBottom: Math.max(safeBottom, 16),
-        flex: 1,
-      }
-    : null
+  const sheetProps = {
+    width: '100%' as const,
+    maxWidth: '100%' as const,
+    borderRadius: isNativeFullscreenOverlay ? 0 : undefined,
+    borderWidth: isNativeFullscreenOverlay ? 0 : undefined,
+    paddingTop: Math.max(safeTop, 16),
+    paddingBottom: 0,
+    marginBottom: 0,
+    ...(isNativeFullscreenOverlay ? { flex: 1 } : null),
+  }
 
   return (
     <>
       <NativeFullscreenAdapt />
-      <StyledPopoverContent {...props} {...nativeProps}>
+      <StyledPopoverContent {...props} {...sheetProps}>
         {children}
       </StyledPopoverContent>
     </>

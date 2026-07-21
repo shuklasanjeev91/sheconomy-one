@@ -1,21 +1,16 @@
 import type { ReactNode } from 'react'
+
 import { Adapt } from 'tamagui'
 
 import { Sheet, SheetFrame, SheetHandle, SheetOverlay } from '~/components/ui/Sheet'
-import { isNativeFullscreenOverlay } from '~/lib/platform/native-fullscreen'
 
 /**
- * Tamagui Adapt → full-screen Sheet for Select / Popover / Menu on iOS & Android.
- * Render as a sibling of the Content inside the parent compound component.
- * No-ops on web so desktop keeps anchored dropdowns.
+ * Tamagui Adapt → full-screen Sheet for Select / Popover / Menu on web, iOS,
+ * and Android. No bottom gap — frame covers the entire viewport.
  */
 export function NativeFullscreenAdapt({ children }: { children?: ReactNode }) {
-  if (!isNativeFullscreenOverlay) {
-    return children ? <>{children}</> : null
-  }
-
   return (
-    <Adapt platform="touch">
+    <Adapt when>
       <Sheet
         modal
         dismissOnSnapToBottom
@@ -29,10 +24,17 @@ export function NativeFullscreenAdapt({ children }: { children?: ReactNode }) {
           flex={1}
           height="100%"
           maxHeight="100%"
+          minHeight="100%"
           width="100%"
           borderRadius={0}
-          padding="$0"
+          padding={0}
+          margin={0}
           backgroundColor="$background"
+          position="absolute"
+          top={0}
+          left={0}
+          right={0}
+          bottom={0}
         >
           <SheetHandle />
           {children ?? <Adapt.Contents />}

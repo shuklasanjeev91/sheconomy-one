@@ -72,7 +72,7 @@ export function ProfileAnalyticsScreen() {
           <Spinner size="large" color={communityUi.brand} />
         </YStack>
       ) : (
-        <YStack gap="$4" paddingBottom="$8">
+        <YStack gap="$4" paddingBottom="$2">
           <XStack flexWrap="wrap" gap="$3">
             <StatChip
               label="Views (30d)"

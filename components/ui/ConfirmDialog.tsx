@@ -1,18 +1,12 @@
-import type { ReactNode } from 'react'
+import { useState, type ReactNode } from 'react'
 
-import { XStack } from 'tamagui'
-
-import {
-  AlertDialog,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogOverlay,
-  AlertDialogTitle,
-} from './AlertDialog'
+import { AppBottomSheet } from './BottomSheet'
 import { Button } from './Button'
+import { Text } from './Text'
+import { XStack, YStack } from 'tamagui'
 
 type ConfirmDialogProps = {
-  /** Uncontrolled: element that opens the dialog (rendered via `asChild`). */
+  /** Uncontrolled: element that opens the sheet (pressable). */
   trigger?: ReactNode
   /** Controlled open state. Provide together with `onOpenChange`. */
   open?: boolean
@@ -26,13 +20,12 @@ type ConfirmDialogProps = {
 }
 
 /**
- * Cross-platform confirmation dialog for destructive actions (remove
- * connection, unfollow, etc.). Wraps the shared AlertDialog primitives. Works
- * either uncontrolled (via `trigger`) or controlled (via `open`/`onOpenChange`).
+ * Cross-platform confirmation — always a bottom sheet on web, iOS, and Android.
+ * Works either uncontrolled (via `trigger`) or controlled (`open`/`onOpenChange`).
  */
 export function ConfirmDialog({
   trigger,
-  open,
+  open: openProp,
   onOpenChange,
   title,
   description,
@@ -41,28 +34,52 @@ export function ConfirmDialog({
   destructive = false,
   onConfirm,
 }: ConfirmDialogProps) {
-  const isControlled = open !== undefined
+  const isControlled = openProp !== undefined
+  const [uncontrolledOpen, setUncontrolledOpen] = useState(false)
+  const open = isControlled ? Boolean(openProp) : uncontrolledOpen
+
+  function setOpen(next: boolean) {
+    if (!isControlled) setUncontrolledOpen(next)
+    onOpenChange?.(next)
+  }
 
   return (
-    <AlertDialog {...(isControlled ? { open, onOpenChange } : {})}>
-      {trigger ? <AlertDialog.Trigger asChild>{trigger}</AlertDialog.Trigger> : null}
-      <AlertDialog.Portal>
-        <AlertDialogOverlay />
-        <AlertDialogContent>
-          <AlertDialogTitle>{title}</AlertDialogTitle>
-          {description ? <AlertDialogDescription>{description}</AlertDialogDescription> : null}
-          <XStack gap="$2" justifyContent="flex-end" marginTop="$2">
-            <AlertDialog.Cancel asChild>
-              <Button tone="secondary">{cancelLabel}</Button>
-            </AlertDialog.Cancel>
-            <AlertDialog.Action asChild>
-              <Button tone={destructive ? 'destructive' : 'primary'} onPress={onConfirm}>
-                {confirmLabel}
-              </Button>
-            </AlertDialog.Action>
+    <>
+      {trigger ? (
+        <YStack asChild onPress={() => setOpen(true)}>
+          {trigger}
+        </YStack>
+      ) : null}
+
+      <AppBottomSheet
+        open={open}
+        onOpenChange={setOpen}
+        title={title}
+        scrollable={false}
+        footer={
+          <XStack gap="$2" width="100%">
+            <Button tone="secondary" flex={1} onPress={() => setOpen(false)}>
+              {cancelLabel}
+            </Button>
+            <Button
+              tone={destructive ? 'destructive' : 'primary'}
+              flex={1}
+              onPress={() => {
+                onConfirm()
+                setOpen(false)
+              }}
+            >
+              {confirmLabel}
+            </Button>
           </XStack>
-        </AlertDialogContent>
-      </AlertDialog.Portal>
-    </AlertDialog>
+        }
+      >
+        {description ? (
+          <Text fontSize={15} lineHeight={22} color="$color11">
+            {description}
+          </Text>
+        ) : null}
+      </AppBottomSheet>
+    </>
   )
 }

@@ -8226,14 +8226,14 @@ __metadata:
     expo-document-picker: "npm:~55.0.14"
     expo-file-system: "npm:~55.0.23"
     expo-font: "npm:~55.0.8"
-    expo-haptics: "npm:^57.0.1"
+    expo-haptics: "npm:~55.0.16"
     expo-image-picker: "npm:~55.0.10"
     expo-linear-gradient: "npm:~55.0.15"
     expo-livekit-screen-share: "npm:^0.2.1"
     expo-local-authentication: "npm:~55.0.13"
     expo-localization: "npm:~55.0.16"
     expo-location: "npm:~55.1.11"
-    expo-print: "npm:^57.0.1"
+    expo-print: "npm:~55.0.17"
     expo-secure-store: "npm:~55.0.15"
     expo-sharing: "npm:~55.0.21"
     expo-updates: "npm:~55.0.25"
@@ -11651,12 +11651,12 @@ __metadata:
   languageName: node
   linkType: hard
 
-"expo-haptics@npm:^57.0.1":
-  version: 57.0.1
-  resolution: "expo-haptics@npm:57.0.1"
+"expo-haptics@npm:~55.0.16":
+  version: 55.0.16
+  resolution: "expo-haptics@npm:55.0.16"
   peerDependencies:
     expo: "*"
-  checksum: 10/ab929015052baa286483a55ebaec43efdcf6c4427a4b4a3c3daa9a1ed69f7bff391aeb7a72eedfc2f98965e256bb1c8b6c5498a7ce254f0e717324ee789186e4
+  checksum: 10/d2ac74acf9e669b091634504a9f63f87db0dd1e9836cab46b2d80113fc217a6ec06072b5156dcc6e1da237e25199267c9cf0a106da46c7b981250045ce956fa5
   languageName: node
   linkType: hard
 
@@ -11809,13 +11809,13 @@ __metadata:
   languageName: node
   linkType: hard
 
-"expo-print@npm:^57.0.1":
-  version: 57.0.1
-  resolution: "expo-print@npm:57.0.1"
+"expo-print@npm:~55.0.17":
+  version: 55.0.17
+  resolution: "expo-print@npm:55.0.17"
   peerDependencies:
     expo: "*"
     react-native: "*"
-  checksum: 10/5ac9a97246128d632012a1f80d97a59ee9bb3c1e600b613b9e2afc45ee5f10a5e9bcf116ddd0e5410a3b3a62f91f672959a1c482074f2fc7ee8e366d029005c8
+  checksum: 10/ae0e3db220e0894ea784687052bca19f91325be249f81aff6772558582dec58fcd53e44fdbef646fa8964dfa1ac48ab84563d0d30fbc77391eaee42fe6a04550
   languageName: node
   linkType: hard
 

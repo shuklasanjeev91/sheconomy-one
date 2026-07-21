@@ -14,6 +14,26 @@ type CachedProfileEntry = {
 
 let memoryCache: CachedProfileEntry | null = null
 
+/** Sync peek — lets useProfile skip the access-gate spinner on warm starts. */
+export function peekCachedProfile(userId: string): Profile | null {
+  if (!userId) return null
+  if (memoryCache?.userId === userId) return memoryCache.profile
+  // Web can read localStorage synchronously; native stays async via readCachedProfile.
+  if (Platform.OS === 'web' && typeof window !== 'undefined') {
+    try {
+      const raw = window.localStorage.getItem(PROFILE_CACHE_KEY)
+      if (!raw) return null
+      const parsed = JSON.parse(raw) as CachedProfileEntry
+      if (parsed?.userId !== userId || !parsed.profile?.id) return null
+      memoryCache = parsed
+      return parsed.profile
+    } catch {
+      return null
+    }
+  }
+  return null
+}
+
 export async function readCachedProfile(userId: string): Promise<Profile | null> {
   if (!userId) return null
   if (memoryCache?.userId === userId) return memoryCache.profile

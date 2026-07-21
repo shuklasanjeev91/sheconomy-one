@@ -6,9 +6,8 @@
  * of at least 10 characters, and a reporter), expressed as a Zod schema.
  */
 
-import { z } from 'zod'
-
 import { ISSUE_PRIORITY, ISSUE_STATUS, ORDER_ISSUE_TYPE } from './order.constants'
+import { z } from '~/lib/zod'
 
 const issueStatusValues = Object.values(ISSUE_STATUS) as [string, ...string[]]
 const issueTypeValues = Object.values(ORDER_ISSUE_TYPE) as [string, ...string[]]
@@ -32,7 +31,7 @@ export const orderIssueSchema = z.object({
 
 export type IssueValidationResult = { isValid: boolean; errors: string[] }
 
-function zodErrorToList(error: z.ZodError): string[] {
+function zodErrorToList(error: { issues: Array<{ message: string }> }): string[] {
   return error.issues.map((issue) => issue.message)
 }
 

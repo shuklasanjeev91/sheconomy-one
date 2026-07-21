@@ -1,5 +1,3 @@
-import { z } from 'zod'
-
 import { getDefaultCountryCode, resolveCountryCode, validatePostalCode } from '~/lib/geo'
 import {
   compose,
@@ -18,6 +16,7 @@ import {
   type AddressType,
   type AddressValidationResult,
 } from './address.type'
+import { z } from '~/lib/zod'
 
 // ============= ZOD SCHEMA =============
 

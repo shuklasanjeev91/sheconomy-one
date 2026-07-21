@@ -1,5 +1,3 @@
-import { z } from 'zod'
-
 import {
   compose,
   maxLength,
@@ -18,6 +16,7 @@ import {
   type ListingType,
   type ListingValidationResult,
 } from './listing.type'
+import { z } from '~/lib/zod'
 
 // ============= SHARED PRIMITIVES =============
 

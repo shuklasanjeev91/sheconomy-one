@@ -1,5 +1,3 @@
-import { z } from 'zod'
-
 import { DEFAULT_COUNTRY } from '~/lib/phone/countries'
 import {
   parseE164Phone,
@@ -21,6 +19,7 @@ import {
   type ShopFormData,
   type ShopValidationResult,
 } from './shop.type'
+import { z } from '~/lib/zod'
 
 // ============= SHARED PRIMITIVES =============
 

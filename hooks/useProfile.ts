@@ -3,7 +3,12 @@ import { useEffect, useRef, useState } from 'react'
 import { importSocialProfileHints } from '~/features/auth/services/social-profile-hints'
 import { normalizeAvatarSrc } from '~/components/ui/Avatar'
 import { subscribeProfileRefresh } from '~/lib/profile/refresh'
-import { clearCachedProfile, readCachedProfile, writeCachedProfile } from '~/lib/profile/profile-cache'
+import {
+  clearCachedProfile,
+  peekCachedProfile,
+  readCachedProfile,
+  writeCachedProfile,
+} from '~/lib/profile/profile-cache'
 import { supabase } from '~/lib/supabase'
 import type { Tables } from '~/lib/supabase'
 import { useSupabase } from '~/providers/SupabaseProvider'
@@ -59,14 +64,15 @@ function withResolvedAvatar(profile: Profile | null, user: ReturnType<typeof use
  */
 export function useProfile() {
   const { user, isLoading: authLoading } = useSupabase()
-  const [profile, setProfile] = useState<Profile | null>(null)
-  const [profileUserId, setProfileUserId] = useState<string | null>(null)
+  const userId = user?.id ?? null
+  const peeked = userId ? peekCachedProfile(userId) : null
+  const [profile, setProfile] = useState<Profile | null>(peeked)
+  const [profileUserId, setProfileUserId] = useState<string | null>(peeked && userId ? userId : null)
   const [fetching, setFetching] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [refreshToken, setRefreshToken] = useState(0)
   const fetchGen = useRef(0)
 
-  const userId = user?.id ?? null
   const profileMatchesUser = !!userId && profileUserId === userId
 
   useEffect(() => subscribeProfileRefresh(() => setRefreshToken((value) => value + 1)), [])

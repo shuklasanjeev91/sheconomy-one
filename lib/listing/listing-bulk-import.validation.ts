@@ -1,5 +1,3 @@
-import { z } from 'zod'
-
 import { validateImportedListingImageUrl } from '~/lib/config/listing-image-import-rules'
 
 import {
@@ -9,6 +7,7 @@ import {
 import type { BulkImportRowValidationResult } from './listing-bulk-import.type'
 import { LISTING_TYPES } from './listing.type'
 import type { PublishListingData } from './listing-publish.orchestrator'
+import { z } from '~/lib/zod'
 
 const listingTypeSchema = z.enum([
   LISTING_TYPES.PHYSICAL,

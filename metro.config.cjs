@@ -44,6 +44,13 @@ const MEDIAPIPE_FACE_DETECTION_STUB = path.join(
 
 function withTamaguiDedupe(config) {
   const extraNodeModules = { ...(config.resolver?.extraNodeModules ?? {}) }
+  const nodeEmpty = path.join(projectRoot, 'lib/metro-stubs/node-empty.js')
+  // Pin Node built-ins away from Hermes (qrcode / exceljs pull these in).
+  for (const name of ['fs', 'graceful-fs', 'fs.realpath', 'fs-constants', 'fstream']) {
+    extraNodeModules[name] = path.dirname(nodeEmpty)
+  }
+  // Package-style resolve: map module name → stub file via extraNodeModules needs a package.
+  // Prefer resolveRequest stubs below; also alias via redirect.
 
   for (const name of TAMAGUI_MODULES) {
     pinNodeModule(extraNodeModules, name)
@@ -63,9 +70,59 @@ function withTamaguiDedupe(config) {
         ...(config.resolver?.nodeModulesPaths ?? []).filter((p) => p !== nodeModules),
       ],
       resolveRequest(context, moduleName, platform) {
+        // Node built-ins pulled in by `qrcode` / `exceljs` (via auth QR + bulk import).
+        // Hermes has no `fs`; requiring it white-screens the native app.
+        if (
+          moduleName === 'fs' ||
+          moduleName === 'node:fs' ||
+          moduleName === 'graceful-fs' ||
+          moduleName === 'fs.realpath' ||
+          moduleName === 'fs-constants' ||
+          moduleName === 'fstream'
+        ) {
+          return {
+            type: 'sourceFile',
+            filePath: path.join(projectRoot, 'lib/metro-stubs/node-empty.js'),
+          }
+        }
+
         // Peer of @tensorflow-models/face-detection; unused with tfjs runtime.
         if (moduleName === '@mediapipe/face_detection') {
           return { type: 'sourceFile', filePath: MEDIAPIPE_FACE_DETECTION_STUB }
+        }
+
+        // One CJS polyfills pull core-js URL; that breaks Hermes URL.protocol setters.
+        if (
+          moduleName === 'core-js/actual/url' ||
+          moduleName === 'core-js/actual/url-search-params' ||
+          moduleName === 'core-js/stable/url' ||
+          moduleName === 'core-js/stable/url-search-params'
+        ) {
+          return {
+            type: 'sourceFile',
+            filePath: path.join(projectRoot, 'lib/metro-stubs/core-js-url.js'),
+          }
+        }
+
+        // Hermes ships Request/fetch; avoid whatwg-fetch mismatch (white screen).
+        if (
+          typeof moduleName === 'string' &&
+          (moduleName === 'react-native/Libraries/Core/setUpXHR' ||
+            moduleName.endsWith('/Libraries/Core/setUpXHR') ||
+            moduleName.endsWith('/Core/setUpXHR') ||
+            moduleName === './setUpXHR' ||
+            /(^|\/)setUpXHR(\.js)?$/.test(moduleName))
+        ) {
+          // Only rewrite RN core setUpXHR, not random files named similarly.
+          const fromRnCore =
+            typeof context.originModulePath === 'string' &&
+            context.originModulePath.includes(`${path.sep}react-native${path.sep}`)
+          if (fromRnCore || moduleName.includes('Libraries/Core/setUpXHR')) {
+            return {
+              type: 'sourceFile',
+              filePath: path.join(projectRoot, 'lib/metro-stubs/setUpXHR.js'),
+            }
+          }
         }
 
         if (moduleName === 'one') {

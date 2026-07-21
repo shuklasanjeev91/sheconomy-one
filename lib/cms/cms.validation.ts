@@ -3,8 +3,6 @@
  * Limits match the DB columns in `cms_setup` (not inflated beyond VARCHAR sizes).
  */
 
-import { z } from 'zod'
-
 import { compose, maxLength, minLength, required, type Validator } from '~/lib/validation'
 
 import {
@@ -19,6 +17,7 @@ import {
   CMS_VALIDATION,
   type CmsValidationResult,
 } from './cms.type'
+import { z } from '~/lib/zod'
 
 // ============= HELPERS =============
 
@@ -32,7 +31,7 @@ const urlSchema = z
   .url('Must be a valid URL (include https://)')
   .optional()
   .nullable()
-const timestampSchema = z.iso.datetime({ offset: true }).optional().nullable()
+const timestampSchema = z.string().datetime({ offset: true }).optional().nullable()
 
 const contentTypeValues = [
   CMS_CONTENT_TYPES.POST,
