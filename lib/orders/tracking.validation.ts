@@ -1,3 +1,6 @@
+import { z } from '~/lib/zod'
+
+
 /**
  * Tracking-number validation + courier catalog.
  *
@@ -6,8 +9,6 @@
  * of `lib/utils/orders/validators.js` (`validateDeliveryData`). All courier data
  * lives in the constants below so nothing is hard-coded at the call sites.
  */
-
-import { z } from 'zod'
 
 // ============= COURIER CATALOG =============
 
@@ -24,6 +25,8 @@ export const COURIER_SLUGS = {
   INDIA_POST: 'indiapost',
   PROFESSIONAL_COURIERS: 'professional-couriers',
   XPRESSBEES: 'xpressbees',
+  SHIPROCKET: 'shiprocket',
+  PICKRR: 'pickrr',
 } as const
 
 export type CourierSlug = (typeof COURIER_SLUGS)[keyof typeof COURIER_SLUGS]
@@ -126,6 +129,20 @@ export const COURIER_RULES: Record<string, CourierRule> = {
     hint: 'Xpressbees tracking numbers should be 11–13 digits',
     formats: ['11–13 digits', '2 letters + 9–11 digits'],
     examples: ['12345678901', 'XB123456789'],
+  },
+  [COURIER_SLUGS.SHIPROCKET]: {
+    name: 'SHEdelivery · Shiprocket',
+    patterns: [/^[A-Z0-9]{6,30}$/],
+    hint: 'Use Create SHEdelivery shipment or paste the AWB from Shiprocket',
+    formats: ['AWB / shipment ID'],
+    examples: ['SR123456789'],
+  },
+  [COURIER_SLUGS.PICKRR]: {
+    name: 'SHEdelivery · Pickrr',
+    patterns: [/^[A-Z0-9]{6,30}$/],
+    hint: 'Use Create SHEdelivery shipment or paste the AWB from Pickrr',
+    formats: ['AWB / tracking ID'],
+    examples: ['PK123456789'],
   },
 }
 

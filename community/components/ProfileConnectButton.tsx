@@ -4,9 +4,10 @@ import { AppLink } from '~/components/navigation/AppLink'
 import { useProfileConnection } from '~/community/hooks/useProfileConnection'
 import { ConfirmDialog, Icons, Spinner, Text, XStack } from '~/components/ui'
 import { routes } from '~/lib/routes'
+import { brandColors } from '~/config/brand-colors'
 import { useAppUi } from '~/lib/theme/useAppUi'
 
-const BRAND_BLUE = '#0a66c2'
+const BRAND_BLUE = brandColors.primary
 
 type ProfileConnectButtonProps = {
   targetUserId?: string | null

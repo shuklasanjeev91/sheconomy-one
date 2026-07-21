@@ -1,9 +1,10 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
+import { Platform } from 'react-native'
 import { useLocalSearchParams, useRouter } from 'one'
 
 import { ListingPublishErrorBoundary } from '~/commerce/components/ListingPublishErrorBoundary'
 import { PageCenter } from '~/components/layout'
-import { Spinner, YStack, useAppToast } from '~/components/ui'
+import { ScrollView, Spinner, YStack, useAppToast } from '~/components/ui'
 import { useAppLayout } from '~/hooks/useAppLayout'
 import { loadAttributes } from '~/lib/listing/listing-attributes.store'
 import { loadImages } from '~/lib/listing/listing-images.store'
@@ -21,6 +22,7 @@ import {
   type ListingFormData,
   type ListingType,
 } from '~/lib/listing/listing.type'
+import { validateListingField } from '~/lib/listing/listing.validation'
 import {
   initFormForType,
   loadFormFromListing,
@@ -180,6 +182,16 @@ function VendorListingPublishContent() {
     <K extends keyof ListingFormData>(field: K, value: ListingFormData[K]) => {
       dispatch(updateListingField({ field, value }))
       setLastSavedAt(new Date().toISOString())
+      // Realtime field errors for string-backed publish fields.
+      if (typeof value === 'string') {
+        const { error } = validateListingField(field, value)
+        setStepErrors((current) => {
+          const next = { ...current }
+          if (error) next[field as string] = error
+          else delete next[field as string]
+          return next
+        })
+      }
     },
     [dispatch],
   )
@@ -387,104 +399,121 @@ function VendorListingPublishContent() {
   const showPublish = activeStep === LISTING_PUBLISH_STEP_IDS.SEO
 
   return (
-    <YStack flex={1} width="100%" backgroundColor={ui.background}>
-      <YStack
+    <YStack
+      flex={1}
+      minHeight={0}
+      width="100%"
+      backgroundColor={ui.background}
+      style={
+        Platform.OS === 'web'
+          ? ({ height: '100%', maxHeight: '100%', overflow: 'hidden' } as const)
+          : undefined
+      }
+    >
+      <ScrollView
         flex={1}
         width="100%"
-        maxWidth={1200}
-        alignSelf="center"
-        paddingHorizontal={isDesktop ? '$6' : '$4'}
-        paddingTop={isDesktop ? '$5' : '$3'}
-        paddingBottom="$2"
-        gap="$4"
+        minHeight={0}
+        showsVerticalScrollIndicator={false}
+        style={Platform.OS === 'web' ? ({ overflowY: 'auto', minHeight: 0 } as const) : undefined}
       >
-        <ListingPublishTopBar
-          ui={ui}
-          title={isEditMode ? LISTING_PUBLISH_COPY.PAGE_TITLE_EDIT : LISTING_PUBLISH_COPY.PAGE_TITLE_CREATE}
-          isSaving={isSaving}
-          onBack={() => router.push(vendorRoutes.products)}
-          onSaveDraft={() => void saveDraft()}
-        />
-
-        <ListingPublishPageHeader
-          ui={ui}
-          headline={stepConfig.headline}
-          subtitle={stepConfig.subtitle}
-        />
-
-        <ListingPublishStepNav
-          ui={ui}
-          activeStep={activeStep}
-          isDesktop={isDesktop}
-          onSelect={(step) => {
-            runStepValidation(activeStep)
-            setActiveStep(step)
-          }}
-        />
-
-        {activeStep === LISTING_PUBLISH_STEP_IDS.BASIC ? (
-          <BasicInfoStep
+        <YStack
+          width="100%"
+          maxWidth={1200}
+          alignSelf="center"
+          paddingHorizontal={isDesktop ? '$6' : '$4'}
+          paddingTop={isDesktop ? '$5' : '$3'}
+          paddingBottom="$6"
+          gap="$4"
+        >
+          {/* <ListingPublishTopBar
             ui={ui}
-            formData={formData}
-            errors={displayErrors}
-            onChangeType={handleChangeType}
-            onUpdate={updateField}
-            onAddTag={handleAddTag}
-            onRemoveTag={handleRemoveTag}
-          />
-        ) : null}
+            title={isEditMode ? LISTING_PUBLISH_COPY.PAGE_TITLE_EDIT : LISTING_PUBLISH_COPY.PAGE_TITLE_CREATE}
+            isSaving={isSaving}
+            onBack={() => router.push(vendorRoutes.products)}
+            onSaveDraft={() => void saveDraft()}
+          /> */}
 
-        {activeStep === LISTING_PUBLISH_STEP_IDS.DETAILS ? (
-          <DetailsStep
+          <ListingPublishPageHeader
             ui={ui}
-            formData={formData}
-            errors={displayErrors}
-            onUpdate={updateField}
-            onUpdateMetadata={updateMetadata}
+            headline={stepConfig.headline}
+            subtitle={stepConfig.subtitle}
           />
-        ) : null}
 
-        {activeStep === LISTING_PUBLISH_STEP_IDS.PRICING ? (
-          <PricingStep
+          <ListingPublishStepNav
             ui={ui}
-            formData={formData}
-            errors={displayErrors}
-            currencySymbol={currencySymbol}
-            onUpdate={updateField}
-            onUpdateMetadata={updateMetadata}
+            activeStep={activeStep}
+            isDesktop={isDesktop}
+            onSelect={(step) => {
+              runStepValidation(activeStep)
+              setActiveStep(step)
+            }}
           />
-        ) : null}
 
-        {activeStep === LISTING_PUBLISH_STEP_IDS.CATEGORIES ? (
-          <CategoriesStep
-            ui={ui}
-            formData={formData}
-            errors={displayErrors}
-            onToggleCategory={handleToggleCategory}
-            onClearCategories={handleClearCategories}
-          />
-        ) : null}
+          {activeStep === LISTING_PUBLISH_STEP_IDS.BASIC ? (
+            <BasicInfoStep
+              ui={ui}
+              formData={formData}
+              errors={displayErrors}
+              onChangeType={handleChangeType}
+              onUpdate={updateField}
+              onAddTag={handleAddTag}
+              onRemoveTag={handleRemoveTag}
+            />
+          ) : null}
 
-        {activeStep === LISTING_PUBLISH_STEP_IDS.IMAGES ? (
-          <ImagesStep
-            ui={ui}
-            formData={formData}
-            errors={displayErrors}
-            onChangeImages={handleChangeImages}
-          />
-        ) : null}
+          {activeStep === LISTING_PUBLISH_STEP_IDS.DETAILS ? (
+            <DetailsStep
+              ui={ui}
+              formData={formData}
+              errors={displayErrors}
+              onUpdate={updateField}
+              onUpdateMetadata={updateMetadata}
+            />
+          ) : null}
 
-        {activeStep === LISTING_PUBLISH_STEP_IDS.SEO ? (
-          <SeoStep
-            ui={ui}
-            formData={formData}
-            errors={displayErrors}
-            shopSlug={shopSlug}
-            onUpdate={updateField}
-            onUpdateMetadata={updateMetadata}
-          />
-        ) : null}
-      </YStack>
+          {activeStep === LISTING_PUBLISH_STEP_IDS.PRICING ? (
+            <PricingStep
+              ui={ui}
+              formData={formData}
+              errors={displayErrors}
+              currencySymbol={currencySymbol}
+              onUpdate={updateField}
+              onUpdateMetadata={updateMetadata}
+            />
+          ) : null}
+
+          {activeStep === LISTING_PUBLISH_STEP_IDS.CATEGORIES ? (
+            <CategoriesStep
+              ui={ui}
+              formData={formData}
+              errors={displayErrors}
+              onToggleCategory={handleToggleCategory}
+              onClearCategories={handleClearCategories}
+            />
+          ) : null}
+
+          {activeStep === LISTING_PUBLISH_STEP_IDS.IMAGES ? (
+            <ImagesStep
+              ui={ui}
+              formData={formData}
+              errors={displayErrors}
+              onChangeImages={handleChangeImages}
+            />
+          ) : null}
+
+          {activeStep === LISTING_PUBLISH_STEP_IDS.SEO ? (
+            <SeoStep
+              ui={ui}
+              formData={formData}
+              errors={displayErrors}
+              shopSlug={shopSlug}
+              onUpdate={updateField}
+              onUpdateMetadata={updateMetadata}
+            />
+          ) : null}
+        </YStack>
+      </ScrollView>
 
       <ListingPublishFooter
         ui={ui}

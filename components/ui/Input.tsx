@@ -1,6 +1,10 @@
 import { forwardRef } from 'react'
+import { Platform } from 'react-native'
 import type { GetProps } from 'tamagui'
-import { Input as TInput, TextArea as TTextArea, YStack, SizableText } from 'tamagui'
+import { Input as TInput, TextArea as TTextArea, YStack } from 'tamagui'
+
+import { AppTextField } from '~/components/forms/AppTextField'
+import { SizableText } from './Text'
 import { BRAND_THEME } from '~/config/tokens'
 
 const sharedFieldStyle = {
@@ -29,10 +33,140 @@ const sharedFieldStyle = {
   },
 } as const
 
-export const Input = forwardRef<any, GetProps<typeof TInput> & { invalid?: boolean }>(function Input(
-  { invalid, ...props },
-  ref,
-) {
+const embeddedFieldStyle = {
+  focusStyle: {
+    borderWidth: 0,
+    backgroundColor: 'transparent',
+    outlineWidth: 0,
+    shadowOpacity: 0,
+  },
+  hoverStyle: {},
+} as const
+
+function isEmbeddedField(props: { borderWidth?: unknown; unstyled?: boolean }): boolean {
+  return props.borderWidth === 0 || props.unstyled === true
+}
+
+type FieldControlExtra = {
+  invalid?: boolean
+  editable?: boolean
+  accessibilityLabel?: string
+  accessibilityHint?: string
+  accessibilityRole?: string
+}
+
+function webSafeFieldProps<T extends FieldControlExtra>(props: T): T {
+  if (Platform.OS !== 'web') return props
+
+  const {
+    editable,
+    accessibilityLabel,
+    accessibilityHint,
+    accessibilityRole: _accessibilityRole,
+    ...rest
+  } = props
+
+  return {
+    ...rest,
+    ...(editable === false ? { readOnly: true } : null),
+    ...(accessibilityLabel ? { 'aria-label': accessibilityLabel } : null),
+    ...(accessibilityHint ? { title: accessibilityHint } : null),
+  } as T
+}
+
+type InputProps = GetProps<typeof TInput> & FieldControlExtra
+
+/**
+ * Web: Tamagui Input.
+ * Native: RN-backed AppTextField so typing, paste, and autofill work reliably
+ * across every screen (Tamagui Input shells often swallow Android touches).
+ */
+export const Input = forwardRef<any, InputProps>(function Input({ invalid, ...props }, ref) {
+  if (Platform.OS !== 'web') {
+    const {
+      value,
+      defaultValue,
+      onChangeText,
+      onBlur,
+      onFocus,
+      placeholder,
+      editable,
+      disabled,
+      autoComplete,
+      textContentType,
+      keyboardType,
+      inputMode,
+      autoCapitalize,
+      autoCorrect,
+      secureTextEntry,
+      returnKeyType,
+      enterKeyHint,
+      accessibilityLabel,
+      maxLength,
+      multiline,
+      numberOfLines,
+      autoFocus,
+      borderWidth,
+      unstyled,
+      flex,
+      width,
+      height,
+    } = props as InputProps & {
+      onChangeText?: (text: string) => void
+      disabled?: boolean
+      autoComplete?: string
+      textContentType?: string
+      inputMode?: string
+      enterKeyHint?: string
+      maxLength?: number
+      multiline?: boolean
+      numberOfLines?: number
+      autoFocus?: boolean
+      defaultValue?: string
+      flex?: number
+      width?: number | string
+      height?: number | string
+    }
+
+    const embedded = isEmbeddedField({ borderWidth, unstyled })
+
+    return (
+      <AppTextField
+        ref={ref}
+        value={value != null ? String(value) : defaultValue != null ? String(defaultValue) : undefined}
+        onChangeText={onChangeText}
+        onBlur={onBlur as never}
+        onFocus={onFocus as never}
+        placeholder={placeholder != null ? String(placeholder) : undefined}
+        editable={editable}
+        disabled={Boolean(disabled)}
+        invalid={invalid}
+        autoComplete={autoComplete as never}
+        textContentType={textContentType as never}
+        keyboardType={keyboardType as never}
+        inputMode={inputMode as never}
+        autoCapitalize={(autoCapitalize as never) ?? 'sentences'}
+        autoCorrect={autoCorrect as never}
+        secureTextEntry={Boolean(secureTextEntry)}
+        returnKeyType={returnKeyType as never}
+        enterKeyHint={enterKeyHint as never}
+        accessibilityLabel={accessibilityLabel}
+        maxLength={maxLength}
+        multiline={Boolean(multiline)}
+        numberOfLines={numberOfLines}
+        autoFocus={autoFocus}
+        embedded={embedded}
+        containerStyle={{
+          ...(typeof flex === 'number' ? { flex } : null),
+          ...(width != null ? { width: width as never } : null),
+          ...(height != null && !embedded ? { minHeight: height as never } : null),
+        }}
+      />
+    )
+  }
+
+  const safeProps = webSafeFieldProps(props)
+
   return (
     <TInput
       ref={ref}
@@ -50,37 +184,88 @@ export const Input = forwardRef<any, GetProps<typeof TInput> & { invalid?: boole
             },
           }
         : null)}
-      {...props}
+      {...(isEmbeddedField(props) ? embeddedFieldStyle : null)}
+      {...safeProps}
     />
   )
 })
 Input.displayName = 'Input'
 
-export const TextArea = forwardRef<any, GetProps<typeof TTextArea> & { invalid?: boolean }>(
-  function TextArea({ invalid, ...props }, ref) {
+export const TextArea = forwardRef<
+  any,
+  GetProps<typeof TTextArea> & FieldControlExtra
+>(function TextArea({ invalid, ...props }, ref) {
+  if (Platform.OS !== 'web') {
+    const {
+      value,
+      onChangeText,
+      onBlur,
+      onFocus,
+      placeholder,
+      editable,
+      disabled,
+      accessibilityLabel,
+      maxLength,
+      numberOfLines,
+      autoFocus,
+      autoCapitalize,
+      autoCorrect,
+    } = props as GetProps<typeof TTextArea> &
+      FieldControlExtra & {
+        onChangeText?: (text: string) => void
+        disabled?: boolean
+        maxLength?: number
+        numberOfLines?: number
+        autoFocus?: boolean
+      }
+
     return (
-      <TTextArea
+      <AppTextField
         ref={ref}
-        theme={BRAND_THEME}
-        minHeight={100}
-        paddingVertical="$3"
-        {...sharedFieldStyle}
-        {...(invalid
-          ? {
-              borderColor: '$red8',
-              focusStyle: {
-                borderColor: '$red9',
-                backgroundColor: '$background',
-                outlineWidth: 0,
-                borderWidth: 1.5,
-              },
-            }
-          : null)}
-        {...props}
+        value={value != null ? String(value) : undefined}
+        onChangeText={onChangeText}
+        onBlur={onBlur as never}
+        onFocus={onFocus as never}
+        placeholder={placeholder != null ? String(placeholder) : undefined}
+        editable={editable}
+        disabled={Boolean(disabled)}
+        invalid={invalid}
+        accessibilityLabel={accessibilityLabel}
+        maxLength={maxLength}
+        multiline
+        numberOfLines={numberOfLines ?? 4}
+        autoFocus={autoFocus}
+        autoCapitalize={(autoCapitalize as never) ?? 'sentences'}
+        autoCorrect={autoCorrect !== false}
       />
     )
-  },
-)
+  }
+
+  const safeProps = webSafeFieldProps(props)
+
+  return (
+    <TTextArea
+      ref={ref}
+      theme={BRAND_THEME}
+      minHeight={100}
+      paddingVertical="$3"
+      {...sharedFieldStyle}
+      {...(invalid
+        ? {
+            borderColor: '$red8',
+            focusStyle: {
+              borderColor: '$red9',
+              backgroundColor: '$background',
+              outlineWidth: 0,
+              borderWidth: 1.5,
+            },
+          }
+        : null)}
+      {...(isEmbeddedField(props) ? embeddedFieldStyle : null)}
+      {...safeProps}
+    />
+  )
+})
 TextArea.displayName = 'TextArea'
 
 export type FieldProps = {
@@ -89,7 +274,6 @@ export type FieldProps = {
   hint?: string
   required?: boolean
   children: React.ReactNode
-  /** Layout: let a field flex to share a row (applied to the wrapper, not the input). */
   flex?: number
   minWidth?: number
 }

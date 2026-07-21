@@ -24,9 +24,12 @@ import {
   XStack,
   YStack,
 } from '~/components/ui'
+import { PhoneInput } from '~/components/forms/PhoneInput'
 import { getShadowStyle, radius } from '~/config/tokens'
 import { useAppLayout } from '~/hooks/useAppLayout'
 import { useAppDispatch, useAppSelector } from '~/lib/store/hooks'
+import { validateShopField } from '~/lib/shop/shop.validation'
+import { optionalUrl, slug as slugValidator } from '~/lib/validation'
 import { supabase } from '~/lib/supabase'
 import {
   adminUpdateShop,
@@ -880,6 +883,47 @@ function ShopEditorDialog({
   onChange: (patch: Partial<ShopFormState>) => void
   onSubmit: () => void
 }) {
+  const [fieldErrors, setFieldErrors] = useState<Partial<Record<keyof ShopFormState, string>>>({})
+
+  useEffect(() => {
+    if (!open) setFieldErrors({})
+  }, [open])
+
+  function patchField(patch: Partial<ShopFormState>) {
+    onChange(patch)
+    setFieldErrors((current) => {
+      const next = { ...current }
+      for (const key of Object.keys(patch) as (keyof ShopFormState)[]) {
+        const error = validateAdminShopField(key, patch[key] ?? '')
+        if (error) next[key] = error
+        else delete next[key]
+      }
+      return next
+    })
+  }
+
+  function handleSubmit() {
+    const nextErrors: Partial<Record<keyof ShopFormState, string>> = {}
+    ;(
+      [
+        'shop_name',
+        'shop_description',
+        'shop_email',
+        'shop_phone_number',
+        'website_url',
+        'logo_url',
+        'shop_currency',
+        'slug',
+      ] as const
+    ).forEach((key) => {
+      const error = validateAdminShopField(key, form[key])
+      if (error) nextErrors[key] = error
+    })
+    setFieldErrors(nextErrors)
+    if (Object.keys(nextErrors).length > 0) return
+    onSubmit()
+  }
+
   return (
     <Dialog modal open={open} onOpenChange={onOpenChange}>
       <Dialog.Portal>
@@ -894,60 +938,99 @@ function ShopEditorDialog({
             <YStack gap="$3" paddingRight="$1">
               {mode === 'create' ? (
                 <Field label="Owner user id">
-                  <Input value={form.ownerUserId} onChangeText={(ownerUserId) => onChange({ ownerUserId })} placeholder="Owner UUID, optional if current user is owner" />
+                  <Input value={form.ownerUserId} onChangeText={(ownerUserId) => patchField({ ownerUserId })} placeholder="Owner UUID, optional if current user is owner" />
                 </Field>
               ) : null}
-              <Field label="Shop name" required>
-                <Input value={form.shop_name} onChangeText={(shop_name) => onChange({ shop_name })} placeholder="Shop name" />
+              <Field label="Shop name" required error={fieldErrors.shop_name}>
+                <Input
+                  value={form.shop_name}
+                  onChangeText={(shop_name) => patchField({ shop_name })}
+                  placeholder="Shop name"
+                  invalid={Boolean(fieldErrors.shop_name)}
+                />
               </Field>
-              <Field label="Description">
-                <TextArea value={form.shop_description} onChangeText={(shop_description) => onChange({ shop_description })} placeholder="Shop description" />
+              <Field label="Description" error={fieldErrors.shop_description}>
+                <TextArea
+                  value={form.shop_description}
+                  onChangeText={(shop_description) => patchField({ shop_description })}
+                  placeholder="Shop description"
+                />
               </Field>
               <XStack gap="$3" flexWrap="wrap">
                 <YStack flex={1} minWidth={180}>
-                  <Field label="Email">
-                    <Input value={form.shop_email} onChangeText={(shop_email) => onChange({ shop_email })} placeholder="shop@example.com" />
+                  <Field label="Email" error={fieldErrors.shop_email}>
+                    <Input
+                      value={form.shop_email}
+                      onChangeText={(shop_email) => patchField({ shop_email })}
+                      placeholder="shop@example.com"
+                      invalid={Boolean(fieldErrors.shop_email)}
+                    />
                   </Field>
                 </YStack>
                 <YStack flex={1} minWidth={180}>
-                  <Field label="Phone">
-                    <Input value={form.shop_phone_number} onChangeText={(shop_phone_number) => onChange({ shop_phone_number })} placeholder="+91..." />
+                  <Field label="Phone" error={fieldErrors.shop_phone_number}>
+                    <PhoneInput
+                      value={form.shop_phone_number}
+                      onChange={(shop_phone_number) => patchField({ shop_phone_number })}
+                      invalid={Boolean(fieldErrors.shop_phone_number)}
+                    />
                   </Field>
                 </YStack>
               </XStack>
-              <Field label="Website URL">
-                <Input value={form.website_url} onChangeText={(website_url) => onChange({ website_url })} placeholder="https://example.com" />
+              <Field label="Website URL" error={fieldErrors.website_url}>
+                <Input
+                  value={form.website_url}
+                  onChangeText={(website_url) => patchField({ website_url })}
+                  placeholder="https://example.com"
+                  invalid={Boolean(fieldErrors.website_url)}
+                />
               </Field>
-              <Field label="Logo URL">
-                <Input value={form.logo_url} onChangeText={(logo_url) => onChange({ logo_url })} placeholder="https://..." />
+              <Field label="Logo URL" error={fieldErrors.logo_url}>
+                <Input
+                  value={form.logo_url}
+                  onChangeText={(logo_url) => patchField({ logo_url })}
+                  placeholder="https://..."
+                  invalid={Boolean(fieldErrors.logo_url)}
+                />
               </Field>
               <XStack gap="$3" flexWrap="wrap">
                 <YStack flex={1} minWidth={160}>
-                  <Field label="Currency">
-                    <Input value={form.shop_currency} onChangeText={(shop_currency) => onChange({ shop_currency })} maxLength={3} placeholder="INR" />
+                  <Field label="Currency" error={fieldErrors.shop_currency}>
+                    <Input
+                      value={form.shop_currency}
+                      onChangeText={(shop_currency) => patchField({ shop_currency })}
+                      maxLength={3}
+                      placeholder="INR"
+                      invalid={Boolean(fieldErrors.shop_currency)}
+                    />
                   </Field>
                 </YStack>
                 <YStack flex={2} minWidth={220}>
                   <Field label="Categories">
-                    <Input value={form.categoriesText} onChangeText={(categoriesText) => onChange({ categoriesText })} placeholder="Fashion, Beauty" />
+                    <Input value={form.categoriesText} onChangeText={(categoriesText) => patchField({ categoriesText })} placeholder="Fashion, Beauty" />
                   </Field>
                 </YStack>
               </XStack>
-              <Field label="Slug">
-                <Input value={form.slug} onChangeText={(slug) => onChange({ slug })} placeholder="shop-slug" />
+              <Field label="Slug" error={fieldErrors.slug}>
+                <Input
+                  value={form.slug}
+                  onChangeText={(slug) => patchField({ slug })}
+                  placeholder="shop-slug"
+                  invalid={Boolean(fieldErrors.slug)}
+                />
               </Field>
               <Field label="SEO title">
-                <Input value={form.seoTitle} onChangeText={(seoTitle) => onChange({ seoTitle })} placeholder="Search title" />
+                <Input value={form.seoTitle} onChangeText={(seoTitle) => patchField({ seoTitle })} placeholder="Search title" />
               </Field>
               <Field label="SEO description">
-                <TextArea value={form.seoDescription} onChangeText={(seoDescription) => onChange({ seoDescription })} placeholder="Search description" />
+                <TextArea value={form.seoDescription} onChangeText={(seoDescription) => patchField({ seoDescription })} placeholder="Search description" />
               </Field>
             </YStack>
           </ScrollView>
 
           <XStack gap="$2" justifyContent="flex-end" flexWrap="wrap">
             <Button tone="outline" onPress={() => onOpenChange(false)} disabled={busy}>Cancel</Button>
-            <Button onPress={onSubmit} disabled={busy || !form.shop_name.trim()}>
+            <Button onPress={handleSubmit} disabled={busy || !form.shop_name.trim()}>
               {busy ? 'Saving...' : mode === 'create' ? 'Create shop' : 'Save changes'}
             </Button>
           </XStack>
@@ -1046,15 +1129,51 @@ function EmptyPanel({ title, description }: { title: string; description: string
   )
 }
 
-function Field({ label, required, children }: { label: string; required?: boolean; children: React.ReactNode }) {
+function Field({
+  label,
+  required,
+  error,
+  children,
+}: {
+  label: string
+  required?: boolean
+  error?: string
+  children: React.ReactNode
+}) {
   return (
     <YStack gap="$2">
       <Text fontSize={12} fontWeight="700" color="$color11">
         {label}{required ? ' *' : ''}
       </Text>
       {children}
+      {error ? (
+        <Text fontSize={12} color="$red10">
+          {error}
+        </Text>
+      ) : null}
     </YStack>
   )
+}
+
+function validateAdminShopField(field: keyof ShopFormState, value: string): string | null {
+  if (
+    field === 'shop_name' ||
+    field === 'shop_description' ||
+    field === 'shop_email' ||
+    field === 'shop_phone_number' ||
+    field === 'website_url' ||
+    field === 'shop_currency'
+  ) {
+    return validateShopField(field, value).error
+  }
+  if (field === 'logo_url') {
+    return optionalUrl('Please enter a valid URL starting with http:// or https://.')(value)
+  }
+  if (field === 'slug') {
+    if (!value.trim()) return null
+    return slugValidator()(value.trim())
+  }
+  return null
 }
 
 function splitCsv(value: string) {

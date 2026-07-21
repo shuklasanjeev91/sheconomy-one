@@ -1,5 +1,6 @@
 import { useCallback } from 'react'
 
+import { CACHE_KEYS } from '~/lib/bootstrap/cache-keys'
 import {
   COMMERCE_PAGE_SIZE,
   fetchListingFeedPage,
@@ -27,5 +28,8 @@ export function useListingFeed({
     [kind, pageSize, shopId],
   )
 
-  return usePaginatedFeed<ListingSummary>({ fetchPage, enabled })
+  // Shop-scoped feeds are unique per shop; only share the home section keys.
+  const cacheKey = shopId ? undefined : CACHE_KEYS.listingFeed(kind)
+
+  return usePaginatedFeed<ListingSummary>({ fetchPage, enabled, cacheKey })
 }

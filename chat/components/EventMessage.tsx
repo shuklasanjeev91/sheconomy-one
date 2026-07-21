@@ -121,7 +121,7 @@ export function EventMessage({ event, isOwn, currentUserId }: EventMessageProps)
         <XStack alignItems="center" gap={6}>
           <Icons.Calendar size={13} color={metaColor} />
           <Text fontSize={12} color={metaColor}>
-            Event
+            Details only — RSVP unavailable for this event
           </Text>
         </XStack>
       ) : (

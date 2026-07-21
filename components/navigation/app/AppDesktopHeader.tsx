@@ -52,7 +52,8 @@ export function AppDesktopHeader() {
     >
       <XStack
         width="100%"
-        alignSelf="center"
+        maxWidth="100%"
+        alignSelf="stretch"
         alignItems="stretch"
         paddingHorizontal={gutter}
         height={60}

@@ -302,10 +302,10 @@ export const APP_CHAT_MOBILE_TABS: AppMobileTabItem[] = [
 /** Bottom tabs — classes: Video + Audio (Home covers hub / program detail). */
 export const APP_CLASS_MOBILE_TABS: AppMobileTabItem[] = [
   {
-    href: classRoutes.video,
+    href: classRoutes.home,
     label: 'Video',
     icon: Icons.Play,
-    match: (path) => isClassVideoPath(path),
+    match: (path) => isClassVideoPath(path) || isClassHomePath(path),
   },
   {
     href: classRoutes.audio,

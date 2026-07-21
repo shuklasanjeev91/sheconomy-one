@@ -15,10 +15,18 @@ export type NativeFrameAnalysis = {
   gender: GenderEstimate | null
   width: number
   height: number
+  eyesClosed: boolean
+  liveScore: number
+  realScore: number
 }
 
 export type NativeFaceAnalyzerHandle = {
-  analyze: (base64: string, width: number, height: number, mode: 'liveness' | 'gender') => Promise<NativeFrameAnalysis>
+  analyze: (
+    base64: string,
+    width: number,
+    height: number,
+    mode: 'liveness' | 'gender',
+  ) => Promise<NativeFrameAnalysis>
   isReady: boolean
 }
 
@@ -27,7 +35,7 @@ type PendingRequest = {
   reject: (reason: Error) => void
 }
 
-const ANALYZE_TIMEOUT_MS = 20_000
+const ANALYZE_TIMEOUT_MS = 25_000
 
 type NativeFaceAnalyzerProps = {
   onReady?: () => void
@@ -35,129 +43,140 @@ type NativeFaceAnalyzerProps = {
 
 export const NativeFaceAnalyzer = forwardRef<NativeFaceAnalyzerHandle, NativeFaceAnalyzerProps>(
   function NativeFaceAnalyzer({ onReady }, ref) {
-  const webViewRef = useRef<import('react-native-webview').WebView | null>(null)
-  const [WebViewComponent, setWebViewComponent] = useState<React.ComponentType<any> | null>(null)
-  const [ready, setReady] = useState(false)
-  const pendingRef = useRef(new Map<string, PendingRequest>())
-  const seqRef = useRef(0)
+    const webViewRef = useRef<import('react-native-webview').WebView | null>(null)
+    const [WebViewComponent, setWebViewComponent] = useState<React.ComponentType<any> | null>(null)
+    const [ready, setReady] = useState(false)
+    const pendingRef = useRef(new Map<string, PendingRequest>())
+    const seqRef = useRef(0)
 
-  useEffect(() => {
-    if (Platform.OS === 'web') return
-    void import('react-native-webview').then((module) => setWebViewComponent(() => module.WebView))
-  }, [])
+    useEffect(() => {
+      if (Platform.OS === 'web') return
+      void import('react-native-webview').then((module) => setWebViewComponent(() => module.WebView))
+    }, [])
 
-  const analyze = useCallback(
-    (base64: string, width: number, height: number, mode: 'liveness' | 'gender') => {
-      if (!ready || !webViewRef.current) {
-        return Promise.reject(new Error('Face analyzer is not ready yet.'))
-      }
-
-      const id = String(++seqRef.current)
-
-      return new Promise<NativeFrameAnalysis>((resolve, reject) => {
-        const timeout = setTimeout(() => {
-          pendingRef.current.delete(id)
-          reject(new Error('Face analysis timed out.'))
-        }, ANALYZE_TIMEOUT_MS)
-
-        pendingRef.current.set(id, {
-          resolve: (value) => {
-            clearTimeout(timeout)
-            resolve(value)
-          },
-          reject: (reason) => {
-            clearTimeout(timeout)
-            reject(reason)
-          },
-        })
-
-        webViewRef.current?.postMessage(
-          JSON.stringify({
-            type: 'analyze',
-            id,
-            base64,
-            width,
-            height,
-            mode,
-          }),
-        )
-      })
-    },
-    [ready],
-  )
-
-  useImperativeHandle(
-    ref,
-    () => ({
-      analyze,
-      isReady: ready,
-    }),
-    [analyze, ready],
-  )
-
-  const onMessage = useCallback((event: { nativeEvent: { data: string } }) => {
-    try {
-      const message = JSON.parse(event.nativeEvent.data) as {
-        type: string
-        id?: string
-        face?: NativeFaceFrame | null
-        gender?: GenderEstimate | null
-        width?: number
-        height?: number
-        message?: string
-      }
-
-      if (message.type === 'ready') {
-        setReady(true)
-        onReady?.()
-        return
-      }
-
-      if (message.type === 'error') {
-        if (message.id) {
-          const pending = pendingRef.current.get(message.id)
-          pendingRef.current.delete(message.id)
-          pending?.reject(new Error(message.message ?? 'Face analysis failed.'))
+    const analyze = useCallback(
+      (base64: string, width: number, height: number, mode: 'liveness' | 'gender') => {
+        if (!ready || !webViewRef.current) {
+          return Promise.reject(new Error('Face analyzer is not ready yet.'))
         }
-        return
-      }
 
-      if (message.type === 'result' && message.id) {
-        const pending = pendingRef.current.get(message.id)
-        pendingRef.current.delete(message.id)
-        pending?.resolve({
-          face: message.face ?? null,
-          gender: message.gender ?? null,
-          width: message.width ?? 0,
-          height: message.height ?? 0,
+        const id = String(++seqRef.current)
+
+        return new Promise<NativeFrameAnalysis>((resolve, reject) => {
+          const timeout = setTimeout(() => {
+            pendingRef.current.delete(id)
+            reject(new Error('Face analysis timed out.'))
+          }, ANALYZE_TIMEOUT_MS)
+
+          pendingRef.current.set(id, {
+            resolve: (value) => {
+              clearTimeout(timeout)
+              resolve(value)
+            },
+            reject: (reason) => {
+              clearTimeout(timeout)
+              reject(reason)
+            },
+          })
+
+          webViewRef.current?.postMessage(
+            JSON.stringify({
+              type: 'analyze',
+              id,
+              base64,
+              width,
+              height,
+              mode,
+            }),
+          )
         })
-      }
-    } catch {
-      // Ignore malformed analyzer messages.
-    }
-  }, [onReady])
+      },
+      [ready],
+    )
 
-  if (Platform.OS === 'web' || !WebViewComponent) return null
+    useImperativeHandle(
+      ref,
+      () => ({
+        analyze,
+        isReady: ready,
+      }),
+      [analyze, ready],
+    )
 
-  const WebView = WebViewComponent
+    const onMessage = useCallback(
+      (event: { nativeEvent: { data: string } }) => {
+        try {
+          const message = JSON.parse(event.nativeEvent.data) as {
+            type: string
+            id?: string
+            face?: NativeFaceFrame | null
+            gender?: GenderEstimate | null
+            width?: number
+            height?: number
+            eyesClosed?: boolean
+            liveScore?: number
+            realScore?: number
+            message?: string
+          }
 
-  return (
-    <WebView
-      ref={webViewRef}
-      source={{ html: getNativeAnalyzerHtml() }}
-      onMessage={onMessage}
-      originWhitelist={['*']}
-      javaScriptEnabled
-      domStorageEnabled
-      allowsInlineMediaPlayback
-      style={{
-        position: 'absolute',
-        width: 1,
-        height: 1,
-        opacity: 0,
-        pointerEvents: 'none',
-      }}
-    />
-  )
-},
+          if (message.type === 'ready') {
+            setReady(true)
+            onReady?.()
+            return
+          }
+
+          if (message.type === 'error') {
+            if (message.id) {
+              const pending = pendingRef.current.get(message.id)
+              pendingRef.current.delete(message.id)
+              pending?.reject(new Error(message.message ?? 'Face analysis failed.'))
+            }
+            return
+          }
+
+          if (message.type === 'result' && message.id) {
+            const pending = pendingRef.current.get(message.id)
+            pendingRef.current.delete(message.id)
+            pending?.resolve({
+              face: message.face ?? null,
+              gender: message.gender ?? null,
+              width: message.width ?? 0,
+              height: message.height ?? 0,
+              eyesClosed: !!message.eyesClosed,
+              liveScore: Number(message.liveScore ?? 0),
+              realScore: Number(message.realScore ?? 0),
+            })
+          }
+        } catch {
+          // Ignore malformed analyzer messages.
+        }
+      },
+      [onReady],
+    )
+
+    if (Platform.OS === 'web' || !WebViewComponent) return null
+
+    const WebView = WebViewComponent
+
+    return (
+      <WebView
+        ref={webViewRef}
+        source={{ html: getNativeAnalyzerHtml() }}
+        onMessage={onMessage}
+        originWhitelist={['*']}
+        javaScriptEnabled
+        domStorageEnabled
+        allowsInlineMediaPlayback
+        mixedContentMode="always"
+        allowFileAccess
+        style={{
+          position: 'absolute',
+          width: 1,
+          height: 1,
+          opacity: 0,
+          pointerEvents: 'none',
+        }}
+      />
+    )
+  },
 )

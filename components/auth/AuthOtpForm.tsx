@@ -1,15 +1,15 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
-import { Platform } from 'react-native'
+import { Keyboard, Platform, View } from 'react-native'
 
 import { AUTH_COPY } from '~/components/auth/auth-copy'
 import { AUTH_LAYOUT } from '~/components/auth/auth-layout'
 import { AuthStepProgress } from '~/components/auth/AuthMethodTabs'
-import { CountryCodePicker, DEFAULT_COUNTRY } from '~/components/auth/CountryCodePicker'
+import { AppTextField } from '~/components/forms/AppTextField'
+import { PhoneInput } from '~/components/forms/PhoneInput'
 import {
   Button,
   Field,
   Icons,
-  Input,
   Spinner,
   Text,
   XStack,
@@ -23,13 +23,21 @@ import {
   isCompleteOtp,
   normalizeOtpDigits,
   validateEmailAddress,
-  validateMobileNumber,
 } from '~/features/auth/validation'
 import { useFormValidation } from '~/hooks/useFormValidation'
+import {
+  isDeviceEmailHintSupported,
+  requestDeviceEmailHint,
+} from '~/lib/platform/email-hint'
 import { isPhoneHintSupported, requestPhoneNumberHint } from '~/lib/platform/phone-hint'
-import { countryFlag, type Country } from '~/lib/phone/countries'
-import { formatPhoneForDisplay, parseE164Phone, validateNationalPhone } from '~/lib/phone/phone'
-import { getSession, type OtpChannel, type PhoneAuthInput } from '~/lib/supabase/auth'
+import { DEFAULT_COUNTRY } from '~/lib/phone/countries'
+import {
+  formatPhoneForDisplay,
+  isValidPhone,
+  normalizePhoneNumber,
+  parseE164Phone,
+} from '~/lib/phone/phone'
+import { getSession, type OtpChannel } from '~/lib/supabase/auth'
 import { email, otp, required } from '~/lib/validation'
 import { useAppUi } from '~/lib/theme/useAppUi'
 
@@ -45,8 +53,6 @@ type AuthOtpFormProps = {
 export function AuthOtpForm({ channel, onSuccess }: AuthOtpFormProps) {
   const ui = useAppUi()
   const toast = useAppToast()
-  const [country, setCountry] = useState<Country>(DEFAULT_COUNTRY)
-  const [phoneE164, setPhoneE164] = useState('')
   const [otpSent, setOtpSent] = useState(false)
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [apiError, setApiError] = useState<string | null>(null)
@@ -63,7 +69,8 @@ export function AuthOtpForm({ channel, onSuccess }: AuthOtpFormProps) {
           ? [required('Enter your email address.'), email()]
           : [
               required('Enter your mobile number.'),
-              (value: string) => validateMobileNumber(value, country),
+              (value: string) =>
+                isValidPhone(value.trim()) ? null : 'Enter a valid mobile number.',
             ],
       },
       otpCode: {
@@ -74,40 +81,76 @@ export function AuthOtpForm({ channel, onSuccess }: AuthOtpFormProps) {
         ],
       },
     }),
-    [country, isEmail],
+    [isEmail],
   )
 
   const form = useFormValidation(schema)
 
-  const phoneInput = useMemo<PhoneAuthInput>(
-    () => ({ country, nationalNumber: form.fields.identifier.value }),
-    [country, form.fields.identifier.value],
-  )
-
   useEffect(() => {
     form.resetAll()
     setOtpSent(false)
-    setPhoneE164('')
     setApiError(null)
     setResendIn(0)
-    setCountry(DEFAULT_COUNTRY)
     verifyingRef.current = false
   }, [channel])
 
+  // Prefill email from device Google account (silent) when available.
   useEffect(() => {
-    if (isEmail || otpSent || !isPhoneHintSupported()) return
+    if (!isEmail || otpSent || !isDeviceEmailHintSupported()) return
     let cancelled = false
-    void requestPhoneNumberHint().then((result) => {
-      if (cancelled || !result.phoneNumber) return
-      const parsed = parseE164Phone(result.phoneNumber)
-      if (!parsed) return
-      setCountry(parsed.country)
-      form.fields.identifier.onChange(parsed.nationalNumber)
+    void requestDeviceEmailHint({ interactive: false }).then((result) => {
+      if (cancelled || !result.email) return
+      if (form.fields.identifier.value.trim()) return
+      form.fields.identifier.onChange(result.email)
     })
     return () => {
       cancelled = true
     }
   }, [isEmail, otpSent])
+
+  function applyPhoneHint(raw: string) {
+    const normalized = normalizePhoneNumber(raw, DEFAULT_COUNTRY)
+    const parsed = parseE164Phone(normalized)
+    const next = parsed
+      ? `${parsed.country.dialCode}${parsed.nationalNumber}`
+      : normalized && isValidPhone(normalized)
+        ? normalized
+        : null
+    if (!next) return false
+    form.fields.identifier.onChange(next)
+    setApiError(null)
+    return true
+  }
+
+  async function fillPhoneFromDevice() {
+    setApiError(null)
+    Keyboard.dismiss()
+    const result = await requestPhoneNumberHint()
+    if (result.phoneNumber && applyPhoneHint(result.phoneNumber)) {
+      toast.show('Number added', { tone: 'success', message: 'Ready to send your code.' })
+      return
+    }
+    if (result.error) {
+      toast.show(result.error, { tone: 'danger' })
+      return
+    }
+    toast.show('No number selected', {
+      tone: 'warning',
+      message: 'Pick a number from the list, or type it below.',
+    })
+  }
+
+  async function fillEmailFromDevice() {
+    setApiError(null)
+    const result = await requestDeviceEmailHint({ interactive: true })
+    if (result.email) {
+      form.fields.identifier.onChange(result.email)
+      return
+    }
+    if (result.error) {
+      toast.show(result.error, { tone: 'danger' })
+    }
+  }
 
   useEffect(() => {
     if (resendIn <= 0) return
@@ -125,17 +168,19 @@ export function AuthOtpForm({ channel, onSuccess }: AuthOtpFormProps) {
       }
       return form.fields.identifier.value.trim().toLowerCase()
     }
-    const result = validateNationalPhone(form.fields.identifier.value, country)
-    if (!result.ok) {
+    const e164 = form.fields.identifier.value.trim()
+    if (!isValidPhone(e164)) {
       form.fields.identifier.touch()
       form.fields.identifier.validate()
       return null
     }
-    setPhoneE164(result.e164)
-    return result.e164
+    return e164
   }
 
   async function handleSendOtp() {
+    // Flush pending IME / native TextInput edits into React state before validate.
+    Keyboard.dismiss()
+    await new Promise<void>((resolve) => setTimeout(resolve, 120))
     setApiError(null)
 
     form.fields.identifier.touch()
@@ -147,7 +192,7 @@ export function AuthOtpForm({ channel, onSuccess }: AuthOtpFormProps) {
     setIsSubmitting(true)
     const result = await sendAuthOtp({
       channel,
-      identifier: isEmail ? validated : phoneInput,
+      identifier: validated,
       purpose: 'login',
     })
     setIsSubmitting(false)
@@ -163,7 +208,7 @@ export function AuthOtpForm({ channel, onSuccess }: AuthOtpFormProps) {
       tone: 'success',
       message: isEmail
         ? 'Check your inbox for the verification code.'
-        : `Code sent to ${formatPhoneForDisplay(validated, country)}`,
+        : `Code sent to ${formatPhoneForDisplay(validated)}`,
     })
   }
 
@@ -187,7 +232,7 @@ export function AuthOtpForm({ channel, onSuccess }: AuthOtpFormProps) {
 
       const result = await verifyAuthOtp({
         channel,
-        identifier: isEmail ? validated : phoneInput,
+        identifier: validated,
         otp: code,
       })
 
@@ -207,14 +252,7 @@ export function AuthOtpForm({ channel, onSuccess }: AuthOtpFormProps) {
       toast.show(isNewUser ? AUTH_COPY.welcomeNew : AUTH_COPY.welcomeBack, { tone: 'success' })
       onSuccess?.({ isNewUser })
     },
-    [
-      channel,
-      form.fields.otpCode,
-      isEmail,
-      onSuccess,
-      phoneInput,
-      toast,
-    ],
+    [channel, form.fields.otpCode, isEmail, onSuccess, toast],
   )
 
   const onAutofillCode = useCallback(
@@ -245,7 +283,6 @@ export function AuthOtpForm({ channel, onSuccess }: AuthOtpFormProps) {
   function resetOtpStep() {
     setOtpSent(false)
     form.fields.otpCode.reset()
-    setPhoneE164('')
     setResendIn(0)
     setApiError(null)
     verifyingRef.current = false
@@ -253,7 +290,7 @@ export function AuthOtpForm({ channel, onSuccess }: AuthOtpFormProps) {
 
   const displayIdentifier = isEmail
     ? form.fields.identifier.value.trim().toLowerCase()
-    : formatPhoneForDisplay(phoneE164 || form.fields.identifier.value, country)
+    : formatPhoneForDisplay(form.fields.identifier.value)
 
   const identifierError = form.fields.identifier.showError ? form.fields.identifier.error : null
   const otpFieldError = form.fields.otpCode.showError ? form.fields.otpCode.error : null
@@ -325,55 +362,78 @@ export function AuthOtpForm({ channel, onSuccess }: AuthOtpFormProps) {
             <Text fontSize={14} color={ui.textMuted} lineHeight={21}>
               {isEmail
                 ? 'We will email a one-time code. New accounts are created automatically.'
-                : `Enter your ${country.name} number — we will text a secure code.`}
+                : `Enter your ${DEFAULT_COUNTRY.name} number — we will text a secure code.`}
             </Text>
           </YStack>
 
           <Field label={isEmail ? 'Email' : 'Mobile number'} error={identifierError ?? undefined}>
             {isEmail ? (
               <AuthInputShell invalid={!!identifierError} icon={Icons.Mail}>
-                <Input
-                  flex={1}
-                  borderWidth={0}
-                  backgroundColor="transparent"
+                <AppTextField
+                  embedded
+                  value={form.fields.identifier.value}
+                  onChangeText={(next) => {
+                    setApiError(null)
+                    form.fields.identifier.onChange(next)
+                  }}
+                  onBlur={form.fields.identifier.onBlur}
+                  disabled={isSubmitting}
                   autoCapitalize="none"
+                  autoCorrect={false}
                   autoComplete="email"
                   textContentType="emailAddress"
                   keyboardType="email-address"
+                  inputMode="email"
                   placeholder="you@example.com"
-                  value={form.fields.identifier.value}
-                  onChangeText={form.fields.identifier.onChange}
-                  onBlur={form.fields.identifier.onBlur}
-                  invalid={!!identifierError}
-                  {...(Platform.OS === 'web' ? ({ autoComplete: 'email' } as object) : {})}
+                  accessibilityLabel="Email address"
+                  importantForAutofill="yes"
                 />
               </AuthInputShell>
             ) : (
-              <AuthInputShell invalid={!!identifierError} row>
-                <CountryCodePicker value={country} onChange={setCountry} compact />
-                <YStack width={1} height={28} backgroundColor={ui.borderSubtle} />
-                <Input
-                  flex={1}
-                  borderWidth={0}
-                  backgroundColor="transparent"
-                  autoCapitalize="none"
-                  autoComplete="tel"
-                  textContentType="telephoneNumber"
-                  keyboardType="phone-pad"
-                  placeholder={country.placeholder}
-                  value={form.fields.identifier.value}
-                  onChangeText={form.fields.identifier.onChange}
-                  onBlur={form.fields.identifier.onBlur}
-                  invalid={!!identifierError}
-                  maxLength={country.maxLength + 4}
-                  {...(Platform.OS === 'web' ? ({ autoComplete: 'tel' } as object) : {})}
-                />
-              </AuthInputShell>
+              <PhoneInput
+                value={form.fields.identifier.value}
+                onChange={(next) => {
+                  setApiError(null)
+                  form.fields.identifier.onChange(next)
+                }}
+                onBlur={form.fields.identifier.onBlur}
+                invalid={!!identifierError}
+                compact
+                disabled={isSubmitting}
+                defaultCountry={DEFAULT_COUNTRY}
+                autoFocus
+              />
             )}
+            {isEmail && isDeviceEmailHintSupported() ? (
+              <Button
+                tone="ghost"
+                size="$3"
+                alignSelf="flex-start"
+                marginTop={4}
+                disabled={isSubmitting}
+                icon={<Icons.Mail size={16} color={ui.textMuted} />}
+                onPress={() => void fillEmailFromDevice()}
+              >
+                Use email from this device
+              </Button>
+            ) : null}
+            {!isEmail && isPhoneHintSupported() ? (
+              <Button
+                tone="ghost"
+                size="$3"
+                alignSelf="flex-start"
+                marginTop={4}
+                disabled={isSubmitting}
+                icon={<Icons.Smartphone size={16} color={ui.textMuted} />}
+                onPress={() => void fillPhoneFromDevice()}
+                accessibilityLabel="Use number from this device"
+              >
+                Use number from this device
+              </Button>
+            ) : null}
             {!isEmail && form.fields.identifier.value && !identifierError ? (
               <Text fontSize={12} color={ui.textMuted} marginTop={6}>
-                Sending to {formatPhoneForDisplay(form.fields.identifier.value, country)}
-                {countryFlag(country) ? ` ${countryFlag(country)}` : ''}
+                Sending to {formatPhoneForDisplay(form.fields.identifier.value)}
               </Text>
             ) : null}
           </Field>
@@ -383,7 +443,9 @@ export function AuthOtpForm({ channel, onSuccess }: AuthOtpFormProps) {
             tone="white"
             size="$4"
             borderRadius={AUTH_LAYOUT.pillRadius}
-            disabled={isSubmitting || !form.fields.identifier.isValid}
+            // Keep pressable when empty so validation errors surface (disabled
+            // buttons swallow taps on Android and feel broken).
+            disabled={isSubmitting}
             onPress={() => void handleSendOtp()}
             icon={isSubmitting ? <Spinner size="small" color="$pink10" /> : undefined}
             iconAfter={!isSubmitting ? <Icons.ArrowRight size={18} color="$pink10" /> : undefined}
@@ -402,35 +464,40 @@ function AuthInputShell({
   children,
   invalid,
   icon: Icon,
-  row,
 }: {
   children: ReactNode
   invalid?: boolean
   icon?: typeof Icons.Mail
-  row?: boolean
 }) {
   const ui = useAppUi()
 
+  // Pure RN View — Tamagui XStack pointerEvents / flex often block TextInput on Android.
   return (
-    <XStack
-      alignItems="center"
-      gap={row ? '$2' : '$3'}
-      paddingHorizontal="$3"
-      minHeight={56}
-      borderRadius={AUTH_LAYOUT.inputRadius}
-      borderWidth={1}
-      borderColor={invalid ? ui.error : ui.borderSubtle}
-      backgroundColor={ui.surfaceMuted}
-      paddingLeft={row ? '$2' : '$3'}
-      style={
-        Platform.OS === 'web'
-          ? ({ boxShadow: 'inset 0 1px 2px rgba(26, 10, 18, 0.04)' } as const)
-          : undefined
-      }
+    <View
+      collapsable={false}
+      pointerEvents="auto"
+      style={{
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 12,
+        paddingHorizontal: 14,
+        minHeight: 56,
+        borderRadius: AUTH_LAYOUT.inputRadius,
+        borderWidth: 1,
+        borderColor: invalid ? ui.error : ui.borderSubtle,
+        backgroundColor: ui.surfaceMuted,
+        ...(Platform.OS === 'web'
+          ? ({ boxShadow: 'inset 0 1px 2px rgba(26, 10, 18, 0.04)' } as object)
+          : null),
+      }}
     >
-      {Icon ? <Icon size={18} color={ui.textMuted} /> : null}
+      {Icon ? (
+        <View pointerEvents="none" style={{ width: 18, height: 18 }}>
+          <Icon size={18} color={ui.textMuted} />
+        </View>
+      ) : null}
       {children}
-    </XStack>
+    </View>
   )
 }
 
@@ -443,7 +510,6 @@ function AuthBackRow({ disabled, onPress }: { disabled?: boolean; onPress: () =>
       alignSelf="flex-start"
       cursor={disabled ? 'default' : 'pointer'}
       opacity={disabled ? 0.5 : 1}
-      animation="quick"
       pressStyle={{ opacity: 0.7 }}
       onPress={disabled ? undefined : onPress}
     >

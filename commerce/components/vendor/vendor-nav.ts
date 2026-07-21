@@ -1,4 +1,5 @@
 import type { Href } from 'one'
+import { Platform } from 'react-native'
 
 import { Icons } from '~/components/ui'
 import { vendorRoutes } from '~/lib/routes'
@@ -19,12 +20,12 @@ export type VendorNavItem = {
 
 /** Build a `/vendor/settings?section=<id>` link for a settings sub-item. */
 function settingsHref(section: string): Href {
-  return `${String(vendorRoutes.settings)}?section=${section}` as Href
+  return vendorRoutes.settingsSection(section)
 }
 
 /**
  * Settings sub-sections, surfaced as a dropdown under the main "Settings" item.
- * Only **General** is functional today; the rest render a "coming soon" stub.
+ * All sections below are implemented in VendorSettingsScreen.
  */
 const SETTINGS_CHILDREN: VendorNavItem[] = [
   {
@@ -45,10 +46,11 @@ const SETTINGS_CHILDREN: VendorNavItem[] = [
   },
   {
     id: 'settings-payments',
-    label: 'Payments',
-    description: 'Payout accounts and tax documentation.',
+    label: 'Payment Methods',
+    description: 'Manage how you receive funds from your customers worldwide.',
     icon: Icons.CreditCard,
     href: settingsHref('payments'),
+    ready: true,
   },
   {
     id: 'settings-notifications',
@@ -56,6 +58,7 @@ const SETTINGS_CHILDREN: VendorNavItem[] = [
     description: 'Order, marketing, and customer alerts.',
     icon: Icons.Bell,
     href: settingsHref('notifications'),
+    ready: true,
   },
   {
     id: 'settings-security',
@@ -63,6 +66,7 @@ const SETTINGS_CHILDREN: VendorNavItem[] = [
     description: 'Sign-in, team access, and permissions.',
     icon: Icons.ShieldCheck,
     href: settingsHref('security'),
+    ready: true,
   },
   {
     id: 'settings-shipping',
@@ -70,13 +74,15 @@ const SETTINGS_CHILDREN: VendorNavItem[] = [
     description: 'Delivery zones and courier partners.',
     icon: Icons.Truck,
     href: settingsHref('shipping'),
+    ready: true,
   },
   {
     id: 'settings-returns',
-    label: 'Returns',
-    description: 'Return windows and refund rules.',
+    label: 'Return Policies',
+    description: 'Return windows, services, and shipping rules.',
     icon: Icons.Undo2,
     href: settingsHref('returns'),
+    ready: true,
   },
 ]
 
@@ -103,6 +109,7 @@ export const VENDOR_NAV_GROUPS: VendorNavGroup[] = [
         description: 'Manage listings and inventory.',
         icon: Icons.Package,
         href: vendorRoutes.products,
+        ready: true,
       },
       {
         id: 'orders',
@@ -123,6 +130,7 @@ export const VENDOR_NAV_GROUPS: VendorNavGroup[] = [
         description: 'Traffic, sales, and engagement trends.',
         icon: Icons.BarChart3,
         href: vendorRoutes.analytics,
+        ready: true,
       },
       {
         id: 'delivery',
@@ -130,6 +138,7 @@ export const VENDOR_NAV_GROUPS: VendorNavGroup[] = [
         description: 'Shipping options and fulfilment.',
         icon: Icons.Truck,
         href: vendorRoutes.delivery,
+        ready: true,
       },
       {
         id: 'ads',
@@ -137,6 +146,7 @@ export const VENDOR_NAV_GROUPS: VendorNavGroup[] = [
         description: 'Campaigns and promotions.',
         icon: Icons.Megaphone,
         href: vendorRoutes.ads,
+        ready: true,
       },
       {
         id: 'reviews',
@@ -144,6 +154,7 @@ export const VENDOR_NAV_GROUPS: VendorNavGroup[] = [
         description: 'Customer ratings and feedback.',
         icon: Icons.Star,
         href: vendorRoutes.reviews,
+        ready: true,
       },
     ],
   },
@@ -165,16 +176,108 @@ export const VENDOR_NAV_GROUPS: VendorNavGroup[] = [
 
 export const VENDOR_NAV_ITEMS: VendorNavItem[] = VENDOR_NAV_GROUPS.flatMap((group) => group.items)
 
+export const VENDOR_SETTINGS_SECTION_IDS = [
+  'general',
+  'connect',
+  'payments',
+  'notifications',
+  'security',
+  'shipping',
+  'returns',
+] as const
+
+export type VendorSettingsSectionId = (typeof VENDOR_SETTINGS_SECTION_IDS)[number]
+
+export function normalizeSettingsSectionParam(
+  raw: string | string[] | undefined | null,
+): VendorSettingsSectionId {
+  const value = (Array.isArray(raw) ? raw[0] : raw)?.trim().toLowerCase()
+  if (value && VENDOR_SETTINGS_SECTION_IDS.includes(value as VendorSettingsSectionId)) {
+    return value as VendorSettingsSectionId
+  }
+  return 'general'
+}
+
+/** Parse `?section=` from the browser location (web fallback when router params lag). */
+export function readSettingsSectionFromLocation(): string | null {
+  if (typeof window === 'undefined') return null
+  try {
+    return new URLSearchParams(window.location.search).get('section')
+  } catch {
+    return null
+  }
+}
+
+export function getVendorSettingsActiveSubId(section: VendorSettingsSectionId): string {
+  return `settings-${section}`
+}
+
+/** Strip query/hash segments so pathname comparisons stay stable on web. */
+export function normalizeVendorPathname(pathname: string): string {
+  const pathOnly = pathname.split('?')[0]?.split('#')[0] ?? pathname
+  return pathOnly.replace(/\/+$/, '') || '/vendor'
+}
+
+export function readSettingsSectionFromPathname(pathname: string): string | null {
+  const queryStart = pathname.indexOf('?')
+  if (queryStart === -1) return null
+  const query = pathname.slice(queryStart + 1).split('#')[0]
+  try {
+    return new URLSearchParams(query).get('section')
+  } catch {
+    return null
+  }
+}
+
+/** Resolve highlighted settings sub-nav id from pathname + section param / URL. */
+export function resolveVendorSettingsActiveSubId(
+  pathname: string,
+  rawSection?: string | string[] | null,
+): string | undefined {
+  const normalizedPath = normalizeVendorPathname(pathname)
+  if (normalizedPath !== '/vendor/settings') return undefined
+
+  const fromPathname = readSettingsSectionFromPathname(pathname)
+  const fromLocation =
+    Platform.OS === 'web' && typeof window !== 'undefined'
+      ? new URLSearchParams(window.location.search).get('section')
+      : null
+  const paramValue = Array.isArray(rawSection) ? rawSection[0] : rawSection
+
+  const section = normalizeSettingsSectionParam(
+    fromPathname ?? fromLocation ?? paramValue ?? 'general',
+  )
+
+  return getVendorSettingsActiveSubId(section)
+}
+
+export function parseSettingsSectionFromHref(href: Href | string): VendorSettingsSectionId | null {
+  const match = String(href).match(/[?&]section=([^&]+)/)
+  if (!match?.[1]) return null
+  return normalizeSettingsSectionParam(decodeURIComponent(match[1]))
+}
+
+export function isVendorSettingsChildActive(
+  child: VendorNavItem,
+  activeSubId?: string,
+): boolean {
+  if (activeSubId && child.id === activeSubId) return true
+  if (!activeSubId) return false
+  const activeSection = activeSubId.replace(/^settings-/, '')
+  const childSection = parseSettingsSectionFromHref(child.href)
+  return childSection != null && childSection === activeSection
+}
+
 /** Resolve the active nav item from the current pathname (defaults to My Shop). */
 export function getActiveVendorNavItem(pathname: string): VendorNavItem {
-  const normalized = pathname.replace(/\/+$/, '') || '/vendor'
+  const normalized = normalizeVendorPathname(pathname)
 
   if (normalized === '/vendor') return VENDOR_NAV_ITEMS[0]
 
   return (
     VENDOR_NAV_ITEMS.find((item) => {
       // Compare on the path only — nav hrefs may carry query strings (e.g. `?section=`).
-      const href = String(item.href).split('?')[0].replace(/\/+$/, '')
+      const href = normalizeVendorPathname(String(item.href).split('?')[0])
       return normalized === href || normalized.startsWith(`${href}/`)
     }) ?? VENDOR_NAV_ITEMS[0]
   )

@@ -1,11 +1,11 @@
 import { usePathname } from 'one'
-import { AppLink } from '~/components/navigation/AppLink'
-import { useMemo } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { Platform, useWindowDimensions } from 'react-native'
 
 import { AuthButton } from '~/components/auth'
 import { XStack, YStack } from '~/components/ui'
 import { tabBarPositionStyle } from '~/lib/layout/styles'
+import { navigateApp } from '~/lib/platform/navigate'
 import { mobileTabBarDockStyle } from '~/lib/theme/surfaces'
 import { useCart } from '~/commerce/hooks/useCart'
 import { useAccess } from '~/hooks/useAccess'
@@ -38,6 +38,14 @@ export function AppMobileBottomTabs() {
   const { itemCount } = useCart()
   const { shops, primaryShopId } = useVendorShops()
   const hasShops = shops.length > 0
+  // Optimistic highlight so tab presses feel instant while the route settles.
+  const [pendingPath, setPendingPath] = useState<string | null>(null)
+
+  useEffect(() => {
+    setPendingPath(null)
+  }, [pathname])
+
+  const activePath = pendingPath ?? pathname
 
   const ui = useAppUi()
   const { ui: coworkUi } = useCoWorkTheme()
@@ -77,10 +85,30 @@ export function AppMobileBottomTabs() {
   const dockSurface = isCoWork ? coworkUi.controlsDock : ui.chromeBg
   const activePillBg = isCoWork ? coworkUi.brandMuted : `${appColors.brand}14`
 
+  function focusPathForTab(tab: AppMobileTabItem) {
+    return String(tab.href)
+  }
+
+  function isTabFocused(tab: AppMobileTabItem) {
+    return tab.match ? tab.match(activePath) : activePath === tab.href
+  }
+
+  function pressTab(tab: AppMobileTabItem) {
+    const href = focusPathForTab(tab)
+    if (tab.match ? tab.match(pathname) : pathname === tab.href) {
+      setPendingPath(null)
+      return
+    }
+    setPendingPath(href)
+    navigateApp(tab.href, { replace: true })
+  }
+
   return (
     <YStack
       zIndex={200}
-      $gtMd={{ display: 'none' }}
+      // Keep tabs visible on all native phones/tablets — `$gtMd` can mis-fire
+      // with Tamagui media on RN and hide the dock entirely.
+      {...(Platform.OS === 'web' ? { $gtMd: { display: 'none' as const } } : { display: 'flex' })}
       width="100%"
       maxWidth="100%"
       alignSelf="stretch"
@@ -93,7 +121,8 @@ export function AppMobileBottomTabs() {
         alignSelf="stretch"
         alignItems="stretch"
         paddingTop={6}
-        paddingBottom={Math.max(safeBottom, Platform.OS === 'ios' ? 10 : 8)}
+        paddingBottom={safeBottom > 0 ? safeBottom : Platform.OS === 'ios' ? 8 : 4}
+        pointerEvents="auto"
         style={mobileTabBarDockStyle(ui, {
           dark: isCoWork,
           surface: dockSurface,
@@ -102,7 +131,7 @@ export function AppMobileBottomTabs() {
         {tabs.map((tab) => {
           const isAuthTab = tab.label === 'You'
           const isCartTab = tab.label === 'Cart'
-          const isFocused = tab.match ? tab.match(pathname) : pathname === tab.href
+          const isFocused = isTabFocused(tab)
 
           if (isAuthTab) {
             return (
@@ -163,23 +192,23 @@ export function AppMobileBottomTabs() {
           }
 
           return (
-            <AppLink key={`${tab.label}-${String(tab.href)}`} href={tab.href} replace asChild>
-              <MobileTabBarItem
-                flex={1}
-                minWidth={0}
-                alignSelf="stretch"
-                label={tab.label}
-                showLabel={showLabels}
-                isFocused={isFocused}
-                activeColor={activeColor}
-                inactiveColor={inactiveColor}
-                activePillBg={activePillBg}
-                badge={isCartTab ? itemCount : undefined}
-                badgeBorderColor={dockSurface}
-              >
-                {iconNode}
-              </MobileTabBarItem>
-            </AppLink>
+            <MobileTabBarItem
+              key={`${tab.label}-${String(tab.href)}`}
+              flex={1}
+              minWidth={0}
+              alignSelf="stretch"
+              label={tab.label}
+              showLabel={showLabels}
+              isFocused={isFocused}
+              activeColor={activeColor}
+              inactiveColor={inactiveColor}
+              activePillBg={activePillBg}
+              badge={isCartTab ? itemCount : undefined}
+              badgeBorderColor={dockSurface}
+              onPress={() => pressTab(tab)}
+            >
+              {iconNode}
+            </MobileTabBarItem>
           )
         })}
       </XStack>

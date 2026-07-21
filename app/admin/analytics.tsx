@@ -1,6 +1,5 @@
-import { SpaRedirect } from '~/components/navigation/SpaRedirect'
-
+import { AdminAnalyticsManager } from './components/AdminAnalyticsManager'
 
 export default function AdminAnalyticsPage() {
-  return <SpaRedirect href="/admin" />
+  return <AdminAnalyticsManager />
 }

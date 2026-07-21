@@ -61,6 +61,13 @@ export const commerceRoutes = {
   favorites: '/favorites' as Href,
   wishlist: '/favorites' as Href,
   orders: '/orders' as Href,
+  order: (id: string) => `/orders/${encodeURIComponent(id)}` as Href,
+  orderSuccess: (orderIds?: string[]) => {
+    if (!orderIds?.length) return '/orders/success' as Href
+    const params = new URLSearchParams()
+    params.set('ids', orderIds.join(','))
+    return `/orders/success?${params.toString()}` as Href
+  },
   paymentMethods: '/payment-methods' as Href,
   addresses: '/addresses' as Href,
   search: (query?: string, scope?: string) => appRoutes.search(query, scope ?? 'listings'),
@@ -68,6 +75,7 @@ export const commerceRoutes = {
   browse: (kind: string) => `/browse/${kind}` as Href,
   listing: (slug: string) => `/listing/${encodeURIComponent(slug)}` as Href,
   shop: (slug: string) => `/shop/${encodeURIComponent(slug)}` as Href,
+  following: '/following' as Href,
 } as const
 
 /** Vendor console — a seller's own storefront management section. */
@@ -85,6 +93,8 @@ export const vendorRoutes = {
   ads: '/vendor/ads' as Href,
   reviews: '/vendor/reviews' as Href,
   settings: '/vendor/settings' as Href,
+  settingsSection: (section: string) =>
+    `/vendor/settings?section=${encodeURIComponent(section)}` as Href,
 } as const
 
 export const communityRoutes = {
@@ -104,6 +114,7 @@ export const communityRoutes = {
   settings: appRoutes.settings,
   createPost: '/community/create' as Href,
   post: (id: string) => `/community/post/${encodeURIComponent(id)}` as Href,
+  article: (id: string) => `/community/article/${encodeURIComponent(id)}` as Href,
   jobs: '/community/jobs' as Href,
   jobCreate: '/community/jobs/create' as Href,
   job: (id: string) => `/community/jobs/${encodeURIComponent(id)}` as Href,
@@ -162,6 +173,7 @@ export const coWorkRoutes = {
   home: '/co-work' as Href,
   meeting: (code: string) => `/co-work/meeting/${encodeURIComponent(code)}` as Href,
   meetingLive: (code: string) => `/co-work/meeting/${encodeURIComponent(code)}/live` as Href,
+  recording: (token: string) => `/co-work/recording/${encodeURIComponent(token)}` as Href,
   schedule: '/co-work/schedule' as Href,
   meetings: '/co-work/meetings' as Href,
   join: '/co-work/join' as Href,

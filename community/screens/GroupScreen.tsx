@@ -51,6 +51,7 @@ import { LocationPickerField } from '~/components/geo'
 import { communityRoutes } from '~/lib/routes'
 import { getGroupShareUrl } from '~/lib/share'
 import { useSupabase } from '~/providers/SupabaseProvider'
+import { usePageSeo } from '~/components/seo/RouteSeo'
 
 const TABS = [
   { id: 'discussion', label: 'Discussion' },
@@ -90,6 +91,19 @@ export function GroupScreen() {
   const [editLocation, setEditLocation] = useState('')
 
   const isAdmin = memberRole === 'admin' || (!!user && group?.created_by === user.id)
+
+  usePageSeo(
+    useMemo(() => {
+      if (!group) return null
+      return {
+        title: group.title || group.name,
+        description:
+          group.description?.replace(/\s+/g, ' ').trim().slice(0, 200) ||
+          `Join the ${group.title || group.name} group on SHEconomy.`,
+        image: group.cover_url ?? group.avatar_url,
+      }
+    }, [group]),
+  )
 
   const reload = useCallback(async () => {
     if (!id) return

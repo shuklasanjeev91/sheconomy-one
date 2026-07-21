@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 
 import { ScreenSearchField } from '~/components/search'
-import { filterBySearchQuery } from '~/lib/search'
+import { SHEET_SEARCH_MIN_ITEMS, filterBySearchQuery } from '~/lib/search'
 
 import { useChatTheme } from '~/chat/lib/chat-theme'
 import type { ChatEventPayload } from '~/chat/lib/types'
@@ -171,12 +171,14 @@ export function EventPickerSheet({ open, onOpenChange, currentUserId, onPick }: 
 
         {mode === 'pick' ? (
           <>
-            <ScreenSearchField
-              value={query}
-              onChangeText={setQuery}
-              placeholder="Search events"
-              clearable
-            />
+            {events.length >= SHEET_SEARCH_MIN_ITEMS || query.length > 0 ? (
+              <ScreenSearchField
+                value={query}
+                onChangeText={setQuery}
+                placeholder="Search events"
+                clearable
+              />
+            ) : null}
             {loading ? (
             <XStack paddingVertical={20} justifyContent="center">
               <Spinner color={chat.brand} />

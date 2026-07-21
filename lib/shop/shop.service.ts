@@ -24,6 +24,8 @@ import {
   unfollowShop as unfollowShopCore,
 } from '~/commerce/lib/shop-follows'
 import { fetchShopDashboard, type ShopDashboardData } from '~/commerce/lib/seller-dashboard'
+import { slugifyTitle } from '~/commerce/lib/seo-urls'
+import { INVALIDATION_TOPICS, invalidateCache } from '~/lib/cache/invalidation'
 import { supabase } from '~/lib/supabase'
 import { uploadShopLogoImage } from '~/lib/supabase/storage-upload'
 
@@ -72,20 +74,36 @@ export type PaginatedShops<T> = {
 
 // ============= OWNER / MY SHOP =============
 
+const MY_SHOPS_TIMEOUT_MS = 10_000
+
 /** All shops owned by a user (newest first). */
 export async function getMyShops(userId?: string | null): Promise<ShopServiceResponse<Shop[]>> {
-  const id = await resolveUserId(userId)
-  if (!id) return fail('User not authenticated')
-
+  // Wrap the full path (auth resolve + query). A hang in `getUser()` used to
+  // leave Redux `isLoadingMyShops` stuck forever because the query race never started.
   try {
-    const { data, error } = await supabase
-      .from('shops')
-      .select('*')
-      .eq('user_id', id)
-      .order('created_at', { ascending: false })
+    const result = await Promise.race([
+      (async () => {
+        const id = await resolveUserId(userId)
+        if (!id) return fail<Shop[]>('User not authenticated')
 
-    if (error) return fail(error)
-    return ok(data ?? [])
+        const { data, error } = await supabase
+          .from('shops')
+          .select('*')
+          .eq('user_id', id)
+          .order('created_at', { ascending: false })
+
+        if (error) return fail<Shop[]>(error)
+        return ok(data ?? [])
+      })(),
+      new Promise<ShopServiceResponse<Shop[]>>((resolve) => {
+        setTimeout(
+          () => resolve(fail<Shop[]>('Shop list timed out. Check your connection and try again.')),
+          MY_SHOPS_TIMEOUT_MS,
+        )
+      }),
+    ])
+
+    return result
   } catch (error) {
     return fail(error)
   }
@@ -127,6 +145,75 @@ export async function hasShop(userId?: string | null): Promise<ShopServiceRespon
 
     if (error) return fail(error)
     return ok((count ?? 0) > 0)
+  } catch (error) {
+    return fail(error)
+  }
+}
+
+export type ShopNameAvailability = {
+  available: boolean
+  /** Case-insensitive exact name collision. */
+  nameTaken: boolean
+  /** URL slug derived from the name already exists. */
+  slugTaken: boolean
+  normalizedName: string
+  suggestedSlug: string
+}
+
+/**
+ * Check whether a shop name (and its derived slug) is free to use.
+ * Case-insensitive exact match on `shop_name`, plus slug collision check.
+ */
+export async function checkShopNameAvailability(
+  shopName: string,
+  options?: { excludeShopId?: string | null },
+): Promise<ShopServiceResponse<ShopNameAvailability>> {
+  const normalizedName = shopName.trim().replace(/\s+/g, ' ')
+  if (normalizedName.length < 2) {
+    return fail('Shop name must be at least 2 characters.')
+  }
+
+  try {
+    // Escape LIKE wildcards so names with `%` / `_` are matched literally.
+    const exactName = normalizedName.replace(/\\/g, '\\\\').replace(/%/g, '\\%').replace(/_/g, '\\_')
+    const suggestedSlug = slugifyTitle(normalizedName)
+
+    let nameQuery = supabase
+      .from('shops')
+      .select('id', { count: 'exact', head: true })
+      .ilike('shop_name', exactName)
+
+    if (options?.excludeShopId) {
+      nameQuery = nameQuery.neq('id', options.excludeShopId)
+    }
+
+    const nameResult = await nameQuery
+    if (nameResult.error) return fail(nameResult.error)
+    const nameTaken = (nameResult.count ?? 0) > 0
+
+    let slugTaken = false
+    if (suggestedSlug) {
+      let slugQuery = supabase
+        .from('shops')
+        .select('id', { count: 'exact', head: true })
+        .eq('slug', suggestedSlug)
+
+      if (options?.excludeShopId) {
+        slugQuery = slugQuery.neq('id', options.excludeShopId)
+      }
+
+      const slugResult = await slugQuery
+      if (slugResult.error) return fail(slugResult.error)
+      slugTaken = (slugResult.count ?? 0) > 0
+    }
+
+    return ok({
+      available: !nameTaken && !slugTaken,
+      nameTaken,
+      slugTaken,
+      normalizedName,
+      suggestedSlug,
+    })
   } catch (error) {
     return fail(error)
   }
@@ -249,6 +336,8 @@ export async function createShop(
     if (error) return fail(error)
     if (!shopId) return fail('Shop creation did not return an id.')
 
+    invalidateShopCaches()
+
     // Persist any additional fields the create form collected.
     const extras = buildExtraUpdate(formData)
     if (Object.keys(extras).length > 0) {
@@ -260,6 +349,16 @@ export async function createShop(
   } catch (error) {
     return fail(error)
   }
+}
+
+/** Refresh every browse/home feed that can show this shop. */
+function invalidateShopCaches() {
+  invalidateCache(
+    'feed:shops',
+    'route:shops-browse',
+    'route:home',
+    INVALIDATION_TOPICS.commerceShops,
+  )
 }
 
 /** Pick the columns beyond name/description/currency that create can also set. */
@@ -299,6 +398,7 @@ export async function updateShop(
       .single()
 
     if (error) return fail(error)
+    invalidateShopCaches()
     return ok(data)
   } catch (error) {
     return fail(error)
@@ -316,6 +416,7 @@ export async function deleteShop(shopId: string): Promise<ShopServiceResponse<{ 
       .eq('id', shopId)
 
     if (error) return fail(error)
+    invalidateShopCaches()
     return ok({ id: shopId })
   } catch (error) {
     return fail(error)

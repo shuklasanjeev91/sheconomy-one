@@ -10,6 +10,8 @@ import {
   type ActivityReaction,
 } from '~/community/lib/user-activity'
 import type { CommunityPost } from '~/community/lib/community'
+import { INVALIDATION_TOPICS } from '~/lib/cache/invalidation'
+import { useAutoRefresh } from '~/lib/cache/useAutoRefresh'
 
 type ActivityItem = CommunityPost | ActivityComment | ActivityReaction
 
@@ -58,6 +60,16 @@ export function useUserActivity(userId?: string) {
       cancelled = true
     }
   }, [userId, filter, fetchPage])
+
+  // Creating/editing/deleting a post refreshes profile activity in place.
+  useAutoRefresh([INVALIDATION_TOPICS.userActivity, INVALIDATION_TOPICS.communityPosts], () => {
+    if (!userId) return
+    void fetchPage(filter, 0).then((page) => {
+      setItems(page.items)
+      setHasMore(page.hasMore)
+      setError(page.error)
+    })
+  })
 
   const loadMore = useCallback(async () => {
     if (isLoading || isLoadingMore || !hasMore) return

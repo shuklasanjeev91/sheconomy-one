@@ -21,7 +21,8 @@ export function nextZoomIn(current: number, step: number, max: number) {
 }
 
 export function nextZoomOut(current: number, step: number, min: number) {
-  return clampZoom(Math.round((current / step) * 100) / 100, min, max)
+  // Upper bound is the current scale — zooming out never increases it.
+  return clampZoom(Math.round((current / step) * 100) / 100, min, current)
 }
 
 export function formatZoomPercent(scale: number) {

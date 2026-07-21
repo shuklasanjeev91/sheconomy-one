@@ -55,7 +55,46 @@ npx eas update:configure
 ```
 
 3. Rebuild native binaries after first enabling Updates (store or internal build) so the installed app includes the Updates runtime.
-4. Publish JS/asset updates with `eas update --channel <channel>`.
+4. Publish JS/asset updates with `eas update --channel <channel>` (or the yarn scripts below).
+
+## Git ↔ OTA integration
+
+| Git event | What happens |
+| --- | --- |
+| Push / merge to `main` | GitHub Action publishes OTA to EAS channel **`production`** |
+| Open / update a PR (non-draft) | GitHub Action runs `eas update --auto` and comments a QR / preview link |
+| Local publish | `yarn update:production` / `yarn update:preview` / `yarn update:auto` |
+
+### One-time: Expo token for GitHub
+
+1. Create a token at [expo.dev/settings/access-tokens](https://expo.dev/settings/access-tokens).
+2. In GitHub → **Settings → Secrets and variables → Actions**, add `EXPO_TOKEN`.
+3. Workflows live at:
+   - [`.github/workflows/eas-update-production.yml`](../.github/workflows/eas-update-production.yml)
+   - [`.github/workflows/eas-update-preview.yml`](../.github/workflows/eas-update-preview.yml)
+
+Without `EXPO_TOKEN`, CI will fail fast with a clear message (web deploys on Vercel are unaffected).
+
+### Local yarn scripts
+
+```bash
+yarn update:development   # eas update --channel development
+yarn update:preview       # eas update --channel preview
+yarn update:production    # eas update --channel production
+yarn update:auto          # branch + message from current git commit
+```
+
+`--auto` maps the current **Git branch** to an EAS Update branch and uses the latest commit message.
+
+### Channel ↔ build profile map
+
+| EAS build profile (`eas.json`) | Update channel |
+| --- | --- |
+| `development` | `development` |
+| `preview` | `preview` |
+| `production` | `production` |
+
+Store / internal binaries must be built with the matching profile so OTA lands on the right devices.
 
 ## Environment variables
 
@@ -70,8 +109,8 @@ Example remote JSON (`public/update-config.example.json`):
 
 ```json
 {
-  "minimumSupportedVersion": "1.20.0",
-  "latestVersion": "1.20.1",
+  "minimumSupportedVersion": "5.0.14",
+  "latestVersion": "6.0",
   "critical": false,
   "maintenanceMode": false,
   "maintenanceMessage": "We are performing scheduled maintenance. Please try again shortly."
@@ -190,7 +229,13 @@ npx expo-updates configuration:status
 ## Commands cheat sheet
 
 ```bash
-# OTA
+# OTA (yarn wrappers)
+yarn update:development
+yarn update:preview
+yarn update:production
+yarn update:auto
+
+# OTA (raw)
 eas update --channel development --message "Development update"
 eas update --channel preview --message "Preview update"
 eas update --channel production --message "Production update"
@@ -207,7 +252,8 @@ yarn test:unit
 ## Integration points in this repo
 
 - Root layout: `app/_layout.tsx` mounts `<AutomaticUpdateManager />`
-- Config: `app.json` → `runtimeVersion` + `updates`
-- EAS profiles: `eas.json`
+- Config: `app.json` → `runtimeVersion` + `updates` (`checkAutomatically: ON_LOAD`)
+- EAS profiles: `eas.json` (`build.*.channel` + `update.*`)
+- GitHub Actions: `.github/workflows/eas-update-*.yml`
 - Logic: `lib/updates/*`
 - UI: `components/system/*`

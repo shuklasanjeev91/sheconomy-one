@@ -15,6 +15,33 @@ type ListingGridProps = {
   showQuickAdd?: boolean
 }
 
+type ColumnLayout = {
+  basis: `${number}%`
+  maxWidth: `${number}%` | number
+  minWidth: number
+}
+
+/**
+ * Overflow-proof column layouts:
+ * - 2/3 cols: no pixel minWidth (phones would wrap to 1 col), grow into the gap,
+ *   capped maxWidth so an odd last card never stretches full-row.
+ * - 4+ cols: keep desktop mins so cards don't get tiny on wide screens.
+ */
+function layoutForColumns(columns: 2 | 3 | 4 | 5 | 6): ColumnLayout {
+  switch (columns) {
+    case 2:
+      return { basis: '44%', maxWidth: '48.5%', minWidth: 0 }
+    case 3:
+      return { basis: '29%', maxWidth: '32%', minWidth: 0 }
+    case 4:
+      return { basis: '22%', maxWidth: '24.5%', minWidth: 180 }
+    case 5:
+      return { basis: '17.5%', maxWidth: '19.5%', minWidth: 160 }
+    case 6:
+      return { basis: '14.5%', maxWidth: '16.5%', minWidth: 140 }
+  }
+}
+
 /** Responsive listing grid — tight gaps, fluid columns. */
 export function ListingGrid({
   listings,
@@ -34,30 +61,18 @@ export function ListingGrid({
     return marketplace.personalizeListings(filtered, { sort: true })
   }, [listings, marketplace, personalize])
 
-  const minWidth =
-    columns === 6 ? 140 : columns === 5 ? 168 : columns === 4 ? 200 : columns === 3 ? 220 : 160
-
-  const basis =
-    columns === 6
-      ? '15.5%'
-      : columns === 5
-        ? '18.5%'
-        : columns === 4
-          ? '23%'
-          : columns === 3
-            ? '31%'
-            : '47%'
+  const { basis, maxWidth, minWidth } = layoutForColumns(columns)
 
   return (
-    <XStack gap="$4" flexWrap="wrap" width="100%">
+    <XStack gap="$3" flexWrap="wrap" width="100%">
       {visibleListings.map((listing) => (
         <XStack
           key={listing.id}
           flexBasis={basis}
-          flexGrow={0}
-          flexShrink={0}
+          flexGrow={1}
+          flexShrink={1}
           minWidth={minWidth}
-          maxWidth={columns === 2 ? '47%' : 280}
+          maxWidth={maxWidth}
         >
           <ListingCard listing={listing} compact={compact} showQuickAdd={showQuickAdd} />
         </XStack>

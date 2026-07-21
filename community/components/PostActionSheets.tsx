@@ -15,7 +15,9 @@ import {
   blockCommunityMember,
   hideCommunityPost,
   reportCommunityPost,
+  unhideCommunityPost,
 } from '~/community/lib/moderation'
+import { feedback } from '~/lib/platform/feedback'
 import { unfollowProfile } from '~/community/lib/profile-follows'
 import { isPostSaved, saveCommunityPost, unsaveCommunityPost } from '~/community/lib/saved-posts'
 import { getPostShareUrl } from '~/community/lib/post-engagement'
@@ -36,7 +38,7 @@ import {
   YStack,
   useAppToast,
 } from '~/components/ui'
-import { chatRoutes, routes } from '~/lib/routes'
+import { appRoutes, chatRoutes, routes } from '~/lib/routes'
 import { copyShareLink } from '~/lib/share'
 import { useAppUi } from '~/lib/theme/useAppUi'
 import { useSupabase } from '~/providers/SupabaseProvider'
@@ -568,9 +570,12 @@ export function PostActionSheets({
                     toast.show('Could not block', { tone: 'danger', message: result.error })
                     return
                   }
+                  void feedback('destructive')
                   toast.show('Member blocked', {
                     tone: 'default',
                     message: `${authorName} will no longer appear in your community feed.`,
+                    actionLabel: 'Manage',
+                    onAction: () => router.push(appRoutes.settingsSection('privacy') as never),
                   })
                   engagement.closeSheet()
                 })
@@ -591,12 +596,29 @@ export function PostActionSheets({
                     toast.show('Could not hide post', { tone: 'danger', message: result.error })
                     return
                   }
+                  void feedback('selection')
+                  onPostDeleted?.(post.id)
+                  engagement.closeSheet()
                   toast.show('Post hidden', {
                     tone: 'default',
                     message: 'This post will not appear in your feed.',
+                    duration: 6000,
+                    actionLabel: 'Undo',
+                    onAction: () => {
+                      void unhideCommunityPost(user.id, post.id).then((undoResult) => {
+                        if (undoResult.error) {
+                          toast.show('Could not undo', {
+                            tone: 'danger',
+                            message: undoResult.error,
+                          })
+                          return
+                        }
+                        toast.show('Post restored', { tone: 'success' })
+                        // Soft restore: refresh feed so the post can return.
+                        engagement.closeSheet()
+                      })
+                    },
                   })
-                  onPostDeleted?.(post.id)
-                  engagement.closeSheet()
                 })
               }}
             />

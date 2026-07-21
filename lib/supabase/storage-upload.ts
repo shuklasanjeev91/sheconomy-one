@@ -12,6 +12,7 @@ export const STORAGE_BUCKETS = {
   listingImages: 'listing-images',
   shopImages: 'shop-images',
   postImages: 'post-images',
+  visualPreviews: 'visual-previews',
 } as const
 
 const MAX_IMAGE_BYTES = 8 * 1024 * 1024
@@ -289,6 +290,30 @@ export async function uploadProfileAvatarImage(
  * Upload the signed-in user's cover/banner image to the public `post-images`
  * bucket. Path is prefixed with the user id to satisfy owner-scoped policies.
  */
+/** Upload return evidence / review photos under the buyer's owner-scoped prefix. */
+export async function uploadOrderEvidenceImages(
+  userId: string,
+  orderId: string,
+  files: Array<{ blob: Blob; mimeType: string; fileName?: string }>,
+  kind: 'return' | 'review' = 'return',
+) {
+  const uploads: UploadResult[] = []
+  for (let index = 0; index < files.length; index += 1) {
+    const file = files[index]
+    const ext = file.fileName?.split('.').pop() ?? extensionForMime(file.mimeType)
+    const path = `${userId}/orders/${orderId}/${kind}/${Date.now()}-${index}-${randomSuffix()}.${ext}`
+    const { data, error } = await uploadStorageObject(
+      STORAGE_BUCKETS.postImages,
+      path,
+      file.blob,
+      file.mimeType,
+    )
+    if (error || !data) return { data: null as UploadResult[] | null, error: error ?? 'Upload failed' }
+    uploads.push(data)
+  }
+  return { data: uploads, error: null as string | null }
+}
+
 export async function uploadProfileCoverImage(
   userId: string,
   file: { blob: Blob; mimeType: string; fileName?: string },
@@ -310,4 +335,22 @@ export async function uploadShopLogoImage(
   const path = `${userId}/shops/${shopId}/logo/${Date.now()}-${randomSuffix()}.${ext}`
 
   return uploadStorageObject(STORAGE_BUCKETS.shopImages, path, file.blob, file.mimeType, options)
+}
+
+/** Upload a user selfie / room photo for Gemini visual preview (private bucket). */
+export async function uploadVisualPreviewInput(
+  userId: string,
+  file: { blob: Blob; mimeType: string; fileName?: string },
+  options?: { onProgress?: UploadProgressHandler },
+) {
+  const ext = file.fileName?.split('.').pop() ?? extensionForMime(file.mimeType)
+  const path = `${userId}/inputs/${Date.now()}-${randomSuffix()}.${ext}`
+
+  return uploadStorageObject(
+    STORAGE_BUCKETS.visualPreviews,
+    path,
+    file.blob,
+    file.mimeType,
+    { ...options, maxBytes: 7 * 1024 * 1024 },
+  )
 }

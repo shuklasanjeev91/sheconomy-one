@@ -20,8 +20,8 @@ describe('fetchRemoteUpdateConfig', () => {
       vi.fn(async () => ({
         ok: true,
         json: async () => ({
-          minimumSupportedVersion: '1.20.0',
-          latestVersion: '1.20.1',
+          minimumSupportedVersion: '5.0.14',
+          latestVersion: '6.0',
           critical: false,
           maintenanceMode: false,
         }),
@@ -29,8 +29,8 @@ describe('fetchRemoteUpdateConfig', () => {
     )
 
     await expect(fetchRemoteUpdateConfig()).resolves.toMatchObject({
-      minimumSupportedVersion: '1.20.0',
-      latestVersion: '1.20.1',
+      "minimumSupportedVersion": "5.0.14",
+      "latestVersion": "6.0",
       critical: false,
       maintenanceMode: false,
     })

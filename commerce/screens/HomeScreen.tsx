@@ -1,31 +1,31 @@
 import { Platform } from 'react-native'
 import { AppLink } from '~/components/navigation/AppLink'
 
-import {
-  AvailableOffersCard,
-  CategoryChip,
-  CommerceSection,
-  HomeHeroSlider,
-  buildHomeHeroSlides,
-  InfiniteHorizontalSection,
-  InfiniteListingSection,
-  RecentlyViewedRail,
-  SaleEventBanner,
-  ShopSpotlightCard,
-} from '~/commerce/components'
+import { AvailableOffersCard } from '~/commerce/components/AvailableOffersCard'
+import { CategoryChip } from '~/commerce/components/CategoryChip'
+import { CommerceSection } from '~/commerce/components/CommerceSection'
+import { FollowedShopsRail } from '~/commerce/components/FollowedShopsRail'
+import { HomeHeroSlider, buildHomeHeroSlides } from '~/commerce/components/HomeHeroSlider'
+import { InfiniteHorizontalSection } from '~/commerce/components/InfiniteHorizontalSection'
+import { InfiniteListingSection } from '~/commerce/components/InfiniteListingSection'
+import { RecentlyViewedRail } from '~/commerce/components/RecentlyViewedRail'
+import { SaleEventBanner } from '~/commerce/components/SaleEventBanner'
+import { ShopSpotlightCard } from '~/commerce/components/ShopSpotlightCard'
 import {
   Button,
   Card,
   Icons,
   Paragraph,
+  Skeleton,
   Spinner,
   Text,
   Theme,
   XStack,
   YStack,
 } from '~/components/ui'
-import { FullWidthLayout, PageCenter, PageSection } from '~/components/layout'
-import { NearbyShopsSection } from '~/components/location'
+import { IdleMount } from '~/components/IdleMount'
+import { FullWidthLayout, PageSection } from '~/components/layout'
+import { NearbyShopsSection, NearYouLocationChip } from '~/components/location'
 import { BRAND_THEME, radius } from '~/config/tokens'
 import { useAppUi } from '~/lib/theme/useAppUi'
 import { useCategoriesFeed } from '~/commerce/hooks/useCategoriesFeed'
@@ -58,13 +58,34 @@ export function HomeScreen({ data, error, loading = false }: HomeScreenProps) {
 
   if (isLoading) {
     return (
-      <FullWidthLayout>
-        <PageCenter>
-          <Spinner size="large" />
-          <Text color={ui.textMuted} marginTop="$3" fontSize={14}>
-            Loading shops…
-          </Text>
-        </PageCenter>
+      <FullWidthLayout scroll>
+        <YStack gap="$5" paddingBottom="$2" width="100%" backgroundColor={ui.background}>
+          <PageSection bleed paddingTop={0}>
+            <Skeleton height={220} borderRadius={0} />
+          </PageSection>
+          <PageSection paddingTop="$2" gap="$3">
+            <XStack gap="$2">
+              <Skeleton height={36} width={96} borderRadius={999} />
+              <Skeleton height={36} width={88} borderRadius={999} />
+              <Skeleton height={36} width={110} borderRadius={999} />
+            </XStack>
+          </PageSection>
+          <PageSection gap="$3">
+            <Skeleton height={18} width="42%" />
+            <XStack gap="$3">
+              <Skeleton height={180} width={140} borderRadius={16} />
+              <Skeleton height={180} width={140} borderRadius={16} />
+              <Skeleton height={180} width={140} borderRadius={16} />
+            </XStack>
+          </PageSection>
+          <PageSection gap="$3">
+            <Skeleton height={18} width="36%" />
+            <XStack gap="$3" flexWrap="wrap">
+              <Skeleton height={210} width="47%" borderRadius={16} />
+              <Skeleton height={210} width="47%" borderRadius={16} />
+            </XStack>
+          </PageSection>
+        </YStack>
       </FullWidthLayout>
     )
   }
@@ -109,8 +130,14 @@ export function HomeScreen({ data, error, loading = false }: HomeScreenProps) {
       }}
       refreshing={categoriesFeed.isRefreshing || shopsFeed.isRefreshing}
     >
-      <YStack gap="$5" paddingBottom="$10" width="100%" backgroundColor={ui.background}>
-        <PageSection bleed paddingTop="$4">
+      <YStack
+        gap="$5"
+        paddingBottom="$2"
+        width="100%"
+        backgroundColor={ui.background}
+        testID="tab-home-commerce"
+      >
+        <PageSection bleed paddingTop={0}>
           <HomeHeroSlider slides={heroSlides} />
         </PageSection>
 
@@ -133,16 +160,20 @@ export function HomeScreen({ data, error, loading = false }: HomeScreenProps) {
         ) : null}
 
         {/* These return null when empty — do not wrap in PageSection or empty gaps stack. */}
-        <SaleEventBanner inset />
-        <AvailableOffersCard
-          title="Offers for you"
-          maxItems={8}
-          layout="row"
-          bordered={false}
-          inset
-        />
-        <RecentlyViewedRail inset />
-        <NearbyShopsSection />
+        <IdleMount>
+          <SaleEventBanner inset />
+          <AvailableOffersCard
+            title="Offers for you"
+            maxItems={8}
+            layout="row"
+            bordered={false}
+            inset
+          />
+          <RecentlyViewedRail inset />
+          <FollowedShopsRail inset />
+          <NearYouLocationChip />
+          <NearbyShopsSection />
+        </IdleMount>
 
         <InfiniteListingSection
           kind="physical"
@@ -226,7 +257,7 @@ export function HomeScreen({ data, error, loading = false }: HomeScreenProps) {
               }}
             >
               <YStack gap="$2" width="100%">
-                <Text fontWeight="800" fontSize={22} color={ui.text} letterSpacing={-0.4}>
+                <Text fontWeight="800" fontSize={20} color={ui.text} letterSpacing={-0.4}>
                   Ready to start selling?
                 </Text>
                 <Paragraph color={ui.textSecondary} fontSize={15} lineHeight={22}>

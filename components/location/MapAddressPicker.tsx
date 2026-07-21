@@ -6,6 +6,7 @@ import { AppBottomSheet, Button, Spinner, Text, XStack, YStack } from '~/compone
 import {
   getCurrentPosition,
   reverseGeocode,
+  useOptionalUserLocation,
   type LatLng,
   type ResolvedAddress,
 } from '~/lib/location'
@@ -41,7 +42,7 @@ function buildMapHtml(coords: LatLng) {
 <body>
   <div id="map"></div>
   <div id="pin">📍</div>
-  <div id="hint">Drag the map to place the pin, then confirm below.</div>
+  <div id="hint">Drag the map to place the pin, then confirm below. Map tiles need network access.</div>
   <script>
     const start = { lat: ${coords.latitude}, lng: ${coords.longitude} };
     let lat = start.lat, lng = start.lng;
@@ -83,7 +84,10 @@ export function MapAddressPicker({
   onConfirm,
 }: MapAddressPickerProps) {
   const ui = useAppUi()
-  const [coords, setCoords] = useState<LatLng | null>(initialCoords ?? null)
+  const sharedLocation = useOptionalUserLocation()
+  const [coords, setCoords] = useState<LatLng | null>(
+    initialCoords ?? sharedLocation?.coords ?? null,
+  )
   const [preview, setPreview] = useState<ResolvedAddress | null>(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -98,6 +102,10 @@ export function MapAddressPicker({
         setCoords(initialCoords)
         return
       }
+      if (sharedLocation?.coords) {
+        setCoords(sharedLocation.coords)
+        return
+      }
       setLoading(true)
       const position = await getCurrentPosition({ accuracy: 'balanced' })
       setLoading(false)
@@ -108,7 +116,7 @@ export function MapAddressPicker({
       }
       setCoords(position.coords)
     })()
-  }, [open, initialCoords])
+  }, [open, initialCoords, sharedLocation?.coords])
 
   useEffect(() => {
     if (!open || !coords) return

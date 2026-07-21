@@ -16,7 +16,8 @@ import {
   subMonths,
 } from 'date-fns'
 import * as Icons from '@tamagui/lucide-icons'
-import { ScrollView, Text, XStack, YStack } from 'tamagui'
+import { ScrollView, XStack, YStack } from 'tamagui'
+import { Text } from './Text'
 
 import { useAppUi } from '~/lib/theme/useAppUi'
 

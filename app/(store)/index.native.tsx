@@ -4,7 +4,10 @@ import { homeLoader, HomeScreen } from '~/commerce/screens/HomeScreen'
 
 export { homeLoader as loader }
 
-/** Native store home — native loader + shared cross-platform HomeScreen. */
+/**
+ * Native entry for store home — same shared `HomeScreen` as web/SSR.
+ * Only the data loader differs (native cache vs SSR).
+ */
 export default function StoreHomeScreen() {
   const { data: result, loading, error: loadError } = useNativeLoader(homeLoader, {
     cacheKey: CACHE_KEYS.home,

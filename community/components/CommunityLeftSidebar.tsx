@@ -53,7 +53,7 @@ export function CommunityLeftSidebar({ pin = 'document' }: { pin?: CommunitySide
               href: routes.profile,
               label: 'Profile',
               icon: Icons.User,
-              iconBg: '#0a66c2',
+              iconBg: communityUi.brand,
             }}
             active={pathname === routes.profile || pathname.startsWith(`${String(routes.profile)}/`)}
           />

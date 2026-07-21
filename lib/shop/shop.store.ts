@@ -58,6 +58,11 @@ type ShopState = {
   hasMoreAdminShops: boolean
 
   isLoading: boolean
+  /** Owner's shops (`loadMyShops`) — do not share with public/admin lists. */
+  isLoadingMyShops: boolean
+  /** True after the first `loadMyShops` settle (success or failure). */
+  myShopsLoaded: boolean
+  /** Public browse / admin shop lists (`loadPublicShops` / `loadAdminShops`). */
   isLoadingShops: boolean
   isCreating: boolean
   isUpdating: boolean
@@ -85,6 +90,8 @@ const initialState: ShopState = {
   totalAdminShops: 0,
   hasMoreAdminShops: false,
   isLoading: false,
+  isLoadingMyShops: false,
+  myShopsLoaded: false,
   isLoadingShops: false,
   isCreating: false,
   isUpdating: false,
@@ -115,6 +122,13 @@ export const loadMyShops = createAsyncThunk<Shop[], string | undefined, ThunkCon
     const response = await shopService.getMyShops(userId)
     if (!response.success) return rejectWithValue(response.error ?? 'Failed to load your shops.')
     return response.data ?? []
+  },
+  {
+    // Deduplicate in-flight refreshes (layout + screens both dispatch on mount).
+    condition: (_, { getState }) => {
+      const { shop } = getState() as { shop: ShopState }
+      return !shop.isLoadingMyShops
+    },
   },
 )
 
@@ -434,7 +448,7 @@ const shopSlice = createSlice({
     builder
       // ---- reads ----
       .addCase(loadMyShops.pending, (state) => {
-        state.isLoadingShops = true
+        state.isLoadingMyShops = true
         state.error = null
       })
       .addCase(loadMyShops.fulfilled, (state, action) => {
@@ -449,11 +463,13 @@ const shopSlice = createSlice({
         if (!stillOwned) {
           state.currentShop = action.payload.find((shop) => shop.is_active) ?? action.payload[0] ?? null
         }
-        state.isLoadingShops = false
+        state.isLoadingMyShops = false
+        state.myShopsLoaded = true
       })
       .addCase(loadMyShops.rejected, (state, action) => {
         state.error = action.payload ?? 'Failed to load your shops.'
-        state.isLoadingShops = false
+        state.isLoadingMyShops = false
+        state.myShopsLoaded = true
       })
 
       .addCase(loadMyShop.pending, (state) => {

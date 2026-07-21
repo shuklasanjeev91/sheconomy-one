@@ -2,8 +2,11 @@ import type { ComponentType } from 'react'
 import { useMemo, useRef } from 'react'
 import { Pressable } from 'react-native'
 import type { ThemeName } from 'tamagui'
+import { XStack, YStack } from 'tamagui'
+import { Text } from './Text'
 import { Toast as TToast, useToastController, useToastState } from '@tamagui/toast'
 import { getShadowStyle } from '~/config/tokens'
+import { useAppUi } from '~/lib/theme/useAppUi'
 
 const AnyToast = TToast as unknown as ComponentType<any> & {
   Title: typeof TToast.Title
@@ -16,6 +19,8 @@ declare module '@tamagui/toast' {
   interface CustomData {
     tone?: ToastTone
     onPress?: () => void
+    actionLabel?: string
+    onAction?: () => void
   }
 }
 
@@ -47,6 +52,8 @@ export function useAppToast() {
           tone?: ToastTone
           duration?: number
           onPress?: () => void
+          actionLabel?: string
+          onAction?: () => void
         },
       ) => {
         controllerRef.current.show(title, {
@@ -54,6 +61,8 @@ export function useAppToast() {
           tone: opts?.tone ?? 'default',
           duration: opts?.duration,
           onPress: opts?.onPress,
+          actionLabel: opts?.actionLabel,
+          onAction: opts?.onAction,
         })
       },
       hide: (...args: Parameters<typeof controller.hide>) =>
@@ -66,6 +75,7 @@ export function useAppToast() {
 /** Mount once near the root — renders whatever `useAppToast().show()` triggers. */
 export function AppToasts() {
   const toast = useToastState()
+  const ui = useAppUi()
 
   if (!toast || toast.isHandledNatively) {
     return null
@@ -73,18 +83,41 @@ export function AppToasts() {
 
   const tone = (toast.tone as ToastTone) ?? 'default'
   const onPress = toast.onPress as (() => void) | undefined
+  const actionLabel = toast.actionLabel as string | undefined
+  const onAction = toast.onAction as (() => void) | undefined
 
   const content = (
-    <>
-      <AnyToast.Title fontWeight="700" fontSize="$4" color="$color12">
-        {toast.title}
-      </AnyToast.Title>
-      {toast.message ? (
-        <AnyToast.Description color="$color11" fontSize="$3">
-          {toast.message}
-        </AnyToast.Description>
+    <XStack alignItems="center" gap="$3" justifyContent="space-between" width="100%">
+      <YStack flex={1} gap="$1" minWidth={0}>
+        <AnyToast.Title fontWeight="700" fontSize="$4" color="$color12">
+          {toast.title}
+        </AnyToast.Title>
+        {toast.message ? (
+          <AnyToast.Description color="$color11" fontSize="$3">
+            {toast.message}
+          </AnyToast.Description>
+        ) : null}
+      </YStack>
+      {actionLabel && onAction ? (
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel={actionLabel}
+          onPress={onAction}
+          hitSlop={8}
+          style={{
+            minHeight: 44,
+            minWidth: 44,
+            alignItems: 'center',
+            justifyContent: 'center',
+            paddingHorizontal: 4,
+          }}
+        >
+          <Text fontSize={14} fontWeight="700" color={ui.brand}>
+            {actionLabel}
+          </Text>
+        </Pressable>
       ) : null}
-    </>
+    </XStack>
   )
 
   return (
@@ -106,7 +139,7 @@ export function AppToasts() {
       exitStyle={{ opacity: 0, y: -12, scale: 0.98 }}
       {...getShadowStyle('md')}
     >
-      {onPress ? (
+      {onPress && !actionLabel ? (
         <Pressable accessibilityRole="button" onPress={onPress}>
           {content}
         </Pressable>

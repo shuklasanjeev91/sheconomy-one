@@ -1,4 +1,4 @@
-import { useCallback, useRef } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { findNodeHandle, NativeModules, Platform, View } from 'react-native'
 import Constants from 'expo-constants'
 
@@ -9,6 +9,11 @@ ensureLiveKitNativeGlobals()
 import { useLocalParticipant, useRoomContext } from '@livekit/react-native'
 import { ScreenCapturePickerView } from '@livekit/react-native-webrtc'
 
+import {
+  CALL_AUDIO_CAPTURE,
+  toggleCallSpeaker,
+  type CallAudioRoute,
+} from '~/co-work/lib/livekit-call-audio'
 import type { LiveKitMediaControls } from '~/co-work/lib/livekit-media-controls'
 import { setLocalScreenShareEnabled } from '~/co-work/lib/livekit-screen-share'
 
@@ -64,10 +69,20 @@ async function showIosBroadcastPicker() {
   await manager.show(reactTag)
 }
 
-export function useLiveKitMediaControls(): LiveKitMediaControls {
+function routeIsSpeaker(route: CallAudioRoute): boolean {
+  return route === 'speaker'
+}
+
+export function useLiveKitMediaControls(preferSpeaker = true): LiveKitMediaControls {
   const room = useRoomContext()
   const { localParticipant, isMicrophoneEnabled, isCameraEnabled, isScreenShareEnabled } =
     useLocalParticipant()
+  const [speakerOn, setSpeakerOn] = useState(preferSpeaker)
+  const muteInFlightRef = useRef(false)
+
+  useEffect(() => {
+    setSpeakerOn(preferSpeaker)
+  }, [preferSpeaker])
 
   const screenSharingRef = useRef(isScreenShareEnabled)
   screenSharingRef.current = isScreenShareEnabled
@@ -106,21 +121,34 @@ export function useLiveKitMediaControls(): LiveKitMediaControls {
     }
   }, [localParticipant])
 
+  const toggleSpeaker = useCallback(async () => {
+    const next = !speakerOn
+    const route = await toggleCallSpeaker(next)
+    // Reflect the actual selected route so Bluetooth/earpiece don't look like speaker.
+    setSpeakerOn(routeIsSpeaker(route))
+  }, [speakerOn])
+
+  const toggleAudio = useCallback(() => {
+    if (muteInFlightRef.current) return
+    const next = !isMicrophoneEnabled
+    muteInFlightRef.current = true
+    void localParticipant
+      .setMicrophoneEnabled(next, { ...CALL_AUDIO_CAPTURE })
+      .finally(() => {
+        muteInFlightRef.current = false
+      })
+  }, [isMicrophoneEnabled, localParticipant])
+
   return {
     room,
     localParticipant,
     audioEnabled: isMicrophoneEnabled,
     videoEnabled: isCameraEnabled,
     screenSharing: isScreenShareEnabled,
-    toggleAudio: () => {
-      const next = !isMicrophoneEnabled
-      void localParticipant.setMicrophoneEnabled(next, {
-        echoCancellation: true,
-        noiseSuppression: true,
-        autoGainControl: true,
-      })
-    },
+    speakerOn,
+    toggleAudio,
     toggleVideo: () => void localParticipant.setCameraEnabled(!isCameraEnabled),
     toggleScreenShare,
+    toggleSpeaker,
   }
 }

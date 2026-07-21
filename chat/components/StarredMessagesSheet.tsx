@@ -7,7 +7,7 @@ import { formatListTimestamp } from '~/chat/lib/time'
 import type { ChatMessage } from '~/chat/lib/types'
 import { ScreenSearchField } from '~/components/search'
 import { AppBottomSheet, Icons, ScrollView, Spinner, Text, XStack, YStack } from '~/components/ui'
-import { filterBySearchQuery } from '~/lib/search'
+import { SHEET_SEARCH_MIN_ITEMS, filterBySearchQuery } from '~/lib/search'
 
 type StarredMessagesSheetProps = {
   open: boolean
@@ -61,14 +61,18 @@ export function StarredMessagesSheet({
     }
   }, [open, currentUserId, conversationId])
 
+  const showSearch = items.length >= SHEET_SEARCH_MIN_ITEMS || query.length > 0
+
   return (
     <AppBottomSheet open={open} onOpenChange={onOpenChange} title="Starred messages" scrollable={false}>
-      <ScreenSearchField
-        value={query}
-        onChangeText={setQuery}
-        placeholder="Search starred messages"
-        clearable
-      />
+      {showSearch ? (
+        <ScreenSearchField
+          value={query}
+          onChangeText={setQuery}
+          placeholder="Search starred messages"
+          clearable
+        />
+      ) : null}
       {loading ? (
         <YStack paddingVertical={24} alignItems="center">
           <Spinner size="small" color={theme.brand} />

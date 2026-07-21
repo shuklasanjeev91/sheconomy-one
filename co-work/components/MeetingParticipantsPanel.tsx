@@ -73,9 +73,11 @@ export function MeetingParticipantsPanel({
                 No participants yet.
               </Text>
             ) : null}
-            {admitted.map((p) => (
-              <ParticipantRow key={p.id} participant={p} handRaised={!!raisedHands[p.user_id]} />
-            ))}
+            {[...admitted]
+              .sort((a, b) => Number(!!raisedHands[b.user_id]) - Number(!!raisedHands[a.user_id]))
+              .map((p) => (
+                <ParticipantRow key={p.id} participant={p} handRaised={!!raisedHands[p.user_id]} />
+              ))}
           </YStack>
         </YStack>
       </ScrollView>

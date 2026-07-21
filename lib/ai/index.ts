@@ -14,11 +14,14 @@ export type {
   PostDraftResult,
   SendAiMessageParams,
   SendAiMessageResult,
+  ShopDraftParams,
+  ShopDraftResult,
 } from './types'
 
 export {
   draftMeetingWithAi,
   draftPostWithAi,
+  draftShopWithAi,
   fetchAiSuggestions,
   fetchCommentSuggestions,
   sendAiMessage,

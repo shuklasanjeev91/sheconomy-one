@@ -9,8 +9,10 @@ import {
   logCall,
   mapCall,
   startCall,
+  startMultiPartyCall,
   updateCallStatus,
 } from '~/chat/lib/calls'
+import { fetchConversationParticipants } from '~/chat/lib/chats'
 import type { ChatSummary } from '~/chat/lib/types'
 import { useAppToast } from '~/components/ui'
 import { chatRoutes } from '~/lib/routes'
@@ -24,7 +26,7 @@ export type OutgoingCallState = {
 
 const STATUS_POLL_MS = 1_200
 
-/** Places an outbound call and tracks its ringing lifecycle for the caller. */
+/** Places an outbound 1:1 or group call and tracks its ringing lifecycle for the caller. */
 export function useOutgoingCall(currentUserId: string) {
   const router = useRouter()
   const toast = useAppToast()
@@ -55,9 +57,52 @@ export function useOutgoingCall(currentUserId: string) {
 
   useEffect(() => teardown, [teardown])
 
+  const joinCallRoom = useCallback(
+    (code: string, callType: CallType, callId: string) => {
+      router.push(chatRoutes.call(code, { type: callType, callId }))
+    },
+    [router],
+  )
+
   const start = useCallback(
     async (chat: ChatSummary, callType: CallType) => {
-      if (outgoingRef.current || !chat.otherUserId) return
+      if (outgoingRef.current) return
+
+      // —— Group / multi-party: ring everyone, host joins immediately (WhatsApp-style).
+      if (chat.type === 'group') {
+        const participants = await fetchConversationParticipants(chat.id)
+        const receivers = Object.values(participants)
+          .filter((p) => p.userId !== currentUserId)
+          .map((p) => ({ id: p.userId, name: p.name, avatar: p.avatarUrl }))
+
+        const { call, error } = await startMultiPartyCall({
+          conversationId: chat.id,
+          callerId: currentUserId,
+          receivers,
+          callType,
+          title: chat.name ? `${chat.name} call` : undefined,
+        })
+
+        if (error || !call) {
+          toast.show('Could not start the call', { message: error ?? undefined, tone: 'danger' })
+          return
+        }
+
+        void logCall({
+          conversationId: chat.id,
+          callerId: currentUserId,
+          callType,
+          outcome: 'answered',
+        })
+
+        if (call.meetingCode) {
+          joinCallRoom(call.meetingCode, callType, call.id)
+        }
+        return
+      }
+
+      // —— 1:1: wait for accept before joining.
+      if (!chat.otherUserId) return
 
       const { call, error } = await startCall({
         conversationId: chat.id,
@@ -91,9 +136,7 @@ export function useOutgoingCall(currentUserId: string) {
             outcome: 'answered',
           })
           teardown()
-          if (code) {
-            router.push(chatRoutes.call(code, { type: callType, callId: call.id }))
-          }
+          if (code) joinCallRoom(code, callType, call.id)
           return
         }
 
@@ -143,7 +186,7 @@ export function useOutgoingCall(currentUserId: string) {
         }
       }, CALL_RING_TIMEOUT_MS)
     },
-    [currentUserId, router, teardown, toast],
+    [currentUserId, joinCallRoom, teardown, toast],
   )
 
   const cancel = useCallback(() => {

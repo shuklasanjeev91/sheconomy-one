@@ -1,4 +1,3 @@
-import { Platform } from 'react-native'
 import { Link } from 'one'
 
 import { Button, Icons, Spinner, Text, XStack, YStack } from '~/components/ui'
@@ -50,12 +49,9 @@ export function ListingPublishFooter({
       borderTopWidth={1}
       borderTopColor={ui.borderSubtle}
       backgroundColor={ui.surface}
-      style={{
-        ...getShadowStyle('md'),
-        ...(Platform.OS === 'web'
-          ? ({ position: 'sticky', bottom: 0, zIndex: 20 } as const)
-          : undefined),
-      }}
+      zIndex={20}
+      flexShrink={0}
+      style={getShadowStyle('md')}
     >
       <Link href={vendorRoutes.products} asChild>
         <Button tone="ghost" size="$3" borderRadius={999} disabled={busy}>

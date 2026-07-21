@@ -443,6 +443,13 @@ export type HomeBootstrapData = {
   heroImages: HomeHeroImageSet
 }
 
+export type HomeBootstrapFeedSeeds = {
+  shops: PaginatedResult<ShopSummary>
+  physical: PaginatedResult<ListingSummary>
+  digital: PaginatedResult<ListingSummary>
+  trending: PaginatedResult<ListingSummary>
+}
+
 const DEFAULT_STATS: CommerceStats = {
   total_active_listings: 0,
   shops_with_listings: 0,
@@ -632,7 +639,7 @@ export async function fetchListingFeedPage(
   }
 
   const { data, error, count } = await applyListingBrowseFilters(
-    query,
+    query as unknown as BrowseFilterQuery,
     browseFilters,
     kind === 'latest' ? 'newest' : 'relevance',
   ).range(from, to)
@@ -801,66 +808,81 @@ export async function fetchShopsPage(
   }
 }
 
-/** Categories that have at least one active listing (via category_assignments). */
-async function fetchAllCategoriesWithActiveListings(): Promise<CategorySummary[]> {
-  const { data: assignments, error } = await supabase
-    .from('category_assignments')
-    .select(
-      `
-      category_id,
-      listings!inner (
-        id,
-        is_active,
-        listing_status
-      )
-    `,
-    )
-    .eq('listings.is_active', true)
-    .eq('listings.listing_status', 'active')
-
-  if (error || !assignments?.length) return []
-
-  const countByCategory = new Map<string, number>()
-  for (const row of assignments) {
-    countByCategory.set(row.category_id, (countByCategory.get(row.category_id) ?? 0) + 1)
-  }
-
-  const categoryIds = [...countByCategory.keys()]
-  if (!categoryIds.length) return []
-
-  const { data: categories, error: categoriesError } = await supabase
-    .from('categories')
-    .select('category_id, category, category_image_url, category_icon, product_count, seo_name')
-    .in('category_id', categoryIds)
-    .eq('status', 'A')
-    .not('category', 'ilike', '%without category%')
-
-  if (categoriesError || !categories?.length) return []
-
-  return categories
-    .filter(isStorefrontCategoryVisible)
-    .map((category) => ({
-      ...category,
-      product_count: countByCategory.get(category.category_id) ?? category.product_count,
-    }))
-    .sort((a, b) => (b.product_count ?? 0) - (a.product_count ?? 0))
-}
-
 export async function fetchCategoriesPage(
   page: number,
   pageSize = COMMERCE_HORIZONTAL_PAGE_SIZE,
 ): Promise<PaginatedResult<CategorySummary>> {
-  const categories = await fetchAllCategoriesWithActiveListings()
-  return paginated(categories, page, pageSize)
+  const from = page * pageSize
+  const to = from + pageSize - 1
+
+  const { data, error, count } = await supabase
+    .from('categories_with_counts')
+    .select('category_id, category, category_image_url, category_icon, product_count, seo_name', {
+      count: 'exact',
+    })
+    .order('product_count', { ascending: false, nullsFirst: false })
+    .range(from, to)
+
+  if (error) {
+    // View may not be migrated yet — fall back to active categories table scan.
+    const legacy = await supabase
+      .from('categories')
+      .select('category_id, category, category_image_url, category_icon, product_count, seo_name', {
+        count: 'exact',
+      })
+      .eq('status', 'A')
+      .not('category', 'ilike', '%without category%')
+      .order('product_count', { ascending: false, nullsFirst: false })
+      .range(from, to)
+
+    if (legacy.error) {
+      return { items: [], page, pageSize, hasMore: false, error: legacy.error.message }
+    }
+
+    const legacyItems = (legacy.data ?? [])
+      .filter(isStorefrontCategoryVisible)
+      .map((row) => ({
+        category_id: row.category_id,
+        category: row.category,
+        category_image_url: row.category_image_url,
+        category_icon: row.category_icon,
+        product_count: row.product_count,
+        seo_name: row.seo_name,
+      }))
+    const legacyTotal = legacy.count ?? 0
+    return {
+      items: legacyItems,
+      page,
+      pageSize,
+      hasMore: legacyTotal ? to + 1 < legacyTotal : (legacy.data?.length ?? 0) === pageSize,
+      error: null,
+    }
+  }
+
+  const items = (data ?? [])
+    .filter(isStorefrontCategoryVisible)
+    .map((row) => ({
+      category_id: row.category_id,
+      category: row.category,
+      category_image_url: row.category_image_url,
+      category_icon: row.category_icon,
+      product_count: row.product_count,
+      seo_name: row.seo_name,
+    }))
+
+  const total = count ?? 0
+  return {
+    items,
+    page,
+    pageSize,
+    hasMore: total ? to + 1 < total : (data?.length ?? 0) === pageSize,
+    error: null,
+  }
 }
 
-async function collectListingImageUrls(
-  kind: ListingFeedKind,
-  limit = 6,
-): Promise<string[]> {
-  const feed = await fetchListingFeedPage(kind, 0, { pageSize: Math.max(limit * 2, 12) })
+function listingImageUrls(items: ListingSummary[], limit = 6): string[] {
   const urls: string[] = []
-  for (const listing of feed.items) {
+  for (const listing of items) {
     const url = listing.image_urls?.[0] ?? listing.image_url
     if (url && !urls.includes(url)) urls.push(url)
     if (urls.length >= limit) break
@@ -868,24 +890,25 @@ async function collectListingImageUrls(
   return urls
 }
 
-async function collectShopLogoUrls(limit = 6): Promise<string[]> {
-  const shops = await fetchShopsPage(0, Math.max(limit * 2, 12))
+function shopLogoUrls(items: ShopSummary[], limit = 6): string[] {
   const urls: string[] = []
-  for (const shop of shops.items) {
+  for (const shop of items) {
     if (shop.logo_url && !urls.includes(shop.logo_url)) urls.push(shop.logo_url)
     if (urls.length >= limit) break
   }
   return urls
 }
 
-export async function fetchHomeHeroImages(): Promise<HomeHeroImageSet> {
-  const [shops, physical, digital, trending] = await Promise.all([
-    collectShopLogoUrls(6),
-    collectListingImageUrls('physical', 6),
-    collectListingImageUrls('digital', 6),
-    collectListingImageUrls('trending', 6),
-  ])
-
+function heroImagesFromFeeds(input: {
+  shops: ShopSummary[]
+  physical: ListingSummary[]
+  digital: ListingSummary[]
+  trending: ListingSummary[]
+}): HomeHeroImageSet {
+  const shops = shopLogoUrls(input.shops, 6)
+  const physical = listingImageUrls(input.physical, 6)
+  const digital = listingImageUrls(input.digital, 6)
+  const trending = listingImageUrls(input.trending, 6)
   return {
     shops,
     physical,
@@ -895,13 +918,34 @@ export async function fetchHomeHeroImages(): Promise<HomeHeroImageSet> {
   }
 }
 
+/** @deprecated Prefer fetchHomeBootstrap — hero images are derived from the same feed queries. */
+export async function fetchHomeHeroImages(): Promise<HomeHeroImageSet> {
+  const [shops, physical, digital, trending] = await Promise.all([
+    fetchShopsPage(0, COMMERCE_HORIZONTAL_PAGE_SIZE),
+    fetchListingFeedPage('physical', 0),
+    fetchListingFeedPage('digital', 0),
+    fetchListingFeedPage('trending', 0),
+  ])
+  return heroImagesFromFeeds({
+    shops: shops.items,
+    physical: physical.items,
+    digital: digital.items,
+    trending: trending.items,
+  })
+}
+
 export async function fetchHomeBootstrap(): Promise<{
   data: HomeBootstrapData | null
   error: string | null
+  feedSeeds?: HomeBootstrapFeedSeeds
 }> {
-  const [{ data: statsRow, error }, heroImages] = await Promise.all([
+  // One round-trip set: stats + the same feeds the home sections/hero use.
+  const [{ data: statsRow, error }, shops, physical, digital, trending] = await Promise.all([
     supabase.from('marketplace_statistics').select('*').maybeSingle(),
-    fetchHomeHeroImages(),
+    fetchShopsPage(0, COMMERCE_HORIZONTAL_PAGE_SIZE),
+    fetchListingFeedPage('physical', 0),
+    fetchListingFeedPage('digital', 0),
+    fetchListingFeedPage('trending', 0),
   ])
 
   if (error) {
@@ -919,7 +963,18 @@ export async function fetchHomeBootstrap(): Promise<{
       }
     : DEFAULT_STATS
 
-  return { data: { stats, heroImages }, error: null }
+  const heroImages = heroImagesFromFeeds({
+    shops: shops.items,
+    physical: physical.items,
+    digital: digital.items,
+    trending: trending.items,
+  })
+
+  return {
+    data: { stats, heroImages },
+    error: null,
+    feedSeeds: { shops, physical, digital, trending },
+  }
 }
 
 /** @deprecated Use fetchHomeBootstrap + paginated section feeds. */
@@ -1007,7 +1062,10 @@ export async function fetchCategoryListingsPage(
     baseQuery = baseQuery.in('shop_id', filters.shopIds)
   }
 
-  const { data, error, count } = await applyListingBrowseFilters(baseQuery, filters).range(from, to)
+  const { data, error, count } = await applyListingBrowseFilters(
+    baseQuery as unknown as BrowseFilterQuery,
+    filters,
+  ).range(from, to)
 
   if (error) {
     return { items: [], page, pageSize, hasMore: false, error: error.message }
@@ -1048,17 +1106,25 @@ export {
   type ListingFulfillmentInfo,
 } from '~/commerce/lib/listing-fulfillment'
 
-function applyListingBrowseFilters<
-  T extends {
-    eq: (col: string, val: unknown) => T
-    gte: (col: string, val: unknown) => T
-    lte: (col: string, val: unknown) => T
-    order: (
-      col: string,
-      opts: { ascending: boolean; nullsFirst?: boolean },
-    ) => T
-  },
->(query: T, filters?: ListingBrowseFilters, defaultSort: ListingSort = 'newest'): T {
+type BrowseFilterQuery = {
+  eq: (col: string, val: unknown) => BrowseFilterQuery
+  gte: (col: string, val: unknown) => BrowseFilterQuery
+  lte: (col: string, val: unknown) => BrowseFilterQuery
+  order: (
+    col: string,
+    opts: { ascending: boolean; nullsFirst?: boolean },
+  ) => BrowseFilterQuery
+  range: (
+    from: number,
+    to: number,
+  ) => PromiseLike<{ data: unknown; error: { message: string } | null; count: number | null }>
+}
+
+function applyListingBrowseFilters(
+  query: BrowseFilterQuery,
+  filters?: ListingBrowseFilters,
+  defaultSort: ListingSort = 'newest',
+): BrowseFilterQuery {
   let next = query
 
   if (filters?.listingType) {

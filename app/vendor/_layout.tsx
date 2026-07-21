@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { Platform } from 'react-native'
-import { Slot, useLocalSearchParams, usePathname, useRouter } from 'one'
+import { Slot, useGlobalSearchParams, usePathname, useRouter } from 'one'
 
 import { RequireVendorRole } from '~/components/auth/RouteGuard'
 import { Icons, ScrollView, Text, XStack, YStack } from '~/components/ui'
@@ -14,7 +14,11 @@ import { useAppDispatch, useAppSelector } from '~/lib/store/hooks'
 import { useAppUi } from '~/lib/theme/useAppUi'
 
 import { VendorSidebar } from '~/commerce/components/vendor/VendorSidebar'
-import { getActiveVendorNavItem, type VendorNavItem } from '~/commerce/components/vendor/vendor-nav'
+import {
+  getActiveVendorNavItem,
+  resolveVendorSettingsActiveSubId,
+  type VendorNavItem,
+} from '~/commerce/components/vendor/vendor-nav'
 
 const EXPANDED_WIDTH = 268
 const COLLAPSED_WIDTH = 80
@@ -43,9 +47,8 @@ export function VendorLayout() {
   }, [dispatch])
 
   const active = getActiveVendorNavItem(pathname)
-  const params = useLocalSearchParams<{ section?: string }>()
-  const activeSubId =
-    active.id === 'settings' ? `settings-${params.section ?? 'general'}` : undefined
+  const globalParams = useGlobalSearchParams() as Record<string, string | string[] | undefined>
+  const activeSubId = resolveVendorSettingsActiveSubId(pathname, globalParams.section)
 
   function handleSelect(item: VendorNavItem) {
     setDrawerOpen(false)
@@ -178,15 +181,15 @@ export function VendorLayout() {
             <YStack
               key="vendor-drawer"
               style={edgePanelPositionStyle()}
-              width={DRAWER_WIDTH}
-              maxWidth="85%"
+              width={Platform.OS === 'web' ? DRAWER_WIDTH : '100%'}
+              maxWidth={Platform.OS === 'web' ? '85%' : '100%'}
               height="100%"
               backgroundColor={ui.surface}
-              borderRightWidth={1}
+              borderRightWidth={Platform.OS === 'web' ? 1 : 0}
               borderRightColor={ui.borderSubtle}
               zIndex={1}
               animation="quick"
-              enterStyle={{ x: -DRAWER_WIDTH }}
+              enterStyle={{ x: Platform.OS === 'web' ? -DRAWER_WIDTH : -40 }}
             >
               <YStack paddingTop={Platform.OS !== 'web' ? safeTop : 0} flex={1} minHeight={0}>
                 <VendorSidebar

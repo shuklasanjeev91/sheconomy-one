@@ -3,7 +3,7 @@ import { useMemo, useState } from 'react'
 
 import { CommunityCard } from '~/community/components/CommunityCard'
 import { CommunityShell } from '~/community/components/CommunityShell'
-import { createEvent } from '~/community/lib/events'
+import { createEventAndFeedPost } from '~/community/lib/events'
 import { useCommunityUi } from '~/community/lib/community-theme'
 import {
   Button,
@@ -23,7 +23,10 @@ import type { PickedImage } from '~/lib/media/pick-image'
 import { uploadEventCoverImage } from '~/lib/supabase/storage-upload'
 import { useUploadProgress } from '~/hooks/useUploadProgress'
 import { LocationPickerField } from '~/components/geo'
+import { clearFormDraft } from '~/lib/drafts/form-draft'
+import { useFormDraft } from '~/hooks/useFormDraft'
 import { useFormValidation } from '~/hooks/useFormValidation'
+import { useUnsavedChangesGuard } from '~/hooks/useUnsavedChangesGuard'
 import { communityRoutes, routes } from '~/lib/routes'
 import {
   dateYmd,
@@ -40,6 +43,7 @@ import { useSupabase } from '~/providers/SupabaseProvider'
 import { BRAND_NAME } from '~/config/brand'
 
 const EVENT_TYPES = ['meetup', 'workshop', 'webinar', 'networking', 'conference', 'other']
+const EVENT_DRAFT_KEY = 'community-create-event'
 
 export function CreateEventScreen() {
   const communityUi = useCommunityUi()
@@ -53,6 +57,7 @@ export function CreateEventScreen() {
   const [eventLocation, setEventLocation] = useState('')
   const [venueDetail, setVenueDetail] = useState('')
   const [cover, setCover] = useState<PickedImage[]>([])
+  const [shareToFeed, setShareToFeed] = useState(true)
   const { progress: uploadProgress, track: trackUpload, reset: resetUpload } = useUploadProgress()
 
   const form = useFormValidation(
@@ -78,6 +83,43 @@ export function CreateEventScreen() {
       [isFree, isOnline],
     ),
   )
+
+  const draftValue = useMemo(
+    () => ({
+      values: form.values,
+      eventType,
+      isOnline,
+      isFree,
+      eventLocation,
+      venueDetail,
+      shareToFeed,
+    }),
+    [eventLocation, eventType, form.values, isFree, isOnline, shareToFeed, venueDetail],
+  )
+  const isDraftDirty = Boolean(
+    form.values.title?.trim() ||
+      form.values.description?.trim() ||
+      eventLocation.trim() ||
+      venueDetail.trim(),
+  )
+  useFormDraft({
+    key: user ? EVENT_DRAFT_KEY : null,
+    value: draftValue,
+    isDirty: () => isDraftDirty,
+    onRestored: (draft) => {
+      if (!draft?.values) return
+      for (const [key, value] of Object.entries(draft.values)) {
+        form.fields[key as keyof typeof form.fields]?.setValue(String(value ?? ''))
+      }
+      if (typeof draft.eventType === 'string') setEventType(draft.eventType)
+      if (typeof draft.isOnline === 'boolean') setIsOnline(draft.isOnline)
+      if (typeof draft.isFree === 'boolean') setIsFree(draft.isFree)
+      if (typeof draft.eventLocation === 'string') setEventLocation(draft.eventLocation)
+      if (typeof draft.venueDetail === 'string') setVenueDetail(draft.venueDetail)
+      if (typeof draft.shareToFeed === 'boolean') setShareToFeed(draft.shareToFeed)
+    },
+  })
+  useUnsavedChangesGuard({ isDirty: isDraftDirty && !isSaving })
 
   if (!user) {
     return (
@@ -141,7 +183,7 @@ export function CreateEventScreen() {
       coverUrl = uploaded.publicUrl
     }
 
-    const { data, error } = await createEvent(user.id, {
+    const { event, error } = await createEventAndFeedPost(user.id, {
       title: form.fields.title.value.trim(),
       description: form.fields.description.value.trim(),
       startTime: startIso,
@@ -160,17 +202,22 @@ export function CreateEventScreen() {
         .split(',')
         .map((tag) => tag.trim())
         .filter(Boolean),
+      shareToFeed,
+      rsvpEnabled: true,
     })
     setIsSaving(false)
     resetUpload()
 
-    if (error || !data) {
+    if (error || !event) {
       toast.show('Could not create event', { tone: 'danger', message: error ?? 'Try again.' })
       return
     }
 
-    toast.show('Event created', { tone: 'success' })
-    router.replace(communityRoutes.event(data.id))
+    toast.show(shareToFeed ? 'Event created and shared to feed' : 'Event created', {
+      tone: 'success',
+    })
+    await clearFormDraft(EVENT_DRAFT_KEY)
+    router.replace(communityRoutes.event(event.id))
   }
 
   return (
@@ -346,6 +393,40 @@ export function CreateEventScreen() {
           field={form.fields.maxAttendees}
           placeholder="100"
         />
+
+        <XStack
+          gap={12}
+          alignItems="center"
+          paddingVertical={8}
+          paddingHorizontal={4}
+          onPress={() => setShareToFeed((value) => !value)}
+          cursor="pointer"
+        >
+          <YStack
+            width={22}
+            height={22}
+            borderRadius={6}
+            borderWidth={2}
+            borderColor={shareToFeed ? communityUi.brand : communityUi.border}
+            backgroundColor={shareToFeed ? communityUi.brand : 'transparent'}
+            alignItems="center"
+            justifyContent="center"
+          >
+            {shareToFeed ? (
+              <Text fontSize={12} fontWeight="800" color="white">
+                ✓
+              </Text>
+            ) : null}
+          </YStack>
+          <YStack flex={1} gap={2}>
+            <Text fontSize={14} fontWeight="700" color={communityUi.text}>
+              Also share to feed
+            </Text>
+            <Text fontSize={12} color={communityUi.textMuted}>
+              Post this event to your network like LinkedIn
+            </Text>
+          </YStack>
+        </XStack>
 
         <Button
           backgroundColor={communityUi.brand}

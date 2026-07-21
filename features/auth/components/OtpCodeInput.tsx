@@ -1,8 +1,9 @@
-import { useRef } from 'react'
-import { Platform } from 'react-native'
+import { useCallback, useEffect, useRef } from 'react'
+import { Platform, Pressable, StyleSheet, TextInput } from 'react-native'
+import * as Clipboard from 'expo-clipboard'
 
-import { Input, Text, XStack, YStack } from '~/components/ui'
-import { normalizeOtpDigits } from '~/features/auth/validation'
+import { Text, XStack, YStack } from '~/components/ui'
+import { isCompleteOtp, normalizeOtpDigits } from '~/features/auth/validation'
 import { useAppUi } from '~/lib/theme/useAppUi'
 
 type OtpCodeInputProps = {
@@ -16,12 +17,12 @@ type OtpCodeInputProps = {
 }
 
 /**
- * Segmented 6-digit OTP field:
- * - Visual digit boxes with a single invisible caret input (autofill-friendly)
- * - Paste fills the full code
- * - Web: autocomplete="one-time-code"
- * - iOS: textContentType="oneTimeCode"
- * - Android: autoComplete="sms-otp" (no READ_SMS)
+ * Segmented OTP field with a single real TextInput overlay:
+ * - Paste fills the full code (maxLength is NOT applied on the input —
+ *   length is enforced after digit normalization so "Code: 123456" pastes work)
+ * - iOS: textContentType="oneTimeCode" for SMS keyboard suggestions
+ * - Android: autoComplete="sms-otp"
+ * - Clipboard: on focus, if clipboard holds a complete OTP, auto-fill it
  */
 export function OtpCodeInput({
   value,
@@ -33,18 +34,62 @@ export function OtpCodeInput({
   accessibilityLabel = 'One-time verification code',
 }: OtpCodeInputProps) {
   const ui = useAppUi()
-  const inputRef = useRef<{ focus?: () => void } | null>(null)
+  const inputRef = useRef<TextInput | null>(null)
   const digits = normalizeOtpDigits(value, length)
   const activeIndex = Math.min(digits.length, length - 1)
+  const lastClipboardCodeRef = useRef<string | null>(null)
+
+  const applyCode = useCallback(
+    (raw: string) => {
+      const next = normalizeOtpDigits(raw, length)
+      if (next !== digits) onChange(next)
+    },
+    [digits, length, onChange],
+  )
+
+  const tryClipboardAutofill = useCallback(async () => {
+    // Only auto-fill when the field is empty so typing is never overwritten.
+    if (disabled || digits.length > 0) return
+    try {
+      const hasString =
+        typeof Clipboard.hasStringAsync === 'function'
+          ? await Clipboard.hasStringAsync()
+          : true
+      if (!hasString) return
+
+      const clip = await Clipboard.getStringAsync()
+      const code = normalizeOtpDigits(clip ?? '', length)
+      if (!isCompleteOtp(code, length)) return
+      if (lastClipboardCodeRef.current === code) return
+      lastClipboardCodeRef.current = code
+      onChange(code)
+    } catch {
+      // Clipboard access can fail (permissions / web); paste still works manually.
+    }
+  }, [digits, disabled, length, onChange])
+
+  useEffect(() => {
+    if (disabled || !autoFocus) return
+    const timer = setTimeout(() => {
+      void tryClipboardAutofill()
+    }, 350)
+    return () => clearTimeout(timer)
+  }, [autoFocus, disabled, tryClipboardAutofill])
 
   function focusInput() {
     if (disabled) return
-    inputRef.current?.focus?.()
+    inputRef.current?.focus()
+    void tryClipboardAutofill()
   }
 
   return (
-    <YStack width="100%" position="relative" onPress={focusInput} cursor={disabled ? 'default' : 'text'}>
-      <XStack gap="$2" width="100%" justifyContent="space-between">
+    <Pressable
+      onPress={focusInput}
+      disabled={disabled}
+      accessibilityRole="none"
+      style={styles.wrap}
+    >
+      <XStack gap="$2" width="100%" justifyContent="space-between" pointerEvents="none">
         {Array.from({ length }, (_, index) => {
           const char = digits[index] ?? ''
           const isActive = !disabled && index === activeIndex
@@ -75,48 +120,62 @@ export function OtpCodeInput({
         })}
       </XStack>
 
-      <Input
-        ref={inputRef as never}
+      <TextInput
+        ref={inputRef}
         value={digits}
-        onChangeText={(text) => onChange(normalizeOtpDigits(text, length))}
+        onChangeText={applyCode}
+        onFocus={() => {
+          void tryClipboardAutofill()
+        }}
         keyboardType="number-pad"
-        maxLength={length}
+        // Intentionally no maxLength — paste of "Your code is 123456" must reach onChangeText.
         autoComplete={Platform.OS === 'android' ? 'sms-otp' : 'one-time-code'}
-        // @ts-expect-error RN iOS prop
         textContentType="oneTimeCode"
         importantForAutofill="yes"
         autoCapitalize="none"
         autoCorrect={false}
+        spellCheck={false}
         editable={!disabled}
-        invalid={invalid}
         autoFocus={autoFocus}
         caretHidden
+        contextMenuHidden={false}
+        selectTextOnFocus={false}
         accessibilityLabel={accessibilityLabel}
-        accessibilityHint="Enter the six digit code from your SMS or email"
-        position="absolute"
-        top={0}
-        left={0}
-        right={0}
-        bottom={0}
-        opacity={0.02}
-        color="transparent"
-        backgroundColor="transparent"
-        borderWidth={0}
+        accessibilityHint="Enter or paste the six digit code from your SMS or email"
+        style={[
+          styles.hiddenInput,
+          Platform.OS === 'web' ? (styles.hiddenInputWeb as object) : null,
+        ]}
         {...(Platform.OS === 'web'
           ? ({
               inputMode: 'numeric',
               autoComplete: 'one-time-code',
-              maxLength: length,
-              style: {
-                position: 'absolute',
-                inset: 0,
-                opacity: 0.02,
-                color: 'transparent',
-                caretColor: 'transparent',
-              },
             } as object)
           : {})}
       />
-    </YStack>
+    </Pressable>
   )
 }
+
+const styles = StyleSheet.create({
+  wrap: {
+    width: '100%',
+    position: 'relative',
+  },
+  hiddenInput: {
+    ...StyleSheet.absoluteFillObject,
+    opacity: 0.02,
+    color: 'transparent',
+    backgroundColor: 'transparent',
+    borderWidth: 0,
+    padding: 0,
+    margin: 0,
+    fontSize: 22,
+    letterSpacing: 24,
+    zIndex: 2,
+  },
+  hiddenInputWeb: {
+    caretColor: 'transparent',
+    outlineStyle: 'none',
+  },
+})

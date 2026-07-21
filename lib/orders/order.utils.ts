@@ -23,7 +23,7 @@ import {
 
 // ============= MONEY / DATES =============
 
-/** Format an order amount using the order/shop currency (default INR). */
+/** Format an order amount (converted into the shopper preferred currency). */
 export function formatOrderAmount(
   amount: number | string | null | undefined,
   currency: string = ORDER_DEFAULTS.CURRENCY,

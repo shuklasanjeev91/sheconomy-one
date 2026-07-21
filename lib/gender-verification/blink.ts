@@ -4,6 +4,7 @@ function distance(a: Point, b: Point) {
   return Math.hypot(a.x - b.x, a.y - b.y)
 }
 
+/** Eye Aspect Ratio from 6 landmark points (p1…p6 around one eye). */
 export function eyeAspectRatio(points: Point[], indices: readonly number[]) {
   const [p1, p2, p3, p4, p5, p6] = indices.map((index) => points[index])
   if (!p1 || !p2 || !p3 || !p4 || !p5 || !p6) return 1
@@ -14,32 +15,135 @@ export function eyeAspectRatio(points: Point[], indices: readonly number[]) {
   return vertical / horizontal
 }
 
+/**
+ * Natural-blink liveness tracker.
+ *
+ * Counts a blink only when eyes close briefly then reopen — not a held squint,
+ * not EAR noise, and not rapid double-counts from the same blink.
+ */
 export type BlinkTracker = {
   count: number
   eyesClosed: boolean
+  closedAt: number | null
+  lastBlinkAt: number | null
+}
+
+export type BlinkTrackerOptions = {
+  blinkThreshold: number
+  openThreshold: number
+  minClosedMs: number
+  maxClosedMs: number
+  minBlinkGapMs: number
+  now?: number
+}
+
+/** Calibrates open-eye EAR per user/camera so absolute thresholds aren't brittle. */
+export type EarCalibrator = {
+  samples: number[]
+  baseline: number | null
+}
+
+export function createEarCalibrator(): EarCalibrator {
+  return { samples: [], baseline: null }
+}
+
+export function updateEarCalibrator(
+  calibrator: EarCalibrator,
+  avgEar: number,
+  sampleTarget = 18,
+): EarCalibrator {
+  if (calibrator.baseline != null) return calibrator
+  // Only learn from clearly open eyes.
+  if (avgEar < 0.17 || avgEar > 0.45) return calibrator
+  calibrator.samples.push(avgEar)
+  if (calibrator.samples.length < sampleTarget) return calibrator
+
+  const sorted = [...calibrator.samples].sort((a, b) => a - b)
+  const trim = Math.floor(sorted.length * 0.15)
+  const mid = sorted.slice(trim, sorted.length - trim || sorted.length)
+  const sum = mid.reduce((acc, value) => acc + value, 0)
+  calibrator.baseline = sum / Math.max(1, mid.length)
+  return calibrator
+}
+
+export function thresholdsFromBaseline(
+  baseline: number | null,
+  fallbackBlink: number,
+  fallbackOpen: number,
+): { blinkThreshold: number; openThreshold: number; calibrated: boolean } {
+  if (baseline == null || baseline <= 0) {
+    return {
+      blinkThreshold: fallbackBlink,
+      openThreshold: fallbackOpen,
+      calibrated: false,
+    }
+  }
+  return {
+    // Natural blinks typically drop EAR ~25–40% below open baseline.
+    blinkThreshold: Math.max(0.12, baseline * 0.74),
+    openThreshold: Math.max(0.16, baseline * 0.9),
+    calibrated: true,
+  }
 }
 
 export function createBlinkTracker(): BlinkTracker {
-  return { count: 0, eyesClosed: false }
+  return {
+    count: 0,
+    eyesClosed: false,
+    closedAt: null,
+    lastBlinkAt: null,
+  }
 }
 
 export function updateBlinkTracker(
   tracker: BlinkTracker,
   leftEar: number,
   rightEar: number,
-  blinkThreshold: number,
-  openThreshold: number,
+  blinkThresholdOrOptions: number | BlinkTrackerOptions,
+  openThreshold?: number,
 ) {
+  const options: BlinkTrackerOptions =
+    typeof blinkThresholdOrOptions === 'number'
+      ? {
+          blinkThreshold: blinkThresholdOrOptions,
+          openThreshold: openThreshold ?? blinkThresholdOrOptions + 0.04,
+          minClosedMs: 60,
+          maxClosedMs: 1000,
+          minBlinkGapMs: 280,
+        }
+      : blinkThresholdOrOptions
+
+  const now = options.now ?? Date.now()
   const avgEar = (leftEar + rightEar) / 2
 
-  if (!tracker.eyesClosed && avgEar < blinkThreshold) {
+  if (!tracker.eyesClosed && avgEar < options.blinkThreshold) {
     tracker.eyesClosed = true
+    tracker.closedAt = now
     return tracker
   }
 
-  if (tracker.eyesClosed && avgEar > openThreshold) {
-    tracker.eyesClosed = false
-    tracker.count += 1
+  if (tracker.eyesClosed) {
+    const closedFor = tracker.closedAt != null ? now - tracker.closedAt : 0
+
+    if (avgEar < options.blinkThreshold && closedFor > options.maxClosedMs) {
+      tracker.eyesClosed = false
+      tracker.closedAt = null
+      return tracker
+    }
+
+    if (avgEar > options.openThreshold) {
+      const longEnough = closedFor >= options.minClosedMs
+      const gapOk =
+        tracker.lastBlinkAt == null || now - tracker.lastBlinkAt >= options.minBlinkGapMs
+
+      if (longEnough && gapOk) {
+        tracker.count += 1
+        tracker.lastBlinkAt = now
+      }
+
+      tracker.eyesClosed = false
+      tracker.closedAt = null
+    }
   }
 
   return tracker
@@ -63,20 +167,22 @@ export function isFaceCentered(
   width: number,
   height: number,
 ) {
+  if (width <= 0 || height <= 0) return false
+
   const centerX = (box.xMin + box.xMax) / 2
   const centerY = (box.yMin + box.yMax) / 2
   const faceWidth = box.xMax - box.xMin
   const faceHeight = box.yMax - box.yMin
 
   const centered =
-    Math.abs(centerX - width / 2) < width * 0.14 &&
-    Math.abs(centerY - height / 2) < height * 0.16
+    Math.abs(centerX - width / 2) < width * 0.22 &&
+    Math.abs(centerY - height / 2) < height * 0.24
 
   const sized =
-    faceWidth > width * 0.28 &&
-    faceWidth < width * 0.72 &&
-    faceHeight > height * 0.22 &&
-    faceHeight < height * 0.78
+    faceWidth > width * 0.18 &&
+    faceWidth < width * 0.88 &&
+    faceHeight > height * 0.16 &&
+    faceHeight < height * 0.9
 
   return centered && sized
 }

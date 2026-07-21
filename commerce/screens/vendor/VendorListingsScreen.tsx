@@ -1,13 +1,12 @@
 import { useState } from 'react'
 import { Link } from 'one'
 
-import { Button, Icons, Spinner, Text, XStack, YStack, useAppToast } from '~/components/ui'
+import { Button, Icons, Spinner, Text, XStack, YStack } from '~/components/ui'
 import { PageCenter } from '~/components/layout'
 import { useAppLayout } from '~/hooks/useAppLayout'
-import { loadMyShops } from '~/lib/shop/shop.store'
 import { DEFAULT_SHOP_CURRENCY } from '~/lib/shop/shop.type'
 import { commerceRoutes, vendorRoutes } from '~/lib/routes'
-import { useAppDispatch, useAppSelector } from '~/lib/store/hooks'
+import { useAppSelector } from '~/lib/store/hooks'
 import { useAppUi } from '~/lib/theme/useAppUi'
 
 import { VendorListingDetailDrawer } from './VendorListingDetailDrawer'
@@ -19,16 +18,14 @@ type InventoryTab = 'product' | 'section'
 export function VendorListingsScreen() {
   const ui = useAppUi()
   const { isDesktop, safeBottom } = useAppLayout()
-  const dispatch = useAppDispatch()
-  const toast = useAppToast()
-
   const shop = useAppSelector((s) => s.shop.currentShop)
-  const isLoadingShops = useAppSelector((s) => s.shop.isLoadingShops)
+  const isLoadingMyShops = useAppSelector((s) => s.shop.isLoadingMyShops)
+  const myShopsLoaded = useAppSelector((s) => s.shop.myShopsLoaded)
 
   const [activeTab, setActiveTab] = useState<InventoryTab>('product')
   const [selectedListingId, setSelectedListingId] = useState<string | null>(null)
 
-  if (!shop && isLoadingShops) {
+  if (!shop && (isLoadingMyShops || !myShopsLoaded)) {
     return (
       <PageCenter>
         <Spinner size="large" />
@@ -88,28 +85,13 @@ export function VendorListingsScreen() {
             </Text>
           </YStack>
 
-          {activeTab === 'section' ? (
-            <Button
-              tone="primary"
-              size="$3"
-              borderRadius={999}
-              icon={<Icons.Plus size={16} />}
-              onPress={() =>
-                toast.show('Shop sections coming soon', {
-                  tone: 'info',
-                  message: 'Section creation will be available after the shop sections migration.',
-                })
-              }
-            >
-              New Section
-            </Button>
-          ) : (
+          {activeTab !== 'section' ? (
             <Link href={vendorRoutes.createListing} asChild>
               <Button tone="primary" size="$3" borderRadius={999} icon={<Icons.Plus size={16} />}>
                 Add Product
               </Button>
             </Link>
-          )}
+          ) : null}
         </XStack>
 
         <InventoryTabs ui={ui} activeTab={activeTab} onChange={setActiveTab} isDesktop={isDesktop} />
@@ -123,7 +105,12 @@ export function VendorListingsScreen() {
             onOpenListing={setSelectedListingId}
           />
         ) : (
-          <VendorListingsSectionsTab ui={ui} isDesktop={isDesktop} safeBottom={safeBottom} />
+          <VendorListingsSectionsTab
+            ui={ui}
+            shopId={shop.id}
+            isDesktop={isDesktop}
+            safeBottom={safeBottom}
+          />
         )}
       </YStack>
 

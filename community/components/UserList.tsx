@@ -5,7 +5,7 @@ import { useCommunityUi } from '~/community/lib/community-theme'
 import type { UserListMember } from '~/community/lib/user-lists'
 import { LoadMoreEnd, LoadMoreSentinel } from '~/commerce/components/LoadMoreSentinel'
 import { ScreenSearchField } from '~/components/search'
-import { filterBySearchQuery } from '~/lib/search'
+import { SHEET_SEARCH_MIN_ITEMS, filterBySearchQuery } from '~/lib/search'
 import { Spinner, Text, XStack, YStack } from '~/components/ui'
 
 type UserListProps = {
@@ -34,6 +34,9 @@ export function UserList({
   const communityUi = useCommunityUi()
   const [query, setQuery] = useState('')
 
+  // Hide the search bar for short lists — it only earns its space on long ones.
+  const showSearch = searchable && (items.length >= SHEET_SEARCH_MIN_ITEMS || query.length > 0)
+
   const filtered = useMemo(
     () =>
       filterBySearchQuery(items, query, (member) => [
@@ -54,7 +57,7 @@ export function UserList({
 
   return (
     <YStack gap="$3" width="100%">
-      {searchable ? (
+      {showSearch ? (
         <ScreenSearchField
           value={query}
           onChangeText={setQuery}

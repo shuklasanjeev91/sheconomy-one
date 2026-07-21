@@ -11,17 +11,20 @@ import {
 import { useUserGeo } from '~/commerce/hooks/useUserGeo'
 import { useNetwork } from '~/community/hooks/useNetwork'
 import { useProfile } from '~/hooks/useProfile'
+import { scheduleIdle } from '~/lib/schedule-idle'
 import { useSupabase } from '~/providers/SupabaseProvider'
 
 export type SuggestionSection = SuggestionSectionMeta & {
   items: CommunitySuggestion[]
 }
 
-export function useCommunitySuggestions(perKindLimit = 4) {
+export function useCommunitySuggestions(perKindLimit = 4, options?: { deferUntilIdle?: boolean }) {
+  const deferUntilIdle = options?.deferUntilIdle ?? true
   const { user } = useSupabase()
   const { profile } = useProfile()
   const network = useNetwork()
   const geo = useUserGeo(profile?.location)
+  const [ready, setReady] = useState(!deferUntilIdle)
   const [byKind, setByKind] = useState<Record<SuggestionKind, CommunitySuggestion[]>>({
     person: [],
     listing: [],
@@ -34,7 +37,13 @@ export function useCommunitySuggestions(perKindLimit = 4) {
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
+  useEffect(() => {
+    if (!deferUntilIdle) return
+    return scheduleIdle(() => setReady(true))
+  }, [deferUntilIdle])
+
   const load = useCallback(async () => {
+    if (!ready) return
     setIsLoading(true)
 
     const extra = user ? await fetchPersonalizationProfile(user.id) : null
@@ -71,11 +80,12 @@ export function useCommunitySuggestions(perKindLimit = 4) {
     profile?.industry,
     profile?.location,
     profile?.occupation,
+    ready,
     user,
   ])
 
   useEffect(() => {
-    load()
+    void load()
   }, [load])
 
   const sections = useMemo<SuggestionSection[]>(
@@ -87,5 +97,5 @@ export function useCommunitySuggestions(perKindLimit = 4) {
     [byKind],
   )
 
-  return { sections, byKind, isLoading, error, refresh: load }
+  return { sections, byKind, isLoading: !ready || isLoading, error, refresh: load }
 }

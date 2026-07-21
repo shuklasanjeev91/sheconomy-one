@@ -167,8 +167,8 @@ export function RegionPreferencesSheet({ open, onOpenChange }: RegionPreferences
       }
     >
       <Text fontSize={13} color={ui.textMuted} lineHeight={19}>
-        Choose where you shop, your language, and the currency you prefer to see. Listing prices stay
-        in each shop&apos;s currency.
+        Choose where you shop, your language, and the currency you prefer. Prices across the app
+        convert into your currency using live exchange rates.
       </Text>
 
       <XStack gap="$2" flexWrap="wrap">

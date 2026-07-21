@@ -1,6 +1,6 @@
 import { useCallback } from 'react'
 
-import { CACHE_KEYS } from '~/lib/bootstrap/app-prefetch'
+import { CACHE_KEYS } from '~/lib/bootstrap/cache-keys'
 import {
   COMMERCE_HORIZONTAL_PAGE_SIZE,
   fetchCategoriesPage,

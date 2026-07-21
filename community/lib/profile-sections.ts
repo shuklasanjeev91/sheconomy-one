@@ -431,18 +431,37 @@ export async function updateProfileAbout(
 /**
  * Update the signed-in user's profile picture and/or cover image URLs. Pass
  * only the field(s) you want to change.
+ *
+ * Uses `.select()` so a silent 0-row RLS miss is reported as an error instead of
+ * looking like success while the UI keeps showing initials.
  */
 export async function updateProfileImages(
   userId: string,
   input: { avatar_url?: string; cover_url?: string },
-): Promise<{ error: string | null }> {
+): Promise<{ error: string | null; data?: { avatar_url: string | null; cover_url: string | null } }> {
   const patch: Record<string, string> = {}
-  if (input.avatar_url !== undefined) patch.avatar_url = input.avatar_url
-  if (input.cover_url !== undefined) patch.cover_url = input.cover_url
+  if (input.avatar_url !== undefined) {
+    const url = input.avatar_url.trim()
+    if (!url) return { error: 'Avatar URL is empty.' }
+    patch.avatar_url = url
+  }
+  if (input.cover_url !== undefined) {
+    const url = input.cover_url.trim()
+    if (!url) return { error: 'Cover URL is empty.' }
+    patch.cover_url = url
+  }
   if (Object.keys(patch).length === 0) return { error: null }
 
-  const { error } = await supabase.from('profiles').update(patch).eq('id', userId)
-  return { error: error?.message ?? null }
+  const { data, error } = await supabase
+    .from('profiles')
+    .update(patch)
+    .eq('id', userId)
+    .select('avatar_url, cover_url')
+    .maybeSingle()
+
+  if (error) return { error: error.message }
+  if (!data) return { error: 'Could not save photo to your profile. Please try again.' }
+  return { error: null, data }
 }
 
 export const EMPTY_EXPERIENCE_INPUT: ExperienceInput = {

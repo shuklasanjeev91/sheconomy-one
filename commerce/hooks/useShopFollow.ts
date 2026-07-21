@@ -43,16 +43,15 @@ export function useShopFollow(shopId?: string | null) {
       ? await unfollowShop(user.id, shopId)
       : await followShop(user.id, shopId)
 
-    setIsToggling(false)
-
     if (!result.error) {
-      setIsFollowing((value) => !value)
+      await reload()
     } else {
       setError(result.error)
     }
 
+    setIsToggling(false)
     return result
-  }, [isFollowing, shopId, user])
+  }, [isFollowing, reload, shopId, user])
 
   return {
     user,

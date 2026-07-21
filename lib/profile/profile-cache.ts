@@ -3,7 +3,8 @@ import { Platform } from 'react-native'
 
 import type { Profile } from '~/hooks/useProfile'
 
-const PROFILE_CACHE_KEY = 'sheconomy:profile-cache-v1'
+/** Bumped when avatar_url caching semantics change (invalidate stale empty avatars). */
+const PROFILE_CACHE_KEY = 'sheconomy:profile-cache-v2'
 
 type CachedProfileEntry = {
   userId: string
@@ -12,6 +13,26 @@ type CachedProfileEntry = {
 }
 
 let memoryCache: CachedProfileEntry | null = null
+
+/** Sync peek — lets useProfile skip the access-gate spinner on warm starts. */
+export function peekCachedProfile(userId: string): Profile | null {
+  if (!userId) return null
+  if (memoryCache?.userId === userId) return memoryCache.profile
+  // Web can read localStorage synchronously; native stays async via readCachedProfile.
+  if (Platform.OS === 'web' && typeof window !== 'undefined') {
+    try {
+      const raw = window.localStorage.getItem(PROFILE_CACHE_KEY)
+      if (!raw) return null
+      const parsed = JSON.parse(raw) as CachedProfileEntry
+      if (parsed?.userId !== userId || !parsed.profile?.id) return null
+      memoryCache = parsed
+      return parsed.profile
+    } catch {
+      return null
+    }
+  }
+  return null
+}
 
 export async function readCachedProfile(userId: string): Promise<Profile | null> {
   if (!userId) return null
@@ -61,4 +82,20 @@ export async function clearCachedProfile(): Promise<void> {
   } catch {
     // ignore
   }
+}
+
+/**
+ * Merge fields into the cached profile (e.g. after avatar upload) without waiting
+ * for a network round-trip.
+ */
+export async function patchCachedProfile(
+  userId: string,
+  patch: Partial<Profile>,
+): Promise<void> {
+  if (!userId) return
+  const current = (await readCachedProfile(userId)) ?? memoryCache?.profile
+  if (!current || current.id !== userId) {
+    return
+  }
+  await writeCachedProfile(userId, { ...current, ...patch })
 }

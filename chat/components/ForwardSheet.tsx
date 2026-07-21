@@ -5,7 +5,7 @@ import { useChatTheme } from '~/chat/lib/chat-theme'
 import type { ChatSummary } from '~/chat/lib/types'
 import { ScreenSearchField } from '~/components/search'
 import { AppBottomSheet, Avatar, Icons, ScrollView, Spinner, Text, XStack, YStack } from '~/components/ui'
-import { filterBySearchQuery } from '~/lib/search'
+import { SHEET_SEARCH_MIN_ITEMS, filterBySearchQuery } from '~/lib/search'
 
 type ForwardSheetProps = {
   open: boolean
@@ -39,14 +39,18 @@ export function ForwardSheet({
     if (!open) setQuery('')
   }, [open])
 
+  const showSearch = targets.length >= SHEET_SEARCH_MIN_ITEMS || query.length > 0
+
   return (
     <AppBottomSheet open={open} onOpenChange={onOpenChange} title="Forward to" scrollable={false}>
-      <ScreenSearchField
-        value={query}
-        onChangeText={setQuery}
-        placeholder="Search chats"
-        clearable
-      />
+      {showSearch ? (
+        <ScreenSearchField
+          value={query}
+          onChangeText={setQuery}
+          placeholder="Search chats"
+          clearable
+        />
+      ) : null}
       {isLoading ? (
         <YStack paddingVertical={24} alignItems="center">
           <Spinner size="small" color={theme.brand} />

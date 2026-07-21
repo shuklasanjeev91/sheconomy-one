@@ -1,14 +1,16 @@
-import { useCallback, useEffect, useState } from 'react'
-import { ConnectionState, RoomEvent } from 'livekit-client'
+import { useCallback, useEffect, useRef, useState } from 'react'
+import { ConnectionState, RoomEvent, Track, type Room } from 'livekit-client'
 
 import { LiveKitRoom, RoomAudioRenderer } from '@livekit/components-react'
 import '@livekit/components-styles'
 
-import { Spinner, Text, YStack } from '~/components/ui'
+import { Icons, Spinner, Text, XStack, YStack } from '~/components/ui'
 import { ScreenCenter, ScreenFill } from '~/components/layout'
 import { MeetingVideoStage } from '~/co-work/components/MeetingVideoStage'
 import { useLiveKitMediaControls } from '~/co-work/hooks/useLiveKitMediaControls.web'
 import { fetchLiveKitCredentials } from '~/co-work/lib/livekit'
+import { reinforceCallMediaOnConnect } from '~/co-work/lib/livekit-call-media'
+import { buildParticipantMetadata } from '~/co-work/lib/participant-avatar'
 import { getLiveKitRoomOptions } from '~/co-work/lib/livekit-room-options'
 import { bindRemoteScreenShareQuality } from '~/co-work/lib/livekit-screen-share'
 import type { LiveKitMediaControls, LiveKitMeetingRoomProps } from '~/co-work/lib/livekit-media-controls'
@@ -128,13 +130,47 @@ function getSheconomyLivekitCss(ui: CoWorkUiTokens, shadows: CoWorkShadows) {
     flex: 1 1 auto;
   }
   .sheconomy-video-gallery .lk-participant-placeholder {
-    background: ${ui.tileBg};
-    width: 100%;
-    height: 100%;
+    background: #1a1216;
+  }
+  .sheconomy-participant-tile .lk-participant-placeholder[data-camera-off='true'] {
+    opacity: 1;
+  }
+  .sheconomy-participant-avatar-wrap {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    padding: 16px;
+  }
+  .sheconomy-participant-avatar-wrap .sheconomy-participant-avatar-label,
+  .sheconomy-participant-avatar-label {
+    font-size: 12px;
+    font-weight: 600;
+    color: rgba(255, 255, 255, 0.55);
   }
   .sheconomy-participant-tile.lk-participant-tile[data-lk-speaking='true'] {
     border-color: ${ui.brandLight};
     box-shadow: 0 0 0 2px ${ui.brandGlow}, ${shadows.tile};
+  }
+  .sheconomy-hand-raised {
+    position: absolute;
+    top: 10px;
+    right: 10px;
+    z-index: 4;
+    width: 36px;
+    height: 36px;
+    border-radius: 999px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 18px;
+    background: rgba(12, 8, 10, 0.78);
+    border: 1px solid ${ui.brandLight};
+    box-shadow: 0 0 0 2px ${ui.brandGlow};
+  }
+  .sheconomy-hand-raised-inline {
+    margin-left: 6px;
   }
   .sheconomy-participant-tile .lk-participant-metadata {
     background: linear-gradient(180deg, transparent 0%, rgba(12, 8, 10, 0.88) 100%);
@@ -177,6 +213,7 @@ export function LiveKitMeetingRoom({
   meetingId,
   roomId,
   displayName,
+  avatarUrl,
   enabled,
   mediaMode = 'meeting',
   onDisconnected,
@@ -203,14 +240,14 @@ export function LiveKitMeetingRoom({
       if (!liveKitConfig.enabled) {
         throw new Error('Video meetings are temporarily unavailable. Please try again later.')
       }
-      const creds = await fetchLiveKitCredentials(meetingId, roomId, displayName)
+      const creds = await fetchLiveKitCredentials(meetingId, roomId, displayName, avatarUrl)
       setCredentials(creds)
     } catch (loadError) {
       setError(loadError instanceof Error ? loadError.message : 'Failed to connect to LiveKit')
     } finally {
       setLoading(false)
     }
-  }, [displayName, enabled, meetingId, roomId])
+  }, [avatarUrl, displayName, enabled, meetingId, roomId])
 
   useEffect(() => {
     void loadCredentials()
@@ -306,61 +343,108 @@ export function LiveKitMeetingRoom({
           background: 'transparent',
         }}
       >
-        <WebLiveKitMeetingContent overlay={overlay} mediaMode={mediaMode} />
+        <WebLiveKitMeetingContent overlay={overlay} mediaMode={mediaMode} avatarUrl={avatarUrl} />
       </LiveKitRoom>
       <style>{getSheconomyLivekitCss(coworkUi, coworkShadows)}</style>
     </ScreenFill>
   )
 }
 
+/**
+ * Browsers block audio element playback until the page gets a user gesture
+ * (autoplay policy). LiveKit reports this via `canPlaybackAudio`; remote
+ * participants stay silent until `room.startAudio()` runs inside a gesture.
+ * This hits hosts hardest: they land in the room via navigation (start
+ * meeting / call accepted) without clicking anything on the meeting page.
+ */
+function useWebAudioPlaybackUnlock(room: Room | undefined) {
+  const [audioBlocked, setAudioBlocked] = useState(false)
+
+  const unlockAudio = useCallback(() => {
+    if (!room) return
+    void room.startAudio().catch(() => {
+      // Still blocked — the banner stays visible for another explicit tap.
+    })
+  }, [room])
+
+  useEffect(() => {
+    if (!room) return
+
+    const syncPlaybackStatus = () => setAudioBlocked(!room.canPlaybackAudio)
+
+    // Best-effort unlock on connect and whenever a remote audio track arrives.
+    // If the browser still blocks, the banner stays until a user gesture.
+    const tryStart = () => {
+      void room.startAudio().catch(() => {})
+      syncPlaybackStatus()
+    }
+
+    const onTrackSubscribed = (track: { kind?: string }) => {
+      if (track.kind === Track.Kind.Audio) tryStart()
+    }
+
+    room.on(RoomEvent.AudioPlaybackStatusChanged, syncPlaybackStatus)
+    room.on(RoomEvent.Connected, tryStart)
+    room.on(RoomEvent.TrackSubscribed, onTrackSubscribed as never)
+    syncPlaybackStatus()
+    if (room.state === ConnectionState.Connected) tryStart()
+
+    return () => {
+      room.off(RoomEvent.AudioPlaybackStatusChanged, syncPlaybackStatus)
+      room.off(RoomEvent.Connected, tryStart)
+      room.off(RoomEvent.TrackSubscribed, onTrackSubscribed as never)
+    }
+  }, [room])
+
+  // Any interaction anywhere on the page counts as the unlocking gesture.
+  useEffect(() => {
+    if (!audioBlocked || typeof document === 'undefined') return
+    const handler = () => unlockAudio()
+    document.addEventListener('pointerdown', handler, { capture: true })
+    document.addEventListener('keydown', handler, { capture: true })
+    return () => {
+      document.removeEventListener('pointerdown', handler, { capture: true })
+      document.removeEventListener('keydown', handler, { capture: true })
+    }
+  }, [audioBlocked, unlockAudio])
+
+  return { audioBlocked, unlockAudio }
+}
+
 function WebLiveKitMeetingContent({
   overlay,
   mediaMode = 'meeting',
+  avatarUrl,
 }: {
   overlay?: (liveKit: LiveKitMediaControls | null) => React.ReactNode
   mediaMode?: import('~/co-work/lib/livekit-media-controls').LiveKitMediaMode
+  avatarUrl?: string | null
 }) {
-  const liveKit = useLiveKitMediaControls()
+  const liveKit = useLiveKitMediaControls(mediaMode !== 'audio')
+  const { audioBlocked, unlockAudio } = useWebAudioPlaybackUnlock(liveKit.room)
+  const micForcedRef = useRef(false)
 
   useEffect(() => {
     const room = liveKit.room
     if (!room) return
 
-    const reinforceVoiceProcessing = async () => {
-      if (!room.localParticipant.isMicrophoneEnabled) return
-      await room.localParticipant.setMicrophoneEnabled(true, {
-        echoCancellation: true,
-        noiseSuppression: true,
-        autoGainControl: true,
-        voiceIsolation: true,
-      })
-    }
-
-    const reinforceCallMedia = async () => {
-      // Voice calls must never leave camera on; video calls prefer camera on.
-      if (mediaMode === 'audio') {
-        if (room.localParticipant.isCameraEnabled) {
-          await room.localParticipant.setCameraEnabled(false)
-        }
-        if (!room.localParticipant.isMicrophoneEnabled) {
-          await room.localParticipant.setMicrophoneEnabled(true, {
-            echoCancellation: true,
-            noiseSuppression: true,
-            autoGainControl: true,
-          })
-        }
-        return
-      }
-      if (mediaMode === 'video' && !room.localParticipant.isCameraEnabled) {
-        await room.localParticipant.setCameraEnabled(true)
-      }
-    }
-
     const unbindScreenShare = bindRemoteScreenShareQuality(room)
 
+    const syncAvatarMetadata = async () => {
+      if (!avatarUrl) return
+      try {
+        await room.localParticipant.setMetadata(buildParticipantMetadata({ avatarUrl }))
+      } catch {
+        // Metadata sync is best-effort; token metadata usually already has the avatar.
+      }
+    }
+
     const onConnected = () => {
-      void reinforceVoiceProcessing()
-      void reinforceCallMedia()
+      const forceMic = !micForcedRef.current
+      micForcedRef.current = true
+      void reinforceCallMediaOnConnect(room, mediaMode, { forceMicEnable: forceMic })
+      void syncAvatarMetadata()
+      void room.startAudio().catch(() => {})
     }
 
     room.on(RoomEvent.Connected, onConnected)
@@ -372,7 +456,7 @@ function WebLiveKitMeetingContent({
       room.off(RoomEvent.Connected, onConnected)
       unbindScreenShare()
     }
-  }, [liveKit.room, mediaMode])
+  }, [avatarUrl, liveKit.room, mediaMode])
 
   return (
     <YStack flex={1} width="100%" height="100%" position="relative" style={{ minHeight: 0, overflow: 'hidden' }}>
@@ -385,9 +469,35 @@ function WebLiveKitMeetingContent({
         className="sheconomy-livekit-room"
         pointerEvents="none"
       >
-        <MeetingVideoStage />
+        {mediaMode === 'audio' ? null : <MeetingVideoStage />}
         <RoomAudioRenderer />
       </YStack>
+      {audioBlocked ? (
+        <XStack
+          position="absolute"
+          top={16}
+          alignSelf="center"
+          zIndex={300}
+          alignItems="center"
+          gap="$2"
+          paddingVertical="$2"
+          paddingHorizontal="$4"
+          borderRadius={999}
+          backgroundColor="rgba(12, 8, 10, 0.9)"
+          borderWidth={1}
+          borderColor="rgba(255,255,255,0.25)"
+          cursor="pointer"
+          pointerEvents="auto"
+          onPress={unlockAudio}
+          role="button"
+          aria-label="Enable meeting audio"
+        >
+          <Icons.Volume2 size={16} color="#fff" />
+          <Text fontSize={13} fontWeight="700" color="#fff">
+            Tap to enable audio
+          </Text>
+        </XStack>
+      ) : null}
       <YStack
         position="absolute"
         top={0}

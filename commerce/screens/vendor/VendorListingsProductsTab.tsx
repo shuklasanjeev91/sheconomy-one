@@ -23,6 +23,7 @@ import { formatListingPrice } from '~/lib/listing/listing.utils'
 import { vendorRoutes } from '~/lib/routes'
 import { useAppDispatch } from '~/lib/store/hooks'
 import type { AppUiTokens } from '~/lib/theme/app-ui'
+import { bulkUpdateVendorListings } from '~/commerce/lib/vendor-operations'
 
 import {
   LISTING_STATUS_FILTER_OPTIONS,
@@ -76,6 +77,10 @@ export function VendorListingsProductsTab({
   const [loading, setLoading] = useState(false)
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
   const [menuOpenId, setMenuOpenId] = useState<string | null>(null)
+  const [bulkPricePercent, setBulkPricePercent] = useState('')
+  const [bulkStockDelta, setBulkStockDelta] = useState('')
+  const [bulkCategory, setBulkCategory] = useState('')
+  const [bulkUpdating, setBulkUpdating] = useState(false)
 
   const hasFilters = applied.search.trim().length > 0 || applied.type !== 'all' || applied.status !== 'all'
 
@@ -151,6 +156,32 @@ export function VendorListingsProductsTab({
       else next.add(id)
       return next
     })
+  }
+
+  async function applyBulk(input: {
+    status?: string
+    pricePercent?: number
+    stockDelta?: number
+    category?: string
+  }) {
+    if (!selectedIds.size) return
+    setBulkUpdating(true)
+    const result = await bulkUpdateVendorListings({
+      shopId,
+      listingIds: [...selectedIds],
+      ...input,
+    })
+    setBulkUpdating(false)
+    if (result.error) {
+      toast.show('Bulk update failed', { tone: 'danger', message: result.error })
+      return
+    }
+    toast.show(`${result.count} products updated`, { tone: 'success' })
+    setSelectedIds(new Set())
+    setBulkPricePercent('')
+    setBulkStockDelta('')
+    setBulkCategory('')
+    await fetchPage()
   }
 
   const statusColors = useMemo(
@@ -232,6 +263,78 @@ export function VendorListingsProductsTab({
           </XStack>
         </XStack>
       </ListingsCard>
+
+      {selectedIds.size > 0 ? (
+        <ListingsCard ui={ui}>
+          <YStack gap="$3">
+            <Text fontSize={13} fontWeight="800" color={ui.text}>
+              Bulk edit {selectedIds.size} selected products
+            </Text>
+            <XStack gap="$2" flexWrap="wrap" alignItems="center">
+              <Button
+                tone="outline"
+                size="$3"
+                disabled={bulkUpdating}
+                onPress={() => void applyBulk({ status: 'active' })}
+              >
+                Activate
+              </Button>
+              <Button
+                tone="outline"
+                size="$3"
+                disabled={bulkUpdating}
+                onPress={() => void applyBulk({ status: 'paused' })}
+              >
+                Pause
+              </Button>
+              <Input
+                width={120}
+                placeholder="Price %"
+                keyboardType="decimal-pad"
+                value={bulkPricePercent}
+                onChangeText={setBulkPricePercent}
+              />
+              <Button
+                tone="outline"
+                size="$3"
+                disabled={!Number.isFinite(Number(bulkPricePercent)) || bulkPricePercent.trim() === ''}
+                onPress={() => void applyBulk({ pricePercent: Number(bulkPricePercent) })}
+              >
+                Apply price
+              </Button>
+              <Input
+                width={120}
+                placeholder="Stock +/-"
+                keyboardType="number-pad"
+                value={bulkStockDelta}
+                onChangeText={setBulkStockDelta}
+              />
+              <Button
+                tone="outline"
+                size="$3"
+                disabled={!Number.isFinite(Number(bulkStockDelta)) || bulkStockDelta.trim() === ''}
+                onPress={() => void applyBulk({ stockDelta: Number(bulkStockDelta) })}
+              >
+                Apply stock
+              </Button>
+              <Input
+                minWidth={150}
+                placeholder="Category"
+                value={bulkCategory}
+                onChangeText={setBulkCategory}
+              />
+              <Button
+                tone="primary"
+                size="$3"
+                disabled={!bulkCategory.trim()}
+                onPress={() => void applyBulk({ category: bulkCategory })}
+              >
+                Set category
+              </Button>
+            </XStack>
+          </YStack>
+        </ListingsCard>
+      ) : null}
 
       <ListingsCard ui={ui}>
         {loading ? (

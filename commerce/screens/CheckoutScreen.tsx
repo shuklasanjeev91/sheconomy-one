@@ -2,7 +2,7 @@ import { useRouter } from 'one'
 import { SpaRedirect } from '~/components/navigation/SpaRedirect'
 import { AppLink } from '~/components/navigation/AppLink'
 import type { ReactNode } from 'react'
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 
 import {
   Field,
@@ -32,23 +32,22 @@ import {
 } from '~/commerce/components'
 import {
   checkCartStock,
-  createOrderFromCart,
+  cancelCheckoutPayment,
+  createAtomicMarketplaceCheckout,
   fetchUserAddresses,
   saveUserAddress,
   type CheckoutAddressInput,
-  type CheckoutLineItem,
   type CheckoutPaymentMode,
   type UserAddress,
 } from '~/commerce/lib/checkout'
-import { clearCartItems, type CartItemRow } from '~/commerce/lib/cart'
-import { computeSelectedTotals, useCartSelection } from '~/commerce/lib/cart-selection'
-import { fetchBuyerPaymentMethods } from '~/commerce/lib/buyer-account'
+import { ensureShepayCheckoutUrl } from '~/commerce/lib/shepay'
 import {
-  parsePaymentMethod,
-  paymentMethodSubtitle,
-  paymentMethodTitle,
-  type ParsedPaymentMethod,
-} from '~/commerce/lib/payment-methods'
+  checkoutShippingLabel,
+  onlinePaymentOptionCopy,
+  resolvePostCheckoutNext,
+} from '~/commerce/lib/checkout-payment-route'
+import { savePendingOrderSuccess } from '~/commerce/lib/customer-orders'
+import { computeSelectedTotals, useCartSelection } from '~/commerce/lib/cart-selection'
 import { cartRequiresShipping, fetchListingTypesByIds } from '~/commerce/lib/listing-fulfillment'
 import { paymentCollectionFor } from '~/commerce/lib/shop-commerce'
 import { deliveryEstimateLabel } from '~/commerce/lib/delivery-estimate'
@@ -75,6 +74,7 @@ import {
 import { maxLength, minLength, required } from '~/lib/validation'
 import { useAppLayout } from '~/hooks/useAppLayout'
 import { useAppUi } from '~/lib/theme/useAppUi'
+import { trackCommerceEvent } from '~/lib/analytics'
 
 const SUMMARY_WIDTH = 320
 
@@ -104,12 +104,11 @@ export function CheckoutScreen() {
   const [notesByShop, setNotesByShop] = useState<Record<string, string>>({})
   const [giftByShop, setGiftByShop] = useState<Record<string, boolean>>({})
   const [paymentMethod, setPaymentMethod] = useState<CheckoutPaymentMode>('online')
-  const [savedPaymentMethods, setSavedPaymentMethods] = useState<ParsedPaymentMethod[]>([])
-  const [selectedSavedPaymentId, setSelectedSavedPaymentId] = useState<string | null>(null)
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [orderPlaced, setOrderPlaced] = useState(false)
   const [isLoadingAddresses, setIsLoadingAddresses] = useState(true)
   const [listingTypes, setListingTypes] = useState<Map<string, string>>(new Map())
+  const checkoutAttemptKey = useRef<string | null>(null)
 
   const availableIds = useMemo(() => items.map((item) => item.id), [items])
   const { isSelected, noneSelected } = useCartSelection(availableIds)
@@ -118,6 +117,20 @@ export function CheckoutScreen() {
     items,
     isSelected,
   )
+
+  useEffect(() => {
+    if (!selectedItems.length || !cart?.id) return
+    trackCommerceEvent('begin_checkout', {
+      currency: cart.currency ?? 'INR',
+      value: total,
+      items: selectedItems.map((item) => ({
+        id: item.listing_id,
+        name: item.listing_id,
+        price: item.unit_price ?? undefined,
+        quantity: item.quantity,
+      })),
+    })
+  }, [cart?.id, selectedItems.length])
 
   const orderShops = useMemo(() => {
     const map = new Map<string, string>()
@@ -150,6 +163,14 @@ export function CheckoutScreen() {
   }, [orderShops, shopPartners])
 
   const paymentStepCount = (paymentGroups.shepay.length ? 1 : 0) + paymentGroups.direct.length
+  const onlineCopy = useMemo(
+    () =>
+      onlinePaymentOptionCopy({
+        shepayShops: paymentGroups.shepay,
+        directShops: paymentGroups.direct,
+      }),
+    [paymentGroups],
+  )
 
   useEffect(() => {
     const ids = items.map((item) => item.listing_id)
@@ -178,14 +199,6 @@ export function CheckoutScreen() {
       })
       .catch(() => toast.show('Could not load addresses', { tone: 'danger' }))
       .finally(() => setIsLoadingAddresses(false))
-
-    void fetchBuyerPaymentMethods(user.id).then(({ methods, error }) => {
-      const parsed = (methods ?? []).map(parsePaymentMethod)
-      setSavedPaymentMethods(parsed)
-      const defaultMethod = parsed.find((method) => method.is_default) ?? parsed[0] ?? null
-      setSelectedSavedPaymentId(defaultMethod?.id ?? null)
-      if (error) toast.show('Could not load payment methods', { tone: 'danger', message: error })
-    })
   }, [isAuthenticated, toast, user])
 
   if (!isAuthenticated) {
@@ -289,82 +302,49 @@ export function CheckoutScreen() {
       }
 
       const mode: CheckoutPaymentMode = needsShipping ? paymentMethod : 'online'
-      const savedPaymentMethodId =
-        mode === 'online' ? selectedSavedPaymentId ?? undefined : undefined
-
-      const toLineItem = (item: CartItemRow): CheckoutLineItem => ({
-        listingId: item.listing_id,
-        quantity: item.quantity,
-        unitPrice: item.unit_price,
-        variationDetails: item.variant_id
-          ? {
-              variant_id: item.variant_id,
-              variant_name: item.variant_name,
-              variant_value: item.variant_value,
-            }
-          : undefined,
+      const selectionKey = selectedItems
+        .map((item) => item.id)
+        .sort()
+        .join(',')
+      if (
+        !checkoutAttemptKey.current ||
+        !checkoutAttemptKey.current.includes(`:${selectionKey}:`)
+      ) {
+        checkoutAttemptKey.current = `${user.id}:${cart.id}:${selectionKey}:${Date.now()}`
+      }
+      const result = await createAtomicMarketplaceCheckout({
+        cartId: cart.id,
+        cartItemIds: selectedItems.map((item) => item.id),
+        shippingAddressId,
+        billingAddressId: shippingAddressId,
+        paymentMode: mode,
+        idempotencyKey: checkoutAttemptKey.current,
+        notesByShop,
+        giftShopIds: Object.entries(giftByShop)
+          .filter(([, enabled]) => enabled)
+          .map(([shopId]) => shopId),
       })
-
-      const discountMeta = cart.applied_discount_id
-        ? {
-            profileId: cart.applied_discount_id,
-            name: cart.applied_discount_name,
-            type: cart.applied_discount_type,
-          }
-        : null
-
-      // marketplace: buyer pays once (platform-collected), but each shop gets its
-      // own receipt/order. Group selected items per shop and create one order per
-      // shop, splitting any order-level discount proportionally by subtotal.
-      const groups = new Map<string, CartItemRow[]>()
-      for (const item of selectedItems) {
-        const list = groups.get(item.shop_id) ?? []
-        list.push(item)
-        groups.set(item.shop_id, list)
+      if (result.error || !result.data) {
+        toast.show('Checkout failed', {
+          tone: 'danger',
+          message: result.error ?? 'Please try again.',
+        })
+        setIsSubmitting(false)
+        return
       }
 
-      const orderNumbers: string[] = []
-      let checkoutUrl: string | null = null
-      for (const [shopId, shopItems] of groups.entries()) {
-        const shopSubtotal = shopItems.reduce(
-          (sum, item) => sum + item.unit_price * item.quantity,
-          0,
-        )
-        const shopDiscount =
-          subtotal > 0 ? Math.round(((discount * shopSubtotal) / subtotal) * 100) / 100 : 0
-        const shopTotal = Math.max(0, shopSubtotal - shopDiscount)
+      const { orderIds, orderNumbers, checkoutGroupId } = result.data
+      let checkoutUrl =
+        result.data.paymentSteps.find((step) => step.checkoutUrl)?.checkoutUrl ?? null
+      let shepayError: string | null = null
+      const hasShepaySteps = result.data.paymentSteps.some((step) => step.collection === 'shepay')
 
-        const partnerInfo = shopPartners.get(shopId)
-        const collection = paymentCollectionFor(partnerInfo)
-
-        const { data, error } = await createOrderFromCart({
-          userId: user.id,
-          cartId: cart.id,
-          shippingAddressId,
-          customerNotes: notesByShop[shopId]?.trim() || undefined,
-          paymentMode: mode,
-          savedPaymentMethodId,
-          currency,
-          items: shopItems.map(toLineItem),
-          subtotalAmount: shopSubtotal,
-          discountAmount: shopDiscount,
-          totalAmount: shopTotal,
-          discount: shopDiscount > 0 ? discountMeta : null,
-          paymentRouting: {
-            collection,
-            gateway: partnerInfo?.paymentLabel ?? null,
-            shopId,
-            commissionApplies: collection === 'shepay',
-          },
-          isGift: !!giftByShop[shopId],
+      if (mode === 'online' && hasShepaySteps && !checkoutUrl) {
+        const shepay = await ensureShepayCheckoutUrl(result.data.paymentSteps, {
+          paymentMethodId: null,
         })
-        if (error) {
-          toast.show('Checkout failed', { tone: 'danger', message: error })
-          setIsSubmitting(false)
-          return
-        }
-        if (data?.orderNumber) orderNumbers.push(data.orderNumber)
-        if (!checkoutUrl && data?.checkoutUrl) checkoutUrl = data.checkoutUrl
+        shepayError = shepay.error
+        checkoutUrl = shepay.checkoutUrl
       }
 
       const usedAddress =
@@ -384,16 +364,75 @@ export function CheckoutScreen() {
         void rememberRecentAddress(usedAddress as never).then(setRecentAddresses)
       }
 
-      setOrderPlaced(true)
-      await clearCartItems(cart.id)
+      const next = resolvePostCheckoutNext({
+        mode,
+        checkoutUrl,
+        shepayError,
+        hasShepaySteps,
+      })
 
-      if (checkoutUrl && mode === 'online') {
-        const opened = await openExternalUrl(checkoutUrl)
-        if (opened) {
-          void refresh()
-          return
+      if (next.kind === 'cancel_and_stay') {
+        if (checkoutGroupId) {
+          await cancelCheckoutPayment(checkoutGroupId)
         }
+        toast.show('Payment setup incomplete', {
+          tone: 'danger',
+          message: next.error,
+        })
+        setIsSubmitting(false)
+        return
       }
+
+      setOrderPlaced(true)
+
+      const awaitingExternalPayment = next.kind === 'payu_bridge' || next.kind === 'external_pay'
+      const pendingUrl =
+        next.kind === 'payu_bridge' ? next.href : next.kind === 'external_pay' ? next.url : null
+
+      if (orderIds.length > 0) {
+        await savePendingOrderSuccess({
+          orderIds,
+          orderNumbers,
+          createdAt: Date.now(),
+          paymentMode: mode,
+          awaitingExternalPayment,
+          checkoutGroupId,
+          checkoutUrl: pendingUrl,
+        })
+      }
+
+      const successHref = commerceRoutes.orderSuccess(orderIds)
+
+      if (next.kind === 'payu_bridge') {
+        void refresh()
+        router.replace(next.href as never)
+        return
+      }
+
+      if (next.kind === 'external_pay') {
+        const opened = await openExternalUrl(next.url)
+        router.replace(successHref)
+        void refresh()
+        if (!opened) {
+          toast.show('Complete payment', {
+            tone: 'info',
+            message: 'Allow pop-ups, or use Resume payment on the next screen.',
+          })
+        }
+        return
+      }
+
+      trackCommerceEvent('purchase', {
+        currency,
+        value: total,
+        transactionId: orderNumbers[0] ?? orderIds[0] ?? cart.id,
+        items: selectedItems.map((item) => ({
+          id: item.listing_id,
+          name: item.listing_id,
+          price: item.unit_price ?? undefined,
+          quantity: item.quantity,
+        })),
+      })
 
       toast.show('Order placed', {
         tone: 'success',
@@ -404,7 +443,7 @@ export function CheckoutScreen() {
               ? `Order ${orderNumbers[0]} has been placed.`
               : 'Your order has been placed.',
       })
-      router.replace(commerceRoutes.home)
+      router.replace(successHref)
       void refresh()
     } catch {
       toast.show('Checkout failed', { tone: 'danger', message: 'Please try again.' })
@@ -718,10 +757,10 @@ export function CheckoutScreen() {
                     {paymentGroups.shepay.length ? (
                       <PaymentRouteRow
                         icon={<Icons.ShieldCheck size={14} color={c.brand} />}
-                        title="SHEconomy Payments (SHEPay)"
+                        title="SHEPay (PayU hosted)"
                         detail={`${paymentGroups.shepay
                           .map((shop) => shop.shopName)
-                          .join(', ')} · collected securely by SHEconomy`}
+                          .join(', ')} · choose UPI, card, or net banking on PayU`}
                       />
                     ) : null}
                     {paymentGroups.direct.map((group) => (
@@ -750,44 +789,10 @@ export function CheckoutScreen() {
                 ) : null}
                 <PaymentOption
                   selected={paymentMethod === 'online'}
-                  title="Credit/Debit card, UPI, Net banking, Wallet"
-                  subtitle={
-                    paymentGroups.direct.length && !paymentGroups.shepay.length
-                      ? 'Paid directly to the seller — 0% commission'
-                      : 'Processed securely (SHEPay for SHEconomy-powered shops)'
-                  }
+                  title={onlineCopy.title}
+                  subtitle={onlineCopy.subtitle}
                   onPress={() => setPaymentMethod('online')}
                 />
-                {paymentMethod === 'online' && savedPaymentMethods.length > 0 ? (
-                  <YStack gap="$2" paddingLeft="$6">
-                    {savedPaymentMethods.map((method) => {
-                      const selected = selectedSavedPaymentId === method.id
-                      return (
-                        <XStack
-                          key={method.id}
-                          gap="$3"
-                          alignItems="center"
-                          padding="$2.5"
-                          borderRadius={10}
-                          borderWidth={1}
-                          borderColor={selected ? c.brand : c.border}
-                          cursor="pointer"
-                          onPress={() => setSelectedSavedPaymentId(method.id)}
-                        >
-                          <CommerceRadio selected={selected} size={16} />
-                          <YStack flex={1} minWidth={0}>
-                            <Text fontSize={13} fontWeight="600" color={c.text} numberOfLines={1}>
-                              {paymentMethodTitle(method)}
-                            </Text>
-                            <Text fontSize={12} color={c.secondary} numberOfLines={1}>
-                              {paymentMethodSubtitle(method)}
-                            </Text>
-                          </YStack>
-                        </XStack>
-                      )
-                    })}
-                  </YStack>
-                ) : null}
 
                 {needsShipping ? (
                   <PaymentOption
@@ -797,12 +802,6 @@ export function CheckoutScreen() {
                     onPress={() => setPaymentMethod('cod')}
                   />
                 ) : null}
-
-                <AppLink href={commerceRoutes.paymentMethods} asChild>
-                  <Text fontSize={13} color={c.link} cursor="pointer" paddingTop="$1">
-                    Manage payment methods
-                  </Text>
-                </AppLink>
               </SectionCard>
 
               <SectionCard step={3} title="Review your order">
@@ -834,10 +833,12 @@ export function CheckoutScreen() {
                         </Text>
                       </XStack>
                       <ShopRatingBadge info={shopHeaders.get(shop.shopId)} />
-                      <XStack alignItems="center" gap="$1.5">
+                      <XStack alignItems="center" gap="$1.5" flexWrap="wrap">
                         <Icons.Truck size={13} color={c.inStock} />
                         <Text fontSize={12} color={c.inStock} fontWeight="600">
                           {deliveryEstimateLabel()}
+                          {' · '}
+                          {checkoutShippingLabel(shopPartners.get(shop.shopId))}
                         </Text>
                       </XStack>
                       <ShopPartnerChips info={shopPartners.get(shop.shopId)} />

@@ -12,7 +12,7 @@ import {
   clearAppSearchHistory,
   recordAppSearchTerm,
   removeAppSearchTerm,
-  SEARCH_SCOPE_PLACEHOLDERS,
+  SEARCH_SCOPE_LABELS,
   searchScopeFromPath,
   searchScopeFromRouteParams,
   searchSuggest,
@@ -31,8 +31,7 @@ type AppSearchFieldProps = {
 }
 
 /**
- * Minimal omnibox: search icon · input · clear.
- * Scope defaults from the active tab (not shown in the bar).
+ * Omnibox with suggestions and a clear control; scope stays implicit from the route.
  */
 export function AppSearchField({ compact, initialQuery = '', scope: scopeProp }: AppSearchFieldProps) {
   const ui = useAppUi()
@@ -57,10 +56,7 @@ export function AppSearchField({ compact, initialQuery = '', scope: scopeProp }:
 
   const fieldHeight = compact ? 40 : isDesktop ? 44 : 42
   const showFocusRing = focused || open
-  const placeholder =
-    activeScope === 'all'
-      ? 'Search for anything'
-      : SEARCH_SCOPE_PLACEHOLDERS[activeScope]
+  const placeholder = 'Search for anything'
 
   useEffect(() => {
     setQuery(initialQuery)
@@ -166,6 +162,7 @@ export function AppSearchField({ compact, initialQuery = '', scope: scopeProp }:
           minWidth={0}
           unstyled
           value={query}
+          accessibilityLabel={`Search ${SEARCH_SCOPE_LABELS[activeScope]}`}
           onChangeText={(value) => {
             setQuery(value)
             if (!open) setOpen(true)

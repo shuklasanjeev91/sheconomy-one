@@ -58,7 +58,7 @@ export function SettingsShell({ children }: { children?: ReactNode }) {
               <SettingsNav showShop={showShop} />
             </YStack>
 
-            <YStack flex={1} minWidth={0} maxWidth={720}>
+            <YStack flex={1} minWidth={0} width="100%" maxWidth="100%">
               {content}
             </YStack>
           </XStack>

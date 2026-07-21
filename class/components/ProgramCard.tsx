@@ -19,7 +19,8 @@ import { useThemedShadowStyle } from '~/lib/theme/useThemedShadowStyle'
 
 type ProgramCardProps = {
   program: Program
-  width?: number
+  /** Card width — use `'100%'` for vertical feed layouts. */
+  width?: number | `${number}%` | '100%'
   /** Override default program detail link (e.g. playlist context). */
   href?: Href
 }
@@ -31,16 +32,17 @@ function canAutoplayProgram(program: Program): boolean {
   return Boolean(url.includes('youtu') || isVideoMediaUrl(url))
 }
 
-export function ProgramCard({ program, width = 280, href }: ProgramCardProps) {
+export function ProgramCard({ program, width = '100%', href }: ProgramCardProps) {
   const ui = useAppUi()
   const cardShadow = useThemedShadowStyle('sm')
   const cardShadowMd = useThemedShadowStyle('md')
   const thumbnailUrl = getProgramThumbnailUrl(program)
   const autoplay = canAutoplayProgram(program)
   const programHref = href ?? classRoutes.program(getProgramSlug(program))
+  const isFullWidth = width === '100%' || (typeof width === 'string' && width.endsWith('%'))
 
   return (
-    <YStack width={width} gap="$2.5" flexShrink={0}>
+    <YStack width={width} gap="$2.5" flexShrink={isFullWidth ? undefined : 0} maxWidth="100%">
       <YStack
         width="100%"
         aspectRatio={16 / 9}

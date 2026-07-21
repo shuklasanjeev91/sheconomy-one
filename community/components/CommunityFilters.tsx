@@ -4,7 +4,7 @@ import { CommunityAdaptiveSheet } from '~/community/components/CommunityAdaptive
 import { useCommunityUi } from '~/community/lib/community-theme'
 import { ScreenSearchField } from '~/components/search'
 import { Button, Icons, ScrollView, Text, XStack, YStack } from '~/components/ui'
-import { filterBySearchQuery } from '~/lib/search'
+import { SHEET_SEARCH_MIN_ITEMS, filterBySearchQuery } from '~/lib/search'
 import { radius } from '~/config/tokens'
 
 export type FilterOption = {
@@ -144,6 +144,9 @@ export function CommunityFilterSheet({
   const [draft, setDraft] = useState<string[]>(value)
   const [query, setQuery] = useState('')
 
+  // Only long lists get an inline search bar — short filter menus stay clean.
+  const showSearch = searchable && options.length >= SHEET_SEARCH_MIN_ITEMS
+
   useEffect(() => {
     if (open) {
       setDraft(value)
@@ -152,9 +155,9 @@ export function CommunityFilterSheet({
   }, [open, value])
 
   const visibleOptions = useMemo(() => {
-    if (!searchable) return options
+    if (!showSearch) return options
     return filterBySearchQuery(options, query, (option) => [option.label, option.hint])
-  }, [options, query, searchable])
+  }, [options, query, showSearch])
 
   function toggle(optionValue: string) {
     if (multi) {
@@ -183,7 +186,7 @@ export function CommunityFilterSheet({
 
   return (
     <CommunityAdaptiveSheet open={open} onOpenChange={onOpenChange} title={title}>
-      {searchable ? (
+      {showSearch ? (
         <ScreenSearchField
           value={query}
           onChangeText={setQuery}

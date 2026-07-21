@@ -515,6 +515,22 @@ export async function fetchProgramsByIds(
   }
 }
 
+/** Programs the user is enrolled in via `class_enrollment`. */
+export async function fetchEnrolledPrograms(
+  userId: string,
+): Promise<{ programs: Program[]; error: string | null }> {
+  const { data, error } = await supabase
+    .from('class_enrollment')
+    .select('course_id, created_at')
+    .eq('user_id', userId)
+    .order('created_at', { ascending: false })
+    .limit(40)
+
+  if (error) return { programs: [], error: error.message }
+  const ids = (data ?? []).map((row) => row.course_id)
+  return fetchProgramsByIds(ids)
+}
+
 export async function fetchProgramBySlug(
   slug: string,
 ): Promise<{ program: Program | null; error: string | null }> {

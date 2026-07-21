@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import type { Href } from 'one'
 
 import { AppLink } from '~/components/navigation/AppLink'
-import { Icons, Separator, Text, XStack, YStack, useAppToast } from '~/components/ui'
+import { Button, Icons, Separator, Text, XStack, YStack, useAppToast } from '~/components/ui'
 import { SurfaceCard } from '~/components/layout'
 import { ChannelPrefsCard } from '~/components/settings/ChannelPrefsCard'
 import { PreferenceRow, SettingsPanel } from '~/components/settings/SettingsPanel'
@@ -65,6 +65,7 @@ function DeepLinkRow({
 
 export function CommerceSettingsPanel() {
   const toast = useAppToast()
+  const ui = useAppUi()
   const { user } = useSupabase()
   const { pushConfigured, permissionGranted, pushBusy, syncDevicePush } = useSettingsPushSync()
   const [loading, setLoading] = useState(true)
@@ -138,6 +139,35 @@ export function CommerceSettingsPanel() {
               disabled={saving}
               onCheckedChange={(checked) => void updatePref('smsEnabled', checked)}
             />
+            <Separator />
+            <YStack paddingHorizontal="$4" paddingVertical="$3" gap="$2">
+              <Text fontSize={15} fontWeight="600" color={ui.text}>
+                Alert frequency
+              </Text>
+              <Text fontSize={13} color={ui.textMuted}>
+                How often promotional marketplace alerts are delivered
+              </Text>
+              <XStack gap="$2" flexWrap="wrap">
+                {(
+                  [
+                    { id: 'immediate', label: 'Immediate' },
+                    { id: 'daily', label: 'Daily digest' },
+                    { id: 'weekly', label: 'Weekly digest' },
+                  ] as const
+                ).map((option) => (
+                  <Button
+                    key={option.id}
+                    size="$2"
+                    tone={prefs.frequency === option.id ? 'primary' : 'outline'}
+                    borderRadius={999}
+                    disabled={saving}
+                    onPress={() => void updatePref('frequency', option.id)}
+                  >
+                    {option.label}
+                  </Button>
+                ))}
+              </XStack>
+            </YStack>
           </>
         }
       />
@@ -148,6 +178,20 @@ export function CommerceSettingsPanel() {
           icon={Icons.Package}
           title="Orders"
           subtitle="Track purchases and returns"
+        />
+        <Separator />
+        <DeepLinkRow
+          href={commerceRoutes.favorites}
+          icon={Icons.Heart}
+          title="Wishlist"
+          subtitle="Saved items and collections"
+        />
+        <Separator />
+        <DeepLinkRow
+          href={commerceRoutes.following}
+          icon={Icons.Store}
+          title="Shops you follow"
+          subtitle="Storefronts you follow for new listings"
         />
         <Separator />
         <DeepLinkRow

@@ -10,7 +10,7 @@ import type { Program } from '~/class/lib/programs'
 import { ScreenSearchField } from '~/components/search'
 import { useAuth } from '~/hooks/useAuth'
 import { AppBottomSheet, Button, Input, Spinner, Text, XStack, YStack, useAppToast } from '~/components/ui'
-import { filterBySearchQuery } from '~/lib/search'
+import { SHEET_SEARCH_MIN_ITEMS, filterBySearchQuery } from '~/lib/search'
 import { useAppUi } from '~/lib/theme/useAppUi'
 
 type SaveToPlaylistSheetProps = {
@@ -27,7 +27,13 @@ export function SaveToPlaylistSheet({ open, onOpenChange, program }: SaveToPlayl
   const [loading, setLoading] = useState(false)
   const [savingId, setSavingId] = useState<string | null>(null)
   const [newTitle, setNewTitle] = useState('')
+  const [titleError, setTitleError] = useState('')
   const [creating, setCreating] = useState(false)
+
+  function onNewTitleChange(value: string) {
+    setNewTitle(value)
+    setTitleError(value.trim() ? '' : 'Enter a playlist name')
+  }
   const [query, setQuery] = useState('')
 
   const mediaType = program.media_type === 'audio' ? 'audio' : 'video'
@@ -119,25 +125,33 @@ export function SaveToPlaylistSheet({ open, onOpenChange, program }: SaveToPlayl
                 <Input
                   flex={1}
                   value={newTitle}
-                  onChangeText={setNewTitle}
+                  onChangeText={onNewTitleChange}
                   placeholder="Playlist name"
+                  invalid={Boolean(titleError)}
                 />
                 <Button size="$3" onPress={() => void handleCreate()} disabled={creating}>
                   {creating ? '…' : 'Create'}
                 </Button>
               </XStack>
+              {titleError ? (
+                <Text fontSize={12} color="$red10">
+                  {titleError}
+                </Text>
+              ) : null}
             </YStack>
 
             <Text fontSize={13} fontWeight="600" color={ui.text}>
               Your playlists
             </Text>
 
-            <ScreenSearchField
-              value={query}
-              onChangeText={setQuery}
-              placeholder="Search playlists"
-              clearable
-            />
+            {playlists.length >= SHEET_SEARCH_MIN_ITEMS || query.length > 0 ? (
+              <ScreenSearchField
+                value={query}
+                onChangeText={setQuery}
+                placeholder="Search playlists"
+                clearable
+              />
+            ) : null}
 
             {loading ? (
               <YStack paddingVertical="$4" alignItems="center">

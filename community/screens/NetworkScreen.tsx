@@ -13,6 +13,11 @@ import type { UserListKind } from '~/community/lib/user-lists'
 import { fetchDiscoverMembers, type NetworkMember } from '~/community/lib/network'
 import { inviteNetworkByEmail } from '~/community/lib/network-invites'
 import {
+  fetchIntroductionInbox,
+  respondToIntroduction,
+  type IntroductionRequest,
+} from '~/community/lib/introductions'
+import {
   dismissNetworkSuggestion,
   useDismissedNetworkSuggestions,
 } from '~/community/lib/dismissed-suggestions'
@@ -162,6 +167,8 @@ export function NetworkScreen() {
         onOpenConnections={() => openUserList('connections')}
         onOpenInvitations={() => openUserList('pending-received')}
       />
+
+      <IntroductionInbox userId={user.id} />
 
       <CommunityCard padding={16} gap={12}>
         <XStack gap="$2" alignItems="center">
@@ -576,5 +583,102 @@ function NetworkSection({
     <CommunityWidget title={title} subtitle={subtitle}>
       <YStack gap={0}>{children}</YStack>
     </CommunityWidget>
+  )
+}
+
+function IntroductionInbox({ userId }: { userId: string }) {
+  const communityUi = useCommunityUi()
+  const ui = useAppUi()
+  const toast = useAppToast()
+  const [items, setItems] = useState<IntroductionRequest[]>([])
+  const [loading, setLoading] = useState(true)
+  const [busyId, setBusyId] = useState<string | null>(null)
+
+  useEffect(() => {
+    let active = true
+    setLoading(true)
+    void fetchIntroductionInbox(userId).then((result) => {
+      if (!active) return
+      setItems(result.items)
+      setLoading(false)
+    })
+    return () => {
+      active = false
+    }
+  }, [userId])
+
+  async function respond(id: string, status: 'accepted' | 'declined') {
+    setBusyId(id)
+    const { error } = await respondToIntroduction(id, status)
+    setBusyId(null)
+    if (error) {
+      toast.show('Could not update request', { tone: 'danger', message: error })
+      return
+    }
+    setItems((prev) => prev.filter((item) => item.id !== id))
+    toast.show(status === 'accepted' ? 'Introduction accepted' : 'Introduction declined', {
+      tone: 'success',
+    })
+  }
+
+  if (loading) {
+    return (
+      <CommunityCard padding={16} alignItems="center">
+        <Spinner size="small" />
+      </CommunityCard>
+    )
+  }
+
+  if (!items.length) return null
+
+  return (
+    <CommunityCard padding={16} gap={12}>
+      <XStack gap="$2" alignItems="center">
+        <Icons.Users size={18} color={communityUi.brand} />
+        <Text fontWeight="700" fontSize={16} color={ui.text}>
+          Introduction requests
+        </Text>
+      </XStack>
+      {items.map((item) => (
+        <YStack
+          key={item.id}
+          gap="$2"
+          padding="$3"
+          borderRadius={12}
+          borderWidth={1}
+          borderColor={ui.borderSubtle}
+          backgroundColor={ui.surfaceMuted}
+        >
+          <Text fontSize={14} color={ui.text} fontWeight="600">
+            {item.requester_name} asks for an intro to {item.target_name}
+          </Text>
+          {item.message ? (
+            <Text fontSize={13} color={ui.textMuted}>
+              {item.message}
+            </Text>
+          ) : null}
+          <XStack gap="$2" flexWrap="wrap">
+            <Button
+              size="$2"
+              tone="primary"
+              borderRadius={999}
+              disabled={busyId === item.id}
+              onPress={() => void respond(item.id, 'accepted')}
+            >
+              Accept
+            </Button>
+            <Button
+              size="$2"
+              tone="outline"
+              borderRadius={999}
+              disabled={busyId === item.id}
+              onPress={() => void respond(item.id, 'declined')}
+            >
+              Decline
+            </Button>
+          </XStack>
+        </YStack>
+      ))}
+    </CommunityCard>
   )
 }

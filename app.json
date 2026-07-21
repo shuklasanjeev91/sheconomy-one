@@ -3,7 +3,7 @@
     "name": "SHEconomy",
     "slug": "sheconomy",
     "owner": "sheconomy",
-    "version": "1.20.1",
+    "version": "6.0",
     "scheme": "sheconomy",
     "platforms": [
       "ios",
@@ -14,7 +14,7 @@
     },
     "updates": {
       "enabled": true,
-      "checkAutomatically": "ON_ERROR_RECOVERY",
+      "checkAutomatically": "ON_LOAD",
       "fallbackToCacheTimeout": 0,
       "url": "https://u.expo.dev/61412da1-9fab-4374-83f5-9e7eba296400"
     },
@@ -71,16 +71,24 @@
           "isIosBackgroundLocationEnabled": false,
           "isAndroidBackgroundLocationEnabled": false
         }
+      ],
+      [
+        "@react-native-voice/voice",
+        {
+          "microphonePermission": "Allow SHEconomy to use the microphone for live meeting captions.",
+          "speechRecognitionPermission": "Allow SHEconomy to convert speech to live captions in meetings."
+        }
       ]
     ],
     "icon": "./public/app-icon.png",
     "splash": {
       "image": "./public/splash.png",
       "resizeMode": "contain",
-      "backgroundColor": "#000000"
+      "backgroundColor": "#FEF5F9"
     },
     "ios": {
       "bundleIdentifier": "com.sheconomy.ecommerce",
+      "buildNumber": "96",
       "appleTeamId": "52H73QK4CL",
       "supportsTablet": true,
       "requireFullScreen": false,
@@ -90,6 +98,7 @@
         "applinks:sheconomy-one-sanjeev-shuklas-projects.vercel.app"
       ],
       "infoPlist": {
+        "CFBundleDisplayName": "SHEconomy",
         "UIBackgroundModes": [
           "remote-notification",
           "remote-notification"
@@ -127,6 +136,7 @@
     },
     "android": {
       "package": "com.sheconomy.ecommerce",
+      "versionCode": 102,
       "softwareKeyboardLayoutMode": "resize",
       "intentFilters": [
         {

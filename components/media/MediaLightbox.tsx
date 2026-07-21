@@ -101,7 +101,7 @@ export function MediaLightbox({ items, open, onOpenChange, initialIndex = 0 }: M
     return () => window.removeEventListener('keydown', onKey)
   }, [open, onOpenChange, goTo, index])
 
-  if (!slides.length) return null
+  if (!open || !slides.length) return null
 
   const slide = slides[index]
   const safeAreaTop = Platform.OS === 'ios' ? 54 : Platform.OS === 'android' ? 28 : 16

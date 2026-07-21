@@ -107,14 +107,16 @@ export function buildHomeHeroSlides(
 
 export function HomeHeroSlider({ slides }: HomeHeroSliderProps) {
   const ui = useAppUi()
-  const { isDesktop, gutter } = useAppLayout()
+  const { isDesktop, isTablet, gutter } = useAppLayout()
   const heroShadow = useThemedShadowStyle('lg')
   const [activeIndex, setActiveIndex] = useState(0)
   const [viewportWidth, setViewportWidth] = useState(0)
   const [paused, setPaused] = useState(false)
   const scrollRef = useRef<ScrollView>(null)
 
-  const slideHeight = isDesktop ? 428 : 356
+  // Phone: compact so hero doesn't eat half the viewport; tablet keeps former mobile size.
+  const slideHeight = isDesktop ? 428 : isTablet ? 356 : 260
+  const density: HeroDensity = isDesktop ? 'desktop' : isTablet ? 'tablet' : 'phone'
   const showNav = slides.length > 1
 
   const goTo = useCallback(
@@ -196,7 +198,7 @@ export function HomeHeroSlider({ slides }: HomeHeroSliderProps) {
               slide={slide}
               width={viewportWidth || '100%'}
               height={slideHeight}
-              isDesktop={isDesktop}
+              density={density}
               isActive={index === activeIndex}
               ui={ui}
             />
@@ -226,16 +228,21 @@ export function HomeHeroSlider({ slides }: HomeHeroSliderProps) {
   )
 }
 
+type HeroDensity = 'phone' | 'tablet' | 'desktop'
+
 type HeroSlidePanelProps = {
   slide: HomeHeroSlide
   width: number | string
   height: number
-  isDesktop: boolean
+  density: HeroDensity
   isActive: boolean
   ui: ReturnType<typeof useAppUi>
 }
 
-function HeroSlidePanel({ slide, width, height, isDesktop, isActive, ui }: HeroSlidePanelProps) {
+function HeroSlidePanel({ slide, width, height, density, isActive, ui }: HeroSlidePanelProps) {
+  const isDesktop = density === 'desktop'
+  const isPhone = density === 'phone'
+
   return (
     <YStack width={width} height={height} position="relative" overflow="hidden">
       <HeroBackdrop slide={slide} isDesktop={isDesktop} />
@@ -265,15 +272,15 @@ function HeroSlidePanel({ slide, width, height, isDesktop, isActive, ui }: HeroS
         height="100%"
         alignItems="center"
         justifyContent="space-between"
-        paddingHorizontal={isDesktop ? 48 : 22}
-        paddingVertical={isDesktop ? 40 : 28}
-        paddingBottom={isDesktop ? 52 : 44}
+        paddingHorizontal={isDesktop ? 48 : isPhone ? 16 : 22}
+        paddingVertical={isDesktop ? 40 : isPhone ? 18 : 28}
+        paddingBottom={isDesktop ? 52 : isPhone ? 36 : 44}
         gap={isDesktop ? 32 : 0}
         zIndex={2}
       >
         <YStack
           flex={1}
-          gap={isDesktop ? '$4' : '$3'}
+          gap={isDesktop ? '$4' : isPhone ? '$2' : '$3'}
           maxWidth={isDesktop ? 520 : 720}
           justifyContent="center"
           {...motion.fadeUp}
@@ -281,8 +288,8 @@ function HeroSlidePanel({ slide, width, height, isDesktop, isActive, ui }: HeroS
         >
           <XStack
             alignSelf="flex-start"
-            paddingHorizontal={12}
-            paddingVertical={6}
+            paddingHorizontal={isPhone ? 10 : 12}
+            paddingVertical={isPhone ? 4 : 6}
             borderRadius={radius.pill}
             backgroundColor="rgba(255,255,255,0.14)"
             borderWidth={1}
@@ -291,26 +298,33 @@ function HeroSlidePanel({ slide, width, height, isDesktop, isActive, ui }: HeroS
               ? { style: { backdropFilter: 'blur(12px)', WebkitBackdropFilter: 'blur(12px)' } }
               : {})}
           >
-            <Text fontSize={11} fontWeight="700" color="rgba(255,255,255,0.95)" letterSpacing={1.2} textTransform="uppercase">
+            <Text
+              fontSize={isPhone ? 10 : 11}
+              fontWeight="700"
+              color="rgba(255,255,255,0.95)"
+              letterSpacing={1.2}
+              textTransform="uppercase"
+            >
               {slide.eyebrow}
             </Text>
           </XStack>
 
-          <YStack gap="$2">
+          <YStack gap={isPhone ? '$1.5' : '$2'}>
             <Text
-              fontSize={isDesktop ? 42 : 30}
+              fontSize={isDesktop ? 42 : isPhone ? 23 : 30}
               fontWeight="800"
               color="white"
-              letterSpacing={isDesktop ? -1.2 : -0.8}
-              lineHeight={isDesktop ? 46 : 34}
+              letterSpacing={isDesktop ? -1.2 : isPhone ? -0.5 : -0.8}
+              lineHeight={isDesktop ? 46 : isPhone ? 28 : 34}
             >
               {slide.title}
             </Text>
             <Text
-              fontSize={isDesktop ? 17 : 15}
+              fontSize={isDesktop ? 17 : isPhone ? 13 : 15}
               color="rgba(255,255,255,0.88)"
-              lineHeight={isDesktop ? 26 : 22}
+              lineHeight={isDesktop ? 26 : isPhone ? 18 : 22}
               maxWidth={480}
+              numberOfLines={isPhone ? 2 : undefined}
             >
               {slide.subtitle}
             </Text>
@@ -324,10 +338,10 @@ function HeroSlidePanel({ slide, width, height, isDesktop, isActive, ui }: HeroS
               alignSelf="flex-start"
               backgroundColor="white"
               color={ui.brand}
-              paddingHorizontal={isDesktop ? 24 : 20}
+              paddingHorizontal={isDesktop ? 24 : isPhone ? 16 : 20}
               hoverStyle={{ opacity: 0.94, scale: 1.02 }}
               pressStyle={{ opacity: 0.88, scale: 0.98 }}
-              iconAfter={<Icons.ArrowRight size={18} color={ui.brand} strokeWidth={2.4} />}
+              iconAfter={<Icons.ArrowRight size={isPhone ? 16 : 18} color={ui.brand} strokeWidth={2.4} />}
             >
               {slide.cta}
             </Button>
@@ -475,9 +489,9 @@ function HeroPagination({
       bottom={0}
       left={0}
       right={0}
-      paddingHorizontal={20}
-      paddingBottom={16}
-      paddingTop={28}
+      paddingHorizontal={16}
+      paddingBottom={12}
+      paddingTop={20}
       alignItems="center"
       justifyContent="space-between"
       gap={12}

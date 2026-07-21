@@ -2,6 +2,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage'
 
 import { supabase } from '~/lib/supabase/client'
 import type { Json, Tables } from '~/lib/supabase'
+import { splitCartItems } from '~/commerce/lib/cart-shelf'
 
 const CART_SESSION_KEY = 'sheconomy:cart-session'
 
@@ -11,7 +12,10 @@ export type CartItemRow = Tables<'cart_items'>
 export type CartWithItems = {
   cart: CartRow
   items: CartItemRow[]
+  savedItems: CartItemRow[]
 }
+
+export { splitCartItems } from '~/commerce/lib/cart-shelf'
 
 async function createSessionId() {
   if (typeof crypto !== 'undefined' && 'randomUUID' in crypto) {
@@ -86,7 +90,10 @@ export async function fetchCartWithItems(cartId: string): Promise<{
   }
 
   return {
-    data: { cart: cartResult.data, items: itemsResult.items },
+    data: {
+      cart: cartResult.data,
+      ...splitCartItems(itemsResult.items),
+    },
     error: null,
   }
 }
@@ -223,6 +230,42 @@ export async function removeCartItem(
 
   await supabase.rpc('update_cart_totals', { p_cart_id: cartId })
   return { error: null }
+}
+
+export async function setCartItemSavedForLater(
+  cartId: string,
+  cartItemId: string,
+  savedForLater: boolean,
+): Promise<{ error: string | null }> {
+  const { error } = await supabase
+    .from('cart_items')
+    .update({
+      saved_for_later: savedForLater,
+      updated_at: new Date().toISOString(),
+    })
+    .eq('id', cartItemId)
+    .eq('cart_id', cartId)
+
+  if (error) {
+    return { error: error.message }
+  }
+
+  await supabase.rpc('update_cart_totals', { p_cart_id: cartId })
+  return { error: null }
+}
+
+export async function saveCartItemForLater(
+  cartId: string,
+  cartItemId: string,
+): Promise<{ error: string | null }> {
+  return setCartItemSavedForLater(cartId, cartItemId, true)
+}
+
+export async function moveSavedCartItemToCart(
+  cartId: string,
+  cartItemId: string,
+): Promise<{ error: string | null }> {
+  return setCartItemSavedForLater(cartId, cartItemId, false)
 }
 
 /** Empties a cart after its items have been converted into order(s). */

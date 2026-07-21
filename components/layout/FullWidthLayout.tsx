@@ -97,7 +97,7 @@ type PageRailProps = {
   centered?: boolean
 } & GetProps<typeof YStack>
 
-/** Full-width content rail — stretches edge-to-edge unless `maxWidth` is set. */
+/** Full-width content rail — stretches edge-to-edge unless `maxWidth` is set (forms only). */
 export function PageRail({
   children,
   maxWidth,
@@ -109,7 +109,7 @@ export function PageRail({
   return (
     <YStack
       {...LAYOUT_STRETCH}
-      maxWidth={maxWidth ?? APP_LAYOUT.contentMaxWidth}
+      {...(constrained ? { maxWidth, width: '100%' as const } : null)}
       alignSelf={constrained && centered ? 'center' : 'stretch'}
       {...props}
     >
@@ -124,7 +124,12 @@ type PageColumnsProps = {
 } & GetProps<typeof YStack>
 
 /** Responsive multi-column row that stretches edge-to-edge. */
-export function PageColumns({ children, gap = '$4', ...props }: PageColumnsProps) {
+export function PageColumns({
+  children,
+  gap = '$4',
+  alignItems = 'flex-start',
+  ...props
+}: PageColumnsProps) {
   const { isDesktop } = useAppLayout()
 
   return (
@@ -132,7 +137,7 @@ export function PageColumns({ children, gap = '$4', ...props }: PageColumnsProps
       width="100%"
       maxWidth="100%"
       flexDirection={isDesktop ? 'row' : 'column'}
-      alignItems="flex-start"
+      alignItems={alignItems}
       gap={gap}
       alignSelf="stretch"
       {...props}

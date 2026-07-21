@@ -60,7 +60,7 @@ export function AvailableOffersCard({
   if (offers.length === 0) return null
 
   const visible = offers.slice(0, maxItems)
-  const cardWidth = media.gtLg ? 280 : media.gtMd ? 260 : 240
+  const cardWidth = media.gtLg ? 280 : media.gtMd ? 260 : media.gtSm ? 220 : 168
 
   async function handleCopy(code: string) {
     const ok = await copyToClipboard(code)

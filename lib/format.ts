@@ -1,3 +1,12 @@
+import {
+  getDisplayCurrencyPreferences,
+} from '~/lib/currency/display-currency'
+import {
+  convertCurrencyAmount,
+  roundConvertedAmount,
+} from '~/lib/currency/exchange-rate-math'
+import { getExchangeRateTable } from '~/lib/currency/rates-store'
+
 function stripHtml(value: string): string {
   return value
     .replace(/<[^>]+>/g, ' ')
@@ -74,24 +83,58 @@ export function getListingCardTitle(listing: {
   return 'Listing'
 }
 
-/**
- * Format a money amount. Pass `locale` (e.g. en-US) to match the shopper's
- * region preferences; defaults remain en-IN / INR for home market.
- */
-export function formatCurrency(amount: number, currency = 'INR', locale = 'en-IN') {
+export type FormatCurrencyOptions = {
+  /** When false, skip FX conversion and format in the source currency. Default true. */
+  convert?: boolean
+  /** Override the shopper preferred display currency. */
+  displayCurrency?: string | null
+}
+
+function formatCurrencyValue(amount: number, currency: string, locale: string) {
+  const safeAmount = Number.isFinite(amount) ? amount : 0
   try {
     return new Intl.NumberFormat(locale, {
       style: 'currency',
       currency,
-      maximumFractionDigits: amount % 1 === 0 ? 0 : 2,
-    }).format(amount)
+      maximumFractionDigits: safeAmount % 1 === 0 ? 0 : 2,
+    }).format(safeAmount)
   } catch {
     return new Intl.NumberFormat('en-IN', {
       style: 'currency',
       currency: 'INR',
-      maximumFractionDigits: amount % 1 === 0 ? 0 : 2,
-    }).format(amount)
+      maximumFractionDigits: safeAmount % 1 === 0 ? 0 : 2,
+    }).format(safeAmount)
   }
+}
+
+/**
+ * Format a money amount for display. By default the amount (in `currency`) is
+ * converted into the shopper's preferred currency via ExchangeRate-API rates.
+ * Pass `{ convert: false }` for vendor/admin edit surfaces that must stay in
+ * the listing/shop currency.
+ */
+export function formatCurrency(
+  amount: number,
+  currency = 'INR',
+  locale?: string,
+  options?: FormatCurrencyOptions,
+) {
+  const prefs = getDisplayCurrencyPreferences()
+  const source = (currency || 'INR').trim().toUpperCase() || 'INR'
+  const shouldConvert = options?.convert !== false && prefs.convertEnabled
+  const display =
+    (options?.displayCurrency?.trim() || prefs.preferredCurrency || source).toUpperCase()
+  const resolvedLocale = locale || prefs.locale || 'en-IN'
+
+  if (!shouldConvert || display === source) {
+    return formatCurrencyValue(amount, source, resolvedLocale)
+  }
+
+  const converted = convertCurrencyAmount(amount, source, display, getExchangeRateTable())
+  if (converted == null) {
+    return formatCurrencyValue(amount, source, resolvedLocale)
+  }
+  return formatCurrencyValue(roundConvertedAmount(converted, display), display, resolvedLocale)
 }
 
 export function formatRating(rating: number | string | null | undefined) {

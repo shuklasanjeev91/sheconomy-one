@@ -6,6 +6,7 @@ import { Platform } from 'react-native'
 
 import type { Database } from './database.types'
 import { supabaseConfig } from './env'
+import { getRealtimeTransport } from './realtime-ws'
 
 const authOptions = {
   flowType: 'pkce' as const,
@@ -17,15 +18,22 @@ const authOptions = {
   },
 }
 
+const transport = getRealtimeTransport()
+const realtime = transport ? { transport } : undefined
+
 export const supabase = createClient<Database>(
   supabaseConfig.url,
   supabaseConfig.anonKey,
   Platform.OS === 'web'
-    ? { auth: authOptions }
+    ? {
+        auth: authOptions,
+        ...(realtime ? { realtime } : {}),
+      }
     : {
         auth: {
           ...authOptions,
           storage: AsyncStorage,
         },
+        ...(realtime ? { realtime } : {}),
       },
 )

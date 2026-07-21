@@ -45,7 +45,14 @@ export function PageScroll({ children, onRefresh, refreshing }: PageScrollProps)
 
   if (useDocumentScroll) {
     return (
-      <YStack width="100%" maxWidth="100%" alignSelf="stretch" backgroundColor={ui.background}>
+      <YStack
+        flexGrow={1}
+        flexShrink={0}
+        width="100%"
+        maxWidth="100%"
+        alignSelf="stretch"
+        backgroundColor={ui.background}
+      >
         {onRefresh ? (
           <YStack
             alignItems="center"
@@ -99,7 +106,8 @@ export function PageScroll({ children, onRefresh, refreshing }: PageScrollProps)
         maxWidth: '100%',
         flexGrow: 1,
         backgroundColor: ui.background,
-        paddingBottom: 16,
+        // Tab clearance comes from `marginBottom` / `mobileTabBarOffset` — avoid a second spacer.
+        paddingBottom: 0,
       }}
     >
       {children}

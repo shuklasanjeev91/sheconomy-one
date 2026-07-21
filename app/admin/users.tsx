@@ -27,9 +27,11 @@ import {
   XStack,
   YStack,
 } from '~/components/ui'
+import { PhoneInput } from '~/components/forms/PhoneInput'
 import { getShadowStyle, radius } from '~/config/tokens'
 import { useAppLayout } from '~/hooks/useAppLayout'
 import { commerceRoutes } from '~/lib/routes'
+import { email as emailValidator, optionalUrl, phone as phoneValidator } from '~/lib/validation'
 import { supabase, type Tables, type TablesInsert, type TablesUpdate } from '~/lib/supabase'
 
 type ProfileRow = Tables<'profiles'>
@@ -904,6 +906,36 @@ function UserEditorDialog({
   onChange: (patch: Partial<UserFormState>) => void
   onSubmit: () => void
 }) {
+  const [fieldErrors, setFieldErrors] = useState<Partial<Record<keyof UserFormState, string>>>({})
+
+  useEffect(() => {
+    if (!open) setFieldErrors({})
+  }, [open])
+
+  function patchField(patch: Partial<UserFormState>) {
+    onChange(patch)
+    setFieldErrors((current) => {
+      const next = { ...current }
+      for (const key of Object.keys(patch) as (keyof UserFormState)[]) {
+        const error = validateAdminUserField(key, String(patch[key] ?? ''), mode)
+        if (error) next[key] = error
+        else delete next[key]
+      }
+      return next
+    })
+  }
+
+  function handleSubmit() {
+    const nextErrors: Partial<Record<keyof UserFormState, string>> = {}
+    ;(['id', 'username', 'email', 'phone', 'website_url'] as const).forEach((key) => {
+      const error = validateAdminUserField(key, form[key], mode)
+      if (error) nextErrors[key] = error
+    })
+    setFieldErrors(nextErrors)
+    if (Object.keys(nextErrors).length > 0) return
+    onSubmit()
+  }
+
   return (
     <Dialog modal open={open} onOpenChange={onOpenChange}>
       <Dialog.Portal>
@@ -916,37 +948,52 @@ function UserEditorDialog({
 
           <ScrollView maxHeight="68vh" showsVerticalScrollIndicator={false}>
             <YStack gap="$3" paddingRight="$1">
-              <Field label="Auth user id" required>
+              <Field label="Auth user id" required error={fieldErrors.id}>
                 <Input
                   value={form.id}
                   editable={mode === 'create'}
-                  onChangeText={(id) => onChange({ id })}
+                  onChangeText={(id) => patchField({ id })}
                   placeholder="UUID from auth.users"
+                  invalid={Boolean(fieldErrors.id)}
                 />
               </Field>
 
               <XStack gap="$3" flexWrap="wrap">
                 <YStack flex={1} minWidth={220}>
-                  <Field label="Username" required>
-                    <Input value={form.username} onChangeText={(username) => onChange({ username })} placeholder="username" />
+                  <Field label="Username" required error={fieldErrors.username}>
+                    <Input
+                      value={form.username}
+                      onChangeText={(username) => patchField({ username })}
+                      placeholder="username"
+                      invalid={Boolean(fieldErrors.username)}
+                    />
                   </Field>
                 </YStack>
                 <YStack flex={1} minWidth={220}>
                   <Field label="Full name">
-                    <Input value={form.full_name} onChangeText={(full_name) => onChange({ full_name })} placeholder="Full name" />
+                    <Input value={form.full_name} onChangeText={(full_name) => patchField({ full_name })} placeholder="Full name" />
                   </Field>
                 </YStack>
               </XStack>
 
               <XStack gap="$3" flexWrap="wrap">
                 <YStack flex={1} minWidth={220}>
-                  <Field label="Email">
-                    <Input value={form.email} onChangeText={(email) => onChange({ email })} placeholder="user@example.com" />
+                  <Field label="Email" error={fieldErrors.email}>
+                    <Input
+                      value={form.email}
+                      onChangeText={(email) => patchField({ email })}
+                      placeholder="user@example.com"
+                      invalid={Boolean(fieldErrors.email)}
+                    />
                   </Field>
                 </YStack>
                 <YStack flex={1} minWidth={220}>
-                  <Field label="Phone">
-                    <Input value={form.phone} onChangeText={(phone) => onChange({ phone })} placeholder="+91..." />
+                  <Field label="Phone" error={fieldErrors.phone}>
+                    <PhoneInput
+                      value={form.phone}
+                      onChange={(phone) => patchField({ phone })}
+                      invalid={Boolean(fieldErrors.phone)}
+                    />
                   </Field>
                 </YStack>
               </XStack>
@@ -962,7 +1009,7 @@ function UserEditorDialog({
                         { value: 'A', label: 'Admin' },
                       ]}
                       placeholder="Select role"
-                      onValueChange={(role) => onChange({ role: role as UserFormState['role'] })}
+                      onValueChange={(role) => patchField({ role: role as UserFormState['role'] })}
                     />
                   </Field>
                 </YStack>
@@ -978,7 +1025,7 @@ function UserEditorDialog({
                         { value: 'inactive', label: 'Inactive' },
                       ]}
                       placeholder="Select status"
-                      onValueChange={(account_status) => onChange({ account_status })}
+                      onValueChange={(account_status) => patchField({ account_status })}
                     />
                   </Field>
                 </YStack>
@@ -987,51 +1034,51 @@ function UserEditorDialog({
               <XStack gap="$3" flexWrap="wrap">
                 <YStack flex={1} minWidth={220}>
                   <Field label="Headline">
-                    <Input value={form.headline} onChangeText={(headline) => onChange({ headline })} placeholder="Founder, designer..." />
+                    <Input value={form.headline} onChangeText={(headline) => patchField({ headline })} placeholder="Founder, designer..." />
                   </Field>
                 </YStack>
                 <YStack flex={1} minWidth={220}>
                   <Field label="Business name">
-                    <Input value={form.business_name} onChangeText={(business_name) => onChange({ business_name })} placeholder="Business" />
+                    <Input value={form.business_name} onChangeText={(business_name) => patchField({ business_name })} placeholder="Business" />
                   </Field>
                 </YStack>
               </XStack>
 
               <Field label="Bio">
-                <TextArea value={form.bio} onChangeText={(bio) => onChange({ bio })} placeholder="Short profile bio" />
+                <TextArea value={form.bio} onChangeText={(bio) => patchField({ bio })} placeholder="Short profile bio" />
               </Field>
 
               <XStack gap="$3" flexWrap="wrap">
                 <YStack flex={1} minWidth={180}>
                   <Field label="Occupation">
-                    <Input value={form.occupation} onChangeText={(occupation) => onChange({ occupation })} placeholder="Occupation" />
+                    <Input value={form.occupation} onChangeText={(occupation) => patchField({ occupation })} placeholder="Occupation" />
                   </Field>
                 </YStack>
                 <YStack flex={1} minWidth={180}>
                   <Field label="Industry">
-                    <Input value={form.industry} onChangeText={(industry) => onChange({ industry })} placeholder="Industry" />
+                    <Input value={form.industry} onChangeText={(industry) => patchField({ industry })} placeholder="Industry" />
                   </Field>
                 </YStack>
                 <YStack flex={1} minWidth={180}>
                   <Field label="Location">
-                    <Input value={form.location} onChangeText={(location) => onChange({ location })} placeholder="City, country" />
+                    <Input value={form.location} onChangeText={(location) => patchField({ location })} placeholder="City, country" />
                   </Field>
                 </YStack>
               </XStack>
 
               <Field label="Interests">
-                <Input value={form.interestsText} onChangeText={(interestsText) => onChange({ interestsText })} placeholder="Fashion, Finance" />
+                <Input value={form.interestsText} onChangeText={(interestsText) => patchField({ interestsText })} placeholder="Fashion, Finance" />
               </Field>
 
               <XStack gap="$3" flexWrap="wrap">
                 <YStack flex={1} minWidth={220}>
                   <Field label="Avatar URL">
-                    <Input value={form.avatar_url} onChangeText={(avatar_url) => onChange({ avatar_url })} placeholder="https://..." />
+                    <Input value={form.avatar_url} onChangeText={(avatar_url) => patchField({ avatar_url })} placeholder="https://..." />
                   </Field>
                 </YStack>
                 <YStack flex={1} minWidth={220}>
                   <Field label="Cover URL">
-                    <Input value={form.cover_url} onChangeText={(cover_url) => onChange({ cover_url })} placeholder="https://..." />
+                    <Input value={form.cover_url} onChangeText={(cover_url) => patchField({ cover_url })} placeholder="https://..." />
                   </Field>
                 </YStack>
               </XStack>
@@ -1039,32 +1086,37 @@ function UserEditorDialog({
               <XStack gap="$3" flexWrap="wrap">
                 <YStack flex={1} minWidth={180}>
                   <Field label="Currency">
-                    <Input value={form.preferred_currency} maxLength={3} onChangeText={(preferred_currency) => onChange({ preferred_currency })} placeholder="INR" />
+                    <Input value={form.preferred_currency} maxLength={3} onChangeText={(preferred_currency) => patchField({ preferred_currency })} placeholder="INR" />
                   </Field>
                 </YStack>
                 <YStack flex={1} minWidth={180}>
                   <Field label="Language">
-                    <Input value={form.preferred_language} maxLength={5} onChangeText={(preferred_language) => onChange({ preferred_language })} placeholder="en" />
+                    <Input value={form.preferred_language} maxLength={5} onChangeText={(preferred_language) => patchField({ preferred_language })} placeholder="en" />
                   </Field>
                 </YStack>
                 <YStack flex={2} minWidth={220}>
-                  <Field label="Website">
-                    <Input value={form.website_url} onChangeText={(website_url) => onChange({ website_url })} placeholder="https://..." />
+                  <Field label="Website" error={fieldErrors.website_url}>
+                    <Input
+                      value={form.website_url}
+                      onChangeText={(website_url) => patchField({ website_url })}
+                      placeholder="https://..."
+                      invalid={Boolean(fieldErrors.website_url)}
+                    />
                   </Field>
                 </YStack>
               </XStack>
 
               <XStack gap="$3" flexWrap="wrap">
-                <ToggleField label="Active" value={form.is_active} onChange={(is_active) => onChange({ is_active })} />
-                <ToggleField label="Verified" value={form.is_verified} onChange={(is_verified) => onChange({ is_verified })} />
-                <ToggleField label="Email verified" value={form.email_verified} onChange={(email_verified) => onChange({ email_verified })} />
-                <ToggleField label="Phone verified" value={form.phone_verified} onChange={(phone_verified) => onChange({ phone_verified })} />
-                <ToggleField label="Banned" value={form.is_banned} onChange={(is_banned) => onChange({ is_banned })} />
+                <ToggleField label="Active" value={form.is_active} onChange={(is_active) => patchField({ is_active })} />
+                <ToggleField label="Verified" value={form.is_verified} onChange={(is_verified) => patchField({ is_verified })} />
+                <ToggleField label="Email verified" value={form.email_verified} onChange={(email_verified) => patchField({ email_verified })} />
+                <ToggleField label="Phone verified" value={form.phone_verified} onChange={(phone_verified) => patchField({ phone_verified })} />
+                <ToggleField label="Banned" value={form.is_banned} onChange={(is_banned) => patchField({ is_banned })} />
               </XStack>
 
               {form.is_banned ? (
                 <Field label="Ban reason">
-                  <TextArea value={form.ban_reason} onChangeText={(ban_reason) => onChange({ ban_reason })} placeholder="Reason for ban" />
+                  <TextArea value={form.ban_reason} onChangeText={(ban_reason) => patchField({ ban_reason })} placeholder="Reason for ban" />
                 </Field>
               ) : null}
             </YStack>
@@ -1074,7 +1126,7 @@ function UserEditorDialog({
             <Button tone="outline" onPress={() => onOpenChange(false)} disabled={busy}>
               Cancel
             </Button>
-            <Button onPress={onSubmit} disabled={busy || !form.username.trim() || (mode === 'create' && !form.id.trim())}>
+            <Button onPress={handleSubmit} disabled={busy || !form.username.trim() || (mode === 'create' && !form.id.trim())}>
               {busy ? 'Saving...' : mode === 'create' ? 'Add user' : 'Save changes'}
             </Button>
           </XStack>
@@ -1187,7 +1239,17 @@ function EmptyPanel({ title, description }: { title: string; description: string
   )
 }
 
-function Field({ label, required, children }: { label: string; required?: boolean; children: ReactNode }) {
+function Field({
+  label,
+  required,
+  error,
+  children,
+}: {
+  label: string
+  required?: boolean
+  error?: string
+  children: ReactNode
+}) {
   return (
     <YStack gap="$2">
       <Text fontSize={12} fontWeight="700" color="$color11">
@@ -1195,8 +1257,33 @@ function Field({ label, required, children }: { label: string; required?: boolea
         {required ? ' *' : ''}
       </Text>
       {children}
+      {error ? (
+        <Text fontSize={12} color="$red10">
+          {error}
+        </Text>
+      ) : null}
     </YStack>
   )
+}
+
+function validateAdminUserField(
+  field: keyof UserFormState,
+  value: string,
+  mode: UserFormMode,
+): string | null {
+  if (field === 'id' && mode === 'create' && !value.trim()) {
+    return 'Auth user id is required.'
+  }
+  if (field === 'username') {
+    if (!value.trim()) return 'Username is required.'
+    if (!/^[a-zA-Z0-9_]{3,30}$/.test(value.trim())) {
+      return 'Username must be 3-30 characters and use only letters, numbers, and underscore.'
+    }
+  }
+  if (field === 'email') return emailValidator()(value)
+  if (field === 'phone') return phoneValidator()(value)
+  if (field === 'website_url') return optionalUrl()(value)
+  return null
 }
 
 function ToggleField({ label, value, onChange }: { label: string; value: boolean; onChange: (value: boolean) => void }) {

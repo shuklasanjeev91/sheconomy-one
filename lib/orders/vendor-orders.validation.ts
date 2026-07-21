@@ -6,9 +6,8 @@
  * applied by the service against the item's *current* status.
  */
 
-import { z } from 'zod'
-
 import { ORDER_STATUS, PAYMENT_MODE } from './order.constants'
+import { z } from '~/lib/zod'
 
 const orderStatusValues = Object.values(ORDER_STATUS) as [string, ...string[]]
 export const orderStatusSchema = z.enum(orderStatusValues)

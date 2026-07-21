@@ -42,6 +42,7 @@ import { LocationPickerField } from '~/components/geo'
 import { communityRoutes } from '~/lib/routes'
 import { getCompanyShareUrl } from '~/lib/share'
 import { useSupabase } from '~/providers/SupabaseProvider'
+import { usePageSeo } from '~/components/seo/RouteSeo'
 
 import { BRAND_MEMBER_LABEL } from '~/config/brand'
 
@@ -86,6 +87,19 @@ export function CompanyPageScreen() {
     if (isManager) return [...BASE_TABS, { id: 'admins' as const, label: 'Admins' }]
     return [...BASE_TABS]
   }, [isManager])
+
+  usePageSeo(
+    useMemo(() => {
+      if (!company) return null
+      return {
+        title: company.name,
+        description:
+          company.tagline?.trim() ||
+          `${company.name} — ${company.industry} company on SHEconomy.`,
+        image: company.logo_url ?? company.cover_url,
+      }
+    }, [company]),
+  )
 
   const reload = useCallback(async () => {
     if (!slug) return

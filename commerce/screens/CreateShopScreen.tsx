@@ -18,11 +18,14 @@ import { getShadowStyle, radius } from '~/config/tokens'
 import { useAppLayout } from '~/hooks/useAppLayout'
 import { useAuth } from '~/hooks/useAuth'
 import { useProfile } from '~/hooks/useProfile'
+import { draftShopWithAi } from '~/lib/ai'
+import { PhoneInput } from '~/components/forms/PhoneInput'
 import { overlayBackdropStyle } from '~/lib/layout/styles'
 import { refreshProfiles } from '~/lib/profile/refresh'
 import { USER_ROLES } from '~/lib/profile/profile.type'
 import { updateProfile } from '~/lib/profile/profile.store'
 import { vendorRoutes } from '~/lib/routes'
+import { checkShopNameAvailability } from '~/lib/shop/shop.service'
 import {
   COMMON_SHOP_CATEGORIES,
   EMPTY_SHOP_FORM_DATA,
@@ -42,6 +45,7 @@ import {
 import { persistStorage } from '~/lib/store/storage'
 import { useAppDispatch, useAppSelector } from '~/lib/store/hooks'
 import { useAppUi } from '~/lib/theme/useAppUi'
+import { useUnsavedChangesGuard } from '~/hooks/useUnsavedChangesGuard'
 
 /** Local-storage key holding the in-progress seller-setup draft. */
 const DRAFT_STORAGE_KEY = 'sheconomy:create-shop-draft'
@@ -92,9 +96,11 @@ export function CreateShopScreen() {
   const dispatch = useAppDispatch()
   const { isDesktop, safeBottom } = useAppLayout()
   const { user } = useAuth()
-  const { profile, isLoading: profileLoading } = useProfile()
+  const { profile } = useProfile()
 
   const myShops = useAppSelector((s) => s.shop.myShops)
+  const myShopsLoaded = useAppSelector((s) => s.shop.myShopsLoaded)
+  const isLoadingMyShops = useAppSelector((s) => s.shop.isLoadingMyShops)
 
   const [phase, setPhase] = useState<Phase>('form')
   const [stepIndex, setStepIndex] = useState(0)
@@ -103,21 +109,30 @@ export function CreateShopScreen() {
   const [errors, setErrors] = useState<Record<string, string>>({})
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [hydrated, setHydrated] = useState(false)
-  const [shopsChecked, setShopsChecked] = useState(false)
   const [showAllCurrencies, setShowAllCurrencies] = useState(false)
   const [countdown, setCountdown] = useState(REDIRECT_COUNTDOWN_SECONDS)
+  /** `null` = not checked yet / too short; true/false after availability settles. */
+  const [nameAvailable, setNameAvailable] = useState<boolean | null>(null)
+  const [nameChecking, setNameChecking] = useState(false)
 
   const hasSubmittedRef = useRef(false)
 
-  const alreadyVendor = profile?.role === USER_ROLES.VENDOR
-  const alreadyHasShop = shopsChecked && myShops.length > 0
+  const handleAvailabilityChange = useCallback((available: boolean | null, checking: boolean) => {
+    setNameAvailable(available)
+    setNameChecking(checking)
+  }, [])
 
-  // Fetch the user's shops (reconciled against the signed-in account) so we can
-  // block owners / vendors from the flow. Only trust the result once it lands —
-  // persisted shop state can belong to a previous session.
+  // Vendors without a shop must be allowed through (they arrive here from
+  // `/vendor/myshop` → "Create your shop"). Only owners who already have a
+  // storefront should be bounced out of this flow.
+  const alreadyHasShop = myShopsLoaded && myShops.length > 0
+
+  // Reconcile shops for the signed-in account. Prefer the shared store flag so
+  // we don't hang when `loadMyShops` is skipped as an in-flight duplicate.
   useEffect(() => {
-    void dispatch(loadMyShops(undefined)).finally(() => setShopsChecked(true))
-  }, [dispatch])
+    if (myShopsLoaded || isLoadingMyShops) return
+    void dispatch(loadMyShops(undefined))
+  }, [dispatch, myShopsLoaded, isLoadingMyShops])
 
   // Hydrate the saved draft + pre-fill contact details from the account.
   useEffect(() => {
@@ -149,16 +164,22 @@ export function CreateShopScreen() {
     void persistStorage.setItem(DRAFT_STORAGE_KEY, JSON.stringify(formData))
   }, [formData, hydrated, phase])
 
-  // Redirect users who shouldn't see the flow (vendors / existing shop owners).
+  useUnsavedChangesGuard({
+    isDirty:
+      hydrated &&
+      phase !== 'success' &&
+      !isSubmitting &&
+      Boolean(formData.shop_name?.trim() || formData.shop_description?.trim()),
+  })
+
+  // Redirect users who already own a shop — vendors with zero shops stay here.
   useEffect(() => {
     if (phase === 'success' || isSubmitting || hasSubmittedRef.current) return
-    if (profileLoading || !shopsChecked) return
-    if (alreadyVendor) {
-      router.replace(vendorRoutes.home)
-    } else if (alreadyHasShop) {
+    if (!myShopsLoaded) return
+    if (alreadyHasShop) {
       router.replace(vendorRoutes.myShop)
     }
-  }, [alreadyVendor, alreadyHasShop, profileLoading, shopsChecked, isSubmitting, phase, router])
+  }, [alreadyHasShop, myShopsLoaded, isSubmitting, phase, router])
 
   // Success countdown → create-listing (or Skip → dashboard).
   useEffect(() => {
@@ -189,10 +210,13 @@ export function CreateShopScreen() {
 
   const setField = useCallback(<K extends keyof ShopFormData>(field: K, value: ShopFormData[K]) => {
     setFormData((current) => ({ ...current, [field]: value }))
+    // Realtime: mark dirty/touched and re-validate on every change.
+    setTouched((current) => ({ ...current, [field as string]: true }))
+    const { error } = validateShopField(field, value)
     setErrors((current) => {
-      if (!current[field as string] && !current.shop_contact) return current
       const next = { ...current }
-      delete next[field as string]
+      if (error) next[field as string] = error
+      else delete next[field as string]
       if (field === 'shop_email' || field === 'shop_phone_number') delete next.shop_contact
       return next
     })
@@ -257,9 +281,20 @@ export function CreateShopScreen() {
       toast.show('Please fix the highlighted fields', { tone: 'danger' })
       return
     }
+    if (currentStep.id === 'basicInfo' && nameChecking) {
+      toast.show('Checking shop name…', { tone: 'info', message: 'Please wait a moment.' })
+      return
+    }
+    if (currentStep.id === 'basicInfo' && nameAvailable === false) {
+      toast.show('Shop name unavailable', {
+        tone: 'danger',
+        message: 'Choose a different name — this one is already taken.',
+      })
+      return
+    }
     setErrors({})
     goToStep(stepIndex + 1)
-  }, [currentStep, goToStep, stepIndex, toast, validateCurrentStep])
+  }, [currentStep, goToStep, nameAvailable, nameChecking, stepIndex, toast, validateCurrentStep])
 
   const handleSubmit = useCallback(async () => {
     if (!user?.id) {
@@ -278,6 +313,30 @@ export function CreateShopScreen() {
         tone: 'danger',
         message: Object.values(validation.errors)[0],
       })
+      return
+    }
+
+    if (nameAvailable === false) {
+      goToStep(0)
+      toast.show('Shop name unavailable', {
+        tone: 'danger',
+        message: 'Choose a different name — this one is already taken.',
+      })
+      return
+    }
+
+    // Final server-side availability check before create.
+    const availability = await checkShopNameAvailability(formData.shop_name)
+    if (!availability.success || !availability.data?.available) {
+      goToStep(0)
+      setNameAvailable(false)
+      setErrors((current) => ({
+        ...current,
+        shop_name: availability.data?.slugTaken
+          ? 'That URL slug is already taken. Try a slightly different name.'
+          : 'This shop name is already taken. Try another.',
+      }))
+      toast.show('Shop name unavailable', { tone: 'danger' })
       return
     }
 
@@ -318,14 +377,15 @@ export function CreateShopScreen() {
     } finally {
       setIsSubmitting(false)
     }
-  }, [dispatch, formData, goToStep, profile?.role, steps, toast, user?.id])
+  }, [dispatch, formData, goToStep, nameAvailable, profile?.role, steps, toast, user?.id])
 
   // ---- Gate / loading states -------------------------------------------------
 
   // Only gate the initial form phase — never tear down the success overlay
   // (a profile refetch after role promotion can briefly re-enter loading).
-  const isBlocked = shopsChecked && !profileLoading && (alreadyVendor || alreadyHasShop)
-  if (phase === 'form' && (profileLoading || !shopsChecked || !hydrated || isBlocked)) {
+  // Vendors with no shop must see the form; only bounce existing shop owners.
+  const isBlocked = myShopsLoaded && alreadyHasShop
+  if (phase === 'form' && (!myShopsLoaded || !hydrated || isBlocked)) {
     return (
       <YStack flex={1} minHeight={360} alignItems="center" justifyContent="center" gap="$3">
         <Spinner size="large" color={ui.brand} />
@@ -359,16 +419,16 @@ export function CreateShopScreen() {
               paddingHorizontal: isDesktop ? 32 : 16,
               paddingTop: 24,
               paddingBottom: (isDesktop ? 40 : 32) + safeBottom,
-              maxWidth: 780,
+              maxWidth: '100%',
               width: '100%',
-              alignSelf: 'center',
+              alignSelf: 'stretch',
             }}
           >
             <ProgressHeader ui={ui} stepIndex={stepIndex} total={steps.length} percent={completionPercentage} />
 
             <YStack
               backgroundColor={ui.surface}
-              borderRadius={radius.xl}
+              borderRadius={radius.surface}
               borderWidth={1}
               borderColor={ui.borderSubtle}
               padding={isDesktop ? '$6' : '$4'}
@@ -378,7 +438,15 @@ export function CreateShopScreen() {
               <StepHeader ui={ui} step={currentStep} />
 
               {currentStep.id === 'basicInfo' ? (
-                <BasicInfoStep ui={ui} formData={formData} errors={errors} touched={touched} setField={setField} onBlur={handleBlur} />
+                <BasicInfoStep
+                  ui={ui}
+                  formData={formData}
+                  errors={errors}
+                  touched={touched}
+                  setField={setField}
+                  onBlur={handleBlur}
+                  onAvailabilityChange={handleAvailabilityChange}
+                />
               ) : null}
               {currentStep.id === 'contact' ? (
                 <ContactStep ui={ui} formData={formData} errors={errors} touched={touched} setField={setField} onBlur={handleBlur} accountEmail={user?.email ?? null} />
@@ -495,7 +563,7 @@ function StepSidebar({
               gap="$3"
               paddingVertical="$3"
               paddingHorizontal="$3"
-              borderRadius={radius.md}
+              borderRadius={radius.chip}
               cursor="pointer"
               backgroundColor={isActive ? ui.roseSurface : 'transparent'}
               hoverStyle={{ backgroundColor: isActive ? ui.roseSurface : ui.surfaceMuted }}
@@ -537,7 +605,7 @@ function StepSidebar({
           gap="$2"
           borderWidth={1}
           borderColor={ui.borderSubtle}
-          borderRadius={radius.md}
+          borderRadius={radius.chip}
           paddingVertical="$2.5"
           paddingHorizontal="$3"
         >
@@ -573,7 +641,7 @@ function StepHeader({ ui, step }: { ui: Ui; step: ShopCreationStep }) {
   const Icon = stepIconFor(step.icon)
   return (
     <XStack gap="$3" alignItems="center">
-      <YStack width={48} height={48} borderRadius={radius.md} alignItems="center" justifyContent="center" backgroundColor={ui.roseSurface}>
+      <YStack width={48} height={48} borderRadius={radius.chip} alignItems="center" justifyContent="center" backgroundColor={ui.roseSurface}>
         <Icon size={24} color={ui.brand} />
       </YStack>
       <YStack flex={1} minWidth={0}>
@@ -605,7 +673,7 @@ function Callout({
   const border = tone === 'warning' ? 'rgba(217, 119, 6, 0.28)' : 'rgba(208, 16, 96, 0.2)'
   const titleColor = tone === 'warning' ? '#b45309' : ui.brand
   return (
-    <XStack gap="$3" padding="$3.5" borderRadius={radius.md} backgroundColor={bg} borderWidth={1} borderColor={border}>
+    <XStack gap="$3" padding="$3.5" borderRadius={radius.chip} backgroundColor={bg} borderWidth={1} borderColor={border}>
       <YStack marginTop={1}>{icon}</YStack>
       <YStack flex={1} minWidth={0} gap="$1">
         <Text fontSize={14} fontWeight="700" color={titleColor}>
@@ -670,8 +738,117 @@ type StepBodyProps = {
   onBlur: (field: keyof ShopFormData) => void
 }
 
-function BasicInfoStep({ ui, formData, errors, touched, setField, onBlur }: StepBodyProps) {
+type NameAvailabilityStatus = 'idle' | 'checking' | 'available' | 'taken' | 'error'
+
+function BasicInfoStep({
+  ui,
+  formData,
+  errors,
+  touched,
+  setField,
+  onBlur,
+  onAvailabilityChange,
+}: StepBodyProps & {
+  onAvailabilityChange?: (available: boolean | null, checking: boolean) => void
+}) {
+  const toast = useAppToast()
   const descriptionLength = formData.shop_description?.length ?? 0
+  const [availability, setAvailability] = useState<NameAvailabilityStatus>('idle')
+  const [availabilityHint, setAvailabilityHint] = useState<string | null>(null)
+  const [aiLoading, setAiLoading] = useState(false)
+  const [nameSuggestions, setNameSuggestions] = useState<string[]>([])
+  const checkSeq = useRef(0)
+
+  useEffect(() => {
+    const name = formData.shop_name.trim()
+    if (name.length < SHOP_VALIDATION.NAME.MIN_LENGTH) {
+      setAvailability('idle')
+      setAvailabilityHint(null)
+      onAvailabilityChange?.(null, false)
+      return
+    }
+
+    setAvailability('checking')
+    onAvailabilityChange?.(null, true)
+    const seq = ++checkSeq.current
+    const timer = setTimeout(() => {
+      void (async () => {
+        const result = await checkShopNameAvailability(name)
+        if (seq !== checkSeq.current) return
+        if (!result.success || !result.data) {
+          setAvailability('error')
+          setAvailabilityHint(result.error ?? 'Could not check availability.')
+          onAvailabilityChange?.(null, false)
+          return
+        }
+        if (result.data.available) {
+          setAvailability('available')
+          setAvailabilityHint(
+            result.data.suggestedSlug
+              ? `Available · your shop URL will use /shop/${result.data.suggestedSlug}`
+              : 'This name is available.',
+          )
+          onAvailabilityChange?.(true, false)
+        } else {
+          setAvailability('taken')
+          setAvailabilityHint(
+            result.data.nameTaken
+              ? 'This shop name is already taken. Try another.'
+              : 'That URL slug is already taken. Try a slightly different name.',
+          )
+          onAvailabilityChange?.(false, false)
+        }
+      })()
+    }, 450)
+
+    return () => clearTimeout(timer)
+  }, [formData.shop_name, onAvailabilityChange])
+
+  async function suggestWithAi(focus: 'both' | 'names' | 'description' = 'both') {
+    setAiLoading(true)
+    try {
+      const result = await draftShopWithAi({
+        prompt:
+          formData.shop_name.trim() ||
+          formData.shop_description.trim() ||
+          'Women-owned boutique with handmade and thoughtful products',
+        categories: formData.shop_categories,
+        currentName: formData.shop_name,
+        currentDescription: formData.shop_description,
+      })
+
+      if (focus === 'both' || focus === 'names') {
+        setNameSuggestions(result.names)
+        if (result.names[0] && !formData.shop_name.trim()) {
+          setField('shop_name', result.names[0])
+        }
+      }
+      if ((focus === 'both' || focus === 'description') && result.description) {
+        setField('shop_description', result.description)
+      }
+      if (result.usedFallback) {
+        toast.show('Suggestions ready', {
+          tone: 'info',
+          message: 'Used local ideas — AI may be limited right now.',
+        })
+      }
+    } catch {
+      toast.show('Could not suggest', {
+        tone: 'danger',
+        message: 'SHEconomy AI is unavailable. Try again in a moment.',
+      })
+    } finally {
+      setAiLoading(false)
+    }
+  }
+
+  const availabilityColor =
+    availability === 'available'
+      ? ui.badgeSuccessText
+      : availability === 'taken' || availability === 'error'
+        ? ui.error
+        : ui.textMuted
+
   return (
     <YStack gap="$4">
       <Callout ui={ui} tone="brand" icon={<Icons.Lightbulb size={18} color={ui.brand} />} title="Make a great first impression">
@@ -681,14 +858,134 @@ function BasicInfoStep({ ui, formData, errors, touched, setField, onBlur }: Step
         Before proceeding, ensure your inventory complies with our Prohibited Items Policy to avoid account suspension.
       </Callout>
 
-      <FieldShell ui={ui} label="Shop Name" required error={touched.shop_name ? errors.shop_name : undefined} hint="Between 2 and 200 characters.">
+      <XStack alignItems="center" justifyContent="space-between" gap="$2" flexWrap="wrap">
+        <XStack alignItems="center" gap="$1.5">
+          <Icons.Sparkles size={14} color={ui.brand} />
+          <Text fontSize={12} fontWeight="700" color={ui.textMuted}>
+            Suggest with AI
+          </Text>
+        </XStack>
+        <XStack gap="$2" flexWrap="wrap">
+          <XStack
+            alignItems="center"
+            gap={6}
+            paddingHorizontal={10}
+            paddingVertical={5}
+            borderRadius={999}
+            borderWidth={1}
+            borderColor={ui.borderSubtle}
+            backgroundColor={ui.surface}
+            cursor="pointer"
+            opacity={aiLoading ? 0.7 : 1}
+            hoverStyle={{ backgroundColor: ui.surfaceMuted }}
+            pressStyle={{ opacity: 0.85 }}
+            onPress={() => {
+              if (!aiLoading) void suggestWithAi('names')
+            }}
+          >
+            {aiLoading ? <Spinner size="small" color={ui.brand} /> : <Icons.Sparkles size={13} color={ui.brand} />}
+            <Text fontSize={12} fontWeight="700" color={ui.brand}>
+              Name ideas
+            </Text>
+          </XStack>
+          <XStack
+            alignItems="center"
+            gap={6}
+            paddingHorizontal={10}
+            paddingVertical={5}
+            borderRadius={999}
+            borderWidth={1}
+            borderColor={ui.borderSubtle}
+            backgroundColor={ui.surface}
+            cursor="pointer"
+            opacity={aiLoading ? 0.7 : 1}
+            hoverStyle={{ backgroundColor: ui.surfaceMuted }}
+            pressStyle={{ opacity: 0.85 }}
+            onPress={() => {
+              if (!aiLoading) void suggestWithAi('description')
+            }}
+          >
+            <Icons.Pencil size={13} color={ui.brand} />
+            <Text fontSize={12} fontWeight="700" color={ui.brand}>
+              Write description
+            </Text>
+          </XStack>
+        </XStack>
+      </XStack>
+
+      {nameSuggestions.length > 0 ? (
+        <YStack gap="$2">
+          <Text fontSize={12} fontWeight="600" color={ui.textMuted}>
+            Tap a name to use it
+          </Text>
+          <XStack gap="$2" flexWrap="wrap">
+            {nameSuggestions.map((name) => {
+              const selected = formData.shop_name.trim().toLowerCase() === name.toLowerCase()
+              return (
+                <XStack
+                  key={name}
+                  paddingHorizontal={12}
+                  paddingVertical={8}
+                  borderRadius={999}
+                  borderWidth={1}
+                  borderColor={selected ? ui.brand : ui.borderSubtle}
+                  backgroundColor={selected ? ui.roseSurface : ui.surface}
+                  cursor="pointer"
+                  hoverStyle={{ backgroundColor: ui.surfaceMuted }}
+                  pressStyle={{ opacity: 0.85 }}
+                  onPress={() => setField('shop_name', name)}
+                >
+                  <Text fontSize={12} fontWeight="600" color={selected ? ui.brand : ui.text} numberOfLines={1}>
+                    {name}
+                  </Text>
+                </XStack>
+              )
+            })}
+          </XStack>
+        </YStack>
+      ) : null}
+
+      <FieldShell
+        ui={ui}
+        label="Shop Name"
+        required
+        error={
+          touched.shop_name && errors.shop_name
+            ? errors.shop_name
+            : availability === 'taken'
+              ? availabilityHint ?? 'This shop name is already taken.'
+              : undefined
+        }
+        hint={
+          availability === 'available' || availability === 'checking' || availability === 'error'
+            ? (
+                <XStack alignItems="center" gap="$1.5">
+                  {availability === 'checking' ? (
+                    <Spinner size="small" color={ui.textMuted} />
+                  ) : availability === 'available' ? (
+                    <Icons.Check size={13} color={availabilityColor} />
+                  ) : (
+                    <Icons.AlertCircle size={13} color={availabilityColor} />
+                  )}
+                  <Text fontSize={12} color={availabilityColor}>
+                    {availability === 'checking'
+                      ? 'Checking availability…'
+                      : availabilityHint ?? 'Between 2 and 200 characters.'}
+                  </Text>
+                </XStack>
+              )
+            : 'Between 2 and 200 characters. We’ll check if the name is free as you type.'
+        }
+      >
         <Input
           value={formData.shop_name}
           onChangeText={(value) => setField('shop_name', value)}
           onBlur={() => onBlur('shop_name')}
           placeholder="e.g. The Velvet Ribbon"
           maxLength={SHOP_VALIDATION.NAME.MAX_LENGTH}
-          invalid={Boolean(touched.shop_name && errors.shop_name)}
+          invalid={Boolean(
+            (touched.shop_name && errors.shop_name) || availability === 'taken',
+          )}
         />
       </FieldShell>
 
@@ -697,8 +994,8 @@ function BasicInfoStep({ ui, formData, errors, touched, setField, onBlur }: Step
         label="Shop Description"
         error={touched.shop_description ? errors.shop_description : undefined}
         hint={
-          <XStack justifyContent="space-between">
-            <Text fontSize={12} color={ui.textMuted}>
+          <XStack justifyContent="space-between" alignItems="center" gap="$2">
+            <Text fontSize={12} color={ui.textMuted} flex={1}>
               A brief summary of your brand ethos and offerings.
             </Text>
             <Text fontSize={12} color={ui.textMuted}>
@@ -738,13 +1035,11 @@ function ContactStep({
         Provide at least one contact method (email or phone) so customers can reach you.
       </Callout>
 
-      <FieldShell ui={ui} label="Phone Number" required={phoneRequired} error={touched.shop_phone_number ? errors.shop_phone_number : undefined} hint="Include your country code, e.g. +919876543210.">
-        <Input
+      <FieldShell ui={ui} label="Phone Number" required={phoneRequired} error={touched.shop_phone_number ? errors.shop_phone_number : undefined} hint="We’ll check the number against your selected country code.">
+        <PhoneInput
           value={formData.shop_phone_number}
-          onChangeText={(value) => setField('shop_phone_number', value.replace(/(?!^)\+/g, '').replace(/[^\d+]/g, ''))}
+          onChange={(value) => setField('shop_phone_number', value)}
           onBlur={() => onBlur('shop_phone_number')}
-          placeholder="+91 98765 43210"
-          keyboardType="phone-pad"
           invalid={Boolean(touched.shop_phone_number && errors.shop_phone_number)}
         />
       </FieldShell>
@@ -824,7 +1119,7 @@ function CategoriesStep({ ui, formData, onToggle }: { ui: Ui; formData: ShopForm
               gap="$2.5"
               paddingVertical="$3"
               paddingHorizontal="$3.5"
-              borderRadius={radius.md}
+              borderRadius={radius.chip}
               borderWidth={1.5}
               borderColor={isSelected ? ui.brand : ui.borderSubtle}
               backgroundColor={isSelected ? ui.roseSurface : ui.surface}
@@ -893,7 +1188,7 @@ function CurrencyStep({
               gap="$3"
               paddingVertical="$3.5"
               paddingHorizontal="$3.5"
-              borderRadius={radius.md}
+              borderRadius={radius.chip}
               borderWidth={1.5}
               borderColor={isSelected ? ui.brand : ui.borderSubtle}
               backgroundColor={isSelected ? ui.roseSurface : ui.surface}
@@ -957,7 +1252,7 @@ function SocialStep({
               <Text fontSize={13} fontWeight="600" color={ui.text}>
                 {label}
               </Text>
-              <XStack alignItems="center" gap="$2" borderWidth={1} borderColor={error ? ui.error : ui.borderSubtle} borderRadius={radius.md} paddingLeft="$3" backgroundColor={ui.surface}>
+              <XStack alignItems="center" gap="$2" borderWidth={1} borderColor={error ? ui.error : ui.borderSubtle} borderRadius={radius.chip} paddingLeft="$3" backgroundColor={ui.surface}>
                 <Icon size={16} color={ui.icon} />
                 <Input
                   flex={1}
@@ -995,23 +1290,34 @@ function SuccessOverlay({
   onSkip: () => void
   onContinue: () => void
 }) {
+  const nativeFullscreen = Platform.OS === 'ios' || Platform.OS === 'android'
+
   return (
-    <YStack style={overlayBackdropStyle()} zIndex={500} alignItems="center" justifyContent="center" padding="$4">
+    <YStack
+      style={overlayBackdropStyle()}
+      zIndex={500}
+      alignItems="center"
+      justifyContent={nativeFullscreen ? 'flex-start' : 'center'}
+      padding={nativeFullscreen ? 0 : '$4'}
+    >
       <YStack fullscreen backgroundColor="rgba(10, 10, 15, 0.55)" animation="quick" enterStyle={{ opacity: 0 }} />
       <YStack
         width="100%"
-        maxWidth={420}
+        maxWidth={nativeFullscreen ? '100%' : 420}
+        flex={nativeFullscreen ? 1 : undefined}
+        height={nativeFullscreen ? '100%' : undefined}
         backgroundColor={ui.surface}
-        borderRadius={radius.xl}
-        borderWidth={1}
+        borderRadius={nativeFullscreen ? 0 : radius.surface}
+        borderWidth={nativeFullscreen ? 0 : 1}
         borderColor={ui.borderSubtle}
         padding="$6"
         gap="$4"
         alignItems="center"
+        justifyContent={nativeFullscreen ? 'center' : undefined}
         zIndex={1}
         animation="quick"
         enterStyle={{ opacity: 0, scale: 0.96, y: 8 }}
-        style={getShadowStyle('lg')}
+        style={nativeFullscreen ? undefined : getShadowStyle('lg')}
       >
         <YStack width={72} height={72} borderRadius={999} alignItems="center" justifyContent="center" backgroundColor={ui.roseSurface}>
           <Icons.PartyPopper size={34} color={ui.brand} />

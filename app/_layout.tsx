@@ -13,6 +13,8 @@ import config from '~/config/tamagui.config'
 import { screenFillStyle } from '~/lib/platform/viewport'
 import { AppToasts } from '~/components/ui/Toast'
 import { AppUsageTracker } from '~/components/analytics/AppUsageTracker'
+import { ExternalAnalyticsScripts } from '~/components/analytics/ExternalAnalyticsScripts'
+import { ExternalAnalyticsTracker } from '~/components/analytics/ExternalAnalyticsTracker'
 import { AppShell } from '~/components/navigation/app/AppShell'
 import { RouteWarmup } from '~/components/navigation/RouteWarmup'
 import { AppBootstrapPrefetch } from '~/components/navigation/AppBootstrapPrefetch'
@@ -21,6 +23,8 @@ import { FavoritesProvider } from '~/commerce/hooks/useFavorites'
 import { MarketplacePersonalizationProvider } from '~/commerce/context/MarketplacePersonalizationContext'
 import { useAppFonts } from '~/hooks/useAppFonts'
 import { RegionPreferencesProvider } from '~/lib/locale/RegionPreferencesContext'
+import { CurrencyRatesProvider } from '~/lib/currency/CurrencyRatesProvider'
+import { UserLocationProvider } from '~/lib/location'
 import { store } from '~/lib/store'
 import { PushNotificationsProvider } from '~/providers/PushNotificationsProvider'
 import { SupabaseProvider } from '~/providers/SupabaseProvider'
@@ -30,6 +34,8 @@ import { AutomaticUpdateManager } from '~/components/system/AutomaticUpdateManag
 import { AiAssistProvider } from '~/providers/AiAssistProvider'
 import { ScreenZoomProvider } from '~/lib/zoom/ScreenZoomContext'
 import { ScreenZoomRoot } from '~/components/media/ScreenZoomRoot'
+import { ConnectivityProvider } from '~/providers/ConnectivityProvider'
+import { RouteSeoProvider } from '~/components/seo/RouteSeo'
 
 function NativeRootShell({ children }: { children: ReactNode }) {
   if (Platform.OS === 'web') {
@@ -62,6 +68,11 @@ export default function Layout() {
           <link rel="apple-touch-icon" href="/apple-touch-icon.png" sizes="80x80" />
           <MetaTheme lightColor="#fef5f9" darkColor="#1c0f14" />
           <meta name="theme-color" content="#D01060" />
+          <meta
+            name="google-site-verification"
+            content="-NBqtpzczzj-BY1yV4J8jtUZZAjChrU5HUFYuYIcMtI"
+          />
+          <ExternalAnalyticsScripts />
           <style
             dangerouslySetInnerHTML={{
               __html: `
@@ -90,9 +101,17 @@ body {
 @media (min-width: 1021px) {
   html, body {
     height: auto;
-    min-height: 100%;
+    min-height: 100vh;
+    min-height: 100dvh;
     overflow-y: auto;
     scroll-behavior: smooth;
+  }
+  /* Sticky footer: shell fills the viewport so footer sits after content (or at bottom when short). */
+  #root {
+    min-height: 100vh;
+    min-height: 100dvh;
+    display: flex;
+    flex-direction: column;
   }
 }
 ::selection {
@@ -188,35 +207,44 @@ function AppProviders({ children }: { children: React.ReactNode }) {
     <ReduxProvider store={store}>
       <SupabaseProvider>
         <RegionPreferencesProvider>
-          <PushNotificationsProvider>
-            <SchemeProvider>
-              <ThemedApp>
-                <CartProvider>
-                  <FavoritesProvider>
-                    <MarketplacePersonalizationProvider>
-                      <AiAssistProvider>
-                        <ScreenZoomProvider>
-                          <ScreenZoomRoot>
-                            <AutomaticUpdateManager />
-                            <InAppNotificationHost />
-                            <PushForegroundNotificationHost />
-                            <AppUsageTracker />
-                            <BiometricUnlockGate>
-                              <AppErrorBoundary scope="AppShell">
-                                <RouteWarmup />
-                                <AppBootstrapPrefetch />
-                                <AppShell>{children}</AppShell>
-                              </AppErrorBoundary>
-                            </BiometricUnlockGate>
-                          </ScreenZoomRoot>
-                        </ScreenZoomProvider>
-                      </AiAssistProvider>
-                    </MarketplacePersonalizationProvider>
-                  </FavoritesProvider>
-                </CartProvider>
-              </ThemedApp>
-            </SchemeProvider>
-          </PushNotificationsProvider>
+          <UserLocationProvider>
+            <CurrencyRatesProvider>
+              <PushNotificationsProvider>
+                <SchemeProvider>
+                  <ThemedApp>
+                    <CartProvider>
+                      <FavoritesProvider>
+                        <MarketplacePersonalizationProvider>
+                          <AiAssistProvider>
+                            <ScreenZoomProvider>
+                              <ScreenZoomRoot>
+                                <AutomaticUpdateManager />
+                                <InAppNotificationHost />
+                                <PushForegroundNotificationHost />
+                                <AppUsageTracker />
+                                <ExternalAnalyticsTracker />
+                                <BiometricUnlockGate>
+                                  <ConnectivityProvider>
+                                    <AppErrorBoundary scope="AppShell">
+                                      <RouteSeoProvider>
+                                        <RouteWarmup />
+                                        <AppBootstrapPrefetch />
+                                        <AppShell>{children}</AppShell>
+                                      </RouteSeoProvider>
+                                    </AppErrorBoundary>
+                                  </ConnectivityProvider>
+                                </BiometricUnlockGate>
+                              </ScreenZoomRoot>
+                            </ScreenZoomProvider>
+                          </AiAssistProvider>
+                        </MarketplacePersonalizationProvider>
+                      </FavoritesProvider>
+                    </CartProvider>
+                  </ThemedApp>
+                </SchemeProvider>
+              </PushNotificationsProvider>
+            </CurrencyRatesProvider>
+          </UserLocationProvider>
         </RegionPreferencesProvider>
       </SupabaseProvider>
     </ReduxProvider>

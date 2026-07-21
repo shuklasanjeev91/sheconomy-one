@@ -8,14 +8,24 @@ type MeetingLiveCaptionsProps = {
   currentCaption: string
   lines: LiveCaptionLine[]
   error?: string | null
+  targetLangName?: string
+  showingTranslation?: boolean
 }
 
-export function MeetingLiveCaptions({ active, currentCaption, lines, error }: MeetingLiveCaptionsProps) {
+export function MeetingLiveCaptions({
+  active,
+  currentCaption,
+  lines,
+  error,
+  targetLangName,
+  showingTranslation,
+}: MeetingLiveCaptionsProps) {
   const { ui: coworkUi } = useCoWorkTheme()
 
   if (!active && !error) return null
 
   const recent = lines.filter((line) => line.isFinal).slice(-2)
+  const latest = recent[recent.length - 1]
 
   return (
     <YStack
@@ -30,7 +40,7 @@ export function MeetingLiveCaptions({ active, currentCaption, lines, error }: Me
     >
       {error ? (
         <YStack
-          maxWidth={720}
+          maxWidth="100%"
           width="100%"
           paddingHorizontal="$3"
           paddingVertical="$2"
@@ -47,7 +57,7 @@ export function MeetingLiveCaptions({ active, currentCaption, lines, error }: Me
 
       {active && currentCaption ? (
         <YStack
-          maxWidth={820}
+          maxWidth="100%"
           width="100%"
           paddingHorizontal="$4"
           paddingVertical="$3"
@@ -57,15 +67,36 @@ export function MeetingLiveCaptions({ active, currentCaption, lines, error }: Me
           style={coworkGlassStyle(coworkUi, true)}
           gap="$2"
         >
-          <XStack alignItems="center" gap="$2">
-            <YStack width={8} height={8} borderRadius={999} backgroundColor={coworkUi.live} />
-            <Text fontSize={10} fontWeight="800" color={coworkUi.brandLight} letterSpacing={1}>
-              LIVE CAPTIONS
-            </Text>
+          <XStack alignItems="center" justifyContent="space-between" gap="$2" flexWrap="wrap">
+            <XStack alignItems="center" gap="$2">
+              <YStack width={8} height={8} borderRadius={999} backgroundColor={coworkUi.live} />
+              <Text fontSize={10} fontWeight="800" color={coworkUi.brandLight} letterSpacing={1}>
+                LIVE CAPTIONS
+              </Text>
+            </XStack>
+            {targetLangName ? (
+              <Text fontSize={10} fontWeight="700" color={coworkUi.textMuted}>
+                {showingTranslation || latest?.translated
+                  ? `Translated · ${targetLangName}`
+                  : targetLangName}
+              </Text>
+            ) : null}
           </XStack>
+          {latest?.speaker ? (
+            <Text fontSize={11} fontWeight="700" color={coworkUi.textSecondary}>
+              {latest.speaker}
+            </Text>
+          ) : null}
           <Text fontSize={16} fontWeight="700" color={coworkUi.text} lineHeight={24}>
             {currentCaption}
           </Text>
+          {latest?.translated &&
+          latest.originalText &&
+          latest.originalText !== latest.text ? (
+            <Text fontSize={11} color={coworkUi.textMuted} lineHeight={16}>
+              Original: {latest.originalText}
+            </Text>
+          ) : null}
           {recent.length > 1 ? (
             <YStack gap={4} opacity={0.72}>
               {recent.slice(0, -1).map((line) => (
@@ -78,7 +109,9 @@ export function MeetingLiveCaptions({ active, currentCaption, lines, error }: Me
         </YStack>
       ) : active ? (
         <YStack
-          maxWidth={520}
+          maxWidth="100%"
+          width="100%"
+          alignItems="center"
           paddingHorizontal="$3"
           paddingVertical="$2"
           borderRadius={999}
@@ -87,7 +120,7 @@ export function MeetingLiveCaptions({ active, currentCaption, lines, error }: Me
           borderColor={coworkUi.borderAccent}
         >
           <Text fontSize={12} color={coworkUi.textMuted}>
-            Listening for speech…
+            Listening · captions in {targetLangName || 'your language'}…
           </Text>
         </YStack>
       ) : null}

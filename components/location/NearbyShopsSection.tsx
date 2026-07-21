@@ -5,7 +5,7 @@ import { Icons, Text, XStack, YStack } from '~/components/ui'
 import { commerceRoutes } from '~/lib/routes'
 import {
   fetchNearbyShops,
-  getCurrentPosition,
+  useOptionalUserLocation,
   type NearbyShop,
 } from '~/lib/location'
 import { useAppUi } from '~/lib/theme/useAppUi'
@@ -16,29 +16,38 @@ type NearbyShopsSectionProps = {
   title?: string
 }
 
-/** “Near you” shop discovery using get_nearby_shops_with_ratings. */
+/** “Near you” shop discovery using shared user location + get_nearby_shops_with_ratings. */
 export function NearbyShopsSection({
   maxDistanceKm = 80,
   title = 'Shops near you',
 }: NearbyShopsSectionProps) {
   const ui = useAppUi()
+  const location = useOptionalUserLocation()
   const [shops, setShops] = useState<NearbyShop[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
+  const latitude = location?.latitude ?? null
+  const longitude = location?.longitude ?? null
+  const locationReady = location?.status === 'ready' || location?.status === 'denied' || location?.status === 'unavailable'
+
   useEffect(() => {
     let cancelled = false
     void (async () => {
-      setLoading(true)
-      const position = await getCurrentPosition({ accuracy: 'approximate', persist: true })
-      if (cancelled) return
-      if (!position.coords) {
-        setLoading(false)
-        setError(null)
-        setShops([])
+      if (latitude == null || longitude == null) {
+        if (locationReady || !location) {
+          setLoading(false)
+          setShops([])
+          setError(null)
+        }
         return
       }
-      const result = await fetchNearbyShops(position.coords, { maxDistanceKm })
+
+      setLoading(true)
+      const result = await fetchNearbyShops(
+        { latitude, longitude },
+        { maxDistanceKm },
+      )
       if (cancelled) return
       setShops(result.shops)
       setError(result.error)
@@ -47,7 +56,7 @@ export function NearbyShopsSection({
     return () => {
       cancelled = true
     }
-  }, [maxDistanceKm])
+  }, [latitude, longitude, maxDistanceKm, locationReady, location])
 
   if (loading || !shops.length) return null
 

@@ -39,6 +39,33 @@ import type {
   VendorTopProduct,
 } from './vendor-orders.type'
 
+/** Last 7 UTC days of distinct order counts (index 0 = 6 days ago … 6 = today). */
+function buildEngagementSeries(
+  rows: Array<{
+    created_at?: string | null
+    orders: { id: string; created_at?: string | null } | null
+  }>,
+): number[] {
+  const dayCounts = [0, 0, 0, 0, 0, 0, 0]
+  const seenOrderDay = new Set<string>()
+  const today = new Date()
+  today.setUTCHours(0, 0, 0, 0)
+  for (const row of rows) {
+    const orderId = row.orders?.id
+    const raw = row.orders?.created_at ?? row.created_at
+    if (!orderId || !raw) continue
+    const created = new Date(raw)
+    created.setUTCHours(0, 0, 0, 0)
+    const diffDays = Math.round((today.getTime() - created.getTime()) / 86_400_000)
+    if (diffDays < 0 || diffDays > 6) continue
+    const key = `${orderId}:${diffDays}`
+    if (seenOrderDay.has(key)) continue
+    seenOrderDay.add(key)
+    dayCounts[6 - diffDays] += 1
+  }
+  return dayCounts
+}
+
 // A rich select shared by list + detail reads.
 const VENDOR_ORDER_SELECT = `
   *,
@@ -370,7 +397,8 @@ export async function getVendorOrderAnalytics(
     const rows = (data ?? []) as unknown as {
       quantity: number
       total_price: number
-      orders: { id: string; order_status: OrderStatus } | null
+      created_at?: string | null
+      orders: { id: string; order_status: OrderStatus; created_at?: string | null } | null
     }[]
 
     const totalOrders = new Set(rows.map((r) => r.orders?.id).filter(Boolean)).size
@@ -382,12 +410,15 @@ export async function getVendorOrderAnalytics(
       return acc
     }, {})
 
+    const engagement_series = buildEngagementSeries(rows)
+
     return ok({
       total_orders: totalOrders,
       total_revenue: totalRevenue,
       total_items: totalItems,
       average_order_value: totalOrders > 0 ? totalRevenue / totalOrders : 0,
       status_distribution: statusDistribution,
+      engagement_series,
       period,
     })
   } catch (error) {
@@ -618,7 +649,7 @@ export async function getPlatformOrderAnalytics(
     const rows = (data ?? []) as unknown as {
       quantity: number
       total_price: number
-      orders: { id: string; order_status: OrderStatus } | null
+      orders: { id: string; order_status: OrderStatus; created_at?: string | null } | null
     }[]
 
     const totalOrders = new Set(rows.map((r) => r.orders?.id).filter(Boolean)).size
@@ -636,6 +667,7 @@ export async function getPlatformOrderAnalytics(
       total_items: totalItems,
       average_order_value: totalOrders > 0 ? totalRevenue / totalOrders : 0,
       status_distribution: statusDistribution,
+      engagement_series: buildEngagementSeries(rows),
       period,
     })
   } catch (error) {
