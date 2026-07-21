@@ -29,6 +29,8 @@ import { paymentReducer } from '~/lib/orders/payment.store'
 import { vendorPaymentReducer } from '~/lib/payment/payment.store'
 import { returnPolicyReducer } from '~/lib/return-policy/return-policy.store'
 import { shippingPolicyReducer } from '~/lib/shipping-policy/shipping-policy.store'
+import { listingReviewsReducer } from '~/lib/listing-reviews/listing-reviews.store'
+import { shopReviewReducer } from '~/lib/shop-review/shop-review.store'
 import { vendorOrdersReducer } from '~/lib/orders/vendor-orders.store'
 
 import { persistStorage } from './storage'
@@ -83,6 +85,8 @@ const appReducer = combineReducers({
   vendorPayment: vendorPaymentReducer,
   returnPolicy: returnPolicyReducer,
   shippingPolicy: shippingPolicyReducer,
+  listingReviews: listingReviewsReducer,
+  shopReview: shopReviewReducer,
   payment: paymentReducer,
   orderIssues: orderIssuesReducer,
   fulfillment: fulfillmentReducer,

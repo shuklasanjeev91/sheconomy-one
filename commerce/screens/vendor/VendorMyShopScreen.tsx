@@ -233,7 +233,6 @@ export function VendorMyShopScreen() {
               shop={shop}
               stats={stats}
               address={address}
-              followerCount={followerCount}
               totalOrders={totalOrders}
               followerCount={followerCount}
               engagementSeries={engagementSeries}
@@ -265,7 +264,6 @@ export function VendorMyShopScreen() {
             shop={shop}
             stats={stats}
             address={address}
-            followerCount={followerCount}
             totalOrders={totalOrders}
             followerCount={followerCount}
             engagementSeries={engagementSeries}
@@ -360,7 +358,6 @@ type MainColumnProps = {
   shop: Shop
   stats: ShopStats | null
   address: ShopAddressDetails | null
-  followerCount: number | null
   totalOrders: number | null
   followerCount: number | null
   engagementSeries: number[]
