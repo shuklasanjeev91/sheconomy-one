@@ -13,6 +13,7 @@ import {
 import { addressReducer } from '~/lib/address/address.store'
 import { cmsReducer } from '~/lib/cms/cms.store'
 import { companyPageReducer } from '~/lib/company-page/company-page.store'
+import { groupReducer } from '~/lib/group/group.store'
 import { saleReducer } from '~/lib/sale-event/sale-event.store'
 import { profileCompletionReducer, profileReducer } from '~/lib/profile/profile.store'
 import { shopReducer } from '~/lib/shop/shop.store'
@@ -84,6 +85,7 @@ const appReducer = combineReducers({
   cms: cmsReducer,
   sale: saleReducer,
   companyPage: companyPageReducer,
+  group: groupReducer,
 })
 
 /** Dispatched on sign-out to wipe all in-memory state back to initial. */
