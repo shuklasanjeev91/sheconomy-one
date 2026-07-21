@@ -1,11 +1,12 @@
 import { Platform } from 'react-native'
 
-import { Avatar, Button, Icons, Image, Text, XStack, YStack, useMedia } from '~/components/ui'
+import { Avatar, Button, Icons, Image, Text, XStack, YStack } from '~/components/ui'
 import { ShopActionButtons } from '~/commerce/components/ShopActionButtons'
 import { StarRating } from '~/commerce/components/StarRating'
 import type { ReviewSummary } from '~/commerce/lib/reviews'
 import { AppLink } from '~/components/navigation/AppLink'
 import { ShareButton } from '~/components/share'
+import { useAppLayout } from '~/hooks/useAppLayout'
 import { getShopShareUrl } from '~/lib/share'
 import { commerceRoutes } from '~/lib/routes'
 import { useAppUi } from '~/lib/theme/useAppUi'
@@ -45,8 +46,7 @@ export function ShopHero({
   shopSlug,
 }: ShopHeroProps) {
   const ui = useAppUi()
-  const media = useMedia()
-  const isDesktop = media.gtMd
+  const { isDesktop } = useAppLayout()
   const bannerHeight = isDesktop ? 160 : 100
   const logoSize = isDesktop ? 88 : 72
   const logoOverlap = Math.round(logoSize / 2)

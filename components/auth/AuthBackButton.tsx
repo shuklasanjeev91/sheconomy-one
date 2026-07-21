@@ -1,8 +1,12 @@
 import { useCallback, useRef } from 'react'
-import { useRouter } from 'one'
+import { useLocalSearchParams, useRouter } from 'one'
 import type { Href } from 'one'
 
-import { getReturnToFromLocation } from '~/lib/auth/redirect'
+import {
+  AUTH_RETURN_TO_PARAM,
+  getReturnToFromLocation,
+  normalizeReturnPath,
+} from '~/lib/auth/redirect'
 import { commerceRoutes } from '~/lib/routes'
 import { useAccess } from '~/hooks/useAccess'
 import { Icons, Text, XStack } from '~/components/ui'
@@ -17,6 +21,7 @@ type AuthBackButtonProps = {
 export function AuthBackButton({ variant = 'dark', showLabel = true }: AuthBackButtonProps) {
   const ui = useAppUi()
   const router = useRouter()
+  const params = useLocalSearchParams<Record<string, string | string[] | undefined>>()
   const { sanitizeReturnPath, isGuest } = useAccess()
   const navigatingRef = useRef(false)
 
@@ -30,16 +35,21 @@ export function AuthBackButton({ variant = 'dark', showLabel = true }: AuthBackB
     if (navigatingRef.current) return
     navigatingRef.current = true
 
-    const target = (
-      isGuest ? commerceRoutes.home : sanitizeReturnPath(getReturnToFromLocation())
-    ) as Href
+    const raw = params[AUTH_RETURN_TO_PARAM]
+    const fromParams = Array.isArray(raw) ? raw[0] : raw
+    const returnTo = fromParams
+      ? normalizeReturnPath(fromParams)
+      : normalizeReturnPath(String(getReturnToFromLocation()))
 
+    const target = (isGuest ? commerceRoutes.home : sanitizeReturnPath(returnTo)) as Href
+
+    // Prefer replace so chromeless auth does not sit under the restored tab shell.
     router.replace(target)
 
     setTimeout(() => {
       navigatingRef.current = false
     }, 300)
-  }, [isGuest, router, sanitizeReturnPath])
+  }, [isGuest, params, router, sanitizeReturnPath])
 
   return (
     <XStack

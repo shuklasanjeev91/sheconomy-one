@@ -2,10 +2,62 @@
 // Deep LiveKit package subpaths are blocked by "exports"; load via absolute path helper.
 import './livekit-encoder-polyfill.cjs'
 import '@azure/core-asynciterator-polyfill'
-import 'core-js/actual/url'
-import 'core-js/actual/url-search-params'
+// Hermes URL exposes `protocol` as a getter-only property. SupabaseClient does
+// `realtimeUrl.protocol = ...` on construct and crashes → white screen after splash.
+import 'react-native-url-polyfill/auto'
+// Hermes may ship fetch without Headers. Side-effect import installs only missing
+// fetch globals (see scripts/patch-whatwg-fetch.cjs) — avoid named imports which
+// can interop as namespace objects under Metro ("Object is not a function").
+import 'whatwg-fetch'
 
 import { LogBox } from 'react-native'
+
+/** RN's abort-controller polyfill lacks modern static helpers used by deps. */
+function installAbortSignalHelpers() {
+  const AbortSignalImpl = globalThis.AbortSignal as typeof AbortSignal | undefined
+  if (!AbortSignalImpl) return
+
+  if (typeof AbortSignalImpl.timeout !== 'function') {
+    AbortSignalImpl.timeout = (ms: number) => {
+      const controller = new AbortController()
+      const id = setTimeout(() => {
+        controller.abort(
+          typeof DOMException === 'function'
+            ? new DOMException('The operation was aborted due to timeout', 'TimeoutError')
+            : undefined,
+        )
+      }, ms)
+      controller.signal.addEventListener(
+        'abort',
+        () => {
+          clearTimeout(id)
+        },
+        { once: true },
+      )
+      return controller.signal
+    }
+  }
+
+  if (typeof AbortSignalImpl.any !== 'function') {
+    AbortSignalImpl.any = (signals: AbortSignal[]) => {
+      const controller = new AbortController()
+      const onAbort = (event: Event) => {
+        const target = event.target as AbortSignal
+        controller.abort(target.reason)
+      }
+      for (const signal of signals) {
+        if (signal.aborted) {
+          controller.abort(signal.reason)
+          break
+        }
+        signal.addEventListener('abort', onAbort, { once: true })
+      }
+      return controller.signal
+    }
+  }
+}
+
+installAbortSignalHelpers()
 
 // Dev-only noise from react-native-svg + upstream RN deprecations (harmless on current stack).
 if (__DEV__) {

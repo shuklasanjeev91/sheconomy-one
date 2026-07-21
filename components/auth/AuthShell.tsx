@@ -1,6 +1,7 @@
 import type { ReactNode } from 'react'
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Platform } from 'react-native'
+import AsyncStorage from '@react-native-async-storage/async-storage'
 
 import { AuthBenefitsCarousel } from '~/components/auth/AuthBenefitsCarousel'
 import { AuthBrandLogo } from '~/components/auth/AuthBrandLogo'
@@ -18,6 +19,8 @@ import { useAppLayout } from '~/hooks/useAppLayout'
 import { useAuthDesktopLayout } from '~/hooks/useAuthDesktopLayout'
 import { useAppUi, useIsDarkTheme } from '~/lib/theme/useAppUi'
 import { useThemedShadowStyle } from '~/lib/theme/useThemedShadowStyle'
+
+const AUTH_ONBOARDING_SEEN_KEY = 'sheconomy.auth.onboarding.seen'
 
 function DesktopAuthLayout({ children, footer }: { children: ReactNode; footer?: ReactNode }) {
   return (
@@ -149,7 +152,8 @@ function MobileAuthFormView({ children, footer }: { children: ReactNode; footer?
         flex={1}
         width="100%"
         showsVerticalScrollIndicator={false}
-        keyboardShouldPersistTaps="handled"
+        keyboardShouldPersistTaps="always"
+        keyboardDismissMode="on-drag"
         contentContainerStyle={{
           flexGrow: 1,
           paddingHorizontal: gutter,
@@ -198,6 +202,8 @@ function DesktopAuthFormColumn({ children, footer }: { children: ReactNode; foot
         flex={1}
         width="100%"
         showsVerticalScrollIndicator={false}
+        keyboardShouldPersistTaps="always"
+        keyboardDismissMode="on-drag"
         contentContainerStyle={{
           flexGrow: 1,
           justifyContent: 'center',
@@ -224,14 +230,40 @@ function DesktopAuthFormColumn({ children, footer }: { children: ReactNode; foot
 /** Full-screen auth shell — desktop 50/50 split; mobile/tablet onboarding then form. */
 export function AuthShell({ children, footer }: AuthShellProps) {
   const isDesktopLayout = useAuthDesktopLayout()
-  const [onboardingComplete, setOnboardingComplete] = useState(false)
+  // null = still reading storage; avoid flashing onboarding for returning users
+  const [onboardingComplete, setOnboardingComplete] = useState<boolean | null>(null)
+
+  useEffect(() => {
+    let cancelled = false
+    void AsyncStorage.getItem(AUTH_ONBOARDING_SEEN_KEY)
+      .then((value) => {
+        if (!cancelled) setOnboardingComplete(value === '1')
+      })
+      .catch(() => {
+        if (!cancelled) setOnboardingComplete(false)
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [])
+
+  function finishOnboarding() {
+    setOnboardingComplete(true)
+    void AsyncStorage.setItem(AUTH_ONBOARDING_SEEN_KEY, '1').catch(() => {})
+  }
 
   if (isDesktopLayout) {
     return <DesktopAuthLayout footer={footer}>{children}</DesktopAuthLayout>
   }
 
+  if (onboardingComplete === null) {
+    return (
+      <YStack flex={1} width="100%" height="100%" backgroundColor="$background" style={authViewportStyle()} />
+    )
+  }
+
   if (!onboardingComplete) {
-    return <AuthOnboarding onFinish={() => setOnboardingComplete(true)} />
+    return <AuthOnboarding onFinish={finishOnboarding} />
   }
 
   return <MobileAuthFormView footer={footer}>{children}</MobileAuthFormView>

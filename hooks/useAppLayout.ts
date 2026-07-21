@@ -1,4 +1,4 @@
-import { Platform } from 'react-native'
+import { Platform, useWindowDimensions } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 
 import { useStableMedia } from '~/hooks/useStableMedia'
@@ -7,12 +7,19 @@ import { APP_LAYOUT } from '~/lib/layout/constants'
 export function useAppLayout() {
   const media = useStableMedia()
   const insets = useSafeAreaInsets()
+  const { width } = useWindowDimensions()
 
   const isMediaHydrated = media.isHydrated
-  const isDesktop = media.gtMd
+  // Native: trust window width — Tamagui `useMedia` can mis-report and hide
+  // the mobile header/tab dock (treating a phone as desktop).
+  const isDesktop =
+    Platform.OS === 'web' ? media.gtMd : width >= APP_LAYOUT.desktopMinWidth
   const isDesktopWeb = Platform.OS === 'web' && media.desktopWeb
-  const isWide = media.gtLg
-  const isTablet = media.gtSm && !media.gtMd
+  const isWide = Platform.OS === 'web' ? media.gtLg : width >= 1280
+  const isTablet =
+    Platform.OS === 'web'
+      ? media.gtSm && !media.gtMd
+      : width >= 600 && width < APP_LAYOUT.desktopMinWidth
   const isNative = Platform.OS !== 'web'
 
   const gutter = isWide

@@ -2,6 +2,8 @@ import { forwardRef } from 'react'
 import { Platform } from 'react-native'
 import type { GetProps } from 'tamagui'
 import { Input as TInput, TextArea as TTextArea, YStack } from 'tamagui'
+
+import { AppTextField } from '~/components/forms/AppTextField'
 import { SizableText } from './Text'
 import { BRAND_THEME } from '~/config/tokens'
 
@@ -31,11 +33,6 @@ const sharedFieldStyle = {
   },
 } as const
 
-/**
- * Fields embedded borderless inside a decorated container (search pills,
- * composers) must not draw their own focus border/glow/background — the
- * container owns the focus ring.
- */
 const embeddedFieldStyle = {
   focusStyle: {
     borderWidth: 0,
@@ -52,17 +49,12 @@ function isEmbeddedField(props: { borderWidth?: unknown; unstyled?: boolean }): 
 
 type FieldControlExtra = {
   invalid?: boolean
-  /** RN TextInput API — mapped to `readOnly` on web (Tamagui does not strip it). */
   editable?: boolean
   accessibilityLabel?: string
   accessibilityHint?: string
   accessibilityRole?: string
 }
 
-/**
- * Tamagui's web Input forwards unknown RN props onto the DOM node.
- * Map / strip them so React does not warn about `editable` / accessibility*.
- */
 function webSafeFieldProps<T extends FieldControlExtra>(props: T): T {
   if (Platform.OS !== 'web') return props
 
@@ -82,10 +74,97 @@ function webSafeFieldProps<T extends FieldControlExtra>(props: T): T {
   } as T
 }
 
-export const Input = forwardRef<
-  any,
-  GetProps<typeof TInput> & FieldControlExtra
->(function Input({ invalid, ...props }, ref) {
+type InputProps = GetProps<typeof TInput> & FieldControlExtra
+
+/**
+ * Web: Tamagui Input.
+ * Native: RN-backed AppTextField so typing, paste, and autofill work reliably
+ * across every screen (Tamagui Input shells often swallow Android touches).
+ */
+export const Input = forwardRef<any, InputProps>(function Input({ invalid, ...props }, ref) {
+  if (Platform.OS !== 'web') {
+    const {
+      value,
+      defaultValue,
+      onChangeText,
+      onBlur,
+      onFocus,
+      placeholder,
+      editable,
+      disabled,
+      autoComplete,
+      textContentType,
+      keyboardType,
+      inputMode,
+      autoCapitalize,
+      autoCorrect,
+      secureTextEntry,
+      returnKeyType,
+      enterKeyHint,
+      accessibilityLabel,
+      maxLength,
+      multiline,
+      numberOfLines,
+      autoFocus,
+      borderWidth,
+      unstyled,
+      flex,
+      width,
+      height,
+    } = props as InputProps & {
+      onChangeText?: (text: string) => void
+      disabled?: boolean
+      autoComplete?: string
+      textContentType?: string
+      inputMode?: string
+      enterKeyHint?: string
+      maxLength?: number
+      multiline?: boolean
+      numberOfLines?: number
+      autoFocus?: boolean
+      defaultValue?: string
+      flex?: number
+      width?: number | string
+      height?: number | string
+    }
+
+    const embedded = isEmbeddedField({ borderWidth, unstyled })
+
+    return (
+      <AppTextField
+        ref={ref}
+        value={value != null ? String(value) : defaultValue != null ? String(defaultValue) : undefined}
+        onChangeText={onChangeText}
+        onBlur={onBlur as never}
+        onFocus={onFocus as never}
+        placeholder={placeholder != null ? String(placeholder) : undefined}
+        editable={editable}
+        disabled={Boolean(disabled)}
+        invalid={invalid}
+        autoComplete={autoComplete as never}
+        textContentType={textContentType as never}
+        keyboardType={keyboardType as never}
+        inputMode={inputMode as never}
+        autoCapitalize={(autoCapitalize as never) ?? 'sentences'}
+        autoCorrect={autoCorrect as never}
+        secureTextEntry={Boolean(secureTextEntry)}
+        returnKeyType={returnKeyType as never}
+        enterKeyHint={enterKeyHint as never}
+        accessibilityLabel={accessibilityLabel}
+        maxLength={maxLength}
+        multiline={Boolean(multiline)}
+        numberOfLines={numberOfLines}
+        autoFocus={autoFocus}
+        embedded={embedded}
+        containerStyle={{
+          ...(typeof flex === 'number' ? { flex } : null),
+          ...(width != null ? { width: width as never } : null),
+          ...(height != null && !embedded ? { minHeight: height as never } : null),
+        }}
+      />
+    )
+  }
+
   const safeProps = webSafeFieldProps(props)
 
   return (
@@ -116,6 +195,52 @@ export const TextArea = forwardRef<
   any,
   GetProps<typeof TTextArea> & FieldControlExtra
 >(function TextArea({ invalid, ...props }, ref) {
+  if (Platform.OS !== 'web') {
+    const {
+      value,
+      onChangeText,
+      onBlur,
+      onFocus,
+      placeholder,
+      editable,
+      disabled,
+      accessibilityLabel,
+      maxLength,
+      numberOfLines,
+      autoFocus,
+      autoCapitalize,
+      autoCorrect,
+    } = props as GetProps<typeof TTextArea> &
+      FieldControlExtra & {
+        onChangeText?: (text: string) => void
+        disabled?: boolean
+        maxLength?: number
+        numberOfLines?: number
+        autoFocus?: boolean
+      }
+
+    return (
+      <AppTextField
+        ref={ref}
+        value={value != null ? String(value) : undefined}
+        onChangeText={onChangeText}
+        onBlur={onBlur as never}
+        onFocus={onFocus as never}
+        placeholder={placeholder != null ? String(placeholder) : undefined}
+        editable={editable}
+        disabled={Boolean(disabled)}
+        invalid={invalid}
+        accessibilityLabel={accessibilityLabel}
+        maxLength={maxLength}
+        multiline
+        numberOfLines={numberOfLines ?? 4}
+        autoFocus={autoFocus}
+        autoCapitalize={(autoCapitalize as never) ?? 'sentences'}
+        autoCorrect={autoCorrect !== false}
+      />
+    )
+  }
+
   const safeProps = webSafeFieldProps(props)
 
   return (
@@ -149,7 +274,6 @@ export type FieldProps = {
   hint?: string
   required?: boolean
   children: React.ReactNode
-  /** Layout: let a field flex to share a row (applied to the wrapper, not the input). */
   flex?: number
   minWidth?: number
 }

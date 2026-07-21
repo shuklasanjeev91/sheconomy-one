@@ -33,7 +33,7 @@ export function AutomaticUpdateManager() {
 
   const check = useCallback(async (force = false) => {
     const deps = depsRef.current
-    if (deps.isDev) {
+    if (deps.isDev || !Updates.isEnabled) {
       setStatus('idle')
       return
     }
@@ -80,7 +80,7 @@ export function AutomaticUpdateManager() {
 
   useEffect(() => {
     const deps = depsRef.current
-    if (deps.isDev) return
+    if (deps.isDev || !Updates.isEnabled) return
 
     void markUpdateApplied(deps, Updates.updateId ?? null)
     void check(false)

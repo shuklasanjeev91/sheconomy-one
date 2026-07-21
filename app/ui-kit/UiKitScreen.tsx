@@ -73,7 +73,7 @@ import { BRAND_NAME } from '~/config/brand'
 export default function UiKitTab() {
   return (
     <PageScroll>
-      <YStack padding="$4" gap="$8" paddingBottom="$10" width="100%">
+      <YStack padding="$4" gap="$8" paddingBottom="$2" width="100%">
         <YStack gap="$1">
           <Badge tone="brand" size="sm">
             Component library

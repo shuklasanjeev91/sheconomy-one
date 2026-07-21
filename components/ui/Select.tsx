@@ -40,8 +40,8 @@ export const SelectItem = styled(TSelect.Item, {
 })
 
 /**
- * Select dropdown content. On iOS/Android automatically adapts into a
- * full-screen sheet so every Select in the app covers the device.
+ * Select dropdown content. Always adapts into a bottom sheet on web, iOS,
+ * and Android so every Select covers the device / viewport from the bottom.
  */
 export function SelectContent({
   children,

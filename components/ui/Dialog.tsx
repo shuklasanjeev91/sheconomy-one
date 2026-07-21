@@ -36,11 +36,18 @@ const StyledDialogContent = styled(
     borderColor: '$borderColor',
     padding: '$5',
     gap: '$3',
-    maxWidth: 480,
-    width: '90%',
+    // Bottom-sheet posture on all platforms (centered modals → sheet).
+    maxWidth: '100%',
+    width: '100%',
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    borderBottomLeftRadius: 0,
+    borderBottomRightRadius: 0,
     animation: 'quick',
-    enterStyle: { opacity: 0, scale: 0.96, y: 8 },
-    exitStyle: { opacity: 0, scale: 0.96, y: 8 },
+    enterStyle: { opacity: 0, y: 28 },
+    exitStyle: { opacity: 0, y: 28 },
     ...getShadowStyle('lg'),
   } as any
 )
@@ -80,7 +87,7 @@ export function DialogContent({
   closeLabel?: string
   children?: ReactNode
 }) {
-  const { safeTop, safeBottom } = useAppLayout()
+  const { safeTop } = useAppLayout()
   const paddingRight =
     props.padding === 0 || props.padding === '$0'
       ? props.paddingRight
@@ -98,10 +105,14 @@ export function DialogContent({
           borderRadius: 0,
           borderWidth: 0,
           paddingTop: Math.max(safeTop, 16),
-          paddingBottom: Math.max(safeBottom, 16),
+          paddingBottom: 0,
+          marginBottom: 0,
           ...(Platform.OS !== 'web' ? { flex: 1 } : null),
         }
-      : null
+      : {
+          paddingBottom: 0,
+          marginBottom: 0,
+        }
 
   return (
     <StyledDialogContent position="relative" {...props} {...nativeFullscreenProps} paddingRight={paddingRight}>

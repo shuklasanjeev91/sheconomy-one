@@ -1,7 +1,9 @@
 import { useEffect, useMemo, useState } from 'react'
+import { View } from 'react-native'
 
 import { CountryCodeSheet } from '~/components/forms/CountryCodeSheet'
-import { Icons, Input, Text, XStack, YStack } from '~/components/ui'
+import { AppTextField } from '~/components/forms/AppTextField'
+import { Icons, Text, XStack, YStack } from '~/components/ui'
 import { AUTH_LAYOUT } from '~/components/auth/auth-layout'
 import {
   DEFAULT_COUNTRY,
@@ -10,6 +12,7 @@ import {
 } from '~/lib/phone/countries'
 import {
   nationalDigits,
+  normalizePhoneNumber,
   parseE164Phone,
   toE164Phone,
 } from '~/lib/phone/phone'
@@ -27,6 +30,7 @@ export type PhoneInputProps = {
   compact?: boolean
   placeholder?: string
   accessibilityLabel?: string
+  autoFocus?: boolean
 }
 
 /**
@@ -43,6 +47,7 @@ export function PhoneInput({
   compact = false,
   placeholder,
   accessibilityLabel = 'Mobile number',
+  autoFocus = false,
 }: PhoneInputProps) {
   const ui = useAppUi()
   const parsed = useMemo(() => (value.trim() ? parseE164Phone(value.trim()) : null), [value])
@@ -50,7 +55,6 @@ export function PhoneInput({
   const [national, setNational] = useState(parsed?.nationalNumber ?? '')
   const [sheetOpen, setSheetOpen] = useState(false)
 
-  // Sync inward when parent resets / loads a different E.164.
   useEffect(() => {
     if (!value.trim()) {
       setNational('')
@@ -77,27 +81,56 @@ export function PhoneInput({
   }
 
   function handleNationalChange(raw: string) {
-    const digits = nationalDigits(raw)
+    const trimmed = raw.trim()
+    const digitCount = nationalDigits(trimmed).length
+
+    const looksInternational =
+      trimmed.includes('+') ||
+      trimmed.startsWith('00') ||
+      digitCount > country.maxLength
+
+    if (looksInternational) {
+      const normalized = normalizePhoneNumber(trimmed, country)
+      const next = parseE164Phone(normalized)
+      if (next) {
+        setCountry(next.country)
+        setNational(next.nationalNumber)
+        onChange(toE164Phone(next.country, next.nationalNumber))
+        return
+      }
+    }
+
+    const digits = nationalDigits(raw).slice(0, country.maxLength)
     setNational(digits)
     emit(country, digits)
   }
 
-  const triggerPad = compact ? '$2' : '$2.5'
+  function flushToParent() {
+    // Recover when native buffer updated without a reliable onChangeText stream.
+    if (!value.trim() && nationalDigits(national).length > 0) {
+      emit(country, national)
+    }
+  }
+
   const inputHeight = compact ? 44 : 52
 
   return (
     <>
-      <XStack
-        width="100%"
-        alignItems="center"
-        gap="$2"
-        opacity={disabled ? 0.6 : 1}
+      <View
+        collapsable={false}
+        pointerEvents="auto"
+        style={{
+          width: '100%',
+          flexDirection: 'row',
+          alignItems: 'center',
+          gap: 8,
+          opacity: disabled ? 0.6 : 1,
+        }}
       >
         <XStack
           alignItems="center"
           gap="$1.5"
           paddingHorizontal={compact ? '$2' : '$3'}
-          paddingVertical={triggerPad}
           minHeight={inputHeight}
           borderRadius={AUTH_LAYOUT.inputRadius}
           borderWidth={1}
@@ -110,35 +143,51 @@ export function PhoneInput({
           accessibilityRole="button"
           accessibilityLabel="Country code"
         >
-          <Text fontSize={compact ? 18 : 20}>{countryFlag(country.iso2)}</Text>
-          <Text fontWeight="700" color={ui.text} fontSize={14}>
+          <Text fontSize={compact ? 18 : 20} pointerEvents="none">
+            {countryFlag(country.iso2)}
+          </Text>
+          <Text fontWeight="700" color={ui.text} fontSize={14} pointerEvents="none">
             {country.dialCode}
           </Text>
-          {!disabled ? <Icons.ChevronDown size={14} color={ui.textMuted} /> : null}
+          {!disabled ? (
+            <YStack pointerEvents="none">
+              <Icons.ChevronDown size={14} color={ui.textMuted} />
+            </YStack>
+          ) : null}
         </XStack>
 
-        <YStack flex={1} minWidth={0}>
-          <Input
-            width="100%"
+        <View style={{ flex: 1, minWidth: 0 }} collapsable={false} pointerEvents="auto">
+          <AppTextField
             value={national}
             onChangeText={handleNationalChange}
-            onBlur={onBlur}
+            onBlur={() => {
+              flushToParent()
+              onBlur?.()
+            }}
+            onEndEditing={(event) => {
+              const nativeText = event.nativeEvent.text
+              if (typeof nativeText === 'string') {
+                handleNationalChange(nativeText)
+              } else {
+                flushToParent()
+              }
+            }}
             placeholder={placeholder ?? country.placeholder ?? 'Mobile number'}
             keyboardType="phone-pad"
             inputMode="tel"
+            autoFocus={autoFocus}
+            showSoftInputOnFocus
             autoComplete="tel"
-            {...({ textContentType: 'telephoneNumber' } as object)}
-            returnKeyType="done"
-            enterKeyHint="done"
+            textContentType="telephoneNumber"
             accessibilityLabel={accessibilityLabel}
             disabled={disabled}
-            editable={!disabled}
             invalid={invalid}
-            height={inputHeight}
-            borderRadius={AUTH_LAYOUT.inputRadius}
+            maxLength={country.maxLength + 8}
+            importantForAutofill="yes"
+            containerStyle={{ minHeight: inputHeight }}
           />
-        </YStack>
-      </XStack>
+        </View>
+      </View>
 
       <CountryCodeSheet
         open={sheetOpen}

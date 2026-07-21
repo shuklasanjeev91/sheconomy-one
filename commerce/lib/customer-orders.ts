@@ -18,7 +18,6 @@ import {
   fetchRefundsForOrderItems,
   type CustomerRefundRow,
 } from '~/commerce/lib/customer-order-trust'
-import { createOrderIssue } from '~/lib/orders/order-issue.service'
 import {
   ISSUE_PRIORITY,
   OPEN_ISSUE_STATUSES,
@@ -28,6 +27,9 @@ import {
   type PaymentMode,
   type PaymentStatus,
 } from '~/lib/orders/order.constants'
+// Lazy-load order-issue.service — its Zod schemas crash Hermes at module init
+// ("Object is not a function") and would white-screen any route that imported
+// this file (including home via the commerce components barrel).
 import type { OrderIssue } from '~/lib/orders/order-issue.type'
 import type { OrderPayment } from '~/lib/orders/payment.type'
 import type { OrderAddressSummary, OrderStatusLog } from '~/lib/orders/vendor-orders.type'
@@ -484,6 +486,7 @@ export async function requestOrderCancellation(input: {
     return { issue: null, error: eligibility.cancelBlockedReason ?? 'Cancellation unavailable' }
   }
 
+  const { createOrderIssue } = await import('~/lib/orders/order-issue.service')
   const response = await createOrderIssue(
     {
       order_id: input.orderId,
@@ -522,6 +525,7 @@ export async function createCustomerOrderSupportIssue(input: {
     return { issue: null, error: 'You already have an open request of this type for this order.' }
   }
 
+  const { createOrderIssue } = await import('~/lib/orders/order-issue.service')
   const response = await createOrderIssue(
     {
       order_id: input.orderId,

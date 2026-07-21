@@ -61,7 +61,6 @@ export {
   Circle,
   Form,
   Group,
-  Image,
   Portal,
   ScrollView,
   Square,
@@ -74,6 +73,10 @@ export {
   useMedia,
   useTheme,
 } from 'tamagui'
+
+// Native-safe Image — percentage width/height must not land in RN `source`.
+export { Image } from './Image'
+export type { AppImageProps } from './Image'
 
 export {
   Text,

@@ -52,6 +52,17 @@ export default defineConfig(({ mode }) => {
     },
 
     resolve: {
+      // Prevent nested @tamagui/* copies (e.g. lucide-icons → core → web) from
+      // splitting React context — production error surfaces as "Missing theme.".
+      dedupe: [
+        'tamagui',
+        '@tamagui/core',
+        '@tamagui/web',
+        '@tamagui/config',
+        '@tamagui/lucide-icons',
+        'react',
+        'react-native',
+      ],
       alias: {
         'expo-av': fromProjectRoot('./lib/stubs/expo-av.ts'),
         'expo-audio': fromProjectRoot('./lib/stubs/expo-audio.ts'),
@@ -80,6 +91,9 @@ export default defineConfig(({ mode }) => {
         '@vladmandic/human': fromProjectRoot(
           './node_modules/@vladmandic/human/dist/human.esm.js',
         ),
+        tamagui: fromProjectRoot('./node_modules/tamagui'),
+        '@tamagui/web': fromProjectRoot('./node_modules/@tamagui/web'),
+        '@tamagui/core': fromProjectRoot('./node_modules/@tamagui/core'),
       },
     },
 
@@ -299,28 +313,52 @@ if (!(normalizedPreloadPath in preloadedLoaderData) && !(href in preloadedLoader
           },
           'whatwg-fetch': {
             'fetch.js': (contents) => {
-              if (!contents || contents.includes('sheconomy-defer-body-call')) {
-                return
-              }
-              let next = contents.replace(
-                '\nBody.call(Request.prototype)\n\nexport function Response',
-                '\nexport function Response',
-              )
-              next = next.replace(
-                '\nBody.call(Response.prototype)\n\nResponse.prototype.clone',
-                '\nResponse.prototype.clone',
-              )
-              next = next.replace(
-                'fetch.polyfill = true',
-                [
-                  '// sheconomy-defer-body-call',
-                  'Body.call(Request.prototype)',
-                  'Body.call(Response.prototype)',
-                  '',
+              if (!contents) return
+              let next = contents
+              if (!next.includes('sheconomy-defer-body-call')) {
+                next = next.replace(
+                  '\nBody.call(Request.prototype)\n\nexport function Response',
+                  '\nexport function Response',
+                )
+                next = next.replace(
+                  '\nBody.call(Response.prototype)\n\nResponse.prototype.clone',
+                  '\nResponse.prototype.clone',
+                )
+                next = next.replace(
                   'fetch.polyfill = true',
-                ].join('\n'),
-              )
-              return next
+                  [
+                    '// sheconomy-defer-body-call',
+                    'Body.call(Request.prototype)',
+                    'Body.call(Response.prototype)',
+                    '',
+                    'fetch.polyfill = true',
+                  ].join('\n'),
+                )
+              }
+              if (!next.includes('sheconomy-install-missing-fetch-globals')) {
+                next = next.replace(
+                  `if (!g.fetch) {
+  g.fetch = fetch
+  g.Headers = Headers
+  g.Request = Request
+  g.Response = Response
+}`,
+                  `// sheconomy-install-missing-fetch-globals
+if (!g.fetch) {
+  g.fetch = fetch
+}
+if (typeof g.Headers !== 'function') {
+  g.Headers = Headers
+}
+if (typeof g.Request !== 'function') {
+  g.Request = Request
+}
+if (typeof g.Response !== 'function') {
+  g.Response = Response
+}`,
+                )
+              }
+              return next === contents ? undefined : next
             },
           },
         },

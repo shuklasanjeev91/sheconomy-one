@@ -15,26 +15,18 @@ type CommunityAdaptiveSheetProps = {
 }
 
 /**
- * App-wide sheet surface — always a bottom sheet on web, iOS, and Android
- * (including desktop web). Never opens as a centered dialog/modal.
- * On iOS/Android AppBottomSheet covers the full device screen.
+ * App-wide sheet surface — always a full-screen bottom sheet on web, iOS,
+ * and Android (including desktop web). No bottom padding/margin gap.
  */
 export function CommunityAdaptiveSheet({
   open,
   onOpenChange,
   title,
   children,
-  tall = false,
   footer,
 }: CommunityAdaptiveSheetProps) {
   return (
-    <AppBottomSheet
-      open={open}
-      onOpenChange={onOpenChange}
-      title={title}
-      footer={footer}
-      maxHeightRatio={tall ? 0.96 : undefined}
-    >
+    <AppBottomSheet open={open} onOpenChange={onOpenChange} title={title} footer={footer}>
       {children}
     </AppBottomSheet>
   )

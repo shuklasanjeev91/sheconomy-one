@@ -13,8 +13,12 @@ let clarityInitialized = false
 
 function ensureClarity() {
   if (!EXTERNAL_ANALYTICS_ENABLED || clarityInitialized) return
-  Clarity.initialize(ANALYTICS_CONFIG.clarityProjectId)
-  clarityInitialized = true
+  try {
+    Clarity.initialize(ANALYTICS_CONFIG.clarityProjectId)
+    clarityInitialized = true
+  } catch (error) {
+    console.warn('[analytics] Clarity init failed', error)
+  }
 }
 
 export function trackExternalPageView(path: string, title?: string) {

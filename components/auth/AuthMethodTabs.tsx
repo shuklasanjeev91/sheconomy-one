@@ -41,14 +41,24 @@ export function AuthMethodTabs({ value, onChange }: AuthMethodTabsProps) {
               justifyContent="center"
               gap="$2"
               paddingVertical="$2.5"
+              minHeight={44}
               borderRadius={10}
               backgroundColor={active ? ui.surface : 'transparent'}
               borderWidth={active ? 1 : 0}
               borderColor={active ? ui.borderSubtle : 'transparent'}
               cursor="pointer"
               animation="quick"
-              pressStyle={{ scale: 0.98 }}
-              onPress={() => onChange(option.id)}
+              pressStyle={{ scale: 0.98, opacity: 0.9 }}
+              hoverStyle={{ backgroundColor: active ? ui.surface : ui.surfaceHover }}
+              role="tab"
+              aria-selected={active}
+              accessibilityRole="tab"
+              accessibilityState={{ selected: active }}
+              accessibilityLabel={`Sign in with ${option.label}`}
+              hitSlop={{ top: 8, bottom: 8, left: 4, right: 4 }}
+              onPress={() => {
+                if (option.id !== value) onChange(option.id)
+              }}
             >
               <option.icon size={17} color={active ? ui.brand : ui.textMuted} />
               <Text fontSize={14} fontWeight="700" color={active ? ui.text : ui.textMuted}>

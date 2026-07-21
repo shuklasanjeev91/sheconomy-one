@@ -29,11 +29,18 @@ const StyledAlertDialogContent = styled(
     borderRadius: '$8',
     padding: '$5',
     gap: '$3',
-    maxWidth: 420,
-    width: '90%',
+    // Bottom-sheet posture on all platforms (centered alerts → sheet).
+    maxWidth: '100%',
+    width: '100%',
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    borderBottomLeftRadius: 0,
+    borderBottomRightRadius: 0,
     animation: 'quick',
-    enterStyle: { opacity: 0, scale: 0.96 },
-    exitStyle: { opacity: 0, scale: 0.96 },
+    enterStyle: { opacity: 0, y: 28 },
+    exitStyle: { opacity: 0, y: 28 },
     ...getShadowStyle('lg'),
   } as any
 )
@@ -73,7 +80,7 @@ export function AlertDialogContent({
   closeLabel?: string
   children?: ReactNode
 }) {
-  const { safeTop, safeBottom } = useAppLayout()
+  const { safeTop } = useAppLayout()
 
   const nativeFullscreenProps =
     isNativeFullscreenOverlay
@@ -84,10 +91,14 @@ export function AlertDialogContent({
           maxHeight: '100%' as const,
           borderRadius: 0,
           paddingTop: Math.max(safeTop, 16),
-          paddingBottom: Math.max(safeBottom, 16),
+          paddingBottom: 0,
+          marginBottom: 0,
           ...(Platform.OS !== 'web' ? { flex: 1 } : null),
         }
-      : null
+      : {
+          paddingBottom: 0,
+          marginBottom: 0,
+        }
 
   return (
     <StyledAlertDialogContent

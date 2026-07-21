@@ -125,9 +125,22 @@ export function VendorMyShopScreen() {
   // Never gate on the shared public/admin `isLoadingShops` flag.
   if (!shop && (isLoadingMyShops || !myShopsLoaded)) {
     return (
-      <PageCenter>
-        <Spinner size="large" />
-      </PageCenter>
+      <YStack flex={1} width="100%" padding="$4" gap="$4">
+        <XStack gap="$3" alignItems="center">
+          <YStack
+            width={72}
+            height={72}
+            borderRadius={999}
+            backgroundColor={ui.surfaceMuted}
+          />
+          <YStack flex={1} gap="$2">
+            <YStack height={22} width="55%" borderRadius={8} backgroundColor={ui.surfaceMuted} />
+            <YStack height={14} width="35%" borderRadius={8} backgroundColor={ui.surfaceMuted} />
+          </YStack>
+        </XStack>
+        <YStack height={120} width="100%" borderRadius={16} backgroundColor={ui.surfaceMuted} />
+        <YStack height={180} width="100%" borderRadius={16} backgroundColor={ui.surfaceMuted} />
+      </YStack>
     )
   }
 

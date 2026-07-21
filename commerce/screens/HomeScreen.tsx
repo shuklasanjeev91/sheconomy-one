@@ -1,24 +1,22 @@
 import { Platform } from 'react-native'
 import { AppLink } from '~/components/navigation/AppLink'
 
-import {
-  AvailableOffersCard,
-  CategoryChip,
-  CommerceSection,
-  HomeHeroSlider,
-  buildHomeHeroSlides,
-  InfiniteHorizontalSection,
-  InfiniteListingSection,
-  RecentlyViewedRail,
-  SaleEventBanner,
-  ShopSpotlightCard,
-} from '~/commerce/components'
+import { AvailableOffersCard } from '~/commerce/components/AvailableOffersCard'
+import { CategoryChip } from '~/commerce/components/CategoryChip'
+import { CommerceSection } from '~/commerce/components/CommerceSection'
 import { FollowedShopsRail } from '~/commerce/components/FollowedShopsRail'
+import { HomeHeroSlider, buildHomeHeroSlides } from '~/commerce/components/HomeHeroSlider'
+import { InfiniteHorizontalSection } from '~/commerce/components/InfiniteHorizontalSection'
+import { InfiniteListingSection } from '~/commerce/components/InfiniteListingSection'
+import { RecentlyViewedRail } from '~/commerce/components/RecentlyViewedRail'
+import { SaleEventBanner } from '~/commerce/components/SaleEventBanner'
+import { ShopSpotlightCard } from '~/commerce/components/ShopSpotlightCard'
 import {
   Button,
   Card,
   Icons,
   Paragraph,
+  Skeleton,
   Spinner,
   Text,
   Theme,
@@ -26,7 +24,7 @@ import {
   YStack,
 } from '~/components/ui'
 import { IdleMount } from '~/components/IdleMount'
-import { FullWidthLayout, PageCenter, PageSection } from '~/components/layout'
+import { FullWidthLayout, PageSection } from '~/components/layout'
 import { NearbyShopsSection, NearYouLocationChip } from '~/components/location'
 import { BRAND_THEME, radius } from '~/config/tokens'
 import { useAppUi } from '~/lib/theme/useAppUi'
@@ -60,13 +58,34 @@ export function HomeScreen({ data, error, loading = false }: HomeScreenProps) {
 
   if (isLoading) {
     return (
-      <FullWidthLayout>
-        <PageCenter>
-          <Spinner size="large" />
-          <Text color={ui.textMuted} marginTop="$3" fontSize={14}>
-            Loading shops…
-          </Text>
-        </PageCenter>
+      <FullWidthLayout scroll>
+        <YStack gap="$5" paddingBottom="$2" width="100%" backgroundColor={ui.background}>
+          <PageSection bleed paddingTop={0}>
+            <Skeleton height={220} borderRadius={0} />
+          </PageSection>
+          <PageSection paddingTop="$2" gap="$3">
+            <XStack gap="$2">
+              <Skeleton height={36} width={96} borderRadius={999} />
+              <Skeleton height={36} width={88} borderRadius={999} />
+              <Skeleton height={36} width={110} borderRadius={999} />
+            </XStack>
+          </PageSection>
+          <PageSection gap="$3">
+            <Skeleton height={18} width="42%" />
+            <XStack gap="$3">
+              <Skeleton height={180} width={140} borderRadius={16} />
+              <Skeleton height={180} width={140} borderRadius={16} />
+              <Skeleton height={180} width={140} borderRadius={16} />
+            </XStack>
+          </PageSection>
+          <PageSection gap="$3">
+            <Skeleton height={18} width="36%" />
+            <XStack gap="$3" flexWrap="wrap">
+              <Skeleton height={210} width="47%" borderRadius={16} />
+              <Skeleton height={210} width="47%" borderRadius={16} />
+            </XStack>
+          </PageSection>
+        </YStack>
       </FullWidthLayout>
     )
   }
@@ -113,12 +132,12 @@ export function HomeScreen({ data, error, loading = false }: HomeScreenProps) {
     >
       <YStack
         gap="$5"
-        paddingBottom="$10"
+        paddingBottom="$2"
         width="100%"
         backgroundColor={ui.background}
         testID="tab-home-commerce"
       >
-        <PageSection bleed paddingTop="$4">
+        <PageSection bleed paddingTop={0}>
           <HomeHeroSlider slides={heroSlides} />
         </PageSection>
 

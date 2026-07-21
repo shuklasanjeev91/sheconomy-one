@@ -1,3 +1,6 @@
+import { z } from '~/lib/zod'
+
+
 /**
  * Tracking-number validation + courier catalog.
  *
@@ -6,8 +9,6 @@
  * of `lib/utils/orders/validators.js` (`validateDeliveryData`). All courier data
  * lives in the constants below so nothing is hard-coded at the call sites.
  */
-
-import { z } from 'zod'
 
 // ============= COURIER CATALOG =============
 

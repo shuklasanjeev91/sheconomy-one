@@ -10,9 +10,9 @@ import {
   Theme,
   XStack,
   YStack,
-  useMedia,
 } from '~/components/ui'
 import { BRAND_THEME } from '~/config/tokens'
+import { useAppLayout } from '~/hooks/useAppLayout'
 import {
   countActiveFilters,
   hasActiveFilters,
@@ -63,8 +63,7 @@ export function ListingFiltersShell({
   children,
 }: ListingFiltersShellProps) {
   const ui = useAppUi()
-  const media = useMedia()
-  const isDesktop = media.gtMd
+  const { isDesktop } = useAppLayout()
   const [open, setOpen] = useState(false)
   const [draft, setDraft] = useState<ListingBrowseFilters>(filters)
   const { minPrice, maxPrice, setMinPrice, setMaxPrice } = useFilterDraftPriceState(

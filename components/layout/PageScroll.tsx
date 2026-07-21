@@ -106,7 +106,8 @@ export function PageScroll({ children, onRefresh, refreshing }: PageScrollProps)
         maxWidth: '100%',
         flexGrow: 1,
         backgroundColor: ui.background,
-        paddingBottom: 16,
+        // Tab clearance comes from `marginBottom` / `mobileTabBarOffset` — avoid a second spacer.
+        paddingBottom: 0,
       }}
     >
       {children}
