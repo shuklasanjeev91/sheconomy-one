@@ -80,10 +80,14 @@ async function resolveUserId(userId?: string | null): Promise<string> {
 }
 
 const REVIEW_DETAIL_SELECT =
-  '*, listing:listings(id, title, listing_type, slug, price, shop_id, shop:shops(id, shop_name, logo_url, verified, user_id)), reviewer:profiles(id, username, full_name, avatar_url), variation:listing_variations(id, variation_name, variation_value), replies:listing_review_replies(id, reply_text, is_vendor_reply, is_pinned, is_public, created_at, updated_at, replier_id, parent_reply_id, replier:profiles(id, username, full_name, avatar_url)), helpfulness_votes:listing_review_helpfulness(id, is_helpful, user_id)'
+  '*, listing:listings(id, title, listing_type, slug, price, shop_id, shop:shops(id, shop_name, logo_url, verified, user_id)), reviewer:profiles!listing_reviews_reviewer_id_fkey(id, username, full_name, avatar_url), variation:listing_variations(id, variation_name, variation_value), replies:listing_review_replies(id, reply_text, is_vendor_reply, is_pinned, is_public, created_at, updated_at, replier_id, parent_reply_id, replier:profiles(id, username, full_name, avatar_url)), helpfulness_votes:listing_review_helpfulness(id, is_helpful, user_id)'
+
+/** Vendor management reads — inner-join listings so shop_id filters work reliably. */
+const MANAGEMENT_SHOP_REVIEW_SELECT =
+  '*, listing:listings!inner(id, title, listing_type, slug, price, shop_id, shop:shops(id, shop_name, logo_url, verified, user_id)), reviewer:profiles!listing_reviews_reviewer_id_fkey(id, username, full_name, avatar_url), variation:listing_variations(id, variation_name, variation_value), replies:listing_review_replies(id, reply_text, is_vendor_reply, is_pinned, is_public, created_at, updated_at, replier_id, parent_reply_id, replier:profiles(id, username, full_name, avatar_url)), helpfulness_votes:listing_review_helpfulness(id, is_helpful, user_id)'
 
 const PUBLIC_REVIEW_SELECT =
-  '*, listing:listings(id, title, listing_type, shop_id), reviewer:profiles(id, username, full_name, avatar_url)'
+  '*, listing:listings(id, title, listing_type, shop_id), reviewer:profiles!listing_reviews_reviewer_id_fkey(id, username, full_name, avatar_url)'
 
 async function fetchListingIdsForShop(shopId: string): Promise<string[]> {
   const { data, error } = await supabase.from('listings').select('id').eq('shop_id', shopId)
@@ -167,8 +171,10 @@ export async function fetchListingReviews(
       }
     }
 
+    const useShopJoin = scope === 'management' && Boolean(parsedFilters.shop_id)
     let listingIds = parsedFilters.listing_ids ?? null
-    if (parsedFilters.shop_id) {
+
+    if (parsedFilters.shop_id && !useShopJoin) {
       const shopListingIds = await fetchListingIdsForShop(parsedFilters.shop_id)
       if (!shopListingIds.length) {
         return ok({ reviews: [], total: 0, hasMore: false })
@@ -183,8 +189,8 @@ export async function fetchListingReviews(
 
     const effectiveFilters = {
       ...parsedFilters,
-      listing_ids: listingIds,
-      shop_id: null,
+      listing_ids: useShopJoin ? null : listingIds,
+      shop_id: useShopJoin ? parsedFilters.shop_id : null,
       status:
         scope === 'public'
           ? [LISTING_REVIEW_STATUS.APPROVED]
@@ -192,11 +198,17 @@ export async function fetchListingReviews(
     }
 
     const sortColumn = resolveListingReviewSortColumn(effectiveFilters.sort_by)
-    const select = scope === 'public' ? PUBLIC_REVIEW_SELECT : REVIEW_DETAIL_SELECT
+    const select = useShopJoin
+      ? MANAGEMENT_SHOP_REVIEW_SELECT
+      : scope === 'public'
+        ? PUBLIC_REVIEW_SELECT
+        : REVIEW_DETAIL_SELECT
 
     let query = supabase.from('listing_reviews').select(select, { count: 'exact' })
 
-    if (effectiveFilters.listing_ids?.length) {
+    if (useShopJoin && effectiveFilters.shop_id) {
+      query = query.eq('listing.shop_id', effectiveFilters.shop_id)
+    } else if (effectiveFilters.listing_ids?.length) {
       query = query.in('listing_id', effectiveFilters.listing_ids)
     }
     if (effectiveFilters.rating?.length) {
@@ -291,17 +303,18 @@ export async function fetchListingReviewById(
 }
 
 export async function fetchListingReviewSummaries(
-  listingIds: string[],
+  listingIds: string[] | null | undefined,
 ): Promise<ListingReviewServiceResponse<ListingReviewSummary[]>> {
+  const ids = listingIds ?? []
   try {
-    if (!listingIds.length) return ok([])
+    if (!ids.length) return ok([])
 
     const { data, error } = await supabase
       .from('listing_review_analytics')
       .select(
         'listing_id, total_reviews, average_rating, rating_distribution, verified_purchase_percentage, updated_at, total_helpfulness_votes',
       )
-      .in('listing_id', listingIds)
+      .in('listing_id', ids)
       .order('updated_at', { ascending: false })
 
     if (error) throw error
@@ -330,10 +343,10 @@ export async function fetchListingReviewSummaries(
       })
     }
 
-    const summaries = fillListingReviewSummaries(listingIds, [...latestByListing.values()])
+    const summaries = fillListingReviewSummaries(ids, [...latestByListing.values()])
     return ok(summaries)
   } catch (error) {
-    const fallback = listingIds.map((listingId) => buildDefaultListingReviewSummary(listingId))
+    const fallback = ids.map((listingId) => buildDefaultListingReviewSummary(listingId))
     return ok(fallback)
   }
 }

@@ -183,7 +183,12 @@ export const loadListingReviews = createAsyncThunk<
     rejectWithValue,
   )
 
-  return { ...result, reset }
+  return {
+    reviews: result.reviews ?? [],
+    total: result.total ?? 0,
+    hasMore: result.hasMore ?? false,
+    reset,
+  }
 })
 
 export const loadMoreListingReviews = createAsyncThunk<
@@ -273,8 +278,11 @@ export const loadListingReviewSummaries = createAsyncThunk<
   { listingIds: string[]; forceRefresh?: boolean },
   ThunkConfig
 >('listingReviews/loadSummaries', async (arg, { getState, rejectWithValue }) => {
-  const { listingIds, forceRefresh } = arg
+  const listingIds = arg.listingIds ?? []
+  const { forceRefresh } = arg
   const state = getState().listingReviews
+
+  if (!listingIds.length) return []
 
   const missing = forceRefresh
     ? listingIds
@@ -493,12 +501,13 @@ const listingReviewsSlice = createSlice({
       })
       .addCase(loadListingReviews.fulfilled, (state, action) => {
         const { reviews, total, hasMore, reset } = action.payload
+        const safeReviews = reviews ?? []
         if (reset || (state.filters.offset ?? 0) === 0) {
-          state.reviews = reviews
-          state.reviewsById = indexListingReviewsById(reviews)
+          state.reviews = safeReviews
+          state.reviewsById = indexListingReviewsById(safeReviews)
         } else {
-          state.reviews = [...state.reviews, ...reviews]
-          state.reviewsById = mergeListingReviewsById(state.reviewsById, reviews)
+          state.reviews = [...state.reviews, ...safeReviews]
+          state.reviewsById = mergeListingReviewsById(state.reviewsById, safeReviews)
         }
         state.pagination = { total, hasMore }
         state.isLoading = false
@@ -517,8 +526,9 @@ const listingReviewsSlice = createSlice({
       })
       .addCase(loadMoreListingReviews.fulfilled, (state, action) => {
         const { reviews, total, hasMore } = action.payload
-        state.reviews = [...state.reviews, ...reviews]
-        state.reviewsById = mergeListingReviewsById(state.reviewsById, reviews)
+        const safeReviews = reviews ?? []
+        state.reviews = [...state.reviews, ...safeReviews]
+        state.reviewsById = mergeListingReviewsById(state.reviewsById, safeReviews)
         state.pagination = { total, hasMore }
         state.isLoading = false
         state.lastFetch = Date.now()
@@ -838,7 +848,7 @@ export const listingReviewsReducer = listingReviewsSlice.reducer
 
 // ============= SELECTORS =============
 
-export const selectListingReviews = (state: RootState) => state.listingReviews.reviews
+export const selectListingReviews = (state: RootState) => state.listingReviews.reviews ?? []
 export const selectListingReviewsById = (state: RootState) => state.listingReviews.reviewsById
 export const selectListingReviewFilters = (state: RootState) => state.listingReviews.filters
 export const selectListingReviewPagination = (state: RootState) => state.listingReviews.pagination
