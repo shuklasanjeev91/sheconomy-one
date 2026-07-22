@@ -8254,6 +8254,7 @@ __metadata:
     react-native-screens: "npm:~4.23.0"
     react-native-svg: "npm:^15.15.5"
     react-native-teleport: "npm:^1.1.10"
+    react-native-url-polyfill: "npm:^3.0.0"
     react-native-web: "npm:^0.21.2"
     react-native-webview: "npm:^14.0.1"
     react-native-worklets: "npm:~0.7.4"
