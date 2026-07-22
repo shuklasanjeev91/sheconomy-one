@@ -1,5 +1,5 @@
 import { createElement, useState } from 'react'
-import { Platform } from 'react-native'
+import { Platform, useWindowDimensions } from 'react-native'
 
 import type { PostMediaItem } from '~/community/lib/post-media'
 import { isGifUrl } from '~/community/lib/giphy'
@@ -26,6 +26,26 @@ type PostMediaSlideProps = {
    * Lightbox / detail can set false for explicit click-to-play with controls.
    */
   autoplayInView?: boolean
+  /**
+   * When true (default for contain+fill images), frame height follows the
+   * media aspect ratio within [minHeight, height] so photos aren't cropped.
+   */
+  responsive?: boolean
+}
+
+function aspectFromLoadEvent(event: unknown): number | null {
+  if (!event || typeof event !== 'object') return null
+  const source =
+    'source' in event
+      ? (event as { source?: { width?: number; height?: number } }).source
+      : 'nativeEvent' in event
+        ? (event as { nativeEvent?: { source?: { width?: number; height?: number } } }).nativeEvent
+            ?.source
+        : null
+  const w = source?.width
+  const h = source?.height
+  if (!w || !h || w <= 0 || h <= 0) return null
+  return w / h
 }
 
 /** Renders one image or video slide for post carousels / single media. */
@@ -37,20 +57,37 @@ export function PostMediaSlide({
   fill = false,
   posterUrl = null,
   autoplayInView = true,
+  responsive,
 }: PostMediaSlideProps) {
   const frameWidth = fill || !width ? '100%' : width
   const [manualPlay, setManualPlay] = useState(false)
+  const { width: windowWidth } = useWindowDimensions()
+  const [layoutWidth, setLayoutWidth] = useState(width > 0 ? width : windowWidth)
+  const [aspect, setAspect] = useState<number | null>(null)
+  const useResponsive =
+    responsive ?? (fit === 'contain' && fill && item.kind !== 'video')
+  const minHeight = Math.min(200, height)
+  // Until natural size loads, use a moderate 4:3 frame (not the max) so
+  // landscape photos don't reserve a tall empty block over the action row.
+  const pendingHeight = Math.min(Math.max(Math.round(layoutWidth * 0.75), minHeight), height)
+  const responsiveHeight =
+    useResponsive && aspect
+      ? Math.min(Math.max(Math.round(layoutWidth / aspect), minHeight), height)
+      : useResponsive
+        ? pendingHeight
+        : height
+  const frameHeight = useResponsive ? responsiveHeight : height
 
   if (item.kind === 'video') {
     const poster = getVideoPosterUrl(item.url, posterUrl)
 
     if (autoplayInView) {
       return (
-        <YStack width={frameWidth} height={height}>
+        <YStack width={frameWidth} height={frameHeight}>
           <AutoplayVideo
             src={item.url}
             posterUrl={poster}
-            height={height}
+            height={frameHeight}
             objectFit={fit}
             autoplayInView
           />
@@ -62,7 +99,7 @@ export function PostMediaSlide({
       return (
         <YStack
           width={frameWidth}
-          height={height}
+          height={frameHeight}
           alignItems="center"
           justifyContent="center"
           backgroundColor="#000"
@@ -105,7 +142,7 @@ export function PostMediaSlide({
       return (
         <YStack
           width={frameWidth}
-          height={height}
+          height={frameHeight}
           alignItems="center"
           justifyContent="center"
           backgroundColor="#000"
@@ -126,7 +163,7 @@ export function PostMediaSlide({
     return (
       <YStack
         width={frameWidth}
-        height={height}
+        height={frameHeight}
         alignItems="center"
         justifyContent="center"
         backgroundColor="#000"
@@ -136,9 +173,41 @@ export function PostMediaSlide({
     )
   }
 
-  if (isGifUrl(item.url)) {
-    return <Image src={item.url} width={frameWidth} height={height} objectFit={fit} alt="" />
+  const image = (
+    <Image
+      src={item.url}
+      width={frameWidth}
+      height={useResponsive ? '100%' : frameHeight}
+      objectFit={fit}
+      alt=""
+      onLoad={(event) => {
+        const next = aspectFromLoadEvent(event)
+        if (next && next !== aspect) setAspect(next)
+      }}
+    />
+  )
+
+  if (useResponsive) {
+    return (
+      <YStack
+        width={frameWidth}
+        height={frameHeight}
+        alignItems="center"
+        justifyContent="center"
+        overflow="hidden"
+        onLayout={(event) => {
+          const next = event.nativeEvent.layout.width
+          if (next > 0 && Math.abs(next - layoutWidth) > 1) setLayoutWidth(next)
+        }}
+      >
+        {image}
+      </YStack>
+    )
   }
 
-  return <Image src={item.url} width={frameWidth} height={height} objectFit={fit} alt="" />
+  if (isGifUrl(item.url)) {
+    return image
+  }
+
+  return image
 }

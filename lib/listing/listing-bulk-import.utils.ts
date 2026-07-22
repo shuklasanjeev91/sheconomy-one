@@ -11,6 +11,7 @@ import {
 import type { BulkImportRawRow, BulkImportRow } from './listing-bulk-import.type'
 import { BULK_IMPORT_ROW_STATUS } from './listing-bulk-import.type'
 import { validateBulkImportRow } from './listing-bulk-import.validation'
+import { loadExcelJS } from './load-exceljs'
 import type { PublishListingData } from './listing-publish.orchestrator'
 import type {
   ListingAttributeInsert,
@@ -240,7 +241,7 @@ function parseExcelCellValue(cellValue: unknown): string {
 }
 
 export async function parseBulkImportExcel(buffer: ArrayBuffer): Promise<BulkImportRawRow[]> {
-  const excelModule = await import('exceljs')
+  const excelModule = await loadExcelJS()
   const ExcelJS = excelModule.default || excelModule
   const workbook = new ExcelJS.Workbook()
   await workbook.xlsx.load(buffer)
@@ -335,7 +336,7 @@ export async function downloadBulkImportExcelTemplate(): Promise<void> {
   if (typeof document === 'undefined') return
 
   try {
-    const excelModule = await import('exceljs')
+    const excelModule = await loadExcelJS()
     const ExcelJS = excelModule.default || excelModule
     const workbook = new ExcelJS.Workbook()
     const worksheet = workbook.addWorksheet(BULK_IMPORT_CONFIG.TEMPLATE_SHEET_LISTINGS)

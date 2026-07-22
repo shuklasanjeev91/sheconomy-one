@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react'
+import { FlashList } from '@shopify/flash-list'
 
 import { ChatListItem } from '~/chat/components/ChatListItem'
 import {
@@ -13,7 +14,6 @@ import type { ChatSummary } from '~/chat/lib/types'
 import {
   AppBottomSheet,
   Icons,
-  ScrollView,
   Spinner,
   Text,
   XStack,
@@ -289,62 +289,75 @@ export function ChatListPane({
           </XStack>
         </YStack>
       ) : (
-        <ScrollView
-          flex={1}
-          showsVerticalScrollIndicator
+        <FlashList
+          data={
+            [
+              ...(archivedChats.length > 0
+                ? ([{ kind: 'archived-header' as const }] as const)
+                : []),
+              ...(showArchived
+                ? archivedChats.map((chat) => ({ kind: 'chat' as const, chat }))
+                : []),
+              ...(archivedChats.length > 0
+                ? ([{ kind: 'divider' as const }] as const)
+                : []),
+              ...activeChats.map((chat) => ({ kind: 'chat' as const, chat })),
+            ] as Array<
+              | { kind: 'archived-header' }
+              | { kind: 'divider' }
+              | { kind: 'chat'; chat: ChatSummary }
+            >
+          }
+          keyExtractor={(item, index) =>
+            item.kind === 'chat' ? item.chat.id : `${item.kind}-${index}`
+          }
+          getItemType={(item) => item.kind}
           contentContainerStyle={{ paddingTop: 8, paddingBottom: scrollBottomPadding }}
-        >
-          {archivedChats.length > 0 ? (
-            <>
-              <XStack
-                onPress={() => setShowArchived((v) => !v)}
-                cursor="pointer"
-                alignItems="center"
-                gap={12}
-                paddingVertical={12}
-                paddingHorizontal={16}
-                hoverStyle={{ backgroundColor: theme.listItemHover }}
-                pressStyle={{ backgroundColor: theme.listItemActive }}
-                animation="quick"
-              >
-                <Icons.Archive size={20} color={theme.textSecondary} />
-                <Text flex={1} fontSize={15} fontWeight="600" color={theme.text}>
-                  Archived
-                </Text>
-                <Text fontSize={13} fontWeight="600" color={theme.textMuted}>
-                  {archivedChats.length}
-                </Text>
-                <Icons.ChevronDown
-                  size={18}
-                  color={theme.textMuted}
-                  rotate={showArchived ? '180deg' : '0deg'}
-                />
-              </XStack>
-              {showArchived
-                ? archivedChats.map((chat) => (
-                    <ChatListItem
-                      key={chat.id}
-                      chat={chat}
-                      active={chat.id === activeChatId}
-                      onPress={() => onSelect(chat)}
-                      onRequestActions={() => setActionsChat(chat)}
-                    />
-                  ))
-                : null}
-              <YStack height={1} backgroundColor={theme.divider} marginVertical={4} />
-            </>
-          ) : null}
-
-          {activeChats.map((chat) => (
-            <ChatListItem
-              key={chat.id}
-              chat={chat}
-              active={chat.id === activeChatId}
-              onPress={() => onSelect(chat)}
-              onRequestActions={() => setActionsChat(chat)}
-            />
-          ))}
-        </ScrollView>
+          style={{ flex: 1 }}
+          drawDistance={200}
+          extraData={{ activeChatId, showArchived, archivedChats: archivedChats.length }}
+          renderItem={({ item }) => {
+            if (item.kind === 'archived-header') {
+              return (
+                <XStack
+                  onPress={() => setShowArchived((v) => !v)}
+                  cursor="pointer"
+                  alignItems="center"
+                  gap={12}
+                  paddingVertical={12}
+                  paddingHorizontal={16}
+                  hoverStyle={{ backgroundColor: theme.listItemHover }}
+                  pressStyle={{ backgroundColor: theme.listItemActive }}
+                  animation="quick"
+                >
+                  <Icons.Archive size={20} color={theme.textSecondary} />
+                  <Text flex={1} fontSize={15} fontWeight="600" color={theme.text}>
+                    Archived
+                  </Text>
+                  <Text fontSize={13} fontWeight="600" color={theme.textMuted}>
+                    {archivedChats.length}
+                  </Text>
+                  <Icons.ChevronDown
+                    size={18}
+                    color={theme.textMuted}
+                    rotate={showArchived ? '180deg' : '0deg'}
+                  />
+                </XStack>
+              )
+            }
+            if (item.kind === 'divider') {
+              return <YStack height={1} backgroundColor={theme.divider} marginVertical={4} />
+            }
+            return (
+              <ChatListItem
+                chat={item.chat}
+                active={item.chat.id === activeChatId}
+                onPress={() => onSelect(item.chat)}
+                onRequestActions={() => setActionsChat(item.chat)}
+              />
+            )
+          }}
+        />
       )}
 
       <XStack

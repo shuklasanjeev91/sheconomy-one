@@ -20,6 +20,11 @@ type CommunityShellProps = {
   wide?: boolean
   onRefresh?: () => void | Promise<void>
   refreshing?: boolean
+  /**
+   * When false, shell does not wrap content in a page ScrollView —
+   * child owns scrolling (e.g. FlashList feed). Default true.
+   */
+  scroll?: boolean
 }
 
 /**
@@ -28,15 +33,19 @@ type CommunityShellProps = {
  * center feed scrolls (LinkedIn-style sticky sidebars).
  * Mobile/native: page scroll via FullWidthLayout / PageScroll.
  */
-export function CommunityShell({ children, onRefresh, refreshing }: CommunityShellProps) {
+export function CommunityShell({
+  children,
+  onRefresh,
+  refreshing,
+  scroll = true,
+}: CommunityShellProps) {
   const communityUi = useCommunityUi()
   const pathname = usePathname()
   const { isWide, isDesktopWeb, gutter } = useAppLayout()
   const showSidebars = isCommunityPath(pathname)
 
-  // Desktop web: sticky side rails + independent center scroll.
-  // Document `position:sticky` fails under `#root { overflow-x: hidden }`, so we
-  // pin the shell to the viewport below the app header instead.
+  // Desktop web sticky rails: always use center ScrollView for document chrome.
+  // When scroll=false (FlashList feed), skip the outer page scroller on mobile/native.
   if (Platform.OS === 'web' && isDesktopWeb && showSidebars) {
     const shellHeight = `calc(100dvh - ${APP_LAYOUT.desktopHeaderHeight}px)` as const
 
@@ -70,32 +79,38 @@ export function CommunityShell({ children, onRefresh, refreshing }: CommunityShe
           >
             <CommunityLeftSidebar pin="viewport" />
 
-            <ScrollView
-              flex={1}
-              minWidth={0}
-              minHeight={0}
-              showsVerticalScrollIndicator
-              style={
-                {
-                  flex: 1,
-                  minHeight: 0,
-                  height: '100%',
-                  overflowY: 'auto',
-                  WebkitOverflowScrolling: 'touch',
-                } as const
-              }
-              contentContainerStyle={{
-                width: '100%',
-                maxWidth: '100%',
-                flexGrow: 1,
-                gap: 12,
-                paddingBottom: 24,
-              }}
-            >
-              <YStack flex={1} minWidth={0} gap="$3" {...LAYOUT_STRETCH}>
+            {scroll ? (
+              <ScrollView
+                flex={1}
+                minWidth={0}
+                minHeight={0}
+                showsVerticalScrollIndicator
+                style={
+                  {
+                    flex: 1,
+                    minHeight: 0,
+                    height: '100%',
+                    overflowY: 'auto',
+                    WebkitOverflowScrolling: 'touch',
+                  } as const
+                }
+                contentContainerStyle={{
+                  width: '100%',
+                  maxWidth: '100%',
+                  flexGrow: 1,
+                  gap: 12,
+                  paddingBottom: 24,
+                }}
+              >
+                <YStack flex={1} minWidth={0} gap="$3" {...LAYOUT_STRETCH}>
+                  {children}
+                </YStack>
+              </ScrollView>
+            ) : (
+              <YStack flex={1} minWidth={0} minHeight={0} gap="$3" {...LAYOUT_STRETCH}>
                 {children}
               </YStack>
-            </ScrollView>
+            )}
 
             {isWide ? <CommunityRightSidebar pin="viewport" /> : null}
           </PageColumns>
@@ -106,16 +121,17 @@ export function CommunityShell({ children, onRefresh, refreshing }: CommunityShe
 
   return (
     <FullWidthLayout
-      scroll
+      scroll={scroll}
       backgroundColor={communityUi.pageBg}
-      onRefresh={onRefresh}
-      refreshing={refreshing}
+      onRefresh={scroll ? onRefresh : undefined}
+      refreshing={scroll ? refreshing : undefined}
+      flex={1}
     >
-      <PageSection paddingVertical="$3">
-        <PageColumns gap={COMMUNITY_LAYOUT.columnGap}>
+      <PageSection paddingVertical="$3" flex={scroll ? undefined : 1} minHeight={scroll ? undefined : 0}>
+        <PageColumns gap={COMMUNITY_LAYOUT.columnGap} flex={scroll ? undefined : 1} minHeight={scroll ? undefined : 0}>
           {showSidebars ? <CommunityLeftSidebar pin="document" /> : null}
 
-          <YStack flex={1} minWidth={0} gap="$3" {...LAYOUT_STRETCH}>
+          <YStack flex={1} minWidth={0} minHeight={scroll ? undefined : 0} gap="$3" {...LAYOUT_STRETCH}>
             {children}
           </YStack>
 

@@ -76,6 +76,8 @@ export function PostLikeButton({
   return (
     <XStack
       flex={1}
+      flexShrink={1}
+      minWidth={0}
       position="relative"
       alignItems="center"
       justifyContent="center"
@@ -93,13 +95,16 @@ export function PostLikeButton({
       />
 
       <XStack
+        flexDirection="column"
         alignItems="center"
         justifyContent="center"
-        gap={6}
-        paddingVertical={12}
-        paddingHorizontal={8}
+        gap={2}
+        paddingVertical={10}
+        paddingHorizontal={2}
         borderRadius={4}
         flex={1}
+        flexShrink={1}
+        minWidth={0}
         opacity={isReacting ? 0.6 : 1}
         cursor="pointer"
         hoverStyle={{ backgroundColor: communityUi.divider }}
@@ -115,11 +120,11 @@ export function PostLikeButton({
           <Icon size={20} color={color} fill={isLiked ? color : 'transparent'} />
         )}
         <Text
-          fontSize={14}
+          fontSize={11}
           fontWeight="600"
           color={color}
-          display="none"
-          $gtSm={{ display: 'flex' }}
+          numberOfLines={1}
+          textAlign="center"
         >
           {isLiked ? reactionLabel : 'Like'}
         </Text>

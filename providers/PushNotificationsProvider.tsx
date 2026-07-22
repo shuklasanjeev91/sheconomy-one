@@ -55,6 +55,7 @@ export function PushNotificationsProvider({ children }: { children: ReactNode })
   const [playerId, setPlayerId] = useState<string | null>(null)
   const [isBusy, setIsBusy] = useState(false)
   const autoPromptStartedRef = useRef(false)
+  const pushSessionActiveRef = useRef(false)
 
   const syncDevice = useCallback(async () => {
     if (!isConfigured || !user?.id) {
@@ -64,6 +65,7 @@ export function PushNotificationsProvider({ children }: { children: ReactNode })
     try {
       await pushClient.init()
       await pushClient.login(user.id)
+      pushSessionActiveRef.current = true
       const permitted = await pushClient.getPermission()
       setPermissionGranted(permitted)
       if (permitted) {
@@ -95,8 +97,12 @@ export function PushNotificationsProvider({ children }: { children: ReactNode })
   useEffect(() => {
     if (!user?.id) {
       autoPromptStartedRef.current = false
-      void pushClient.logout()
       setPlayerId(null)
+      // Only logout after a prior login/init — never before OneSignal.initialize.
+      if (pushSessionActiveRef.current) {
+        pushSessionActiveRef.current = false
+        void pushClient.logout()
+      }
       return
     }
     void syncDevice()

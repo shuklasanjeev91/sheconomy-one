@@ -1,5 +1,6 @@
 import { forwardRef, useEffect, useState } from 'react'
-import { Image as RNImage, Platform, type StyleProp, type ViewStyle } from 'react-native'
+import { Image as ExpoImage } from 'expo-image'
+import { type StyleProp, type ViewStyle } from 'react-native'
 import type { GetProps } from 'tamagui'
 import { YStack } from 'tamagui'
 import { SizableText } from './Text'
@@ -57,8 +58,8 @@ export function normalizeAvatarSrc(src?: string | null): string | undefined {
 /**
  * Initials-fallback avatar — pass `name` to auto-derive the fallback text.
  *
- * Uses RN Image (not Tamagui Avatar.Image) so load/error and cover-crop behave
- * the same on web, iOS, and Android. Initials sit under the photo until it loads.
+ * Uses expo-image on all platforms for cache + consistent cover crop.
+ * Initials sit under the photo until it loads.
  */
 export const Avatar = forwardRef<any, AvatarProps>(function Avatar(
   { src, name, size = '$6', ring = false, borderWidth, borderColor, style, ...props },
@@ -132,21 +133,18 @@ export const Avatar = forwardRef<any, AvatarProps>(function Avatar(
       </YStack>
 
       {showImage ? (
-        <RNImage
+        <ExpoImage
           key={normalized}
-          source={{ uri: normalized }}
+          source={normalized}
           accessibilityLabel={name}
+          recyclingKey={normalized}
+          cachePolicy="memory-disk"
+          contentFit="cover"
           onLoad={() => setLoaded(true)}
           onError={() => {
             setFailed(true)
             setLoaded(false)
           }}
-          // Google CDNs often block hotlinking without this on web.
-          {...(Platform.OS === 'web'
-            ? ({
-                referrerPolicy: 'no-referrer',
-              } as object)
-            : {})}
           style={{
             position: 'absolute',
             top: 0,
@@ -155,7 +153,6 @@ export const Avatar = forwardRef<any, AvatarProps>(function Avatar(
             height: px,
             zIndex: 1,
           }}
-          resizeMode="cover"
         />
       ) : null}
     </YStack>

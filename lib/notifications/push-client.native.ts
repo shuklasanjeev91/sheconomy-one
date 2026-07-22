@@ -56,6 +56,8 @@ const nativePushClient: PushClient = {
   },
 
   async logout() {
+    // OneSignal throws IllegalStateException if logout runs before initialize.
+    if (!initialized) return
     try {
       const { OneSignal } = await import('react-native-onesignal')
       OneSignal.logout()

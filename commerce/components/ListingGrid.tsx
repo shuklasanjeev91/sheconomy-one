@@ -1,6 +1,8 @@
 import { useMemo } from 'react'
+import { FlashList } from '@shopify/flash-list'
+import { Platform } from 'react-native'
 
-import { XStack } from '~/components/ui'
+import { XStack, YStack } from '~/components/ui'
 import { useOptionalMarketplacePersonalization } from '~/commerce/context/MarketplacePersonalizationContext'
 import { hasListingImages } from '~/lib/listing-images'
 import type { ListingSummary } from '~/lib/supabase/commerce'
@@ -13,6 +15,11 @@ type ListingGridProps = {
   compact?: boolean
   personalize?: boolean
   showQuickAdd?: boolean
+  /**
+   * When true (default on native for large grids), use FlashList with numColumns.
+   * Nested page-scroll contexts still recycle within the drawn window when bounded.
+   */
+  virtualized?: boolean
 }
 
 type ColumnLayout = {
@@ -21,12 +28,6 @@ type ColumnLayout = {
   minWidth: number
 }
 
-/**
- * Overflow-proof column layouts:
- * - 2/3 cols: no pixel minWidth (phones would wrap to 1 col), grow into the gap,
- *   capped maxWidth so an odd last card never stretches full-row.
- * - 4+ cols: keep desktop mins so cards don't get tiny on wide screens.
- */
 function layoutForColumns(columns: 2 | 3 | 4 | 5 | 6): ColumnLayout {
   switch (columns) {
     case 2:
@@ -42,13 +43,14 @@ function layoutForColumns(columns: 2 | 3 | 4 | 5 | 6): ColumnLayout {
   }
 }
 
-/** Responsive listing grid — tight gaps, fluid columns. */
+/** Responsive listing grid — FlashList on native for larger catalogs. */
 export function ListingGrid({
   listings,
   columns = 5,
   compact,
   personalize = true,
   showQuickAdd,
+  virtualized = Platform.OS !== 'web',
 }: ListingGridProps) {
   const marketplace = useOptionalMarketplacePersonalization()
 
@@ -62,6 +64,25 @@ export function ListingGrid({
   }, [listings, marketplace, personalize])
 
   const { basis, maxWidth, minWidth } = layoutForColumns(columns)
+  const useFlash = virtualized && visibleListings.length > 10
+
+  if (useFlash) {
+    return (
+      <FlashList
+        data={visibleListings}
+        keyExtractor={(item) => item.id}
+        numColumns={columns}
+        scrollEnabled={false}
+        drawDistance={400}
+        renderItem={({ item: listing }) => (
+          <YStack flex={1} padding="$1.5" minWidth={0}>
+            <ListingCard listing={listing} compact={compact} showQuickAdd={showQuickAdd} />
+          </YStack>
+        )}
+        style={{ width: '100%' }}
+      />
+    )
+  }
 
   return (
     <XStack gap="$3" flexWrap="wrap" width="100%">

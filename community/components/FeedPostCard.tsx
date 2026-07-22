@@ -1,4 +1,5 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useState, memo } from 'react'
+import { useWindowDimensions } from 'react-native'
 import { useRouter } from 'one'
 import { AppLink } from '~/components/navigation/AppLink'
 import { useThemeName } from 'tamagui'
@@ -61,7 +62,7 @@ type FeedPostCardProps = {
   onPostDeleted?: (postId: string) => void
 }
 
-export function FeedPostCard({
+export const FeedPostCard = memo(function FeedPostCard({
   post,
   linkToDetail = true,
   compactArticle = false,
@@ -139,8 +140,17 @@ export function FeedPostCard({
             gap={6}
             alignItems="center"
           >
-            <Icons.Repeat size={14} color={postSurface.accentColor} />
-            <Text fontSize={12} fontWeight="600" color={communityUi.textMuted}>
+            <YStack flexShrink={0}>
+              <Icons.Repeat size={14} color={postSurface.accentColor} />
+            </YStack>
+            <Text
+              fontSize={12}
+              fontWeight="600"
+              color={communityUi.textMuted}
+              numberOfLines={1}
+              flexShrink={1}
+              minWidth={0}
+            >
               {authorName} reposted
             </Text>
           </XStack>
@@ -168,6 +178,7 @@ export function FeedPostCard({
                   fontSize={14}
                   color={communityUi.text}
                   cursor="pointer"
+                  numberOfLines={1}
                   hoverStyle={{ color: communityUi.brand, textDecorationLine: 'underline' }}
                 >
                   {authorName}
@@ -180,6 +191,7 @@ export function FeedPostCard({
                   fontSize={14}
                   color={communityUi.text}
                   cursor="pointer"
+                  numberOfLines={1}
                   hoverStyle={{ color: communityUi.brand, textDecorationLine: 'underline' }}
                 >
                   {authorName}
@@ -192,6 +204,7 @@ export function FeedPostCard({
                   fontSize={14}
                   color={communityUi.text}
                   cursor="pointer"
+                  numberOfLines={1}
                   hoverStyle={{ color: communityUi.brand, textDecorationLine: 'underline' }}
                 >
                   {authorName}
@@ -266,6 +279,7 @@ export function FeedPostCard({
           <XStack
             padding={4}
             borderRadius={999}
+            flexShrink={0}
             cursor="pointer"
             hoverStyle={{ backgroundColor: communityUi.divider }}
             onPress={() => engagement.openSheet('options')}
@@ -418,6 +432,8 @@ export function FeedPostCard({
           borderTopWidth={1}
           borderTopColor={communityUi.borderLight}
           justifyContent="space-around"
+          alignItems="stretch"
+          minWidth={0}
         >
           <PostLikeButton
             isLiked={engagement.isLiked}
@@ -481,7 +497,7 @@ export function FeedPostCard({
       ) : null}
     </>
   )
-}
+})
 
 function ReactionIcons() {
   const communityUi = useCommunityUi()
@@ -515,8 +531,15 @@ function PostMedia({
   onPress?: (index?: number) => void
 }) {
   const communityUi = useCommunityUi()
+  const { width: windowWidth } = useWindowDimensions()
   const companionImage = items.find((item) => item.kind === 'image')?.url ?? null
   const hasVideo = items.some((item) => item.kind === 'video')
+  // Full-bleed feed width; keep frames usable on phones and tablets.
+  const frameHeight = useMemo(() => {
+    if (hasVideo) return Math.min(Math.round(windowWidth * (9 / 16) + 48), 480)
+    // Tall enough for portrait without forcing crop when fit=contain.
+    return Math.min(Math.max(Math.round(windowWidth * 0.9), 280), 560)
+  }, [hasVideo, windowWidth])
   // LinkedIn: videos stay in-feed with muted autoplay — images open zoom lightbox.
   const pressable =
     onPress && !hasVideo
@@ -525,24 +548,28 @@ function PostMedia({
 
   if (items.length === 1) {
     const item = items[0]
-    const height = item.kind === 'video' ? 420 : 360
+    const isVideo = item.kind === 'video'
     return (
       <YStack
         width="100%"
-        height={height}
+        height={frameHeight}
         borderRadius={radius.card}
         overflow="hidden"
-        backgroundColor={item.kind === 'video' ? '#000' : communityUi.pageBg}
+        backgroundColor={isVideo ? '#000' : communityUi.pageBg}
         {...pressable}
       >
         <PostMediaSlide
           item={item}
           width={0}
-          height={height}
-          fit={item.kind === 'video' ? 'contain' : 'cover'}
+          height={frameHeight}
+          // Always contain — cover was cropping feed photos on phones.
+          // Keep a fixed frame height so FlashList doesn't restack/overlap cards
+          // when natural image aspect loads.
+          fit="contain"
           fill
+          responsive={false}
           posterUrl={companionImage}
-          autoplayInView={item.kind === 'video'}
+          autoplayInView={isVideo}
         />
       </YStack>
     )
@@ -551,7 +578,7 @@ function PostMedia({
   return (
     <PostMediaCarousel
       items={items}
-      height={hasVideo ? 420 : 360}
+      height={frameHeight}
       fit="contain"
       onPressImage={onPress && !hasVideo ? (index) => onPress(index) : undefined}
     />
@@ -766,31 +793,32 @@ function PostActionButton({
 }) {
   const communityUi = useCommunityUi()
   return (
-    <XStack
+    <YStack
       flex={1}
+      flexShrink={1}
+      minWidth={0}
       alignItems="center"
       justifyContent="center"
-      gap={6}
-      paddingVertical={10}
-      paddingHorizontal={8}
+      gap={2}
+      paddingVertical={8}
+      paddingHorizontal={2}
       borderRadius={999}
       cursor="pointer"
-      animation="quick"
       hoverStyle={{ backgroundColor: communityUi.divider }}
-      pressStyle={{ scale: 0.97 }}
+      pressStyle={{ opacity: 0.72 }}
       onPress={onPress}
     >
       <Icon size={20} color={communityUi.textMuted} />
       <Text
-        fontSize={13}
+        fontSize={11}
         fontWeight="600"
         color={communityUi.textMuted}
-        display="none"
-        $gtSm={{ display: 'flex' }}
+        numberOfLines={1}
+        textAlign="center"
       >
         {label}
       </Text>
-    </XStack>
+    </YStack>
   )
 }
 
@@ -947,10 +975,16 @@ function PostEventCard({
       setIsLoading(false)
       return
     }
+    let cancelled = false
+    setIsLoading(true)
     fetchPostEventRsvpState(post.id, user.id).then((state) => {
+      if (cancelled) return
       setIsRsvped(state.isRsvped)
       setIsLoading(false)
     })
+    return () => {
+      cancelled = true
+    }
   }, [post.id, user])
 
   async function toggleRsvp() {
@@ -1081,12 +1115,21 @@ function OriginalPostEmbed({ original }: { original: OriginalPostPreview }) {
           if (!originalMedia.length) return null
           if (originalMedia.length === 1) {
             return (
-              <YStack height={180} backgroundColor="#000">
-                <PostMediaSlide item={originalMedia[0]} width={0} height={180} fit="cover" fill />
+              <YStack height={200} backgroundColor={communityUi.pageBg}>
+                <PostMediaSlide
+                  item={originalMedia[0]}
+                  width={0}
+                  height={200}
+                  fit="contain"
+                  fill
+                  responsive={false}
+                />
               </YStack>
             )
           }
-          return <PostMediaCarousel items={originalMedia} height={180} fit="cover" rounded={false} />
+          return (
+            <PostMediaCarousel items={originalMedia} height={200} fit="contain" rounded={false} />
+          )
         })()}
       </YStack>
     </AppLink>

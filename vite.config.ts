@@ -367,7 +367,7 @@ if (typeof g.Response !== 'function') {
       tamaguiPlugin({
         components: ['tamagui'],
         config: './config/tamagui.config.ts',
-        disableExtraction: true,
+        disableExtraction: false,
       }),
     ],
 

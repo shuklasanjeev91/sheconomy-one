@@ -1,6 +1,8 @@
 import { useEffect, useRef, useState } from 'react'
+import { Platform } from 'react-native'
 
 import { SendPostSheet } from '~/chat/components/SendPostSheet'
+import { WebOnlyStyle } from '~/components/platform/WebOnlyStyle'
 import { CommunityAdaptiveSheet } from '~/community/components/CommunityAdaptiveSheet'
 import { MentionInput } from '~/community/components/MentionInput'
 import { PostComments } from '~/community/components/PostComments'
@@ -170,9 +172,13 @@ export function PostActionSheets({
                   }
                 })
               }}
-              style={{
-                animation: `reactionPop 0.4s cubic-bezier(0.34, 1.56, 0.64, 1) ${index * 0.05}s both`,
-              }}
+              style={
+                Platform.OS === 'web'
+                  ? {
+                      animation: `reactionPop 0.4s cubic-bezier(0.34, 1.56, 0.64, 1) ${index * 0.05}s both`,
+                    }
+                  : undefined
+              }
             >
               <Text fontSize={40}>{reaction.emoji}</Text>
               <Text fontSize={12} fontWeight="600" color={communityUi.textMuted}>
@@ -181,12 +187,12 @@ export function PostActionSheets({
             </YStack>
           ))}
         </XStack>
-        <style>{`
+        <WebOnlyStyle>{`
           @keyframes reactionPop {
             from { transform: scale(0.4) translateY(16px); opacity: 0; }
             to { transform: scale(1) translateY(0); opacity: 1; }
           }
-        `}</style>
+        `}</WebOnlyStyle>
       </CommunityAdaptiveSheet>
 
       <CommunityAdaptiveSheet

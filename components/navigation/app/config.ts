@@ -100,8 +100,8 @@ export type AppMobileTabItem = {
 export const APP_CENTER_NAV: AppCenterNavItem[] = [
   {
     href: commerceRoutes.home,
-    label: 'Home',
-    icon: Icons.Home,
+    label: 'Commerce',
+    icon: Icons.Store,
     feature: 'commerce',
     match: (path) => isCommercePath(path),
   },

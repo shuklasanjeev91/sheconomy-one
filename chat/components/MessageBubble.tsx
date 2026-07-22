@@ -1,3 +1,4 @@
+import { memo } from 'react'
 import { Platform } from 'react-native'
 
 import { useChatTheme } from '~/chat/lib/chat-theme'
@@ -183,7 +184,7 @@ function StatusTicks({
   return <Icons.Check size={15} color={color} strokeWidth={2.6} />
 }
 
-export function MessageBubble({
+export const MessageBubble = memo(function MessageBubble({
   message,
   isOwn,
   showTail,
@@ -586,4 +587,4 @@ export function MessageBubble({
       </YStack>
     </XStack>
   )
-}
+})

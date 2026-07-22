@@ -5,6 +5,7 @@
     "owner": "sheconomy",
     "version": "6.0",
     "scheme": "sheconomy",
+    "newArchEnabled": true,
     "platforms": [
       "ios",
       "android"

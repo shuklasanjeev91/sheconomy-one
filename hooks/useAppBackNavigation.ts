@@ -36,9 +36,15 @@ export function useAppBackNavigation() {
 
     if (canGoBack) {
       navigatingRef.current = true
-      startTransition(() => {
+      // Native: call back() immediately — startTransition deferred back() felt hung.
+      const runBack = () => {
         router.back()
-      })
+      }
+      if (Platform.OS === 'web') {
+        startTransition(runBack)
+      } else {
+        runBack()
+      }
 
       // Web SPAs / Slot stacks sometimes report canGoBack but back() no-ops.
       // If the path hasn't changed shortly after, fall back to the parent route.

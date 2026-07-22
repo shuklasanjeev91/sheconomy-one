@@ -2,8 +2,9 @@
  * Native root layout — same shared `AppShell` + screens as web.
  * `.native` only omits the web `<html>` document shell on RN.
  *
- * Extra hosts (biometric gate, AI assist, update manager, etc.) are layered
- * back once each is confirmed not to block first paint on Hermes.
+ * Provider tree mirrors web `AppProviders` for tab/settings hooks
+ * (push, zoom, locale, location, marketplace). Heavy hosts that can
+ * block first paint (biometric gate, update manager, analytics) stay off.
  */
 import { LoadProgressBar, Slot } from 'one'
 import { Provider as ReduxProvider } from 'react-redux'
@@ -18,11 +19,20 @@ import { AppErrorBoundary } from '~/components/AppErrorBoundary'
 import config from '~/config/tamagui.config.native'
 import { AppToasts } from '~/components/ui/Toast'
 import { AppShell } from '~/components/navigation/app/AppShell'
+import { ScreenZoomRoot } from '~/components/media/ScreenZoomRoot'
 import { CartProvider } from '~/commerce/hooks/useCart'
 import { FavoritesProvider } from '~/commerce/hooks/useFavorites'
+import { MarketplacePersonalizationProvider } from '~/commerce/context/MarketplacePersonalizationContext'
 import { useAppFonts } from '~/hooks/useAppFonts'
+import { RegionPreferencesProvider } from '~/lib/locale/RegionPreferencesContext'
+import { CurrencyRatesProvider } from '~/lib/currency/CurrencyRatesProvider'
+import { UserLocationProvider } from '~/lib/location'
+import { ScreenZoomProvider } from '~/lib/zoom/ScreenZoomContext'
 import { store } from '~/lib/store'
+import { PushNotificationsProvider } from '~/providers/PushNotificationsProvider'
 import { SupabaseProvider } from '~/providers/SupabaseProvider'
+import { AiAssistProvider } from '~/providers/AiAssistProvider'
+import { ConnectivityProvider } from '~/providers/ConnectivityProvider'
 
 function AppProviders({ children }: { children: ReactNode }) {
   useAppFonts()
@@ -30,17 +40,35 @@ function AppProviders({ children }: { children: ReactNode }) {
   return (
     <ReduxProvider store={store}>
       <SupabaseProvider>
-        <SchemeProvider>
-          <ThemedApp>
-            <CartProvider>
-              <FavoritesProvider>
-                <AppErrorBoundary scope="AppShell">
-                  <AppShell>{children}</AppShell>
-                </AppErrorBoundary>
-              </FavoritesProvider>
-            </CartProvider>
-          </ThemedApp>
-        </SchemeProvider>
+        <RegionPreferencesProvider>
+          <UserLocationProvider>
+            <CurrencyRatesProvider>
+              <PushNotificationsProvider>
+                <SchemeProvider>
+                  <ThemedApp>
+                    <CartProvider>
+                      <FavoritesProvider>
+                        <MarketplacePersonalizationProvider>
+                          <AiAssistProvider>
+                            <ScreenZoomProvider>
+                              <ScreenZoomRoot>
+                                <ConnectivityProvider>
+                                  <AppErrorBoundary scope="AppShell">
+                                    <AppShell>{children}</AppShell>
+                                  </AppErrorBoundary>
+                                </ConnectivityProvider>
+                              </ScreenZoomRoot>
+                            </ScreenZoomProvider>
+                          </AiAssistProvider>
+                        </MarketplacePersonalizationProvider>
+                      </FavoritesProvider>
+                    </CartProvider>
+                  </ThemedApp>
+                </SchemeProvider>
+              </PushNotificationsProvider>
+            </CurrencyRatesProvider>
+          </UserLocationProvider>
+        </RegionPreferencesProvider>
       </SupabaseProvider>
     </ReduxProvider>
   )

@@ -1,5 +1,6 @@
 import { forwardRef } from 'react'
-import { Image as RNImage, Platform, type StyleProp, type ImageStyle, type ImageSourcePropType } from 'react-native'
+import { Image as ExpoImage, type ImageContentFit } from 'expo-image'
+import { Platform, type StyleProp, type ImageStyle, type ImageSourcePropType } from 'react-native'
 import type { GetProps } from 'tamagui'
 import { Image as TamaguiImage } from 'tamagui'
 
@@ -13,33 +14,50 @@ export type AppImageProps = Omit<TamaguiImageProps, 'src' | 'source'> & {
   width?: number | string
   height?: number | string
   objectFit?: 'cover' | 'contain' | 'fill' | 'none' | 'scale-down'
+  /** Stable recycling key for FlashList / expo-image native cache. */
+  recyclingKey?: string
 }
 
 function numericDim(value: unknown): number | undefined {
   return typeof value === 'number' && Number.isFinite(value) && value > 0 ? value : undefined
 }
 
-function resizeModeFor(objectFit?: AppImageProps['objectFit']) {
+function contentFitFor(objectFit?: AppImageProps['objectFit']): ImageContentFit {
   switch (objectFit) {
     case 'contain':
-      return 'contain' as const
+      return 'contain'
     case 'fill':
-      return 'stretch' as const
+      return 'fill'
     case 'none':
-      return 'center' as const
+      return 'none'
     case 'scale-down':
-      return 'contain' as const
+      return 'scale-down'
     default:
-      return 'cover' as const
+      return 'cover'
   }
+}
+
+function uriFromSource(source: ImageSourcePropType | undefined): string | number | null {
+  if (source == null) return null
+  if (typeof source === 'number') return source
+  if (typeof source === 'object' && !Array.isArray(source) && 'uri' in source && typeof source.uri === 'string') {
+    return source.uri
+  }
+  if (Array.isArray(source)) {
+    for (const entry of source) {
+      if (entry && typeof entry === 'object' && 'uri' in entry && typeof entry.uri === 'string') {
+        return entry.uri
+      }
+    }
+  }
+  return null
 }
 
 /**
  * Cross-platform image.
  *
- * Tamagui's native Image puts `width`/`height` into RN `source` and rebuilds
- * `source` from `src`, which breaks when dimensions are percentage strings.
- * On native we render RN Image with a clean `{ uri }` source.
+ * Native: `expo-image` for disk/memory cache and FlashList recycling.
+ * Web: Tamagui Image (DOM-friendly `src` / `alt`).
  */
 export const Image = forwardRef<any, AppImageProps>(function Image(
   {
@@ -54,6 +72,7 @@ export const Image = forwardRef<any, AppImageProps>(function Image(
     onError,
     onLoad,
     borderRadius,
+    recyclingKey,
     ..._rest
   },
   ref,
@@ -62,31 +81,40 @@ export const Image = forwardRef<any, AppImageProps>(function Image(
   const label = accessibilityLabel ?? alt
 
   if (Platform.OS !== 'web') {
-    const resolved: ImageSourcePropType | undefined =
-      (source as ImageSourcePropType | undefined) ?? (uri ? { uri } : undefined)
+    const fromSource = uriFromSource(source as ImageSourcePropType | undefined)
+    const resolved = fromSource ?? uri ?? null
 
-    if (!resolved) {
+    if (resolved == null) {
       return null
     }
 
     const w = numericDim(width)
     const h = numericDim(height)
     const radius = numericDim(borderRadius)
-    // Percentage dims need a sized parent — absolute fill is the reliable RN pattern
-    // inside aspect-ratio cards (ListingCard, CategoryChip, etc.).
     const fillParent =
       (typeof width === 'string' && width.includes('%')) ||
       (typeof height === 'string' && height.includes('%')) ||
       (width == null && height == null)
 
+    const recycleKey =
+      recyclingKey ?? (typeof resolved === 'string' ? resolved : String(resolved))
+
     return (
-      <RNImage
+      <ExpoImage
         ref={ref}
         source={resolved}
         accessibilityLabel={label}
-        resizeMode={resizeModeFor(objectFit)}
-        onError={typeof onError === 'function' ? (onError as () => void) : undefined}
-        onLoad={typeof onLoad === 'function' ? (onLoad as () => void) : undefined}
+        contentFit={contentFitFor(objectFit)}
+        cachePolicy="memory-disk"
+        recyclingKey={recycleKey}
+        onError={typeof onError === 'function' ? () => (onError as () => void)() : undefined}
+        onLoad={
+          typeof onLoad === 'function'
+            ? (event) => {
+                ;(onLoad as (event: unknown) => void)(event)
+              }
+            : undefined
+        }
         style={
           [
             fillParent
@@ -120,7 +148,6 @@ export const Image = forwardRef<any, AppImageProps>(function Image(
       height={height}
       objectFit={objectFit}
       borderRadius={borderRadius}
-      // Web DOM uses `alt` — never pass RN `accessibilityLabel` to <img>.
       alt={label}
       style={style}
       onError={onError}
