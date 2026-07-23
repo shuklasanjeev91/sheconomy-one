@@ -9,7 +9,7 @@
   },
   "scripts": {
     "eas-build-pre-install": "corepack enable",
-    "postinstall": "one patch || true && node scripts/strip-datetimepicker-flow.cjs && node scripts/patch-react-native-voice-android.cjs && node scripts/patch-rn-setup-xhr.cjs && node scripts/patch-whatwg-fetch.cjs && node scripts/patch-phoenix-rn.cjs && node scripts/patch-otp-verify-hint.cjs && node scripts/bundle-zod-v3.cjs && node scripts/dedupe-tamagui-lucide.cjs && node scripts/patch-vxrn-hermes-async-gen.cjs && node scripts/patch-async-generator-function-hermes.cjs && node scripts/patch-vxrn-hermes-prod-bundle.cjs",
+    "postinstall": "one patch || true && node scripts/strip-datetimepicker-flow.cjs && node scripts/patch-react-native-voice-android.cjs && node scripts/patch-rn-setup-xhr.cjs && node scripts/patch-whatwg-fetch.cjs && node scripts/patch-phoenix-rn.cjs && node scripts/patch-otp-verify-hint.cjs && node scripts/bundle-zod-v3.cjs && node scripts/dedupe-tamagui-lucide.cjs && node scripts/patch-vxrn-hermes-async-gen.cjs && node scripts/patch-async-generator-function-hermes.cjs && node scripts/patch-vxrn-hermes-prod-bundle.cjs && node scripts/patch-vxrn-bundle-exit.cjs",
     "android": "one run:android",
     "build": "VXRN_FORCE_PATCH=1 ONE_CACHE_KEY=${ONE_CACHE_KEY:-202607151} one build && node scripts/patch-vercel-output.mjs",
     "build:web": "VXRN_FORCE_PATCH=1 ONE_CACHE_KEY=${ONE_CACHE_KEY:-202607151} one build && node scripts/patch-vercel-output.mjs",

@@ -421,65 +421,78 @@ function ManageMyNetwork({
 }) {
   const communityUi = useCommunityUi()
 
-  const tiles = [
+  const tiles: Array<{
+    label: string
+    value: number | null
+    icon: typeof Icons.Users
+    onPress: (() => void) | null
+    href: string | null
+  }> = [
     {
       label: 'Connections',
       value: connectionsCount,
       icon: Icons.Users,
       onPress: onOpenConnections,
-      href: null as string | null,
+      href: null,
     },
     {
       label: 'Invitations',
       value: invitationsCount,
       icon: Icons.Mail,
       onPress: onOpenInvitations,
-      href: null as string | null,
+      href: null,
     },
     {
       label: 'People you may know',
       value: suggestionsCount,
       icon: Icons.UserPlus,
-      onPress: null as (() => void) | null,
-      href: communityRoutes.peopleTab('suggestions'),
+      onPress: null,
+      href: String(communityRoutes.peopleTab('suggestions')),
     },
     {
       label: 'Groups',
-      value: null as number | null,
+      value: null,
       icon: Icons.Network,
       onPress: null,
-      href: communityRoutes.groups,
+      href: String(communityRoutes.groups),
     },
     {
       label: 'Events',
       value: null,
       icon: Icons.Calendar,
       onPress: null,
-      href: communityRoutes.events,
+      href: String(communityRoutes.events),
     },
     {
       label: 'Saved posts',
       value: null,
       icon: Icons.Bookmark,
       onPress: null,
-      href: communityRoutes.saved,
+      href: String(communityRoutes.saved),
     },
     {
       label: 'Pages',
       value: null,
       icon: Icons.Building2,
       onPress: null,
-      href: communityRoutes.companies,
+      href: String(communityRoutes.companies),
     },
   ]
 
   return (
-    <CommunityWidget title="Manage my network" subtitle="Quick access to your professional graph">
-      <YStack gap={0}>
+    <CommunityWidget
+      title="Manage my network"
+      subtitle="Quick access to your professional graph"
+      // Avoid Tamagui enterStyle height collapse on native scroll layouts.
+      animated={false}
+    >
+      <YStack gap={0} width="100%">
         {tiles.map((tile) => {
           const Icon = tile.icon
           const row = (
             <XStack
+              width="100%"
+              minHeight={60}
               alignItems="center"
               justifyContent="space-between"
               paddingVertical={12}
@@ -488,12 +501,14 @@ function ManageMyNetwork({
               borderBottomColor={communityUi.borderLight}
               cursor="pointer"
               hoverStyle={{ backgroundColor: communityUi.hoverBg }}
+              pressStyle={{ opacity: 0.92 }}
               onPress={tile.onPress ?? undefined}
             >
-              <XStack gap={12} alignItems="center" flex={1}>
+              <XStack gap={12} alignItems="center" flex={1} minWidth={0}>
                 <XStack
                   width={36}
                   height={36}
+                  flexShrink={0}
                   borderRadius={8}
                   backgroundColor={communityUi.accentMuted}
                   alignItems="center"
@@ -501,13 +516,20 @@ function ManageMyNetwork({
                 >
                   <Icon size={18} color={communityUi.brand} />
                 </XStack>
-                <Text fontSize={14} fontWeight="600" color={communityUi.text}>
+                <Text
+                  flexShrink={1}
+                  fontSize={14}
+                  fontWeight="600"
+                  lineHeight={18}
+                  color={communityUi.text}
+                  numberOfLines={1}
+                >
                   {tile.label}
                 </Text>
               </XStack>
-              <XStack gap={8} alignItems="center">
+              <XStack gap={8} alignItems="center" flexShrink={0}>
                 {tile.value != null ? (
-                  <Text fontSize={14} fontWeight="700" color={communityUi.textMuted}>
+                  <Text fontSize={14} fontWeight="700" lineHeight={18} color={communityUi.textMuted}>
                     {tile.value}
                   </Text>
                 ) : null}
@@ -518,13 +540,17 @@ function ManageMyNetwork({
 
           if (tile.href) {
             return (
-              <AppLink key={tile.label} href={tile.href as never}>
+              <AppLink key={tile.label} href={tile.href as never} asChild>
                 {row}
               </AppLink>
             )
           }
 
-          return <YStack key={tile.label}>{row}</YStack>
+          return (
+            <YStack key={tile.label} width="100%">
+              {row}
+            </YStack>
+          )
         })}
       </YStack>
     </CommunityWidget>

@@ -42,7 +42,7 @@ export function AppLink({ href, children, replace, asChild, external }: AppLinkP
       }
 
       return (
-        <XStack cursor="pointer" onPress={go} role="link">
+        <XStack width="100%" cursor="pointer" onPress={go} role="link">
           {children}
         </XStack>
       )

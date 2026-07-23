@@ -1,3 +1,5 @@
+import { Platform, View } from 'react-native'
+
 import { CommunitySuggestionRow } from '~/community/components/CommunitySuggestionRow'
 import { AppLink } from '~/components/navigation/AppLink'
 import { CommunityWidget } from '~/community/components/CommunityWidget'
@@ -10,6 +12,10 @@ type CommunitySuggestionSectionCardProps = {
   limit?: number
 }
 
+/** Keep FlashList from under-measuring and clipping subtitle / reason lines on native. */
+const ROW_MIN_HEIGHT = 64
+const SECTION_CHROME_HEIGHT = 88
+
 export function CommunitySuggestionSectionCard({
   section,
   limit = 3,
@@ -19,9 +25,12 @@ export function CommunitySuggestionSectionCard({
 
   if (!items.length) return null
 
-  return (
+  const minHeight = SECTION_CHROME_HEIGHT + items.length * ROW_MIN_HEIGHT
+
+  const card = (
     <CommunityWidget
       title={section.title}
+      animated={false}
       footer={
         <AppLink href={section.seeAllHref as never}>
           <Text fontSize={14} fontWeight="600" color={communityUi.brand}>
@@ -30,11 +39,26 @@ export function CommunitySuggestionSectionCard({
         </AppLink>
       }
     >
-      <YStack gap={0}>
+      <YStack gap={0} width="100%">
         {items.map((item) => (
-          <CommunitySuggestionRow key={`${item.kind}-${item.id}`} item={item} showKindLabel={false} />
+          <CommunitySuggestionRow
+            key={`${item.kind}-${item.id}`}
+            item={item}
+            showKindLabel={false}
+          />
         ))}
       </YStack>
     </CommunityWidget>
   )
+
+  // Native FlashList: non-collapsible wrapper + minHeight so subtitle/reason stay visible.
+  if (Platform.OS !== 'web') {
+    return (
+      <View collapsable={false} style={{ width: '100%', minHeight }}>
+        {card}
+      </View>
+    )
+  }
+
+  return card
 }

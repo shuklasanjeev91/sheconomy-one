@@ -232,27 +232,61 @@ export function CompaniesScreen() {
 function CompanySection({ title, items }: { title: string; items: CompanyPage[] }) {
   const communityUi = useCommunityUi()
   if (!items.length) return null
+
   return (
-    <CommunityCard padding={12} gap={0}>
-      <Text fontSize={16} fontWeight="700" color={communityUi.text} paddingBottom={12}>
+    <CommunityCard padding={12} gap={0} animated={false}>
+      <Text
+        fontSize={16}
+        fontWeight="700"
+        lineHeight={20}
+        color={communityUi.text}
+        paddingBottom={12}
+      >
         {title}
       </Text>
-      {items.map((company) => (
-        <AppLink key={company.id} href={communityRoutes.company(company.id)}>
-          <XStack gap={12} paddingVertical={12} borderBottomWidth={1} borderBottomColor={communityUi.borderLight} alignItems="center">
-            <Avatar name={company.name} src={company.logo_url ?? undefined} size="$4" />
-            <YStack flex={1} gap={2}>
-              <Text fontSize={15} fontWeight="600" color={communityUi.text}>
-                {company.name}
-              </Text>
-              <Text fontSize={13} color={communityUi.textMuted}>
-                {company.industry}
-                {company.location ? ` · ${company.location}` : ''}
-              </Text>
-            </YStack>
-          </XStack>
-        </AppLink>
-      ))}
+      <YStack width="100%" gap={0}>
+        {items.map((company) => (
+          <AppLink key={company.id} href={communityRoutes.company(company.id)} asChild>
+            <XStack
+              width="100%"
+              minHeight={60}
+              gap={12}
+              paddingVertical={12}
+              borderBottomWidth={1}
+              borderBottomColor={communityUi.borderLight}
+              alignItems="center"
+              cursor="pointer"
+              pressStyle={{ opacity: 0.92 }}
+            >
+              <YStack width={36} height={36} flexShrink={0}>
+                <Avatar name={company.name} src={company.logo_url ?? undefined} size={36} />
+              </YStack>
+              <YStack flex={1} minWidth={0} gap={2}>
+                <Text
+                  fontSize={15}
+                  fontWeight="600"
+                  lineHeight={20}
+                  color={communityUi.text}
+                  numberOfLines={1}
+                  ellipsizeMode="tail"
+                >
+                  {company.name}
+                </Text>
+                <Text
+                  fontSize={13}
+                  lineHeight={16}
+                  color={communityUi.textMuted}
+                  numberOfLines={1}
+                  ellipsizeMode="tail"
+                >
+                  {company.industry}
+                  {company.location ? ` · ${company.location}` : ''}
+                </Text>
+              </YStack>
+            </XStack>
+          </AppLink>
+        ))}
+      </YStack>
     </CommunityCard>
   )
 }
