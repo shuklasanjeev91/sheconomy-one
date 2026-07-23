@@ -21,7 +21,11 @@ policy features.
 | `shop-review.utils.ts` | Pure helpers (sort, stats, permissions, optimistic builders) |
 | `shop-review.service.ts` | Typed Supabase data-access + shop rating refresh |
 | `shop-review.store.ts` | Redux slice, async thunks, selectors. **Main entry point.** |
+| `shop-review-ui.copy.ts` | Vendor hub UI strings |
+| `shop-review-ui.utils.ts` | Hub stats, tab/search filters, export helpers |
 | `index.ts` | Barrel exports |
+
+Vendor UI lives under `commerce/components/vendor/shop-review/` and `commerce/screens/vendor/VendorShopReviewsHubPanel.tsx` (route: `/vendor/reviews`).
 
 Redux key: **`shopReview`** (registered in `lib/store/index.ts`).
 

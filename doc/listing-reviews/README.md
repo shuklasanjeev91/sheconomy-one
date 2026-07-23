@@ -23,7 +23,11 @@ shipping-policy features. This guide is for developers building **vendor**,
 | `listing-reviews.utils.ts` | Pure helpers (sort, stats, defaults, optimistic builders, rollback helpers) |
 | `listing-reviews.service.ts` | Typed Supabase data-access. Dispatch thunks instead of calling directly. |
 | `listing-reviews.store.ts` | Redux slice, async thunks, selectors. **Main entry point.** |
+| `listing-reviews-ui.copy.ts` | Vendor hub UI strings |
+| `listing-reviews-ui.utils.ts` | Hub stats, tab/search filters, export helpers |
 | `index.ts` | Barrel exports |
+
+Vendor UI lives under `commerce/components/vendor/listing-review/` and `commerce/screens/vendor/VendorListingReviewsHubPanel.tsx` (route: `/vendor/reviews` → Listing Reviews tab).
 
 Redux key: **`listingReviews`** (registered in `lib/store/index.ts`).
 
