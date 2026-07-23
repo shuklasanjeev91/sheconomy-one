@@ -74,9 +74,9 @@ export function ProfileOnboardingNudge() {
       <XStack
         alignItems="center"
         gap="$3"
-        maxWidth={960}
+        maxWidth="100%"
         width="100%"
-        alignSelf="center"
+        alignSelf="stretch"
         flexWrap="wrap"
       >
         <YStack flex={1} gap={2} minWidth={200}>

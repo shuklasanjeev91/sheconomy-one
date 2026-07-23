@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { KeyboardAvoidingView, Platform, Share } from 'react-native'
-import type { NativeScrollEvent, NativeSyntheticEvent, ScrollView as RNScrollView } from 'react-native'
+import type { NativeScrollEvent, NativeSyntheticEvent } from 'react-native'
+import { FlashList, type FlashListRef } from '@shopify/flash-list'
 
 import { usePeerPresence } from '~/chat/hooks/usePeerPresence'
 import { useConversation } from '~/chat/hooks/useConversation'
@@ -29,7 +30,6 @@ import {
   AppBottomSheet,
   Icons,
   Input,
-  ScrollView,
   Spinner,
   Text,
   XStack,
@@ -114,7 +114,7 @@ export function ChatThreadPane({
 }: ChatThreadPaneProps) {
   const theme = useChatTheme()
   const isDark = useIsDarkTheme()
-  const scrollRef = useRef<RNScrollView>(null)
+  const scrollRef = useRef<FlashListRef<ChatMessage>>(null)
   const isGroup = chat.type === 'group'
 
   // Scroll bookkeeping for infinite scroll + smart auto-scroll.
@@ -146,7 +146,6 @@ export function ChatThreadPane({
   const [searchOpen, setSearchOpen] = useState(false)
   const [searchQuery, setSearchQuery] = useState('')
   const [matchIndex, setMatchIndex] = useState(0)
-  const messageLayoutRef = useRef<Record<string, number>>({})
 
   // Multi-select.
   const [selectionMode, setSelectionMode] = useState(false)
@@ -180,6 +179,7 @@ export function ChatThreadPane({
     loadingOlder,
     loadOlder,
     sending,
+    uploadProgress,
     peerTyping,
     peerReadAt,
     reactionsByMessage,
@@ -198,7 +198,7 @@ export function ChatThreadPane({
   } = useConversation({ conversationId: chat.id, currentUserId })
 
   const { outgoing, start: startOutgoingCall, cancel: cancelOutgoingCall } = useOutgoingCall(currentUserId)
-  const canCall = chat.type === 'direct' && !!chat.otherUserId
+  const canCall = chat.type === 'direct' ? !!chat.otherUserId : chat.type === 'group'
 
   const isMuted = mutedOverride ?? chat.isMuted
 
@@ -232,12 +232,15 @@ export function ChatThreadPane({
       .map((m) => m.id)
   }, [visibleMessages, trimmedQuery])
 
-  const scrollToMessage = useCallback((messageId: string) => {
-    const y = messageLayoutRef.current[messageId]
-    if (typeof y === 'number') {
-      scrollRef.current?.scrollTo({ y: Math.max(0, y - 60), animated: true })
-    }
-  }, [])
+  const scrollToMessage = useCallback(
+    (messageId: string) => {
+      const message = visibleMessages.find((m) => m.id === messageId)
+      if (message) {
+        scrollRef.current?.scrollToItem({ item: message, animated: true, viewPosition: 0.2 })
+      }
+    },
+    [visibleMessages],
+  )
 
   useEffect(() => {
     if (matchIds.length === 0) return
@@ -515,11 +518,8 @@ export function ChatThreadPane({
     contentHeightRef.current = height
 
     if (pendingPrependRef.current) {
-      const delta = height - prevContentHeightRef.current
-      if (delta > 0) {
-        scrollRef.current?.scrollTo({ y: scrollYRef.current + delta, animated: false })
-        scrollYRef.current += delta
-      }
+      // FlashList maintainVisibleContentPosition handles most prepend anchoring;
+      // clear the pending flag once height settles.
       if (height !== previousHeight) pendingPrependRef.current = false
     }
   }, [])
@@ -692,10 +692,10 @@ export function ChatThreadPane({
         </YStack>
       ) : (
         <YStack flex={1} minHeight={0} position="relative">
-          <ScrollView
-            ref={scrollRef as never}
-            flex={1}
-            showsVerticalScrollIndicator
+          <FlashList
+            ref={scrollRef}
+            data={visibleMessages}
+            keyExtractor={(item) => item.id}
             keyboardShouldPersistTaps="handled"
             onScroll={handleScroll}
             scrollEventThrottle={16}
@@ -703,15 +703,17 @@ export function ChatThreadPane({
             onLayout={(e) => {
               viewportHeightRef.current = e.nativeEvent.layout.height
             }}
-            contentContainerStyle={{ paddingVertical: 12, flexGrow: 1 }}
-          >
-            {loadingOlder ? (
-              <YStack width="100%" alignItems="center" paddingVertical={10}>
-                <Spinner size="small" color={theme.brand} />
-              </YStack>
-            ) : null}
-
-            {visibleMessages.length === 0 ? (
+            contentContainerStyle={{ paddingVertical: 12 }}
+            style={{ flex: 1 }}
+            drawDistance={280}
+            ListHeaderComponent={
+              loadingOlder ? (
+                <YStack width="100%" alignItems="center" paddingVertical={10}>
+                  <Spinner size="small" color={theme.brand} />
+                </YStack>
+              ) : null
+            }
+            ListEmptyComponent={
               <YStack flex={1} alignItems="center" justifyContent="center" gap={8} paddingVertical="$10">
                 <Icons.MessageCircle size={38} color={theme.textMuted} />
                 <Text fontSize={15} fontWeight="700" color={theme.text}>
@@ -721,9 +723,9 @@ export function ChatThreadPane({
                   Say hi and start the conversation.
                 </Text>
               </YStack>
-            ) : null}
-
-            {visibleMessages.map((message, index) => {
+            }
+            ListFooterComponent={peerTyping ? <TypingBubble /> : null}
+            renderItem={({ item: message, index }) => {
               const prev = visibleMessages[index - 1] ?? null
               const next = visibleMessages[index + 1] ?? null
               const dayBreak = isNewDay(prev?.createdAt ?? null, message.createdAt)
@@ -740,12 +742,7 @@ export function ChatThreadPane({
               const sender = showGroupSender && message.senderId ? participants[message.senderId] : null
 
               return (
-                <YStack
-                  key={message.id}
-                  onLayout={(e) => {
-                    messageLayoutRef.current[message.id] = e.nativeEvent.layout.y
-                  }}
-                >
+                <YStack>
                   {dayBreak ? <DateSeparator label={formatDaySeparator(message.createdAt)} /> : null}
                   <MessageBubble
                     message={message}
@@ -779,10 +776,20 @@ export function ChatThreadPane({
                   />
                 </YStack>
               )
-            })}
-
-            {peerTyping ? <TypingBubble /> : null}
-          </ScrollView>
+            }}
+            extraData={{
+              reactionsByMessage,
+              starredIds,
+              selectionMode,
+              selectedIds,
+              searchOpen,
+              searchQuery,
+              peerReadAt,
+              pollResultsByMessage,
+              participants,
+              isDark,
+            }}
+          />
 
           {showScrollBtn ? (
             <YStack
@@ -872,6 +879,7 @@ export function ChatThreadPane({
           onCreateEvent={() => setEventPickerOpen(true)}
           onTyping={handleTyping}
           sending={sending}
+          uploadProgress={uploadProgress}
           replyTo={replyTarget}
           replySenderName={replyTarget ? resolveSenderName(replyTarget.senderId) : null}
           onCancelReply={() => setReplyTarget(null)}

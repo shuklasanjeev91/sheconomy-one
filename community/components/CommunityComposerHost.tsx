@@ -1,11 +1,14 @@
 import { CommunityAdaptiveSheet } from '~/community/components/CommunityAdaptiveSheet'
 import { CreatePostForm } from '~/community/components/CreatePostForm'
-import { closeComposer, useComposerState } from '~/community/lib/composer-store'
+import {
+  closeComposer,
+  composerSheetTitle,
+  useComposerState,
+} from '~/community/lib/composer-store'
 
 /**
- * Single global mount that renders the post composer as an overlay — a bottom
- * sheet on mobile and a centered dialog on desktop — so "Create post" entry
- * points open in place instead of navigating to a separate route.
+ * Single global mount for the post composer — always a bottom sheet on web,
+ * iOS, and Android. Mode-aware title (article / event / celebration / …).
  */
 export function CommunityComposerHost() {
   const { open, options } = useComposerState()
@@ -16,8 +19,13 @@ export function CommunityComposerHost() {
       onOpenChange={(next) => {
         if (!next) closeComposer()
       }}
-      title="Create a post"
+      title={composerSheetTitle(options.mode)}
       maxWidth={620}
+      tall={
+        options.mode === 'article' ||
+        options.mode === 'event' ||
+        options.mode === 'celebration'
+      }
     >
       {open ? (
         <CreatePostForm
@@ -26,6 +34,7 @@ export function CommunityComposerHost() {
           initialMode={options.mode}
           initialGifUrl={options.gifUrl}
           autoPickMedia={options.media}
+          autoPickVideo={options.video}
           initialGroupId={options.groupId}
           initialCompanyId={options.companyId}
         />

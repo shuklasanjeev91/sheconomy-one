@@ -1,3 +1,4 @@
+import { INVALIDATION_TOPICS, invalidateCache } from '~/lib/cache/invalidation'
 import { supabase } from '~/lib/supabase/client'
 
 export const GROUP_PAGE_SIZE = 20
@@ -164,6 +165,7 @@ export async function createGroup(
       status: 'active',
       joined_at: new Date().toISOString(),
     })
+    invalidateCache(INVALIDATION_TOPICS.communityGroups)
   }
 
   return { data: (data as Group | null) ?? null, error: error?.message ?? null }

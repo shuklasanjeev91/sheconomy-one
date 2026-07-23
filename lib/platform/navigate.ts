@@ -1,3 +1,4 @@
+import { startTransition } from 'react'
 import type { Href } from 'one'
 import { router } from 'one'
 import { Platform } from 'react-native'
@@ -23,15 +24,28 @@ function isCurrentLocation(href: string): boolean {
 /**
  * Soft client navigation for in-app paths on web, iOS, and Android.
  * Never assigns `window.location` — keeps the Vite SPA shell mounted.
+ *
+ * Web: startTransition keeps the chrome responsive while heavy routes paint.
+ * Native: navigate immediately — deferring router.push/replace under
+ * startTransition made tab/back taps feel multi-second delayed on Hermes.
  */
 export function navigateApp(href: Href | string, options?: NavigateAppOptions): void {
   const target = (typeof href === 'string' ? href : String(href)) as Href
   if (isCurrentLocation(String(target))) return
-  if (options?.replace) {
-    router.replace(target)
+
+  const go = () => {
+    if (options?.replace) {
+      router.replace(target)
+      return
+    }
+    router.push(target)
+  }
+
+  if (Platform.OS === 'web') {
+    startTransition(go)
     return
   }
-  router.push(target)
+  go()
 }
 
 /** Convenience alias for tab / auth redirects. */

@@ -58,8 +58,8 @@ export function AiAssistFab() {
       hoverStyle={{ opacity: 0.92 }}
       pressStyle={{ scale: 0.94, opacity: 0.9 }}
       animation="quick"
+      role="button"
       aria-label="Ask SHEconomy AI"
-      accessibilityRole="button"
       onPress={() => openAssist()}
     >
       <Icons.Sparkles size={22} color={ui.onBrand} />

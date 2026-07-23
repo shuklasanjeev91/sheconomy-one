@@ -1,5 +1,7 @@
 import { useEffect } from 'react'
 
+import { startCoreTabPrefetch } from '~/lib/bootstrap/app-prefetch'
+
 const WARM_ROUTE_SEGMENTS = [
   '',
   'community',
@@ -51,6 +53,7 @@ export function RouteWarmup() {
     if (typeof document === 'undefined') return
 
     return scheduleIdle(() => {
+      startCoreTabPrefetch()
       for (const segment of WARM_ROUTE_SEGMENTS) {
         const href = preloadHref(segment)
         if (!document.querySelector(`link[data-sheconomy-warmup="${href}"]`)) {

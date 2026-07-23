@@ -130,8 +130,49 @@ export async function fetchHostedMeetings(userId: string): Promise<Meeting[]> {
   return (data ?? []).map((row) => mapMeeting(row as Record<string, unknown>))
 }
 
+/** Meetings the user hosts or is invited to as a participant. */
+export function mergeHostedAndInvitedMeetings(
+  hosted: Meeting[],
+  invited: Meeting[],
+): Meeting[] {
+  const hostedIds = new Set(hosted.map((meeting) => meeting.id))
+  const merged = [...hosted, ...invited.filter((meeting) => !hostedIds.has(meeting.id))]
+  merged.sort((a, b) => {
+    const aAt = a.scheduled_at ? Date.parse(a.scheduled_at) : Number.MAX_SAFE_INTEGER
+    const bAt = b.scheduled_at ? Date.parse(b.scheduled_at) : Number.MAX_SAFE_INTEGER
+    return aAt - bAt
+  })
+  return merged
+}
+
 export async function fetchMyMeetings(userId: string): Promise<Meeting[]> {
-  return fetchHostedMeetings(userId)
+  const hosted = await fetchHostedMeetings(userId)
+
+  const { data: participantRows, error } = await supabase
+    .from('meeting_participants')
+    .select('meeting_id')
+    .eq('user_id', userId)
+    .limit(50)
+
+  if (error) {
+    return hosted
+  }
+
+  const invitedIds = (participantRows ?? [])
+    .map((row) => row.meeting_id)
+    .filter((id) => !hosted.some((meeting) => meeting.id === id))
+
+  if (!invitedIds.length) return hosted
+
+  const { data: invitedMeetings } = await supabase
+    .from('meetings')
+    .select(MEETING_SELECT)
+    .in('id', invitedIds)
+    .in('status', ['scheduled', 'instant', 'active'])
+    .order('scheduled_at', { ascending: true, nullsFirst: false })
+
+  const invited = (invitedMeetings ?? []).map((row) => mapMeeting(row as Record<string, unknown>))
+  return mergeHostedAndInvitedMeetings(hosted, invited)
 }
 
 export async function fetchUpcomingMeetings(): Promise<Meeting[]> {
@@ -363,7 +404,11 @@ export async function joinMeetingParticipant(
 export async function admitParticipant(participantId: string): Promise<void> {
   const { error } = await supabase
     .from('meeting_participants')
-    .update({ status: 'admitted', joined_at: new Date().toISOString() })
+    .update({
+      status: 'admitted',
+      joined_at: new Date().toISOString(),
+      left_at: null,
+    })
     .eq('id', participantId)
 
   if (error) throw new Error(error.message)
@@ -451,7 +496,17 @@ export async function sendMeetingChatMessage(
     .single()
 
   if (error) throw new Error(error.message)
-  return data as MeetingChatMessage
+
+  const { data: profile } = await supabase
+    .from('profiles')
+    .select('full_name, username, avatar_url')
+    .eq('id', senderId)
+    .maybeSingle()
+
+  return {
+    ...(data as MeetingChatMessage),
+    sender: profile ?? null,
+  }
 }
 
 import { buildAbsoluteUrl } from '~/lib/platform/url'

@@ -1,6 +1,8 @@
 import { useEffect, useRef, useState } from 'react'
+import { Platform } from 'react-native'
 
 import { SendPostSheet } from '~/chat/components/SendPostSheet'
+import { WebOnlyStyle } from '~/components/platform/WebOnlyStyle'
 import { CommunityAdaptiveSheet } from '~/community/components/CommunityAdaptiveSheet'
 import { MentionInput } from '~/community/components/MentionInput'
 import { PostComments } from '~/community/components/PostComments'
@@ -15,11 +17,17 @@ import {
   blockCommunityMember,
   hideCommunityPost,
   reportCommunityPost,
+  unhideCommunityPost,
 } from '~/community/lib/moderation'
+import { feedback } from '~/lib/platform/feedback'
 import { unfollowProfile } from '~/community/lib/profile-follows'
 import { isPostSaved, saveCommunityPost, unsaveCommunityPost } from '~/community/lib/saved-posts'
 import { getPostShareUrl } from '~/community/lib/post-engagement'
-import type { CommunityPost } from '~/community/lib/community'
+import {
+  deleteCommunityPost,
+  updateCommunityPost,
+  type CommunityPost,
+} from '~/community/lib/community'
 import { collectPostMedia, postHasMedia } from '~/community/lib/post-media'
 import { ShareSheet } from '~/components/share/ShareSheet'
 import {
@@ -32,7 +40,7 @@ import {
   YStack,
   useAppToast,
 } from '~/components/ui'
-import { chatRoutes, routes } from '~/lib/routes'
+import { appRoutes, chatRoutes, routes } from '~/lib/routes'
 import { copyShareLink } from '~/lib/share'
 import { useAppUi } from '~/lib/theme/useAppUi'
 import { useSupabase } from '~/providers/SupabaseProvider'
@@ -46,9 +54,18 @@ type Engagement = ReturnType<typeof usePostEngagement>
 type PostActionSheetsProps = {
   post: CommunityPost
   engagement: Engagement
+  onPostUpdated?: (postId: string, patch: Partial<CommunityPost>) => void
+  onPostDeleted?: (postId: string) => void
 }
 
-export function PostActionSheets({ post, engagement }: PostActionSheetsProps) {
+const NON_EDITABLE_POST_TYPES = new Set(['poll', 'event', 'celebration', 'product', 'service'])
+
+export function PostActionSheets({
+  post,
+  engagement,
+  onPostUpdated,
+  onPostDeleted,
+}: PostActionSheetsProps) {
   const communityUi = useCommunityUi()
   const ui = useAppUi()
   const router = useRouter()
@@ -59,6 +76,16 @@ export function PostActionSheets({ post, engagement }: PostActionSheetsProps) {
   const [isFeaturing, setIsFeaturing] = useState(false)
   const [saved, setSaved] = useState(false)
   const [savingAction, setSavingAction] = useState(false)
+  const [editDraft, setEditDraft] = useState(post.content)
+  const [isEditing, setIsEditing] = useState(false)
+  const [isDeleting, setIsDeleting] = useState(false)
+  const editEncodedRef = useRef('')
+
+  useEffect(() => {
+    if (engagement.activeSheet !== 'edit') return
+    setEditDraft(post.content)
+    editEncodedRef.current = post.content
+  }, [engagement.activeSheet, post.content])
 
   useEffect(() => {
     if (!user?.id || engagement.activeSheet !== 'options') return
@@ -74,6 +101,8 @@ export function PostActionSheets({ post, engagement }: PostActionSheetsProps) {
   const shareUrl = getPostShareUrl(post.id)
   const authorName = post.author?.full_name || post.author?.username || 'member'
   const isOwnPost = !!user?.id && user.id === post.user_id
+  const canEditPost =
+    isOwnPost && (!post.post_type || !NON_EDITABLE_POST_TYPES.has(post.post_type))
   const postSnippet = mentionsToPlainText(post.content).trim().slice(0, 140)
   const sendContext = postSnippet
     ? `${authorName} on ${BRAND_NAME}: "${postSnippet}"`
@@ -143,9 +172,13 @@ export function PostActionSheets({ post, engagement }: PostActionSheetsProps) {
                   }
                 })
               }}
-              style={{
-                animation: `reactionPop 0.4s cubic-bezier(0.34, 1.56, 0.64, 1) ${index * 0.05}s both`,
-              }}
+              style={
+                Platform.OS === 'web'
+                  ? {
+                      animation: `reactionPop 0.4s cubic-bezier(0.34, 1.56, 0.64, 1) ${index * 0.05}s both`,
+                    }
+                  : undefined
+              }
             >
               <Text fontSize={40}>{reaction.emoji}</Text>
               <Text fontSize={12} fontWeight="600" color={communityUi.textMuted}>
@@ -154,12 +187,12 @@ export function PostActionSheets({ post, engagement }: PostActionSheetsProps) {
             </YStack>
           ))}
         </XStack>
-        <style>{`
+        <WebOnlyStyle>{`
           @keyframes reactionPop {
             from { transform: scale(0.4) translateY(16px); opacity: 0; }
             to { transform: scale(1) translateY(0); opacity: 1; }
           }
-        `}</style>
+        `}</WebOnlyStyle>
       </CommunityAdaptiveSheet>
 
       <CommunityAdaptiveSheet
@@ -409,6 +442,22 @@ export function PostActionSheets({ post, engagement }: PostActionSheetsProps) {
         maxWidth={480}
       >
         <YStack gap="$2">
+          {canEditPost ? (
+            <SheetAction
+              icon={Icons.Pencil}
+              label="Edit post"
+              description="Update what you wrote"
+              onPress={() => engagement.openSheet('edit')}
+            />
+          ) : null}
+          {isOwnPost ? (
+            <SheetAction
+              icon={Icons.Trash2}
+              label="Delete post"
+              description="Remove this post from the feed"
+              onPress={() => engagement.openSheet('delete-confirm')}
+            />
+          ) : null}
           {isOwnPost ? (
             <SheetAction
               icon={Icons.Star}
@@ -527,36 +576,177 @@ export function PostActionSheets({ post, engagement }: PostActionSheetsProps) {
                     toast.show('Could not block', { tone: 'danger', message: result.error })
                     return
                   }
+                  void feedback('destructive')
                   toast.show('Member blocked', {
                     tone: 'default',
                     message: `${authorName} will no longer appear in your community feed.`,
+                    actionLabel: 'Manage',
+                    onAction: () => router.push(appRoutes.settingsSection('privacy') as never),
                   })
                   engagement.closeSheet()
                 })
               }}
             />
           ) : null}
-          <SheetAction
-            icon={Icons.EyeOff}
-            label="Hide post"
-            onPress={() => {
-              if (!user?.id) {
-                requireAuth('hide posts')
-                return
-              }
-              void hideCommunityPost(user.id, post.id).then((result) => {
-                if (result.error) {
-                  toast.show('Could not hide post', { tone: 'danger', message: result.error })
+          {!isOwnPost ? (
+            <SheetAction
+              icon={Icons.EyeOff}
+              label="Hide post"
+              onPress={() => {
+                if (!user?.id) {
+                  requireAuth('hide posts')
                   return
                 }
-                toast.show('Post hidden', {
-                  tone: 'default',
-                  message: 'This post will not appear in your feed.',
+                void hideCommunityPost(user.id, post.id).then((result) => {
+                  if (result.error) {
+                    toast.show('Could not hide post', { tone: 'danger', message: result.error })
+                    return
+                  }
+                  void feedback('selection')
+                  onPostDeleted?.(post.id)
+                  engagement.closeSheet()
+                  toast.show('Post hidden', {
+                    tone: 'default',
+                    message: 'This post will not appear in your feed.',
+                    duration: 6000,
+                    actionLabel: 'Undo',
+                    onAction: () => {
+                      void unhideCommunityPost(user.id, post.id).then((undoResult) => {
+                        if (undoResult.error) {
+                          toast.show('Could not undo', {
+                            tone: 'danger',
+                            message: undoResult.error,
+                          })
+                          return
+                        }
+                        toast.show('Post restored', { tone: 'success' })
+                        // Soft restore: refresh feed so the post can return.
+                        engagement.closeSheet()
+                      })
+                    },
+                  })
                 })
-                engagement.closeSheet()
-              })
+              }}
+            />
+          ) : null}
+        </YStack>
+      </CommunityAdaptiveSheet>
+
+      <CommunityAdaptiveSheet
+        open={engagement.activeSheet === 'edit'}
+        onOpenChange={(open) => !open && engagement.closeSheet()}
+        title="Edit post"
+        maxWidth={560}
+      >
+        <YStack gap="$4">
+          <MentionInput
+            multiline
+            value={editDraft}
+            onChangeText={setEditDraft}
+            onEncodedChange={(encoded) => {
+              editEncodedRef.current = encoded
             }}
+            placeholder="What do you want to talk about?"
+            suggestionsPlacement="top"
+            minHeight={110}
+            backgroundColor={ui.surface}
           />
+          <XStack justifyContent="flex-end" gap="$2">
+            <Button
+              backgroundColor="transparent"
+              color={ui.textSecondary}
+              borderRadius={999}
+              onPress={() => engagement.closeSheet()}
+            >
+              Cancel
+            </Button>
+            <Button
+              backgroundColor={BRAND_BLUE}
+              color="white"
+              borderRadius={999}
+              disabled={isEditing || !editDraft.trim()}
+              onPress={() => {
+                if (!user?.id) {
+                  requireAuth('edit posts')
+                  return
+                }
+                const nextContent = editEncodedRef.current || editDraft
+                if (!nextContent.trim()) return
+                setIsEditing(true)
+                void updateCommunityPost(user.id, post.id, { content: nextContent }).then(
+                  (result) => {
+                    setIsEditing(false)
+                    if (result.error) {
+                      toast.show('Could not update post', {
+                        tone: 'danger',
+                        message: result.error,
+                      })
+                      return
+                    }
+                    post.content = nextContent
+                    onPostUpdated?.(post.id, { content: nextContent })
+                    toast.show('Post updated', { tone: 'success' })
+                    engagement.closeSheet()
+                  },
+                )
+              }}
+              icon={isEditing ? <Spinner size="small" color="white" /> : undefined}
+            >
+              {isEditing ? 'Saving…' : 'Save'}
+            </Button>
+          </XStack>
+        </YStack>
+      </CommunityAdaptiveSheet>
+
+      <CommunityAdaptiveSheet
+        open={engagement.activeSheet === 'delete-confirm'}
+        onOpenChange={(open) => !open && engagement.closeSheet()}
+        title="Delete post?"
+        maxWidth={420}
+      >
+        <YStack gap="$4">
+          <Text color={ui.textMuted} fontSize={14}>
+            This will permanently remove your post from the feed. You cannot undo this action.
+          </Text>
+          <XStack justifyContent="flex-end" gap="$2">
+            <Button
+              backgroundColor="transparent"
+              color={ui.textSecondary}
+              borderRadius={999}
+              onPress={() => engagement.closeSheet()}
+            >
+              Cancel
+            </Button>
+            <Button
+              backgroundColor={ui.error}
+              color="white"
+              borderRadius={999}
+              disabled={isDeleting}
+              onPress={() => {
+                if (!user?.id) {
+                  requireAuth('delete posts')
+                  return
+                }
+                setIsDeleting(true)
+                void deleteCommunityPost(user.id, post.id).then((result) => {
+                  setIsDeleting(false)
+                  if (result.error) {
+                    toast.show('Could not delete post', {
+                      tone: 'danger',
+                      message: result.error,
+                    })
+                    return
+                  }
+                  onPostDeleted?.(post.id)
+                  toast.show('Post deleted', { tone: 'success' })
+                  engagement.closeSheet()
+                })
+              }}
+              icon={isDeleting ? <Spinner size="small" color="white" /> : undefined}
+            >
+              {isDeleting ? 'Deleting…' : 'Delete'}
+            </Button>
+          </XStack>
         </YStack>
       </CommunityAdaptiveSheet>
     </>

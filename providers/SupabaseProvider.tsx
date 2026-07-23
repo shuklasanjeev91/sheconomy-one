@@ -16,7 +16,7 @@ const SupabaseContext = createContext<SupabaseContextValue | null>(null)
 
 export function SupabaseProvider({ children }: { children: React.ReactNode }) {
   const [session, setSession] = useState<Session | null>(null)
-  const [isLoading, setIsLoading] = useState(Platform.OS !== 'web')
+  const [isLoading, setIsLoading] = useState(false)
 
   useEffect(() => {
     let isMounted = true
@@ -26,7 +26,7 @@ export function SupabaseProvider({ children }: { children: React.ReactNode }) {
         ? null
         : setTimeout(() => {
             if (isMounted) setIsLoading(false)
-          }, 2000)
+          }, 1_500)
 
     supabase.auth
       .getSession()

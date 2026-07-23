@@ -1,5 +1,4 @@
-/** Platform entry — Metro/Vite resolve `.native` / `.web` automatically. */
-export { default, otpAutofillService } from './otp-autofill.web'
+/** Shared helpers for OTP autofill (platform files provide the service). */
 
 /** Optional 11-char Android SMS Retriever app hash for SMS templates. */
 export function getAndroidSmsAppHash(): string | null {
@@ -8,3 +7,7 @@ export function getAndroidSmsAppHash(): string | null {
   const trimmed = typeof value === 'string' ? value.trim() : ''
   return trimmed.length > 0 ? trimmed : null
 }
+
+// Platform entry points: Metro/Vite resolve `.native` / `.web` automatically.
+// Re-export web as fallback for tooling that does not apply platform extensions.
+export { default, otpAutofillService } from './otp-autofill.web'

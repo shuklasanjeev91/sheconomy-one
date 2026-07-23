@@ -1,5 +1,6 @@
 import { useCallback } from 'react'
 
+import { CACHE_KEYS } from '~/lib/bootstrap/cache-keys'
 import {
   COMMERCE_HORIZONTAL_PAGE_SIZE,
   fetchCategoriesPage,
@@ -14,5 +15,9 @@ export function useCategoriesFeed(enabled = true) {
     [],
   )
 
-  return usePaginatedFeed<CategorySummary>({ fetchPage, enabled })
+  return usePaginatedFeed<CategorySummary>({
+    fetchPage,
+    enabled,
+    cacheKey: CACHE_KEYS.categories,
+  })
 }

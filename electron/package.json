@@ -1,0 +1,9 @@
+{
+  "name": "sheconomy-desktop",
+  "version": "1.20.1",
+  "private": true,
+  "description": "SHEconomy desktop shell",
+  "author": "SHEconomy",
+  "main": "main.cjs",
+  "dependencies": {}
+}

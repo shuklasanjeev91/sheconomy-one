@@ -5,17 +5,23 @@ export type LiveCaptionLine = {
   userId: string
   speaker: string
   text: string
+  /** Original spoken/STT text before viewer translation. */
+  originalText?: string
+  sourceLang?: string | null
+  targetLang?: string | null
+  translated?: boolean
   isFinal: boolean
   timestamp: number
 }
 
-/** Web Speech API on browsers; native apps receive shared captions from the room. */
+/** Web Speech API on browsers; Voice STT on iOS/Android; all platforms can view shared captions. */
 export function isLiveCaptionsSupported() {
   return hasSpeechRecognition() || isNativeRuntime()
 }
 
+/** Publish captions from this device's microphone. */
 export function canPublishLiveCaptions() {
-  return hasSpeechRecognition()
+  return hasSpeechRecognition() || isNativeRuntime()
 }
 
 export function formatCaptionTimestamp(timestamp: number) {

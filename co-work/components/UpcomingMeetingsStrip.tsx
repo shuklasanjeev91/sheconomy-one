@@ -3,7 +3,7 @@ import { AppLink } from '~/components/navigation/AppLink'
 import { useEffect, useState } from 'react'
 
 import { CoWorkStatusPill } from '~/co-work/components/CoWorkUi'
-import { fetchHostedMeetings, formatMeetingCode } from '~/co-work/lib/meetings'
+import { fetchMyMeetings, formatMeetingCode } from '~/co-work/lib/meetings'
 import { recordMeetingCode } from '~/co-work/lib/recent-meeting-codes'
 import { coworkGlassStyle, useCoWorkTheme } from '~/co-work/lib/theme'
 import type { Meeting } from '~/co-work/lib/types'
@@ -30,8 +30,13 @@ function formatWhen(meeting: Meeting) {
   }).format(new Date(raw))
 }
 
-/** Upcoming hosted meetings on Co-Work home — web + native. */
-export function UpcomingMeetingsStrip() {
+/** Upcoming meetings on Co-Work home (hosted + invited) — web + native. */
+export function UpcomingMeetingsStrip({
+  refreshKey = 0,
+}: {
+  /** Increment to force a reload (e.g. pull-to-refresh). */
+  refreshKey?: number
+}) {
   const { ui: coworkUi, shadows: coworkShadows } = useCoWorkTheme()
   const { user } = useSupabase()
   const router = useRouter()
@@ -70,7 +75,7 @@ export function UpcomingMeetingsStrip() {
     }
     let active = true
     setLoading(true)
-    void fetchHostedMeetings(user.id)
+    void fetchMyMeetings(user.id)
       .then((rows) => {
         if (!active) return
         const upcoming = rows
@@ -87,7 +92,7 @@ export function UpcomingMeetingsStrip() {
     return () => {
       active = false
     }
-  }, [user?.id])
+  }, [refreshKey, user?.id])
 
   if (!user) return null
 

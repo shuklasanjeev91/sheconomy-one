@@ -1,5 +1,5 @@
-import { AdminSectionPage } from './layout'
+import { AdminCmsManager } from './components/AdminCmsManager'
 
 export default function AdminCmsPage() {
-  return <AdminSectionPage sectionId="cms" />
+  return <AdminCmsManager />
 }

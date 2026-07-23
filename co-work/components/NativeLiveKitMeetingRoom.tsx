@@ -1,19 +1,35 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useWindowDimensions } from 'react-native'
 import { ConnectionState, RoomEvent, Track } from 'livekit-client'
 
+import { ensureLiveKitNativeGlobals } from '~/lib/livekit/register-native-globals'
+
+ensureLiveKitNativeGlobals()
+
 import {
-  AudioSession,
   LiveKitRoom,
   VideoTrack,
   isTrackReference,
   useLocalParticipant,
   useTracks,
-  type TrackReference,
 } from '@livekit/react-native'
 
-import { Spinner, Text, XStack, YStack } from '~/components/ui'
+import { Avatar, Spinner, Text, XStack, YStack } from '~/components/ui'
+import { useParticipantHandRaised } from '~/co-work/components/MeetingLiveSignalsContext'
+import {
+  buildParticipantMetadata,
+  getParticipantAvatarUrl,
+  isCameraTileOff,
+  participantDisplayName,
+} from '~/co-work/lib/participant-avatar'
 import { ScreenCenter, ScreenFill } from '~/components/layout'
+import {
+  applyPreferredCallAudioOutput,
+  bindIosCallAudioManagement,
+  configureLiveKitCallAudio,
+  stopLiveKitCallAudio,
+} from '~/co-work/lib/livekit-call-audio'
+import { reinforceCallMediaOnConnect } from '~/co-work/lib/livekit-call-media'
 import type { LiveKitMediaControls } from '~/co-work/lib/livekit-media-controls'
 import {
   NativeScreenCapturePicker,
@@ -35,6 +51,7 @@ type NativeLiveKitMeetingRoomProps = {
   meetingId: string
   roomId: string
   displayName: string
+  avatarUrl?: string | null
   isHost: boolean
   enabled: boolean
   mediaMode?: import('~/co-work/lib/livekit-media-controls').LiveKitMediaMode
@@ -52,6 +69,7 @@ export function NativeLiveKitMeetingRoom({
   meetingId,
   roomId,
   displayName,
+  avatarUrl,
   enabled,
   mediaMode = 'meeting',
   onDisconnected,
@@ -64,13 +82,38 @@ export function NativeLiveKitMeetingRoom({
   > | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
+  const [audioReady, setAudioReady] = useState(false)
+  const [audioError, setAudioError] = useState<string | null>(null)
 
   useEffect(() => {
-    void AudioSession.startAudioSession()
+    let cancelled = false
+    setAudioReady(false)
+    setAudioError(null)
+    void (async () => {
+      try {
+        await configureLiveKitCallAudio(mediaMode)
+        if (!cancelled) {
+          setAudioReady(true)
+          setAudioError(null)
+        }
+      } catch (err) {
+        if (!cancelled) {
+          // Do not join with a broken session — remote audio often goes silent.
+          setAudioReady(false)
+          setAudioError(
+            err instanceof Error
+              ? err.message
+              : 'Could not start call audio. Check microphone permissions and try again.',
+          )
+        }
+      }
+    })()
     return () => {
-      void AudioSession.stopAudioSession()
+      cancelled = true
+      stopLiveKitCallAudio()
+      setAudioReady(false)
     }
-  }, [])
+  }, [mediaMode])
 
   useEffect(() => {
     if (!enabled) return
@@ -78,7 +121,7 @@ export function NativeLiveKitMeetingRoom({
   }, [enabled])
 
   useEffect(() => {
-    if (!enabled || !roomId) return
+    if (!enabled || !roomId || !audioReady) return
     let cancelled = false
 
     async function load() {
@@ -91,7 +134,7 @@ export function NativeLiveKitMeetingRoom({
         if (!liveKitConfig.enabled) {
           throw new Error('Video meetings are temporarily unavailable. Please try again later.')
         }
-        const creds = await fetchLiveKitCredentials(meetingId, roomId, displayName)
+        const creds = await fetchLiveKitCredentials(meetingId, roomId, displayName, avatarUrl)
         if (cancelled) return
         setCredentials(creds)
       } catch (loadError) {
@@ -106,7 +149,7 @@ export function NativeLiveKitMeetingRoom({
     return () => {
       cancelled = true
     }
-  }, [displayName, enabled, meetingId, roomId])
+  }, [audioReady, avatarUrl, displayName, enabled, meetingId, roomId])
 
   if (!roomId) {
     return (
@@ -130,6 +173,39 @@ export function NativeLiveKitMeetingRoom({
     )
   }
 
+  if (audioError) {
+    return (
+      <ScreenFill padding="$4" backgroundColor="#0c080a" gap="$3">
+        <Text color={coworkUi.danger} fontWeight="700">
+          Could not start call audio
+        </Text>
+        <Text color={coworkUi.textSecondary} lineHeight={22}>
+          {audioError}
+        </Text>
+        <Text
+          color={coworkUi.brand}
+          fontWeight="600"
+          onPress={() => {
+            setAudioError(null)
+            setAudioReady(false)
+            void configureLiveKitCallAudio(mediaMode)
+              .then(() => setAudioReady(true))
+              .catch((err) =>
+                setAudioError(
+                  err instanceof Error
+                    ? err.message
+                    : 'Could not start call audio. Check microphone permissions and try again.',
+                ),
+              )
+          }}
+        >
+          Try again
+        </Text>
+        {overlay?.(null)}
+      </ScreenFill>
+    )
+  }
+
   if (error) {
     return (
       <ScreenFill padding="$4" backgroundColor="#0c080a" gap="$3">
@@ -144,7 +220,7 @@ export function NativeLiveKitMeetingRoom({
     )
   }
 
-  if (loading || !credentials) {
+  if (!audioReady || loading || !credentials) {
     return (
       <ScreenCenter backgroundColor="#0c080a">
         <Spinner size="large" color={coworkUi.brand} />
@@ -167,7 +243,7 @@ export function NativeLiveKitMeetingRoom({
         onDisconnected={onDisconnected}
         style={{ flex: 1, width: '100%', height: '100%' }}
       >
-        <NativeLiveKitMeetingContent overlay={overlay} mediaMode={mediaMode} />
+        <NativeLiveKitMeetingContent overlay={overlay} mediaMode={mediaMode} avatarUrl={avatarUrl} />
       </LiveKitRoom>
     </ScreenFill>
   )
@@ -176,73 +252,82 @@ export function NativeLiveKitMeetingRoom({
 function NativeLiveKitMeetingContent({
   overlay,
   mediaMode = 'meeting',
+  avatarUrl,
 }: {
   overlay?: (liveKit: LiveKitMediaControls | null) => React.ReactNode
   mediaMode?: import('~/co-work/lib/livekit-media-controls').LiveKitMediaMode
+  avatarUrl?: string | null
 }) {
-  const liveKit = useLiveKitMediaControls()
+  const preferSpeaker = mediaMode !== 'audio'
+  const liveKit = useLiveKitMediaControls(preferSpeaker)
+  const micForcedRef = useRef(false)
 
   useEffect(() => {
     const room = liveKit.room
     if (!room) return
 
-    const reinforceVoiceProcessing = async () => {
-      try {
-        if (!room.localParticipant.isMicrophoneEnabled) return
-        await room.localParticipant.setMicrophoneEnabled(true, {
-          echoCancellation: true,
-          noiseSuppression: true,
-          autoGainControl: true,
-        })
-      } catch {
-        // Permission denial / missing device — room stays connected without reinforcement.
-      }
-    }
-
-    const reinforceCallMedia = async () => {
-      try {
-        if (mediaMode === 'audio') {
-          if (room.localParticipant.isCameraEnabled) {
-            await room.localParticipant.setCameraEnabled(false)
-          }
-          if (!room.localParticipant.isMicrophoneEnabled) {
-            await room.localParticipant.setMicrophoneEnabled(true, {
-              echoCancellation: true,
-              noiseSuppression: true,
-              autoGainControl: true,
-            })
-          }
-          return
-        }
-        if (mediaMode === 'video' && !room.localParticipant.isCameraEnabled) {
-          await room.localParticipant.setCameraEnabled(true)
-        }
-      } catch {
-        // Same as above — do not reject into an unhandled fatal on device.
-      }
-    }
-
+    const unbindIos = bindIosCallAudioManagement(preferSpeaker)
     const unbindScreenShare = bindRemoteScreenShareQuality(room)
 
+    const boostRemoteAudio = (publication: { setVolume?: (v: number) => void; kind?: string }) => {
+      try {
+        if (publication.kind === 'audio' || publication.setVolume) {
+          publication.setVolume?.(1)
+        }
+      } catch {
+        // Older publications may not expose setVolume.
+      }
+    }
+
+    const syncAvatarMetadata = async () => {
+      if (!avatarUrl) return
+      try {
+        await room.localParticipant.setMetadata(buildParticipantMetadata({ avatarUrl }))
+      } catch {
+        // Best-effort; token metadata usually already includes the avatar.
+      }
+    }
+
     const onConnected = () => {
-      void reinforceVoiceProcessing()
-      void reinforceCallMedia()
+      const forceMic = !micForcedRef.current
+      micForcedRef.current = true
+      void (async () => {
+        await reinforceCallMediaOnConnect(room, mediaMode, { forceMicEnable: forceMic })
+        try {
+          await applyPreferredCallAudioOutput(mediaMode)
+        } catch {
+          // Routing is best-effort; AEC still works on the default path.
+        }
+        await syncAvatarMetadata()
+      })()
+    }
+
+    const onTrackSubscribed = (
+      track: { kind?: string },
+      publication: { setVolume?: (v: number) => void; kind?: string },
+    ) => {
+      if (track.kind === 'audio' || publication.kind === 'audio') {
+        boostRemoteAudio(publication)
+      }
     }
 
     room.on(RoomEvent.Connected, onConnected)
+    room.on(RoomEvent.TrackSubscribed, onTrackSubscribed as never)
     if (room.state === ConnectionState.Connected) {
       onConnected()
     }
 
     return () => {
       room.off(RoomEvent.Connected, onConnected)
+      room.off(RoomEvent.TrackSubscribed, onTrackSubscribed as never)
       unbindScreenShare()
+      unbindIos()
     }
-  }, [liveKit.room, mediaMode])
+  }, [avatarUrl, liveKit.room, mediaMode, preferSpeaker])
 
   return (
     <YStack flex={1} width="100%" height="100%" position="relative" backgroundColor="#0c080a">
-      <NativeMeetingVideoStage />
+      {mediaMode === 'audio' ? null : <NativeMeetingVideoStage />}
       <NativeScreenCapturePicker />
       <YStack
         position="absolute"
@@ -277,12 +362,11 @@ function NativeMeetingVideoStage() {
     [tracks, localParticipant.identity],
   )
 
-  const stageTracks = layoutState.stageTracks.filter(isTrackReference) as TrackReference[]
-  const pipTrack =
-    layoutState.pipTrack && isTrackReference(layoutState.pipTrack)
-      ? (layoutState.pipTrack as TrackReference)
-      : null
+  const stageTracks = layoutState.stageTracks
+  const pipTrack = layoutState.pipTrack
   const hasScreenShare = layoutState.hasScreenShare
+  // Three equal full-width rows — only for the 3-person gallery case.
+  const isThreeStack = !hasScreenShare && stageTracks.length === 3
 
   const useWideLayout = isDesktop || isTablet || width >= 768
   const topInset = Math.max(safeTop, 12) + HEADER_CLEARANCE
@@ -321,51 +405,81 @@ function NativeMeetingVideoStage() {
         </YStack>
       ) : (
         <YStack flex={1} width="100%" height="100%" position="relative">
-          <XStack
-            flex={1}
-            width="100%"
-            flexWrap={hasScreenShare ? 'nowrap' : 'wrap'}
-            alignContent={hasScreenShare || stageTracks.length <= 1 ? 'stretch' : 'center'}
-            justifyContent="center"
-            gap={STAGE_GAP}
-          >
-            {stageTracks.map((trackRef, index) => {
-              const isScreen =
-                trackRef.source === Track.Source.ScreenShare ||
-                trackRef.publication.source === Track.Source.ScreenShare
-              const name =
-                trackRef.participant.name || trackRef.participant.identity || 'Participant'
+          {isThreeStack ? (
+            <YStack flex={1} width="100%" height="100%" gap={STAGE_GAP}>
+              {stageTracks.map((trackRef) => {
+                const isScreen =
+                  trackRef.source === Track.Source.ScreenShare ||
+                  (isTrackReference(trackRef) &&
+                    trackRef.publication.source === Track.Source.ScreenShare)
+                const name = participantDisplayName(trackRef.participant)
+                const tileHeight = Math.max(Math.floor((stageHeight - STAGE_GAP * 2) / 3), 100)
 
-              // Screen-share focus: first tile fills the stage; extras stack below if any.
-              const tileWidth = hasScreenShare
-                ? stageWidth
-                : stageTracks.length <= 1
-                  ? stageWidth
-                  : Math.floor((stageWidth - STAGE_GAP) / 2)
-              const tileHeight = hasScreenShare
-                ? index === 0
-                  ? stageHeight
-                  : Math.floor(stageHeight / 3)
-                : stageTracks.length <= 1
-                  ? stageHeight
-                  : Math.floor((stageHeight - STAGE_GAP) / Math.ceil(stageTracks.length / 2))
-
-              return (
-                <NativeVideoTile
-                  key={
-                    trackRef.publication.trackSid ??
+                return (
+                  <YStack key={
+                    (isTrackReference(trackRef) ? trackRef.publication.trackSid : null) ??
                     `${trackRef.participant.identity}-${trackRef.source}`
-                  }
-                  trackRef={trackRef}
-                  name={name}
-                  isScreen={isScreen}
-                  width={tileWidth}
-                  height={Math.max(tileHeight, 120)}
-                  radius={hasScreenShare && index === 0 ? coworkUi.radius.tile : 14}
-                />
-              )
-            })}
-          </XStack>
+                  } flex={1} width="100%" minHeight={0}>
+                    <NativeVideoTile
+                      trackRef={trackRef}
+                      name={name}
+                      isScreen={isScreen}
+                      width={stageWidth}
+                      height={tileHeight}
+                      radius={14}
+                      fill
+                    />
+                  </YStack>
+                )
+              })}
+            </YStack>
+          ) : (
+            <XStack
+              flex={1}
+              width="100%"
+              flexWrap={hasScreenShare ? 'nowrap' : 'wrap'}
+              alignContent={hasScreenShare || stageTracks.length <= 1 ? 'stretch' : 'center'}
+              justifyContent="center"
+              gap={STAGE_GAP}
+            >
+              {stageTracks.map((trackRef, index) => {
+                const isScreen =
+                  trackRef.source === Track.Source.ScreenShare ||
+                  (isTrackReference(trackRef) &&
+                    trackRef.publication.source === Track.Source.ScreenShare)
+                const name = participantDisplayName(trackRef.participant)
+
+                // Screen-share focus: first tile fills the stage; extras stack below if any.
+                const tileWidth = hasScreenShare
+                  ? stageWidth
+                  : stageTracks.length <= 1
+                    ? stageWidth
+                    : Math.floor((stageWidth - STAGE_GAP) / 2)
+                const tileHeight = hasScreenShare
+                  ? index === 0
+                    ? stageHeight
+                    : Math.floor(stageHeight / 3)
+                  : stageTracks.length <= 1
+                    ? stageHeight
+                    : Math.floor((stageHeight - STAGE_GAP) / Math.ceil(stageTracks.length / 2))
+
+                return (
+                  <NativeVideoTile
+                    key={
+                      (isTrackReference(trackRef) ? trackRef.publication.trackSid : null) ??
+                      `${trackRef.participant.identity}-${trackRef.source}`
+                    }
+                    trackRef={trackRef}
+                    name={name}
+                    isScreen={isScreen}
+                    width={tileWidth}
+                    height={Math.max(tileHeight, 120)}
+                    radius={hasScreenShare && index === 0 ? coworkUi.radius.tile : 14}
+                  />
+                )
+              })}
+            </XStack>
+          )}
 
           {pipTrack ? (
             <YStack
@@ -383,11 +497,7 @@ function NativeMeetingVideoStage() {
             >
               <NativeVideoTile
                 trackRef={pipTrack}
-                name={
-                  pipTrack.participant.name ||
-                  pipTrack.participant.identity ||
-                  'You'
-                }
+                name={participantDisplayName(pipTrack.participant)}
                 isScreen={false}
                 width={PIP_WIDTH}
                 height={PIP_HEIGHT}
@@ -410,32 +520,76 @@ function NativeVideoTile({
   height,
   radius,
   compact,
+  fill,
 }: {
-  trackRef: TrackReference
+  trackRef: import('@livekit/components-core').TrackReferenceOrPlaceholder
   name: string
   isScreen: boolean
   width: number
   height: number
   radius: number
   compact?: boolean
+  /** When true, tile stretches to fill a flex parent (used by the 3-person stack). */
+  fill?: boolean
 }) {
+  const { ui: coworkUi } = useCoWorkTheme()
+  const avatarUrl = getParticipantAvatarUrl(trackRef.participant)
+  const handRaised = useParticipantHandRaised(trackRef.participant.identity)
+  const cameraOff =
+    !isScreen &&
+    isCameraTileOff({
+      source: trackRef.source,
+      publication: isTrackReference(trackRef) ? trackRef.publication : null,
+      isPlaceholder: !isTrackReference(trackRef),
+    })
+
   return (
     <YStack
-      width={width}
-      height={height}
+      width={fill ? '100%' : width}
+      height={fill ? '100%' : height}
+      flex={fill ? 1 : undefined}
       maxWidth="100%"
       borderRadius={radius}
       overflow="hidden"
-      borderWidth={1}
-      borderColor="rgba(255,255,255,0.12)"
+      borderWidth={handRaised && !isScreen ? 2 : 1}
+      borderColor={handRaised && !isScreen ? coworkUi.brandLight : 'rgba(255,255,255,0.12)'}
       backgroundColor="#1a1216"
       position="relative"
     >
-      <VideoTrack
-        trackRef={trackRef}
-        style={{ width: '100%', height: '100%' }}
-        objectFit={isScreen ? 'contain' : 'cover'}
-      />
+      {isTrackReference(trackRef) && !cameraOff ? (
+        <VideoTrack
+          trackRef={trackRef}
+          style={{ width: '100%', height: '100%' }}
+          objectFit={isScreen ? 'contain' : 'cover'}
+        />
+      ) : (
+        <YStack flex={1} width="100%" height="100%" alignItems="center" justifyContent="center" gap={compact ? 4 : 8}>
+          <Avatar name={name} src={avatarUrl ?? undefined} size={compact ? '$5' : '$8'} />
+          {!isScreen && !compact ? (
+            <Text fontSize={12} color="rgba(255,255,255,0.55)" fontWeight="600">
+              Camera off
+            </Text>
+          ) : null}
+        </YStack>
+      )}
+      {handRaised && !isScreen ? (
+        <YStack
+          position="absolute"
+          top={compact ? 6 : 10}
+          right={compact ? 6 : 10}
+          width={compact ? 28 : 34}
+          height={compact ? 28 : 34}
+          borderRadius={999}
+          alignItems="center"
+          justifyContent="center"
+          backgroundColor="rgba(12, 8, 10, 0.78)"
+          borderWidth={1}
+          borderColor={coworkUi.brandLight}
+          zIndex={4}
+        >
+          <Text fontSize={compact ? 14 : 16}>✋</Text>
+        </YStack>
+      ) : null}
       <YStack
         position="absolute"
         left={compact ? 6 : 10}
@@ -451,6 +605,7 @@ function NativeVideoTile({
         <Text fontSize={compact ? 10 : 12} fontWeight="700" color="#fff" numberOfLines={1}>
           {name}
           {isScreen ? ' · Screen' : ''}
+          {handRaised && !isScreen ? ' · ✋' : ''}
         </Text>
       </YStack>
     </YStack>

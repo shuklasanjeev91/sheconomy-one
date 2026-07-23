@@ -1,10 +1,12 @@
 import { supabase } from '~/lib/supabase/client'
+import { uploadBlobWithProgress, type UploadProgressHandler } from '~/lib/supabase/storage-upload-progress'
 
 import type {
   ChatEventPayload,
   ChatMessage,
   ChatMessageType,
   ChatPollPayload,
+  ChatStoryReplyPayload,
   ChatSummary,
   ChatType,
   MessageReaction,
@@ -92,6 +94,20 @@ function parseEventPayload(metadata: unknown): ChatEventPayload | null {
     location: typeof raw.location === 'string' ? raw.location : null,
     imageUrl: typeof raw.imageUrl === 'string' ? raw.imageUrl : null,
     isStatic: !eventId,
+  }
+}
+
+function parseStoryReplyPayload(metadata: unknown): ChatStoryReplyPayload | null {
+  if (!metadata || typeof metadata !== 'object') return null
+  const raw = metadata as Record<string, unknown>
+  if (raw.type !== 'story_reply') return null
+  const storyId = typeof raw.storyId === 'string' ? raw.storyId : null
+  if (!storyId) return null
+  return {
+    storyId,
+    authorId: typeof raw.authorId === 'string' ? raw.authorId : null,
+    previewUrl: typeof raw.previewUrl === 'string' ? raw.previewUrl : null,
+    previewText: typeof raw.previewText === 'string' ? raw.previewText : null,
   }
 }
 
@@ -304,6 +320,7 @@ export function mapMessage(row: MessageRow): ChatMessage {
       editedAt: row.edited_at,
       poll: legacy.poll,
       event: legacy.event,
+      storyReply: null,
     }
   }
 
@@ -325,6 +342,7 @@ export function mapMessage(row: MessageRow): ChatMessage {
     editedAt: row.edited_at,
     poll: type === 'poll' ? parsePollPayload(row.metadata) : null,
     event: type === 'event' ? parseEventPayload(row.metadata) : null,
+    storyReply: type === 'text' ? parseStoryReplyPayload(row.metadata) : null,
   }
 }
 
@@ -492,12 +510,19 @@ export async function sendPollMessage(
   senderId: string,
   poll: ChatPollPayload,
 ): Promise<{ messageId: string | null; error: string | null }> {
+  // WhatsApp/legacy-compatible payload: list previews and older clients read
+  // `[Poll]` + `metadata.type`, while modern bubbles use `message_type='poll'`.
   return sendMessage({
     conversationId,
     senderId,
-    content: poll.question,
+    content: `[Poll] ${poll.question}`,
     type: 'poll',
-    metadata: { question: poll.question, options: poll.options },
+    metadata: {
+      type: 'poll',
+      question: poll.question,
+      options: poll.options,
+      votes: {},
+    },
   })
 }
 
@@ -510,9 +535,10 @@ export async function sendEventMessage(
   return sendMessage({
     conversationId,
     senderId,
-    content: event.title,
+    content: `[Event] ${event.title}`,
     type: 'event',
     metadata: {
+      type: 'event',
       eventId: event.eventId,
       title: event.title,
       startTime: event.startTime,
@@ -680,6 +706,17 @@ export async function clearConversation(
   return { error: error?.message ?? null }
 }
 
+export async function markConversationDelivered(
+  conversationId: string,
+  userId: string,
+): Promise<{ error: string | null }> {
+  const { error } = await supabase.rpc('mark_messages_as_delivered', {
+    p_chat_room_id: conversationId,
+    p_user_id: userId,
+  })
+  return { error: error?.message ?? null }
+}
+
 export async function markConversationRead(
   conversationId: string,
   userId: string,
@@ -728,6 +765,10 @@ function extensionForMime(mime: string): string {
   if (mime.includes('webp')) return 'webp'
   if (mime.includes('gif')) return 'gif'
   if (mime.includes('heic')) return 'heic'
+  if (mime.includes('mp4') || mime.includes('m4v')) return 'mp4'
+  if (mime.includes('webm')) return 'webm'
+  if (mime.includes('quicktime') || mime.includes('mov')) return 'mov'
+  if (mime.startsWith('video/')) return 'mp4'
   return 'jpg'
 }
 
@@ -742,19 +783,21 @@ export async function uploadChatMedia(
   conversationId: string,
   userId: string,
   file: { blob: Blob; mimeType: string; fileName?: string },
+  options?: { onProgress?: UploadProgressHandler },
 ): Promise<{ data: UploadChatMediaResult | null; error: string | null }> {
   const ext = file.fileName?.split('.').pop()?.toLowerCase() ?? extensionForMime(file.mimeType)
   const rand = Math.random().toString(36).slice(2, 10)
-  // Path shape `chat/{conversationId}/...` satisfies the participant-scoped RLS policy.
   const path = `chat/${conversationId}/${userId}-${Date.now()}-${rand}.${ext}`
 
-  const { error } = await supabase.storage.from(CHAT_FILES_BUCKET).upload(path, file.blob, {
-    contentType: file.mimeType,
-    upsert: true,
-    cacheControl: '3600',
-  })
+  const { error } = await uploadBlobWithProgress(
+    CHAT_FILES_BUCKET,
+    path,
+    file.blob,
+    file.mimeType,
+    { upsert: true, onProgress: options?.onProgress },
+  )
 
-  if (error) return { data: null, error: error.message }
+  if (error) return { data: null, error }
 
   return {
     data: {

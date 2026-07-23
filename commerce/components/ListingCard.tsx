@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { memo, useState } from 'react'
 import { useRouter } from 'one'
 
 import { AppLink } from '~/components/navigation/AppLink'
@@ -8,7 +8,9 @@ import { getListingSlug } from '~/lib/supabase/commerce'
 import type { ListingSummary } from '~/lib/supabase/commerce'
 import { routes } from '~/lib/routes'
 import { useCart } from '~/commerce/hooks/useCart'
+import { useAsyncAction } from '~/hooks/useAsyncAction'
 import { useThemedShadowStyle } from '~/lib/theme/useThemedShadowStyle'
+import { motion } from '~/lib/theme/motion'
 
 import { FavoriteButton } from './FavoriteButton'
 import { ListingBadge } from './ListingBadge'
@@ -31,7 +33,7 @@ type ListingCardProps = {
 /**
  * Listing tile — square image(s), heart overlay, title, optional rating, bold price.
  */
-export function ListingCard({ listing, compact, showQuickAdd }: ListingCardProps) {
+export const ListingCard = memo(function ListingCard({ listing, compact, showQuickAdd }: ListingCardProps) {
   const ui = useAppUi()
   const cardShadow = useThemedShadowStyle('sm')
   const cardShadowMd = useThemedShadowStyle('md')
@@ -79,10 +81,8 @@ export function ListingCard({ listing, compact, showQuickAdd }: ListingCardProps
             backgroundColor={ui.imagePlaceholder}
             borderWidth={1}
             borderColor={ui.borderSubtle}
-            cursor="pointer"
-            animation="quick"
-            hoverStyle={{ opacity: 0.98, y: -4, ...cardShadowMd }}
-            pressStyle={{ scale: 0.985, y: 0 }}
+            {...motion.cardLift}
+            hoverStyle={{ ...motion.cardLift.hoverStyle, ...cardShadowMd }}
             style={cardShadow}
           >
             <ListingImage
@@ -184,13 +184,13 @@ export function ListingCard({ listing, compact, showQuickAdd }: ListingCardProps
       {showQuickAdd ? <QuickAddButton listing={listing} /> : null}
     </YStack>
   )
-}
+})
 
 function QuickAddButton({ listing }: { listing: ListingSummary }) {
   const { addToCart } = useCart()
   const toast = useAppToast()
   const router = useRouter()
-  const [adding, setAdding] = useState(false)
+  const { run, pending } = useAsyncAction()
 
   return (
     <Button
@@ -198,25 +198,29 @@ function QuickAddButton({ listing }: { listing: ListingSummary }) {
       tone="primary"
       borderRadius={999}
       width="100%"
-      disabled={adding}
+      minHeight={44}
+      disabled={pending}
+      accessibilityLabel={`Add ${listing.title} to cart`}
       icon={<Icons.ShoppingCart size={14} />}
-      onPress={async () => {
-        setAdding(true)
-        const { error } = await addToCart(listing.id)
-        setAdding(false)
-        if (error) {
-          // Likely needs variant/option selection — send them to the product page.
-          toast.show('Choose options', {
-            tone: 'default',
-            message: 'Select options on the product page to add it.',
-          })
-          router.push(routes.listing(getListingSlug(listing)))
-          return
-        }
-        toast.show('Added to cart', { tone: 'success' })
+      onPress={() => {
+        void run(
+          async () => {
+            const { error } = await addToCart(listing.id)
+            if (error) {
+              toast.show('Choose options', {
+                tone: 'default',
+                message: 'Select options on the product page to add it.',
+              })
+              router.push(routes.listing(getListingSlug(listing)))
+              return
+            }
+            toast.show('Added to cart', { tone: 'success' })
+          },
+          { haptic: 'success', errorTitle: 'Could not add to cart' },
+        )
       }}
     >
-      {adding ? 'Adding…' : 'Add to cart'}
+      {pending ? 'Adding…' : 'Add to cart'}
     </Button>
   )
 }

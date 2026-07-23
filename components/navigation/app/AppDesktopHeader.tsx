@@ -35,7 +35,7 @@ export function AppDesktopHeader() {
 
   const hasShops = shops.length > 0
   const sellerHubHref =
-    hasShops && primaryShopId ? commerceRoutes.manageShop(primaryShopId) : commerceRoutes.myShops
+    hasShops && primaryShopId ? commerceRoutes.manageShop(primaryShopId) : commerceRoutes.createShop
   const showCreateShop = canManageShops && isAuthenticated && !shopsLoading && !hasShops
 
   return (
@@ -52,7 +52,8 @@ export function AppDesktopHeader() {
     >
       <XStack
         width="100%"
-        alignSelf="center"
+        maxWidth="100%"
+        alignSelf="stretch"
         alignItems="stretch"
         paddingHorizontal={gutter}
         height={60}
@@ -89,7 +90,7 @@ export function AppDesktopHeader() {
                 />
               ) : null}
               {showCreateShop ? (
-                <AppLink href={`${commerceRoutes.myShops}?create=1` as import('one').Href} asChild>
+                <AppLink href={commerceRoutes.createShop} asChild>
                   <XStack
                     height={40}
                     paddingHorizontal="$3"

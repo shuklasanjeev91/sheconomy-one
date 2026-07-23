@@ -8,6 +8,22 @@ export type MutualIntroducer = {
   headline: string | null
 }
 
+export type IntroductionStatus = 'pending' | 'accepted' | 'declined' | 'cancelled'
+
+export type IntroductionRequest = {
+  id: string
+  requester_id: string
+  introducer_id: string
+  target_id: string
+  message: string | null
+  status: IntroductionStatus
+  created_at: string
+  requester_name: string
+  requester_avatar: string | null
+  target_name: string
+  target_avatar: string | null
+}
+
 /** List accepted connections of the viewer who are also connected to the target. */
 export async function fetchMutualIntroducers(
   viewerId: string,
@@ -27,7 +43,6 @@ export async function fetchMutualIntroducers(
 
   if (!viewerPeers.size) return []
 
-  const peerIds = [...viewerPeers]
   const { data: targetConnections } = await supabase
     .from('connections')
     .select('sender_id, receiver_id')
@@ -67,5 +82,60 @@ export async function requestIntroduction(
     p_target_id: targetId,
     p_message: message?.trim() || null,
   })
+  return { error: error?.message ?? null }
+}
+
+/** Pending intros where the viewer is the introducer. */
+export async function fetchIntroductionInbox(
+  userId: string,
+): Promise<{ items: IntroductionRequest[]; error: string | null }> {
+  const { data, error } = await supabase
+    .from('introduction_requests')
+    .select('*')
+    .eq('introducer_id', userId)
+    .eq('status', 'pending')
+    .order('created_at', { ascending: false })
+    .limit(40)
+
+  if (error) return { items: [], error: error.message }
+  const rows = data ?? []
+  if (!rows.length) return { items: [], error: null }
+
+  const profileIds = [...new Set(rows.flatMap((row) => [row.requester_id, row.target_id]))]
+  const { data: profiles } = await supabase
+    .from('profiles')
+    .select('id, full_name, username, avatar_url')
+    .in('id', profileIds)
+  const byId = new Map((profiles ?? []).map((profile) => [profile.id, profile]))
+
+  const items: IntroductionRequest[] = rows.map((row) => {
+    const requester = byId.get(row.requester_id)
+    const target = byId.get(row.target_id)
+    return {
+      id: row.id,
+      requester_id: row.requester_id,
+      introducer_id: row.introducer_id,
+      target_id: row.target_id,
+      message: row.message,
+      status: row.status as IntroductionStatus,
+      created_at: row.created_at,
+      requester_name: requester?.full_name || requester?.username || 'Member',
+      requester_avatar: requester?.avatar_url ?? null,
+      target_name: target?.full_name || target?.username || 'Member',
+      target_avatar: target?.avatar_url ?? null,
+    }
+  })
+
+  return { items, error: null }
+}
+
+export async function respondToIntroduction(
+  requestId: string,
+  status: 'accepted' | 'declined' | 'cancelled',
+): Promise<{ error: string | null }> {
+  const { error } = await supabase
+    .from('introduction_requests')
+    .update({ status })
+    .eq('id', requestId)
   return { error: error?.message ?? null }
 }

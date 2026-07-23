@@ -16,9 +16,12 @@ declare module 'one' {
         | `/(store)/category`
         | `/(store)/checkout`
         | `/(store)/favorites`
+        | `/(store)/following`
         | `/(store)/listing`
-        | `/(store)/my-shops`
         | `/(store)/orders`
+        | `/(store)/orders/payu`
+        | `/(store)/orders/payu-return`
+        | `/(store)/orders/success`
         | `/(store)/payment-methods`
         | `/(store)/search`
         | `/(store)/shop`
@@ -28,11 +31,21 @@ declare module 'one' {
         | `/admin`
         | `/admin/`
         | `/admin/analytics`
+        | `/admin/blog`
         | `/admin/cart`
         | `/admin/categories`
         | `/admin/cms`
         | `/admin/company-pages`
+        | `/admin/components/AdminAnalyticsManager`
+        | `/admin/components/AdminBlogDetail`
+        | `/admin/components/AdminBlogManager`
+        | `/admin/components/AdminCmsManager`
+        | `/admin/components/AdminCompanyPagesManager`
+        | `/admin/components/AdminGroupsManager`
+        | `/admin/components/AdminSaleEventsManager`
+        | `/admin/components/AdminSettingsManager`
         | `/admin/components/AdminShopsManager`
+        | `/admin/components/CmsCoverImage`
         | `/admin/groups`
         | `/admin/layout`
         | `/admin/moderation`
@@ -93,15 +106,18 @@ declare module 'one' {
         | `/community/stories/create`
         | `/create-my-shop`
         | `/favorites`
+        | `/following`
         | `/help`
         | `/legal/ads`
         | `/legal/cookies`
         | `/legal/privacy`
         | `/legal/terms`
         | `/listing`
-        | `/my-shops`
         | `/notifications`
         | `/orders`
+        | `/orders/payu`
+        | `/orders/payu-return`
+        | `/orders/success`
         | `/payment-methods`
         | `/profile`
         | `/search`
@@ -139,8 +155,9 @@ declare module 'one' {
         | `/(store)/browse/${OneRouter.SingleRoutePart<T>}`
         | `/(store)/category/${OneRouter.SingleRoutePart<T>}`
         | `/(store)/listing/${OneRouter.SingleRoutePart<T>}`
-        | `/(store)/my-shops/${OneRouter.SingleRoutePart<T>}`
+        | `/(store)/orders/${OneRouter.SingleRoutePart<T>}`
         | `/(store)/shop/${OneRouter.SingleRoutePart<T>}`
+        | `/admin/blog/${OneRouter.SingleRoutePart<T>}`
         | `/browse/${OneRouter.SingleRoutePart<T>}`
         | `/category/${OneRouter.SingleRoutePart<T>}`
         | `/chat/${OneRouter.SingleRoutePart<T>}`
@@ -149,6 +166,8 @@ declare module 'one' {
         | `/class/playlists/${OneRouter.SingleRoutePart<T>}`
         | `/co-work/meeting/${OneRouter.SingleRoutePart<T>}`
         | `/co-work/meeting/${OneRouter.SingleRoutePart<T>}/live`
+        | `/co-work/recording/${OneRouter.SingleRoutePart<T>}`
+        | `/community/article/${OneRouter.SingleRoutePart<T>}`
         | `/community/company/${OneRouter.SingleRoutePart<T>}`
         | `/community/events/${OneRouter.SingleRoutePart<T>}`
         | `/community/group/${OneRouter.SingleRoutePart<T>}`
@@ -158,7 +177,7 @@ declare module 'one' {
         | `/community/post/${OneRouter.SingleRoutePart<T>}`
         | `/community/stories/${OneRouter.SingleRoutePart<T>}`
         | `/listing/${OneRouter.SingleRoutePart<T>}`
-        | `/my-shops/${OneRouter.SingleRoutePart<T>}`
+        | `/orders/${OneRouter.SingleRoutePart<T>}`
         | `/profile/${OneRouter.SingleRoutePart<T>}`
         | `/profile/${OneRouter.SingleRoutePart<T>}/connections`
         | `/profile/${OneRouter.SingleRoutePart<T>}/followers`
@@ -168,8 +187,9 @@ declare module 'one' {
         | `/(store)/browse/[kind]`
         | `/(store)/category/[slug]`
         | `/(store)/listing/[slug]`
-        | `/(store)/my-shops/[shopId]`
+        | `/(store)/orders/[id]`
         | `/(store)/shop/[slug]`
+        | `/admin/blog/[id]`
         | `/browse/[kind]`
         | `/category/[slug]`
         | `/chat/[id]`
@@ -178,6 +198,8 @@ declare module 'one' {
         | `/class/playlists/[id]`
         | `/co-work/meeting/[code]`
         | `/co-work/meeting/[code]/live`
+        | `/co-work/recording/[token]`
+        | `/community/article/[id]`
         | `/community/company/[slug]`
         | `/community/events/[id]`
         | `/community/group/[id]`
@@ -187,7 +209,7 @@ declare module 'one' {
         | `/community/post/[id]`
         | `/community/stories/[userId]`
         | `/listing/[slug]`
-        | `/my-shops/[shopId]`
+        | `/orders/[id]`
         | `/profile/[username]`
         | `/profile/[username]/connections`
         | `/profile/[username]/followers`
@@ -198,8 +220,9 @@ declare module 'one' {
         '/(store)/browse/[kind]': RouteInfo<{ kind: string }>
         '/(store)/category/[slug]': RouteInfo<{ slug: string }>
         '/(store)/listing/[slug]': RouteInfo<{ slug: string }>
-        '/(store)/my-shops/[shopId]': RouteInfo<{ shopId: string }>
+        '/(store)/orders/[id]': RouteInfo<{ id: string }>
         '/(store)/shop/[slug]': RouteInfo<{ slug: string }>
+        '/admin/blog/[id]': RouteInfo<{ id: string }>
         '/browse/[kind]': RouteInfo<{ kind: string }>
         '/category/[slug]': RouteInfo<{ slug: string }>
         '/chat/[id]': RouteInfo<{ id: string }>
@@ -208,6 +231,8 @@ declare module 'one' {
         '/class/playlists/[id]': RouteInfo<{ id: string }>
         '/co-work/meeting/[code]': RouteInfo<{ code: string }>
         '/co-work/meeting/[code]/live': RouteInfo<{ code: string }>
+        '/co-work/recording/[token]': RouteInfo<{ token: string }>
+        '/community/article/[id]': RouteInfo<{ id: string }>
         '/community/company/[slug]': RouteInfo<{ slug: string }>
         '/community/events/[id]': RouteInfo<{ id: string }>
         '/community/group/[id]': RouteInfo<{ id: string }>
@@ -217,7 +242,7 @@ declare module 'one' {
         '/community/post/[id]': RouteInfo<{ id: string }>
         '/community/stories/[userId]': RouteInfo<{ userId: string }>
         '/listing/[slug]': RouteInfo<{ slug: string }>
-        '/my-shops/[shopId]': RouteInfo<{ shopId: string }>
+        '/orders/[id]': RouteInfo<{ id: string }>
         '/profile/[username]': RouteInfo<{ username: string }>
         '/profile/[username]/connections': RouteInfo<{ username: string }>
         '/profile/[username]/followers': RouteInfo<{ username: string }>

@@ -11,6 +11,7 @@ import {
   ConfirmDialog,
   Icons,
   LinearGradient,
+  ScreenState,
   Spinner,
   Text,
   XStack,
@@ -22,10 +23,13 @@ import { fetchShopAddressDetails, type ShopAddressDetails } from '~/commerce/lib
 import { getShadowStyle, radius } from '~/config/tokens'
 import { getCountryName } from '~/lib/geo'
 import { useAppLayout } from '~/hooks/useAppLayout'
+import { formatCurrency } from '~/lib/format'
 import { loadVendorAnalytics, selectVendorAnalytics } from '~/lib/orders/vendor-orders.store'
+import type { VendorOrderAnalytics } from '~/lib/orders/vendor-orders.type'
 import { openExternalUrl as openPlatformUrl } from '~/lib/platform/openUrl'
 import { commerceRoutes, vendorRoutes } from '~/lib/routes'
 import { deleteShop, loadMyShops, loadShopStats, updateShop } from '~/lib/shop/shop.store'
+import { getShopFollowerCount } from '~/lib/shop/shop.service'
 import type { Shop, ShopStats } from '~/lib/shop/shop.type'
 import { formatShopHours, getShopCompletionPercentage } from '~/lib/shop/shop.utils'
 import { useAppDispatch, useAppSelector } from '~/lib/store/hooks'
@@ -46,9 +50,12 @@ const SOCIAL_ICONS: Record<string, IconType> = {
   website: Icons.Globe,
 }
 
-/** Illustrative weekday engagement heights for the placeholder chart (0–1). */
-const ENGAGEMENT_SAMPLE = [0.35, 0.55, 0.4, 0.7, 0.5, 0.85, 0.6]
-const ENGAGEMENT_DAYS = ['M', 'T', 'W', 'T', 'F', 'S', 'S']
+/** Last 7 days order counts (index 0 = 6 days ago). */
+const ENGAGEMENT_DAYS = ['D-6', 'D-5', 'D-4', 'D-3', 'D-2', 'D-1', 'Today']
+
+function formatShopMoney(value: number, currency?: string | null) {
+  return formatCurrency(value, currency ?? 'INR')
+}
 
 function openExternalUrl(url: string | null | undefined) {
   if (!url) return
@@ -65,22 +72,32 @@ export function VendorMyShopScreen() {
 
   const shop = useAppSelector((s) => s.shop.currentShop)
   const stats = useAppSelector((s) => s.shop.shopStats)
-  const isLoadingShops = useAppSelector((s) => s.shop.isLoadingShops)
+  const isLoadingMyShops = useAppSelector((s) => s.shop.isLoadingMyShops)
+  const myShopsLoaded = useAppSelector((s) => s.shop.myShopsLoaded)
+  const shopError = useAppSelector((s) => s.shop.error)
   const isUpdating = useAppSelector((s) => s.shop.isUpdating)
   const isDeleting = useAppSelector((s) => s.shop.isDeleting)
   const analytics = useAppSelector(selectVendorAnalytics)
 
   const [address, setAddress] = useState<ShopAddressDetails | null>(null)
+  const [followerCount, setFollowerCount] = useState<number | null>(null)
 
   useEffect(() => {
-    if (!shop) void dispatch(loadMyShops(undefined))
-  }, [dispatch, shop])
+    if (!shop && !myShopsLoaded) void dispatch(loadMyShops(undefined))
+  }, [dispatch, shop, myShopsLoaded])
 
   useEffect(() => {
     if (!shop?.id) return
     void dispatch(loadShopStats(shop.id))
     // All-time order totals for this shop (since the shop was created).
     void dispatch(loadVendorAnalytics({ vendorId: shop.id, filters: { date_from: shop.created_at } }))
+    let active = true
+    void getShopFollowerCount(shop.id).then((result) => {
+      if (active && result.success) setFollowerCount(result.data ?? 0)
+    })
+    return () => {
+      active = false
+    }
   }, [dispatch, shop?.id, shop?.created_at])
 
   useEffect(() => {
@@ -99,12 +116,43 @@ export function VendorMyShopScreen() {
 
   const completion = useMemo(() => getShopCompletionPercentage(shop), [shop])
   const totalOrders = analytics?.total_orders ?? null
+  const engagementSeries = analytics?.engagement_series ?? [0, 0, 0, 0, 0, 0, 0]
+  const retryLoadShops = () => {
+    void dispatch(loadMyShops(undefined))
+  }
 
-  if (!shop && isLoadingShops) {
+  // Only block the first paint while the owner's shops are in flight.
+  // Never gate on the shared public/admin `isLoadingShops` flag.
+  if (!shop && (isLoadingMyShops || !myShopsLoaded)) {
     return (
-      <PageCenter>
-        <Spinner size="large" />
-      </PageCenter>
+      <YStack flex={1} width="100%" padding="$4" gap="$4">
+        <XStack gap="$3" alignItems="center">
+          <YStack
+            width={72}
+            height={72}
+            borderRadius={999}
+            backgroundColor={ui.surfaceMuted}
+          />
+          <YStack flex={1} gap="$2">
+            <YStack height={22} width="55%" borderRadius={8} backgroundColor={ui.surfaceMuted} />
+            <YStack height={14} width="35%" borderRadius={8} backgroundColor={ui.surfaceMuted} />
+          </YStack>
+        </XStack>
+        <YStack height={120} width="100%" borderRadius={16} backgroundColor={ui.surfaceMuted} />
+        <YStack height={180} width="100%" borderRadius={16} backgroundColor={ui.surfaceMuted} />
+      </YStack>
+    )
+  }
+
+  if (!shop && shopError) {
+    return (
+      <ScreenState
+        error={shopError}
+        empty
+        errorTitle="Couldn’t load your shop"
+        onRetry={retryLoadShops}
+        minHeight={360}
+      />
     )
   }
 
@@ -127,9 +175,9 @@ export function VendorMyShopScreen() {
         <Text fontSize={14} color={ui.textSecondary} textAlign="center" maxWidth={360} lineHeight={20}>
           Create your storefront to start selling on SHEconomy and manage it from here.
         </Text>
-        <AppLink href={commerceRoutes.myShops} asChild>
+        <AppLink href={commerceRoutes.createShop} asChild>
           <Button tone="primary" size="$4" borderRadius={999} marginTop="$2">
-            Go to My Shops
+            Create your shop
           </Button>
         </AppLink>
       </YStack>
@@ -163,7 +211,7 @@ export function VendorMyShopScreen() {
     try {
       await dispatch(deleteShop(shop.id)).unwrap()
       toast.show('Shop deleted', { tone: 'success' })
-      router.replace(commerceRoutes.myShops)
+      router.replace(commerceRoutes.createShop)
     } catch (error) {
       toast.show('Could not delete shop', {
         tone: 'danger',
@@ -199,6 +247,8 @@ export function VendorMyShopScreen() {
               stats={stats}
               address={address}
               totalOrders={totalOrders}
+              followerCount={followerCount}
+              engagementSeries={engagementSeries}
               isDesktop={isDesktop}
             />
             <DangerZone
@@ -211,7 +261,13 @@ export function VendorMyShopScreen() {
             />
           </YStack>
           <YStack width={320} flexShrink={0} gap="$4">
-            <RightRail ui={ui} shop={shop} completion={completion} />
+            <RightRail
+              ui={ui}
+              shop={shop}
+              completion={completion}
+              stats={stats}
+              analytics={analytics}
+            />
           </YStack>
         </XStack>
       ) : (
@@ -222,9 +278,17 @@ export function VendorMyShopScreen() {
             stats={stats}
             address={address}
             totalOrders={totalOrders}
+            followerCount={followerCount}
+            engagementSeries={engagementSeries}
             isDesktop={isDesktop}
           />
-          <RightRail ui={ui} shop={shop} completion={completion} />
+          <RightRail
+            ui={ui}
+            shop={shop}
+            completion={completion}
+            stats={stats}
+            analytics={analytics}
+          />
           <DangerZone
             ui={ui}
             shop={shop}
@@ -260,21 +324,7 @@ function ShopHeaderBar({ ui, shop, isDesktop, previewHref, isDeleting, onDelete 
       gap="$3"
       flexWrap="wrap"
     >
-      <YStack gap="$1" minWidth={0}>
-        <XStack alignItems="center" gap="$1.5">
-          <Icons.Store size={14} color={ui.textMuted} />
-          <Text fontSize={12} fontWeight="600" color={ui.textMuted} letterSpacing={0.2}>
-            Shop Management
-          </Text>
-          <Icons.ChevronRight size={13} color={ui.textMuted} />
-          <Text fontSize={12} fontWeight="700" color={ui.brand} numberOfLines={1}>
-            {shop.shop_name}
-          </Text>
-        </XStack>
-        <Text fontSize={isDesktop ? 26 : 22} fontWeight="800" color={ui.text} letterSpacing={-0.5}>
-          My Shop
-        </Text>
-      </YStack>
+   
 
       <XStack gap="$2" flexWrap="wrap" alignItems="center">
         <AppLink href={previewHref} asChild>
@@ -322,14 +372,26 @@ type MainColumnProps = {
   stats: ShopStats | null
   address: ShopAddressDetails | null
   totalOrders: number | null
+  followerCount: number | null
+  engagementSeries: number[]
   isDesktop: boolean
 }
 
-function MainColumn({ ui, shop, stats, address, totalOrders, isDesktop }: MainColumnProps) {
+function MainColumn({
+  ui,
+  shop,
+  stats,
+  address,
+  totalOrders,
+  followerCount,
+  engagementSeries,
+  isDesktop,
+}: MainColumnProps) {
   const categories = Array.isArray(shop.shop_categories) ? (shop.shop_categories as string[]) : []
   const socialLinks = (shop.social_links as Record<string, string> | null) ?? {}
   const socialEntries = Object.entries(socialLinks).filter(([, url]) => Boolean(url))
   const hours = formatShopHours(shop.shop_hours as Record<string, string> | null)
+  const maxEngagement = Math.max(1, ...engagementSeries)
 
   const activeProducts = stats?.activeListings ?? 0
   const totalListings = stats?.totalListings ?? 0
@@ -388,7 +450,6 @@ function MainColumn({ ui, shop, stats, address, totalOrders, isDesktop }: MainCo
                     </Text>
                   </XStack>
                 ) : null}
-                <PlaceholderPill ui={ui} icon={Icons.Crown} label="Premium Merchant" />
               </XStack>
               <XStack alignItems="center" gap="$2" flexWrap="wrap">
                 <XStack
@@ -458,7 +519,13 @@ function MainColumn({ ui, shop, stats, address, totalOrders, isDesktop }: MainCo
           hint={reviewsLabel}
           real={rating != null && rating > 0}
         />
-        <StatTile ui={ui} icon={Icons.Users} label="Followers" value="1.2k" />
+        <StatTile
+          ui={ui}
+          icon={Icons.Users}
+          label="Followers"
+          value={followerCount == null ? '—' : String(followerCount)}
+          real={followerCount != null}
+        />
       </XStack>
 
       {/* Address + Contact */}
@@ -539,23 +606,25 @@ function MainColumn({ ui, shop, stats, address, totalOrders, isDesktop }: MainCo
         </Card>
       </XStack>
 
-      {/* Recent engagement (placeholder chart) */}
+      {/* Recent engagement from order analytics */}
       <Card ui={ui}>
         <XStack alignItems="center" justifyContent="space-between">
-          <SectionHeading ui={ui} icon={Icons.Activity} title="Recent Engagement" noMargin />
-          <SampleBadge ui={ui} />
+          <SectionHeading ui={ui} icon={Icons.Activity} title="Orders · last 7 days" noMargin />
+          <Text fontSize={11} fontWeight="700" color={ui.textMuted}>
+            Live
+          </Text>
         </XStack>
         <XStack alignItems="flex-end" justifyContent="space-between" height={120} marginTop="$3" gap="$2">
-          {ENGAGEMENT_SAMPLE.map((value, index) => (
+          {engagementSeries.map((value, index) => (
             <YStack key={index} flex={1} alignItems="center" gap="$1.5">
               <YStack
                 width="100%"
                 maxWidth={26}
-                height={Math.max(8, value * 96)}
+                height={Math.max(8, (value / maxEngagement) * 96)}
                 borderRadius={8}
-                backgroundColor={index === ENGAGEMENT_SAMPLE.length - 2 ? ui.brand : ui.roseSurface}
+                backgroundColor={index === engagementSeries.length - 1 ? ui.brand : ui.roseSurface}
               />
-              <Text fontSize={11} color={ui.textMuted} fontWeight="600">
+              <Text fontSize={10} color={ui.textMuted} fontWeight="600">
                 {ENGAGEMENT_DAYS[index]}
               </Text>
             </YStack>
@@ -590,28 +659,21 @@ function MainColumn({ ui, shop, stats, address, totalOrders, isDesktop }: MainCo
         <Card ui={ui} flex={1} minWidth={260}>
           <XStack alignItems="center" justifyContent="space-between">
             <SectionHeading ui={ui} icon={Icons.CreditCard} title="Payment Methods" noMargin />
-            <SampleBadge ui={ui} />
           </XStack>
-          <XStack gap="$2" flexWrap="wrap" marginTop="$3">
-            {['UPI', 'Cards', 'Net Banking', 'Cash on Delivery'].map((method) => (
-              <XStack
-                key={method}
-                alignItems="center"
-                gap="$1.5"
-                paddingHorizontal="$3"
-                paddingVertical="$2"
-                borderRadius={999}
-                borderWidth={1}
-                borderColor={ui.borderSubtle}
-                backgroundColor={ui.surfaceMuted}
-              >
-                <Icons.Check size={13} color={ui.success} />
-                <Text fontSize={12} fontWeight="600" color={ui.text}>
-                  {method}
-                </Text>
-              </XStack>
-            ))}
-          </XStack>
+          <YStack gap="$2" marginTop="$3">
+            <Text fontSize={13} color={ui.textSecondary}>
+              Checkout accepts cards, UPI, net banking, and COD based on your shop Payments and
+              Shipping settings.
+            </Text>
+            <AppLink
+              href={`${String(vendorRoutes.settings)}?section=payments` as Href}
+              asChild
+            >
+              <Button size="$3" borderRadius={999} alignSelf="flex-start">
+                Manage payments
+              </Button>
+            </AppLink>
+          </YStack>
         </Card>
       </XStack>
     </YStack>
@@ -707,15 +769,46 @@ type RightRailProps = {
   ui: AppUiTokens
   shop: Shop
   completion: number
+  stats: ShopStats | null
+  analytics: VendorOrderAnalytics | null
 }
 
-function RightRail({ ui, shop, completion }: RightRailProps) {
+function RightRail({ ui, shop, completion, stats, analytics }: RightRailProps) {
+  const avgOrder =
+    analytics && analytics.total_orders > 0
+      ? analytics.average_order_value
+      : 0
+  const repeatRate =
+    analytics && analytics.total_orders > 0
+      ? Math.min(
+          100,
+          Math.round(
+            ((analytics.status_distribution.delivered ??
+              analytics.status_distribution.completed ??
+              0) /
+              analytics.total_orders) *
+              100,
+          ),
+        )
+      : 0
+
   const healthRows = [
-    { label: 'Verification', value: shop.verified ? 'Verified' : 'Pending', ok: shop.verified, real: true },
-    { label: 'Profile completeness', value: `${completion}%`, ok: completion >= 80, real: true },
-    { label: 'Visibility', value: shop.is_active ? 'Live' : 'Paused', ok: shop.is_active, real: true },
-    { label: 'Support responsiveness', value: 'Great', ok: true, real: false },
-    { label: 'Quality score', value: 'A-', ok: true, real: false },
+    { label: 'Verification', value: shop.verified ? 'Verified' : 'Pending', ok: shop.verified },
+    { label: 'Profile completeness', value: `${completion}%`, ok: completion >= 80 },
+    { label: 'Visibility', value: shop.is_active ? 'Live' : 'Paused', ok: shop.is_active },
+    {
+      label: 'Active listings',
+      value: String(stats?.activeListings ?? 0),
+      ok: (stats?.activeListings ?? 0) > 0,
+    },
+    {
+      label: 'Avg rating',
+      value:
+        shop.average_rating != null && Number(shop.average_rating) > 0
+          ? Number(shop.average_rating).toFixed(1)
+          : '—',
+      ok: Number(shop.average_rating ?? 0) >= 4,
+    },
   ]
 
   return (
@@ -724,12 +817,26 @@ function RightRail({ ui, shop, completion }: RightRailProps) {
       <Card ui={ui}>
         <XStack alignItems="center" justifyContent="space-between">
           <SectionHeading ui={ui} icon={Icons.TrendingUp} title="Performance Snapshot" noMargin />
-          <SampleBadge ui={ui} />
         </XStack>
         <YStack gap="$3" marginTop="$3">
-          <SnapshotRow ui={ui} label="Views (7d)" value="3,420" delta="+8.2%" />
-          <SnapshotRow ui={ui} label="Conversion" value="2.4%" delta="+0.3%" />
-          <SnapshotRow ui={ui} label="Repeat buyers" value="34%" delta="+1.1%" />
+          <SnapshotRow
+            ui={ui}
+            label="Orders"
+            value={String(analytics?.total_orders ?? 0)}
+            delta={`${stats?.activeListings ?? 0} live listings`}
+          />
+          <SnapshotRow
+            ui={ui}
+            label="Revenue"
+            value={formatShopMoney(analytics?.total_revenue ?? 0, shop.shop_currency)}
+            delta={`AOV ${formatShopMoney(avgOrder, shop.shop_currency)}`}
+          />
+          <SnapshotRow
+            ui={ui}
+            label="Fulfilled share"
+            value={`${repeatRate}%`}
+            delta={`${shop.total_reviews ?? 0} reviews`}
+          />
         </YStack>
       </Card>
 
@@ -757,7 +864,6 @@ function RightRail({ ui, shop, completion }: RightRailProps) {
                 <Text fontSize={13} color={ui.textSecondary} fontWeight="600" numberOfLines={1}>
                   {row.label}
                 </Text>
-                {!row.real ? <SampleDot ui={ui} /> : null}
               </XStack>
               <Text fontSize={13} fontWeight="700" color={row.ok ? ui.text : ui.textMuted}>
                 {row.value}
@@ -852,7 +958,6 @@ function StatTile({
   label,
   value,
   hint,
-  real,
 }: {
   ui: AppUiTokens
   icon: IconType
@@ -885,7 +990,6 @@ function StatTile({
         >
           <Icon size={17} color={ui.brand} />
         </YStack>
-        {!real ? <SampleDot ui={ui} /> : null}
       </XStack>
       <Text fontSize={22} fontWeight="800" color={ui.text} letterSpacing={-0.5}>
         {value}
@@ -1014,64 +1118,10 @@ function SnapshotRow({
   )
 }
 
-function PlaceholderPill({ ui, icon, label }: { ui: AppUiTokens; icon: IconType; label: string }) {
-  const Icon = icon
-  return (
-    <XStack
-      alignItems="center"
-      gap={4}
-      paddingHorizontal={8}
-      paddingVertical={3}
-      borderRadius={999}
-      backgroundColor={ui.chip}
-    >
-      <Icon size={12} color={ui.brand} />
-      <Text fontSize={11} fontWeight="700" color={ui.textSecondary}>
-        {label}
-      </Text>
-    </XStack>
-  )
-}
-
 function PlaceholderNote({ ui, text }: { ui: AppUiTokens; text: string }) {
   return (
     <Text fontSize={13} color={ui.textMuted} lineHeight={19} marginTop="$1" fontStyle="italic">
       {text}
     </Text>
-  )
-}
-
-/** Small badge marking a widget whose values are illustrative placeholders. */
-function SampleBadge({ ui }: { ui: AppUiTokens }) {
-  return (
-    <XStack
-      alignItems="center"
-      gap={4}
-      paddingHorizontal={8}
-      paddingVertical={2}
-      borderRadius={999}
-      backgroundColor={ui.chip}
-    >
-      <YStack width={6} height={6} borderRadius={999} backgroundColor={ui.textMuted} />
-      <Text fontSize={10} fontWeight="700" color={ui.textMuted} letterSpacing={0.3}>
-        SAMPLE
-      </Text>
-    </XStack>
-  )
-}
-
-function SampleDot({ ui }: { ui: AppUiTokens }) {
-  return (
-    <XStack
-      alignItems="center"
-      paddingHorizontal={6}
-      paddingVertical={1}
-      borderRadius={999}
-      backgroundColor={ui.chip}
-    >
-      <Text fontSize={9} fontWeight="700" color={ui.textMuted} letterSpacing={0.3}>
-        SAMPLE
-      </Text>
-    </XStack>
   )
 }

@@ -34,7 +34,7 @@ export const COMMERCE_FOOTER_COLUMNS: { title: string; links: NavLinkItem[] }[] 
     title: 'Sell',
     links: [
       { href: commerceRoutes.createShop, label: `Sell on ${BRAND_NAME}` },
-      { href: commerceRoutes.myShops, label: 'Your shops' },
+      { href: commerceRoutes.manageShop(), label: 'Your shop' },
       { href: appRoutes.helpProduct('shop'), label: 'Seller help' },
       { href: routes.signIn, label: 'Create account' },
       { href: appRoutes.settingsSection('shop'), label: 'Shop settings' },

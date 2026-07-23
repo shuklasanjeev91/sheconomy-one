@@ -9,6 +9,7 @@ export async function hideCommunityPost(
     { user_id: userId, post_id: postId },
     { onConflict: 'user_id,post_id' },
   )
+  invalidateFeedExclusionCache()
   return { error: error?.message ?? null }
 }
 
@@ -61,7 +62,116 @@ export async function blockCommunityMember(
       `and(follower_id.eq.${blockerId},following_id.eq.${blockedId}),and(follower_id.eq.${blockedId},following_id.eq.${blockerId})`,
     )
 
+  invalidateFeedExclusionCache()
   return { error: null }
+}
+
+/** Unblock a member previously blocked by the viewer. */
+export async function unblockCommunityMember(
+  blockerId: string,
+  blockedId: string,
+): Promise<{ error: string | null }> {
+  const { error } = await supabase
+    .from('blocked_users')
+    .delete()
+    .eq('blocker_id', blockerId)
+    .eq('blocked_id', blockedId)
+
+  invalidateFeedExclusionCache()
+  return { error: error?.message ?? null }
+}
+
+export type BlockedMember = {
+  id: string
+  blockedId: string
+  createdAt: string
+  fullName: string | null
+  username: string | null
+  avatarUrl: string | null
+}
+
+/** List members the viewer has blocked, with profile context for settings UI. */
+export async function listBlockedMembers(blockerId: string): Promise<{
+  members: BlockedMember[]
+  error: string | null
+}> {
+  const { data, error } = await supabase
+    .from('blocked_users')
+    .select(
+      'id, blocked_id, created_at, profile:profiles!blocked_users_blocked_id_fkey(id, full_name, username, avatar_url)',
+    )
+    .eq('blocker_id', blockerId)
+    .order('created_at', { ascending: false })
+
+  if (error) {
+    // Fallback without join if the FK alias differs across environments.
+    const fallback = await supabase
+      .from('blocked_users')
+      .select('id, blocked_id, created_at')
+      .eq('blocker_id', blockerId)
+      .order('created_at', { ascending: false })
+
+    if (fallback.error) {
+      return { members: [], error: fallback.error.message }
+    }
+
+    const ids = (fallback.data ?? []).map((row) => row.blocked_id)
+    const profiles =
+      ids.length === 0
+        ? []
+        : (
+            await supabase
+              .from('profiles')
+              .select('id, full_name, username, avatar_url')
+              .in('id', ids)
+          ).data ?? []
+
+    const byId = new Map(profiles.map((p) => [p.id, p]))
+    return {
+      members: (fallback.data ?? []).map((row) => {
+        const profile = byId.get(row.blocked_id)
+        return {
+          id: row.id,
+          blockedId: row.blocked_id,
+          createdAt: row.created_at,
+          fullName: profile?.full_name ?? null,
+          username: profile?.username ?? null,
+          avatarUrl: profile?.avatar_url ?? null,
+        }
+      }),
+      error: null,
+    }
+  }
+
+  return {
+    members: (data ?? []).map((row: any) => {
+      const profile = Array.isArray(row.profile) ? row.profile[0] : row.profile
+      return {
+        id: row.id,
+        blockedId: row.blocked_id,
+        createdAt: row.created_at,
+        fullName: profile?.full_name ?? null,
+        username: profile?.username ?? null,
+        avatarUrl: profile?.avatar_url ?? null,
+      }
+    }),
+    error: null,
+  }
+}
+
+/** Undo a hide — used by undo toasts after hide-post. */
+export async function unhideCommunityPost(
+  userId: string,
+  postId: string,
+): Promise<{ error: string | null }> {
+  const { error } = await supabase
+    .from('community_hidden_posts')
+    .delete()
+    .eq('user_id', userId)
+    .eq('post_id', postId)
+
+  invalidateFeedExclusionCache()
+  return { error: error?.message ?? null }
 }
 
 /** Report a member for review. */
@@ -86,10 +196,21 @@ export async function reportCommunityMember(
   return { error: error?.message ?? null }
 }
 
+type FeedExclusionSnapshot = {
+  hiddenPostIds: string[]
+  blockedUserIds: string[]
+}
+
+let feedExclusionCache: { userId: string; snapshot: FeedExclusionSnapshot } | null = null
+
+export function invalidateFeedExclusionCache() {
+  feedExclusionCache = null
+}
+
 /** IDs the viewer has hidden or whose authors they blocked. */
 export async function fetchFeedExclusion(
   userId: string,
-): Promise<{ hiddenPostIds: string[]; blockedUserIds: string[] }> {
+): Promise<FeedExclusionSnapshot> {
   const [{ data: hidden }, { data: blocked }, { data: blockedBy }] = await Promise.all([
     supabase.from('community_hidden_posts').select('post_id').eq('user_id', userId),
     supabase.from('blocked_users').select('blocked_id').eq('blocker_id', userId),
@@ -105,4 +226,15 @@ export async function fetchFeedExclusion(
     hiddenPostIds: (hidden ?? []).map((row) => row.post_id),
     blockedUserIds: [...new Set(blockedUserIds)],
   }
+}
+
+/** Session-scoped cache so feed pagination does not re-query exclusions every page. */
+export async function getFeedExclusion(userId: string): Promise<FeedExclusionSnapshot> {
+  if (feedExclusionCache?.userId === userId) {
+    return feedExclusionCache.snapshot
+  }
+
+  const snapshot = await fetchFeedExclusion(userId)
+  feedExclusionCache = { userId, snapshot }
+  return snapshot
 }

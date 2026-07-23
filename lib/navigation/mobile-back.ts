@@ -59,7 +59,7 @@ export function getMobileBackFallback(pathname: string): Href {
   if (pathname.startsWith('/cart') || pathname.startsWith('/checkout')) {
     return commerceRoutes.home
   }
-  if (pathname.startsWith('/my-shops')) {
+  if (pathname.startsWith('/vendor') || pathname.startsWith('/create-my-shop')) {
     return commerceRoutes.home
   }
   if (pathname.startsWith('/settings/')) {

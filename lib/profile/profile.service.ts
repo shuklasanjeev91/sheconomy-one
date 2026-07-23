@@ -25,7 +25,11 @@ import {
 import { fetchProfileDetails } from '~/community/lib/profile-details'
 import { refreshProfiles } from '~/lib/profile/refresh'
 import { supabase } from '~/lib/supabase'
-import { getStoragePublicUrl, uploadStorageObject } from '~/lib/supabase/storage-upload'
+import {
+  getStoragePublicUrl,
+  uploadStorageObject,
+  type UploadProgressHandler,
+} from '~/lib/supabase/storage-upload'
 
 import {
   PROFILE_MEDIA_BUCKET,
@@ -240,6 +244,7 @@ export async function uploadImage(
   userId: string,
   file: ProfileImageUpload,
   type: ProfileImageType = 'avatar',
+  options?: { onProgress?: UploadProgressHandler },
 ): Promise<ServiceResponse<Pick<Profile, 'avatar_url' | 'cover_url'>>> {
   if (!userId) return fail('User ID required')
 
@@ -252,6 +257,7 @@ export async function uploadImage(
       path,
       file.blob,
       file.mimeType,
+      { onProgress: options?.onProgress },
     )
 
     if (uploadError || !uploaded) {

@@ -6,18 +6,15 @@ import {
   Button,
   Icons,
   Paragraph,
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectViewport,
+  Skeleton,
   Spinner,
   Text,
   XStack,
   YStack,
   useAppToast,
-  useMedia,
 } from '~/components/ui'
+import { OptionSearchSheet } from '~/components/search/OptionSearchSheet'
+import { useAppLayout } from '~/hooks/useAppLayout'
 import {
   AvailableOffersCard,
   ListingGrid,
@@ -35,14 +32,16 @@ import { useListingFeed } from '~/commerce/hooks/useListingFeed'
 import { useShop } from '~/commerce/hooks/useShop'
 import { useShopReviews } from '~/commerce/hooks/useShopReviews'
 import type { ListingSummary } from '~/commerce/lib/commerce'
+import type { ShopLoaderResult } from '~/commerce/lib/shop-loader'
 import { hasVisibleReviews } from '~/commerce/lib/reviews'
 import { formatShopCountry } from '~/commerce/lib/shop-location'
-import { FullWidthLayout, PageCenter, PageSection, StickyRail } from '~/components/layout'
+import { FullWidthLayout, PageSection, StickyRail } from '~/components/layout'
 import { getShadowStyle, radius } from '~/config/tokens'
 import { useVendorShops } from '~/hooks/useVendorShops'
 import { useProfile } from '~/hooks/useProfile'
 import { commerceRoutes } from '~/lib/routes'
 import { useAppUi } from '~/lib/theme/useAppUi'
+import { usePageSeo } from '~/components/seo/RouteSeo'
 
 type ShopTab = 'products' | 'about' | 'reviews'
 type ShopSort = 'featured' | 'price-asc' | 'price-desc' | 'newest' | 'rating'
@@ -75,12 +74,14 @@ function sortListings(items: ListingSummary[], sort: ShopSort): ListingSummary[]
   }
 }
 
-export function ShopScreen() {
+export function ShopScreen(
+  props: { initial?: ShopLoaderResult | null; awaitingInitial?: boolean } = {},
+) {
+  const { initial, awaitingInitial = false } = props
   const ui = useAppUi()
   const { slug } = useParams<{ slug: string }>()
-  const media = useMedia()
-  const isDesktop = media.gtMd
-  const { shop, isLoading, error, refresh } = useShop(slug)
+  const { isDesktop, isWide, isTablet } = useAppLayout()
+  const { shop, isLoading, error, refresh } = useShop(slug, initial, { awaitingInitial })
   useCanonicalShopSlug(slug, shop)
   const {
     reviews: shopReviews,
@@ -95,7 +96,7 @@ export function ShopScreen() {
   const { user } = useProfile()
   const { updateShop } = useVendorShops()
   const toast = useAppToast()
-  const gridColumns = media.gtLg ? 4 : media.gtMd ? 3 : media.gtSm ? 3 : 2
+  const gridColumns = isWide ? 4 : isDesktop ? 3 : isTablet ? 3 : 2
 
   const [shopName, setShopName] = useState('')
   const [shopDescription, setShopDescription] = useState('')
@@ -103,17 +104,59 @@ export function ShopScreen() {
   const [isEditing, setIsEditing] = useState(false)
   const [tab, setTab] = useState<ShopTab>('products')
   const [sort, setSort] = useState<ShopSort>('featured')
+  const [sortOpen, setSortOpen] = useState(false)
 
   const sortedListings = useMemo(
     () => sortListings(listingsFeed.items, sort),
     [listingsFeed.items, sort],
   )
+  const sortLabel = SORT_OPTIONS.find((option) => option.value === sort)?.label ?? 'Featured'
+
+  usePageSeo(
+    useMemo(() => {
+      if (!shop) return null
+      return {
+        title: shop.shop_name,
+        description:
+          shop.shop_description?.trim().slice(0, 200) ||
+          `Shop ${shop.shop_name} on SHEconomy — browse products from this women-led business.`,
+        image: shop.logo_url ?? null,
+      }
+    }, [shop]),
+  )
 
   if (isLoading) {
     return (
-      <PageCenter>
-        <Spinner size="large" />
-      </PageCenter>
+      <FullWidthLayout scroll>
+        <YStack gap="$4" width="100%" paddingBottom="$6">
+          <Skeleton height={200} borderRadius={0} />
+          <PageSection gap="$3">
+            <XStack gap="$3" alignItems="center">
+              <Skeleton width={64} height={64} borderRadius={32} />
+              <YStack flex={1} gap="$2">
+                <Skeleton height={22} width="55%" />
+                <Skeleton height={14} width="35%" />
+              </YStack>
+            </XStack>
+            <Skeleton height={14} width="90%" />
+            <Skeleton height={14} width="70%" />
+            <XStack gap="$2" marginTop="$2">
+              <Skeleton height={36} width={88} borderRadius={999} />
+              <Skeleton height={36} width={96} borderRadius={999} />
+              <Skeleton height={36} width={80} borderRadius={999} />
+            </XStack>
+          </PageSection>
+          <PageSection gap="$3">
+            <Skeleton height={18} width="30%" />
+            <XStack gap="$3" flexWrap="wrap">
+              <Skeleton height={210} width="47%" borderRadius={16} />
+              <Skeleton height={210} width="47%" borderRadius={16} />
+              <Skeleton height={210} width="47%" borderRadius={16} />
+              <Skeleton height={210} width="47%" borderRadius={16} />
+            </XStack>
+          </PageSection>
+        </YStack>
+      </FullWidthLayout>
     )
   }
 
@@ -128,7 +171,9 @@ export function ShopScreen() {
             borderWidth={1}
             borderColor={ui.borderSubtle}
             backgroundColor={ui.surface}
-            maxWidth={480}
+            width="100%"
+            maxWidth="100%"
+            alignSelf="stretch"
             style={getShadowStyle('sm')}
           >
             <Text fontWeight="600" fontSize={22} color={ui.text}>
@@ -203,7 +248,7 @@ export function ShopScreen() {
 
   return (
     <FullWidthLayout scroll>
-      <YStack width="100%" paddingBottom="$10" backgroundColor={ui.background}>
+      <YStack width="100%" paddingBottom="$2" backgroundColor={ui.background}>
         <ShopHero
           shopId={shop.id}
           shopName={shop.shop_name}
@@ -243,7 +288,7 @@ export function ShopScreen() {
                 paddingHorizontal="$3"
                 paddingVertical="$3"
                 borderBottomWidth={2}
-                borderBottomColor={active ? '#E47911' : 'transparent'}
+                borderBottomColor={active ? ui.brand : 'transparent'}
                 cursor="pointer"
                 onPress={() => setTab(item.id)}
                 hoverStyle={{ opacity: 0.85 }}
@@ -297,26 +342,31 @@ export function ShopScreen() {
                     <Text fontSize={13} color={ui.textSecondary} flexShrink={0}>
                       Sort by:
                     </Text>
-                    <Select value={sort} onValueChange={(value) => setSort(value as ShopSort)}>
-                      <SelectTrigger
-                        flex={1}
-                        minWidth={160}
-                        maxWidth={isDesktop ? 220 : undefined}
-                        borderRadius={8}
-                        iconAfter={<Icons.ChevronDown size={16} />}
-                      >
-                        <Select.Value placeholder="Sort" />
-                      </SelectTrigger>
-                      <SelectContent zIndex={300000}>
-                        <SelectViewport>
-                          {SORT_OPTIONS.map((option, index) => (
-                            <SelectItem key={option.value} index={index} value={option.value}>
-                              <Select.ItemText>{option.label}</Select.ItemText>
-                            </SelectItem>
-                          ))}
-                        </SelectViewport>
-                      </SelectContent>
-                    </Select>
+                    <Button
+                      tone="outline"
+                      size="$3"
+                      borderRadius={8}
+                      flex={1}
+                      minWidth={160}
+                      maxWidth={isDesktop ? 220 : undefined}
+                      iconAfter={<Icons.ChevronDown size={16} />}
+                      aria-label={`Sort by ${sortLabel}`}
+                      onPress={() => setSortOpen(true)}
+                    >
+                      {sortLabel}
+                    </Button>
+                    <OptionSearchSheet
+                      open={sortOpen}
+                      onOpenChange={setSortOpen}
+                      title="Sort by"
+                      options={SORT_OPTIONS}
+                      value={sort}
+                      onSelect={(next) => {
+                        setSort(next as ShopSort)
+                        setSortOpen(false)
+                      }}
+                      searchPlaceholder="Search sort options"
+                    />
                   </XStack>
                 </YStack>
 
@@ -415,7 +465,7 @@ export function ShopScreen() {
           ) : null}
 
           {tab === 'reviews' ? (
-            <YStack gap="$4" width="100%" maxWidth={900}>
+            <YStack gap="$4" width="100%" maxWidth="100%" alignSelf="stretch">
               {hasReviews ? (
                 <ReviewsSection
                   title="Customer reviews"

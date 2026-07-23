@@ -1,6 +1,6 @@
 import { useParams } from 'one'
 import { AppLink } from '~/components/navigation/AppLink'
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 
 import { AboutDetailRow } from '~/community/components/AboutDetailRow'
 import { CommunityCard } from '~/community/components/CommunityCard'
@@ -24,6 +24,7 @@ import { ShareButton } from '~/components/share'
 import { communityRoutes } from '~/lib/routes'
 import { getEventShareUrl } from '~/lib/share'
 import { useSupabase } from '~/providers/SupabaseProvider'
+import { usePageSeo } from '~/components/seo/RouteSeo'
 
 type Tab = 'about' | 'attendees'
 
@@ -39,6 +40,19 @@ export function EventDetailScreen() {
   const [tab, setTab] = useState<Tab>('about')
   const [isLoading, setIsLoading] = useState(true)
   const [isToggling, setIsToggling] = useState(false)
+
+  usePageSeo(
+    useMemo(() => {
+      if (!event) return null
+      return {
+        title: event.title,
+        description:
+          event.description?.replace(/\s+/g, ' ').trim().slice(0, 200) ||
+          'Join this event on SHEconomy.',
+        image: event.image_url,
+      }
+    }, [event]),
+  )
 
   useEffect(() => {
     if (!id) return

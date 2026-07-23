@@ -23,6 +23,14 @@ export type ChatEventPayload = {
   isStatic?: boolean
 }
 
+/** Story reply payload carried in `messages.metadata` for text DMs from the story viewer. */
+export type ChatStoryReplyPayload = {
+  storyId: string
+  authorId: string | null
+  previewUrl: string | null
+  previewText: string | null
+}
+
 /** A conversation row as surfaced in the chat list (from `get_user_chats`). */
 export type ChatSummary = {
   id: string
@@ -80,6 +88,8 @@ export type ChatMessage = {
   poll: ChatPollPayload | null
   /** Event reference for `event` messages (parsed from metadata). */
   event: ChatEventPayload | null
+  /** Story reply reference for DMs sent from the story viewer. */
+  storyReply: ChatStoryReplyPayload | null
   /** Client-only optimistic marker until the server row is confirmed. */
   optimistic?: boolean
 }

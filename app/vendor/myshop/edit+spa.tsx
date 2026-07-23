@@ -1,13 +1,11 @@
-import { RequireShopAccess } from '~/components/auth/RequireShopAccess'
 import { ShopErrorBoundary } from '~/commerce/components/ShopErrorBoundary'
 import { VendorEditShopScreen } from '~/commerce/screens/vendor/VendorEditShopScreen'
 
+/** Auth/role gating lives in `app/vendor/_layout.tsx` (`RequireVendorRole`). */
 export default function VendorEditShopRoute() {
   return (
-    <RequireShopAccess redirectTo="/vendor/myshop/edit">
-      <ShopErrorBoundary>
-        <VendorEditShopScreen />
-      </ShopErrorBoundary>
-    </RequireShopAccess>
+    <ShopErrorBoundary>
+      <VendorEditShopScreen />
+    </ShopErrorBoundary>
   )
 }

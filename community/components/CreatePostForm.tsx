@@ -1,13 +1,16 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { Platform } from 'react-native'
 import { useRouter } from 'one'
 
 import { CommunityAdaptiveSheet } from '~/community/components/CommunityAdaptiveSheet'
 import { GifPicker } from '~/community/components/GifPicker'
+import { EmojiPickerSheet } from '~/components/emoji/EmojiPickerSheet'
 import { CommunityCard } from '~/community/components/CommunityCard'
 import { MentionInput } from '~/community/components/MentionInput'
 import { PostComposeAiBar } from '~/community/components/PostComposeAiBar'
 import { PostLinkPreviewCard } from '~/community/components/PostLinkPreviewCard'
 import { createCommunityPost, type PostLinkPreview } from '~/community/lib/community'
+import { createEventAndFeedPost } from '~/community/lib/events'
 import {
   clearComposeDraft,
   loadComposeDraft,
@@ -36,25 +39,30 @@ import {
   useAppToast,
 } from '~/components/ui'
 import { ImageUploadField, preparePickedImagesForUpload } from '~/components/media/ImageUploadField'
+import { MediaDropZone } from '~/components/media/MediaDropZone'
+import { UploadProgressBar } from '~/components/media/UploadProgressBar'
+import { NativeVideoFile } from '~/lib/native/NativeMediaPlayers'
+import { ScreenSearchField } from '~/components/search'
 import { useFormValidation } from '~/hooks/useFormValidation'
 import { useQueryParam } from '~/hooks/useQueryParams'
 import { useProfile } from '~/hooks/useProfile'
-import { pickImages, releasePickedImage, type PickedImage } from '~/lib/media/pick-image'
+import { pickImages, pickMedia, pickVideos, releasePickedImage, type PickedImage } from '~/lib/media/pick-image'
+import { splitPostMediaItems } from '~/lib/media/split-post-media'
 import { communityRoutes, routes } from '~/lib/routes'
-import { uploadEventCoverImage, uploadPostImages } from '~/lib/supabase/storage-upload'
+import { uploadEventCoverImage, uploadPostImages, uploadPostVideos } from '~/lib/supabase/storage-upload'
+import { SHEET_SEARCH_MIN_ITEMS, filterBySearchQuery } from '~/lib/search'
 import { maxLength, optionalUrl } from '~/lib/validation'
 
 const MAX_POST_LENGTH = 3000
 const MAX_ARTICLE_LENGTH = 12000
 const MAX_POLL_OPTIONS = 4
 const MAX_PHOTOS = 9
+const MAX_VIDEOS = 3
 const POLL_DURATIONS = [
   { label: '1 day', days: 1 },
   { label: '3 days', days: 3 },
   { label: '1 week', days: 7 },
 ]
-const QUICK_EMOJIS = ['😀', '😂', '😍', '🎉', '🙌', '🔥', '👏', '💯', '❤️', '🚀', '✨', '🙏']
-
 const CELEBRATION_OCCASIONS: {
   value: string
   label: string
@@ -88,6 +96,8 @@ type CreatePostFormProps = {
   initialGifUrl?: string
   /** Open the photo picker automatically on mount. */
   autoPickMedia?: boolean
+  /** Open the video picker automatically on mount. */
+  autoPickVideo?: boolean
   /**
    * When true the form is rendered inside an overlay (sheet/dialog): it drops
    * its own card chrome and closes via onSuccess instead of navigating away.
@@ -102,6 +112,7 @@ export function CreatePostForm({
   initialMode,
   initialGifUrl,
   autoPickMedia,
+  autoPickVideo,
   embedded,
 }: CreatePostFormProps) {
   const communityUi = useCommunityUi()
@@ -118,6 +129,7 @@ export function CreatePostForm({
     ),
   )
   const [isPosting, setIsPosting] = useState(false)
+  const [uploadProgress, setUploadProgress] = useState<number | null>(null)
   const [gifOpen, setGifOpen] = useState(false)
   const [audienceOpen, setAudienceOpen] = useState(false)
   const [emojiOpen, setEmojiOpen] = useState(false)
@@ -129,6 +141,7 @@ export function CreatePostForm({
   const [companies, setCompanies] = useState<{ id: string; name: string }[]>([])
   const [groups, setGroups] = useState<{ id: string; title: string }[]>([])
   const [photos, setPhotos] = useState<PickedImage[]>([])
+  const [videos, setVideos] = useState<PickedImage[]>([])
   const [isPicking, setIsPicking] = useState(false)
 
   const [linkPreview, setLinkPreview] = useState<PostLinkPreview | null>(null)
@@ -143,7 +156,11 @@ export function CreatePostForm({
   const [eventTitle, setEventTitle] = useState('')
   const [eventDate, setEventDate] = useState('')
   const [eventTime, setEventTime] = useState('')
+  const [eventEndDate, setEventEndDate] = useState('')
+  const [eventEndTime, setEventEndTime] = useState('')
   const [eventLocation, setEventLocation] = useState('')
+  const [eventIsOnline, setEventIsOnline] = useState(false)
+  const [eventMeetingUrl, setEventMeetingUrl] = useState('')
   const [eventRsvp, setEventRsvp] = useState(true)
   const [eventCover, setEventCover] = useState<PickedImage[]>([])
 
@@ -152,6 +169,8 @@ export function CreatePostForm({
   const [celebrationTitle, setCelebrationTitle] = useState('')
   const [celebrationCover, setCelebrationCover] = useState<PickedImage[]>([])
   const [articleTitle, setArticleTitle] = useState('')
+  const [articleTags, setArticleTags] = useState('')
+  const [articleCover, setArticleCover] = useState<PickedImage[]>([])
 
   // Product / Shop (seller data)
   const { shops } = useVendorShops()
@@ -160,6 +179,21 @@ export function CreatePostForm({
   const [loadingListings, setLoadingListings] = useState(false)
   const [selectedListing, setSelectedListing] = useState<SellerListingRow | null>(null)
   const [selectedShop, setSelectedShop] = useState<VendorShop | null>(null)
+  const [listingSearchQuery, setListingSearchQuery] = useState('')
+  const [shopSearchQuery, setShopSearchQuery] = useState('')
+
+  const filteredListings = useMemo(
+    () => filterBySearchQuery(listings, listingSearchQuery, (listing) => [listing.title]),
+    [listings, listingSearchQuery],
+  )
+  const filteredShops = useMemo(
+    () =>
+      filterBySearchQuery(shops, shopSearchQuery, (shop) => [
+        shop.shop_name,
+        shop.shop_description,
+      ]),
+    [shops, shopSearchQuery],
+  )
 
   const displayName = profile?.full_name || profile?.username || 'You'
   const content = form.fields.content.value
@@ -168,7 +202,7 @@ export function CreatePostForm({
   const remaining = contentLimit - content.length
   const isOverLimit = remaining < 0
   const contentError = form.fields.content.showError ? form.fields.content.error : null
-  const hasMedia = photos.length > 0 || Boolean(imageUrl.trim())
+  const hasMedia = photos.length > 0 || videos.length > 0 || Boolean(imageUrl.trim())
 
   // Detect the first URL in a text post and unfurl an Open Graph preview
   // Debounced. Skipped once the user removes a preview or
@@ -226,6 +260,24 @@ export function CreatePostForm({
               ? !!selectedShop
               : (Boolean(content.trim()) || hasMedia) && !isOverLimit && form.fields.imageUrl.isValid
 
+  const applyPostMediaItems = useCallback(
+    (items: PickedImage[]) => {
+      const { photos: imageItems, videos: videoItems } = splitPostMediaItems(items)
+      if (imageItems.length) {
+        form.fields.imageUrl.setValue('')
+        videos.forEach(releasePickedImage)
+        setVideos([])
+        setPhotos((current) => [...current, ...imageItems].slice(0, MAX_PHOTOS))
+      } else if (videoItems.length) {
+        form.fields.imageUrl.setValue('')
+        photos.forEach(releasePickedImage)
+        setPhotos([])
+        setVideos((current) => [...current, ...videoItems].slice(0, MAX_VIDEOS))
+      }
+    },
+    [form.fields.imageUrl, photos, videos],
+  )
+
   const pickPhotos = useCallback(async () => {
     if (isPicking || photos.length >= MAX_PHOTOS) return
     setIsPicking(true)
@@ -233,6 +285,7 @@ export function CreatePostForm({
       const picked = await pickImages({ multiple: true, maxCount: MAX_PHOTOS - photos.length })
       if (picked.length) {
         form.fields.imageUrl.setValue('')
+        setVideos([])
         setPhotos((current) => [...current, ...picked].slice(0, MAX_PHOTOS))
       }
     } catch (error) {
@@ -244,6 +297,51 @@ export function CreatePostForm({
       setIsPicking(false)
     }
   }, [form.fields.imageUrl, isPicking, photos.length, toast])
+
+  const pickPostVideos = useCallback(async () => {
+    if (isPicking || videos.length >= MAX_VIDEOS) return
+    setIsPicking(true)
+    try {
+      const picked = await pickVideos({ multiple: true, maxCount: MAX_VIDEOS - videos.length })
+      if (picked.length) {
+        form.fields.imageUrl.setValue('')
+        photos.forEach(releasePickedImage)
+        setPhotos([])
+        setVideos((current) => [...current, ...picked].slice(0, MAX_VIDEOS))
+      }
+    } catch (error) {
+      toast.show('Could not add video', {
+        tone: 'danger',
+        message: error instanceof Error ? error.message : 'Try again.',
+      })
+    } finally {
+      setIsPicking(false)
+    }
+  }, [form.fields.imageUrl, isPicking, photos, toast, videos.length])
+
+  const pickPostMedia = useCallback(async () => {
+    if (isPicking) return
+    const photoSlots = MAX_PHOTOS - photos.length
+    const videoSlots = MAX_VIDEOS - videos.length
+    if (photoSlots <= 0 && videoSlots <= 0) return
+
+    setIsPicking(true)
+    try {
+      const picked = await pickMedia({
+        accept: 'media',
+        multiple: true,
+        maxCount: Math.max(photoSlots, videoSlots),
+      })
+      if (picked.length) applyPostMediaItems(picked)
+    } catch (error) {
+      toast.show('Could not add media', {
+        tone: 'danger',
+        message: error instanceof Error ? error.message : 'Try again.',
+      })
+    } finally {
+      setIsPicking(false)
+    }
+  }, [applyPostMediaItems, isPicking, photos.length, toast, videos.length])
 
   const gifParam = useQueryParam('gif')
   const groupParam = useQueryParam('groupId')
@@ -261,7 +359,7 @@ export function CreatePostForm({
       setPostContext('company')
     }
     if (composeParam === 'poll' || composeParam === 'event') setComposeMode(composeParam)
-    if (composeParam === 'media') void pickPhotos()
+    if (composeParam === 'media') void pickPostMedia()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [companyParam, composeParam, gifParam, groupParam])
 
@@ -320,7 +418,8 @@ export function CreatePostForm({
       setComposeMode(initialMode)
     }
     if (initialGifUrl) form.fields.imageUrl.setValue(initialGifUrl)
-    if (autoPickMedia) void pickPhotos()
+    if (autoPickMedia) void pickPostMedia()
+    if (autoPickVideo) void pickPostVideos()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
@@ -386,6 +485,14 @@ export function CreatePostForm({
     })
   }
 
+  function removeVideo(index: number) {
+    setVideos((current) => {
+      const target = current[index]
+      if (target) releasePickedImage(target)
+      return current.filter((_, i) => i !== index)
+    })
+  }
+
   function insertEmoji(emoji: string) {
     form.fields.content.onChange(`${content}${emoji}`)
   }
@@ -403,6 +510,7 @@ export function CreatePostForm({
     const finalContent = encodedContentRef.current || content
 
     setIsPosting(true)
+    setUploadProgress(null)
     let result: { id: string | null; error: string | null }
     if (composeMode === 'poll') {
       result = await createCommunityPost(user.id, {
@@ -410,14 +518,21 @@ export function CreatePostForm({
         visibility,
         companyId: targetCompanyId,
         groupId: targetGroupId,
-        poll: { question: content, options: pollOptions, durationDays: pollDurationDays },
+        poll: {
+          question: content.trim() || finalContent.trim(),
+          options: filledPollOptions,
+          durationDays: pollDurationDays,
+        },
       })
     } else if (composeMode === 'celebration') {
       const occasionMeta = CELEBRATION_OCCASIONS.find((o) => o.value === occasion)
       let celebrationImageUrl: string | null = null
       if (celebrationCover[0]) {
+        setUploadProgress(0)
         const files = await preparePickedImagesForUpload(celebrationCover)
-        const { urls, error: uploadError } = await uploadPostImages(user.id, files)
+        const { urls, error: uploadError } = await uploadPostImages(user.id, files, {
+          onProgress: setUploadProgress,
+        })
         if (uploadError) {
           setIsPosting(false)
           toast.show('Could not upload photo', { tone: 'danger', message: uploadError })
@@ -471,11 +586,24 @@ export function CreatePostForm({
     } else if (composeMode === 'event') {
       const startIso =
         eventDate && eventTime ? new Date(`${eventDate}T${eventTime}`).toISOString() : null
+      const endIso =
+        eventEndDate && eventEndTime
+          ? new Date(`${eventEndDate}T${eventEndTime}`).toISOString()
+          : undefined
+
+      if (!startIso) {
+        setIsPosting(false)
+        toast.show('Add a start date and time', { tone: 'danger' })
+        return
+      }
 
       let coverUrl: string | null = null
       if (eventCover[0]) {
+        setUploadProgress(0)
         const [file] = await preparePickedImagesForUpload(eventCover)
-        const { data: uploaded, error: uploadError } = await uploadEventCoverImage(user.id, file)
+        const { data: uploaded, error: uploadError } = await uploadEventCoverImage(user.id, file, {
+          onProgress: setUploadProgress,
+        })
         if (uploadError || !uploaded) {
           setIsPosting(false)
           toast.show('Could not upload cover image', {
@@ -487,23 +615,35 @@ export function CreatePostForm({
         coverUrl = uploaded.publicUrl
       }
 
-      result = await createCommunityPost(user.id, {
-        content: finalContent,
-        imageUrl: coverUrl,
+      const locationLabel = eventIsOnline
+        ? eventMeetingUrl.trim() || 'Online'
+        : eventLocation.trim() || undefined
+
+      const synced = await createEventAndFeedPost(user.id, {
+        title: eventTitle.trim(),
+        description: finalContent.trim() || undefined,
+        startTime: startIso,
+        endTime: endIso,
+        isOnline: eventIsOnline,
+        location: eventIsOnline ? undefined : locationLabel,
+        meetingUrl: eventIsOnline ? eventMeetingUrl.trim() || undefined : undefined,
+        imageUrl: coverUrl ?? undefined,
+        isFree: true,
+        shareToFeed: true,
         visibility,
-        companyId: targetCompanyId,
-        groupId: targetGroupId,
-        eventTitle: eventTitle.trim(),
-        eventDescription: finalContent.trim() || null,
-        eventStartTime: startIso,
-        eventLocation: eventLocation.trim() || null,
-        eventRsvpEnabled: eventRsvp,
+        rsvpEnabled: eventRsvp,
       })
+
+      result = { id: synced.postId, error: synced.error }
     } else if (composeMode === 'article') {
       let mediaUrls: string[] = []
-      if (photos.length) {
-        const files = await preparePickedImagesForUpload(photos)
-        const { urls, error: uploadError } = await uploadPostImages(user.id, files)
+      const coverSource = articleCover.length ? articleCover : photos
+      if (coverSource.length) {
+        setUploadProgress(0)
+        const files = await preparePickedImagesForUpload(coverSource)
+        const { urls, error: uploadError } = await uploadPostImages(user.id, files, {
+          onProgress: setUploadProgress,
+        })
         if (uploadError) {
           setIsPosting(false)
           toast.show('Could not upload photos', {
@@ -514,7 +654,12 @@ export function CreatePostForm({
         }
         mediaUrls = urls
       }
-      const finalImageUrl = mediaUrls.length ? null : imageUrl || null
+      const finalImageUrl = mediaUrls.length ? mediaUrls[0] : imageUrl || null
+      const tags = articleTags
+        .split(',')
+        .map((tag) => tag.trim())
+        .filter(Boolean)
+        .slice(0, 8)
       result = await createCommunityPost(user.id, {
         content: finalContent,
         imageUrl: finalImageUrl,
@@ -524,14 +669,20 @@ export function CreatePostForm({
         groupId: targetGroupId,
         postType: 'article',
         articleTitle: articleTitle.trim(),
+        articleTags: tags.length ? tags : null,
       })
     } else {
       let mediaUrls: string[] = []
+      let videoUrls: string[] = []
       if (photos.length) {
+        setUploadProgress(0)
         const files = await preparePickedImagesForUpload(photos)
-        const { urls, error: uploadError } = await uploadPostImages(user.id, files)
+        const { urls, error: uploadError } = await uploadPostImages(user.id, files, {
+          onProgress: setUploadProgress,
+        })
         if (uploadError) {
           setIsPosting(false)
+          setUploadProgress(null)
           toast.show('Could not upload photos', {
             tone: 'danger',
             message: uploadError,
@@ -539,20 +690,38 @@ export function CreatePostForm({
           return
         }
         mediaUrls = urls
+      } else if (videos.length) {
+        setUploadProgress(0)
+        const files = await preparePickedImagesForUpload(videos)
+        const { urls, error: uploadError } = await uploadPostVideos(user.id, files, {
+          onProgress: setUploadProgress,
+        })
+        if (uploadError) {
+          setIsPosting(false)
+          setUploadProgress(null)
+          toast.show('Could not upload video', {
+            tone: 'danger',
+            message: uploadError,
+          })
+          return
+        }
+        videoUrls = urls
       }
 
-      const finalImageUrl = mediaUrls.length ? null : imageUrl || null
+      const finalImageUrl = mediaUrls.length || videoUrls.length ? null : imageUrl || null
       result = await createCommunityPost(user.id, {
         content: finalContent,
         imageUrl: finalImageUrl,
         mediaUrls: mediaUrls.length ? mediaUrls : null,
+        videoUrls: videoUrls.length ? videoUrls : null,
         visibility,
         companyId: targetCompanyId,
         groupId: targetGroupId,
-        linkPreview: mediaUrls.length || finalImageUrl ? null : linkPreview,
+        linkPreview: mediaUrls.length || videoUrls.length || finalImageUrl ? null : linkPreview,
       })
     }
     setIsPosting(false)
+    setUploadProgress(null)
 
     if (result.error || !result.id) {
       toast.show('Could not post', { tone: 'danger', message: result.error ?? 'Try again shortly.' })
@@ -581,6 +750,8 @@ export function CreatePostForm({
     previewUrlRef.current = null
     photos.forEach(releasePickedImage)
     setPhotos([])
+    videos.forEach(releasePickedImage)
+    setVideos([])
     onSuccess?.()
     // Overlay usage closes via onSuccess; the standalone route navigates home.
     if (!embedded) router.replace(communityRoutes.home)
@@ -669,10 +840,22 @@ export function CreatePostForm({
           </XStack>
         ) : null}
 
-        {/* Compose body */}
+        {/* Compose body — drag & drop photos/videos on web */}
+        <MediaDropZone
+          disabled={isPosting || (composeMode !== 'text' && composeMode !== 'article')}
+          accept="media"
+          multiple
+          maxCount={
+            composeMode === 'article'
+              ? Math.max(1, MAX_PHOTOS - photos.length)
+              : Math.max(1, MAX_PHOTOS - photos.length + MAX_VIDEOS - videos.length)
+          }
+          onDrop={(items) => applyPostMediaItems(items)}
+          label="Drop photos or videos to attach"
+        >
         <YStack paddingHorizontal={16} paddingBottom={12} gap={12}>
           {composeMode === 'article' ? (
-            <YStack gap="$2">
+            <YStack gap="$3">
               <Text fontSize={13} fontWeight="600" color={communityUi.textMuted}>
                 Article headline
               </Text>
@@ -686,6 +869,21 @@ export function CreatePostForm({
                 backgroundColor="transparent"
                 paddingHorizontal={0}
               />
+              <ImageUploadField
+                label="Cover image"
+                hint="Optional hero image for your article."
+                value={articleCover}
+                onChange={setArticleCover}
+                uploadProgress={uploadProgress}
+                uploadLabel="Uploading cover…"
+              />
+              <Field label="Topics (optional)" hint="Comma-separated, up to 8">
+                <Input
+                  value={articleTags}
+                  onChangeText={setArticleTags}
+                  placeholder="Leadership, Growth, Community"
+                />
+              </Field>
             </YStack>
           ) : null}
 
@@ -721,27 +919,6 @@ export function CreatePostForm({
             <Text fontSize={12} color="#cc1010">
               {contentError}
             </Text>
-          ) : null}
-
-          {/* Quick emoji row */}
-          {emojiOpen ? (
-            <XStack gap={6} flexWrap="wrap" paddingVertical={4}>
-              {QUICK_EMOJIS.map((emoji) => (
-                <XStack
-                  key={emoji}
-                  width={38}
-                  height={38}
-                  alignItems="center"
-                  justifyContent="center"
-                  borderRadius={999}
-                  cursor="pointer"
-                  hoverStyle={{ backgroundColor: communityUi.hoverBg }}
-                  onPress={() => insertEmoji(emoji)}
-                >
-                  <Text fontSize={22}>{emoji}</Text>
-                </XStack>
-              ))}
-            </XStack>
           ) : null}
 
           {/* Photo previews */}
@@ -784,21 +961,77 @@ export function CreatePostForm({
                   height={120}
                   borderRadius={12}
                   borderWidth={1}
-                  borderColor={communityUi.border}
                   borderStyle="dashed"
+                  borderColor={communityUi.border}
                   alignItems="center"
                   justifyContent="center"
                   cursor="pointer"
-                  hoverStyle={{ backgroundColor: communityUi.hoverBg }}
                   onPress={() => void pickPhotos()}
                 >
-                  {isPicking ? (
-                    <Spinner size="small" color={communityUi.brand} />
-                  ) : (
-                    <Icons.Plus size={24} color={communityUi.textMuted} />
-                  )}
+                  <Icons.Plus size={22} color={communityUi.textMuted} />
                 </YStack>
               ) : null}
+            </XStack>
+          ) : null}
+
+          {/* Video previews */}
+          {composeMode === 'text' && videos.length > 0 ? (
+            <XStack gap={8} flexWrap="wrap">
+              {videos.map((video, index) => (
+                <YStack
+                  key={`${video.uri}-${index}`}
+                  width={videos.length === 1 ? '100%' : 160}
+                  height={videos.length === 1 ? 260 : 120}
+                  borderRadius={12}
+                  overflow="hidden"
+                  borderWidth={1}
+                  borderColor={communityUi.border}
+                  backgroundColor="#000"
+                  position="relative"
+                >
+                  {/* eslint-disable-next-line jsx-a11y/media-has-caption -- preview only */}
+                  {Platform.OS === 'web' ? (
+                    <video
+                      src={video.uri}
+                      style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                      muted
+                      playsInline
+                      controls={false}
+                    />
+                  ) : (
+                    <NativeVideoFile uri={video.uri} autoPlay={false} />
+                  )}
+                  <YStack
+                    position="absolute"
+                    top={6}
+                    left={6}
+                    paddingHorizontal={8}
+                    paddingVertical={4}
+                    borderRadius={999}
+                    backgroundColor="rgba(0,0,0,0.6)"
+                  >
+                    <Text fontSize={11} fontWeight="700" color="white">
+                      Video
+                    </Text>
+                  </YStack>
+                  <YStack
+                    position="absolute"
+                    top={6}
+                    right={6}
+                    width={28}
+                    height={28}
+                    borderRadius={999}
+                    alignItems="center"
+                    justifyContent="center"
+                    backgroundColor="rgba(0,0,0,0.6)"
+                    cursor="pointer"
+                    aria-label="Remove video"
+                    onPress={() => removeVideo(index)}
+                  >
+                    <Icons.X size={16} color="white" />
+                  </YStack>
+                </YStack>
+              ))}
             </XStack>
           ) : null}
 
@@ -810,8 +1043,13 @@ export function CreatePostForm({
               backgroundColor={communityUi.pageBg}
               position="relative"
             >
-              {/* eslint-disable-next-line jsx-a11y/alt-text */}
-              <img src={imageUrl} style={{ width: '100%', maxHeight: 320, objectFit: 'contain' }} />
+              <Image
+                src={imageUrl}
+                width="100%"
+                maxHeight={320}
+                objectFit="contain"
+                alt="GIF preview"
+              />
               <YStack
                 position="absolute"
                 top={8}
@@ -907,7 +1145,7 @@ export function CreatePostForm({
               <XStack gap={12} flexWrap="wrap">
                 <DateTimeField
                   mode="date"
-                  label="Date"
+                  label="Start date"
                   minDate={new Date()}
                   value={eventDate}
                   onChange={setEventDate}
@@ -916,21 +1154,63 @@ export function CreatePostForm({
                 />
                 <DateTimeField
                   mode="time"
-                  label="Time"
+                  label="Start time"
                   value={eventTime}
                   onChange={setEventTime}
                   flex={1}
                   minWidth={150}
                 />
               </XStack>
-              <Field label="Location (optional)">
-                <Input value={eventLocation} onChangeText={setEventLocation} placeholder="Venue, city or online link" />
-              </Field>
+              <XStack gap={12} flexWrap="wrap">
+                <DateTimeField
+                  mode="date"
+                  label="End date (optional)"
+                  minDate={new Date()}
+                  value={eventEndDate}
+                  onChange={setEventEndDate}
+                  flex={1}
+                  minWidth={150}
+                />
+                <DateTimeField
+                  mode="time"
+                  label="End time"
+                  value={eventEndTime}
+                  onChange={setEventEndTime}
+                  flex={1}
+                  minWidth={150}
+                />
+              </XStack>
+              <XStack gap={10} alignItems="center">
+                <Switch checked={eventIsOnline} onCheckedChange={setEventIsOnline} />
+                <Text fontSize={14} color={communityUi.text}>
+                  Online event
+                </Text>
+              </XStack>
+              {eventIsOnline ? (
+                <Field label="Meeting link">
+                  <Input
+                    value={eventMeetingUrl}
+                    onChangeText={setEventMeetingUrl}
+                    placeholder="https://meet.example.com/…"
+                    autoCapitalize="none"
+                  />
+                </Field>
+              ) : (
+                <Field label="Location (optional)">
+                  <Input
+                    value={eventLocation}
+                    onChangeText={setEventLocation}
+                    placeholder="Venue, city"
+                  />
+                </Field>
+              )}
               <ImageUploadField
                 label="Cover image (optional)"
                 hint="Add a banner attendees will see on the event."
                 value={eventCover}
                 onChange={setEventCover}
+                uploadProgress={uploadProgress}
+                uploadLabel="Uploading cover…"
               />
               <XStack gap={10} alignItems="center">
                 <Switch checked={eventRsvp} onCheckedChange={setEventRsvp} />
@@ -938,14 +1218,20 @@ export function CreatePostForm({
                   Allow RSVPs
                 </Text>
               </XStack>
+              <Text fontSize={12} color={communityUi.textMuted}>
+                Shared to your feed and listed under Events.
+              </Text>
             </YStack>
           ) : null}
 
           {/* Celebration editor */}
           {composeMode === 'celebration' ? (
             <YStack gap={12}>
-              <Text fontSize={13} fontWeight="600" color={communityUi.textMuted}>
+              <Text fontSize={15} fontWeight="700" color={communityUi.text}>
                 What are you celebrating?
+              </Text>
+              <Text fontSize={13} color={communityUi.textMuted} lineHeight={18}>
+                Share a milestone with your network — friends can congratulate you.
               </Text>
               <XStack gap={8} flexWrap="wrap">
                 {CELEBRATION_OCCASIONS.map((item) => (
@@ -962,7 +1248,8 @@ export function CreatePostForm({
                   value={celebrationTitle}
                   onChangeText={setCelebrationTitle}
                   placeholder={
-                    CELEBRATION_OCCASIONS.find((o) => o.value === occasion)?.placeholder ?? 'Share the news'
+                    CELEBRATION_OCCASIONS.find((o) => o.value === occasion)?.placeholder ??
+                    'Share the news'
                   }
                   maxLength={120}
                 />
@@ -972,6 +1259,8 @@ export function CreatePostForm({
                 hint="Add a photo to make your celebration stand out."
                 value={celebrationCover}
                 onChange={setCelebrationCover}
+                uploadProgress={uploadProgress}
+                uploadLabel="Uploading photo…"
               />
             </YStack>
           ) : null}
@@ -989,6 +1278,7 @@ export function CreatePostForm({
                       onPress={() => {
                         setActiveShopId(shopItem.id)
                         setSelectedListing(null)
+                        setListingSearchQuery('')
                       }}
                     />
                   ))}
@@ -1007,8 +1297,22 @@ export function CreatePostForm({
               ) : listings.length === 0 ? (
                 <EmptyPickerHint icon={Icons.Package} message="No active listings in this shop yet." />
               ) : (
-                <YStack gap={8} maxHeight={320} overflow="scroll">
-                  {listings.map((listing) => (
+                <YStack gap={8}>
+                  {listings.length >= SHEET_SEARCH_MIN_ITEMS || listingSearchQuery.length > 0 ? (
+                    <ScreenSearchField
+                      value={listingSearchQuery}
+                      onChangeText={setListingSearchQuery}
+                      placeholder="Search listings"
+                      clearable
+                    />
+                  ) : null}
+                  {filteredListings.length === 0 ? (
+                    <Text fontSize={13} color={communityUi.textMuted}>
+                      No listings match your search.
+                    </Text>
+                  ) : (
+                    <YStack gap={8} maxHeight={320} overflow="scroll">
+                      {filteredListings.map((listing) => (
                     <PickerRow
                       key={listing.id}
                       title={listing.title}
@@ -1024,6 +1328,8 @@ export function CreatePostForm({
                       }
                     />
                   ))}
+                    </YStack>
+                  )}
                 </YStack>
               )}
             </YStack>
@@ -1038,8 +1344,22 @@ export function CreatePostForm({
                   message="You don't have a shop yet. Create one to promote it here."
                 />
               ) : (
-                <YStack gap={8} maxHeight={320} overflow="scroll">
-                  {shops.map((shopItem) => (
+                <YStack gap={8}>
+                  {shops.length >= SHEET_SEARCH_MIN_ITEMS || shopSearchQuery.length > 0 ? (
+                    <ScreenSearchField
+                      value={shopSearchQuery}
+                      onChangeText={setShopSearchQuery}
+                      placeholder="Search shops"
+                      clearable
+                    />
+                  ) : null}
+                  {filteredShops.length === 0 ? (
+                    <Text fontSize={13} color={communityUi.textMuted}>
+                      No shops match your search.
+                    </Text>
+                  ) : (
+                    <YStack gap={8} maxHeight={320} overflow="scroll">
+                      {filteredShops.map((shopItem) => (
                     <PickerRow
                       key={shopItem.id}
                       title={shopItem.shop_name}
@@ -1052,6 +1372,8 @@ export function CreatePostForm({
                       }
                     />
                   ))}
+                    </YStack>
+                  )}
                 </YStack>
               )}
             </YStack>
@@ -1063,8 +1385,9 @@ export function CreatePostForm({
             </Text>
           </XStack>
         </YStack>
+        </MediaDropZone>
 
-        {/* Toolbar */}
+        {/* Toolbar — LinkedIn-style: media, event, celebrate, poll, more */}
         <XStack
           paddingHorizontal={12}
           paddingVertical={10}
@@ -1074,10 +1397,10 @@ export function CreatePostForm({
           justifyContent="space-between"
           gap={8}
         >
-          <XStack gap={2} alignItems="center" flex={1} flexWrap="wrap">
+          <XStack gap={4} alignItems="center" flex={1}>
             <ToolbarButton
               icon={Icons.Image}
-              color="#4a9cff"
+              color="#70b5f9"
               label="Photo"
               active={photos.length > 0}
               onPress={() => {
@@ -1086,21 +1409,14 @@ export function CreatePostForm({
               }}
             />
             <ToolbarButton
-              icon={Icons.Film}
-              color="#7fc15e"
-              label="GIF"
-              active={!!imageUrl && isGifUrl(imageUrl)}
+              icon={Icons.Video}
+              color="#e74c3c"
+              label="Video"
+              active={videos.length > 0}
               onPress={() => {
                 setComposeMode('text')
-                setGifOpen(true)
+                void pickPostVideos()
               }}
-            />
-            <ToolbarButton
-              icon={Icons.BarChart2}
-              color="#c37dda"
-              label="Poll"
-              active={composeMode === 'poll'}
-              onPress={() => setComposeMode(composeMode === 'poll' ? 'text' : 'poll')}
             />
             <ToolbarButton
               icon={Icons.Calendar}
@@ -1110,25 +1426,37 @@ export function CreatePostForm({
               onPress={() => setComposeMode(composeMode === 'event' ? 'text' : 'event')}
             />
             <ToolbarButton
-              icon={Icons.Smile}
-              color="#f5a623"
-              label="Emoji"
-              active={emojiOpen}
-              onPress={() => setEmojiOpen((v) => !v)}
+              icon={Icons.PartyPopper}
+              color="#c37dda"
+              label="Celebrate"
+              active={composeMode === 'celebration'}
+              onPress={() => setComposeMode(composeMode === 'celebration' ? 'text' : 'celebration')}
+            />
+            <ToolbarButton
+              icon={Icons.BarChart2}
+              color="#7fc15e"
+              label="Poll"
+              active={composeMode === 'poll'}
+              onPress={() => setComposeMode(composeMode === 'poll' ? 'text' : 'poll')}
             />
             <ToolbarButton
               icon={Icons.MoreHorizontal}
               color={communityUi.textMuted}
               label="More"
               active={
-                composeMode === 'celebration' ||
                 composeMode === 'product' ||
                 composeMode === 'shop' ||
-                composeMode === 'article'
+                composeMode === 'article' ||
+                emojiOpen ||
+                (!!imageUrl && isGifUrl(imageUrl))
               }
               onPress={() => setMoreOpen(true)}
             />
           </XStack>
+
+          {uploadProgress != null && uploadProgress > 0 ? (
+            <UploadProgressBar progress={uploadProgress} label="Uploading media…" compact />
+          ) : null}
 
           <Button
             backgroundColor={canPost ? communityUi.brand : communityUi.border}
@@ -1146,11 +1474,20 @@ export function CreatePostForm({
 
       <GifPicker open={gifOpen} onOpenChange={setGifOpen} onSelect={form.fields.imageUrl.setValue} />
 
-      <CommunityAdaptiveSheet open={moreOpen} onOpenChange={setMoreOpen} title="Create">
+      <EmojiPickerSheet
+        open={emojiOpen}
+        onOpenChange={setEmojiOpen}
+        onPick={(emoji) => {
+          insertEmoji(emoji)
+          setEmojiOpen(false)
+        }}
+      />
+
+      <CommunityAdaptiveSheet open={moreOpen} onOpenChange={setMoreOpen} title="Add to your post">
         <YStack gap={4}>
           <MoreOptionRow
             icon={Icons.Newspaper}
-            tint="#0a66c2"
+            tint={communityUi.brand}
             title="Write an article"
             description="Long-form thought leadership for your network"
             onPress={() => {
@@ -1159,18 +1496,30 @@ export function CreatePostForm({
             }}
           />
           <MoreOptionRow
-            icon={Icons.PartyPopper}
-            tint="#c37dda"
-            title="Celebrate an occasion"
-            description="New job, work anniversary, launch and more"
+            icon={Icons.Film}
+            tint="#7fc15e"
+            title="Add a GIF"
+            description="Search and attach an animated GIF"
             onPress={() => {
-              setComposeMode('celebration')
+              setComposeMode('text')
               setMoreOpen(false)
+              setGifOpen(true)
+            }}
+          />
+          <MoreOptionRow
+            icon={Icons.Smile}
+            tint="#f5a623"
+            title="Add emoji"
+            description="Insert emoji into your post"
+            onPress={() => {
+              setComposeMode('text')
+              setMoreOpen(false)
+              setEmojiOpen(true)
             }}
           />
           <MoreOptionRow
             icon={Icons.Tag}
-            tint="#0a66c2"
+            tint={communityUi.brand}
             title="Share a product"
             description="Feature a listing from your shop"
             onPress={() => {
@@ -1185,26 +1534,6 @@ export function CreatePostForm({
             description="Invite people to visit your shop"
             onPress={() => {
               setComposeMode('shop')
-              setMoreOpen(false)
-            }}
-          />
-          <MoreOptionRow
-            icon={Icons.BarChart2}
-            tint="#e7a33e"
-            title="Create a poll"
-            description="Ask your network a question"
-            onPress={() => {
-              setComposeMode('poll')
-              setMoreOpen(false)
-            }}
-          />
-          <MoreOptionRow
-            icon={Icons.Calendar}
-            tint="#e7a33e"
-            title="Create an event"
-            description="Share a meetup or webinar"
-            onPress={() => {
-              setComposeMode('event')
               setMoreOpen(false)
             }}
           />
@@ -1274,24 +1603,23 @@ function ToolbarButton({
 }) {
   const communityUi = useCommunityUi()
   return (
-    <XStack
-      gap={6}
-      alignItems="center"
-      paddingHorizontal={10}
-      paddingVertical={8}
+    <YStack
+      width={40}
+      height={40}
       borderRadius={999}
+      alignItems="center"
+      justifyContent="center"
       cursor="pointer"
       backgroundColor={active ? communityUi.accentMuted : 'transparent'}
       hoverStyle={{ backgroundColor: active ? communityUi.accentMuted : communityUi.hoverBg }}
       pressStyle={{ opacity: 0.75 }}
       animation="quick"
       onPress={onPress}
+      accessibilityLabel={label}
+      aria-label={label}
     >
-      <Icon size={20} color={color} />
-      <Text fontSize={13} fontWeight="600" color={communityUi.textMuted} display="none" $gtSm={{ display: 'flex' }}>
-        {label}
-      </Text>
-    </XStack>
+      <Icon size={22} color={color} />
+    </YStack>
   )
 }
 

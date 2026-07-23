@@ -42,11 +42,9 @@ export class DeliveryErrorBoundary extends Component<Props, State> {
   }
 
   private handleRetry = () => {
+    // Remount children in-place — never full browser reload (keeps Vite SPA shell).
     this.setState({ error: null })
     this.props.onReset?.()
-    if (!this.props.onReset && Platform.OS === 'web' && typeof window !== 'undefined') {
-      window.location.reload()
-    }
   }
 
   render() {

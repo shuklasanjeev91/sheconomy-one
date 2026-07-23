@@ -10,7 +10,11 @@ import type { CommunityPost } from '~/community/lib/community'
 import { postHasMedia } from '~/community/lib/post-media'
 import { fetchSavedCommunityPosts, unsaveCommunityPost } from '~/community/lib/saved-posts'
 import { HorizontalScrollRow } from '~/components/layout'
-import { Button, Icons, Input, Spinner, Text, XStack, YStack, useAppToast } from '~/components/ui'
+import { ScreenSearchField } from '~/components/search'
+import { Button, Icons, Spinner, Text, XStack, YStack, useAppToast } from '~/components/ui'
+import { filterBySearchQuery } from '~/lib/search'
+import { INVALIDATION_TOPICS } from '~/lib/cache/invalidation'
+import { useAutoRefresh } from '~/lib/cache/useAutoRefresh'
 import { BRAND_NAME } from '~/config/brand'
 import { copyToClipboard } from '~/lib/platform/clipboard'
 import { communityRoutes, routes } from '~/lib/routes'
@@ -18,15 +22,16 @@ import { getPostShareUrl } from '~/lib/share'
 import { useAppUi } from '~/lib/theme/useAppUi'
 import { useSupabase } from '~/providers/SupabaseProvider'
 
-type SavedTypeFilter = 'all' | 'text' | 'media' | 'poll' | 'event' | 'article'
+type SavedTypeFilter = 'all' | 'text' | 'media' | 'poll' | 'event' | 'article' | 'celebration'
 
 const TYPE_FILTERS: Array<{ id: SavedTypeFilter; label: string }> = [
   { id: 'all', label: 'All' },
   { id: 'text', label: 'Updates' },
   { id: 'media', label: 'Media' },
-  { id: 'poll', label: 'Polls' },
-  { id: 'event', label: 'Events' },
   { id: 'article', label: 'Articles' },
+  { id: 'event', label: 'Events' },
+  { id: 'celebration', label: 'Celebrations' },
+  { id: 'poll', label: 'Polls' },
 ]
 
 function matchesType(post: CommunityPost, filter: SavedTypeFilter) {
@@ -47,13 +52,13 @@ export function SavedPostsScreen() {
   const [query, setQuery] = useState('')
   const [typeFilter, setTypeFilter] = useState<SavedTypeFilter>('all')
 
-  async function reload() {
+  async function reload(silent = false) {
     if (!user?.id) {
       setItems([])
       setLoading(false)
       return
     }
-    setLoading(true)
+    if (!silent) setLoading(true)
     const result = await fetchSavedCommunityPosts(user.id)
     setItems(result.items)
     setError(result.error)
@@ -66,23 +71,21 @@ export function SavedPostsScreen() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [authLoading, user?.id])
 
+  // Saving/unsaving a post anywhere updates this list without a route reload.
+  useAutoRefresh([INVALIDATION_TOPICS.savedPosts, INVALIDATION_TOPICS.communityPosts], () => {
+    if (authLoading) return
+    void reload(true)
+  })
+
   const visible = useMemo(() => {
-    const needle = query.trim().toLowerCase()
-    return items.filter((post) => {
-      if (!matchesType(post, typeFilter)) return false
-      if (!needle) return true
-      const haystack = [
-        post.content,
-        post.author?.full_name,
-        post.author?.username,
-        post.event_title,
-        post.post_type,
-      ]
-        .filter(Boolean)
-        .join(' ')
-        .toLowerCase()
-      return haystack.includes(needle)
-    })
+    const typed = items.filter((post) => matchesType(post, typeFilter))
+    return filterBySearchQuery(typed, query, (post) => [
+      post.content,
+      post.author?.full_name,
+      post.author?.username,
+      post.event_title,
+      post.post_type,
+    ])
   }, [items, query, typeFilter])
 
   async function handleShareSaved() {
@@ -146,29 +149,12 @@ export function SavedPostsScreen() {
 
       {user ? (
         <YStack gap="$3" width="100%">
-          <XStack
-            alignItems="center"
-            gap="$2"
-            paddingHorizontal="$3"
-            minHeight={44}
-            borderRadius={999}
-            borderWidth={1}
-            borderColor={ui.borderSubtle}
-            backgroundColor={ui.surface}
-          >
-            <Icons.Search size={16} color={ui.textMuted} />
-            <Input
-              flex={1}
-              value={query}
-              onChangeText={setQuery}
-              placeholder="Search saved posts"
-              borderWidth={0}
-              backgroundColor="transparent"
-              height={40}
-              fontSize={14}
-              paddingHorizontal={0}
-            />
-          </XStack>
+          <ScreenSearchField
+            value={query}
+            onChangeText={setQuery}
+            placeholder="Search saved posts"
+            unifiedScope="posts"
+          />
           <HorizontalScrollRow gap={8}>
             {TYPE_FILTERS.map((filter) => {
               const active = typeFilter === filter.id

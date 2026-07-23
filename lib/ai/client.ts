@@ -11,6 +11,8 @@ import type {
   PostDraftResult,
   SendAiMessageParams,
   SendAiMessageResult,
+  ShopDraftParams,
+  ShopDraftResult,
 } from './types'
 
 type InvokeErrorPayload = {
@@ -125,6 +127,63 @@ export async function draftMeetingWithAi(
       ? result.agenda.map((item) => String(item).trim()).filter(Boolean)
       : [],
     usedFallback: Boolean(result.usedFallback),
+  }
+}
+
+/** Shop name + description ideas for seller onboarding. */
+export async function draftShopWithAi(params: ShopDraftParams = {}): Promise<ShopDraftResult> {
+  try {
+    const result = await invokeAiAssist<ShopDraftResult>({
+      action: 'shop_draft',
+      product: 'shop',
+      message:
+        params.prompt?.trim() ||
+        'Suggest shop names and a short description for a women-owned storefront',
+      context: {
+        categories: Array.isArray(params.categories) ? params.categories : [],
+        current_name: params.currentName?.trim() || null,
+        current_description: params.currentDescription?.trim() || null,
+      },
+    })
+
+    const names = Array.isArray(result.names)
+      ? result.names
+          .map((name) => String(name).trim())
+          .filter((name) => name.length >= 2 && name.length <= 200)
+      : []
+
+    if (names.length > 0) {
+      return {
+        names: names.slice(0, 6),
+        description: String(result.description ?? '').trim().slice(0, 1000),
+        usedFallback: Boolean(result.usedFallback),
+      }
+    }
+  } catch {
+    // Edge function missing / offline — use local ideas so the UI still works.
+  }
+
+  return localShopDraftFallback(params)
+}
+
+function localShopDraftFallback(params: ShopDraftParams): ShopDraftResult {
+  const category = params.categories?.[0] || 'handmade goods'
+  const seed =
+    params.currentName?.trim() ||
+    params.prompt?.trim().slice(0, 28) ||
+    'Studio'
+  const base = seed.replace(/[^a-zA-Z0-9\s&'-]/g, '').trim() || 'Velvet'
+  return {
+    names: [
+      `${base} Collective`,
+      `The ${base} Shop`,
+      `${base} & Co.`,
+      `Maison ${base}`,
+      `${base} Atelier`,
+      `Little ${base}`,
+    ].map((name) => name.slice(0, 40)),
+    description: `A women-owned shop for ${category.toLowerCase()}. Thoughtfully made pieces, honest details, and a warm welcome for every shopper.`,
+    usedFallback: true,
   }
 }
 

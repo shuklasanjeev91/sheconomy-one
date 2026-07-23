@@ -32,9 +32,13 @@ export * from './Dialog'
 export * from './Popover'
 export * from './Sheet'
 export * from './BottomSheet'
+export * from './NativeFullscreenAdapt'
 export * from './Tabs'
 export * from './Tooltip'
 export * from './Toast'
+export * from './ScreenState'
+export * from './Skeleton'
+export * from './ActionProgress'
 
 // Content
 export * from './Avatar'
@@ -57,19 +61,9 @@ export {
   Circle,
   Form,
   Group,
-  H1,
-  H2,
-  H3,
-  H4,
-  H5,
-  H6,
-  Image,
-  Paragraph,
   Portal,
   ScrollView,
-  SizableText,
   Square,
-  Text,
   Theme,
   Unspaced,
   VisuallyHidden,
@@ -79,6 +73,23 @@ export {
   useMedia,
   useTheme,
 } from 'tamagui'
+
+// Native-safe Image — percentage width/height must not land in RN `source`.
+export { Image } from './Image'
+export type { AppImageProps } from './Image'
+
+export {
+  Text,
+  Paragraph,
+  SizableText,
+  H1,
+  H2,
+  H3,
+  H4,
+  H5,
+  H6,
+  MAX_FONT_SIZE_MULTIPLIER,
+} from './Text'
 
 export { LinearGradient } from 'tamagui/linear-gradient'
 export { FocusScope } from '@tamagui/focus-scope'

@@ -16,10 +16,11 @@ export function MeetingVideoStage() {
   const { width, height } = useWindowDimensions()
   const { stageTracks, pipTrack, totalTiles, hasScreenShare } = useMeetingGalleryTracks()
 
-  const isLandscape = width > height
+  const stageWidth = Math.max(width - (isDesktop ? 48 : 24), 160)
+  const stageHeight = Math.max(height - 200, 180)
   const layout = useMemo(
-    () => meetingGalleryLayout(stageTracks.length, { isDesktop, isLandscape }),
-    [stageTracks.length, isDesktop, isLandscape],
+    () => meetingGalleryLayout(stageTracks.length, { width: stageWidth, height: stageHeight }),
+    [stageTracks.length, stageWidth, stageHeight],
   )
   const solo = stageTracks.length <= 1 && !pipTrack
   const galleryClass = hasScreenShare

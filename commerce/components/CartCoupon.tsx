@@ -14,7 +14,9 @@ import { radius } from '~/config/tokens'
 import { useCart } from '~/commerce/hooks/useCart'
 import {
   fetchAvailableOffers,
+  isOfferEligible,
   offerBadgeLabel,
+  offerEligibleSubtotal,
   type AvailableOffer,
 } from '~/commerce/lib/discounts'
 import { formatCurrency } from '~/lib/format'
@@ -100,38 +102,141 @@ export function CartCoupon() {
     toast.show('Coupon removed', { tone: 'default' })
   }
 
+  const otherOffers = offers.filter((offer) => offer.id !== appliedId)
+  const offersList =
+    otherOffers.length > 0 ? (
+      <YStack gap="$2">
+        <XStack
+          alignItems="center"
+          gap="$2"
+          cursor="pointer"
+          onPress={() => setOffersOpen((open) => !open)}
+        >
+          <Icons.Sparkles size={15} color={ui.brand} />
+          <Text fontSize={13} fontWeight="700" color={ui.brand}>
+            {appliedId
+              ? `${otherOffers.length} other ${otherOffers.length === 1 ? 'offer' : 'offers'}`
+              : `${otherOffers.length} ${otherOffers.length === 1 ? 'offer' : 'offers'} available`}
+          </Text>
+          {offersOpen ? (
+            <Icons.ChevronUp size={16} color={ui.brand} />
+          ) : (
+            <Icons.ChevronDown size={16} color={ui.brand} />
+          )}
+        </XStack>
+
+        {offersOpen ? (
+          <YStack gap="$2">
+            {otherOffers.map((offer) => {
+              const eligibleSubtotal = offerEligibleSubtotal(offer, subtotal, items)
+              const eligible = isOfferEligible(offer, subtotal, items)
+              const shortfall =
+                offer.minOrderAmount == null ? 0 : Math.max(0, offer.minOrderAmount - eligibleSubtotal)
+              const busy = applyingCode === offer.code.toUpperCase()
+              return (
+                <YStack
+                  key={offer.id}
+                  gap="$2"
+                  padding="$3"
+                  borderRadius={radius.chip}
+                  borderWidth={1}
+                  borderStyle="dashed"
+                  borderColor={ui.border}
+                  backgroundColor={ui.surfaceMuted}
+                >
+                  <XStack alignItems="center" gap="$2" flexWrap="wrap">
+                    <XStack
+                      alignItems="center"
+                      gap="$1.5"
+                      paddingHorizontal="$2.5"
+                      paddingVertical="$1"
+                      borderRadius={radius.chip}
+                      backgroundColor={ui.badgeBrandBg}
+                    >
+                      <Icons.Tag size={12} color={ui.badgeBrandText} />
+                      <Text fontSize={12} fontWeight="800" color={ui.badgeBrandText}>
+                        {offer.code}
+                      </Text>
+                    </XStack>
+                    <Text fontSize={12} fontWeight="700" color={ui.success}>
+                      {offerBadgeLabel(offer, currency)}
+                    </Text>
+                  </XStack>
+
+                  <Text fontSize={13} color={ui.text} fontWeight="600" numberOfLines={1}>
+                    {offer.name}
+                  </Text>
+                  {offer.description ? (
+                    <Text fontSize={12} color={ui.textSecondary} numberOfLines={2}>
+                      {offer.description}
+                    </Text>
+                  ) : null}
+
+                  <XStack alignItems="center" justifyContent="space-between" gap="$2">
+                    <Text fontSize={11.5} color={ui.textMuted} flex={1} numberOfLines={1}>
+                      {offer.minOrderAmount
+                        ? `Min. order ${formatCurrency(offer.minOrderAmount, currency)}`
+                        : 'No minimum order'}
+                    </Text>
+                    {eligible ? (
+                      <Button
+                        tone="outline"
+                        size="$2"
+                        borderRadius={radius.chip}
+                        disabled={busy}
+                        onPress={() => void handleApply(offer.code, true)}
+                      >
+                        {busy ? <Spinner size="small" /> : appliedId ? 'Switch' : 'Apply'}
+                      </Button>
+                    ) : (
+                      <Text fontSize={11.5} fontWeight="600" color={ui.textSecondary}>
+                        Add {formatCurrency(shortfall, currency)} more
+                      </Text>
+                    )}
+                  </XStack>
+                </YStack>
+              )
+            })}
+          </YStack>
+        ) : null}
+      </YStack>
+    ) : null
+
   if (appliedId) {
     return (
-      <YStack
-        gap="$2"
-        padding="$3"
-        borderRadius={radius.chip}
-        borderWidth={1}
-        borderColor={ui.success}
-        backgroundColor={ui.badgeSuccessBg}
-      >
-        <XStack alignItems="center" gap="$2.5">
-          <Icons.BadgeCheck size={20} color={ui.success} />
-          <YStack flex={1} minWidth={0} gap={1}>
-            <Text fontWeight="700" fontSize={14} color={ui.text} numberOfLines={1}>
-              {appliedName ?? 'Coupon applied'}
-            </Text>
-            <Text fontSize={12} color={ui.textSecondary}>
-              {couponAutoApplied ? 'Best offer applied · ' : ''}You saved{' '}
-              {formatCurrency(discountAmount, currency)}
-            </Text>
-          </YStack>
-          <Button
-            tone="ghost"
-            size="$2"
-            color={ui.danger}
-            disabled={removing}
-            onPress={handleRemove}
-            icon={removing ? <Spinner size="small" /> : <Icons.X size={15} />}
-          >
-            Remove
-          </Button>
-        </XStack>
+      <YStack gap="$3">
+        <YStack
+          gap="$2"
+          padding="$3"
+          borderRadius={radius.chip}
+          borderWidth={1}
+          borderColor={ui.success}
+          backgroundColor={ui.badgeSuccessBg}
+        >
+          <XStack alignItems="center" gap="$2.5">
+            <Icons.BadgeCheck size={20} color={ui.success} />
+            <YStack flex={1} minWidth={0} gap={1}>
+              <Text fontWeight="700" fontSize={14} color={ui.text} numberOfLines={1}>
+                {appliedName ?? 'Coupon applied'}
+              </Text>
+              <Text fontSize={12} color={ui.textSecondary}>
+                {couponAutoApplied ? 'Best offer applied · ' : ''}You saved{' '}
+                {formatCurrency(discountAmount, currency)}
+              </Text>
+            </YStack>
+            <Button
+              tone="ghost"
+              size="$2"
+              color={ui.danger}
+              disabled={removing}
+              onPress={handleRemove}
+              icon={removing ? <Spinner size="small" /> : <Icons.X size={15} />}
+            >
+              Remove
+            </Button>
+          </XStack>
+        </YStack>
+        {offersList}
       </YStack>
     )
   }
@@ -182,101 +287,7 @@ export function CartCoupon() {
         </Text>
       ) : null}
 
-      {offers.length > 0 ? (
-        <YStack gap="$2">
-          <XStack
-            alignItems="center"
-            gap="$2"
-            cursor="pointer"
-            onPress={() => setOffersOpen((open) => !open)}
-          >
-            <Icons.Sparkles size={15} color={ui.brand} />
-            <Text fontSize={13} fontWeight="700" color={ui.brand}>
-              {offers.length} {offers.length === 1 ? 'offer' : 'offers'} available
-            </Text>
-            {offersOpen ? (
-              <Icons.ChevronUp size={16} color={ui.brand} />
-            ) : (
-              <Icons.ChevronDown size={16} color={ui.brand} />
-            )}
-          </XStack>
-
-          {offersOpen ? (
-            <YStack gap="$2">
-              {offers.map((offer) => {
-                const eligible =
-                  offer.minOrderAmount == null || subtotal >= offer.minOrderAmount
-                const shortfall =
-                  offer.minOrderAmount == null ? 0 : offer.minOrderAmount - subtotal
-                const busy = applyingCode === offer.code.toUpperCase()
-                return (
-                  <YStack
-                    key={offer.id}
-                    gap="$2"
-                    padding="$3"
-                    borderRadius={radius.chip}
-                    borderWidth={1}
-                    borderStyle="dashed"
-                    borderColor={ui.border}
-                    backgroundColor={ui.surfaceMuted}
-                  >
-                    <XStack alignItems="center" gap="$2" flexWrap="wrap">
-                      <XStack
-                        alignItems="center"
-                        gap="$1.5"
-                        paddingHorizontal="$2.5"
-                        paddingVertical="$1"
-                        borderRadius={radius.chip}
-                        backgroundColor={ui.badgeBrandBg}
-                      >
-                        <Icons.Tag size={12} color={ui.badgeBrandText} />
-                        <Text fontSize={12} fontWeight="800" color={ui.badgeBrandText}>
-                          {offer.code}
-                        </Text>
-                      </XStack>
-                      <Text fontSize={12} fontWeight="700" color={ui.success}>
-                        {offerBadgeLabel(offer, currency)}
-                      </Text>
-                    </XStack>
-
-                    <Text fontSize={13} color={ui.text} fontWeight="600" numberOfLines={1}>
-                      {offer.name}
-                    </Text>
-                    {offer.description ? (
-                      <Text fontSize={12} color={ui.textSecondary} numberOfLines={2}>
-                        {offer.description}
-                      </Text>
-                    ) : null}
-
-                    <XStack alignItems="center" justifyContent="space-between" gap="$2">
-                      <Text fontSize={11.5} color={ui.textMuted} flex={1} numberOfLines={1}>
-                        {offer.minOrderAmount
-                          ? `Min. order ${formatCurrency(offer.minOrderAmount, currency)}`
-                          : 'No minimum order'}
-                      </Text>
-                      {eligible ? (
-                        <Button
-                          tone="outline"
-                          size="$2"
-                          borderRadius={radius.chip}
-                          disabled={busy}
-                          onPress={() => void handleApply(offer.code, true)}
-                        >
-                          {busy ? <Spinner size="small" /> : 'Apply'}
-                        </Button>
-                      ) : (
-                        <Text fontSize={11.5} fontWeight="600" color={ui.textSecondary}>
-                          Add {formatCurrency(shortfall, currency)} more
-                        </Text>
-                      )}
-                    </XStack>
-                  </YStack>
-                )
-              })}
-            </YStack>
-          ) : null}
-        </YStack>
-      ) : null}
+      {offersList}
     </YStack>
   )
 }

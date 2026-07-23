@@ -144,7 +144,7 @@ export function useVendorShops() {
   )
 
   // Never report "ready with zero shops" until the first fetch for this user finishes.
-  // Otherwise SellerDashboard redirects to /my-shops before data lands (spinner loop).
+  // Otherwise SellerDashboard redirects before vendor shops data lands (spinner loop).
   // Background refresh must not blank the seller hub with a full-screen spinner.
   const isLoading = authLoading || (!!userId && !shopsMatchUser)
 

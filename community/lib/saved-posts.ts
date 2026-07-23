@@ -1,3 +1,4 @@
+import { INVALIDATION_TOPICS, invalidateCache } from '~/lib/cache/invalidation'
 import { supabase } from '~/lib/supabase/client'
 import type { CommunityPost } from '~/community/lib/community'
 import { fetchPostById } from '~/community/lib/community'
@@ -48,6 +49,8 @@ export async function saveCommunityPost(
     collection_name: 'Saved',
   })
 
+  if (!error) invalidateCache(INVALIDATION_TOPICS.savedPosts)
+
   return { error: error?.message ?? null }
 }
 
@@ -61,6 +64,8 @@ export async function unsaveCommunityPost(
     .delete()
     .eq('user_id', userId)
     .eq('post_id', postId)
+
+  if (!error) invalidateCache(INVALIDATION_TOPICS.savedPosts)
 
   return { error: error?.message ?? null }
 }

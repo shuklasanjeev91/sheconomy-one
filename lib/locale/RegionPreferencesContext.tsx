@@ -56,7 +56,7 @@ const DEFAULTS: RegionPreferences = {
   currencyCode: 'INR',
   localeTag: 'en-IN',
   userSet: false,
-  ready: false,
+  ready: true,
 }
 
 function applyHtmlLang(languageCode: string, countryCode: string) {

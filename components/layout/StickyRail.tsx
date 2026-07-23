@@ -27,18 +27,29 @@ export function StickyRail({
   style,
   ...props
 }: StickyRailProps) {
-  const { isDesktopWeb } = useAppLayout()
+  const { isDesktopWeb, isDesktop } = useAppLayout()
 
   if (pin === 'viewport') {
     return (
       <YStack
         flexShrink={0}
+        alignSelf="stretch"
         height="100%"
         maxHeight="100%"
-        overflow="scroll"
+        minHeight={0}
+        overflow="hidden"
         style={
           Platform.OS === 'web'
-            ? ({ overflowY: 'auto', minHeight: 0, ...(style as object) } as const)
+            ? ({
+                height: '100%',
+                maxHeight: '100%',
+                minHeight: 0,
+                overflowY: 'auto',
+                overflowX: 'hidden',
+                overscrollBehavior: 'contain',
+                WebkitOverflowScrolling: 'touch',
+                ...(style as object),
+              } as const)
             : (style as object)
         }
         {...props}
@@ -48,18 +59,31 @@ export function StickyRail({
     )
   }
 
-  const stickyStyle = isDesktopWeb ? stickyRailStyle({ scrollable }) : undefined
+  // Sticky whenever the rail sits beside content on web. Wide windows scroll
+  // the document (offset below the sticky app header); narrower desktop
+  // windows scroll an inner container that already starts below the header,
+  // so `position: sticky` pins against that container with a small offset.
+  const stickyActive = Platform.OS === 'web' && isDesktop
+  const stickyTop = isDesktopWeb ? STICKY_RAIL_TOP : 16
+  const stickyStyle = stickyActive
+    ? stickyRailStyle({ scrollable, top: stickyTop })
+    : undefined
 
   return (
     <YStack
       flexShrink={0}
       alignSelf="flex-start"
-      position={isDesktopWeb ? 'sticky' : undefined}
-      top={isDesktopWeb ? STICKY_RAIL_TOP : undefined}
-      zIndex={isDesktopWeb ? 5 : undefined}
+      zIndex={stickyActive ? 5 : undefined}
       style={
-        stickyStyle || style
-          ? { ...(stickyStyle ?? {}), ...(style as object) }
+        stickyActive || style
+          ? {
+              ...(stickyStyle ?? {}),
+              // Prefer CSS sticky via style — Tamagui `position` can drop `sticky` on web.
+              ...(stickyActive
+                ? ({ position: 'sticky', top: stickyTop, zIndex: 5 } as const)
+                : null),
+              ...(style as object),
+            }
           : undefined
       }
       {...props}

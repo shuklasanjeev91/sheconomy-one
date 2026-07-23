@@ -1,5 +1,5 @@
 import { Platform } from 'react-native'
-import { useCallback, useRef } from 'react'
+import { startTransition, useCallback, useRef } from 'react'
 import { usePathname, useRouter } from 'one'
 import type { Href } from 'one'
 
@@ -8,10 +8,11 @@ import {
   getMobileBackFallback,
   shouldShowMobileBack,
 } from '~/lib/navigation/mobile-back'
+import { navigateApp } from '~/lib/platform/navigate'
 import { communityRoutes, routes } from '~/lib/routes'
 
 /**
- * Shared back navigation for app chrome (web, iOS, Android).
+ * Shared back navigation for app chrome (web, iOS, and Android).
  * History when available; otherwise a sensible section fallback.
  */
 export function useAppBackNavigation() {
@@ -35,7 +36,15 @@ export function useAppBackNavigation() {
 
     if (canGoBack) {
       navigatingRef.current = true
-      router.back()
+      // Native: call back() immediately — startTransition deferred back() felt hung.
+      const runBack = () => {
+        router.back()
+      }
+      if (Platform.OS === 'web') {
+        startTransition(runBack)
+      } else {
+        runBack()
+      }
 
       // Web SPAs / Slot stacks sometimes report canGoBack but back() no-ops.
       // If the path hasn't changed shortly after, fall back to the parent route.
@@ -45,18 +54,22 @@ export function useAppBackNavigation() {
           const current = window.location.pathname.replace(/\/$/, '') || '/'
           const expected = fromPath.replace(/\/$/, '') || '/'
           if (current === expected) {
-            router.replace(fallbackHref)
+            navigateApp(fallbackHref, { replace: true })
           }
         }, 120)
         return
       }
 
-      navigatingRef.current = false
+      // Native: clear the lock on the next frame so rapid taps aren't dropped,
+      // but don't block the JS thread waiting for the previous heavy screen.
+      requestAnimationFrame(() => {
+        navigatingRef.current = false
+      })
       return
     }
 
     navigatingRef.current = false
-    router.replace(fallbackHref)
+    navigateApp(fallbackHref, { replace: true })
   }, [fallbackHref, pathname, router])
 
   return {

@@ -1,19 +1,16 @@
-import { useEffect, useRef, useState } from 'react'
+import { useMemo, useRef, useState } from 'react'
 
+import { MentionHashtagSuggestPanel } from '~/community/components/MentionHashtagSuggestPanel'
 import {
   encodeMentions,
   getActiveToken,
   replaceActiveToken,
   type MentionRef,
 } from '~/community/lib/mentions'
-import { searchProfiles, suggestHashtags, type ProfileSuggestion } from '~/community/lib/network'
-import { Avatar, Icons, Input, Spinner, Text, TextArea, XStack, YStack } from '~/components/ui'
-import { useAppUi } from '~/lib/theme/useAppUi'
-
-type SuggestionState =
-  | { kind: 'mention'; items: ProfileSuggestion[] }
-  | { kind: 'hashtag'; items: string[] }
-  | null
+import type { ProfileSuggestion } from '~/community/lib/network'
+import { useMentionHashtagSuggestions } from '~/community/hooks/useMentionHashtagSuggestions'
+import { useAppLayout } from '~/hooks/useAppLayout'
+import { Input, TextArea, YStack } from '~/components/ui'
 
 type MentionInputProps = {
   value: string
@@ -49,43 +46,32 @@ export function MentionInput({
   flex,
   ...inputStyle
 }: MentionInputProps) {
-  const ui = useAppUi()
   const mentionsRef = useRef<MentionRef[]>([])
   const [focused, setFocused] = useState(false)
-  const [results, setResults] = useState<SuggestionState>(null)
-  const [loading, setLoading] = useState(false)
+  const [panelOpen, setPanelOpen] = useState(false)
+  const { isDesktop } = useAppLayout()
+
+  const activeToken = useMemo(() => getActiveToken(value), [value])
+  const suggestEnabled = activeToken != null && panelOpen && (isDesktop ? focused : true)
+
+  const { results, loading, loadingMore, error, hasMore, loadMore, clear } =
+    useMentionHashtagSuggestions({
+      token: activeToken,
+      enabled: suggestEnabled,
+    })
 
   function emit(next: string) {
     onChangeText(next)
     onEncodedChange?.(encodeMentions(next, mentionsRef.current))
   }
 
-  useEffect(() => {
+  function updateActiveTokenQuery(nextQuery: string) {
     const token = getActiveToken(value)
-    if (!focused || !token) {
-      setResults(null)
-      setLoading(false)
-      return
-    }
-
-    let active = true
-    setLoading(true)
-    const timer = setTimeout(async () => {
-      if (token.type === 'mention') {
-        const items = await searchProfiles(token.query, 6)
-        if (active) setResults({ kind: 'mention', items })
-      } else {
-        const items = await suggestHashtags(token.query, 8)
-        if (active) setResults({ kind: 'hashtag', items })
-      }
-      if (active) setLoading(false)
-    }, 160)
-
-    return () => {
-      active = false
-      clearTimeout(timer)
-    }
-  }, [value, focused])
+    if (!token) return
+    const prefix = token.type === 'mention' ? '@' : '#'
+    emit(`${value.slice(0, token.start)}${prefix}${nextQuery}`)
+    setPanelOpen(true)
+  }
 
   function selectProfile(profile: ProfileSuggestion) {
     const token = getActiveToken(value)
@@ -93,130 +79,90 @@ export function MentionInput({
     const display = profile.full_name?.trim() || profile.username || 'member'
     mentionsRef.current = [...mentionsRef.current, { id: profile.id, display }]
     emit(replaceActiveToken(value, token.start, `@${display}`))
-    setResults(null)
+    clear()
+    setPanelOpen(false)
   }
 
   function selectHashtag(tag: string) {
     const token = getActiveToken(value)
     if (!token) return
     emit(replaceActiveToken(value, token.start, `#${tag}`))
-    setResults(null)
+    clear()
+    setPanelOpen(false)
   }
 
-  const showDropdown =
-    focused && (loading || (results !== null && results.items.length > 0))
+  function handleFocus() {
+    setFocused(true)
+    if (getActiveToken(value)) setPanelOpen(true)
+  }
 
-  const dropdown = showDropdown ? (
-    <YStack
-      position="absolute"
-      left={0}
-      right={0}
-      {...(suggestionsPlacement === 'top' ? { bottom: '100%', marginBottom: 6 } : { top: '100%', marginTop: 6 })}
-      zIndex={1000}
-      backgroundColor={ui.elevatedSurface}
-      borderWidth={1}
-      borderColor={ui.border}
-      borderRadius={12}
-      overflow="hidden"
-      maxHeight={260}
-      style={{ boxShadow: ui.shadowCard as string }}
-    >
-      {loading && (results === null || results.items.length === 0) ? (
-        <XStack padding="$3" alignItems="center" gap="$2">
-          <Spinner size="small" />
-          <Text fontSize={13} color={ui.textMuted}>
-            Searching…
-          </Text>
-        </XStack>
-      ) : results?.kind === 'mention' ? (
-        results.items.map((profile) => (
-          <XStack
-            key={profile.id}
-            gap="$2"
-            alignItems="center"
-            paddingVertical="$2"
-            paddingHorizontal="$3"
-            cursor="pointer"
-            hoverStyle={{ backgroundColor: ui.surfaceHover }}
-            onPress={() => selectProfile(profile)}
-          >
-            <Avatar
-              name={profile.full_name || profile.username || 'member'}
-              src={profile.avatar_url ?? undefined}
-              size="$3"
-            />
-            <YStack flex={1} minWidth={0}>
-              <Text fontSize={14} fontWeight="600" color={ui.text} numberOfLines={1}>
-                {profile.full_name || profile.username}
-              </Text>
-              {profile.headline ? (
-                <Text fontSize={12} color={ui.textMuted} numberOfLines={1}>
-                  {profile.headline}
-                </Text>
-              ) : profile.username ? (
-                <Text fontSize={12} color={ui.textMuted} numberOfLines={1}>
-                  @{profile.username}
-                </Text>
-              ) : null}
-            </YStack>
-          </XStack>
-        ))
-      ) : results?.kind === 'hashtag' ? (
-        results.items.map((tag) => (
-          <XStack
-            key={tag}
-            gap="$2"
-            alignItems="center"
-            paddingVertical="$2"
-            paddingHorizontal="$3"
-            cursor="pointer"
-            hoverStyle={{ backgroundColor: ui.surfaceHover }}
-            onPress={() => selectHashtag(tag)}
-          >
-            <Icons.Hash size={16} color={ui.brand} />
-            <Text fontSize={14} fontWeight="500" color={ui.text} numberOfLines={1}>
-              {tag}
-            </Text>
-          </XStack>
-        ))
-      ) : null}
-    </YStack>
-  ) : null
+  function handleBlur() {
+    // Desktop: close anchored panel when the input blurs.
+    // Mobile: keep the bottom sheet open until the user picks someone or dismisses it.
+    setTimeout(() => {
+      setFocused(false)
+      if (isDesktop) setPanelOpen(false)
+    }, 180)
+  }
+
+  const showPanel =
+    panelOpen &&
+    activeToken != null &&
+    (isDesktop ? focused : true) &&
+    (loading || error != null || results != null)
 
   const commonProps = {
     value,
-    onChangeText: emit,
+    onChangeText: (next: string) => {
+      emit(next)
+      const token = getActiveToken(next)
+      setPanelOpen(focused && token != null)
+    },
     placeholder,
     autoFocus,
-    onFocus: () => setFocused(true),
-    // Delay so a tap on a suggestion is registered before the dropdown unmounts.
-    onBlur: () => setTimeout(() => setFocused(false), 180),
+    onFocus: handleFocus,
+    onBlur: handleBlur,
     ...inputStyle,
   }
 
   return (
     <YStack position="relative" flex={flex}>
       {multiline ? (
-        <TextArea
-          width="100%"
-          {...commonProps}
-        />
+        <TextArea width="100%" {...commonProps} />
       ) : (
         <Input
           width="100%"
           {...commonProps}
           onSubmitEditing={() => {
-            const active = getActiveToken(value)
-            if (active && results && results.items.length > 0) {
+            const token = getActiveToken(value)
+            if (token && results && results.items.length > 0) {
               if (results.kind === 'mention') selectProfile(results.items[0])
-              else selectHashtag(results.items[0])
+              else selectHashtag(results.items[0].tag)
               return
             }
             onSubmitEditing?.()
           }}
         />
       )}
-      {dropdown}
+
+      {activeToken && showPanel ? (
+        <MentionHashtagSuggestPanel
+          open={showPanel}
+          onOpenChange={setPanelOpen}
+          kind={activeToken.type}
+          query={activeToken.query}
+          onQueryChange={updateActiveTokenQuery}
+          results={results}
+          loading={loading}
+          loadingMore={loadingMore}
+          error={error}
+          hasMore={hasMore}
+          placement={suggestionsPlacement}
+          onSelectProfile={selectProfile}
+          onSelectHashtag={selectHashtag}
+          onLoadMore={loadMore}
+        />
+      ) : null}
     </YStack>
   )
 }

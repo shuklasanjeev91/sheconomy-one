@@ -21,6 +21,7 @@ export function CommunityCard({
 }: CommunityCardProps) {
   const communityUi = useCommunityUi()
   const nativeShadow = useThemedShadowStyle('sm')
+  const isWeb = Platform.OS === 'web'
 
   return (
     <YStack
@@ -29,17 +30,13 @@ export function CommunityCard({
       borderRadius={radius.card}
       borderWidth={1}
       borderColor={communityUi.borderLight}
+      // Keep clipped corners; reaction picker uses Modal on native so it won't clip.
       overflow="hidden"
       padding={padding}
       gap={gap}
-      style={
-        Platform.OS === 'web'
-          ? { boxShadow: communityUi.cardShadow, transition: 'transform 0.2s ease, box-shadow 0.2s ease' }
-          : nativeShadow
-      }
-      animation="quick"
-      hoverStyle={Platform.OS === 'web' ? { y: -2 } : undefined}
-      {...motion.fadeUp}
+      style={isWeb ? { boxShadow: communityUi.cardShadow } : nativeShadow}
+      {...(isWeb ? motion.fadeUp : null)}
+      {...(isWeb ? motion.pressable : null)}
       {...props}
     >
       {children}

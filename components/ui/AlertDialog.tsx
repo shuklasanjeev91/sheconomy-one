@@ -1,8 +1,11 @@
 import type { ComponentProps, ReactNode } from 'react'
+import { Platform } from 'react-native'
 import { AlertDialog as TAlertDialog, styled, XStack } from 'tamagui'
 
 import * as Icons from '@tamagui/lucide-icons'
 import { getShadowStyle, radius } from '~/config/tokens'
+import { useAppLayout } from '~/hooks/useAppLayout'
+import { isNativeFullscreenOverlay } from '~/lib/platform/native-fullscreen'
 
 /** For destructive/confirmation flows — cannot be dismissed by outside click. */
 export const AlertDialog = TAlertDialog
@@ -26,11 +29,18 @@ const StyledAlertDialogContent = styled(
     borderRadius: '$8',
     padding: '$5',
     gap: '$3',
-    maxWidth: 420,
-    width: '90%',
+    // Bottom-sheet posture on all platforms (centered alerts → sheet).
+    maxWidth: '100%',
+    width: '100%',
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    borderBottomLeftRadius: 0,
+    borderBottomRightRadius: 0,
     animation: 'quick',
-    enterStyle: { opacity: 0, scale: 0.96 },
-    exitStyle: { opacity: 0, scale: 0.96 },
+    enterStyle: { opacity: 0, y: 28 },
+    exitStyle: { opacity: 0, y: 28 },
     ...getShadowStyle('lg'),
   } as any
 )
@@ -70,8 +80,33 @@ export function AlertDialogContent({
   closeLabel?: string
   children?: ReactNode
 }) {
+  const { safeTop } = useAppLayout()
+
+  const nativeFullscreenProps =
+    isNativeFullscreenOverlay
+      ? {
+          width: '100%' as const,
+          height: '100%' as const,
+          maxWidth: '100%' as const,
+          maxHeight: '100%' as const,
+          borderRadius: 0,
+          paddingTop: Math.max(safeTop, 16),
+          paddingBottom: 0,
+          marginBottom: 0,
+          ...(Platform.OS !== 'web' ? { flex: 1 } : null),
+        }
+      : {
+          paddingBottom: 0,
+          marginBottom: 0,
+        }
+
   return (
-    <StyledAlertDialogContent position="relative" {...props} paddingRight={showClose ? props.paddingRight ?? '$8' : props.paddingRight}>
+    <StyledAlertDialogContent
+      position="relative"
+      {...props}
+      {...nativeFullscreenProps}
+      paddingRight={showClose ? props.paddingRight ?? '$8' : props.paddingRight}
+    >
       {showClose ? <AlertDialogCloseButton label={closeLabel} /> : null}
       {children}
     </StyledAlertDialogContent>

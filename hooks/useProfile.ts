@@ -1,6 +1,14 @@
 import { useEffect, useRef, useState } from 'react'
 
+import { importSocialProfileHints } from '~/features/auth/services/social-profile-hints'
+import { normalizeAvatarSrc } from '~/components/ui/Avatar'
 import { subscribeProfileRefresh } from '~/lib/profile/refresh'
+import {
+  clearCachedProfile,
+  peekCachedProfile,
+  readCachedProfile,
+  writeCachedProfile,
+} from '~/lib/profile/profile-cache'
 import { supabase } from '~/lib/supabase'
 import type { Tables } from '~/lib/supabase'
 import { useSupabase } from '~/providers/SupabaseProvider'
@@ -31,7 +39,21 @@ export type Profile = Pick<
   | 'gender'
 >
 
-const PROFILE_FETCH_TIMEOUT_MS = 4_000
+const PROFILE_FETCH_TIMEOUT_MS = 2_500
+
+/** Prefer profiles.avatar_url; fall back to Google/Apple/LinkedIn identity picture. */
+function withResolvedAvatar(profile: Profile | null, user: ReturnType<typeof useSupabase>['user']): Profile | null {
+  if (!profile) return null
+  const fromProfile = normalizeAvatarSrc(profile.avatar_url)
+  if (fromProfile) {
+    return profile.avatar_url === fromProfile ? profile : { ...profile, avatar_url: fromProfile }
+  }
+  const social = normalizeAvatarSrc(importSocialProfileHints(user).avatarUrl)
+  if (!social) {
+    return profile.avatar_url ? { ...profile, avatar_url: null } : profile
+  }
+  return { ...profile, avatar_url: social }
+}
 
 /**
  * Loads the signed-in user's `profiles` row.
@@ -42,14 +64,15 @@ const PROFILE_FETCH_TIMEOUT_MS = 4_000
  */
 export function useProfile() {
   const { user, isLoading: authLoading } = useSupabase()
-  const [profile, setProfile] = useState<Profile | null>(null)
-  const [profileUserId, setProfileUserId] = useState<string | null>(null)
+  const userId = user?.id ?? null
+  const peeked = userId ? peekCachedProfile(userId) : null
+  const [profile, setProfile] = useState<Profile | null>(peeked)
+  const [profileUserId, setProfileUserId] = useState<string | null>(peeked && userId ? userId : null)
   const [fetching, setFetching] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [refreshToken, setRefreshToken] = useState(0)
   const fetchGen = useRef(0)
 
-  const userId = user?.id ?? null
   const profileMatchesUser = !!userId && profileUserId === userId
 
   useEffect(() => subscribeProfileRefresh(() => setRefreshToken((value) => value + 1)), [])
@@ -63,6 +86,7 @@ export function useProfile() {
       setProfileUserId(null)
       setError(null)
       setFetching(false)
+      void clearCachedProfile()
       return
     }
 
@@ -74,12 +98,19 @@ export function useProfile() {
       setProfile(null)
     }
 
+    void readCachedProfile(userId).then((cached) => {
+      if (cancelled || fetchGen.current !== gen || !cached) return
+      setProfile(withResolvedAvatar(cached, user))
+      setProfileUserId(userId)
+      setFetching(true)
+    })
+
     const timeout = setTimeout(() => {
       if (cancelled || fetchGen.current !== gen) return
-      setError('Profile load timed out')
-      setProfile(null)
-      setProfileUserId(userId)
+      // Keep any cached profile on screen; only surface the timeout if we have nothing.
       setFetching(false)
+      setProfileUserId(userId)
+      setError((current) => current ?? 'Profile load timed out')
     }, PROFILE_FETCH_TIMEOUT_MS)
 
     void supabase
@@ -97,8 +128,12 @@ export function useProfile() {
           setError(profileError.message)
           setProfile(null)
         } else {
-          setProfile(data)
+          const resolved = withResolvedAvatar(data, user)
+          setProfile(resolved)
           setError(null)
+          // Cache the resolved row (incl. social avatar fallback) so tab bar /
+          // composer keep a usable avatar_url across sessions.
+          if (resolved) void writeCachedProfile(userId, resolved)
         }
         setProfileUserId(userId)
         setFetching(false)
@@ -116,8 +151,8 @@ export function useProfile() {
       cancelled = true
       clearTimeout(timeout)
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- clear previous identity only when userId changes
-  }, [userId, authLoading, refreshToken])
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- clear previous identity only when userId changes; user metadata used for avatar fallback
+  }, [userId, authLoading, refreshToken, user])
 
   // Only block the shell while we lack a profile for the current user.
   // Background refreshes must not remount AppAccessGate as a full-screen spinner

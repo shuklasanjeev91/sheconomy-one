@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useRouter } from 'one'
 
 import {
@@ -6,6 +6,7 @@ import {
   requestIntroduction,
   type MutualIntroducer,
 } from '~/community/lib/introductions'
+import { ScreenSearchField } from '~/components/search'
 import {
   AppBottomSheet,
   Avatar,
@@ -21,6 +22,7 @@ import {
 import { buildSignInUrl } from '~/lib/auth/redirect'
 import { routes } from '~/lib/routes'
 import { useAppUi } from '~/lib/theme/useAppUi'
+import { SHEET_SEARCH_MIN_ITEMS, filterBySearchQuery } from '~/lib/search'
 import { useSupabase } from '~/providers/SupabaseProvider'
 
 type IntroductionRequestButtonProps = {
@@ -54,6 +56,21 @@ export function IntroductionRequestButton({
   const [introducers, setIntroducers] = useState<MutualIntroducer[]>([])
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [message, setMessage] = useState('')
+  const [query, setQuery] = useState('')
+
+  const filteredIntroducers = useMemo(
+    () =>
+      filterBySearchQuery(introducers, query, (person) => [
+        person.full_name,
+        person.headline,
+        person.username,
+      ]),
+    [introducers, query],
+  )
+
+  useEffect(() => {
+    if (!open) setQuery('')
+  }, [open])
 
   const signInRedirect = targetUsername
     ? routes.userProfile(targetUsername)
@@ -111,8 +128,21 @@ export function IntroductionRequestButton({
             </Text>
           ) : (
             <>
+              {introducers.length >= SHEET_SEARCH_MIN_ITEMS || query.length > 0 ? (
+                <ScreenSearchField
+                  value={query}
+                  onChangeText={setQuery}
+                  placeholder="Search mutual connections"
+                  clearable
+                />
+              ) : null}
               <YStack gap="$2">
-                {introducers.map((person) => {
+                {filteredIntroducers.length === 0 ? (
+                  <Text fontSize={14} color={ui.textMuted}>
+                    No connections match your search.
+                  </Text>
+                ) : null}
+                {filteredIntroducers.map((person) => {
                   const selected = selectedId === person.user_id
                   return (
                     <XStack

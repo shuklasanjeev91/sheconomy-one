@@ -3,6 +3,7 @@ import { KeyboardAvoidingView, Platform } from 'react-native'
 
 import { CommunityAdaptiveSheet } from '~/community/components/CommunityAdaptiveSheet'
 import { Field, Icons, Input, ScrollView, Spinner, Text, XStack, YStack } from '~/components/ui'
+import { SHEET_SEARCH_MIN_ITEMS } from '~/lib/search'
 import { useAppUi } from '~/lib/theme/useAppUi'
 
 export type SearchSelectFieldProps = {
@@ -150,31 +151,41 @@ function SearchSelectSheet({
     trimmedQuery.length > 0 &&
     !filtered.some((item) => item.toLowerCase() === trimmedQuery.toLowerCase())
 
+  // Async pickers and free-text entry need the search box; short static
+  // option lists don't.
+  const showSearch =
+    Boolean(loadOptions) ||
+    allowCustom ||
+    (options?.length ?? 0) >= SHEET_SEARCH_MIN_ITEMS ||
+    query.length > 0
+
   const listMaxHeight = Platform.OS === 'web' ? 420 : 360
   const body = (
     <YStack gap="$3" width="100%">
-      <XStack
-        alignItems="center"
-        gap="$2"
-        paddingHorizontal="$3"
-        paddingVertical="$2"
-        borderRadius={12}
-        borderWidth={1}
-        borderColor={ui.borderSubtle}
-        backgroundColor={ui.surfaceMuted}
-      >
-        <Icons.Search size={18} color={ui.textMuted} />
-        <Input
-          flex={1}
-          borderWidth={0}
-          backgroundColor="transparent"
-          placeholder={searchPlaceholder}
-          value={query}
-          onChangeText={setQuery}
-          autoFocus
-        />
-        {loading ? <Spinner size="small" /> : null}
-      </XStack>
+      {showSearch ? (
+        <XStack
+          alignItems="center"
+          gap="$2"
+          paddingHorizontal="$3"
+          paddingVertical="$2"
+          borderRadius={12}
+          borderWidth={1}
+          borderColor={ui.borderSubtle}
+          backgroundColor={ui.surfaceMuted}
+        >
+          <Icons.Search size={18} color={ui.textMuted} />
+          <Input
+            flex={1}
+            borderWidth={0}
+            backgroundColor="transparent"
+            placeholder={searchPlaceholder}
+            value={query}
+            onChangeText={setQuery}
+            autoFocus
+          />
+          {loading ? <Spinner size="small" /> : null}
+        </XStack>
+      ) : null}
 
       <ScrollView maxHeight={listMaxHeight} width="100%" keyboardShouldPersistTaps="handled">
         <YStack gap="$1" width="100%">

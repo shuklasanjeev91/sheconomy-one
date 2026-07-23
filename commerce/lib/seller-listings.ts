@@ -1,6 +1,19 @@
 import { supabase } from '~/lib/supabase'
-import type { Database, Tables } from '~/lib/supabase'
+import type { Database, Tables, TablesUpdate } from '~/lib/supabase'
 import { slugifyTitle } from '~/commerce/lib/seo-urls'
+import { INVALIDATION_TOPICS, invalidateCache } from '~/lib/cache/invalidation'
+
+/** Refresh every browse/category/home feed that can show seller inventory. */
+function invalidateSellerCatalogueCaches() {
+  invalidateCache(
+    'feed:categories',
+    'feed:shops',
+    'route:shops-browse',
+    'route:home',
+    INVALIDATION_TOPICS.commerceListings,
+    INVALIDATION_TOPICS.commerceShops,
+  )
+}
 
 type ListingType = Database['public']['Enums']['listing_type_enum']
 type ListingStatus = Database['public']['Enums']['listing_status_enum']
@@ -19,6 +32,7 @@ export type CreateListingInput = {
   category?: string
   imageUrl?: string
   imageUrls?: string[]
+  media?: Array<{ url: string; type: 'image' | 'video' }>
   publish?: boolean
 }
 
@@ -77,29 +91,35 @@ export async function createSellerListing(input: CreateListingInput) {
     return { listing: null, error: error?.message ?? 'Could not create listing.' }
   }
 
-  const imageUrls = (input.imageUrls?.length
-    ? input.imageUrls
-    : input.imageUrl?.trim()
-      ? [input.imageUrl.trim()]
-      : []
-  ).filter(Boolean)
+  const mediaItems =
+    input.media?.length
+      ? input.media
+      : (input.imageUrls?.length
+          ? input.imageUrls
+          : input.imageUrl?.trim()
+            ? [input.imageUrl.trim()]
+            : []
+        ).map((url) => ({ url, type: 'image' as const }))
 
-  if (imageUrls.length > 0) {
+  if (mediaItems.length > 0) {
     await supabase.from('listing_images').insert(
-      imageUrls.map((imageUrl, index) => ({
+      mediaItems.map((item, index) => ({
         listing_id: data.id,
-        image_url: imageUrl,
+        image_url: item.url,
+        image_type: item.type === 'video' ? 'video' : 'image',
         is_primary: index === 0,
         display_order: index,
       })),
     )
   }
 
+  invalidateSellerCatalogueCaches()
+
   return { listing: data, error: null as string | null }
 }
 
 export async function updateSellerListing(listingId: string, shopId: string, input: UpdateListingInput) {
-  const payload: Tables<'listings'>['Update'] = {}
+  const payload: TablesUpdate<'listings'> = {}
 
   if (input.title != null) {
     payload.title = input.title.trim()
@@ -132,6 +152,8 @@ export async function updateSellerListing(listingId: string, shopId: string, inp
     return { listing: null, error: error.message }
   }
 
+  invalidateSellerCatalogueCaches()
+
   return { listing: data, error: null as string | null }
 }
 
@@ -157,6 +179,8 @@ export async function updateShopProfile(shopId: string, userId: string, input: U
   if (error) {
     return { shop: null, error: error.message }
   }
+
+  invalidateSellerCatalogueCaches()
 
   return { shop: data, error: null as string | null }
 }

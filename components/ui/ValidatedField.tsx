@@ -1,6 +1,8 @@
 import type { GetProps } from 'tamagui'
 
+import { PhoneInput } from '~/components/forms/PhoneInput'
 import type { FormFieldState } from '~/hooks/useFormValidation'
+import type { Country } from '~/lib/phone/countries'
 
 import { Field } from './Input'
 import { Input, TextArea } from './Input'
@@ -68,6 +70,42 @@ export function ValidatedTextArea({
         onBlur={field.onBlur}
         invalid={field.showError && !!field.error}
         {...inputProps}
+      />
+    </Field>
+  )
+}
+
+type ValidatedPhoneFieldProps = SharedProps & {
+  defaultCountry?: Country
+  compact?: boolean
+  disabled?: boolean
+}
+
+/** Phone field wired to `useFormValidation` (E.164 value). */
+export function ValidatedPhoneField({
+  label,
+  hint,
+  required,
+  field,
+  defaultCountry,
+  compact,
+  disabled,
+}: ValidatedPhoneFieldProps) {
+  return (
+    <Field
+      label={label}
+      required={required}
+      hint={!field.showError ? hint : undefined}
+      error={field.showError ? field.error ?? undefined : undefined}
+    >
+      <PhoneInput
+        value={field.value}
+        onChange={field.onChange}
+        onBlur={field.onBlur}
+        invalid={field.showError && !!field.error}
+        defaultCountry={defaultCountry}
+        compact={compact}
+        disabled={disabled}
       />
     </Field>
   )

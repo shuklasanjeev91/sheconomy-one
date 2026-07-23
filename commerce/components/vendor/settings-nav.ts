@@ -22,8 +22,8 @@ export type SettingsSection = {
 }
 
 /**
- * The shop-settings sidebar navigation. Only **General** is implemented today;
- * the remaining sections render a "coming soon" placeholder and are built out
+ * The shop-settings sidebar navigation. Sections marked `ready` are
+ * implemented; the rest render a "coming soon" placeholder and are built out
  * incrementally. Shared across web + mobile so the two stay in sync.
  */
 export const SETTINGS_SECTIONS: readonly SettingsSection[] = [
@@ -37,38 +37,44 @@ export const SETTINGS_SECTIONS: readonly SettingsSection[] = [
   {
     id: 'connect',
     label: 'Connect',
-    description: 'Connect Shopify, Instagram, or ERP tools to sync inventory and sales data.',
+    description: 'Manage your contact details, shop address, and social platforms.',
     icon: Icons.Share2,
+    ready: true,
   },
   {
     id: 'payments',
-    label: 'Payments',
-    description: 'Manage how you receive funds, connected bank accounts, and tax documentation.',
+    label: 'Payment Methods',
+    description: 'Manage how you receive funds from your customers worldwide.',
     icon: Icons.CreditCard,
+    ready: true,
   },
   {
     id: 'notifications',
     label: 'Notifications',
     description: 'Control how you receive order updates, marketing insights, and customer messages.',
     icon: Icons.Bell,
+    ready: true,
   },
   {
     id: 'security',
     label: 'Security',
     description: 'Manage sign-in, team access, and role-based permissions for your shop.',
     icon: Icons.ShieldCheck,
+    ready: true,
   },
   {
     id: 'shipping',
     label: 'Shipping',
-    description: 'Set up delivery zones, international rates, and preferred courier partners.',
+    description: 'Configure delivery fees, free-shipping thresholds, processing times, and zone-based rates.',
     icon: Icons.Truck,
+    ready: true,
   },
   {
     id: 'returns',
-    label: 'Returns',
-    description: 'Define return windows, refund rules, and reverse-logistics preferences.',
+    label: 'Return Policies',
+    description: 'Manage return windows, refund rules, and reverse-logistics preferences.',
     icon: Icons.Undo2,
+    ready: true,
   },
 ] as const
 

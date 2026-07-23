@@ -1,22 +1,19 @@
 import { useEffect, useState } from 'react'
 
-import { ProgramCard } from '~/class/components/ProgramCard'
+import { ProgramCardGrid } from '~/class/components/ProgramCardGrid'
 import { fetchPublishedPrograms, type Program } from '~/class/lib/programs'
-import { HorizontalScrollRow } from '~/components/layout'
-import { Spinner, Text, YStack, useMedia } from '~/components/ui'
+import { Spinner, Text, YStack } from '~/components/ui'
 import { useAppUi } from '~/lib/theme/useAppUi'
 
 type RelatedProgramsRailProps = {
   program: Program
 }
 
-/** Same-category recommendations under a program detail — web + native. */
+/** Same-category recommendations under a program detail — responsive grid. */
 export function RelatedProgramsRail({ program }: RelatedProgramsRailProps) {
   const ui = useAppUi()
-  const media = useMedia()
   const [items, setItems] = useState<Program[]>([])
   const [loading, setLoading] = useState(false)
-  const cardWidth = media.gtLg ? 280 : 240
 
   useEffect(() => {
     let active = true
@@ -51,11 +48,7 @@ export function RelatedProgramsRail({ program }: RelatedProgramsRailProps) {
       {loading && items.length === 0 ? (
         <Spinner size="small" color={ui.brand} />
       ) : (
-        <HorizontalScrollRow gap="$3">
-          {items.map((item) => (
-            <ProgramCard key={item.id} program={item} width={cardWidth} />
-          ))}
-        </HorizontalScrollRow>
+        <ProgramCardGrid programs={items} />
       )}
     </YStack>
   )

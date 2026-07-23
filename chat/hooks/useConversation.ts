@@ -8,6 +8,7 @@ import {
   fetchReactionsForMessages,
   fetchReplyPreview,
   mapMessage,
+  markConversationDelivered,
   markConversationRead,
   mediaCategory,
   sendEventMessage,
@@ -35,6 +36,7 @@ import type {
 } from '~/chat/lib/types'
 import { pickedImageToBlob } from '~/lib/media/pick-image'
 import { supabase } from '~/lib/supabase/client'
+import { useAppToast } from '~/components/ui'
 
 const TYPING_IDLE_MS = 2500
 const PEER_TYPING_TIMEOUT_MS = 5000
@@ -43,6 +45,10 @@ let tempCounter = 0
 function nextTempId() {
   tempCounter += 1
   return `temp-${Date.now()}-${tempCounter}`
+}
+
+function isOptimisticMessageId(messageId: string) {
+  return messageId.startsWith('temp-')
 }
 
 function toReplyPreview(message: ChatMessage): ReplyPreview {
@@ -61,12 +67,14 @@ type UseConversationOptions = {
 }
 
 export function useConversation({ conversationId, currentUserId }: UseConversationOptions) {
+  const toast = useAppToast()
   const [messages, setMessages] = useState<ChatMessage[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [hasMore, setHasMore] = useState(false)
   const [loadingOlder, setLoadingOlder] = useState(false)
   const [sending, setSending] = useState(false)
+  const [uploadProgress, setUploadProgress] = useState<number | null>(null)
   const [peerTyping, setPeerTyping] = useState(false)
   const [peerReadAt, setPeerReadAt] = useState<string | null>(null)
   const [reactionRows, setReactionRows] = useState<MessageReaction[]>([])
@@ -87,7 +95,10 @@ export function useConversation({ conversationId, currentUserId }: UseConversati
 
   const markRead = useCallback(() => {
     if (!conversationId || !currentUserId) return
-    void markConversationRead(conversationId, currentUserId)
+    // Delivered first (gray ✓✓), then read (blue ✓✓) while this thread is open.
+    void markConversationDelivered(conversationId, currentUserId).then(() =>
+      markConversationRead(conversationId, currentUserId),
+    )
   }, [conversationId, currentUserId])
 
   const loadReactions = useCallback(async (ids: string[]) => {
@@ -207,11 +218,16 @@ export function useConversation({ conversationId, currentUserId }: UseConversati
                 next[optimisticIndex] = { ...incoming, replyPreview: prev[optimisticIndex].replyPreview }
                 return next
               })
+              if (incoming.type === 'poll') void loadPollVotes([incoming.id])
               return
             }
           }
 
           setMessagesTracked((prev) => [...prev, incoming])
+
+          if (incoming.type === 'poll') {
+            void loadPollVotes([incoming.id])
+          }
 
           if (incoming.senderId !== currentUserId) {
             markRead()
@@ -397,6 +413,7 @@ export function useConversation({ conversationId, currentUserId }: UseConversati
         editedAt: null,
         poll: null,
         event: null,
+        storyReply: null,
         optimistic: true,
       }
       setMessagesTracked((prev) => [...prev, optimistic])
@@ -488,10 +505,12 @@ export function useConversation({ conversationId, currentUserId }: UseConversati
         editedAt: null,
         poll: null,
         event: null,
+        storyReply: null,
         optimistic: true,
       }
       setMessagesTracked((prev) => [...prev, optimistic])
       setSending(true)
+      setUploadProgress(0)
 
       try {
         const blob = await pickedImageToBlob(attachment)
@@ -499,6 +518,7 @@ export function useConversation({ conversationId, currentUserId }: UseConversati
           conversationId,
           currentUserId,
           { blob, mimeType: attachment.mimeType, fileName: attachment.fileName },
+          { onProgress: setUploadProgress },
         )
 
         if (uploadError || !uploaded) {
@@ -532,6 +552,7 @@ export function useConversation({ conversationId, currentUserId }: UseConversati
         )
       } finally {
         setSending(false)
+        setUploadProgress(null)
       }
     },
     [conversationId, currentUserId, setMessagesTracked],
@@ -559,18 +580,25 @@ export function useConversation({ conversationId, currentUserId }: UseConversati
         editedAt: null,
         poll: null,
         event: null,
+        storyReply: null,
         optimistic: true,
       }
       setMessagesTracked((prev) => [...prev, optimistic])
       setSending(true)
+      setUploadProgress(0)
 
       try {
         const blob = await pickedImageToBlob(attachment)
-        const { data: uploaded, error: uploadError } = await uploadChatMedia(conversationId, currentUserId, {
-          blob,
-          mimeType: attachment.mimeType,
-          fileName: attachment.fileName,
-        })
+        const { data: uploaded, error: uploadError } = await uploadChatMedia(
+          conversationId,
+          currentUserId,
+          {
+            blob,
+            mimeType: attachment.mimeType,
+            fileName: attachment.fileName,
+          },
+          { onProgress: setUploadProgress },
+        )
 
         if (uploadError || !uploaded) throw new Error(uploadError ?? 'Upload failed')
 
@@ -601,6 +629,7 @@ export function useConversation({ conversationId, currentUserId }: UseConversati
         )
       } finally {
         setSending(false)
+        setUploadProgress(null)
       }
     },
     [conversationId, currentUserId, setMessagesTracked],
@@ -656,7 +685,7 @@ export function useConversation({ conversationId, currentUserId }: UseConversati
         id: nextTempId(),
         conversationId,
         senderId: currentUserId,
-        content: poll.question,
+        content: `[Poll] ${poll.question}`,
         type: 'poll',
         mediaUrl: null,
         mediaType: null,
@@ -670,6 +699,7 @@ export function useConversation({ conversationId, currentUserId }: UseConversati
         editedAt: null,
         poll,
         event: null,
+        storyReply: null,
         optimistic: true,
       }
       setMessagesTracked((prev) => [...prev, optimistic])
@@ -680,15 +710,21 @@ export function useConversation({ conversationId, currentUserId }: UseConversati
         poll,
       )
       setSending(false)
+      if (sendError || !messageId) {
+        toast.show('Could not send poll', { tone: 'danger', message: sendError ?? undefined })
+        setMessagesTracked((prev) =>
+          prev.map((m) => (m.id === optimistic.id ? { ...m, status: 'failed' } : m)),
+        )
+        return
+      }
       setMessagesTracked((prev) =>
-        prev.map((m) => {
-          if (m.id !== optimistic.id) return m
-          if (sendError || !messageId) return { ...m, status: 'failed' }
-          return { ...m, id: messageId, status: 'sent', optimistic: false }
-        }),
+        prev.map((m) =>
+          m.id === optimistic.id ? { ...m, id: messageId, status: 'sent', optimistic: false } : m,
+        ),
       )
+      void loadPollVotes([messageId])
     },
-    [conversationId, currentUserId, setMessagesTracked],
+    [conversationId, currentUserId, setMessagesTracked, toast, loadPollVotes],
   )
 
   const sendEvent = useCallback(
@@ -712,6 +748,7 @@ export function useConversation({ conversationId, currentUserId }: UseConversati
         editedAt: null,
         poll: null,
         event,
+        storyReply: null,
         optimistic: true,
       }
       setMessagesTracked((prev) => [...prev, optimistic])
@@ -736,6 +773,10 @@ export function useConversation({ conversationId, currentUserId }: UseConversati
   const votePoll = useCallback(
     async (messageId: string, optionIndex: number) => {
       if (!currentUserId) return
+      if (isOptimisticMessageId(messageId)) {
+        toast.show('Poll is still sending', { tone: 'info', message: 'Try again in a moment.' })
+        return
+      }
       setPollVotes((prev) => {
         const mine = prev.find((v) => v.messageId === messageId && v.userId === currentUserId)
         const others = prev.filter(
@@ -745,9 +786,12 @@ export function useConversation({ conversationId, currentUserId }: UseConversati
         return [...others, { messageId, userId: currentUserId, optionIndex }]
       })
       const { error: voteError } = await castMessagePollVote(messageId, currentUserId, optionIndex)
-      if (voteError) void loadPollVotes([messageId])
+      if (voteError) {
+        toast.show('Could not vote', { tone: 'danger', message: voteError })
+        void loadPollVotes([messageId])
+      }
     },
-    [currentUserId, loadPollVotes],
+    [currentUserId, loadPollVotes, toast],
   )
 
   const pollResultsByMessage = useMemo(() => {
@@ -795,6 +839,7 @@ export function useConversation({ conversationId, currentUserId }: UseConversati
     loadingOlder,
     loadOlder,
     sending,
+    uploadProgress,
     peerTyping,
     peerReadAt,
     reactionsByMessage,

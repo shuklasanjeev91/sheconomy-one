@@ -14,8 +14,9 @@ export function getBottomTabWidthTier(width: number, gtSm: boolean): BottomTabWi
   return 'compact'
 }
 
-export function shouldShowBottomTabLabels(tier: BottomTabWidthTier) {
-  return tier !== 'compact'
+export function shouldShowBottomTabLabels(_tier: BottomTabWidthTier) {
+  // Always show captions — icon-only tabs confuse users on phones.
+  return true
 }
 
 export function formatBottomTabLabel(label: string, tier: BottomTabWidthTier) {

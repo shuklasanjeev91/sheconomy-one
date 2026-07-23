@@ -9,19 +9,19 @@
  *     the migrated TensorFlow classifier (`lib/nsfwjs`) and screens every
  *     upload through it — mirroring how the legacy `listingImagesService` used
  *     the classifier directly. A custom moderator can be swapped in with
- *     `registerImageModerator(...)`. On native (or if analysis fails) uploads
- *     proceed (fail-open), exactly like the legacy service did when analysis
- *     was unavailable. No image is uploaded before it is moderated.
+ *     `registerImageModerator(...)`. On native, uploads use the server
+ *     `moderate_image` ai-assist path. If moderation cannot run, uploads are
+ *     blocked (fail closed). No image is uploaded before it is moderated.
  */
-
-import { Platform } from 'react-native'
 
 import { supabase } from '~/lib/supabase'
 import {
   STORAGE_BUCKETS,
   getStoragePublicUrl,
   uploadStorageObject,
+  type UploadProgressHandler,
 } from '~/lib/supabase/storage-upload'
+import { uploadFilesWithAggregateProgress } from '~/lib/supabase/storage-upload-progress'
 
 import { fail, ok, resolveUserId, verifyListingManageAccess } from './listing.access'
 import { createListingError, LISTING_ERROR_CODES } from './listing.errors'
@@ -76,7 +76,6 @@ export function getImageModerator(): ImageModerator | null {
  */
 async function resolveModerator(): Promise<ImageModerator | null> {
   if (activeModerator) return activeModerator
-  if (Platform.OS !== 'web') return null
 
   if (!defaultModeratorPromise) {
     defaultModeratorPromise = import('../nsfwjs/listing-image-moderator')
@@ -89,8 +88,7 @@ async function resolveModerator(): Promise<ImageModerator | null> {
 /**
  * Screen a batch of images. Resolves when all are approved; throws a
  * `ListingError(NSFW_CONTENT)` if any is rejected. If no moderator is available
- * (native, or the classifier failed to load) we fail open (approve) — mirroring
- * the legacy behaviour.
+ * we reject the upload (fail closed) so native and web share one safety policy.
  */
 async function moderateImages(
   images: (Blob | File)[],
@@ -98,7 +96,12 @@ async function moderateImages(
 ): Promise<void> {
   if (images.length === 0) return
   const moderator = await resolveModerator()
-  if (!moderator) return
+  if (!moderator) {
+    throw createListingError(
+      LISTING_ERROR_CODES.NSFW_CONTENT,
+      'Image moderation is unavailable. Please try again.',
+    )
+  }
 
   let results: ImageModerationResult[]
   if (images.length > 1 && moderator.analyzeBatch) {
@@ -162,6 +165,7 @@ export type UploadedImage = {
 export async function uploadImage(
   file: ListingImageUpload,
   listingId?: string | null,
+  options?: { onProgress?: UploadProgressHandler },
 ): Promise<ListingServiceResponse<UploadedImage>> {
   const validationError = validateUploadFile(file)
   if (validationError) return fail(validationError)
@@ -178,6 +182,7 @@ export async function uploadImage(
       path,
       file.blob,
       file.mimeType,
+      { onProgress: options?.onProgress },
     )
     if (error || !data) return fail(error ?? 'Upload failed.')
 
@@ -199,7 +204,10 @@ export async function uploadImage(
 export async function batchUploadImages(
   files: ListingImageUpload[],
   listingId?: string | null,
-  onProgress?: (progress: { processed: number; total: number }) => void,
+  options?: {
+    onModerationProgress?: (progress: { processed: number; total: number }) => void
+    onUploadProgress?: UploadProgressHandler
+  },
 ): Promise<ListingServiceResponse<UploadedImage[]>> {
   if (!files.length) return fail('No files provided for upload.')
 
@@ -209,20 +217,29 @@ export async function batchUploadImages(
   try {
     await moderateImages(
       files.map((file) => file.blob),
-      onProgress,
+      options?.onModerationProgress,
     )
 
     const uploaded: UploadedImage[] = []
     const uploadedPaths: string[] = []
 
-    for (const file of files) {
-      const result = await uploadImage(file, listingId)
-      if (!result.success || !result.data) {
-        if (uploadedPaths.length) await rollbackUploadedImages(uploadedPaths)
-        return fail(result.error ?? 'Upload failed.')
-      }
-      uploaded.push(result.data)
-      uploadedPaths.push(result.data.path)
+    const { error: batchError } = await uploadFilesWithAggregateProgress(
+      files,
+      async (file, onFileProgress) => {
+        const result = await uploadImage(file, listingId, { onProgress: onFileProgress })
+        if (!result.success || !result.data) {
+          return { error: result.error ?? 'Upload failed.' }
+        }
+        uploaded.push(result.data)
+        uploadedPaths.push(result.data.path)
+        return { error: null }
+      },
+      options?.onUploadProgress,
+    )
+
+    if (batchError) {
+      if (uploadedPaths.length) await rollbackUploadedImages(uploadedPaths)
+      return fail(batchError)
     }
 
     return ok(uploaded)

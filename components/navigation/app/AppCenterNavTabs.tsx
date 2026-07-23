@@ -1,11 +1,15 @@
 import { usePathname } from 'one'
+import { Platform } from 'react-native'
 
 import { AppLink } from '~/components/navigation/AppLink'
-import { XStack, YStack } from '~/components/ui'
+import { Text, XStack, YStack } from '~/components/ui'
 import { useAccess } from '~/hooks/useAccess'
 import { useAppUi } from '~/lib/theme/useAppUi'
 
 import { APP_CENTER_NAV, getAppColors } from './config'
+
+/** Tamagui layout animation is costly on Hermes during rapid tab switches. */
+const tabAnim = Platform.OS === 'web' ? ('quick' as const) : undefined
 
 type AppCenterNavTabsProps = {
   variant?: 'desktop' | 'mobile' | 'mobile-inline'
@@ -20,6 +24,7 @@ export function AppCenterNavTabs({ variant = 'desktop', compact = false }: AppCe
   const colors = getAppColors(ui)
   const isInline = variant === 'mobile-inline'
   const isMobile = variant === 'mobile' || isInline
+  const showMobileLabels = isMobile
 
   return (
     <XStack
@@ -31,10 +36,10 @@ export function AppCenterNavTabs({ variant = 'desktop', compact = false }: AppCe
       alignSelf="stretch"
       borderTopWidth={variant === 'mobile' && !compact ? 1 : 0}
       borderTopColor={colors.border}
-      paddingHorizontal={variant === 'mobile' ? 8 : 0}
+      paddingHorizontal={variant === 'mobile' ? 4 : 0}
       paddingVertical={variant === 'mobile' ? (compact ? 4 : 6) : 0}
-      gap={variant === 'mobile' ? 4 : 0}
-      animation="quick"
+      gap={variant === 'mobile' ? 2 : 0}
+      animation={tabAnim}
     >
       {APP_CENTER_NAV.map((item) => {
         const isActive = item.match(pathname)
@@ -44,40 +49,63 @@ export function AppCenterNavTabs({ variant = 'desktop', compact = false }: AppCe
         return (
           <AppLink key={item.label} href={href} replace asChild>
             <YStack
-              flex={isInline ? 1 : 1}
+              flex={1}
               maxWidth={!isMobile ? 112 : undefined}
               alignItems="center"
               justifyContent="center"
               cursor="pointer"
               position="relative"
-              height={isMobile ? (isInline ? 44 : 48) : undefined}
-              borderRadius={isMobile ? 999 : 0}
-              paddingHorizontal={isMobile ? 12 : 0}
+              minHeight={
+                isMobile
+                  ? showMobileLabels
+                    ? compact
+                      ? 52
+                      : 56
+                    : isInline
+                      ? 44
+                      : 48
+                  : undefined
+              }
+              borderRadius={isMobile ? 14 : 0}
+              paddingHorizontal={isMobile ? 4 : 0}
+              paddingVertical={isMobile && showMobileLabels ? 4 : 0}
+              gap={isMobile && showMobileLabels ? 2 : 0}
               backgroundColor={isMobile && isActive ? `${colors.brand}18` : 'transparent'}
               hoverStyle={
                 isMobile ? { backgroundColor: `${colors.brand}10` } : { backgroundColor: ui.navHover }
               }
               pressStyle={isMobile ? { opacity: 0.72, scale: 0.96 } : undefined}
-              animation="quick"
+              animation={tabAnim}
               aria-label={item.label}
               title={item.label}
             >
               <Icon
-                size={isInline ? 20 : isMobile ? 21 : 24}
+                size={isInline ? 20 : isMobile ? 20 : 24}
                 color={isActive ? colors.brand : colors.icon}
                 fill={isActive ? colors.brand : 'none'}
                 strokeWidth={isActive ? 2.2 : 1.8}
-                // Keep presses on the Link host — SVG icons can steal the first click on web.
                 pointerEvents="none"
               />
-              {isMobile && !isInline ? (
+              {showMobileLabels ? (
+                <Text
+                  fontSize={9}
+                  fontWeight={isActive ? '700' : '500'}
+                  color={isActive ? colors.brand : colors.textSecondary}
+                  numberOfLines={1}
+                  textAlign="center"
+                  width="100%"
+                  lineHeight={11}
+                >
+                  {item.label}
+                </Text>
+              ) : isMobile && !isInline ? (
                 <YStack
                   width={isActive ? 4 : 0}
                   height={4}
                   borderRadius={999}
                   backgroundColor={colors.brand}
                   marginTop={4}
-                  animation="quick"
+                  animation={tabAnim}
                 />
               ) : isActive ? (
                 <YStack

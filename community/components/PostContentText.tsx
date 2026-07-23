@@ -9,7 +9,7 @@ import {
   type PostTextSegment,
 } from '~/community/lib/post-text'
 import { useCommunityUi } from '~/community/lib/community-theme'
-import { Text, XStack } from '~/components/ui'
+import { Text, YStack } from '~/components/ui'
 import { communityRoutes } from '~/lib/routes'
 import { useAppUi } from '~/lib/theme/useAppUi'
 
@@ -35,38 +35,39 @@ export function PostContentText({
     canCollapse && !expanded ? truncatePost(plainContent) : plainContent
 
   return (
-    <Text fontSize={fontSize} color={ui.text} lineHeight={lineHeight} whiteSpace="pre-wrap">
-      <PostTextSegments segments={parsePostText(visibleContent)} />
-      {canCollapse && !expanded ? (
-        <>
-          {' '}
-          <Text
-            fontSize={fontSize}
-            fontWeight="600"
-            color={ui.textMuted}
-            cursor="pointer"
-            onPress={() => setExpanded(true)}
-            hoverStyle={{ color: communityUi.brand, textDecorationLine: 'underline' }}
-          >
-            see more
-          </Text>
-        </>
-      ) : null}
+    <YStack width="100%" minWidth={0} gap={4}>
+      <Text fontSize={fontSize} color={ui.text} lineHeight={lineHeight} whiteSpace="pre-wrap">
+        <PostTextSegments segments={parsePostText(visibleContent)} />
+        {canCollapse && !expanded ? (
+          <>
+            {' '}
+            <Text
+              fontSize={fontSize}
+              fontWeight="600"
+              color={ui.textMuted}
+              cursor="pointer"
+              onPress={() => setExpanded(true)}
+              hoverStyle={{ color: communityUi.brand, textDecorationLine: 'underline' }}
+            >
+              see more
+            </Text>
+          </>
+        ) : null}
+      </Text>
       {canCollapse && expanded ? (
-        <XStack marginTop={4}>
-          <Text
-            fontSize={14}
-            fontWeight="600"
-            color={ui.textMuted}
-            cursor="pointer"
-            onPress={() => setExpanded(false)}
-            hoverStyle={{ color: communityUi.brand, textDecorationLine: 'underline' }}
-          >
-            see less
-          </Text>
-        </XStack>
+        <Text
+          fontSize={14}
+          fontWeight="600"
+          color={ui.textMuted}
+          cursor="pointer"
+          alignSelf="flex-start"
+          onPress={() => setExpanded(false)}
+          hoverStyle={{ color: communityUi.brand, textDecorationLine: 'underline' }}
+        >
+          see less
+        </Text>
       ) : null}
-    </Text>
+    </YStack>
   )
 }
 

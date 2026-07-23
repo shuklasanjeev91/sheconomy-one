@@ -55,6 +55,7 @@ export function UserListBottomSheet({
           onLoadMore={list.loadMore}
           showConnect={isOwnProfile || kind !== 'followers'}
           showFollow
+          searchable
         />
       </YStack>
     </AppBottomSheet>

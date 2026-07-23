@@ -3,25 +3,22 @@ import type { Tables } from '~/lib/supabase'
 import { formatCurrency } from '~/lib/format'
 
 import { applyCartDiscount, removeCartDiscount, type CartRow } from './cart'
+import {
+  pickBestOffer,
+  type AvailableOffer,
+} from './offer-utils'
+
+export type { AvailableOffer }
+export {
+  estimateOfferDiscount,
+  isOfferEligible,
+  offerEligibleSubtotal,
+  pickBestOffer,
+} from './offer-utils'
 
 export type DiscountProfile = Tables<'discount_profiles'>
 
 export type DiscountType = 'percentage' | 'fixed'
-
-/** A publicly-applicable coupon shown in the "available offers" list. */
-export type AvailableOffer = {
-  id: string
-  code: string
-  name: string
-  description: string | null
-  type: DiscountType
-  value: number
-  minOrderAmount: number | null
-  maxDiscountAmount: number | null
-  validUntil: string | null
-  /** When set, this coupon only applies to that shop's products. */
-  shopId: string | null
-}
 
 type DiscountLike = {
   discount_type: string
@@ -304,17 +301,6 @@ export async function reconcileCartDiscount(
   return true
 }
 
-/** Estimate the discount an offer would give for a subtotal (clamped to it). */
-export function estimateOfferDiscount(offer: AvailableOffer, subtotal: number): number {
-  let amount = offer.type === 'percentage' ? (subtotal * offer.value) / 100 : offer.value
-  if (offer.maxDiscountAmount && offer.maxDiscountAmount > 0 && amount > offer.maxDiscountAmount) {
-    amount = offer.maxDiscountAmount
-  }
-  if (amount > subtotal) amount = subtotal
-  if (amount < 0) amount = 0
-  return Math.round(amount * 100) / 100
-}
-
 export type BestOfferResult = {
   applied: boolean
   offer?: AvailableOffer
@@ -340,35 +326,22 @@ export async function autoApplyBestOffer(options: {
     ? await fetchAvailableOffers({ shopId: options.shopId })
     : await fetchAvailableOffers({ shopIds: options.shopIds ?? null })
 
-  let best: AvailableOffer | null = null
-  let bestAmount = 0
-  for (const offer of offers) {
-    let eligibleSubtotal = options.subtotal
-    if (offer.shopId) {
-      const items = options.items ?? []
-      eligibleSubtotal = items
-        .filter((item) => item.shop_id === offer.shopId)
-        .reduce((sum, item) => sum + toNumber(item.total_price), 0)
-      if (eligibleSubtotal <= 0) continue
-    }
-    if (offer.minOrderAmount != null && eligibleSubtotal < offer.minOrderAmount) continue
-    const amount = estimateOfferDiscount(offer, eligibleSubtotal)
-    if (amount > bestAmount) {
-      best = offer
-      bestAmount = amount
-    }
-  }
+  const best = pickBestOffer({
+    offers,
+    subtotal: options.subtotal,
+    items: options.items,
+  })
 
-  if (!best || bestAmount <= 0) return { applied: false }
+  if (!best) return { applied: false }
 
   const { error } = await applyCartDiscount({
     cartId: options.cartId,
-    profileId: best.id,
-    amount: bestAmount,
+    profileId: best.offer.id,
+    amount: best.amount,
   })
 
   if (error) return { applied: false, error }
-  return { applied: true, offer: best, amount: bestAmount }
+  return { applied: true, offer: best.offer, amount: best.amount }
 }
 
 /** Short human label like "10% OFF" or "₹150 OFF" for an offer badge. */

@@ -4,12 +4,12 @@ import {
   AccordionContent,
   AccordionItem,
   AccordionTrigger,
-  Adapt,
   AlertDialog,
   AlertDialogContent,
   AlertDialogDescription,
   AlertDialogOverlay,
   AlertDialogTitle,
+  AppBottomSheet,
   Avatar,
   Badge,
   BrandGradient,
@@ -47,10 +47,6 @@ import {
   SelectTrigger,
   SelectViewport,
   Separator,
-  Sheet,
-  SheetFrame,
-  SheetHandle,
-  SheetOverlay,
   Slider,
   Spinner,
   Square,
@@ -77,7 +73,7 @@ import { BRAND_NAME } from '~/config/brand'
 export default function UiKitTab() {
   return (
     <PageScroll>
-      <YStack padding="$4" gap="$8" paddingBottom="$10" width="100%">
+      <YStack padding="$4" gap="$8" paddingBottom="$2" width="100%">
         <YStack gap="$1">
           <Badge tone="brand" size="sm">
             Component library
@@ -190,15 +186,6 @@ function FormsDemo() {
             <SelectTrigger width="100%" iconAfter={<Icons.ChevronDown size={16} />}>
               <Select.Value placeholder="Choose…" />
             </SelectTrigger>
-            <Adapt when="sm" platform="touch">
-              <Sheet modal>
-                <SheetFrame>
-                  <SheetHandle />
-                  <Adapt.Contents />
-                </SheetFrame>
-                <SheetOverlay />
-              </Sheet>
-            </Adapt>
             <SelectContent>
               <SelectViewport>
                 {['apple', 'banana', 'cherry', 'durian'].map((item, i) => (
@@ -249,9 +236,6 @@ function MenusDemo() {
           <ContextMenuContent>
             <ContextMenuItem>
               <Text>Copy</Text>
-            </ContextMenuItem>
-            <ContextMenuItem>
-              <Text>Paste</Text>
             </ContextMenuItem>
           </ContextMenuContent>
         </ContextMenu.Portal>
@@ -389,18 +373,9 @@ function SheetDemo() {
       <Button tone="outline" onPress={() => setOpen(true)}>
         Open sheet
       </Button>
-      <Sheet open={open} onOpenChange={setOpen} modal snapPointsMode="fit">
-        <SheetOverlay />
-        <SheetFrame>
-          <SheetHandle />
-          <YStack padding="$4" gap="$2">
-            <Text fontWeight="700" fontSize="$5">
-              Bottom sheet
-            </Text>
-            <Text color="$color10">The native modal pattern, on every platform.</Text>
-          </YStack>
-        </SheetFrame>
-      </Sheet>
+      <AppBottomSheet open={open} onOpenChange={setOpen} title="Bottom sheet">
+        <Text color="$color10">The native modal pattern, on every platform.</Text>
+      </AppBottomSheet>
     </>
   )
 }

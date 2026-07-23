@@ -1,7 +1,9 @@
-import { useCallback } from 'react'
+import { useCallback, useMemo } from 'react'
+import { Platform } from 'react-native'
+import { FlashList } from '@shopify/flash-list'
 import { useParams, useRouter } from 'one'
 
-import { LoadMoreEnd, LoadMoreSentinel } from '~/commerce/components/LoadMoreSentinel'
+import { LoadMoreEnd } from '~/commerce/components/LoadMoreSentinel'
 import { CommunityShell } from '~/community/components/CommunityShell'
 import { FeedPostCard } from '~/community/components/FeedPostCard'
 import { useHashtagFollow } from '~/community/hooks/useHashtagFollow'
@@ -11,9 +13,11 @@ import { usePaginatedFeed } from '~/commerce/hooks/usePaginatedFeed'
 import { Button, Spinner, Text, XStack, YStack, useAppToast } from '~/components/ui'
 import { ShareButton } from '~/components/share'
 import { buildSignInUrl } from '~/lib/auth/redirect'
+import { APP_LAYOUT } from '~/lib/layout/constants'
 import { communityRoutes } from '~/lib/routes'
 import { getHashtagShareUrl } from '~/lib/share'
 import { useAppUi } from '~/lib/theme/useAppUi'
+import { usePageSeo } from '~/components/seo/RouteSeo'
 
 export function HashtagFeedScreen() {
   const ui = useAppUi()
@@ -22,6 +26,16 @@ export function HashtagFeedScreen() {
   const { tag } = useParams<{ tag: string }>()
   const normalizedTag = decodeURIComponent(tag ?? '').replace(/^#/, '')
   const follow = useHashtagFollow(normalizedTag)
+
+  usePageSeo(
+    useMemo(() => {
+      if (!normalizedTag) return null
+      return {
+        title: `#${normalizedTag}`,
+        description: `Posts tagged #${normalizedTag} from the SHEconomy community.`,
+      }
+    }, [normalizedTag]),
+  )
 
   const fetchPage = useCallback(
     (page: number) => fetchHashtagFeedPage(normalizedTag, page),
@@ -50,8 +64,8 @@ export function HashtagFeedScreen() {
     })
   }
 
-  return (
-    <CommunityShell>
+  const listHeader = useMemo(
+    () => (
       <YStack
         width="100%"
         backgroundColor={ui.surface}
@@ -60,6 +74,7 @@ export function HashtagFeedScreen() {
         borderColor={ui.borderSubtle}
         padding="$4"
         gap="$3"
+        marginBottom="$3"
         style={{ boxShadow: ui.shadowSoft }}
       >
         <XStack alignItems="flex-start" justifyContent="space-between" gap="$3">
@@ -96,39 +111,76 @@ export function HashtagFeedScreen() {
           </XStack>
         </XStack>
       </YStack>
+    ),
+    [
+      follow.isFollowing,
+      follow.isLoading,
+      follow.isToggling,
+      normalizedTag,
+      ui.borderSubtle,
+      ui.shadowSoft,
+      ui.surface,
+      ui.text,
+      ui.textSecondary,
+    ],
+  )
 
-      {isLoading ? (
-        <YStack alignItems="center" paddingVertical="$8">
-          <Spinner size="large" />
-        </YStack>
-      ) : error ? (
-        <YStack padding="$4" borderRadius={10} backgroundColor={ui.surface}>
-          <Text color={ui.textMuted}>{error}</Text>
-        </YStack>
-      ) : items.length === 0 ? (
-        <YStack
-          padding="$6"
-          borderRadius={10}
-          backgroundColor={ui.surface}
-          borderWidth={1}
-          borderColor={ui.borderSubtle}
-          alignItems="center"
-        >
-          <Text color={ui.textMuted}>No posts with #{normalizedTag} yet.</Text>
-        </YStack>
-      ) : (
-        <>
-          {items.map((post) => (
-            <FeedPostCard key={post.id} post={post} />
-          ))}
-          <LoadMoreSentinel
-            hasMore={hasMore}
-            isLoadingMore={isLoadingMore}
-            onLoadMore={loadMore}
+  const renderItem = useCallback(
+    ({ item }: { item: CommunityPost }) => (
+      <YStack width="100%" paddingBottom={12}>
+        <FeedPostCard post={item} />
+      </YStack>
+    ),
+    [],
+  )
+
+  return (
+    <CommunityShell scroll={false}>
+      <YStack flex={1} minHeight={0} width="100%">
+        {isLoading ? (
+          <YStack alignItems="center" paddingVertical="$8">
+            {listHeader}
+            <Spinner size="large" />
+          </YStack>
+        ) : error ? (
+          <YStack gap="$3">
+            {listHeader}
+            <YStack padding="$4" borderRadius={10} backgroundColor={ui.surface}>
+              <Text color={ui.textMuted}>{error}</Text>
+            </YStack>
+          </YStack>
+        ) : items.length === 0 ? (
+          <YStack gap="$3">
+            {listHeader}
+            <YStack
+              padding="$6"
+              borderRadius={10}
+              backgroundColor={ui.surface}
+              borderWidth={1}
+              borderColor={ui.borderSubtle}
+              alignItems="center"
+            >
+              <Text color={ui.textMuted}>No posts with #{normalizedTag} yet.</Text>
+            </YStack>
+          </YStack>
+        ) : (
+          <FlashList
+            data={items}
+            renderItem={renderItem}
+            keyExtractor={(item) => item.id}
+            ListHeaderComponent={listHeader}
+            ListFooterComponent={!hasMore ? <LoadMoreEnd /> : null}
+            onEndReached={() => {
+              if (hasMore && !isLoadingMore) loadMore()
+            }}
+            onEndReachedThreshold={0.6}
+            style={{ flex: 1 }}
+            contentContainerStyle={{
+              paddingBottom: Platform.OS === 'web' ? 24 : APP_LAYOUT.mobileTabBarHeight + 64,
+            }}
           />
-          {!hasMore ? <LoadMoreEnd /> : null}
-        </>
-      )}
+        )}
+      </YStack>
     </CommunityShell>
   )
 }

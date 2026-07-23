@@ -271,20 +271,15 @@ module.exports = (async () => {
   const oneConfig = await withOne(projectRoot, oneBundlerOptions)
   const merged = mergeConfig(rnDefault, oneConfig)
 
-  // Keep watchFolders to project roots only. Nested node_modules package paths as
-  // extra watch roots can confuse Watchman/Metro SHA-1 lookup during expo-updates.
-  // Also ensure .watchmanconfig does NOT ignore node_modules — Metro must index
-  // packages like one/metro-entry.js when generating the Release updates manifest.
   merged.watchFolders = [
     ...new Set([
-      ...(merged.watchFolders ?? []).filter((folder) => {
-        const resolved = path.resolve(folder)
-        return !(
-          resolved === nodeModules ||
-          resolved.startsWith(path.join(nodeModules, path.sep))
-        )
-      }),
+      ...(merged.watchFolders ?? []),
       projectRoot,
+      // Metro must index these packages for SHA-1 when custom resolveRequest
+      // returns absolute paths under node_modules.
+      path.join(nodeModules, 'one'),
+      path.join(nodeModules, '@babel'),
+      path.join(nodeModules, '@babel/runtime'),
     ]),
   ]
 

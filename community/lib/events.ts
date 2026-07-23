@@ -1,3 +1,4 @@
+import { INVALIDATION_TOPICS, invalidateCache } from '~/lib/cache/invalidation'
 import { supabase } from '~/lib/supabase/client'
 
 export const EVENT_PAGE_SIZE = 20
@@ -21,6 +22,8 @@ export type CommunityEvent = {
   status: string | null
   tags: string[] | null
   created_at: string | null
+  /** Linked feed post when shared to the community feed. */
+  post_id?: string | null
 }
 
 export type EventFilters = {
@@ -169,24 +172,36 @@ export async function fetchPostEventRsvpState(
 export async function rsvpToPostEvent(
   postId: string,
   userId: string,
+  communityEventId?: string | null,
 ): Promise<{ error: string | null }> {
   const { error } = await supabase.from('post_event_rsvps').insert({
     post_id: postId,
     user_id: userId,
   })
-  return { error: error?.message ?? null }
+  if (error) return { error: error.message }
+
+  if (communityEventId) {
+    await registerForEvent(communityEventId, userId)
+  }
+  return { error: null }
 }
 
 export async function cancelPostEventRsvp(
   postId: string,
   userId: string,
+  communityEventId?: string | null,
 ): Promise<{ error: string | null }> {
   const { error } = await supabase
     .from('post_event_rsvps')
     .delete()
     .eq('post_id', postId)
     .eq('user_id', userId)
-  return { error: error?.message ?? null }
+  if (error) return { error: error.message }
+
+  if (communityEventId) {
+    await cancelEventRegistration(communityEventId, userId)
+  }
+  return { error: null }
 }
 
 export type CreateEventInput = {
@@ -204,6 +219,11 @@ export type CreateEventInput = {
   currency?: string
   maxAttendees?: number
   tags?: string[]
+  /** Also publish a feed event post (default true for LinkedIn-parity). */
+  shareToFeed?: boolean
+  visibility?: string
+  rsvpEnabled?: boolean
+  postId?: string | null
 }
 
 export async function createEvent(
@@ -230,11 +250,93 @@ export async function createEvent(
       organizer_id: userId,
       status: 'published',
       registration_required: true,
+      post_id: input.postId ?? null,
     })
     .select('*')
     .maybeSingle()
 
+  if (!error && data) {
+    invalidateCache(INVALIDATION_TOPICS.communityEvents)
+  }
+
   return { data: (data as CommunityEvent | null) ?? null, error: error?.message ?? null }
+}
+
+/**
+ * Create a directory event and (optionally) a matching feed post, linked both ways.
+ * Used by the composer Event mode and the Events create screen.
+ */
+export async function createEventAndFeedPost(
+  userId: string,
+  input: CreateEventInput & { shareToFeed?: boolean },
+): Promise<{
+  event: CommunityEvent | null
+  postId: string | null
+  error: string | null
+}> {
+  const shareToFeed = input.shareToFeed !== false
+  const { createCommunityPost } = await import('~/community/lib/community')
+
+  let postId: string | null = null
+
+  if (shareToFeed) {
+    const locationLabel = input.isOnline
+      ? input.meetingUrl?.trim() || 'Online'
+      : input.location?.trim() || null
+
+    const postResult = await createCommunityPost(userId, {
+      content: input.description?.trim() || input.title.trim(),
+      imageUrl: input.imageUrl ?? null,
+      visibility: input.visibility ?? 'public',
+      postType: 'event',
+      eventTitle: input.title.trim(),
+      eventDescription: input.description?.trim() || null,
+      eventStartTime: input.startTime,
+      eventEndTime: input.endTime ?? null,
+      eventLocation: locationLabel,
+      eventRsvpEnabled: input.rsvpEnabled !== false,
+      eventIsOnline: input.isOnline,
+      eventMeetingUrl: input.meetingUrl ?? null,
+    })
+
+    if (postResult.error || !postResult.id) {
+      return { event: null, postId: null, error: postResult.error ?? 'Could not create feed post.' }
+    }
+    postId = postResult.id
+  }
+
+  const { data: event, error } = await createEvent(userId, {
+    ...input,
+    postId,
+  })
+
+  if (error || !event) {
+    return { event: null, postId, error: error ?? 'Could not create event.' }
+  }
+
+  if (postId) {
+    // Link event id onto the feed post for RSVP dual-write + "View event".
+    const { data: existing } = await supabase
+      .from('posts')
+      .select('post_data')
+      .eq('id', postId)
+      .maybeSingle()
+    const prev =
+      existing?.post_data && typeof existing.post_data === 'object' && !Array.isArray(existing.post_data)
+        ? (existing.post_data as Record<string, unknown>)
+        : {}
+    await supabase
+      .from('posts')
+      .update({
+        post_data: {
+          ...prev,
+          community_event_id: event.id,
+        },
+      })
+      .eq('id', postId)
+  }
+
+  return { event, postId, error: null }
 }
 
 export type EventAttendee = {

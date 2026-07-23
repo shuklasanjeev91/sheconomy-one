@@ -50,6 +50,8 @@ Deno.serve(async (req) => {
     const meetingId = String(body.meetingId ?? '')
     const roomName = String(body.roomName ?? '')
     const displayName = String(body.displayName ?? 'Guest').slice(0, 80)
+    const bodyAvatarUrl =
+      typeof body.avatarUrl === 'string' && body.avatarUrl.trim() ? body.avatarUrl.trim() : null
 
     if (!meetingId || !roomName) {
       return new Response(JSON.stringify({ error: 'meetingId and roomName are required.' }), {
@@ -113,9 +115,23 @@ Deno.serve(async (req) => {
       }
     }
 
+    const { data: profile } = await supabase
+      .from('profiles')
+      .select('full_name, username, avatar_url')
+      .eq('id', userId)
+      .maybeSingle()
+
+    const resolvedName =
+      displayName ||
+      profile?.full_name ||
+      profile?.username ||
+      'Guest'
+    const avatarUrl = bodyAvatarUrl || profile?.avatar_url || null
+
     const token = new AccessToken(apiKey, apiSecret, {
       identity: userId,
-      name: displayName,
+      name: String(resolvedName).slice(0, 80),
+      metadata: JSON.stringify({ avatarUrl }),
       ttl: '4h',
     })
 

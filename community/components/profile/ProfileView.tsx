@@ -1,6 +1,8 @@
 import type { ReactNode } from 'react'
 import { useEffect, useState } from 'react'
+import { Platform } from 'react-native'
 
+import { LoadMoreSentinel } from '~/commerce/components/LoadMoreSentinel'
 import { FeedPostCard } from '~/community/components/FeedPostCard'
 import { UserListBottomSheet } from '~/community/components/UserListBottomSheet'
 import { ProfileBackgroundSections } from '~/community/components/profile/ProfileBackgroundSections'
@@ -12,6 +14,7 @@ import { AppLink } from '~/components/navigation/AppLink'
 import { useProfileDetails } from '~/community/hooks/useProfileDetails'
 import { useUserActivity } from '~/community/hooks/useUserActivity'
 import { BRAND_BLUE } from '~/community/lib/constants'
+import { brandColors } from '~/config/brand-colors'
 import type { CommunityPost } from '~/community/lib/community'
 import {
   parseCreatorMode,
@@ -58,12 +61,16 @@ import {
 } from '~/components/ui'
 import { ShareButton } from '~/components/share'
 import { updateProfileImages } from '~/community/lib/profile-sections'
-import { pickImages, pickedImageToBlob } from '~/lib/media/pick-image'
+import { pickImages, pickedImageToBlob, type PickedImage } from '~/lib/media/pick-image'
 import { refreshProfiles } from '~/lib/profile/refresh'
+import { patchCachedProfile } from '~/lib/profile/profile-cache'
 import { communityRoutes } from '~/lib/routes'
 import { getProfileShareUrl } from '~/lib/share'
 import { supabase } from '~/lib/supabase/client'
 import { uploadProfileAvatarImage, uploadProfileCoverImage } from '~/lib/supabase/storage-upload'
+import { MediaDropZone } from '~/components/media/MediaDropZone'
+import { UploadProgressBar } from '~/components/media/UploadProgressBar'
+import { useUploadProgress } from '~/hooks/useUploadProgress'
 import { getShadowStyle, radius } from '~/config/tokens'
 import { useAppUi } from '~/lib/theme/useAppUi'
 
@@ -404,44 +411,88 @@ function ProfileHero({
   const toast = useAppToast()
   const [uploadingAvatar, setUploadingAvatar] = useState(false)
   const [uploadingCover, setUploadingCover] = useState(false)
+  /** Optimistic local URL so the photo appears immediately after upload. */
+  const [localAvatarUrl, setLocalAvatarUrl] = useState<string | null>(null)
+  const [localCoverUrl, setLocalCoverUrl] = useState<string | null>(null)
+  const { progress: uploadProgress, track: trackUpload, reset: resetUpload } = useUploadProgress()
 
-  async function handlePickImage(kind: 'avatar' | 'cover') {
+  const avatarUrl = localAvatarUrl ?? profile.avatar_url
+  const coverUrl = localCoverUrl ?? profile.cover_url
+
+  useEffect(() => {
+    setLocalAvatarUrl(null)
+  }, [profile.avatar_url])
+
+  useEffect(() => {
+    setLocalCoverUrl(null)
+  }, [profile.cover_url])
+
+  async function handleUploadImage(kind: 'avatar' | 'cover', first: PickedImage) {
     if (!profile.id) return
-    const busy = kind === 'avatar' ? uploadingAvatar : uploadingCover
-    if (busy) return
     const setBusy = kind === 'avatar' ? setUploadingAvatar : setUploadingCover
+    setBusy(true)
+    trackUpload(1)
     try {
-      const picked = await pickImages({ multiple: false, maxCount: 1 })
-      const first = picked[0]
-      if (!first) return
-      setBusy(true)
       const blob = await pickedImageToBlob(first)
       const upload = kind === 'avatar' ? uploadProfileAvatarImage : uploadProfileCoverImage
-      const { data, error } = await upload(profile.id, {
-        blob,
-        mimeType: first.mimeType || blob.type || 'image/jpeg',
-        fileName: first.fileName,
-      })
-      if (error || !data) {
+      const { data, error } = await upload(
+        profile.id,
+        {
+          blob,
+          mimeType: first.mimeType || blob.type || 'image/jpeg',
+          fileName: first.fileName,
+        },
+        { onProgress: trackUpload },
+      )
+      if (error || !data?.publicUrl) {
         toast.show('Could not upload image', { tone: 'danger', message: error ?? undefined })
         return
       }
-      const { error: updateError } = await updateProfileImages(
+      const publicUrl = data.publicUrl
+      if (kind === 'avatar') setLocalAvatarUrl(publicUrl)
+      else setLocalCoverUrl(publicUrl)
+
+      const { error: updateError, data: saved } = await updateProfileImages(
         profile.id,
-        kind === 'avatar' ? { avatar_url: data.publicUrl } : { cover_url: data.publicUrl },
+        kind === 'avatar' ? { avatar_url: publicUrl } : { cover_url: publicUrl },
       )
-      if (updateError) {
-        toast.show('Could not update photo', { tone: 'danger', message: updateError })
+      if (updateError || !saved) {
+        if (kind === 'avatar') setLocalAvatarUrl(null)
+        else setLocalCoverUrl(null)
+        toast.show('Could not update photo', { tone: 'danger', message: updateError ?? undefined })
         return
       }
+
+      // Keep the signed-in profile cache in sync so tab bar / composer pick up the photo.
+      await patchCachedProfile(profile.id, {
+        avatar_url: saved.avatar_url,
+        cover_url: saved.cover_url,
+      })
       toast.show(kind === 'avatar' ? 'Profile photo updated' : 'Cover photo updated', {
         tone: 'success',
       })
       refreshProfiles()
     } catch {
+      if (kind === 'avatar') setLocalAvatarUrl(null)
+      else setLocalCoverUrl(null)
       toast.show('Could not update photo', { tone: 'danger' })
     } finally {
       setBusy(false)
+      resetUpload()
+    }
+  }
+
+  async function handlePickImage(kind: 'avatar' | 'cover') {
+    if (!profile.id) return
+    const busy = kind === 'avatar' ? uploadingAvatar : uploadingCover
+    if (busy) return
+    try {
+      const picked = await pickImages({ multiple: false, maxCount: 1 })
+      const first = picked[0]
+      if (!first) return
+      await handleUploadImage(kind, first)
+    } catch {
+      toast.show('Could not update photo', { tone: 'danger' })
     }
   }
 
@@ -454,12 +505,24 @@ function ProfileHero({
       overflow="hidden"
       style={getShadowStyle('sm')}
     >
-      <CoverBanner
-        coverUrl={profile.cover_url}
-        editable={isOwnProfile}
-        uploading={uploadingCover}
-        onEdit={() => void handlePickImage('cover')}
-      />
+      <MediaDropZone
+        disabled={!isOwnProfile || uploadingCover}
+        accept="image"
+        maxCount={1}
+        label="Drop a cover photo"
+        onDrop={(items) => {
+          const first = items[0]
+          if (first) void handleUploadImage('cover', first)
+        }}
+      >
+        <CoverBanner
+          coverUrl={coverUrl}
+          editable={isOwnProfile}
+          uploading={uploadingCover}
+          uploadProgress={uploadingCover ? uploadProgress : null}
+          onEdit={() => void handlePickImage('cover')}
+        />
+      </MediaDropZone>
 
       <YStack paddingHorizontal="$4" paddingBottom="$4">
         <XStack
@@ -470,6 +533,18 @@ function ProfileHero({
           gap="$3"
           width="100%"
         >
+          <MediaDropZone
+            disabled={!isOwnProfile || uploadingAvatar}
+            accept="image"
+            maxCount={1}
+            label="Drop a profile photo"
+            fill={false}
+            borderRadius={999}
+            onDrop={(items) => {
+              const first = items[0]
+              if (first) void handleUploadImage('avatar', first)
+            }}
+          >
           <YStack
             position="relative"
             flexShrink={0}
@@ -478,7 +553,7 @@ function ProfileHero({
           >
             <Avatar
               name={displayName}
-              src={profile.avatar_url ?? undefined}
+              src={avatarUrl}
               size="$10"
               borderWidth={4}
               borderColor={ui.surface}
@@ -506,6 +581,12 @@ function ProfileHero({
               </XStack>
             ) : null}
           </YStack>
+          </MediaDropZone>
+          {uploadingAvatar && uploadProgress != null && uploadProgress > 0 ? (
+            <YStack width="100%" maxWidth={280} marginTop="$2">
+              <UploadProgressBar progress={uploadProgress} label="Uploading photo…" compact />
+            </YStack>
+          ) : null}
           <XStack
             gap="$2"
             flexWrap="wrap"
@@ -769,27 +850,12 @@ function ActivitySection({
                     )
                   })}
 
-            {activity.hasMore ? (
-              <XStack justifyContent="center" paddingTop="$1">
-                <XStack
-                  paddingHorizontal="$4"
-                  paddingVertical="$2.5"
-                  borderRadius={999}
-                  borderWidth={1}
-                  borderColor={ui.borderSubtle}
-                  cursor="pointer"
-                  alignItems="center"
-                  gap="$2"
-                  hoverStyle={{ backgroundColor: ui.surfaceMuted }}
-                  onPress={() => void activity.loadMore()}
-                >
-                  {activity.isLoadingMore ? <Spinner size="small" /> : null}
-                  <Text fontSize={14} fontWeight="600" color={ui.text}>
-                    {activity.isLoadingMore ? 'Loading…' : 'Show more activity'}
-                  </Text>
-                </XStack>
-              </XStack>
-            ) : null}
+            <LoadMoreSentinel
+              hasMore={activity.hasMore}
+              isLoadingMore={activity.isLoadingMore}
+              onLoadMore={() => void activity.loadMore()}
+              label="Show more activity"
+            />
           </YStack>
         )}
       </YStack>
@@ -1131,11 +1197,13 @@ function CoverBanner({
   coverUrl,
   editable = false,
   uploading = false,
+  uploadProgress = null,
   onEdit,
 }: {
   coverUrl?: string | null
   editable?: boolean
   uploading?: boolean
+  uploadProgress?: number | null
   onEdit?: () => void
 }) {
   const ui = useAppUi()
@@ -1150,9 +1218,13 @@ function CoverBanner({
         <YStack
           height={200}
           width="100%"
-          style={{
-            background: 'linear-gradient(135deg, #004182 0%, #0a66c2 50%, #378fe9 100%)',
-          }}
+          style={
+            Platform.OS === 'web'
+              ? {
+                  background: `linear-gradient(135deg, ${brandColors.primaryDark} 0%, ${brandColors.primary} 50%, ${brandColors.primaryLight} 100%)`,
+                }
+              : { backgroundColor: BRAND_BLUE }
+          }
         />
       )}
 
@@ -1179,6 +1251,12 @@ function CoverBanner({
             <Icons.Camera size={18} color="white" />
           )}
         </XStack>
+      ) : null}
+
+      {uploadProgress != null && uploadProgress > 0 ? (
+        <YStack position="absolute" left={12} right={12} bottom={12}>
+          <UploadProgressBar progress={uploadProgress} label="Uploading cover…" compact />
+        </YStack>
       ) : null}
     </YStack>
   )

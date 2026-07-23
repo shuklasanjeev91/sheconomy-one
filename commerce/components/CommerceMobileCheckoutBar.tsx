@@ -2,10 +2,10 @@ import { Platform } from 'react-native'
 
 import { Button, Spinner, Text, Theme, XStack, YStack } from '~/components/ui'
 import { BRAND_THEME, getShadowStyle } from '~/config/tokens'
-import { MOBILE_TAB_BAR_HEIGHT } from '~/components/navigation/constants'
 import { bottomBarPositionStyle } from '~/lib/layout/styles'
 import { chromeSurfaceStyle } from '~/lib/theme/surfaces'
 import { formatCurrency } from '~/lib/format'
+import { useAppLayout } from '~/hooks/useAppLayout'
 import { useAppUi } from '~/lib/theme/useAppUi'
 
 type CommerceMobileCheckoutBarProps = {
@@ -35,6 +35,7 @@ export function CommerceMobileCheckoutBar({
   savings,
 }: CommerceMobileCheckoutBarProps) {
   const ui = useAppUi()
+  const { mobileTabBarOffset } = useAppLayout()
 
   return (
     <XStack
@@ -48,7 +49,7 @@ export function CommerceMobileCheckoutBar({
       gap="$3"
       width="100%"
       style={{
-        ...bottomBarPositionStyle(MOBILE_TAB_BAR_HEIGHT),
+        ...bottomBarPositionStyle(mobileTabBarOffset),
         ...getShadowStyle('md'),
         ...chromeSurfaceStyle(ui),
         ...(Platform.OS === 'web'

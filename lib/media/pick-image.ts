@@ -1,3 +1,5 @@
+import { WEB_FILE_INPUT_ACCEPT } from '~/lib/media/media-accept'
+
 export type PickedImage = {
   uri: string
   mimeType: string
@@ -9,6 +11,24 @@ export type PickImagesOptions = {
   multiple?: boolean
   maxCount?: number
 }
+
+export type PickVideosOptions = {
+  multiple?: boolean
+  maxCount?: number
+}
+
+export type PickMediaAccept = 'image' | 'video' | 'media' | 'any'
+
+export type PickMediaOptions = {
+  accept?: PickMediaAccept
+  multiple?: boolean
+  maxCount?: number
+}
+
+export type PickedMedia = PickedImage & { fileSize?: number }
+
+/** Alias — video picks share the same shape as images (uri + mime + optional File). */
+export type PickedVideo = PickedImage
 
 export type PickedDocument = {
   uri: string
@@ -42,6 +62,81 @@ export async function pickImages(options: PickImagesOptions = {}): Promise<Picke
         files.map((file) => ({
           uri: URL.createObjectURL(file),
           mimeType: file.type || 'image/jpeg',
+          fileName: file.name,
+          file,
+        })),
+      )
+      input.remove()
+    }
+
+    input.oncancel = () => {
+      resolve([])
+      input.remove()
+    }
+
+    document.body.appendChild(input)
+    input.click()
+  })
+}
+
+export async function pickMedia(options: PickMediaOptions = {}): Promise<PickedMedia[]> {
+  const accept = options.accept ?? 'image'
+  if (accept === 'image') return pickImages(options)
+  if (accept === 'video') return pickVideos(options)
+
+  if (typeof document === 'undefined') return []
+
+  const maxCount = options.maxCount ?? (options.multiple ? (accept === 'any' ? 10 : 5) : 1)
+
+  return new Promise((resolve) => {
+    const input = document.createElement('input')
+    input.type = 'file'
+    input.accept = WEB_FILE_INPUT_ACCEPT[accept]
+    input.multiple = !!options.multiple
+    input.style.display = 'none'
+
+    input.onchange = () => {
+      const files = Array.from(input.files ?? []).slice(0, maxCount)
+      resolve(
+        files.map((file) => ({
+          uri: URL.createObjectURL(file),
+          mimeType: file.type || 'application/octet-stream',
+          fileName: file.name,
+          fileSize: file.size,
+          file,
+        })),
+      )
+      input.remove()
+    }
+
+    input.oncancel = () => {
+      resolve([])
+      input.remove()
+    }
+
+    document.body.appendChild(input)
+    input.click()
+  })
+}
+
+export async function pickVideos(options: PickVideosOptions = {}): Promise<PickedVideo[]> {
+  if (typeof document === 'undefined') return []
+
+  const maxCount = options.maxCount ?? (options.multiple ? 3 : 1)
+
+  return new Promise((resolve) => {
+    const input = document.createElement('input')
+    input.type = 'file'
+    input.accept = 'video/mp4,video/webm,video/quicktime,video/x-m4v,video/*'
+    input.multiple = !!options.multiple
+    input.style.display = 'none'
+
+    input.onchange = () => {
+      const files = Array.from(input.files ?? []).slice(0, maxCount)
+      resolve(
+        files.map((file) => ({
+          uri: URL.createObjectURL(file),
+          mimeType: file.type || 'video/mp4',
           fileName: file.name,
           file,
         })),

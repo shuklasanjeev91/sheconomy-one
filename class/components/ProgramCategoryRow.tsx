@@ -1,18 +1,15 @@
-import { ProgramCard } from '~/class/components/ProgramCard'
+import { ProgramCardGrid } from '~/class/components/ProgramCardGrid'
 import type { Program, ProgramCategory } from '~/class/lib/programs'
-import { HorizontalScrollRow } from '~/components/layout'
-import { Text, XStack, YStack, useMedia } from '~/components/ui'
+import { Text, XStack, YStack } from '~/components/ui'
 import { useAppUi } from '~/lib/theme/useAppUi'
 
 type ProgramCategoryRowProps = {
   category: ProgramCategory
   programs: Program[]
-  cardWidth?: number
 }
 
-export function ProgramCategoryRow({ category, programs, cardWidth }: ProgramCategoryRowProps) {
+export function ProgramCategoryRow({ category, programs }: ProgramCategoryRowProps) {
   const ui = useAppUi()
-  const media = useMedia()
 
   if (!programs.length) return null
 
@@ -27,19 +24,7 @@ export function ProgramCategoryRow({ category, programs, cardWidth }: ProgramCat
         </Text>
       </XStack>
 
-      {media.gtMd ? (
-        <XStack flexWrap="wrap" gap="$4" width="100%">
-          {programs.map((program) => (
-            <ProgramCard key={program.id} program={program} width={cardWidth} />
-          ))}
-        </XStack>
-      ) : (
-        <HorizontalScrollRow>
-          {programs.map((program) => (
-            <ProgramCard key={program.id} program={program} width={cardWidth} />
-          ))}
-        </HorizontalScrollRow>
-      )}
+      <ProgramCardGrid programs={programs} />
     </YStack>
   )
 }

@@ -16,6 +16,7 @@ type MeetingInfoPanelProps = {
   isHost: boolean
   onClose: () => void
   onInvite?: () => void
+  onOpenRecordings?: () => void
   fullWidth?: boolean
 }
 
@@ -25,6 +26,7 @@ export function MeetingInfoPanel({
   isHost,
   onClose,
   onInvite,
+  onOpenRecordings,
   fullWidth,
 }: MeetingInfoPanelProps) {
   const { ui: coworkUi } = useCoWorkTheme()
@@ -184,6 +186,18 @@ export function MeetingInfoPanel({
         >
           Share invite link
         </Button>
+        {isHost && onOpenRecordings ? (
+          <Button
+            tone="outline"
+            borderRadius={999}
+            borderColor={coworkUi.borderAccent}
+            color={coworkUi.brandLight}
+            icon={<Icons.Circle size={16} color={coworkUi.brandLight} />}
+            onPress={onOpenRecordings}
+          >
+            Meeting recordings
+          </Button>
+        ) : null}
         {isHost && onInvite ? (
           <Button
             tone="outline"

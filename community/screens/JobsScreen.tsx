@@ -9,11 +9,15 @@ import {
   CommunityFilterSheet,
   type FilterOption,
 } from '~/community/components/CommunityFilters'
-import { fetchSavedJobs, searchJobs, type JobListing } from '~/community/lib/jobs'
+import { fetchMyJobApplications, fetchSavedJobs, searchJobs, type JobListing, type MyJobApplication } from '~/community/lib/jobs'
 import { useCommunityUi } from '~/community/lib/community-theme'
-import { Button, Icons, Input, ScrollView, Spinner, Text, XStack, YStack } from '~/components/ui'
-import { radius } from '~/config/tokens'
+import { LoadMoreSentinel } from '~/commerce/components/LoadMoreSentinel'
+import { ScreenSearchField } from '~/components/search'
+import { Button, Icons, ScrollView, Spinner, Text, XStack, YStack } from '~/components/ui'
+import { INVALIDATION_TOPICS } from '~/lib/cache/invalidation'
+import { useAutoRefresh } from '~/lib/cache/useAutoRefresh'
 import { communityRoutes } from '~/lib/routes'
+import { useScreenSearch } from '~/hooks/useScreenSearch'
 import { useSupabase } from '~/providers/SupabaseProvider'
 
 const JOB_TYPE_OPTIONS: FilterOption[] = [
@@ -66,7 +70,7 @@ function labelForValue(options: FilterOption[], value: string): string | undefin
 export function JobsScreen() {
   const communityUi = useCommunityUi()
   const { user } = useSupabase()
-  const [search, setSearch] = useState('')
+  const { input: search, setInput: setSearch, debounced: searchQuery } = useScreenSearch()
   const [jobTypes, setJobTypes] = useState<string[]>([])
   const [experience, setExperience] = useState('')
   const [remote, setRemote] = useState('any')
@@ -76,6 +80,8 @@ export function JobsScreen() {
   const [sort, setSort] = useState('recent')
   const [activeSheet, setActiveSheet] = useState<ActiveSheet>(null)
   const [showSavedOnly, setShowSavedOnly] = useState(false)
+  const [showMyApplications, setShowMyApplications] = useState(false)
+  const [myApplications, setMyApplications] = useState<MyJobApplication[]>([])
 
   const [items, setItems] = useState<JobListing[]>([])
   const [savedJobs, setSavedJobs] = useState<JobListing[]>([])
@@ -85,11 +91,11 @@ export function JobsScreen() {
   const [isLoadingMore, setIsLoadingMore] = useState(false)
 
   const load = useCallback(
-    async (pageToLoad: number, append: boolean) => {
+    async (pageToLoad: number, append: boolean, silent = false) => {
       if (append) setIsLoadingMore(true)
-      else setIsLoading(true)
+      else if (!silent) setIsLoading(true)
       const result = await searchJobs({
-        search,
+        search: searchQuery,
         jobType: jobTypes[0] ?? '',
         experience,
         isRemote: remote === 'remote',
@@ -101,21 +107,30 @@ export function JobsScreen() {
       setIsLoading(false)
       setIsLoadingMore(false)
     },
-    [experience, jobTypes, remote, search],
+    [experience, jobTypes, remote, searchQuery],
   )
 
   useEffect(() => {
     load(0, false)
   }, [load])
 
+  // New jobs posted elsewhere show up without a manual route reload.
+  useAutoRefresh(INVALIDATION_TOPICS.communityJobs, () => {
+    void load(0, false, true)
+  })
+
   useEffect(() => {
     if (!user?.id) {
       setSavedJobs([])
+      setMyApplications([])
       return
     }
     let active = true
     void fetchSavedJobs(user.id).then((result) => {
       if (active) setSavedJobs(result.items)
+    })
+    void fetchMyJobApplications(user.id).then((result) => {
+      if (active) setMyApplications(result.items)
     })
     return () => {
       active = false
@@ -222,33 +237,38 @@ export function JobsScreen() {
         />
 
         {user ? (
-          <CommunityFilterPill
-            label={savedJobs.length ? `Saved (${savedJobs.length})` : 'Saved'}
-            summary="Saved jobs"
-            active={showSavedOnly}
-            onPress={() => setShowSavedOnly((value) => !value)}
-          />
+          <XStack gap={8} flexWrap="wrap">
+            <CommunityFilterPill
+              label={savedJobs.length ? `Saved (${savedJobs.length})` : 'Saved'}
+              summary="Saved jobs"
+              active={showSavedOnly}
+              onPress={() => {
+                setShowMyApplications(false)
+                setShowSavedOnly((value) => !value)
+              }}
+            />
+            <CommunityFilterPill
+              label={
+                myApplications.length
+                  ? `My applications (${myApplications.length})`
+                  : 'My applications'
+              }
+              summary="Applications you submitted"
+              active={showMyApplications}
+              onPress={() => {
+                setShowSavedOnly(false)
+                setShowMyApplications((value) => !value)
+              }}
+            />
+          </XStack>
         ) : null}
 
-        <XStack
-          gap={8}
-          alignItems="center"
-          padding={12}
-          borderRadius={radius.chip}
-          borderWidth={1}
-          borderColor={communityUi.borderLight}
-          backgroundColor={communityUi.inputBg}
-        >
-          <Icons.Search size={18} color={communityUi.textMuted} />
-          <Input
-            flex={1}
-            value={search}
-            onChangeText={setSearch}
-            placeholder="Search jobs, companies, skills"
-            borderWidth={0}
-            backgroundColor="transparent"
-          />
-        </XStack>
+        <ScreenSearchField
+          value={search}
+          onChangeText={setSearch}
+          placeholder="Search jobs, companies, skills"
+          unifiedScope="jobs"
+        />
 
         <ScrollView horizontal showsHorizontalScrollIndicator={false}>
           <XStack gap={8} alignItems="center" paddingVertical={2}>
@@ -320,6 +340,41 @@ export function JobsScreen() {
         <YStack alignItems="center" paddingVertical="$8">
           <Spinner size="large" color={communityUi.brand} />
         </YStack>
+      ) : showMyApplications ? (
+        <CommunityCard padding={12} gap={0}>
+          {myApplications.length === 0 ? (
+            <Text color={communityUi.textMuted} padding={12}>
+              You haven’t applied to any jobs yet.
+            </Text>
+          ) : (
+            myApplications.map((application) => (
+              <AppLink
+                key={application.id}
+                href={application.job ? communityRoutes.job(application.job.id) : communityRoutes.jobs}
+              >
+                <YStack
+                  paddingVertical={12}
+                  borderBottomWidth={1}
+                  borderBottomColor={communityUi.borderLight}
+                  gap={4}
+                >
+                  <Text fontSize={16} fontWeight="600" color={communityUi.text}>
+                    {application.job?.title ?? 'Job'}
+                  </Text>
+                  <Text fontSize={14} color={communityUi.textMuted}>
+                    {application.job?.company_name ?? 'Company'}
+                  </Text>
+                  <Text fontSize={13} color={communityUi.textMuted}>
+                    Status: {application.status}
+                    {application.job
+                      ? ` · ${application.job.location} · ${application.job.job_type}`
+                      : ''}
+                  </Text>
+                </YStack>
+              </AppLink>
+            ))
+          )}
+        </CommunityCard>
       ) : (
         <CommunityCard padding={12} gap={0}>
           {visibleItems.length === 0 ? (
@@ -354,21 +409,12 @@ export function JobsScreen() {
               </AppLink>
             ))
           )}
-          {hasMore && !showSavedOnly ? (
-            <YStack alignItems="center" paddingVertical={12}>
-              {isLoadingMore ? (
-                <Spinner size="small" color={communityUi.brand} />
-              ) : (
-                <Text
-                  color={communityUi.brand}
-                  fontWeight="600"
-                  cursor="pointer"
-                  onPress={() => load(page + 1, true)}
-                >
-                  Load more
-                </Text>
-              )}
-            </YStack>
+          {!showSavedOnly ? (
+            <LoadMoreSentinel
+              hasMore={hasMore}
+              isLoadingMore={isLoadingMore}
+              onLoadMore={() => void load(page + 1, true)}
+            />
           ) : null}
         </CommunityCard>
       )}

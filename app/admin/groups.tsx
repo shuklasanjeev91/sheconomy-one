@@ -1,5 +1,5 @@
-import { AdminSectionPage } from './layout'
+import { AdminGroupsManager } from './components/AdminGroupsManager'
 
 export default function AdminGroupsPage() {
-  return <AdminSectionPage sectionId="groups" />
+  return <AdminGroupsManager />
 }

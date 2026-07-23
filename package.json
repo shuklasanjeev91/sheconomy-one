@@ -3,7 +3,7 @@
   "version": "6.0",
   "private": true,
   "type": "module",
-  "main": "app.native.entry.js",
+  "main": "one/metro-entry",
   "engines": {
     "node": "22.x"
   },

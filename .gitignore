@@ -9,6 +9,7 @@
 
 tmp
 dist
+dist-desktop
 .vercel
 node_modules
 

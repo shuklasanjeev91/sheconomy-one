@@ -4,8 +4,6 @@
  * `categories-schema.js` and kept symmetric with `listing.validation`.
  */
 
-import { z } from 'zod'
-
 import { compose, maxLength, minLength, pattern, required, type Validator } from '~/lib/validation'
 
 import {
@@ -17,6 +15,7 @@ import {
   type CategoryFormData,
   type CategoryValidationResult,
 } from './listing-categories.type'
+import { z } from '~/lib/zod'
 
 // ============= SHARED PRIMITIVES =============
 

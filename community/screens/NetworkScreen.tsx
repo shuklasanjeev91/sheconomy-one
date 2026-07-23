@@ -13,12 +13,21 @@ import type { UserListKind } from '~/community/lib/user-lists'
 import { fetchDiscoverMembers, type NetworkMember } from '~/community/lib/network'
 import { inviteNetworkByEmail } from '~/community/lib/network-invites'
 import {
+  fetchIntroductionInbox,
+  respondToIntroduction,
+  type IntroductionRequest,
+} from '~/community/lib/introductions'
+import {
   dismissNetworkSuggestion,
   useDismissedNetworkSuggestions,
 } from '~/community/lib/dismissed-suggestions'
 import { useNetwork } from '~/community/hooks/useNetwork'
+import { useUserList } from '~/community/hooks/useUserList'
+import { LoadMoreEnd, LoadMoreSentinel } from '~/commerce/components/LoadMoreSentinel'
+import { ScreenSearchField } from '~/components/search'
 import { Button, Icons, Input, Spinner, Text, XStack, YStack, useAppToast } from '~/components/ui'
 import { useProfile } from '~/hooks/useProfile'
+import { textMatchesQuery } from '~/lib/search'
 import { buildAbsoluteUrl } from '~/lib/platform/url'
 import { communityRoutes, routes } from '~/lib/routes'
 import { getProfileShareUrl, shareViaSystem } from '~/lib/share'
@@ -33,6 +42,8 @@ export function NetworkScreen() {
   const { user, isLoading: authLoading } = useSupabase()
   const { profile } = useProfile()
   const network = useNetwork()
+  const connectionsList = useUserList('connections', user?.id, !!user)
+  const suggestionsList = useUserList('suggestions', user?.id, !!user)
   const dismissedIds = useDismissedNetworkSuggestions()
   const toast = useAppToast()
   const [guestSuggestions, setGuestSuggestions] = useState<NetworkMember[]>([])
@@ -107,44 +118,46 @@ export function NetworkScreen() {
 
   const sentIds = new Set(network.pendingSent.map((member) => member.user_id))
   const dismissed = new Set(dismissedIds)
-  const visibleSuggestions = network.suggestions.filter(
+  const suggestionSource =
+    suggestionsList.items.length > 0 ? suggestionsList.items : network.suggestions
+  const visibleSuggestions = suggestionSource.filter(
     (member) => !sentIds.has(member.user_id) && !dismissed.has(member.user_id),
   )
   const query = search.trim().toLowerCase()
 
   function matchesSearch(member: NetworkMember) {
-    if (!query) return true
-    return (
-      member.full_name.toLowerCase().includes(query) ||
-      (member.headline?.toLowerCase().includes(query) ?? false)
-    )
+    return textMatchesQuery(query, member.full_name, member.headline)
   }
 
-  const filteredConnections = network.connections.filter(matchesSearch)
+  const connectionSource =
+    connectionsList.items.length > 0 ? connectionsList.items : network.connections
+  const filteredConnections = connectionSource.filter(matchesSearch)
 
   return (
-    <CommunityShell wide>
+    <CommunityShell
+      wide
+      onRefresh={() => {
+        network.reload()
+        connectionsList.refresh()
+        suggestionsList.refresh()
+      }}
+    >
 
       <NetworkHero
-        connectionsCount={network.connections.length}
+        connectionsCount={connectionsList.totalCount || network.connections.length}
         invitationsCount={network.pendingReceived.length}
         onOpenConnections={() => openUserList('connections')}
         onOpenInvitations={() => openUserList('pending-received')}
       />
 
       <CommunityCard padding={12}>
-        <XStack gap="$2" alignItems="center">
-          <Icons.Search size={18} color={ui.textMuted} />
-          <Input
-            flex={1}
-            value={search}
-            onChangeText={setSearch}
-            placeholder="Search by name or headline"
-            borderWidth={0}
-            backgroundColor="transparent"
-            paddingHorizontal={0}
-          />
-        </XStack>
+        <ScreenSearchField
+          value={search}
+          onChangeText={setSearch}
+          placeholder="Search by name or headline"
+          unifiedScope="people"
+          variant="plain"
+        />
       </CommunityCard>
 
       <ManageMyNetwork
@@ -154,6 +167,8 @@ export function NetworkScreen() {
         onOpenConnections={() => openUserList('connections')}
         onOpenInvitations={() => openUserList('pending-received')}
       />
+
+      <IntroductionInbox userId={user.id} />
 
       <CommunityCard padding={16} gap={12}>
         <XStack gap="$2" alignItems="center">
@@ -198,7 +213,12 @@ export function NetworkScreen() {
                   result.status === 'pending_signup' ? 'Invite saved' : 'Invitation sent',
                   {
                     tone: 'success',
-                    message: result.message,
+                    message:
+                      result.emailsSent && result.emailsSent > 0
+                        ? `${result.message ?? 'Invite sent'} · Email delivered`
+                        : result.emailError
+                          ? `${result.message ?? 'Invite saved'} · Email could not be sent`
+                          : result.message,
                   },
                 )
                 setInviteEmail('')
@@ -255,7 +275,7 @@ export function NetworkScreen() {
         </NetworkSection>
       ) : null}
 
-      {visibleSuggestions.length > 0 ? (
+      {visibleSuggestions.length > 0 || suggestionsList.hasMore ? (
         <NetworkSection
           title="People you may know"
           subtitle="Based on your industry, location, and mutual connections"
@@ -270,6 +290,12 @@ export function NetworkScreen() {
               }}
             />
           ))}
+          <LoadMoreSentinel
+            hasMore={suggestionsList.hasMore}
+            isLoadingMore={suggestionsList.isLoadingMore}
+            onLoadMore={suggestionsList.loadMore}
+          />
+          {!suggestionsList.hasMore && visibleSuggestions.length > 0 ? <LoadMoreEnd /> : null}
         </NetworkSection>
       ) : null}
 
@@ -284,12 +310,16 @@ export function NetworkScreen() {
       <NetworkSection
         title="Your connections"
         subtitle={
-          network.connections.length
-            ? `${network.connections.length} connections`
+          connectionsList.totalCount || connectionSource.length
+            ? `${connectionsList.totalCount || connectionSource.length} connections`
             : 'Start connecting with founders and creators'
         }
       >
-        {filteredConnections.length === 0 ? (
+        {connectionsList.isLoading && filteredConnections.length === 0 ? (
+          <YStack alignItems="center" paddingVertical="$6">
+            <Spinner size="large" />
+          </YStack>
+        ) : filteredConnections.length === 0 ? (
           <YStack gap="$2">
             <Text color={ui.textMuted}>
               {query
@@ -305,9 +335,17 @@ export function NetworkScreen() {
             ) : null}
           </YStack>
         ) : (
-          filteredConnections.map((member) => (
-            <MemberRow key={member.user_id} member={member} />
-          ))
+          <>
+            {filteredConnections.map((member) => (
+              <MemberRow key={member.user_id} member={member} />
+            ))}
+            <LoadMoreSentinel
+              hasMore={connectionsList.hasMore}
+              isLoadingMore={connectionsList.isLoadingMore}
+              onLoadMore={connectionsList.loadMore}
+            />
+            {!connectionsList.hasMore ? <LoadMoreEnd /> : null}
+          </>
         )}
       </NetworkSection>
 
@@ -545,5 +583,102 @@ function NetworkSection({
     <CommunityWidget title={title} subtitle={subtitle}>
       <YStack gap={0}>{children}</YStack>
     </CommunityWidget>
+  )
+}
+
+function IntroductionInbox({ userId }: { userId: string }) {
+  const communityUi = useCommunityUi()
+  const ui = useAppUi()
+  const toast = useAppToast()
+  const [items, setItems] = useState<IntroductionRequest[]>([])
+  const [loading, setLoading] = useState(true)
+  const [busyId, setBusyId] = useState<string | null>(null)
+
+  useEffect(() => {
+    let active = true
+    setLoading(true)
+    void fetchIntroductionInbox(userId).then((result) => {
+      if (!active) return
+      setItems(result.items)
+      setLoading(false)
+    })
+    return () => {
+      active = false
+    }
+  }, [userId])
+
+  async function respond(id: string, status: 'accepted' | 'declined') {
+    setBusyId(id)
+    const { error } = await respondToIntroduction(id, status)
+    setBusyId(null)
+    if (error) {
+      toast.show('Could not update request', { tone: 'danger', message: error })
+      return
+    }
+    setItems((prev) => prev.filter((item) => item.id !== id))
+    toast.show(status === 'accepted' ? 'Introduction accepted' : 'Introduction declined', {
+      tone: 'success',
+    })
+  }
+
+  if (loading) {
+    return (
+      <CommunityCard padding={16} alignItems="center">
+        <Spinner size="small" />
+      </CommunityCard>
+    )
+  }
+
+  if (!items.length) return null
+
+  return (
+    <CommunityCard padding={16} gap={12}>
+      <XStack gap="$2" alignItems="center">
+        <Icons.Users size={18} color={communityUi.brand} />
+        <Text fontWeight="700" fontSize={16} color={ui.text}>
+          Introduction requests
+        </Text>
+      </XStack>
+      {items.map((item) => (
+        <YStack
+          key={item.id}
+          gap="$2"
+          padding="$3"
+          borderRadius={12}
+          borderWidth={1}
+          borderColor={ui.borderSubtle}
+          backgroundColor={ui.surfaceMuted}
+        >
+          <Text fontSize={14} color={ui.text} fontWeight="600">
+            {item.requester_name} asks for an intro to {item.target_name}
+          </Text>
+          {item.message ? (
+            <Text fontSize={13} color={ui.textMuted}>
+              {item.message}
+            </Text>
+          ) : null}
+          <XStack gap="$2" flexWrap="wrap">
+            <Button
+              size="$2"
+              tone="primary"
+              borderRadius={999}
+              disabled={busyId === item.id}
+              onPress={() => void respond(item.id, 'accepted')}
+            >
+              Accept
+            </Button>
+            <Button
+              size="$2"
+              tone="outline"
+              borderRadius={999}
+              disabled={busyId === item.id}
+              onPress={() => void respond(item.id, 'declined')}
+            >
+              Decline
+            </Button>
+          </XStack>
+        </YStack>
+      ))}
+    </CommunityCard>
   )
 }

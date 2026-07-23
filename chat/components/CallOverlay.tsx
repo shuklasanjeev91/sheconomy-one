@@ -2,6 +2,7 @@ import { Platform } from 'react-native'
 
 import type { CallType } from '~/chat/lib/calls'
 import { Avatar, Icons, Text, XStack, YStack } from '~/components/ui'
+import { brandColors } from '~/config/brand-colors'
 
 type CallOverlayProps = {
   name: string
@@ -16,7 +17,7 @@ type CallOverlayProps = {
 
 const OVERLAY_BG = '#0f0a0d'
 const SUBTLE = '#c9b6c1'
-const ACCEPT = '#25d366'
+const ACCEPT = brandColors.primary
 const DECLINE = '#f2385a'
 
 function RoundButton({

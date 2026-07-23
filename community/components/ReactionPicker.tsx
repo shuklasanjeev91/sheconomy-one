@@ -1,7 +1,9 @@
 import { useEffect, useState } from 'react'
+import { Modal, Platform, Pressable, StyleSheet, View } from 'react-native'
 
 import { REACTION_TYPES, type ReactionType } from '~/community/lib/constants'
 import { useCommunityUi } from '~/community/lib/community-theme'
+import { WebOnlyStyle } from '~/components/platform/WebOnlyStyle'
 import { Text, XStack, YStack } from '~/components/ui'
 
 type ReactionPickerProps = {
@@ -14,6 +16,49 @@ type ReactionPickerProps = {
 export function ReactionPicker({ visible, onSelect, onClose }: ReactionPickerProps) {
   const communityUi = useCommunityUi()
   if (!visible) return null
+
+  const bar = (
+    <XStack
+      backgroundColor={communityUi.cardBg}
+      borderRadius={999}
+      paddingHorizontal={10}
+      paddingVertical={8}
+      gap={4}
+      borderWidth={1}
+      borderColor={communityUi.borderLight}
+      alignItems="center"
+      style={Platform.OS === 'web' ? { boxShadow: communityUi.reactionBarShadow } : undefined}
+      // @ts-expect-error web pointer events
+      onMouseLeave={Platform.OS === 'web' ? onClose : undefined}
+    >
+      {REACTION_TYPES.map((reaction, index) => (
+        <ReactionEmoji
+          key={reaction.type}
+          emoji={reaction.emoji}
+          label={reaction.label}
+          delayMs={index * 45}
+          onPress={() => {
+            onSelect(reaction.type)
+            onClose()
+          }}
+        />
+      ))}
+    </XStack>
+  )
+
+  // Native: Modal so the bar isn't clipped by CommunityCard / overflow parents.
+  if (Platform.OS !== 'web') {
+    return (
+      <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
+        <View style={styles.modalRoot} pointerEvents="box-none">
+          <Pressable style={StyleSheet.absoluteFill} onPress={onClose} accessibilityLabel="Dismiss reactions" />
+          <View style={styles.modalBar} pointerEvents="box-none">
+            {bar}
+          </View>
+        </View>
+      </Modal>
+    )
+  }
 
   return (
     <>
@@ -29,33 +74,11 @@ export function ReactionPicker({ visible, onSelect, onClose }: ReactionPickerPro
       />
       <XStack
         position="absolute"
-        bottom="calc(100% + 8px)"
+        bottom={'calc(100% + 8px)' as unknown as number}
         left={0}
         zIndex={99}
-        backgroundColor={communityUi.cardBg}
-        borderRadius={999}
-        paddingHorizontal={10}
-        paddingVertical={8}
-        gap={4}
-        borderWidth={1}
-        borderColor={communityUi.borderLight}
-        alignItems="center"
-        style={{ boxShadow: communityUi.reactionBarShadow }}
-        // @ts-expect-error web pointer events
-        onMouseLeave={onClose}
       >
-        {REACTION_TYPES.map((reaction, index) => (
-          <ReactionEmoji
-            key={reaction.type}
-            emoji={reaction.emoji}
-            label={reaction.label}
-            delayMs={index * 45}
-            onPress={() => {
-              onSelect(reaction.type)
-              onClose()
-            }}
-          />
-        ))}
+        {bar}
       </XStack>
     </>
   )
@@ -90,11 +113,15 @@ function ReactionEmoji({
       cursor="pointer"
       hoverStyle={{ transform: [{ scale: 1.35 }] }}
       onPress={onPress}
-      style={{
-        transform: mounted ? 'scale(1) translateY(0)' : 'scale(0.3) translateY(12px)',
-        opacity: mounted ? 1 : 0,
-        transition: `transform 0.35s cubic-bezier(0.34, 1.56, 0.64, 1), opacity 0.2s ease`,
-      }}
+      opacity={mounted ? 1 : 0}
+      transform={mounted ? [{ scale: 1 }, { translateY: 0 }] : [{ scale: 0.3 }, { translateY: 12 }]}
+      style={
+        Platform.OS === 'web'
+          ? {
+              transition: `transform 0.35s cubic-bezier(0.34, 1.56, 0.64, 1), opacity 0.2s ease`,
+            }
+          : undefined
+      }
     >
       <Text fontSize={28} lineHeight={32}>
         {emoji}
@@ -106,7 +133,7 @@ function ReactionEmoji({
         fontWeight="600"
         color={communityUi.textMuted}
         opacity={0}
-        style={{ transition: 'opacity 0.15s' }}
+        style={Platform.OS === 'web' ? { transition: 'opacity 0.15s' } : undefined}
         // @ts-expect-error web
         className="reaction-label"
       >
@@ -126,22 +153,41 @@ export function ReactionBurst({ emoji, onDone }: { emoji: string; onDone: () => 
     <YStack
       position="absolute"
       top={-20}
-      left="50%"
+      left={0}
+      right={0}
+      alignItems="center"
       zIndex={100}
       pointerEvents="none"
-      style={{
-        transform: 'translateX(-50%)',
-        animation: 'reactionBurst 0.7s ease forwards',
-      }}
+      opacity={1}
+      style={
+        Platform.OS === 'web'
+          ? {
+              animation: 'reactionBurst 0.7s ease forwards',
+            }
+          : undefined
+      }
     >
       <Text fontSize={40}>{emoji}</Text>
-      <style>{`
+      <WebOnlyStyle>{`
         @keyframes reactionBurst {
-          0% { transform: translateX(-50%) scale(0.5); opacity: 1; }
-          50% { transform: translateX(-50%) scale(1.4) translateY(-24px); opacity: 1; }
-          100% { transform: translateX(-50%) scale(1) translateY(-40px); opacity: 0; }
+          0% { transform: scale(0.5); opacity: 1; }
+          50% { transform: scale(1.4) translateY(-24px); opacity: 1; }
+          100% { transform: scale(1) translateY(-40px); opacity: 0; }
         }
-      `}</style>
+      `}</WebOnlyStyle>
     </YStack>
   )
 }
+
+const styles = StyleSheet.create({
+  modalRoot: {
+    flex: 1,
+    justifyContent: 'flex-end',
+    alignItems: 'center',
+    paddingBottom: 96,
+  },
+  modalBar: {
+    alignItems: 'center',
+    zIndex: 2,
+  },
+})

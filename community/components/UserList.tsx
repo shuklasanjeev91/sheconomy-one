@@ -3,7 +3,10 @@ import { useMemo, useState } from 'react'
 import { UserListItem } from '~/community/components/UserListItem'
 import { useCommunityUi } from '~/community/lib/community-theme'
 import type { UserListMember } from '~/community/lib/user-lists'
-import { Icons, Input, Spinner, Text, XStack, YStack } from '~/components/ui'
+import { LoadMoreEnd, LoadMoreSentinel } from '~/commerce/components/LoadMoreSentinel'
+import { ScreenSearchField } from '~/components/search'
+import { SHEET_SEARCH_MIN_ITEMS, filterBySearchQuery } from '~/lib/search'
+import { Spinner, Text, XStack, YStack } from '~/components/ui'
 
 type UserListProps = {
   items: UserListMember[]
@@ -31,17 +34,18 @@ export function UserList({
   const communityUi = useCommunityUi()
   const [query, setQuery] = useState('')
 
-  const filtered = useMemo(() => {
-    const trimmed = query.trim().toLowerCase()
-    if (!trimmed) return items
+  // Hide the search bar for short lists — it only earns its space on long ones.
+  const showSearch = searchable && (items.length >= SHEET_SEARCH_MIN_ITEMS || query.length > 0)
 
-    return items.filter(
-      (member) =>
-        member.full_name.toLowerCase().includes(trimmed) ||
-        (member.username?.toLowerCase().includes(trimmed) ?? false) ||
-        (member.headline?.toLowerCase().includes(trimmed) ?? false),
-    )
-  }, [items, query])
+  const filtered = useMemo(
+    () =>
+      filterBySearchQuery(items, query, (member) => [
+        member.full_name,
+        member.username,
+        member.headline,
+      ]),
+    [items, query],
+  )
 
   if (isLoading) {
     return (
@@ -53,28 +57,13 @@ export function UserList({
 
   return (
     <YStack gap="$3" width="100%">
-      {searchable ? (
-        <XStack
-          gap={8}
-          alignItems="center"
-          paddingHorizontal={12}
-          paddingVertical={8}
-          borderRadius={8}
-          borderWidth={1}
-          borderColor={communityUi.border}
-          backgroundColor={communityUi.cardBg}
-        >
-          <Icons.Search size={18} color={communityUi.textMuted} />
-          <Input
-            flex={1}
-            value={query}
-            onChangeText={setQuery}
-            placeholder="Search people"
-            borderWidth={0}
-            backgroundColor="transparent"
-            paddingHorizontal={0}
-          />
-        </XStack>
+      {showSearch ? (
+        <ScreenSearchField
+          value={query}
+          onChangeText={setQuery}
+          placeholder="Search people"
+          unifiedScope="people"
+        />
       ) : null}
 
       {filtered.length === 0 ? (
@@ -96,22 +85,15 @@ export function UserList({
         </YStack>
       )}
 
-      {hasMore && onLoadMore ? (
-        <XStack justifyContent="center" paddingVertical="$3">
-          {isLoadingMore ? (
-            <Spinner size="small" color={communityUi.brand} />
-          ) : (
-            <Text
-              fontSize={14}
-              fontWeight="600"
-              color={communityUi.brand}
-              cursor="pointer"
-              onPress={onLoadMore}
-            >
-              Load more
-            </Text>
-          )}
-        </XStack>
+      {onLoadMore ? (
+        <>
+          <LoadMoreSentinel
+            hasMore={hasMore}
+            isLoadingMore={isLoadingMore}
+            onLoadMore={onLoadMore}
+          />
+          {!hasMore && filtered.length > 0 ? <LoadMoreEnd /> : null}
+        </>
       ) : null}
     </YStack>
   )

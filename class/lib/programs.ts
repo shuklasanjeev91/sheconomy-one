@@ -333,32 +333,52 @@ export async function fetchProgramCategories(): Promise<{
   return { categories, error: null }
 }
 
-export async function fetchPublishedPrograms(options?: {
+export const PROGRAM_PAGE_SIZE = 24
+
+export type ProgramsPageResult = {
+  programs: Program[]
+  page: number
+  pageSize: number
+  hasMore: boolean
+  error: string | null
+}
+
+type PublishedProgramFilters = {
   category?: string
   mediaType?: 'video' | 'audio'
   featuredOnly?: boolean
   authorId?: string
   externalAuthorId?: string
-  limit?: number
-}): Promise<{ programs: Program[]; error: string | null }> {
+  language?: string
+  sort?: 'default' | 'popular' | 'newest' | 'az'
+}
+
+/** Paginated published programs — use with infinite scroll (no hard catalog cap). */
+export async function fetchPublishedProgramsPage(
+  page: number,
+  pageSize = PROGRAM_PAGE_SIZE,
+  options?: PublishedProgramFilters,
+): Promise<ProgramsPageResult> {
+  const from = page * pageSize
+  const to = from + pageSize - 1
+
   let query = supabase
     .from('programs')
-    .select(PROGRAM_SELECT)
+    .select(PROGRAM_SELECT, { count: 'exact' })
     .not('published_at', 'is', null)
-    .order('published_at', { ascending: false })
 
   if (options?.category) {
     query = query.eq('category', options.category)
   }
-
   if (options?.mediaType) {
     query = query.eq('media_type', options.mediaType)
   }
-
   if (options?.featuredOnly) {
     query = query.eq('featured', true)
   }
-
+  if (options?.language) {
+    query = query.eq('language', options.language)
+  }
   if (options?.authorId && options?.externalAuthorId) {
     query = query.or(
       `author_id.eq.${options.authorId},external_author_id.eq.${options.externalAuthorId}`,
@@ -369,20 +389,57 @@ export async function fetchPublishedPrograms(options?: {
     query = query.eq('external_author_id', options.externalAuthorId)
   }
 
-  if (options?.limit) {
-    query = query.limit(options.limit)
+  switch (options?.sort) {
+    case 'popular':
+      query = query.order('view_count', { ascending: false, nullsFirst: false })
+      break
+    case 'az':
+      query = query.order('title', { ascending: true })
+      break
+    case 'newest':
+    case 'default':
+    default:
+      query = query.order('published_at', { ascending: false })
+      break
   }
 
-  const { data, error } = await query
+  const { data, error, count } = await query.range(from, to)
 
   if (error) {
-    return { programs: [], error: error.message }
+    return { programs: [], page, pageSize, hasMore: false, error: error.message }
   }
 
   const programs = await enrichProgramAuthors((data as ProgramRow[]).map(mapProgram), {
     resolveByTitle: false,
   })
-  return { programs, error: null }
+  const total = count ?? 0
+
+  return {
+    programs,
+    page,
+    pageSize,
+    hasMore: total ? to + 1 < total : programs.length === pageSize,
+    error: null,
+  }
+}
+
+export async function fetchPublishedPrograms(options?: {
+  category?: string
+  mediaType?: 'video' | 'audio'
+  featuredOnly?: boolean
+  authorId?: string
+  externalAuthorId?: string
+  limit?: number
+}): Promise<{ programs: Program[]; error: string | null }> {
+  const limit = options?.limit ?? PROGRAM_PAGE_SIZE
+  const result = await fetchPublishedProgramsPage(0, limit, {
+    category: options?.category,
+    mediaType: options?.mediaType,
+    featuredOnly: options?.featuredOnly,
+    authorId: options?.authorId,
+    externalAuthorId: options?.externalAuthorId,
+  })
+  return { programs: result.programs, error: result.error }
 }
 
 /**
@@ -456,6 +513,22 @@ export async function fetchProgramsByIds(
     programs: unique.map((id) => byId.get(id)).filter((program): program is Program => Boolean(program)),
     error: null,
   }
+}
+
+/** Programs the user is enrolled in via `class_enrollment`. */
+export async function fetchEnrolledPrograms(
+  userId: string,
+): Promise<{ programs: Program[]; error: string | null }> {
+  const { data, error } = await supabase
+    .from('class_enrollment')
+    .select('course_id, created_at')
+    .eq('user_id', userId)
+    .order('created_at', { ascending: false })
+    .limit(40)
+
+  if (error) return { programs: [], error: error.message }
+  const ids = (data ?? []).map((row) => row.course_id)
+  return fetchProgramsByIds(ids)
 }
 
 export async function fetchProgramBySlug(

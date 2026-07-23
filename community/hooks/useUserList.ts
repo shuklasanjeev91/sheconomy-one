@@ -17,7 +17,14 @@ export function useUserList(kind: UserListKind, userId?: string, enabled = true)
   const [error, setError] = useState<string | null>(null)
   const requestIdRef = useRef(0)
 
-  const paginated = kind === 'followers' || kind === 'following'
+  const paginated =
+    kind === 'followers' ||
+    kind === 'following' ||
+    kind === 'connections' ||
+    kind === 'suggestions' ||
+    kind === 'discover' ||
+    kind === 'pending-received' ||
+    kind === 'pending-sent'
 
   const loadPage = useCallback(
     async (pageToLoad: number, append: boolean) => {

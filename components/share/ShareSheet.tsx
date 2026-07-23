@@ -3,6 +3,7 @@ import type { ReactNode } from 'react'
 import { CommunityAdaptiveSheet } from '~/community/components/CommunityAdaptiveSheet'
 import { ShareActionRow } from '~/components/share/ShareActionRow'
 import { Icons, Separator, Text, XStack, YStack, useAppToast } from '~/components/ui'
+import { brandColors, sheconomyLight } from '~/config/brand-colors'
 import {
   canUseSystemShare,
   copyShareLink,
@@ -30,14 +31,16 @@ type ShareTarget = {
   color: string
 }
 
+/** Share destinations keep their labels/icons; chrome uses SHEconomy palette only. */
 const SHARE_TARGETS: ShareTarget[] = [
-  { key: 'whatsapp', label: 'WhatsApp', icon: Icons.MessageCircle, color: '#25D366' },
-  { key: 'linkedin', label: '', icon: Icons.Linkedin, color: '#0A66C2' },
-  { key: 'x', label: 'X', icon: Icons.Twitter, color: '#1DA1F2' },
-  { key: 'facebook', label: '', icon: Icons.Facebook, color: '#1877F2' },
-  { key: 'telegram', label: 'Telegram', icon: Icons.Send, color: '#229ED9' },
-  { key: 'email', label: 'Email', icon: Icons.Mail, color: '#EA4335' },
+  { key: 'whatsapp', label: 'WhatsApp', icon: Icons.MessageCircle, color: brandColors.primary },
+  { key: 'linkedin', label: '', icon: Icons.Linkedin, color: brandColors.primaryDark },
+  { key: 'x', label: 'X', icon: Icons.Twitter, color: brandColors.primaryLight },
+  { key: 'facebook', label: '', icon: Icons.Facebook, color: brandColors.coral },
+  { key: 'telegram', label: 'Telegram', icon: Icons.Send, color: sheconomyLight.sheconomy8 },
+  { key: 'email', label: 'Email', icon: Icons.Mail, color: brandColors.primaryDark },
 ]
+
 
 export function ShareSheet({
   open,
@@ -127,7 +130,8 @@ function ShareTargetButton({
       hoverStyle={{ opacity: 0.85 }}
       pressStyle={{ opacity: 0.7 }}
       onPress={onPress}
-      accessibilityLabel={target.label ? `Share via ${target.label}` : 'Share'}
+      aria-label={target.label ? `Share via ${target.label}` : 'Share'}
+      role="button"
     >
       <YStack
         width={52}

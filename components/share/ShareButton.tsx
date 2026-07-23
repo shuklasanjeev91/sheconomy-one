@@ -28,6 +28,18 @@ export function ShareButton({
 }: ShareButtonProps) {
   const [open, setOpen] = useState(false)
 
+  const sheet = open ? (
+    <ShareSheet
+      open={open}
+      onOpenChange={setOpen}
+      payload={payload}
+      title={sheetTitle ?? label}
+      copyLabel={copyLabel}
+      copyToastMessage={copyToastMessage}
+      extraActions={extraActions}
+    />
+  ) : null
+
   if (variant === 'icon') {
     return (
       <>
@@ -39,15 +51,7 @@ export function ShareButton({
           aria-label={label}
           onPress={() => setOpen(true)}
         />
-        <ShareSheet
-          open={open}
-          onOpenChange={setOpen}
-          payload={payload}
-          title={sheetTitle ?? label}
-          copyLabel={copyLabel}
-          copyToastMessage={copyToastMessage}
-          extraActions={extraActions}
-        />
+        {sheet}
       </>
     )
   }
@@ -63,15 +67,7 @@ export function ShareButton({
       >
         {label}
       </Button>
-      <ShareSheet
-        open={open}
-        onOpenChange={setOpen}
-        payload={payload}
-        title={sheetTitle ?? label}
-        copyLabel={copyLabel}
-        copyToastMessage={copyToastMessage}
-        extraActions={extraActions}
-      />
+      {sheet}
     </>
   )
 }

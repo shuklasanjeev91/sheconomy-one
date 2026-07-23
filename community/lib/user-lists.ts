@@ -100,55 +100,59 @@ async function fetchProfilesByIds(ids: string[]): Promise<UserListMember[]> {
     .filter((item): item is UserListMember => !!item)
 }
 
-/** Accepted connections only — list length is the source of truth for the counter. */
-export async function fetchAcceptedConnections(userId: string): Promise<UserListPage> {
-  const { data, error } = await supabase.rpc('get_user_connections', {
-    target_user_id: userId,
-    connection_status: 'accepted',
-  })
+/** Accepted connections — paginated (no hard cap; load via infinite scroll). */
+export async function fetchAcceptedConnections(
+  userId: string,
+  page = 0,
+  pageSize = USER_LIST_PAGE_SIZE,
+): Promise<UserListPage> {
+  const from = page * pageSize
+  const to = from + pageSize - 1
 
-  if (!error && data) {
-    const items = dedupeMembers(
-      (data as ConnectionRpcRow[]).map((row) => ({
-        user_id: row.user_id,
-        username: null,
-        full_name: row.full_name,
-        headline: row.headline,
-        avatar_url: row.avatar_url,
-        location: null,
-        industry: null,
-        is_verified: false,
-        mutual_count: row.mutual_count ?? 0,
-        connection_id: row.connection_id,
-        connection_status: row.status,
-        is_sender: row.is_sender,
-      })),
-    )
-    return { items, totalCount: items.length, hasMore: false, error: null }
-  }
-
-  // Direct accepted-only fallback (no discover/suggestions).
-  const { data: rows, error: directError } = await supabase
+  const { data: rows, error, count } = await supabase
     .from('connections')
-    .select('id, sender_id, receiver_id, status, created_at')
+    .select('id, sender_id, receiver_id, status, created_at', { count: 'exact' })
     .eq('status', 'accepted')
     .or(`sender_id.eq.${userId},receiver_id.eq.${userId}`)
     .order('created_at', { ascending: false })
+    .range(from, to)
 
-  if (directError) {
+  if (error) {
     return {
       items: [],
       totalCount: 0,
       hasMore: false,
-      error: directError.message ?? error?.message ?? 'Could not load connections',
+      error: error.message ?? 'Could not load connections',
     }
   }
 
   const otherIds = (rows ?? []).map((row) =>
     row.sender_id === userId ? row.receiver_id : row.sender_id,
   )
-  const items = await fetchProfilesByIds(otherIds)
-  return { items, totalCount: items.length, hasMore: false, error: null }
+  const profiles = await fetchProfilesByIds(otherIds)
+  const byId = new Map(profiles.map((item) => [item.user_id, item]))
+  const mapped: UserListMember[] = []
+  for (let index = 0; index < otherIds.length; index += 1) {
+    const id = otherIds[index]
+    const profile = byId.get(id)
+    if (!profile) continue
+    const row = rows?.[index]
+    mapped.push({
+      ...profile,
+      connection_id: row?.id ?? null,
+      connection_status: 'accepted',
+      is_sender: row?.sender_id === userId,
+    })
+  }
+  const items = dedupeMembers(mapped)
+  const totalCount = count ?? items.length
+
+  return {
+    items,
+    totalCount,
+    hasMore: totalCount ? to + 1 < totalCount : items.length === pageSize,
+    error: null,
+  }
 }
 
 export async function fetchUserFollowers(
@@ -256,29 +260,36 @@ export async function fetchUserListByKind(
   }
 
   if (kind === 'connections') {
-    return fetchAcceptedConnections(userId)
+    return fetchAcceptedConnections(userId, page)
   }
 
-  const summary = await fetchNetworkSummary(userId)
-
-  if (kind === 'pending-received') {
-    const items = dedupeMembers(summary.pendingReceived)
-    return { items, totalCount: items.length, hasMore: false, error: summary.error }
+  if (kind === 'pending-received' || kind === 'pending-sent') {
+    const summary = await fetchNetworkSummary(userId)
+    const source =
+      kind === 'pending-received' ? summary.pendingReceived : summary.pendingSent
+    const items = dedupeMembers(source)
+    const from = page * USER_LIST_PAGE_SIZE
+    const slice = items.slice(from, from + USER_LIST_PAGE_SIZE)
+    return {
+      items: slice,
+      totalCount: items.length,
+      hasMore: from + USER_LIST_PAGE_SIZE < items.length,
+      error: summary.error,
+    }
   }
 
-  if (kind === 'pending-sent') {
-    const items = dedupeMembers(summary.pendingSent)
-    return { items, totalCount: items.length, hasMore: false, error: summary.error }
+  if (kind === 'suggestions' || kind === 'discover') {
+    const discover = await fetchDiscoverMembers(userId, USER_LIST_PAGE_SIZE, page)
+    const items = dedupeMembers(discover.items)
+    return {
+      items,
+      totalCount: items.length + page * USER_LIST_PAGE_SIZE,
+      hasMore: discover.hasMore,
+      error: discover.error,
+    }
   }
 
-  if (kind === 'suggestions') {
-    const items = dedupeMembers(summary.suggestions)
-    return { items, totalCount: items.length, hasMore: false, error: summary.error }
-  }
-
-  const discover = await fetchDiscoverMembers(userId, USER_LIST_PAGE_SIZE)
-  const items = dedupeMembers(discover.items)
-  return { items, totalCount: items.length, hasMore: false, error: discover.error }
+  return { items: [], totalCount: 0, hasMore: false, error: 'Unknown list kind' }
 }
 
 export const USER_LIST_META: Record<

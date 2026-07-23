@@ -30,7 +30,8 @@ import {
   isCommercePath,
   isCommerceShopsPath,
   isCommunityPath,
-  isMyShopsPath,
+  isManageShopPath,
+  isCreateShopPath,
   isCommunityFeedPath,
   isJobsPath,
   isNotificationsPath,
@@ -99,8 +100,8 @@ export type AppMobileTabItem = {
 export const APP_CENTER_NAV: AppCenterNavItem[] = [
   {
     href: commerceRoutes.home,
-    label: 'Home',
-    icon: Icons.Home,
+    label: 'Commerce',
+    icon: Icons.Store,
     feature: 'commerce',
     match: (path) => isCommercePath(path),
   },
@@ -147,7 +148,7 @@ export function getCommerceMobileTabs({
   const sellerHref =
     hasShops && primaryShopId
       ? commerceRoutes.manageShop(primaryShopId)
-      : commerceRoutes.myShops
+      : commerceRoutes.createShop
 
   return [
     {
@@ -160,7 +161,7 @@ export function getCommerceMobileTabs({
       href: sellerHref,
       label: hasShops ? 'Manage shop' : 'Create shop',
       icon: hasShops ? Icons.Settings : Icons.PlusCircle,
-      match: (path) => isMyShopsPath(path),
+      match: (path) => (hasShops ? isManageShopPath(path) : isCreateShopPath(path)),
     },
   ]
 }
@@ -301,10 +302,10 @@ export const APP_CHAT_MOBILE_TABS: AppMobileTabItem[] = [
 /** Bottom tabs — classes: Video + Audio (Home covers hub / program detail). */
 export const APP_CLASS_MOBILE_TABS: AppMobileTabItem[] = [
   {
-    href: classRoutes.video,
+    href: classRoutes.home,
     label: 'Video',
     icon: Icons.Play,
-    match: (path) => isClassVideoPath(path),
+    match: (path) => isClassVideoPath(path) || isClassHomePath(path),
   },
   {
     href: classRoutes.audio,

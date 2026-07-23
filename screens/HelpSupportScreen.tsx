@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
 import { AppPageHeader } from '~/components/layout/AppPageHeader'
 import { FullWidthLayout, PageSection, SurfaceCard } from '~/components/layout'
+import { ScreenSearchField } from '~/components/search'
 import {
   Button,
   Icons,
@@ -299,11 +300,10 @@ export function HelpSupportScreen() {
                 </XStack>
               </ScrollView>
 
-              <Input
+              <ScreenSearchField
                 value={query}
                 onChangeText={setQuery}
                 placeholder="Search help articles"
-                borderRadius={radius.chip}
               />
 
               {!query.trim() && popularArticles.length > 0 ? (

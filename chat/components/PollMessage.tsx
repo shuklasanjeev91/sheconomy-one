@@ -18,6 +18,7 @@ export function PollMessage({ poll, result, isOwn, onVote }: PollMessageProps) {
   const counts = poll.options.map((_, index) => (live[index] ?? 0) + (base[index] ?? 0))
   const total = counts.reduce((sum, value) => sum + value, 0)
   const myOptionIndex = result?.myOptionIndex ?? null
+  const canVote = typeof onVote === 'function'
 
   const questionColor = isOwn ? chat.bubbleOutText : chat.bubbleInText
   const metaColor = isOwn ? chat.bubbleMetaOut : chat.bubbleMetaIn
@@ -41,8 +42,8 @@ export function PollMessage({ poll, result, isOwn, onVote }: PollMessageProps) {
           return (
             <YStack
               key={index}
-              onPress={() => onVote(index)}
-              cursor="pointer"
+              onPress={canVote ? () => onVote(index) : undefined}
+              cursor={canVote ? 'pointer' : 'default'}
               borderRadius={8}
               borderWidth={1}
               borderColor={isMine ? fillColor : chat.border}
@@ -50,7 +51,9 @@ export function PollMessage({ poll, result, isOwn, onVote }: PollMessageProps) {
               position="relative"
               minHeight={36}
               justifyContent="center"
-              pressStyle={{ opacity: 0.85 }}
+              pressStyle={canVote ? { opacity: 0.85 } : undefined}
+              accessibilityRole="button"
+              accessibilityState={{ selected: isMine }}
             >
               <YStack
                 position="absolute"

@@ -1,27 +1,21 @@
 import { useRouter } from 'one'
 import { AppLink } from '~/components/navigation/AppLink'
-import { useState } from 'react'
 import type { Href } from 'one'
 
-import { GifPicker } from '~/community/components/GifPicker'
 import { CommunityCard } from '~/community/components/CommunityCard'
 import { openComposer, type ComposerOptions } from '~/community/lib/composer-store'
 import { useCommunityUi } from '~/community/lib/community-theme'
-import { Avatar, Icons, Text, XStack } from '~/components/ui'
+import { HorizontalScrollRow } from '~/components/layout'
+import { Avatar, Icons, Text, XStack, YStack } from '~/components/ui'
 import { communityRoutes, routes } from '~/lib/routes'
 import { buildSignInUrl } from '~/lib/auth/redirect'
 import { useProfile } from '~/hooks/useProfile'
 
-type FeedComposerProps = {
-  onGifSelect?: (url: string) => void
-}
-
-export function FeedComposer({ onGifSelect }: FeedComposerProps) {
+export function FeedComposer() {
   const communityUi = useCommunityUi()
   const router = useRouter()
   const { profile, isAuthenticated } = useProfile()
   const name = profile?.full_name || profile?.username || 'You'
-  const [gifOpen, setGifOpen] = useState(false)
 
   // Every entry point opens the shared composer overlay. Unauthenticated users
   // are routed through sign-in first (returning to the feed afterwards).
@@ -33,20 +27,11 @@ export function FeedComposer({ onGifSelect }: FeedComposerProps) {
     openComposer(options)
   }
 
-  function handleGif(url: string) {
-    if (onGifSelect) {
-      onGifSelect(url)
-      return
-    }
-    compose({ gifUrl: url })
-  }
-
   return (
-    <>
-      <CommunityCard padding={16} gap={12}>
+    <CommunityCard padding={16} gap={12}>
         <XStack gap={10} alignItems="center">
-          <AppLink href={(isAuthenticated ? communityRoutes.profile : routes.signIn) as Href} asChild>
-            <Avatar name={name} src={profile?.avatar_url ?? undefined} size="$4" cursor="pointer" />
+          <AppLink href={(isAuthenticated ? communityRoutes.profile : routes.signIn) as Href}>
+            <Avatar name={name} src={profile?.avatar_url} size="$4" cursor="pointer" />
           </AppLink>
           <XStack
             flex={1}
@@ -67,36 +52,27 @@ export function FeedComposer({ onGifSelect }: FeedComposerProps) {
           </XStack>
         </XStack>
 
-        <XStack borderTopWidth={1} borderTopColor={communityUi.borderLight} paddingTop={8}>
-          <ComposerAction icon={Icons.Image} label="Media" color="#70b5f9" onPress={() => compose({ media: true })} />
-          <ComposerAction
-            icon={Icons.Film}
-            label="GIF"
-            color="#7fc15e"
-            onPress={() => {
-              if (!isAuthenticated) {
-                router.push(buildSignInUrl(communityRoutes.home) as never)
-                return
-              }
-              setGifOpen(true)
-            }}
-          />
-          <ComposerAction icon={Icons.BarChart2} label="Poll" color="#c37dda" onPress={() => compose({ mode: 'poll' })} />
-          <ComposerAction icon={Icons.Calendar} label="Event" color="#e7a33e" onPress={() => compose({ mode: 'event' })} />
-          <ComposerAction icon={Icons.PartyPopper} label="Celebrate" color="#e7a33e" onPress={() => compose({ mode: 'celebration' })} />
-          <ComposerAction icon={Icons.Tag} label="Product" color="#0a66c2" onPress={() => compose({ mode: 'product' })} />
-        </XStack>
+        <YStack borderTopWidth={1} borderTopColor={communityUi.borderLight} paddingTop={8}>
+          <HorizontalScrollRow gap={0}>
+            <ComposerAction icon={Icons.Image} label="Photo" color={communityUi.brandLight} onPress={() => compose({ media: true })} />
+            <ComposerAction icon={Icons.Video} label="Video" color="#e74c3c" onPress={() => compose({ video: true })} />
+            <ComposerAction icon={Icons.Calendar} label="Event" color="#e7a33e" onPress={() => compose({ mode: 'event' })} />
+            <ComposerAction
+              icon={Icons.PartyPopper}
+              label="Celebrate"
+              color="#c37dda"
+              onPress={() => compose({ mode: 'celebration' })}
+            />
+            <ComposerAction
+              icon={Icons.Newspaper}
+              label="Article"
+              color={communityUi.brand}
+              onPress={() => compose({ mode: 'article' })}
+            />
+            <ComposerAction icon={Icons.BarChart2} label="Poll" color="#7fc15e" onPress={() => compose({ mode: 'poll' })} />
+          </HorizontalScrollRow>
+        </YStack>
       </CommunityCard>
-
-      <GifPicker
-        open={gifOpen}
-        onOpenChange={setGifOpen}
-        onSelect={(url) => {
-          handleGif(url)
-          setGifOpen(false)
-        }}
-      />
-    </>
   )
 }
 
@@ -113,22 +89,25 @@ function ComposerAction({
 }) {
   const communityUi = useCommunityUi()
   return (
-    <XStack
-      gap={8}
+    <YStack
+      minWidth={64}
+      paddingHorizontal={6}
       alignItems="center"
-      paddingVertical={12}
-      paddingHorizontal={4}
-      borderRadius={4}
-      cursor="pointer"
-      flex={1}
       justifyContent="center"
-      hoverStyle={{ backgroundColor: communityUi.divider }}
+      paddingVertical={8}
+      borderRadius={999}
+      cursor="pointer"
+      hoverStyle={{ backgroundColor: communityUi.hoverBg }}
+      pressStyle={{ opacity: 0.75 }}
       onPress={onPress}
+      accessibilityLabel={label}
+      aria-label={label}
+      role="button"
     >
-      <Icon size={20} color={color} />
-      <Text fontSize={14} fontWeight="600" color={communityUi.textMuted} display="none" $gtSm={{ display: 'flex' }}>
+      <Icon size={22} color={color} />
+      <Text fontSize={12} fontWeight="600" color={communityUi.textMuted} marginTop={4} numberOfLines={1}>
         {label}
       </Text>
-    </XStack>
+    </YStack>
   )
 }

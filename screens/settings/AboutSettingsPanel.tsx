@@ -1,3 +1,5 @@
+import { Platform } from 'react-native'
+
 import { BRAND_BLUE } from '~/community/lib/constants'
 import { AppLink } from '~/components/navigation/AppLink'
 import { Icons, ListItem, Separator, Text, XStack, YStack } from '~/components/ui'
@@ -6,11 +8,23 @@ import { SettingsPanel } from '~/components/settings/SettingsPanel'
 import { radius } from '~/config/tokens'
 import { routes } from '~/lib/routes'
 import { useAppUi } from '~/lib/theme/useAppUi'
+import {
+  getAppDisplayName,
+  getNativeAppVersion,
+  getNativeBuildNumber,
+} from '~/lib/updates/native-app-version'
 import { useAiAssistOptional } from '~/providers/AiAssistProvider'
 
 export function AboutSettingsPanel() {
   const ui = useAppUi()
   const ai = useAiAssistOptional()
+  const appName = getAppDisplayName()
+  const version = getNativeAppVersion()
+  const build = getNativeBuildNumber()
+  const versionSubtitle =
+    Platform.OS === 'android'
+      ? `${appName} · versionName ${version} · versionCode ${build}`
+      : `${appName} · Version ${version} · Build ${build}`
 
   return (
     <SettingsPanel title="About" description="Help, AI assist, and app version">
@@ -61,7 +75,7 @@ export function AboutSettingsPanel() {
         <ListItem
           icon={<Icons.Info size={18} color={BRAND_BLUE} />}
           title="Version"
-          subTitle="1.0.0"
+          subTitle={versionSubtitle}
         />
       </SurfaceCard>
     </SettingsPanel>

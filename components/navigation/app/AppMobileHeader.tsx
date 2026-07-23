@@ -21,6 +21,8 @@ import { getAppColors } from './config'
 
 /** Collapse search/logo row after this scroll offset — tabs stay visible (LinkedIn-style). */
 const SCROLL_TABS_ONLY_THRESHOLD = 36
+/** Header layout animation is web-only — on native it lags every back/tab chrome change. */
+const headerAnim = Platform.OS === 'web' ? ('quick' as const) : undefined
 
 type AppMobileHeaderProps = {
   /** Compact detail chrome — back + search, no section tab row. */
@@ -58,7 +60,7 @@ export function AppMobileHeader({ minimal = false }: AppMobileHeaderProps) {
       top={Platform.OS === 'web' ? 0 : undefined}
       $gtMd={{ display: 'none' }}
       style={chromeSurfaceStyle(ui)}
-      animation="quick"
+      animation={headerAnim}
     >
       {showChromeRow ? (
         <XStack
@@ -68,7 +70,7 @@ export function AppMobileHeader({ minimal = false }: AppMobileHeaderProps) {
           alignItems="center"
           gap="$2.5"
           style={{ minHeight: 56 }}
-          animation="quick"
+          animation={headerAnim}
         >
           <XStack flexShrink={0} alignItems="center">
             {showBack ? <AppHeaderBackButton /> : <NavLogo compact href={commerceRoutes.home} />}
@@ -144,7 +146,7 @@ function HeaderIcon({
       overflow="visible"
       cursor="pointer"
       aria-label={label}
-      animation="quick"
+      {...(Platform.OS === 'web' ? { animation: 'quick' as const } : {})}
       hoverStyle={{ backgroundColor: colors.chipHover, scale: 1.04 }}
       pressStyle={{ opacity: 0.75, scale: 0.94 }}
       {...(onPress ? { onPress } : {})}

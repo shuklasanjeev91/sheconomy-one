@@ -14,7 +14,6 @@ export function AuthBrandLogo({ compact = false }: { compact?: boolean }) {
       height={compact ? 40 : 44}
       objectFit="contain"
       alt={`${BRAND_NAME} logo`}
-      color="$pink10"
     />
   )
 }

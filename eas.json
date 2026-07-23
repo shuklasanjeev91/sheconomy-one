@@ -1,7 +1,7 @@
 {
   "cli": {
     "version": ">= 16.0.0",
-    "appVersionSource": "remote"
+    "appVersionSource": "local"
   },
   "build": {
     "development": {
@@ -11,11 +11,25 @@
     },
     "preview": {
       "distribution": "internal",
-      "channel": "preview"
+      "channel": "preview",
+      "node": "22.14.0",
+      "env": {
+        "YARN_ENABLE_GLOBAL_CACHE": "false",
+        "YARN_ENABLE_IMMUTABLE_INSTALLS": "false",
+        "YARN_NODE_LINKER": "node-modules",
+        "EXPO_NO_DOCTOR": "1",
+        "EAS_BUILD_DISABLE_EXPO_DOCTOR_STEP": "1"
+      },
+      "ios": {
+        "resourceClass": "m-medium"
+      },
+      "android": {
+        "buildType": "apk"
+      }
     },
     "production": {
       "channel": "production",
-      "autoIncrement": true
+      "autoIncrement": false
     }
   },
   "submit": {

@@ -9,6 +9,11 @@ export default defineConfig({
   resolve: {
     alias: {
       '~': path.resolve(__dirname, '.'),
+      '@react-native-async-storage/async-storage': path.resolve(
+        __dirname,
+        'tests/mocks/async-storage.ts',
+      ),
+      'react-native': path.resolve(__dirname, 'tests/mocks/react-native.ts'),
     },
   },
 })

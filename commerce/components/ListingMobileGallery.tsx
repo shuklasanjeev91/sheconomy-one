@@ -8,10 +8,12 @@ import { useAppUi } from '~/lib/theme/useAppUi'
 
 import { FavoriteButton } from './FavoriteButton'
 import { ListingImage } from './ListingImage'
+import { listingMediaKind } from '~/commerce/lib/listing-media'
 
 type GalleryImage = {
   id: string
   image_url: string
+  image_type?: string | null
   alt_text?: string | null
 }
 
@@ -84,6 +86,7 @@ export function ListingMobileGallery({
               >
                 <ListingImage
                   imageUrls={[image.image_url]}
+                  imageType={image.image_type}
                   alt={image.alt_text ?? title}
                   width="100%"
                   height="100%"
@@ -140,7 +143,7 @@ export function ListingMobileGallery({
         <MediaLightbox
           items={images.map((image) => ({
             url: image.image_url,
-            kind: 'image' as const,
+            kind: listingMediaKind(image.image_url, image.image_type),
             alt: image.alt_text ?? title,
           }))}
           open={lightboxOpen}

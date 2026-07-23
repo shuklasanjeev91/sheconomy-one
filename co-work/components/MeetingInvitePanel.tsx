@@ -74,7 +74,12 @@ export function MeetingInvitePanel({
 
       toast.show('Invites sent', {
         tone: 'success',
-        message: `${result.notifications ?? 0} in-app · ${result.emailsSent ?? 0} email`,
+        message:
+          result.emailsSent && result.emailsSent > 0
+            ? `${result.notifications ?? 0} in-app · ${result.emailsSent} email via Resend`
+            : result.mailtoLinks?.length
+              ? `${result.notifications ?? 0} in-app · open email app for ${result.mailtoLinks.length} guest(s)`
+              : `${result.notifications ?? 0} in-app`,
       })
     } catch (sendError) {
       toast.show('Could not send invites', {

@@ -1,4 +1,4 @@
-import { useEffect } from 'react'
+import { useEffect, useState } from 'react'
 import { useRouter } from 'one'
 
 import {
@@ -14,6 +14,7 @@ import {
   useAppToast,
 } from '~/components/ui'
 import { PageCenter } from '~/components/layout'
+import { PhoneInput } from '~/components/forms/PhoneInput'
 import { getShadowStyle, radius } from '~/config/tokens'
 import { useAppLayout } from '~/hooks/useAppLayout'
 import { vendorRoutes } from '~/lib/routes'
@@ -32,7 +33,7 @@ import {
   type ShopUpdate,
 } from '~/lib/shop/shop.type'
 import { shopToFormData } from '~/lib/shop/shop.utils'
-import { validateShopData } from '~/lib/shop/shop.validation'
+import { validateShopData, validateShopField } from '~/lib/shop/shop.validation'
 import { useAppDispatch, useAppSelector } from '~/lib/store/hooks'
 import { useAppUi } from '~/lib/theme/useAppUi'
 
@@ -47,11 +48,13 @@ export function VendorEditShopScreen() {
   const form = useAppSelector((s) => s.shop.formData)
   const validation = useAppSelector((s) => s.shop.validation)
   const isUpdating = useAppSelector((s) => s.shop.isUpdating)
-  const isLoadingShops = useAppSelector((s) => s.shop.isLoadingShops)
+  const isLoadingMyShops = useAppSelector((s) => s.shop.isLoadingMyShops)
+  const myShopsLoaded = useAppSelector((s) => s.shop.myShopsLoaded)
+  const [liveErrors, setLiveErrors] = useState<Record<string, string>>({})
 
   useEffect(() => {
-    if (!shop) void dispatch(loadMyShops(undefined))
-  }, [dispatch, shop])
+    if (!shop && !myShopsLoaded) void dispatch(loadMyShops(undefined))
+  }, [dispatch, shop, myShopsLoaded])
 
   useEffect(() => {
     if (shop) dispatch(loadFormFromShop(shopToFormData(shop)))
@@ -59,6 +62,13 @@ export function VendorEditShopScreen() {
 
   function setField<K extends keyof ShopFormData>(field: K, value: ShopFormData[K]) {
     dispatch(updateShopField({ field, value }))
+    const { error } = validateShopField(field, value)
+    setLiveErrors((current) => {
+      const next = { ...current }
+      if (error) next[field as string] = error
+      else delete next[field as string]
+      return next
+    })
   }
 
   function toggleCategory(category: string) {
@@ -105,7 +115,7 @@ export function VendorEditShopScreen() {
     }
   }
 
-  if (!shop && isLoadingShops) {
+  if (!shop && (isLoadingMyShops || !myShopsLoaded)) {
     return (
       <PageCenter>
         <Spinner size="large" />
@@ -124,12 +134,13 @@ export function VendorEditShopScreen() {
     )
   }
 
-  const errors = validation.errors
+  const errors = { ...validation.errors, ...liveErrors }
 
   return (
     <YStack
       width="100%"
-      maxWidth={720}
+      maxWidth="100%"
+      alignSelf="stretch"
       gap="$5"
       paddingHorizontal={isDesktop ? '$6' : '$4'}
       paddingTop={isDesktop ? '$6' : '$4'}
@@ -230,11 +241,10 @@ export function VendorEditShopScreen() {
           />
         </Field>
         <Field label="Phone" error={errors.shop_phone_number}>
-          <Input
+          <PhoneInput
             value={form.shop_phone_number}
-            onChangeText={(value) => setField('shop_phone_number', value)}
-            keyboardType="phone-pad"
-            placeholder="+91XXXXXXXXXX"
+            onChange={(value) => setField('shop_phone_number', value)}
+            invalid={Boolean(errors.shop_phone_number)}
           />
         </Field>
         <Field label="Website" error={errors.website_url}>

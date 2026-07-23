@@ -16,10 +16,15 @@ import {
   YStack,
   useAppToast,
 } from '~/components/ui'
+import { clearFormDraft } from '~/lib/drafts/form-draft'
+import { useFormDraft } from '~/hooks/useFormDraft'
 import { useFormValidation } from '~/hooks/useFormValidation'
+import { useUnsavedChangesGuard } from '~/hooks/useUnsavedChangesGuard'
 import { communityRoutes, routes } from '~/lib/routes'
 import { maxLength, minLength, required } from '~/lib/validation'
 import { useSupabase } from '~/providers/SupabaseProvider'
+
+const JOB_DRAFT_KEY = 'community-create-job'
 
 const JOB_TYPES = ['Full-time', 'Part-time', 'Contract', 'Internship', 'Freelance'] as const
 const EXPERIENCE_LEVELS = ['Entry level', 'Associate', 'Mid-Senior', 'Director', 'Executive'] as const
@@ -50,6 +55,39 @@ export function CreateJobScreen() {
       [],
     ),
   )
+
+  const draftValue = useMemo(
+    () => ({
+      values: form.values,
+      jobType,
+      experienceLevel,
+      isRemote,
+      location,
+    }),
+    [experienceLevel, form.values, isRemote, jobType, location],
+  )
+  const isDraftDirty = Boolean(
+    form.values.title?.trim() ||
+      form.values.companyName?.trim() ||
+      form.values.description?.trim() ||
+      location.trim(),
+  )
+  useFormDraft({
+    key: user ? JOB_DRAFT_KEY : null,
+    value: draftValue,
+    isDirty: () => isDraftDirty,
+    onRestored: (draft) => {
+      if (!draft?.values) return
+      for (const [key, value] of Object.entries(draft.values)) {
+        form.fields[key as keyof typeof form.fields]?.setValue(String(value ?? ''))
+      }
+      if (draft.jobType) setJobType(draft.jobType)
+      if (draft.experienceLevel) setExperienceLevel(draft.experienceLevel)
+      if (typeof draft.isRemote === 'boolean') setIsRemote(draft.isRemote)
+      if (typeof draft.location === 'string') setLocation(draft.location)
+    },
+  })
+  useUnsavedChangesGuard({ isDirty: isDraftDirty && !isSaving })
 
   if (!user) {
     return (
@@ -103,6 +141,7 @@ export function CreateJobScreen() {
       return
     }
 
+    await clearFormDraft(JOB_DRAFT_KEY)
     toast.show('Job posted', { tone: 'success' })
     router.replace(communityRoutes.job(data.id))
   }

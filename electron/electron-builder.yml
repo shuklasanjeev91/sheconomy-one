@@ -1,0 +1,33 @@
+appId: com.sheconomy.desktop
+productName: SHEconomy
+copyright: Copyright © SHEconomy
+electronVersion: 37.10.3
+directories:
+  output: ../dist-desktop
+  buildResources: build
+files:
+  - main.cjs
+  - preload.cjs
+  - package.json
+asar: true
+npmRebuild: false
+nodeGypRebuild: false
+win:
+  target:
+    - target: nsis
+      arch:
+        - x64
+  artifactName: SHEconomy-Setup-${version}.${ext}
+nsis:
+  oneClick: false
+  allowToChangeInstallationDirectory: true
+  createDesktopShortcut: true
+  createStartMenuShortcut: true
+  shortcutName: SHEconomy
+mac:
+  target:
+    - dmg
+  category: public.app-category.shopping
+linux:
+  target:
+    - AppImage

@@ -11,7 +11,7 @@ type RequireShopAccessProps = {
 }
 
 /** Seller dashboard — sign in required; guests see inline auth. */
-export function RequireShopAccess({ children, redirectTo = '/my-shops' }: RequireShopAccessProps) {
+export function RequireShopAccess({ children, redirectTo = '/vendor/myshop' }: RequireShopAccessProps) {
   const { isLoading, isGuest } = useAccess()
 
   if (isLoading) {

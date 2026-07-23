@@ -24,6 +24,8 @@ export type PostSheetType =
   | 'send'
   | 'share'
   | 'options'
+  | 'edit'
+  | 'delete-confirm'
   | null
 
 export function usePostEngagement(
@@ -60,10 +62,15 @@ export function usePostEngagement(
       return
     }
 
+    let cancelled = false
     fetchUserPostReaction(user.id, postId).then((reaction) => {
+      if (cancelled) return
       setReactionId(reaction?.id ?? null)
       setReactionType(reaction?.reactionType ?? null)
     })
+    return () => {
+      cancelled = true
+    }
   }, [postId, user])
 
   const loadComments = useCallback(async () => {

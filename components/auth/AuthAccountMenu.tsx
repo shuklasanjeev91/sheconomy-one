@@ -1,5 +1,4 @@
 import type { Href } from 'one'
-import { AppLink } from '~/components/navigation/AppLink'
 import { useMemo } from 'react'
 
 import {
@@ -406,24 +405,30 @@ export function AuthGuestMenuContent({ onClose, signInHref }: { onClose: () => v
         </YStack>
       ))}
 
-      <AppLink href={signInHref} asChild>
-        <XStack
-          height={48}
-          borderRadius={999}
-          backgroundColor={ui.brand}
-          alignItems="center"
-          justifyContent="center"
-          marginHorizontal="$2"
-          cursor="pointer"
-          animation="quick"
-          pressStyle={{ opacity: 0.9, scale: 0.98 }}
-          onPress={onClose}
-        >
-          <Text fontSize={15} fontWeight="700" color={ui.onBrand}>
-            Sign in or create account
-          </Text>
-        </XStack>
-      </AppLink>
+      <XStack
+        height={48}
+        borderRadius={999}
+        backgroundColor={ui.brand}
+        alignItems="center"
+        justifyContent="center"
+        marginHorizontal="$2"
+        cursor="pointer"
+        animation="quick"
+        pressStyle={{ opacity: 0.9, scale: 0.98 }}
+        role="button"
+        accessibilityRole="button"
+        accessibilityLabel="Sign in or create account"
+        onPress={() => {
+          // Navigate first, then close — closing the sheet before push can
+          // cancel navigation when this CTA lives inside a modal portal.
+          navigateApp(signInHref)
+          requestAnimationFrame(() => onClose())
+        }}
+      >
+        <Text fontSize={15} fontWeight="700" color={ui.onBrand}>
+          Sign in or create account
+        </Text>
+      </XStack>
     </YStack>
   )
 }

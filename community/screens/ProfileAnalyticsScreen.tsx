@@ -72,7 +72,7 @@ export function ProfileAnalyticsScreen() {
           <Spinner size="large" color={communityUi.brand} />
         </YStack>
       ) : (
-        <YStack gap="$4" paddingBottom="$8">
+        <YStack gap="$4" paddingBottom="$2">
           <XStack flexWrap="wrap" gap="$3">
             <StatChip
               label="Views (30d)"
@@ -82,7 +82,7 @@ export function ProfileAnalyticsScreen() {
             <StatChip
               label="Unique viewers"
               value={analytics?.uniqueViewersCount ?? 0}
-              color="#0a66c2"
+              color={communityUi.brand}
             />
             <StatChip
               label="Engagement"

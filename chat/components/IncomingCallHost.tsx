@@ -1,6 +1,7 @@
 import { useRouter } from 'one'
 
 import { useIncomingCalls } from '~/chat/hooks/useIncomingCalls'
+import { useAppToast } from '~/components/ui'
 import { chatRoutes } from '~/lib/routes'
 import { useSupabase } from '~/providers/SupabaseProvider'
 
@@ -12,6 +13,7 @@ import { CallOverlay } from './CallOverlay'
  */
 export function IncomingCallHost() {
   const router = useRouter()
+  const toast = useAppToast()
   const { user } = useSupabase()
   const { incoming, caller, accept, decline } = useIncomingCalls(user?.id)
 
@@ -27,18 +29,25 @@ export function IncomingCallHost() {
       onAccept={() => {
         const callType = incoming.callType
         const callId = incoming.id
-        void accept().then((code) => {
-          if (code) {
-            router.push(
-              chatRoutes.call(code, {
-                type: callType,
-                callId,
-              }),
-            )
-          }
-        })
+        void accept()
+          .then((code) => {
+            if (code) {
+              router.push(
+                chatRoutes.call(code, {
+                  type: callType,
+                  callId,
+                }),
+              )
+            }
+          })
+          .catch((error: unknown) => {
+            toast.show('Could not answer the call', {
+              message: error instanceof Error ? error.message : undefined,
+              tone: 'danger',
+            })
+          })
       }}
-      onDecline={() => void decline()}
+      onDecline={() => void decline().catch(() => {})}
     />
   )
 }

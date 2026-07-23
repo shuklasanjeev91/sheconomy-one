@@ -24,7 +24,7 @@ function withAlpha(hexOrRgba: string, alpha: number): string {
 
 /**
  * Modern, type-aware card surfaces for the community feed.
- * Keeps brand-linkedin cool neutrals; accents stay purposeful (not purple-default).
+ * Accents stay within the SHEconomy magenta/coral palette (plus semantic greens for service/repost).
  */
 export function getPostTypeSurface(
   postType: string | null | undefined,
@@ -44,23 +44,23 @@ export function getPostTypeSurface(
 
   switch (type) {
     case 'poll':
-      return make('#0a66c2', 'Poll')
+      return make(ui.brand, 'Poll')
     case 'event':
       return make('#0f766e', 'Event')
     case 'celebration':
-      return make('#d01060', 'Celebration')
+      return make(ui.brand, 'Celebration')
     case 'product':
       return make('#c2410c', 'Product')
     case 'service':
       return make('#15803d', 'Service')
     case 'article':
-      return make('#334155', 'Article')
+      return make(ui.brandHover, 'Article')
     case 'group_post':
       return make('#b45309', 'Group')
     case 'repost':
       return make('#057642', 'Repost')
     case 'thought':
-      return make('#0369a1', 'Thought')
+      return make(ui.brandLight, 'Thought')
     case 'text':
     case 'post':
     default:

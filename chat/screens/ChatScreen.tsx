@@ -12,7 +12,6 @@ import { useUserChats } from '~/chat/hooks/useUserChats'
 import type { ChatSummary } from '~/chat/lib/types'
 import { useChatTheme } from '~/chat/lib/chat-theme'
 import { Button, Icons, Spinner, Text, XStack, YStack } from '~/components/ui'
-import { PushPermissionBanner } from '~/components/notifications/PushPermissionBanner'
 import { useAppLayout } from '~/hooks/useAppLayout'
 import { chatRoutes, routes } from '~/lib/routes'
 import { useSupabase } from '~/providers/SupabaseProvider'
@@ -67,7 +66,7 @@ export function ChatScreen({ chatId = null, filter = 'all' }: ChatScreenProps) {
     Platform.OS === 'web' ? ({ flex: 1, minHeight: 0, width: '100%' } as const) : undefined
 
   // ---- Auth states ---------------------------------------------------------
-  if (authLoading) {
+  if (authLoading && chats.length === 0) {
     return (
       <YStack flex={1} minHeight={0} backgroundColor={theme.pageBg} alignItems="center" justifyContent="center" style={fillStyle}>
         <Spinner size="large" color={theme.brand} />
@@ -129,9 +128,6 @@ export function ChatScreen({ chatId = null, filter = 'all' }: ChatScreenProps) {
           minHeight={0}
         >
           <ChatSectionTabs />
-          <YStack paddingHorizontal={12} paddingBottom={8} gap={8}>
-            <PushPermissionBanner />
-          </YStack>
           <ChatListPane
             chats={visibleChats}
             isLoading={isLoading}
@@ -169,19 +165,12 @@ export function ChatScreen({ chatId = null, filter = 'all' }: ChatScreenProps) {
           onBack={() => router.push(chatRoutes.home)}
           onConversationChanged={reload}
         />
-      ) : chatId && isLoading ? (
+      ) : chatId && isLoading && visibleChats.length === 0 ? (
         <YStack flex={1} alignItems="center" justifyContent="center">
           <Spinner size="large" color={theme.brand} />
         </YStack>
       ) : (
         <YStack flex={1} minHeight={0}>
-          <YStack paddingHorizontal={12} paddingTop={8} paddingBottom={4} gap={8}>
-            <PushPermissionBanner />
-            {!chatId ? (
-              <>
-              </>
-            ) : null}
-          </YStack>
           <ChatListPane
             chats={visibleChats}
             isLoading={isLoading}

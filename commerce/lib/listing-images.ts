@@ -103,7 +103,7 @@ export function normalizeListingImageUrl(
   const resolvedPath = resolveStorageLikePath(value)
   if (resolvedPath) return resolvedPath
 
-  if (/\.(jpe?g|png|gif|webp|avif)(\?.*)?$/i.test(value)) {
+  if (/\.(jpe?g|png|gif|webp|avif|mp4|webm|mov|m4v)(\?.*)?$/i.test(value)) {
     for (const bucket of LISTING_IMAGE_BUCKETS) {
       const candidate = buildStoragePublicUrl(bucket, value)
       if (candidate) return candidate

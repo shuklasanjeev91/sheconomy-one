@@ -1,4 +1,5 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useState, memo } from 'react'
+import { useWindowDimensions } from 'react-native'
 import { useRouter } from 'one'
 import { AppLink } from '~/components/navigation/AppLink'
 import { useThemeName } from 'tamagui'
@@ -29,11 +30,12 @@ import {
   getPostTypeSurface,
   resolveFeedPostType,
 } from '~/community/lib/post-type-surface'
-import { Avatar, Button, Icons, Image, Text, XStack, YStack } from '~/components/ui'
+import { Avatar, Button, Icons, Image, Text, XStack, YStack, useAppToast } from '~/components/ui'
 import { radius } from '~/config/tokens'
 import { commerceRoutes, communityRoutes, routes } from '~/lib/routes'
 import { useSupabase } from '~/providers/SupabaseProvider'
 import { rsvpToPostEvent, cancelPostEventRsvp, fetchPostEventRsvpState } from '~/community/lib/events'
+import { CongratulateSheet } from '~/community/components/CongratulateSheet'
 
 import { BRAND_MEMBER_LABEL } from '~/config/brand'
 
@@ -54,12 +56,23 @@ type FeedPostCardProps = {
   post: CommunityPost
   /** When false, timestamps and content won't link to the post detail page. */
   linkToDetail?: boolean
+  /** On the article reader, hide the article body (already shown above) and keep engagement. */
+  compactArticle?: boolean
+  onPostUpdated?: (postId: string, patch: Partial<CommunityPost>) => void
+  onPostDeleted?: (postId: string) => void
 }
 
-export function FeedPostCard({ post, linkToDetail = true }: FeedPostCardProps) {
+export const FeedPostCard = memo(function FeedPostCard({
+  post,
+  linkToDetail = true,
+  compactArticle = false,
+  onPostUpdated,
+  onPostDeleted,
+}: FeedPostCardProps) {
   const communityUi = useCommunityUi()
   const themeName = useThemeName()
   const router = useRouter()
+  const [congratulateOpen, setCongratulateOpen] = useState(false)
   const postSurface = useMemo(
     () =>
       getPostTypeSurface(
@@ -87,11 +100,15 @@ export function FeedPostCard({ post, linkToDetail = true }: FeedPostCardProps) {
   const posterName = post.author?.full_name || post.author?.username || 'member'
   // Event posts show their cover image inside the event card, so keep it out of
   // the general media grid to avoid rendering the same image twice.
-  const isEventPost = !!(post.event_rsvp_enabled && post.event_title)
+  const isEventPost = !!(post.event_title && (post.event_rsvp_enabled || post.post_type === 'event'))
   const mediaItems = collectPostMedia(post).filter((item) => {
     if (!isEventPost) return true
     return item.url !== post.image_url
   })
+
+  const articleHref = communityRoutes.article(post.id)
+  const isArticle = post.post_type === 'article' || !!post.article_title
+  const detailHref = isArticle ? articleHref : communityRoutes.post(post.id)
 
   const [lightboxOpen, setLightboxOpen] = useState(false)
   const [lightboxIndex, setLightboxIndex] = useState(0)
@@ -123,8 +140,17 @@ export function FeedPostCard({ post, linkToDetail = true }: FeedPostCardProps) {
             gap={6}
             alignItems="center"
           >
-            <Icons.Repeat size={14} color={postSurface.accentColor} />
-            <Text fontSize={12} fontWeight="600" color={communityUi.textMuted}>
+            <YStack flexShrink={0}>
+              <Icons.Repeat size={14} color={postSurface.accentColor} />
+            </YStack>
+            <Text
+              fontSize={12}
+              fontWeight="600"
+              color={communityUi.textMuted}
+              numberOfLines={1}
+              flexShrink={1}
+              minWidth={0}
+            >
               {authorName} reposted
             </Text>
           </XStack>
@@ -152,6 +178,7 @@ export function FeedPostCard({ post, linkToDetail = true }: FeedPostCardProps) {
                   fontSize={14}
                   color={communityUi.text}
                   cursor="pointer"
+                  numberOfLines={1}
                   hoverStyle={{ color: communityUi.brand, textDecorationLine: 'underline' }}
                 >
                   {authorName}
@@ -164,6 +191,7 @@ export function FeedPostCard({ post, linkToDetail = true }: FeedPostCardProps) {
                   fontSize={14}
                   color={communityUi.text}
                   cursor="pointer"
+                  numberOfLines={1}
                   hoverStyle={{ color: communityUi.brand, textDecorationLine: 'underline' }}
                 >
                   {authorName}
@@ -176,6 +204,7 @@ export function FeedPostCard({ post, linkToDetail = true }: FeedPostCardProps) {
                   fontSize={14}
                   color={communityUi.text}
                   cursor="pointer"
+                  numberOfLines={1}
                   hoverStyle={{ color: communityUi.brand, textDecorationLine: 'underline' }}
                 >
                   {authorName}
@@ -226,7 +255,7 @@ export function FeedPostCard({ post, linkToDetail = true }: FeedPostCardProps) {
             ) : null}
             <XStack gap={4} alignItems="center">
               {linkToDetail ? (
-                <AppLink href={communityRoutes.post(post.id)}>
+                <AppLink href={detailHref}>
                   <Text
                     fontSize={12}
                     color={communityUi.textSubtle}
@@ -250,6 +279,7 @@ export function FeedPostCard({ post, linkToDetail = true }: FeedPostCardProps) {
           <XStack
             padding={4}
             borderRadius={999}
+            flexShrink={0}
             cursor="pointer"
             hoverStyle={{ backgroundColor: communityUi.divider }}
             onPress={() => engagement.openSheet('options')}
@@ -259,46 +289,99 @@ export function FeedPostCard({ post, linkToDetail = true }: FeedPostCardProps) {
         </XStack>
 
         <YStack paddingHorizontal={16} paddingBottom={12} gap={10}>
-          {post.post_type === 'article' && post.article_title ? (
-            <XStack gap={8} alignItems="center">
-              <Icons.Newspaper size={16} color={communityUi.brand} />
-              <Text fontSize={12} fontWeight="700" color={communityUi.brand} textTransform="uppercase" letterSpacing={0.4}>
-                Article
-              </Text>
-            </XStack>
-          ) : null}
-          {post.article_title ? (
-            linkToDetail ? (
-              <AppLink href={communityRoutes.post(post.id)}>
-                <Text fontSize={20} fontWeight="800" color={communityUi.text} letterSpacing={-0.3} lineHeight={26}>
-                  {post.article_title}
-                </Text>
-              </AppLink>
-            ) : (
-              <Text fontSize={20} fontWeight="800" color={communityUi.text} letterSpacing={-0.3} lineHeight={26}>
-                {post.article_title}
-              </Text>
-            )
-          ) : null}
-          {linkToDetail ? (
-            <AppLink href={communityRoutes.post(post.id)}>
-              <PostContentText content={post.content} />
+          {!compactArticle && isArticle ? (
+            <AppLink href={articleHref}>
+              <YStack
+                gap={10}
+                borderRadius={12}
+                borderWidth={1}
+                borderColor={communityUi.border}
+                overflow="hidden"
+                backgroundColor={communityUi.pageBg}
+                cursor="pointer"
+                hoverStyle={{ borderColor: communityUi.brand }}
+              >
+                {post.image_url || mediaItems[0]?.kind === 'image' ? (
+                  <Image
+                    src={post.image_url || mediaItems[0]?.url || ''}
+                    width="100%"
+                    height={160}
+                    objectFit="cover"
+                    alt=""
+                  />
+                ) : null}
+                <YStack padding={14} gap={8}>
+                  <XStack gap={8} alignItems="center">
+                    <Icons.Newspaper size={16} color={communityUi.brand} />
+                    <Text
+                      fontSize={12}
+                      fontWeight="700"
+                      color={communityUi.brand}
+                      textTransform="uppercase"
+                      letterSpacing={0.4}
+                    >
+                      Article
+                    </Text>
+                  </XStack>
+                  {post.article_title ? (
+                    <Text fontSize={20} fontWeight="800" color={communityUi.text} letterSpacing={-0.3} lineHeight={26}>
+                      {post.article_title}
+                    </Text>
+                  ) : null}
+                  <PostContentText content={post.content} collapsible />
+                  <Text fontSize={13} fontWeight="700" color={communityUi.brand}>
+                    Read article →
+                  </Text>
+                </YStack>
+              </YStack>
             </AppLink>
-          ) : (
-            <PostContentText content={post.content} />
-          )}
+          ) : null}
+
+          {!compactArticle && !isArticle ? (
+            <>
+              {linkToDetail ? (
+                <AppLink href={detailHref}>
+                  <PostContentText content={post.content} />
+                </AppLink>
+              ) : (
+                <PostContentText content={post.content} />
+              )}
+            </>
+          ) : null}
+
           {post.originalPost ? (
             <OriginalPostEmbed original={post.originalPost} />
           ) : null}
-          {post.celebration ? <PostCelebrationCard celebration={post.celebration} /> : null}
+          {post.celebration ? (
+            <YStack gap={10}>
+              <PostCelebrationCard celebration={post.celebration} />
+              <Button
+                alignSelf="flex-start"
+                size="$3"
+                borderRadius={999}
+                backgroundColor={communityUi.brand}
+                color="white"
+                icon={<Icons.PartyPopper size={16} color="white" />}
+                onPress={() => {
+                  if (!engagement.isAuthenticated) {
+                    requireAuth()
+                    return
+                  }
+                  setCongratulateOpen(true)
+                }}
+              >
+                Congratulate
+              </Button>
+            </YStack>
+          ) : null}
           {post.poll ? <PollBlock poll={post.poll} onRequireAuth={requireAuth} /> : null}
-          {post.event_rsvp_enabled && post.event_title ? (
+          {isEventPost ? (
             <PostEventCard post={post} onRequireAuth={requireAuth} />
           ) : null}
-          {mediaItems.length > 0 ? (
+          {!isArticle && mediaItems.length > 0 ? (
             <PostMedia items={mediaItems} onPress={openMedia} />
           ) : null}
-          {post.link && mediaItems.length === 0 ? (
+          {post.link && mediaItems.length === 0 && !isArticle ? (
             <PostLinkPreviewCard preview={post.link} />
           ) : null}
           {post.product ? <PostProductCard product={post.product} /> : null}
@@ -349,6 +432,8 @@ export function FeedPostCard({ post, linkToDetail = true }: FeedPostCardProps) {
           borderTopWidth={1}
           borderTopColor={communityUi.borderLight}
           justifyContent="space-around"
+          alignItems="stretch"
+          minWidth={0}
         >
           <PostLikeButton
             isLiked={engagement.isLiked}
@@ -384,7 +469,23 @@ export function FeedPostCard({ post, linkToDetail = true }: FeedPostCardProps) {
         </XStack>
       </CommunityCard>
 
-      <PostActionSheets post={post} engagement={engagement} />
+      <PostActionSheets
+        post={post}
+        engagement={engagement}
+        onPostUpdated={onPostUpdated}
+        onPostDeleted={onPostDeleted}
+      />
+
+      {post.celebration ? (
+        <CongratulateSheet
+          open={congratulateOpen}
+          onOpenChange={setCongratulateOpen}
+          post={post}
+          onCongratulated={() => {
+            engagement.openSheet('comments')
+          }}
+        />
+      ) : null}
 
       {mediaItems.length > 0 ? (
         <PostImageLightbox
@@ -396,7 +497,7 @@ export function FeedPostCard({ post, linkToDetail = true }: FeedPostCardProps) {
       ) : null}
     </>
   )
-}
+})
 
 function ReactionIcons() {
   const communityUi = useCommunityUi()
@@ -430,8 +531,15 @@ function PostMedia({
   onPress?: (index?: number) => void
 }) {
   const communityUi = useCommunityUi()
+  const { width: windowWidth } = useWindowDimensions()
   const companionImage = items.find((item) => item.kind === 'image')?.url ?? null
   const hasVideo = items.some((item) => item.kind === 'video')
+  // Full-bleed feed width; keep frames usable on phones and tablets.
+  const frameHeight = useMemo(() => {
+    if (hasVideo) return Math.min(Math.round(windowWidth * (9 / 16) + 48), 480)
+    // Tall enough for portrait without forcing crop when fit=contain.
+    return Math.min(Math.max(Math.round(windowWidth * 0.9), 280), 560)
+  }, [hasVideo, windowWidth])
   // LinkedIn: videos stay in-feed with muted autoplay — images open zoom lightbox.
   const pressable =
     onPress && !hasVideo
@@ -440,24 +548,28 @@ function PostMedia({
 
   if (items.length === 1) {
     const item = items[0]
-    const height = item.kind === 'video' ? 420 : 360
+    const isVideo = item.kind === 'video'
     return (
       <YStack
         width="100%"
-        height={height}
+        height={frameHeight}
         borderRadius={radius.card}
         overflow="hidden"
-        backgroundColor={item.kind === 'video' ? '#000' : communityUi.pageBg}
+        backgroundColor={isVideo ? '#000' : communityUi.pageBg}
         {...pressable}
       >
         <PostMediaSlide
           item={item}
           width={0}
-          height={height}
-          fit={item.kind === 'video' ? 'contain' : 'cover'}
+          height={frameHeight}
+          // Always contain — cover was cropping feed photos on phones.
+          // Keep a fixed frame height so FlashList doesn't restack/overlap cards
+          // when natural image aspect loads.
+          fit="contain"
           fill
+          responsive={false}
           posterUrl={companionImage}
-          autoplayInView={item.kind === 'video'}
+          autoplayInView={isVideo}
         />
       </YStack>
     )
@@ -466,7 +578,7 @@ function PostMedia({
   return (
     <PostMediaCarousel
       items={items}
-      height={hasVideo ? 420 : 360}
+      height={frameHeight}
       fit="contain"
       onPressImage={onPress && !hasVideo ? (index) => onPress(index) : undefined}
     />
@@ -681,31 +793,32 @@ function PostActionButton({
 }) {
   const communityUi = useCommunityUi()
   return (
-    <XStack
+    <YStack
       flex={1}
+      flexShrink={1}
+      minWidth={0}
       alignItems="center"
       justifyContent="center"
-      gap={6}
-      paddingVertical={10}
-      paddingHorizontal={8}
+      gap={2}
+      paddingVertical={8}
+      paddingHorizontal={2}
       borderRadius={999}
       cursor="pointer"
-      animation="quick"
       hoverStyle={{ backgroundColor: communityUi.divider }}
-      pressStyle={{ scale: 0.97 }}
+      pressStyle={{ opacity: 0.72 }}
       onPress={onPress}
     >
       <Icon size={20} color={communityUi.textMuted} />
       <Text
-        fontSize={13}
+        fontSize={11}
         fontWeight="600"
         color={communityUi.textMuted}
-        display="none"
-        $gtSm={{ display: 'flex' }}
+        numberOfLines={1}
+        textAlign="center"
       >
         {label}
       </Text>
-    </XStack>
+    </YStack>
   )
 }
 
@@ -729,6 +842,8 @@ type PollState = {
 function PollBlock({ poll, onRequireAuth }: { poll: CommunityPoll; onRequireAuth: () => void }) {
   const communityUi = useCommunityUi()
   const { user } = useSupabase()
+  const toast = useAppToast()
+  const [pending, setPending] = useState(false)
   const [state, setState] = useState<PollState>({
     options: poll.options.map((option) => ({ id: option.id, text: option.text, votes: option.votes })),
     myOptionId: poll.myOptionId,
@@ -751,9 +866,10 @@ function PollBlock({ poll, onRequireAuth }: { poll: CommunityPoll; onRequireAuth
       onRequireAuth()
       return
     }
-    if (closed) return
+    if (closed || pending) return
 
     const previous = state
+    setPending(true)
     setState((prev) => {
       const options = prev.options.map((option) => ({ ...option }))
       const findOption = (id: string) => options.find((option) => option.id === id)
@@ -775,7 +891,11 @@ function PollBlock({ poll, onRequireAuth }: { poll: CommunityPoll; onRequireAuth
     })
 
     castPollVote(poll.id, optionId, user.id).then(({ error }) => {
-      if (error) setState(previous)
+      setPending(false)
+      if (error) {
+        setState(previous)
+        toast.show('Could not vote', { tone: 'danger', message: error })
+      }
     })
   }
 
@@ -790,7 +910,8 @@ function PollBlock({ poll, onRequireAuth }: { poll: CommunityPoll; onRequireAuth
             <YStack
               key={option.id}
               onPress={() => vote(option.id)}
-              cursor={closed ? 'default' : 'pointer'}
+              disabled={closed || pending}
+              cursor={closed || pending ? 'default' : 'pointer'}
               borderRadius={8}
               borderWidth={1}
               borderColor={isMine ? communityUi.brand : communityUi.border}
@@ -798,7 +919,10 @@ function PollBlock({ poll, onRequireAuth }: { poll: CommunityPoll; onRequireAuth
               position="relative"
               minHeight={40}
               justifyContent="center"
-              pressStyle={closed ? undefined : { opacity: 0.85 }}
+              pressStyle={closed || pending ? undefined : { opacity: 0.85 }}
+              opacity={pending ? 0.85 : 1}
+              accessibilityRole="button"
+              accessibilityState={{ disabled: closed || pending, selected: isMine }}
             >
               {showResults ? (
                 <YStack
@@ -851,10 +975,16 @@ function PostEventCard({
       setIsLoading(false)
       return
     }
+    let cancelled = false
+    setIsLoading(true)
     fetchPostEventRsvpState(post.id, user.id).then((state) => {
+      if (cancelled) return
       setIsRsvped(state.isRsvped)
       setIsLoading(false)
     })
+    return () => {
+      cancelled = true
+    }
   }, [post.id, user])
 
   async function toggleRsvp() {
@@ -864,8 +994,8 @@ function PostEventCard({
     }
     setIsToggling(true)
     const result = isRsvped
-      ? await cancelPostEventRsvp(post.id, user.id)
-      : await rsvpToPostEvent(post.id, user.id)
+      ? await cancelPostEventRsvp(post.id, user.id, post.community_event_id)
+      : await rsvpToPostEvent(post.id, user.id, post.community_event_id)
     setIsToggling(false)
     if (!result.error) setIsRsvped(!isRsvped)
   }
@@ -893,7 +1023,7 @@ function PostEventCard({
       <YStack padding={12} gap={8}>
         <XStack gap={8} alignItems="center">
           <Icons.Calendar size={18} color={communityUi.brand} />
-          <Text fontSize={15} fontWeight="600" color={communityUi.text}>
+          <Text fontSize={15} fontWeight="600" color={communityUi.text} flex={1}>
             {post.event_title}
           </Text>
         </XStack>
@@ -908,17 +1038,34 @@ function PostEventCard({
             {post.event_description}
           </Text>
         ) : null}
-        <Button
-          alignSelf="flex-start"
-          size="$3"
-          borderRadius={999}
-          backgroundColor={isRsvped ? communityUi.divider : communityUi.brand}
-          color={isRsvped ? communityUi.textMuted : 'white'}
-          disabled={isLoading || isToggling}
-          onPress={toggleRsvp}
-        >
-          {isRsvped ? 'Going' : 'RSVP'}
-        </Button>
+        <XStack gap={8} flexWrap="wrap">
+          {post.event_rsvp_enabled !== false ? (
+            <Button
+              alignSelf="flex-start"
+              size="$3"
+              borderRadius={999}
+              backgroundColor={isRsvped ? communityUi.divider : communityUi.brand}
+              color={isRsvped ? communityUi.textMuted : 'white'}
+              disabled={isLoading || isToggling}
+              onPress={toggleRsvp}
+            >
+              {isRsvped ? 'Going' : 'RSVP'}
+            </Button>
+          ) : null}
+          {post.community_event_id ? (
+            <AppLink href={communityRoutes.event(post.community_event_id)}>
+              <Button
+                alignSelf="flex-start"
+                size="$3"
+                borderRadius={999}
+                tone="outline"
+                icon={<Icons.ArrowUpRight size={14} />}
+              >
+                View event
+              </Button>
+            </AppLink>
+          ) : null}
+        </XStack>
       </YStack>
     </YStack>
   )
@@ -968,12 +1115,21 @@ function OriginalPostEmbed({ original }: { original: OriginalPostPreview }) {
           if (!originalMedia.length) return null
           if (originalMedia.length === 1) {
             return (
-              <YStack height={180} backgroundColor="#000">
-                <PostMediaSlide item={originalMedia[0]} width={0} height={180} fit="cover" fill />
+              <YStack height={200} backgroundColor={communityUi.pageBg}>
+                <PostMediaSlide
+                  item={originalMedia[0]}
+                  width={0}
+                  height={200}
+                  fit="contain"
+                  fill
+                  responsive={false}
+                />
               </YStack>
             )
           }
-          return <PostMediaCarousel items={originalMedia} height={180} fit="cover" rounded={false} />
+          return (
+            <PostMediaCarousel items={originalMedia} height={200} fit="contain" rounded={false} />
+          )
         })()}
       </YStack>
     </AppLink>

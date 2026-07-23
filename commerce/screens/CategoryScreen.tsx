@@ -5,6 +5,7 @@ import { Spinner, Text, YStack } from '~/components/ui'
 import { ListingBrowseView, ListingFiltersShell, CommercePageHeader } from '~/commerce/components'
 import { useCategoryFilterFacets } from '~/commerce/hooks/useCategoryFilterFacets'
 import { useCategoryListings } from '~/commerce/hooks/useCategoryListings'
+import type { CategoryLoaderResult } from '~/commerce/lib/category-loader'
 import {
   buildFilterSearchParams,
   type ListingBrowseFilters,
@@ -13,18 +14,32 @@ import { fetchCategoryBySlug, getCategorySlug, type CategorySummary } from '~/li
 import { commerceRoutes } from '~/lib/routes'
 import { FullWidthLayout, PageSection } from '~/components/layout'
 import { useAppUi } from '~/lib/theme/useAppUi'
+import { usePageSeo } from '~/components/seo/RouteSeo'
 
-export function CategoryScreen({ filters: initialFilters = {} }: { filters?: ListingBrowseFilters }) {
+export function CategoryScreen({
+  filters: initialFilters = {},
+  initial,
+}: {
+  filters?: ListingBrowseFilters
+  initial?: CategoryLoaderResult | null
+}) {
   const ui = useAppUi()
   const { slug } = useParams<{ slug: string }>()
   const router = useRouter()
   const filters = initialFilters
-  const [category, setCategory] = useState<CategorySummary | null>(null)
-  const [categoryError, setCategoryError] = useState<string | null>(null)
-  const [isCategoryLoading, setIsCategoryLoading] = useState(true)
+  const hasInitial = Boolean(initial?.category || initial?.error)
+  const [category, setCategory] = useState<CategorySummary | null>(initial?.category ?? null)
+  const [categoryError, setCategoryError] = useState<string | null>(initial?.error ?? null)
+  const [isCategoryLoading, setIsCategoryLoading] = useState(!hasInitial)
 
   useEffect(() => {
     if (!slug) return
+    if (initial?.category || initial?.error) {
+      setCategory(initial.category)
+      setCategoryError(initial.error)
+      setIsCategoryLoading(false)
+      return
+    }
 
     let active = true
     setIsCategoryLoading(true)
@@ -38,7 +53,7 @@ export function CategoryScreen({ filters: initialFilters = {} }: { filters?: Lis
     return () => {
       active = false
     }
-  }, [slug])
+  }, [slug, initial?.category, initial?.error])
 
   const listingsFeed = useCategoryListings({
     categoryId: category?.category_id,
@@ -48,6 +63,18 @@ export function CategoryScreen({ filters: initialFilters = {} }: { filters?: Lis
   const { facets, isLoading: facetsLoading } = useCategoryFilterFacets(category?.category_id)
 
   const filterKey = useMemo(() => JSON.stringify(filters), [filters])
+
+  usePageSeo(
+    useMemo(() => {
+      if (!category) return null
+      const name = category.seo_name || category.category
+      return {
+        title: name,
+        description: `Shop ${name} from women-led businesses on SHEconomy.`,
+        image: category.category_image_url,
+      }
+    }, [category]),
+  )
 
   function updateFilters(next: ListingBrowseFilters) {
     if (!category) return
@@ -111,6 +138,7 @@ export function CategoryScreen({ filters: initialFilters = {} }: { filters?: Lis
               hasMore={listingsFeed.hasMore}
               error={listingsFeed.error}
               onLoadMore={listingsFeed.loadMore}
+              onRetry={listingsFeed.refresh}
               emptyMessage={`No listings in ${category.category} yet.`}
             />
           </ListingFiltersShell>

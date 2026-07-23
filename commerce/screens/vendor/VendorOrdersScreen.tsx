@@ -5,7 +5,6 @@ import {
   Avatar,
   Button,
   Icons,
-  Input,
   Popover,
   PopoverContent,
   Spinner,
@@ -14,10 +13,14 @@ import {
   YStack,
   useAppToast,
 } from '~/components/ui'
+import { ScreenSearchField } from '~/components/search'
 import { getShadowStyle, radius } from '~/config/tokens'
 import { useAppLayout } from '~/hooks/useAppLayout'
 import { useProfile } from '~/hooks/useProfile'
+import { useScreenSearch } from '~/hooks/useScreenSearch'
 import { createTracking, selectDeliveryLoading } from '~/lib/orders/delivery.store'
+import { getIssuesByOrder } from '~/lib/orders/order-issue.service'
+import type { EnrichedOrderIssue } from '~/lib/orders/order-issue.type'
 import { ORDER_STATUS, ORDER_STATUS_DISPLAY, type OrderStatus } from '~/lib/orders/order.constants'
 import { formatOrderAmount, formatOrderDate } from '~/lib/orders/order.utils'
 import { selectOrderPayments, getOrderPayments } from '~/lib/orders/payment.store'
@@ -46,7 +49,6 @@ import { VendorAddTrackingDrawer, type TrackingFormValues } from './VendorAddTra
 import { ActionButton, VendorOrderDetailDrawer } from './VendorOrderDetailDrawer'
 
 const PAGE_SIZE = 10
-const SEARCH_DEBOUNCE_MS = 350
 
 type StatusFilter = OrderStatus | 'all'
 type DatePreset = 'all' | '7d' | '30d'
@@ -90,7 +92,8 @@ export function VendorOrdersScreen() {
   const { profile } = useProfile()
 
   const shop = useAppSelector((s) => s.shop.currentShop)
-  const isLoadingShops = useAppSelector((s) => s.shop.isLoadingShops)
+  const isLoadingMyShops = useAppSelector((s) => s.shop.isLoadingMyShops)
+  const myShopsLoaded = useAppSelector((s) => s.shop.myShopsLoaded)
   const listOrders = useAppSelector(selectVendorOrders)
   const listPagination = useAppSelector(selectVendorPagination)
   const loading = useAppSelector(selectVendorOrdersLoading)
@@ -104,27 +107,22 @@ export function VendorOrdersScreen() {
   const shopId = shop?.id ?? null
   const role = profile?.role ?? null
 
-  const [searchInput, setSearchInput] = useState('')
-  const [searchTerm, setSearchTerm] = useState('')
+  const { input: searchInput, setInput: setSearchInput, debounced: searchTerm } = useScreenSearch()
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('all')
   const [datePreset, setDatePreset] = useState<DatePreset>('all')
   const [page, setPage] = useState(1)
   const [selectedItemId, setSelectedItemId] = useState<string | null>(null)
   const [trackingItem, setTrackingItem] = useState<VendorOrderItem | null>(null)
+  const [orderIssues, setOrderIssues] = useState<EnrichedOrderIssue[]>([])
 
   const isSearchMode = searchTerm.trim().length > 0
   const orders = isSearchMode ? searchResults : listOrders
   const pagination = isSearchMode ? searchPagination : listPagination
   const listLoading = isSearchMode ? loading.searching : loading.orders
 
-  // Debounce the raw search box into the applied search term.
   useEffect(() => {
-    const handle = setTimeout(() => {
-      setSearchTerm(searchInput)
-      setPage(1)
-    }, SEARCH_DEBOUNCE_MS)
-    return () => clearTimeout(handle)
-  }, [searchInput])
+    setPage(1)
+  }, [searchTerm])
 
   const loadPage = useCallback(() => {
     if (!shopId) return
@@ -187,11 +185,21 @@ export function VendorOrdersScreen() {
 
   const openDetail = (item: VendorOrderItem) => {
     setSelectedItemId(item.id)
+    setOrderIssues([])
     void dispatch(loadVendorOrderItem({ orderItemId: item.id }))
-    if (item.order_id) void dispatch(getOrderPayments({ orderId: item.order_id }))
+    if (item.order_id) {
+      void dispatch(getOrderPayments({ orderId: item.order_id }))
+      void getIssuesByOrder(item.order_id).then((response) => {
+        if (response.success && response.data) setOrderIssues(response.data)
+        else setOrderIssues([])
+      })
+    }
   }
 
-  const closeDetail = () => setSelectedItemId(null)
+  const closeDetail = () => {
+    setSelectedItemId(null)
+    setOrderIssues([])
+  }
 
   const handleAdvance = async (item: VendorOrderItem, target: VendorOrderAction['target']) => {
     // Shipping requires tracking info: open the Add-Tracking drawer instead of
@@ -258,7 +266,7 @@ export function VendorOrdersScreen() {
       ? currentItem
       : orders.find((item) => item.id === selectedItemId) ?? null
 
-  if (!shop && isLoadingShops) {
+  if (!shop && (isLoadingMyShops || !myShopsLoaded)) {
     return (
       <YStack flex={1} alignItems="center" justifyContent="center" minHeight={360}>
         <Spinner size="large" />
@@ -330,34 +338,13 @@ export function VendorOrdersScreen() {
           style={getShadowStyle('sm')}
         >
           <XStack gap="$3" flexWrap="wrap" alignItems="center">
-            <XStack
-              flex={1}
-              minWidth={220}
-              alignItems="center"
-              gap="$2"
-              paddingHorizontal="$3"
-              borderRadius={999}
-              borderWidth={1}
-              borderColor={ui.borderSubtle}
-              backgroundColor={ui.surfaceMuted}
-            >
-              <Icons.Search size={16} color={ui.textMuted} />
-              <Input
-                flex={1}
-                borderWidth={0}
-                backgroundColor="transparent"
-                paddingHorizontal={0}
-                height="$4"
-                placeholder="Search order number or customer…"
+            <YStack flex={1} minWidth={220}>
+              <ScreenSearchField
                 value={searchInput}
                 onChangeText={setSearchInput}
+                placeholder="Search order number or customer…"
               />
-              {searchInput ? (
-                <YStack cursor="pointer" onPress={() => setSearchInput('')} pressStyle={{ opacity: 0.6 }}>
-                  <Icons.X size={15} color={ui.textMuted} />
-                </YStack>
-              ) : null}
-            </XStack>
+            </YStack>
 
             <FilterDropdown
               ui={ui}
@@ -476,9 +463,14 @@ export function VendorOrdersScreen() {
         loading={loading.item}
         updating={loading.updatingStatus}
         payments={payments}
+        issues={orderIssues}
         role={role}
         onClose={closeDetail}
         onAdvance={handleAdvance}
+        onIssuesChanged={() => {
+          if (drawerItem) openDetail(drawerItem)
+          loadPage()
+        }}
       />
 
       <VendorAddTrackingDrawer
@@ -944,7 +936,7 @@ function NoShopState({ ui }: { ui: AppUiTokens }) {
       <Text fontSize={14} color={ui.textSecondary} textAlign="center" maxWidth={360} lineHeight={20}>
         Create your storefront to start receiving and managing orders.
       </Text>
-      <AppLink href={commerceRoutes.myShops} asChild>
+      <AppLink href={commerceRoutes.manageShop()} asChild>
         <Button tone="primary" size="$4" borderRadius={999} marginTop="$2">
           Go to My Shops
         </Button>

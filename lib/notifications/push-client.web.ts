@@ -154,6 +154,47 @@ const webPushClient: PushClient = {
     })()
     return () => unsubscribe()
   },
+
+  onForegroundNotification(handler: (payload: PushClickPayload) => void) {
+    let unsubscribe = () => {}
+    void (async () => {
+      try {
+        const OneSignal = await loadOneSignal()
+        await this.init()
+        const listener = (event: {
+          preventDefault?: () => void
+          notification?: {
+            notificationId?: string
+            title?: string
+            body?: string
+            launchURL?: string
+            additionalData?: Record<string, unknown>
+          }
+        }) => {
+          event.preventDefault?.()
+          const data = event.notification?.additionalData ?? null
+          const url =
+            event.notification?.launchURL ||
+            (typeof data?.url === 'string' ? data.url : null) ||
+            (typeof data?.action_url === 'string' ? data.action_url : null)
+          handler({
+            url,
+            notificationId: event.notification?.notificationId ?? null,
+            title: event.notification?.title ?? null,
+            body: event.notification?.body ?? null,
+            data,
+          })
+        }
+        OneSignal.Notifications.addEventListener('foregroundWillDisplay', listener)
+        unsubscribe = () => {
+          OneSignal.Notifications.removeEventListener('foregroundWillDisplay', listener)
+        }
+      } catch {
+        // ignore
+      }
+    })()
+    return () => unsubscribe()
+  },
 }
 
 export default webPushClient

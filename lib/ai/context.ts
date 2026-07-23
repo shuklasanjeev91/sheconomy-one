@@ -3,7 +3,7 @@ import {
   isClassPath,
   isCoWorkPath,
   isCommunityPath,
-  isMyShopsPath,
+  isVendorPath,
   routes,
 } from '~/lib/routes'
 
@@ -23,14 +23,18 @@ export function resolveAiRouteContext(pathname: string): AiRouteContext {
   const path = normalizePath(pathname)
   const segments = path.split('/').filter(Boolean)
 
-  if (isMyShopsPath(path)) {
-    const shopId = segments[0] === 'my-shops' && segments[1] ? segments[1] : undefined
+  if (isVendorPath(path) || path === '/create-my-shop' || path.startsWith('/create-my-shop/')) {
     return {
       product: 'shop',
-      contextPage: shopId ? 'dashboard' : 'home',
+      contextPage: path.includes('/settings')
+        ? 'settings'
+        : path.includes('/orders')
+          ? 'orders'
+          : path.includes('/products') || path.includes('/create-listing')
+            ? 'listings'
+            : 'dashboard',
       context: {
         route: path,
-        ...(shopId ? { shop_id: shopId } : {}),
       },
     }
   }

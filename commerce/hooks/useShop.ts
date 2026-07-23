@@ -1,165 +1,74 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 
-import { supabase } from '~/lib/supabase'
-import type { Tables } from '~/lib/supabase'
-import { isUuid, shopSlugMatches, slugifyTitle } from '~/commerce/lib/seo-urls'
 import {
-  normalizeShopAddress,
-  type ShopAddress,
-  type ShopOwnerProfile,
-} from '~/commerce/lib/shop-location'
+  fetchShopDetail,
+  type ShopDetail,
+  type ShopLoaderResult,
+} from '~/commerce/lib/shop-loader'
 
 export type { ShopAddress, ShopOwnerProfile } from '~/commerce/lib/shop-location'
+export type { ShopDetail } from '~/commerce/lib/shop-loader'
 
-export type ShopDetail = Pick<
-  Tables<'shops'>,
-  | 'id'
-  | 'shop_name'
-  | 'shop_description'
-  | 'logo_url'
-  | 'shop_email'
-  | 'shop_phone_number'
-  | 'shop_currency'
-  | 'average_rating'
-  | 'total_reviews'
-  | 'verified'
-  | 'is_active'
-  | 'user_id'
-  | 'slug'
-  | 'website_url'
-  | 'created_at'
-  | 'shop_metadata'
-> & {
-  owner: ShopOwnerProfile | null
-  address: ShopAddress | null
+type UseShopOptions = {
+  /**
+   * Parent route loader is still in flight — wait instead of starting a second
+   * fetch (avoids double network + spinner thrash on native shop routes).
+   */
+  awaitingInitial?: boolean
 }
 
-const SHOP_SELECT = `
-  id,
-  shop_name,
-  shop_description,
-  logo_url,
-  shop_email,
-  shop_phone_number,
-  shop_currency,
-  average_rating,
-  total_reviews,
-  verified,
-  is_active,
-  user_id,
-  slug,
-  website_url,
-  created_at,
-  shop_metadata,
-  shop_addresses(city, state, country, postal_code)
-`
-
-const OWNER_SELECT =
-  'id, full_name, username, avatar_url, headline, location, is_verified, business_name'
-
-type ShopRow = Omit<ShopDetail, 'owner' | 'address'> & {
-  shop_addresses?: unknown
-}
-
-async function loadShopOwner(userId: string): Promise<ShopOwnerProfile | null> {
-  const { data, error } = await supabase
-    .from('profiles')
-    .select(OWNER_SELECT)
-    .eq('id', userId)
-    .maybeSingle()
-
-  if (error || !data) return null
-  return data
-}
-
-function mapShopRow(row: ShopRow): ShopDetail {
-  const { shop_addresses, ...shop } = row
-  return {
-    ...shop,
-    owner: null,
-    address: normalizeShopAddress(shop_addresses),
-  }
-}
-
-export function useShop(shopRef?: string) {
-  const [shop, setShop] = useState<ShopDetail | null>(null)
-  const [isLoading, setIsLoading] = useState(true)
-  const [error, setError] = useState<string | null>(null)
+export function useShop(
+  shopRef?: string,
+  initial?: ShopLoaderResult | null,
+  options: UseShopOptions = {},
+) {
+  const { awaitingInitial = false } = options
+  const hasInitial = Boolean(initial?.data || initial?.error)
+  const [shop, setShop] = useState<ShopDetail | null>(initial?.data ?? null)
+  const [isLoading, setIsLoading] = useState(!hasInitial && Boolean(shopRef))
+  const [error, setError] = useState<string | null>(initial?.error ?? null)
+  const requestGen = useRef(0)
 
   const load = useCallback(async () => {
     if (!shopRef) {
       setShop(null)
       setIsLoading(false)
+      setError(null)
       return
     }
 
+    const gen = ++requestGen.current
     setIsLoading(true)
     setError(null)
-
-    const select = SHOP_SELECT
-
-    let shopResult = isUuid(shopRef)
-      ? await supabase.from('shops').select(select).eq('id', shopRef).maybeSingle()
-      : await supabase.from('shops').select(select).eq('slug', shopRef).maybeSingle()
-
-    if (!shopResult.data && !isUuid(shopRef)) {
-      const slugGuess = shopRef.replace(/-/g, ' ')
-      shopResult = await supabase
-        .from('shops')
-        .select(select)
-        .ilike('shop_name', slugGuess)
-        .maybeSingle()
-    }
-
-    if (!shopResult.data && !isUuid(shopRef)) {
-      const { data: activeShops } = await supabase
-        .from('shops')
-        .select(select)
-        .eq('is_active', true)
-        .limit(250)
-
-      const matched =
-        activeShops?.find((row) => shopSlugMatches(row, shopRef)) ??
-        activeShops?.find((row) => slugifyTitle(row.shop_name) === shopRef.toLowerCase()) ??
-        null
-
-      if (matched) {
-        shopResult = { data: matched, error: null }
-      }
-    }
-
-    if (!shopResult.data && !isUuid(shopRef)) {
-      shopResult = await supabase.from('shops').select(select).eq('id', shopRef).maybeSingle()
-    }
-
-    if (shopResult.error || !shopResult.data) {
-      setError(shopResult.error?.message ?? 'Shop not found')
-      setShop(null)
-      setIsLoading(false)
-      return
-    }
-
-    const mappedShop = mapShopRow(shopResult.data as ShopRow)
-    const owner = await loadShopOwner(mappedShop.user_id)
-
-    setShop({
-      ...mappedShop,
-      owner,
-    })
+    const result = await fetchShopDetail(shopRef)
+    if (requestGen.current !== gen) return
+    setShop(result.data)
+    setError(result.error)
     setIsLoading(false)
   }, [shopRef])
 
   useEffect(() => {
-    let cancelled = false
+    if (initial?.data || initial?.error) {
+      setShop(initial.data)
+      setError(initial.error)
+      setIsLoading(false)
+      return
+    }
 
-    load().then(() => {
+    if (awaitingInitial) {
+      setIsLoading(true)
+      return
+    }
+
+    let cancelled = false
+    void load().then(() => {
       if (cancelled) return
     })
-
     return () => {
       cancelled = true
+      requestGen.current += 1
     }
-  }, [load])
+  }, [load, initial?.data, initial?.error, awaitingInitial])
 
   return { shop, isLoading, error, refresh: load }
 }
