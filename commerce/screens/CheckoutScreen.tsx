@@ -47,6 +47,11 @@ import {
   resolvePostCheckoutNext,
 } from '~/commerce/lib/checkout-payment-route'
 import { savePendingOrderSuccess } from '~/commerce/lib/customer-orders'
+import {
+  computeCheckoutShippingQuote,
+  fetchDeliveryProfilesByShopIds,
+} from '~/commerce/lib/checkout-shipping'
+import type { ShippingPolicy } from '~/lib/shipping-policy/shipping-policy.type'
 import { computeSelectedTotals, useCartSelection } from '~/commerce/lib/cart-selection'
 import { cartRequiresShipping, fetchListingTypesByIds } from '~/commerce/lib/listing-fulfillment'
 import { paymentCollectionFor } from '~/commerce/lib/shop-commerce'
@@ -108,10 +113,21 @@ export function CheckoutScreen() {
   const [orderPlaced, setOrderPlaced] = useState(false)
   const [isLoadingAddresses, setIsLoadingAddresses] = useState(true)
   const [listingTypes, setListingTypes] = useState<Map<string, string>>(new Map())
+  const [deliveryProfilesByShop, setDeliveryProfilesByShop] = useState(
+    () => new Map<string, ShippingPolicy[]>(),
+  )
   const checkoutAttemptKey = useRef<string | null>(null)
 
   const availableIds = useMemo(() => items.map((item) => item.id), [items])
-  const { isSelected, noneSelected } = useCartSelection(availableIds)
+  const { isSelected, noneSelected, selectedIds } = useCartSelection(availableIds)
+  const selectedIdsKey = useMemo(
+    () => [...selectedIds].sort().join(','),
+    [[...selectedIds].sort().join(',')],
+  )
+  const itemShopKey = useMemo(
+    () => items.map((item) => `${item.id}:${item.shop_id}:${item.shop_name}`).join('|'),
+    [items],
+  )
   const { selectedItems, subtotal, unitCount, discount, total } = computeSelectedTotals(
     cart,
     items,
@@ -133,14 +149,78 @@ export function CheckoutScreen() {
   }, [cart?.id, selectedItems.length])
 
   const orderShops = useMemo(() => {
+    const selected = new Set(selectedIds)
     const map = new Map<string, string>()
-    for (const item of selectedItems) {
+    for (const item of items) {
+      if (!selected.has(item.id)) continue
       if (!map.has(item.shop_id)) map.set(item.shop_id, item.shop_name)
     }
     return [...map.entries()].map(([shopId, shopName]) => ({ shopId, shopName }))
-  }, [selectedItems])
+  }, [itemShopKey, selectedIdsKey])
 
-  const shopIds = useMemo(() => orderShops.map((shop) => shop.shopId), [orderShops])
+  const shopIdsKey = useMemo(() => {
+    const selected = new Set(selectedIdsKey ? selectedIdsKey.split(',') : [])
+    const ids = new Set<string>()
+    for (const item of items) {
+      if (!selected.has(item.id) || !item.shop_id) continue
+      ids.add(item.shop_id)
+    }
+    return [...ids].sort().join(',')
+  }, [itemShopKey, selectedIdsKey])
+
+  useEffect(() => {
+    if (!shopIdsKey) {
+      setDeliveryProfilesByShop((prev) => (prev.size === 0 ? prev : new Map()))
+      return
+    }
+    const shopIds = shopIdsKey.split(',')
+    let active = true
+    void fetchDeliveryProfilesByShopIds(shopIds)
+      .then((profiles) => {
+        if (!active) return
+        setDeliveryProfilesByShop((prev) => {
+          if (prev.size === profiles.size) {
+            let unchanged = true
+            for (const [shopId, rows] of profiles) {
+              const existing = prev.get(shopId)
+              if (!existing || existing.length !== rows.length) {
+                unchanged = false
+                break
+              }
+            }
+            if (unchanged) return prev
+          }
+          return profiles
+        })
+      })
+      .catch(() => {
+        if (active) setDeliveryProfilesByShop((prev) => (prev.size === 0 ? prev : new Map()))
+      })
+    return () => {
+      active = false
+    }
+  }, [shopIdsKey])
+
+  const needsShipping = cartRequiresShipping(
+    listingTypes,
+    selectedItems.map((item) => item.listing_id),
+  )
+
+  const shippingQuote = useMemo(
+    () =>
+      computeCheckoutShippingQuote({
+        cart,
+        selectedItems,
+        listingTypes,
+        deliveryProfilesByShop,
+        selectedSubtotal: subtotal,
+        selectedDiscount: discount,
+      }),
+    [cart, deliveryProfilesByShop, discount, listingTypes, selectedItems, subtotal],
+  )
+
+  const orderTotal = needsShipping ? shippingQuote.grandTotal : total
+  const shopIds = useMemo(() => (shopIdsKey ? shopIdsKey.split(',') : []), [shopIdsKey])
   const { partners: shopPartners } = useShopPartners(shopIds)
   const shopHeaders = useShopHeaders(shopIds)
   const multiShop = orderShops.length > 1
@@ -223,10 +303,6 @@ export function CheckoutScreen() {
   }
 
   const currency = cart.currency ?? 'INR'
-  const needsShipping = cartRequiresShipping(
-    listingTypes,
-    selectedItems.map((item) => item.listing_id),
-  )
   const placeLabel = 'Place your order'
   const canPlace = !noneSelected && !isSubmitting
 
@@ -424,7 +500,7 @@ export function CheckoutScreen() {
 
       trackCommerceEvent('purchase', {
         currency,
-        value: total,
+        value: orderTotal,
         transactionId: orderNumbers[0] ?? orderIds[0] ?? cart.id,
         items: selectedItems.map((item) => ({
           id: item.listing_id,
@@ -476,7 +552,17 @@ export function CheckoutScreen() {
         Order summary
       </Text>
       <SummaryRow label={`Items (${unitCount})`} value={formatCurrency(subtotal, currency)} />
-      <SummaryRow label="Delivery" value="FREE" valueColor={c.inStock} />
+      <SummaryRow
+        label="Delivery"
+        value={
+          needsShipping
+            ? shippingQuote.shippingTotal <= 0
+              ? 'FREE'
+              : formatCurrency(shippingQuote.shippingTotal, currency)
+            : 'FREE'
+        }
+        valueColor={c.inStock}
+      />
       {discount > 0 ? (
         <SummaryRow
           label={`Promotion${cart.applied_discount_name ? ` (${cart.applied_discount_name})` : ''}`}
@@ -491,7 +577,7 @@ export function CheckoutScreen() {
           Order total:
         </Text>
         <Text fontSize={18} fontWeight="700" color={c.priceStrong}>
-          {formatCurrency(total, currency)}
+          {formatCurrency(orderTotal, currency)}
         </Text>
       </XStack>
       {multiShop ? (

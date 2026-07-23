@@ -1,5 +1,5 @@
-import { VendorOperationsScreen } from '~/commerce/screens/vendor/VendorOperationsScreen'
+import { VendorDeliveryScreen } from '~/commerce/screens/vendor/VendorDeliveryScreen'
 
 export default function VendorDeliveryRoute() {
-  return <VendorOperationsScreen kind="delivery" />
+  return <VendorDeliveryScreen />
 }

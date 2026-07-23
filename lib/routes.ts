@@ -91,6 +91,7 @@ export const vendorRoutes = {
   analytics: '/vendor/analytics' as Href,
   delivery: '/vendor/delivery' as Href,
   ads: '/vendor/ads' as Href,
+  createDiscount: '/vendor/ads/create' as Href,
   reviews: '/vendor/reviews' as Href,
   settings: '/vendor/settings' as Href,
   settingsSection: (section: string) =>

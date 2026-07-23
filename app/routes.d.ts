@@ -142,6 +142,7 @@ declare module 'one' {
         | `/vendor`
         | `/vendor/`
         | `/vendor/ads`
+        | `/vendor/ads/create`
         | `/vendor/analytics`
         | `/vendor/create-listing`
         | `/vendor/delivery`
