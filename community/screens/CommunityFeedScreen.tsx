@@ -16,7 +16,8 @@ import { useCommunityFeed } from '~/community/hooks/useCommunityFeed'
 import { useCommunitySuggestions } from '~/community/hooks/useCommunitySuggestions'
 import { interleaveFeedWithSuggestions, type FeedEntry } from '~/community/lib/interleave-feed-suggestions'
 import { refreshStories } from '~/community/lib/story-refresh'
-import { ScreenState, YStack, useMedia } from '~/components/ui'
+import { ScreenState, YStack } from '~/components/ui'
+import { useAppLayout } from '~/hooks/useAppLayout'
 import { communityRoutes } from '~/lib/routes'
 import { APP_LAYOUT } from '~/lib/layout/constants'
 
@@ -28,11 +29,15 @@ export function CommunityFeedScreen() {
   const router = useRouter()
   const [sort, setSort] = useState<FeedSort>('recent')
   const [contentFilter, setContentFilter] = useState<FeedContentFilter | null>(null)
-  const media = useMedia()
-  const isDesktop = media.gtLg
+  // Use window-width layout (not Tamagui useMedia) so phones are never treated as
+  // desktop — otherwise suggestions are skipped here and the right rail is also hidden.
+  const { isDesktopWeb, isWide } = useAppLayout()
   const { items, isLoading, isLoadingMore, isRefreshing, hasMore, error, loadMore, refresh, removeItem, patchItem } =
     useCommunityFeed(true, sort, contentFilter ?? undefined)
-  const { sections, refresh: refreshSuggestions } = useCommunitySuggestions(4)
+  // Load suggestions immediately so FlashList can interleave them with the first paint.
+  const { sections, refresh: refreshSuggestions } = useCommunitySuggestions(4, {
+    deferUntilIdle: false,
+  })
   const showingCached = items.length > 0 && !!error
   // Avoid FlashList firing onEndReached during the first layout pass.
   const endReachedReadyRef = useRef(false)
@@ -44,12 +49,15 @@ export function CommunityFeedScreen() {
     return () => clearTimeout(timer)
   }, [sort, contentFilter])
 
+  // Only skip in-feed suggestions when the right sidebar actually shows them.
+  const showSuggestionsInFeed = !isWide && sections.length > 0
+
   const feedEntries = useMemo((): FeedEntry[] => {
-    if (isDesktop || !sections.length) {
+    if (!showSuggestionsInFeed) {
       return items.map((post) => ({ type: 'post' as const, post }))
     }
     return interleaveFeedWithSuggestions(items, sections, SUGGESTION_INTERVAL)
-  }, [isDesktop, items, sections])
+  }, [items, sections, showSuggestionsInFeed])
 
   const onRefresh = useCallback(async () => {
     refresh()
@@ -97,12 +105,12 @@ export function CommunityFeedScreen() {
     () => (
       <YStack gap="$3" width="100%" paddingBottom="$2">
         <StoriesStrip />
-        {isDesktop ? <FeedComposer /> : null}
+        {isDesktopWeb ? <FeedComposer /> : null}
         <FeedFilterChips value={contentFilter} onChange={setContentFilter} />
         <FeedSortBar value={sort} onChange={setSort} />
       </YStack>
     ),
-    [contentFilter, isDesktop, sort],
+    [contentFilter, isDesktopWeb, sort],
   )
 
   const listFooter = useMemo(
@@ -134,6 +142,7 @@ export function CommunityFeedScreen() {
             renderItem={renderItem}
             keyExtractor={keyExtractor}
             getItemType={getItemType}
+            extraData={sections}
             ListHeaderComponent={listHeader}
             ListFooterComponent={listFooter}
             onEndReached={() => {

@@ -10,6 +10,8 @@ type CommunityWidgetProps = {
   headerActions?: ReactNode
   children: ReactNode
   footer?: ReactNode
+  /** Pass false when rendered inside FlashList to avoid enter-animation height bugs. */
+  animated?: boolean
 }
 
 /** Right-rail widget card for the community feed. */
@@ -19,10 +21,11 @@ export function CommunityWidget({
   headerActions,
   children,
   footer,
+  animated = true,
 }: CommunityWidgetProps) {
   const communityUi = useCommunityUi()
   return (
-    <CommunityCard gap={0}>
+    <CommunityCard gap={0} animated={animated}>
       <XStack
         paddingHorizontal={12}
         paddingTop={12}
