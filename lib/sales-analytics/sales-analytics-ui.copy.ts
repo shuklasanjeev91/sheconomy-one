@@ -1,0 +1,23 @@
+export const SALES_ANALYTICS_UI_COPY = {
+  screenTitle: 'Sales Analytics',
+  screenSubtitle: (shopName: string) => `Insights for ${shopName}`,
+  noShopTitle: 'No shop yet',
+  noShopBody: 'Create a shop first to view sales analytics.',
+  loadError: 'Could not load sales analytics',
+  refreshSuccess: 'Sales analytics refreshed',
+  exportSuccess: 'Export ready',
+  exportError: 'Could not export sales data',
+  exportEmpty: 'No data to export',
+  hubErrorTitle: 'Sales analytics unavailable',
+  emptySummary: 'No sales data for this period.',
+  emptyRecords: 'No sales records match your filters.',
+  emptyProducts: 'Top products will appear after your first sales.',
+  emptyRegions: 'Regional breakdown will appear after deliveries.',
+  emptyTrend: 'Trend data will appear once sales are recorded.',
+  tabs: {
+    overview: 'Overview',
+    detailed: 'Records',
+    products: 'Products',
+    regional: 'Regional',
+  },
+} as const
