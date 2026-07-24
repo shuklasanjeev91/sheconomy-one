@@ -46,12 +46,20 @@ export function getStoragePublicUrl(bucket: string, path: string) {
 export async function uploadStorageObject(
   bucket: string,
   path: string,
-  body: ArrayBuffer | Blob | File,
+  body: ArrayBuffer | Blob | File | Uint8Array,
   contentType: string,
   options?: { onProgress?: UploadProgressHandler; maxBytes?: number },
 ) {
-  const size = body instanceof ArrayBuffer ? body.byteLength : (body as Blob).size
+  const size =
+    body instanceof ArrayBuffer
+      ? body.byteLength
+      : body instanceof Uint8Array
+        ? body.byteLength
+        : (body as Blob).size
   const maxBytes = options?.maxBytes ?? MAX_IMAGE_BYTES
+  if (size <= 0) {
+    return { data: null, error: 'Image data is empty.' }
+  }
   if (size > maxBytes) {
     const mb = Math.round(maxBytes / (1024 * 1024))
     return {
@@ -62,8 +70,13 @@ export async function uploadStorageObject(
     }
   }
 
-  const blob = body instanceof Blob ? body : new Blob([body], { type: contentType })
-  const { error } = await uploadBlobWithProgress(bucket, path, blob, contentType, {
+  // Prefer raw bytes — RN Blob uploads can "succeed" with empty/corrupt objects.
+  const uploadBody: ArrayBuffer | Uint8Array | Blob =
+    body instanceof ArrayBuffer || body instanceof Uint8Array
+      ? body
+      : body
+
+  const { error } = await uploadBlobWithProgress(bucket, path, uploadBody, contentType, {
     upsert: true,
     onProgress: options?.onProgress,
   })
@@ -271,19 +284,38 @@ export async function uploadGroupAvatarImage(
   return uploadStorageObject(STORAGE_BUCKETS.postImages, path, file.blob, file.mimeType, options)
 }
 
+export type ProfileMediaUpload = {
+  /** Prefer arrayBuffer on native — RN Blobs can upload as empty objects. */
+  arrayBuffer?: ArrayBuffer
+  blob?: Blob
+  mimeType: string
+  fileName?: string
+}
+
+function resolveUploadBody(file: ProfileMediaUpload): ArrayBuffer | Blob | null {
+  if (file.arrayBuffer && file.arrayBuffer.byteLength > 0) return file.arrayBuffer
+  if (file.blob && (file.blob.size > 0 || typeof file.blob.arrayBuffer === 'function')) {
+    return file.blob
+  }
+  return null
+}
+
 /**
  * Upload the signed-in user's profile picture to the public `post-images`
  * bucket. Path is prefixed with the user id to satisfy owner-scoped policies.
  */
 export async function uploadProfileAvatarImage(
   userId: string,
-  file: { blob: Blob; mimeType: string; fileName?: string },
+  file: ProfileMediaUpload,
   options?: { onProgress?: UploadProgressHandler },
 ) {
-  const ext = file.fileName?.split('.').pop() ?? extensionForMime(file.mimeType)
+  const body = resolveUploadBody(file)
+  if (!body) return { data: null, error: 'Image data is empty.' }
+  // Prefer mime-based extension so HEIC filenames don't label JPEG bytes as .heic.
+  const ext = extensionForMime(file.mimeType)
   const path = `${userId}/avatar/${Date.now()}-${randomSuffix()}.${ext}`
 
-  return uploadStorageObject(STORAGE_BUCKETS.postImages, path, file.blob, file.mimeType, options)
+  return uploadStorageObject(STORAGE_BUCKETS.postImages, path, body, file.mimeType, options)
 }
 
 /**
@@ -316,13 +348,15 @@ export async function uploadOrderEvidenceImages(
 
 export async function uploadProfileCoverImage(
   userId: string,
-  file: { blob: Blob; mimeType: string; fileName?: string },
+  file: ProfileMediaUpload,
   options?: { onProgress?: UploadProgressHandler },
 ) {
-  const ext = file.fileName?.split('.').pop() ?? extensionForMime(file.mimeType)
+  const body = resolveUploadBody(file)
+  if (!body) return { data: null, error: 'Image data is empty.' }
+  const ext = extensionForMime(file.mimeType)
   const path = `${userId}/cover/${Date.now()}-${randomSuffix()}.${ext}`
 
-  return uploadStorageObject(STORAGE_BUCKETS.postImages, path, file.blob, file.mimeType, options)
+  return uploadStorageObject(STORAGE_BUCKETS.postImages, path, body, file.mimeType, options)
 }
 
 export async function uploadShopLogoImage(

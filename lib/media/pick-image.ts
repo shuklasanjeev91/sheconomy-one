@@ -347,6 +347,35 @@ export async function pickedImageToBlob(image: PickedImage): Promise<Blob> {
   return response.blob()
 }
 
+export type PickedImageBytes = {
+  buffer: ArrayBuffer
+  mimeType: string
+  fileName?: string
+  byteLength: number
+}
+
+export async function readPickedImageBytes(image: PickedImage): Promise<PickedImageBytes> {
+  if (image.file) {
+    const buffer = await image.file.arrayBuffer()
+    if (buffer.byteLength <= 0) throw new Error('Could not read the selected image.')
+    return {
+      buffer,
+      mimeType: image.mimeType || image.file.type || 'image/jpeg',
+      fileName: image.fileName ?? image.file.name,
+      byteLength: buffer.byteLength,
+    }
+  }
+  const blob = await pickedImageToBlob(image)
+  const buffer = await blob.arrayBuffer()
+  if (buffer.byteLength <= 0) throw new Error('Could not read the selected image.')
+  return {
+    buffer,
+    mimeType: image.mimeType || blob.type || 'image/jpeg',
+    fileName: image.fileName,
+    byteLength: buffer.byteLength,
+  }
+}
+
 export function releasePickedImage(image: PickedImage) {
   if (image.file || !image.uri.startsWith('blob:')) return
   if (typeof URL !== 'undefined') URL.revokeObjectURL(image.uri)

@@ -36,18 +36,21 @@ function resolvePx(size: SizeToken | number | undefined): number {
   return AVATAR_PX.$6
 }
 
-/** Trim / reject empty & non-http(s) junk so we never mount a broken image. */
+/** Trim / reject empty & non-loadable junk so we never mount a broken image. */
 export function normalizeAvatarSrc(src?: string | null): string | undefined {
   if (typeof src !== 'string') return undefined
   const trimmed = src.trim()
   if (!trimmed) return undefined
-  // Allow https remote URLs and local / blob / data URIs used by pickers.
+  // Remote URLs, picker previews, and common native photo-library schemes.
   if (
     trimmed.startsWith('https://') ||
     trimmed.startsWith('http://') ||
     trimmed.startsWith('blob:') ||
     trimmed.startsWith('data:') ||
     trimmed.startsWith('file:') ||
+    trimmed.startsWith('ph://') ||
+    trimmed.startsWith('assets-library://') ||
+    trimmed.startsWith('content://') ||
     trimmed.startsWith('/')
   ) {
     return trimmed
@@ -135,11 +138,13 @@ export const Avatar = forwardRef<any, AvatarProps>(function Avatar(
       {showImage ? (
         <ExpoImage
           key={normalized}
-          source={normalized}
+          // Object form is more reliable for file:// and remote URLs on native.
+          source={{ uri: normalized }}
           accessibilityLabel={name}
           recyclingKey={normalized}
           cachePolicy="memory-disk"
           contentFit="cover"
+          transition={0}
           onLoad={() => setLoaded(true)}
           onError={() => {
             setFailed(true)

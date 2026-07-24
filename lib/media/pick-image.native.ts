@@ -32,13 +32,17 @@ export async function pickImages(options: PickImagesOptions = {}): Promise<Picke
       allowsMultipleSelection: !!options.multiple,
       selectionLimit: options.maxCount ?? (options.multiple ? 5 : 1),
       quality: 0.85,
+      exif: false,
+      // Prefer JPEG/PNG over HEIC so uploaded avatars render everywhere.
+      preferredAssetRepresentationMode:
+        ImagePicker.UIImagePickerPreferredAssetRepresentationMode.Compatible,
     })
 
     if (result.canceled) return []
 
     return result.assets.map((asset) => ({
       uri: asset.uri,
-      mimeType: asset.mimeType ?? 'image/jpeg',
+      mimeType: normalizeImageMime(asset.mimeType, asset.uri, asset.fileName),
       fileName: asset.fileName ?? undefined,
     }))
   } catch (error) {
@@ -173,6 +177,8 @@ export async function captureImage(): Promise<PickedImage | null> {
     const result = await ImagePicker.launchCameraAsync({
       mediaTypes: ['images'],
       quality: 0.85,
+      preferredAssetRepresentationMode:
+        ImagePicker.UIImagePickerPreferredAssetRepresentationMode.Compatible,
     })
 
     if (result.canceled) return null
@@ -182,7 +188,7 @@ export async function captureImage(): Promise<PickedImage | null> {
 
     return {
       uri: asset.uri,
-      mimeType: asset.mimeType ?? 'image/jpeg',
+      mimeType: normalizeImageMime(asset.mimeType, asset.uri, asset.fileName),
       fileName: asset.fileName ?? undefined,
     }
   } catch (error) {
@@ -227,12 +233,84 @@ export async function pickDocument(): Promise<PickedDocument | null> {
   }
 }
 
-export async function pickedImageToBlob(image: PickedImage): Promise<Blob> {
+function normalizeImageMime(
+  mimeType?: string | null,
+  uri?: string,
+  fileName?: string | null,
+): string {
+  const raw = (mimeType || '').toLowerCase()
+  if (raw.startsWith('image/') && !raw.includes('heic') && !raw.includes('heif')) {
+    return raw
+  }
+  const name = `${fileName || ''} ${uri || ''}`.toLowerCase()
+  if (name.includes('.png')) return 'image/png'
+  if (name.includes('.webp')) return 'image/webp'
+  if (name.includes('.gif')) return 'image/gif'
+  // HEIC and unknown image types: label as JPEG (picker quality re-encodes).
+  return 'image/jpeg'
+}
+
+function base64ToArrayBuffer(base64: string): ArrayBuffer {
+  // eslint-disable-next-line no-undef -- RN / Hermes provide atob
+  const binary = atob(base64)
+  const bytes = new Uint8Array(binary.length)
+  for (let i = 0; i < binary.length; i += 1) bytes[i] = binary.charCodeAt(i)
+  return bytes.buffer
+}
+
+export type PickedImageBytes = {
+  buffer: ArrayBuffer
+  mimeType: string
+  fileName?: string
+  byteLength: number
+}
+
+/**
+ * Read picker bytes once. Prefer FileSystem on native — `fetch(fileUri).blob()`
+ * is unreliable and RN Blobs can only be read once (empty second upload).
+ */
+export async function readPickedImageBytes(image: PickedImage): Promise<PickedImageBytes> {
+  const mimeType = normalizeImageMime(image.mimeType, image.uri, image.fileName)
+
+  try {
+    const FileSystem = await import('expo-file-system/legacy')
+    const base64 = await FileSystem.readAsStringAsync(image.uri, {
+      encoding: FileSystem.EncodingType.Base64,
+    })
+    if (base64) {
+      const buffer = base64ToArrayBuffer(base64)
+      if (buffer.byteLength > 0) {
+        return {
+          buffer,
+          mimeType,
+          fileName: image.fileName,
+          byteLength: buffer.byteLength,
+        }
+      }
+    }
+  } catch {
+    // Fall through to fetch for unusual URI schemes.
+  }
+
   const response = await fetch(image.uri)
   if (!response.ok) {
     throw new Error('Could not read the selected image.')
   }
-  return response.blob()
+  const buffer = await response.arrayBuffer()
+  if (buffer.byteLength <= 0) {
+    throw new Error('Could not read the selected image.')
+  }
+  return {
+    buffer,
+    mimeType,
+    fileName: image.fileName,
+    byteLength: buffer.byteLength,
+  }
+}
+
+export async function pickedImageToBlob(image: PickedImage): Promise<Blob> {
+  const bytes = await readPickedImageBytes(image)
+  return new Blob([new Uint8Array(bytes.buffer)], { type: bytes.mimeType })
 }
 
 export function releasePickedImage(_image: PickedImage) {}
