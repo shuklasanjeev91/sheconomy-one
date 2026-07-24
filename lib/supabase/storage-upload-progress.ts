@@ -5,6 +5,8 @@ import { supabaseConfig } from '~/lib/supabase/env'
 
 export type UploadProgressHandler = (percent: number) => void
 
+export type UploadBody = Blob | ArrayBuffer | Uint8Array
+
 function encodeObjectPath(path: string) {
   return path
     .split('/')
@@ -12,11 +14,30 @@ function encodeObjectPath(path: string) {
     .join('/')
 }
 
+async function toArrayBuffer(data: UploadBody): Promise<ArrayBuffer | null> {
+  if (data instanceof ArrayBuffer) {
+    return data.byteLength > 0 ? data : null
+  }
+  if (data instanceof Uint8Array) {
+    if (data.byteLength <= 0) return null
+    // Copy into a standalone ArrayBuffer (avoid SharedArrayBuffer typing issues).
+    const copy = new Uint8Array(data.byteLength)
+    copy.set(data)
+    return copy.buffer
+  }
+  try {
+    const buffer = await data.arrayBuffer()
+    return buffer.byteLength > 0 ? buffer : null
+  } catch {
+    return null
+  }
+}
+
 /** Upload with byte progress on web (XHR); native falls back to standard upload. */
 export async function uploadBlobWithProgress(
   bucket: string,
   path: string,
-  blob: Blob,
+  data: UploadBody,
   contentType: string,
   options?: { upsert?: boolean; onProgress?: UploadProgressHandler },
 ): Promise<{ error: string | null }> {
@@ -24,7 +45,12 @@ export async function uploadBlobWithProgress(
 
   if (Platform.OS !== 'web' || typeof XMLHttpRequest === 'undefined') {
     onProgress?.(0)
-    const { error } = await supabase.storage.from(bucket).upload(path, blob, {
+    // React Native Blob uploads are unreliable with supabase-js. Always send bytes.
+    const buffer = await toArrayBuffer(data)
+    if (!buffer) {
+      return { error: 'Image data is empty.' }
+    }
+    const { error } = await supabase.storage.from(bucket).upload(path, new Uint8Array(buffer), {
       contentType,
       upsert: options?.upsert ?? true,
       cacheControl: '3600',
@@ -32,6 +58,13 @@ export async function uploadBlobWithProgress(
     onProgress?.(error ? 0 : 100)
     return { error: error?.message ?? null }
   }
+
+  const blob =
+    data instanceof Blob
+      ? data
+      : new Blob([data instanceof Uint8Array ? data : new Uint8Array(data)], {
+          type: contentType,
+        })
 
   const {
     data: { session },
