@@ -23,8 +23,11 @@ import { useShopPartners } from '~/commerce/hooks/useShopPartners'
 import { useShopHeaders } from '~/commerce/hooks/useShopHeaders'
 import {
   CartCoupon,
+  CheckoutContactSection,
   CommerceButton,
   CommerceLink,
+  CommerceMobileCheckoutBar,
+  COMMERCE_MOBILE_CHECKOUT_BAR_HEIGHT,
   CommerceRadio,
   ShopPartnerChips,
   ShopRatingBadge,
@@ -53,6 +56,7 @@ import {
 } from '~/commerce/lib/checkout-shipping'
 import type { ShippingPolicy } from '~/lib/shipping-policy/shipping-policy.type'
 import { computeSelectedTotals, useCartSelection } from '~/commerce/lib/cart-selection'
+import { ensureCartDiscountValidForCheckout, toCartOfferItems } from '~/commerce/lib/discounts'
 import { cartRequiresShipping, fetchListingTypesByIds } from '~/commerce/lib/listing-fulfillment'
 import { paymentCollectionFor } from '~/commerce/lib/shop-commerce'
 import { deliveryEstimateLabel } from '~/commerce/lib/delivery-estimate'
@@ -79,6 +83,7 @@ import {
 import { maxLength, minLength, required } from '~/lib/validation'
 import { useAppLayout } from '~/hooks/useAppLayout'
 import { useAppUi } from '~/lib/theme/useAppUi'
+import { resolveAuthContact } from '~/features/auth/services/account-contact'
 import { trackCommerceEvent } from '~/lib/analytics'
 
 const SUMMARY_WIDTH = 320
@@ -117,6 +122,13 @@ export function CheckoutScreen() {
     () => new Map<string, ShippingPolicy[]>(),
   )
   const checkoutAttemptKey = useRef<string | null>(null)
+  const [contactCheckoutReady, setContactCheckoutReady] = useState(false)
+
+  const authContact = useMemo(() => resolveAuthContact(user), [user])
+
+  useEffect(() => {
+    setContactCheckoutReady(authContact.checkoutReady)
+  }, [authContact.checkoutReady])
 
   const availableIds = useMemo(() => items.map((item) => item.id), [items])
   const { isSelected, noneSelected, selectedIds } = useCartSelection(availableIds)
@@ -265,11 +277,13 @@ export function CheckoutScreen() {
     void readRecentAddresses().then(setRecentAddresses)
   }, [])
 
+  const userId = user?.id ?? null
+
   useEffect(() => {
-    if (!isAuthenticated || !user) return
+    if (!isAuthenticated || !userId) return
 
     setIsLoadingAddresses(true)
-    fetchUserAddresses(user.id)
+    fetchUserAddresses(userId)
       .then(({ addresses: rows, error }) => {
         setAddresses(rows)
         const defaultAddress = rows.find((row) => row.is_default) ?? rows[0]
@@ -279,7 +293,7 @@ export function CheckoutScreen() {
       })
       .catch(() => toast.show('Could not load addresses', { tone: 'danger' }))
       .finally(() => setIsLoadingAddresses(false))
-  }, [isAuthenticated, toast, user])
+  }, [isAuthenticated, toast, userId])
 
   if (!isAuthenticated) {
     return <SpaRedirect href={routes.signIn} />
@@ -304,10 +318,19 @@ export function CheckoutScreen() {
 
   const currency = cart.currency ?? 'INR'
   const placeLabel = 'Place your order'
-  const canPlace = !noneSelected && !isSubmitting
+  const canPlace = !noneSelected && !isSubmitting && contactCheckoutReady
+  const showMobileBar = !isDesktop && !orderPlaced
 
   async function handlePlaceOrder() {
-    if (!cart || !user || noneSelected) return
+    if (!cart || !user || noneSelected || !contactCheckoutReady) {
+      if (!contactCheckoutReady) {
+        toast.show('Verify your mobile', {
+          tone: 'warning',
+          message: 'Add and verify a mobile number before placing your order.',
+        })
+      }
+      return
+    }
     setIsSubmitting(true)
 
     let shippingAddressId = selectedAddressId
@@ -382,6 +405,24 @@ export function CheckoutScreen() {
         .map((item) => item.id)
         .sort()
         .join(',')
+
+      if (cart.applied_discount_id) {
+        const { removed } = await ensureCartDiscountValidForCheckout(
+          cart,
+          toCartOfferItems(selectedItems),
+        )
+        if (removed) {
+          await refresh()
+          toast.show('Coupon removed', {
+            tone: 'default',
+            message:
+              'The applied offer no longer applies to your selected items. Review your order and try again.',
+          })
+          setIsSubmitting(false)
+          return
+        }
+      }
+
       if (
         !checkoutAttemptKey.current ||
         !checkoutAttemptKey.current.includes(`:${selectionKey}:`)
@@ -543,10 +584,12 @@ export function CheckoutScreen() {
       gap="$3"
       width="100%"
     >
-      {placeButton}
-      <Text fontSize={11} color={c.secondary} textAlign="center" lineHeight={15}>
-        By placing your order, you agree to SHEconomy&apos;s privacy notice and conditions of use.
-      </Text>
+      {!isDesktop ? null : placeButton}
+      {isDesktop ? (
+        <Text fontSize={11} color={c.secondary} textAlign="center" lineHeight={15}>
+          By placing your order, you agree to SHEconomy&apos;s privacy notice and conditions of use.
+        </Text>
+      ) : null}
       <YStack height={1} backgroundColor={c.divider} />
       <Text fontSize={17} fontWeight="700" color={c.text}>
         Order summary
@@ -587,10 +630,18 @@ export function CheckoutScreen() {
             : `Securely collected by SHEconomy · ${orderShops.length} shops fulfil separately`}
         </Text>
       ) : null}
+      {isDesktop ? null : (
+        <>
+          {placeButton}
+          <Text fontSize={11} color={c.secondary} textAlign="center" lineHeight={15}>
+            By placing your order, you agree to SHEconomy&apos;s privacy notice and conditions of use.
+          </Text>
+        </>
+      )}
     </YStack>
   )
 
-  return (
+  const checkoutLayout = (
     <FullWidthLayout scroll>
       <PageSection paddingVertical="$5" {...LAYOUT_STRETCH}>
         <YStack
@@ -601,6 +652,9 @@ export function CheckoutScreen() {
           backgroundColor={c.page}
           padding={isDesktop ? '$4' : '$2'}
           borderRadius={12}
+          paddingBottom={
+            showMobileBar ? COMMERCE_MOBILE_CHECKOUT_BAR_HEIGHT + 24 : undefined
+          }
         >
           <XStack alignItems="center" gap="$2" paddingHorizontal="$1">
             <Icons.Lock size={16} color={c.brand} />
@@ -617,8 +671,17 @@ export function CheckoutScreen() {
             gap="$4"
           >
             <YStack flex={1} minWidth={0} width="100%" gap="$4">
+              {user ? (
+                <SectionCard step={1} title="Contact details">
+                  <CheckoutContactSection
+                    user={user}
+                    onCheckoutReadyChange={setContactCheckoutReady}
+                  />
+                </SectionCard>
+              ) : null}
+
               {needsShipping ? (
-                <SectionCard step={1} title="Delivery address">
+                <SectionCard step={2} title="Delivery address">
                   {recentAddresses.length > 0 ? (
                     <YStack gap="$2">
                       <Text fontSize={12} fontWeight="600" color={c.secondary}>
@@ -816,7 +879,7 @@ export function CheckoutScreen() {
                   />
                 </SectionCard>
               ) : (
-                <SectionCard step={1} title="Digital delivery">
+                <SectionCard step={2} title="Digital delivery">
                   <Text fontSize={13} color={c.secondary} lineHeight={19}>
                     Your items are digital — files will be available to download right after
                     purchase. No shipping address required.
@@ -824,7 +887,7 @@ export function CheckoutScreen() {
                 </SectionCard>
               )}
 
-              <SectionCard step={2} title="Payment method">
+              <SectionCard step={needsShipping ? 3 : 2} title="Payment method">
                 {paymentMethod === 'online' && paymentStepCount > 1 ? (
                   <YStack
                     gap="$2"
@@ -890,7 +953,7 @@ export function CheckoutScreen() {
                 ) : null}
               </SectionCard>
 
-              <SectionCard step={3} title="Review your order">
+              <SectionCard step={needsShipping ? 4 : 3} title="Review your order">
                 {multiShop ? (
                   <Text fontSize={12} color={c.secondary}>
                     Your order includes items from {orderShops.length} shops. Each shop packs and
@@ -1013,6 +1076,24 @@ export function CheckoutScreen() {
         </YStack>
       </PageSection>
     </FullWidthLayout>
+  )
+
+  if (!showMobileBar) return checkoutLayout
+
+  return (
+    <YStack flex={1} width="100%" position="relative">
+      {checkoutLayout}
+      <CommerceMobileCheckoutBar
+        total={orderTotal}
+        currency={currency}
+        caption={`Order total · ${unitCount} ${unitCount === 1 ? 'item' : 'items'}`}
+        savings={discount || null}
+        label={placeLabel}
+        disabled={!canPlace}
+        isLoading={isSubmitting}
+        onPress={handlePlaceOrder}
+      />
+    </YStack>
   )
 }
 

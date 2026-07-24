@@ -405,32 +405,43 @@ function MainColumn({
     <YStack gap="$5">
       {/* Identity card */}
       <Card ui={ui} padding={0} overflow="hidden">
-        <YStack height={132} position="relative">
+        <YStack height={132} position="relative" zIndex={0} overflow="hidden">
           {shop.open_graph_image ? (
             <YStack
               fullscreen
+              zIndex={0}
               backgroundColor={ui.roseSurface}
               // Image banner when present
             />
           ) : null}
           <LinearGradient
             fullscreen
+            zIndex={0}
             colors={[ui.brand, ui.coral]}
             start={[0, 0]}
             end={[1, 1]}
           />
         </YStack>
-        <YStack paddingHorizontal="$5" paddingBottom="$5">
-          <XStack marginTop={-40} alignItems="flex-end" gap="$3" flexWrap="wrap">
+        <YStack paddingHorizontal="$5" paddingBottom="$5" position="relative" zIndex={1}>
+          <XStack
+            marginTop={-40}
+            alignItems="flex-end"
+            gap="$3"
+            flexWrap="wrap"
+            position="relative"
+            zIndex={2}
+          >
             <YStack
               borderWidth={4}
               borderColor={ui.surface}
               borderRadius={999}
               backgroundColor={ui.surface}
+              position="relative"
+              zIndex={2}
             >
               <Avatar size="$8" src={shop.logo_url ?? undefined} name={shop.shop_name} />
             </YStack>
-            <YStack flex={1} minWidth={200} paddingBottom="$2" gap="$1.5">
+            <YStack flex={1} minWidth={200} paddingBottom="$2" gap="$1.5" position="relative" zIndex={2}>
               <XStack alignItems="center" gap="$2" flexWrap="wrap">
                 <Text fontSize={isDesktop ? 22 : 19} fontWeight="800" color={ui.text} letterSpacing={-0.4}>
                   {shop.shop_name}

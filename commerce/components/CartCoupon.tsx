@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 
 import {
   Button,
@@ -12,12 +12,13 @@ import {
 } from '~/components/ui'
 import { radius } from '~/config/tokens'
 import { useCart } from '~/commerce/hooks/useCart'
+import { filterSelectedCartItems } from '~/commerce/lib/cart-selection'
 import {
   fetchAvailableOffers,
-  isOfferEligible,
   offerBadgeLabel,
-  offerEligibleSubtotal,
+  toCartOfferItems,
   type AvailableOffer,
+  type CartOfferFetchContext,
 } from '~/commerce/lib/discounts'
 import { formatCurrency } from '~/lib/format'
 import { useAppUi } from '~/lib/theme/useAppUi'
@@ -35,32 +36,44 @@ export function CartCoupon() {
   const [offersOpen, setOffersOpen] = useState(false)
   const [applyingCode, setApplyingCode] = useState<string | null>(null)
 
+  const selectedItems = useMemo(() => filterSelectedCartItems(items), [items])
+  const cartOfferItems = useMemo(() => toCartOfferItems(selectedItems), [selectedItems])
+  const selectedSubtotal = useMemo(
+    () => selectedItems.reduce((sum, item) => sum + item.unit_price * item.quantity, 0),
+    [selectedItems],
+  )
+
   const currency = cart?.currency ?? 'INR'
-  const subtotal = cart?.items_subtotal ?? 0
   const appliedId = cart?.applied_discount_id ?? null
   const appliedName = cart?.applied_discount_name ?? null
   const discountAmount = cart?.discount_amount ?? 0
-  const cartShopIdsKey = items
-    .map((item) => item.shop_id)
-    .filter(Boolean)
-    .sort()
-    .join(',')
+
+  const cartContext = useMemo<CartOfferFetchContext>(
+    () => ({ subtotal: selectedSubtotal, items: cartOfferItems }),
+    [selectedSubtotal, cartOfferItems],
+  )
+  const contextKey = `${selectedSubtotal}:${cartOfferItems.map((i) => i.listing_id).sort().join(',')}`
 
   useEffect(() => {
+    if (selectedSubtotal <= 0 || cartOfferItems.length === 0) {
+      setOffers([])
+      return
+    }
     let active = true
     const shopIds = [
-      ...new Set(items.map((item) => item.shop_id).filter((id): id is string => !!id)),
+      ...new Set(selectedItems.map((item) => item.shop_id).filter((id): id is string => !!id)),
     ]
-    void fetchAvailableOffers({ shopIds }).then((rows) => {
+    const listingIds = cartOfferItems.map((item) => item.listing_id)
+    void fetchAvailableOffers({ shopIds, listingIds, cartContext }).then((rows) => {
       if (!active) return
       setOffers(rows)
     })
     return () => {
       active = false
     }
-  }, [cartShopIdsKey])
+  }, [contextKey, cartContext, selectedItems])
 
-  if (!cart || subtotal <= 0) return null
+  if (!cart || selectedSubtotal <= 0) return null
 
   async function handleApply(rawCode: string, fromOffer = false) {
     const trimmed = rawCode.trim()
@@ -128,10 +141,6 @@ export function CartCoupon() {
         {offersOpen ? (
           <YStack gap="$2">
             {otherOffers.map((offer) => {
-              const eligibleSubtotal = offerEligibleSubtotal(offer, subtotal, items)
-              const eligible = isOfferEligible(offer, subtotal, items)
-              const shortfall =
-                offer.minOrderAmount == null ? 0 : Math.max(0, offer.minOrderAmount - eligibleSubtotal)
               const busy = applyingCode === offer.code.toUpperCase()
               return (
                 <YStack
@@ -178,21 +187,15 @@ export function CartCoupon() {
                         ? `Min. order ${formatCurrency(offer.minOrderAmount, currency)}`
                         : 'No minimum order'}
                     </Text>
-                    {eligible ? (
-                      <Button
-                        tone="outline"
-                        size="$2"
-                        borderRadius={radius.chip}
-                        disabled={busy}
-                        onPress={() => void handleApply(offer.code, true)}
-                      >
-                        {busy ? <Spinner size="small" /> : appliedId ? 'Switch' : 'Apply'}
-                      </Button>
-                    ) : (
-                      <Text fontSize={11.5} fontWeight="600" color={ui.textSecondary}>
-                        Add {formatCurrency(shortfall, currency)} more
-                      </Text>
-                    )}
+                    <Button
+                      tone="outline"
+                      size="$2"
+                      borderRadius={radius.chip}
+                      disabled={busy}
+                      onPress={() => void handleApply(offer.code, true)}
+                    >
+                      {busy ? <Spinner size="small" /> : appliedId ? 'Switch' : 'Apply'}
+                    </Button>
                   </XStack>
                 </YStack>
               )

@@ -134,6 +134,17 @@ export function CartScreen() {
     }, 0)
   }, [items, isSelected, listingTypes])
 
+  const selectedHasStockIssue = useMemo(() => {
+    return items.some((item) => {
+      if (!isSelected(item.id)) return false
+      const stock = listingStock.get(item.listing_id)
+      if (typeof stock !== 'number') return false
+      return stock <= 0 || item.quantity > stock
+    })
+  }, [items, isSelected, listingStock])
+
+  const checkoutBlocked = noneSelected || selectedHasStockIssue
+
   function listingHref(listingId: string) {
     return commerceRoutes.listing(listingSlugs.get(listingId) ?? listingId)
   }
@@ -329,9 +340,14 @@ export function CartScreen() {
       {subtotalLine}
       {discountBlock}
       <CartCoupon />
+      {selectedHasStockIssue ? (
+        <Text fontSize={12} color={c.brand} lineHeight={18}>
+          Update out-of-stock items or reduce quantities before checkout.
+        </Text>
+      ) : null}
       <CommerceButton
         variant="primary"
-        disabled={noneSelected}
+        disabled={checkoutBlocked}
         onPress={() => router.push(commerceRoutes.checkout)}
         width="100%"
       >
@@ -368,6 +384,11 @@ export function CartScreen() {
       {subtotalLine}
       {discountBlock}
       <CartCoupon />
+      {selectedHasStockIssue ? (
+        <Text fontSize={12} color={c.brand} lineHeight={18}>
+          Update out-of-stock items or reduce quantities before checkout.
+        </Text>
+      ) : null}
       {protectionNote}
     </YStack>
   )
@@ -460,14 +481,18 @@ export function CartScreen() {
               </XStack>
             ) : null}
 
-            {shopItems.map((item) => (
+            {shopItems.map((item) => {
+              const stock = listingStock.get(item.listing_id)
+              const outOfStock = typeof stock === 'number' && stock <= 0
+              return (
               <CartRow
                 key={item.id}
                 item={item}
                 selected={isSelected(item.id)}
                 listingHref={listingHref(item.listing_id)}
                 listingType={listingTypes.get(item.listing_id)}
-                maxQuantity={listingStock.get(item.listing_id) ?? null}
+                maxQuantity={stock ?? null}
+                outOfStock={outOfStock}
                 currency={currency}
                 isDesktop={isDesktop}
                 onToggle={() => toggleCartItemSelected(item.id)}
@@ -475,13 +500,21 @@ export function CartScreen() {
                 onRemove={handleRemove}
                 onSaveForLater={handleSaveForLater}
               />
-            ))}
+              )
+            })}
 
             <CartShopOffers
               shopId={shopId}
               shopName={shopItems[0]?.shop_name}
               subtotal={shopSelectedSubtotal}
               currency={currency}
+              items={shopItems
+                .filter((item) => isSelected(item.id))
+                .map((item) => ({
+                  shop_id: item.shop_id,
+                  listing_id: item.listing_id,
+                  total_price: item.total_price,
+                }))}
             />
 
             {groupedByShop.length > 1 ? (
@@ -676,7 +709,7 @@ export function CartScreen() {
         caption={`Subtotal · ${unitCount} ${unitCount === 1 ? 'item' : 'items'}`}
         savings={discount || null}
         label="Proceed to buy"
-        disabled={noneSelected}
+        disabled={checkoutBlocked}
         onPress={() => router.push(commerceRoutes.checkout)}
       />
     </YStack>
@@ -778,6 +811,7 @@ function CartRow({
   listingHref,
   listingType,
   maxQuantity,
+  outOfStock,
   currency,
   isDesktop,
   onToggle,
@@ -790,6 +824,7 @@ function CartRow({
   listingHref: string
   listingType?: string
   maxQuantity?: number | null
+  outOfStock: boolean
   currency: string
   isDesktop: boolean
   onToggle: () => void
@@ -801,7 +836,8 @@ function CartRow({
   const imageSize = isDesktop ? 120 : 90
   const atMax = typeof maxQuantity === 'number' && item.quantity >= maxQuantity
   const overStock = typeof maxQuantity === 'number' && item.quantity > maxQuantity
-  const lowStock = typeof maxQuantity === 'number' && maxQuantity > 0 && maxQuantity <= 5
+  const lowStock =
+    !outOfStock && typeof maxQuantity === 'number' && maxQuantity > 0 && maxQuantity <= 5
 
   const lineTotal = item.unit_price * item.quantity
 
@@ -851,10 +887,16 @@ function CartRow({
             </Text>
           </AppLink>
 
-          <Text fontSize={12} color={c.inStock} fontWeight="600">
-            {listingType && isDigitalListing(listingType)
-              ? 'In stock · Instant download'
-              : 'In stock'}
+          <Text
+            fontSize={12}
+            color={outOfStock ? '#b45309' : c.inStock}
+            fontWeight="600"
+          >
+            {outOfStock
+              ? 'Out of stock'
+              : listingType && isDigitalListing(listingType)
+                ? 'In stock · Instant download'
+                : 'In stock'}
           </Text>
 
           {item.variant_name ? (
@@ -910,12 +952,12 @@ function CartRow({
         <ListingQuantityStepper
           size="sm"
           quantity={item.quantity}
-          maxQuantity={maxQuantity}
+          maxQuantity={outOfStock ? 0 : maxQuantity}
           onDecrease={() =>
             item.quantity <= 1 ? onRemove(item.id) : onQuantityChange(item.id, item.quantity - 1)
           }
           onIncrease={() => {
-            if (atMax) return
+            if (outOfStock || atMax) return
             onQuantityChange(item.id, item.quantity + 1)
           }}
         />
@@ -932,6 +974,13 @@ function CartRow({
         <Text fontSize={12} color={c.brand} paddingLeft={isDesktop ? imageSize + 40 : 0}>
           Only {maxQuantity} in stock — reduce quantity to check out.
         </Text>
+      ) : outOfStock ? (
+        <YStack gap="$2" paddingLeft={isDesktop ? imageSize + 40 : 0}>
+          <Text fontSize={12} color="#b45309" fontWeight="600">
+            Currently out of stock — remove this item or save it for later.
+          </Text>
+          <StockNotifyButton listingId={item.listing_id} outOfStock />
+        </YStack>
       ) : lowStock ? (
         <Text fontSize={12} color={c.secondary} paddingLeft={isDesktop ? imageSize + 40 : 0}>
           Available: {maxQuantity} in stock

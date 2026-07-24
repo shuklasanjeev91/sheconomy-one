@@ -46,11 +46,10 @@ export function PageScroll({ children, onRefresh, refreshing }: PageScrollProps)
   if (useDocumentScroll) {
     return (
       <YStack
-        flexGrow={1}
-        flexShrink={0}
         width="100%"
         maxWidth="100%"
         alignSelf="stretch"
+        flexShrink={0}
         backgroundColor={ui.background}
       >
         {onRefresh ? (
