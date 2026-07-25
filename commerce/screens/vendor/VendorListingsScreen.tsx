@@ -4,7 +4,7 @@ import { Link } from 'one'
 import { Button, Icons, Spinner, Text, XStack, YStack } from '~/components/ui'
 import { PageCenter } from '~/components/layout'
 import { useAppLayout } from '~/hooks/useAppLayout'
-import { DEFAULT_SHOP_CURRENCY } from '~/lib/shop/shop.type'
+import { useVendorCurrency } from '~/hooks/useVendorCurrency'
 import { commerceRoutes, vendorRoutes } from '~/lib/routes'
 import { useAppSelector } from '~/lib/store/hooks'
 import { useAppUi } from '~/lib/theme/useAppUi'
@@ -21,6 +21,7 @@ export function VendorListingsScreen() {
   const shop = useAppSelector((s) => s.shop.currentShop)
   const isLoadingMyShops = useAppSelector((s) => s.shop.isLoadingMyShops)
   const myShopsLoaded = useAppSelector((s) => s.shop.myShopsLoaded)
+  const { currency, currencyInfo } = useVendorCurrency()
 
   const [activeTab, setActiveTab] = useState<InventoryTab>('product')
   const [selectedListingId, setSelectedListingId] = useState<string | null>(null)
@@ -61,8 +62,6 @@ export function VendorListingsScreen() {
     )
   }
 
-  const currency = shop.shop_currency || DEFAULT_SHOP_CURRENCY
-
   return (
     <>
       <YStack
@@ -100,7 +99,7 @@ export function VendorListingsScreen() {
           <VendorListingsProductsTab
             ui={ui}
             shopId={shop.id}
-            currency={currency}
+            currencyInfo={currencyInfo}
             isDesktop={isDesktop}
             onOpenListing={setSelectedListingId}
           />

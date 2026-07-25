@@ -19,6 +19,7 @@ import {
 } from '~/components/ui'
 import { getShadowStyle, radius } from '~/config/tokens'
 import { useLockBodyScroll } from '~/hooks/useLockBodyScroll'
+import { useVendorCurrency } from '~/hooks/useVendorCurrency'
 import { overlayBackdropStyle } from '~/lib/layout/styles'
 import { DELIVERY_MODE, DELIVERY_MODE_OPTIONS, type DeliveryMode } from '~/lib/orders/order.constants'
 import { formatOrderAmount, formatOrderDate } from '~/lib/orders/order.utils'
@@ -128,7 +129,8 @@ type TrackingFormProps = {
 function TrackingForm({ ui, item, submitting, onClose, onSubmit }: TrackingFormProps) {
   const toast = useAppToast()
   const order = item.orders
-  const currency = order?.currency ?? 'INR'
+  const { resolveCurrency } = useVendorCurrency()
+  const currency = resolveCurrency(order?.currency)
   const customer = order?.profiles
 
   const [courierSlug, setCourierSlug] = useState('')

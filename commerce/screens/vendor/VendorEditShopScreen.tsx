@@ -53,12 +53,25 @@ export function VendorEditShopScreen() {
   const [liveErrors, setLiveErrors] = useState<Record<string, string>>({})
 
   useEffect(() => {
-    if (!shop && !myShopsLoaded) void dispatch(loadMyShops(undefined))
-  }, [dispatch, shop, myShopsLoaded])
+    // Always refresh when shops have not been loaded this session, even if a
+    // persisted currentShop exists — otherwise stale fields (e.g. currency) stick.
+    if (!myShopsLoaded) void dispatch(loadMyShops(undefined))
+  }, [dispatch, myShopsLoaded])
+
+  const shopSeedKey = shop ? `${shop.id}:${shop.shop_currency ?? ''}` : null
+  const [hydratedSeedKey, setHydratedSeedKey] = useState<string | null>(null)
 
   useEffect(() => {
-    if (shop) dispatch(loadFormFromShop(shopToFormData(shop)))
-  }, [dispatch, shop?.id])
+    if (!shop || !shopSeedKey) return
+    dispatch(loadFormFromShop(shopToFormData(shop)))
+    setHydratedSeedKey(shopSeedKey)
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- avoid wiping edits on unrelated shop reference updates
+  }, [dispatch, shopSeedKey])
+
+  const displayCurrency =
+    shop && hydratedSeedKey === shopSeedKey
+      ? form.shop_currency || shop.shop_currency || DEFAULT_SHOP_CURRENCY
+      : shop?.shop_currency || form.shop_currency || DEFAULT_SHOP_CURRENCY
 
   function setField<K extends keyof ShopFormData>(field: K, value: ShopFormData[K]) {
     dispatch(updateShopField({ field, value }))
@@ -99,7 +112,7 @@ export function VendorEditShopScreen() {
       shop_email: form.shop_email.trim() || null,
       shop_phone_number: form.shop_phone_number.trim() || null,
       website_url: form.website_url.trim() || null,
-      shop_currency: form.shop_currency || DEFAULT_SHOP_CURRENCY,
+      shop_currency: displayCurrency,
       shop_categories: form.shop_categories,
     }
 
@@ -191,7 +204,7 @@ export function VendorEditShopScreen() {
           </Text>
           <XStack gap="$2" flexWrap="wrap">
             {SUPPORTED_CURRENCIES.map((currency) => {
-              const active = (form.shop_currency || DEFAULT_SHOP_CURRENCY) === currency.code
+              const active = displayCurrency === currency.code
               return (
                 <XStack
                   key={currency.code}

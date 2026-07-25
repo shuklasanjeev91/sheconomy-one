@@ -19,6 +19,7 @@ import {
   subscribeCustomerOrderChanges,
   type CustomerOrderDetail,
   type CustomerOrderItem,
+  type CustomerOrderPackage,
 } from '~/commerce/lib/customer-orders'
 import {
   buildCustomerOrderTimeline,
@@ -33,14 +34,13 @@ import {
   Button,
   Icons,
   Image,
-  ScreenState,
+  Spinner,
   Text,
   XStack,
   YStack,
   useAppToast,
 } from '~/components/ui'
-import { FullWidthLayout, PageSection } from '~/components/layout'
-import { formatCurrency } from '~/lib/format'
+import { PageContent } from '~/components/layout'
 import { shareCustomerOrderInvoice } from '~/lib/orders/order-invoice'
 import { formatOrderAmount, formatOrderDate } from '~/lib/orders/order.utils'
 import type { OrderAddressSummary } from '~/lib/orders/vendor-orders.type'
@@ -77,7 +77,7 @@ export function OrderDetailScreen({ orderId }: OrderDetailScreenProps) {
   const ui = useAppUi()
   const toast = useAppToast()
   const router = useRouter()
-  const { isDesktop } = useAppLayout()
+  const { isDesktopWeb } = useAppLayout()
   const { user } = useProfile()
   const { addToCart } = useCart()
   const [order, setOrder] = useState<CustomerOrderDetail | null>(null)
@@ -133,6 +133,13 @@ export function OrderDetailScreen({ orderId }: OrderDetailScreenProps) {
       createdAt: order.created_at,
     })
   }, [order])
+
+  const packages = useMemo(() => {
+    if (!order) return []
+    return dedupeOrderPackages(order.deliveries, order.estimated_delivery_date)
+  }, [order])
+
+  const orderEta = order ? formatEstimatedDelivery(order.estimated_delivery_date) : null
 
   const shippingLines = addressLines(order?.shipping_address)
 
@@ -238,377 +245,447 @@ export function OrderDetailScreen({ orderId }: OrderDetailScreenProps) {
     }
   }
 
-  /** PageScroll already insets for the tab bar + safe area. */
-  const bottomPad = isDesktop ? 32 : 24
+  const bottomPad = isDesktopWeb ? '$12' : '$8'
 
   return (
-    <FullWidthLayout
-      scroll
+    <PageContent
+      maxWidth={760}
+      centered
+      paddingVertical="$6"
+      paddingBottom={bottomPad}
       refreshing={refreshing}
       onRefresh={async () => {
         setRefreshing(true)
         await load({ soft: true })
       }}
     >
-      <PageSection paddingVertical="$6" paddingBottom={bottomPad}>
-        <ScreenState
-          loading={isLoading}
-          error={error}
-          empty={!isLoading && !error && !order}
-          emptyTitle="Order not found"
-          emptyMessage="This order may belong to another account or no longer exists."
-          emptyActionLabel="Back to orders"
-          onEmptyAction={() => router.replace(commerceRoutes.orders)}
-          onRetry={() => void load()}
-        >
-          {order ? (
-            <YStack gap="$5" width="100%">
-              <CommercePageHeader
-                title={`Order #${order.order_number}`}
-                subtitle={`${order.shop_name ?? 'Shop'} · ${formatOrderDate(order.created_at, true)}`}
-              />
+      {isLoading && !order ? (
+        <YStack alignItems="center" paddingVertical="$8" gap="$3" minHeight={220}>
+          <Spinner size="large" color={ui.brand} />
+          <Text fontSize={13} color={ui.textMuted}>
+            Loading order…
+          </Text>
+        </YStack>
+      ) : error && !order ? (
+        <CommercePanel alignItems="center" gap="$3">
+          <Text fontWeight="700" fontSize={16} color={ui.text} textAlign="center">
+            Couldn&apos;t load this order
+          </Text>
+          <Text fontSize={14} color={ui.textMuted} textAlign="center">
+            {error}
+          </Text>
+          <Button tone="primary" size="$3" borderRadius={999} onPress={() => void load()}>
+            Try again
+          </Button>
+        </CommercePanel>
+      ) : !order ? (
+        <CommercePanel alignItems="center" gap="$3">
+          <Text fontWeight="700" fontSize={16} color={ui.text} textAlign="center">
+            Order not found
+          </Text>
+          <Text fontSize={14} color={ui.textMuted} textAlign="center" lineHeight={20}>
+            This order may belong to another account or no longer exists.
+          </Text>
+          <Button
+            tone="primary"
+            size="$3"
+            borderRadius={999}
+            onPress={() => router.replace(commerceRoutes.orders)}
+          >
+            Back to orders
+          </Button>
+        </CommercePanel>
+      ) : (
+        <YStack gap="$5" width="100%" flexShrink={0}>
+          <AppLink href={commerceRoutes.orders} asChild>
+            <Button
+              tone="ghost"
+              size="$2"
+              alignSelf="flex-start"
+              paddingHorizontal={0}
+              icon={<Icons.ArrowLeft size={16} />}
+            >
+              All orders
+            </Button>
+          </AppLink>
 
-              <XStack gap="$2" flexWrap="wrap" alignItems="center">
+          <CommercePageHeader
+            title={`Order #${order.order_number}`}
+            subtitle={`${order.shop_name ?? 'Shop'} · ${formatOrderDate(order.created_at, true)}`}
+          />
+
+          <CommercePanel gap="$3">
+            <XStack
+              justifyContent="space-between"
+              alignItems="flex-start"
+              gap="$3"
+              flexWrap="wrap"
+            >
+              <YStack gap="$2">
                 <OrderStatusBadge status={order.order_status} />
-                <Text fontSize={14} fontWeight="800" color={ui.text}>
-                  {formatCurrency(order.total_amount, order.currency)}
+                <Text fontSize={12} color={ui.textSecondary} textTransform="capitalize">
+                  {[order.payment_mode, order.payment_status].filter(Boolean).join(' · ') ||
+                    'Payment pending'}
                 </Text>
-                {formatEstimatedDelivery(order.estimated_delivery_date) ? (
+                {orderEta ? (
                   <Text fontSize={12} color={ui.textSecondary}>
-                    ETA {formatEstimatedDelivery(order.estimated_delivery_date)}
+                    Estimated delivery: {orderEta}
                   </Text>
                 ) : null}
-              </XStack>
-
-              <CommercePanel padding="$4" gap="$3">
-                <Text fontSize={14} fontWeight="800" color={ui.text}>
-                  Items
+              </YStack>
+              <YStack alignItems="flex-end" gap={2}>
+                <Text fontSize={22} fontWeight="800" color={ui.brand}>
+                  {formatOrderAmount(order.total_amount, order.currency)}
                 </Text>
-                <YStack gap="$3">
-                  {order.items.map((item) => {
-                    const trust = getItemTrustEligibility(order, item)
-                    const itemRefund = order.refunds.find((refund) => refund.order_item_id === item.id)
-                    return (
+                <Text fontSize={11} color={ui.textMuted}>
+                  Order total
+                </Text>
+              </YStack>
+            </XStack>
+
+            <YStack height={1} backgroundColor={ui.borderSubtle} />
+
+            <YStack gap="$2">
+              <SummaryRow label="Subtotal" value={formatOrderAmount(order.subtotal_amount, order.currency)} />
+              {Number(order.discount_amount) > 0 ? (
+                <SummaryRow
+                  label="Discount"
+                  value={`- ${formatOrderAmount(order.discount_amount, order.currency)}`}
+                />
+              ) : null}
+              <SummaryRow
+                label="Shipping"
+                value={formatOrderAmount(order.shipping_amount, order.currency)}
+              />
+              <SummaryRow label="Tax" value={formatOrderAmount(order.tax_amount, order.currency)} />
+            </YStack>
+          </CommercePanel>
+
+          <CommercePanel gap="$3">
+            <Text fontSize={14} fontWeight="800" color={ui.text}>
+              Items
+            </Text>
+            <YStack gap="$3">
+              {order.items.map((item, itemIndex) => {
+                const trust = getItemTrustEligibility(order, item)
+                const itemRefund = order.refunds.find((refund) => refund.order_item_id === item.id)
+                const isLastItem = itemIndex === order.items.length - 1
+                return (
+                  <YStack
+                    key={item.id}
+                    gap="$2"
+                    paddingBottom={isLastItem ? 0 : '$3'}
+                    borderBottomWidth={isLastItem ? 0 : 1}
+                    borderBottomColor={ui.borderSubtle}
+                  >
+                    <XStack gap="$3" alignItems="flex-start">
                       <YStack
-                        key={item.id}
-                        gap="$2"
-                        paddingBottom="$3"
-                        borderBottomWidth={1}
-                        borderBottomColor={ui.borderSubtle}
+                        width={64}
+                        height={64}
+                        borderRadius={10}
+                        overflow="hidden"
+                        backgroundColor={ui.imagePlaceholder}
+                        alignItems="center"
+                        justifyContent="center"
+                        flexShrink={0}
                       >
-                        <XStack gap="$3" alignItems="flex-start">
-                          <YStack
+                        {item.image_url ? (
+                          <Image
+                            source={{ uri: item.image_url }}
                             width={64}
                             height={64}
-                            borderRadius={10}
-                            overflow="hidden"
-                            backgroundColor={ui.imagePlaceholder}
-                            alignItems="center"
-                            justifyContent="center"
-                          >
-                            {item.image_url ? (
-                              <Image
-                                source={{ uri: item.image_url }}
-                                width={64}
-                                height={64}
-                                resizeMode="cover"
-                              />
-                            ) : (
-                              <Icons.Image size={22} color={ui.textMuted} />
-                            )}
-                          </YStack>
-                          <YStack flex={1} minWidth={0} gap={3}>
-                            {item.listing_slug ? (
-                              <AppLink href={commerceRoutes.listing(item.listing_slug)} asChild>
-                                <Text fontSize={14} fontWeight="700" color={ui.text} numberOfLines={2}>
-                                  {item.product_title}
-                                </Text>
-                              </AppLink>
-                            ) : (
-                              <Text fontSize={14} fontWeight="700" color={ui.text} numberOfLines={2}>
-                                {item.product_title}
-                              </Text>
-                            )}
-                            <Text fontSize={12} color={ui.textMuted}>
-                              Qty {item.quantity}
-                              {variationLabel(item.variation_details)
-                                ? ` · ${variationLabel(item.variation_details)}`
-                                : ''}
-                            </Text>
-                            <OrderStatusBadge status={item.item_status} size="sm" />
-                            {itemRefund ? (
-                              <Text fontSize={11} color={ui.textSecondary}>
-                                Refund {refundStatusLabel(itemRefund.refund_status)} ·{' '}
-                                {formatOrderAmount(itemRefund.refund_amount, order.currency)}
-                              </Text>
-                            ) : null}
-                            {trust.hasReview ? (
-                              <Text fontSize={11} color={ui.textMuted}>
-                                Review submitted
-                              </Text>
-                            ) : null}
-                          </YStack>
-                          <Text fontSize={14} fontWeight="800" color={ui.text}>
-                            {formatOrderAmount(item.total_price, order.currency)}
-                          </Text>
-                        </XStack>
-                        <XStack gap="$2" flexWrap="wrap">
-                          {trust.canDownload ? (
-                            <Button
-                              tone="primary"
-                              size="$3"
-                              borderRadius={999}
-                              disabled={downloadingItemId === item.id}
-                              icon={<Icons.Download size={14} />}
-                              onPress={() => void handleDownload(item)}
-                            >
-                              {downloadingItemId === item.id ? 'Opening…' : 'Download'}
-                            </Button>
-                          ) : null}
-                          {trust.canReview ? (
-                            <Button
-                              tone="outline"
-                              size="$3"
-                              borderRadius={999}
-                              icon={<Icons.Star size={14} />}
-                              onPress={() => setReviewItem(item)}
-                            >
-                              Write a review
-                            </Button>
-                          ) : null}
-                          {trust.canReturn ? (
-                            <Button
-                              tone="outline"
-                              size="$3"
-                              borderRadius={999}
-                              icon={<Icons.PackageMinus size={14} />}
-                              onPress={() => setReturnItem(item)}
-                            >
-                              Return item
-                            </Button>
-                          ) : trust.hasOpenReturnRequest ? (
-                            <Text fontSize={12} color={ui.textMuted}>
-                              Return request pending
-                            </Text>
-                          ) : null}
-                        </XStack>
+                            resizeMode="cover"
+                          />
+                        ) : (
+                          <Icons.Image size={22} color={ui.textMuted} />
+                        )}
                       </YStack>
-                    )
-                  })}
-                </YStack>
-              </CommercePanel>
-
-              <CommercePanel padding="$4" gap="$3">
-                <Text fontSize={14} fontWeight="800" color={ui.text}>
-                  Payment & totals
-                </Text>
-                <YStack gap="$2">
-                  <SummaryRow label="Subtotal" value={formatOrderAmount(order.subtotal_amount, order.currency)} />
-                  {Number(order.discount_amount) > 0 ? (
-                    <SummaryRow
-                      label="Discount"
-                      value={`- ${formatOrderAmount(order.discount_amount, order.currency)}`}
-                    />
-                  ) : null}
-                  <SummaryRow
-                    label="Shipping"
-                    value={formatOrderAmount(order.shipping_amount, order.currency)}
-                  />
-                  <SummaryRow label="Tax" value={formatOrderAmount(order.tax_amount, order.currency)} />
-                  <XStack justifyContent="space-between" marginTop="$1">
-                    <Text fontSize={15} fontWeight="800" color={ui.text}>
-                      Total
-                    </Text>
-                    <Text fontSize={16} fontWeight="800" color={ui.brand}>
-                      {formatOrderAmount(order.total_amount, order.currency)}
-                    </Text>
-                  </XStack>
-                  <Text fontSize={12} color={ui.textSecondary} textTransform="capitalize">
-                    {[order.payment_mode, order.payment_status].filter(Boolean).join(' · ') ||
-                      'Payment pending'}
-                  </Text>
-                </YStack>
-              </CommercePanel>
-
-              <CommercePanel padding="$4" gap="$3">
-                <Text fontSize={14} fontWeight="800" color={ui.text}>
-                  Delivery address
-                </Text>
-                {shippingLines.length ? (
-                  <YStack gap={2}>
-                    {shippingLines.map((line) => (
-                      <Text key={line} fontSize={13} color={ui.textSecondary}>
-                        {line}
+                      <YStack flex={1} minWidth={0} gap={3}>
+                        {item.listing_slug ? (
+                          <AppLink href={commerceRoutes.listing(item.listing_slug)} asChild>
+                            <Text fontSize={14} fontWeight="700" color={ui.text} numberOfLines={2}>
+                              {item.product_title}
+                            </Text>
+                          </AppLink>
+                        ) : (
+                          <Text fontSize={14} fontWeight="700" color={ui.text} numberOfLines={2}>
+                            {item.product_title}
+                          </Text>
+                        )}
+                        <Text fontSize={12} color={ui.textMuted}>
+                          Qty {item.quantity}
+                          {variationLabel(item.variation_details)
+                            ? ` · ${variationLabel(item.variation_details)}`
+                            : ''}
+                        </Text>
+                        <OrderStatusBadge status={item.item_status} size="sm" />
+                        {itemRefund ? (
+                          <Text fontSize={11} color={ui.textSecondary}>
+                            Refund {refundStatusLabel(itemRefund.refund_status)} ·{' '}
+                            {formatOrderAmount(itemRefund.refund_amount, order.currency)}
+                          </Text>
+                        ) : null}
+                        {trust.hasReview ? (
+                          <Text fontSize={11} color={ui.textMuted}>
+                            Review submitted
+                          </Text>
+                        ) : null}
+                      </YStack>
+                      <Text fontSize={14} fontWeight="800" color={ui.text} flexShrink={0}>
+                        {formatOrderAmount(item.total_price, order.currency)}
                       </Text>
-                    ))}
+                    </XStack>
+                    <XStack gap="$2" flexWrap="wrap">
+                      {trust.canDownload ? (
+                        <Button
+                          tone="primary"
+                          size="$3"
+                          borderRadius={999}
+                          disabled={downloadingItemId === item.id}
+                          icon={<Icons.Download size={14} />}
+                          onPress={() => void handleDownload(item)}
+                        >
+                          {downloadingItemId === item.id ? 'Opening…' : 'Download'}
+                        </Button>
+                      ) : null}
+                      {trust.canReview ? (
+                        <Button
+                          tone="outline"
+                          size="$3"
+                          borderRadius={999}
+                          icon={<Icons.Star size={14} />}
+                          onPress={() => setReviewItem(item)}
+                        >
+                          Write a review
+                        </Button>
+                      ) : null}
+                      {trust.canReturn ? (
+                        <Button
+                          tone="outline"
+                          size="$3"
+                          borderRadius={999}
+                          icon={<Icons.PackageMinus size={14} />}
+                          onPress={() => setReturnItem(item)}
+                        >
+                          Return item
+                        </Button>
+                      ) : trust.hasOpenReturnRequest ? (
+                        <Text fontSize={12} color={ui.textMuted}>
+                          Return request pending
+                        </Text>
+                      ) : null}
+                    </XStack>
                   </YStack>
-                ) : (
-                  <Text fontSize={13} color={ui.textMuted}>
-                    No shipping address on this order.
-                  </Text>
-                )}
-              </CommercePanel>
-
-              <CommercePanel padding="$4" gap="$3">
-                <Text fontSize={14} fontWeight="800" color={ui.text}>
-                  Order timeline
-                </Text>
-                <OrderTimeline events={timeline} />
-              </CommercePanel>
-
-              <YStack gap="$3">
-                <Text fontSize={14} fontWeight="800" color={ui.text}>
-                  Packages & tracking
-                </Text>
-                {order.deliveries.length === 0 ? (
-                  <CommercePanel padding="$4">
-                    <Text fontSize={13} color={ui.textMuted}>
-                      The shop hasn’t added shipment tracking yet. You’ll see carrier details here
-                      once your package ships.
-                    </Text>
-                  </CommercePanel>
-                ) : (
-                  order.deliveries.map((shipment, index) => (
-                    <OrderPackageCard key={shipment.id} shipment={shipment} index={index} />
-                  ))
-                )}
-              </YStack>
-
-              {order.issues.length > 0 ? (
-                <CommercePanel padding="$4" gap="$3">
-                  <Text fontSize={14} fontWeight="800" color={ui.text}>
-                    Your requests
-                  </Text>
-                  {order.issues.map((issue) => (
-                    <YStack key={issue.id} gap={2}>
-                      <Text fontSize={13} fontWeight="700" color={ui.text}>
-                        {issueTypeLabel(issue.issue_type)}
-                      </Text>
-                      <Text fontSize={12} color={ui.textSecondary}>
-                        {issueStatusLabel(issue.status)} · {formatOrderDate(issue.created_at, true)}
-                      </Text>
-                      <Text fontSize={12} color={ui.textMuted} numberOfLines={3}>
-                        {issue.description}
-                      </Text>
-                    </YStack>
-                  ))}
-                </CommercePanel>
-              ) : null}
-
-              <CommercePanel padding="$4" gap="$3">
-                <Text fontSize={14} fontWeight="800" color={ui.text}>
-                  Actions
-                </Text>
-                <XStack gap="$2" flexWrap="wrap">
-                  {eligibility?.canShareInvoice ? (
-                    <Button
-                      tone="outline"
-                      size="$3"
-                      borderRadius={999}
-                      disabled={invoicing}
-                      icon={<Icons.Download size={14} />}
-                      onPress={() => void handleInvoice()}
-                    >
-                      {invoicing ? 'Preparing…' : 'Invoice / receipt'}
-                    </Button>
-                  ) : null}
-                  {eligibility?.canReorder ? (
-                    <Button
-                      tone="outline"
-                      size="$3"
-                      borderRadius={999}
-                      disabled={reordering}
-                      icon={<Icons.ShoppingCart size={14} />}
-                      onPress={() => void handleReorder()}
-                    >
-                      {reordering ? 'Adding…' : 'Reorder'}
-                    </Button>
-                  ) : null}
-                  {eligibility?.canCancel ? (
-                    <Button
-                      tone="outline"
-                      size="$3"
-                      borderRadius={999}
-                      icon={<Icons.XCircle size={14} />}
-                      onPress={() => setCancelOpen(true)}
-                    >
-                      Request cancellation
-                    </Button>
-                  ) : eligibility?.hasOpenCancellationRequest ? (
-                    <Text fontSize={12} color={ui.textMuted}>
-                      Cancellation request pending
-                    </Text>
-                  ) : null}
-                  {eligibility?.canGetHelp ? (
-                    <Button
-                      tone="primary"
-                      size="$3"
-                      borderRadius={999}
-                      icon={<Icons.MessageCircle size={14} />}
-                      onPress={() => setSupportOpen(true)}
-                    >
-                      Get help
-                    </Button>
-                  ) : null}
-                </XStack>
-                {eligibility?.cancelBlockedReason && !eligibility.canCancel ? (
-                  <Text fontSize={11} color={ui.textMuted}>
-                    {eligibility.cancelBlockedReason}
-                  </Text>
-                ) : null}
-              </CommercePanel>
-
-              <AppLink href={commerceRoutes.orders} asChild>
-                <Button tone="outline" size="$3" borderRadius={999} alignSelf="flex-start">
-                  Back to all orders
-                </Button>
-              </AppLink>
-
-              {user?.id ? (
-                <>
-                  <CancelOrderSheet
-                    open={cancelOpen}
-                    onOpenChange={setCancelOpen}
-                    orderId={order.id}
-                    userId={user.id}
-                    onSubmitted={() => void load({ soft: true })}
-                  />
-                  <OrderSupportSheet
-                    open={supportOpen}
-                    onOpenChange={setSupportOpen}
-                    orderId={order.id}
-                    orderNumber={order.order_number}
-                    userId={user.id}
-                    onSubmitted={() => void load({ soft: true })}
-                  />
-                  <ReturnOrderItemSheet
-                    open={Boolean(returnItem)}
-                    onOpenChange={(next) => {
-                      if (!next) setReturnItem(null)
-                    }}
-                    orderId={order.id}
-                    userId={user.id}
-                    item={returnItem}
-                    onSubmitted={() => void load({ soft: true })}
-                  />
-                  <WriteReviewSheet
-                    open={Boolean(reviewItem)}
-                    onOpenChange={(next) => {
-                      if (!next) setReviewItem(null)
-                    }}
-                    orderId={order.id}
-                    userId={user.id}
-                    item={reviewItem}
-                    onSubmitted={() => void load({ soft: true })}
-                  />
-                </>
-              ) : null}
+                )
+              })}
             </YStack>
+          </CommercePanel>
+
+          <CommercePanel gap="$3">
+            <Text fontSize={14} fontWeight="800" color={ui.text}>
+              Delivery address
+            </Text>
+            {shippingLines.length ? (
+              <YStack gap={2}>
+                {shippingLines.map((line) => (
+                  <Text key={line} fontSize={13} color={ui.textSecondary} lineHeight={20}>
+                    {line}
+                  </Text>
+                ))}
+              </YStack>
+            ) : (
+              <Text fontSize={13} color={ui.textMuted}>
+                No shipping address on this order.
+              </Text>
+            )}
+          </CommercePanel>
+
+          <CommercePanel gap="$3">
+            <Text fontSize={14} fontWeight="800" color={ui.text}>
+              Order timeline
+            </Text>
+            <OrderTimeline events={timeline} />
+          </CommercePanel>
+
+          <CommercePanel gap="$3">
+            <Text fontSize={14} fontWeight="800" color={ui.text}>
+              Packages & tracking
+            </Text>
+            {packages.length === 0 ? (
+              <Text fontSize={13} color={ui.textMuted} lineHeight={20}>
+                The shop hasn&apos;t added shipment tracking yet. You&apos;ll see carrier details here
+                once your package ships.
+              </Text>
+            ) : (
+              packages.map((shipment, index) => (
+                <OrderPackageCard
+                  key={shipment.id}
+                  shipment={shipment}
+                  index={index}
+                  embedded
+                />
+              ))
+            )}
+          </CommercePanel>
+
+          {order.issues.length > 0 ? (
+            <CommercePanel gap="$3">
+              <Text fontSize={14} fontWeight="800" color={ui.text}>
+                Your requests
+              </Text>
+              {order.issues.map((issue) => (
+                <YStack key={issue.id} gap={2}>
+                  <Text fontSize={13} fontWeight="700" color={ui.text}>
+                    {issueTypeLabel(issue.issue_type)}
+                  </Text>
+                  <Text fontSize={12} color={ui.textSecondary}>
+                    {issueStatusLabel(issue.status)} · {formatOrderDate(issue.created_at, true)}
+                  </Text>
+                  <Text fontSize={12} color={ui.textMuted} numberOfLines={3}>
+                    {issue.description}
+                  </Text>
+                </YStack>
+              ))}
+            </CommercePanel>
           ) : null}
-        </ScreenState>
-      </PageSection>
-    </FullWidthLayout>
+
+          <CommercePanel gap="$3">
+            <Text fontSize={14} fontWeight="800" color={ui.text}>
+              Actions
+            </Text>
+            <XStack gap="$2" flexWrap="wrap">
+              {eligibility?.canShareInvoice ? (
+                <Button
+                  tone="outline"
+                  size="$3"
+                  borderRadius={999}
+                  disabled={invoicing}
+                  icon={<Icons.Download size={14} />}
+                  onPress={() => void handleInvoice()}
+                >
+                  {invoicing ? 'Preparing…' : 'Invoice / receipt'}
+                </Button>
+              ) : null}
+              {eligibility?.canReorder ? (
+                <Button
+                  tone="outline"
+                  size="$3"
+                  borderRadius={999}
+                  disabled={reordering}
+                  icon={<Icons.ShoppingCart size={14} />}
+                  onPress={() => void handleReorder()}
+                >
+                  {reordering ? 'Adding…' : 'Reorder'}
+                </Button>
+              ) : null}
+              {eligibility?.canCancel ? (
+                <Button
+                  tone="outline"
+                  size="$3"
+                  borderRadius={999}
+                  icon={<Icons.XCircle size={14} />}
+                  onPress={() => setCancelOpen(true)}
+                >
+                  Request cancellation
+                </Button>
+              ) : eligibility?.hasOpenCancellationRequest ? (
+                <Text fontSize={12} color={ui.textMuted}>
+                  Cancellation request pending
+                </Text>
+              ) : null}
+              {eligibility?.canGetHelp ? (
+                <Button
+                  tone="primary"
+                  size="$3"
+                  borderRadius={999}
+                  icon={<Icons.MessageCircle size={14} />}
+                  onPress={() => setSupportOpen(true)}
+                >
+                  Get help
+                </Button>
+              ) : null}
+            </XStack>
+            {eligibility?.cancelBlockedReason && !eligibility.canCancel ? (
+              <Text fontSize={11} color={ui.textMuted}>
+                {eligibility.cancelBlockedReason}
+              </Text>
+            ) : null}
+          </CommercePanel>
+
+          {user?.id ? (
+            <>
+              <CancelOrderSheet
+                open={cancelOpen}
+                onOpenChange={setCancelOpen}
+                orderId={order.id}
+                userId={user.id}
+                onSubmitted={() => void load({ soft: true })}
+              />
+              <OrderSupportSheet
+                open={supportOpen}
+                onOpenChange={setSupportOpen}
+                orderId={order.id}
+                orderNumber={order.order_number}
+                userId={user.id}
+                onSubmitted={() => void load({ soft: true })}
+              />
+              <ReturnOrderItemSheet
+                open={Boolean(returnItem)}
+                onOpenChange={(next) => {
+                  if (!next) setReturnItem(null)
+                }}
+                orderId={order.id}
+                userId={user.id}
+                item={returnItem}
+                onSubmitted={() => void load({ soft: true })}
+              />
+              <WriteReviewSheet
+                open={Boolean(reviewItem)}
+                onOpenChange={(next) => {
+                  if (!next) setReviewItem(null)
+                }}
+                orderId={order.id}
+                userId={user.id}
+                item={reviewItem}
+                onSubmitted={() => void load({ soft: true })}
+              />
+            </>
+          ) : null}
+        </YStack>
+      )}
+    </PageContent>
   )
+}
+
+function dedupeOrderPackages(
+  deliveries: CustomerOrderPackage[],
+  orderEta: string | null | undefined,
+): CustomerOrderPackage[] {
+  const merged = new Map<string, CustomerOrderPackage>()
+
+  for (const row of deliveries) {
+    const key = row.order_item_id ?? row.id
+    const existing = merged.get(key)
+    if (!existing) {
+      merged.set(key, row)
+      continue
+    }
+    merged.set(key, {
+      ...existing,
+      ...row,
+      estimated_delivery_date:
+        row.estimated_delivery_date ?? existing.estimated_delivery_date ?? orderEta ?? null,
+      tracking_number: row.tracking_number ?? existing.tracking_number,
+      carrier_tracking_url: row.carrier_tracking_url ?? existing.carrier_tracking_url,
+      carrier_name: row.carrier_name ?? existing.carrier_name,
+      product_title: row.product_title ?? existing.product_title,
+    })
+  }
+
+  return [...merged.values()].map((pkg) => ({
+    ...pkg,
+    estimated_delivery_date: pkg.estimated_delivery_date ?? orderEta ?? null,
+  }))
 }
 
 function SummaryRow({ label, value }: { label: string; value: string }) {

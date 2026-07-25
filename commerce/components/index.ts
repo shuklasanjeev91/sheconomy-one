@@ -21,6 +21,7 @@ export {
   CommerceCheckbox,
   CommerceRadio,
 } from './commerce-ui'
+export { CheckoutContactSection } from './CheckoutContactSection'
 export { CartCoupon } from './CartCoupon'
 export {
   CommerceMobileCheckoutBar,

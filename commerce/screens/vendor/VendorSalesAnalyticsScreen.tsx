@@ -45,7 +45,7 @@ import {
   setSalesAnalyticsFilters,
   setSalesAnalyticsShopId,
 } from '~/lib/sales-analytics/sales-analytics.store'
-import { getCurrentShopUtils } from '~/lib/shop/shop.utils'
+import { useVendorCurrency } from '~/hooks/useVendorCurrency'
 import { useAppDispatch, useAppSelector } from '~/lib/store/hooks'
 import { useAppUi } from '~/lib/theme/useAppUi'
 
@@ -82,7 +82,7 @@ export function VendorSalesAnalyticsScreen() {
     [profile?.id, profile?.role],
   )
 
-  const shopUtils = useMemo(() => getCurrentShopUtils(shop), [shop])
+  const shopUtils = useVendorCurrency()
   const formatAmount = shopUtils.formatAmount
 
   const summaryCards = useMemo(

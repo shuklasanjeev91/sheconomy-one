@@ -284,13 +284,18 @@ export async function savePaymentCredentials(
     const credentialsWithoutMode = { ...credentials }
     delete (credentialsWithoutMode as Record<string, string>).mode
 
+    const merchantId =
+      credentialsWithoutMode.key_id ||
+      credentialsWithoutMode.public_key ||
+      credentialsWithoutMode.merchant_key ||
+      credentialsWithoutMode.merchantId ||
+      credentialsWithoutMode.apiKey ||
+      `${provider}_${Date.now()}`
+
     const accountData = {
       shop_id: shopId,
       provider: dbProvider,
-      merchant_id:
-        credentialsWithoutMode.merchantId ||
-        credentialsWithoutMode.apiKey ||
-        `${provider}_${Date.now()}`,
+      merchant_id: merchantId,
       access_token: null,
       refresh_token: null,
       token_expiry: null,
@@ -311,6 +316,15 @@ export async function savePaymentCredentials(
       .single()
 
     if (error) throw error
+
+    await syncShopCommercePaymentRouting({
+      shopId,
+      provider,
+      connected: true,
+      keyId: credentialsWithoutMode.key_id ?? credentialsWithoutMode.public_key ?? null,
+      accountLabel: merchantId,
+    })
+
     return ok(data)
   } catch (error) {
     return fail(error, 'Could not save payment credentials.')
@@ -677,3 +691,37 @@ export function getPaymentLogStatusOptions(): PaymentFilterOption[] {
 }
 
 export { buildDefaultPaymentSettings }
+
+/** Keep checkout routing (`shop_commerce_settings`) aligned when a vendor connects a gateway. */
+async function syncShopCommercePaymentRouting(input: {
+  shopId: string
+  provider: string
+  connected: boolean
+  keyId?: string | null
+  accountLabel?: string | null
+}) {
+  const { shopId, provider, connected, keyId, accountLabel } = input
+  if (!shopId) return
+
+  const payload = connected
+    ? {
+        shop_id: shopId,
+        payment_connected: true,
+        payment_mode: 'direct',
+        payment_gateway: normalizeProviderId(provider),
+        payment_gateway_key_id: keyId?.trim() || null,
+        payment_account_label: accountLabel?.trim() || null,
+        updated_at: new Date().toISOString(),
+      }
+    : {
+        shop_id: shopId,
+        payment_connected: false,
+        payment_mode: 'shepay',
+        payment_gateway: null,
+        payment_gateway_key_id: null,
+        payment_account_label: null,
+        updated_at: new Date().toISOString(),
+      }
+
+  await supabase.from('shop_commerce_settings').upsert(payload, { onConflict: 'shop_id' })
+}

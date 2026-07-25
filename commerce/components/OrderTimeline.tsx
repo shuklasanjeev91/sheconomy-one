@@ -18,10 +18,12 @@ export function OrderTimeline({ events }: OrderTimelineProps) {
     )
   }
 
+  const displayEvents = [...events].reverse()
+
   return (
     <YStack gap="$0" width="100%">
-      {events.map((event, index) => {
-        const isLast = index === events.length - 1
+      {displayEvents.map((event, index) => {
+        const isLast = index === displayEvents.length - 1
         return (
           <XStack key={event.id} gap="$3" alignItems="stretch">
             <YStack alignItems="center" width={18}>
@@ -38,7 +40,7 @@ export function OrderTimeline({ events }: OrderTimelineProps) {
                 <YStack flex={1} width={2} backgroundColor={ui.borderSubtle} minHeight={28} />
               ) : null}
             </YStack>
-            <YStack flex={1} gap={2} paddingBottom={isLast ? 0 : '$3'}>
+            <YStack flex={1} gap={2} paddingBottom={isLast ? 0 : '$3'} minWidth={0}>
               <XStack justifyContent="space-between" gap="$2" alignItems="flex-start">
                 <Text
                   fontSize={14}
@@ -49,7 +51,7 @@ export function OrderTimeline({ events }: OrderTimelineProps) {
                   {event.label}
                 </Text>
                 {event.at ? (
-                  <Text fontSize={11} color={ui.textMuted}>
+                  <Text fontSize={11} color={ui.textMuted} flexShrink={0}>
                     {formatOrderDate(event.at, true)}
                   </Text>
                 ) : null}
