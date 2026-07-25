@@ -35,7 +35,7 @@ import {
   updateDiscountProfile,
 } from '~/lib/discount/discount.store'
 import { vendorRoutes } from '~/lib/routes'
-import { getCurrentShopUtils } from '~/lib/shop/shop.utils'
+import { useVendorCurrency } from '~/hooks/useVendorCurrency'
 import { useAppDispatch, useAppSelector } from '~/lib/store/hooks'
 import { useAppUi } from '~/lib/theme/useAppUi'
 
@@ -68,7 +68,7 @@ export function VendorDiscountScreen() {
     [profile?.id, profile?.role],
   )
 
-  const shopUtils = useMemo(() => getCurrentShopUtils(shop), [shop])
+  const shopUtils = useVendorCurrency()
   const summaryCards = useMemo(() => buildDiscountSummaryCards(stats), [stats])
 
   const visibleDiscounts = useMemo(() => {

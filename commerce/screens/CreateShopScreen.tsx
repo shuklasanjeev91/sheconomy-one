@@ -94,7 +94,7 @@ export function CreateShopScreen() {
   const router = useRouter()
   const toast = useAppToast()
   const dispatch = useAppDispatch()
-  const { isDesktop, safeBottom } = useAppLayout()
+  const { isDesktop, safeBottom, desktopHeaderHeight } = useAppLayout()
   const { user } = useAuth()
   const { profile } = useProfile()
 
@@ -398,8 +398,25 @@ export function CreateShopScreen() {
 
   const isLastStep = stepIndex === steps.length - 1
 
+  const webShellHeight =
+    Platform.OS === 'web' && isDesktop
+      ? (`calc(100dvh - ${desktopHeaderHeight}px)` as const)
+      : undefined
+
   return (
-    <YStack flex={1} width="100%" backgroundColor={ui.background} minHeight={0}>
+    <YStack
+      flex={1}
+      width="100%"
+      backgroundColor={ui.background}
+      minHeight={0}
+      style={
+        Platform.OS === 'web'
+          ? isDesktop
+            ? ({ height: webShellHeight, minHeight: webShellHeight, overflow: 'hidden' } as const)
+            : ({ height: '100%', maxHeight: '100%', overflow: 'hidden' } as const)
+          : undefined
+      }
+    >
       <XStack flex={1} minHeight={0} alignItems="stretch">
         {isDesktop ? (
           <StepSidebar
@@ -411,10 +428,23 @@ export function CreateShopScreen() {
           />
         ) : null}
 
-        <YStack flex={1} minWidth={0}>
+        <YStack flex={1} minWidth={0} minHeight={0}>
           <ScrollView
             flex={1}
-            showsVerticalScrollIndicator={false}
+            width="100%"
+            minHeight={0}
+            showsVerticalScrollIndicator
+            keyboardShouldPersistTaps="handled"
+            style={
+              Platform.OS === 'web'
+                ? ({
+                    overflowY: 'auto',
+                    minHeight: 0,
+                    height: '100%',
+                    WebkitOverflowScrolling: 'touch',
+                  } as const)
+                : undefined
+            }
             contentContainerStyle={{
               paddingHorizontal: isDesktop ? 32 : 16,
               paddingTop: 24,

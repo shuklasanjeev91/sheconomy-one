@@ -60,32 +60,52 @@ function GenderVerificationModalShell({
         width="100%"
         maxWidth={isDesktop ? 560 : undefined}
         flex={isDesktop ? undefined : 1}
-        maxHeight={isDesktop ? '90%' : '100%'}
-        minHeight={0}
+        maxHeight={isDesktop ? ('90vh' as const) : ('100%' as const)}
+        minHeight={isDesktop ? undefined : 0}
         backgroundColor={ui.surface}
         borderRadius={isDesktop ? radius.card : 0}
         borderWidth={isDesktop ? 1 : 0}
         borderColor={ui.borderSubtle}
         overflow="hidden"
-        style={isDesktop ? getShadowStyle('lg') : undefined}
+        style={
+          Platform.OS === 'web'
+            ? ({
+                ...(isDesktop ? getShadowStyle('lg') : {}),
+                display: 'flex',
+                flexDirection: 'column',
+                ...(isDesktop ? {} : { flex: 1, minHeight: 0 }),
+              } as const)
+            : isDesktop
+              ? getShadowStyle('lg')
+              : undefined
+        }
       >
         <ModalHeader ui={ui} onClose={onClose} />
         <ScrollView
-          flex={1}
           width="100%"
-          minHeight={0}
-          showsVerticalScrollIndicator={false}
+          flex={isDesktop ? undefined : 1}
+          minHeight={isDesktop ? undefined : 0}
+          showsVerticalScrollIndicator
           keyboardShouldPersistTaps="handled"
+          style={
+            Platform.OS === 'web'
+              ? ({
+                  overflowY: 'auto',
+                  ...(isDesktop
+                    ? { maxHeight: 'calc(90vh - 72px)' }
+                    : { flex: 1, minHeight: 0 }),
+                } as const)
+              : isDesktop
+                ? undefined
+                : ({ flex: 1 } as const)
+          }
           contentContainerStyle={{
-            flexGrow: 1,
             padding: 20,
             paddingBottom: 28,
             gap: 20,
           }}
         >
-          <GenderVerificationErrorBoundary scope="Modal">
-            <VerificationFlow onClose={onClose} onVerified={onVerified} />
-          </GenderVerificationErrorBoundary>
+          <VerificationFlow onClose={onClose} onVerified={onVerified} />
         </ScrollView>
       </YStack>
     </YStack>
@@ -161,6 +181,7 @@ function VerificationFlow({
 
   if (verification.phase === 'success') {
     return (
+      <GenderVerificationErrorBoundary scope="Modal" onReset={verification.reset}>
       <YStack alignItems="center" gap="$3" paddingVertical="$4">
         <YStack
           width={64}
@@ -182,10 +203,12 @@ function VerificationFlow({
           Continue
         </Button>
       </YStack>
+      </GenderVerificationErrorBoundary>
     )
   }
 
   return (
+    <GenderVerificationErrorBoundary scope="Modal" onReset={verification.reset}>
     <YStack gap="$4">
       {verification.phase === 'idle' ? (
         <YStack gap="$2">
@@ -193,6 +216,27 @@ function VerificationFlow({
             Keep {BRAND_NAME} women-first with a live face check. Center your face and blink
             naturally {verification.requiredBlinks} times — photos and screen replays are rejected.
             Video stays on your device.
+          </Text>
+        </YStack>
+      ) : null}
+
+      {!verification.supported ? (
+        <YStack
+          padding="$3"
+          borderRadius={radius.chip}
+          backgroundColor="rgba(180, 83, 9, 0.08)"
+          borderWidth={1}
+          borderColor="rgba(180, 83, 9, 0.2)"
+          gap="$1.5"
+        >
+          <XStack alignItems="center" gap="$2">
+            <Icons.AlertTriangle size={16} color="#b45309" />
+            <Text fontSize={13} fontWeight="700" color="#b45309">
+              Camera required
+            </Text>
+          </XStack>
+          <Text color={ui.textSecondary} fontSize={13} lineHeight={19}>
+            Use a device with a front camera and allow browser camera access to complete verification.
           </Text>
         </YStack>
       ) : null}
@@ -267,5 +311,6 @@ function VerificationFlow({
         </Button>
       </YStack>
     </YStack>
+    </GenderVerificationErrorBoundary>
   )
 }

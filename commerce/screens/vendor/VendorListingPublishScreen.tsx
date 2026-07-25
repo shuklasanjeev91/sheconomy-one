@@ -34,8 +34,7 @@ import {
   validateForm,
 } from '~/lib/listing/listing.store'
 import { toFriendlyListingError } from '~/lib/listing/listing.errors'
-import { DEFAULT_SHOP_CURRENCY } from '~/lib/shop/shop.type'
-import { getCurrencySymbol } from '~/lib/shop/shop.utils'
+import { useVendorCurrency } from '~/hooks/useVendorCurrency'
 import { vendorRoutes } from '~/lib/routes'
 import { useAppDispatch, useAppSelector } from '~/lib/store/hooks'
 import { useAppUi } from '~/lib/theme/useAppUi'
@@ -98,6 +97,7 @@ function VendorListingPublishContent() {
   const isLoadingDetails = useAppSelector((s) => s.listing.isLoadingDetails)
   const isUpdating = useAppSelector((s) => s.listing.isUpdating)
   const publishProgress = useAppSelector(selectPublishProgressInfo)
+  const { currency, currencySymbol } = useVendorCurrency()
 
   const [activeStep, setActiveStep] = useState<ListingPublishStepId>(LISTING_PUBLISH_STEP_IDS.BASIC)
   const [stepErrors, setStepErrors] = useState<Record<string, string>>({})
@@ -109,8 +109,6 @@ function VendorListingPublishContent() {
     [activeStep],
   )
 
-  const currency = shop?.shop_currency || DEFAULT_SHOP_CURRENCY
-  const currencySymbol = getCurrencySymbol(currency)
   const shopSlug =
     shop?.slug || shop?.shop_name?.toLowerCase().replace(/\s+/g, '-') || 'shop'
 

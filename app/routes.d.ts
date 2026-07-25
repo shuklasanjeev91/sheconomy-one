@@ -21,6 +21,7 @@ declare module 'one' {
         | `/(store)/orders`
         | `/(store)/orders/payu`
         | `/(store)/orders/payu-return`
+        | `/(store)/orders/razorpay-return`
         | `/(store)/orders/success`
         | `/(store)/payment-methods`
         | `/(store)/search`
@@ -117,6 +118,7 @@ declare module 'one' {
         | `/orders`
         | `/orders/payu`
         | `/orders/payu-return`
+        | `/orders/razorpay-return`
         | `/orders/success`
         | `/payment-methods`
         | `/profile`

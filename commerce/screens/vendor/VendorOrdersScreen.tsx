@@ -18,6 +18,7 @@ import { getShadowStyle, radius } from '~/config/tokens'
 import { useAppLayout } from '~/hooks/useAppLayout'
 import { useProfile } from '~/hooks/useProfile'
 import { useScreenSearch } from '~/hooks/useScreenSearch'
+import { useVendorCurrency } from '~/hooks/useVendorCurrency'
 import { createTracking, selectDeliveryLoading } from '~/lib/orders/delivery.store'
 import { getIssuesByOrder } from '~/lib/orders/order-issue.service'
 import type { EnrichedOrderIssue } from '~/lib/orders/order-issue.type'
@@ -564,7 +565,8 @@ type RowProps = {
 
 function OrderRow({ ui, item, role, updating, isLast, onOpen, onAdvance }: RowProps) {
   const order = item.orders
-  const currency = order?.currency ?? 'INR'
+  const { resolveCurrency } = useVendorCurrency()
+  const currency = resolveCurrency(order?.currency)
   const customer = order?.profiles
   const actions = getVendorOrderActions(item.item_status, role)
   const discount = Number(item.item_discount_amount) || 0
@@ -677,7 +679,8 @@ type CardProps = {
 
 function OrderCard({ ui, item, role, updating, onOpen, onAdvance }: CardProps) {
   const order = item.orders
-  const currency = order?.currency ?? 'INR'
+  const { resolveCurrency } = useVendorCurrency()
+  const currency = resolveCurrency(order?.currency)
   const customer = order?.profiles
   const actions = getVendorOrderActions(item.item_status, role)
 

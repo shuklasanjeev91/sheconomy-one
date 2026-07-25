@@ -16,17 +16,22 @@ import {
 } from '~/components/ui'
 import { getShadowStyle, radius } from '~/config/tokens'
 import { useLockBodyScroll } from '~/hooks/useLockBodyScroll'
+import { useVendorCurrency } from '~/hooks/useVendorCurrency'
 import { loadListingCategories } from '~/lib/listing/listing-categories.store'
 import { loadListingDetails } from '~/lib/listing/listing.store'
 import type { ListingDetails } from '~/lib/listing/listing.service'
-import { LISTING_STATUS } from '~/lib/listing/listing.type'
-import { formatListingPrice, getPrimaryListingImage } from '~/lib/listing/listing.utils'
+import { getPrimaryListingImage } from '~/lib/listing/listing.utils'
+import { getCurrencyName } from '~/lib/shop/current-shop-utils'
 import { overlayBackdropStyle } from '~/lib/layout/styles'
 import { commerceRoutes, vendorRoutes } from '~/lib/routes'
 import { useAppDispatch, useAppSelector } from '~/lib/store/hooks'
 import type { AppUiTokens } from '~/lib/theme/app-ui'
 
-import { listingSkuFallback, listingStatusLabel } from '~/commerce/screens/vendor/vendor-listings-shared'
+import {
+  listingSkuFallback,
+  listingStatusLabel,
+  listingTypeLabel,
+} from '~/commerce/screens/vendor/vendor-listings-shared'
 
 const PANEL_WIDTH = 720
 
@@ -40,6 +45,26 @@ const DETAIL_TABS: { id: DetailTab; label: string; icon: (typeof Icons)[keyof ty
   { id: 'categories', label: 'Categories', icon: Icons.Tags },
   { id: 'media', label: 'Media', icon: Icons.Image },
 ]
+
+type ParsedImage = { url: string; alt?: string; isPrimary?: boolean; displayOrder?: number }
+type ParsedAttribute = { name: string; value: string }
+type ParsedVariation = {
+  id?: string
+  name: string
+  value: string
+  sku?: string | null
+  stock?: number | null
+  priceAdjustment?: number | null
+  isAvailable?: boolean | null
+}
+type ParsedMaterial = {
+  id?: string
+  name: string
+  percentage?: number | null
+  isPrimary?: boolean
+  isSustainable?: boolean
+  certification?: string | null
+}
 
 type VendorListingDetailDrawerProps = {
   ui: AppUiTokens
@@ -61,8 +86,9 @@ export function VendorListingDetailDrawer({
   onClose,
 }: VendorListingDetailDrawerProps) {
   const dispatch = useAppDispatch()
-  const toast = useAppToast()
+  useAppToast()
   useLockBodyScroll(open)
+  const { formatAmount, resolveCurrency } = useVendorCurrency()
 
   const listing = useAppSelector((s) => s.listing.currentListing)
   const isLoading = useAppSelector((s) => s.listing.isLoadingDetails)
@@ -79,10 +105,13 @@ export function VendorListingDetailDrawer({
     void dispatch(loadListingCategories(listingId))
   }, [dispatch, listingId, open])
 
+  const shopCurrency = resolveCurrency(listing?.shop_currency, currency)
+
   const images = useMemo(() => parseImages(listing), [listing])
   const attributes = useMemo(() => parseAttributes(listing), [listing])
   const variations = useMemo(() => parseVariations(listing), [listing])
   const materials = useMemo(() => parseMaterials(listing), [listing])
+  const metadata = useMemo(() => parseListingMetadata(listing), [listing])
 
   if (!open) return null
 
@@ -163,7 +192,13 @@ export function VendorListingDetailDrawer({
               }}
             >
               <YStack gap="$4" padding="$4">
-                <ListingHero ui={ui} listing={listing} currency={currency} images={images} />
+                <ListingHero
+                  ui={ui}
+                  listing={listing}
+                  shopCurrency={shopCurrency}
+                  formatAmount={formatAmount}
+                  images={images}
+                />
 
                 <ScrollView horizontal showsHorizontalScrollIndicator={false}>
                   <XStack gap="$2">
@@ -198,11 +233,13 @@ export function VendorListingDetailDrawer({
                   ui={ui}
                   tab={activeTab}
                   listing={listing}
-                  currency={currency}
+                  shopCurrency={shopCurrency}
+                  formatAmount={formatAmount}
                   images={images}
                   attributes={attributes}
                   variations={variations}
                   materials={materials}
+                  metadata={metadata}
                   categories={listingCategories}
                 />
               </YStack>
@@ -260,17 +297,24 @@ export function VendorListingDetailDrawer({
 function ListingHero({
   ui,
   listing,
-  currency,
+  shopCurrency,
+  formatAmount,
   images,
 }: {
   ui: AppUiTokens
   listing: ListingDetails
-  currency: string
-  images: { url: string; isPrimary?: boolean }[]
+  shopCurrency: string
+  formatAmount: ReturnType<typeof useVendorCurrency>['formatAmount']
+  images: ParsedImage[]
 }) {
   const hero = images[0]?.url ?? getPrimaryListingImage(listing as never)
   const stock = listing.quantity ?? listing.stock ?? 0
   const lowStock = stock > 0 && stock <= 5
+  const sku = listing.sku?.trim() || listingSkuFallback(listing.slug, listing.id ?? '')
+  const basePrice =
+    listing.price == null || Number(listing.price) === 0
+      ? 'Free'
+      : formatAmount(listing.price, { showCode: true })
 
   return (
     <YStack
@@ -283,7 +327,7 @@ function ListingHero({
       style={getShadowStyle('sm')}
     >
       <XStack gap="$4" flexWrap="wrap" alignItems="flex-start">
-        <YStack gap="$2" width={isDesktopWidth(220) ? 220 : '100%'}>
+        <YStack gap="$2" width={220} flexShrink={0} $sm={{ width: '100%' }}>
           <YStack
             width="100%"
             aspectRatio={1}
@@ -299,21 +343,23 @@ function ListingHero({
               <Icons.Image size={36} color={ui.textMuted} />
             )}
           </YStack>
-          <XStack gap="$2" flexWrap="wrap">
-            {images.slice(0, 4).map((image, index) => (
-              <YStack
-                key={`${image.url}-${index}`}
-                width={52}
-                height={52}
-                borderRadius={radius.chip}
-                overflow="hidden"
-                borderWidth={image.isPrimary ? 2 : 1}
-                borderColor={image.isPrimary ? ui.brand : ui.borderSubtle}
-              >
-                <Image src={image.url} width={52} height={52} objectFit="cover" alt="" />
-              </YStack>
-            ))}
-          </XStack>
+          {images.length > 1 ? (
+            <XStack gap="$2" flexWrap="wrap">
+              {images.slice(0, 4).map((image, index) => (
+                <YStack
+                  key={`${image.url}-${index}`}
+                  width={52}
+                  height={52}
+                  borderRadius={radius.chip}
+                  overflow="hidden"
+                  borderWidth={image.isPrimary ? 2 : 1}
+                  borderColor={image.isPrimary ? ui.brand : ui.borderSubtle}
+                >
+                  <Image src={image.url} width={52} height={52} objectFit="cover" alt="" />
+                </YStack>
+              ))}
+            </XStack>
+          ) : null}
         </YStack>
 
         <YStack flex={1} minWidth={240} gap="$3">
@@ -321,6 +367,8 @@ function ListingHero({
             <XStack gap="$2" flexWrap="wrap">
               <StatusPill ui={ui} label={listingStatusLabel(listing.listing_status)} tone="brand" />
               {listing.is_featured ? <StatusPill ui={ui} label="Featured" tone="gold" /> : null}
+              {!listing.is_active ? <StatusPill ui={ui} label="Hidden" tone="warning" /> : null}
+              <StatusPill ui={ui} label={shopCurrency} tone="neutral" />
             </XStack>
             <Text fontSize={11.5} color={ui.textMuted} fontWeight="600">
               Last updated: {formatUpdatedAt(listing.updated_at)}
@@ -331,8 +379,14 @@ function ListingHero({
             {listing.title}
           </Text>
           <Text fontSize={12.5} color={ui.textSecondary} fontWeight="600">
-            SKU: {listingSkuFallback(listing.slug, listing.id ?? '')}
+            SKU: {sku}
           </Text>
+          {listing.shop_name ? (
+            <Text fontSize={12} color={ui.textMuted} fontWeight="600">
+              Shop: {listing.shop_name}
+              {listing.shop_verified ? ' · Verified' : ''}
+            </Text>
+          ) : null}
 
           <XStack
             gap="$3"
@@ -345,10 +399,13 @@ function ListingHero({
           >
             <YStack flex={1} minWidth={120} gap={4}>
               <Text fontSize={11} fontWeight="700" color={ui.textMuted}>
-                SELLING PRICE
+                SELLING PRICE ({shopCurrency})
               </Text>
               <Text fontSize={22} fontWeight="800" color={ui.text}>
-                {formatListingPrice(listing.price, listing.shop_currency ?? currency)}
+                {basePrice}
+              </Text>
+              <Text fontSize={11} color={ui.textMuted}>
+                {getCurrencyName(shopCurrency)}
               </Text>
             </YStack>
             <YStack flex={1} minWidth={120} gap={4}>
@@ -404,32 +461,165 @@ function TabContent({
   ui,
   tab,
   listing,
-  currency,
+  shopCurrency,
+  formatAmount,
   images,
   attributes,
   variations,
   materials,
+  metadata,
   categories,
 }: {
   ui: AppUiTokens
   tab: DetailTab
   listing: ListingDetails
-  currency: string
-  images: { url: string; isPrimary?: boolean }[]
-  attributes: { name: string; value: string }[]
-  variations: { name: string; value: string }[]
-  materials: { name: string; value: string }[]
+  shopCurrency: string
+  formatAmount: ReturnType<typeof useVendorCurrency>['formatAmount']
+  images: ParsedImage[]
+  attributes: ParsedAttribute[]
+  variations: ParsedVariation[]
+  materials: ParsedMaterial[]
+  metadata: ListingMetadataFields
   categories: { category_id: string; is_primary?: boolean | null }[]
 }) {
   if (tab === 'overview') {
     return (
-      <YStack gap="$3">
-        <Text fontSize={15} fontWeight="800" color={ui.text}>
-          Product Narrative
-        </Text>
-        <Text fontSize={14} color={ui.textSecondary} lineHeight={22}>
-          {stripHtml(listing.description ?? '') || 'No description added yet.'}
-        </Text>
+      <YStack gap="$4">
+        <YStack gap="$3">
+          <Text fontSize={15} fontWeight="800" color={ui.text}>
+            Product Narrative
+          </Text>
+          <Text fontSize={14} color={ui.textSecondary} lineHeight={22}>
+            {stripHtml(listing.description ?? '') || 'No description added yet.'}
+          </Text>
+        </YStack>
+
+        <DetailGrid
+          ui={ui}
+          title="Listing Details"
+          rows={[
+            { label: 'Listing type', value: listingTypeLabel(listing.listing_type) },
+            { label: 'Status', value: listingStatusLabel(listing.listing_status) },
+            { label: 'Slug', value: listing.slug ?? '—' },
+            {
+              label: 'SKU',
+              value: listing.sku?.trim() || listingSkuFallback(listing.slug, listing.id ?? ''),
+            },
+            {
+              label: 'Base price',
+              value:
+                listing.price == null || Number(listing.price) === 0
+                  ? 'Free'
+                  : formatAmount(listing.price, { showCode: true }),
+            },
+            { label: 'Shop currency', value: shopCurrency },
+            { label: 'Quantity', value: String(listing.quantity ?? listing.stock ?? 0) },
+            { label: 'Stock', value: String(listing.stock ?? listing.quantity ?? 0) },
+            {
+              label: 'Min order quantity',
+              value: metadata.minOrderQuantity != null ? String(metadata.minOrderQuantity) : '—',
+            },
+            {
+              label: 'Weight',
+              value: listing.weight != null ? `${listing.weight} kg` : '—',
+            },
+            {
+              label: 'Dimensions',
+              value: formatDimensions(listing.dimensions),
+            },
+            {
+              label: 'Shipping required',
+              value: listing.shipping_required == null ? '—' : listing.shipping_required ? 'Yes' : 'No',
+            },
+            { label: 'Featured', value: listing.is_featured ? 'Yes' : 'No' },
+            { label: 'Storefront visible', value: listing.is_active ? 'Yes' : 'No' },
+            {
+              label: 'Published',
+              value: formatDateTime(listing.published_at),
+            },
+            { label: 'Created', value: formatDateTime(listing.created_at) },
+            { label: 'Updated', value: formatDateTime(listing.updated_at) },
+          ]}
+        />
+
+        {(listing.meta_title || listing.meta_description) ? (
+          <DetailGrid
+            ui={ui}
+            title="SEO"
+            rows={[
+              { label: 'Meta title', value: listing.meta_title?.trim() || '—' },
+              { label: 'Meta description', value: listing.meta_description?.trim() || '—' },
+            ]}
+          />
+        ) : null}
+
+        {listing.tags?.length ? (
+          <YStack gap="$2">
+            <Text fontSize={15} fontWeight="800" color={ui.text}>
+              Tags
+            </Text>
+            <XStack gap="$2" flexWrap="wrap">
+              {listing.tags.map((tag) => (
+                <XStack
+                  key={tag}
+                  paddingHorizontal="$2.5"
+                  paddingVertical={4}
+                  borderRadius={999}
+                  backgroundColor={ui.surfaceMuted}
+                >
+                  <Text fontSize={12} fontWeight="600" color={ui.textSecondary}>
+                    {tag}
+                  </Text>
+                </XStack>
+              ))}
+            </XStack>
+          </YStack>
+        ) : null}
+
+        {listing.listing_type === 'digital' ? (
+          <DetailGrid
+            ui={ui}
+            title="Digital Delivery"
+            rows={[
+              { label: 'File URL', value: listing.digital_file_url ?? '—' },
+              {
+                label: 'File size',
+                value: listing.digital_file_size != null ? `${listing.digital_file_size} bytes` : '—',
+              },
+              { label: 'File type', value: listing.digital_file_type ?? '—' },
+              {
+                label: 'Download limit',
+                value: listing.download_limit != null ? String(listing.download_limit) : 'Unlimited',
+              },
+            ]}
+          />
+        ) : null}
+
+        {listing.listing_type === 'service' ? (
+          <DetailGrid
+            ui={ui}
+            title="Service Settings"
+            rows={[
+              {
+                label: 'Duration',
+                value:
+                  listing.booking_duration_minutes != null
+                    ? `${listing.booking_duration_minutes} min`
+                    : '—',
+              },
+              { label: 'Meeting URL', value: listing.meeting_url ?? '—' },
+              { label: 'Max attendees', value: String(listing.max_attendees ?? 1) },
+              {
+                label: 'Requires approval',
+                value: listing.requires_approval ? 'Yes' : 'No',
+              },
+              {
+                label: 'Online service',
+                value: listing.is_online == null ? '—' : listing.is_online ? 'Yes' : 'No',
+              },
+            ]}
+          />
+        ) : null}
       </YStack>
     )
   }
@@ -439,11 +629,19 @@ function TabContent({
   }
 
   if (tab === 'variations') {
-    return <KeyValuePanel ui={ui} title="Variations" rows={variations} empty="No variations configured." />
+    return (
+      <VariationsPanel
+        ui={ui}
+        variations={variations}
+        basePrice={listing.price}
+        formatAmount={formatAmount}
+        shopCurrency={shopCurrency}
+      />
+    )
   }
 
   if (tab === 'materials') {
-    return <KeyValuePanel ui={ui} title="Materials" rows={materials} empty="No materials listed." />
+    return <MaterialsPanel ui={ui} materials={materials} />
   }
 
   if (tab === 'categories') {
@@ -481,29 +679,255 @@ function TabContent({
   return (
     <YStack gap="$3">
       <Text fontSize={15} fontWeight="800" color={ui.text}>
-        Media
+        Media ({images.length})
       </Text>
       {images.length === 0 ? (
         <Text fontSize={13} color={ui.textSecondary}>
           No images uploaded yet.
         </Text>
       ) : (
-        <XStack gap="$3" flexWrap="wrap">
+        <YStack gap="$3">
           {images.map((image, index) => (
-            <YStack
+            <XStack
               key={`${image.url}-${index}`}
-              width={120}
-              height={120}
+              gap="$3"
+              alignItems="center"
+              padding="$2.5"
               borderRadius={radius.chip}
-              overflow="hidden"
-              borderWidth={image.isPrimary ? 2 : 1}
-              borderColor={image.isPrimary ? ui.brand : ui.borderSubtle}
+              borderWidth={1}
+              borderColor={ui.borderSubtle}
+              backgroundColor={ui.surface}
             >
-              <Image src={image.url} width={120} height={120} objectFit="cover" alt="" />
-            </YStack>
+              <YStack
+                width={80}
+                height={80}
+                borderRadius={radius.chip}
+                overflow="hidden"
+                borderWidth={image.isPrimary ? 2 : 1}
+                borderColor={image.isPrimary ? ui.brand : ui.borderSubtle}
+              >
+                <Image src={image.url} width={80} height={80} objectFit="cover" alt="" />
+              </YStack>
+              <YStack flex={1} gap={4}>
+                <Text fontSize={13} fontWeight="700" color={ui.text}>
+                  {image.alt?.trim() || `Image ${index + 1}`}
+                </Text>
+                <Text fontSize={12} color={ui.textMuted}>
+                  {image.isPrimary ? 'Primary · ' : ''}
+                  Order {image.displayOrder ?? index}
+                </Text>
+              </YStack>
+            </XStack>
           ))}
-        </XStack>
+        </YStack>
       )}
+    </YStack>
+  )
+}
+
+function VariationsPanel({
+  ui,
+  variations,
+  basePrice,
+  formatAmount,
+  shopCurrency,
+}: {
+  ui: AppUiTokens
+  variations: ParsedVariation[]
+  basePrice: number | null | undefined
+  formatAmount: ReturnType<typeof useVendorCurrency>['formatAmount']
+  shopCurrency: string
+}) {
+  const base = Number(basePrice ?? 0)
+
+  return (
+    <YStack
+      borderRadius={radius.card}
+      borderWidth={1}
+      borderColor={ui.borderSubtle}
+      overflow="hidden"
+      backgroundColor={ui.surface}
+    >
+      <XStack padding="$3" backgroundColor="#FFF8EE" justifyContent="space-between" alignItems="center">
+        <Text fontSize={13} fontWeight="800" color={ui.text}>
+          Variations ({variations.length})
+        </Text>
+        <Text fontSize={11.5} fontWeight="600" color={ui.textMuted}>
+          Base price: {base === 0 ? 'Free' : formatAmount(base, { showCode: true })} · {shopCurrency}
+        </Text>
+      </XStack>
+
+      {variations.length === 0 ? (
+        <Text fontSize={13} color={ui.textSecondary} padding="$3">
+          No variations configured.
+        </Text>
+      ) : (
+        variations.map((variation, index) => {
+          const adjustment = Number(variation.priceAdjustment ?? 0)
+          const finalPrice = base + (Number.isFinite(adjustment) ? adjustment : 0)
+          const priceLabel =
+            finalPrice === 0 && base === 0
+              ? 'Free'
+              : formatAmount(finalPrice, { showCode: true })
+          const adjustmentLabel =
+            adjustment === 0
+              ? '—'
+              : `${adjustment > 0 ? '+' : ''}${formatAmount(adjustment, { showCode: true })}`
+
+          return (
+            <YStack
+              key={variation.id ?? `${variation.name}-${variation.value}-${index}`}
+              padding="$3"
+              borderTopWidth={1}
+              borderTopColor={ui.borderSubtle}
+              gap="$2.5"
+            >
+              <XStack justifyContent="space-between" alignItems="flex-start" gap="$3" flexWrap="wrap">
+                <YStack gap={4} flex={1} minWidth={160}>
+                  <Text fontSize={14} fontWeight="800" color={ui.text}>
+                    {variation.name.trim()}: {variation.value.trim()}
+                  </Text>
+                  {variation.id ? (
+                    <Text fontSize={11} color={ui.textMuted} fontWeight="600">
+                      ID: {variation.id}
+                    </Text>
+                  ) : null}
+                </YStack>
+                <StatusPill
+                  ui={ui}
+                  label={variation.isAvailable === false ? 'Unavailable' : 'Available'}
+                  tone={variation.isAvailable === false ? 'warning' : 'brand'}
+                />
+              </XStack>
+
+              <XStack gap="$3" flexWrap="wrap">
+                <VariationStat ui={ui} label="Final price" value={priceLabel} />
+                <VariationStat ui={ui} label="Price adjustment" value={adjustmentLabel} />
+                <VariationStat
+                  ui={ui}
+                  label="Stock"
+                  value={variation.stock != null ? String(variation.stock) : '—'}
+                />
+                <VariationStat ui={ui} label="SKU" value={variation.sku?.trim() || '—'} />
+              </XStack>
+            </YStack>
+          )
+        })
+      )}
+    </YStack>
+  )
+}
+
+function VariationStat({ ui, label, value }: { ui: AppUiTokens; label: string; value: string }) {
+  return (
+    <YStack minWidth={120} gap={2}>
+      <Text fontSize={10.5} fontWeight="700" color={ui.textMuted} letterSpacing={0.3}>
+        {label.toUpperCase()}
+      </Text>
+      <Text fontSize={13} fontWeight="700" color={ui.text}>
+        {value}
+      </Text>
+    </YStack>
+  )
+}
+
+function MaterialsPanel({ ui, materials }: { ui: AppUiTokens; materials: ParsedMaterial[] }) {
+  return (
+    <YStack
+      borderRadius={radius.card}
+      borderWidth={1}
+      borderColor={ui.borderSubtle}
+      overflow="hidden"
+      backgroundColor={ui.surface}
+    >
+      <XStack padding="$3" backgroundColor="#FFF8EE">
+        <Text fontSize={13} fontWeight="800" color={ui.text}>
+          Materials ({materials.length})
+        </Text>
+      </XStack>
+
+      {materials.length === 0 ? (
+        <Text fontSize={13} color={ui.textSecondary} padding="$3">
+          No materials listed.
+        </Text>
+      ) : (
+        materials.map((material, index) => (
+          <YStack
+            key={material.id ?? `${material.name}-${index}`}
+            padding="$3"
+            borderTopWidth={index === 0 ? 0 : 1}
+            borderTopColor={ui.borderSubtle}
+            gap="$2"
+          >
+            <XStack justifyContent="space-between" alignItems="center" gap="$2" flexWrap="wrap">
+              <Text fontSize={14} fontWeight="800" color={ui.text}>
+                {material.name}
+              </Text>
+              <XStack gap="$2" flexWrap="wrap">
+                {material.isPrimary ? <StatusPill ui={ui} label="Primary" tone="brand" /> : null}
+                {material.isSustainable ? <StatusPill ui={ui} label="Sustainable" tone="gold" /> : null}
+              </XStack>
+            </XStack>
+            <XStack gap="$3" flexWrap="wrap">
+              <VariationStat
+                ui={ui}
+                label="Percentage"
+                value={material.percentage != null ? `${material.percentage}%` : '—'}
+              />
+              <VariationStat
+                ui={ui}
+                label="Certification"
+                value={material.certification?.trim() || '—'}
+              />
+            </XStack>
+          </YStack>
+        ))
+      )}
+    </YStack>
+  )
+}
+
+function DetailGrid({
+  ui,
+  title,
+  rows,
+}: {
+  ui: AppUiTokens
+  title: string
+  rows: { label: string; value: string }[]
+}) {
+  return (
+    <YStack
+      borderRadius={radius.card}
+      borderWidth={1}
+      borderColor={ui.borderSubtle}
+      overflow="hidden"
+      backgroundColor={ui.surface}
+    >
+      <XStack padding="$3" backgroundColor="#FFF8EE">
+        <Text fontSize={13} fontWeight="800" color={ui.text}>
+          {title}
+        </Text>
+      </XStack>
+      {rows.map((row, index) => (
+        <XStack
+          key={row.label}
+          paddingHorizontal="$3"
+          paddingVertical="$2.5"
+          borderTopWidth={index === 0 ? 0 : 1}
+          borderTopColor={ui.borderSubtle}
+          justifyContent="space-between"
+          gap="$3"
+          flexWrap="wrap"
+        >
+          <Text fontSize={13} fontWeight="700" color={ui.textSecondary} minWidth={140}>
+            {row.label}
+          </Text>
+          <Text fontSize={13} fontWeight="700" color={ui.text} flex={1} textAlign="right">
+            {row.value}
+          </Text>
+        </XStack>
+      ))}
     </YStack>
   )
 }
@@ -516,7 +940,7 @@ function KeyValuePanel({
 }: {
   ui: AppUiTokens
   title: string
-  rows: { name: string; value: string }[]
+  rows: ParsedAttribute[]
   empty: string
 }) {
   return (
@@ -567,14 +991,16 @@ function StatusPill({
 }: {
   ui: AppUiTokens
   label: string
-  tone: 'brand' | 'gold' | 'warning'
+  tone: 'brand' | 'gold' | 'warning' | 'neutral'
 }) {
   const styles =
     tone === 'gold'
       ? { bg: '#FFF4D6', color: '#9A6700' }
       : tone === 'warning'
         ? { bg: '#FFF0E1', color: '#B45309' }
-        : { bg: ui.roseSurface, color: ui.brand }
+        : tone === 'neutral'
+          ? { bg: ui.surfaceMuted, color: ui.textSecondary }
+          : { bg: ui.roseSurface, color: ui.brand }
 
   return (
     <XStack paddingHorizontal="$2.5" paddingVertical={4} borderRadius={999} backgroundColor={styles.bg}>
@@ -585,66 +1011,183 @@ function StatusPill({
   )
 }
 
-function parseImages(listing: ListingDetails | null): { url: string; isPrimary?: boolean }[] {
-  if (!listing?.images) return []
-  const raw = listing.images
-  if (!Array.isArray(raw)) return []
-  return raw
-    .map((item) => {
-      if (!item || typeof item !== 'object') return null
-      const row = item as Record<string, unknown>
-      const url = typeof row.image_url === 'string' ? row.image_url : null
-      if (!url) return null
-      return { url, isPrimary: Boolean(row.is_primary) }
-    })
-    .filter((item): item is { url: string; isPrimary?: boolean } => Boolean(item))
+type ListingMetadataFields = {
+  minOrderQuantity?: number | null
 }
 
-function parseCollection(
-  listing: ListingDetails | null,
-  key: 'attributes' | 'variations' | 'materials',
-): { name: string; value: string }[] {
-  const raw = listing?.[key]
+function parseListingMetadata(listing: ListingDetails | null): ListingMetadataFields {
+  const meta = asRecord(listing?.listing_metadata)
+  const minOrderQuantity = readNumber(meta?.min_order_quantity)
+  return { minOrderQuantity }
+}
+
+function parseImages(listing: ListingDetails | null): ParsedImage[] {
+  const fromView = parseImageRows(listing?.images, 'image_url', 'alt_text')
+  const meta = asRecord(listing?.listing_metadata)
+  const fromMeta = parseImageRows(meta?.images, 'url', 'alt')
+  const merged = new Map<string, ParsedImage>()
+
+  for (const image of [...fromView, ...fromMeta]) {
+    if (!image.url.startsWith('blob:')) {
+      merged.set(image.url, image)
+    } else if (!merged.has(image.url)) {
+      merged.set(image.url, image)
+    }
+  }
+
+  return [...merged.values()].sort((a, b) => {
+    if (Boolean(a.isPrimary) !== Boolean(b.isPrimary)) return a.isPrimary ? -1 : 1
+    return (a.displayOrder ?? 0) - (b.displayOrder ?? 0)
+  })
+}
+
+function parseImageRows(
+  raw: unknown,
+  urlKey: string,
+  altKey: string,
+): ParsedImage[] {
   if (!Array.isArray(raw)) return []
   return raw
     .map((item) => {
       if (!item || typeof item !== 'object') return null
       const row = item as Record<string, unknown>
-      const name =
-        typeof row.attribute_name === 'string'
-          ? row.attribute_name
-          : typeof row.variation_name === 'string'
-            ? row.variation_name
-            : typeof row.material_name === 'string'
-              ? row.material_name
-              : typeof row.name === 'string'
-                ? row.name
-                : 'Item'
-      const value =
-        typeof row.attribute_value === 'string'
-          ? row.attribute_value
-          : typeof row.variation_value === 'string'
-            ? row.variation_value
-            : typeof row.material_value === 'string'
-              ? row.material_value
-              : typeof row.value === 'string'
-                ? row.value
-                : ''
+      const url = typeof row[urlKey] === 'string' ? row[urlKey] : null
+      if (!url) return null
+      return {
+        url,
+        alt: typeof row[altKey] === 'string' ? row[altKey] : undefined,
+        isPrimary: Boolean(row.is_primary ?? row.isPrimary),
+        displayOrder: readNumber(row.display_order ?? row.displayOrder) ?? undefined,
+      }
+    })
+    .filter((item): item is ParsedImage => Boolean(item))
+}
+
+function parseAttributes(listing: ListingDetails | null): ParsedAttribute[] {
+  return parseNameValueCollection(listing?.attributes, {
+    nameKeys: ['attribute_name', 'name'],
+    valueKeys: ['attribute_value', 'value'],
+  })
+}
+
+function parseVariations(listing: ListingDetails | null): ParsedVariation[] {
+  const fromView = parseVariationArray(listing?.variations)
+  const meta = asRecord(listing?.listing_metadata)
+  const fromMeta = parseVariationArray(meta?.variations)
+  return mergeById(fromView, fromMeta)
+}
+
+function parseMaterials(listing: ListingDetails | null): ParsedMaterial[] {
+  const fromView = parseMaterialArray(listing?.materials)
+  const meta = asRecord(listing?.listing_metadata)
+  const fromMeta = parseMaterialArray(meta?.materials)
+  return mergeById(fromView, fromMeta)
+}
+
+function parseVariationArray(raw: unknown): ParsedVariation[] {
+  if (!Array.isArray(raw)) return []
+  return raw
+    .map((item) => {
+      if (!item || typeof item !== 'object') return null
+      const row = item as Record<string, unknown>
+      const name = readString(row.variation_name ?? row.name)
+      const value = readString(row.variation_value ?? row.value)
+      if (!name && !value) return null
+      return {
+        id: readString(row.id) ?? undefined,
+        name: name || 'Option',
+        value: value || '—',
+        sku: readString(row.sku),
+        stock: readNumber(row.stock),
+        priceAdjustment: readNumber(row.price_adjustment ?? row.priceAdjustment),
+        isAvailable:
+          row.is_available === undefined && row.isAvailable === undefined
+            ? null
+            : Boolean(row.is_available ?? row.isAvailable),
+      }
+    })
+    .filter((item): item is ParsedVariation => Boolean(item))
+}
+
+function parseMaterialArray(raw: unknown): ParsedMaterial[] {
+  if (!Array.isArray(raw)) return []
+  return raw
+    .map((item) => {
+      if (!item || typeof item !== 'object') return null
+      const row = item as Record<string, unknown>
+      const name = readString(row.material_name ?? row.name)
+      if (!name) return null
+      return {
+        id: readString(row.id) ?? undefined,
+        name,
+        percentage: readNumber(row.percentage),
+        isPrimary: Boolean(row.is_primary ?? row.isPrimary),
+        isSustainable: Boolean(row.is_sustainable ?? row.isSustainable),
+        certification: readString(row.certification),
+      }
+    })
+    .filter((item): item is ParsedMaterial => Boolean(item))
+}
+
+function parseNameValueCollection(
+  raw: unknown,
+  keys: { nameKeys: string[]; valueKeys: string[] },
+): ParsedAttribute[] {
+  if (!Array.isArray(raw)) return []
+  return raw
+    .map((item) => {
+      if (!item || typeof item !== 'object') return null
+      const row = item as Record<string, unknown>
+      const name = keys.nameKeys.map((key) => readString(row[key])).find(Boolean) ?? 'Item'
+      const value = keys.valueKeys.map((key) => readString(row[key])).find(Boolean) ?? ''
       return value ? { name, value } : null
     })
-    .filter((item): item is { name: string; value: string } => Boolean(item))
+    .filter((item): item is ParsedAttribute => Boolean(item))
 }
 
-function parseAttributes(listing: ListingDetails | null) {
-  return parseCollection(listing, 'attributes')
+function mergeById<T extends { id?: string }>(primary: T[], secondary: T[]): T[] {
+  const source = primary.length > 0 ? primary : secondary
+  if (primary.length === 0 || secondary.length === 0) return source
+
+  const map = new Map<string, T>()
+  for (const item of secondary) {
+    if (item.id) map.set(item.id, item)
+  }
+  for (const item of primary) {
+    if (item.id) map.set(item.id, { ...map.get(item.id), ...item })
+    else map.set(`__noid_${map.size}`, item)
+  }
+  return [...map.values()]
 }
 
-function parseVariations(listing: ListingDetails | null) {
-  return parseCollection(listing, 'variations')
+function asRecord(value: unknown): Record<string, unknown> | null {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return null
+  return value as Record<string, unknown>
 }
 
-function parseMaterials(listing: ListingDetails | null) {
-  return parseCollection(listing, 'materials')
+function readString(value: unknown): string | null {
+  return typeof value === 'string' && value.trim() ? value : null
+}
+
+function readNumber(value: unknown): number | null {
+  if (typeof value === 'number' && Number.isFinite(value)) return value
+  if (typeof value === 'string' && value.trim()) {
+    const parsed = Number(value)
+    return Number.isFinite(parsed) ? parsed : null
+  }
+  return null
+}
+
+function formatDimensions(value: unknown): string {
+  const record = asRecord(value)
+  if (!record) return '—'
+  const parts = ['length', 'width', 'height']
+    .map((key) => {
+      const num = readNumber(record[key])
+      return num != null ? `${key[0].toUpperCase()}${key.slice(1)}: ${num}` : null
+    })
+    .filter(Boolean)
+  return parts.length ? parts.join(' · ') : '—'
 }
 
 function stripHtml(value: string): string {
@@ -666,6 +1209,15 @@ function formatUpdatedAt(value: string | null | undefined): string {
   return date.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })
 }
 
-function isDesktopWidth(min: number) {
-  return min > 0
+function formatDateTime(value: string | null | undefined): string {
+  if (!value) return '—'
+  const date = new Date(value)
+  if (Number.isNaN(date.getTime())) return '—'
+  return date.toLocaleString(undefined, {
+    month: 'short',
+    day: 'numeric',
+    year: 'numeric',
+    hour: 'numeric',
+    minute: '2-digit',
+  })
 }

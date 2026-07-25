@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 
 import { Button, Icons, Spinner, Text, XStack, YStack, useAppToast } from '~/components/ui'
 import { radius } from '~/config/tokens'
@@ -7,24 +7,28 @@ import {
   fetchShopCoupons,
   offerBadgeLabel,
   type AvailableOffer,
+  type CartOfferFetchContext,
+  type CartOfferItem,
 } from '~/commerce/lib/discounts'
+import { filterEligibleOffers, isOfferEligible } from '~/commerce/lib/offer-utils'
 import { formatCurrency } from '~/lib/format'
 import { useAppUi } from '~/lib/theme/useAppUi'
 
 type CartShopOffersProps = {
   shopId: string
   shopName?: string | null
-  /** Subtotal for this shop's items — used for eligibility hints. */
+  /** Selected-line subtotal for this shop. */
   subtotal: number
   currency: string
+  /** Selected cart lines for this shop (item-level coupon eligibility). */
+  items: CartOfferItem[]
 }
 
 /**
- * Shop-level coupon codes surfaced inside a cart shop group (marketplace). The
- * cart carries a single order-level discount, so applying a shop code replaces
- * any current coupon (the customer is told when they tap Apply).
+ * Shop coupon codes inside a cart shop group (order-level + item-level linked listings).
+ * Only shows offers the current selection can apply — matches checkout validation.
  */
-export function CartShopOffers({ shopId, shopName, subtotal, currency }: CartShopOffersProps) {
+export function CartShopOffers({ shopId, shopName, subtotal, currency, items }: CartShopOffersProps) {
   const ui = useAppUi()
   const toast = useAppToast()
   const { cart, applyCoupon } = useCart()
@@ -33,26 +37,59 @@ export function CartShopOffers({ shopId, shopName, subtotal, currency }: CartSho
 
   const appliedId = cart?.applied_discount_id ?? null
 
+  const cartContext = useMemo<CartOfferFetchContext>(
+    () => ({ subtotal, items }),
+    [subtotal, items],
+  )
+
+  const listingIdsKey = items
+    .map((item) => item.listing_id)
+    .sort()
+    .join(',')
+  const contextKey = `${subtotal}:${listingIdsKey}`
+
+  const visibleOffers = useMemo(
+    () => filterEligibleOffers(offers, subtotal, items),
+    [offers, subtotal, items],
+  )
+
   useEffect(() => {
+    if (subtotal <= 0 || items.length === 0) {
+      setOffers([])
+      return
+    }
+
     let active = true
-    void fetchShopCoupons(shopId).then((rows) => {
+    const listingIds = items.map((item) => item.listing_id)
+    void fetchShopCoupons(shopId, listingIds, cartContext).then((rows) => {
       if (active) setOffers(rows)
     })
+
     return () => {
       active = false
     }
-  }, [shopId])
+  }, [shopId, contextKey, cartContext])
 
-  if (offers.length === 0) return null
+  if (visibleOffers.length === 0) return null
 
   async function handleApply(offer: AvailableOffer) {
+    if (!isOfferEligible(offer, subtotal, items)) {
+      toast.show("Can't apply code", {
+        tone: 'danger',
+        message: 'Add more eligible items to meet the minimum for this offer.',
+      })
+      return
+    }
+
     setApplyingCode(offer.code.toUpperCase())
     const { error } = await applyCoupon(offer.code)
     setApplyingCode(null)
+
     if (error) {
       toast.show("Couldn't apply code", { tone: 'danger', message: error })
       return
     }
+
     toast.show('Coupon applied', {
       tone: 'success',
       message: `${offer.code} from ${shopName ?? 'this shop'} added to your order.`,
@@ -68,10 +105,11 @@ export function CartShopOffers({ shopId, shopName, subtotal, currency }: CartSho
         </Text>
       </XStack>
       <XStack gap="$2" flexWrap="wrap">
-        {offers.map((offer) => {
-          const eligible = offer.minOrderAmount == null || subtotal >= offer.minOrderAmount
+        {visibleOffers.map((offer) => {
           const busy = applyingCode === offer.code.toUpperCase()
           const isApplied = appliedId === offer.id
+          const canApply = isOfferEligible(offer, subtotal, items)
+
           return (
             <XStack
               key={offer.id}
@@ -92,6 +130,7 @@ export function CartShopOffers({ shopId, shopName, subtotal, currency }: CartSho
                 </Text>
                 <Text fontSize={10.5} color={ui.success} fontWeight="700">
                   {offerBadgeLabel(offer, currency)}
+                  {offer.appliesTo === 'item' ? ' · item offer' : ''}
                   {offer.minOrderAmount
                     ? ` · min ${formatCurrency(offer.minOrderAmount, currency)}`
                     : ''}
@@ -103,13 +142,13 @@ export function CartShopOffers({ shopId, shopName, subtotal, currency }: CartSho
                 </XStack>
               ) : (
                 <Button
-                  tone={eligible ? 'primary' : 'ghost'}
+                  tone="primary"
                   size="$2"
                   borderRadius={radius.chip}
-                  disabled={busy || !eligible}
+                  disabled={busy || !canApply}
                   onPress={() => void handleApply(offer)}
                 >
-                  {busy ? <Spinner size="small" color="white" /> : eligible ? 'Apply' : 'Locked'}
+                  {busy ? <Spinner size="small" color="white" /> : 'Apply'}
                 </Button>
               )}
             </XStack>

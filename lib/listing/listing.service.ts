@@ -48,7 +48,10 @@ import {
 // ============= DERIVED VIEW / RPC ROW TYPES =============
 
 type Fn = Database['public']['Functions']
-export type ShopListingRow = Fn['get_shop_listings']['Returns'][number]
+export type ShopListingRow = Fn['get_shop_listings']['Returns'][number] & {
+  /** Present when loaded via direct table query (not returned by RPC). */
+  sku?: string | null
+}
 export type AdminListingRow = Fn['admin_search_listings']['Returns'][number]
 export type PopularTag = Fn['get_popular_tags']['Returns'][number]
 export type RecommendedListing = Fn['get_listing_recommendations']['Returns'][number]
@@ -87,9 +90,66 @@ export type ShopListingQuery = {
   offset?: number
 }
 
+type ListingCatalogRow = Pick<
+  Listing,
+  | 'id'
+  | 'title'
+  | 'slug'
+  | 'description'
+  | 'price'
+  | 'quantity'
+  | 'listing_type'
+  | 'listing_status'
+  | 'is_active'
+  | 'is_featured'
+  | 'is_online'
+  | 'created_at'
+  | 'updated_at'
+  | 'sku'
+> & {
+  listing_images: Array<{
+    image_url: string
+    is_primary: boolean
+    display_order: number
+  }> | null
+}
+
+function pickPrimaryImageUrl(
+  images: ListingCatalogRow['listing_images'],
+): string {
+  if (!images?.length) return ''
+  const sorted = [...images].sort((a, b) => {
+    if (a.is_primary !== b.is_primary) return a.is_primary ? -1 : 1
+    return (a.display_order ?? 0) - (b.display_order ?? 0)
+  })
+  return sorted[0]?.image_url ?? ''
+}
+
+function mapCatalogRowToShopListing(row: ListingCatalogRow): ShopListingRow {
+  return {
+    id: row.id,
+    title: row.title,
+    slug: row.slug ?? '',
+    description: row.description ?? '',
+    price: row.price,
+    quantity: row.quantity ?? 0,
+    listing_type: row.listing_type,
+    listing_status: row.listing_status,
+    is_active: row.is_active,
+    is_featured: row.is_featured,
+    is_online: row.is_online ?? false,
+    created_at: row.created_at,
+    updated_at: row.updated_at,
+    primary_image_url: pickPrimaryImageUrl(row.listing_images),
+    similarity_score: 0,
+    sku: row.sku ?? null,
+  }
+}
+
 /**
- * Listings for a single shop via the `get_shop_listings` RPC (owner/admin
- * view — includes drafts and inactive rows). Access enforced by RLS.
+ * Listings for a single shop (owner/admin view — all statuses, including
+ * draft / paused / archived). Queries the `listings` table directly so
+ * nothing is hidden by RPC defaults. Access enforced by RLS.
  */
 export async function getShopListings(
   shopId: string,
@@ -98,22 +158,41 @@ export async function getShopListings(
   if (!shopId) return fail('Shop ID is required')
 
   const limit = query.limit ?? 50
-  try {
-    const { data, error } = await supabase.rpc('get_shop_listings', {
-      p_shop_id: shopId,
-      p_listing_type: query.listingType ?? undefined,
-      p_listing_status: query.listingStatus ?? undefined,
-      p_is_active: query.isActive ?? undefined,
-      p_is_online: query.isOnline ?? undefined,
-      p_search_term: query.search ?? undefined,
-      p_min_price: query.minPrice ?? undefined,
-      p_max_price: query.maxPrice ?? undefined,
-      p_limit: limit,
-      p_offset: query.offset ?? 0,
-    })
+  const offset = query.offset ?? 0
 
+  try {
+    let request = supabase
+      .from('listings')
+      .select(
+        `
+        id, title, slug, description, price, quantity, listing_type, listing_status,
+        is_active, is_featured, is_online, created_at, updated_at, sku,
+        listing_images ( image_url, is_primary, display_order )
+      `,
+      )
+      .eq('shop_id', shopId)
+      .order('updated_at', { ascending: false })
+
+    if (query.listingType) request = request.eq('listing_type', query.listingType)
+    if (query.listingStatus) request = request.eq('listing_status', query.listingStatus)
+    if (query.isActive != null) request = request.eq('is_active', query.isActive)
+    if (query.isOnline != null) request = request.eq('is_online', query.isOnline)
+    if (query.minPrice != null) request = request.gte('price', query.minPrice)
+    if (query.maxPrice != null) request = request.lte('price', query.maxPrice)
+
+    const search = query.search?.trim()
+    if (search) {
+      const term = search.replace(/[%_]/g, '')
+      request = request.or(`title.ilike.%${term}%,sku.ilike.%${term}%`)
+    }
+
+    request = request.range(offset, offset + limit - 1)
+
+    const { data, error } = await request
     if (error) return fail(error)
-    return ok(data ?? [])
+
+    const rows = (data ?? []) as ListingCatalogRow[]
+    return ok(rows.map(mapCatalogRowToShopListing))
   } catch (error) {
     return fail(error)
   }

@@ -24,7 +24,7 @@ import {
   createDiscountProfile,
 } from '~/lib/discount/discount.store'
 import { vendorRoutes } from '~/lib/routes'
-import { getCurrentShopUtils } from '~/lib/shop/shop.utils'
+import { useVendorCurrency } from '~/hooks/useVendorCurrency'
 import { useAppDispatch, useAppSelector } from '~/lib/store/hooks'
 import { useAppUi } from '~/lib/theme/useAppUi'
 
@@ -55,7 +55,7 @@ export function VendorCreateDiscountScreen() {
   })
   const [errors, setErrors] = useState<Record<string, string>>({})
 
-  const shopUtils = useMemo(() => getCurrentShopUtils(shop), [shop])
+  const shopUtils = useVendorCurrency()
 
   const accessContext = useMemo(
     () => ({

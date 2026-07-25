@@ -28,7 +28,9 @@ import {
   applyCouponCode,
   autoApplyBestOffer,
   reconcileCartDiscount,
+  toCartOfferItems,
 } from '~/commerce/lib/discounts'
+import { filterSelectedCartItems, useCartSelectionRevision } from '~/commerce/lib/cart-selection'
 import { trackCommerceEvent } from '~/lib/analytics'
 import type { Json } from '~/lib/supabase'
 import { supabase } from '~/lib/supabase/client'
@@ -118,14 +120,23 @@ export function CartProvider({ children }: { children: ReactNode }) {
     }
     if (data.cart.applied_discount_id || data.cart.items_subtotal <= 0) return data
 
+    const selectedItems = filterSelectedCartItems(data.items)
+    const selectedSubtotal = selectedItems.reduce(
+      (sum, item) => sum + item.unit_price * item.quantity,
+      0,
+    )
+    if (selectedSubtotal <= 0) return data
+
     const shopIds = [
-      ...new Set(data.items.map((item) => item.shop_id).filter((id): id is string => !!id)),
+      ...new Set(selectedItems.map((item) => item.shop_id).filter((id): id is string => !!id)),
     ]
+    const listingIds = selectedItems.map((item) => item.listing_id)
     const result = await autoApplyBestOffer({
       cartId: data.cart.id,
-      subtotal: data.cart.items_subtotal,
+      subtotal: selectedSubtotal,
       shopIds,
-      items: data.items,
+      listingIds,
+      items: toCartOfferItems(selectedItems),
     })
     if (!result.applied || !result.offer) return data
 
@@ -173,7 +184,11 @@ export function CartProvider({ children }: { children: ReactNode }) {
       let next = data
 
       if (next.cart.applied_discount_id) {
-        const changed = await reconcileCartDiscount(next.cart, next.items)
+        const selectedItems = filterSelectedCartItems(next.items)
+        const changed = await reconcileCartDiscount(
+          next.cart,
+          toCartOfferItems(selectedItems),
+        )
         if (changed) {
           const fresh = await fetchCartWithItems(cart.id)
           next = fresh.data ?? next
@@ -204,6 +219,40 @@ export function CartProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     void loadCart()
   }, [loadCart])
+
+  const selectionRevision = useCartSelectionRevision()
+
+  useEffect(() => {
+    const cart = cartData?.cart
+    if (!cart?.applied_discount_id || !cartData?.items.length) return
+
+    let cancelled = false
+    ;(async () => {
+      const selectedItems = filterSelectedCartItems(cartData.items)
+      const changed = await reconcileCartDiscount(cart, toCartOfferItems(selectedItems))
+      if (cancelled || !changed) return
+
+      const fresh = await fetchCartWithItems(cart.id)
+      if (cancelled || !fresh.data) return
+
+      let next = fresh.data
+      if (!next.cart.applied_discount_id) {
+        next = await tryAutoApply(next)
+      }
+
+      setCartData(next)
+      if (!next.cart.applied_discount_id) {
+        setAutoApplied(false)
+      } else {
+        const autoId = readAutoAppliedDiscountId(next.cart)
+        setAutoApplied(autoId === next.cart.applied_discount_id)
+      }
+    })()
+
+    return () => {
+      cancelled = true
+    }
+  }, [selectionRevision, cartData?.cart?.applied_discount_id, cartData?.items, tryAutoApply])
 
   useEffect(() => {
     if (!user || mergedRef.current) return
@@ -333,12 +382,17 @@ export function CartProvider({ children }: { children: ReactNode }) {
     async (code: string) => {
       const cart = cartData?.cart
       if (!cart) return { error: 'Cart not found' }
+      const selectedItems = filterSelectedCartItems(cartData?.items ?? [])
+      const selectedSubtotal = selectedItems.reduce(
+        (sum, item) => sum + item.unit_price * item.quantity,
+        0,
+      )
       const { error: couponError } = await applyCouponCode({
         cartId: cart.id,
         code,
-        subtotal: cart.items_subtotal,
+        subtotal: selectedSubtotal,
         currency: cart.currency ?? 'INR',
-        items: cartData?.items,
+        items: toCartOfferItems(selectedItems),
       })
       if (!couponError) {
         couponOptOutRef.current = false

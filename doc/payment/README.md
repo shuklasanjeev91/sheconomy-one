@@ -166,3 +166,19 @@ import { PaymentErrorBoundary } from '~/commerce/components/PaymentErrorBoundary
   earlier gateway / COD details.
 - **Shared foundation** — payments reuse the same `order.*` foundation as vendor
   orders; future order modules (refunds, fulfilment) build on it too.
+
+---
+
+## 10. Provider integrations (checkout)
+
+| Provider | Collection | Status | Doc |
+|----------|------------|--------|-----|
+| PayU (SHEPay) | `shepay` | ✅ Platform keys + `shepay-payu-create` | `commerce/lib/shepay.ts` |
+| Razorpay | `direct` | ✅ Seller credentials + Payment Links | [`doc/payment/razorpay/README.md`](./razorpay/README.md) |
+| Stripe / PayPal | `direct` | Catalog only (credential/OAuth stubs) | `doc/payment/vendor-gateway/README.md` |
+
+**Order payments** (`lib/orders/payment.*`) are provider-agnostic — they record
+the result after `process_checkout_payment_webhook` updates `order_payments`.
+
+Vendor gateway setup for Razorpay: **Payment Methods → Razorpay → Key ID + Secret**.
+Checkout routing requires `shop_commerce_settings.payment_mode = direct`.

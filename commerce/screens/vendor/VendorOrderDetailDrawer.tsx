@@ -16,6 +16,7 @@ import {
 } from '~/components/ui'
 import { getShadowStyle, radius } from '~/config/tokens'
 import { useLockBodyScroll } from '~/hooks/useLockBodyScroll'
+import { useVendorCurrency } from '~/hooks/useVendorCurrency'
 import { overlayBackdropStyle } from '~/lib/layout/styles'
 import { shareOrderInvoice } from '~/lib/orders/order-invoice'
 import type { EnrichedOrderIssue } from '~/lib/orders/order-issue.type'
@@ -200,7 +201,8 @@ function DrawerBody({
   const [resolvingId, setResolvingId] = useState<string | null>(null)
   const [confirmingReturn, setConfirmingReturn] = useState(false)
   const order = item.orders
-  const currency = order?.currency ?? 'INR'
+  const { resolveCurrency } = useVendorCurrency()
+  const currency = resolveCurrency(order?.currency)
   const customer = order?.profiles
   const address = item.billing_address ?? order?.billing_address ?? null
   const lines = addressLines(address)

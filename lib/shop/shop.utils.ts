@@ -1,9 +1,7 @@
-import { formatCurrency as formatCurrencyIntl } from '~/lib/format'
 import { USER_ROLES, type UserRole } from '~/lib/profile/profile.type'
 
 import {
   COMMON_SHOP_CATEGORIES,
-  CURRENCY_SYMBOLS,
   DEFAULT_SHOP_CURRENCY,
   SUPPORTED_CURRENCIES,
   VALID_SOCIAL_PLATFORMS,
@@ -12,59 +10,20 @@ import {
   type SocialPlatform,
 } from '~/lib/shop/shop.type'
 
-// ============= CURRENCY =============
-
-/** Currency symbol for a code, falling back to the code itself, then the default. */
-export function getCurrencySymbol(currencyCode: string | null | undefined): string {
-  if (!currencyCode) return CURRENCY_SYMBOLS[DEFAULT_SHOP_CURRENCY]
-  const upper = currencyCode.toUpperCase()
-  return CURRENCY_SYMBOLS[upper] ?? currencyCode
-}
-
-/** Human name for a supported currency code. */
-export function getCurrencyName(currencyCode: string | null | undefined): string {
-  const fallback = 'Indian Rupee'
-  if (!currencyCode) return fallback
-  const match = SUPPORTED_CURRENCIES.find(
-    (currency) => currency.code.toLowerCase() === currencyCode.toLowerCase(),
-  )
-  return match?.name ?? fallback
-}
-
-export function isValidCurrency(currencyCode: string | null | undefined): boolean {
-  return !!currencyCode && Object.prototype.hasOwnProperty.call(CURRENCY_SYMBOLS, currencyCode.toUpperCase())
-}
-
-/** Format an amount in a shop's currency (delegates to the shared Intl helper). */
-export function formatShopCurrency(
-  amount: number | string | null | undefined,
-  currencyCode: string = DEFAULT_SHOP_CURRENCY,
-): string {
-  const numeric = typeof amount === 'number' ? amount : Number(amount ?? 0)
-  return formatCurrencyIntl(Number.isFinite(numeric) ? numeric : 0, currencyCode || DEFAULT_SHOP_CURRENCY)
-}
-
-export type CurrentShopUtils = {
-  currency: string
-  currencySymbol: string
-  formatAmount: (amount: number | string | null | undefined) => string
-  shopId: string | null
-  shopName: string
-  isValid: boolean
-}
-
-/** Derive a small currency/formatting helper bundle for the active shop. */
-export function getCurrentShopUtils(shop: Shop | null | undefined): CurrentShopUtils {
-  const currency = shop?.shop_currency || DEFAULT_SHOP_CURRENCY
-  return {
-    currency,
-    currencySymbol: getCurrencySymbol(currency),
-    formatAmount: (amount) => formatShopCurrency(amount, currency),
-    shopId: shop?.id ?? null,
-    shopName: shop?.shop_name ?? '',
-    isValid: !!shop,
-  }
-}
+// Currency helpers live in current-shop-utils (vendor panel source of truth).
+export {
+  type CurrentShopUtils,
+  type FormatVendorCurrencyOptions,
+  type VendorCurrencyInfo,
+  formatShopCurrency,
+  getCurrencyDisplayOptions,
+  getCurrencyName,
+  getCurrencySymbol,
+  getCurrentShopUtils,
+  isValidCurrency,
+  resolveVendorCurrency,
+  toCurrencyInfo,
+} from './current-shop-utils'
 
 // ============= SLUG =============
 
