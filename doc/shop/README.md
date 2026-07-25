@@ -20,7 +20,9 @@ or **admin** (verify/activate) surfaces.
 | `lib/shop/shop.type.ts` | All TypeScript types + constants (`Shop`, `ShopUpdate`, `ShopFormData`, `SUPPORTED_CURRENCIES`, `SHOP_CREATION_STEPS`, …) |
 | `lib/shop/shop.errors.ts` | **Centralised shop error handling** — `ShopError`, `SHOP_ERROR_CODES`, `toFriendlyShopError()` |
 | `lib/shop/shop.validation.ts` | **Zod** schema (`shopSchema`) + field validators for `useFormValidation` |
-| `lib/shop/shop.utils.ts` | Pure helpers (currency, slug, hours, completion %, filtering/sorting, `canManageShop`) |
+| `lib/shop/current-shop-utils.ts` | **Vendor currency helpers** — `getCurrentShopUtils`, `resolveVendorCurrency`, `toCurrencyInfo` |
+| `hooks/useVendorCurrency.ts` | Hook that binds Redux `currentShop` to those helpers for `/vendor/*` screens |
+| `lib/shop/shop.utils.ts` | Pure helpers (currency re-exports, slug, hours, completion %, filtering/sorting, `canManageShop`) |
 | `lib/shop/shop.service.ts` | Typed Supabase data-access functions. You normally do **not** call these directly — dispatch thunks instead. |
 | `lib/shop/shop.store.ts` | Redux slice, async thunks, sync actions. **This is your main entry point.** |
 | `commerce/components/ShopErrorBoundary.tsx` | Error boundary that renders friendly shop errors + a retry action |
@@ -261,13 +263,29 @@ Multi-step flows: `validateShopStep(stepId, data)` returns `{ isValid, errors, i
 
 ---
 
-## 9. Currency & display helpers (`shop.utils`)
+## 9. Currency & display helpers (vendor panel)
 
-| Helper | Does |
+**Source of truth:** `shops.shop_currency`. Prefer the global helpers below instead of
+hardcoding `INR` or reading the column ad hoc.
+
+| File / helper | Does |
 |--------|------|
-| `formatShopCurrency(amount, currency)` | Locale-aware money formatting (wraps `~/lib/format`) |
+| `lib/shop/current-shop-utils.ts` | Global util (old-project `currentShopUtils` pattern) |
+| `hooks/useVendorCurrency.ts` | Hook: reads Redux `currentShop` → `{ currency, currencyInfo, formatAmount, resolveCurrency }` |
+| `formatShopCurrency(amount, currency)` | Locale-aware money formatting (no shopper FX conversion) |
 | `getCurrencySymbol(code)` / `getCurrencyName(code)` | Symbol / name lookup |
-| `getCurrentShopUtils(shop)` | `{ currency, currencySymbol, formatAmount, … }` bundle |
+| `getCurrentShopUtils(shop)` | `{ currency, currencySymbol, currencyInfo, formatAmount, … }` bundle |
+| `toCurrencyInfo(code)` / `resolveVendorCurrency(...codes)` | ProductList-style `currencyInfo` + fallback chain |
+
+```tsx
+import { useVendorCurrency } from '~/hooks/useVendorCurrency'
+
+const { currency, currencyInfo, formatAmount, resolveCurrency } = useVendorCurrency()
+// Product list: pass currencyInfo={{ symbol, code, formatAmount }}
+// Product detail: resolveCurrency(listing.shop_currency)
+```
+
+Re-exported from `~/lib/shop/shop.utils` for convenience.
 | `generateShopSlug(name)` | URL-friendly slug |
 | `isShopOwner(shop, userId)` / `canManageShop(shop, userId, role)` | Ownership / admin checks |
 | `formatShopHours(hours)` / `isShopOpen(hours)` | Hours display + open/closed |

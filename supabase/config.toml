@@ -402,6 +402,14 @@ verify_jwt = false
 [functions.shepay-payu-create]
 verify_jwt = true
 
+# Authenticated Razorpay direct seller checkout (JWT required — default).
+[functions.razorpay-direct-create]
+verify_jwt = true
+
+# Razorpay webhook verifies X-Razorpay-Signature (no JWT).
+[functions.razorpay-direct-webhook]
+verify_jwt = false
+
 # Authenticated SHEDelivery create shipment (JWT required — default).
 [functions.shedelivery-create-shipment]
 verify_jwt = true

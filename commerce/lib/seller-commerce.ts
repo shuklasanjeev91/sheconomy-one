@@ -100,7 +100,7 @@ export async function saveShopCommerceForm(
   const payload = {
     shop_id: shopId,
     payment_connected: !form.paymentManaged,
-    payment_mode: form.paymentManaged ? 'shepay' : 'gateway',
+    payment_mode: form.paymentManaged ? 'shepay' : 'direct',
     payment_gateway: form.paymentManaged ? null : form.paymentGateway,
     payment_account_label: form.paymentManaged ? null : form.paymentAccountLabel.trim() || null,
     payment_gateway_key_id: form.paymentManaged ? null : form.paymentKeyId.trim() || null,

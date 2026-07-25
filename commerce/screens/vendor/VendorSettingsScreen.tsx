@@ -112,8 +112,10 @@ export function VendorSettingsScreen() {
   const section = getSettingsSection(activeId)
 
   useEffect(() => {
-    if (!shop && !myShopsLoaded) void dispatch(loadMyShops(undefined))
-  }, [dispatch, shop, myShopsLoaded])
+    // Always refresh when shops have not been loaded this session, even if a
+    // persisted currentShop exists — otherwise stale fields (e.g. currency) stick.
+    if (!myShopsLoaded) void dispatch(loadMyShops(undefined))
+  }, [dispatch, myShopsLoaded])
 
   if (!shop && (isLoadingMyShops || !myShopsLoaded)) {
     return (
@@ -553,13 +555,20 @@ function GeneralSettings({ ui, shop, isDesktop, safeBottom }: GeneralSettingsPro
   const [editingHours, setEditingHours] = useState(
     () => Object.keys((shop.shop_hours as Record<string, string> | null) ?? {}).length > 0,
   )
+  // Track when form has been seeded from this shop so we don't flash the empty-form
+  // INR default before loadFormFromShop runs (formData is not persisted).
+  const shopSeedKey = `${shop.id}:${shop.shop_currency ?? ''}`
+  const [hydratedSeedKey, setHydratedSeedKey] = useState<string | null>(null)
 
   useEffect(() => {
     dispatch(loadFormFromShop(shopToFormData(shop)))
+    setHydratedSeedKey(shopSeedKey)
     setTagline(readTagline(shop))
     setLogoImages([])
     setEditingHours(Object.keys((shop.shop_hours as Record<string, string> | null) ?? {}).length > 0)
-  }, [dispatch, shop.id])
+    // shopSeedKey captures id + currency; re-seed when either changes from the server.
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- avoid wiping edits on unrelated shop reference updates
+  }, [dispatch, shopSeedKey])
 
   const errors = validation.errors
   const categories = form.shop_categories ?? []
@@ -571,7 +580,10 @@ function GeneralSettings({ ui, shop, isDesktop, safeBottom }: GeneralSettingsPro
   )
   const hours = form.shop_hours ?? {}
   const hasHours = Object.keys(hours).length > 0
-  const currency = form.shop_currency || DEFAULT_SHOP_CURRENCY
+  const currency =
+    hydratedSeedKey === shopSeedKey
+      ? form.shop_currency || shop.shop_currency || DEFAULT_SHOP_CURRENCY
+      : shop.shop_currency || DEFAULT_SHOP_CURRENCY
   const logoPreview = logoImages[0]?.uri ?? shop.logo_url ?? undefined
 
   function setField<K extends keyof ShopFormData>(field: K, value: ShopFormData[K]) {
@@ -910,7 +922,11 @@ function GeneralSettings({ ui, shop, isDesktop, safeBottom }: GeneralSettingsPro
         {/* Shop Currency */}
         <Card ui={ui}>
           <SectionTitle ui={ui} icon={Icons.DollarSign} title="Shop Currency" />
-          <Select value={currency} onValueChange={(value) => setField('shop_currency', value)}>
+          <Select
+            key={`shop-currency-${shop.id}-${currency}`}
+            value={currency}
+            onValueChange={(value) => setField('shop_currency', value)}
+          >
             <SelectTrigger width="100%" iconAfter={<Icons.ChevronDown size={16} color={ui.textMuted} />}>
               <Select.Value placeholder="Select a currency" />
             </SelectTrigger>

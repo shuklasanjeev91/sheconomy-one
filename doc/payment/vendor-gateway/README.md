@@ -220,3 +220,16 @@ export function VendorPaymentPanel({ shopId }: { shopId: string }) {
 - ❌ Don't confuse with `lib/orders/payment.store.ts` (order checkout)
 - ❌ Don't call `payment.service` directly from components
 - ❌ Don't store raw credentials in Redux — only in Supabase `metadata` via service
+
+---
+
+## 11. Direct provider checkout (Razorpay)
+
+**Razorpay** is the first fully wired **seller-direct** provider:
+
+1. Vendor connects via credential form (Key ID + Secret) — not OAuth stub
+2. `savePaymentCredentials` syncs `shop_commerce_settings.payment_mode = direct`
+3. Checkout uses `razorpay-direct-create` → Payment Link → webhook
+
+See **[doc/payment/razorpay/README.md](../razorpay/README.md)** for the full flow,
+webhook URL, and how to add Stripe/Cashfree the same way.

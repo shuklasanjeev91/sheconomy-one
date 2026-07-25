@@ -156,7 +156,9 @@ export function resolvePostCheckoutNext(input: {
   if (!input.checkoutUrl) {
     return {
       kind: 'cancel_and_stay',
-      error: 'Seller payment link is not ready. Please try again or contact the shop.',
+      error:
+        input.shepayError ??
+        'Seller payment link is not ready. Please try again or contact the shop.',
     }
   }
   if (isAppPayUBridgeUrl(input.checkoutUrl)) {

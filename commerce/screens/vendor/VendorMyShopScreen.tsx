@@ -23,7 +23,6 @@ import { fetchShopAddressDetails, type ShopAddressDetails } from '~/commerce/lib
 import { getShadowStyle, radius } from '~/config/tokens'
 import { getCountryName } from '~/lib/geo'
 import { useAppLayout } from '~/hooks/useAppLayout'
-import { formatCurrency } from '~/lib/format'
 import { loadVendorAnalytics, selectVendorAnalytics } from '~/lib/orders/vendor-orders.store'
 import type { VendorOrderAnalytics } from '~/lib/orders/vendor-orders.type'
 import { openExternalUrl as openPlatformUrl } from '~/lib/platform/openUrl'
@@ -32,6 +31,7 @@ import { deleteShop, loadMyShops, loadShopStats, updateShop } from '~/lib/shop/s
 import { getShopFollowerCount } from '~/lib/shop/shop.service'
 import type { Shop, ShopStats } from '~/lib/shop/shop.type'
 import { formatShopHours, getShopCompletionPercentage } from '~/lib/shop/shop.utils'
+import { useVendorCurrency } from '~/hooks/useVendorCurrency'
 import { useAppDispatch, useAppSelector } from '~/lib/store/hooks'
 import type { AppUiTokens } from '~/lib/theme/app-ui'
 import { useAppUi } from '~/lib/theme/useAppUi'
@@ -52,10 +52,6 @@ const SOCIAL_ICONS: Record<string, IconType> = {
 
 /** Last 7 days order counts (index 0 = 6 days ago). */
 const ENGAGEMENT_DAYS = ['D-6', 'D-5', 'D-4', 'D-3', 'D-2', 'D-1', 'Today']
-
-function formatShopMoney(value: number, currency?: string | null) {
-  return formatCurrency(value, currency ?? 'INR')
-}
 
 function openExternalUrl(url: string | null | undefined) {
   if (!url) return
@@ -387,6 +383,7 @@ function MainColumn({
   engagementSeries,
   isDesktop,
 }: MainColumnProps) {
+  const { currency } = useVendorCurrency()
   const categories = Array.isArray(shop.shop_categories) ? (shop.shop_categories as string[]) : []
   const socialLinks = (shop.social_links as Record<string, string> | null) ?? {}
   const socialEntries = Object.entries(socialLinks).filter(([, url]) => Boolean(url))
@@ -486,7 +483,7 @@ function MainColumn({
                   </Text>
                 </XStack>
                 <Text fontSize={12} color={ui.textMuted}>
-                  {shop.shop_currency?.toUpperCase() || 'INR'}
+                  {currency}
                 </Text>
               </XStack>
             </YStack>
@@ -785,6 +782,7 @@ type RightRailProps = {
 }
 
 function RightRail({ ui, shop, completion, stats, analytics }: RightRailProps) {
+  const { formatAmount } = useVendorCurrency()
   const avgOrder =
     analytics && analytics.total_orders > 0
       ? analytics.average_order_value
@@ -839,8 +837,8 @@ function RightRail({ ui, shop, completion, stats, analytics }: RightRailProps) {
           <SnapshotRow
             ui={ui}
             label="Revenue"
-            value={formatShopMoney(analytics?.total_revenue ?? 0, shop.shop_currency)}
-            delta={`AOV ${formatShopMoney(avgOrder, shop.shop_currency)}`}
+            value={formatAmount(analytics?.total_revenue ?? 0)}
+            delta={`AOV ${formatAmount(avgOrder)}`}
           />
           <SnapshotRow
             ui={ui}

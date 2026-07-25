@@ -44,6 +44,7 @@ import {
   type UserAddress,
 } from '~/commerce/lib/checkout'
 import { ensureShepayCheckoutUrl } from '~/commerce/lib/shepay'
+import { ensureDirectCheckoutUrl } from '~/commerce/lib/razorpay-direct'
 import {
   checkoutShippingLabel,
   onlinePaymentOptionCopy,
@@ -453,15 +454,22 @@ export function CheckoutScreen() {
       const { orderIds, orderNumbers, checkoutGroupId } = result.data
       let checkoutUrl =
         result.data.paymentSteps.find((step) => step.checkoutUrl)?.checkoutUrl ?? null
-      let shepayError: string | null = null
+      let paymentSetupError: string | null = null
       const hasShepaySteps = result.data.paymentSteps.some((step) => step.collection === 'shepay')
+      const hasDirectSteps = result.data.paymentSteps.some((step) => step.collection === 'direct')
 
       if (mode === 'online' && hasShepaySteps && !checkoutUrl) {
         const shepay = await ensureShepayCheckoutUrl(result.data.paymentSteps, {
           paymentMethodId: null,
         })
-        shepayError = shepay.error
+        paymentSetupError = shepay.error
         checkoutUrl = shepay.checkoutUrl
+      }
+
+      if (mode === 'online' && hasDirectSteps && !checkoutUrl) {
+        const direct = await ensureDirectCheckoutUrl(result.data.paymentSteps)
+        paymentSetupError = paymentSetupError ?? direct.error
+        checkoutUrl = direct.checkoutUrl ?? checkoutUrl
       }
 
       const usedAddress =
@@ -484,8 +492,8 @@ export function CheckoutScreen() {
       const next = resolvePostCheckoutNext({
         mode,
         checkoutUrl,
-        shepayError,
-        hasShepaySteps,
+        shepayError: paymentSetupError,
+        hasShepaySteps: hasShepaySteps || hasDirectSteps,
       })
 
       if (next.kind === 'cancel_and_stay') {

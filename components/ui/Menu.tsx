@@ -1,15 +1,12 @@
 import type { ComponentProps, ReactNode } from 'react'
 import { Menu as TMenu, ContextMenu as TContextMenu, styled } from 'tamagui'
 
-import { NativeFullscreenAdapt } from '~/components/ui/NativeFullscreenAdapt'
 import { getShadowStyle } from '~/config/tokens'
-import { isNativeFullscreenOverlay } from '~/lib/platform/native-fullscreen'
-import { useAppLayout } from '~/hooks/useAppLayout'
 
 /**
  * Dropdown menu (`Menu`) and right-click menu (`ContextMenu`) share the same
  * anatomy in Tamagui — restyle both content/item surfaces once, reuse twice.
- * On iOS/Android content adapts into a full-screen sheet.
+ * Note: unlike Select/Popover, Menu does not support Tamagui Adapt.
  */
 export const Menu = TMenu
 export const ContextMenu = TContextMenu
@@ -66,47 +63,18 @@ export const ContextMenuItem = styled(TContextMenu.Item, {
   hoverStyle: { backgroundColor: '$color4' },
 })
 
-function useOverlaySheetContentProps() {
-  const { safeTop } = useAppLayout()
-  return {
-    width: '100%' as const,
-    maxWidth: '100%' as const,
-    minWidth: '100%' as const,
-    borderRadius: isNativeFullscreenOverlay ? 0 : undefined,
-    borderWidth: isNativeFullscreenOverlay ? 0 : undefined,
-    paddingTop: Math.max(safeTop, 16),
-    paddingBottom: 0,
-    marginBottom: 0,
-    ...(isNativeFullscreenOverlay ? { flex: 1 } : null),
-  }
-}
-
 export function MenuContent({
   children,
   ...props
 }: ComponentProps<typeof StyledMenuContent> & { children?: ReactNode }) {
-  const sheetProps = useOverlaySheetContentProps()
-  return (
-    <>
-      <NativeFullscreenAdapt />
-      <StyledMenuContent {...props} {...sheetProps}>
-        {children}
-      </StyledMenuContent>
-    </>
-  )
+  // Menu does not support Tamagui Adapt — use a plain dropdown surface.
+  return <StyledMenuContent {...props}>{children}</StyledMenuContent>
 }
 
 export function ContextMenuContent({
   children,
   ...props
 }: ComponentProps<typeof StyledContextMenuContent> & { children?: ReactNode }) {
-  const sheetProps = useOverlaySheetContentProps()
-  return (
-    <>
-      <NativeFullscreenAdapt />
-      <StyledContextMenuContent {...props} {...sheetProps}>
-        {children}
-      </StyledContextMenuContent>
-    </>
-  )
+  // ContextMenu does not support Tamagui Adapt — use a plain dropdown surface.
+  return <StyledContextMenuContent {...props}>{children}</StyledContextMenuContent>
 }
