@@ -1,30 +1,38 @@
 import { orange, orangeDark } from '@tamagui/colors/legacy'
 
-/** Extracted from sheconomy-logo_v2.png — primary wordmark magenta */
+/**
+ * Brand palette from official logo
+ * https://zsaqrrzwygzwrlzgymxk.supabase.co/storage/v1/object/public/sheconomy-logo/1024X1024.png
+ */
 export const brandColors = {
-  primary: '#D01060',
-  primaryDark: '#BD0E54',
-  primaryLight: '#E83870',
-  coral: '#F87840',
-  coralLight: '#FFEDE5',
+  /** Deep magenta — primary brand / splash / CTAs */
+  primary: '#D81B60',
+  primaryDark: '#B0144E',
+  /** Vibrant pink — globe / highlights */
+  primaryLight: '#FF5E9B',
+  /** Bright orange — accent diagonal / gradients */
+  coral: '#FF8C42',
+  coralLight: '#FFE8D6',
+  /** Soft wash backgrounds */
   roseTint: '#FEF5F9',
   roseSurface: '#FCEAF1',
+  softPink: '#FF9B9B',
 } as const
 
-/** 12-step light accent scale (Radix-style), anchored on logo #D01060 at step 9 */
+/** 12-step light accent scale (Radix-style), anchored on logo primary at step 9 */
 export const sheconomyLight = {
-  sheconomy1: '#fefcfd',
+  sheconomy1: '#fffbfd',
   sheconomy2: '#fef5f9',
   sheconomy3: '#fceaf1',
   sheconomy4: '#fadce8',
   sheconomy5: '#f7cbdd',
   sheconomy6: '#f2b4cd',
   sheconomy7: '#eb8eb3',
-  sheconomy8: '#e35890',
+  sheconomy8: '#e85a96',
   sheconomy9: brandColors.primary,
   sheconomy10: brandColors.primaryDark,
-  sheconomy11: '#a20a47',
-  sheconomy12: '#500b27',
+  sheconomy11: '#8f0f3f',
+  sheconomy12: '#4a0a22',
 } as const
 
 /** 12-step dark accent scale */
@@ -39,17 +47,17 @@ export const sheconomyDark = {
   sheconomy8: '#992855',
   sheconomy9: brandColors.primary,
   sheconomy10: brandColors.primaryLight,
-  sheconomy11: '#f6639e',
+  sheconomy11: '#ff7eb0',
   sheconomy12: '#fcddea',
 } as const
 
 /** Coral accent tokens for gradients and highlights */
 export const coralScaleLight = {
   coral1: '#fff9f6',
-  coral2: '#ffede5',
-  coral3: '#ffdccc',
-  coral4: '#ffc4a8',
-  coral5: '#ffa97d',
+  coral2: '#ffe8d6',
+  coral3: '#ffd4b3',
+  coral4: '#ffbc8a',
+  coral5: '#ffa35e',
   coral6: brandColors.coral,
   coral7: '#e86a30',
   coral8: '#c45624',

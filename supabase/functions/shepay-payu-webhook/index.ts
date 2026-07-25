@@ -1,8 +1,8 @@
 import 'jsr:@supabase/functions-js/edge-runtime.d.ts'
 import { createClient } from 'jsr:@supabase/supabase-js@2'
 
-import { corsHeaders, jsonResponse } from '../_shared/cors.ts'
-import { payUResponseHash } from '../_shared/payu.ts'
+import { corsHeaders, jsonResponse } from '~/supabase/functions/_shared/cors.ts'
+import { payUResponseHash } from '~/supabase/functions/_shared/payu.ts'
 
 function pick(form: Record<string, string>, ...keys: string[]) {
   for (const key of keys) {

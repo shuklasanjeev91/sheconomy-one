@@ -20,7 +20,8 @@ function parseMarginPx(rootMargin: string | number): number {
 /**
  * Fires when the sentinel approaches the viewport.
  * Web: IntersectionObserver when available, plus scrollY fallback.
- * Native: AppBarScrollContext scrollY + measureInWindow.
+ * Native: AppBarScrollContext scrollY + measureInWindow polling (Tamagui
+ * hosts often lack measureInWindow — callers should attach to RN `View`).
  */
 export function useInfiniteScroll(
   onLoadMore: () => void,
@@ -44,10 +45,11 @@ export function useInfiniteScroll(
     if (!enabled || inFlight.current) return
     inFlight.current = true
     onLoadMoreRef.current()
-    // Allow another trigger after the parent flips isLoadingMore / hasMore.
-    requestAnimationFrame(() => {
+    // Stay locked until `enabled` flips false (parent sets isLoadingMore) or
+    // a short debounce elapses if the parent no-ops.
+    setTimeout(() => {
       inFlight.current = false
-    })
+    }, 450)
   }, [enabled])
 
   const checkNativeVisibility = useCallback(() => {
@@ -57,6 +59,7 @@ export function useInfiniteScroll(
 
     if (Platform.OS === 'web' && typeof (node as HTMLElement).getBoundingClientRect === 'function') {
       const rect = (node as HTMLElement).getBoundingClientRect()
+      if (rect.height === 0 && rect.width === 0) return
       if (rect.top <= window.innerHeight + marginPx) trigger()
       return
     }
@@ -65,6 +68,8 @@ export function useInfiniteScroll(
     if (typeof view.measureInWindow !== 'function') return
 
     view.measureInWindow((_x, y, _w, h) => {
+      // Unlaid-out / detached nodes report zeros — do not treat as visible.
+      if (!h && !_w) return
       const windowHeight = Dimensions.get('window').height
       if (y <= windowHeight + marginPx && y + (h || 1) >= -marginPx) {
         trigger()
@@ -93,10 +98,13 @@ export function useInfiniteScroll(
     return () => observer.disconnect()
   }, [enabled, rootMargin, scrollY, trigger])
 
-  // Native (+ web ScrollView): scroll position drives visibility checks.
+  // Native (+ web ScrollView): scroll position + interval so already-visible
+  // sentinels keep loading until they leave the viewport / hasMore ends.
   useEffect(() => {
     if (!enabled) return
     checkNativeVisibility()
+    const id = setInterval(checkNativeVisibility, 280)
+    return () => clearInterval(id)
   }, [enabled, scrollY, checkNativeVisibility])
 
   useEffect(() => {

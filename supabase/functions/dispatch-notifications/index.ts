@@ -20,6 +20,8 @@ type NotificationRow = {
   delivery_status: Record<string, { status?: string; at?: string; error?: string }> | null
   data: Record<string, unknown> | null
   template_id: string | null
+  type?: string | null
+  priority?: number | null
 }
 
 type TemplateRow = {
@@ -72,34 +74,90 @@ async function sendResendEmail(apiKey: string, payload: {
 async function sendOneSignalPush(options: {
   appId: string
   apiKey: string
-  playerIds: string[]
+  /** OneSignal subscription / player ids from user_push_devices. */
+  playerIds?: string[]
+  /** Auth user ids passed to OneSignal.login() on clients. */
+  externalIds?: string[]
   title: string
   body: string
   url?: string | null
+  /** Extra data payload (call ids, kind, etc.). */
+  data?: Record<string, unknown>
+  /** High-priority ringing push for incoming calls. */
+  isIncomingCall?: boolean
 }) {
-  if (!options.playerIds.length) return
-  const response = await fetch('https://onesignal.com/api/v1/notifications', {
-    method: 'POST',
-    headers: {
-      Authorization: `Basic ${options.apiKey}`,
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({
-      app_id: options.appId,
-      include_player_ids: options.playerIds,
-      headings: { en: options.title },
-      contents: { en: options.body },
-      url: options.url ?? undefined,
-      data: options.url
-        ? { action_url: options.url, url: options.url }
-        : undefined,
-      web_url: options.url ?? undefined,
-      app_url: options.url ?? undefined,
-    }),
-  })
-  if (!response.ok) {
-    throw new Error((await response.text()) || 'OneSignal error')
+  const playerIds = (options.playerIds ?? []).filter(Boolean)
+  const externalIds = (options.externalIds ?? []).filter(Boolean)
+  if (!playerIds.length && !externalIds.length) return
+
+  const data: Record<string, unknown> = {
+    ...(options.data ?? {}),
   }
+  if (options.url) {
+    data.action_url = options.url
+    data.url = options.url
+  }
+  if (options.isIncomingCall) {
+    data.notification_kind = 'incoming_call'
+  }
+
+  const base: Record<string, unknown> = {
+    app_id: options.appId,
+    headings: { en: options.title },
+    contents: { en: options.body },
+    target_channel: 'push',
+    data: Object.keys(data).length ? data : undefined,
+    web_url: options.url ?? undefined,
+    app_url: options.url ?? undefined,
+    url: options.url ?? undefined,
+  }
+
+  if (options.isIncomingCall) {
+    // Wake locked devices and play a call-like alert when the app is not open.
+    // Use OS defaults so delivery does not fail when custom sound files / channels are missing.
+    Object.assign(base, {
+      priority: 10,
+      ttl: 55,
+      ios_sound: 'default',
+      ios_interruption_level: 'time_sensitive',
+      ios_relevance_score: 1,
+      android_visibility: 1,
+      android_group: 'incoming_calls',
+      android_accent_color: 'FFD81B60',
+      collapse_id: typeof data.call_id === 'string' ? `call:${data.call_id}` : 'incoming_call',
+      content_available: true,
+      mutable_content: true,
+    })
+  }
+
+  // OneSignal allows only one targeting parameter per request.
+  // Prefer external_id (set via OneSignal.login on web/native); fall back to
+  // stored subscription ids when alias targeting is rejected.
+  const targetingAttempts: Record<string, unknown>[] = []
+  if (externalIds.length) {
+    targetingAttempts.push({ include_aliases: { external_id: externalIds } })
+  }
+  if (playerIds.length) {
+    targetingAttempts.push({ include_subscription_ids: playerIds })
+  }
+
+  let lastError: Error | null = null
+  for (const targeting of targetingAttempts) {
+    const payload = { ...base, ...targeting }
+    for (const authHeader of [`Key ${options.apiKey}`, `Basic ${options.apiKey}`]) {
+      const response = await fetch('https://onesignal.com/api/v1/notifications', {
+        method: 'POST',
+        headers: {
+          Authorization: authHeader,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(payload),
+      })
+      if (response.ok) return
+      lastError = new Error((await response.text()) || 'OneSignal error')
+    }
+  }
+  if (lastError) throw lastError
 }
 
 async function sendTwilioMessage(options: {
@@ -202,7 +260,7 @@ Deno.serve(async (req) => {
 
     let notificationQuery = supabase
       .from('notifications')
-      .select('id, recipient_id, title, message, action_url, channels, delivery_status, data, template_id')
+      .select('id, recipient_id, title, message, action_url, channels, delivery_status, data, template_id, type, priority')
       .order('created_at', { ascending: true })
       .limit(limit)
 
@@ -304,29 +362,35 @@ Deno.serve(async (req) => {
             .eq('user_id', notification.recipient_id)
             .eq('enabled', true)
           const playerIds = (devices ?? []).map((d) => d.player_id).filter(Boolean)
-          if (!playerIds.length) {
-            delivery = markChannel(delivery, 'push', 'skipped', 'No push devices')
-          } else {
-            try {
-              await sendOneSignalPush({
-                appId: oneSignalAppId,
-                apiKey: oneSignalKey,
-                playerIds,
-                title:
-                  substitute(template?.push_title_template, vars) || notification.title,
-                body:
-                  substitute(template?.push_body_template, vars) || notification.message,
-                url: notification.action_url,
-              })
-              delivery = markChannel(delivery, 'push', 'sent')
-            } catch (err) {
-              delivery = markChannel(
-                delivery,
-                'push',
-                'failed',
-                err instanceof Error ? err.message : 'push failed',
-              )
-            }
+          try {
+            const isIncomingCall =
+              notification.type === 'incoming_call' ||
+              vars.notification_kind === 'incoming_call' ||
+              (typeof notification.action_url === 'string' &&
+                notification.action_url.includes('ring=1'))
+            // Always target external_id (OneSignal.login(userId) on web/native).
+            // Player/subscription ids are optional extras when registration succeeded.
+            await sendOneSignalPush({
+              appId: oneSignalAppId,
+              apiKey: oneSignalKey,
+              playerIds,
+              externalIds: [notification.recipient_id],
+              title:
+                substitute(template?.push_title_template, vars) || notification.title,
+              body:
+                substitute(template?.push_body_template, vars) || notification.message,
+              url: notification.action_url,
+              data: vars,
+              isIncomingCall,
+            })
+            delivery = markChannel(delivery, 'push', 'sent')
+          } catch (err) {
+            delivery = markChannel(
+              delivery,
+              'push',
+              'failed',
+              err instanceof Error ? err.message : 'push failed',
+            )
           }
         }
       }

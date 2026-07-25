@@ -6,9 +6,9 @@ import { PageSection } from '~/components/layout'
 import type { ListingFeedKind } from '~/lib/supabase/commerce'
 import { useListingFeed } from '~/commerce/hooks/useListingFeed'
 
-import { CommerceSection } from './CommerceSection'
-import { ListingGrid } from './ListingGrid'
-import { LoadMoreEnd, LoadMoreSentinel } from './LoadMoreSentinel'
+import { CommerceSection } from '~/commerce/components/CommerceSection'
+import { ListingGrid } from '~/commerce/components/ListingGrid'
+import { LoadMoreEnd, LoadMoreSentinel } from '~/commerce/components/LoadMoreSentinel'
 import { useAppUi } from '~/lib/theme/useAppUi'
 
 type InfiniteListingSectionProps = {

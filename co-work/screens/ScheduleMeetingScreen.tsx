@@ -2,7 +2,7 @@ import { useRouter } from 'one'
 import { AppLink } from '~/components/navigation/AppLink'
 import { useMemo, useState } from 'react'
 
-import { RequireAuth } from '~/components/auth/RequireAuth'
+import { AuthSignInFlow } from '~/components/auth/AuthSignInFlow'
 import { AppPage, LAYOUT_STRETCH } from '~/components/layout'
 import { Button, Field, Icons, Input, Spinner, Text, XStack, YStack, useAppToast } from '~/components/ui'
 import { clearFormDraft } from '~/lib/drafts/form-draft'
@@ -161,7 +161,7 @@ export function ScheduleMeetingScreen() {
   useUnsavedChangesGuard({ isDirty: isDraftDirty && !saving })
 
   if (!isAuthenticated || !user) {
-    return <RequireAuth redirectTo={coWorkRoutes.schedule} />
+    return <AuthSignInFlow returnTo={String(coWorkRoutes.schedule)} />
   }
 
   async function handleSchedule() {

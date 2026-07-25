@@ -10,11 +10,11 @@
  */
 import { isWeb } from 'tamagui'
 
-import { brandColors } from './brand-colors'
+import { brandColors } from '~/config/brand-colors'
 
 export const BRAND_THEME = 'sheconomy' as const
 
-export { BRAND_NAME, BRAND_MEMBER_LABEL, BRAND_SHOP_LABEL, BRAND_COWORK_LABEL } from './brand'
+export { BRAND_NAME, BRAND_MEMBER_LABEL, BRAND_SHOP_LABEL, BRAND_COWORK_LABEL } from '~/config/brand'
 
 /**
  * Tamagui's own `radius` token scale (`$1`…`$12`, see tamagui.config.ts)
@@ -75,18 +75,18 @@ export const shadowsDark = {
 /** Web renders real box-shadows via CSS; RN needs the shadow* props above. */
 export const webShadows = {
   none: 'none',
-  sm: '0 1px 2px rgba(208, 16, 96, 0.05), 0 4px 14px rgba(16, 12, 14, 0.06)',
-  md: '0 8px 28px rgba(208, 16, 96, 0.09), 0 2px 8px rgba(16, 12, 14, 0.07)',
-  lg: '0 16px 40px rgba(208, 16, 96, 0.11), 0 6px 16px rgba(16, 12, 14, 0.08)',
-  xl: '0 28px 64px rgba(208, 16, 96, 0.13), 0 10px 24px rgba(16, 12, 14, 0.1)',
+  sm: '0 1px 2px rgba(216, 27, 96, 0.05), 0 4px 14px rgba(16, 12, 14, 0.06)',
+  md: '0 8px 28px rgba(216, 27, 96, 0.09), 0 2px 8px rgba(16, 12, 14, 0.07)',
+  lg: '0 16px 40px rgba(216, 27, 96, 0.11), 0 6px 16px rgba(16, 12, 14, 0.08)',
+  xl: '0 28px 64px rgba(216, 27, 96, 0.13), 0 10px 24px rgba(16, 12, 14, 0.1)',
 } as const
 
 export const webShadowsDark = {
   none: 'none',
   sm: '0 2px 8px rgba(0, 0, 0, 0.45), 0 0 0 1px rgba(255, 255, 255, 0.06)',
-  md: '0 8px 28px rgba(0, 0, 0, 0.5), 0 0 0 1px rgba(208, 16, 96, 0.12)',
-  lg: '0 16px 44px rgba(0, 0, 0, 0.55), 0 0 0 1px rgba(208, 16, 96, 0.14)',
-  xl: '0 24px 56px rgba(0, 0, 0, 0.6), 0 0 0 1px rgba(208, 16, 96, 0.16)',
+  md: '0 8px 28px rgba(0, 0, 0, 0.5), 0 0 0 1px rgba(216, 27, 96, 0.12)',
+  lg: '0 16px 44px rgba(0, 0, 0, 0.55), 0 0 0 1px rgba(216, 27, 96, 0.14)',
+  xl: '0 24px 56px rgba(0, 0, 0, 0.6), 0 0 0 1px rgba(216, 27, 96, 0.16)',
 } as const
 
 /**
@@ -124,4 +124,4 @@ export const gradients = {
   danger: ['$red8', '$red10'],
 } as const
 
-export { brandColors } from './brand-colors'
+export { brandColors } from '~/config/brand-colors'

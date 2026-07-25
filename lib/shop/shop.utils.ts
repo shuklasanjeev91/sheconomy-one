@@ -10,7 +10,7 @@ import {
   type Shop,
   type ShopFormData,
   type SocialPlatform,
-} from './shop.type'
+} from '~/lib/shop/shop.type'
 
 // ============= CURRENCY =============
 

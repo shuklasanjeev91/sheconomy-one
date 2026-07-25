@@ -10,17 +10,16 @@ export function useAppLayout() {
   const { width } = useWindowDimensions()
 
   const isMediaHydrated = media.isHydrated
-  // Native: trust window width — Tamagui `useMedia` can mis-report and hide
-  // the mobile header/tab dock (treating a phone as desktop).
-  const isDesktop =
-    Platform.OS === 'web' ? media.gtMd : width >= APP_LAYOUT.desktopMinWidth
-  const isDesktopWeb = Platform.OS === 'web' && media.desktopWeb
-  const isWide = Platform.OS === 'web' ? media.gtLg : width >= 1280
-  const isTablet =
-    Platform.OS === 'web'
-      ? media.gtSm && !media.gtMd
-      : width >= 600 && width < APP_LAYOUT.desktopMinWidth
+  // Native never uses desktop chrome — iPad Pro logical width is ≥1024, which
+  // used to flip `isDesktop` and hide the bottom tab bar while PageScroll still
+  // reserved `mobileTabBarOffset` (empty footer gap).
   const isNative = Platform.OS !== 'web'
+  const isDesktop = isNative ? false : media.gtMd
+  const isDesktopWeb = Platform.OS === 'web' && media.desktopWeb
+  // Wide rails are a large-screen (web) concern — never on iPhone/iPad.
+  const isWide = Platform.OS === 'web' ? media.gtLg : false
+  const isTablet =
+    Platform.OS === 'web' ? media.gtSm && !media.gtMd : width >= 600
 
   const gutter = isWide
     ? APP_LAYOUT.railPaddingWide

@@ -12,14 +12,14 @@ import { createAsyncThunk, createSlice, current, type PayloadAction } from '@red
 
 import type { AppDispatch, RootState } from '~/lib/store'
 
-import type { OrderStatus } from './order.constants'
-import * as vendorOrderService from './vendor-orders.service'
+import type { OrderStatus } from '~/lib/orders/order.constants'
+import * as vendorOrderService from '~/lib/orders/vendor-orders.service'
 import {
   computeVendorOrderStats,
   getPendingVendorOrders,
   getRecentVendorOrders,
   getVendorTotalRevenue,
-} from './vendor-orders.utils'
+} from '~/lib/orders/vendor-orders.utils'
 import type {
   PaginatedVendorOrders,
   PaginationMeta,
@@ -29,7 +29,7 @@ import type {
   VendorOrderPagination,
   VendorOrderSearchParams,
   VendorOrderSummary,
-} from './vendor-orders.type'
+} from '~/lib/orders/vendor-orders.type'
 
 // ============= STATE =============
 

@@ -9,8 +9,8 @@
 import { supabase } from '~/lib/supabase'
 import { USER_ROLES } from '~/lib/profile/profile.type'
 
-import { toFriendlyOrderError } from './order.errors'
-import type { OrderServiceResponse } from './vendor-orders.type'
+import { toFriendlyOrderError } from '~/lib/orders/order.errors'
+import type { OrderServiceResponse } from '~/lib/orders/vendor-orders.type'
 
 export function ok<T>(data: T): OrderServiceResponse<T> {
   return { data, error: null, success: true }

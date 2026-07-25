@@ -43,7 +43,7 @@ import { validateProviderCredentialForm } from '~/lib/payment/payment.validation
 import { useAppDispatch, useAppSelector } from '~/lib/store/hooks'
 import type { AppUiTokens } from '~/lib/theme/app-ui'
 
-import { PaymentProviderIcon } from './PaymentProviderIcon'
+import { PaymentProviderIcon } from '~/commerce/components/vendor/payment/PaymentProviderIcon'
 
 type PaymentConnectFormProps = {
   ui: AppUiTokens

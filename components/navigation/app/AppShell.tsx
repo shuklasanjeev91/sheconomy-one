@@ -21,12 +21,14 @@ import { appShellStyle, lockedAppShellStyle, meetingViewportStyle } from '~/lib/
 import { useAppUi } from '~/lib/theme/useAppUi'
 
 import { IncomingCallHost } from '~/chat/components/IncomingCallHost'
+import { InstantMeetingHost } from '~/co-work/components/InstantMeetingHost'
 import { ProfileOnboardingNudge } from '~/components/auth/ProfileOnboardingNudge'
 import { GenderVerificationHost } from '~/components/gender-verification/GenderVerificationHost'
+import { useInstantMeetingSession } from '~/co-work/lib/instant-meeting-session'
 
-import { AppDesktopHeader } from './AppDesktopHeader'
-import { AppMobileBottomTabs } from './AppMobileBottomTabs'
-import { AppMobileHeader } from './AppMobileHeader'
+import { AppDesktopHeader } from '~/components/navigation/app/AppDesktopHeader'
+import { AppMobileBottomTabs } from '~/components/navigation/app/AppMobileBottomTabs'
+import { AppMobileHeader } from '~/components/navigation/app/AppMobileHeader'
 
 type AppShellProps = {
   children: ReactNode
@@ -34,8 +36,11 @@ type AppShellProps = {
 
 function useChromelessRoute() {
   const pathname = usePathname()
+  const instantMeeting = useInstantMeetingSession()
   // Full-screen meeting lobby + live room — no app header/tabs (Zoom-style).
+  // Instant meetings stay on Co-Work (no /live hop) and use InstantMeetingHost.
   return (
+    !!instantMeeting ||
     pathname.startsWith('/ui-kit') ||
     pathname.startsWith('/co-work/meeting/') ||
     pathname === '/co-work/meeting' ||
@@ -122,6 +127,7 @@ export function AppShell({ children }: AppShellProps) {
           <AppAccessGate>
             {children}
             <IncomingCallHost />
+            <InstantMeetingHost />
           </AppAccessGate>
         </ScreenFill>
       </NativeSafeArea>
@@ -161,6 +167,7 @@ export function AppShell({ children }: AppShellProps) {
             {!isDesktop && !chatConversationMobile ? <AppMobileBottomTabs /> : null}
             <IncomingCallHost />
             <GenderVerificationHost />
+            <InstantMeetingHost />
           </ScreenFill>
         </AppBarScrollProvider>
       </AppAccessGate>

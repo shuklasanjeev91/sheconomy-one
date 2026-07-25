@@ -95,8 +95,8 @@ const coworkUiDark: CoWorkUiTokens = {
   brand: brandColors.primary,
   brandDark: brandColors.primaryDark,
   brandLight: brandColors.primaryLight,
-  brandMuted: 'rgba(208, 16, 96, 0.18)',
-  brandGlow: 'rgba(208, 16, 96, 0.4)',
+  brandMuted: 'rgba(216, 27, 96, 0.18)',
+  brandGlow: 'rgba(216, 27, 96, 0.4)',
   coral: brandColors.coral,
   coralMuted: 'rgba(248, 120, 64, 0.16)',
   live: '#34d399',
@@ -112,9 +112,9 @@ const coworkUiDark: CoWorkUiTokens = {
   controlsDock: 'rgba(28, 15, 20, 0.94)',
   headerBg: 'rgba(22, 12, 16, 0.82)',
   panelHeader: 'rgba(30, 16, 22, 0.96)',
-  chatBubbleSelf: 'rgba(208, 16, 96, 0.22)',
+  chatBubbleSelf: 'rgba(216, 27, 96, 0.22)',
   chatBubbleOther: 'rgba(255, 255, 255, 0.06)',
-  chipBg: 'rgba(208, 16, 96, 0.12)',
+  chipBg: 'rgba(216, 27, 96, 0.12)',
   radius: coworkRadius,
 }
 
@@ -126,7 +126,7 @@ const coworkUiLight: CoWorkUiTokens = {
   surfaceMuted: sheconomyLight.sheconomy3,
   border: sheconomyLight.sheconomy5,
   borderSoft: 'rgba(26, 10, 18, 0.08)',
-  borderAccent: 'rgba(208, 16, 96, 0.28)',
+  borderAccent: 'rgba(216, 27, 96, 0.28)',
   glass: 'rgba(255, 255, 255, 0.88)',
   glassElevated: 'rgba(255, 255, 255, 0.96)',
   glassBorder: 'rgba(26, 10, 18, 0.1)',
@@ -136,8 +136,8 @@ const coworkUiLight: CoWorkUiTokens = {
   brand: brandColors.primary,
   brandDark: brandColors.primaryDark,
   brandLight: brandColors.primaryLight,
-  brandMuted: 'rgba(208, 16, 96, 0.1)',
-  brandGlow: 'rgba(208, 16, 96, 0.2)',
+  brandMuted: 'rgba(216, 27, 96, 0.1)',
+  brandGlow: 'rgba(216, 27, 96, 0.2)',
   coral: brandColors.coral,
   coralMuted: 'rgba(248, 120, 64, 0.12)',
   live: '#059669',
@@ -153,9 +153,9 @@ const coworkUiLight: CoWorkUiTokens = {
   controlsDock: 'rgba(255, 255, 255, 0.98)',
   headerBg: 'rgba(255, 255, 255, 0.92)',
   panelHeader: 'rgba(255, 255, 255, 0.98)',
-  chatBubbleSelf: 'rgba(208, 16, 96, 0.12)',
+  chatBubbleSelf: 'rgba(216, 27, 96, 0.12)',
   chatBubbleOther: sheconomyLight.sheconomy3,
-  chipBg: 'rgba(208, 16, 96, 0.08)',
+  chipBg: 'rgba(216, 27, 96, 0.08)',
   radius: coworkRadius,
 }
 
@@ -171,26 +171,26 @@ export function useCoWorkUi(): CoWorkUiTokens {
 export function getCoWorkGradients(scheme: 'light' | 'dark', ui: CoWorkUiTokens): CoWorkGradients {
   if (scheme === 'dark') {
     return {
-      page: `radial-gradient(ellipse 80% 50% at 20% -10%, rgba(208,16,96,0.18) 0%, transparent 55%),
+      page: `radial-gradient(ellipse 80% 50% at 20% -10%, rgba(216, 27, 96,0.18) 0%, transparent 55%),
     radial-gradient(ellipse 60% 40% at 90% 10%, rgba(248,120,64,0.1) 0%, transparent 50%),
     linear-gradient(165deg, ${sheconomyDark.sheconomy1} 0%, ${sheconomyDark.sheconomy3} 48%, #12080d 100%)`,
-      header: 'linear-gradient(90deg, rgba(208,16,96,0.14) 0%, transparent 55%)',
+      header: 'linear-gradient(90deg, rgba(216, 27, 96,0.14) 0%, transparent 55%)',
       activeControl: `linear-gradient(145deg, ${brandColors.primaryLight} 0%, ${brandColors.primary} 55%, ${brandColors.primaryDark} 100%)`,
       dangerControl: `linear-gradient(145deg, #ff5c7a 0%, ${ui.danger} 100%)`,
       recording: `linear-gradient(135deg, #f43f68 0%, ${brandColors.primaryDark} 100%)`,
-      heroOrb: 'radial-gradient(circle, rgba(208,16,96,0.35) 0%, transparent 70%)',
+      heroOrb: 'radial-gradient(circle, rgba(216, 27, 96,0.35) 0%, transparent 70%)',
     }
   }
 
   return {
-    page: `radial-gradient(ellipse 80% 50% at 20% -10%, rgba(208,16,96,0.08) 0%, transparent 55%),
+    page: `radial-gradient(ellipse 80% 50% at 20% -10%, rgba(216, 27, 96,0.08) 0%, transparent 55%),
     radial-gradient(ellipse 60% 40% at 90% 10%, rgba(248,120,64,0.06) 0%, transparent 50%),
     linear-gradient(165deg, ${sheconomyLight.sheconomy2} 0%, #ffffff 48%, ${sheconomyLight.sheconomy3} 100%)`,
-    header: 'linear-gradient(90deg, rgba(208,16,96,0.08) 0%, transparent 55%)',
+    header: 'linear-gradient(90deg, rgba(216, 27, 96,0.08) 0%, transparent 55%)',
     activeControl: `linear-gradient(145deg, ${brandColors.primaryLight} 0%, ${brandColors.primary} 55%, ${brandColors.primaryDark} 100%)`,
     dangerControl: `linear-gradient(145deg, #ef4444 0%, ${ui.danger} 100%)`,
     recording: `linear-gradient(135deg, #ef4444 0%, ${brandColors.primaryDark} 100%)`,
-    heroOrb: 'radial-gradient(circle, rgba(208,16,96,0.18) 0%, transparent 70%)',
+    heroOrb: 'radial-gradient(circle, rgba(216, 27, 96,0.18) 0%, transparent 70%)',
   }
 }
 
@@ -205,10 +205,10 @@ export function getCoWorkShadows(scheme: 'light' | 'dark'): CoWorkShadows {
   }
 
   return {
-    dock: '0 16px 48px rgba(208, 16, 96, 0.12), 0 0 0 1px rgba(26, 10, 18, 0.06)',
-    panel: '0 12px 40px rgba(208, 16, 96, 0.1), 0 0 0 1px rgba(26, 10, 18, 0.06)',
-    card: '0 4px 24px rgba(208, 16, 96, 0.08)',
-    tile: '0 8px 32px rgba(208, 16, 96, 0.1)',
+    dock: '0 16px 48px rgba(216, 27, 96, 0.12), 0 0 0 1px rgba(26, 10, 18, 0.06)',
+    panel: '0 12px 40px rgba(216, 27, 96, 0.1), 0 0 0 1px rgba(26, 10, 18, 0.06)',
+    card: '0 4px 24px rgba(216, 27, 96, 0.08)',
+    tile: '0 8px 32px rgba(216, 27, 96, 0.1)',
   }
 }
 

@@ -7,7 +7,7 @@ import {
   LISTING_PUBLISH_STEPS,
   type ListingPublishStepConfig,
   type ListingPublishStepId,
-} from './listing-publish.constants'
+} from '~/commerce/components/vendor/listing-publish/listing-publish.constants'
 
 function stepIcon(iconName: ListingPublishStepConfig['iconName'], color: string, size = 15) {
   switch (iconName) {

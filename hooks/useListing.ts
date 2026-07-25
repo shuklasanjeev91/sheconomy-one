@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 
 import type { DeliveryProfile } from '~/commerce/lib/listing-fulfillment'
 import {
+  enrichListingShopShipping,
   fetchListingDetail,
   mapListingImages,
   type ListingImage,
@@ -11,10 +12,17 @@ import {
 
 export type { ListingDetail, ListingImage, ListingShop, ListingRow } from '~/commerce/lib/listing-loader'
 
+type UseListingOptions = {
+  /** Parent native loader still running — wait instead of double-fetching. */
+  awaitingInitial?: boolean
+}
+
 export function useListing(
   listingRef?: string,
   initial?: ListingLoaderResult | null,
+  options: UseListingOptions = {},
 ) {
+  const { awaitingInitial = false } = options
   const hasInitial = Boolean(initial?.data || initial?.error)
   const [listing, setListing] = useState<ListingRow | null>(initial?.data ?? null)
   const [isLoading, setIsLoading] = useState(!hasInitial && Boolean(listingRef))
@@ -36,6 +44,11 @@ export function useListing(
       return
     }
 
+    if (awaitingInitial) {
+      setIsLoading(true)
+      return
+    }
+
     let cancelled = false
 
     async function load() {
@@ -53,7 +66,20 @@ export function useListing(
     return () => {
       cancelled = true
     }
-  }, [listingRef, initial?.data, initial?.error])
+  }, [listingRef, initial?.data, initial?.error, awaitingInitial])
+
+  // Shipping rails are optional for first paint — fill in without blocking the spinner.
+  useEffect(() => {
+    if (!listing?.id || !listing.shop_id) return
+    let cancelled = false
+    void enrichListingShopShipping(listing).then((next) => {
+      if (cancelled || next === listing) return
+      setListing(next)
+    })
+    return () => {
+      cancelled = true
+    }
+  }, [listing?.id, listing?.shop_id])
 
   const images = mapListingImages(listing)
 

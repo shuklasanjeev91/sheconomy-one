@@ -16,8 +16,8 @@ import {
   FULFILLMENT_STATUS,
   PENDING_FULFILLMENT_STATUSES,
   type FulfillmentStatus,
-} from './order.constants'
-import * as fulfillmentService from './fulfillment.service'
+} from '~/lib/orders/order.constants'
+import * as fulfillmentService from '~/lib/orders/fulfillment.service'
 import type {
   CarrierService,
   CarrierServiceFilters,
@@ -34,7 +34,7 @@ import type {
   PaginatedFulfillments,
   PaginationMeta,
   UpdateFulfillmentStatusMetadata,
-} from './fulfillment.type'
+} from '~/lib/orders/fulfillment.type'
 
 // ============= STATE =============
 

@@ -6,8 +6,8 @@ import {
   isCommunityPath,
 } from '~/lib/routes'
 
-import type { SearchScope } from './types'
-import { SEARCH_SCOPE_ALIASES, SEARCH_SCOPES } from './types'
+import type { SearchScope } from '~/lib/search/types'
+import { SEARCH_SCOPE_ALIASES, SEARCH_SCOPES } from '~/lib/search/types'
 
 /** Map the active app section to the default search scope. */
 export function searchScopeFromPath(pathname: string): SearchScope {

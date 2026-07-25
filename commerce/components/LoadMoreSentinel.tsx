@@ -1,4 +1,5 @@
 import type { ReactNode } from 'react'
+import { View } from 'react-native'
 
 import { Button, Spinner, Text, YStack } from '~/components/ui'
 import { useInfiniteScroll } from '~/hooks/useInfiniteScroll'
@@ -18,7 +19,7 @@ export function LoadMoreSentinel({
   isLoadingMore,
   onLoadMore,
   label = 'Load more',
-  rootMargin = '240px',
+  rootMargin = '320px',
 }: LoadMoreSentinelProps) {
   const ui = useAppUi()
   const { sentinelRef, supportsAutoLoad } = useInfiniteScroll(onLoadMore, {
@@ -29,30 +30,36 @@ export function LoadMoreSentinel({
   if (!hasMore && !isLoadingMore) return null
 
   return (
-    <YStack
+    // RN View guarantees measureInWindow — Tamagui YStack refs often do not.
+    <View
       ref={sentinelRef as never}
-      width="100%"
-      alignItems="center"
-      justifyContent="center"
-      paddingVertical="$4"
-      gap="$2"
-      minHeight={1}
+      collapsable={false}
+      style={{ width: '100%', minHeight: 1 }}
       onLayout={() => {
-        // Native: re-measure after layout so scrollY checks see the sentinel.
+        // Native: re-measure after layout so visibility checks see the sentinel.
       }}
     >
-      {isLoadingMore ? (
-        <Spinner size="small" />
-      ) : hasMore && !supportsAutoLoad ? (
-        <Button tone="outline" size="$3" borderRadius={999} onPress={onLoadMore}>
-          {label}
-        </Button>
-      ) : hasMore ? (
-        <Text fontSize={12} color={ui.textMuted}>
-          Scroll for more
-        </Text>
-      ) : null}
-    </YStack>
+      <YStack
+        width="100%"
+        alignItems="center"
+        justifyContent="center"
+        paddingVertical="$3"
+        gap="$2"
+        minHeight={1}
+      >
+        {isLoadingMore ? (
+          <Spinner size="small" />
+        ) : hasMore && !supportsAutoLoad ? (
+          <Button tone="outline" size="$3" borderRadius={999} onPress={onLoadMore}>
+            {label}
+          </Button>
+        ) : hasMore ? (
+          <Text fontSize={12} color={ui.textMuted}>
+            Loading more…
+          </Text>
+        ) : null}
+      </YStack>
+    </View>
   )
 }
 

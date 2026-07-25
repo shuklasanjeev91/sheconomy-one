@@ -1,4 +1,7 @@
 import { Sheet as TSheet, styled } from 'tamagui'
+import { Platform } from 'react-native'
+
+const overlayAnimation = Platform.OS === 'web' ? 'quick' : '75ms'
 
 /** Bottom sheet — the natural "modal" pattern on mobile, also great on web. */
 export const Sheet = TSheet
@@ -7,8 +10,8 @@ export const SheetOverlay = styled(
   TSheet.Overlay,
   {
     name: 'SheetOverlay',
-    backgroundColor: 'rgba(10, 10, 15, 0.5)',
-    animation: 'quick',
+    backgroundColor: 'rgba(10, 10, 15, 0.45)',
+    animation: overlayAnimation,
     enterStyle: { opacity: 0 },
     exitStyle: { opacity: 0 },
   } as any

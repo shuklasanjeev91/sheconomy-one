@@ -3,7 +3,7 @@ import type { ListingShopPoliciesModel, ShopPolicySection } from '~/commerce/lib
 import { radius } from '~/config/tokens'
 import { useAppUi } from '~/lib/theme/useAppUi'
 
-import { SectionTitle } from './SectionTitle'
+import { SectionTitle } from '~/commerce/components/SectionTitle'
 
 type ListingShopPoliciesProps = {
   policies: ListingShopPoliciesModel

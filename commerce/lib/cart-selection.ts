@@ -1,6 +1,6 @@
 import { useSyncExternalStore } from 'react'
 
-import type { CartItemRow, CartRow } from './cart'
+import type { CartItemRow, CartRow } from '~/commerce/lib/cart'
 
 /**
  * Per-item cart selection. We persist the *deselected* ids at module scope so

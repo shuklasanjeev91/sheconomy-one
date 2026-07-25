@@ -3,7 +3,7 @@ import {
   PAYMENT_MODES,
   SALES_DATE_RANGES,
   SALES_STATUS,
-} from './sales-analytics.constants'
+} from '~/lib/sales-analytics/sales-analytics.constants'
 import type {
   SalesAnalyticsFilterInput,
   SalesAnalyticsRecord,
@@ -11,8 +11,8 @@ import type {
   VendorRegionalSalesRow,
   VendorSalesAnalyticsRow,
   VendorTopProductRow,
-} from './sales-analytics.type'
-import { formatPercentage } from './sales-analytics.utils'
+} from '~/lib/sales-analytics/sales-analytics.type'
+import { formatPercentage } from '~/lib/sales-analytics/sales-analytics.utils'
 
 export type SalesAnalyticsHubTab = 'overview' | 'detailed' | 'products' | 'regional'
 

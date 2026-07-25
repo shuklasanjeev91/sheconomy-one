@@ -2,7 +2,7 @@ import { YStack } from '~/components/ui'
 import type { Shop } from '~/lib/shop/shop.type'
 import type { AppUiTokens } from '~/lib/theme/app-ui'
 
-import { VendorReturnPolicyHubPanel } from './VendorReturnPolicyHubPanel'
+import { VendorReturnPolicyHubPanel } from '~/commerce/screens/vendor/VendorReturnPolicyHubPanel'
 
 type VendorReturnPolicySettingsProps = {
   ui: AppUiTokens

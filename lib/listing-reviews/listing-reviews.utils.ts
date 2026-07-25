@@ -4,7 +4,7 @@ import {
   LISTING_REVIEW_SORT_BY,
   LISTING_REVIEW_STATUS,
   LISTING_REVIEW_VALIDATION,
-} from './listing-reviews.constants'
+} from '~/lib/listing-reviews/listing-reviews.constants'
 import type {
   ListingReview,
   ListingReviewCreateInput,
@@ -13,7 +13,7 @@ import type {
   ListingReviewStats,
   ListingReviewSummary,
   ListingReviewWithRelations,
-} from './listing-reviews.type'
+} from '~/lib/listing-reviews/listing-reviews.type'
 
 // ============= DEFAULTS =============
 

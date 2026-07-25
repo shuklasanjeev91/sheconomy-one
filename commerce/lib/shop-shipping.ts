@@ -1,6 +1,6 @@
 import type { Json } from '~/lib/supabase'
 
-import type { DeliveryProfile } from './listing-fulfillment'
+import type { DeliveryProfile } from '~/commerce/lib/listing-fulfillment'
 
 export type ShopShippingProvider = {
   id: string

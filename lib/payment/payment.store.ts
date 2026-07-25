@@ -13,8 +13,8 @@ import {
   PAYMENT_ACCOUNT_STATUS,
   PAYMENT_LOG_DEFAULT_LIMIT,
   type PaymentProviderId,
-} from './payment.constants'
-import * as paymentService from './payment.service'
+} from '~/lib/payment/payment.constants'
+import * as paymentService from '~/lib/payment/payment.service'
 import type {
   ConnectedProviderSummary,
   LogPaymentEventInput,
@@ -28,12 +28,12 @@ import type {
   PaymentSettingsInput,
   ShopPaymentAccount,
   VendorPaymentSettings,
-} from './payment.type'
+} from '~/lib/payment/payment.type'
 import {
   accountsToConnectedProviders,
   mergeConnectedProviders,
   normalizeProviderId,
-} from './payment.utils'
+} from '~/lib/payment/payment.utils'
 
 // ============= STATE =============
 

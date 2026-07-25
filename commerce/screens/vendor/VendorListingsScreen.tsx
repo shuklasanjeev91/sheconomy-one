@@ -9,9 +9,9 @@ import { commerceRoutes, vendorRoutes } from '~/lib/routes'
 import { useAppSelector } from '~/lib/store/hooks'
 import { useAppUi } from '~/lib/theme/useAppUi'
 
-import { VendorListingDetailDrawer } from './VendorListingDetailDrawer'
-import { VendorListingsProductsTab } from './VendorListingsProductsTab'
-import { VendorListingsSectionsTab } from './VendorListingsSectionsTab'
+import { VendorListingDetailDrawer } from '~/commerce/screens/vendor/VendorListingDetailDrawer'
+import { VendorListingsProductsTab } from '~/commerce/screens/vendor/VendorListingsProductsTab'
+import { VendorListingsSectionsTab } from '~/commerce/screens/vendor/VendorListingsSectionsTab'
 
 type InventoryTab = 'product' | 'section'
 

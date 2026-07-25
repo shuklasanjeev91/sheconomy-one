@@ -9,7 +9,7 @@ import { useAppLayout } from '~/hooks/useAppLayout'
 import { useVendorShops } from '~/hooks/useVendorShops'
 import { useAppUi } from '~/lib/theme/useAppUi'
 
-import { SettingsNav } from './SettingsNav'
+import { SettingsNav } from '~/components/settings/SettingsNav'
 
 const SIDEBAR_WIDTH = 260
 

@@ -38,12 +38,12 @@ const communityUiLight: CommunityUiTokens = {
   divider: 'rgba(0,0,0,0.08)',
   bannerGradient: `linear-gradient(180deg, ${brandColors.primaryDark} 0%, ${brandColors.primary} 100%)`,
   cardRadius: 18,
-  cardShadow: '0 1px 2px rgba(208, 16, 96, 0.04), 0 8px 24px rgba(16, 12, 14, 0.06)',
+  cardShadow: '0 1px 2px rgba(216, 27, 96, 0.04), 0 8px 24px rgba(16, 12, 14, 0.06)',
   reactionBarShadow: '0 12px 32px rgba(16, 12, 14, 0.12), 0 0 0 1px rgba(0,0,0,0.04)',
   inputBg: '#ffffff',
   inputBorder: '#c8c8c8',
   hoverBg: 'rgba(0,0,0,0.04)',
-  accentMuted: 'rgba(208, 16, 96, 0.1)',
+  accentMuted: 'rgba(216, 27, 96, 0.1)',
 }
 
 const communityUiDark: CommunityUiTokens = {

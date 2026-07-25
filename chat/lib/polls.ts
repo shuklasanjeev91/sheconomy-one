@@ -1,6 +1,6 @@
 import { supabase } from '~/lib/supabase/client'
 
-import type { MessagePollVote, PollResult } from './types'
+import type { MessagePollVote, PollResult } from '~/chat/lib/types'
 
 type MessagePollVoteRow = {
   message_id: string

@@ -23,8 +23,8 @@ import {
   PAYMENT_LOG_MAX_LIMIT,
   SETTLEMENT_SCHEDULES,
   SUPPORTED_CURRENCIES,
-} from './payment.constants'
-import { PaymentError, PAYMENT_ERROR_CODES, toFriendlyPaymentError } from './payment.errors'
+} from '~/lib/payment/payment.constants'
+import { PaymentError, PAYMENT_ERROR_CODES, toFriendlyPaymentError } from '~/lib/payment/payment.errors'
 import type {
   ConnectPaymentAccountInput,
   CurrencyOption,
@@ -45,7 +45,7 @@ import type {
   ShopPaymentAccountInsert,
   ConnectedProviderSummary,
   VendorPaymentSettings,
-} from './payment.type'
+} from '~/lib/payment/payment.type'
 import {
   accountsToConnectedProviders,
   generatePaymentReference,
@@ -53,9 +53,9 @@ import {
   normalizeProviderId,
   processPaymentAnalytics,
   resolveProviderForDatabase,
-} from './payment.utils'
-import { buildDefaultPaymentSettings, validatePaymentSettings, validateProviderCredentials } from './payment.validation'
-import type { PaymentProviderId } from './payment.constants'
+} from '~/lib/payment/payment.utils'
+import { buildDefaultPaymentSettings, validatePaymentSettings, validateProviderCredentials } from '~/lib/payment/payment.validation'
+import type { PaymentProviderId } from '~/lib/payment/payment.constants'
 
 function ok<T>(data: T): PaymentServiceResponse<T> {
   return { success: true, data, error: null }

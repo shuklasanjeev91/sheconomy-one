@@ -6,8 +6,8 @@ import { radius } from '~/config/tokens'
 import type { ChannelNotificationPrefs } from '~/lib/notifications/product-preferences'
 import { useAppUi } from '~/lib/theme/useAppUi'
 
-import { PreferenceRow, SettingsSectionHeading } from './SettingsPanel'
-import { pushPlatformLabel } from './pushPlatformLabel'
+import { PreferenceRow, SettingsSectionHeading } from '~/components/settings/SettingsPanel'
+import { pushPlatformLabel } from '~/components/settings/pushPlatformLabel'
 
 export function ChannelPrefsCard({
   title,

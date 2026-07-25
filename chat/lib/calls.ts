@@ -192,6 +192,27 @@ export async function fetchCallById(callId: string): Promise<ChatCall | null> {
   return mapCall(data as CallRow)
 }
 
+/**
+ * Latest unanswered inbound call still within the ring window.
+ * Used when the app wakes from a push (realtime INSERT was missed while killed).
+ */
+export async function fetchPendingIncomingCall(userId: string): Promise<ChatCall | null> {
+  const since = new Date(Date.now() - CALL_RING_TIMEOUT_MS).toISOString()
+  const { data, error } = await supabase
+    .from('calls')
+    .select(CALL_SELECT)
+    .eq('receiver_id', userId)
+    .eq('status', 'ringing')
+    .gte('created_at', since)
+    .order('created_at', { ascending: false })
+    .limit(1)
+    .maybeSingle()
+  if (error || !data) return null
+  const call = mapCall(data as CallRow)
+  if (!call.meetingCode) return null
+  return call
+}
+
 export type CallOutcome = 'answered' | 'missed' | 'declined'
 
 /**

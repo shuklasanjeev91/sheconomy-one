@@ -8,7 +8,7 @@ import {
   SHIPPING_POLICY_VALIDATION,
   SHIPPING_RATE_TYPE,
   SHIPPING_ZONE_TYPE,
-} from './shipping-policy.constants'
+} from '~/lib/shipping-policy/shipping-policy.constants'
 import type {
   AssignedShippingPolicy,
   ShippingChargeResult,
@@ -17,8 +17,8 @@ import type {
   ShippingPolicyInput,
   ShippingRate,
   ShippingZone,
-} from './shipping-policy.type'
-import { parseShippingZonesFromJson } from './shipping-policy.type'
+} from '~/lib/shipping-policy/shipping-policy.type'
+import { parseShippingZonesFromJson } from '~/lib/shipping-policy/shipping-policy.type'
 
 // ============= DEFAULTS =============
 

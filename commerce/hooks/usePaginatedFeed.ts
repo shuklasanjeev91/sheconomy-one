@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
+import { Platform } from 'react-native'
 
 import { peekAppCache, readAppCache, writeAppCache } from '~/lib/cache/app-cache'
 import { useAutoRefresh } from '~/lib/cache/useAutoRefresh'
@@ -12,7 +13,7 @@ type PaginatedCacheSnapshot<T> = {
 }
 
 /** Skip network revalidation when the same feed was fetched this recently. */
-const FEED_FRESH_MS = 45_000
+const FEED_FRESH_MS = Platform.OS === 'web' ? 45_000 : 60_000
 const feedFetchedAt = new Map<string, number>()
 
 function mergeUnique<T extends { id: string }>(existing: T[], next: T[]): T[] {

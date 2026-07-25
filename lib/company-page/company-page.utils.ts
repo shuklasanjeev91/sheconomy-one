@@ -10,7 +10,7 @@ import {
   type CompanyImageUploadFile,
   type CompanyMemberRole,
   type CompanyPage,
-} from './company-page.type'
+} from '~/lib/company-page/company-page.type'
 
 /** Generate a URL-safe slug from a company name. */
 export function generateCompanyPageSlug(name: string | null | undefined): string {

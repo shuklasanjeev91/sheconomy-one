@@ -1,4 +1,4 @@
-import type { HelpArticle, HelpProduct } from './types'
+import type { HelpArticle, HelpProduct } from '~/lib/help/types'
 
 /** Static FAQ used when the knowledge base is empty or unreachable. */
 export const FAQ_FALLBACK: HelpArticle[] = [

@@ -7,7 +7,7 @@ import {
   routes,
 } from '~/lib/routes'
 
-import type { AiProduct, AiRouteContext } from './types'
+import type { AiProduct, AiRouteContext } from '~/lib/ai/types'
 
 function normalizePath(pathname: string) {
   if (!pathname) return '/'

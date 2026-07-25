@@ -1,6 +1,6 @@
 import { supabase } from '~/lib/supabase/client'
 
-import type { LatLng, NearbyShop } from './types'
+import type { LatLng, NearbyShop } from '~/lib/location/types'
 
 export async function fetchNearbyShops(
   coords: LatLng,

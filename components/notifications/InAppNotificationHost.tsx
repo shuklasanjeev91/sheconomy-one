@@ -1,6 +1,7 @@
 import { useEffect, useRef } from 'react'
 
 import { pathFromNotificationUrl } from '~/lib/notifications/push-config'
+import { resolveMarketplaceTrustNotificationPath } from '~/lib/notifications/marketplace-notification-path'
 import { navigateApp } from '~/lib/platform/navigate'
 import { supabase } from '~/lib/supabase/client'
 import { useAppToast } from '~/components/ui'
@@ -12,6 +13,14 @@ type LiveNotification = {
   message: string | null
   action_url: string | null
   channels: string[] | null
+  type?: string | null
+  context_type?: string | null
+  context_id?: string | null
+}
+
+function isCallNotification(row: LiveNotification) {
+  const type = (row.type ?? '').toLowerCase()
+  return type === 'incoming_call' || type.includes('incoming_call')
 }
 
 /**
@@ -41,12 +50,21 @@ export function InAppNotificationHost() {
           if (!row?.id || seenRef.current.has(row.id)) return
           seenRef.current.add(row.id)
 
+          // Incoming calls use CallOverlay instead of a toast.
+          if (isCallNotification(row)) return
+
           const channels = (row.channels ?? []).map((c) => c.toLowerCase())
           if (channels.length > 0 && !channels.includes('in_app')) return
 
           const title = row.title?.trim() || 'New notification'
           const message = row.message?.trim() || undefined
-          const path = pathFromNotificationUrl(row.action_url)
+          const path =
+            resolveMarketplaceTrustNotificationPath({
+              type: row.type,
+              contextType: row.context_type,
+              contextId: row.context_id,
+              actionUrl: row.action_url,
+            }) || pathFromNotificationUrl(row.action_url)
 
           toast.show(title, {
             message,

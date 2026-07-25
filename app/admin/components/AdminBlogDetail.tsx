@@ -29,7 +29,7 @@ import {
 } from '~/lib/cms'
 import { appRoutes } from '~/lib/routes'
 import { useAppDispatch, useAppSelector } from '~/lib/store/hooks'
-import { CmsCoverImage } from './CmsCoverImage'
+import { CmsCoverImage } from '~/app/admin/components/CmsCoverImage'
 
 function formatDateTime(value: string | null | undefined) {
   if (!value) return '—'

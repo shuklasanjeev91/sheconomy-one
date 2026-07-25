@@ -8,8 +8,8 @@ import { createAsyncThunk, createSlice, current, type PayloadAction } from '@red
 
 import type { AppDispatch, RootState } from '~/lib/store'
 
-import * as shopReviewService from './shop-review.service'
-import { buildDefaultShopReviewFilters, buildDefaultShopReviewPagination } from './shop-review.validation'
+import * as shopReviewService from '~/lib/shop-review/shop-review.service'
+import { buildDefaultShopReviewFilters, buildDefaultShopReviewPagination } from '~/lib/shop-review/shop-review.validation'
 import type {
   ShopReviewAccessContext,
   ShopReviewBulkModerationInput,
@@ -25,7 +25,7 @@ import type {
   ShopReviewStats,
   ShopReviewUpdateInput,
   ShopReviewWithRelations,
-} from './shop-review.type'
+} from '~/lib/shop-review/shop-review.type'
 import {
   applyShopReviewUpdate,
   buildOptimisticShopReview,
@@ -35,7 +35,7 @@ import {
   reviewMatchesShopReviewFilters,
   shouldUseShopReviewCache,
   upsertShopReview,
-} from './shop-review.utils'
+} from '~/lib/shop-review/shop-review.utils'
 
 type ShopReviewsState = {
   shopId: string | null

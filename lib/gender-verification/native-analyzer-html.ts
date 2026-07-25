@@ -1,4 +1,4 @@
-import { GENDER_VERIFICATION } from './constants'
+import { GENDER_VERIFICATION } from '~/lib/gender-verification/constants'
 
 /** Hidden WebView HTML: @vladmandic/human blink + antispoof + liveness + gender. */
 export function getNativeAnalyzerHtml() {

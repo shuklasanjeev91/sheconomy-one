@@ -28,7 +28,7 @@ import { filterPaymentProvidersByQuery, getFrontendVisibleProviders, sortProvide
 import { useAppDispatch, useAppSelector } from '~/lib/store/hooks'
 import type { AppUiTokens } from '~/lib/theme/app-ui'
 
-import { VendorPaymentConnectDrawer } from './VendorPaymentConnectDrawer'
+import { VendorPaymentConnectDrawer } from '~/commerce/screens/vendor/VendorPaymentConnectDrawer'
 
 type VendorPaymentMethodsPanelProps = {
   ui: AppUiTokens

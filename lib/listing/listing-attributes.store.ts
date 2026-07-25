@@ -9,12 +9,12 @@ import { createAsyncThunk, createSlice, current } from '@reduxjs/toolkit'
 
 import type { AppDispatch } from '~/lib/store'
 
-import * as attributesService from './listing-attributes.service'
+import * as attributesService from '~/lib/listing/listing-attributes.service'
 import type {
   ListingAttribute,
   ListingAttributeInsert,
   ListingAttributeUpdate,
-} from './listing.type'
+} from '~/lib/listing/listing.type'
 
 type AttributesState = {
   byListingId: string | null

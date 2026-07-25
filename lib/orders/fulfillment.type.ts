@@ -12,8 +12,8 @@
 
 import type { Tables, TablesInsert, TablesUpdate } from '~/lib/supabase'
 
-import type { FulfillmentEventType, FulfillmentStatus } from './order.constants'
-import type { OrderServiceResponse } from './vendor-orders.type'
+import type { FulfillmentEventType, FulfillmentStatus } from '~/lib/orders/order.constants'
+import type { OrderServiceResponse } from '~/lib/orders/vendor-orders.type'
 
 export type { OrderServiceResponse }
 

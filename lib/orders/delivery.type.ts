@@ -9,8 +9,8 @@
 
 import type { Json, Tables, TablesInsert, TablesUpdate } from '~/lib/supabase'
 
-import type { DeliveryMode, DeliveryStatus } from './order.constants'
-import type { OrderServiceResponse, PaginationMeta } from './vendor-orders.type'
+import type { DeliveryMode, DeliveryStatus } from '~/lib/orders/order.constants'
+import type { OrderServiceResponse, PaginationMeta } from '~/lib/orders/vendor-orders.type'
 
 // Shared response envelope + pagination meta, re-exported so delivery code is a
 // one-stop import.

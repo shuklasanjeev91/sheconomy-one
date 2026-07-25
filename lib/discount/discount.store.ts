@@ -14,8 +14,8 @@ import {
   DEFAULT_DISCOUNT_PAGINATION,
   DISCOUNT_FETCH_SCOPE,
   DISCOUNT_TYPES,
-} from './discount.constants'
-import * as discountService from './discount.service'
+} from '~/lib/discount/discount.constants'
+import * as discountService from '~/lib/discount/discount.service'
 import type {
   BogoRuleInput,
   DiscountAccessContext,
@@ -33,8 +33,8 @@ import type {
   DiscountUpdateInput,
   DiscountValidationContext,
   OrderDiscountRow,
-} from './discount.type'
-import { buildDefaultDiscountFilters } from './discount.validation'
+} from '~/lib/discount/discount.type'
+import { buildDefaultDiscountFilters } from '~/lib/discount/discount.validation'
 import {
   buildOptimisticDiscount,
   computeDiscountStats,
@@ -45,7 +45,7 @@ import {
   replaceTempDiscount,
   shouldUseDiscountCache,
   upsertDiscount,
-} from './discount.utils'
+} from '~/lib/discount/discount.utils'
 
 type DiscountUsageHistoryResult = {
   items: OrderDiscountRow[]

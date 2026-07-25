@@ -1,6 +1,6 @@
 import { z } from 'zod'
 
-import type { CustomPartnerFormInput, CustomPartnerInput } from './vendor-shipping.type'
+import type { CustomPartnerFormInput, CustomPartnerInput } from '~/lib/vendor-shipping/vendor-shipping.type'
 
 const pickupAddressSchema = z.object({
   address_line1: z.string().optional(),

@@ -19,13 +19,13 @@ import { INVALIDATION_TOPICS, invalidateCache } from '~/lib/cache/invalidation'
 import { supabase } from '~/lib/supabase'
 import type { Database } from '~/lib/supabase'
 
-import { fail, isAdminUser, ok, resolveUserId, verifyListingManageAccess, verifyShopManageAccess } from './listing.access'
-import { prepareListingDataForSubmission } from './listing.utils'
-import { validateCategoryData } from './listing.validation'
-import { addImage, uploadAndAttachImage } from './listing-images.service'
-import { replaceAttributes } from './listing-attributes.service'
-import { replaceMaterials } from './listing-materials.service'
-import { replaceVariations } from './listing-variations.service'
+import { fail, isAdminUser, ok, resolveUserId, verifyListingManageAccess, verifyShopManageAccess } from '~/lib/listing/listing.access'
+import { prepareListingDataForSubmission } from '~/lib/listing/listing.utils'
+import { validateCategoryData } from '~/lib/listing/listing.validation'
+import { addImage, uploadAndAttachImage } from '~/lib/listing/listing-images.service'
+import { replaceAttributes } from '~/lib/listing/listing-attributes.service'
+import { replaceMaterials } from '~/lib/listing/listing-materials.service'
+import { replaceVariations } from '~/lib/listing/listing-variations.service'
 import {
   LISTING_PAGE_SIZE,
   LISTING_STATUS,
@@ -43,7 +43,7 @@ import {
   type ListingUpdate,
   type PlatformListingStats,
   type PublicListing,
-} from './listing.type'
+} from '~/lib/listing/listing.type'
 
 // ============= DERIVED VIEW / RPC ROW TYPES =============
 

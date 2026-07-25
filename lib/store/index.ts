@@ -39,7 +39,7 @@ import { vendorShippingReducer } from '~/lib/vendor-shipping/vendor-shipping.sto
 import { shopReviewReducer } from '~/lib/shop-review/shop-review.store'
 import { vendorOrdersReducer } from '~/lib/orders/vendor-orders.store'
 
-import { persistStorage } from './storage'
+import { persistStorage } from '~/lib/store/storage'
 
 const completionPersistConfig = {
   key: 'profile-completion',

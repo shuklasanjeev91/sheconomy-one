@@ -4,9 +4,9 @@ import { getFeedExclusion } from '~/community/lib/moderation'
 import { INVALIDATION_TOPICS, invalidateCache } from '~/lib/cache/invalidation'
 import { supabase } from '~/lib/supabase/client'
 
-import { extractHashtags, extractMentions } from './post-text'
-import { notifyHashtagFollowers } from './hashtag-follows'
-import { isVideoMediaUrl, normalizeUrlList } from './post-media'
+import { extractHashtags, extractMentions } from '~/community/lib/post-text'
+import { notifyHashtagFollowers } from '~/community/lib/hashtag-follows'
+import { isVideoMediaUrl, normalizeUrlList } from '~/community/lib/post-media'
 
 export const COMMUNITY_PAGE_SIZE = 15
 

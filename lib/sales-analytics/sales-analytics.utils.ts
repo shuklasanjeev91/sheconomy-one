@@ -11,7 +11,7 @@ import {
   SALES_DATE_RANGES,
   SALES_DATE_TYPE,
   SALES_SORT_BY,
-} from './sales-analytics.constants'
+} from '~/lib/sales-analytics/sales-analytics.constants'
 import type {
   ExportFormat,
   FormattedVendorSalesAnalytics,
@@ -25,7 +25,7 @@ import type {
   SalesExportPreparedData,
   SalesSummaryMetrics,
   VendorSalesAnalyticsRow,
-} from './sales-analytics.type'
+} from '~/lib/sales-analytics/sales-analytics.type'
 
 // ============= DEFAULTS =============
 

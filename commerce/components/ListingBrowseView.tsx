@@ -5,9 +5,9 @@ import type { ListingSummary } from '~/lib/supabase/commerce'
 import { getShadowStyle, radius } from '~/config/tokens'
 import { useAppUi } from '~/lib/theme/useAppUi'
 
-import { CommercePageHeader } from './CommercePageHeader'
-import { ListingGrid } from './ListingGrid'
-import { LoadMoreEnd, LoadMoreSentinel } from './LoadMoreSentinel'
+import { CommercePageHeader } from '~/commerce/components/CommercePageHeader'
+import { ListingGrid } from '~/commerce/components/ListingGrid'
+import { LoadMoreEnd, LoadMoreSentinel } from '~/commerce/components/LoadMoreSentinel'
 
 type ListingBrowseViewProps = {
   title: string

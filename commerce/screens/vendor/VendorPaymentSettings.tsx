@@ -3,7 +3,7 @@ import { PAYMENT_UI_COPY } from '~/lib/payment/payment-ui.copy'
 import type { Shop } from '~/lib/shop/shop.type'
 import type { AppUiTokens } from '~/lib/theme/app-ui'
 
-import { VendorPaymentMethodsPanel } from './VendorPaymentMethodsPanel'
+import { VendorPaymentMethodsPanel } from '~/commerce/screens/vendor/VendorPaymentMethodsPanel'
 
 type VendorPaymentSettingsProps = {
   ui: AppUiTokens

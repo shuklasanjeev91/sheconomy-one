@@ -1,7 +1,7 @@
 import 'jsr:@supabase/functions-js/edge-runtime.d.ts'
 import { createClient } from 'jsr:@supabase/supabase-js@2'
 
-import { corsHeaders, jsonResponse } from '../_shared/cors.ts'
+import { corsHeaders, jsonResponse } from '~/supabase/functions/_shared/cors.ts'
 
 const SHIPROCKET_BASE_URL = 'https://apiv2.shiprocket.in/v1/external'
 const TOKEN_TTL_MS = 10 * 24 * 60 * 60 * 1000

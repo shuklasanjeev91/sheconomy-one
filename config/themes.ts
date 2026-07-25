@@ -33,7 +33,7 @@ import {
   sheconomyDarkPalette,
   sheconomyLight,
   sheconomyLightPalette,
-} from './brand-colors'
+} from '~/config/brand-colors'
 
 const lightShadowColor = 'rgba(0,0,0,0.04)'
 const lightShadowColorStrong = 'rgba(0,0,0,0.085)'

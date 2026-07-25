@@ -4,8 +4,8 @@
 
 import { z } from 'zod'
 
-import { DEFAULT_GROUP_TYPE, GROUP_TYPE_OPTIONS } from './group.type'
-import { normalizeGroupName, parseIndustriesInput } from './group.utils'
+import { DEFAULT_GROUP_TYPE, GROUP_TYPE_OPTIONS } from '~/lib/group/group.type'
+import { normalizeGroupName, parseIndustriesInput } from '~/lib/group/group.utils'
 
 const optionalUrl = z
   .union([z.string().url('Must be a valid URL'), z.literal(''), z.null()])

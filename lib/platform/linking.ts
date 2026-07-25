@@ -2,7 +2,7 @@ import type { Href } from 'one'
 
 import { APP_SCHEME, buildAppUrl, buildNativeSchemeUrl, resolveAppOrigin } from '~/config/app-origin'
 
-import { navigateApp } from './navigate'
+import { navigateApp } from '~/lib/platform/navigate'
 
 /**
  * Open an in-app path via soft SPA routing on web, iOS, and Android.

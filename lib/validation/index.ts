@@ -1,1 +1,1 @@
-export * from './validators'
+export * from '~/lib/validation/validators'

@@ -3,7 +3,8 @@ import { useRef, useState } from 'react'
 import { ReactionBurst, ReactionPicker } from '~/community/components/ReactionPicker'
 import { REACTION_TYPES, type ReactionType } from '~/community/lib/constants'
 import { useCommunityUi } from '~/community/lib/community-theme'
-import { Icons, Text, XStack, useMedia } from '~/components/ui'
+import { Icons, Text, XStack } from '~/components/ui'
+import { useAppLayout } from '~/hooks/useAppLayout'
 
 type PostLikeButtonProps = {
   isLiked: boolean
@@ -27,8 +28,7 @@ export function PostLikeButton({
   onRequireAuth,
 }: PostLikeButtonProps) {
   const communityUi = useCommunityUi()
-  const media = useMedia()
-  const isDesktop = media.gtMd
+  const { isDesktop } = useAppLayout()
   const [pickerOpen, setPickerOpen] = useState(false)
   const [burstEmoji, setBurstEmoji] = useState<string | null>(null)
   const longPressTimer = useRef<ReturnType<typeof setTimeout> | null>(null)

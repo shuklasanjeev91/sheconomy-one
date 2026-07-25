@@ -11,12 +11,12 @@ import {
   CUSTOM_PARTNER_SELECT,
   CUSTOM_PROVIDER_TYPE,
   SHIPROCKET_PROVIDER_TYPE,
-} from './vendor-shipping.constants'
+} from '~/lib/vendor-shipping/vendor-shipping.constants'
 import {
   VendorShippingError,
   VENDOR_SHIPPING_ERROR_CODES,
   toFriendlyVendorShippingError,
-} from './vendor-shipping.errors'
+} from '~/lib/vendor-shipping/vendor-shipping.errors'
 import type {
   ConnectShiprocketInput,
   CustomPartnerInput,
@@ -25,8 +25,8 @@ import type {
   ShiprocketStatus,
   VendorShippingAccessContext,
   VendorShippingServiceResponse,
-} from './vendor-shipping.type'
-import { validateCustomPartnerInput } from './vendor-shipping.validation'
+} from '~/lib/vendor-shipping/vendor-shipping.type'
+import { validateCustomPartnerInput } from '~/lib/vendor-shipping/vendor-shipping.validation'
 
 function ok<T>(data: T, message?: string | null): VendorShippingServiceResponse<T> {
   return { success: true, data, error: null, message: message ?? null }

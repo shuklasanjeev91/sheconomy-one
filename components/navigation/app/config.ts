@@ -45,7 +45,7 @@ import {
   formatBottomTabLabel,
   limitMiddleTabsForWidth,
   type BottomTabWidthTier,
-} from './mobile-tab-bar-width'
+} from '~/components/navigation/app/mobile-tab-bar-width'
 
 export function getAppColors(ui: AppUiTokens = appUiLight) {
   return {

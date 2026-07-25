@@ -3,6 +3,43 @@ import { getOneSignalAppId, resolvePushPlatform } from '~/lib/notifications/push
 
 let initialized = false
 
+async function waitForSubscriptionId(timeoutMs = 8_000): Promise<string | null> {
+  const { OneSignal } = await import('react-native-onesignal')
+
+  const existing = await OneSignal.User.pushSubscription.getIdAsync()
+  if (existing) return existing
+
+  return new Promise((resolve) => {
+    let settled = false
+    const finish = (id: string | null) => {
+      if (settled) return
+      settled = true
+      clearTimeout(timer)
+      try {
+        OneSignal.User.pushSubscription.removeEventListener('change', onChange)
+      } catch {
+        // ignore
+      }
+      resolve(id)
+    }
+
+    const onChange = (state: { current?: { id?: string | null } }) => {
+      const id = state.current?.id
+      if (id) finish(id)
+    }
+
+    const timer = setTimeout(() => {
+      void OneSignal.User.pushSubscription.getIdAsync().then((id) => finish(id ?? null))
+    }, timeoutMs)
+
+    try {
+      OneSignal.User.pushSubscription.addEventListener('change', onChange)
+    } catch {
+      finish(null)
+    }
+  })
+}
+
 /**
  * Native (iOS / Android) OneSignal push client.
  * Requires a development/production build — not available inside Expo Go.
@@ -45,6 +82,16 @@ const nativePushClient: PushClient = {
     }
   },
 
+  async canRequestPermission() {
+    try {
+      const { OneSignal } = await import('react-native-onesignal')
+      await this.init()
+      return await OneSignal.Notifications.canRequestPermission()
+    } catch {
+      return false
+    }
+  },
+
   async login(userId: string) {
     try {
       const { OneSignal } = await import('react-native-onesignal')
@@ -68,9 +115,8 @@ const nativePushClient: PushClient = {
 
   async getPlayerId() {
     try {
-      const { OneSignal } = await import('react-native-onesignal')
       await this.init()
-      return await OneSignal.User.pushSubscription.getIdAsync()
+      return await waitForSubscriptionId(6_000)
     } catch {
       return null
     }

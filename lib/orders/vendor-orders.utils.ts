@@ -3,13 +3,13 @@
  * shape the UI expects, plus pure client-side aggregations over the loaded set.
  */
 
-import { ORDER_STATUS, type OrderStatus } from './order.constants'
+import { ORDER_STATUS, type OrderStatus } from '~/lib/orders/order.constants'
 import type {
   OrderDeliverySummary,
   OrderListingSummary,
   VendorOrderItem,
   VendorOrderStats,
-} from './vendor-orders.type'
+} from '~/lib/orders/vendor-orders.type'
 
 // Re-export the shared status helpers so the vendor module is a one-stop import.
 export {
@@ -20,7 +20,7 @@ export {
   getNextPossibleStatuses,
   isValidStatusTransition,
   validateStatusTransition,
-} from './order.utils'
+} from '~/lib/orders/order.utils'
 
 /** Pick the primary image URL from a listing's images (is_primary, else lowest order). */
 export function resolvePrimaryImage(listing: OrderListingSummary | null | undefined): string | null {

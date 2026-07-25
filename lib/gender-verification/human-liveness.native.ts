@@ -1,5 +1,5 @@
 /** Native stub — Human liveness runs in the WebView analyzer on iOS/Android. */
-import { GENDER_VERIFICATION } from './constants'
+import { GENDER_VERIFICATION } from '~/lib/gender-verification/constants'
 
 export async function getHuman(): Promise<never> {
   throw new Error('Human liveness is web-only here; use NativeFaceAnalyzer on native.')

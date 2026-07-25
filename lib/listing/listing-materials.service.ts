@@ -8,13 +8,13 @@
 
 import { supabase } from '~/lib/supabase'
 
-import { fail, ok, resolveUserId, verifyListingManageAccess } from './listing.access'
+import { fail, ok, resolveUserId, verifyListingManageAccess } from '~/lib/listing/listing.access'
 import type {
   ListingMaterial,
   ListingMaterialInsert,
   ListingMaterialUpdate,
   ListingServiceResponse,
-} from './listing.type'
+} from '~/lib/listing/listing.type'
 
 function toNumber(value: unknown): number | null {
   if (value === null || value === undefined || value === '') return null

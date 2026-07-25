@@ -7,7 +7,7 @@ import { useOptionalMarketplacePersonalization } from '~/commerce/context/Market
 import { hasListingImages } from '~/lib/listing-images'
 import type { ListingSummary } from '~/lib/supabase/commerce'
 
-import { ListingCard } from './ListingCard'
+import { ListingCard } from '~/commerce/components/ListingCard'
 
 type ListingGridProps = {
   listings: ListingSummary[]

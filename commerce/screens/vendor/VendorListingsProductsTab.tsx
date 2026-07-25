@@ -35,7 +35,7 @@ import {
   listingStatusLabel,
   listingStatusTone,
   listingTypeLabel,
-} from './vendor-listings-shared'
+} from '~/commerce/screens/vendor/vendor-listings-shared'
 
 const PAGE_SIZE = 10
 

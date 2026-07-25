@@ -2,7 +2,7 @@ import { createAsyncThunk, createSlice, type PayloadAction } from '@reduxjs/tool
 
 import type { AppDispatch, RootState } from '~/lib/store'
 
-import * as vendorShippingService from './vendor-shipping.service'
+import * as vendorShippingService from '~/lib/vendor-shipping/vendor-shipping.service'
 import type {
   ConnectShiprocketInput,
   CustomPartnerFormInput,
@@ -10,9 +10,9 @@ import type {
   CustomShippingPartner,
   ShiprocketStatus,
   VendorShippingAccessContext,
-} from './vendor-shipping.type'
-import { emptyCustomPartnerForm } from './vendor-shipping.type'
-import { toFriendlyVendorShippingError } from './vendor-shipping.errors'
+} from '~/lib/vendor-shipping/vendor-shipping.type'
+import { emptyCustomPartnerForm } from '~/lib/vendor-shipping/vendor-shipping.type'
+import { toFriendlyVendorShippingError } from '~/lib/vendor-shipping/vendor-shipping.errors'
 
 type VendorShippingState = {
   shopId: string | null

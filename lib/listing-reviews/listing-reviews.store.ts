@@ -9,8 +9,8 @@ import { createAsyncThunk, createSlice, current, type PayloadAction } from '@red
 
 import type { AppDispatch, RootState } from '~/lib/store'
 
-import * as listingReviewService from './listing-reviews.service'
-import { buildDefaultListingReviewFilters } from './listing-reviews.validation'
+import * as listingReviewService from '~/lib/listing-reviews/listing-reviews.service'
+import { buildDefaultListingReviewFilters } from '~/lib/listing-reviews/listing-reviews.validation'
 import type {
   ListingReviewAccessContext,
   ListingReviewAnalyticsParams,
@@ -26,7 +26,7 @@ import type {
   ListingReviewUpdateInput,
   ListingReviewVendorDashboard,
   ListingReviewWithRelations,
-} from './listing-reviews.type'
+} from '~/lib/listing-reviews/listing-reviews.type'
 import {
   applyListingReviewUpdate,
   buildOptimisticListingReview,
@@ -36,7 +36,7 @@ import {
   reviewMatchesCurrentFilters,
   shouldUseListingReviewCache,
   upsertListingReview,
-} from './listing-reviews.utils'
+} from '~/lib/listing-reviews/listing-reviews.utils'
 
 // ============= STATE =============
 

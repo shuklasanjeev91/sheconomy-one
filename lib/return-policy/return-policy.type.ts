@@ -1,6 +1,6 @@
 import type { Tables, TablesInsert, TablesUpdate } from '~/lib/supabase'
 
-import type { RETURN_SHIPPING_PAID_BY_VALUES } from './return-policy.constants'
+import type { RETURN_SHIPPING_PAID_BY_VALUES } from '~/lib/return-policy/return-policy.constants'
 
 /** Full `return_policies` row from Supabase. */
 export type ReturnPolicy = Tables<'return_policies'>

@@ -15,9 +15,9 @@ import { useAppBackNavigation } from '~/hooks/useAppBackNavigation'
 import { useAppUi } from '~/lib/theme/useAppUi'
 import { chromeSurfaceStyle } from '~/lib/theme/surfaces'
 
-import { AppCenterNavTabs } from './AppCenterNavTabs'
-import { AppMenuButton } from './AppMenuSheet'
-import { getAppColors } from './config'
+import { AppCenterNavTabs } from '~/components/navigation/app/AppCenterNavTabs'
+import { AppMenuButton } from '~/components/navigation/app/AppMenuSheet'
+import { getAppColors } from '~/components/navigation/app/config'
 
 /** Collapse search/logo row after this scroll offset — tabs stay visible (LinkedIn-style). */
 const SCROLL_TABS_ONLY_THRESHOLD = 36
@@ -58,7 +58,8 @@ export function AppMobileHeader({ minimal = false }: AppMobileHeaderProps) {
       width="100%"
       position={Platform.OS === 'web' ? 'sticky' : 'relative'}
       top={Platform.OS === 'web' ? 0 : undefined}
-      $gtMd={{ display: 'none' }}
+      // Web-only: Tamagui `$gtMd` on native iPad can hide this header entirely.
+      {...(Platform.OS === 'web' ? { $gtMd: { display: 'none' as const } } : { display: 'flex' })}
       style={chromeSurfaceStyle(ui)}
       animation={headerAnim}
     >

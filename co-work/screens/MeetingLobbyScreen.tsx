@@ -1,25 +1,25 @@
-import { useRouter } from 'one'
 import { AppLink } from '~/components/navigation/AppLink'
-import { Platform } from 'react-native'
 import { useCallback, useEffect, useState } from 'react'
+import { Platform } from 'react-native'
 
-import { RequireAuth } from '~/components/auth/RequireAuth'
-import { FullWidthLayout, LAYOUT_STRETCH, PageCenter, PageSection } from '~/components/layout'
+import { AuthSignInFlow } from '~/components/auth/AuthSignInFlow'
+import { FullWidthLayout, LAYOUT_STRETCH, PageSection, ScreenCenter } from '~/components/layout'
 import { BRAND_MEMBER_LABEL } from '~/config/brand'
 import { ShareSheet } from '~/components/share'
 import { Button, Field, Icons, Input, Spinner, Text, XStack, YStack, useAppToast } from '~/components/ui'
 import { CoWorkBrandChip, CoWorkIconBadge } from '~/co-work/components/CoWorkUi'
 import { MeetingInvitePanel } from '~/co-work/components/MeetingInvitePanel'
-import { MeetingRoomScreen } from '~/co-work/screens/MeetingRoomScreen'
 import {
   fetchMeetingByCode,
   formatMeetingCode,
   getMeetingShareUrl,
   verifyMeetingPasscode,
 } from '~/co-work/lib/meetings'
+import { openInstantMeetingSession } from '~/co-work/lib/instant-meeting-session'
 import { coworkGlassStyle, useCoWorkTheme } from '~/co-work/lib/theme'
 import { controlGradientStyle, coworkBoxShadow, pageGradientStyle } from '~/lib/platform/crossStyles'
 import type { Meeting } from '~/co-work/lib/types'
+import { navigateApp } from '~/lib/platform/navigate'
 import { coWorkRoutes } from '~/lib/routes'
 import { useProfile } from '~/hooks/useProfile'
 
@@ -27,17 +27,16 @@ import { APP_LAYOUT } from '~/lib/layout/constants'
 
 type MeetingLobbyScreenProps = {
   code: string
-  startLive?: boolean
 }
 
-export function MeetingLobbyScreen({ code, startLive = false }: MeetingLobbyScreenProps) {
+/** Pre-join lobby only — live room is `/meeting/:code/live` (MeetingLiveScreen). */
+export function MeetingLobbyScreen({ code }: MeetingLobbyScreenProps) {
   const { ui: coworkUi, gradients: coworkGradients, shadows: coworkShadows } = useCoWorkTheme()
   const toast = useAppToast()
   const { profile, user, isAuthenticated, isLoading } = useProfile()
   const [meeting, setMeeting] = useState<Meeting | null>(null)
   const [passcode, setPasscode] = useState('')
   const [verified, setVerified] = useState(false)
-  const [inRoom, setInRoom] = useState(startLive)
   const [error, setError] = useState<string | null>(null)
   const [loadingMeeting, setLoadingMeeting] = useState(true)
   const [showInvite, setShowInvite] = useState(false)
@@ -45,12 +44,20 @@ export function MeetingLobbyScreen({ code, startLive = false }: MeetingLobbyScre
 
   const isHost = !!meeting && !!user && meeting.host_id === user.id
   const hostName = profile?.full_name || profile?.username || 'You'
+  const normalizedCode = code.replace(/\s/g, '').trim()
 
   const load = useCallback(async () => {
+    if (!normalizedCode) {
+      setLoadingMeeting(false)
+      setMeeting(null)
+      setError('Missing meeting code. Go back to Co-Work and try again.')
+      return
+    }
+
     setLoadingMeeting(true)
     setError(null)
     try {
-      const row = await fetchMeetingByCode(code)
+      const row = await fetchMeetingByCode(normalizedCode)
       if (!row) {
         setError('Meeting not found. Check the code and try again.')
         setMeeting(null)
@@ -58,13 +65,15 @@ export function MeetingLobbyScreen({ code, startLive = false }: MeetingLobbyScre
       }
       if (row.status === 'ended') setError('This meeting has ended.')
       setMeeting(row)
-      if (!row.security_settings?.passcode && !row.security_settings?.requirePasscode) setVerified(true)
+      if (!row.security_settings?.passcode && !row.security_settings?.requirePasscode) {
+        setVerified(true)
+      }
     } catch (loadError) {
       setError(loadError instanceof Error ? loadError.message : 'Failed to load meeting')
     } finally {
       setLoadingMeeting(false)
     }
-  }, [code])
+  }, [normalizedCode])
 
   useEffect(() => {
     void load()
@@ -80,34 +89,39 @@ export function MeetingLobbyScreen({ code, startLive = false }: MeetingLobbyScre
     setVerified(true)
   }
 
-  // Don't block the live room on profile hydrate once auth user is known —
-  // otherwise /meeting/…/live stays on a blank spinner until profile fetches.
+  function enterLiveRoom() {
+    if (!meeting) return
+    if (Platform.OS === 'web') {
+      navigateApp(coWorkRoutes.meetingLive(meeting.meeting_code))
+      return
+    }
+    openInstantMeetingSession({
+      code: meeting.meeting_code,
+      meeting,
+    })
+  }
+
   if (loadingMeeting || (isLoading && !user)) {
     return (
-      <PageCenter>
+      <ScreenCenter backgroundColor={coworkUi.pageBg}>
         <Spinner size="large" color={coworkUi.brand} />
-      </PageCenter>
+        <Text color={coworkUi.textSecondary} marginTop="$3">
+          Loading meeting…
+        </Text>
+      </ScreenCenter>
     )
   }
 
   if (!isAuthenticated || !user) {
-    return <RequireAuth redirectTo={startLive ? coWorkRoutes.meetingLive(code) : coWorkRoutes.meeting(code)} />
-  }
-
-  if (inRoom && meeting && meeting.status !== 'ended') {
-    return (
-      <MeetingRoomScreen
-        meeting={meeting}
-        userId={user.id}
-        displayName={profile?.full_name || profile?.username || 'You'}
-        avatarUrl={profile?.avatar_url}
-        isHost={meeting.host_id === user.id}
-      />
-    )
+    return <AuthSignInFlow returnTo={String(coWorkRoutes.meeting(normalizedCode || code))} />
   }
 
   return (
-    <FullWidthLayout scroll backgroundColor={coworkUi.pageBg} style={pageGradientStyle(coworkGradients.page, coworkUi.pageBg)}>
+    <FullWidthLayout
+      scroll
+      backgroundColor={coworkUi.pageBg}
+      style={pageGradientStyle(coworkGradients.page, coworkUi.pageBg)}
+    >
       <PageSection paddingVertical="$6" {...LAYOUT_STRETCH}>
         <YStack gap="$5" width="100%" maxWidth={APP_LAYOUT.maxFormWidth} alignSelf="center">
           <YStack gap="$3">
@@ -116,7 +130,9 @@ export function MeetingLobbyScreen({ code, startLive = false }: MeetingLobbyScre
               {meeting?.title ?? 'Join meeting'}
             </Text>
             <Text color={coworkUi.textSecondary} fontSize={15}>
-              {meeting ? formatMeetingCode(meeting.meeting_code) : code.toUpperCase()}
+              {meeting
+                ? formatMeetingCode(meeting.meeting_code)
+                : (normalizedCode || code).toUpperCase()}
             </Text>
           </YStack>
 
@@ -193,7 +209,7 @@ export function MeetingLobbyScreen({ code, startLive = false }: MeetingLobbyScre
                   size="$4"
                   borderRadius={999}
                   icon={<Icons.Video size={18} color="white" />}
-                  onPress={() => setInRoom(true)}
+                  onPress={enterLiveRoom}
                   style={controlGradientStyle(coworkGradients.activeControl, coworkUi.brand)}
                 >
                   Join now
@@ -246,7 +262,9 @@ export function MeetingLobbyScreen({ code, startLive = false }: MeetingLobbyScre
                     hostName={hostName}
                     onClose={() => setShowInvite(false)}
                     fullWidth
-                    onInviteesUpdated={(next) => setMeeting((current) => (current ? { ...current, invitees: next } : current))}
+                    onInviteesUpdated={(next) =>
+                      setMeeting((current) => (current ? { ...current, invitees: next } : current))
+                    }
                   />
                 </YStack>
               ) : null}

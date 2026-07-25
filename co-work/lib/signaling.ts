@@ -2,7 +2,7 @@ import type { RealtimeChannel } from '@supabase/supabase-js'
 
 import { supabase } from '~/lib/supabase/client'
 
-import type { SignalPayload } from './types'
+import type { SignalPayload } from '~/co-work/lib/types'
 
 export type MeetingChatInsertRow = {
   id: string
@@ -40,6 +40,7 @@ const joinLocks = new Map<string, Promise<RealtimeChannel>>()
 
 /** Fully tear down any existing meeting channel before rejoining. */
 export async function removeMeetingChannel(meetingId: string): Promise<void> {
+  joinLocks.delete(meetingId)
   const channels = findMeetingChannels(meetingId)
   for (const channel of channels) {
     try {
@@ -81,15 +82,33 @@ function attachMeetingChannelListeners(
 }
 
 async function subscribeMeetingChannel(channel: RealtimeChannel, userId: string): Promise<RealtimeChannel> {
+  const SUBSCRIBE_TIMEOUT_MS = 8_000
+
   return new Promise((resolve, reject) => {
+    let settled = false
+    const finish = (fn: () => void) => {
+      if (settled) return
+      settled = true
+      clearTimeout(timer)
+      fn()
+    }
+
+    const timer = setTimeout(() => {
+      finish(() => reject(new Error('Meeting channel subscribe timed out')))
+    }, SUBSCRIBE_TIMEOUT_MS)
+
     channel.subscribe(async (status, err) => {
       if (status === 'SUBSCRIBED') {
-        await channel.track({ userId, online_at: new Date().toISOString() })
-        resolve(channel)
+        try {
+          await channel.track({ userId, online_at: new Date().toISOString() })
+        } catch {
+          // Presence track is best-effort; channel is still usable for broadcast.
+        }
+        finish(() => resolve(channel))
         return
       }
       if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT' || status === 'CLOSED') {
-        reject(new Error(err?.message ?? 'Failed to join meeting channel'))
+        finish(() => reject(new Error(err?.message ?? `Failed to join meeting channel (${status})`)))
       }
     })
   })
@@ -120,7 +139,13 @@ export async function joinMeetingChannel(
   handlers: SignalingHandlers,
 ): Promise<RealtimeChannel> {
   const existing = joinLocks.get(meetingId)
-  if (existing) return existing
+  if (existing) {
+    try {
+      return await existing
+    } catch {
+      // Previous join failed/timed out — fall through and retry.
+    }
+  }
 
   const promise = joinMeetingChannelOnce(meetingId, userId, handlers)
   joinLocks.set(meetingId, promise)

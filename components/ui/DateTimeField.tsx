@@ -15,15 +15,15 @@ import {
   startOfWeek,
   subMonths,
 } from 'date-fns'
-import * as Icons from '@tamagui/lucide-icons'
+import * as Icons from '~/components/ui/icons'
 import { ScrollView, XStack, YStack } from 'tamagui'
-import { Text } from './Text'
+import { Text } from '~/components/ui/Text'
 
 import { useAppUi } from '~/lib/theme/useAppUi'
 
-import { AppBottomSheet } from './BottomSheet'
-import { Button } from './Button'
-import { Field } from './Input'
+import { AppBottomSheet } from '~/components/ui/BottomSheet'
+import { Button } from '~/components/ui/Button'
+import { Field } from '~/components/ui/Input'
 
 const DATE_FMT = 'yyyy-MM-dd'
 const TIME_FMT = 'HH:mm'

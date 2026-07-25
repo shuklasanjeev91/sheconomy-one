@@ -4,7 +4,7 @@ import {
   uploadBlobWithProgress,
   uploadFilesWithAggregateProgress,
   type UploadProgressHandler,
-} from './storage-upload-progress'
+} from '~/lib/supabase/storage-upload-progress'
 
 export type { UploadProgressHandler }
 

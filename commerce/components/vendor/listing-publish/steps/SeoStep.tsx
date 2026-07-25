@@ -13,9 +13,9 @@ import type { ListingFormData } from '~/lib/listing/listing.type'
 import { generateListingSlug } from '~/lib/listing/listing.utils'
 import type { AppUiTokens } from '~/lib/theme/app-ui'
 
-import { ListingPublishCard, ListingPublishFieldError, ListingPublishTip } from '../ListingPublishCard'
-import { LISTING_METADATA_KEYS, LISTING_PUBLISH_COPY } from '../listing-publish.constants'
-import { readMetadataBoolean } from '../listing-publish.utils'
+import { ListingPublishCard, ListingPublishFieldError, ListingPublishTip } from '~/commerce/components/vendor/listing-publish/ListingPublishCard'
+import { LISTING_METADATA_KEYS, LISTING_PUBLISH_COPY } from '~/commerce/components/vendor/listing-publish/listing-publish.constants'
+import { readMetadataBoolean } from '~/commerce/components/vendor/listing-publish/listing-publish.utils'
 
 type SeoStepProps = {
   ui: AppUiTokens

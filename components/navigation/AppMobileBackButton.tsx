@@ -1,2 +1,2 @@
 /** Prefer `AppHeaderBackButton` — kept for older imports. */
-export { AppHeaderBackButton, AppMobileBackButton } from './AppHeaderBackButton'
+export { AppHeaderBackButton, AppMobileBackButton } from '~/components/navigation/AppHeaderBackButton'

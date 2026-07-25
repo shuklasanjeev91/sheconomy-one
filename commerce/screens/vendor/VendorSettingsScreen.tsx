@@ -58,10 +58,10 @@ import {
   type SettingsSection,
   type SettingsSectionId,
 } from '~/commerce/components/vendor/settings-nav'
-import { VendorConnectSettings } from './VendorConnectSettings'
-import { VendorPaymentSettings } from './VendorPaymentSettings'
-import { VendorReturnPolicySettings } from './VendorReturnPolicySettings'
-import { VendorShippingPolicySettings } from './VendorShippingPolicySettings'
+import { VendorConnectSettings } from '~/commerce/screens/vendor/VendorConnectSettings'
+import { VendorPaymentSettings } from '~/commerce/screens/vendor/VendorPaymentSettings'
+import { VendorReturnPolicySettings } from '~/commerce/screens/vendor/VendorReturnPolicySettings'
+import { VendorShippingPolicySettings } from '~/commerce/screens/vendor/VendorShippingPolicySettings'
 import { AppLink } from '~/components/navigation/AppLink'
 import { appRoutes } from '~/lib/routes'
 

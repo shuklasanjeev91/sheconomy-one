@@ -11,8 +11,8 @@ import {
   DISCOUNT_TYPES,
   DISCOUNT_USER_TYPES,
   DISCOUNT_VALIDATION,
-} from './discount.constants'
-import { DISCOUNT_ELIGIBILITY_ERRORS } from './discount.errors'
+} from '~/lib/discount/discount.constants'
+import { DISCOUNT_ELIGIBILITY_ERRORS } from '~/lib/discount/discount.errors'
 import type {
   BogoRule,
   BogoRuleInput,
@@ -23,7 +23,7 @@ import type {
   DiscountProfile,
   DiscountStats,
   DiscountType,
-} from './discount.type'
+} from '~/lib/discount/discount.type'
 
 // Re-export for convenience in store/service layers.
 export { DISCOUNT_ELIGIBILITY_ERRORS as DISCOUNT_UTILS_ERRORS }

@@ -1,5 +1,9 @@
 import { getListingCardTitle } from '~/lib/format'
-import { getListingImageUrls, normalizeListingImageUrl } from '~/commerce/lib/listing-images'
+import {
+  getListingImageUrls,
+  hasListingImages,
+  normalizeListingImageUrl,
+} from '~/commerce/lib/listing-images'
 import { resolveCategoryListingIdConstraint } from '~/commerce/lib/category-facets'
 import {
   getListingOrderColumn,
@@ -206,18 +210,16 @@ const DELIVERY_PROFILE_FIELDS = `
   is_active
 `
 
-/** Catalog feeds — only listings that have at least one image row. */
+/** Catalog feeds — card-ready fields only (no nested shipping rails). */
 const LISTING_CATALOG_SELECT = `
   id,
   slug,
   title,
   meta_title,
-  description,
   price,
   mrp,
   price_includes_tax,
   tax_percent,
-  product_info,
   listing_type,
   average_rating,
   total_reviews,
@@ -238,11 +240,40 @@ const LISTING_CATALOG_SELECT = `
     total_reviews,
     verified,
     shop_metadata,
-    shop_addresses(city, state, country, latitude, longitude),
-    delivery_profiles(${DELIVERY_PROFILE_FIELDS}),
-    shipping_providers(id, provider_name, provider_type, is_primary, is_active, configuration),
-    shop_shipping_accounts(provider, status),
-    shipping_rates(delivery_days_min, delivery_days_max, zone_name, is_active, shipping_provider_id)
+    delivery_profiles(${DELIVERY_PROFILE_FIELDS})
+  )
+`
+
+/**
+ * Ultra-light card hydrate for recommendation rails / by-id lookups.
+ * Require at least one listing_images row — storefront cards without photos
+ * render as empty placeholders (home grids already use !inner).
+ */
+const LISTING_CARD_SELECT = `
+  id,
+  slug,
+  title,
+  meta_title,
+  price,
+  mrp,
+  price_includes_tax,
+  tax_percent,
+  listing_type,
+  average_rating,
+  total_reviews,
+  shop_id,
+  category,
+  created_at,
+  is_featured,
+  shipping_required,
+  listing_metadata,
+  listing_images!inner(id, image_url, is_primary, display_order, alt_text, image_metadata),
+  shops(
+    shop_name,
+    shop_currency,
+    average_rating,
+    total_reviews,
+    verified
   )
 `
 
@@ -365,7 +396,7 @@ export async function fetchListingsByIds(ids: string[]): Promise<ListingSummary[
 
   const { data, error } = await supabase
     .from('listings')
-    .select(LISTING_CATALOG_SELECT)
+    .select(LISTING_CARD_SELECT)
     .in('id', ids)
     .eq('is_active', true)
     .eq('listing_status', 'active')
@@ -373,7 +404,52 @@ export async function fetchListingsByIds(ids: string[]): Promise<ListingSummary[
   if (error || !data?.length) return []
 
   const byId = new Map((data as ListingRow[]).map((row) => [row.id, mapListingRow(row)]))
-  return ids.map((id) => byId.get(id)).filter((item): item is ListingSummary => !!item)
+  return ids
+    .map((id) => byId.get(id))
+    .filter((item): item is ListingSummary => !!item)
+    .filter((item) => hasListingImages(item.image_urls, item.image_url))
+}
+
+type ActiveListingCardFilters = {
+  shopId?: string | null
+  category?: string | null
+  listingType?: string | null
+  excludeId?: string | null
+  limit?: number
+  orderBy?: 'created_at' | 'average_rating'
+}
+
+/** Increase query window so post-filters (exclude id / invalid urls) still fill the rail. */
+export async function fetchActiveListingCards(
+  filters: ActiveListingCardFilters,
+): Promise<ListingSummary[]> {
+  const limit = filters.limit ?? 8
+  let query = supabase
+    .from('listings')
+    .select(LISTING_CARD_SELECT)
+    .eq('is_active', ACTIVE_LISTING_FILTER.is_active)
+    .eq('listing_status', ACTIVE_LISTING_FILTER.listing_status)
+    .limit(limit + (filters.excludeId ? 2 : 0))
+
+  if (filters.shopId) query = query.eq('shop_id', filters.shopId)
+  if (filters.category?.trim()) query = query.eq('category', filters.category.trim())
+  if (filters.listingType) query = query.eq('listing_type', filters.listingType)
+  if (filters.excludeId) query = query.neq('id', filters.excludeId)
+
+  if (filters.orderBy === 'average_rating') {
+    query = query.order('average_rating', { ascending: false, nullsFirst: false })
+  } else {
+    query = query.order('created_at', { ascending: false })
+  }
+
+  const { data, error } = await query
+  if (error || !data?.length) return []
+
+  return (data as ListingRow[])
+    .map(mapListingRow)
+    .filter((item) => item.id !== filters.excludeId)
+    .filter((item) => hasListingImages(item.image_urls, item.image_url))
+    .slice(0, limit)
 }
 
 export async function fetchListingSlugMap(

@@ -23,7 +23,7 @@ import {
   type SaleBannerValidation,
   type SaleEvent,
   type VendorEnrollment,
-} from './sale-event.type'
+} from '~/lib/sale-event/sale-event.type'
 
 // ============= RESPONSE HELPERS =============
 

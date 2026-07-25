@@ -7,7 +7,7 @@ import {
   type CategorySummary,
 } from '~/lib/supabase/commerce'
 
-import { usePaginatedFeed } from './usePaginatedFeed'
+import { usePaginatedFeed } from '~/commerce/hooks/usePaginatedFeed'
 
 export function useCategoriesFeed(enabled = true) {
   const fetchPage = useCallback(

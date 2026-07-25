@@ -26,7 +26,7 @@ import { commerceRoutes, vendorRoutes } from '~/lib/routes'
 import { useAppDispatch, useAppSelector } from '~/lib/store/hooks'
 import type { AppUiTokens } from '~/lib/theme/app-ui'
 
-import { listingSkuFallback, listingStatusLabel } from './vendor-listings-shared'
+import { listingSkuFallback, listingStatusLabel } from '~/commerce/screens/vendor/vendor-listings-shared'
 
 const PANEL_WIDTH = 720
 

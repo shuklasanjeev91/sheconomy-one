@@ -19,7 +19,7 @@ export type AuthLayoutTokens = {
 
 const light: AuthLayoutTokens = {
   heroGradient:
-    'linear-gradient(155deg, #7a0538 0%, #9d0844 28%, #D01060 58%, #e84a8a 100%)',
+    'linear-gradient(155deg, #7a0538 0%, #9d0844 28%, #D81B60 58%, #e84a8a 100%)',
   heroMesh:
     'radial-gradient(ellipse 80% 60% at 20% 10%, rgba(255,255,255,0.18) 0%, transparent 60%), radial-gradient(ellipse 60% 50% at 85% 80%, rgba(248,120,64,0.22) 0%, transparent 55%)',
   pageGradient: 'linear-gradient(180deg, #fef5f9 0%, #ffffff 42%, #fefcfd 100%)',
@@ -33,7 +33,7 @@ const light: AuthLayoutTokens = {
 
 const dark: AuthLayoutTokens = {
   heroGradient:
-    'linear-gradient(155deg, #4a0320 0%, #7a0538 28%, #9d0844 58%, #D01060 100%)',
+    'linear-gradient(155deg, #4a0320 0%, #7a0538 28%, #9d0844 58%, #D81B60 100%)',
   heroMesh:
     'radial-gradient(ellipse 80% 60% at 20% 10%, rgba(255,255,255,0.1) 0%, transparent 60%), radial-gradient(ellipse 60% 50% at 85% 80%, rgba(248,120,64,0.14) 0%, transparent 55%)',
   pageGradient: `linear-gradient(180deg, ${sheconomyDark.sheconomy1} 0%, ${sheconomyDark.sheconomy2} 42%, ${sheconomyDark.sheconomy1} 100%)`,
@@ -41,7 +41,7 @@ const dark: AuthLayoutTokens = {
   trustMuted: 'rgba(255,255,255,0.74)',
   glassBg: 'rgba(255,255,255,0.1)',
   glassBorder: 'rgba(255,255,255,0.16)',
-  marketingGlow: '0 0 120px rgba(208, 16, 96, 0.25)',
+  marketingGlow: '0 0 120px rgba(216, 27, 96, 0.25)',
   formShadow: '0 24px 64px rgba(0, 0, 0, 0.55), 0 0 0 1px rgba(255, 255, 255, 0.06)',
 }
 

@@ -9,7 +9,7 @@ import { createAsyncThunk, createSlice, type PayloadAction } from '@reduxjs/tool
 
 import type { AppDispatch } from '~/lib/store'
 
-import * as groupService from './group.service'
+import * as groupService from '~/lib/group/group.service'
 import {
   DEFAULT_GROUP_LIMIT,
   type Group,
@@ -19,14 +19,14 @@ import {
   type GroupPlatformStats,
   type GroupServiceResponse,
   type GroupWithCounts,
-} from './group.type'
+} from '~/lib/group/group.type'
 import {
   createGroupSchema,
   parseOrThrow,
   respondJoinRequestSchema,
   setGroupMemberRoleSchema,
   updateGroupSchema,
-} from './group.validation'
+} from '~/lib/group/group.validation'
 
 // ============= STATE =============
 

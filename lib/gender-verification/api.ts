@@ -1,6 +1,6 @@
 import { supabase } from '~/lib/supabase'
 
-import { GENDER_VERIFICATION } from './constants'
+import { GENDER_VERIFICATION } from '~/lib/gender-verification/constants'
 
 export type CompleteVerificationResult = {
   ok: boolean

@@ -3,16 +3,15 @@ import {
   writePersistentValue,
 } from '~/lib/platform/storage'
 
-const STORAGE_KEY = 'sheconomy:push-auto-prompt-v1'
+/** Bumped so devices stuck on the old "denied forever" gate get one fresh auto-subscribe pass. */
+const STORAGE_KEY = 'sheconomy:push-auto-prompt-v2'
 
 type PushAutoPromptState = {
   /** OS permission prompt was shown at least once on this device. */
   prompted: boolean
-  /** User denied push — do not auto-prompt again. */
-  denied: boolean
 }
 
-const DEFAULT_STATE: PushAutoPromptState = { prompted: false, denied: false }
+const DEFAULT_STATE: PushAutoPromptState = { prompted: false }
 
 async function readState(): Promise<PushAutoPromptState> {
   const raw = await readPersistentValue(STORAGE_KEY)
@@ -21,35 +20,29 @@ async function readState(): Promise<PushAutoPromptState> {
     const parsed = JSON.parse(raw) as Partial<PushAutoPromptState>
     return {
       prompted: parsed.prompted === true,
-      denied: parsed.denied === true,
     }
   } catch {
     return DEFAULT_STATE
   }
 }
 
-/** Whether we should show the native OS permission dialog automatically. */
+/** Whether we should auto-request the OS permission dialog (once per install). */
 export async function shouldAutoPromptPush(): Promise<boolean> {
   const state = await readState()
-  return !state.prompted && !state.denied
+  return !state.prompted
 }
 
-export async function markPushAutoPromptAttempted(granted: boolean): Promise<void> {
-  const state = await readState()
+export async function markPushAutoPromptAttempted(): Promise<void> {
   await writePersistentValue(
     STORAGE_KEY,
-    JSON.stringify({
-      prompted: true,
-      denied: granted ? false : true,
-    } satisfies PushAutoPromptState),
+    JSON.stringify({ prompted: true } satisfies PushAutoPromptState),
   )
 }
 
-/** Clear denial so settings can re-trigger a prompt attempt. */
+/** Clear so Settings → enable can re-run the full subscribe flow. */
 export async function resetPushAutoPromptDenial(): Promise<void> {
-  const state = await readState()
   await writePersistentValue(
     STORAGE_KEY,
-    JSON.stringify({ prompted: state.prompted, denied: false }),
+    JSON.stringify({ prompted: false } satisfies PushAutoPromptState),
   )
 }

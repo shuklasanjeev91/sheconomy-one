@@ -11,7 +11,7 @@ import {
   type Group,
   type GroupImageUploadFile,
   type GroupMemberRole,
-} from './group.type'
+} from '~/lib/group/group.type'
 
 /** URL-safe slug-ish name (groups use `name` as short label, not a unique slug). */
 export function normalizeGroupName(name: string | null | undefined): string {

@@ -13,12 +13,12 @@ import {
   SALES_ANALYTICS_VALIDATION,
   SALES_DATE_TYPE,
   SALES_SORT_BY,
-} from './sales-analytics.constants'
+} from '~/lib/sales-analytics/sales-analytics.constants'
 import {
   SalesAnalyticsError,
   SALES_ANALYTICS_ERROR_CODES,
   toFriendlySalesAnalyticsError,
-} from './sales-analytics.errors'
+} from '~/lib/sales-analytics/sales-analytics.errors'
 import type {
   ExportFormat,
   RegionalSalesOptions,
@@ -39,7 +39,7 @@ import type {
   VendorRegionalSalesRow,
   VendorSalesAnalyticsRow,
   VendorTopProductRow,
-} from './sales-analytics.type'
+} from '~/lib/sales-analytics/sales-analytics.type'
 import {
   buildSalesQuery,
   calculateSalesSummary,
@@ -48,14 +48,14 @@ import {
   normalizeDateForQuery,
   prepareExportData,
   resolveSalesSortColumn,
-} from './sales-analytics.utils'
+} from '~/lib/sales-analytics/sales-analytics.utils'
 import {
   parseSalesAnalyticsCreate,
   parseSalesAnalyticsFilter,
   parseSalesAnalyticsRefundStatus,
   parseSalesAnalyticsReturnStatus,
   validateSalesAnalyticsExportParams,
-} from './sales-analytics.validation'
+} from '~/lib/sales-analytics/sales-analytics.validation'
 
 // ============= RESPONSE HELPERS =============
 

@@ -89,7 +89,8 @@ export type ListingRow = ListingDetail & {
   shops: ListingShop | null
 }
 
-export const LISTING_DETAIL_SELECT = `
+/** First-paint PDP payload — no deep delivery/shipping embeds. */
+export const LISTING_CORE_SELECT = `
   id, slug, title, description, price, listing_type, listing_status, is_active,
   average_rating, total_reviews, stock, quantity, category, tags,
   shop_id, created_at, sku, weight, dimensions, listing_metadata,
@@ -103,23 +104,20 @@ export const LISTING_DETAIL_SELECT = `
   listing_attributes(
     id, attribute_name, attribute_value, display_order
   ),
-  listing_delivery_profiles(
-    delivery_profiles(
-      id, profile_name, processing_time_min, processing_time_max,
-      fixed_fee, free_shipping_threshold, shipping_rate_type, delivery_metadata, is_default, is_active
-    )
-  ),
   shops(
     id, shop_name, logo_url, shop_currency, verified, slug, shop_metadata, user_id,
-    average_rating, total_reviews,
-    delivery_profiles(
-      id, profile_name, processing_time_min, processing_time_max,
-      fixed_fee, free_shipping_threshold, shipping_rate_type, delivery_metadata, is_default, is_active
-    ),
-    shipping_providers(id, provider_name, provider_type, is_primary, is_active, configuration),
-    shop_shipping_accounts(provider, status),
-    shipping_rates(delivery_days_min, delivery_days_max, zone_name, is_active, shipping_provider_id)
+    average_rating, total_reviews
   )
+`
+
+/** @deprecated Prefer LISTING_CORE_SELECT + fetchShopShippingEnrichment */
+export const LISTING_DETAIL_SELECT = LISTING_CORE_SELECT
+
+const SHOP_SHIPPING_SELECT = `
+  id,
+  shipping_providers(id, provider_name, provider_type, is_primary, is_active, configuration),
+  shop_shipping_accounts(provider, status),
+  shipping_rates(delivery_days_min, delivery_days_max, zone_name, is_active, shipping_provider_id)
 `
 
 export type ListingLoaderResult = {
@@ -127,84 +125,238 @@ export type ListingLoaderResult = {
   error: string | null
 }
 
-export async function fetchListingDetail(listingRef: string): Promise<ListingLoaderResult> {
-  let data = null
-  let listingError = null
+type ListingIdRow = { id: string; slug?: string | null; title?: string | null }
 
+async function resolveListingId(listingRef: string): Promise<{
+  id: string | null
+  error: string | null
+}> {
   if (isUuid(listingRef)) {
-    const result = await supabase
-      .from('listings')
-      .select(LISTING_DETAIL_SELECT)
-      .eq('id', listingRef)
-      .eq('is_active', ACTIVE_LISTING_FILTER.is_active)
-      .eq('listing_status', ACTIVE_LISTING_FILTER.listing_status)
-      .maybeSingle()
-    data = result.data
-    listingError = result.error
-  } else {
-    const bySlug = await supabase
-      .from('listings')
-      .select(LISTING_DETAIL_SELECT)
-      .eq('slug', listingRef)
-      .eq('is_active', ACTIVE_LISTING_FILTER.is_active)
-      .eq('listing_status', ACTIVE_LISTING_FILTER.listing_status)
-      .maybeSingle()
-    data = bySlug.data
-    listingError = bySlug.error
-
-    if (!data) {
-      const titleGuess = listingRef.replace(/-/g, ' ')
-      const byTitle = await supabase
-        .from('listings')
-        .select(LISTING_DETAIL_SELECT)
-        .ilike('title', titleGuess)
-        .eq('is_active', ACTIVE_LISTING_FILTER.is_active)
-        .eq('listing_status', ACTIVE_LISTING_FILTER.listing_status)
-        .limit(1)
-        .maybeSingle()
-      data = byTitle.data
-      listingError = byTitle.error
-    }
-
-    if (!data) {
-      const { data: activeListings } = await supabase
-        .from('listings')
-        .select(LISTING_DETAIL_SELECT)
-        .eq('is_active', ACTIVE_LISTING_FILTER.is_active)
-        .eq('listing_status', ACTIVE_LISTING_FILTER.listing_status)
-        .limit(300)
-
-      data =
-        activeListings?.find((row) => listingSlugMatches(row, listingRef)) ??
-        activeListings?.find((row) => slugifyTitle(row.title) === listingRef.toLowerCase()) ??
-        null
-    }
-
-    if (!data) {
-      const idPrefix = listingRef.split('-')[0]
-      if (isUuid(idPrefix)) {
-        const byId = await supabase
-          .from('listings')
-          .select(LISTING_DETAIL_SELECT)
-          .eq('id', idPrefix)
-          .eq('is_active', ACTIVE_LISTING_FILTER.is_active)
-          .eq('listing_status', ACTIVE_LISTING_FILTER.listing_status)
-          .maybeSingle()
-        data = byId.data
-        listingError = byId.error
-      }
-    }
+    return { id: listingRef, error: null }
   }
 
-  if (data && !isListingStorefrontVisible(data)) {
-    data = null
+  const idPrefix = listingRef.split('-')[0]
+  if (isUuid(idPrefix)) {
+    return { id: idPrefix, error: null }
   }
 
-  if (listingError || !data) {
-    return { data: null, error: listingError?.message ?? 'Listing not found' }
+  const active = () =>
+    supabase
+      .from('listings')
+      .select('id, slug, title')
+      .eq('is_active', ACTIVE_LISTING_FILTER.is_active)
+      .eq('listing_status', ACTIVE_LISTING_FILTER.listing_status)
+
+  const bySlug = await active().eq('slug', listingRef).maybeSingle()
+  if (bySlug.error) return { id: null, error: bySlug.error.message }
+  if (bySlug.data?.id) return { id: bySlug.data.id, error: null }
+
+  const titleGuess = listingRef.replace(/-/g, ' ').trim()
+  if (titleGuess) {
+    const byTitle = await active().ilike('title', titleGuess).limit(5)
+    if (byTitle.error) return { id: null, error: byTitle.error.message }
+    const matched =
+      byTitle.data?.find((row) => listingSlugMatches(row, listingRef)) ??
+      byTitle.data?.find((row) => slugifyTitle(row.title ?? '') === listingRef.toLowerCase()) ??
+      byTitle.data?.[0] ??
+      null
+    if (matched?.id) return { id: matched.id, error: null }
+
+    // Broader title contains — still light columns only
+    const byContains = await active().ilike('title', `%${titleGuess}%`).limit(25)
+    const containsMatch =
+      byContains.data?.find((row) => listingSlugMatches(row as ListingIdRow, listingRef)) ??
+      byContains.data?.find(
+        (row) => slugifyTitle(row.title ?? '') === listingRef.toLowerCase(),
+      ) ??
+      null
+    if (containsMatch?.id) return { id: containsMatch.id, error: null }
+  }
+
+  return { id: null, error: null }
+}
+
+async function fetchShopShippingEnrichment(shopId: string): Promise<Partial<ListingShop> | null> {
+  const { data, error } = await supabase
+    .from('shops')
+    .select(SHOP_SHIPPING_SELECT)
+    .eq('id', shopId)
+    .maybeSingle()
+
+  if (error || !data) return null
+  return {
+    shipping_providers: data.shipping_providers ?? null,
+    shop_shipping_accounts: data.shop_shipping_accounts ?? null,
+    shipping_rates: data.shipping_rates ?? null,
+  }
+}
+
+async function fetchListingCoreById(id: string): Promise<ListingLoaderResult> {
+  const { data, error } = await supabase
+    .from('listings')
+    .select(LISTING_CORE_SELECT)
+    .eq('id', id)
+    .eq('is_active', ACTIVE_LISTING_FILTER.is_active)
+    .eq('listing_status', ACTIVE_LISTING_FILTER.listing_status)
+    .maybeSingle()
+
+  if (error || !data) {
+    return { data: null, error: error?.message ?? 'Listing not found' }
+  }
+
+  if (!isListingStorefrontVisible(data)) {
+    return { data: null, error: 'Listing not found' }
   }
 
   return { data: data as ListingRow, error: null }
+}
+
+/** Attach shop shipping rails after first paint (separate from core PDP query). */
+export async function enrichListingShopShipping(listing: ListingRow): Promise<ListingRow> {
+  if (!listing.shop_id || !listing.shops) return listing
+  if (
+    listing.shops.shipping_providers != null ||
+    listing.shops.shipping_rates != null ||
+    listing.shops.shop_shipping_accounts != null
+  ) {
+    return listing
+  }
+
+  const shipping = await fetchShopShippingEnrichment(listing.shop_id)
+  if (!shipping) return listing
+  return {
+    ...listing,
+    shops: { ...listing.shops, ...shipping },
+  }
+}
+
+/**
+ * Resolve any listing ref (uuid / slug / title-slug) to one core detail fetch.
+ * Never runs the nested detail select against unresolved slug/title scans.
+ */
+export async function fetchListingDetail(listingRef: string): Promise<ListingLoaderResult> {
+  const resolved = await resolveListingId(listingRef)
+  if (resolved.error) return { data: null, error: resolved.error }
+  if (!resolved.id) return { data: null, error: 'Listing not found' }
+  return fetchListingCoreById(resolved.id)
+}
+
+/** Fast path when the caller already has a listing UUID (cards, prefetch). */
+export async function fetchListingDetailById(listingId: string): Promise<ListingLoaderResult> {
+  if (!isUuid(listingId)) return fetchListingDetail(listingId)
+  return fetchListingCoreById(listingId)
+}
+
+/**
+ * Build a paint-ready listing row from a marketplace card summary so PDP can
+ * render instantly while the full detail request is in flight.
+ */
+export function listingRowFromSummary(listing: {
+  id: string
+  slug?: string | null
+  title: string
+  price: number
+  mrp?: number | null
+  price_includes_tax?: boolean | null
+  tax_percent?: number | null
+  listing_type: string
+  average_rating?: number | null
+  total_reviews?: number | null
+  image_url?: string | null
+  image_urls?: string[]
+  images?: Array<{ id?: string; image_url: string; is_primary?: boolean; display_order?: number }>
+  shop_name?: string | null
+  shop_id?: string | null
+  category?: string | null
+  created_at?: string | null
+  currency?: string
+  shipping_required?: boolean | null
+  listing_metadata?: unknown
+  shop_verified?: boolean
+  shop_rating?: number | null
+  shop_review_count?: number | null
+}): ListingRow {
+  const urls =
+    listing.image_urls?.length
+      ? listing.image_urls
+      : listing.image_url
+        ? [listing.image_url]
+        : []
+
+  const listing_images =
+    listing.images?.length
+      ? listing.images.map((image, index) => ({
+          id: image.id ?? `${listing.id}-img-${index}`,
+          image_url: image.image_url,
+          is_primary: image.is_primary ?? index === 0,
+          display_order: image.display_order ?? index,
+          alt_text: listing.title,
+          image_type: null as string | null,
+        }))
+      : urls.map((image_url, index) => ({
+          id: `${listing.id}-img-${index}`,
+          image_url,
+          is_primary: index === 0,
+          display_order: index,
+          alt_text: listing.title,
+          image_type: null as string | null,
+        }))
+
+  return {
+    id: listing.id,
+    slug: listing.slug ?? null,
+    title: listing.title,
+    description: null,
+    price: listing.price,
+    listing_type: listing.listing_type,
+    listing_status: 'active',
+    is_active: true,
+    average_rating: listing.average_rating ?? null,
+    total_reviews: listing.total_reviews ?? null,
+    stock: null,
+    quantity: null,
+    category: listing.category ?? null,
+    tags: null,
+    shop_id: listing.shop_id ?? null,
+    created_at: listing.created_at ?? null,
+    sku: null,
+    weight: null,
+    dimensions: null,
+    listing_metadata: (listing.listing_metadata as ListingRow['listing_metadata']) ?? null,
+    mrp: listing.mrp ?? null,
+    price_includes_tax: listing.price_includes_tax ?? null,
+    tax_percent: listing.tax_percent ?? null,
+    product_info: null,
+    digital_file_url: null,
+    digital_file_type: null,
+    digital_file_size: null,
+    download_limit: null,
+    shipping_required: listing.shipping_required ?? null,
+    listing_images,
+    listing_variations: [],
+    listing_attributes: [],
+    listing_delivery_profiles: null,
+    shops: listing.shop_id
+      ? {
+          id: listing.shop_id,
+          shop_name: listing.shop_name ?? 'Shop',
+          logo_url: null,
+          shop_currency: listing.currency ?? 'INR',
+          verified: listing.shop_verified ?? null,
+          slug: null,
+          average_rating: listing.shop_rating ?? null,
+          total_reviews: listing.shop_review_count ?? null,
+          shop_metadata: null,
+          user_id: null as unknown as string,
+        }
+      : null,
+  } as ListingRow
+}
+
+export function listingLoaderResultFromSummary(
+  listing: Parameters<typeof listingRowFromSummary>[0],
+): ListingLoaderResult {
+  return { data: listingRowFromSummary(listing), error: null }
 }
 
 export async function listingLoader({

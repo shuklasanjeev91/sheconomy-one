@@ -116,7 +116,7 @@ export function CommerceSettingsPanel() {
   return (
     <SettingsPanel
       title="Marketplace"
-      description="Buyer alerts for orders, cart, and restock — plus shortcuts to orders and checkout details"
+      description="Buyer alerts for orders, cart recovery, and restock — plus shortcuts to orders and checkout details"
     >
       <ChannelPrefsCard
         loading={loading}

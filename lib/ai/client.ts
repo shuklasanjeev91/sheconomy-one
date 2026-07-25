@@ -13,7 +13,7 @@ import type {
   SendAiMessageResult,
   ShopDraftParams,
   ShopDraftResult,
-} from './types'
+} from '~/lib/ai/types'
 
 type InvokeErrorPayload = {
   error?: string

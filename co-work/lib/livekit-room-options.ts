@@ -47,7 +47,9 @@ export function getLiveKitRoomOptions(platform: LiveKitRoomPlatform = 'web'): Ro
 
   return {
     ...shared,
-    adaptiveStream: true,
-    // Keep default singlePeerConnection on web (more efficient; RN bug doesn't apply).
+    // Prefer explicit HIGH quality for remote screen shares (see bindRemoteScreenShareQuality).
+    // Default adaptiveStream can request a missing low layer from mobile publishers →
+    // empty video + avatar placeholder on web (native→web).
+    adaptiveStream: false,
   }
 }

@@ -15,12 +15,12 @@ import { createAsyncThunk, createSlice, current, type PayloadAction } from '@red
 
 import type { AppDispatch } from '~/lib/store'
 
-import * as categoriesService from './listing-categories.service'
+import * as categoriesService from '~/lib/listing/listing-categories.service'
 import type {
   CategoryWithRelations,
   ListingCategoryRow,
   PaginatedCategories,
-} from './listing-categories.service'
+} from '~/lib/listing/listing-categories.service'
 import {
   CATEGORY_PAGE_SIZE,
   EMPTY_CATEGORY_FORM_DATA,
@@ -37,9 +37,9 @@ import {
   type CategoryTreeItem,
   type CategoryValidationResult,
   type ListingCategoryAssignmentInput,
-} from './listing-categories.type'
-import { buildCategoryTree } from './listing-categories.utils'
-import { validateCategoryData } from './listing-categories.validation'
+} from '~/lib/listing/listing-categories.type'
+import { buildCategoryTree } from '~/lib/listing/listing-categories.utils'
+import { validateCategoryData } from '~/lib/listing/listing-categories.validation'
 
 // ============= STATE =============
 

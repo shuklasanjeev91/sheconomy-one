@@ -7,7 +7,7 @@ import {
   SHOP_REVIEW_SORT_BY,
   SHOP_REVIEW_STATUS,
   SHOP_REVIEW_VALIDATION,
-} from './shop-review.constants'
+} from '~/lib/shop-review/shop-review.constants'
 import type {
   ShopReview,
   ShopReviewCreateInput,
@@ -18,7 +18,7 @@ import type {
   ShopReviewStats,
   ShopReviewSummary,
   ShopReviewWithRelations,
-} from './shop-review.type'
+} from '~/lib/shop-review/shop-review.type'
 
 // ============= DEFAULTS =============
 

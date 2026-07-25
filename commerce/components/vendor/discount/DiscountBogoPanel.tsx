@@ -25,8 +25,8 @@ import {
 } from '~/lib/discount/discount-ui.utils'
 import type { AppUiTokens } from '~/lib/theme/app-ui'
 
-import { DiscountEntityPicker } from './DiscountEntityPicker'
-import { DiscountFormCard } from './DiscountFormCard'
+import { DiscountEntityPicker } from '~/commerce/components/vendor/discount/DiscountEntityPicker'
+import { DiscountFormCard } from '~/commerce/components/vendor/discount/DiscountFormCard'
 
 type DiscountBogoPanelProps = {
   ui: AppUiTokens

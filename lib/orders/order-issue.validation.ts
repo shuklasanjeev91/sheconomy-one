@@ -6,7 +6,7 @@
  * of at least 10 characters, and a reporter), expressed as a Zod schema.
  */
 
-import { ISSUE_PRIORITY, ISSUE_STATUS, ORDER_ISSUE_TYPE } from './order.constants'
+import { ISSUE_PRIORITY, ISSUE_STATUS, ORDER_ISSUE_TYPE } from '~/lib/orders/order.constants'
 import { z } from '~/lib/zod'
 
 const issueStatusValues = Object.values(ISSUE_STATUS) as [string, ...string[]]

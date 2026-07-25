@@ -16,7 +16,7 @@ import {
 } from '~/commerce/lib/category-facets'
 import type { ListingTypeFilter } from '~/lib/supabase/commerce'
 
-import { PriceRangeSlider } from './PriceRangeSlider'
+import { PriceRangeSlider } from '~/commerce/components/PriceRangeSlider'
 import { useAppUi } from '~/lib/theme/useAppUi'
 
 type ListingFiltersPanelProps = {

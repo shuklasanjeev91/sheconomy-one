@@ -5,11 +5,11 @@ import { pickImages, type PickedImage } from '~/lib/media/pick-image'
 import type { ListingFormData, ListingImageDraft } from '~/lib/listing/listing.type'
 import type { AppUiTokens } from '~/lib/theme/app-ui'
 
-import { ListingPublishCard, ListingPublishFieldError } from '../ListingPublishCard'
+import { ListingPublishCard, ListingPublishFieldError } from '~/commerce/components/vendor/listing-publish/ListingPublishCard'
 import {
   LISTING_PUBLISH_COPY,
   LISTING_PUBLISH_IMAGE_HINTS,
-} from '../listing-publish.constants'
+} from '~/commerce/components/vendor/listing-publish/listing-publish.constants'
 
 type ImagesStepProps = {
   ui: AppUiTokens

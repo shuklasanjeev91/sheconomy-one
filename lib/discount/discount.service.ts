@@ -17,13 +17,13 @@ import {
   DISCOUNT_TYPES,
   DISCOUNT_VALIDATION,
   APPLIES_TO,
-} from './discount.constants'
+} from '~/lib/discount/discount.constants'
 import {
   DiscountError,
   DISCOUNT_ERROR_CODES,
   DISCOUNT_ERROR_MESSAGES,
   toFriendlyDiscountError,
-} from './discount.errors'
+} from '~/lib/discount/discount.errors'
 import type {
   BogoRuleInput,
   BogoRuleUpdate,
@@ -46,7 +46,7 @@ import type {
   DiscountUsageHistoryResult,
   DiscountValidationContext,
   OrderDiscountRow,
-} from './discount.type'
+} from '~/lib/discount/discount.type'
 import {
   calculateCartDiscount,
   formatPaginationResponse,
@@ -57,13 +57,13 @@ import {
   prepareDiscountInsertData,
   prepareDiscountUpdateData,
   validateImageDimensions,
-} from './discount.utils'
+} from '~/lib/discount/discount.utils'
 import {
   parseDiscountApplication,
   parseDiscountCreate,
   parseDiscountUpdate,
   parseCartItems,
-} from './discount.validation'
+} from '~/lib/discount/discount.validation'
 
 // ============= INTERNAL HELPERS =============
 

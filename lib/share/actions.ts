@@ -3,7 +3,7 @@ import { Linking, Platform, Share } from 'react-native'
 import { BRAND_NAME } from '~/config/brand'
 import { copyToClipboard } from '~/lib/platform/clipboard'
 
-import type { SharePayload } from './types'
+import type { SharePayload } from '~/lib/share/types'
 
 export async function copyShareLink(url: string): Promise<boolean> {
   return copyToClipboard(url)

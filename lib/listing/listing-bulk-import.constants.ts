@@ -1,4 +1,4 @@
-import { LISTING_TYPES, LISTING_VALIDATION } from './listing.type'
+import { LISTING_TYPES, LISTING_VALIDATION } from '~/lib/listing/listing.type'
 
 /** Bulk import tuning — centralised so UI and store stay in sync. */
 export const BULK_IMPORT_CONFIG = {

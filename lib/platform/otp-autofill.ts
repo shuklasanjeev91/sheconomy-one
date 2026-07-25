@@ -10,4 +10,4 @@ export function getAndroidSmsAppHash(): string | null {
 
 // Platform entry points: Metro/Vite resolve `.native` / `.web` automatically.
 // Re-export web as fallback for tooling that does not apply platform extensions.
-export { default, otpAutofillService } from './otp-autofill.web'
+export { default, otpAutofillService } from '~/lib/platform/otp-autofill.web'

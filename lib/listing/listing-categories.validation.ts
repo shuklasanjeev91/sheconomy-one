@@ -14,7 +14,7 @@ import {
   CATEGORY_STATUS,
   type CategoryFormData,
   type CategoryValidationResult,
-} from './listing-categories.type'
+} from '~/lib/listing/listing-categories.type'
 import { z } from '~/lib/zod'
 
 // ============= SHARED PRIMITIVES =============

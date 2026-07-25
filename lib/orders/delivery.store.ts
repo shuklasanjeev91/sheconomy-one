@@ -11,8 +11,8 @@ import { createAsyncThunk, createSlice, current } from '@reduxjs/toolkit'
 
 import type { AppDispatch, RootState } from '~/lib/store'
 
-import * as deliveryService from './delivery.service'
-import type { DeliveryStatus } from './order.constants'
+import * as deliveryService from '~/lib/orders/delivery.service'
+import type { DeliveryStatus } from '~/lib/orders/order.constants'
 import type {
   CreateDeliveryInput,
   CreateTrackingInput,
@@ -25,7 +25,7 @@ import type {
   TrackableDeliveryOptions,
   UpdateDeliveryStatusMetadata,
   VendorDeliveryOptions,
-} from './delivery.type'
+} from '~/lib/orders/delivery.type'
 
 // ============= STATE =============
 

@@ -2,11 +2,11 @@ import 'jsr:@supabase/functions-js/edge-runtime.d.ts'
 import { createClient } from 'jsr:@supabase/supabase-js@2'
 import { WebhookReceiver } from 'npm:livekit-server-sdk@2'
 
-import { corsHeaders, jsonResponse } from '../_shared/cors.ts'
+import { corsHeaders, jsonResponse } from '~/supabase/functions/_shared/cors.ts'
 import {
   extractEgressFileInfo,
   mapEgressStatusToRecordingStatus,
-} from '../_shared/recording-helpers.ts'
+} from '~/supabase/functions/_shared/recording-helpers.ts'
 
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') {

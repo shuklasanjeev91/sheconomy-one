@@ -15,7 +15,7 @@ import {
   type CategorySeoMeta,
   type CategoryStatus,
   type CategoryTreeItem,
-} from './listing-categories.type'
+} from '~/lib/listing/listing-categories.type'
 
 /** Minimal shape shared by DB rows and tree nodes for hierarchy operations. */
 type CategoryLike = {

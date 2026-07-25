@@ -57,7 +57,7 @@ export const SETTINGS_NAV: SettingsNavItem[] = [
   {
     id: 'notifications',
     label: 'Notifications',
-    description: 'Device push master switch',
+    description: 'Push + reminder types',
     href: appRoutes.settingsSection('notifications'),
     icon: Icons.Bell,
     group: 'account',

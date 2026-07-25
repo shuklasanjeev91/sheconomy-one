@@ -16,7 +16,7 @@ export type {
   SendAiMessageResult,
   ShopDraftParams,
   ShopDraftResult,
-} from './types'
+} from '~/lib/ai/types'
 
 export {
   draftMeetingWithAi,
@@ -26,7 +26,7 @@ export {
   fetchCommentSuggestions,
   sendAiMessage,
   sendAiSuggestionFeedback,
-} from './client'
-export { aiProductLabel, resolveAiRouteContext } from './context'
-export { localAiSuggestionChips, productQuickTools } from './product-quick-tools'
-export type { ProductQuickTool } from './product-quick-tools'
+} from '~/lib/ai/client'
+export { aiProductLabel, resolveAiRouteContext } from '~/lib/ai/context'
+export { localAiSuggestionChips, productQuickTools } from '~/lib/ai/product-quick-tools'
+export type { ProductQuickTool } from '~/lib/ai/product-quick-tools'

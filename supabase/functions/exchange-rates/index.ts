@@ -1,6 +1,6 @@
 import 'jsr:@supabase/functions-js/edge-runtime.d.ts'
 
-import { corsHeaders, jsonResponse } from '../_shared/cors.ts'
+import { corsHeaders, jsonResponse } from '~/supabase/functions/_shared/cors.ts'
 
 type ApiSuccess = {
   result: 'success'

@@ -10,12 +10,12 @@ import { createAsyncThunk, createSlice, current } from '@reduxjs/toolkit'
 
 import type { AppDispatch } from '~/lib/store'
 
-import * as variationsService from './listing-variations.service'
+import * as variationsService from '~/lib/listing/listing-variations.service'
 import type {
   ListingVariation,
   ListingVariationInsert,
   ListingVariationUpdate,
-} from './listing.type'
+} from '~/lib/listing/listing.type'
 
 type VariationsState = {
   byListingId: string | null

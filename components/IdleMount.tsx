@@ -1,4 +1,5 @@
 import { useEffect, useState, type ReactNode } from 'react'
+import { Platform } from 'react-native'
 
 import { scheduleIdle } from '~/lib/schedule-idle'
 
@@ -6,7 +7,7 @@ import { scheduleIdle } from '~/lib/schedule-idle'
 export function IdleMount({
   children,
   fallback = null,
-  timeoutMs = 2500,
+  timeoutMs = Platform.OS === 'web' ? 2500 : 200,
 }: {
   children: ReactNode
   fallback?: ReactNode

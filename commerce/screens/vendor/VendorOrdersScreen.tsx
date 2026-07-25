@@ -45,8 +45,8 @@ import { useAppUi } from '~/lib/theme/useAppUi'
 
 import { OrderStatusBadge } from '~/commerce/components/vendor/OrderStatusBadge'
 import { getVendorOrderActions, type VendorOrderAction } from '~/commerce/components/vendor/vendor-order-actions'
-import { VendorAddTrackingDrawer, type TrackingFormValues } from './VendorAddTrackingDrawer'
-import { ActionButton, VendorOrderDetailDrawer } from './VendorOrderDetailDrawer'
+import { VendorAddTrackingDrawer, type TrackingFormValues } from '~/commerce/screens/vendor/VendorAddTrackingDrawer'
+import { ActionButton, VendorOrderDetailDrawer } from '~/commerce/screens/vendor/VendorOrderDetailDrawer'
 
 const PAGE_SIZE = 10
 

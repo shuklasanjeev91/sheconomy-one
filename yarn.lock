@@ -3451,6 +3451,15 @@ __metadata:
   languageName: node
   linkType: hard
 
+"@livekit/react-native-callkeep@npm:^4.3.16":
+  version: 4.3.16
+  resolution: "@livekit/react-native-callkeep@npm:4.3.16"
+  peerDependencies:
+    react-native: ">=0.40.0"
+  checksum: 10/dee87b72a86d07d7675a524cf03e08b24478982c67e992ef93e5fc6834db80d94585260dd478afb2fb9c4d60959306b21a9f754262f0721045f8caf13813a74e
+  languageName: node
+  linkType: hard
+
 "@livekit/react-native-expo-plugin@npm:^1.0.2":
   version: 1.0.2
   resolution: "@livekit/react-native-expo-plugin@npm:1.0.2"
@@ -8229,6 +8238,7 @@ __metadata:
     "@livekit/components-react": "npm:^2.9.21"
     "@livekit/components-styles": "npm:^1.2.0"
     "@livekit/react-native": "npm:^2.11.1"
+    "@livekit/react-native-callkeep": "npm:^4.3.16"
     "@livekit/react-native-expo-plugin": "npm:^1.0.2"
     "@livekit/react-native-webrtc": "npm:^144.1.1"
     "@mediapipe/face_mesh": "npm:~0.4.0"

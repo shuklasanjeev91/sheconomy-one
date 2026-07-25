@@ -15,7 +15,7 @@ import {
   type ListingFormData,
   type ListingType,
   type ListingValidationResult,
-} from './listing.type'
+} from '~/lib/listing/listing.type'
 import { z } from '~/lib/zod'
 
 // ============= SHARED PRIMITIVES =============

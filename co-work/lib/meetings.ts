@@ -1,13 +1,13 @@
 import { supabase } from '~/lib/supabase/client'
 
-import { parseMeetingInvitees } from './invites'
+import { parseMeetingInvitees } from '~/co-work/lib/invites'
 import type {
   CreateMeetingInput,
   Meeting,
   MeetingChatMessage,
   MeetingParticipant,
   MeetingSecuritySettings,
-} from './types'
+} from '~/co-work/lib/types'
 
 const MEETING_SELECT =
   'id, title, description, meeting_code, host_id, status, scheduled_at, started_at, ended_at, time_zone, max_participants, room_id, security_settings, meeting_options, invitees, created_at, host:profiles!meetings_host_id_fkey(full_name, username, avatar_url)'
@@ -359,41 +359,27 @@ export async function joinMeetingParticipant(
   isHost: boolean,
   waitingRoom: boolean,
 ): Promise<MeetingParticipant> {
-  const { data: existing } = await supabase
-    .from('meeting_participants')
-    .select(PARTICIPANT_SELECT)
-    .eq('meeting_id', meetingId)
-    .eq('user_id', userId)
-    .maybeSingle()
+  const status = waitingRoom ? 'waiting' : 'admitted'
+  const joinedAt = waitingRoom ? null : new Date().toISOString()
 
-  if (existing) {
-    const { data, error } = await supabase
-      .from('meeting_participants')
-      .update({
-        status: waitingRoom ? 'waiting' : 'admitted',
-        joined_at: waitingRoom ? null : new Date().toISOString(),
-        left_at: null,
-        is_host: isHost,
-      })
-      .eq('id', existing.id)
-      .select(PARTICIPANT_SELECT)
-      .single()
-
-    if (error) throw new Error(error.message)
-    return mapParticipant(data as Record<string, unknown>)
-  }
-
+  // Upsert: React Strict Mode / reconnect can call join twice; select-then-insert
+  // races on meeting_participants_meeting_id_user_id_key and surfaces as
+  // "Live updates paused" even though the room is fine.
   const { data, error } = await supabase
     .from('meeting_participants')
-    .insert({
-      meeting_id: meetingId,
-      user_id: userId,
-      is_host: isHost,
-      status: waitingRoom ? 'waiting' : 'admitted',
-      joined_at: waitingRoom ? null : new Date().toISOString(),
-      is_muted: false,
-      is_video_off: false,
-    })
+    .upsert(
+      {
+        meeting_id: meetingId,
+        user_id: userId,
+        is_host: isHost,
+        status,
+        joined_at: joinedAt,
+        left_at: null,
+        is_muted: false,
+        is_video_off: false,
+      },
+      { onConflict: 'meeting_id,user_id' },
+    )
     .select(PARTICIPANT_SELECT)
     .single()
 

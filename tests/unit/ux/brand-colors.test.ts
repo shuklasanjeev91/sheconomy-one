@@ -53,7 +53,7 @@ describe('SHEconomy brand colors', () => {
   })
 
   it('keeps coral in the official brand palette', () => {
-    expect(brandColors.coral).toBe('#F87840')
+    expect(brandColors.coral).toBe('#FF8C42')
     expect(getAppUi('light').coral).toBe(brandColors.coral)
     expect(getCoWorkUi('light').coral).toBe(brandColors.coral)
   })

@@ -31,9 +31,9 @@ import {
 import { generateDiscountCodeFromName } from '~/lib/discount/discount.utils'
 import type { AppUiTokens } from '~/lib/theme/app-ui'
 
-import { DiscountBogoPanel } from './DiscountBogoPanel'
-import { DiscountEntityPicker } from './DiscountEntityPicker'
-import { DiscountFormCard } from './DiscountFormCard'
+import { DiscountBogoPanel } from '~/commerce/components/vendor/discount/DiscountBogoPanel'
+import { DiscountEntityPicker } from '~/commerce/components/vendor/discount/DiscountEntityPicker'
+import { DiscountFormCard } from '~/commerce/components/vendor/discount/DiscountFormCard'
 
 export type DiscountCreateFormState = DiscountFormInput & {
   eligible_listings?: string[]

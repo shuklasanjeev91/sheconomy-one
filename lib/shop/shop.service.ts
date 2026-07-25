@@ -29,7 +29,7 @@ import { INVALIDATION_TOPICS, invalidateCache } from '~/lib/cache/invalidation'
 import { supabase } from '~/lib/supabase'
 import { uploadShopLogoImage } from '~/lib/supabase/storage-upload'
 
-import { toFriendlyShopError } from './shop.errors'
+import { toFriendlyShopError } from '~/lib/shop/shop.errors'
 import {
   DEFAULT_SHOP_CURRENCY,
   SHOP_FOLLOW_STATUSES,
@@ -44,7 +44,7 @@ import {
   type ShopStats,
   type ShopSummary,
   type ShopUpdate,
-} from './shop.type'
+} from '~/lib/shop/shop.type'
 
 // ============= RESPONSE HELPERS =============
 

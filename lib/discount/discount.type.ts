@@ -17,7 +17,7 @@ import type {
   DISCOUNT_SOURCE_VALUES,
   DISCOUNT_TYPE_VALUES,
   DISCOUNT_USER_TYPE_VALUES,
-} from './discount.constants'
+} from '~/lib/discount/discount.constants'
 
 // ============= SERVICE RESPONSE =============
 

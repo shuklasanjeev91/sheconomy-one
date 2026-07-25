@@ -16,7 +16,7 @@ import {
 } from '~/lib/routes'
 import { supabase } from '~/lib/supabase/client'
 
-import { blockedSearchScopes, scopesToQuery, type AccessTier } from './access'
+import { blockedSearchScopes, scopesToQuery, type AccessTier } from '~/lib/search/access'
 import type {
   CategoryHit,
   CompanyHit,
@@ -31,7 +31,7 @@ import type {
   ProgramHit,
   SearchScope,
   ShopHit,
-} from './types'
+} from '~/lib/search/types'
 
 function listingToHit(listing: ListingSummary): ListingHit {
   const slug = listing.slug?.trim() || listing.id

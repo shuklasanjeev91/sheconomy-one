@@ -1,4 +1,4 @@
-import { resolveCountryCode } from './data'
+import { resolveCountryCode } from '~/lib/geo/data'
 
 const POSTAL_RULES: Record<string, RegExp> = {
   IN: /^[1-9]\d{5}$/,

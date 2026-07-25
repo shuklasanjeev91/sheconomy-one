@@ -4,7 +4,7 @@ import {
   BOGO_TEMPLATES,
   DISCOUNT_TYPES,
   type BogoTemplateDefinition,
-} from './discount.constants'
+} from '~/lib/discount/discount.constants'
 import type {
   AppliesTo,
   BogoRuleInput,
@@ -12,8 +12,8 @@ import type {
   DiscountProfile,
   DiscountStats,
   DiscountType,
-} from './discount.type'
-import { formatDiscountDisplay, isDiscountValid } from './discount.utils'
+} from '~/lib/discount/discount.type'
+import { formatDiscountDisplay, isDiscountValid } from '~/lib/discount/discount.utils'
 
 export type DiscountHubTab = 'all' | 'active' | 'inactive' | 'expired'
 

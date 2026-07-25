@@ -14,6 +14,9 @@ const HANDLE_CHROME = 28
 const HEADER_CHROME = 52
 const FOOTER_CHROME = 72
 
+/** Native sheets use the shortest timing preset — spring/slow anims felt laggy on iPad. */
+const SHEET_ANIMATION = Platform.OS === 'web' ? 'quick' : '100ms'
+
 type BottomSheetHeaderProps = {
   title?: string
   onClose: () => void
@@ -46,8 +49,7 @@ export function BottomSheetHeader({ title, onClose }: BottomSheetHeaderProps) {
         cursor="pointer"
         aria-label="Close"
         hoverStyle={{ backgroundColor: ui.surfaceHover }}
-        pressStyle={{ opacity: 0.75, scale: 0.94 }}
-        animation="quick"
+        pressStyle={{ opacity: 0.75, scale: 0.96 }}
         onPress={onClose}
       >
         <Icons.X size={22} color={ui.text} />
@@ -102,15 +104,16 @@ export function AppBottomSheet({
     (footer ? FOOTER_CHROME : 0) +
     (nativeFullscreen ? safeTop : 0)
 
-  const body = (
-    <YStack paddingHorizontal="$4" paddingTop="$3" paddingBottom="$3" gap="$3" width="100%">
-      {children}
-    </YStack>
-  )
-
   function close() {
     onOpenChange(false)
   }
+
+  // Defer heavy body until open — mounts were the main open-lag on native.
+  const body = open ? (
+    <YStack paddingHorizontal="$4" paddingTop="$3" paddingBottom="$3" gap="$3" width="100%">
+      {children}
+    </YStack>
+  ) : null
 
   return (
     <Sheet
@@ -121,9 +124,10 @@ export function AppBottomSheet({
       snapPoints={[100]}
       snapPointsMode="percent"
       zIndex={100_000}
-      animation="quick"
+      animation={SHEET_ANIMATION}
+      moveOnKeyboardChange={false}
     >
-      <SheetOverlay />
+      <SheetOverlay animation={SHEET_ANIMATION} />
       <SheetFrame
         padding={0}
         margin={0}
@@ -144,61 +148,63 @@ export function AppBottomSheet({
         right={0}
         bottom={0}
       >
-        <YStack
-          width="100%"
-          flex={1}
-          height="100%"
-          maxHeight={maxSheetHeight}
-          paddingTop={nativeFullscreen ? safeTop : 0}
-          paddingBottom={0}
-          marginBottom={0}
-        >
-          {showHandle ? (
-            <YStack paddingTop="$2.5" paddingBottom="$1" alignItems="center" width="100%">
-              <SheetHandle />
-            </YStack>
-          ) : null}
+        {open ? (
+          <YStack
+            width="100%"
+            flex={1}
+            height="100%"
+            maxHeight={maxSheetHeight}
+            paddingTop={nativeFullscreen ? safeTop : 0}
+            paddingBottom={0}
+            marginBottom={0}
+          >
+            {showHandle ? (
+              <YStack paddingTop="$2.5" paddingBottom="$1" alignItems="center" width="100%">
+                <SheetHandle />
+              </YStack>
+            ) : null}
 
-          <BottomSheetHeader title={title} onClose={close} />
+            <BottomSheetHeader title={title} onClose={close} />
 
-          {scrollable ? (
-            <Sheet.ScrollView
-              width="100%"
-              flex={1}
-              showsVerticalScrollIndicator
-              keyboardShouldPersistTaps="handled"
-              onScroll={onScroll}
-              scrollEventThrottle={16}
-              contentContainerStyle={{ paddingBottom: 0, flexGrow: 1 }}
-              {...(Platform.OS === 'web'
-                ? {
-                    maxHeight: `calc(100vh - ${chromeHeight}px)` as unknown as number,
-                  }
-                : {})}
-            >
-              {body}
-            </Sheet.ScrollView>
-          ) : (
-            <YStack flex={1} width="100%" paddingBottom={0}>
-              {body}
-            </YStack>
-          )}
+            {scrollable ? (
+              <Sheet.ScrollView
+                width="100%"
+                flex={1}
+                showsVerticalScrollIndicator
+                keyboardShouldPersistTaps="handled"
+                onScroll={onScroll}
+                scrollEventThrottle={16}
+                contentContainerStyle={{ paddingBottom: 0, flexGrow: 1 }}
+                {...(Platform.OS === 'web'
+                  ? {
+                      maxHeight: `calc(100vh - ${chromeHeight}px)` as unknown as number,
+                    }
+                  : {})}
+              >
+                {body}
+              </Sheet.ScrollView>
+            ) : (
+              <YStack flex={1} width="100%" paddingBottom={0}>
+                {body}
+              </YStack>
+            )}
 
-          {footer ? (
-            <YStack
-              width="100%"
-              paddingHorizontal="$4"
-              paddingTop="$3"
-              paddingBottom="$3"
-              marginBottom={0}
-              borderTopWidth={1}
-              borderTopColor={ui.borderSubtle}
-              backgroundColor={ui.surface}
-            >
-              {footer}
-            </YStack>
-          ) : null}
-        </YStack>
+            {footer ? (
+              <YStack
+                width="100%"
+                paddingHorizontal="$4"
+                paddingTop="$3"
+                paddingBottom="$3"
+                marginBottom={0}
+                borderTopWidth={1}
+                borderTopColor={ui.borderSubtle}
+                backgroundColor={ui.surface}
+              >
+                {footer}
+              </YStack>
+            ) : null}
+          </YStack>
+        ) : null}
       </SheetFrame>
     </Sheet>
   )

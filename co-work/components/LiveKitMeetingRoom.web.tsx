@@ -135,6 +135,17 @@ function getSheconomyLivekitCss(ui: CoWorkUiTokens, shadows: CoWorkShadows) {
   .sheconomy-participant-tile .lk-participant-placeholder[data-camera-off='true'] {
     opacity: 1;
   }
+  .sheconomy-participant-tile[data-lk-source='screen_share'] .lk-participant-placeholder {
+    /* Never paint the camera-off avatar over a screen-share tile. */
+    background: #0c080a;
+  }
+  .sheconomy-screen-waiting {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 100%;
+    height: 100%;
+  }
   .sheconomy-participant-avatar-wrap {
     display: flex;
     flex-direction: column;

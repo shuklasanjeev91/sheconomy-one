@@ -5,7 +5,7 @@
  * Constants (`PAYMENT_PROVIDERS`, regions, etc.) live in `payment.constants.ts`.
  */
 
-import { PAYMENT_PROVIDERS, PAYMENT_REGIONS, CONNECTION_TYPES } from './payment.constants'
+import { PAYMENT_PROVIDERS, PAYMENT_REGIONS, CONNECTION_TYPES } from '~/lib/payment/payment.constants'
 
 export const PROVIDER_CREDENTIAL_FIELDS = {
   // India Regional

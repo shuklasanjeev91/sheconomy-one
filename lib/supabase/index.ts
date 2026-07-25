@@ -1,7 +1,7 @@
-export { supabase } from './client'
-export { supabaseConfig } from './env'
-export { getSheconomyLogoUrl, getSheconomyFaviconUrl, SHECONOMY_LOGO_BUCKET } from './brand'
-export type { SheconomyLogoVariant } from './brand'
+export { supabase } from '~/lib/supabase/client'
+export { supabaseConfig } from '~/lib/supabase/env'
+export { getSheconomyLogoUrl, getSheconomyFaviconUrl, SHECONOMY_LOGO_BUCKET } from '~/lib/supabase/brand'
+export type { SheconomyLogoVariant } from '~/lib/supabase/brand'
 export {
   COMMERCE_HORIZONTAL_PAGE_SIZE,
   COMMERCE_PAGE_SIZE,
@@ -14,7 +14,7 @@ export {
   mapListingRow,
   pickListingImage,
   sortListingImages,
-} from './commerce'
+} from '~/lib/supabase/commerce'
 export type {
   CategorySummary,
   CommerceStats,
@@ -24,6 +24,6 @@ export type {
   ListingSummary,
   PaginatedResult,
   ShopSummary,
-} from './commerce'
-export * from './auth'
-export type { Database, Json, Tables, TablesInsert, TablesUpdate } from './database.types'
+} from '~/lib/supabase/commerce'
+export * from '~/lib/supabase/auth'
+export type { Database, Json, Tables, TablesInsert, TablesUpdate } from '~/lib/supabase/database.types'

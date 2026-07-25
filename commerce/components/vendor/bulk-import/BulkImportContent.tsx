@@ -28,9 +28,9 @@ import { vendorRoutes } from '~/lib/routes'
 import { useAppDispatch, useAppSelector } from '~/lib/store/hooks'
 import type { AppUiTokens } from '~/lib/theme/app-ui'
 
-import { BulkImportDropZone } from './BulkImportDropZone'
-import { BulkImportOverallProgress } from './BulkImportOverallProgress'
-import { BulkImportRowCard } from './BulkImportRowCard'
+import { BulkImportDropZone } from '~/commerce/components/vendor/bulk-import/BulkImportDropZone'
+import { BulkImportOverallProgress } from '~/commerce/components/vendor/bulk-import/BulkImportOverallProgress'
+import { BulkImportRowCard } from '~/commerce/components/vendor/bulk-import/BulkImportRowCard'
 
 type BulkImportContentProps = {
   ui: AppUiTokens

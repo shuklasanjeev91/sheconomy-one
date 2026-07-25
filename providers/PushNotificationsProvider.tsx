@@ -8,6 +8,7 @@ import {
   useState,
   type ReactNode,
 } from 'react'
+import { Platform } from 'react-native'
 
 import {
   disablePushDevice,
@@ -44,9 +45,23 @@ type PushNotificationsContextValue = {
 
 const PushNotificationsContext = createContext<PushNotificationsContextValue | null>(null)
 
+async function waitForPlayerId(attempts = 6, delayMs = 700): Promise<string | null> {
+  let id: string | null = null
+  for (let attempt = 0; attempt < attempts && !id; attempt += 1) {
+    if (attempt > 0) {
+      await new Promise((resolve) => setTimeout(resolve, delayMs))
+    }
+    id = await pushClient.getPlayerId()
+  }
+  return id
+}
+
 /**
  * Cross-platform push lifecycle:
  * web / iOS / Android → OneSignal → `user_push_devices` → dispatch-notifications.
+ *
+ * On sign-in, auto-requests OS permission once (like most apps) when the OS
+ * still allows prompting, then registers the subscription.
  */
 export function PushNotificationsProvider({ children }: { children: ReactNode }) {
   const { user } = useSupabase()
@@ -54,8 +69,36 @@ export function PushNotificationsProvider({ children }: { children: ReactNode })
   const [permissionGranted, setPermissionGranted] = useState(false)
   const [playerId, setPlayerId] = useState<string | null>(null)
   const [isBusy, setIsBusy] = useState(false)
-  const autoPromptStartedRef = useRef(false)
+  // Avoid running OneSignal / push side-effects during SSR (dual-renderer warning).
+  const [clientReady, setClientReady] = useState(Platform.OS !== 'web')
+  const autoSubscribeStartedRef = useRef(false)
   const pushSessionActiveRef = useRef(false)
+
+  useEffect(() => {
+    setClientReady(true)
+  }, [])
+
+  const registerIfPossible = useCallback(
+    async (userId: string, permitted: boolean) => {
+      if (!permitted) {
+        setPlayerId(null)
+        return null
+      }
+      await pushClient.optIn()
+      const id = await waitForPlayerId()
+      setPlayerId(id)
+      if (id) {
+        await registerPushDevice({
+          userId,
+          playerId: id,
+          platform: pushClient.platform,
+          provider: 'onesignal',
+        })
+      }
+      return id
+    },
+    [],
+  )
 
   const syncDevice = useCallback(async () => {
     if (!isConfigured || !user?.id) {
@@ -68,36 +111,26 @@ export function PushNotificationsProvider({ children }: { children: ReactNode })
       pushSessionActiveRef.current = true
       const permitted = await pushClient.getPermission()
       setPermissionGranted(permitted)
-      if (permitted) {
-        await pushClient.optIn()
-      }
-      const id = await pushClient.getPlayerId()
-      setPlayerId(id)
-      if (permitted && id) {
-        await registerPushDevice({
-          userId: user.id,
-          playerId: id,
-          platform: pushClient.platform,
-          provider: 'onesignal',
-        })
-      }
+      await registerIfPossible(user.id, permitted)
     } catch (error) {
       console.warn('[push] syncDevice failed', error)
     }
-  }, [isConfigured, user?.id])
+  }, [isConfigured, registerIfPossible, user?.id])
 
   useEffect(() => {
-    if (!isConfigured) return
+    if (!clientReady || !isConfigured) return
     const timer = setTimeout(() => {
       void pushClient.init()
     }, 1_500)
     return () => clearTimeout(timer)
-  }, [isConfigured])
+  }, [clientReady, isConfigured])
 
   useEffect(() => {
+    if (!clientReady) return
     if (!user?.id) {
-      autoPromptStartedRef.current = false
+      autoSubscribeStartedRef.current = false
       setPlayerId(null)
+      setPermissionGranted(false)
       // Only logout after a prior login/init — never before OneSignal.initialize.
       if (pushSessionActiveRef.current) {
         pushSessionActiveRef.current = false
@@ -106,10 +139,10 @@ export function PushNotificationsProvider({ children }: { children: ReactNode })
       return
     }
     void syncDevice()
-  }, [user?.id, syncDevice])
+  }, [clientReady, user?.id, syncDevice])
 
   useEffect(() => {
-    if (!isConfigured) return
+    if (!clientReady || !isConfigured) return
     return pushClient.onNotificationClick((payload) => {
       const path = pathFromNotificationUrl(payload.url)
       if (path) {
@@ -120,7 +153,7 @@ export function PushNotificationsProvider({ children }: { children: ReactNode })
         }
       }
     })
-  }, [isConfigured])
+  }, [clientReady, isConfigured])
 
   const enablePush = useCallback(async () => {
     if (!isConfigured) {
@@ -133,32 +166,20 @@ export function PushNotificationsProvider({ children }: { children: ReactNode })
     try {
       await pushClient.init()
       await pushClient.login(user.id)
+      pushSessionActiveRef.current = true
       const granted = await pushClient.requestPermission()
       setPermissionGranted(granted)
       if (!granted) {
         return { ok: false, error: 'Permission was denied. Enable notifications in system settings.' }
       }
-      await pushClient.optIn()
-      // Subscription id can arrive slightly after permission.
-      let id = await pushClient.getPlayerId()
-      if (!id) {
-        await new Promise((resolve) => setTimeout(resolve, 800))
-        id = await pushClient.getPlayerId()
-      }
-      setPlayerId(id)
+      const id = await registerIfPossible(user.id, true)
       if (!id) {
         return {
           ok: false,
-          error: 'Could not obtain a push subscription yet. Try again in a moment.',
+          error:
+            'Could not obtain a push subscription yet. Check notification permission, then try again.',
         }
       }
-      const { error } = await registerPushDevice({
-        userId: user.id,
-        playerId: id,
-        platform: pushClient.platform,
-        provider: 'onesignal',
-      })
-      if (error) return { ok: false, error }
       return { ok: true }
     } catch (error) {
       return {
@@ -168,37 +189,52 @@ export function PushNotificationsProvider({ children }: { children: ReactNode })
     } finally {
       setIsBusy(false)
     }
-  }, [isConfigured, user?.id])
+  }, [isConfigured, registerIfPossible, user?.id])
 
+  // Auto-subscribe after sign-in when the OS will still show a permission prompt.
   useEffect(() => {
-    if (!isConfigured || !user?.id || autoPromptStartedRef.current) return
+    if (!clientReady || !isConfigured || !user?.id || autoSubscribeStartedRef.current) return
 
     let cancelled = false
     const timer = setTimeout(() => {
       void (async () => {
-        if (cancelled || autoPromptStartedRef.current) return
+        if (cancelled || autoSubscribeStartedRef.current) return
 
-        const permitted = await pushClient.getPermission()
-        if (cancelled) return
-        if (permitted) {
-          await markPushAutoPromptAttempted(true)
-          return
+        try {
+          await pushClient.init()
+          await pushClient.login(user.id)
+          pushSessionActiveRef.current = true
+
+          const permitted = await pushClient.getPermission()
+          if (cancelled) return
+
+          if (permitted) {
+            setPermissionGranted(true)
+            await registerIfPossible(user.id, true)
+            await markPushAutoPromptAttempted()
+            return
+          }
+
+          const canRequest = await pushClient.canRequestPermission()
+          if (cancelled || !canRequest) return
+
+          const shouldPrompt = await shouldAutoPromptPush()
+          if (cancelled || !shouldPrompt) return
+
+          autoSubscribeStartedRef.current = true
+          await markPushAutoPromptAttempted()
+          await enablePush()
+        } catch (error) {
+          console.warn('[push] auto-subscribe failed', error)
         }
-
-        const shouldPrompt = await shouldAutoPromptPush()
-        if (cancelled || !shouldPrompt) return
-
-        autoPromptStartedRef.current = true
-        const result = await enablePush()
-        await markPushAutoPromptAttempted(result.ok)
       })()
-    }, 2_500)
+    }, 1_200)
 
     return () => {
       cancelled = true
       clearTimeout(timer)
     }
-  }, [enablePush, isConfigured, user?.id])
+  }, [clientReady, enablePush, isConfigured, registerIfPossible, user?.id])
 
   const disablePush = useCallback(async () => {
     if (!user?.id) return { ok: false, error: 'Not signed in' }

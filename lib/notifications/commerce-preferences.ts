@@ -18,7 +18,11 @@ const DEFAULT_PREFS: CommerceNotificationPrefs = {
   frequency: 'immediate',
 }
 
-const BUYER_PROMO_TYPES = ['cart_abandoned_customer', 'back_in_stock', 'wishlist_sale'] as const
+const BUYER_PROMO_TYPES = [
+  'cart_abandoned_customer',
+  'product_back_in_stock',
+  'wishlist_sale',
+] as const
 
 const BUYER_ORDER_TYPES = [
   'order_placed_customer',

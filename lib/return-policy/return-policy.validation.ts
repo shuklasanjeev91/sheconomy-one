@@ -4,12 +4,12 @@ import {
   DEFAULT_RETURN_POLICY_VALUES,
   RETURN_POLICY_VALIDATION,
   RETURN_SHIPPING_PAID_BY_VALUES,
-} from './return-policy.constants'
+} from '~/lib/return-policy/return-policy.constants'
 import type {
   ReturnPolicyFormData,
   ReturnPolicyInput,
   ReturnPolicyValidationResult,
-} from './return-policy.type'
+} from '~/lib/return-policy/return-policy.type'
 
 // ============= ZOD SCHEMAS =============
 

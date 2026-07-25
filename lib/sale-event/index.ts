@@ -1,8 +1,8 @@
-export * from './sale-event.type'
-export * from './sale-event.errors'
-export * from './sale-event.utils'
-export * from './sale-event.validation'
-export * from './sale-event.service'
+export * from '~/lib/sale-event/sale-event.type'
+export * from '~/lib/sale-event/sale-event.errors'
+export * from '~/lib/sale-event/sale-event.utils'
+export * from '~/lib/sale-event/sale-event.validation'
+export * from '~/lib/sale-event/sale-event.service'
 export {
   saleReducer,
   setCurrentEvent,
@@ -35,4 +35,4 @@ export {
   loadAllActiveCategories,
   loadListingsForPicker,
   type SaleEnrollmentRow,
-} from './sale-event.store'
+} from '~/lib/sale-event/sale-event.store'

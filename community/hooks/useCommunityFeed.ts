@@ -8,7 +8,7 @@ import {
   type FeedSort,
 } from '~/community/lib/community'
 
-import { usePaginatedFeed } from '../../commerce/hooks/usePaginatedFeed'
+import { usePaginatedFeed } from '~/commerce/hooks/usePaginatedFeed'
 
 function communityCacheKey(sort: FeedSort, feed?: FeedContentFilter) {
   return feed ? `${CACHE_KEYS.community}:${sort}:${feed}` : `${CACHE_KEYS.community}:${sort}`

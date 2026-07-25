@@ -12,7 +12,7 @@ import { createAsyncThunk, createSlice, type PayloadAction } from '@reduxjs/tool
 
 import type { AppDispatch } from '~/lib/store'
 
-import * as saleService from './sale-event.service'
+import * as saleService from '~/lib/sale-event/sale-event.service'
 import {
   ENROLLMENT_STATUS,
   type CategoryPickerParams,
@@ -28,7 +28,7 @@ import {
   type SaleServiceResponse,
   type SaleShopRef,
   type VendorEnrollment,
-} from './sale-event.type'
+} from '~/lib/sale-event/sale-event.type'
 import {
   attachOfferCategoriesSchema,
   attachOfferListingsSchema,
@@ -40,8 +40,8 @@ import {
   updateEnrollmentStatusSchema,
   updateEventSchema,
   vendorEnrollSchema,
-} from './sale-event.validation'
-import { formatEnrollments, normalizeOfferPayload } from './sale-event.utils'
+} from '~/lib/sale-event/sale-event.validation'
+import { formatEnrollments, normalizeOfferPayload } from '~/lib/sale-event/sale-event.utils'
 
 // ============= STATE =============
 

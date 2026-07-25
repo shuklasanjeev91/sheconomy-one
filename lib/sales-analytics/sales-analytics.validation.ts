@@ -14,7 +14,7 @@ import {
   SALES_SORT_BY_VALUES,
   SALES_SORT_ORDER_VALUES,
   SALES_STATUS_VALUES,
-} from './sales-analytics.constants'
+} from '~/lib/sales-analytics/sales-analytics.constants'
 import type {
   SalesAnalyticsCreateInput,
   SalesAnalyticsFilterInput,
@@ -22,7 +22,7 @@ import type {
   SalesAnalyticsReturnStatusInput,
   SalesAnalyticsValidationResult,
   SalesExportConfig,
-} from './sales-analytics.type'
+} from '~/lib/sales-analytics/sales-analytics.type'
 
 // ============= PRIMITIVE SCHEMAS =============
 

@@ -1,12 +1,12 @@
-import './setup-polyfill'
+import '~/lib/supabase/setup-polyfill'
 
 import AsyncStorage from '@react-native-async-storage/async-storage'
 import { createClient } from '@supabase/supabase-js'
 import { Platform } from 'react-native'
 
-import type { Database } from './database.types'
-import { supabaseConfig } from './env'
-import { getRealtimeTransport } from './realtime-ws'
+import type { Database } from '~/lib/supabase/database.types'
+import { supabaseConfig } from '~/lib/supabase/env'
+import { getRealtimeTransport } from '~/lib/supabase/realtime-ws'
 
 const authOptions = {
   flowType: 'pkce' as const,

@@ -3,7 +3,7 @@ import { canAccessFeature } from '~/lib/auth/access'
 import { buildSignInUrl } from '~/lib/auth/redirect'
 import { appRoutes, classRoutes, communityRoutes, coWorkRoutes } from '~/lib/routes'
 
-import type { SearchScope } from './types'
+import type { SearchScope } from '~/lib/search/types'
 
 const COMMERCE_SCOPES: SearchScope[] = ['listings', 'categories', 'shops']
 const COMMUNITY_SCOPES: SearchScope[] = ['people', 'companies', 'groups', 'jobs', 'posts']

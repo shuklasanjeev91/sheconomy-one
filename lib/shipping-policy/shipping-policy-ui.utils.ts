@@ -6,20 +6,20 @@ import {
   SHIPPING_PROCESSING_PRESETS,
   SHIPPING_RATE_TYPE,
   SHIPPING_ZONE_TYPE,
-} from './shipping-policy.constants'
+} from '~/lib/shipping-policy/shipping-policy.constants'
 import type {
   ShippingPolicy,
   ShippingPolicyFormData,
   ShippingPolicyInput,
   ShippingRate,
   ShippingZone,
-} from './shipping-policy.type'
-import { parseShippingZonesFromJson } from './shipping-policy.type'
+} from '~/lib/shipping-policy/shipping-policy.type'
+import { parseShippingZonesFromJson } from '~/lib/shipping-policy/shipping-policy.type'
 import {
   getShopLevelShippingPolicyInput,
   inferFreeShippingThresholdFromZones,
   normalizeShippingZones,
-} from './shipping-policy.utils'
+} from '~/lib/shipping-policy/shipping-policy.utils'
 
 export function createShippingPolicyFormData(
   _shopName?: string | null,

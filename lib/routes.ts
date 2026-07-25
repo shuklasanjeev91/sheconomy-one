@@ -173,7 +173,10 @@ export const classRoutes = {
 export const coWorkRoutes = {
   home: '/co-work' as Href,
   meeting: (code: string) => `/co-work/meeting/${encodeURIComponent(code)}` as Href,
-  meetingLive: (code: string) => `/co-work/meeting/${encodeURIComponent(code)}/live` as Href,
+  // Prefer nested `/live` — keeps LiveKit out of the lobby route chunk.
+  // Flat `?live=1` used to share a file with lobby and blanked Co-Work/lobby.
+  meetingLive: (code: string) =>
+    `/co-work/meeting/${encodeURIComponent(code)}/live` as Href,
   recording: (token: string) => `/co-work/recording/${encodeURIComponent(token)}` as Href,
   schedule: '/co-work/schedule' as Href,
   meetings: '/co-work/meetings' as Href,
@@ -352,8 +355,13 @@ export function isCoWorkJoinPath(pathname: string) {
   return pathname === '/co-work/join' || pathname.startsWith('/co-work/join/')
 }
 
-export function isCoWorkLivePath(pathname: string) {
-  return /\/co-work\/meeting\/[^/]+\/live/.test(pathname)
+export function isCoWorkLivePath(pathname: string, search = '') {
+  if (/\/co-work\/meeting\/[^/]+\/live\/?$/.test(pathname)) return true
+  if (!/\/co-work\/meeting\/[^/]+\/?$/.test(pathname)) return false
+  const query = search.startsWith('?') ? search.slice(1) : search
+  const params = new URLSearchParams(query)
+  const live = (params.get('live') ?? '').toLowerCase()
+  return live === '1' || live === 'true' || live === 'yes'
 }
 
 export function isCreatePostPath(pathname: string) {

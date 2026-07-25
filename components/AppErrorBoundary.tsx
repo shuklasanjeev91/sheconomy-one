@@ -10,6 +10,8 @@ type Props = {
   children: ReactNode
   /** Optional screen label for crash reports. */
   scope?: string
+  /** Show the underlying error message even in Release (useful for meeting debug). */
+  alwaysShowError?: boolean
 }
 
 type State = {
@@ -42,7 +44,8 @@ export class AppErrorBoundary extends Component<Props, State> {
     if (Platform.OS === 'web' && isBenignDomMutationError(error)) {
       return { error: null, supportRef: null, remountKey: Date.now() }
     }
-    return { error, supportRef: buildSupportRef() }
+    // Scope is applied in componentDidCatch; stamp alone is enough for the first paint.
+    return { error, supportRef: buildSupportRef('APP') }
   }
 
   componentDidCatch(error: Error, info: ErrorInfo) {
@@ -57,7 +60,7 @@ export class AppErrorBoundary extends Component<Props, State> {
     }
 
     const supportRef = this.state.supportRef ?? buildSupportRef(this.props.scope)
-    if (!this.state.supportRef) {
+    if (supportRef !== this.state.supportRef) {
       this.setState({ supportRef })
     }
     logger.error('Unhandled render error', {
@@ -102,6 +105,7 @@ export class AppErrorBoundary extends Component<Props, State> {
 
     const isDev = typeof __DEV__ !== 'undefined' ? __DEV__ : process.env.NODE_ENV !== 'production'
     const supportRef = this.state.supportRef ?? 'UNKNOWN'
+    const showErrorDetail = isDev || !!this.props.alwaysShowError
 
     return (
       <YStack
@@ -119,8 +123,8 @@ export class AppErrorBoundary extends Component<Props, State> {
         <Text fontSize={14} color="$color10" textAlign="center" maxWidth={420} lineHeight={22}>
           We hit an unexpected problem. Your work is safe — try again, or head home and continue.
         </Text>
-        {isDev ? (
-          <Text fontSize={12} color="$color9" textAlign="center" maxWidth={480}>
+        {showErrorDetail ? (
+          <Text fontSize={12} color="$color9" textAlign="center" maxWidth={480} selectable>
             {this.state.error.message}
           </Text>
         ) : null}

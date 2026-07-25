@@ -127,7 +127,7 @@ export function AuthOnboarding({ onFinish }: AuthOnboardingProps) {
                   position="relative"
                   style={
                     Platform.OS === 'web'
-                      ? { boxShadow: '0 20px 48px rgba(208, 16, 96, 0.28)' }
+                      ? { boxShadow: '0 20px 48px rgba(216, 27, 96, 0.28)' }
                       : undefined
                   }
                 >

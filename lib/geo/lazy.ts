@@ -1,4 +1,4 @@
-import type { GeoOption } from './types'
+import type { GeoOption } from '~/lib/geo/types'
 
 type CityModule = typeof import('country-state-city')
 

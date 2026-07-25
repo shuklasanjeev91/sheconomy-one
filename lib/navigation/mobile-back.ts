@@ -8,6 +8,7 @@ import {
   communityRoutes,
   isChatPath,
   isClassPath,
+  isCoWorkLivePath,
   isCoWorkPath,
   isCommercePath,
   isCommunityPath,
@@ -34,9 +35,9 @@ export function isMobileRootPath(pathname: string): boolean {
 }
 
 /** Whether the mobile chrome should show a back control for this route. */
-export function shouldShowMobileBack(pathname: string): boolean {
+export function shouldShowMobileBack(pathname: string, search = ''): boolean {
   if (!pathname || pathname.startsWith('/ui-kit')) return false
-  if (/\/co-work\/meeting\/[^/]+\/live/.test(pathname)) return false
+  if (isCoWorkLivePath(pathname, search)) return false
   if (/\/chat\/call\//.test(pathname)) return false
   if (pathname.startsWith('/auth/')) return false
   return !isMobileRootPath(pathname)

@@ -13,8 +13,8 @@ import {
   DEFAULT_SALES_ANALYTICS_SORTING,
   EXPORT_FORMATS,
   SALES_ANALYTICS_FETCH_SCOPE,
-} from './sales-analytics.constants'
-import * as salesAnalyticsService from './sales-analytics.service'
+} from '~/lib/sales-analytics/sales-analytics.constants'
+import * as salesAnalyticsService from '~/lib/sales-analytics/sales-analytics.service'
 import type {
   ExportFormat,
   SalesAnalyticsAccessContext,
@@ -32,8 +32,8 @@ import type {
   VendorRegionalSalesRow,
   VendorSalesAnalyticsRow,
   VendorTopProductRow,
-} from './sales-analytics.type'
-import { buildDefaultSalesAnalyticsFilters } from './sales-analytics.validation'
+} from '~/lib/sales-analytics/sales-analytics.type'
+import { buildDefaultSalesAnalyticsFilters } from '~/lib/sales-analytics/sales-analytics.validation'
 import {
   applyRefundStatusUpdate,
   applyReturnStatusUpdate,
@@ -44,7 +44,7 @@ import {
   shouldUseSalesAnalyticsCache,
   trimExportHistory,
   upsertSalesAnalyticsRecord,
-} from './sales-analytics.utils'
+} from '~/lib/sales-analytics/sales-analytics.utils'
 
 // ============= STATE =============
 

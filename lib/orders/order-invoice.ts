@@ -13,9 +13,9 @@
  * identically inside the isolated print iframe, independent of the app's CSS.
  */
 
-import { ORDER_DEFAULTS } from './order.constants'
-import { formatOrderAmount, formatOrderDate } from './order.utils'
-import type { OrderAddressSummary, VendorOrderItem } from './vendor-orders.type'
+import { ORDER_DEFAULTS } from '~/lib/orders/order.constants'
+import { formatOrderAmount, formatOrderDate } from '~/lib/orders/order.utils'
+import type { OrderAddressSummary, VendorOrderItem } from '~/lib/orders/vendor-orders.type'
 
 const DEFAULT_BRAND_COLOR = '#be185d'
 

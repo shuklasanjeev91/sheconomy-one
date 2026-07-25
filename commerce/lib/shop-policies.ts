@@ -1,7 +1,7 @@
 import { formatCurrency } from '~/lib/format'
 
-import type { DeliveryProfile, ListingFulfillmentInfo } from './listing-fulfillment'
-import type { ListingReturnPolicy } from './return-policies'
+import type { DeliveryProfile, ListingFulfillmentInfo } from '~/commerce/lib/listing-fulfillment'
+import type { ListingReturnPolicy } from '~/commerce/lib/return-policies'
 
 export type ShopPolicySection = {
   title: string

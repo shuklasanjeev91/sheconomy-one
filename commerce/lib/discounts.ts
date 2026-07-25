@@ -2,11 +2,11 @@ import { supabase } from '~/lib/supabase/client'
 import type { Tables } from '~/lib/supabase'
 import { formatCurrency } from '~/lib/format'
 
-import { applyCartDiscount, removeCartDiscount, type CartRow } from './cart'
+import { applyCartDiscount, removeCartDiscount, type CartRow } from '~/commerce/lib/cart'
 import {
   pickBestOffer,
   type AvailableOffer,
-} from './offer-utils'
+} from '~/commerce/lib/offer-utils'
 
 export type { AvailableOffer }
 export {
@@ -14,7 +14,7 @@ export {
   isOfferEligible,
   offerEligibleSubtotal,
   pickBestOffer,
-} from './offer-utils'
+} from '~/commerce/lib/offer-utils'
 
 export type DiscountProfile = Tables<'discount_profiles'>
 

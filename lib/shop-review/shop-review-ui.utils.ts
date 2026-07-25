@@ -1,11 +1,11 @@
-import { SHOP_REVIEW_STATUS, SHOP_REVIEW_VALIDATION } from './shop-review.constants'
-import { SHOP_REVIEW_UI_COPY } from './shop-review-ui.copy'
-import type { ShopReviewStats, ShopReviewWithRelations } from './shop-review.type'
+import { SHOP_REVIEW_STATUS, SHOP_REVIEW_VALIDATION } from '~/lib/shop-review/shop-review.constants'
+import { SHOP_REVIEW_UI_COPY } from '~/lib/shop-review/shop-review-ui.copy'
+import type { ShopReviewStats, ShopReviewWithRelations } from '~/lib/shop-review/shop-review.type'
 import {
   formatShopReviewStatus,
   generateShopReviewSummary,
   sortShopReviews,
-} from './shop-review.utils'
+} from '~/lib/shop-review/shop-review.utils'
 
 export type ShopReviewHubTab = 'overview' | 'all' | 'pending' | 'responses'
 

@@ -1,9 +1,9 @@
 import { Text, YStack } from '~/components/ui'
 import type { ListingSpecification } from '~/lib/listing-detail'
 
-import { HtmlContent } from './HtmlContent'
-import { ListingSpecifications } from './ListingSpecifications'
-import { SectionTitle } from './SectionTitle'
+import { HtmlContent } from '~/commerce/components/HtmlContent'
+import { ListingSpecifications } from '~/commerce/components/ListingSpecifications'
+import { SectionTitle } from '~/commerce/components/SectionTitle'
 
 type ListingDetailsPanelProps = {
   description: string | null | undefined

@@ -2,15 +2,15 @@ import {
   DEFAULT_VENDOR_REVIEW_STATUSES,
   LISTING_REVIEW_STATUS,
   LISTING_REVIEW_VALIDATION,
-} from './listing-reviews.constants'
-import { LISTING_REVIEW_UI_COPY } from './listing-reviews-ui.copy'
-import type { ListingReviewWithRelations } from './listing-reviews.type'
+} from '~/lib/listing-reviews/listing-reviews.constants'
+import { LISTING_REVIEW_UI_COPY } from '~/lib/listing-reviews/listing-reviews-ui.copy'
+import type { ListingReviewWithRelations } from '~/lib/listing-reviews/listing-reviews.type'
 import {
   calculateListingReviewStats,
   formatListingReviewStatus,
   parseListingReviewImages,
   sortListingReviews,
-} from './listing-reviews.utils'
+} from '~/lib/listing-reviews/listing-reviews.utils'
 
 export type ListingReviewHubTab = 'overview' | 'all' | 'pending' | 'responses'
 

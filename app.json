@@ -22,6 +22,7 @@
     "plugins": [
       "./plugins/withUniversalDeviceSupport.cjs",
       "./plugins/withGoogleModularHeaders.cjs",
+      "./plugins/withCallKeep.cjs",
       [
         "onesignal-expo-plugin",
         {
@@ -35,7 +36,20 @@
         {
           "android": {
             "audioType": "communication",
-            "enableScreenShareService": false
+            "enableScreenShareService": true
+          }
+        }
+      ],
+      [
+        "expo-livekit-screen-share",
+        {
+          "ios": {
+            "extensionName": "ScreenShareExtension",
+            "appGroupIdentifier": "group.com.sheconomy.ecommerce"
+          },
+          "android": {
+            "enableScreenShareService": true,
+            "foregroundServicePermission": true
           }
         }
       ],
@@ -51,8 +65,9 @@
       [
         "expo-camera",
         {
-          "cameraPermission": "Allow SHEconomy to use your camera for face liveness verification.",
-          "recordAudioAndroid": false
+          "cameraPermission": "Allow SHEconomy to use your camera for video meetings and face liveness verification.",
+          "microphonePermission": "Allow SHEconomy to use your microphone for video meetings and live captions.",
+          "recordAudioAndroid": true
         }
       ],
       "expo-secure-store",
@@ -76,7 +91,7 @@
       [
         "@react-native-voice/voice",
         {
-          "microphonePermission": "Allow SHEconomy to use the microphone for live meeting captions.",
+          "microphonePermission": "Allow SHEconomy to use the microphone for video meetings and live captions.",
           "speechRecognitionPermission": "Allow SHEconomy to convert speech to live captions in meetings."
         }
       ]
@@ -85,7 +100,7 @@
     "splash": {
       "image": "./public/splash.png",
       "resizeMode": "contain",
-      "backgroundColor": "#FEF5F9"
+      "backgroundColor": "#D81B60"
     },
     "ios": {
       "bundleIdentifier": "com.sheconomy.ecommerce",
@@ -94,6 +109,7 @@
       "supportsTablet": true,
       "requireFullScreen": false,
       "usesAppleSignIn": true,
+      "icon": "./public/app-icon.png",
       "associatedDomains": [
         "applinks:sheconomy-one-sanjeev-shuklas-projects.vercel.app",
         "applinks:sheconomy-one-sanjeev-shuklas-projects.vercel.app"
@@ -101,7 +117,8 @@
       "infoPlist": {
         "CFBundleDisplayName": "SHEconomy",
         "UIBackgroundModes": [
-          "remote-notification",
+          "audio",
+          "voip",
           "remote-notification"
         ],
         "NSUserTrackingUsageDescription": "This permission is used to deliver personalized push notifications.",
@@ -132,13 +149,20 @@
           "UIInterfaceOrientationLandscapeLeft",
           "UIInterfaceOrientationLandscapeRight"
         ],
-        "ITSAppUsesNonExemptEncryption": false
+        "ITSAppUsesNonExemptEncryption": false,
+        "RTCScreenSharingExtension": "com.sheconomy.ecommerce.ScreenShareExtension",
+        "RTCAppGroupIdentifier": "group.com.sheconomy.ecommerce"
       }
     },
     "android": {
       "package": "com.sheconomy.ecommerce",
       "versionCode": 102,
       "softwareKeyboardLayoutMode": "resize",
+      "adaptiveIcon": {
+        "foregroundImage": "./public/app-icon.png",
+        "backgroundColor": "#D81B60"
+      },
+      "icon": "./public/app-icon.png",
       "intentFilters": [
         {
           "action": "VIEW",
@@ -159,6 +183,7 @@
       "permissions": [
         "android.permission.RECORD_AUDIO",
         "android.permission.CAMERA",
+        "android.permission.POST_NOTIFICATIONS",
         "android.permission.ACCESS_COARSE_LOCATION",
         "android.permission.ACCESS_FINE_LOCATION",
         "android.permission.USE_BIOMETRIC",
@@ -166,7 +191,17 @@
         "android.permission.READ_CONTACTS",
         "android.permission.WRITE_CONTACTS",
         "android.permission.BLUETOOTH_CONNECT",
-        "android.permission.MODIFY_AUDIO_SETTINGS"
+        "android.permission.MODIFY_AUDIO_SETTINGS",
+        "android.permission.FOREGROUND_SERVICE",
+        "android.permission.FOREGROUND_SERVICE_MEDIA_PROJECTION",
+        "android.permission.FOREGROUND_SERVICE_MICROPHONE",
+        "android.permission.FOREGROUND_SERVICE_PHONE_CALL",
+        "android.permission.MANAGE_OWN_CALLS",
+        "android.permission.READ_PHONE_STATE",
+        "android.permission.READ_PHONE_NUMBERS",
+        "android.permission.CALL_PHONE",
+        "android.permission.READ_CALL_LOG",
+        "android.permission.USE_FULL_SCREEN_INTENT"
       ]
     },
     "extra": {
@@ -182,6 +217,15 @@
                   "entitlements": {
                     "com.apple.security.application-groups": [
                       "group.com.sheconomy.ecommerce.onesignal"
+                    ]
+                  }
+                },
+                {
+                  "targetName": "ScreenShareExtension",
+                  "bundleIdentifier": "com.sheconomy.ecommerce.ScreenShareExtension",
+                  "entitlements": {
+                    "com.apple.security.application-groups": [
+                      "group.com.sheconomy.ecommerce"
                     ]
                   }
                 }

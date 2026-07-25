@@ -6,7 +6,7 @@ import { Text, XStack, YStack } from '~/components/ui'
 import { useAccess } from '~/hooks/useAccess'
 import { useAppUi } from '~/lib/theme/useAppUi'
 
-import { APP_CENTER_NAV, getAppColors } from './config'
+import { APP_CENTER_NAV, getAppColors } from '~/components/navigation/app/config'
 
 /** Tamagui layout animation is costly on Hermes during rapid tab switches. */
 const tabAnim = Platform.OS === 'web' ? ('quick' as const) : undefined

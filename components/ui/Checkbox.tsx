@@ -2,7 +2,7 @@ import { forwardRef } from 'react'
 import type { ComponentType } from 'react'
 import type { GetProps } from 'tamagui'
 import { Checkbox as TCheckbox } from 'tamagui'
-import { Check } from '@tamagui/lucide-icons'
+import { Check } from '~/components/ui/icons'
 import { BRAND_THEME } from '~/config/tokens'
 
 // Checkbox's own prop type omits 'animation' despite supporting it at

@@ -21,16 +21,16 @@ import {
   type PaymentProviderId,
   type PaymentRegion,
   type SupportedCurrencyCode,
-} from './payment.constants'
-import { PAYMENT_PROVIDERS_CONFIG, PROVIDER_CREDENTIAL_FIELDS } from './payment.providers.config'
-import { PAYMENT_CONNECTION_TYPE_LABELS, PAYMENT_PROVIDER_BADGE_LABELS, PAYMENT_UI_COPY } from './payment-ui.copy'
+} from '~/lib/payment/payment.constants'
+import { PAYMENT_PROVIDERS_CONFIG, PROVIDER_CREDENTIAL_FIELDS } from '~/lib/payment/payment.providers.config'
+import { PAYMENT_CONNECTION_TYPE_LABELS, PAYMENT_PROVIDER_BADGE_LABELS, PAYMENT_UI_COPY } from '~/lib/payment/payment-ui.copy'
 import type {
   ConnectedProviderSummary,
   PaymentAnalytics,
   PaymentProviderConfig,
   PaymentSetupStatus,
   ShopPaymentAccount,
-} from './payment.type'
+} from '~/lib/payment/payment.type'
 
 export function normalizeProviderId(provider: string): PaymentProviderId {
   return provider.trim().toLowerCase() as PaymentProviderId

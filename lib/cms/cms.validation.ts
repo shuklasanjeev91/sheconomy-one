@@ -16,7 +16,7 @@ import {
   CMS_TWITTER_CARDS,
   CMS_VALIDATION,
   type CmsValidationResult,
-} from './cms.type'
+} from '~/lib/cms/cms.type'
 import { z } from '~/lib/zod'
 
 // ============= HELPERS =============

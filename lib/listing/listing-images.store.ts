@@ -11,8 +11,8 @@ import { createAsyncThunk, createSlice, current } from '@reduxjs/toolkit'
 
 import type { AppDispatch } from '~/lib/store'
 
-import * as imagesService from './listing-images.service'
-import type { ListingImage, ListingImageUpdate, ListingImageUpload } from './listing.type'
+import * as imagesService from '~/lib/listing/listing-images.service'
+import type { ListingImage, ListingImageUpdate, ListingImageUpload } from '~/lib/listing/listing.type'
 
 type ImagesState = {
   byListingId: string | null

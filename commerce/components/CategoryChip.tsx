@@ -6,7 +6,7 @@ import { getCategorySlug } from '~/lib/supabase/commerce'
 import { commerceRoutes } from '~/lib/routes'
 import { useAppUi } from '~/lib/theme/useAppUi'
 
-import { CategoryImage } from './CategoryImage'
+import { CategoryImage } from '~/commerce/components/CategoryImage'
 
 const CIRCLE_SIZE = 88
 

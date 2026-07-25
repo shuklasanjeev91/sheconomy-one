@@ -8,8 +8,8 @@
 
 import type { Tables } from '~/lib/supabase'
 
-import type { OrderStatus, PaymentMode, PaymentStatus } from './order.constants'
-import type { OrderServiceResponse } from './vendor-orders.type'
+import type { OrderStatus, PaymentMode, PaymentStatus } from '~/lib/orders/order.constants'
+import type { OrderServiceResponse } from '~/lib/orders/vendor-orders.type'
 
 // Shared response envelope, re-exported so payment code is a one-stop import.
 export type { OrderServiceResponse }

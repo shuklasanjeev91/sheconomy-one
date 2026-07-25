@@ -2,7 +2,7 @@ import { config as configBase } from '@tamagui/config/v3'
 import { createAnimations } from '@tamagui/animations-react-native'
 import { createTamagui } from 'tamagui'
 
-import { themes, tokens } from './themes'
+import { themes, tokens } from '~/config/themes'
 
 /**
  * Native RN Animated driver — object timings only.
@@ -74,6 +74,14 @@ const tamaguiConfig = createTamagui({
   tokens,
   themes,
   animations: nativeAnimations,
+  // Phones + tablets (incl. iPad Pro): never activate desktop media.
+  // Large-screen / desktop chrome is web-only.
+  media: {
+    ...configBase.media,
+    gtMd: { minWidth: 100_000 },
+    gtLg: { minWidth: 100_000 },
+    gtXl: { minWidth: 100_000 },
+  },
   settings: {
     ...configBase.settings,
     fastSchemeChange: true,

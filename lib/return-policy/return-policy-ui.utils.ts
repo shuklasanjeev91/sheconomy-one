@@ -2,16 +2,16 @@ import {
   RETURN_POLICY_DISPLAY,
   RETURN_POLICY_VALIDATION,
   RETURN_SHIPPING_PAID_BY,
-} from './return-policy.constants'
-import { RETURN_POLICY_UI_COPY } from './return-policy-ui.copy'
+} from '~/lib/return-policy/return-policy.constants'
+import { RETURN_POLICY_UI_COPY } from '~/lib/return-policy/return-policy-ui.copy'
 import type {
   ReturnPolicy,
   ReturnPolicyFormData,
   ReturnPolicyInput,
   ReturnShippingPaidBy,
-} from './return-policy.type'
-import { buildDefaultReturnPolicyFormData } from './return-policy.validation'
-import { formatReturnPolicy, sortReturnPolicies } from './return-policy.utils'
+} from '~/lib/return-policy/return-policy.type'
+import { buildDefaultReturnPolicyFormData } from '~/lib/return-policy/return-policy.validation'
+import { formatReturnPolicy, sortReturnPolicies } from '~/lib/return-policy/return-policy.utils'
 
 export type ReturnPolicyWindowOption = {
   value: number

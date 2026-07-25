@@ -8,7 +8,7 @@ import {
 } from '~/lib/listing/visual-preview'
 import { useAppUi } from '~/lib/theme/useAppUi'
 
-import { VisualPreviewSheet } from './VisualPreviewSheet'
+import { VisualPreviewSheet } from '~/commerce/components/visual-preview/VisualPreviewSheet'
 
 type ListingVisualPreviewButtonsProps = {
   listingId: string

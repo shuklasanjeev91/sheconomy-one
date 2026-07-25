@@ -4,7 +4,7 @@ import { Platform } from 'react-native'
 import { YStack } from '~/components/ui'
 import type { GetProps } from 'tamagui'
 import { useAppLayout } from '~/hooks/useAppLayout'
-import { STICKY_RAIL_TOP, stickyRailStyle } from './sticky'
+import { STICKY_RAIL_TOP, stickyRailStyle } from '~/components/layout/sticky'
 
 type StickyRailPin = 'document' | 'viewport'
 

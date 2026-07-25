@@ -18,7 +18,7 @@ import {
   DISCOUNT_TYPES,
   DISCOUNT_USER_TYPES,
   DISCOUNT_VALIDATION,
-} from './discount.constants'
+} from '~/lib/discount/discount.constants'
 import type {
   BogoRuleInput,
   DiscountApplicationInput,
@@ -29,7 +29,7 @@ import type {
   DiscountUpdateInput,
   DiscountValidationContext,
   DiscountValidationResult,
-} from './discount.type'
+} from '~/lib/discount/discount.type'
 
 // ============= PRIMITIVE SCHEMAS =============
 

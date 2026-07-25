@@ -28,6 +28,7 @@ const webPushClient: PushClient = {
         await OneSignal.init({
           appId,
           allowLocalhostAsSecureOrigin: true,
+          autoResubscribe: true,
           serviceWorkerPath: '/OneSignalSDKWorker.js',
           serviceWorkerUpdaterPath: '/OneSignalSDKUpdaterWorker.js',
           serviceWorkerParam: { scope: '/' },
@@ -66,6 +67,18 @@ const webPushClient: PushClient = {
     }
   },
 
+  async canRequestPermission() {
+    try {
+      const OneSignal = await loadOneSignal()
+      await this.init()
+      if (!OneSignal.Notifications.isPushSupported()) return false
+      // Browser still shows the prompt only while status is "default".
+      return OneSignal.Notifications.permissionNative === 'default'
+    } catch {
+      return false
+    }
+  },
+
   async login(userId: string) {
     try {
       const OneSignal = await loadOneSignal()
@@ -90,7 +103,35 @@ const webPushClient: PushClient = {
     try {
       const OneSignal = await loadOneSignal()
       await this.init()
-      return OneSignal.User.PushSubscription.id ?? null
+      const existing = OneSignal.User.PushSubscription.id
+      if (existing) return existing
+
+      return await new Promise<string | null>((resolve) => {
+        let settled = false
+        const finish = (id: string | null) => {
+          if (settled) return
+          settled = true
+          clearTimeout(timer)
+          try {
+            OneSignal.User.PushSubscription.removeEventListener('change', onChange)
+          } catch {
+            // ignore
+          }
+          resolve(id)
+        }
+        const onChange = (event: { current?: { id?: string } }) => {
+          const id = event.current?.id
+          if (id) finish(id)
+        }
+        const timer = setTimeout(() => {
+          finish(OneSignal.User.PushSubscription.id ?? null)
+        }, 6_000)
+        try {
+          OneSignal.User.PushSubscription.addEventListener('change', onChange)
+        } catch {
+          finish(null)
+        }
+      })
     } catch {
       return null
     }

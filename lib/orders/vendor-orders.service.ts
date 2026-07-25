@@ -23,10 +23,10 @@ import {
   resolveUserId,
   verifyOrderItemAccess,
   verifyVendorShopAccess,
-} from './order.access'
-import { ORDER_DEFAULTS, VENDOR_EDITABLE_ITEM_FIELDS, type OrderStatus } from './order.constants'
-import { validateStatusTransition } from './order.utils'
-import { transformVendorOrderItems } from './vendor-orders.utils'
+} from '~/lib/orders/order.access'
+import { ORDER_DEFAULTS, VENDOR_EDITABLE_ITEM_FIELDS, type OrderStatus } from '~/lib/orders/order.constants'
+import { validateStatusTransition } from '~/lib/orders/order.utils'
+import { transformVendorOrderItems } from '~/lib/orders/vendor-orders.utils'
 import type {
   OrderServiceResponse,
   PaginatedVendorOrders,
@@ -37,7 +37,7 @@ import type {
   VendorOrderSearchParams,
   VendorOrderSummary,
   VendorTopProduct,
-} from './vendor-orders.type'
+} from '~/lib/orders/vendor-orders.type'
 
 /** Last 7 UTC days of distinct order counts (index 0 = 6 days ago … 6 = today). */
 function buildEngagementSeries(

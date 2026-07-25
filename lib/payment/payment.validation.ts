@@ -9,13 +9,13 @@ import {
   SETTLEMENT_SCHEDULES,
   SUPPORTED_CURRENCIES,
   type PaymentProviderId,
-} from './payment.constants'
-import { PROVIDER_CREDENTIAL_FIELDS } from './payment.providers.config'
+} from '~/lib/payment/payment.constants'
+import { PROVIDER_CREDENTIAL_FIELDS } from '~/lib/payment/payment.providers.config'
 import type {
   PaymentSettingsInput,
   PaymentValidationResult,
   ProviderCredentialsValidationResult,
-} from './payment.type'
+} from '~/lib/payment/payment.type'
 
 const settlementScheduleSchema = z.enum([
   SETTLEMENT_SCHEDULES.DAILY,

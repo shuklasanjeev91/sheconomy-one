@@ -9,7 +9,7 @@ import {
   SHOP_REVIEW_SORT_ORDER_VALUES,
   SHOP_REVIEW_STATUS_VALUES,
   SHOP_REVIEW_VALIDATION,
-} from './shop-review.constants'
+} from '~/lib/shop-review/shop-review.constants'
 import type {
   ShopReviewBulkModerationInput,
   ShopReviewCreateInput,
@@ -22,7 +22,7 @@ import type {
   ShopReviewStatsQueryInput,
   ShopReviewUpdateInput,
   ShopReviewValidationResult,
-} from './shop-review.type'
+} from '~/lib/shop-review/shop-review.type'
 
 export const shopReviewStatusSchema = z.enum(SHOP_REVIEW_STATUS_VALUES)
 export const shopReviewReportReasonSchema = z.enum(SHOP_REVIEW_REPORT_REASON_VALUES)

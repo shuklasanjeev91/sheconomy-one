@@ -10,7 +10,7 @@ import type {
   SALES_SORT_BY_VALUES,
   SALES_SORT_ORDER_VALUES,
   SALES_STATUS_VALUES,
-} from './sales-analytics.constants'
+} from '~/lib/sales-analytics/sales-analytics.constants'
 
 export type SalesAnalyticsRecord = Tables<'sales_analytics'>
 export type VendorSalesAnalyticsRow = Tables<'vendor_sales_analytics'>

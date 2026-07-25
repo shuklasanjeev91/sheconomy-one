@@ -15,6 +15,8 @@ export type PushClient = {
   requestPermission: () => Promise<boolean>
   /** Current OS permission for push. */
   getPermission: () => Promise<boolean>
+  /** Whether the OS will still show a permission prompt (not permanently denied). */
+  canRequestPermission: () => Promise<boolean>
   /** Bind the OneSignal user to our auth user id. */
   login: (userId: string) => Promise<void>
   /** Clear external user binding (on sign-out). */

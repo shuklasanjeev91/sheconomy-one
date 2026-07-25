@@ -124,15 +124,57 @@ function withTamaguiDedupe(config) {
           return datetimepickerStub
         }
 
-        // Node built-ins pulled in by `qrcode` / `exceljs` (via auth QR + bulk import).
-        // Hermes has no `fs`; requiring it white-screens the native app.
+        // LiveKit WebRTC → nested `debug` Node entry does require('tty').
+        // Hermes has no Node require (Rolldown `__require` throws). Force browser build.
+        if (
+          typeof moduleName === 'string' &&
+          (moduleName === 'debug/src/node.js' ||
+            moduleName === 'debug/src/node' ||
+            moduleName.endsWith('/debug/src/node.js') ||
+            moduleName.endsWith('/debug/src/node'))
+        ) {
+          const fromOrigin =
+            typeof context.originModulePath === 'string'
+              ? path.dirname(context.originModulePath)
+              : projectRoot
+          const candidates = [
+            path.join(fromOrigin, 'browser.js'),
+            path.join(fromOrigin, '..', 'browser.js'),
+            path.join(projectRoot, 'node_modules/debug/src/browser.js'),
+            path.join(
+              projectRoot,
+              'node_modules/@livekit/react-native-webrtc/node_modules/debug/src/browser.js',
+            ),
+          ]
+          for (const filePath of candidates) {
+            if (require('fs').existsSync(filePath)) {
+              return { type: 'sourceFile', filePath }
+            }
+          }
+        }
+
+        if (moduleName === 'util' || moduleName === 'node:util') {
+          return {
+            type: 'sourceFile',
+            filePath: path.join(projectRoot, 'lib/metro-stubs/node-util.js'),
+          }
+        }
+
         if (
           moduleName === 'fs' ||
           moduleName === 'node:fs' ||
           moduleName === 'graceful-fs' ||
           moduleName === 'fs.realpath' ||
           moduleName === 'fs-constants' ||
-          moduleName === 'fstream'
+          moduleName === 'fstream' ||
+          moduleName === 'tty' ||
+          moduleName === 'node:tty' ||
+          moduleName === 'net' ||
+          moduleName === 'node:net' ||
+          moduleName === 'dns' ||
+          moduleName === 'node:dns' ||
+          moduleName === 'os' ||
+          moduleName === 'node:os'
         ) {
           return {
             type: 'sourceFile',

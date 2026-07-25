@@ -15,9 +15,9 @@
 import { supabase } from '~/lib/supabase'
 
 // Reuse the generic identity helpers so we don't duplicate auth logic.
-import { isAdminUser, resolveUserId } from './listing.access'
-import { CATEGORY_ERROR_CODES, createCategoryError, toFriendlyCategoryError } from './listing-categories.errors'
-import type { CategoryServiceResponse } from './listing-categories.type'
+import { isAdminUser, resolveUserId } from '~/lib/listing/listing.access'
+import { CATEGORY_ERROR_CODES, createCategoryError, toFriendlyCategoryError } from '~/lib/listing/listing-categories.errors'
+import type { CategoryServiceResponse } from '~/lib/listing/listing-categories.type'
 
 export { isAdminUser, resolveUserId }
 

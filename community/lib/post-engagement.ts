@@ -1,7 +1,7 @@
 import { supabase } from '~/lib/supabase/client'
 
-import type { ReactionType } from './constants'
-import { extractMentions } from './post-text'
+import type { ReactionType } from '~/community/lib/constants'
+import { extractMentions } from '~/community/lib/post-text'
 
 export type PostComment = {
   id: string

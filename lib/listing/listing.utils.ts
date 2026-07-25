@@ -15,7 +15,7 @@ import {
   type ListingStatus,
   type ListingType,
   type ServiceTypeValue,
-} from './listing.type'
+} from '~/lib/listing/listing.type'
 
 // ============= SLUG =============
 

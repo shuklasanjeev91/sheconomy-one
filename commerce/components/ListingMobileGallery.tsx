@@ -6,8 +6,8 @@ import { MediaLightbox } from '~/components/media/MediaLightbox'
 import { Icons, ScrollView, Text, XStack, YStack } from '~/components/ui'
 import { useAppUi } from '~/lib/theme/useAppUi'
 
-import { FavoriteButton } from './FavoriteButton'
-import { ListingImage } from './ListingImage'
+import { FavoriteButton } from '~/commerce/components/FavoriteButton'
+import { ListingImage } from '~/commerce/components/ListingImage'
 import { listingMediaKind } from '~/commerce/lib/listing-media'
 
 type GalleryImage = {

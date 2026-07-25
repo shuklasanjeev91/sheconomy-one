@@ -1,10 +1,10 @@
-export * from './types'
-export * from './scope-from-path'
-export * from './access'
-export * from './history'
-export * from './federate'
-export * from './suggest'
-export * from './filter'
+export * from '~/lib/search/types'
+export * from '~/lib/search/scope-from-path'
+export * from '~/lib/search/access'
+export * from '~/lib/search/history'
+export * from '~/lib/search/federate'
+export * from '~/lib/search/suggest'
+export * from '~/lib/search/filter'
 
 export function buildSearchHref(query?: string, scope?: string): string {
   const params = new URLSearchParams()

@@ -5,8 +5,8 @@ import { getShadowStyle } from '~/config/tokens'
 import { vendorRoutes } from '~/lib/routes'
 import type { AppUiTokens } from '~/lib/theme/app-ui'
 
-import { LISTING_PUBLISH_COPY } from './listing-publish.constants'
-import { formatRelativeLastSaved } from './listing-publish.utils'
+import { LISTING_PUBLISH_COPY } from '~/commerce/components/vendor/listing-publish/listing-publish.constants'
+import { formatRelativeLastSaved } from '~/commerce/components/vendor/listing-publish/listing-publish.utils'
 
 type ListingPublishFooterProps = {
   ui: AppUiTokens

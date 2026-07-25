@@ -8,7 +8,7 @@ import { createAsyncThunk, createSlice, current, type PayloadAction } from '@red
 
 import type { AppDispatch, RootState } from '~/lib/store'
 
-import * as shippingPolicyService from './shipping-policy.service'
+import * as shippingPolicyService from '~/lib/shipping-policy/shipping-policy.service'
 import type {
   AssignedShippingPolicy,
   DeleteShippingPolicyResult,
@@ -17,8 +17,8 @@ import type {
   ShippingPolicyFormData,
   ShippingPolicyInput,
   ShippingPolicyValidationResult,
-} from './shipping-policy.type'
-import { EMPTY_SHIPPING_POLICY_FORM_DATA } from './shipping-policy.type'
+} from '~/lib/shipping-policy/shipping-policy.type'
+import { EMPTY_SHIPPING_POLICY_FORM_DATA } from '~/lib/shipping-policy/shipping-policy.type'
 import {
   applyDefaultShippingPolicyChange,
   buildOptimisticListingShippingAssignment,
@@ -30,8 +30,8 @@ import {
   sortShippingPolicies,
   upsertListingShippingAssignment,
   upsertShippingPolicy,
-} from './shipping-policy.utils'
-import { validateShippingPolicyInput } from './shipping-policy.validation'
+} from '~/lib/shipping-policy/shipping-policy.utils'
+import { validateShippingPolicyInput } from '~/lib/shipping-policy/shipping-policy.validation'
 
 type ShippingPolicyState = {
   shopId: string | null

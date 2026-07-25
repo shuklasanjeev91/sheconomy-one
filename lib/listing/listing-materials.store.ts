@@ -9,12 +9,12 @@ import { createAsyncThunk, createSlice, current } from '@reduxjs/toolkit'
 
 import type { AppDispatch } from '~/lib/store'
 
-import * as materialsService from './listing-materials.service'
+import * as materialsService from '~/lib/listing/listing-materials.service'
 import type {
   ListingMaterial,
   ListingMaterialInsert,
   ListingMaterialUpdate,
-} from './listing.type'
+} from '~/lib/listing/listing.type'
 
 type MaterialsState = {
   byListingId: string | null

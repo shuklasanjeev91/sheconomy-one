@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState, memo } from 'react'
-import { useWindowDimensions } from 'react-native'
+import { Platform, useWindowDimensions } from 'react-native'
 import { useRouter } from 'one'
 import { AppLink } from '~/components/navigation/AppLink'
 import { useThemeName } from 'tamagui'
@@ -717,9 +717,13 @@ function PostProductCard({ product }: { product: PostProduct }) {
     </XStack>
   )
 
-  if (product.slug) {
+  if (product.listingId || product.slug) {
+    const href =
+      Platform.OS !== 'web' && product.listingId
+        ? commerceRoutes.listing(product.listingId)
+        : commerceRoutes.listing(product.slug ?? product.listingId!)
     return (
-      <AppLink href={commerceRoutes.listing(product.slug)} asChild>
+      <AppLink href={href} asChild>
         {card}
       </AppLink>
     )

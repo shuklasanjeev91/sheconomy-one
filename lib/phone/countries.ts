@@ -1,4 +1,4 @@
-export type { Country } from './types'
+export type { Country } from '~/lib/phone/types'
 
 export {
   filterPhoneCountries as filterCountries,
@@ -7,10 +7,10 @@ export {
   getAllPhoneCountries,
   getDefaultPhoneCountry,
   hasStrictPhoneRule,
-} from './catalog'
+} from '~/lib/phone/catalog'
 
 import { countryFlagEmoji } from '~/lib/geo'
-import { getAllPhoneCountries, getDefaultPhoneCountry } from './catalog'
+import { getAllPhoneCountries, getDefaultPhoneCountry } from '~/lib/phone/catalog'
 
 /** Full international catalog backed by country-state-city. */
 export const PHONE_COUNTRIES = getAllPhoneCountries()

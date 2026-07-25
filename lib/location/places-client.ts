@@ -1,7 +1,7 @@
 import { supabase } from '~/lib/supabase/client'
 import { reverseGeocodeNominatim } from '~/lib/location/nominatim'
 
-import type { LatLng, PlaceSuggestion, ResolvedAddress } from './types'
+import type { LatLng, PlaceSuggestion, ResolvedAddress } from '~/lib/location/types'
 
 type PlacesAction = 'autocomplete' | 'details' | 'geocode' | 'reverse'
 

@@ -1,5 +1,6 @@
 import { useEffect } from 'react'
 
+import { isIncomingCallPush } from '~/chat/lib/incoming-call-push'
 import pushClient from '~/lib/notifications/push-client'
 import { getOneSignalAppId, pathFromNotificationUrl } from '~/lib/notifications/push-config'
 import { navigateApp } from '~/lib/platform/navigate'
@@ -7,6 +8,7 @@ import { useAppToast } from '~/components/ui'
 
 /**
  * Shows in-app toasts when a push arrives while the app is foregrounded.
+ * Incoming calls use CallOverlay / CallKit instead (IncomingCallHost).
  * Must render inside ToastProvider.
  */
 export function PushForegroundNotificationHost() {
@@ -16,6 +18,9 @@ export function PushForegroundNotificationHost() {
   useEffect(() => {
     if (!isConfigured) return
     return pushClient.onForegroundNotification((payload) => {
+      // Let IncomingCallHost / CallOverlay / CallKeep own the ringing UX.
+      if (isIncomingCallPush(payload)) return
+
       const title = payload.title?.trim() || 'New notification'
       const message = payload.body?.trim() || undefined
       const path = pathFromNotificationUrl(payload.url)

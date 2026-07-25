@@ -15,8 +15,8 @@ import { createAsyncThunk, createSlice, current, type PayloadAction } from '@red
 import type { ShopDashboardData } from '~/commerce/lib/seller-dashboard'
 import type { AppDispatch } from '~/lib/store'
 
-import * as shopService from './shop.service'
-import type { PaginatedShops } from './shop.service'
+import * as shopService from '~/lib/shop/shop.service'
+import type { PaginatedShops } from '~/lib/shop/shop.service'
 import {
   DEFAULT_SHOP_CURRENCY,
   EMPTY_SHOP_FORM_DATA,
@@ -30,8 +30,8 @@ import {
   type ShopSummary,
   type ShopUpdate,
   type ShopValidationResult,
-} from './shop.type'
-import { validateShopData } from './shop.validation'
+} from '~/lib/shop/shop.type'
+import { validateShopData } from '~/lib/shop/shop.validation'
 
 // ============= STATE =============
 

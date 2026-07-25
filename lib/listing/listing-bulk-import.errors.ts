@@ -1,4 +1,4 @@
-import { toFriendlyListingError } from './listing.errors'
+import { toFriendlyListingError } from '~/lib/listing/listing.errors'
 
 function extractErrorText(errorInput: unknown): string {
   if (!errorInput) return ''

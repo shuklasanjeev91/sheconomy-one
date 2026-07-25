@@ -5,7 +5,7 @@ import Voice, {
 
 import { isNativeRuntime } from '~/lib/platform/capabilities'
 
-import type { NativeSpeechHandlers, NativeSpeechSession } from './native-speech-recognition'
+import type { NativeSpeechHandlers, NativeSpeechSession } from '~/co-work/lib/native-speech-recognition'
 
 export function isNativeSpeechRecognitionAvailable() {
   return isNativeRuntime()

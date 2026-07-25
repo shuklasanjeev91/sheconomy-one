@@ -1,6 +1,6 @@
 import { useLocalSearchParams } from 'one'
 
-import { AdminBlogDetail } from '../components/AdminBlogDetail'
+import { AdminBlogDetail } from '~/app/admin/components/AdminBlogDetail'
 
 export default function AdminBlogDetailPage() {
   const params = useLocalSearchParams<{ id?: string | string[] }>()

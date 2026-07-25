@@ -1,5 +1,5 @@
-import type { LucideIcon } from '@tamagui/lucide-icons'
-import { Calendar, Radio, ShieldCheck, Sparkles, Store, Users } from '@tamagui/lucide-icons'
+import type { LucideIcon } from '~/components/ui/icons'
+import { Calendar, Radio, ShieldCheck, Sparkles, Store, Users } from '~/components/ui/icons'
 
 import { BRAND_NAME } from '~/config/brand'
 

@@ -16,15 +16,15 @@
 import { supabase } from '~/lib/supabase'
 import type { Json } from '~/lib/supabase'
 
-import { fail, isAdminUser, ok, resolveUserId, verifyOrderItemAccess, verifyVendorShopAccess } from './order.access'
+import { fail, isAdminUser, ok, resolveUserId, verifyOrderItemAccess, verifyVendorShopAccess } from '~/lib/orders/order.access'
 import {
   FULFILLMENT_DEFAULTS,
   FULFILLMENT_EVENT_TYPE,
   FULFILLMENT_STATUS,
   ORDER_DEFAULTS,
   type FulfillmentStatus,
-} from './order.constants'
-import { validateFulfillmentData } from './fulfillment.validation'
+} from '~/lib/orders/order.constants'
+import { validateFulfillmentData } from '~/lib/orders/fulfillment.validation'
 import type {
   CarrierService,
   CreateFulfillmentEventInput,
@@ -42,7 +42,7 @@ import type {
   OrderServiceResponse,
   PaginatedFulfillments,
   UpdateFulfillmentStatusMetadata,
-} from './fulfillment.type'
+} from '~/lib/orders/fulfillment.type'
 
 const FULFILLMENT_DETAIL_SELECT = `
   *,

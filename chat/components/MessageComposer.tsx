@@ -23,8 +23,8 @@ import {
 import { captureImage, pickDocument, pickImages, pickMedia, pickVideos } from '~/lib/media/pick-image'
 import { sendPickedItemAsChatAttachment } from '~/lib/media/route-chat-attachment'
 
-import { AttachmentSheet } from './AttachmentSheet'
-import { EmojiPickerSheet } from './EmojiPickerSheet'
+import { AttachmentSheet } from '~/chat/components/AttachmentSheet'
+import { EmojiPickerSheet } from '~/chat/components/EmojiPickerSheet'
 
 type MessageComposerProps = {
   conversationId?: string | null

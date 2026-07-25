@@ -54,7 +54,7 @@ export function useMeetingPresence({
     'none' | 'chat' | 'people' | 'invite' | 'info' | 'recordings'
   >('none')
   const [error, setError] = useState<string | null>(null)
-  const [isConnecting, setIsConnecting] = useState(false)
+  const [isConnecting, setIsConnecting] = useState(true)
   const [handRaised, setHandRaised] = useState(false)
   const [raisedHands, setRaisedHands] = useState<Record<string, boolean>>({})
   const [liveCaptions, setLiveCaptions] = useState<LiveCaptionLine[]>([])
@@ -235,8 +235,24 @@ export function useMeetingPresence({
     try {
       const waitingRoom = !isHost && !!meeting.security_settings?.waitingRoom
       await joinMeetingParticipant(meeting.id, userId, isHost, waitingRoom)
-      if (isHost && meeting.status === 'scheduled') await startMeeting(meeting.id)
+      if (isHost && (meeting.status === 'scheduled' || meeting.status === 'instant')) {
+        await startMeeting(meeting.id)
+      }
+      await refreshParticipants()
+    } catch (joinError) {
+      if (generation !== connectGenerationRef.current) return
+      setError(joinError instanceof Error ? joinError.message : 'Failed to join meeting')
+      setIsConnecting(false)
+      return
+    }
 
+    // Unlock the room UI as soon as DB join succeeds. Realtime can stall
+    // (Strict Mode remount / channel timeout) and must not block "Joining…".
+    if (generation === connectGenerationRef.current) {
+      setIsConnecting(false)
+    }
+
+    try {
       const channel = await joinMeetingChannel(meeting.id, userId, {
         onSignal: handleSignal,
         onParticipantChange: () => void refreshParticipants(),
@@ -265,25 +281,14 @@ export function useMeetingPresence({
       realtimeActiveRef.current = true
       setRealtimeDegraded(false)
       stopPolling()
-      await refreshParticipants()
       await refreshChat()
-    } catch (connectError) {
+    } catch {
       if (generation !== connectGenerationRef.current) return
 
       realtimeActiveRef.current = false
       setRealtimeDegraded(true)
       startPolling()
-      await refreshParticipants()
       await refreshChat()
-
-      const message = connectError instanceof Error ? connectError.message : 'Failed to join meeting'
-      if (!message.includes('postgres_changes')) {
-        setError(message)
-      }
-    } finally {
-      if (generation === connectGenerationRef.current) {
-        setIsConnecting(false)
-      }
     }
   }, [
     enabled,

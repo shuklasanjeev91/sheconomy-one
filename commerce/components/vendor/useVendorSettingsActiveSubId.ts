@@ -10,7 +10,7 @@ import {
   normalizeVendorPathname,
   readSettingsSectionFromPathname,
   type VendorSettingsSectionId,
-} from './vendor-nav'
+} from '~/commerce/components/vendor/vendor-nav'
 
 function subscribeToBrowserSearch(callback: () => void) {
   if (typeof window === 'undefined') return () => {}

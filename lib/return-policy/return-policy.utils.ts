@@ -3,13 +3,13 @@ import {
   RETURN_POLICY_DISPLAY,
   RETURN_POLICY_VALIDATION,
   RETURN_SHIPPING_PAID_BY,
-} from './return-policy.constants'
+} from '~/lib/return-policy/return-policy.constants'
 import type {
   AssignedReturnPolicy,
   ReturnPolicy,
   ReturnPolicyFormatted,
   ReturnPolicyInput,
-} from './return-policy.type'
+} from '~/lib/return-policy/return-policy.type'
 
 // ============= DEFAULTS =============
 

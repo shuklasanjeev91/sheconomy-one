@@ -16,9 +16,9 @@ import {
 import type { ListingFormData } from '~/lib/listing/listing.type'
 import type { AppUiTokens } from '~/lib/theme/app-ui'
 
-import { ListingPublishCard, ListingPublishFieldError } from '../ListingPublishCard'
-import { LISTING_METADATA_KEYS } from '../listing-publish.constants'
-import { readMetadataString } from '../listing-publish.utils'
+import { ListingPublishCard, ListingPublishFieldError } from '~/commerce/components/vendor/listing-publish/ListingPublishCard'
+import { LISTING_METADATA_KEYS } from '~/commerce/components/vendor/listing-publish/listing-publish.constants'
+import { readMetadataString } from '~/commerce/components/vendor/listing-publish/listing-publish.utils'
 
 type DetailsStepProps = {
   ui: AppUiTokens

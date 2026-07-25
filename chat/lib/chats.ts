@@ -12,7 +12,7 @@ import type {
   MessageReaction,
   ReplyPreview,
   MessageDeliveryStatus,
-} from './types'
+} from '~/chat/lib/types'
 
 export const CHAT_FILES_BUCKET = 'chat-files'
 export const MESSAGES_PAGE_SIZE = 30

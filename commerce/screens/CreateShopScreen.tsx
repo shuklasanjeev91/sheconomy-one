@@ -670,7 +670,7 @@ function Callout({
   children: string
 }) {
   const bg = tone === 'warning' ? 'rgba(217, 119, 6, 0.08)' : ui.roseSurface
-  const border = tone === 'warning' ? 'rgba(217, 119, 6, 0.28)' : 'rgba(208, 16, 96, 0.2)'
+  const border = tone === 'warning' ? 'rgba(217, 119, 6, 0.28)' : 'rgba(216, 27, 96, 0.2)'
   const titleColor = tone === 'warning' ? '#b45309' : ui.brand
   return (
     <XStack gap="$3" padding="$3.5" borderRadius={radius.chip} backgroundColor={bg} borderWidth={1} borderColor={border}>

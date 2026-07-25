@@ -9,7 +9,7 @@ import {
 import type { ConnectedProviderSummary, PaymentProviderConfig, ShopPaymentAccount } from '~/lib/payment/payment.type'
 import type { AppUiTokens } from '~/lib/theme/app-ui'
 
-import { PaymentProviderIcon } from './PaymentProviderIcon'
+import { PaymentProviderIcon } from '~/commerce/components/vendor/payment/PaymentProviderIcon'
 
 type PaymentProviderCardProps = {
   ui: AppUiTokens

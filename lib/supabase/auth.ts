@@ -1,4 +1,4 @@
-import { supabase } from './client'
+import { supabase } from '~/lib/supabase/client'
 
 /**
  * Passwordless auth only — no separate sign-up flow.

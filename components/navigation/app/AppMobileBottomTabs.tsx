@@ -20,12 +20,12 @@ import {
   getMobileBottomTabMiddleTabs,
   getMobileBottomTabSection,
   type AppMobileTabItem,
-} from './config'
+} from '~/components/navigation/app/config'
 import {
   getBottomTabWidthTier,
   shouldShowBottomTabLabels,
-} from './mobile-tab-bar-width'
-import { MobileTabBarItem } from './MobileTabBarItem'
+} from '~/components/navigation/app/mobile-tab-bar-width'
+import { MobileTabBarItem } from '~/components/navigation/app/MobileTabBarItem'
 import { useAppUi } from '~/lib/theme/useAppUi'
 
 const TAB_ICON = { active: 24, inactive: 22 } as const
@@ -120,8 +120,9 @@ export function AppMobileBottomTabs() {
         maxWidth="100%"
         alignSelf="stretch"
         alignItems="stretch"
-        paddingTop={6}
-        paddingBottom={safeBottom > 0 ? safeBottom : Platform.OS === 'ios' ? 8 : 4}
+        paddingTop={4}
+        // Home-indicator only — avoid stacking extra bottom padding on top of safe area.
+        paddingBottom={safeBottom > 0 ? safeBottom : Platform.OS === 'ios' ? 4 : 2}
         pointerEvents="auto"
         style={mobileTabBarDockStyle(ui, {
           dark: isCoWork,

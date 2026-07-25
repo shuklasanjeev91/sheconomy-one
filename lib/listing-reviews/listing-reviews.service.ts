@@ -14,12 +14,12 @@ import {
   LISTING_REVIEW_STATUS,
   LISTING_REVIEW_SUCCESS_MESSAGES,
   LISTING_REVIEW_VALIDATION,
-} from './listing-reviews.constants'
+} from '~/lib/listing-reviews/listing-reviews.constants'
 import {
   ListingReviewError,
   LISTING_REVIEW_ERROR_CODES,
   toFriendlyListingReviewError,
-} from './listing-reviews.errors'
+} from '~/lib/listing-reviews/listing-reviews.errors'
 import type {
   DeleteListingReviewResult,
   ListingReviewAccessContext,
@@ -41,12 +41,12 @@ import type {
   ListingReviewUpdateInput,
   ListingReviewVendorDashboard,
   ListingReviewWithRelations,
-} from './listing-reviews.type'
+} from '~/lib/listing-reviews/listing-reviews.type'
 import {
   buildDefaultListingReviewSummary,
   fillListingReviewSummaries,
   resolveListingReviewSortColumn,
-} from './listing-reviews.utils'
+} from '~/lib/listing-reviews/listing-reviews.utils'
 import {
   parseListingReviewAnalyticsParams,
   parseListingReviewBatchModeration,
@@ -57,7 +57,7 @@ import {
   parseListingReviewReplyUpdate,
   parseListingReviewReport,
   parseListingReviewUpdate,
-} from './listing-reviews.validation'
+} from '~/lib/listing-reviews/listing-reviews.validation'
 
 // ============= RESPONSE HELPERS =============
 

@@ -1,6 +1,6 @@
 import { Platform } from 'react-native'
 
-import type { LocationAccuracyPreference, LocationPermissionStatus } from './types'
+import type { LocationAccuracyPreference, LocationPermissionStatus } from '~/lib/location/types'
 
 /**
  * Foreground location permission only — Phase 4 never requests background.
@@ -22,7 +22,7 @@ export async function getLocationPermissionStatus(): Promise<LocationPermissionS
   }
 
   try {
-    const Location = await import('expo-location')
+    const Location = await import('~/lib/location/expo-location-module')
     const current = await Location.getForegroundPermissionsAsync()
     if (current.granted) return 'granted'
     if (current.canAskAgain === false) return 'denied'
@@ -41,7 +41,7 @@ export async function requestForegroundLocationPermission(): Promise<LocationPer
   }
 
   try {
-    const Location = await import('expo-location')
+    const Location = await import('~/lib/location/expo-location-module')
     const result = await Location.requestForegroundPermissionsAsync()
     return result.granted ? 'granted' : 'denied'
   } catch {

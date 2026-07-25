@@ -53,7 +53,7 @@ import {
   type SkillInput,
   type VerificationStatus,
   type VerificationUpdate,
-} from './profile.type'
+} from '~/lib/profile/profile.type'
 
 // ============= RESPONSE HELPERS =============
 

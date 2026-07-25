@@ -3,7 +3,7 @@ import { Image as ExpoImage } from 'expo-image'
 import { type StyleProp, type ViewStyle } from 'react-native'
 import type { GetProps } from 'tamagui'
 import { YStack } from 'tamagui'
-import { SizableText } from './Text'
+import { SizableText } from '~/components/ui/Text'
 import { BRAND_THEME } from '~/config/tokens'
 
 type SizeToken = '$1' | '$2' | '$2.5' | '$3' | '$4' | '$5' | '$6' | '$7' | '$8' | '$10'

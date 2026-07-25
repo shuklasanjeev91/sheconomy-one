@@ -7,7 +7,7 @@
  * legacy `{ isValid, errors[] }` shape.
  */
 
-import { FULFILLMENT_STATUS } from './order.constants'
+import { FULFILLMENT_STATUS } from '~/lib/orders/order.constants'
 import { z } from '~/lib/zod'
 
 const fulfillmentStatusValues = Object.values(FULFILLMENT_STATUS) as [string, ...string[]]

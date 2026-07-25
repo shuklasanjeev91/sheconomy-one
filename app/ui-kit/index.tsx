@@ -1,1 +1,1 @@
-export { default } from './UiKitScreen'
+export { default } from '~/app/ui-kit/UiKitScreen'

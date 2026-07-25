@@ -67,7 +67,7 @@ export default function Layout() {
           <link rel="icon" href="/favicon.png" type="image/png" sizes="80x80" />
           <link rel="apple-touch-icon" href="/apple-touch-icon.png" sizes="80x80" />
           <MetaTheme lightColor="#fef5f9" darkColor="#1c0f14" />
-          <meta name="theme-color" content="#D01060" />
+          <meta name="theme-color" content="#D81B60" />
           <meta
             name="google-site-verification"
             content="-NBqtpzczzj-BY1yV4J8jtUZZAjChrU5HUFYuYIcMtI"
@@ -115,7 +115,7 @@ body {
   }
 }
 ::selection {
-  background: rgba(208, 16, 96, 0.22);
+  background: rgba(216, 27, 96, 0.22);
   color: inherit;
 }
 a {
@@ -151,7 +151,7 @@ img {
   line-height: 1.35;
 }
 .listing-html-content a {
-  color: var(--color9, #D01060);
+  color: var(--color9, #D81B60);
   text-decoration: underline;
 }
 .listing-html-content strong,
