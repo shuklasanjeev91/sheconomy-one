@@ -21,6 +21,18 @@ function isCurrentLocation(href: string): boolean {
   return normalizeLocation(current) === normalizeLocation(href)
 }
 
+function isNavigatorNotReadyError(error: unknown): boolean {
+  const message = error instanceof Error ? error.message : String(error ?? '')
+  return /navigate before mounting the Root Layout|Root Layout/i.test(message)
+}
+
+function fallbackWebReplace(target: string): boolean {
+  if (Platform.OS !== 'web' || typeof window === 'undefined') return false
+  const path = target.startsWith('http') ? target : `${window.location.origin}${target.startsWith('/') ? target : `/${target}`}`
+  window.location.replace(path)
+  return true
+}
+
 /**
  * Soft client navigation for in-app paths on web, iOS, and Android.
  * Never assigns `window.location` — keeps the Vite SPA shell mounted.
@@ -34,11 +46,30 @@ export function navigateApp(href: Href | string, options?: NavigateAppOptions): 
   if (isCurrentLocation(String(target))) return
 
   const go = () => {
-    if (options?.replace) {
-      router.replace(target)
-      return
+    try {
+      const outcome = options?.replace ? router.replace(target) : router.push(target)
+      if (outcome && typeof (outcome as Promise<unknown>).then === 'function') {
+        void (outcome as Promise<unknown>).catch((error: unknown) => {
+          if (isNavigatorNotReadyError(error)) {
+            if (!fallbackWebReplace(String(target))) {
+              setTimeout(go, 50)
+            }
+            return
+          }
+          console.warn('[navigateApp] navigation failed', target, error)
+          fallbackWebReplace(String(target))
+        })
+      }
+    } catch (error) {
+      if (isNavigatorNotReadyError(error)) {
+        if (!fallbackWebReplace(String(target))) {
+          setTimeout(go, 50)
+        }
+        return
+      }
+      console.warn('[navigateApp] navigation failed', target, error)
+      fallbackWebReplace(String(target))
     }
-    router.push(target)
   }
 
   if (Platform.OS === 'web') {

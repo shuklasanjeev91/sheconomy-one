@@ -129,6 +129,7 @@ export function AppShell({ children }: AppShellProps) {
             <IncomingCallHost />
             <InstantMeetingHost />
           </AppAccessGate>
+          <GenderVerificationHost />
         </ScreenFill>
       </NativeSafeArea>
     )
@@ -152,9 +153,6 @@ export function AppShell({ children }: AppShellProps) {
             {!isDesktop ? <AppMobileHeader minimal={compactMobileTopBar || chatConversationMobile} /> : null}
             <ProfileOnboardingNudge />
             <YStack
-              // Sticky footer: main grows to fill short viewports; document desktop
-              // must NOT use minHeight:0 or content is clipped and window scroll dies.
-              // flexShrink:0 keeps tall pages from compressing into the footer.
               flexGrow={1}
               flexShrink={0}
               flex={stretchMainContent ? 1 : undefined}
@@ -167,11 +165,11 @@ export function AppShell({ children }: AppShellProps) {
             {showCommerceFooter ? <CommerceDesktopFooter /> : null}
             {!isDesktop && !chatConversationMobile ? <AppMobileBottomTabs /> : null}
             <IncomingCallHost />
-            <GenderVerificationHost />
             <InstantMeetingHost />
           </ScreenFill>
         </AppBarScrollProvider>
       </AppAccessGate>
+      <GenderVerificationHost />
     </NativeSafeArea>
   )
 }

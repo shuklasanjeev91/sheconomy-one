@@ -15,6 +15,8 @@ import { useAppUi } from '~/lib/theme/useAppUi'
 
 type GenderVerificationModalProps = {
   open: boolean
+  /** When false, hide close / "Maybe later" (required verification on protected routes). */
+  dismissible?: boolean
   /** Dismiss the modal (postpone verification). */
   onClose: () => void
   /** Fired once the member is verified — the host refreshes the profile here. */
@@ -28,15 +30,27 @@ type GenderVerificationModalProps = {
  * `GenderVerificationErrorBoundary` so any failure — including a 413
  * image-too-large — is shown with a friendly, actionable message.
  */
-export function GenderVerificationModal({ open, onClose, onVerified }: GenderVerificationModalProps) {
+export function GenderVerificationModal({
+  open,
+  dismissible = true,
+  onClose,
+  onVerified,
+}: GenderVerificationModalProps) {
   if (!open) return null
 
   // Mounted only while open so the camera stream is released on close (the
   // liveness hook stops all tracks on unmount).
-  return <GenderVerificationModalShell onClose={onClose} onVerified={onVerified} />
+  return (
+    <GenderVerificationModalShell
+      dismissible={dismissible}
+      onClose={onClose}
+      onVerified={onVerified}
+    />
+  )
 }
 
 function GenderVerificationModalShell({
+  dismissible = true,
   onClose,
   onVerified,
 }: Omit<GenderVerificationModalProps, 'open'>) {
@@ -50,7 +64,7 @@ function GenderVerificationModalShell({
       left={0}
       right={0}
       bottom={0}
-      zIndex={200_000}
+      zIndex={200_020}
       backgroundColor="rgba(0,0,0,0.55)"
       alignItems="center"
       justifyContent={isDesktop ? 'center' : 'flex-end'}
@@ -80,7 +94,7 @@ function GenderVerificationModalShell({
               : undefined
         }
       >
-        <ModalHeader ui={ui} onClose={onClose} />
+        <ModalHeader ui={ui} dismissible={dismissible} onClose={onClose} />
         <ScrollView
           width="100%"
           flex={isDesktop ? undefined : 1}
@@ -105,7 +119,7 @@ function GenderVerificationModalShell({
             gap: 20,
           }}
         >
-          <VerificationFlow onClose={onClose} onVerified={onVerified} />
+          <VerificationFlow dismissible={dismissible} onClose={onClose} onVerified={onVerified} />
         </ScrollView>
       </YStack>
     </YStack>
@@ -114,9 +128,11 @@ function GenderVerificationModalShell({
 
 function ModalHeader({
   ui,
+  dismissible,
   onClose,
 }: {
   ui: ReturnType<typeof useAppUi>
+  dismissible: boolean
   onClose: () => void
 }) {
   return (
@@ -149,22 +165,26 @@ function ModalHeader({
           </Text>
         </YStack>
       </XStack>
-      <Button
-        size="$2"
-        circular
-        chromeless
-        onPress={onClose}
-        aria-label="Close verification"
-        icon={<Icons.X size={20} color={ui.textSecondary} />}
-      />
+      {dismissible ? (
+        <Button
+          size="$2"
+          circular
+          chromeless
+          onPress={onClose}
+          aria-label="Close verification"
+          icon={<Icons.X size={20} color={ui.textSecondary} />}
+        />
+      ) : null}
     </XStack>
   )
 }
 
 function VerificationFlow({
+  dismissible,
   onClose,
   onVerified,
 }: {
+  dismissible: boolean
   onClose: () => void
   onVerified: () => void
 }) {
@@ -304,11 +324,13 @@ function VerificationFlow({
           </Button>
         ) : null}
 
-        <Button chromeless size="$3" onPress={onClose}>
-          <Text color={ui.textMuted} fontSize={14}>
-            Maybe later
-          </Text>
-        </Button>
+        {dismissible ? (
+          <Button chromeless size="$3" onPress={onClose}>
+            <Text color={ui.textMuted} fontSize={14}>
+              Maybe later
+            </Text>
+          </Button>
+        ) : null}
       </YStack>
     </YStack>
     </GenderVerificationErrorBoundary>

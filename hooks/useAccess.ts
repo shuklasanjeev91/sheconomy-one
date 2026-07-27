@@ -17,7 +17,8 @@ import {
 import { useProfile } from '~/hooks/useProfile'
 
 export function useAccess() {
-  const { profile, isAuthenticated, isLoading } = useProfile()
+  const { profile, isAuthenticated, isLoading, isRefreshing } = useProfile()
+  const isVerified = profile?.is_verified === true
 
   const tier = useMemo(
     () => getAccessTier(isAuthenticated, profile?.gender),
@@ -28,22 +29,26 @@ export function useAccess() {
     () => ({
       tier,
       isLoading,
+      isRefreshing,
       isAuthenticated,
+      isVerified,
       isFemale: tier === 'female',
       isMale: tier === 'male',
       isGuest: tier === 'guest',
       canManageShops: canManageShops(tier),
       canAccessFeature: (feature: AppFeature) => canAccessFeature(tier, feature),
-      canAccessPath: (pathname: string) => canAccessPath(tier, pathname),
+      canAccessPath: (pathname: string) => canAccessPath(tier, pathname, isVerified),
       getPathFeature,
-      getDefaultHome: () => getDefaultHomeForTier(tier),
-      getDeniedRedirect: (pathname: string) => getAccessDeniedRedirect(tier, pathname),
-      sanitizeReturnPath: (path: string | null | undefined) => sanitizeReturnPath(path, tier),
+      getDefaultHome: () => getDefaultHomeForTier(tier, isVerified),
+      getDeniedRedirect: (pathname: string) =>
+        getAccessDeniedRedirect(tier, pathname, isVerified),
+      sanitizeReturnPath: (path: string | null | undefined) =>
+        sanitizeReturnPath(path, tier, isVerified),
       resolveFeatureNavHref: (href: string, feature: AppFeature) =>
         resolveFeatureNavHref(tier, href, feature),
       visibleFeatures: getVisibleFeatures(tier),
     }),
-    [tier, isLoading, isAuthenticated],
+    [tier, isLoading, isRefreshing, isAuthenticated, isVerified],
   )
 }
 

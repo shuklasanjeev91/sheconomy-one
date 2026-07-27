@@ -61,6 +61,8 @@ type VendorListingsProductsTabProps = {
   /** Old ProductList-style currency bundle (`symbol` / `code` / `formatAmount`). */
   currencyInfo: VendorCurrencyInfo
   isDesktop: boolean
+  /** Bump after bulk import (or other external refresh) to reload the list. */
+  refreshKey?: number
   onOpenListing: (listingId: string) => void
 }
 
@@ -69,6 +71,7 @@ export function VendorListingsProductsTab({
   shopId,
   currencyInfo,
   isDesktop,
+  refreshKey = 0,
   onOpenListing,
 }: VendorListingsProductsTabProps) {
   const dispatch = useAppDispatch()
@@ -121,7 +124,7 @@ export function VendorListingsProductsTab({
     } finally {
       setLoading(false)
     }
-  }, [applied.search, applied.status, applied.type, dispatch, page, shopId, toast])
+  }, [applied.search, applied.status, applied.type, dispatch, page, refreshKey, shopId, toast])
 
   useEffect(() => {
     void fetchPage()

@@ -40,6 +40,8 @@ export const GENDER_VERIFICATION_PROMPT = {
   /** Query param + value that opens the "access restricted" modal (e.g. `?gender=restricted`). */
   restrictedQueryParam: 'gender',
   restrictedQueryValue: 'restricted',
+  /** Survives SPA redirect / reload so "Verify myself" keeps the liveness modal open. */
+  verificationFlowStorageKey: 'sheconomy:gender-verify:flow-open',
 } as const
 
 /** MediaPipe Face Mesh eye landmark indices. */

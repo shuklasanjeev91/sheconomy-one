@@ -6,7 +6,7 @@ import { SpaRedirect } from '~/components/navigation/SpaRedirect'
 import { AuthSignInFlow } from '~/components/auth/AuthSignInFlow'
 import { PageCenter } from '~/components/layout'
 import { Spinner, YStack } from '~/components/ui'
-import { canAccessPath, getGuestSignInReturnTo } from '~/lib/auth/access'
+import { canAccessPath as checkAccessPath, getGuestSignInReturnTo } from '~/lib/auth/access'
 import { useAccess } from '~/hooks/useAccess'
 import { useAppLayout } from '~/hooks/useAppLayout'
 
@@ -32,18 +32,15 @@ function Shell({ children, documentScroll }: { children: ReactNode; documentScro
 /** Redirects users away from routes their access tier cannot use. */
 export function AppAccessGate({ children }: AppAccessGateProps) {
   const pathname = usePathname()
-  const { tier, isLoading, isAuthenticated, getDeniedRedirect } = useAccess()
+  const { tier, isLoading, isAuthenticated, canAccessPath, getDeniedRedirect } = useAccess()
   const { isDesktopWeb } = useAppLayout()
   const useDocumentScroll = Platform.OS === 'web' && isDesktopWeb
 
   const guestSignInReturnTo = getGuestSignInReturnTo(tier, pathname)
   const guestCanBrowsePath =
-    canAccessPath('guest', pathname) && getGuestSignInReturnTo('guest', pathname) === null
+    checkAccessPath('guest', pathname) && getGuestSignInReturnTo('guest', pathname) === null
   const guestCanBrowseWhileAuthLoads = !isAuthenticated && guestCanBrowsePath
 
-  // While auth/profile settle: keep the current shell painted.
-  // A full-screen spinner here made every tab/back press feel hung for seconds
-  // (especially when profile cache missed and isLoading flipped true).
   if (isLoading) {
     if (isAuthenticated || guestCanBrowseWhileAuthLoads || guestCanBrowsePath) {
       return <Shell documentScroll={useDocumentScroll}>{children}</Shell>
@@ -59,7 +56,7 @@ export function AppAccessGate({ children }: AppAccessGateProps) {
     return <AuthSignInFlow returnTo={guestSignInReturnTo} />
   }
 
-  if (!canAccessPath(tier, pathname)) {
+  if (!canAccessPath(pathname)) {
     return <SpaRedirect href={getDeniedRedirect(pathname)} />
   }
 

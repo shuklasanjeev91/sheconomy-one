@@ -113,10 +113,12 @@ export function useAuth() {
       if (session?.user?.id) {
         const { data } = await supabase
           .from('profiles')
-          .select('gender')
+          .select('gender, is_verified')
           .eq('id', session.user.id)
           .maybeSingle()
         tier = getAccessTier(true, data?.gender)
+        router.replace(sanitizeReturnPath(returnTo, tier, data?.is_verified) as import('one').Href)
+        return
       }
 
       router.replace(sanitizeReturnPath(returnTo, tier) as import('one').Href)
