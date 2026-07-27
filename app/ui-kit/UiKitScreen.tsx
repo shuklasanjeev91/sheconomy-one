@@ -160,9 +160,24 @@ function FormsDemo() {
         <YStack gap="$2">
           <Label>Plan</Label>
           <RadioGroup value={radio} onValueChange={setRadio}>
-            <RadioGroupItemWithLabel value="a" label="Starter" />
-            <RadioGroupItemWithLabel value="b" label="Pro" />
-            <RadioGroupItemWithLabel value="c" label="Team" />
+            <RadioGroupItemWithLabel
+              value="a"
+              label="Starter"
+              selected={radio === 'a'}
+              onSelect={setRadio}
+            />
+            <RadioGroupItemWithLabel
+              value="b"
+              label="Pro"
+              selected={radio === 'b'}
+              onSelect={setRadio}
+            />
+            <RadioGroupItemWithLabel
+              value="c"
+              label="Team"
+              selected={radio === 'c'}
+              onSelect={setRadio}
+            />
           </RadioGroup>
         </YStack>
 

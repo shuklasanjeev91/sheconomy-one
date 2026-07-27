@@ -64,10 +64,18 @@ const nativePushClient: PushClient = {
     try {
       const { OneSignal } = await import('react-native-onesignal')
       await this.init()
+      // true = fallback to settings if previously denied on some Android versions.
       const granted = await OneSignal.Notifications.requestPermission(true)
-      if (granted) OneSignal.User.pushSubscription.optIn()
-      return granted
-    } catch {
+      if (granted) {
+        try {
+          OneSignal.User.pushSubscription.optIn()
+        } catch (error) {
+          console.warn('[push] Native optIn after grant failed', error)
+        }
+      }
+      return !!granted
+    } catch (error) {
+      console.warn('[push] Native requestPermission failed', error)
       return false
     }
   },
@@ -76,7 +84,7 @@ const nativePushClient: PushClient = {
     try {
       const { OneSignal } = await import('react-native-onesignal')
       await this.init()
-      return await OneSignal.Notifications.getPermissionAsync()
+      return !!(await OneSignal.Notifications.getPermissionAsync())
     } catch {
       return false
     }
@@ -86,7 +94,12 @@ const nativePushClient: PushClient = {
     try {
       const { OneSignal } = await import('react-native-onesignal')
       await this.init()
-      return await OneSignal.Notifications.canRequestPermission()
+      // If the SDK helper fails, fall back to “not yet granted”.
+      try {
+        return !!(await OneSignal.Notifications.canRequestPermission())
+      } catch {
+        return !(await OneSignal.Notifications.getPermissionAsync())
+      }
     } catch {
       return false
     }

@@ -9,6 +9,14 @@ import { PUBLIC_SUPABASE_ANON_KEY, PUBLIC_SUPABASE_URL } from './config/supabase
 
 const fromProjectRoot = (path: string) => fileURLToPath(new URL(path, import.meta.url).toString())
 
+/** Drop Tamagui vite-plugin global caches so config HMR cannot serve stale *.tamagui.css imports. */
+function clearTamaguiViteCaches() {
+  const g = globalThis as Record<string, unknown>
+  delete g.__tamagui_vite_cache__
+  delete g.__tamagui_vite_cache_size__
+  delete g.__tamagui_vite_pending__
+}
+
 /** Vite loadEnv only reads .env files; merge CI/Vercel process.env for EXPO_PUBLIC_* keys. */
 function loadProjectEnv(mode: string) {
   const fromFiles = loadEnv(mode, process.cwd(), '')
@@ -16,6 +24,7 @@ function loadProjectEnv(mode: string) {
     'EXPO_PUBLIC_SUPABASE_URL',
     'EXPO_PUBLIC_SUPABASE_ANON_KEY',
     'EXPO_PUBLIC_WEB_APP_URL',
+    'EXPO_PUBLIC_ONESIGNAL_APP_ID',
     'ONE_SERVER_URL',
     'ONE_CACHE_KEY',
   ] as const
@@ -30,6 +39,7 @@ function loadProjectEnv(mode: string) {
 }
 
 export default defineConfig(({ mode }) => {
+  clearTamaguiViteCaches()
   const env = loadProjectEnv(mode)
   const appOrigin = (env.EXPO_PUBLIC_WEB_APP_URL || env.ONE_SERVER_URL || DEFAULT_APP_ORIGIN).replace(
     /\/$/,
@@ -504,7 +514,10 @@ if (typeof g.Response !== 'function') {
       tamaguiPlugin({
         components: ['tamagui'],
         config: './config/tamagui.config.ts',
-        disableExtraction: false,
+        // Dev: skip CSS extraction. After vite.config HMR, Tamagui's global JS cache can
+        // re-emit `*.tamagui.css` imports while the per-instance cssMap is empty → Vite
+        // "Failed to resolve import …Avatar.tsx.tamagui.css". Production still extracts.
+        disableExtraction: mode === 'development',
       }),
     ],
 
@@ -535,6 +548,12 @@ if (typeof g.Response !== 'function') {
       ),
       'process.env.EXPO_PUBLIC_WEB_APP_URL': JSON.stringify(
         env.EXPO_PUBLIC_WEB_APP_URL ?? env.ONE_SERVER_URL ?? DEFAULT_APP_ORIGIN,
+      ),
+      'import.meta.env.EXPO_PUBLIC_ONESIGNAL_APP_ID': JSON.stringify(
+        env.EXPO_PUBLIC_ONESIGNAL_APP_ID?.trim() || '',
+      ),
+      'process.env.EXPO_PUBLIC_ONESIGNAL_APP_ID': JSON.stringify(
+        env.EXPO_PUBLIC_ONESIGNAL_APP_ID?.trim() || '',
       ),
       'process.env.ONE_SERVER_URL': JSON.stringify(
         env.ONE_SERVER_URL ?? env.EXPO_PUBLIC_WEB_APP_URL ?? DEFAULT_APP_ORIGIN,

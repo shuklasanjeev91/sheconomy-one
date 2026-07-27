@@ -3,46 +3,52 @@ import {
   writePersistentValue,
 } from '~/lib/platform/storage'
 
-/** Bumped so devices stuck on the old "denied forever" gate get one fresh auto-subscribe pass. */
-const STORAGE_KEY = 'sheconomy:push-auto-prompt-v2'
+/**
+ * Persists after the user has *actually decided* the OS permission
+ * (granted or denied) — not merely after we attempted to show a dialog.
+ * Bumped to v4 to recover devices stuck on earlier “prompted without dialog” bugs.
+ */
+const STORAGE_KEY = 'sheconomy:push-permission-decided-v4'
 
-type PushAutoPromptState = {
-  /** OS permission prompt was shown at least once on this device. */
-  prompted: boolean
+type PushPermissionMemory = {
+  /** User/OS permission is settled (not still "default"). */
+  decided: boolean
 }
 
-const DEFAULT_STATE: PushAutoPromptState = { prompted: false }
-
-async function readState(): Promise<PushAutoPromptState> {
+async function readState(): Promise<PushPermissionMemory> {
   const raw = await readPersistentValue(STORAGE_KEY)
-  if (!raw) return DEFAULT_STATE
+  if (!raw) return { decided: false }
   try {
-    const parsed = JSON.parse(raw) as Partial<PushAutoPromptState>
-    return {
-      prompted: parsed.prompted === true,
-    }
+    const parsed = JSON.parse(raw) as Partial<PushPermissionMemory>
+    return { decided: parsed.decided === true }
   } catch {
-    return DEFAULT_STATE
+    return { decided: false }
   }
 }
 
-/** Whether we should auto-request the OS permission dialog (once per install). */
+/** True until the user has completed (or OS has settled) the permission choice. */
 export async function shouldAutoPromptPush(): Promise<boolean> {
   const state = await readState()
-  return !state.prompted
+  return !state.decided
 }
 
-export async function markPushAutoPromptAttempted(): Promise<void> {
+/** Call only after permission is granted or permanently denied (not still promptable). */
+export async function markPushPermissionDecided(): Promise<void> {
   await writePersistentValue(
     STORAGE_KEY,
-    JSON.stringify({ prompted: true } satisfies PushAutoPromptState),
+    JSON.stringify({ decided: true } satisfies PushPermissionMemory),
   )
 }
 
-/** Clear so Settings → enable can re-run the full subscribe flow. */
-export async function resetPushAutoPromptDenial(): Promise<void> {
+/** Settings → Enable can clear this so we may request again when the OS allows. */
+export async function resetPushPermissionMemory(): Promise<void> {
   await writePersistentValue(
     STORAGE_KEY,
-    JSON.stringify({ prompted: false } satisfies PushAutoPromptState),
+    JSON.stringify({ decided: false } satisfies PushPermissionMemory),
   )
 }
+
+/** @deprecated Use markPushPermissionDecided */
+export const markPushAutoPromptAttempted = markPushPermissionDecided
+/** @deprecated Use resetPushPermissionMemory */
+export const resetPushAutoPromptDenial = resetPushPermissionMemory
