@@ -1,6 +1,6 @@
 import { useRouter } from 'one'
 import { AppLink } from '~/components/navigation/AppLink'
-import { useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Share } from 'react-native'
 
 import { Icons, Image, Spinner, Text, XStack, YStack, useAppToast } from '~/components/ui'
@@ -40,7 +40,13 @@ import { deliveryEstimateLabel } from '~/commerce/lib/delivery-estimate'
 import { useFavorites } from '~/commerce/hooks/useFavorites'
 import { fetchListingStockByIds } from '~/commerce/lib/listing-fulfillment'
 import { fetchListingSlugMap, fetchListingTypesByIds, isDigitalListing } from '~/lib/supabase/commerce'
-import { formatCurrency } from '~/lib/format'
+import {
+  computeCartDisplayTotals,
+  computeShopDisplaySubtotal,
+  convertCartLineTotal,
+  shopCurrencyFor,
+} from '~/commerce/lib/checkout-display-pricing'
+import { useFormatCurrency } from '~/hooks/useFormatCurrency'
 import { copyToClipboard } from '~/lib/platform/clipboard'
 import { commerceRoutes } from '~/lib/routes'
 import { useAppLayout } from '~/hooks/useAppLayout'
@@ -67,6 +73,7 @@ export function CartScreen() {
   const { favoriteIds, isFavorite, toggleFavorite } = useFavorites()
   const toast = useAppToast()
   const router = useRouter()
+  const { formatMoney, convertMoney, preferredCurrency } = useFormatCurrency()
   const [listingSlugs, setListingSlugs] = useState<Map<string, string>>(new Map())
   const [listingTypes, setListingTypes] = useState<Map<string, string>>(new Map())
   const [listingStock, setListingStock] = useState<Map<string, number | null>>(new Map())
@@ -112,8 +119,48 @@ export function CartScreen() {
   const availableIds = useMemo(() => items.map((item) => item.id), [items])
   const { isSelected, allSelected, noneSelected } = useCartSelection(availableIds)
 
-  const currency = cart?.currency ?? 'INR'
+  const settlementCurrency = cart?.currency ?? 'INR'
+  const shopCurrencies = useMemo(() => {
+    const map = new Map<string, string>()
+    for (const [shopId, header] of shopHeaders) {
+      map.set(shopId, header.shopCurrency)
+    }
+    return map
+  }, [shopHeaders])
+
+  const selectedItems = useMemo(
+    () => items.filter((item) => isSelected(item.id)),
+    [items, isSelected],
+  )
+
   const { subtotal, unitCount, discount, total } = computeSelectedTotals(cart, items, isSelected)
+
+  const displayTotals = useMemo(
+    () =>
+      computeCartDisplayTotals({
+        selectedItems,
+        subtotal,
+        discount,
+        shopCurrencies,
+        convertMoney,
+        settlementCurrency,
+      }),
+    [convertMoney, discount, selectedItems, settlementCurrency, shopCurrencies, subtotal],
+  )
+
+  const formatCartMoney = useCallback(
+    (amount: number, shopId?: string) =>
+      formatMoney(
+        amount,
+        shopId
+          ? shopCurrencyFor(shopId, shopCurrencies, settlementCurrency)
+          : preferredCurrency,
+        shopId ? undefined : { convert: false },
+      ),
+    [formatMoney, preferredCurrency, settlementCurrency, shopCurrencies],
+  )
+
+  const showSettlementCurrencyNote = preferredCurrency !== settlementCurrency
   const recommendationSeedId =
     items[0]?.listing_id ?? savedItems[0]?.listing_id ?? favoriteIds[0] ?? undefined
   const cartListingIds = useMemo(
@@ -130,9 +177,12 @@ export function CartScreen() {
       if (!isSelected(item.id)) return sum
       const type = listingTypes.get(item.listing_id)
       if (type && isDigitalListing(type)) return sum
-      return sum + item.total_price
+      return (
+        sum +
+        convertCartLineTotal(item, shopCurrencies, convertMoney, settlementCurrency)
+      )
     }, 0)
-  }, [items, isSelected, listingTypes])
+  }, [convertMoney, items, isSelected, listingTypes, settlementCurrency, shopCurrencies])
 
   const selectedHasStockIssue = useMemo(() => {
     return items.some((item) => {
@@ -168,9 +218,9 @@ export function CartScreen() {
           : item.variant_name
             ? ` (${item.variant_name})`
             : ''
-      return `• ${item.title}${variant} × ${item.quantity} — ${formatCurrency(
+      return `• ${item.title}${variant} × ${item.quantity} — ${formatCartMoney(
         item.unit_price * item.quantity,
-        currency,
+        item.shop_id,
       )}`
     })
     const message = [
@@ -179,7 +229,7 @@ export function CartScreen() {
       '',
       ...lines,
       '',
-      `Total: ${formatCurrency(total, currency)}`,
+      `Total: ${formatCartMoney(displayTotals.total)}`,
     ].join('\n')
 
     try {
@@ -274,23 +324,23 @@ export function CartScreen() {
     <Text fontSize={18} color={c.text}>
       Subtotal ({unitCount} {unitCount === 1 ? 'item' : 'items'}):{' '}
       <Text fontSize={18} fontWeight="700" color={c.priceStrong}>
-        {formatCurrency(subtotal, currency)}
+        {formatCartMoney(displayTotals.itemsSubtotal)}
       </Text>
     </Text>
   )
 
   const discountBlock =
-    discount > 0 ? (
+    displayTotals.promotion > 0 ? (
       <YStack gap="$2" width="100%">
         <XStack justifyContent="space-between">
           <Text fontSize={13} color={c.secondary}>
             Promotion{cart?.applied_discount_name ? ` (${cart.applied_discount_name})` : ''}
           </Text>
           <Text fontSize={13} color={c.inStock}>
-            −{formatCurrency(discount, currency)}
+            −{formatCartMoney(displayTotals.promotion)}
           </Text>
         </XStack>
-        {subtotal > 0 ? (
+        {displayTotals.itemsSubtotal > 0 ? (
           <XStack
             alignItems="center"
             gap="$1.5"
@@ -301,13 +351,24 @@ export function CartScreen() {
           >
             <Icons.BadgePercent size={14} color={c.inStock} />
             <Text fontSize={12} fontWeight="700" color={c.inStock}>
-              You&apos;re saving {formatCurrency(discount, currency)} (
-              {Math.round((discount / (subtotal + discount)) * 100)}%)
+              You&apos;re saving {formatCartMoney(displayTotals.promotion)} (
+              {Math.round(
+                (displayTotals.promotion /
+                  (displayTotals.itemsSubtotal + displayTotals.promotion)) *
+                  100,
+              )}
+              %)
             </Text>
           </XStack>
         ) : null}
       </YStack>
     ) : null
+
+  const settlementCurrencyNote = showSettlementCurrencyNote ? (
+    <Text fontSize={11} color={c.secondary} lineHeight={15} textAlign="center">
+      Prices shown in {preferredCurrency}. You will be charged in {settlementCurrency} at checkout.
+    </Text>
+  ) : null
 
   const protectionNote = (
     <XStack alignItems="center" gap="$1.5" justifyContent="center">
@@ -333,7 +394,7 @@ export function CartScreen() {
         <CartFreeShippingBar
           shippableSubtotal={shippableSubtotal}
           shopIds={shopIds}
-          currency={currency}
+          currency={preferredCurrency}
         />
       ) : null}
       <CartRecoveryNudge itemCount={unitCount} />
@@ -353,6 +414,7 @@ export function CartScreen() {
       >
         Proceed to buy ({unitCount} {unitCount === 1 ? 'item' : 'items'})
       </CommerceButton>
+      {settlementCurrencyNote}
       {protectionNote}
     </YStack>
   )
@@ -377,7 +439,7 @@ export function CartScreen() {
         <CartFreeShippingBar
           shippableSubtotal={shippableSubtotal}
           shopIds={shopIds}
-          currency={currency}
+          currency={preferredCurrency}
         />
       ) : null}
       <CartRecoveryNudge itemCount={unitCount} compact />
@@ -389,6 +451,7 @@ export function CartScreen() {
           Update out-of-stock items or reduce quantities before checkout.
         </Text>
       ) : null}
+      {settlementCurrencyNote}
       {protectionNote}
     </YStack>
   )
@@ -441,10 +504,18 @@ export function CartScreen() {
       <YStack height={1} backgroundColor={c.divider} marginHorizontal={isDesktop ? -16 : -14} />
 
       {groupedByShop.map(([shopId, shopItems], groupIndex) => {
-        const shopSelectedSubtotal = shopItems.reduce(
-          (sum, item) => (isSelected(item.id) ? sum + item.unit_price * item.quantity : sum),
+        const shopSelectedItems = shopItems.filter((item) => isSelected(item.id))
+        const shopSelectedSubtotal = shopSelectedItems.reduce(
+          (sum, item) => sum + item.unit_price * item.quantity,
           0,
         )
+        const shopDisplaySubtotal = computeShopDisplaySubtotal(
+          shopSelectedItems,
+          shopCurrencies,
+          convertMoney,
+          settlementCurrency,
+        )
+        const shopCurrency = shopCurrencyFor(shopId, shopCurrencies, settlementCurrency)
         return (
           <YStack key={shopId} gap="$2.5" paddingTop={groupIndex > 0 ? '$3' : 0}>
             {groupIndex > 0 ? (
@@ -493,7 +564,7 @@ export function CartScreen() {
                 listingType={listingTypes.get(item.listing_id)}
                 maxQuantity={stock ?? null}
                 outOfStock={outOfStock}
-                currency={currency}
+                formatPrice={(amount) => formatCartMoney(amount, item.shop_id)}
                 isDesktop={isDesktop}
                 onToggle={() => toggleCartItemSelected(item.id)}
                 onQuantityChange={handleQuantityChange}
@@ -507,14 +578,12 @@ export function CartScreen() {
               shopId={shopId}
               shopName={shopItems[0]?.shop_name}
               subtotal={shopSelectedSubtotal}
-              currency={currency}
-              items={shopItems
-                .filter((item) => isSelected(item.id))
-                .map((item) => ({
+              currency={shopCurrency}
+              items={shopSelectedItems.map((item) => ({
                   shop_id: item.shop_id,
                   listing_id: item.listing_id,
                   total_price: item.total_price,
-                }))}
+              }))}
             />
 
             {groupedByShop.length > 1 ? (
@@ -522,7 +591,7 @@ export function CartScreen() {
                 <Text fontSize={12} color={c.secondary}>
                   Subtotal ({shopItems[0]?.shop_name}):{' '}
                   <Text fontWeight="700" color={c.text}>
-                    {formatCurrency(shopSelectedSubtotal, currency)}
+                    {formatCartMoney(shopDisplaySubtotal)}
                   </Text>
                 </Text>
               </XStack>
@@ -568,7 +637,7 @@ export function CartScreen() {
             key={item.id}
             item={item}
             listingHref={listingHref(item.listing_id)}
-            currency={currency}
+            formatPrice={(amount) => formatCartMoney(amount, item.shop_id)}
             isDesktop={isDesktop}
             outOfStock={outOfStock}
             onMoveToCart={() => void handleMoveToCart(item.id)}
@@ -705,7 +774,11 @@ export function CartScreen() {
       {layout}
       <CommerceMobileCheckoutBar
         total={total}
-        currency={currency}
+        currency={settlementCurrency}
+        formattedTotal={formatCartMoney(displayTotals.total)}
+        formattedSavings={
+          displayTotals.promotion > 0 ? formatCartMoney(displayTotals.promotion) : null
+        }
         caption={`Subtotal · ${unitCount} ${unitCount === 1 ? 'item' : 'items'}`}
         savings={discount || null}
         label="Proceed to buy"
@@ -719,7 +792,7 @@ export function CartScreen() {
 function SavedForLaterRow({
   item,
   listingHref,
-  currency,
+  formatPrice,
   isDesktop,
   outOfStock,
   onMoveToCart,
@@ -728,7 +801,7 @@ function SavedForLaterRow({
 }: {
   item: CartItemRow
   listingHref: string
-  currency: string
+  formatPrice: (amount: number) => string
   isDesktop: boolean
   outOfStock: boolean
   onMoveToCart: () => void
@@ -779,7 +852,7 @@ function SavedForLaterRow({
             </Text>
           ) : null}
           <Text fontSize={16} fontWeight="800" color={c.priceStrong}>
-            {formatCurrency(lineTotal, currency)}
+            {formatPrice(lineTotal)}
           </Text>
           <Text fontSize={12} color={c.secondary}>
             Qty {item.quantity}
@@ -812,7 +885,7 @@ function CartRow({
   listingType,
   maxQuantity,
   outOfStock,
-  currency,
+  formatPrice,
   isDesktop,
   onToggle,
   onQuantityChange,
@@ -825,7 +898,7 @@ function CartRow({
   listingType?: string
   maxQuantity?: number | null
   outOfStock: boolean
-  currency: string
+  formatPrice: (amount: number) => string
   isDesktop: boolean
   onToggle: () => void
   onQuantityChange: (itemId: string, nextQuantity: number) => void
@@ -918,11 +991,11 @@ function CartRow({
           {!isDesktop ? (
             <YStack gap={2} paddingTop={2}>
               <Text fontSize={17} fontWeight="800" color={c.priceStrong} letterSpacing={-0.3}>
-                {formatCurrency(lineTotal, currency)}
+                {formatPrice(lineTotal)}
               </Text>
               {item.quantity > 1 ? (
                 <Text fontSize={11} color={c.secondary}>
-                  {formatCurrency(item.unit_price, currency)} each
+                  {formatPrice(item.unit_price)} each
                 </Text>
               ) : null}
             </YStack>
@@ -932,11 +1005,11 @@ function CartRow({
         {isDesktop ? (
           <YStack alignItems="flex-end" flexShrink={0} gap={2}>
             <Text fontSize={18} fontWeight="800" color={c.priceStrong}>
-              {formatCurrency(lineTotal, currency)}
+              {formatPrice(lineTotal)}
             </Text>
             {item.quantity > 1 ? (
               <Text fontSize={12} color={c.secondary}>
-                {formatCurrency(item.unit_price, currency)} each
+                {formatPrice(item.unit_price)} each
               </Text>
             ) : null}
           </YStack>

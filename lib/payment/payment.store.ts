@@ -301,6 +301,43 @@ export const logPaymentEvent = createAsyncThunk<
   return result
 })
 
+// ─── Razorpay-specific thunks ──────────────────────────────────────────────────
+
+export const validateRazorpayCredentials = createAsyncThunk<
+  paymentService.RazorpayValidateResult,
+  paymentService.RazorpayValidateInput,
+  ThunkConfig
+>('vendorPayment/validateRazorpay', (input, { rejectWithValue }) =>
+  resolveResponse(paymentService.validateRazorpayCredentials(input), rejectWithValue),
+)
+
+export const connectRazorpay = createAsyncThunk<
+  paymentService.RazorpayConnectResult,
+  paymentService.RazorpayConnectInput,
+  ThunkConfig
+>('vendorPayment/connectRazorpay', async (input, { dispatch, rejectWithValue }) => {
+  const result = await resolveResponse(
+    paymentService.connectRazorpay(input),
+    rejectWithValue,
+  )
+  // Refresh accounts so the UI reflects the new connection
+  await dispatch(loadPaymentAccounts({ shopId: input.shopId }))
+  return result
+})
+
+export const disconnectRazorpay = createAsyncThunk<
+  ShopPaymentAccount[],
+  { shopId: string },
+  ThunkConfig
+>('vendorPayment/disconnectRazorpay', async ({ shopId }, { dispatch, rejectWithValue }) => {
+  const result = await resolveResponse(
+    paymentService.disconnectRazorpay(shopId),
+    rejectWithValue,
+  )
+  await dispatch(loadPaymentAccounts({ shopId }))
+  return result
+})
+
 // ============= SLICE =============
 
 const vendorPaymentSlice = createSlice({

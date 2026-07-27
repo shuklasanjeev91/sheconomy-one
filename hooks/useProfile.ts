@@ -37,6 +37,7 @@ export type Profile = Pick<
   | 'interests'
   | 'profile_completion_percentage'
   | 'gender'
+  | 'phone'
 >
 
 const PROFILE_FETCH_TIMEOUT_MS = 2_500
@@ -124,7 +125,7 @@ export function useProfile() {
     void supabase
       .from('profiles')
       .select(
-        'id, role, full_name, username, email, avatar_url, cover_url, headline, bio, is_verified, follower_count, following_count, connections_count, location, industry, occupation, business_name, website_url, portfolio_url, interests, profile_completion_percentage, gender',
+        'id, role, full_name, username, email, phone, avatar_url, cover_url, headline, bio, is_verified, follower_count, following_count, connections_count, location, industry, occupation, business_name, website_url, portfolio_url, interests, profile_completion_percentage, gender',
       )
       .eq('id', userId)
       .maybeSingle()

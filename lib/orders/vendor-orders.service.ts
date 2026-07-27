@@ -92,7 +92,7 @@ const VENDOR_ORDER_SELECT = `
   listings (
     id,
     title,
-    listing_images ( id, image_url, is_primary, display_order )
+    listing_images ( id, image_url, is_primary, display_order, image_metadata )
   ),
   order_delivery (
     tracking_number, delivery_address, delivery_status, estimated_delivery_date
@@ -176,7 +176,7 @@ export async function getVendorOrderItem(
           profiles!user_id ( full_name, email, phone ),
           order_status_logs ( * )
         ),
-        listings ( id, title, description, listing_images ( id, image_url, is_primary, display_order ) ),
+        listings ( id, title, description, listing_images ( id, image_url, is_primary, display_order, image_metadata ) ),
         shops!vendor_id ( id, shop_name, user_id )
       `,
       )
@@ -346,7 +346,7 @@ export async function updateVendorOrderItem(
       .update({ ...filtered, updated_at: new Date().toISOString() })
       .eq('id', orderItemId)
       .select(
-        `*, orders ( id, order_number, order_status ), listings ( id, title, listing_images ( id, image_url, is_primary, display_order ) )`,
+        `*, orders ( id, order_number, order_status ), listings ( id, title, listing_images ( id, image_url, is_primary, display_order, image_metadata ) )`,
       )
       .single()
 
@@ -550,7 +550,7 @@ export async function searchVendorOrders(
         `
         *,
         orders!inner ( id, order_number, order_status, total_amount, created_at, profiles!user_id ( full_name, email ) ),
-        listings ( id, title, listing_images ( id, image_url, is_primary, display_order ) )
+        listings ( id, title, listing_images ( id, image_url, is_primary, display_order, image_metadata ) )
         `,
         { count: 'exact' },
       )

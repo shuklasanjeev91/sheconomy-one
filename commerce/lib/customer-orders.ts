@@ -14,6 +14,7 @@ import {
   type CustomerItemTrustEligibility,
   type PendingOrderSuccessSnapshot,
 } from '~/commerce/lib/customer-order-lifecycle'
+import { normalizeListingImageUrl } from '~/commerce/lib/listing-images'
 import {
   fetchRefundsForOrderItems,
   type CustomerRefundRow,
@@ -183,7 +184,7 @@ const ORDER_DETAIL_SELECT = `
       listing_status,
       stock,
       listing_type,
-      listing_images ( id, image_url, is_primary, display_order )
+      listing_images ( id, image_url, image_metadata, is_primary, display_order )
     ),
     shops:shops!vendor_id ( id, shop_name, slug, logo_url )
   ),
@@ -213,6 +214,7 @@ function primaryImageUrl(
   images:
     | Array<{
         image_url: string
+        image_metadata?: unknown
         is_primary: boolean | null
         display_order: number | null
       }>
@@ -225,7 +227,11 @@ function primaryImageUrl(
       (a.is_primary ? -1 : 0) - (b.is_primary ? -1 : 0) ||
       (a.display_order ?? 0) - (b.display_order ?? 0),
   )
-  return sorted[0]?.image_url ?? null
+  for (const image of sorted) {
+    const url = normalizeListingImageUrl(image.image_url, image.image_metadata)
+    if (url) return url
+  }
+  return null
 }
 
 function variantIdFromDetails(details: Json | null): string | null {
