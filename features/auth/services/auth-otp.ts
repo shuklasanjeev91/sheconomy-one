@@ -25,7 +25,7 @@ export async function sendAuthOtp(input: ClientSendOtpInput): Promise<SendOtpRes
   })
 
   if (error) {
-    const mapped = mapAuthErrorMessage(error.message)
+    const mapped = mapAuthErrorMessage(error.message, { code: error.code })
     return {
       success: false,
       verificationId: '',
@@ -63,7 +63,7 @@ export async function verifyAuthOtp(input: {
   )
 
   if (error) {
-    const mapped = mapAuthErrorMessage(error.message)
+    const mapped = mapAuthErrorMessage(error.message, { code: error.code })
     return { success: false, error: mapped.text, code: mapped.code }
   }
 

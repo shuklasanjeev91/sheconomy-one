@@ -91,6 +91,7 @@ const SUMMARY_WIDTH = 320
 
 export function CheckoutScreen() {
   const c = useCommercePalette()
+  const ui = useAppUi()
   const { isDesktop } = useAppLayout()
   const { user, isAuthenticated } = useProfile()
   const { cart, items: cartItems, isLoading, refresh } = useCart()
@@ -124,6 +125,7 @@ export function CheckoutScreen() {
   )
   const checkoutAttemptKey = useRef<string | null>(null)
   const [contactCheckoutReady, setContactCheckoutReady] = useState(false)
+  const [addressError, setAddressError] = useState<string | null>(null)
 
   const authContact = useMemo(() => resolveAuthContact(user), [user])
 
@@ -218,6 +220,39 @@ export function CheckoutScreen() {
     listingTypes,
     selectedItems.map((item) => item.listing_id),
   )
+
+  const checkoutAddressDraft = useMemo(
+    (): CheckoutAddressInput => ({
+      ...newAddress,
+      address_line_1: addressForm.fields.address_line_1.value.trim(),
+      address_line_2: addressForm.fields.address_line_2.value.trim(),
+    }),
+    [
+      addressForm.fields.address_line_1.value,
+      addressForm.fields.address_line_2.value,
+      newAddress,
+    ],
+  )
+
+  const addressReady = useMemo(() => {
+    if (!needsShipping) return true
+    if (useNewAddress) return !validateAddressInput(checkoutAddressDraft)
+    return Boolean(selectedAddressId)
+  }, [checkoutAddressDraft, needsShipping, selectedAddressId, useNewAddress])
+
+  const addressRequirementMessage = useMemo(() => {
+    if (!needsShipping || addressReady) return null
+    if (!useNewAddress) {
+      return addresses.length > 0
+        ? 'Select a delivery address to continue.'
+        : 'Add a delivery address to continue.'
+    }
+    return validateAddressInput(checkoutAddressDraft) ?? 'Add a delivery address to continue.'
+  }, [addressReady, addresses.length, checkoutAddressDraft, needsShipping, useNewAddress])
+
+  useEffect(() => {
+    if (addressReady) setAddressError(null)
+  }, [addressReady])
 
   const shippingQuote = useMemo(
     () =>
@@ -319,7 +354,7 @@ export function CheckoutScreen() {
 
   const currency = cart.currency ?? 'INR'
   const placeLabel = 'Place your order'
-  const canPlace = !noneSelected && !isSubmitting && contactCheckoutReady
+  const canPlace = !noneSelected && !isSubmitting && contactCheckoutReady && addressReady
   const showMobileBar = !isDesktop && !orderPlaced
 
   async function handlePlaceOrder() {
@@ -330,6 +365,12 @@ export function CheckoutScreen() {
           message: 'Add and verify a mobile number before placing your order.',
         })
       }
+      return
+    }
+    if (needsShipping && !addressReady) {
+      const message = addressRequirementMessage ?? 'Add a delivery address to continue.'
+      setAddressError(message)
+      toast.show('Delivery address required', { tone: 'warning', message })
       return
     }
     setIsSubmitting(true)
@@ -711,9 +752,11 @@ export function CheckoutScreen() {
                               if (match) {
                                 setUseNewAddress(false)
                                 setSelectedAddressId(match.id)
+                                setAddressError(null)
                                 return
                               }
                               setUseNewAddress(true)
+                              setAddressError(null)
                               setNewAddress({
                                 address_line_1: recent.address_line_1,
                                 address_line_2: recent.address_line_2 ?? '',
@@ -755,6 +798,7 @@ export function CheckoutScreen() {
                             onPress={() => {
                               setUseNewAddress(false)
                               setSelectedAddressId(address.id)
+                              setAddressError(null)
                             }}
                           >
                             <YStack paddingTop="$1">
@@ -778,7 +822,12 @@ export function CheckoutScreen() {
                   ) : null}
 
                   <XStack gap="$3" alignItems="center" flexWrap="wrap">
-                    <CommerceLink onPress={() => setUseNewAddress(true)}>
+                    <CommerceLink
+                      onPress={() => {
+                        setUseNewAddress(true)
+                        setAddressError(null)
+                      }}
+                    >
                       {addresses.length ? '+ Add a new delivery address' : '+ Add a delivery address'}
                     </CommerceLink>
                     <AppLink href={commerceRoutes.addresses} asChild>
@@ -885,6 +934,14 @@ export function CheckoutScreen() {
                     listingType={needsShipping ? 'physical' : 'digital'}
                     compact
                   />
+                  {addressError ?? addressRequirementMessage ? (
+                    <XStack alignItems="center" gap="$2" paddingTop="$1">
+                      <Icons.Info size={14} color={ui.error} />
+                      <Text fontSize={12} color={ui.error} fontWeight="600" flex={1}>
+                        {addressError ?? addressRequirementMessage}
+                      </Text>
+                    </XStack>
+                  ) : null}
                 </SectionCard>
               ) : (
                 <SectionCard step={2} title="Digital delivery">

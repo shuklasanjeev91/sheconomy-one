@@ -1,6 +1,7 @@
 import type { User } from '@supabase/supabase-js'
 
 import { mapAuthErrorMessage } from '~/features/auth/validation'
+import { canonicalE164Phone } from '~/lib/phone/phone'
 import {
   formatPhoneForDisplay,
   isValidEmail,
@@ -26,7 +27,8 @@ export type AuthContactSnapshot = {
 
 export function resolveAuthContact(user: User | null | undefined): AuthContactSnapshot {
   const email = user?.email?.trim() || null
-  const phone = user?.phone?.trim() || null
+  const phoneRaw = user?.phone?.trim() || null
+  const phone = phoneRaw ? canonicalE164Phone(phoneRaw) : null
   const phoneVerified = Boolean(phone && user?.phone_confirmed_at)
   const emailVerified = Boolean(email && user?.email_confirmed_at)
 
@@ -63,13 +65,17 @@ export async function sendCheckoutPhoneVerification(phoneE164: string): Promise<
   success: boolean
   error?: string
 }> {
-  if (!isValidPhone(phoneE164)) {
+  const canonicalPhone = canonicalE164Phone(phoneE164)
+  if (!isValidPhone(canonicalPhone)) {
     return { success: false, error: 'Enter a valid mobile number.' }
   }
 
-  const { error } = await sendAuthenticatedPhoneChangeOtp(phoneE164)
+  const { error } = await sendAuthenticatedPhoneChangeOtp(canonicalPhone)
   if (error) {
-    return { success: false, error: mapAuthErrorMessage(error.message).text }
+    return {
+      success: false,
+      error: mapAuthErrorMessage(error.message, { code: error.code }).text,
+    }
   }
   return { success: true }
 }
@@ -78,18 +84,22 @@ export async function confirmCheckoutPhoneVerification(
   phoneE164: string,
   otp: string,
 ): Promise<{ success: boolean; error?: string }> {
-  if (!isValidPhone(phoneE164)) {
+  const canonicalPhone = canonicalE164Phone(phoneE164)
+  if (!isValidPhone(canonicalPhone)) {
     return { success: false, error: 'Enter a valid mobile number.' }
   }
 
-  const { data, error } = await verifyAuthenticatedPhoneChange(phoneE164, otp)
+  const { data, error } = await verifyAuthenticatedPhoneChange(canonicalPhone, otp)
   if (error) {
-    return { success: false, error: mapAuthErrorMessage(error.message).text }
+    return {
+      success: false,
+      error: mapAuthErrorMessage(error.message, { code: error.code }).text,
+    }
   }
 
   const userId = data.user?.id
   if (userId) {
-    const profileError = await syncProfileContact(userId, { phone: phoneE164 })
+    const profileError = await syncProfileContact(userId, { phone: canonicalPhone })
     if (profileError) {
       return { success: false, error: profileError }
     }
@@ -110,7 +120,10 @@ export async function sendCheckoutEmailVerification(email: string): Promise<{
 
   const { error } = await sendAuthenticatedEmailChangeOtp(email)
   if (error) {
-    return { success: false, error: mapAuthErrorMessage(error.message).text }
+    return {
+      success: false,
+      error: mapAuthErrorMessage(error.message, { code: error.code }).text,
+    }
   }
   return { success: true }
 }
@@ -125,7 +138,10 @@ export async function confirmCheckoutEmailVerification(
 
   const { data, error } = await verifyAuthenticatedEmailChange(email, otp)
   if (error) {
-    return { success: false, error: mapAuthErrorMessage(error.message).text }
+    return {
+      success: false,
+      error: mapAuthErrorMessage(error.message, { code: error.code }).text,
+    }
   }
 
   const userId = data.user?.id
