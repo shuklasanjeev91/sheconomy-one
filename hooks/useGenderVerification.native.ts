@@ -12,6 +12,7 @@ import {
   createGenderVerificationSession,
   createGestureBlinkTracker,
   isFaceCentered,
+  markProfileVerifiedAfterGenderCheck,
   passesAntiSpoof,
   updateGestureBlinkTracker,
 } from '~/lib/gender-verification'

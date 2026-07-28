@@ -16450,6 +16450,8 @@ export type Database = {
           p_billing_address_id?: string
           p_cart_id: string
           p_cart_item_ids: string[]
+          p_customer_amounts_by_shop?: Json
+          p_customer_currency?: string
           p_gift_shop_ids?: string[]
           p_idempotency_key?: string
           p_notes_by_shop?: Json

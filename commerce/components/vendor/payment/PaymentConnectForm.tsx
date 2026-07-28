@@ -33,11 +33,15 @@ import {
 import { PROVIDER_CREDENTIAL_FIELDS } from '~/lib/payment/payment.providers.config'
 import {
   connectPaymentAccount,
+  connectRazorpay,
   disconnectPaymentAccount,
+  disconnectRazorpay,
   savePaymentCredentials,
   selectVendorPaymentLoading,
   updatePaymentSettings,
+  validateRazorpayCredentials,
 } from '~/lib/payment/payment.store'
+import { PAYMENT_PROVIDERS } from '~/lib/payment/payment.constants'
 import type { PaymentProviderConfig } from '~/lib/payment/payment.type'
 import { validateProviderCredentialForm } from '~/lib/payment/payment.validation'
 import { useAppDispatch, useAppSelector } from '~/lib/store/hooks'
@@ -95,6 +99,7 @@ export function PaymentConnectForm({
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({})
   const [revealedFields, setRevealedFields] = useState<Record<string, boolean>>({})
   const [testPassed, setTestPassed] = useState<boolean | null>(null)
+  const [isValidating, setIsValidating] = useState(false)
   const [loadingExisting, setLoadingExisting] = useState(connected && showCredentialForm)
 
   useEffect(() => {
@@ -147,14 +152,60 @@ export function PaymentConnectForm({
     if (canOpen) await Linking.openURL(url)
   }
 
-  function runValidationCheck() {
+  async function runValidationCheck() {
+    // Always run local field validation first
     const payload = { ...credentials, webhook_url: webhookUrl }
-    const result = validateProviderCredentialForm(provider.id, payload)
-    setFieldErrors(result.errors)
-    setTestPassed(result.isValid)
-    toast.show(result.isValid ? PAYMENT_UI_COPY.testSuccess : PAYMENT_UI_COPY.testFailed, {
-      tone: result.isValid ? 'success' : 'danger',
-    })
+    const localResult = validateProviderCredentialForm(provider.id, payload)
+    if (!localResult.isValid) {
+      setFieldErrors(localResult.errors)
+      setTestPassed(false)
+      toast.show(PAYMENT_UI_COPY.testFailed, { tone: 'danger' })
+      return
+    }
+    setFieldErrors({})
+
+    // For Razorpay: make a real API call to verify credentials against Razorpay
+    if (provider.id === PAYMENT_PROVIDERS.RAZORPAY) {
+      const keyId = credentials.key_id?.trim() ?? ''
+      const keySecret = credentials.key_secret?.trim() ?? ''
+      if (!keyId || !keySecret) {
+        setTestPassed(false)
+        toast.show(PAYMENT_UI_COPY.testFailed, { tone: 'danger', message: 'Key ID and Key Secret are required.' })
+        return
+      }
+
+      setIsValidating(true)
+      setTestPassed(null)
+      try {
+        const result = await dispatch(
+          validateRazorpayCredentials({
+            shopId,
+            keyId,
+            keySecret,
+            mode: (mode === 'live' ? 'live' : 'test') as 'test' | 'live',
+          }),
+        ).unwrap()
+
+        setTestPassed(true)
+        toast.show(
+          `${PAYMENT_UI_COPY.testSuccess} · ${result.maskedKeyId ?? keyId.slice(0, 12) + '…'}`,
+          { tone: 'success' },
+        )
+      } catch (error) {
+        setTestPassed(false)
+        toast.show(PAYMENT_UI_COPY.testFailed, {
+          tone: 'danger',
+          message: toFriendlyPaymentError(error),
+        })
+      } finally {
+        setIsValidating(false)
+      }
+      return
+    }
+
+    // Generic providers: local validation only
+    setTestPassed(true)
+    toast.show(PAYMENT_UI_COPY.testSuccess, { tone: 'success' })
   }
 
   async function handleConnect() {
@@ -191,22 +242,36 @@ export function PaymentConnectForm({
     const { webhook_url: webhookValue, ...credentialValues } = payload
 
     try {
-      await dispatch(
-        savePaymentCredentials({
-          shopId,
-          provider: provider.id,
-          credentials: credentialValues,
-          mode,
-        }),
-      ).unwrap()
-
-      if (webhookValue?.trim()) {
+      if (provider.id === PAYMENT_PROVIDERS.RAZORPAY) {
+        // Razorpay uses encrypted edge function (BYOK — credentials never stored plain-text)
         await dispatch(
-          updatePaymentSettings({
+          connectRazorpay({
             shopId,
-            settings: { webhook_url: webhookValue.trim() },
+            keyId: credentialValues.key_id?.trim() ?? '',
+            keySecret: credentialValues.key_secret?.trim() ?? '',
+            webhookSecret: credentialValues.webhook_secret?.trim() || undefined,
+            webhookUrl: webhookValue?.trim() || undefined,
+            mode: (mode === 'live' ? 'live' : 'test') as 'test' | 'live',
           }),
         ).unwrap()
+      } else {
+        await dispatch(
+          savePaymentCredentials({
+            shopId,
+            provider: provider.id,
+            credentials: credentialValues,
+            mode,
+          }),
+        ).unwrap()
+
+        if (webhookValue?.trim()) {
+          await dispatch(
+            updatePaymentSettings({
+              shopId,
+              settings: { webhook_url: webhookValue.trim() },
+            }),
+          ).unwrap()
+        }
       }
 
       toast.show(PAYMENT_UI_COPY.connectSuccess, { tone: 'success' })
@@ -222,7 +287,11 @@ export function PaymentConnectForm({
 
   async function handleDisconnect() {
     try {
-      await dispatch(disconnectPaymentAccount({ shopId, provider: provider.id })).unwrap()
+      if (provider.id === PAYMENT_PROVIDERS.RAZORPAY) {
+        await dispatch(disconnectRazorpay({ shopId })).unwrap()
+      } else {
+        await dispatch(disconnectPaymentAccount({ shopId, provider: provider.id })).unwrap()
+      }
       toast.show(PAYMENT_UI_COPY.disconnectSuccess, { tone: 'success' })
       onConnected?.()
       onClose()
@@ -504,16 +573,30 @@ export function PaymentConnectForm({
                   tone="outline"
                   size="$3"
                   borderRadius={999}
-                  icon={<Icons.FlaskConical size={15} color={ui.brand} />}
-                  onPress={runValidationCheck}
+                  disabled={isValidating}
+                  icon={
+                    isValidating ? (
+                      <Spinner size="small" />
+                    ) : (
+                      <Icons.FlaskConical size={15} color={ui.brand} />
+                    )
+                  }
+                  onPress={() => void runValidationCheck()}
                 >
-                  {PAYMENT_UI_COPY.runTest}
+                  {isValidating ? 'Validating…' : PAYMENT_UI_COPY.runTest}
                 </Button>
                 {testPassed === true ? (
                   <XStack gap="$2" alignItems="center">
                     <Icons.CheckCircle2 size={16} color={ui.success} />
                     <Text fontSize={12} color={ui.success}>
                       {PAYMENT_UI_COPY.testSuccess}
+                    </Text>
+                  </XStack>
+                ) : testPassed === false ? (
+                  <XStack gap="$2" alignItems="center">
+                    <Icons.XCircle size={16} color={ui.danger} />
+                    <Text fontSize={12} color={ui.danger}>
+                      {PAYMENT_UI_COPY.testFailed}
                     </Text>
                   </XStack>
                 ) : null}

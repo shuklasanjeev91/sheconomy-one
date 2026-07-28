@@ -20,6 +20,26 @@ export async function createGenderVerificationSession(requiredBlinks = GENDER_VE
   return { sessionId: data as string, error: null as string | null }
 }
 
+/** Gender liveness RPC sets `gender` — flip `is_verified` so the app-wide prompt stays hidden. */
+export async function markProfileVerifiedAfterGenderCheck() {
+  const {
+    data: { user },
+    error: authError,
+  } = await supabase.auth.getUser()
+
+  if (authError || !user) {
+    return { ok: false as const, error: authError?.message ?? 'Not authenticated' }
+  }
+
+  const { error } = await supabase.from('profiles').update({ is_verified: true }).eq('id', user.id)
+
+  if (error) {
+    return { ok: false as const, error: error.message }
+  }
+
+  return { ok: true as const, error: null as string | null }
+}
+
 export async function completeGenderVerificationSession(input: {
   sessionId: string
   detectedBlinks: number
@@ -43,6 +63,20 @@ export async function completeGenderVerificationSession(input: {
   // RPC returns `{ ok: true }` on success; keep legacy keys for older backends.
   const ok =
     payload?.ok === true || payload?.success === true || payload?.verified === true
+
+  if (ok) {
+    const { ok: profileUpdated, error: profileError } = await markProfileVerifiedAfterGenderCheck()
+    if (!profileUpdated) {
+      return {
+        result: {
+          ok: false,
+          message: profileError ?? 'Could not update verification status on your profile.',
+          verified: false,
+        } satisfies CompleteVerificationResult,
+        error: null as string | null,
+      }
+    }
+  }
 
   return {
     result: {

@@ -692,6 +692,147 @@ export function getPaymentLogStatusOptions(): PaymentFilterOption[] {
 
 export { buildDefaultPaymentSettings }
 
+// ============= RAZORPAY CREDENTIAL EDGE FUNCTIONS =============
+
+export type RazorpayValidateInput = {
+  shopId: string
+  keyId: string
+  keySecret: string
+  mode: 'test' | 'live'
+}
+
+export type RazorpayValidateResult = {
+  valid: boolean
+  maskedKeyId?: string
+  mode?: string
+  error?: string
+}
+
+export type RazorpayConnectInput = {
+  shopId: string
+  keyId: string
+  keySecret: string
+  webhookSecret?: string
+  webhookUrl?: string
+  mode: 'test' | 'live'
+}
+
+export type RazorpayConnectResult = {
+  success: boolean
+  maskedKeyId?: string
+  status?: string
+  mode?: string
+  error?: string
+}
+
+export type RazorpayCreateOrderInput = {
+  shopId: string
+  amount: number
+  currency?: string
+  receipt: string
+  notes?: Record<string, string>
+}
+
+export type RazorpayCreateOrderResult = {
+  razorpayOrderId: string
+  keyId: string
+  amount: number
+  currency: string
+  mode: string
+  error?: string
+}
+
+export type RazorpayVerifyPaymentInput = {
+  shopId: string
+  razorpayOrderId: string
+  razorpayPaymentId: string
+  razorpaySignature: string
+}
+
+export type RazorpayVerifyPaymentResult = {
+  verified: boolean
+  paymentId?: string
+  error?: string
+}
+
+async function callEdgeFunction<T>(
+  functionName: string,
+  body: Record<string, unknown>,
+): Promise<T> {
+  const { data, error } = await supabase.functions.invoke<T>(functionName, { body })
+  if (error) throw error
+  return data as T
+}
+
+export async function validateRazorpayCredentials(
+  input: RazorpayValidateInput,
+): Promise<PaymentServiceResponse<RazorpayValidateResult>> {
+  try {
+    const result = await callEdgeFunction<RazorpayValidateResult>('razorpay-validate', input)
+    if (!result.valid) {
+      return fail<RazorpayValidateResult>(result.error ?? 'Validation failed')
+    }
+    return ok(result)
+  } catch (error) {
+    return fail<RazorpayValidateResult>(error, 'Could not validate Razorpay credentials.')
+  }
+}
+
+export async function connectRazorpay(
+  input: RazorpayConnectInput,
+): Promise<PaymentServiceResponse<RazorpayConnectResult>> {
+  try {
+    const result = await callEdgeFunction<RazorpayConnectResult>('razorpay-connect', input)
+    if (!result.success) {
+      return fail<RazorpayConnectResult>(result.error ?? 'Connection failed')
+    }
+    return ok(result)
+  } catch (error) {
+    return fail<RazorpayConnectResult>(error, 'Could not connect Razorpay account.')
+  }
+}
+
+export async function disconnectRazorpay(
+  shopId: string,
+): Promise<PaymentServiceResponse<ShopPaymentAccount[]>> {
+  try {
+    const { error } = await supabase.functions.invoke('razorpay-disconnect', { body: { shopId } })
+    if (error) throw error
+    // Return the updated account list for the Redux store
+    return getPaymentAccounts(shopId, 'razorpay')
+  } catch (error) {
+    return fail<ShopPaymentAccount[]>(error, 'Could not disconnect Razorpay account.')
+  }
+}
+
+export async function createRazorpayOrder(
+  input: RazorpayCreateOrderInput,
+): Promise<PaymentServiceResponse<RazorpayCreateOrderResult>> {
+  try {
+    const result = await callEdgeFunction<RazorpayCreateOrderResult>('razorpay-create-order', input)
+    if (!result.razorpayOrderId) {
+      return fail<RazorpayCreateOrderResult>((result as { error?: string }).error ?? 'Order creation failed')
+    }
+    return ok(result)
+  } catch (error) {
+    return fail<RazorpayCreateOrderResult>(error, 'Could not create Razorpay order.')
+  }
+}
+
+export async function verifyRazorpayPayment(
+  input: RazorpayVerifyPaymentInput,
+): Promise<PaymentServiceResponse<RazorpayVerifyPaymentResult>> {
+  try {
+    const result = await callEdgeFunction<RazorpayVerifyPaymentResult>('razorpay-verify-payment', input)
+    if (!result.verified) {
+      return fail<RazorpayVerifyPaymentResult>(result.error ?? 'Payment verification failed')
+    }
+    return ok(result)
+  } catch (error) {
+    return fail<RazorpayVerifyPaymentResult>(error, 'Payment verification failed.')
+  }
+}
+
 /** Keep checkout routing (`shop_commerce_settings`) aligned when a vendor connects a gateway. */
 async function syncShopCommercePaymentRouting(input: {
   shopId: string

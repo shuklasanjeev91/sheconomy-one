@@ -46,6 +46,9 @@ import { formatOrderAmount, formatOrderDate } from '~/lib/orders/order.utils'
 import type { OrderAddressSummary } from '~/lib/orders/vendor-orders.type'
 import { openExternalUrl } from '~/lib/platform/openUrl'
 import { commerceRoutes } from '~/lib/routes'
+import {
+  formatCustomerContactPhone,
+} from '~/features/auth/services/account-contact'
 import { useProfile } from '~/hooks/useProfile'
 import { useAppUi } from '~/lib/theme/useAppUi'
 import { useAppLayout } from '~/hooks/useAppLayout'
@@ -78,7 +81,7 @@ export function OrderDetailScreen({ orderId }: OrderDetailScreenProps) {
   const toast = useAppToast()
   const router = useRouter()
   const { isDesktopWeb } = useAppLayout()
-  const { user } = useProfile()
+  const { user, profile } = useProfile()
   const { addToCart } = useCart()
   const [order, setOrder] = useState<CustomerOrderDetail | null>(null)
   const [isLoading, setIsLoading] = useState(true)
@@ -203,6 +206,10 @@ export function OrderDetailScreen({ orderId }: OrderDetailScreenProps) {
   async function handleInvoice() {
     if (!order || !user) return
     setInvoicing(true)
+    const customerPhoneLabel = formatCustomerContactPhone({
+      authUser: user,
+      profilePhone: profile?.phone,
+    })
     const result = await shareCustomerOrderInvoice(
       {
         orderNumber: order.order_number,
@@ -210,10 +217,12 @@ export function OrderDetailScreen({ orderId }: OrderDetailScreenProps) {
         currency: order.currency,
         shopName: order.shop_name,
         customerName:
+          profile?.full_name?.trim() ||
           (typeof user.user_metadata?.full_name === 'string' && user.user_metadata.full_name) ||
           user.email ||
           'Customer',
-        customerEmail: user.email ?? null,
+        customerEmail: profile?.email?.trim() || user.email || null,
+        customerPhone: customerPhoneLabel !== 'Not added' ? customerPhoneLabel : null,
         shippingAddress: order.shipping_address,
         subtotalAmount: order.subtotal_amount,
         discountAmount: order.discount_amount,
@@ -391,10 +400,10 @@ export function OrderDetailScreen({ orderId }: OrderDetailScreenProps) {
                       >
                         {item.image_url ? (
                           <Image
-                            source={{ uri: item.image_url }}
+                            src={item.image_url}
                             width={64}
                             height={64}
-                            resizeMode="cover"
+                            objectFit="cover"
                           />
                         ) : (
                           <Icons.Image size={22} color={ui.textMuted} />

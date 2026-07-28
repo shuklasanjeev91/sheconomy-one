@@ -8,6 +8,7 @@ import { supabase } from '~/lib/supabase/client'
 
 import { DEFAULT_COUNTRY, type Country } from '~/lib/phone/countries'
 import {
+  canonicalE164Phone,
   formatPhoneForDisplay as formatPhoneDisplay,
   isValidPhone as isValidNationalPhone,
   normalizePhoneNumber as normalizeE164,
@@ -137,7 +138,7 @@ export async function verifyOtp(
 }
 
 function resolveE164Phone(phone: string | PhoneAuthInput): string {
-  if (typeof phone === 'string') return normalizeE164(phone)
+  if (typeof phone === 'string') return canonicalE164Phone(phone)
   const result = validateNationalPhone(phone.nationalNumber, phone.country)
   return result.ok ? result.e164 : ''
 }

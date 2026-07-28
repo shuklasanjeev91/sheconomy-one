@@ -9,6 +9,7 @@ import { commerceRoutes, vendorRoutes } from '~/lib/routes'
 import { useAppSelector } from '~/lib/store/hooks'
 import { useAppUi } from '~/lib/theme/useAppUi'
 
+import { VendorBulkImportDrawer } from '~/commerce/screens/vendor/VendorBulkImportDrawer'
 import { VendorListingDetailDrawer } from '~/commerce/screens/vendor/VendorListingDetailDrawer'
 import { VendorListingsProductsTab } from '~/commerce/screens/vendor/VendorListingsProductsTab'
 import { VendorListingsSectionsTab } from '~/commerce/screens/vendor/VendorListingsSectionsTab'
@@ -25,6 +26,8 @@ export function VendorListingsScreen() {
 
   const [activeTab, setActiveTab] = useState<InventoryTab>('product')
   const [selectedListingId, setSelectedListingId] = useState<string | null>(null)
+  const [bulkImportOpen, setBulkImportOpen] = useState(false)
+  const [productsRefreshKey, setProductsRefreshKey] = useState(0)
 
   if (!shop && (isLoadingMyShops || !myShopsLoaded)) {
     return (
@@ -85,11 +88,22 @@ export function VendorListingsScreen() {
           </YStack>
 
           {activeTab !== 'section' ? (
-            <Link href={vendorRoutes.createListing} asChild>
-              <Button tone="primary" size="$3" borderRadius={999} icon={<Icons.Plus size={16} />}>
-                Add Product
+            <XStack gap="$2" flexWrap="wrap">
+              <Button
+                tone="outline"
+                size="$3"
+                borderRadius={999}
+                icon={<Icons.Upload size={16} />}
+                onPress={() => setBulkImportOpen(true)}
+              >
+                Import
               </Button>
-            </Link>
+              <Link href={vendorRoutes.createListing} asChild>
+                <Button tone="primary" size="$3" borderRadius={999} icon={<Icons.Plus size={16} />}>
+                  Add Product
+                </Button>
+              </Link>
+            </XStack>
           ) : null}
         </XStack>
 
@@ -101,6 +115,7 @@ export function VendorListingsScreen() {
             shopId={shop.id}
             currencyInfo={currencyInfo}
             isDesktop={isDesktop}
+            refreshKey={productsRefreshKey}
             onOpenListing={setSelectedListingId}
           />
         ) : (
@@ -121,6 +136,16 @@ export function VendorListingsScreen() {
         isDesktop={isDesktop}
         safeBottom={safeBottom}
         onClose={() => setSelectedListingId(null)}
+      />
+
+      <VendorBulkImportDrawer
+        ui={ui}
+        open={bulkImportOpen}
+        isDesktop={isDesktop}
+        shopId={shop.id}
+        safeBottom={safeBottom}
+        onClose={() => setBulkImportOpen(false)}
+        onImportComplete={() => setProductsRefreshKey((key) => key + 1)}
       />
     </>
   )

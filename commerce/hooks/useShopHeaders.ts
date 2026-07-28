@@ -5,6 +5,7 @@ import { supabase } from '~/lib/supabase/client'
 /** Buyer-facing shop header info surfaced in cart/checkout shop groups. */
 export type ShopHeaderInfo = {
   shopId: string
+  shopCurrency: string
   rating: number | null
   reviews: number
   verified: boolean
@@ -17,12 +18,13 @@ async function fetchShopHeaders(shopIds: string[]): Promise<Map<string, ShopHead
 
   const { data } = await supabase
     .from('shops')
-    .select('id, average_rating, total_reviews, verified')
+    .select('id, shop_currency, average_rating, total_reviews, verified')
     .in('id', unique)
 
   for (const row of data ?? []) {
     result.set(row.id, {
       shopId: row.id,
+      shopCurrency: row.shop_currency?.trim() || 'INR',
       rating: typeof row.average_rating === 'number' ? row.average_rating : null,
       reviews: row.total_reviews ?? 0,
       verified: !!row.verified,

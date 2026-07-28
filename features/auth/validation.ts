@@ -33,12 +33,38 @@ export function isCompleteOtp(value: string, length = 6): boolean {
   return new RegExp(`^\\d{${length}}$`).test(value.trim())
 }
 
+export type AuthErrorCode =
+  | 'invalid'
+  | 'expired'
+  | 'rate_limited'
+  | 'network'
+  | 'phone_exists'
+  | 'email_exists'
+  | 'unknown'
+
 /** Map user-facing auth errors without exposing internals or OTP values. */
-export function mapAuthErrorMessage(message: string | null | undefined): {
+export function mapAuthErrorMessage(
+  message: string | null | undefined,
+  options?: { code?: string | null },
+): {
   text: string
-  code: 'invalid' | 'expired' | 'rate_limited' | 'network' | 'unknown'
+  code: AuthErrorCode
 } {
   const raw = (message ?? '').toLowerCase()
+  const errorCode = (options?.code ?? '').toLowerCase()
+
+  if (errorCode === 'phone_exists' || raw.includes('phone number has already been registered')) {
+    return {
+      text: 'A user with this phone number has already been registered.',
+      code: 'phone_exists',
+    }
+  }
+  if (errorCode === 'email_exists' || raw.includes('email address has already been registered')) {
+    return {
+      text: 'A user with this email address has already been registered.',
+      code: 'email_exists',
+    }
+  }
   if (!raw) return { text: 'Something went wrong. Please try again.', code: 'unknown' }
   if (raw.includes('expired') || raw.includes('otp_expired')) {
     return { text: 'This code has expired. Request a new one.', code: 'expired' }
@@ -47,15 +73,19 @@ export function mapAuthErrorMessage(message: string | null | undefined): {
     return { text: 'Too many attempts. Please wait and try again.', code: 'rate_limited' }
   }
   if (
-    raw.includes('invalid') ||
-    raw.includes('token') ||
-    raw.includes('otp') ||
-    raw.includes('code')
+    raw.includes('invalid otp') ||
+    raw.includes('otp expired') ||
+    raw.includes('invalid token') ||
+    raw.includes('token has expired') ||
+    (raw.includes('invalid') && raw.includes('code'))
   ) {
     return { text: 'That code is incorrect. Please try again.', code: 'invalid' }
   }
   if (raw.includes('network') || raw.includes('fetch') || raw.includes('offline')) {
     return { text: 'You appear to be offline. Check your connection and retry.', code: 'network' }
+  }
+  if (message?.trim()) {
+    return { text: message.trim(), code: 'unknown' }
   }
   return { text: 'Unable to continue right now. Please try again.', code: 'unknown' }
 }

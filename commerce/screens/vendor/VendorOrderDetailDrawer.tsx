@@ -19,6 +19,7 @@ import { useLockBodyScroll } from '~/hooks/useLockBodyScroll'
 import { useVendorCurrency } from '~/hooks/useVendorCurrency'
 import { overlayBackdropStyle } from '~/lib/layout/styles'
 import { shareOrderInvoice } from '~/lib/orders/order-invoice'
+import { formatCustomerContactPhone } from '~/features/auth/services/account-contact'
 import type { EnrichedOrderIssue } from '~/lib/orders/order-issue.type'
 import { openMailtoLink } from '~/lib/platform/openMailto'
 import { formatOrderAmount, formatOrderDate } from '~/lib/orders/order.utils'
@@ -204,6 +205,10 @@ function DrawerBody({
   const { resolveCurrency } = useVendorCurrency()
   const currency = resolveCurrency(order?.currency)
   const customer = order?.profiles
+  const customerPhoneLabel = useMemo(
+    () => formatCustomerContactPhone({ profilePhone: customer?.phone }),
+    [customer?.phone],
+  )
   const address = item.billing_address ?? order?.billing_address ?? null
   const lines = addressLines(address)
   const actions = useMemo(() => getVendorOrderActions(item.item_status, role), [item.item_status, role])
@@ -343,8 +348,8 @@ function DrawerBody({
               {customer?.email ? (
                 <ContactLine ui={ui} icon={Icons.Mail} value={customer.email} />
               ) : null}
-              {customer?.phone ? (
-                <ContactLine ui={ui} icon={Icons.Phone} value={customer.phone} />
+              {customerPhoneLabel !== 'Not added' ? (
+                <ContactLine ui={ui} icon={Icons.Phone} value={customerPhoneLabel} />
               ) : null}
             </YStack>
           </XStack>

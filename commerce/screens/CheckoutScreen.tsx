@@ -2,7 +2,7 @@ import { useRouter } from 'one'
 import { SpaRedirect } from '~/components/navigation/SpaRedirect'
 import { AppLink } from '~/components/navigation/AppLink'
 import type { ReactNode } from 'react'
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
 import {
   Field,
@@ -61,7 +61,13 @@ import { ensureCartDiscountValidForCheckout, toCartOfferItems } from '~/commerce
 import { cartRequiresShipping, fetchListingTypesByIds } from '~/commerce/lib/listing-fulfillment'
 import { paymentCollectionFor } from '~/commerce/lib/shop-commerce'
 import { deliveryEstimateLabel } from '~/commerce/lib/delivery-estimate'
-import { formatCurrency } from '~/lib/format'
+import {
+  buildCustomerAmountsByShop,
+  computeCheckoutDisplayTotals,
+  computeShopDisplaySubtotal,
+  shopCurrencyFor,
+} from '~/commerce/lib/checkout-display-pricing'
+import { useFormatCurrency } from '~/hooks/useFormatCurrency'
 import { useFormValidation } from '~/hooks/useFormValidation'
 import { useProfile } from '~/hooks/useProfile'
 import { openExternalUrl } from '~/lib/platform/openUrl'
@@ -91,8 +97,10 @@ const SUMMARY_WIDTH = 320
 
 export function CheckoutScreen() {
   const c = useCommercePalette()
+  const ui = useAppUi()
   const { isDesktop } = useAppLayout()
   const { user, isAuthenticated } = useProfile()
+  const { formatMoney, convertMoney, preferredCurrency } = useFormatCurrency()
   const { cart, items: cartItems, isLoading, refresh } = useCart()
   const { items, isChecking } = useStorefrontCartItems(cartItems)
   const toast = useAppToast()
@@ -124,6 +132,7 @@ export function CheckoutScreen() {
   )
   const checkoutAttemptKey = useRef<string | null>(null)
   const [contactCheckoutReady, setContactCheckoutReady] = useState(false)
+  const [addressError, setAddressError] = useState<string | null>(null)
 
   const authContact = useMemo(() => resolveAuthContact(user), [user])
 
@@ -219,6 +228,61 @@ export function CheckoutScreen() {
     selectedItems.map((item) => item.listing_id),
   )
 
+  const checkoutAddressDraft = useMemo(
+    (): CheckoutAddressInput => ({
+      ...newAddress,
+      address_line_1: addressForm.fields.address_line_1.value.trim(),
+      address_line_2: addressForm.fields.address_line_2.value.trim(),
+    }),
+    [
+      addressForm.fields.address_line_1.value,
+      addressForm.fields.address_line_2.value,
+      newAddress,
+    ],
+  )
+
+  const addressReady = useMemo(() => {
+    if (!needsShipping) return true
+    if (useNewAddress) return !validateAddressInput(checkoutAddressDraft)
+    return Boolean(selectedAddressId)
+  }, [checkoutAddressDraft, needsShipping, selectedAddressId, useNewAddress])
+
+  const addressRequirementMessage = useMemo(() => {
+    if (!needsShipping || addressReady) return null
+    if (!useNewAddress) {
+      return addresses.length > 0
+        ? 'Select a delivery address to continue.'
+        : 'Add a delivery address to continue.'
+    }
+    if (
+      addresses.length === 0 &&
+      !checkoutAddressDraft.address_line_1.trim() &&
+      !checkoutAddressDraft.city.trim()
+    ) {
+      return 'Add a delivery address to continue.'
+    }
+    return validateAddressInput(checkoutAddressDraft) ?? 'Add a delivery address to continue.'
+  }, [addressReady, addresses.length, checkoutAddressDraft, needsShipping, useNewAddress])
+
+  const deliveryAddressNotice = addressError ?? addressRequirementMessage
+
+  useEffect(() => {
+    if (addressReady) setAddressError(null)
+  }, [addressReady])
+
+  useEffect(() => {
+    setAddressError(null)
+  }, [
+    checkoutAddressDraft.address_line_1,
+    checkoutAddressDraft.address_line_2,
+    checkoutAddressDraft.city,
+    checkoutAddressDraft.state,
+    checkoutAddressDraft.postal_code,
+    checkoutAddressDraft.country,
+    selectedAddressId,
+    useNewAddress,
+  ])
+
   const shippingQuote = useMemo(
     () =>
       computeCheckoutShippingQuote({
@@ -236,6 +300,69 @@ export function CheckoutScreen() {
   const shopIds = useMemo(() => (shopIdsKey ? shopIdsKey.split(',') : []), [shopIdsKey])
   const { partners: shopPartners } = useShopPartners(shopIds)
   const shopHeaders = useShopHeaders(shopIds)
+  const settlementCurrency = cart?.currency ?? 'INR'
+  const shopCurrencies = useMemo(() => {
+    const map = new Map<string, string>()
+    for (const [shopId, header] of shopHeaders) {
+      map.set(shopId, header.shopCurrency)
+    }
+    return map
+  }, [shopHeaders])
+
+  const displayTotals = useMemo(
+    () =>
+      computeCheckoutDisplayTotals({
+        selectedItems,
+        subtotal,
+        discount,
+        shippingQuote,
+        needsShipping,
+        shopCurrencies,
+        convertMoney,
+        settlementCurrency,
+      }),
+    [
+      convertMoney,
+      discount,
+      needsShipping,
+      selectedItems,
+      settlementCurrency,
+      shippingQuote,
+      shopCurrencies,
+      subtotal,
+    ],
+  )
+
+  const customerAmountsByShop = useMemo(
+    () =>
+      buildCustomerAmountsByShop({
+        selectedItems,
+        subtotal,
+        discount,
+        shippingQuote,
+        shopCurrencies,
+        convertMoney,
+        settlementCurrency,
+      }),
+    [
+      convertMoney,
+      discount,
+      selectedItems,
+      settlementCurrency,
+      shippingQuote,
+      shopCurrencies,
+      subtotal,
+    ],
+  )
+
+  const formatCheckoutMoney = useCallback(
+    (amount: number, sourceCurrency?: string | null) =>
+      formatMoney(amount, sourceCurrency ?? preferredCurrency, {
+        convert: sourceCurrency ? undefined : false,
+      }),
+    [formatMoney, preferredCurrency],
+  )
+
   const multiShop = orderShops.length > 1
 
   // Group shops by who collects the money. Every SHEPay shop can be collected in a
@@ -317,10 +444,33 @@ export function CheckoutScreen() {
     return <SpaRedirect href={commerceRoutes.home} />
   }
 
-  const currency = cart.currency ?? 'INR'
+  const showSettlementCurrencyNote = preferredCurrency !== settlementCurrency
   const placeLabel = 'Place your order'
-  const canPlace = !noneSelected && !isSubmitting && contactCheckoutReady
+  const canPlace =
+    !noneSelected &&
+    !isSubmitting &&
+    !isLoadingAddresses &&
+    contactCheckoutReady &&
+    addressReady
   const showMobileBar = !isDesktop && !orderPlaced
+
+  function handlePlaceOrderPress() {
+    if (needsShipping && !addressReady) {
+      const message = addressRequirementMessage ?? 'Add a delivery address to continue.'
+      setAddressError(message)
+      toast.show('Delivery address required', { tone: 'warning', message })
+      return
+    }
+    if (!contactCheckoutReady) {
+      toast.show('Verify your mobile', {
+        tone: 'warning',
+        message: 'Add and verify a mobile number before placing your order.',
+      })
+      return
+    }
+    if (!canPlace) return
+    void handlePlaceOrder()
+  }
 
   async function handlePlaceOrder() {
     if (!cart || !user || noneSelected || !contactCheckoutReady) {
@@ -330,6 +480,12 @@ export function CheckoutScreen() {
           message: 'Add and verify a mobile number before placing your order.',
         })
       }
+      return
+    }
+    if (needsShipping && !addressReady) {
+      const message = addressRequirementMessage ?? 'Add a delivery address to continue.'
+      setAddressError(message)
+      toast.show('Delivery address required', { tone: 'warning', message })
       return
     }
     setIsSubmitting(true)
@@ -441,6 +597,8 @@ export function CheckoutScreen() {
         giftShopIds: Object.entries(giftByShop)
           .filter(([, enabled]) => enabled)
           .map(([shopId]) => shopId),
+        customerCurrency: preferredCurrency,
+        customerAmountsByShop: customerAmountsByShop,
       })
       if (result.error || !result.data) {
         toast.show('Checkout failed', {
@@ -548,7 +706,7 @@ export function CheckoutScreen() {
       }
 
       trackCommerceEvent('purchase', {
-        currency,
+        currency: settlementCurrency,
         value: orderTotal,
         transactionId: orderNumbers[0] ?? orderIds[0] ?? cart.id,
         items: selectedItems.map((item) => ({
@@ -577,9 +735,32 @@ export function CheckoutScreen() {
   }
 
   const placeButton = (
-    <CommerceButton variant="primary" width="100%" disabled={!canPlace} onPress={handlePlaceOrder}>
-      {isSubmitting ? 'Placing…' : placeLabel}
-    </CommerceButton>
+    <YStack gap="$2" width="100%">
+      {needsShipping && deliveryAddressNotice ? (
+        <XStack
+          alignItems="center"
+          gap="$2"
+          padding="$2"
+          borderRadius={8}
+          borderWidth={1}
+          borderColor={ui.error}
+          backgroundColor={ui.roseSurface}
+        >
+          <Icons.Info size={14} color={ui.error} />
+          <Text fontSize={12} color={ui.error} fontWeight="600" flex={1}>
+            {deliveryAddressNotice}
+          </Text>
+        </XStack>
+      ) : null}
+      <CommerceButton
+        variant="primary"
+        width="100%"
+        disabled={!canPlace}
+        onPress={handlePlaceOrderPress}
+      >
+        {isSubmitting ? 'Placing…' : placeLabel}
+      </CommerceButton>
+    </YStack>
   )
 
   const orderSummary = (
@@ -602,14 +783,17 @@ export function CheckoutScreen() {
       <Text fontSize={17} fontWeight="700" color={c.text}>
         Order summary
       </Text>
-      <SummaryRow label={`Items (${unitCount})`} value={formatCurrency(subtotal, currency)} />
+      <SummaryRow
+        label={`Items (${unitCount})`}
+        value={formatCheckoutMoney(displayTotals.itemsSubtotal)}
+      />
       <SummaryRow
         label="Delivery"
         value={
           needsShipping
-            ? shippingQuote.shippingTotal <= 0
+            ? displayTotals.shipping <= 0
               ? 'FREE'
-              : formatCurrency(shippingQuote.shippingTotal, currency)
+              : formatCheckoutMoney(displayTotals.shipping)
             : 'FREE'
         }
         valueColor={c.inStock}
@@ -617,7 +801,7 @@ export function CheckoutScreen() {
       {discount > 0 ? (
         <SummaryRow
           label={`Promotion${cart.applied_discount_name ? ` (${cart.applied_discount_name})` : ''}`}
-          value={`−${formatCurrency(discount, currency)}`}
+          value={`−${formatCheckoutMoney(displayTotals.promotion)}`}
           valueColor={c.inStock}
         />
       ) : null}
@@ -628,9 +812,15 @@ export function CheckoutScreen() {
           Order total:
         </Text>
         <Text fontSize={18} fontWeight="700" color={c.priceStrong}>
-          {formatCurrency(orderTotal, currency)}
+          {formatCheckoutMoney(displayTotals.orderTotal)}
         </Text>
       </XStack>
+      {showSettlementCurrencyNote ? (
+        <Text fontSize={11} color={c.secondary} lineHeight={15}>
+          Prices shown in {preferredCurrency}. You will be charged in {settlementCurrency} at
+          payment.
+        </Text>
+      ) : null}
       {multiShop ? (
         <Text fontSize={11} color={c.secondary} lineHeight={15}>
           {paymentGroups.direct.length
@@ -690,6 +880,14 @@ export function CheckoutScreen() {
 
               {needsShipping ? (
                 <SectionCard step={2} title="Delivery address">
+                  {addresses.length === 0 ? (
+                    <XStack alignItems="center" gap="$2">
+                      <Icons.Info size={14} color={ui.badgeAccentText} />
+                      <Text fontSize={13} color={ui.badgeAccentText} fontWeight="600" flex={1}>
+                        Add a delivery address to ship this order.
+                      </Text>
+                    </XStack>
+                  ) : null}
                   {recentAddresses.length > 0 ? (
                     <YStack gap="$2">
                       <Text fontSize={12} fontWeight="600" color={c.secondary}>
@@ -711,9 +909,11 @@ export function CheckoutScreen() {
                               if (match) {
                                 setUseNewAddress(false)
                                 setSelectedAddressId(match.id)
+                                setAddressError(null)
                                 return
                               }
                               setUseNewAddress(true)
+                              setAddressError(null)
                               setNewAddress({
                                 address_line_1: recent.address_line_1,
                                 address_line_2: recent.address_line_2 ?? '',
@@ -755,6 +955,7 @@ export function CheckoutScreen() {
                             onPress={() => {
                               setUseNewAddress(false)
                               setSelectedAddressId(address.id)
+                              setAddressError(null)
                             }}
                           >
                             <YStack paddingTop="$1">
@@ -778,9 +979,27 @@ export function CheckoutScreen() {
                   ) : null}
 
                   <XStack gap="$3" alignItems="center" flexWrap="wrap">
-                    <CommerceLink onPress={() => setUseNewAddress(true)}>
+                    <CommerceLink
+                      onPress={() => {
+                        setUseNewAddress(true)
+                        setAddressError(null)
+                      }}
+                    >
                       {addresses.length ? '+ Add a new delivery address' : '+ Add a delivery address'}
                     </CommerceLink>
+                    {addresses.length > 0 && useNewAddress ? (
+                      <CommerceLink
+                        onPress={() => {
+                          setUseNewAddress(false)
+                          setSelectedAddressId(
+                            addresses.find((row) => row.is_default)?.id ?? addresses[0]?.id ?? null,
+                          )
+                          setAddressError(null)
+                        }}
+                      >
+                        Choose a saved address
+                      </CommerceLink>
+                    ) : null}
                     <AppLink href={commerceRoutes.addresses} asChild>
                       <Text fontSize={13} color={c.link} cursor="pointer">
                         Manage addresses
@@ -885,6 +1104,14 @@ export function CheckoutScreen() {
                     listingType={needsShipping ? 'physical' : 'digital'}
                     compact
                   />
+                  {deliveryAddressNotice ? (
+                    <XStack alignItems="center" gap="$2" paddingTop="$1">
+                      <Icons.Info size={14} color={ui.error} />
+                      <Text fontSize={12} color={ui.error} fontWeight="600" flex={1}>
+                        {deliveryAddressNotice}
+                      </Text>
+                    </XStack>
+                  ) : null}
                 </SectionCard>
               ) : (
                 <SectionCard step={2} title="Digital delivery">
@@ -971,9 +1198,11 @@ export function CheckoutScreen() {
 
                 {orderShops.map((shop, index) => {
                   const shopItems = selectedItems.filter((item) => item.shop_id === shop.shopId)
-                  const shopSubtotal = shopItems.reduce(
-                    (sum, item) => sum + item.unit_price * item.quantity,
-                    0,
+                  const shopSubtotal = computeShopDisplaySubtotal(
+                    shopItems,
+                    shopCurrencies,
+                    convertMoney,
+                    settlementCurrency,
                   )
                   return (
                     <YStack
@@ -1027,7 +1256,10 @@ export function CheckoutScreen() {
                             </Text>
                           </YStack>
                           <Text fontSize={14} fontWeight="700" color={c.priceStrong}>
-                            {formatCurrency(item.unit_price * item.quantity, currency)}
+                            {formatMoney(
+                              item.unit_price * item.quantity,
+                              shopCurrencyFor(item.shop_id, shopCurrencies, settlementCurrency),
+                            )}
                           </Text>
                         </XStack>
                       ))}
@@ -1035,7 +1267,7 @@ export function CheckoutScreen() {
                         <Text fontSize={12} color={c.secondary}>
                           Shop subtotal:{' '}
                           <Text fontWeight="700" color={c.text}>
-                            {formatCurrency(shopSubtotal, currency)}
+                            {formatCheckoutMoney(shopSubtotal)}
                           </Text>
                         </Text>
                       </XStack>
@@ -1092,14 +1324,16 @@ export function CheckoutScreen() {
     <YStack flex={1} width="100%" position="relative">
       {checkoutLayout}
       <CommerceMobileCheckoutBar
-        total={orderTotal}
-        currency={currency}
+        total={displayTotals.orderTotal}
+        currency={preferredCurrency}
+        formattedTotal={formatCheckoutMoney(displayTotals.orderTotal)}
+        formattedSavings={displayTotals.promotion > 0 ? formatCheckoutMoney(displayTotals.promotion) : null}
         caption={`Order total · ${unitCount} ${unitCount === 1 ? 'item' : 'items'}`}
-        savings={discount || null}
+        savings={displayTotals.promotion > 0 ? displayTotals.promotion : null}
         label={placeLabel}
         disabled={!canPlace}
         isLoading={isSubmitting}
-        onPress={handlePlaceOrder}
+        onPress={handlePlaceOrderPress}
       />
     </YStack>
   )

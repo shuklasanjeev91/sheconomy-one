@@ -593,9 +593,7 @@ function TrackingForm({ ui, item, submitting, onClose, onSubmit }: TrackingFormP
                 Send an automated email with tracking details.
               </Text>
             </YStack>
-            <Switch checked={notifyCustomer} onCheckedChange={setNotifyCustomer}>
-              <Switch.Thumb />
-            </Switch>
+            <Switch checked={notifyCustomer} onCheckedChange={setNotifyCustomer} />
           </XStack>
         </YStack>
       </ScrollView>
