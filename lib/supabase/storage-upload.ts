@@ -371,7 +371,7 @@ export async function uploadShopLogoImage(
   return uploadStorageObject(STORAGE_BUCKETS.shopImages, path, file.blob, file.mimeType, options)
 }
 
-/** Upload a user selfie / room photo for Gemini visual preview (private bucket). */
+/** Upload a user selfie / room photo for visual preview (private bucket). */
 export async function uploadVisualPreviewInput(
   userId: string,
   file: { blob: Blob; mimeType: string; fileName?: string },

@@ -81,7 +81,7 @@ export function CreateGroupScreen() {
       return
     }
     await clearFormDraft(GROUP_DRAFT_KEY)
-    router.replace(communityRoutes.group(data.id))
+    router.push(communityRoutes.group(data.id))
   }
 
   return (

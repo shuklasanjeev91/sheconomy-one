@@ -1,5 +1,4 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { useRouter } from 'one'
 import { AppLink } from '~/components/navigation/AppLink'
 
 import { CommercePageHeader, CommercePanel } from '~/commerce/components'
@@ -52,6 +51,7 @@ import {
 import { useProfile } from '~/hooks/useProfile'
 import { useAppUi } from '~/lib/theme/useAppUi'
 import { useAppLayout } from '~/hooks/useAppLayout'
+import { navigateApp, replaceApp } from '~/lib/platform/navigate'
 
 function addressLines(address: OrderAddressSummary | null | undefined): string[] {
   if (!address) return []
@@ -79,7 +79,6 @@ type OrderDetailScreenProps = {
 export function OrderDetailScreen({ orderId }: OrderDetailScreenProps) {
   const ui = useAppUi()
   const toast = useAppToast()
-  const router = useRouter()
   const { isDesktopWeb } = useAppLayout()
   const { user, profile } = useProfile()
   const { addToCart } = useCart()
@@ -171,7 +170,7 @@ export function OrderDetailScreen({ orderId }: OrderDetailScreenProps) {
             ? `${skipped.length} item(s) couldn’t be added.`
             : undefined,
       })
-      router.push(commerceRoutes.cart)
+      navigateApp(commerceRoutes.cart)
       return
     }
 
@@ -299,7 +298,7 @@ export function OrderDetailScreen({ orderId }: OrderDetailScreenProps) {
             tone="primary"
             size="$3"
             borderRadius={999}
-            onPress={() => router.replace(commerceRoutes.orders)}
+            onPress={() => replaceApp(commerceRoutes.orders)}
           >
             Back to orders
           </Button>

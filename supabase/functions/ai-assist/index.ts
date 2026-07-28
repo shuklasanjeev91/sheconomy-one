@@ -91,11 +91,14 @@ function productPlaybook(product: AiProduct): string {
       ].join('\n')
     case 'cowork':
       return [
-        'Co-Work playbook:',
-        '- Host from /co-work; share meeting code/link with guests.',
-        '- Join with code on Co-Work home; allow camera/mic in browser/system settings.',
-        '- AV blocked: grant permissions, refresh, check another device/headset.',
-        '- Invite via meeting invite flow; upcoming hosted meetings appear in grounding facts.',
+        'Co-Work playbook (support-trained):',
+        '- Schedule a meeting: open /co-work/schedule (Create with AI accepts natural language like “weekly sync tomorrow 11am”).',
+        '- Instant host: start from /co-work, then share the meeting code or /co-work/meeting/{code} link.',
+        '- Join: /co-work/join or enter the code on /co-work; allow camera/mic in browser + system settings.',
+        '- After scheduling: copy code/link, invite guests, open lobby when it is time.',
+        '- AV blocked: grant permissions, refresh, try another browser/device/headset.',
+        '- Upcoming hosted meetings appear in grounding facts — never invent codes or times.',
+        '- When the user asks to schedule/book a meeting, guide them to /co-work/schedule with a concrete draft (title, time, next step). Do NOT only say “no upcoming meetings”.',
       ].join('\n')
     default:
       return [
@@ -171,10 +174,13 @@ function detectIntent(product: AiProduct, message: string): Intent {
     }
   }
   if (
-    /\b(meeting|co-work|cowork|camera|mic|microphone|host|join code)\b/.test(lower) ||
+    /\b(meeting|co-work|cowork|camera|mic|microphone|host|join code|schedule)\b/.test(lower) ||
     product === 'cowork'
   ) {
-    if (product === 'cowork' || /\b(meeting|co-work|cowork|camera|mic|host)\b/.test(lower)) {
+    if (
+      product === 'cowork' ||
+      /\b(meeting|co-work|cowork|camera|mic|host|schedule|session|call|sync)\b/.test(lower)
+    ) {
       return 'cowork'
     }
   }
@@ -229,8 +235,10 @@ function productDeepLinks(product: AiProduct, searchQuery?: string | null): Deep
       ]
     case 'cowork':
       return [
-        { label: 'Co-Work', href: '/co-work' },
-        { label: 'Host FAQ', href: '/help?product=cowork&article=host-meeting' },
+        { label: 'Schedule meeting', href: '/co-work/schedule' },
+        { label: 'Co-Work home', href: '/co-work' },
+        { label: 'Join with code', href: '/co-work/join' },
+        { label: 'Schedule FAQ', href: '/help?product=cowork&article=schedule-meeting' },
         { label: 'Help Center', href: helpHref(product) },
       ]
     case 'shop':
@@ -374,18 +382,57 @@ function expandSearchTerms(query: string): string[] {
 async function searchListingsForQuery(
   service: SupabaseClient,
   query: string,
-): Promise<Array<{ title: string; slug: string; price: number | string | null }>> {
-  const terms = expandSearchTerms(query)
+  options?: {
+    limit?: number
+    minPrice?: number | null
+    maxPrice?: number | null
+    listingType?: string | null
+  },
+): Promise<Array<{ id: string; title: string; slug: string; price: number | string | null }>> {
+  const trimmed = query.trim()
+  if (!trimmed) return []
+  const limit = options?.limit ?? 8
+
+  const { data: rpcRows, error: rpcError } = await service.rpc('search_listings', {
+    p_search_term: trimmed,
+    p_limit: limit,
+    p_offset: 0,
+    p_listing_type: options?.listingType ?? null,
+    p_min_price: options?.minPrice ?? null,
+    p_max_price: options?.maxPrice ?? null,
+  })
+
+  if (!rpcError && Array.isArray(rpcRows) && rpcRows.length) {
+    const ids = rpcRows
+      .map((row: { id?: string }) => (typeof row?.id === 'string' ? row.id : ''))
+      .filter(Boolean)
+    if (ids.length) {
+      const { data: listings } = await service
+        .from('listings')
+        .select('id, title, slug, price')
+        .in('id', ids)
+        .eq('is_active', true)
+      const byId = new Map((listings ?? []).map((row) => [row.id, row]))
+      return ids
+        .map((id) => byId.get(id))
+        .filter((row): row is { id: string; title: string; slug: string; price: number | string | null } =>
+          Boolean(row?.slug && row?.title),
+        )
+    }
+  }
+
+  // Fallback: title ilike across expanded terms (legacy chat path).
+  const terms = expandSearchTerms(trimmed)
   if (!terms.length) return []
 
   const orFilter = terms.map((t) => `title.ilike.%${t.replace(/[%_,]/g, '')}%`).join(',')
   const { data, error } = await service
     .from('listings')
-    .select('title, slug, price')
+    .select('id, title, slug, price')
     .eq('is_active', true)
     .or(orFilter)
     .order('created_at', { ascending: false })
-    .limit(5)
+    .limit(limit)
 
   if (error) {
     console.error('listing search error:', error.message)
@@ -513,7 +560,9 @@ async function buildGrounding(
     } else {
       facts.push('No upcoming hosted meetings.')
     }
-    facts.push('Co-Work tips: host/join at /co-work; share meeting code; allow camera/mic permissions.')
+    facts.push(
+      'Co-Work tips: schedule at /co-work/schedule (AI draft supported); host/join at /co-work; share meeting code or /co-work/meeting/{code}; allow camera/mic permissions.',
+    )
   }
 
   if (product === 'shop') {
@@ -628,7 +677,54 @@ async function buildGrounding(
   return facts
 }
 
-/** Grounded in-app assistant used when OpenAI is unavailable or errors. */
+function wantsScheduleMeeting(message: string): boolean {
+  const lower = message.toLowerCase()
+  const hasMeeting =
+    /\b(meeting|co-?work|session|call|sync|huddle|standup|stand-up)\b/.test(lower) ||
+    /\bschedule\b/.test(lower)
+  const hasScheduleVerb =
+    /\b(schedule|book|set\s*up|setup|plan|create|arrange|organize|host)\b/.test(lower)
+  const hasWhen =
+    /\b(tomorrow|today|tonight|next\s+(mon|tue|wed|thu|fri|sat|sun)|monday|tuesday|wednesday|thursday|friday|saturday|sunday|\d{1,2}\s*(am|pm)|morning|afternoon|evening)\b/.test(
+      lower,
+    )
+  if (hasScheduleVerb && (hasMeeting || hasWhen)) return true
+  if (hasMeeting && hasWhen) return true
+  return false
+}
+
+function formatMeetingDraftReply(draft: {
+  title: string
+  description: string
+  scheduledAt: string | null
+  maxParticipants: number | null
+  agenda: string[]
+}): string {
+  const when = draft.scheduledAt
+    ? new Date(draft.scheduledAt).toLocaleString('en-IN', {
+        weekday: 'short',
+        month: 'short',
+        day: 'numeric',
+        hour: 'numeric',
+        minute: '2-digit',
+      })
+    : 'a time you choose on the schedule form'
+  const agenda =
+    draft.agenda.length > 0
+      ? ` Agenda: ${draft.agenda.map((item, i) => `${i + 1}) ${item}`).join('; ')}.`
+      : ''
+  return [
+    `I drafted a Co-Work meeting for you: “${draft.title}” around ${when}.`,
+    draft.description ? `${draft.description.slice(0, 160)}.` : null,
+    agenda.trim() || null,
+    'Open Schedule meeting to review the title/time, then create it and share the code/link with guests.',
+    'Tip: on /co-work/schedule you can also use Create with AI for another draft.',
+  ]
+    .filter(Boolean)
+    .join(' ')
+}
+
+/** Grounded in-app assistant used when Gemini is unavailable or errors. */
 function fallbackReply(product: AiProduct, message: string, facts: string[]): string {
   const lower = message.toLowerCase()
   const intent = detectIntent(product, message)
@@ -746,12 +842,28 @@ function fallbackReply(product: AiProduct, message: string, facts: string[]): st
     if (lower.includes('camera') || lower.includes('mic')) {
       return `Allow camera/mic in browser + system settings, then refresh the meeting. Join/host from /co-work. Help: ${helpHref('cowork')}`
     }
+    if (wantsScheduleMeeting(message)) {
+      const draftFact = facts.find((f) => f.startsWith('Suggested meeting draft:'))
+      if (draftFact) {
+        return `${draftFact.replace(/^Suggested meeting draft:\s*/, '')} Open /co-work/schedule to create it and share the code/link. Help: ${helpHref('cowork')}`
+      }
+      return [
+        'To schedule a Co-Work meeting for tomorrow (or any time): open /co-work/schedule.',
+        'Use Create with AI — e.g. “team sync tomorrow at 11am” — then review title/time and create.',
+        'After creating, share the meeting code or /co-work/meeting/{code} link.',
+        meetingFact ? `${meetingFact}.` : null,
+        'Help: ' + helpHref('cowork'),
+      ]
+        .filter(Boolean)
+        .join(' ')
+    }
     if (lower.includes('join') || lower.includes('code')) {
-      return `On /co-work, enter the meeting code to join. Ask the host if you don’t have a code. Help: ${helpHref('cowork')}`
+      return `On /co-work or /co-work/join, enter the meeting code to join. Ask the host if you don’t have a code. Help: ${helpHref('cowork')}`
     }
     return [
       meetingFact ? `${meetingFact}.` : 'No upcoming hosted meetings right now.',
-      'Host a meeting from /co-work and share the code/link. Help: ' + helpHref('cowork'),
+      'To schedule one, open /co-work/schedule (or host instantly from /co-work) and share the code/link. Help: ' +
+        helpHref('cowork'),
     ].join(' ')
   }
 
@@ -783,13 +895,13 @@ function fallbackReply(product: AiProduct, message: string, facts: string[]): st
         'Try: “enroll in a class” or “video won’t play”.',
       ].join(' ')
     case 'cowork':
-      return 'I can help host/join meetings and fix camera/mic. Open /co-work — try: “host a meeting” or “join with code”.'
+      return 'I can help schedule, host, or join Co-Work meetings and fix camera/mic. Try: “schedule a meeting for tomorrow at 11am”, “host a meeting”, or “join with code”. Open /co-work/schedule or /co-work.'
     default:
       return `I can help across Marketplace, Community, Chat, Class, Co-Work, and Manage shop. Ask a product question, or open ${help}.`
   }
 }
 
-type OpenAICallResult = {
+type LlmCallResult = {
   answer: string | null
   model: string | null
   error: string | null
@@ -812,11 +924,10 @@ function normalizeApiKey(raw: string | undefined | null): string {
   return key
 }
 
-function collectApiKeys(): Array<{ source: string; key: string }> {
+function collectGeminiApiKeys(): Array<{ source: string; key: string }> {
   const candidates: Array<{ source: string; env: string }> = [
-    // Prefer project-specific key when both exist (OPENAI_API_KEY may be stale).
-    { source: 'SHECONOMY_OPENAI_API_KEY', env: 'SHECONOMY_OPENAI_API_KEY' },
-    { source: 'OPENAI_API_KEY', env: 'OPENAI_API_KEY' },
+    { source: 'GEMINI_API_KEY', env: 'GEMINI_API_KEY' },
+    { source: 'GOOGLE_AI_API_KEY', env: 'GOOGLE_AI_API_KEY' },
   ]
   const seen = new Set<string>()
   const keys: Array<{ source: string; key: string }> = []
@@ -829,26 +940,124 @@ function collectApiKeys(): Array<{ source: string; key: string }> {
   return keys
 }
 
-async function callOpenAIOnce(
+function preferredGeminiModels(): string[] {
+  const preferred =
+    Deno.env.get('GEMINI_MODEL')?.trim() ||
+    Deno.env.get('GOOGLE_AI_MODEL')?.trim() ||
+    'gemini-2.5-flash'
+  return [
+    ...new Set([
+      preferred,
+      'gemini-2.5-flash',
+      'gemini-2.0-flash',
+      'gemini-2.5-pro',
+      'gemini-flash-latest',
+      'gemini-2.0-flash-lite',
+    ]),
+  ]
+}
+
+/** Flash-first list for vision describe (cheaper / less quota pressure than Pro). */
+function preferredVisionModels(): string[] {
+  const preferred =
+    Deno.env.get('GEMINI_VISION_MODEL')?.trim() ||
+    Deno.env.get('GEMINI_MODEL')?.trim() ||
+    'gemini-2.5-flash'
+  return [
+    ...new Set([
+      preferred,
+      'gemini-2.5-flash',
+      'gemini-2.0-flash',
+      'gemini-2.0-flash-lite',
+      'gemini-2.5-pro',
+      'gemini-flash-latest',
+    ]),
+  ]
+}
+
+type GeminiPart =
+  | { text: string }
+  | { inlineData: { mimeType: string; data: string } }
+
+type GeminiContent = {
+  role: 'user' | 'model'
+  parts: GeminiPart[]
+}
+
+/** Gemini requires alternating user/model turns — merge consecutive same-role messages. */
+function toGeminiContents(
+  history: ChatMessageRow[],
+  userMessage: string,
+  extraUserParts: GeminiPart[] = [],
+): GeminiContent[] {
+  const contents: GeminiContent[] = []
+
+  const push = (role: 'user' | 'model', parts: GeminiPart[]) => {
+    const last = contents[contents.length - 1]
+    if (last && last.role === role) {
+      last.parts.push(...parts)
+      return
+    }
+    contents.push({ role, parts })
+  }
+
+  for (const message of history.slice(-12)) {
+    const text = String(message.content ?? '').trim()
+    if (!text) continue
+    push(message.role === 'assistant' ? 'model' : 'user', [{ text }])
+  }
+
+  const userParts: GeminiPart[] = [{ text: userMessage }, ...extraUserParts]
+  push('user', userParts)
+
+  // API requires the first content to be from the user.
+  if (contents.length && contents[0].role !== 'user') {
+    contents.unshift({ role: 'user', parts: [{ text: 'Continue.' }] })
+  }
+
+  return contents
+}
+
+function extractGeminiText(payload: unknown): string | null {
+  const candidates = (payload as { candidates?: Array<{ content?: { parts?: Array<{ text?: string }> } }> })
+    ?.candidates
+  if (!Array.isArray(candidates) || !candidates.length) return null
+  for (const candidate of candidates) {
+    const parts = candidate?.content?.parts
+    if (!Array.isArray(parts)) continue
+    const text = parts
+      .map((part) => (typeof part?.text === 'string' ? part.text : ''))
+      .join('')
+      .trim()
+    if (text) return text
+  }
+  return null
+}
+
+async function callGeminiOnce(
   apiKey: string,
   model: string,
-  messages: Array<{ role: string; content: unknown }>,
+  systemPrompt: string,
+  contents: GeminiContent[],
+  options?: { jsonMode?: boolean; maxOutputTokens?: number; temperature?: number },
 ): Promise<{ answer: string | null; error: string | null }> {
-  const baseUrl = (Deno.env.get('OPENAI_BASE_URL')?.trim() || 'https://api.openai.com/v1').replace(
-    /\/$/,
-    '',
-  )
-  const response = await fetch(`${baseUrl}/chat/completions`, {
+  const url = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent?key=${encodeURIComponent(apiKey)}`
+  const generationConfig: Record<string, unknown> = {
+    temperature: options?.temperature ?? 0.4,
+    maxOutputTokens: options?.maxOutputTokens ?? 4096,
+  }
+  if (options?.jsonMode) {
+    generationConfig.responseMimeType = 'application/json'
+  }
+  const response = await fetch(url, {
     method: 'POST',
-    headers: {
-      Authorization: `Bearer ${apiKey}`,
-      'Content-Type': 'application/json',
-    },
+    headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
-      model,
-      temperature: 0.4,
-      max_tokens: 700,
-      messages,
+      systemInstruction: {
+        parts: [{ text: systemPrompt }],
+      },
+      contents,
+      generationConfig,
     }),
   })
 
@@ -856,51 +1065,46 @@ async function callOpenAIOnce(
     const text = await response.text()
     let detail = text.slice(0, 400)
     try {
-      const parsed = JSON.parse(text) as { error?: { message?: string; code?: string; type?: string } }
-      detail = parsed?.error?.message || parsed?.error?.code || parsed?.error?.type || detail
+      const parsed = JSON.parse(text) as { error?: { message?: string; status?: string; code?: number } }
+      detail = parsed?.error?.message || parsed?.error?.status || detail
     } catch {
       // keep raw slice
     }
-    console.error('OpenAI error:', response.status, detail)
+    console.error('Gemini error:', response.status, detail)
     return { answer: null, error: `${response.status}: ${detail}` }
   }
 
   const payload = await response.json()
-  const content = payload?.choices?.[0]?.message?.content
-  if (typeof content === 'string' && content.trim()) {
-    return { answer: content.trim(), error: null }
+  const content = extractGeminiText(payload)
+  if (content) return { answer: content, error: null }
+  const blockReason =
+    (payload as { promptFeedback?: { blockReason?: string } })?.promptFeedback?.blockReason ||
+    (payload as { candidates?: Array<{ finishReason?: string }> })?.candidates?.[0]?.finishReason
+  return {
+    answer: null,
+    error: blockReason ? `blocked:${blockReason}` : 'empty_completion',
   }
-  return { answer: null, error: 'empty_completion' }
 }
 
-async function callOpenAI(
+async function callGemini(
   systemPrompt: string,
   history: ChatMessageRow[],
   userMessage: string,
-): Promise<OpenAICallResult> {
-  const keys = collectApiKeys()
+): Promise<LlmCallResult> {
+  const keys = collectGeminiApiKeys()
   if (!keys.length) {
-    console.warn('ai-assist: no OpenAI API key set — using fallback replies')
-    return { answer: null, model: null, error: 'missing_openai_api_key', keySource: null }
+    console.warn('ai-assist: no Gemini API key set — using fallback replies')
+    return { answer: null, model: null, error: 'missing_gemini_api_key', keySource: null }
   }
 
-  const messages = [
-    { role: 'system', content: systemPrompt },
-    ...history.slice(-12).map((m) => ({
-      role: m.role === 'assistant' ? 'assistant' : 'user',
-      content: m.content,
-    })),
-    { role: 'user', content: userMessage },
-  ]
-
-  const preferredModel = Deno.env.get('OPENAI_MODEL')?.trim() || 'gpt-4o-mini'
-  const models = [...new Set([preferredModel, 'gpt-4o-mini', 'gpt-4o'])]
+  const contents = toGeminiContents(history, userMessage)
+  const models = preferredGeminiModels()
 
   let lastError: string | null = null
   for (const { source, key } of keys) {
     for (const model of models) {
       try {
-        const result = await callOpenAIOnce(key, model, messages)
+        const result = await callGeminiOnce(key, model, systemPrompt, contents)
         if (result.answer) {
           return { answer: result.answer, model, error: null, keySource: source }
         }
@@ -908,13 +1112,106 @@ async function callOpenAI(
         // Invalid key → try next key. Model errors → try next model with same key.
         if (result.error?.startsWith('401') || result.error?.startsWith('403')) break
       } catch (err) {
-        lastError = err instanceof Error ? err.message : 'openai_fetch_failed'
-        console.error('OpenAI fetch failed:', lastError)
+        lastError = err instanceof Error ? err.message : 'gemini_fetch_failed'
+        console.error('Gemini fetch failed:', lastError)
       }
     }
   }
 
   return { answer: null, model: null, error: lastError, keySource: keys[0]?.source ?? null }
+}
+
+function parseDataUrl(dataUrl: string): { mimeType: string; data: string } | null {
+  const match = /^data:([^;]+);base64,(.+)$/i.exec(dataUrl.trim())
+  if (!match) return null
+  return { mimeType: match[1], data: match[2] }
+}
+
+async function callGeminiVision(
+  systemPrompt: string,
+  imageDataUrl: string,
+  userMessage = 'Moderate this listing image.',
+  options?: { jsonMode?: boolean },
+): Promise<LlmCallResult> {
+  const keys = collectGeminiApiKeys()
+  if (!keys.length) {
+    return { answer: null, model: null, error: 'missing_gemini_api_key', keySource: null }
+  }
+
+  const parsed = parseDataUrl(imageDataUrl)
+  if (!parsed) {
+    return { answer: null, model: null, error: 'invalid_image_data_url', keySource: null }
+  }
+
+  // Cap inline image size (~2.5MB base64) to stay within edge + Gemini limits.
+  if (parsed.data.length > 3_500_000) {
+    return { answer: null, model: null, error: 'image_too_large', keySource: null }
+  }
+
+  const contents = toGeminiContents([], userMessage, [
+    { inlineData: { mimeType: parsed.mimeType, data: parsed.data } },
+  ])
+  const models = preferredVisionModels()
+
+  let lastError: string | null = null
+  for (const { source, key } of keys) {
+    for (const model of models) {
+      try {
+        const result = await callGeminiOnce(key, model, systemPrompt, contents, {
+          jsonMode: options?.jsonMode,
+          maxOutputTokens: 1024,
+          temperature: 0.2,
+        })
+        if (result.answer) {
+          return { answer: result.answer, model, error: null, keySource: source }
+        }
+        lastError = result.error
+        if (result.error?.startsWith('401') || result.error?.startsWith('403')) break
+        // Hard quota — no point hammering every model with the same exhausted key.
+        if (/429|RESOURCE_EXHAUSTED|quota|limit:\s*0|denied access/i.test(String(result.error))) {
+          continue
+        }
+      } catch (err) {
+        lastError = err instanceof Error ? err.message : 'gemini_fetch_failed'
+      }
+    }
+  }
+
+  return { answer: null, model: null, error: lastError, keySource: keys[0]?.source ?? null }
+}
+
+function visionFailureMessage(error: string | null): { error: string; status: number } {
+  const detail = String(error ?? '')
+  if (/missing_gemini_api_key/i.test(detail)) {
+    return {
+      error: 'Image search is not configured. Set a Google AI API key on the server.',
+      status: 503,
+    }
+  }
+  if (/image_too_large|invalid_image/i.test(detail)) {
+    return {
+      error: 'That photo is too large or invalid. Try a smaller, clearer product shot.',
+      status: 400,
+    }
+  }
+  if (/403|denied access/i.test(detail)) {
+    return {
+      error:
+        'Image search is unavailable for this AI project (access denied). Check Google AI Studio billing/permissions, or type your search instead.',
+      status: 503,
+    }
+  }
+  if (/429|RESOURCE_EXHAUSTED|quota|limit:\s*0|free_tier|billing/i.test(detail)) {
+    return {
+      error:
+        'AI image search is out of quota right now. Wait a bit, enable billing in Google AI Studio, or type what you are looking for instead.',
+      status: 429,
+    }
+  }
+  return {
+    error: 'Could not identify the product in that photo. Try a clearer product shot, or type your search.',
+    status: 502,
+  }
 }
 
 function localCommentSuggestionList(ctx: {
@@ -1096,45 +1393,93 @@ function parseModerateImageJson(
   }
 }
 
-async function callOpenAIVision(
-  systemPrompt: string,
-  imageDataUrl: string,
-): Promise<OpenAICallResult> {
-  const keys = collectApiKeys()
-  if (!keys.length) {
-    return { answer: null, model: null, error: 'missing_openai_api_key', keySource: null }
-  }
-
-  const preferredModel = Deno.env.get('OPENAI_MODEL')?.trim() || 'gpt-4o-mini'
-  const models = [...new Set([preferredModel, 'gpt-4o-mini', 'gpt-4o'])]
-  const messages = [
-    { role: 'system', content: systemPrompt },
-    {
-      role: 'user',
-      content: [
-        { type: 'text', text: 'Moderate this listing image.' },
-        { type: 'image_url', image_url: { url: imageDataUrl } },
-      ],
-    },
-  ]
-
-  let lastError: string | null = null
-  for (const { source, key } of keys) {
-    for (const model of models) {
-      try {
-        const result = await callOpenAIOnce(key, model, messages)
-        if (result.answer) {
-          return { answer: result.answer, model, error: null, keySource: source }
-        }
-        lastError = result.error
-        if (result.error?.startsWith('401') || result.error?.startsWith('403')) break
-      } catch (err) {
-        lastError = err instanceof Error ? err.message : 'openai_fetch_failed'
-      }
+function parseDescribeSearchImageJson(
+  raw: string | null,
+): { query: string; category: string | null; attributes: string[] } | null {
+  if (!raw) return null
+  const trimmed = raw
+    .trim()
+    .replace(/^```json\s*/i, '')
+    .replace(/^```\s*/i, '')
+    .replace(/```$/i, '')
+  try {
+    const parsed = JSON.parse(trimmed) as Record<string, unknown>
+    const query = typeof parsed.query === 'string' ? parsed.query.trim() : ''
+    if (!query) return null
+    const category =
+      typeof parsed.category === 'string' && parsed.category.trim()
+        ? parsed.category.trim()
+        : null
+    const attributes = Array.isArray(parsed.attributes)
+      ? parsed.attributes.map((item) => String(item).trim()).filter(Boolean).slice(0, 8)
+      : []
+    return { query: query.slice(0, 120), category, attributes }
+  } catch {
+    // Fallback: treat plain text as the query.
+    const plain = trimmed.replace(/^["']|["']$/g, '').trim()
+    if (plain.length >= 2 && plain.length <= 120 && !plain.includes('{')) {
+      return { query: plain, category: null, attributes: [] }
     }
+    return null
   }
+}
 
-  return { answer: null, model: null, error: lastError, keySource: keys[0]?.source ?? null }
+function parseAiSearchJson(
+  raw: string | null,
+): {
+  searchTerm: string
+  category: string | null
+  minPrice: number | null
+  maxPrice: number | null
+  listingType: 'physical' | 'digital' | null
+  rationale: string
+} | null {
+  if (!raw) return null
+  const trimmed = raw
+    .trim()
+    .replace(/^```json\s*/i, '')
+    .replace(/^```\s*/i, '')
+    .replace(/```$/i, '')
+  try {
+    const parsed = JSON.parse(trimmed) as Record<string, unknown>
+    const searchTerm =
+      typeof parsed.searchTerm === 'string'
+        ? parsed.searchTerm.trim()
+        : typeof parsed.query === 'string'
+          ? parsed.query.trim()
+          : ''
+    if (!searchTerm) return null
+    const minPrice =
+      typeof parsed.minPrice === 'number' && Number.isFinite(parsed.minPrice)
+        ? parsed.minPrice
+        : null
+    const maxPrice =
+      typeof parsed.maxPrice === 'number' && Number.isFinite(parsed.maxPrice)
+        ? parsed.maxPrice
+        : null
+    const listingType =
+      parsed.listingType === 'physical' || parsed.listingType === 'digital'
+        ? parsed.listingType
+        : null
+    const category =
+      typeof parsed.category === 'string' && parsed.category.trim()
+        ? parsed.category.trim()
+        : null
+    const rationale =
+      typeof parsed.rationale === 'string' && parsed.rationale.trim()
+        ? parsed.rationale.trim().slice(0, 280)
+        : `Showing results for “${searchTerm}”.`
+    return {
+      searchTerm: searchTerm.slice(0, 120),
+      category,
+      minPrice,
+      maxPrice,
+      listingType,
+      rationale,
+    }
+  } catch {
+    return null
+  }
 }
 
 function fallbackMeetingDraft(prompt: string, _timeZone: string) {
@@ -1329,7 +1674,7 @@ Deno.serve(async (req) => {
         .filter(Boolean)
         .join('\n')
 
-      const completion = await callOpenAI(
+      const completion = await callGemini(
         systemPrompt,
         [],
         'Generate comment suggestions as a JSON string array.',
@@ -1359,7 +1704,7 @@ Deno.serve(async (req) => {
         'If the user mentions a relative time (tomorrow, Friday 3pm), resolve scheduledAt in ISO.',
       ].join('\n')
 
-      const completion = await callOpenAI(systemPrompt, [], prompt)
+      const completion = await callGemini(systemPrompt, [], prompt)
       const parsed = parseMeetingDraftJson(completion.answer)
       if (parsed) {
         return json({ ...parsed, usedFallback: false, product: 'cowork' })
@@ -1384,7 +1729,7 @@ Deno.serve(async (req) => {
         `Compose mode: ${composeMode}.`,
       ].join('\n')
 
-      const completion = await callOpenAI(systemPrompt, [], prompt)
+      const completion = await callGemini(systemPrompt, [], prompt)
       const parsed = parsePostDraftJson(completion.answer)
       if (parsed?.content) {
         return json({ ...parsed, usedFallback: false, product: 'community' })
@@ -1420,7 +1765,7 @@ Deno.serve(async (req) => {
         .filter(Boolean)
         .join('\n')
 
-      const completion = await callOpenAI(systemPrompt, [], prompt)
+      const completion = await callGemini(systemPrompt, [], prompt)
       const parsed = parseShopDraftJson(completion.answer)
       if (parsed && parsed.names.length) {
         return json({
@@ -1474,7 +1819,32 @@ Deno.serve(async (req) => {
       const shoppingQuery = extractShoppingQuery(message)
       const intent = detectIntent(product, message)
       const effectiveProduct = resolveEffectiveProduct(product, intent, shoppingQuery)
+      const scheduleRequested = wantsScheduleMeeting(message)
+      const timeZone =
+        typeof context.time_zone === 'string' && context.time_zone
+          ? context.time_zone
+          : 'Asia/Kolkata'
+
+      let meetingDraft: ReturnType<typeof fallbackMeetingDraft> | null = null
+      if (scheduleRequested) {
+        const draftSystem = [
+          'You draft professional video-meeting details like Zoom / Google Calendar AI.',
+          'Return ONLY JSON with keys: title (string), description (string), scheduledAt (ISO 8601 string or null), maxParticipants (number or null), agenda (string array).',
+          'Prefer practical titles. Agenda should be 3 short bullets.',
+          `User timezone: ${timeZone}. Current time UTC: ${new Date().toISOString()}.`,
+          'If the user mentions a relative time (tomorrow, Friday 3pm), resolve scheduledAt in ISO.',
+        ].join('\n')
+        const draftCompletion = await callGemini(draftSystem, [], message)
+        meetingDraft =
+          parseMeetingDraftJson(draftCompletion.answer) ?? fallbackMeetingDraft(message, timeZone)
+      }
+
       const facts = await buildGrounding(service, userId, effectiveProduct, context, message)
+      if (meetingDraft) {
+        facts.push(
+          `Suggested meeting draft: title="${meetingDraft.title}"; when=${meetingDraft.scheduledAt ?? 'unset'}; maxParticipants=${meetingDraft.maxParticipants ?? 'default'}; agenda=${meetingDraft.agenda.join(' | ') || 'none'}; description=${meetingDraft.description.slice(0, 160)}`,
+        )
+      }
       const listingLinks: DeepLink[] = []
       const matchFact = facts.find((f) => f.startsWith('Matching marketplace listings:'))
       if (matchFact) {
@@ -1485,22 +1855,36 @@ Deno.serve(async (req) => {
           if (href && title) listingLinks.push({ label: title.slice(0, 40), href })
         }
       }
+      const scheduleHref = meetingDraft
+        ? `/co-work/schedule?prompt=${encodeURIComponent(message.slice(0, 240))}`
+        : '/co-work/schedule'
       const deepLinks = [
         ...listingLinks,
+        ...(meetingDraft
+          ? [{ label: 'Create this meeting', href: scheduleHref }]
+          : []),
         ...productDeepLinks(effectiveProduct, shoppingQuery),
-      ]
+      ].filter(
+        (link, index, arr) =>
+          arr.findIndex((other) => other.href === link.href && other.label === link.label) === index,
+      )
       const systemPrompt = [
-        'You are SHEconomy AI — trained across Marketplace, Community, Manage Shop, Chat, Class, and Co-Work.',
+        'You are SHEconomy AI — the in-app support chatbot for Marketplace, Community, Manage Shop, Chat, Class, and Co-Work.',
         'Answer like a capable product expert: clear, warm, specific, and action-oriented (2–6 short sentences unless the user asks for detail).',
         'Stay on the user’s intent. For shopping, recommend Matching marketplace listings and /search?q=…. Do NOT dump account/settings or unrelated order lists unless asked.',
         'Use grounding facts for personalization. Never invent order numbers, stock, prices, meetings, or listings not in the facts.',
-        'Point to real in-app paths (/search, /listing/…, /orders, /cart, /community, /chat, /class, /co-work, /vendor/myshop, /create-my-shop, /settings, /help).',
+        'Point to real in-app paths (/search, /listing/…, /orders, /cart, /community, /chat, /class, /co-work, /co-work/schedule, /co-work/join, /vendor/myshop, /create-my-shop, /settings, /help).',
         'Prefer concrete next steps. Never ask for passwords or full payment card numbers.',
+        scheduleRequested
+          ? 'The user wants to SCHEDULE a Co-Work meeting. Use the Suggested meeting draft fact. Tell them the drafted title/time and send them to /co-work/schedule (Create with AI). Do not reply that there are no upcoming meetings as the only answer.'
+          : '',
         `Detected intent: ${intent}.`,
         `Product focus: ${effectiveProduct}.`,
         productPlaybook(effectiveProduct),
         `Grounding facts:\n- ${facts.join('\n- ')}`,
-      ].join('\n')
+      ]
+        .filter(Boolean)
+        .join('\n')
 
       if (!sessionId) {
         const { data: session, error: sessionError } = await supabase
@@ -1508,10 +1892,10 @@ Deno.serve(async (req) => {
           .insert({
             user_id: userId,
             product: effectiveProduct,
-            context: { ...context, shopping_query: shoppingQuery },
+            context: { ...context, shopping_query: shoppingQuery, schedule_requested: scheduleRequested },
             title: message.slice(0, 80),
             system_prompt: systemPrompt,
-            model: Deno.env.get('OPENAI_MODEL') ?? 'gpt-4o-mini',
+            model: Deno.env.get('GEMINI_MODEL') ?? 'gemini-2.5-pro',
             is_active: true,
           })
           .select('id')
@@ -1523,7 +1907,7 @@ Deno.serve(async (req) => {
           .from('ai_sessions')
           .update({
             product: effectiveProduct,
-            context: { ...context, shopping_query: shoppingQuery },
+            context: { ...context, shopping_query: shoppingQuery, schedule_requested: scheduleRequested },
             updated_at: new Date().toISOString(),
             system_prompt: systemPrompt,
           })
@@ -1535,7 +1919,7 @@ Deno.serve(async (req) => {
         session_id: sessionId,
         role: 'user',
         content: message,
-        metadata: { product: effectiveProduct, shoppingQuery, intent, context },
+        metadata: { product: effectiveProduct, shoppingQuery, intent, scheduleRequested, context },
       })
 
       const { data: history } = await supabase
@@ -1549,21 +1933,33 @@ Deno.serve(async (req) => {
       // Exclude the just-inserted user message from history when calling the model (we pass it separately).
       const historyForModel = (history ?? []).slice(0, -1) as ChatMessageRow[]
 
-      const completion = await callOpenAI(
+      const completion = await callGemini(
         systemPrompt,
         historyForModel.length ? historyForModel : prior,
         message,
       )
       let answer = completion.answer
-      const usedFallback = !answer
+      let usedFallback = !answer
       const fallbackReason = usedFallback
-        ? completion.error?.includes('missing_openai_api_key')
-          ? 'missing_openai_api_key'
+        ? completion.error?.includes('missing_gemini_api_key')
+          ? 'missing_gemini_api_key'
           : completion.error?.includes('429')
-            ? 'openai_quota_exceeded'
-            : 'openai_request_failed'
+            ? 'gemini_quota_exceeded'
+            : 'gemini_request_failed'
         : null
-      if (!answer) answer = fallbackReply(effectiveProduct, message, facts)
+      if (!answer) {
+        answer = meetingDraft
+          ? formatMeetingDraftReply(meetingDraft)
+          : fallbackReply(effectiveProduct, message, facts)
+      } else if (
+        meetingDraft &&
+        /no upcoming hosted meetings/i.test(answer) &&
+        !/\/co-work\/schedule/i.test(answer)
+      ) {
+        // Model drifted into list-meetings mode — replace with schedule guidance.
+        answer = formatMeetingDraftReply(meetingDraft)
+        usedFallback = false
+      }
 
       await supabase.from('ai_messages').insert({
         session_id: sessionId,
@@ -1573,11 +1969,13 @@ Deno.serve(async (req) => {
           product: effectiveProduct,
           shoppingQuery,
           intent,
+          scheduleRequested,
+          meetingDraft,
           usedFallback,
           fallbackReason,
-          openaiError: completion.error,
-          openaiModel: completion.model,
-          openaiKeySource: completion.keySource,
+          geminiError: completion.error,
+          geminiModel: completion.model,
+          geminiKeySource: completion.keySource,
           deepLinks,
         },
       })
@@ -1596,7 +1994,8 @@ Deno.serve(async (req) => {
         deepLinks,
         usedFallback,
         fallbackReason,
-        openaiError: usedFallback ? completion.error : null,
+        geminiError: usedFallback ? completion.error : null,
+        meetingDraft,
         product: effectiveProduct,
       })
     }
@@ -1643,7 +2042,7 @@ Deno.serve(async (req) => {
         .filter(Boolean)
         .join('\n')
 
-      const completion = await callOpenAI(systemPrompt, [], text)
+      const completion = await callGemini(systemPrompt, [], text)
       const parsed = parseTranslateJson(completion.answer)
       if (parsed?.translatedText) {
         return json({
@@ -1680,7 +2079,7 @@ Deno.serve(async (req) => {
         'Return ONLY JSON: {"verdict":"approved"|"rejected","reasons":["..."],"confidence":0-1}',
       ].join('\n')
 
-      const completion = await callOpenAIVision(systemPrompt, dataUrl)
+      const completion = await callGeminiVision(systemPrompt, dataUrl)
       const parsed = parseModerateImageJson(completion.answer)
       if (parsed) {
         return json({ ...parsed, usedFallback: false, product: 'commerce' })
@@ -1696,10 +2095,108 @@ Deno.serve(async (req) => {
       })
     }
 
+    if (action === 'describe_search_image') {
+      const dataUrl = typeof body.message === 'string' ? body.message.trim() : ''
+      if (!dataUrl.startsWith('data:image/')) {
+        return json({ error: 'message must be a data:image URL' }, 400)
+      }
+
+      const systemPrompt = [
+        'You turn product photos into marketplace search keywords for SHEconomy.',
+        'Identify the main sellable product (fashion, home, beauty, craft, food, digital goods).',
+        'Ignore people faces, backgrounds, and watermarks unless they define the product.',
+        'Prefer short searchable terms shoppers would type (e.g. "red georgette saree", "ceramic wall planter").',
+        'Do not mention Gemini, Google, or model names.',
+        'Return ONLY JSON: {"query":"2-6 word search phrase","category":"optional category","attributes":["color","material","style"]}',
+      ].join('\n')
+
+      const completion = await callGeminiVision(
+        systemPrompt,
+        dataUrl,
+        'Describe this product for marketplace search.',
+        { jsonMode: true },
+      )
+      const parsed = parseDescribeSearchImageJson(completion.answer)
+      if (parsed) {
+        return json({
+          query: parsed.query,
+          category: parsed.category,
+          attributes: parsed.attributes,
+          usedFallback: false,
+          product: 'commerce',
+        })
+      }
+
+      console.error('describe_search_image failed:', completion.error)
+      const failure = visionFailureMessage(completion.error)
+      return json({ error: failure.error, code: 'image_search_failed' }, failure.status)
+    }
+
+    if (action === 'ai_search') {
+      const message = typeof body.message === 'string' ? body.message.trim() : ''
+      if (!message) return json({ error: 'message is required' }, 400)
+
+      const systemPrompt = [
+        'You are SHEconomy shopping search. Convert natural language into structured marketplace search.',
+        'Extract a concise searchTerm (2-8 words), optional INR price bounds, optional listingType physical|digital, optional category, and a short shopper-facing rationale.',
+        'Do not mention Gemini, Google, or model names in rationale.',
+        'Return ONLY JSON: {"searchTerm":"...","category":null,"minPrice":null,"maxPrice":null,"listingType":null,"rationale":"..."}',
+      ].join('\n')
+
+      const completion = await callGemini(systemPrompt, [], message)
+      const parsed =
+        parseAiSearchJson(completion.answer) ??
+        (() => {
+          const fallbackTerm = extractShoppingQuery(message) || message.slice(0, 80)
+          return {
+            searchTerm: fallbackTerm,
+            category: null as string | null,
+            minPrice: null as number | null,
+            maxPrice: null as number | null,
+            listingType: null as 'physical' | 'digital' | null,
+            rationale: `Showing results for “${fallbackTerm}”.`,
+          }
+        })()
+
+      const matches = await searchListingsForQuery(service, parsed.searchTerm, {
+        limit: 12,
+        minPrice: parsed.minPrice,
+        maxPrice: parsed.maxPrice,
+        listingType: parsed.listingType,
+      })
+
+      const listingIds = matches.map((row) => row.id).filter(Boolean)
+      const deepLinks = [
+        {
+          label: `Search “${parsed.searchTerm}”`,
+          href: `/search?q=${encodeURIComponent(parsed.searchTerm)}&scope=listings`,
+        },
+        ...matches.slice(0, 5).map((row) => ({
+          label: row.title,
+          href: `/listing/${row.slug}`,
+        })),
+      ]
+
+      return json({
+        answer: parsed.rationale,
+        searchTerm: parsed.searchTerm,
+        filters: {
+          minPrice: parsed.minPrice,
+          maxPrice: parsed.maxPrice,
+          listingType: parsed.listingType,
+          category: parsed.category,
+        },
+        listingIds,
+        deepLinks,
+        usedFallback: !completion.answer || Boolean(completion.error),
+        product: 'commerce',
+      })
+    }
+
     return json(
       {
         error:
-          'Unknown action. Use suggestions | chat | feedback | comment_suggestions | meeting_draft | post_draft | shop_draft | translate | moderate_image.',
+          'Unknown action. Use suggestions | chat | feedback | comment_suggestions | meeting_draft | post_draft | shop_draft | translate | moderate_image | describe_search_image | ai_search.',
       },
       400,
     )

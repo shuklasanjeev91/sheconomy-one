@@ -1,5 +1,4 @@
 import { useCallback, useEffect, useState } from 'react'
-import { useRouter } from 'one'
 import { AppLink } from '~/components/navigation/AppLink'
 
 import { CommercePageHeader, CommercePanel } from '~/commerce/components'
@@ -16,6 +15,7 @@ import { commerceRoutes } from '~/lib/routes'
 import { useProfile } from '~/hooks/useProfile'
 import { useAppUi } from '~/lib/theme/useAppUi'
 import { getOrderStatusDisplay } from '~/lib/orders/order.utils'
+import { navigateApp } from '~/lib/platform/navigate'
 
 type OrderStatusFilter = 'all' | 'processing' | 'shipped' | 'delivered' | 'cancelled'
 
@@ -53,7 +53,6 @@ function formatOrderDate(value: string | null) {
 export function OrderHistoryScreen() {
   const ui = useAppUi()
   const toast = useAppToast()
-  const router = useRouter()
   const { user } = useProfile()
   const [orders, setOrders] = useState<CustomerOrderHistoryRow[]>([])
   const [isLoading, setIsLoading] = useState(true)
@@ -197,7 +196,7 @@ export function OrderHistoryScreen() {
                       tone="primary"
                       size="$3"
                       borderRadius={999}
-                      onPress={() => router.push(commerceRoutes.order(order.order_id))}
+                      onPress={() => navigateApp(commerceRoutes.order(order.order_id))}
                     >
                       View order
                     </Button>

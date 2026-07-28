@@ -45,9 +45,9 @@ import { copyShareLink } from '~/lib/share'
 import { useAppUi } from '~/lib/theme/useAppUi'
 import { useSupabase } from '~/providers/SupabaseProvider'
 
-import { useRouter } from 'one'
 
 import { BRAND_NAME } from '~/config/brand'
+import { navigateApp } from '~/lib/platform/navigate'
 
 type Engagement = ReturnType<typeof usePostEngagement>
 
@@ -68,7 +68,6 @@ export function PostActionSheets({
 }: PostActionSheetsProps) {
   const communityUi = useCommunityUi()
   const ui = useAppUi()
-  const router = useRouter()
   const toast = useAppToast()
   const { user } = useSupabase()
   const [sendOpen, setSendOpen] = useState(false)
@@ -119,7 +118,7 @@ export function PostActionSheets({
       tone: 'default',
       message: `Sign in to ${action}.`,
     })
-    router.push(routes.signIn)
+    navigateApp(routes.signIn)
   }
 
   useEffect(() => {
@@ -431,7 +430,7 @@ export function PostActionSheets({
           contextText={sendContext}
           preview={sendPreview}
           onShareElsewhere={() => setShareOpen(true)}
-          onSent={(conversationId) => router.push(chatRoutes.conversation(conversationId))}
+          onSent={(conversationId) => navigateApp(chatRoutes.conversation(conversationId))}
         />
       ) : null}
 
@@ -581,7 +580,7 @@ export function PostActionSheets({
                     tone: 'default',
                     message: `${authorName} will no longer appear in your community feed.`,
                     actionLabel: 'Manage',
-                    onAction: () => router.push(appRoutes.settingsSection('privacy') as never),
+                    onAction: () => navigateApp(appRoutes.settingsSection('privacy') as never),
                   })
                   engagement.closeSheet()
                 })

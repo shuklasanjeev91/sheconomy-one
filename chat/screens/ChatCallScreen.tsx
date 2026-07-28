@@ -183,7 +183,7 @@ export function ChatCallScreen({ code, callType, callId, needsAnswer = false }: 
             updated.status === 'missed'
           ) {
             hungUpRef.current = true
-            router.replace(chatRoutes.home)
+            router.push(chatRoutes.home)
           }
         },
       )
@@ -211,7 +211,7 @@ export function ChatCallScreen({ code, callType, callId, needsAnswer = false }: 
     } catch {
       // Best-effort hangup — still leave the UI.
     }
-    router.replace(chatRoutes.home)
+    router.push(chatRoutes.home)
   }, [callId, meeting, router, user])
 
   if (isLoading && !user) {
@@ -257,7 +257,7 @@ export function ChatCallScreen({ code, callType, callId, needsAnswer = false }: 
             } catch {
               // ignore
             }
-            router.replace(chatRoutes.home)
+            router.push(chatRoutes.home)
           })()
         }}
       />
@@ -285,7 +285,7 @@ export function ChatCallScreen({ code, callType, callId, needsAnswer = false }: 
           color={ACCEPT}
           fontWeight="700"
           cursor="pointer"
-          onPress={() => router.replace(chatRoutes.home)}
+          onPress={() => router.push(chatRoutes.home)}
         >
           Back to chats
         </Text>

@@ -1,4 +1,3 @@
-import { useRouter } from 'one'
 import { useCallback, useEffect, useRef, useState } from 'react'
 
 import {
@@ -26,6 +25,7 @@ import {
 import { helpHref } from '~/lib/help/types'
 import { useAppUi } from '~/lib/theme/useAppUi'
 import { useAiAssist } from '~/providers/AiAssistProvider'
+import { navigateApp } from '~/lib/platform/navigate'
 
 function newLocalId() {
   return `local-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
@@ -57,7 +57,8 @@ const QUICK_ACTIONS: Record<AiProduct, Array<{ label: string; prompt: string; hr
     { label: 'Open Help', prompt: '', href: '/help?product=class' },
   ],
   cowork: [
-    { label: 'Host meeting', prompt: 'How do I host a Co-Work meeting?' },
+    { label: 'Schedule tomorrow', prompt: 'Schedule a Co-Work meeting for tomorrow at 11am' },
+    { label: 'Host meeting', prompt: 'How do I host a Co-Work meeting and share the code?' },
     { label: 'Join with code', prompt: 'How do I join a meeting with a code?' },
     { label: 'AV help', prompt: 'Camera or mic is blocked — how do I fix it?' },
     { label: 'Open Help', prompt: '', href: '/help?product=cowork' },
@@ -69,6 +70,7 @@ const QUICK_ACTIONS: Record<AiProduct, Array<{ label: string; prompt: string; hr
     { label: 'Open Help', prompt: '', href: '/help?product=shop' },
   ],
   account: [
+    { label: 'Schedule Co-Work', prompt: 'Schedule a Co-Work meeting for tomorrow at 11am' },
     { label: 'Notifications', prompt: 'Help me tune alerts across products' },
     { label: 'Shop marketplace', prompt: 'I want to buy something on the marketplace' },
     { label: 'Open Help', prompt: '', href: '/help' },
@@ -80,7 +82,6 @@ const QUICK_ACTIONS: Record<AiProduct, Array<{ label: string; prompt: string; hr
  */
 export function AiAssistSheet() {
   const ui = useAppUi()
-  const router = useRouter()
   const {
     open,
     closeAssist,
@@ -190,7 +191,7 @@ export function AiAssistSheet() {
 
   function goLink(href: string) {
     closeAssist()
-    router.push(href as never)
+    navigateApp(href as never)
   }
 
   const footer = (
@@ -306,8 +307,8 @@ export function AiAssistSheet() {
               How can I help?
             </Text>
             <Text fontSize={14} color={ui.textMuted} lineHeight={20}>
-              Ask about orders, community, chat, classes, Co-Work, or your shop — answers stay grounded to
-              your account.
+              AI support for Marketplace, Community, Chat, Classes, Co-Work, and your shop —
+              including scheduling meetings, tracking orders, and seller tips.
             </Text>
           </YStack>
         ) : null}

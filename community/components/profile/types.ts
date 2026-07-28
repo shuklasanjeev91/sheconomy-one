@@ -23,4 +23,6 @@ export type ProfileDisplay = {
   interests?: string[] | null
   profile_completion_percentage?: number | null
   email?: string | null
+  date_of_birth?: string | null
+  marriage_anniversary?: string | null
 }

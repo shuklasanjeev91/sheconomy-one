@@ -1,6 +1,5 @@
 import { useEffect, useMemo, useState, memo } from 'react'
 import { Platform, useWindowDimensions } from 'react-native'
-import { useRouter } from 'one'
 import { AppLink } from '~/components/navigation/AppLink'
 import { useThemeName } from 'tamagui'
 
@@ -33,6 +32,7 @@ import {
 import { Avatar, Button, Icons, Image, Text, XStack, YStack, useAppToast } from '~/components/ui'
 import { radius } from '~/config/tokens'
 import { commerceRoutes, communityRoutes, routes } from '~/lib/routes'
+import { navigateApp } from '~/lib/platform/navigate'
 import { useSupabase } from '~/providers/SupabaseProvider'
 import { rsvpToPostEvent, cancelPostEventRsvp, fetchPostEventRsvpState } from '~/community/lib/events'
 import { CongratulateSheet } from '~/community/components/CongratulateSheet'
@@ -71,7 +71,6 @@ export const FeedPostCard = memo(function FeedPostCard({
 }: FeedPostCardProps) {
   const communityUi = useCommunityUi()
   const themeName = useThemeName()
-  const router = useRouter()
   const [congratulateOpen, setCongratulateOpen] = useState(false)
   const postSurface = useMemo(
     () =>
@@ -114,7 +113,7 @@ export const FeedPostCard = memo(function FeedPostCard({
   const [lightboxIndex, setLightboxIndex] = useState(0)
 
   function requireAuth() {
-    router.push(routes.signIn)
+    navigateApp(routes.signIn)
   }
 
   // LinkedIn-style: tapping media opens a fullscreen zoomable viewer (feed + detail).
@@ -290,8 +289,9 @@ export const FeedPostCard = memo(function FeedPostCard({
 
         <YStack paddingHorizontal={16} paddingBottom={12} gap={10}>
           {!compactArticle && isArticle ? (
-            <AppLink href={articleHref}>
+            <AppLink href={articleHref} asChild>
               <YStack
+                width="100%"
                 gap={10}
                 borderRadius={12}
                 borderWidth={1}
@@ -300,6 +300,7 @@ export const FeedPostCard = memo(function FeedPostCard({
                 backgroundColor={communityUi.pageBg}
                 cursor="pointer"
                 hoverStyle={{ borderColor: communityUi.brand }}
+                pressStyle={{ opacity: 0.92 }}
               >
                 {post.image_url || mediaItems[0]?.kind === 'image' ? (
                   <Image
@@ -340,8 +341,10 @@ export const FeedPostCard = memo(function FeedPostCard({
           {!compactArticle && !isArticle ? (
             <>
               {linkToDetail ? (
-                <AppLink href={detailHref}>
-                  <PostContentText content={post.content} />
+                <AppLink href={detailHref} asChild>
+                  <YStack width="100%" cursor="pointer" pressStyle={{ opacity: 0.92 }}>
+                    <PostContentText content={post.content} />
+                  </YStack>
                 </AppLink>
               ) : (
                 <PostContentText content={post.content} />
@@ -586,6 +589,8 @@ function PostMedia({
 }
 
 const CELEBRATION_EMOJI: Record<string, string> = {
+  birthday: '🎂',
+  marriage_anniversary: '💍',
   new_job: '💼',
   work_anniversary: '🎊',
   education: '🎓',
@@ -1079,8 +1084,9 @@ function OriginalPostEmbed({ original }: { original: OriginalPostPreview }) {
   const communityUi = useCommunityUi()
 
   return (
-    <AppLink href={communityRoutes.post(original.id)}>
+    <AppLink href={communityRoutes.post(original.id)} asChild>
       <YStack
+        width="100%"
         borderWidth={1}
         borderColor={communityUi.border}
         borderRadius={8}
@@ -1088,6 +1094,7 @@ function OriginalPostEmbed({ original }: { original: OriginalPostPreview }) {
         backgroundColor={communityUi.pageBg}
         cursor="pointer"
         hoverStyle={{ borderColor: communityUi.brandLight }}
+        pressStyle={{ opacity: 0.92 }}
       >
         <XStack padding={12} gap={10} alignItems="flex-start">
           <Avatar

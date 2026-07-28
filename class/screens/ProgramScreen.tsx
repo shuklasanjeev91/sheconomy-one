@@ -157,7 +157,7 @@ export function ProgramScreen() {
       const href = playlistId
         ? classRoutes.program(getProgramSlug(next), { playlist: playlistId })
         : classRoutes.program(getProgramSlug(next))
-      router.replace(href as never)
+      router.push(href as never)
     },
     [clearCountdown, playlistId, router],
   )

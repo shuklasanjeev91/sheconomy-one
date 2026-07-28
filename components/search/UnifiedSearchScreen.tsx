@@ -1,4 +1,3 @@
-import { useRouter } from 'one'
 import { useEffect, useMemo, useState, type ReactNode } from 'react'
 
 import { ListingBrowseView, ListingFiltersShell } from '~/commerce/components'
@@ -16,7 +15,7 @@ import {
 } from '~/commerce/lib/search-history'
 import { SearchHitRow } from '~/components/search/SearchHitRow'
 import { FullWidthLayout, HorizontalScrollRow, PageSection } from '~/components/layout'
-import { Button, EmptyState, Spinner, Text, XStack, YStack } from '~/components/ui'
+import { Button, EmptyState, Icons, Spinner, Text, XStack, YStack } from '~/components/ui'
 import { countActiveFilters, hasActiveFilters } from '~/commerce/lib/filters'
 import { useAccess } from '~/hooks/useAccess'
 import { useProfile } from '~/hooks/useProfile'
@@ -24,6 +23,7 @@ import {
   availableSearchScopes,
   canAccessSearchScope,
   federatedSearch,
+  runAiSearch,
   SEARCH_SCOPE_LABELS,
   searchScopeGateHref,
   type FederatedSearchResult,
@@ -31,13 +31,14 @@ import {
   type SearchScope,
 } from '~/lib/search'
 import { appRoutes, commerceRoutes } from '~/lib/routes'
-import { replaceApp } from '~/lib/platform/navigate'
+import { navigateApp, replaceApp } from '~/lib/platform/navigate'
 import { useAppUi } from '~/lib/theme/useAppUi'
 
 type UnifiedSearchScreenProps = {
   query?: string
   scope?: SearchScope
   filters?: ListingBrowseFilters
+  mode?: 'ai' | null
 }
 
 type SectionKey =
@@ -74,34 +75,82 @@ export function UnifiedSearchScreen({
   query: queryProp = '',
   scope: scopeProp = 'all',
   filters: initialFilters = {},
+  mode: modeProp = null,
 }: UnifiedSearchScreenProps) {
-  const router = useRouter()
   const ui = useAppUi()
   const { tier } = useAccess()
   const { user, profile } = useProfile()
   const userGeo = useUserGeo(profile?.location)
   const history = useSearchHistory()
   const query = queryProp.trim()
-  const scope = scopeProp
-  const filters = initialFilters
+  const aiMode = modeProp === 'ai'
+  const scope = aiMode ? 'listings' : scopeProp
+  const [aiAnswer, setAiAnswer] = useState<string | null>(null)
+  const [aiSearchTerm, setAiSearchTerm] = useState<string | null>(null)
+  const [aiFilters, setAiFilters] = useState<ListingBrowseFilters>({})
+  const [aiLoading, setAiLoading] = useState(false)
+  const [aiError, setAiError] = useState<string | null>(null)
+
+  const filters = aiMode
+    ? { ...initialFilters, ...aiFilters }
+    : initialFilters
   const scopes = availableSearchScopes(tier)
 
   const [result, setResult] = useState<FederatedSearchResult | null>(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
-  const listingsBrowseEnabled = scope === 'listings' && query.length > 0
+  const effectiveListingQuery = aiMode ? (aiSearchTerm ?? '').trim() : query
+  const listingsBrowseEnabled =
+    scope === 'listings' && effectiveListingQuery.length > 0 && (!aiMode || Boolean(aiSearchTerm))
   const listingsFeed = useSearchListings({
-    query,
+    query: effectiveListingQuery,
     filters,
     enabled: listingsBrowseEnabled,
   })
 
-  const filterKey = useMemo(() => JSON.stringify(filters), [filters])
+  const filterKey = useMemo(
+    () => JSON.stringify({ filters, term: effectiveListingQuery, aiMode }),
+    [filters, effectiveListingQuery, aiMode],
+  )
 
   useEffect(() => {
     if (query) recordSearchTerm(query)
   }, [query])
+
+  useEffect(() => {
+    if (!aiMode || !query) {
+      setAiAnswer(null)
+      setAiSearchTerm(null)
+      setAiFilters({})
+      setAiLoading(false)
+      setAiError(null)
+      return
+    }
+
+    let cancelled = false
+    setAiLoading(true)
+    setAiError(null)
+    void runAiSearch(query)
+      .then((next) => {
+        if (cancelled) return
+        setAiAnswer(next.answer)
+        setAiSearchTerm(next.searchTerm)
+        setAiFilters(next.filters)
+        setAiLoading(false)
+      })
+      .catch((err: unknown) => {
+        if (cancelled) return
+        setAiError(err instanceof Error ? err.message : 'AI search failed')
+        setAiSearchTerm(query)
+        setAiFilters({})
+        setAiLoading(false)
+      })
+
+    return () => {
+      cancelled = true
+    }
+  }, [aiMode, query])
 
   useEffect(() => {
     if (!query || scope === 'listings') {
@@ -149,21 +198,24 @@ export function UnifiedSearchScreen({
     )
     if (query) params.set('q', query)
     if (next !== 'all') params.set('scope', next)
+    // Leaving AI mode when switching scopes.
+    params.delete('mode')
     const search = params.toString()
-    router.replace((search ? `${appRoutes.search()}?${search}` : appRoutes.search()) as never)
+    replaceApp((search ? `${appRoutes.search()}?${search}` : appRoutes.search()) as never)
   }
 
   function updateFilters(next: ListingBrowseFilters) {
     const params = buildFilterSearchParams(new URLSearchParams(), next)
     if (query) params.set('q', query)
     params.set('scope', 'listings')
+    if (aiMode) params.set('mode', 'ai')
     const search = params.toString()
-    router.replace((search ? `/search?${search}` : '/search?scope=listings') as never)
+    replaceApp((search ? `/search?${search}` : '/search?scope=listings') as never)
   }
 
   function runHistoryTerm(term: string) {
     recordSearchTerm(term)
-    router.push(appRoutes.search(term, scope) as never)
+    navigateApp(appRoutes.search(term, scope) as never)
   }
 
   const gated = scope !== 'all' && !canAccessSearchScope(tier, scope)
@@ -177,8 +229,53 @@ export function UnifiedSearchScreen({
       <PageSection paddingVertical="$5" gap="$4">
         <YStack gap="$3" width="100%">
           <Text fontSize={22} fontWeight="800" color={ui.text} letterSpacing={-0.4}>
-            {query ? `Results for “${query}”` : 'Search'}
+            {aiMode && query
+              ? `AI results for “${query}”`
+              : query
+                ? `Results for “${query}”`
+                : 'Search'}
           </Text>
+
+          {aiMode && query ? (
+            <YStack
+              gap="$2"
+              padding="$3.5"
+              borderRadius={14}
+              borderWidth={1}
+              borderColor={ui.borderSubtle}
+              backgroundColor={ui.surfaceMuted}
+            >
+              <XStack alignItems="center" gap="$2">
+                <Icons.Sparkles size={16} color={ui.brand} />
+                <Text fontSize={13} fontWeight="700" color={ui.text}>
+                  Ask AI
+                </Text>
+              </XStack>
+              {aiLoading ? (
+                <XStack alignItems="center" gap="$2">
+                  <Spinner size="small" />
+                  <Text fontSize={13} color={ui.textSecondary}>
+                    Understanding your request…
+                  </Text>
+                </XStack>
+              ) : null}
+              {aiError ? (
+                <Text fontSize={13} color={ui.danger}>
+                  {aiError}
+                </Text>
+              ) : null}
+              {!aiLoading && aiAnswer ? (
+                <Text fontSize={14} color={ui.textSecondary} lineHeight={21}>
+                  {aiAnswer}
+                </Text>
+              ) : null}
+              {!aiLoading && aiSearchTerm && aiSearchTerm !== query ? (
+                <Text fontSize={12} color={ui.textMuted}>
+                  Searching listings for “{aiSearchTerm}”
+                </Text>
+              ) : null}
+            </YStack>
+          ) : null}
 
           <HorizontalScrollRow gap="$2">
             {scopes.map((item) => {
@@ -256,7 +353,7 @@ export function UnifiedSearchScreen({
           <YStack gap="$4" width="100%">
             <Text fontSize={14} color={ui.textSecondary}>
               Search listings, shops, people, companies, groups, jobs, posts, programs, and
-              meetings.
+              meetings. Use the camera, mic, or Ask AI in the search bar.
             </Text>
             {history.length > 0 ? (
               <YStack gap="$3" width="100%">
@@ -308,7 +405,7 @@ export function UnifiedSearchScreen({
               alignSelf="flex-start"
               tone="outline"
               borderRadius={999}
-              onPress={() => router.push(commerceRoutes.favorites as never)}
+              onPress={() => navigateApp(commerceRoutes.favorites as never)}
             >
               Open wishlist
             </Button>
@@ -321,18 +418,24 @@ export function UnifiedSearchScreen({
               key={filterKey}
               title="Listing results"
               subtitle={
-                !listingsFeed.isLoading && listingsFeed.items.length > 0
+                !listingsFeed.isLoading &&
+                !aiLoading &&
+                listingsFeed.items.length > 0
                   ? `${listingsFeed.items.length}${listingsFeed.hasMore ? '+' : ''} listings`
                   : undefined
               }
               items={listingsFeed.items}
-              isLoading={listingsFeed.isLoading}
+              isLoading={listingsFeed.isLoading || aiLoading}
               isLoadingMore={listingsFeed.isLoadingMore}
               hasMore={listingsFeed.hasMore}
               error={listingsFeed.error}
               onLoadMore={listingsFeed.loadMore}
               onRetry={listingsFeed.refresh}
-              emptyMessage={`No listing results for “${query}”.`}
+              emptyMessage={
+                aiLoading
+                  ? 'Finding matches…'
+                  : `No listing results for “${effectiveListingQuery || query}”.`
+              }
             />
           </ListingFiltersShell>
         ) : null}

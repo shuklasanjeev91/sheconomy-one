@@ -30,12 +30,14 @@ import { PushNotificationsProvider } from '~/providers/PushNotificationsProvider
 import { SupabaseProvider } from '~/providers/SupabaseProvider'
 import { InAppNotificationHost } from '~/components/notifications/InAppNotificationHost'
 import { PushForegroundNotificationHost } from '~/components/notifications/PushForegroundNotificationHost'
+import { PushSubscribePromptHost } from '~/components/notifications/PushSubscribePromptHost'
 import { AutomaticUpdateManager } from '~/components/system/AutomaticUpdateManager'
 import { AiAssistProvider } from '~/providers/AiAssistProvider'
 import { ScreenZoomProvider } from '~/lib/zoom/ScreenZoomContext'
 import { ScreenZoomRoot } from '~/components/media/ScreenZoomRoot'
 import { ConnectivityProvider } from '~/providers/ConnectivityProvider'
 import { RouteSeoProvider } from '~/components/seo/RouteSeo'
+import { PwaBootstrap } from '~/components/pwa/PwaBootstrap'
 
 function NativeRootShell({ children }: { children: ReactNode }) {
   if (Platform.OS === 'web') {
@@ -64,10 +66,16 @@ export default function Layout() {
             name="viewport"
             content="width=device-width, initial-scale=1, maximum-scale=5"
           />
-          <link rel="icon" href="/favicon.png" type="image/png" sizes="80x80" />
-          <link rel="apple-touch-icon" href="/apple-touch-icon.png" sizes="80x80" />
-          <MetaTheme lightColor="#fef5f9" darkColor="#1c0f14" />
+          <link rel="icon" href="/favicon.png" type="image/png" sizes="48x48" />
+          <link rel="apple-touch-icon" href="/apple-touch-icon.png" sizes="180x180" />
+          <link rel="manifest" href="/manifest.webmanifest" />
+          <meta name="mobile-web-app-capable" content="yes" />
+          <meta name="apple-mobile-web-app-capable" content="yes" />
+          <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+          <meta name="apple-mobile-web-app-title" content="SHEconomy" />
+          <meta name="application-name" content="SHEconomy" />
           <meta name="theme-color" content="#D81B60" />
+          <MetaTheme lightColor="#fef5f9" darkColor="#1c0f14" />
           <meta
             name="google-site-verification"
             content="-NBqtpzczzj-BY1yV4J8jtUZZAjChrU5HUFYuYIcMtI"
@@ -219,8 +227,10 @@ function AppProviders({ children }: { children: React.ReactNode }) {
                             <ScreenZoomProvider>
                               <ScreenZoomRoot>
                                 <AutomaticUpdateManager />
+                                <PwaBootstrap />
                                 <InAppNotificationHost />
                                 <PushForegroundNotificationHost />
+                                <PushSubscribePromptHost />
                                 <AppUsageTracker />
                                 <ExternalAnalyticsTracker />
                                 <BiometricUnlockGate>

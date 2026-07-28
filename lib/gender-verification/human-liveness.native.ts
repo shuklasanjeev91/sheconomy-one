@@ -14,6 +14,9 @@ export type HumanLivenessFrame = {
   eyesClosed: boolean
   blinkLeft: boolean
   blinkRight: boolean
+  leftEar: number
+  rightEar: number
+  avgEar: number
   liveScore: number
   realScore: number
   gender: null
@@ -31,6 +34,9 @@ export async function detectHumanLivenessFrame(
     eyesClosed: false,
     blinkLeft: false,
     blinkRight: false,
+    leftEar: 0.3,
+    rightEar: 0.3,
+    avgEar: 0.3,
     liveScore: 0,
     realScore: 0,
     gender: null,

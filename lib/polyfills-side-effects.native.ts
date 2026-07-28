@@ -90,6 +90,7 @@ import '@tamagui/native/setup-worklets'
 // Register Tamagui config on the single @tamagui/web instance before any UI mounts.
 import '~/config/tamagui.config'
 import { startNativeBootstrapPrefetch } from '~/lib/bootstrap/app-prefetch'
+import '~/lib/brand/register-suspense-fallback'
 
 globalThis.global = globalThis
 startNativeBootstrapPrefetch()

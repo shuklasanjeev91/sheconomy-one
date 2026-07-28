@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { usePathname, useRouter } from 'one'
+import { usePathname } from 'one'
 import { useDispatch, useSelector } from 'react-redux'
 
 import { Button, Text, XStack, YStack } from '~/components/ui'
@@ -17,13 +17,13 @@ import {
 import type { RootState } from '~/lib/store'
 import { appRoutes } from '~/lib/routes'
 import { useAppUi } from '~/lib/theme/useAppUi'
+import { navigateApp } from '~/lib/platform/navigate'
 
 /**
  * Soft prompt for signed-in members who skipped or never finished profile onboarding.
  */
 export function ProfileOnboardingNudge() {
   const ui = useAppUi()
-  const router = useRouter()
   const pathname = usePathname()
   const dispatch = useDispatch()
   const { user, isLoading } = useSupabase()
@@ -91,7 +91,7 @@ export function ProfileOnboardingNudge() {
         <Button
           tone="primary"
           size="$2"
-          onPress={() => router.push(appRoutes.completeProfile)}
+          onPress={() => navigateApp(appRoutes.completeProfile)}
         >
           Continue
         </Button>

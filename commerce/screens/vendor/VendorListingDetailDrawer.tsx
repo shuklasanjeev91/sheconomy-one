@@ -1,7 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Platform } from 'react-native'
-import { Link } from 'one'
-
+import { AppLink } from '~/components/navigation'
 import {
   Button,
   Icons,
@@ -263,18 +262,18 @@ export function VendorListingDetailDrawer({
               ) : null}
               <XStack gap="$2" flex={isDesktop ? undefined : 1}>
                 {previewHref ? (
-                  <Link href={previewHref} asChild>
+                  <AppLink href={previewHref} asChild>
                     <Button tone="outline" size="$3" borderRadius={999} flex={isDesktop ? undefined : 1}>
                       Preview
                     </Button>
-                  </Link>
+                  </AppLink>
                 ) : null}
                 {listingId ? (
-                  <Link href={vendorRoutes.editListing(listingId)} asChild>
+                  <AppLink href={vendorRoutes.editListing(listingId)} asChild>
                     <Button tone="primary" size="$3" borderRadius={999} flex={isDesktop ? undefined : 1}>
                       Edit
                     </Button>
-                  </Link>
+                  </AppLink>
                 ) : null}
               </XStack>
             </XStack>

@@ -78,6 +78,10 @@ export type AboutInput = {
   industry?: string
   business_name?: string
   location?: string
+  /** YYYY-MM-DD — used for birthday celebrations among connections. */
+  date_of_birth?: string | null
+  /** YYYY-MM-DD — marriage / wedding anniversary. */
+  marriage_anniversary?: string | null
 }
 
 function trimOrNull(value?: string | null) {
@@ -421,6 +425,13 @@ export async function updateProfileAbout(
   const fullName = input.full_name?.trim()
   if (fullName) {
     patch.full_name = fullName
+  }
+
+  if (input.date_of_birth !== undefined) {
+    patch.date_of_birth = input.date_of_birth?.trim() || null
+  }
+  if (input.marriage_anniversary !== undefined) {
+    patch.marriage_anniversary = input.marriage_anniversary?.trim() || null
   }
 
   const { error } = await supabase.from('profiles').update(patch).eq('id', userId)

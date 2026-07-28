@@ -1,4 +1,3 @@
-import { useRouter } from 'one'
 
 import { AppLink } from '~/components/navigation/AppLink'
 import { CommunityCard } from '~/community/components/CommunityCard'
@@ -9,10 +8,10 @@ import { useCommunityUi } from '~/community/lib/community-theme'
 import { Avatar, Button, Icons, Spinner, Text, XStack, YStack } from '~/components/ui'
 import { communityRoutes } from '~/lib/routes'
 import { useProfile } from '~/hooks/useProfile'
+import { navigateApp } from '~/lib/platform/navigate'
 
 export function StoriesScreen() {
   const communityUi = useCommunityUi()
-  const router = useRouter()
   const { profile, isAuthenticated } = useProfile()
   const { rings, isLoading } = useStoryRings()
 
@@ -29,7 +28,7 @@ export function StoriesScreen() {
                 color="white"
                 borderRadius={999}
                 icon={<Icons.Plus size={16} color="white" />}
-                onPress={() => router.push(communityRoutes.storyCreate)}
+                onPress={() => navigateApp(communityRoutes.storyCreate)}
               >
                 Add story
               </Button>
@@ -53,7 +52,7 @@ export function StoriesScreen() {
               backgroundColor={communityUi.brand}
               color="white"
               borderRadius={999}
-              onPress={() => router.push(communityRoutes.storyCreate)}
+              onPress={() => navigateApp(communityRoutes.storyCreate)}
             >
               Share your story
             </Button>

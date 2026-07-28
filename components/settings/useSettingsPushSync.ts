@@ -8,10 +8,14 @@ export function useSettingsPushSync() {
   const {
     isConfigured: pushConfigured,
     permissionGranted,
+    playerId,
     isBusy: pushBusy,
     enablePush,
     disablePush,
   } = usePushNotifications()
+
+  // Only treat push as ON when we have a saved OneSignal subscription id.
+  const pushEnabled = permissionGranted && !!playerId
 
   async function syncDevicePush(enabled: boolean): Promise<boolean> {
     if (enabled) {
@@ -35,7 +39,7 @@ export function useSettingsPushSync() {
 
   return {
     pushConfigured,
-    permissionGranted,
+    permissionGranted: pushEnabled,
     pushBusy,
     syncDevicePush,
   }

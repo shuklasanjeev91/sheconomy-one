@@ -119,7 +119,7 @@ export function VendorEditShopScreen() {
     try {
       await dispatch(updateShop({ shopId: shop.id, updates })).unwrap()
       toast.show('Shop updated', { tone: 'success' })
-      router.replace(vendorRoutes.myShop)
+      router.push(vendorRoutes.myShop)
     } catch (error) {
       toast.show('Could not save changes', {
         tone: 'danger',
@@ -315,7 +315,7 @@ export function VendorEditShopScreen() {
           tone="outline"
           size="$4"
           borderRadius={999}
-          onPress={() => router.replace(vendorRoutes.myShop)}
+          onPress={() => router.push(vendorRoutes.myShop)}
         >
           Cancel
         </Button>

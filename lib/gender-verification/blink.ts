@@ -15,6 +15,12 @@ export function eyeAspectRatio(points: Point[], indices: readonly number[]) {
   return vertical / horizontal
 }
 
+/** EAR from an ordered 6-point eye contour (no mesh index lookup). */
+export function eyeAspectRatioFromContour(points: Point[]) {
+  if (points.length < 6) return 1
+  return eyeAspectRatio(points, [0, 1, 2, 3, 4, 5])
+}
+
 /**
  * Natural-blink liveness tracker.
  *
@@ -175,14 +181,14 @@ export function isFaceCentered(
   const faceHeight = box.yMax - box.yMin
 
   const centered =
-    Math.abs(centerX - width / 2) < width * 0.22 &&
-    Math.abs(centerY - height / 2) < height * 0.24
+    Math.abs(centerX - width / 2) < width * 0.28 &&
+    Math.abs(centerY - height / 2) < height * 0.3
 
   const sized =
-    faceWidth > width * 0.18 &&
-    faceWidth < width * 0.88 &&
-    faceHeight > height * 0.16 &&
-    faceHeight < height * 0.9
+    faceWidth > width * 0.16 &&
+    faceWidth < width * 0.92 &&
+    faceHeight > height * 0.14 &&
+    faceHeight < height * 0.92
 
   return centered && sized
 }

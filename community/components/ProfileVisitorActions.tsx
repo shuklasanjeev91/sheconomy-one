@@ -1,5 +1,4 @@
 import { useState } from 'react'
-import { useRouter } from 'one'
 
 import { createDirectConversation } from '~/chat/lib/chats'
 import { IntroductionRequestButton } from '~/community/components/IntroductionRequestButton'
@@ -26,6 +25,7 @@ import { chatRoutes, communityRoutes, routes } from '~/lib/routes'
 import { copyShareLink, getProfileShareUrl } from '~/lib/share'
 import { useAppUi } from '~/lib/theme/useAppUi'
 import { useSupabase } from '~/providers/SupabaseProvider'
+import { navigateApp } from '~/lib/platform/navigate'
 
 type ProfileVisitorActionsProps = {
   targetUserId: string
@@ -55,7 +55,6 @@ export function ProfileVisitorActions({
 }: ProfileVisitorActionsProps) {
   const ui = useAppUi()
   const toast = useAppToast()
-  const router = useRouter()
   const { user } = useSupabase()
   const [moreOpen, setMoreOpen] = useState(false)
   const [shareOpen, setShareOpen] = useState(false)
@@ -73,7 +72,7 @@ export function ProfileVisitorActions({
       tone: 'default',
       message: `Sign in to ${action}.`,
     })
-    router.push(buildSignInUrl(signInRedirect) as never)
+    navigateApp(buildSignInUrl(signInRedirect) as never)
   }
 
   async function openDirectMessage() {
@@ -89,7 +88,7 @@ export function ProfileVisitorActions({
       toast.show('Could not start chat', { tone: 'danger', message: error ?? undefined })
       return
     }
-    router.push(chatRoutes.conversation(conversationId) as never)
+    navigateApp(chatRoutes.conversation(conversationId) as never)
   }
 
   return (
@@ -174,7 +173,7 @@ export function ProfileVisitorActions({
                 onViewConnections()
                 return
               }
-              router.push(communityRoutes.userConnections(targetUsername) as never)
+              navigateApp(communityRoutes.userConnections(targetUsername) as never)
             }}
           />
           <MoreRow
@@ -274,7 +273,7 @@ export function ProfileVisitorActions({
                   return
                 }
                 toast.show('Member blocked', { tone: 'default' })
-                router.push(communityRoutes.network)
+                navigateApp(communityRoutes.network)
               })
             }}
           />

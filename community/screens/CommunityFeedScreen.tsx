@@ -1,37 +1,41 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { FlashList } from '@shopify/flash-list'
-import { useRouter } from 'one'
-import { Platform } from 'react-native'
+import { Platform, type NativeScrollEvent, type NativeSyntheticEvent } from 'react-native'
 
 import { LoadMoreEnd } from '~/commerce/components/LoadMoreSentinel'
 import { CommunitySuggestionSectionCard } from '~/community/components/CommunitySuggestionSectionCard'
 import { StoriesStrip } from '~/community/components/StoriesStrip'
 import { CommunityShell } from '~/community/components/CommunityShell'
 import { FeedComposer } from '~/community/components/FeedComposer'
+import { TodayCelebrationsCard } from '~/community/components/TodayCelebrationsCard'
 import { FeedFilterChips } from '~/community/components/FeedFilterChips'
 import { FeedPostCard } from '~/community/components/FeedPostCard'
 import { FeedSortBar, type FeedSort } from '~/community/components/FeedSortBar'
 import type { FeedContentFilter } from '~/community/lib/community'
+import { openComposer } from '~/community/lib/composer-store'
 import { useCommunityFeed } from '~/community/hooks/useCommunityFeed'
 import { useCommunitySuggestions } from '~/community/hooks/useCommunitySuggestions'
 import { interleaveFeedWithSuggestions, type FeedEntry } from '~/community/lib/interleave-feed-suggestions'
 import { refreshStories } from '~/community/lib/story-refresh'
+import { useAppBarScroll } from '~/components/navigation/AppBarScrollContext'
 import { ScreenState, YStack } from '~/components/ui'
 import { useAppLayout } from '~/hooks/useAppLayout'
-import { communityRoutes } from '~/lib/routes'
 import { APP_LAYOUT } from '~/lib/layout/constants'
 
 const SUGGESTION_INTERVAL = 3
 const FEED_LIST_BOTTOM_PAD =
   Platform.OS === 'web' ? 24 : APP_LAYOUT.mobileTabBarHeight + 64
+/** Hide stories + create post once the feed has scrolled past this offset. */
+const HIDE_COMPOSER_SCROLL_Y = 48
+const chromeAnim = Platform.OS === 'web' ? ('quick' as const) : undefined
 
 export function CommunityFeedScreen() {
-  const router = useRouter()
   const [sort, setSort] = useState<FeedSort>('recent')
   const [contentFilter, setContentFilter] = useState<FeedContentFilter | null>(null)
   // Use window-width layout (not Tamagui useMedia) so phones are never treated as
   // desktop — otherwise suggestions are skipped here and the right rail is also hidden.
-  const { isDesktopWeb, isWide } = useAppLayout()
+  const { isWide } = useAppLayout()
+  const { scrollY, setScrollY } = useAppBarScroll()
   const { items, isLoading, isLoadingMore, isRefreshing, hasMore, error, loadMore, refresh, removeItem, patchItem } =
     useCommunityFeed(true, sort, contentFilter ?? undefined)
   // Load suggestions immediately so FlashList can interleave them with the first paint.
@@ -49,8 +53,13 @@ export function CommunityFeedScreen() {
     return () => clearTimeout(timer)
   }, [sort, contentFilter])
 
+  useEffect(() => {
+    return () => setScrollY(0)
+  }, [setScrollY])
+
   // Only skip in-feed suggestions when the right sidebar actually shows them.
   const showSuggestionsInFeed = !isWide && sections.length > 0
+  const showFeedChrome = scrollY <= HIDE_COMPOSER_SCROLL_Y
 
   const feedEntries = useMemo((): FeedEntry[] => {
     if (!showSuggestionsInFeed) {
@@ -64,6 +73,13 @@ export function CommunityFeedScreen() {
     refreshSuggestions()
     refreshStories()
   }, [refresh, refreshSuggestions])
+
+  const onFeedScroll = useCallback(
+    (event: NativeSyntheticEvent<NativeScrollEvent>) => {
+      setScrollY(event.nativeEvent.contentOffset.y)
+    },
+    [setScrollY],
+  )
 
   const onPostUpdated = useCallback(
     (postId: string, patch: Parameters<typeof patchItem>[1]) => {
@@ -104,13 +120,11 @@ export function CommunityFeedScreen() {
   const listHeader = useMemo(
     () => (
       <YStack gap="$3" width="100%" paddingBottom="$2">
-        <StoriesStrip />
-        {isDesktopWeb ? <FeedComposer /> : null}
         <FeedFilterChips value={contentFilter} onChange={setContentFilter} />
         <FeedSortBar value={sort} onChange={setSort} />
       </YStack>
     ),
-    [contentFilter, isDesktopWeb, sort],
+    [contentFilter, sort],
   )
 
   const listFooter = useMemo(
@@ -125,41 +139,52 @@ export function CommunityFeedScreen() {
 
   return (
     <CommunityShell scroll={false} refreshing={isRefreshing} onRefresh={onRefresh}>
-      <ScreenState
-        loading={isLoading && items.length === 0}
-        error={error}
-        empty={!isLoading && items.length === 0}
-        showingCached={showingCached}
-        emptyTitle="Your feed is quiet"
-        emptyMessage="Be the first to share an update with your network."
-        emptyActionLabel="Create post"
-        onEmptyAction={() => router.push(communityRoutes.createPost as never)}
-        onRetry={refresh}
-      >
-        {items.length > 0 ? (
-          <FlashList
-            data={feedEntries}
-            renderItem={renderItem}
-            keyExtractor={keyExtractor}
-            getItemType={getItemType}
-            extraData={sections}
-            ListHeaderComponent={listHeader}
-            ListFooterComponent={listFooter}
-            onEndReached={() => {
-              if (!endReachedReadyRef.current) return
-              if (hasMore && !isLoadingMore) loadMore()
-            }}
-            onEndReachedThreshold={0.4}
-            onRefresh={onRefresh}
-            refreshing={isRefreshing}
-            drawDistance={Platform.OS === 'web' ? 500 : 250}
-            style={{ flex: 1, width: '100%' }}
-            contentContainerStyle={{ paddingBottom: FEED_LIST_BOTTOM_PAD }}
-          />
-        ) : (
-          listHeader
-        )}
-      </ScreenState>
+      <YStack flex={1} width="100%" gap="$3">
+        {showFeedChrome ? (
+          <YStack gap="$3" width="100%" animation={chromeAnim}>
+            <StoriesStrip />
+            <TodayCelebrationsCard />
+            <FeedComposer />
+          </YStack>
+        ) : null}
+        <ScreenState
+          loading={isLoading && items.length === 0}
+          error={error}
+          empty={!isLoading && items.length === 0}
+          showingCached={showingCached}
+          emptyTitle="Your feed is quiet"
+          emptyMessage="Be the first to share an update with your network."
+          emptyActionLabel="Create post"
+          onEmptyAction={() => openComposer()}
+          onRetry={refresh}
+        >
+          {items.length > 0 ? (
+            <FlashList
+              data={feedEntries}
+              renderItem={renderItem}
+              keyExtractor={keyExtractor}
+              getItemType={getItemType}
+              extraData={sections}
+              ListHeaderComponent={listHeader}
+              ListFooterComponent={listFooter}
+              onScroll={onFeedScroll}
+              scrollEventThrottle={16}
+              onEndReached={() => {
+                if (!endReachedReadyRef.current) return
+                if (hasMore && !isLoadingMore) loadMore()
+              }}
+              onEndReachedThreshold={0.4}
+              onRefresh={onRefresh}
+              refreshing={isRefreshing}
+              drawDistance={Platform.OS === 'web' ? 500 : 250}
+              style={{ flex: 1, width: '100%' }}
+              contentContainerStyle={{ paddingBottom: FEED_LIST_BOTTOM_PAD }}
+            />
+          ) : (
+            listHeader
+          )}
+        </ScreenState>
+      </YStack>
     </CommunityShell>
   )
 }

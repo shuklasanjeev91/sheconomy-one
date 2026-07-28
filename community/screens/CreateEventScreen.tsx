@@ -217,7 +217,7 @@ export function CreateEventScreen() {
       tone: 'success',
     })
     await clearFormDraft(EVENT_DRAFT_KEY)
-    router.replace(communityRoutes.event(event.id))
+    router.push(communityRoutes.event(event.id))
   }
 
   return (
@@ -354,9 +354,10 @@ export function CreateEventScreen() {
 
         <ImageUploadField
           label="Cover image (optional)"
-          hint="Upload a banner attendees will see on the event."
+          hint="Upload a banner attendees will see on the event (16:9)."
           value={cover}
           onChange={setCover}
+          aspect="landscape"
           uploadProgress={uploadProgress}
           uploadLabel="Uploading cover…"
         />

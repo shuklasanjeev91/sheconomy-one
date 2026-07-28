@@ -1,4 +1,4 @@
-import { usePathname, useRouter } from 'one'
+import { usePathname } from 'one'
 
 import { openNewChat } from '~/chat/lib/chat-actions-store'
 import { useChatTheme } from '~/chat/lib/chat-theme'
@@ -8,6 +8,7 @@ import {
   isChatCallsPath,
   isChatGroupsPath,
 } from '~/lib/routes'
+import { replaceApp } from '~/lib/platform/navigate'
 
 type SectionKey = 'chats' | 'groups' | 'calls'
 
@@ -26,7 +27,6 @@ function activeSection(pathname: string): SectionKey {
 /** WhatsApp-Web-style header for the desktop chat pane: section switcher + new chat. */
 export function ChatSectionTabs() {
   const theme = useChatTheme()
-  const router = useRouter()
   const pathname = usePathname()
   const active = activeSection(pathname)
 
@@ -47,9 +47,11 @@ export function ChatSectionTabs() {
           <XStack
             key={section.key}
             onPress={() => {
-              if (!isActive) router.push(section.href)
+              if (!isActive) replaceApp(section.href)
             }}
             cursor="pointer"
+            accessibilityRole="tab"
+            accessibilityState={{ selected: isActive }}
             alignItems="center"
             gap={6}
             paddingHorizontal={12}
@@ -57,6 +59,7 @@ export function ChatSectionTabs() {
             borderRadius={999}
             backgroundColor={isActive ? `${theme.brand}18` : 'transparent'}
             hoverStyle={{ backgroundColor: isActive ? `${theme.brand}22` : theme.listItemHover }}
+            pressStyle={{ opacity: 0.88 }}
             animation="quick"
           >
             <Icon size={16} color={isActive ? theme.brand : theme.textSecondary} />

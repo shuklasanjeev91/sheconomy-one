@@ -31,5 +31,7 @@ export type PushClient = {
   onNotificationClick: (handler: (payload: PushClickPayload) => void) => () => void
   /** Push received while the app is in the foreground. Returns unsubscribe. */
   onForegroundNotification: (handler: (payload: PushClickPayload) => void) => () => void
+  /** Last human-readable failure from requestPermission / init (if any). */
+  getLastError?: () => string | null
   platform: PushPlatform
 }

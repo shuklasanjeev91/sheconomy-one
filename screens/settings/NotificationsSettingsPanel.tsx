@@ -61,9 +61,9 @@ export function NotificationsSettingsPanel() {
           title={`${pushPlatformLabel()} push`}
           subtitle={
             !pushConfigured
-              ? 'Push is unavailable in this build (missing OneSignal App ID). Restart the dev server after setting EXPO_PUBLIC_ONESIGNAL_APP_ID, or use a rebuild — not Expo Go on iOS/Android'
+              ? 'Push is unavailable (OneSignal App ID missing from Supabase secrets). Confirm ONESIGNAL_APP_ID is set, then reopen the app — not Expo Go on iOS/Android'
               : permissionGranted
-                ? 'Enabled for this browser or app install'
+                ? 'Enabled for this browser — device registered for push delivery'
                 : 'Turn on to get cart, order, meeting, stock, and event reminders'
           }
           checked={permissionGranted}

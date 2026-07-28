@@ -1,5 +1,5 @@
 /**
- * Native listing image moderator — server-side OpenAI vision via ai-assist.
+ * Native listing image moderator — server-side vision via ai-assist.
  * Keeps native uploads from fail-open when client TF.js is unavailable.
  */
 

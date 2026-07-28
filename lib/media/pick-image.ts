@@ -10,6 +10,14 @@ export type PickedImage = {
 export type PickImagesOptions = {
   multiple?: boolean
   maxCount?: number
+  /**
+   * Target crop aspect as [width, height]. Prefer `pickImagesWithCrop` /
+   * `ImageUploadField` aspect props for the crop UI — this flag is also used
+   * by native ImagePicker `allowsEditing` when set.
+   */
+  aspect?: readonly [number, number]
+  /** Native ImagePicker crop UI (ignored on web). Default true when aspect is set. */
+  allowsEditing?: boolean
 }
 
 export type PickVideosOptions = {

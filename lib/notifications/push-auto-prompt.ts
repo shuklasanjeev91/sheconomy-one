@@ -6,9 +6,10 @@ import {
 /**
  * Persists after the user has *actually decided* the OS permission
  * (granted or denied) — not merely after we attempted to show a dialog.
- * Bumped to v4 to recover devices stuck on earlier “prompted without dialog” bugs.
+ * Bumped to v5 so devices stuck after silent auto-prompt skips see the
+ * in-app subscribe dialog again.
  */
-const STORAGE_KEY = 'sheconomy:push-permission-decided-v4'
+const STORAGE_KEY = 'sheconomy:push-permission-decided-v5'
 
 type PushPermissionMemory = {
   /** User/OS permission is settled (not still "default"). */

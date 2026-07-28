@@ -1,4 +1,3 @@
-import { useRouter } from 'one'
 
 import { Icons, Text, XStack, YStack } from '~/components/ui'
 import { HorizontalScrollRow } from '~/components/layout'
@@ -8,6 +7,7 @@ import { productQuickTools } from '~/lib/ai/product-quick-tools'
 import { useAppUi } from '~/lib/theme/useAppUi'
 import { useAiAssistOptional } from '~/providers/AiAssistProvider'
 import { useSupabase } from '~/providers/SupabaseProvider'
+import { navigateApp } from '~/lib/platform/navigate'
 
 type ProductQuickToolsProps = {
   product: AiProduct
@@ -28,7 +28,6 @@ export function ProductQuickTools({
   inset = false,
 }: ProductQuickToolsProps) {
   const ui = useAppUi()
-  const router = useRouter()
   const { user } = useSupabase()
   const ai = useAiAssistOptional()
   const tools = productQuickTools(product)
@@ -47,7 +46,7 @@ export function ProductQuickTools({
       return
     }
     if (tool.href) {
-      router.push(tool.href as never)
+      navigateApp(tool.href as never)
     }
   }
 

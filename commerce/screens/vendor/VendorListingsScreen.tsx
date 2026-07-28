@@ -1,6 +1,6 @@
 import { useState } from 'react'
-import { Link } from 'one'
 
+import { AppLink } from '~/components/navigation'
 import { Button, Icons, Spinner, Text, XStack, YStack } from '~/components/ui'
 import { PageCenter } from '~/components/layout'
 import { useAppLayout } from '~/hooks/useAppLayout'
@@ -56,11 +56,11 @@ export function VendorListingsScreen() {
         <Text fontSize={14} color={ui.textSecondary} textAlign="center" maxWidth={360}>
           Create your storefront to start managing products and inventory.
         </Text>
-        <Link href={commerceRoutes.manageShop()} asChild>
+        <AppLink href={commerceRoutes.manageShop()} asChild>
           <Button tone="primary" size="$4" borderRadius={999}>
             Go to My Shops
           </Button>
-        </Link>
+        </AppLink>
       </YStack>
     )
   }
@@ -98,11 +98,11 @@ export function VendorListingsScreen() {
               >
                 Import
               </Button>
-              <Link href={vendorRoutes.createListing} asChild>
+              <AppLink href={vendorRoutes.createListing} asChild>
                 <Button tone="primary" size="$3" borderRadius={999} icon={<Icons.Plus size={16} />}>
                   Add Product
                 </Button>
-              </Link>
+              </AppLink>
             </XStack>
           ) : null}
         </XStack>

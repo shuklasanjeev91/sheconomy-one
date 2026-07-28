@@ -42,7 +42,7 @@ export function MeetingLiveScreen({
 
   const exitMeeting = useCallback(() => {
     onExit?.()
-    navigateApp(coWorkRoutes.home, { replace: true })
+    navigateApp(coWorkRoutes.home)
   }, [onExit])
 
   const boot = useCallback(async () => {

@@ -1,4 +1,4 @@
-import { useRouter } from 'one'
+import { useLocalSearchParams, useRouter } from 'one'
 import { AppLink } from '~/components/navigation/AppLink'
 import { useMemo, useState } from 'react'
 
@@ -40,6 +40,12 @@ export function ScheduleMeetingScreen() {
   const router = useRouter()
   const toast = useAppToast()
   const { user, profile, isAuthenticated } = useProfile()
+  const params = useLocalSearchParams<{ prompt?: string | string[] }>()
+  const aiPrompt = useMemo(() => {
+    const raw = params.prompt
+    const value = Array.isArray(raw) ? raw[0] : raw
+    return typeof value === 'string' && value.trim() ? value.trim() : null
+  }, [params.prompt])
 
   const [title, setTitle] = useState('')
   const [description, setDescription] = useState('')
@@ -289,6 +295,7 @@ export function ScheduleMeetingScreen() {
 
         <MeetingAiDraftPanel
           timeZone={timeZone}
+          initialPrompt={aiPrompt}
           onApply={(draft) => {
             setTitle(draft.title)
             setDescription(draft.description)

@@ -71,6 +71,49 @@ async function sendResendEmail(apiKey: string, payload: {
   }
 }
 
+function resolvePublicAppOrigin(): string {
+  return (
+    Deno.env.get('PUBLIC_APP_URL')?.replace(/\/$/, '') ||
+    'https://sheconomy-one-eight.vercel.app'
+  )
+}
+
+/** OneSignal requires absolute http(s) URLs for web_url / app_url. */
+function toAbsoluteHttpUrl(url: string | null | undefined, appOrigin: string): string | null {
+  if (!url) return null
+  const trimmed = url.trim()
+  if (!trimmed) return null
+  if (/^https?:\/\//i.test(trimmed)) return trimmed
+  if (trimmed.startsWith('sheconomy://')) {
+    const path = trimmed.replace(/^sheconomy:\/\//, '').replace(/^\//, '')
+    return `${appOrigin}/${path}`
+  }
+  if (trimmed.startsWith('/')) return `${appOrigin}${trimmed}`
+  return `${appOrigin}/${trimmed}`
+}
+
+function onesignalResponseError(body: unknown): string | null {
+  if (!body || typeof body !== 'object') return null
+  const errors = (body as { errors?: unknown }).errors
+  if (Array.isArray(errors) && errors.length) {
+    return JSON.stringify(errors)
+  }
+  if (typeof errors === 'string' && errors.trim()) return errors
+  return null
+}
+
+/** True only when OneSignal accepted the send and at least one device was targeted. */
+function onesignalDelivered(body: unknown): boolean {
+  if (!body || typeof body !== 'object') return false
+  if (onesignalResponseError(body)) return false
+  const id = (body as { id?: unknown }).id
+  if (typeof id !== 'string' || !id.trim()) return false
+  const recipients = (body as { recipients?: unknown }).recipients
+  // Explicit 0 recipients = accepted payload but nobody to notify.
+  if (typeof recipients === 'number' && recipients <= 0) return false
+  return true
+}
+
 async function sendOneSignalPush(options: {
   appId: string
   apiKey: string
@@ -90,12 +133,28 @@ async function sendOneSignalPush(options: {
   const externalIds = (options.externalIds ?? []).filter(Boolean)
   if (!playerIds.length && !externalIds.length) return
 
+  const absoluteUrl = toAbsoluteHttpUrl(options.url, resolvePublicAppOrigin())
+  // Keep original path in data for in-app deep links; absolute for OneSignal click URLs.
+  const pathForData =
+    options.url && options.url.trim().startsWith('/')
+      ? options.url.trim()
+      : absoluteUrl
+        ? (() => {
+            try {
+              const parsed = new URL(absoluteUrl)
+              return `${parsed.pathname}${parsed.search}${parsed.hash}` || absoluteUrl
+            } catch {
+              return options.url ?? absoluteUrl
+            }
+          })()
+        : options.url ?? null
+
   const data: Record<string, unknown> = {
     ...(options.data ?? {}),
   }
-  if (options.url) {
-    data.action_url = options.url
-    data.url = options.url
+  if (pathForData) {
+    data.action_url = pathForData
+    data.url = pathForData
   }
   if (options.isIncomingCall) {
     data.notification_kind = 'incoming_call'
@@ -107,9 +166,12 @@ async function sendOneSignalPush(options: {
     contents: { en: options.body },
     target_channel: 'push',
     data: Object.keys(data).length ? data : undefined,
-    web_url: options.url ?? undefined,
-    app_url: options.url ?? undefined,
-    url: options.url ?? undefined,
+  }
+
+  // OneSignal rejects `url` when `web_url` / `app_url` are set, and both must be absolute https.
+  if (absoluteUrl) {
+    base.web_url = absoluteUrl
+    base.app_url = absoluteUrl
   }
 
   if (options.isIncomingCall) {
@@ -131,14 +193,15 @@ async function sendOneSignalPush(options: {
   }
 
   // OneSignal allows only one targeting parameter per request.
-  // Prefer external_id (set via OneSignal.login on web/native); fall back to
-  // stored subscription ids when alias targeting is rejected.
+  // Prefer stored subscription/player ids (device actually registered), then external_id.
   const targetingAttempts: Record<string, unknown>[] = []
-  if (externalIds.length) {
-    targetingAttempts.push({ include_aliases: { external_id: externalIds } })
-  }
   if (playerIds.length) {
     targetingAttempts.push({ include_subscription_ids: playerIds })
+    targetingAttempts.push({ include_player_ids: playerIds })
+  }
+  if (externalIds.length) {
+    targetingAttempts.push({ include_aliases: { external_id: externalIds } })
+    targetingAttempts.push({ include_external_user_ids: externalIds })
   }
 
   let lastError: Error | null = null
@@ -153,8 +216,28 @@ async function sendOneSignalPush(options: {
         },
         body: JSON.stringify(payload),
       })
-      if (response.ok) return
-      lastError = new Error((await response.text()) || 'OneSignal error')
+      const raw = await response.text()
+      let parsed: unknown = null
+      try {
+        parsed = raw ? JSON.parse(raw) : null
+      } catch {
+        parsed = null
+      }
+      const bodyError = onesignalResponseError(parsed)
+      // OneSignal often returns HTTP 200 with `{ id: "", errors: [...] }` or recipients:0.
+      if (response.ok && !bodyError && onesignalDelivered(parsed)) return
+      lastError = new Error(
+        bodyError ||
+          (parsed && typeof parsed === 'object' && (parsed as { recipients?: number }).recipients === 0
+            ? 'OneSignal accepted the notification but matched 0 subscribed devices'
+            : null) ||
+          raw ||
+          'OneSignal error',
+      )
+      // Auth scheme mismatch — try the other header before switching targets.
+      if (response.status === 401 || response.status === 403) continue
+      // Targeting / payload errors won't change with a different auth header.
+      break
     }
   }
   if (lastError) throw lastError

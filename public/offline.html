@@ -1,0 +1,96 @@
+<!DOCTYPE html>
+<html lang="en-US">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="theme-color" content="#D81B60" />
+    <title>Offline · SHEconomy</title>
+    <style>
+      :root {
+        color-scheme: light;
+        --bg: #fef5f9;
+        --text: #1a0a12;
+        --muted: #6b4a57;
+        --brand: #d81b60;
+        --card: #ffffff;
+        --border: #f0d6e2;
+      }
+      * {
+        box-sizing: border-box;
+      }
+      html,
+      body {
+        margin: 0;
+        min-height: 100%;
+        font-family:
+          'Segoe UI',
+          system-ui,
+          -apple-system,
+          sans-serif;
+        background: var(--bg);
+        color: var(--text);
+      }
+      main {
+        min-height: 100dvh;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 24px;
+      }
+      .card {
+        width: 100%;
+        max-width: 420px;
+        background: var(--card);
+        border: 1px solid var(--border);
+        border-radius: 20px;
+        padding: 28px 24px;
+        text-align: center;
+        box-shadow: 0 12px 40px rgba(26, 10, 18, 0.08);
+      }
+      img {
+        width: 72px;
+        height: 72px;
+        border-radius: 18px;
+        margin-bottom: 16px;
+      }
+      h1 {
+        margin: 0 0 8px;
+        font-size: 1.35rem;
+        letter-spacing: -0.02em;
+      }
+      p {
+        margin: 0 0 20px;
+        color: var(--muted);
+        line-height: 1.5;
+        font-size: 0.95rem;
+      }
+      button {
+        appearance: none;
+        border: 0;
+        border-radius: 999px;
+        background: var(--brand);
+        color: #fff;
+        font-weight: 700;
+        font-size: 0.95rem;
+        padding: 12px 22px;
+        cursor: pointer;
+      }
+      button:hover {
+        filter: brightness(1.05);
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <div class="card">
+        <img src="/pwa-icon-192.png" alt="SHEconomy" width="72" height="72" />
+        <h1>You’re offline</h1>
+        <p>
+          SHEconomy needs a connection for the latest shops, feed, and messages. Check your network
+          and try again.
+        </p>
+        <button type="button" onclick="location.reload()">Try again</button>
+      </div>
+    </main>
+  </body>
+</html>

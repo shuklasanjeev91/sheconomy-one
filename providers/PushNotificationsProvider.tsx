@@ -20,6 +20,7 @@ import {
   shouldAutoPromptPush,
 } from '~/lib/notifications/push-auto-prompt'
 import {
+  fetchOneSignalConfig,
   getOneSignalAppId,
   pathFromNotificationUrl,
 } from '~/lib/notifications/push-config'
@@ -35,6 +36,10 @@ type PushNotificationsContextValue = {
   isBusy: boolean
   /** Last registered OneSignal player/subscription id. */
   playerId: string | null
+  /** In-app “Allow notifications?” dialog visibility. */
+  subscribePromptVisible: boolean
+  /** Hide the in-app subscribe dialog. */
+  dismissSubscribePrompt: () => void
   /** Request OS permission and register this device. */
   enablePush: () => Promise<{ ok: boolean; error?: string }>
   /** Opt out + disable this device row. */
@@ -73,17 +78,44 @@ async function rememberDecisionIfSettled() {
  */
 export function PushNotificationsProvider({ children }: { children: ReactNode }) {
   const { user } = useSupabase()
-  const isConfigured = !!getOneSignalAppId()
+  const [isConfigured, setIsConfigured] = useState(() => !!getOneSignalAppId())
   const [permissionGranted, setPermissionGranted] = useState(false)
   const [playerId, setPlayerId] = useState<string | null>(null)
   const [isBusy, setIsBusy] = useState(false)
   const [clientReady, setClientReady] = useState(Platform.OS !== 'web')
+  const [configReady, setConfigReady] = useState(() => !!getOneSignalAppId())
+  const [subscribePromptVisible, setSubscribePromptVisible] = useState(false)
   const handledUserRef = useRef<string | null>(null)
   const pushSessionActiveRef = useRef(false)
+
+  const dismissSubscribePrompt = useCallback(() => {
+    setSubscribePromptVisible(false)
+  }, [])
 
   useEffect(() => {
     setClientReady(true)
   }, [])
+
+  // Load App ID from Supabase edge secrets so web + Release native match dispatch.
+  useEffect(() => {
+    if (!clientReady) return
+    let cancelled = false
+    void (async () => {
+      try {
+        const config = await fetchOneSignalConfig()
+        if (cancelled) return
+        setIsConfigured(!!config.appId)
+      } catch (error) {
+        console.warn('[push] config resolve failed', error)
+        if (!cancelled) setIsConfigured(!!getOneSignalAppId())
+      } finally {
+        if (!cancelled) setConfigReady(true)
+      }
+    })()
+    return () => {
+      cancelled = true
+    }
+  }, [clientReady])
 
   const registerIfPossible = useCallback(async (userId: string, permitted: boolean) => {
     if (!permitted) {
@@ -91,7 +123,23 @@ export function PushNotificationsProvider({ children }: { children: ReactNode })
       return null
     }
     await pushClient.optIn()
-    const id = await waitForPlayerId()
+    // Re-bind external_id after subscribe so OneSignal links the web/iOS subscription.
+    try {
+      await pushClient.login(userId)
+    } catch {
+      // ignore
+    }
+    let id = await waitForPlayerId(pushClient.platform === 'web' ? 16 : 10, 700)
+    // Web often has Notification.permission=granted from an earlier visit but no
+    // OneSignal subscription yet — force a repair pass once.
+    if (!id && pushClient.platform === 'web') {
+      console.info('[push] web permission granted but no subscription id — repairing')
+      const repaired = await pushClient.requestPermission()
+      if (repaired) {
+        await pushClient.login(userId)
+        id = await waitForPlayerId(16, 700)
+      }
+    }
     setPlayerId(id)
     if (id) {
       const { error } = await registerPushDevice({
@@ -102,7 +150,10 @@ export function PushNotificationsProvider({ children }: { children: ReactNode })
       })
       if (error) {
         console.warn('[push] registerPushDevice failed', error)
+        setPlayerId(null)
+        return null
       }
+      console.info('[push] device registered', { platform: pushClient.platform, playerId: id })
     } else {
       console.warn('[push] permission granted but no player/subscription id yet')
     }
@@ -125,16 +176,24 @@ export function PushNotificationsProvider({ children }: { children: ReactNode })
       setPermissionGranted(granted)
       await rememberDecisionIfSettled()
       if (!granted) {
-        return { ok: false, error: 'Permission was denied. Enable notifications in system settings.' }
+        return {
+          ok: false,
+          error:
+            pushClient.getLastError?.() ||
+            'Permission was denied. Enable notifications in system settings.',
+        }
       }
       const id = await registerIfPossible(user.id, true)
       if (!id) {
         return {
           ok: false,
           error:
-            'Could not obtain a push subscription yet. Check notification permission, then try again.',
+            pushClient.getLastError?.() ||
+            'Could not save this browser as a push device. Sign in again, allow notifications, then retry.',
         }
       }
+      setPermissionGranted(true)
+      setSubscribePromptVisible(false)
       return { ok: true }
     } catch (error) {
       return {
@@ -165,14 +224,14 @@ export function PushNotificationsProvider({ children }: { children: ReactNode })
   }, [isConfigured, registerIfPossible, user?.id])
 
   useEffect(() => {
-    if (!clientReady || !isConfigured) return
+    if (!clientReady || !configReady || !isConfigured) return
     const timer = setTimeout(() => {
       void pushClient.init().catch((error) => {
         console.warn('[push] early init failed', error)
       })
     }, 400)
     return () => clearTimeout(timer)
-  }, [clientReady, isConfigured])
+  }, [clientReady, configReady, isConfigured])
 
   // Sign-out cleanup.
   useEffect(() => {
@@ -182,6 +241,7 @@ export function PushNotificationsProvider({ children }: { children: ReactNode })
     handledUserRef.current = null
     setPlayerId(null)
     setPermissionGranted(false)
+    setSubscribePromptVisible(false)
     if (pushSessionActiveRef.current) {
       pushSessionActiveRef.current = false
       void pushClient.logout()
@@ -189,11 +249,12 @@ export function PushNotificationsProvider({ children }: { children: ReactNode })
   }, [clientReady, user?.id])
 
   /**
-   * Auto-subscribe when a user is (or becomes) signed in.
-   * Stable deps only — avoid cancelling mid-prompt when callback identities change.
+   * After sign-in: register if already allowed; otherwise show an in-app
+   * subscribe dialog. Browsers block OS prompts without a user gesture, so web
+   * never auto-calls requestPermission — the dialog button does.
    */
   useEffect(() => {
-    if (!clientReady || !isConfigured || !user?.id) return
+    if (!clientReady || !configReady || !isConfigured || !user?.id) return
     if (handledUserRef.current === user.id) return
 
     const userId = user.id
@@ -216,11 +277,16 @@ export function PushNotificationsProvider({ children }: { children: ReactNode })
           if (cancelled) return
 
           if (permitted) {
-            setPermissionGranted(true)
-            await registerIfPossible(userId, true)
-            await markPushPermissionDecided()
+            const id = await registerIfPossible(userId, true)
+            setPermissionGranted(!!id)
+            setSubscribePromptVisible(!id)
+            if (id) await markPushPermissionDecided()
             if (!cancelled) handledUserRef.current = userId
-            console.info('[push] already permitted — registered device')
+            console.info(
+              id
+                ? '[push] already permitted — registered device'
+                : '[push] permitted in browser but device not registered — show prompt',
+            )
             return
           }
 
@@ -228,7 +294,6 @@ export function PushNotificationsProvider({ children }: { children: ReactNode })
           if (cancelled) return
 
           if (!canRequest) {
-            // Denied / unsupported — remember so we don't keep trying.
             await markPushPermissionDecided()
             if (!cancelled) handledUserRef.current = userId
             console.info('[push] cannot request permission (denied or unsupported)')
@@ -238,24 +303,29 @@ export function PushNotificationsProvider({ children }: { children: ReactNode })
           const shouldPrompt = await shouldAutoPromptPush()
           if (cancelled) return
 
-          if (!shouldPrompt) {
-            if (!cancelled) handledUserRef.current = userId
-            console.info('[push] permission already decided earlier — skip OS prompt')
-            return
+          // Always offer the in-app dialog when we can still request — browsers
+          // require a click before their permission UI will appear.
+          if (shouldPrompt) {
+            setSubscribePromptVisible(true)
+            console.info('[push] showing in-app subscribe prompt')
           }
 
-          console.info('[push] requesting OS permission')
-          const granted = await pushClient.requestPermission()
-          if (cancelled) return
+          // Native can also present the system sheet without a gesture.
+          if (Platform.OS !== 'web' && shouldPrompt) {
+            console.info('[push] requesting OS permission')
+            const granted = await pushClient.requestPermission()
+            if (cancelled) return
 
-          setPermissionGranted(granted)
-          await rememberDecisionIfSettled()
+            setPermissionGranted(granted)
+            await rememberDecisionIfSettled()
 
-          if (granted) {
-            await registerIfPossible(userId, true)
-            console.info('[push] permission granted — device registered')
-          } else {
-            console.info('[push] permission not granted')
+            if (granted) {
+              setSubscribePromptVisible(false)
+              await registerIfPossible(userId, true)
+              console.info('[push] permission granted — device registered')
+            } else {
+              console.info('[push] permission not granted — keep in-app prompt if needed')
+            }
           }
 
           if (!cancelled) handledUserRef.current = userId
@@ -269,10 +339,10 @@ export function PushNotificationsProvider({ children }: { children: ReactNode })
       cancelled = true
       clearTimeout(timer)
     }
-  }, [clientReady, isConfigured, registerIfPossible, user?.id])
+  }, [clientReady, configReady, isConfigured, registerIfPossible, user?.id])
 
   useEffect(() => {
-    if (!clientReady || !isConfigured) return
+    if (!clientReady || !configReady || !isConfigured) return
     return pushClient.onNotificationClick((payload) => {
       const path = pathFromNotificationUrl(payload.url)
       if (path) {
@@ -283,7 +353,7 @@ export function PushNotificationsProvider({ children }: { children: ReactNode })
         }
       }
     })
-  }, [clientReady, isConfigured])
+  }, [clientReady, configReady, isConfigured])
 
   const disablePush = useCallback(async () => {
     if (!user?.id) return { ok: false, error: 'Not signed in' }
@@ -312,17 +382,21 @@ export function PushNotificationsProvider({ children }: { children: ReactNode })
       permissionGranted,
       isBusy,
       playerId,
+      subscribePromptVisible,
+      dismissSubscribePrompt,
       enablePush,
       disablePush,
       syncDevice,
     }),
     [
       disablePush,
+      dismissSubscribePrompt,
       enablePush,
       isBusy,
       isConfigured,
       permissionGranted,
       playerId,
+      subscribePromptVisible,
       syncDevice,
     ],
   )

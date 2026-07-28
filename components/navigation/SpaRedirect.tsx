@@ -3,7 +3,7 @@ import { usePathname } from 'one'
 import { useEffect, useRef } from 'react'
 
 import { Spinner, YStack } from '~/components/ui'
-import { replaceApp } from '~/lib/platform/navigate'
+import { navigateApp } from '~/lib/platform/navigate'
 
 type SpaRedirectProps = {
   href: Href | string
@@ -15,7 +15,7 @@ function normalizePath(path: string): string {
   return trimmed === '' ? '/' : trimmed
 }
 
-/** True when navigating to `href` would be a no-op (avoids replace loops). */
+/** True when navigating to `href` would be a no-op (avoids push loops). */
 function isAlreadyAtHref(pathname: string, href: string): boolean {
   const [targetPath, targetQuery = ''] = href.split('?')
   if (normalizePath(pathname) !== normalizePath(targetPath ?? '/')) return false
@@ -34,10 +34,10 @@ function isNavigatorNotReadyError(error: unknown): boolean {
 }
 
 /**
- * Soft SPA redirect via `router.replace` — never hard-reloads the shell.
+ * Soft SPA redirect via `router.push` — never hard-reloads the shell.
  * Drop-in for One's `<Redirect href=… />` on web, iOS, and Android.
  *
- * Guards against same-path replace loops that blank the app (max update depth).
+ * Guards against same-path navigation loops that blank the app (max update depth).
  * Retries when the root navigator is not mounted yet (common on cold auth routes).
  */
 export function SpaRedirect({ href }: SpaRedirectProps) {
@@ -57,15 +57,17 @@ export function SpaRedirect({ href }: SpaRedirectProps) {
     const tryNavigate = () => {
       if (cancelled || didNavigate.current) return
       try {
-        replaceApp(target)
+        navigateApp(target)
         didNavigate.current = true
       } catch (error) {
         attempts += 1
         if (attempts >= maxAttempts || !isNavigatorNotReadyError(error)) {
-          console.warn('[SpaRedirect] replace failed', target, error)
+          console.warn('[SpaRedirect] push failed', target, error)
           if (typeof window !== 'undefined') {
-            window.location.replace(
-              target.startsWith('http') ? target : `${window.location.origin}${target.startsWith('/') ? target : `/${target}`}`,
+            window.location.assign(
+              target.startsWith('http')
+                ? target
+                : `${window.location.origin}${target.startsWith('/') ? target : `/${target}`}`,
             )
           }
           return

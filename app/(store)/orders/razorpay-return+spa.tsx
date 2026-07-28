@@ -62,16 +62,16 @@ export default function RazorpayReturnRoute() {
           await cancelCheckoutPayment(pending.checkoutGroupId)
           await clearPendingOrderSuccess()
           if (cancelled) return
-          router.replace(commerceRoutes.cart)
+          router.push(commerceRoutes.cart)
           return
         }
         if (pending?.orderIds?.length) {
           await savePendingOrderSuccess({ ...pending, awaitingExternalPayment: true })
           if (cancelled) return
-          router.replace(commerceRoutes.orderSuccess(pending.orderIds))
+          router.push(commerceRoutes.orderSuccess(pending.orderIds))
           return
         }
-        router.replace(commerceRoutes.cart)
+        router.push(commerceRoutes.cart)
         return
       }
 
@@ -90,7 +90,7 @@ export default function RazorpayReturnRoute() {
           awaitingExternalPayment: false,
         })
         if (cancelled) return
-        router.replace(commerceRoutes.orderSuccess(pending.orderIds))
+        router.push(commerceRoutes.orderSuccess(pending.orderIds))
         return
       }
 

@@ -1,4 +1,3 @@
-import { useRouter } from 'one'
 import { useCallback, useEffect, useMemo, useState, memo } from 'react'
 
 import { CommunityCard } from '~/community/components/CommunityCard'
@@ -26,6 +25,7 @@ import { FlashList } from '@shopify/flash-list'
 import { supabase } from '~/lib/supabase/client'
 import { useAppUi } from '~/lib/theme/useAppUi'
 import { useSupabase } from '~/providers/SupabaseProvider'
+import { navigateApp } from '~/lib/platform/navigate'
 
 type NotificationsCache = {
   items: AppNotification[]
@@ -36,7 +36,6 @@ type NotificationsCache = {
 export function NotificationsScreen() {
   const communityUi = useCommunityUi()
   const ui = useAppUi()
-  const router = useRouter()
   const { user } = useSupabase()
   const cacheKey = user?.id ? CACHE_KEYS.notifications(user.id) : null
   const initial = cacheKey ? peekAppCache<NotificationsCache>(cacheKey) : null
@@ -169,10 +168,10 @@ export function NotificationsScreen() {
       }
       const path = resolveNotificationPath(notification)
       if (path && path !== '/notifications') {
-        router.push(path as never)
+        navigateApp(path as never)
       }
     },
-    [persistReadState, router, user?.id],
+    [persistReadState, user?.id],
   )
 
   async function handleMarkAll() {

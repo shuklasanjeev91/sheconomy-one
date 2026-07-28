@@ -12,6 +12,7 @@ import {
 } from '~/class/lib/languages'
 import {
   fetchProgramCategories,
+  fetchPublishedProgramLanguages,
   fetchPublishedPrograms,
   fetchPublishedProgramsPage,
   groupProgramsByCategory,
@@ -34,6 +35,7 @@ export function ClassesScreen() {
 
   const [categories, setCategories] = useState<ProgramCategory[]>([])
   const [featured, setFeatured] = useState<Program[]>([])
+  const [availableLanguages, setAvailableLanguages] = useState<string[]>([])
   const [metaError, setMetaError] = useState<string | null>(null)
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null)
   const [selectedLanguage, setSelectedLanguage] = useState<string | null>(null)
@@ -46,14 +48,16 @@ export function ClassesScreen() {
   useEffect(() => {
     let cancelled = false
     void (async () => {
-      const [categoryResult, featuredResult] = await Promise.all([
+      const [categoryResult, featuredResult, languageResult] = await Promise.all([
         fetchProgramCategories(),
         fetchPublishedPrograms({ featuredOnly: true, mediaType: mediaTab, limit: 12 }),
+        fetchPublishedProgramLanguages({ mediaType: mediaTab }),
       ])
       if (cancelled) return
       setCategories(categoryResult.categories)
       setFeatured(featuredResult.programs)
-      setMetaError(categoryResult.error ?? featuredResult.error)
+      setAvailableLanguages(languageResult.languages)
+      setMetaError(categoryResult.error ?? featuredResult.error ?? languageResult.error)
     })()
     return () => {
       cancelled = true
@@ -88,12 +92,18 @@ export function ClassesScreen() {
     () => feed.items.filter((program) => program.media_type === mediaTab),
     [feed.items, mediaTab],
   )
-  const featuredForTab = useMemo(
-    () => featured.filter((program) => program.media_type === mediaTab),
-    [featured, mediaTab],
-  )
+  const featuredForTab = useMemo(() => {
+    const forTab = featured.filter((program) => program.media_type === mediaTab)
+    if (!selectedLanguage) return forTab
+    return forTab.filter(
+      (program) => (program.language ?? 'en').trim().toLowerCase() === selectedLanguage,
+    )
+  }, [featured, mediaTab, selectedLanguage])
   const error = metaError ?? feed.error
-  const languageCodes = useMemo(() => collectProgramLanguages(programs), [programs])
+  const languageCodes = useMemo(() => {
+    if (availableLanguages.length > 0) return availableLanguages
+    return collectProgramLanguages(programs)
+  }, [availableLanguages, programs])
 
   const grouped = useMemo(
     () => groupProgramsByCategory(programs, categories),
@@ -112,41 +122,52 @@ export function ClassesScreen() {
   }, [categories, programs])
 
   const hasActiveFilters = Boolean(selectedCategory) || Boolean(selectedLanguage)
+  const showLanguageFilter = languageCodes.length > 0
 
   return (
     <ClassShell refreshing={feed.isRefreshing} onRefresh={() => feed.refresh()}>
       <ContinueLearningRail mediaType={mediaTab} />
       <SavedProgramsRail mediaType={mediaTab} />
 
-      {languageCodes.length > 1 || selectedLanguage ? (
-        <XStack flexWrap="wrap" gap="$2" width="100%">
-          <CategoryChip
-            label="All languages"
-            active={!selectedLanguage}
-            onPress={() => setSelectedLanguage(null)}
-          />
-          {languageCodes.map((code) => (
+      {showLanguageFilter ? (
+        <YStack gap="$2" width="100%">
+          <Text fontSize={13} fontWeight="700" color={ui.textMuted} letterSpacing={0.2}>
+            Language
+          </Text>
+          <XStack flexWrap="wrap" gap="$2" width="100%">
             <CategoryChip
-              key={code}
-              label={formatProgramLanguage(code)}
-              active={selectedLanguage === code}
-              onPress={() => setSelectedLanguage(code)}
+              label="All languages"
+              active={!selectedLanguage}
+              onPress={() => setSelectedLanguage(null)}
             />
-          ))}
-        </XStack>
+            {languageCodes.map((code) => (
+              <CategoryChip
+                key={code}
+                label={formatProgramLanguage(code)}
+                active={selectedLanguage === code}
+                onPress={() => setSelectedLanguage(code)}
+              />
+            ))}
+          </XStack>
+        </YStack>
       ) : null}
 
       {categoryChips.length > 1 ? (
-        <XStack flexWrap="wrap" gap="$2" width="100%">
-          {categoryChips.map((chip) => (
-            <CategoryChip
-              key={chip}
-              label={chip}
-              active={chip === 'All' ? !selectedCategory : selectedCategory === chip}
-              onPress={() => setSelectedCategory(chip === 'All' ? null : chip)}
-            />
-          ))}
-        </XStack>
+        <YStack gap="$2" width="100%">
+          <Text fontSize={13} fontWeight="700" color={ui.textMuted} letterSpacing={0.2}>
+            Category
+          </Text>
+          <XStack flexWrap="wrap" gap="$2" width="100%">
+            {categoryChips.map((chip) => (
+              <CategoryChip
+                key={chip}
+                label={chip}
+                active={chip === 'All' ? !selectedCategory : selectedCategory === chip}
+                onPress={() => setSelectedCategory(chip === 'All' ? null : chip)}
+              />
+            ))}
+          </XStack>
+        </YStack>
       ) : null}
 
       {error ? (
@@ -173,7 +194,7 @@ export function ClassesScreen() {
         >
           <Icons.Radio size={44} color={ui.brand} opacity={0.85} />
           <Text fontSize={16} fontWeight="700" color={ui.text} letterSpacing={-0.2}>
-            {hasActiveFilters ? 'No matching videos' : `No ${mediaTab} yet`}
+            {hasActiveFilters ? 'No matching programs' : `No ${mediaTab} yet`}
           </Text>
           <Text fontSize={14} color={ui.textSecondary} textAlign="center" paddingHorizontal="$4">
             {hasActiveFilters

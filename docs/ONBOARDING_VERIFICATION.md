@@ -2,6 +2,16 @@
 
 Cross-platform (Web / Android / iOS) passwordless onboarding on top of the existing Supabase OTP auth.
 
+## First-launch app intro (native)
+
+On **iOS and Android**, `NativeAppOnboardingGate` wraps the root shell and shows a full-screen brand carousel once (`sheconomy.auth.onboarding.seen`). After Skip / Get started, members land in the main app (commerce is browsable as a guest). The same persistence key is shared with compact-web auth onboarding so users are not asked twice.
+
+Replay: Settings → About → **Replay welcome tour**, then fully relaunch the app.
+
+Files: `components/onboarding/NativeAppOnboardingGate.tsx`, `components/auth/AuthOnboarding.tsx`, `lib/onboarding/first-launch.ts`.
+
+---
+
 ## Architecture
 
 | Layer | Role |

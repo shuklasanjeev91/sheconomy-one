@@ -60,8 +60,8 @@ export function CommerceSection({
         {action ? (
           action
         ) : actionLabel && actionHref ? (
-          <AppLink href={actionHref}>
-            <Theme name={BRAND_THEME}>
+          <Theme name={BRAND_THEME}>
+            <AppLink href={actionHref} asChild>
               <XStack
                 paddingHorizontal="$3"
                 paddingVertical="$1.5"
@@ -76,8 +76,8 @@ export function CommerceSection({
                   {actionLabel}
                 </Text>
               </XStack>
-            </Theme>
-          </AppLink>
+            </AppLink>
+          </Theme>
         ) : null}
       </XStack>
       {children}

@@ -177,7 +177,7 @@ export function CreateShopScreen() {
     if (phase === 'success' || isSubmitting || hasSubmittedRef.current) return
     if (!myShopsLoaded) return
     if (alreadyHasShop) {
-      router.replace(vendorRoutes.myShop)
+      router.push(vendorRoutes.myShop)
     }
   }, [alreadyHasShop, myShopsLoaded, isSubmitting, phase, router])
 
@@ -185,7 +185,7 @@ export function CreateShopScreen() {
   useEffect(() => {
     if (phase !== 'success') return
     if (countdown <= 0) {
-      router.replace(vendorRoutes.createListing)
+      router.push(vendorRoutes.createListing)
       return
     }
     const timer = setTimeout(() => setCountdown((value) => value - 1), 1000)
@@ -534,8 +534,8 @@ export function CreateShopScreen() {
         <SuccessOverlay
           ui={ui}
           countdown={countdown}
-          onSkip={() => router.replace(vendorRoutes.home)}
-          onContinue={() => router.replace(vendorRoutes.createListing)}
+          onSkip={() => router.push(vendorRoutes.home)}
+          onContinue={() => router.push(vendorRoutes.createListing)}
         />
       ) : null}
     </YStack>

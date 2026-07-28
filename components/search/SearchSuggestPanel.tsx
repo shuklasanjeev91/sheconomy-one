@@ -17,6 +17,7 @@ type SearchSuggestPanelProps = {
   onClearRecent?: () => void
   onRemoveRecent?: (term: string) => void
   onHitPress?: () => void
+  onAskAi?: () => void
 }
 
 export function SearchSuggestPanel({
@@ -31,12 +32,50 @@ export function SearchSuggestPanel({
   onClearRecent,
   onRemoveRecent,
   onHitPress,
+  onAskAi,
 }: SearchSuggestPanelProps) {
   const ui = useAppUi()
   const trimmed = query.trim()
 
   const body = (
     <YStack gap="$3" width="100%" paddingBottom="$2" paddingTop="$2">
+      {trimmed && onAskAi ? (
+        <XStack
+          paddingHorizontal="$3"
+          paddingVertical="$2.5"
+          borderRadius={10}
+          cursor="pointer"
+          hoverStyle={{ backgroundColor: ui.surfaceHover }}
+          onPress={() => {
+            onAskAi()
+            onOpenChange(false)
+          }}
+          alignItems="center"
+          gap="$2.5"
+          accessibilityRole="button"
+          aria-label="Ask AI to search"
+        >
+          <YStack
+            width={32}
+            height={32}
+            borderRadius={999}
+            backgroundColor={ui.surfaceMuted}
+            alignItems="center"
+            justifyContent="center"
+          >
+            <Icons.Sparkles size={15} color={ui.brand} />
+          </YStack>
+          <YStack flex={1} minWidth={0} gap={2}>
+            <Text fontSize={14} fontWeight="600" color={ui.text} numberOfLines={1}>
+              Ask AI: “{trimmed}”
+            </Text>
+            <Text fontSize={12} color={ui.textMuted} numberOfLines={1}>
+              Understand your request and find matching listings
+            </Text>
+          </YStack>
+        </XStack>
+      ) : null}
+
       {!trimmed && recent.length > 0 ? (
         <YStack gap="$1">
           <SuggestSectionHeader

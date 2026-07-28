@@ -35,7 +35,7 @@ export function GenderVerificationScreen() {
         refreshProfiles()
       }
       setTimeout(() => {
-        router.replace(communityRoutes.home)
+        router.push(communityRoutes.home)
       }, 1100)
     },
   })
@@ -43,7 +43,7 @@ export function GenderVerificationScreen() {
   useEffect(() => {
     if (Platform.OS === 'web' || !isFemale) return
     refreshProfiles()
-    router.replace(communityRoutes.home)
+    router.push(communityRoutes.home)
   }, [isFemale, router])
 
   const isRunning =

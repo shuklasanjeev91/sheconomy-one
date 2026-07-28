@@ -206,6 +206,18 @@ export const FAQ_FALLBACK: HelpArticle[] = [
     slug: 'host-meeting',
   },
   {
+    id: 'fallback-cowork-schedule',
+    title: 'How do I schedule a Co-Work meeting for tomorrow?',
+    content:
+      'Go to Co-Work → Schedule meeting (/co-work/schedule). Use Create with AI and say something like “team sync tomorrow at 11am”, review the drafted title and time, then create the meeting and share the code or /co-work/meeting/{code} link. You can also ask SHEconomy AI: “Schedule a meeting for tomorrow.”',
+    category: 'cowork',
+    tags: ['meetings', 'schedule', 'ai'],
+    helpful_count: 0,
+    view_count: 0,
+    source: 'fallback',
+    slug: 'schedule-meeting',
+  },
+  {
     id: 'fallback-cowork-waiting-room',
     title: 'What is the waiting room?',
     content:
@@ -279,6 +291,12 @@ export const CONTACT_TEMPLATES: Array<{
     label: 'AV blocked',
     subject: 'Camera or mic blocked in Co-Work',
     description: 'Meeting code:\nDevice:\nWhat I already tried:\n',
+  },
+  {
+    product: 'cowork',
+    label: 'Schedule help',
+    subject: 'Help scheduling a Co-Work meeting',
+    description: 'When I want the meeting:\nWho should join:\nWhat happened / error:\n',
   },
 ]
 

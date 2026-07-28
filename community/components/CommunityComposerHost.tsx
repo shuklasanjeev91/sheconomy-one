@@ -37,6 +37,9 @@ export function CommunityComposerHost() {
           autoPickVideo={options.video}
           initialGroupId={options.groupId}
           initialCompanyId={options.companyId}
+          initialOccasion={options.occasion}
+          initialCelebrationTitle={options.celebrationTitle}
+          initialContent={options.content}
         />
       ) : null}
     </CommunityAdaptiveSheet>

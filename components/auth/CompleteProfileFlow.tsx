@@ -53,7 +53,7 @@ import { DEFAULT_COUNTRY, findCountryByIso2 } from '~/lib/phone/countries'
 import { isValidPhone } from '~/lib/phone/phone'
 import { supabase } from '~/lib/supabase/client'
 import { useAppUi } from '~/lib/theme/useAppUi'
-import { useRouter } from 'one'
+import { navigateApp, replaceApp } from '~/lib/platform/navigate'
 
 type Step = 'basics' | 'phone' | 'prefs' | 'interests' | 'intents'
 
@@ -74,7 +74,6 @@ type CompleteProfileFlowProps = {
 export function CompleteProfileFlow({ returnTo, isNewUser }: CompleteProfileFlowProps) {
   const ui = useAppUi()
   const toast = useAppToast()
-  const router = useRouter()
   const { user, completeSignIn } = useAuth()
   const [loading, setLoading] = useState(true)
   const [profile, setProfile] = useState<OnboardingProfile | null>(null)
@@ -170,7 +169,7 @@ export function CompleteProfileFlow({ returnTo, isNewUser }: CompleteProfileFlow
     if (!user?.id) return
     await markOnboardingCompleted(user.id)
     if (options?.goToShop) {
-      router.replace(commerceRoutes.createShop)
+      replaceApp(commerceRoutes.createShop)
       return
     }
     if (options?.offerContacts && isContactProfileSuggestSupported()) {
@@ -378,7 +377,7 @@ export function CompleteProfileFlow({ returnTo, isNewUser }: CompleteProfileFlow
           tone="primary"
           size="$4"
           borderRadius={999}
-          onPress={() => router.push(appRoutes.importContacts)}
+          onPress={() => navigateApp(appRoutes.importContacts)}
         >
           Select contacts
         </Button>

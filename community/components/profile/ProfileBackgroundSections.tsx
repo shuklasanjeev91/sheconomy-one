@@ -63,6 +63,7 @@ import {
 } from '~/components/ui'
 import { LocationPickerField } from '~/components/geo'
 import { MonthYearField } from '~/components/forms/MonthYearField'
+import { NativeDateField } from '~/components/forms/NativeDateField'
 import { SearchSelectField } from '~/components/forms/SearchSelectField'
 import { suggestCompanyNames } from '~/community/lib/companies'
 import { INDUSTRY_OPTIONS } from '~/lib/datasets/industries'
@@ -115,6 +116,8 @@ export function ProfileBackgroundSections({
       industry: profile.industry ?? '',
       business_name: profile.business_name ?? '',
       location: profile.location ?? '',
+      date_of_birth: profile.date_of_birth ?? null,
+      marriage_anniversary: profile.marriage_anniversary ?? null,
     })
     setEditingId(null)
     setSheetKind('about')
@@ -1075,6 +1078,24 @@ function AboutForm({ value, onChange }: { value: AboutInput; onChange: (value: A
         onChange={(text) => patch({ location: text })}
         label="Location"
       />
+      <NativeDateField
+        label="Birthday"
+        value={value.date_of_birth ?? null}
+        onChange={(date) => patch({ date_of_birth: date })}
+        maximumDate={new Date()}
+      />
+      <Text fontSize={12} color={ui.textMuted}>
+        Connections see a birthday wish card on your special day — not your birth year.
+      </Text>
+      <NativeDateField
+        label="Marriage anniversary"
+        value={value.marriage_anniversary ?? null}
+        onChange={(date) => patch({ marriage_anniversary: date })}
+        maximumDate={new Date()}
+      />
+      <Text fontSize={12} color={ui.textMuted}>
+        Optional. Your connections can congratulate you on the anniversary date.
+      </Text>
       <Field label="About">
         <TextArea
           value={value.bio ?? ''}

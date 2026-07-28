@@ -61,7 +61,8 @@ import {
 } from '~/components/ui'
 import { ShareButton } from '~/components/share'
 import { updateProfileImages } from '~/community/lib/profile-sections'
-import { pickImages, readPickedImageBytes, type PickedImage } from '~/lib/media/pick-image'
+import { readPickedImageBytes, type PickedImage } from '~/lib/media/pick-image'
+import { cropIfNeeded, pickImagesWithCrop } from '~/lib/media/pick-and-crop'
 import { refreshProfiles } from '~/lib/profile/refresh'
 import { patchCachedProfile } from '~/lib/profile/profile-cache'
 import { communityRoutes } from '~/lib/routes'
@@ -527,7 +528,12 @@ function ProfileHero({
     const busy = kind === 'avatar' ? uploadingAvatar : uploadingCover
     if (busy) return
     try {
-      const picked = await pickImages({ multiple: false, maxCount: 1 })
+      const picked = await pickImagesWithCrop({
+        multiple: false,
+        maxCount: 1,
+        aspect: kind === 'avatar' ? 'avatar' : 'cover',
+        cropTitle: kind === 'avatar' ? 'Profile photo' : 'Cover photo',
+      })
       const first = picked[0]
       if (!first) return
       await handleUploadImage(kind, first)
@@ -552,7 +558,11 @@ function ProfileHero({
         label="Drop a cover photo"
         onDrop={(items) => {
           const first = items[0]
-          if (first) void handleUploadImage('cover', first)
+          if (!first) return
+          void (async () => {
+            const cropped = await cropIfNeeded(first, 'cover', { cropTitle: 'Cover photo' })
+            if (cropped) void handleUploadImage('cover', cropped)
+          })()
         }}
       >
         <CoverBanner
@@ -581,7 +591,11 @@ function ProfileHero({
             borderRadius={999}
             onDrop={(items) => {
               const first = items[0]
-              if (first) void handleUploadImage('avatar', first)
+              if (!first) return
+              void (async () => {
+                const cropped = await cropIfNeeded(first, 'avatar', { cropTitle: 'Profile photo' })
+                if (cropped) void handleUploadImage('avatar', cropped)
+              })()
             }}
           >
           <YStack

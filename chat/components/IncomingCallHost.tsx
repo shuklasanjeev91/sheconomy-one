@@ -17,7 +17,7 @@ import {
 import { CallOverlay } from '~/chat/components/CallOverlay'
 import { useAppToast } from '~/components/ui'
 import pushClient from '~/lib/notifications/push-client'
-import { getOneSignalAppId } from '~/lib/notifications/push-config'
+import { resolveOneSignalAppId } from '~/lib/notifications/push-config'
 import { chatRoutes } from '~/lib/routes'
 import { useSupabase } from '~/providers/SupabaseProvider'
 
@@ -129,22 +129,32 @@ export function IncomingCallHost() {
   // When a high-priority call push wakes the process before realtime reconnects,
   // show the system in-call UI immediately from the push payload.
   useEffect(() => {
-    if (Platform.OS === 'web' || !getOneSignalAppId()) return
+    if (Platform.OS === 'web') return
+    let unsubFg = () => {}
+    let unsubClick = () => {}
+    let cancelled = false
 
-    const presentFromPush = (payload: Parameters<typeof parseIncomingCallPush>[0]) => {
-      const parsed = parseIncomingCallPush(payload)
-      if (!parsed) return
-      displayNativeIncomingCall({
-        callId: parsed.callId,
-        callerName: parsed.callerName,
-        hasVideo: parsed.callType === 'video',
-        handle: parsed.callerName,
-      })
-    }
+    void (async () => {
+      const appId = await resolveOneSignalAppId()
+      if (cancelled || !appId) return
 
-    const unsubFg = pushClient.onForegroundNotification(presentFromPush)
-    const unsubClick = pushClient.onNotificationClick(presentFromPush)
+      const presentFromPush = (payload: Parameters<typeof parseIncomingCallPush>[0]) => {
+        const parsed = parseIncomingCallPush(payload)
+        if (!parsed) return
+        displayNativeIncomingCall({
+          callId: parsed.callId,
+          callerName: parsed.callerName,
+          hasVideo: parsed.callType === 'video',
+          handle: parsed.callerName,
+        })
+      }
+
+      unsubFg = pushClient.onForegroundNotification(presentFromPush)
+      unsubClick = pushClient.onNotificationClick(presentFromPush)
+    })()
+
     return () => {
+      cancelled = true
       unsubFg()
       unsubClick()
     }

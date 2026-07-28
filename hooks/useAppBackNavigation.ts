@@ -54,7 +54,7 @@ export function useAppBackNavigation() {
           const current = window.location.pathname.replace(/\/$/, '') || '/'
           const expected = fromPath.replace(/\/$/, '') || '/'
           if (current === expected) {
-            navigateApp(fallbackHref, { replace: true })
+            navigateApp(fallbackHref)
           }
         }, 120)
         return
@@ -69,7 +69,7 @@ export function useAppBackNavigation() {
     }
 
     navigatingRef.current = false
-    navigateApp(fallbackHref, { replace: true })
+    navigateApp(fallbackHref)
   }, [fallbackHref, pathname, router])
 
   return {

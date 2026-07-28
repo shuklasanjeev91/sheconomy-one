@@ -724,6 +724,7 @@ function GeneralSettings({ ui, shop, isDesktop, safeBottom }: GeneralSettingsPro
                 label=""
                 value={logoImages}
                 onChange={setLogoImages}
+                aspect="square"
                 disabled={isUpdating || (uploadProgress != null && uploadProgress > 0)}
                 hint="Square images work best."
                 uploadProgress={uploadProgress}

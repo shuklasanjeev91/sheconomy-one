@@ -11,7 +11,6 @@ import {
   coWorkRoutes,
   commerceRoutes,
   communityRoutes,
-  isCartPath,
   isChatPath,
   isChatCallsPath,
   isChatGroupsPath,
@@ -36,7 +35,9 @@ import {
   isJobsPath,
   isNotificationsPath,
   isProfilePath,
+  isVendorPath,
   routes,
+  vendorRoutes,
 } from '~/lib/routes'
 
 import { type AppUiTokens, appUiLight } from '~/lib/theme/app-ui'
@@ -166,17 +167,47 @@ export function getCommerceMobileTabs({
   ]
 }
 
-/** Global utilities — cart on mobile bottom tabs (alerts stay in desktop header). */
-export const APP_GLOBAL_MOBILE_TABS: AppMobileTabItem[] = [
-  {
-    href: routes.cart,
-    label: 'Cart',
-    icon: Icons.ShoppingBag,
-    match: (path) => isCartPath(path),
-  },
-]
+/** Cart moved to the mobile top bar — bottom tabs are Home + section + You only. */
 
-export type BottomTabSection = 'commerce' | 'community' | 'chat' | 'class' | 'co-work'
+export type BottomTabSection =
+  | 'commerce'
+  | 'community'
+  | 'chat'
+  | 'class'
+  | 'co-work'
+  /** Seller console — Etsy-style Manage Shop chrome on `/vendor/*`. */
+  | 'vendor'
+
+/**
+ * Manage Shop bottom tabs (middle segment). Combined with Home + You
+ * in `buildMobileBottomTabs` — Home, Listings, Orders, Stats, You.
+ */
+export function getVendorMobileTabs(): AppMobileTabItem[] {
+  return [
+    {
+      href: vendorRoutes.products,
+      label: 'Listings',
+      icon: Icons.Package,
+      match: (path) =>
+        path === '/vendor/products' ||
+        path.startsWith('/vendor/products/') ||
+        path === '/vendor/create-listing' ||
+        path.startsWith('/vendor/create-listing'),
+    },
+    {
+      href: vendorRoutes.orders,
+      label: 'Orders',
+      icon: Icons.ShoppingBag,
+      match: (path) => path === '/vendor/orders' || path.startsWith('/vendor/orders/'),
+    },
+    {
+      href: vendorRoutes.analytics,
+      label: 'Stats',
+      icon: Icons.BarChart3,
+      match: (path) => path === '/vendor/analytics' || path.startsWith('/vendor/analytics/'),
+    },
+  ]
+}
 
 export function getHomeMobileTab(section: BottomTabSection): AppMobileTabItem {
   switch (section) {
@@ -209,6 +240,16 @@ export function getHomeMobileTab(section: BottomTabSection): AppMobileTabItem {
         label: 'Home',
         icon: Icons.Home,
         match: (path) => isCoWorkHomePath(path),
+      }
+    case 'vendor':
+      return {
+        href: vendorRoutes.myShop,
+        label: 'Home',
+        icon: Icons.Home,
+        match: (path) =>
+          path === '/vendor' ||
+          path === '/vendor/myshop' ||
+          path.startsWith('/vendor/myshop/'),
       }
     case 'commerce':
     default:
@@ -253,7 +294,7 @@ export function getAuthMobileTab(tier: AccessTier): AppMobileTabItem {
   }
 }
 
-/** Bottom tabs — community section (Home + Cart + You added automatically). */
+/** Bottom tabs — community section (Home + You added automatically). */
 export const APP_COMMUNITY_MOBILE_TABS: AppMobileTabItem[] = [
   {
     href: communityRoutes.network,
@@ -302,10 +343,11 @@ export const APP_CHAT_MOBILE_TABS: AppMobileTabItem[] = [
 /** Bottom tabs — classes: Video + Audio (Home covers hub / program detail). */
 export const APP_CLASS_MOBILE_TABS: AppMobileTabItem[] = [
   {
-    href: classRoutes.home,
+    href: classRoutes.video,
     label: 'Video',
     icon: Icons.Play,
-    match: (path) => isClassVideoPath(path) || isClassHomePath(path),
+    // Only `/class/video` — do not treat Class Home (`/class`) as Video or both tabs light up.
+    match: (path) => isClassVideoPath(path),
   },
   {
     href: classRoutes.audio,
@@ -340,6 +382,8 @@ export const APP_COWORK_MOBILE_TABS: AppMobileTabItem[] = [
 export function getMobileBottomTabSection(pathname: string): BottomTabSection | null {
   if (pathname.startsWith('/auth/') || pathname.startsWith('/ui-kit')) return null
   if (isCoWorkLivePath(pathname)) return null
+  // Manage Shop gets its own Etsy-style tab chrome (not marketplace Home/Shops/You).
+  if (isVendorPath(pathname) || isManageShopPath(pathname)) return 'vendor'
   if (isChatPath(pathname)) return 'chat'
   if (isCommercePath(pathname)) return 'commerce'
   if (isCoWorkPath(pathname)) return 'co-work'
@@ -380,6 +424,9 @@ export function getMobileBottomTabMiddleTabs(
     case 'co-work':
       tabs = APP_COWORK_MOBILE_TABS
       break
+    case 'vendor':
+      tabs = getVendorMobileTabs()
+      break
     default:
       tabs = []
   }
@@ -396,17 +443,12 @@ export function buildMobileBottomTabs(
   tier: AccessTier,
   widthTier: BottomTabWidthTier = 'expanded',
 ): AppMobileTabItem[] {
-  const globalTabs = section === 'co-work' ? [] : APP_GLOBAL_MOBILE_TABS
   const home = getHomeMobileTab(section)
   const auth = getAuthMobileTab(tier)
 
   return [
     { ...home, label: formatBottomTabLabel(home.label, widthTier) },
     ...middleTabs,
-    ...globalTabs.map((tab) => ({
-      ...tab,
-      label: formatBottomTabLabel(tab.label, widthTier),
-    })),
     { ...auth, label: formatBottomTabLabel(auth.label, widthTier) },
   ]
 }

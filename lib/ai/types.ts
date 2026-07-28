@@ -125,3 +125,35 @@ export type ShopDraftResult = {
   description: string
   usedFallback: boolean
 }
+
+export type DescribeSearchImageParams = {
+  /** data:image/...;base64,... */
+  dataUrl: string
+}
+
+export type DescribeSearchImageResult = {
+  query: string
+  category: string | null
+  attributes: string[]
+  usedFallback: boolean
+}
+
+export type AiSearchParams = {
+  message: string
+}
+
+export type AiSearchFilters = {
+  minPrice?: number | null
+  maxPrice?: number | null
+  listingType?: 'physical' | 'digital' | null
+  category?: string | null
+}
+
+export type AiSearchResult = {
+  answer: string
+  searchTerm: string
+  filters: AiSearchFilters
+  listingIds: string[]
+  deepLinks: AiDeepLink[]
+  usedFallback: boolean
+}

@@ -143,7 +143,7 @@ export function CreateJobScreen() {
 
     await clearFormDraft(JOB_DRAFT_KEY)
     toast.show('Job posted', { tone: 'success' })
-    router.replace(communityRoutes.job(data.id))
+    router.push(communityRoutes.job(data.id))
   }
 
   return (
