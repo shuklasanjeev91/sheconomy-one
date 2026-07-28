@@ -127,6 +127,9 @@ Deno.serve(async (request) => {
   let expectedSig: string
   try {
     expectedSig = await hmacSha256Hex(message, keySecret)
+  } catch {
+    keySecret = ''
+    return jsonResponse({ verified: false, error: 'Could not compute payment signature' }, 500)
   } finally {
     keySecret = ''
   }

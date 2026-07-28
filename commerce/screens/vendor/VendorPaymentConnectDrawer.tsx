@@ -56,6 +56,7 @@ export function VendorPaymentConnectDrawer({
           top: 0,
           right: 0,
           bottom: 0,
+          height: '100dvh',
           boxShadow: '-4px 0 24px rgba(0,0,0,0.18)',
         } as const)
       : ({ position: 'absolute' as const, top: 0, right: 0, bottom: 0 } as const)
@@ -74,6 +75,8 @@ export function VendorPaymentConnectDrawer({
       <YStack
         width={isDesktop ? PANEL_WIDTH : '100%'}
         maxWidth="100%"
+        flex={1}
+        minHeight={0}
         backgroundColor={ui.background}
         borderLeftWidth={isDesktop ? 1 : 0}
         borderLeftColor={ui.borderSubtle}
@@ -125,6 +128,7 @@ export function VendorPaymentConnectDrawer({
         <YStack
           flex={1}
           minHeight={0}
+          overflow="hidden"
           paddingHorizontal="$4"
           paddingTop="$4"
           paddingBottom={16 + safeBottom}

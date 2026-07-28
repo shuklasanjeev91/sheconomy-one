@@ -319,7 +319,7 @@ export function PaymentConnectForm({
       <ScrollView
         flex={1}
         showsVerticalScrollIndicator={false}
-        contentContainerStyle={{ paddingBottom: 24 }}
+        contentContainerStyle={{ paddingBottom: 32 }}
       >
         <YStack gap="$4">
           <XStack alignItems="center" gap="$3">
@@ -367,6 +367,8 @@ export function PaymentConnectForm({
             />
             <MetadataCell ui={ui} label={PAYMENT_UI_COPY.fees} value={getProviderFeesLabel(provider)} />
           </XStack>
+
+       
 
           {oauthFlow ? (
             <YStack gap="$3" padding="$4" borderRadius={radius.card} borderWidth={1} borderColor={ui.borderSubtle}>
@@ -602,105 +604,62 @@ export function PaymentConnectForm({
                 ) : null}
               </YStack>
 
-              <YStack gap="$2">
-                <Text
-                  fontSize={10}
-                  fontWeight="800"
-                  color={ui.textMuted}
-                  letterSpacing={0.6}
-                  textTransform="uppercase"
-                >
-                  {PAYMENT_UI_COPY.supportedMethodsPrefix} {provider.name}
-                </Text>
-                <XStack gap="$2" flexWrap="wrap">
-                  {supportedMethods.map((method) => (
-                    <XStack
-                      key={method}
-                      alignItems="center"
-                      gap="$1.5"
-                      paddingHorizontal="$2.5"
-                      paddingVertical={6}
-                      borderRadius={999}
-                      backgroundColor="#DCFCE7"
-                    >
-                      <Icons.Check size={12} color="#166534" />
-                      <Text fontSize={12} fontWeight="600" color="#166534">
-                        {method}
-                      </Text>
-                    </XStack>
-                  ))}
+              <YStack
+                gap="$2.5"
+                paddingTop="$3"
+                borderTopWidth={1}
+                borderTopColor={ui.borderSubtle}
+              >
+                {connected ? (
+                  <Button
+                    tone="outline"
+                    size="$4"
+                    borderRadius={999}
+                    borderColor="#DC2626"
+                    color="#DC2626"
+                    disabled={loading.connecting || loading.accounts}
+                    onPress={() => void handleDisconnect()}
+                  >
+                    {PAYMENT_UI_COPY.disconnect}
+                  </Button>
+                ) : null}
+                <XStack gap="$2.5">
+                  <Button
+                    tone="outline"
+                    size="$4"
+                    borderRadius={999}
+                    flex={1}
+                    borderColor={ui.brand}
+                    color={ui.brand}
+                    disabled={loading.connecting}
+                    onPress={onClose}
+                  >
+                    {PAYMENT_UI_COPY.cancel}
+                  </Button>
+                  <Button
+                    tone="primary"
+                    size="$4"
+                    borderRadius={999}
+                    flex={1}
+                    disabled={loading.connecting}
+                    icon={
+                      loading.connecting ? (
+                        <Spinner size="small" color="white" />
+                      ) : (
+                        <Icons.Link size={16} color="white" />
+                      )
+                    }
+                    onPress={() => void handleConnect()}
+                  >
+                    {connectLabel}
+                  </Button>
                 </XStack>
               </YStack>
 
-              <YStack gap="$2" paddingTop="$1">
-                <XStack alignItems="center" gap="$2">
-                  <YStack flex={1} height={1} backgroundColor={ui.borderSubtle} />
-                  <Text fontSize={10} fontWeight="700" color={ui.textMuted} letterSpacing={0.5}>
-                    {PAYMENT_UI_COPY.verificationTitle}
-                  </Text>
-                  <YStack flex={1} height={1} backgroundColor={ui.borderSubtle} />
-                </XStack>
-                <Text fontSize={13} color={ui.textSecondary} lineHeight={20}>
-                  {PAYMENT_UI_COPY.verificationBody}
-                </Text>
-              </YStack>
             </YStack>
           ) : null}
         </YStack>
       </ScrollView>
-
-      <YStack
-        gap="$2.5"
-        paddingTop="$3"
-        borderTopWidth={1}
-        borderTopColor={ui.borderSubtle}
-        backgroundColor={ui.surface}
-      >
-        {connected ? (
-          <Button
-            tone="outline"
-            size="$4"
-            borderRadius={999}
-            borderColor="#DC2626"
-            color="#DC2626"
-            disabled={loading.connecting || loading.accounts}
-            onPress={() => void handleDisconnect()}
-          >
-            {PAYMENT_UI_COPY.disconnect}
-          </Button>
-        ) : null}
-        <XStack gap="$2.5">
-          <Button
-            tone="outline"
-            size="$4"
-            borderRadius={999}
-            flex={1}
-            borderColor={ui.brand}
-            color={ui.brand}
-            disabled={loading.connecting}
-            onPress={onClose}
-          >
-            {PAYMENT_UI_COPY.cancel}
-          </Button>
-          <Button
-            tone="primary"
-            size="$4"
-            borderRadius={999}
-            flex={1}
-            disabled={loading.connecting}
-            icon={
-              loading.connecting ? (
-                <Spinner size="small" color="white" />
-              ) : (
-                <Icons.Link size={16} color="white" />
-              )
-            }
-            onPress={() => void handleConnect()}
-          >
-            {connectLabel}
-          </Button>
-        </XStack>
-      </YStack>
     </YStack>
   )
 }

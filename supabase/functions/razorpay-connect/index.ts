@@ -188,8 +188,10 @@ Deno.serve(async (request) => {
     .from('vendor_payment_settings')
     .upsert(settingsPayload, { onConflict: 'shop_id', ignoreDuplicates: false })
 
-  // Sync shop_commerce_settings so checkout routing uses direct/razorpay
-  await admin.from('shop_commerce_settings').upsert(
+  // Sync shop_commerce_settings so checkout routing uses direct/razorpay.
+  // Provide safe defaults for all NOT NULL columns so a first-time INSERT
+  // (no existing row) never fails on a missing-column constraint.
+  const { error: scsError } = await admin.from('shop_commerce_settings').upsert(
     {
       shop_id: shopId,
       payment_connected: true,
@@ -197,10 +199,26 @@ Deno.serve(async (request) => {
       payment_gateway: 'razorpay',
       payment_gateway_key_id: keyId,
       payment_account_label: maskKeyId(keyId),
+      // Safe defaults — only used when INSERT creates a brand-new row
+      shipping_mode: 'shedelivery',
+      shipping_connected: false,
       updated_at: now,
     },
     { onConflict: 'shop_id', ignoreDuplicates: false },
   )
+
+  if (scsError) {
+    // Non-fatal — credentials are saved. Log and continue so the vendor
+    // is not blocked, but surface a warning in the response.
+    console.error('[razorpay-connect] shop_commerce_settings upsert failed:', scsError.message)
+    return jsonResponse({
+      success: true,
+      maskedKeyId: maskKeyId(keyId),
+      status: 'connected',
+      mode,
+      warning: 'Credentials saved but checkout routing could not be updated. Please disconnect and reconnect to retry.',
+    })
+  }
 
   return jsonResponse({
     success: true,

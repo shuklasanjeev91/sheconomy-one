@@ -107,6 +107,7 @@ export const VALID_STATUS_TRANSITIONS: Record<OrderStatus, OrderStatus[]> = {
     ORDER_STATUS.CANCELLED,
   ],
   [ORDER_STATUS.AWAITING_PAYMENT]: [
+    ORDER_STATUS.PENDING,        // payment confirmed → vendor sees & actions the order
     ORDER_STATUS.CONFIRMED,
     ORDER_STATUS.PAYMENT_FAILED,
     ORDER_STATUS.CANCELLED,

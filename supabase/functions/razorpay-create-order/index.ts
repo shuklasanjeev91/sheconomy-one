@@ -65,8 +65,10 @@ Deno.serve(async (request) => {
     return jsonResponse({ error: 'Invalid JSON' }, 400)
   }
 
-  const { shopId, amount, receipt, notes } = body
+  const { shopId, amount, notes } = body
   const currency = (body.currency ?? 'INR').toUpperCase()
+  // Razorpay enforces a 40-character limit on receipt
+  const receipt = (body.receipt ?? '').slice(0, 40)
 
   if (!shopId || !amount || !receipt) {
     return jsonResponse({ error: 'shopId, amount, and receipt are required' }, 400)

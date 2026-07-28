@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { Platform } from 'react-native'
 import { useRouter } from 'one'
 import { AppLink } from '~/components/navigation/AppLink'
 
@@ -162,8 +163,15 @@ export function OrderSuccessScreen() {
   )
 
   async function openPaymentUrl(url: string) {
+    // PayU bridge: SPA navigation within the app
     if (isAppPayUBridgeUrl(url) || /\/orders\/payu(\?|$)/.test(url)) {
       router.replace(url as never)
+      return true
+    }
+    // Razorpay Payment Link: same-tab redirect so razorpay-return handles the callback
+    // and the payment confirmation polling works correctly
+    if (Platform.OS === 'web' && /rzp\.io/.test(url) && typeof window !== 'undefined') {
+      window.location.href = url
       return true
     }
     return openExternalUrl(url)
@@ -260,8 +268,8 @@ export function OrderSuccessScreen() {
               Payment required
             </Text>
             <Text fontSize={13} color={ui.textSecondary} lineHeight={18}>
-              Finish checkout on PayU (SHEPay) or the seller’s payment page. Cancel releases
-              reserved stock and returns items to your cart.
+              Complete your payment to confirm this order. Cancelling releases reserved stock
+              and returns items to your cart.
             </Text>
             <XStack gap="$2" flexWrap="wrap">
               <Button
@@ -274,7 +282,7 @@ export function OrderSuccessScreen() {
                 {paymentBusy
                   ? 'Working…'
                   : checkoutUrl && isAppPayUBridgeUrl(checkoutUrl)
-                    ? 'Continue to PayU'
+                    ? 'Continue to SHEPay'
                     : 'Resume payment'}
               </Button>
               <Button

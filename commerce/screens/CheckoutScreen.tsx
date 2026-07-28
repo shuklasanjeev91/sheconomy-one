@@ -1,4 +1,5 @@
 import { useRouter } from 'one'
+import { Platform } from 'react-native'
 import { SpaRedirect } from '~/components/navigation/SpaRedirect'
 import { AppLink } from '~/components/navigation/AppLink'
 import type { ReactNode } from 'react'
@@ -124,6 +125,7 @@ export function CheckoutScreen() {
   const [giftByShop, setGiftByShop] = useState<Record<string, boolean>>({})
   const [paymentMethod, setPaymentMethod] = useState<CheckoutPaymentMode>('online')
   const [isSubmitting, setIsSubmitting] = useState(false)
+  const [isRedirectingToPayment, setIsRedirectingToPayment] = useState(false)
   const [orderPlaced, setOrderPlaced] = useState(false)
   const [isLoadingAddresses, setIsLoadingAddresses] = useState(true)
   const [listingTypes, setListingTypes] = useState<Map<string, string>>(new Map())
@@ -445,10 +447,22 @@ export function CheckoutScreen() {
   }
 
   const showSettlementCurrencyNote = preferredCurrency !== settlementCurrency
-  const placeLabel = 'Place your order'
+
+  // Pure Razorpay-direct order: no SHEPay steps involved, payment mode is online.
+  // Used to contextualise button labels so the user understands they are going
+  // to a payment gateway, not placing a confirmed order.
+  const isRazorpayDirectOnly =
+    paymentMethod === 'online' &&
+    paymentGroups.direct.length > 0 &&
+    paymentGroups.shepay.length === 0
+
+  const placeLabel = isRazorpayDirectOnly ? 'Continue to payment' : 'Place your order'
+  const submittingLabel = isRazorpayDirectOnly ? 'Setting up payment…' : 'Placing…'
+
   const canPlace =
     !noneSelected &&
     !isSubmitting &&
+    !isRedirectingToPayment &&
     !isLoadingAddresses &&
     contactCheckoutReady &&
     addressReady
@@ -666,8 +680,6 @@ export function CheckoutScreen() {
         return
       }
 
-      setOrderPlaced(true)
-
       const awaitingExternalPayment = next.kind === 'payu_bridge' || next.kind === 'external_pay'
       const pendingUrl =
         next.kind === 'payu_bridge' ? next.href : next.kind === 'external_pay' ? next.url : null
@@ -687,12 +699,26 @@ export function CheckoutScreen() {
       const successHref = commerceRoutes.orderSuccess(orderIds)
 
       if (next.kind === 'payu_bridge') {
+        setOrderPlaced(true)
         void refresh()
         router.replace(next.href as never)
         return
       }
 
       if (next.kind === 'external_pay') {
+        const isRazorpayDirect = hasDirectSteps && !hasShepaySteps
+        if (Platform.OS === 'web' && isRazorpayDirect && typeof window !== 'undefined') {
+          // Same-tab redirect: razorpay-return handles the callback.
+          // Do NOT set orderPlaced — the page is destroyed immediately after redirect.
+          // The button switches to "Redirecting to payment…" for the brief moment before navigation.
+          setIsRedirectingToPayment(true)
+          setTimeout(() => {
+            window.location.href = next.url
+          }, 120)
+          return
+        }
+        // Native / non-Razorpay external: open in browser then show pending order screen.
+        setOrderPlaced(true)
         const opened = await openExternalUrl(next.url)
         router.replace(successHref)
         void refresh()
@@ -705,6 +731,8 @@ export function CheckoutScreen() {
         return
       }
 
+      // COD / fully settled at checkout — show success immediately.
+      setOrderPlaced(true)
       trackCommerceEvent('purchase', {
         currency: settlementCurrency,
         value: orderTotal,
@@ -758,7 +786,7 @@ export function CheckoutScreen() {
         disabled={!canPlace}
         onPress={handlePlaceOrderPress}
       >
-        {isSubmitting ? 'Placing…' : placeLabel}
+        {isRedirectingToPayment ? 'Redirecting to payment…' : isSubmitting ? submittingLabel : placeLabel}
       </CommerceButton>
     </YStack>
   )
@@ -1330,9 +1358,9 @@ export function CheckoutScreen() {
         formattedSavings={displayTotals.promotion > 0 ? formatCheckoutMoney(displayTotals.promotion) : null}
         caption={`Order total · ${unitCount} ${unitCount === 1 ? 'item' : 'items'}`}
         savings={displayTotals.promotion > 0 ? displayTotals.promotion : null}
-        label={placeLabel}
+        label={isRedirectingToPayment ? 'Redirecting to payment…' : isSubmitting ? submittingLabel : placeLabel}
         disabled={!canPlace}
-        isLoading={isSubmitting}
+        isLoading={isSubmitting || isRedirectingToPayment}
         onPress={handlePlaceOrderPress}
       />
     </YStack>
