@@ -53,9 +53,24 @@ export function AppearanceSettingsPanel() {
           Theme
         </Text>
         <RadioGroup value={scheme.setting} onValueChange={(v) => scheme.set(v as 'light' | 'dark' | 'system')}>
-          <RadioGroupItemWithLabel value="light" label="Light" />
-          <RadioGroupItemWithLabel value="dark" label="Dark" />
-          <RadioGroupItemWithLabel value="system" label="Match system" />
+          <RadioGroupItemWithLabel
+            value="light"
+            label="Light"
+            selected={scheme.setting === 'light'}
+            onSelect={() => scheme.set('light')}
+          />
+          <RadioGroupItemWithLabel
+            value="dark"
+            label="Dark"
+            selected={scheme.setting === 'dark'}
+            onSelect={() => scheme.set('dark')}
+          />
+          <RadioGroupItemWithLabel
+            value="system"
+            label="Match system"
+            selected={scheme.setting === 'system'}
+            onSelect={() => scheme.set('system')}
+          />
         </RadioGroup>
       </SurfaceCard>
 
@@ -65,7 +80,8 @@ export function AppearanceSettingsPanel() {
         </Text>
         <Text color={ui.textMuted} fontSize={13} lineHeight={19}>
           Tap + repeatedly to enlarge every word on screen (and every image). Works like LinkedIn-style
-          display zoom — not a single jump.
+          display zoom on web. On iOS/Android, use system display size settings for accessibility zoom
+          so buttons and switches stay fully tappable.
         </Text>
         <XStack alignItems="center" justifyContent="space-between" gap="$3" flexWrap="wrap">
           <YStack gap="$1" flex={1} minWidth={140}>

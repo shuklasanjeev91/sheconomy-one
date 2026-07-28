@@ -48,11 +48,23 @@ const webPushClient: PushClient = {
     try {
       const OneSignal = await loadOneSignal()
       await this.init()
-      if (!OneSignal.Notifications.isPushSupported()) return false
-      const granted = await OneSignal.Notifications.requestPermission()
-      if (granted) await OneSignal.User.PushSubscription.optIn()
-      return granted
-    } catch {
+      if (!initialized) return false
+      if (!OneSignal.Notifications.isPushSupported()) {
+        console.warn('[push] Web push not supported in this browser')
+        return false
+      }
+      // Prefer native permission API; OneSignal wraps browser Notification.requestPermission.
+      const granted = await OneSignal.Notifications.requestPermission(true)
+      if (granted) {
+        try {
+          await OneSignal.User.PushSubscription.optIn()
+        } catch (error) {
+          console.warn('[push] Web optIn after grant failed', error)
+        }
+      }
+      return !!granted
+    } catch (error) {
+      console.warn('[push] Web requestPermission failed', error)
       return false
     }
   },
@@ -61,6 +73,10 @@ const webPushClient: PushClient = {
     try {
       const OneSignal = await loadOneSignal()
       await this.init()
+      if (!initialized) return false
+      if (typeof OneSignal.Notifications.permissionAsync === 'function') {
+        return !!(await OneSignal.Notifications.permissionAsync())
+      }
       return !!OneSignal.Notifications.permission
     } catch {
       return false
@@ -71,9 +87,11 @@ const webPushClient: PushClient = {
     try {
       const OneSignal = await loadOneSignal()
       await this.init()
+      if (!initialized) return false
       if (!OneSignal.Notifications.isPushSupported()) return false
-      // Browser still shows the prompt only while status is "default".
-      return OneSignal.Notifications.permissionNative === 'default'
+      // Browser still shows the system prompt only while status is "default".
+      const native = OneSignal.Notifications.permissionNative
+      return native === 'default'
     } catch {
       return false
     }
