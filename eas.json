@@ -18,7 +18,14 @@
         "YARN_ENABLE_IMMUTABLE_INSTALLS": "false",
         "YARN_NODE_LINKER": "node-modules",
         "EXPO_NO_DOCTOR": "1",
-        "EAS_BUILD_DISABLE_EXPO_DOCTOR_STEP": "1"
+        "EAS_BUILD_DISABLE_EXPO_DOCTOR_STEP": "1",
+        "EXPO_PUBLIC_SUPABASE_URL": "https://zsaqrrzwygzwrlzgymxk.supabase.co",
+        "EXPO_PUBLIC_SUPABASE_ANON_KEY": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InpzYXFycnp3eWd6d3Jsemd5bXhrIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTEyNTYwMzMsImV4cCI6MjA2NjgzMjAzM30.cFeln0b7EtzPaNmuGTCr3sDn_nU_8uNjaIYL9ER1_U0",
+        "EXPO_PUBLIC_WEB_APP_URL": "https://sheconomy-one-sanjeev-shuklas-projects.vercel.app",
+        "ONE_SERVER_URL": "https://sheconomy-one-sanjeev-shuklas-projects.vercel.app",
+        "EXPO_PUBLIC_ONESIGNAL_APP_ID": "d43662df-5e0b-46eb-9ee1-258220fc7e4b",
+        "EXPO_PUBLIC_VISUAL_PREVIEW_ENABLED": "true",
+        "EXPO_PUBLIC_APP_ENV": "preview"
       },
       "ios": {
         "resourceClass": "m-medium"
