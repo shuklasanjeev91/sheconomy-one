@@ -98,6 +98,18 @@ export async function createAtomicMarketplaceCheckout(input: {
   idempotencyKey: string
   notesByShop?: Record<string, string>
   giftShopIds?: string[]
+  /** Shopper's display/settlement currency (e.g. INR). */
+  customerCurrency?: string
+  /** Per-shop converted totals in customer currency for order records. */
+  customerAmountsByShop?: Record<
+    string,
+    {
+      subtotal_amount: number
+      shipping_amount: number
+      discount_amount: number
+      total_amount: number
+    }
+  >
 }): Promise<{ data: AtomicCheckoutResult | null; error: string | null }> {
   const { data, error } = await supabase.rpc('atomic_marketplace_checkout' as never, {
     p_cart_id: input.cartId,
@@ -108,6 +120,8 @@ export async function createAtomicMarketplaceCheckout(input: {
     p_idempotency_key: input.idempotencyKey,
     p_notes_by_shop: input.notesByShop ?? {},
     p_gift_shop_ids: input.giftShopIds ?? [],
+    p_customer_currency: input.customerCurrency ?? null,
+    p_customer_amounts_by_shop: input.customerAmountsByShop ?? {},
   } as never)
 
   if (error) return { data: null, error: error.message }

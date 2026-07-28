@@ -42,9 +42,31 @@ export function resolveAuthContact(user: User | null | undefined): AuthContactSn
   }
 }
 
+/** Prefer verified auth phone; fall back to `profiles.phone` for receipts and vendor views. */
+export function resolveCustomerPhone(input: {
+  authUser?: User | null
+  profilePhone?: string | null
+}): string | null {
+  const authPhone = resolveAuthContact(input.authUser).phone
+  if (authPhone) return authPhone
+
+  const profileRaw = input.profilePhone?.trim()
+  if (!profileRaw) return null
+
+  return canonicalE164Phone(profileRaw)
+}
+
 export function formatAuthContactPhone(phone: string | null | undefined): string {
   if (!phone?.trim()) return 'Not added'
   return formatPhoneForDisplay(phone.trim())
+}
+
+export function formatCustomerContactPhone(input: {
+  authUser?: User | null
+  profilePhone?: string | null
+}): string {
+  const phone = resolveCustomerPhone(input)
+  return phone ? formatAuthContactPhone(phone) : 'Not added'
 }
 
 async function syncProfileContact(userId: string, patch: { phone?: string; email?: string }) {

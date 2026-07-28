@@ -2,7 +2,12 @@ import 'jsr:@supabase/functions-js/edge-runtime.d.ts'
 import { createClient } from 'jsr:@supabase/supabase-js@2'
 
 import { corsHeaders, jsonResponse } from '../_shared/cors.ts'
-import { parseStoredCredentials, verifyRazorpayWebhookSignature } from '../_shared/razorpay.ts'
+import { decryptSecret } from '../_shared/encryption.ts'
+import {
+  isEncryptedAccount,
+  parseStoredCredentials,
+  verifyRazorpayWebhookSignature,
+} from '../_shared/razorpay.ts'
 
 function readString(value: unknown): string {
   return typeof value === 'string' ? value : ''
@@ -74,23 +79,61 @@ Deno.serve(async (request) => {
 
   const { data: account } = await admin
     .from('shop_payment_accounts')
-    .select('metadata')
+    .select('access_token, metadata')
     .eq('shop_id', shopId)
     .eq('provider', 'razorpay')
     .eq('status', 'connected')
     .maybeSingle()
 
   const metadata = account?.metadata as Record<string, unknown> | null
-  const credentials = parseStoredCredentials(metadata?.credentials)
-  const webhookSecret = credentials?.webhook_secret || credentials?.key_secret || ''
   const signature = request.headers.get('x-razorpay-signature') ?? ''
 
-  if (
-    webhookSecret &&
-    signature &&
-    !(await verifyRazorpayWebhookSignature(rawBody, signature, webhookSecret))
-  ) {
-    return jsonResponse({ error: 'Invalid Razorpay signature' }, 401)
+  // Resolve the webhook secret for signature verification.
+  // New encrypted accounts store it encrypted in metadata; legacy accounts used plain JSON.
+  let webhookSecret = ''
+
+  if (isEncryptedAccount(metadata)) {
+    // Try decrypting the dedicated webhook secret first; fall back to key_secret.
+    const wsEncrypted = typeof metadata?.webhook_secret_encrypted === 'string'
+      ? metadata.webhook_secret_encrypted : null
+    const wsIv = typeof metadata?.webhook_secret_iv === 'string' ? metadata.webhook_secret_iv : null
+    const wsTag = typeof metadata?.webhook_secret_auth_tag === 'string' ? metadata.webhook_secret_auth_tag : null
+
+    if (wsEncrypted && wsIv && wsTag) {
+      try {
+        webhookSecret = await decryptSecret(wsEncrypted, wsIv, wsTag)
+      } catch {
+        // Webhook secret decryption failed — fall through to key_secret
+      }
+    }
+
+    // If no dedicated webhook secret, fall back to the key_secret for verification
+    if (!webhookSecret && account?.access_token) {
+      const iv = typeof metadata?.iv === 'string' ? metadata.iv : null
+      const authTag = typeof metadata?.auth_tag === 'string' ? metadata.auth_tag : null
+      if (iv && authTag) {
+        try {
+          webhookSecret = await decryptSecret(account.access_token, iv, authTag)
+        } catch {
+          // Decryption failed — will proceed without verification (logged below)
+        }
+      }
+    }
+  } else {
+    // Legacy plain-text credentials
+    const credentials = parseStoredCredentials(metadata?.credentials)
+    webhookSecret = credentials?.webhook_secret || credentials?.key_secret || ''
+  }
+
+  if (signature) {
+    if (!webhookSecret) {
+      // Signature present but we can't verify — reject to prevent spoofed events
+      console.error(`[razorpay-direct-webhook] signature present but webhook secret unavailable for shop=${shopId}`)
+      return jsonResponse({ error: 'Webhook signature could not be verified' }, 401)
+    }
+    if (!(await verifyRazorpayWebhookSignature(rawBody, signature, webhookSecret))) {
+      return jsonResponse({ error: 'Invalid Razorpay signature' }, 401)
+    }
   }
 
   const mappedStatus = mapEventStatus(event)

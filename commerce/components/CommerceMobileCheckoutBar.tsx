@@ -15,6 +15,10 @@ type CommerceMobileCheckoutBarProps = {
   onPress: () => void
   disabled?: boolean
   isLoading?: boolean
+  /** Pre-formatted total label (e.g. after currency conversion). */
+  formattedTotal?: string
+  /** Pre-formatted savings label. */
+  formattedSavings?: string | null
   /** Small line above the total, e.g. "3 items". */
   caption?: string
   /** When set, shows a "You save …" hint. */
@@ -31,6 +35,8 @@ export function CommerceMobileCheckoutBar({
   onPress,
   disabled,
   isLoading,
+  formattedTotal,
+  formattedSavings,
   caption,
   savings,
 }: CommerceMobileCheckoutBarProps) {
@@ -67,11 +73,11 @@ export function CommerceMobileCheckoutBar({
           </Text>
         ) : null}
         <Text fontWeight="800" fontSize={20} color={ui.text} numberOfLines={1} letterSpacing={-0.4}>
-          {formatCurrency(total, currency)}
+          {formattedTotal ?? formatCurrency(total, currency)}
         </Text>
         {savings && savings > 0 ? (
           <Text fontSize={11} fontWeight="700" color={ui.success} numberOfLines={1}>
-            You save {formatCurrency(savings, currency)}
+            You save {formattedSavings ?? formatCurrency(savings, currency)}
           </Text>
         ) : null}
       </YStack>

@@ -11,6 +11,16 @@ export function razorpayAuthHeader(credentials: RazorpayCredentials): string {
   return `Basic ${token}`
 }
 
+/**
+ * Parse credentials from the legacy format where credentials were stored as a
+ * plain JSON string in `metadata.credentials`.
+ *
+ * New accounts use AES-256-GCM encryption; their `access_token` holds the
+ * encrypted key_secret and `metadata.iv` / `metadata.auth_tag` hold the
+ * decryption parameters. Those must be decrypted server-side via
+ * `supabase/functions/_shared/encryption.ts`. This function is only used for
+ * the legacy plain-text format.
+ */
 export function parseStoredCredentials(raw: unknown): RazorpayCredentials | null {
   if (!raw || typeof raw !== 'string') return null
   try {
@@ -27,6 +37,17 @@ export function parseStoredCredentials(raw: unknown): RazorpayCredentials | null
   } catch {
     return null
   }
+}
+
+/**
+ * Check whether a shop_payment_accounts row was saved with the new encrypted format.
+ * Encrypted rows have `metadata.iv` and `metadata.auth_tag` instead of `metadata.credentials`.
+ */
+export function isEncryptedAccount(metadata: Record<string, unknown> | null | undefined): boolean {
+  return (
+    typeof metadata?.iv === 'string' &&
+    typeof metadata?.auth_tag === 'string'
+  )
 }
 
 export function amountToPaise(amount: number): number {

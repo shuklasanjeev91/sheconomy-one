@@ -2,10 +2,13 @@ import 'jsr:@supabase/functions-js/edge-runtime.d.ts'
 import { createClient } from 'jsr:@supabase/supabase-js@2'
 
 import { corsHeaders, jsonResponse } from '../_shared/cors.ts'
+import { decryptSecret } from '../_shared/encryption.ts'
 import {
   amountToPaise,
   createRazorpayPaymentLink,
+  isEncryptedAccount,
   parseStoredCredentials,
+  type RazorpayCredentials,
 } from '../_shared/razorpay.ts'
 
 type CreateBody = {
@@ -81,14 +84,57 @@ Deno.serve(async (request) => {
 
   const { data: account } = await admin
     .from('shop_payment_accounts')
-    .select('metadata, status')
+    .select('merchant_id, access_token, metadata, status')
     .eq('shop_id', step.shop_id)
     .eq('provider', 'razorpay')
     .eq('status', 'connected')
     .maybeSingle()
 
-  const metadata = account?.metadata as Record<string, unknown> | null
-  const credentials = parseStoredCredentials(metadata?.credentials)
+  if (!account) {
+    return jsonResponse({ error: 'Razorpay credentials not configured for this shop' }, 400)
+  }
+
+  const metadata = account.metadata as Record<string, unknown> | null
+
+  // Resolve credentials — new accounts use AES-256-GCM encrypted access_token;
+  // legacy accounts stored plain-text JSON in metadata.credentials.
+  let credentials: RazorpayCredentials | null = null
+
+  if (isEncryptedAccount(metadata)) {
+    const iv = typeof metadata?.iv === 'string' ? metadata.iv : null
+    const authTag = typeof metadata?.auth_tag === 'string' ? metadata.auth_tag : null
+    const encryptedSecret = account.access_token
+    const keyId = account.merchant_id
+
+    if (!iv || !authTag || !encryptedSecret || !keyId) {
+      return jsonResponse({ error: 'Razorpay credentials are incomplete for this shop' }, 400)
+    }
+
+    try {
+      const keySecret = await decryptSecret(encryptedSecret, iv, authTag)
+      const webhookSecretEncrypted = typeof metadata?.webhook_secret_encrypted === 'string'
+        ? metadata.webhook_secret_encrypted : null
+      const wsIv = typeof metadata?.webhook_secret_iv === 'string' ? metadata.webhook_secret_iv : null
+      const wsTag = typeof metadata?.webhook_secret_auth_tag === 'string' ? metadata.webhook_secret_auth_tag : null
+
+      let webhookSecret: string | null = null
+      if (webhookSecretEncrypted && wsIv && wsTag) {
+        try {
+          webhookSecret = await decryptSecret(webhookSecretEncrypted, wsIv, wsTag)
+        } catch {
+          // Non-fatal — webhook secret missing just means signature won't be set on link
+        }
+      }
+
+      credentials = { key_id: keyId, key_secret: keySecret, webhook_secret: webhookSecret }
+    } catch {
+      return jsonResponse({ error: 'Could not process Razorpay credentials for this shop' }, 500)
+    }
+  } else {
+    // Legacy: plain-text credentials stored in metadata.credentials JSON string
+    credentials = parseStoredCredentials(metadata?.credentials)
+  }
+
   if (!credentials) {
     return jsonResponse({ error: 'Razorpay credentials not configured for this shop' }, 400)
   }

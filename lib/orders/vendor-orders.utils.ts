@@ -70,10 +70,13 @@ export function transformVendorOrderItems(items: VendorOrderItem[] | null | unde
 
 // ============= CLIENT-SIDE AGGREGATIONS =============
 
+// 'awaiting_payment' is intentionally excluded: online payment orders in that
+// state have not been paid yet and should not be visible/actionable by vendors.
+// The webhook handler promotes them to 'confirmed' once payment is received.
 const PENDING_STATUSES: OrderStatus[] = [
-  ORDER_STATUS.PENDING,
-  ORDER_STATUS.CONFIRMED,
-  ORDER_STATUS.PROCESSING,
+  ORDER_STATUS.PENDING,    // COD orders — payment on delivery, actionable immediately
+  ORDER_STATUS.CONFIRMED,  // Online orders after payment webhook confirmed
+  ORDER_STATUS.PROCESSING, // Vendor is packing
 ]
 
 export function getVendorOrdersByStatus(
