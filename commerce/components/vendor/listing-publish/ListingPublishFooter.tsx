@@ -1,5 +1,4 @@
-import { Link } from 'one'
-
+import { AppLink } from '~/components/navigation'
 import { Button, Icons, Spinner, Text, XStack, YStack } from '~/components/ui'
 import { getShadowStyle } from '~/config/tokens'
 import { vendorRoutes } from '~/lib/routes'
@@ -53,11 +52,11 @@ export function ListingPublishFooter({
       flexShrink={0}
       style={getShadowStyle('md')}
     >
-      <Link href={vendorRoutes.products} asChild>
+      <AppLink href={vendorRoutes.products} asChild>
         <Button tone="ghost" size="$3" borderRadius={999} disabled={busy}>
           {LISTING_PUBLISH_COPY.CANCEL_CHANGES}
         </Button>
-      </Link>
+      </AppLink>
 
       <Text
         fontSize={12}

@@ -93,6 +93,7 @@ import { useAppLayout } from '~/hooks/useAppLayout'
 import { useAppUi } from '~/lib/theme/useAppUi'
 import { resolveAuthContact } from '~/features/auth/services/account-contact'
 import { trackCommerceEvent } from '~/lib/analytics'
+import { navigateApp, replaceApp } from '~/lib/platform/navigate'
 
 const SUMMARY_WIDTH = 320
 
@@ -105,7 +106,6 @@ export function CheckoutScreen() {
   const { cart, items: cartItems, isLoading, refresh } = useCart()
   const { items, isChecking } = useStorefrontCartItems(cartItems)
   const toast = useAppToast()
-  const router = useRouter()
 
   const [addresses, setAddresses] = useState<UserAddress[]>([])
   const [recentAddresses, setRecentAddresses] = useState<RecentAddressSnapshot[]>([])
@@ -527,7 +527,7 @@ export function CheckoutScreen() {
               : `${issues.length} items exceed available stock. Update quantities in your cart.`,
         })
         setIsSubmitting(false)
-        router.push(commerceRoutes.cart)
+        navigateApp(commerceRoutes.cart)
         return
       }
 
@@ -701,7 +701,7 @@ export function CheckoutScreen() {
       if (next.kind === 'payu_bridge') {
         setOrderPlaced(true)
         void refresh()
-        router.replace(next.href as never)
+        replaceApp(next.href as never)
         return
       }
 
@@ -720,7 +720,7 @@ export function CheckoutScreen() {
         // Native / non-Razorpay external: open in browser then show pending order screen.
         setOrderPlaced(true)
         const opened = await openExternalUrl(next.url)
-        router.replace(successHref)
+        replaceApp(successHref)
         void refresh()
         if (!opened) {
           toast.show('Complete payment', {
@@ -754,7 +754,7 @@ export function CheckoutScreen() {
               ? `Order ${orderNumbers[0]} has been placed.`
               : 'Your order has been placed.',
       })
-      router.replace(successHref)
+      replaceApp(successHref)
       void refresh()
     } catch {
       toast.show('Checkout failed', { tone: 'danger', message: 'Please try again.' })

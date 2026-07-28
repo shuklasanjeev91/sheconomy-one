@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { useParams, useRouter } from 'one'
+import { useParams } from 'one'
 import { AppLink } from '~/components/navigation/AppLink'
 import {
   Button,
@@ -82,6 +82,7 @@ import { usePageSeo } from '~/components/seo/RouteSeo'
 import { trackCommerceEvent } from '~/lib/analytics'
 
 import { BRAND_SHOP_LABEL } from '~/config/brand'
+import { navigateApp } from '~/lib/platform/navigate'
 
 type ListingScreenProps = {
   initial?: ListingLoaderResult | null
@@ -112,7 +113,6 @@ export function ListingScreen({
   })
   const { addToCart, items: cartItems, updateQuantity, removeItem } = useCart()
   const toast = useAppToast()
-  const router = useRouter()
   const { isDesktop } = useAppLayout()
 
   usePageSeo(
@@ -244,7 +244,7 @@ export function ListingScreen({
     setPersonalizationNote('')
     toast.show('Added to cart', { tone: 'success' })
     if (goToCheckout) {
-      router.push(commerceRoutes.checkout)
+      navigateApp(commerceRoutes.checkout)
     }
   }
 
@@ -263,7 +263,7 @@ export function ListingScreen({
   }
 
   function goToCheckout() {
-    router.push(commerceRoutes.checkout)
+    navigateApp(commerceRoutes.checkout)
   }
 
   const specifications = buildListingSpecifications({

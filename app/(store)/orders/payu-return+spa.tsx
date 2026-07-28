@@ -38,7 +38,7 @@ export default function PayUReturnRoute() {
           await cancelCheckoutPayment(pending.checkoutGroupId)
           await clearPendingOrderSuccess()
           if (cancelled) return
-          router.replace(commerceRoutes.cart)
+          router.push(commerceRoutes.cart)
           return
         }
         if (pending?.orderIds?.length) {
@@ -47,10 +47,10 @@ export default function PayUReturnRoute() {
             awaitingExternalPayment: true,
           })
           if (cancelled) return
-          router.replace(commerceRoutes.orderSuccess(pending.orderIds))
+          router.push(commerceRoutes.orderSuccess(pending.orderIds))
           return
         }
-        router.replace(commerceRoutes.cart)
+        router.push(commerceRoutes.cart)
         return
       }
 
@@ -61,10 +61,10 @@ export default function PayUReturnRoute() {
           awaitingExternalPayment: true,
         })
         if (cancelled) return
-        router.replace(commerceRoutes.orderSuccess(pending.orderIds))
+        router.push(commerceRoutes.orderSuccess(pending.orderIds))
         return
       }
-      router.replace(commerceRoutes.orders)
+      router.push(commerceRoutes.orders)
     })()
     return () => {
       cancelled = true

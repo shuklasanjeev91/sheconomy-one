@@ -20,6 +20,12 @@ export type ComposerOptions = {
   gifUrl?: string
   groupId?: string
   companyId?: string
+  /** Celebration occasion key (birthday, work_anniversary, …). */
+  occasion?: string
+  /** Pre-fill celebration title / milestone text. */
+  celebrationTitle?: string
+  /** Pre-fill post body (e.g. congratulate copy). */
+  content?: string
 }
 
 /** Sheet title for the shared community composer by mode. */

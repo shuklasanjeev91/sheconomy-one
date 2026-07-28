@@ -124,16 +124,16 @@ export function StoryViewerScreen() {
 
   const goToNextAuthorOrExit = useCallback(() => {
     if (!userId) {
-      router.replace(communityRoutes.home)
+      router.push(communityRoutes.home)
       return
     }
     const pos = authorQueue.indexOf(userId)
     const nextAuthor = pos >= 0 ? authorQueue[pos + 1] : undefined
     if (nextAuthor && nextAuthor !== userId) {
-      router.replace(communityRoutes.storyUser(nextAuthor))
+      router.push(communityRoutes.storyUser(nextAuthor))
       return
     }
-    router.replace(communityRoutes.home)
+    router.push(communityRoutes.home)
   }, [authorQueue, router, userId])
 
   const goNext = useCallback(() => {
@@ -265,7 +265,7 @@ export function StoryViewerScreen() {
     toast.show('Story deleted', { tone: 'success' })
     const remaining = slides.filter((s) => s.id !== slide.id)
     if (!remaining.length) {
-      router.replace(communityRoutes.home)
+      router.push(communityRoutes.home)
       return
     }
     setSlides(remaining)

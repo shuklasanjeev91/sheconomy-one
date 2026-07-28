@@ -1,7 +1,8 @@
 import type { PushClient, PushClickPayload } from '~/lib/notifications/push-client.types'
-import { getOneSignalAppId, resolvePushPlatform } from '~/lib/notifications/push-config'
+import { resolveOneSignalAppId, resolvePushPlatform } from '~/lib/notifications/push-config'
 
 let initialized = false
+let initPromise: Promise<void> | null = null
 
 async function waitForSubscriptionId(timeoutMs = 8_000): Promise<string | null> {
   const { OneSignal } = await import('react-native-onesignal')
@@ -48,16 +49,24 @@ const nativePushClient: PushClient = {
   platform: resolvePushPlatform(),
 
   async init() {
-    const appId = getOneSignalAppId()
-    if (!appId || initialized) return
-    try {
-      const { OneSignal, LogLevel } = await import('react-native-onesignal')
-      OneSignal.Debug.setLogLevel(LogLevel.Warn)
-      OneSignal.initialize(appId)
-      initialized = true
-    } catch (error) {
-      console.warn('[push] Native OneSignal init failed', error)
-    }
+    if (initialized) return
+    if (initPromise) return initPromise
+
+    initPromise = (async () => {
+      try {
+        const appId = await resolveOneSignalAppId()
+        if (!appId) return
+        const { OneSignal, LogLevel } = await import('react-native-onesignal')
+        OneSignal.Debug.setLogLevel(LogLevel.Warn)
+        OneSignal.initialize(appId)
+        initialized = true
+      } catch (error) {
+        console.warn('[push] Native OneSignal init failed', error)
+        initPromise = null
+      }
+    })()
+
+    return initPromise
   },
 
   async requestPermission() {
@@ -208,9 +217,11 @@ const nativePushClient: PushClient = {
             body?: string
             additionalData?: Record<string, unknown>
             launchURL?: string
+            display?: () => void
           }
         }) => {
-          event.preventDefault?.()
+          // Do not swallow the OS banner — users test with the app open.
+          // Still forward payload so in-app toasts can mirror the alert.
           const notification = event.getNotification?.() ?? null
           const data = notification?.additionalData ?? null
           const url =

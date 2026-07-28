@@ -6,12 +6,15 @@ import {
   type VerificationPhase,
   completeGenderVerificationSession,
   computeLivenessScore,
+  createBlinkTracker,
+  createEarCalibrator,
   createGenderVerificationSession,
-  createGestureBlinkTracker,
   detectHumanLivenessFrame,
   passesAntiSpoof,
   preloadHumanModels,
-  updateGestureBlinkTracker,
+  thresholdsFromBaseline,
+  updateBlinkTracker,
+  updateEarCalibrator,
 } from '~/lib/gender-verification'
 
 import { BRAND_NAME } from '~/config/brand'
@@ -29,7 +32,7 @@ export function useGenderVerification({ onVerified }: UseGenderVerificationOptio
     faceDetected: false,
     faceCentered: false,
     eyesClosed: false,
-    calibrated: true,
+    calibrated: false,
     avgEar: null,
     liveScore: 0,
     realScore: 0,
@@ -41,7 +44,8 @@ export function useGenderVerification({ onVerified }: UseGenderVerificationOptio
   const videoRef = useRef<HTMLVideoElement | null>(null)
   const streamRef = useRef<MediaStream | null>(null)
   const loopActiveRef = useRef(false)
-  const blinkTrackerRef = useRef(createGestureBlinkTracker())
+  const blinkTrackerRef = useRef(createBlinkTracker())
+  const earCalibratorRef = useRef(createEarCalibrator())
   const stableFramesRef = useRef(0)
   const liveSamplesRef = useRef<number[]>([])
   const realSamplesRef = useRef<number[]>([])
@@ -113,7 +117,14 @@ export function useGenderVerification({ onVerified }: UseGenderVerificationOptio
           )
         }
 
-        const gender = lastGenderRef.current
+        let gender = lastGenderRef.current
+        if (!gender) {
+          const video = videoRef.current
+          if (video) {
+            const frame = await detectHumanLivenessFrame(video, { forceGender: true })
+            gender = frame.gender
+          }
+        }
         if (!gender) {
           throw new Error('Could not analyze your face. Try again in good lighting.')
         }
@@ -166,12 +177,20 @@ export function useGenderVerification({ onVerified }: UseGenderVerificationOptio
         const frame = await detectHumanLivenessFrame(video)
         if (!loopActiveRef.current || generation !== loopGenerationRef.current) return
 
+        updateEarCalibrator(earCalibratorRef.current, frame.avgEar, 10)
+        const thresholds = thresholdsFromBaseline(
+          earCalibratorRef.current.baseline,
+          GENDER_VERIFICATION.earBlinkThreshold,
+          GENDER_VERIFICATION.earOpenThreshold,
+        )
+        const eyesClosed = frame.avgEar < thresholds.blinkThreshold
+
         setTracking({
           faceDetected: frame.faceDetected,
           faceCentered: frame.faceCentered,
-          eyesClosed: frame.eyesClosed,
-          calibrated: true,
-          avgEar: null,
+          eyesClosed,
+          calibrated: thresholds.calibrated,
+          avgEar: frame.avgEar,
           liveScore: frame.liveScore,
           realScore: frame.realScore,
           facingCamera: frame.facingCamera,
@@ -194,27 +213,33 @@ export function useGenderVerification({ onVerified }: UseGenderVerificationOptio
         }
 
         if (frame.gender) lastGenderRef.current = frame.gender
-        liveSamplesRef.current = [...liveSamplesRef.current.slice(-24), frame.liveScore]
-        realSamplesRef.current = [...realSamplesRef.current.slice(-24), frame.realScore]
+        if (frame.liveScore > 0) {
+          liveSamplesRef.current = [...liveSamplesRef.current.slice(-24), frame.liveScore]
+        }
+        if (frame.realScore > 0) {
+          realSamplesRef.current = [...realSamplesRef.current.slice(-24), frame.realScore]
+        }
         stableFramesRef.current += 1
         setPhase('blink')
 
-        const tracker = updateGestureBlinkTracker(
-          blinkTrackerRef.current,
-          frame.eyesClosed,
-          Date.now(),
-        )
+        const tracker = updateBlinkTracker(blinkTrackerRef.current, frame.leftEar, frame.rightEar, {
+          blinkThreshold: thresholds.blinkThreshold,
+          openThreshold: thresholds.openThreshold,
+          minClosedMs: GENDER_VERIFICATION.minClosedMs,
+          maxClosedMs: GENDER_VERIFICATION.maxClosedMs,
+          minBlinkGapMs: GENDER_VERIFICATION.minBlinkGapMs,
+        })
         blinkTrackerRef.current = tracker
         setBlinkCount(tracker.count)
 
         const remaining = Math.max(0, GENDER_VERIFICATION.requiredBlinks - tracker.count)
         if (remaining > 0) {
           setInstruction(
-            frame.eyesClosed
+            eyesClosed
               ? 'Open your eyes'
               : `Blink naturally — ${remaining} left`,
           )
-          await new Promise((r) => setTimeout(r, 25))
+          await new Promise((r) => setTimeout(r, 16))
           continue
         }
 
@@ -248,7 +273,8 @@ export function useGenderVerification({ onVerified }: UseGenderVerificationOptio
     setError(null)
     setPhase('loading')
     setInstruction('Loading secure face models…')
-    blinkTrackerRef.current = createGestureBlinkTracker()
+    blinkTrackerRef.current = createBlinkTracker()
+    earCalibratorRef.current = createEarCalibrator()
     stableFramesRef.current = 0
     liveSamplesRef.current = []
     realSamplesRef.current = []
@@ -277,7 +303,7 @@ export function useGenderVerification({ onVerified }: UseGenderVerificationOptio
 
     try {
       const stream = await navigator.mediaDevices.getUserMedia({
-        video: { facingMode: 'user', width: { ideal: 1280 }, height: { ideal: 720 } },
+        video: { facingMode: 'user', width: { ideal: 640 }, height: { ideal: 480 } },
         audio: false,
       })
       streamRef.current = stream
@@ -312,14 +338,15 @@ export function useGenderVerification({ onVerified }: UseGenderVerificationOptio
     setError(null)
     setPhase('idle')
     setInstruction('Start when you are ready')
-    blinkTrackerRef.current = createGestureBlinkTracker()
+    blinkTrackerRef.current = createBlinkTracker()
+    earCalibratorRef.current = createEarCalibrator()
     stableFramesRef.current = 0
     analyzingRef.current = false
     setTracking({
       faceDetected: false,
       faceCentered: false,
       eyesClosed: false,
-      calibrated: true,
+      calibrated: false,
       avgEar: null,
       liveScore: 0,
       realScore: 0,

@@ -1,4 +1,3 @@
-import { useRouter } from 'one'
 import { AppLink } from '~/components/navigation/AppLink'
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Share } from 'react-native'
@@ -50,6 +49,7 @@ import { useFormatCurrency } from '~/hooks/useFormatCurrency'
 import { copyToClipboard } from '~/lib/platform/clipboard'
 import { commerceRoutes } from '~/lib/routes'
 import { useAppLayout } from '~/hooks/useAppLayout'
+import { navigateApp } from '~/lib/platform/navigate'
 
 const SUMMARY_WIDTH = 300
 
@@ -72,7 +72,6 @@ export function CartScreen() {
   const { items, isChecking, hasInactiveItems } = useStorefrontCartItems(cartItems)
   const { favoriteIds, isFavorite, toggleFavorite } = useFavorites()
   const toast = useAppToast()
-  const router = useRouter()
   const { formatMoney, convertMoney, preferredCurrency } = useFormatCurrency()
   const [listingSlugs, setListingSlugs] = useState<Map<string, string>>(new Map())
   const [listingTypes, setListingTypes] = useState<Map<string, string>>(new Map())
@@ -409,7 +408,7 @@ export function CartScreen() {
       <CommerceButton
         variant="primary"
         disabled={checkoutBlocked}
-        onPress={() => router.push(commerceRoutes.checkout)}
+        onPress={() => navigateApp(commerceRoutes.checkout)}
         width="100%"
       >
         Proceed to buy ({unitCount} {unitCount === 1 ? 'item' : 'items'})
@@ -702,11 +701,11 @@ export function CartScreen() {
                     ? 'Move items from Saved for later into your cart when you’re ready.'
                     : 'Browse shops and add something you love.'}
                 </Text>
-                <CommerceButton variant="primary" onPress={() => router.push(commerceRoutes.home)}>
+                <CommerceButton variant="primary" onPress={() => navigateApp(commerceRoutes.home)}>
                   Discover today&apos;s finds
                 </CommerceButton>
                 {savedItems.length > 0 ? (
-                  <CommerceLink onPress={() => router.push(commerceRoutes.wishlist)}>
+                  <CommerceLink onPress={() => navigateApp(commerceRoutes.wishlist)}>
                     Open wishlist
                   </CommerceLink>
                 ) : null}
@@ -783,7 +782,7 @@ export function CartScreen() {
         savings={discount || null}
         label="Proceed to buy"
         disabled={checkoutBlocked}
-        onPress={() => router.push(commerceRoutes.checkout)}
+        onPress={() => navigateApp(commerceRoutes.checkout)}
       />
     </YStack>
   )

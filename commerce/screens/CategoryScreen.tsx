@@ -1,4 +1,4 @@
-import { useParams, useRouter } from 'one'
+import { useParams } from 'one'
 import { useEffect, useMemo, useState } from 'react'
 
 import { Spinner, Text, YStack } from '~/components/ui'
@@ -15,6 +15,7 @@ import { commerceRoutes } from '~/lib/routes'
 import { FullWidthLayout, PageSection } from '~/components/layout'
 import { useAppUi } from '~/lib/theme/useAppUi'
 import { usePageSeo } from '~/components/seo/RouteSeo'
+import { replaceApp } from '~/lib/platform/navigate'
 
 export function CategoryScreen({
   filters: initialFilters = {},
@@ -25,7 +26,6 @@ export function CategoryScreen({
 }) {
   const ui = useAppUi()
   const { slug } = useParams<{ slug: string }>()
-  const router = useRouter()
   const filters = initialFilters
   const hasInitial = Boolean(initial?.category || initial?.error)
   const [category, setCategory] = useState<CategorySummary | null>(initial?.category ?? null)
@@ -81,7 +81,7 @@ export function CategoryScreen({
     const params = buildFilterSearchParams(new URLSearchParams(), next)
     const search = params.toString()
     const base = commerceRoutes.category(getCategorySlug(category))
-    router.replace((search ? `${base}?${search}` : base) as never)
+    replaceApp((search ? `${base}?${search}` : base) as never)
   }
 
   if (isCategoryLoading) {

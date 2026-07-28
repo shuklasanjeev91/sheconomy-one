@@ -30,9 +30,12 @@ import { UserLocationProvider } from '~/lib/location'
 import { ScreenZoomProvider } from '~/lib/zoom/ScreenZoomContext'
 import { store } from '~/lib/store'
 import { PushNotificationsProvider } from '~/providers/PushNotificationsProvider'
+import { PushForegroundNotificationHost } from '~/components/notifications/PushForegroundNotificationHost'
+import { PushSubscribePromptHost } from '~/components/notifications/PushSubscribePromptHost'
 import { SupabaseProvider } from '~/providers/SupabaseProvider'
 import { AiAssistProvider } from '~/providers/AiAssistProvider'
 import { ConnectivityProvider } from '~/providers/ConnectivityProvider'
+import { NativeAppOnboardingGate } from '~/components/onboarding/NativeAppOnboardingGate'
 
 function AppProviders({ children }: { children: ReactNode }) {
   useAppFonts()
@@ -53,8 +56,12 @@ function AppProviders({ children }: { children: ReactNode }) {
                             <ScreenZoomProvider>
                               <ScreenZoomRoot>
                                 <ConnectivityProvider>
+                                  <PushSubscribePromptHost />
+                                  <PushForegroundNotificationHost />
                                   <AppErrorBoundary scope="AppShell">
-                                    <AppShell>{children}</AppShell>
+                                    <NativeAppOnboardingGate>
+                                      <AppShell>{children}</AppShell>
+                                    </NativeAppOnboardingGate>
                                   </AppErrorBoundary>
                                 </ConnectivityProvider>
                               </ScreenZoomRoot>

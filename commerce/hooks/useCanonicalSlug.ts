@@ -24,7 +24,7 @@ export function useCanonicalListingSlug(
     const canonical = getListingSlug(listing)
     if (canonical === routeSlug || listingSlugMatches(listing, routeSlug)) return
 
-    router.replace(`/listing/${encodeURIComponent(canonical)}` as never)
+    router.push(`/listing/${encodeURIComponent(canonical)}` as never)
   }, [routeSlug, listing, router])
 }
 
@@ -42,6 +42,6 @@ export function useCanonicalShopSlug(
     const canonical = getShopSlug(shop)
     if (canonical === routeSlug || shopSlugMatches(shop, routeSlug)) return
 
-    router.replace(`/shop/${encodeURIComponent(canonical)}` as never)
+    router.push(`/shop/${encodeURIComponent(canonical)}` as never)
   }, [routeSlug, shop, router])
 }

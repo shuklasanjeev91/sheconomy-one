@@ -47,7 +47,7 @@ export function AppCenterNavTabs({ variant = 'desktop', compact = false }: AppCe
         const href = resolveFeatureNavHref(String(item.href), item.feature)
 
         return (
-          <AppLink key={item.label} href={href} replace asChild>
+          <AppLink key={item.label} href={href} asChild>
             <YStack
               flex={1}
               maxWidth={!isMobile ? 112 : undefined}

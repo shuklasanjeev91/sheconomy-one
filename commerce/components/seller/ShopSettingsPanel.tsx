@@ -204,6 +204,7 @@ export function ShopSettingsPanel({ shop, onUpdated }: ShopSettingsPanelProps) {
           label="Upload logo"
           value={logoImages}
           onChange={setLogoImages}
+          aspect="square"
           disabled={isSaving}
           hint="Square images work best. Saved to shop storage when you tap Save."
           uploadProgress={uploadProgress}

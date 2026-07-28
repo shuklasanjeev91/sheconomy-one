@@ -27,12 +27,18 @@ export async function pickImages(options: PickImagesOptions = {}): Promise<Picke
       throw new Error('Photo library permission is required to upload images.')
     }
 
+    const aspect = options.aspect
+    const allowsEditing =
+      options.allowsEditing ?? (!!aspect && !options.multiple)
+
     const result = await ImagePicker.launchImageLibraryAsync({
       mediaTypes: ['images'],
-      allowsMultipleSelection: !!options.multiple,
+      allowsMultipleSelection: !!options.multiple && !allowsEditing,
       selectionLimit: options.maxCount ?? (options.multiple ? 5 : 1),
       quality: 0.85,
       exif: false,
+      allowsEditing,
+      aspect: aspect ? [aspect[0], aspect[1]] : undefined,
       // Prefer JPEG/PNG over HEIC so uploaded avatars render everywhere.
       preferredAssetRepresentationMode:
         ImagePicker.UIImagePickerPreferredAssetRepresentationMode.Compatible,
@@ -177,6 +183,8 @@ export async function captureImage(): Promise<PickedImage | null> {
     const result = await ImagePicker.launchCameraAsync({
       mediaTypes: ['images'],
       quality: 0.85,
+      allowsEditing: true,
+      aspect: [1, 1],
       preferredAssetRepresentationMode:
         ImagePicker.UIImagePickerPreferredAssetRepresentationMode.Compatible,
     })

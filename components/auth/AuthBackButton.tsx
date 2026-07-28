@@ -44,7 +44,7 @@ export function AuthBackButton({ variant = 'dark', showLabel = true }: AuthBackB
     const target = (isGuest ? commerceRoutes.home : sanitizeReturnPath(returnTo)) as Href
 
     // Prefer replace so chromeless auth does not sit under the restored tab shell.
-    router.replace(target)
+    router.push(target)
 
     setTimeout(() => {
       navigatingRef.current = false

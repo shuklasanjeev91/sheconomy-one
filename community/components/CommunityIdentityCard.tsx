@@ -56,8 +56,8 @@ export function CommunityIdentityCard() {
               Sign in to see your network, profile views, and personalised feed.
             </Text>
           </YStack>
-          <AppLink href={routes.signIn as Href}>
-            <Text fontSize={13} fontWeight="700" color={communityUi.brand}>
+          <AppLink href={routes.signIn as Href} asChild>
+            <Text fontSize={13} fontWeight="700" color={communityUi.brand} cursor="pointer">
               Sign in
             </Text>
           </AppLink>
@@ -135,14 +135,16 @@ export function CommunityIdentityCard() {
         ) : null}
         {profile.profile_completion_percentage != null &&
         profile.profile_completion_percentage < 100 ? (
-          <AppLink href={href}>
+          <AppLink href={href} asChild>
             <XStack
+              width="100%"
               paddingHorizontal={12}
               paddingVertical={8}
               justifyContent="space-between"
               alignItems="center"
               cursor="pointer"
               hoverStyle={{ backgroundColor: communityUi.hoverBg }}
+              pressStyle={{ opacity: 0.85 }}
             >
               <Text fontSize={12} color={communityUi.textMuted}>
                 Profile strength
@@ -162,14 +164,16 @@ function StatLink({ label, value, href }: { label: string; value: number; href: 
   const communityUi = useCommunityUi()
 
   return (
-    <AppLink href={href}>
+    <AppLink href={href} asChild>
       <XStack
+        width="100%"
         paddingHorizontal={12}
         paddingVertical={6}
         justifyContent="space-between"
         alignItems="center"
         cursor="pointer"
         hoverStyle={{ backgroundColor: communityUi.hoverBg }}
+        pressStyle={{ opacity: 0.85 }}
       >
         <Text fontSize={12} fontWeight="600" color={communityUi.textMuted}>
           {label}

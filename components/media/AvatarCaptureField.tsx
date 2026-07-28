@@ -2,7 +2,8 @@ import { useState } from 'react'
 import { Image, Platform } from 'react-native'
 
 import { Button, Icons, Spinner, Text, XStack, YStack, useAppToast } from '~/components/ui'
-import { captureImage, pickImages, pickedImageToBlob, type PickedImage } from '~/lib/media/pick-image'
+import { pickedImageToBlob, type PickedImage } from '~/lib/media/pick-image'
+import { captureImageWithCrop, cropIfNeeded, pickImagesWithCrop } from '~/lib/media/pick-and-crop'
 import { uploadImage } from '~/lib/profile/profile.service'
 import { MediaDropZone } from '~/components/media/MediaDropZone'
 import { UploadProgressBar } from '~/components/media/UploadProgressBar'
@@ -51,7 +52,9 @@ export function AvatarCaptureField({
     if (!image || disabled || busy) return
     setBusy('drop')
     try {
-      await uploadPicked(image.uri, image.mimeType, image.fileName)
+      const cropped = await cropIfNeeded(image, 'avatar', { cropTitle: 'Profile photo' })
+      if (!cropped) return
+      await uploadPicked(cropped.uri, cropped.mimeType, cropped.fileName)
       toast.show('Photo updated', { tone: 'success' })
     } catch (error) {
       toast.show('Could not update photo', {
@@ -68,7 +71,12 @@ export function AvatarCaptureField({
     if (disabled || busy) return
     setBusy('library')
     try {
-      const picked = await pickImages({ multiple: false, maxCount: 1 })
+      const picked = await pickImagesWithCrop({
+        multiple: false,
+        maxCount: 1,
+        aspect: 'avatar',
+        cropTitle: 'Profile photo',
+      })
       const image = picked[0]
       if (!image) return
       await uploadPicked(image.uri, image.mimeType, image.fileName)
@@ -88,7 +96,10 @@ export function AvatarCaptureField({
     if (disabled || busy || Platform.OS === 'web') return
     setBusy('camera')
     try {
-      const shot = await captureImage()
+      const shot = await captureImageWithCrop({
+        aspect: 'avatar',
+        cropTitle: 'Profile photo',
+      })
       if (!shot) return
       await uploadPicked(shot.uri, shot.mimeType, shot.fileName)
       toast.show('Photo updated', { tone: 'success' })

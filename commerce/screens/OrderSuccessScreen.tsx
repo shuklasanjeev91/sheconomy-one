@@ -165,7 +165,7 @@ export function OrderSuccessScreen() {
   async function openPaymentUrl(url: string) {
     // PayU bridge: SPA navigation within the app
     if (isAppPayUBridgeUrl(url) || /\/orders\/payu(\?|$)/.test(url)) {
-      router.replace(url as never)
+      router.push(url as never)
       return true
     }
     // Razorpay Payment Link: same-tab redirect so razorpay-return handles the callback
@@ -231,7 +231,7 @@ export function OrderSuccessScreen() {
         tone: 'success',
         message: 'Reserved stock was released and items can return to your cart.',
       })
-      router.replace(commerceRoutes.cart)
+      router.push(commerceRoutes.cart)
     } finally {
       setPaymentBusy(false)
     }
@@ -330,7 +330,7 @@ export function OrderSuccessScreen() {
               tone="primary"
               size="$3"
               borderRadius={999}
-              onPress={() => router.replace(commerceRoutes.orders)}
+              onPress={() => router.push(commerceRoutes.orders)}
             >
               View your orders
             </Button>

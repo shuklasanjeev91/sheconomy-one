@@ -115,7 +115,7 @@ export default function AuthQrApproveRoute() {
             {busy ? 'Approving…' : 'Approve login'}
           </Button>
         )}
-        <Button tone="ghost" size="$3" onPress={() => router.replace(buildSignInUrl('/') as never)}>
+        <Button tone="ghost" size="$3" onPress={() => router.push(buildSignInUrl('/') as never)}>
           Cancel
         </Button>
       </YStack>

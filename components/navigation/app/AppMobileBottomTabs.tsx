@@ -7,7 +7,6 @@ import { XStack, YStack } from '~/components/ui'
 import { tabBarPositionStyle } from '~/lib/layout/styles'
 import { navigateApp } from '~/lib/platform/navigate'
 import { mobileTabBarDockStyle } from '~/lib/theme/surfaces'
-import { useCart } from '~/commerce/hooks/useCart'
 import { useAccess } from '~/hooks/useAccess'
 import { useAppLayout } from '~/hooks/useAppLayout'
 import { useStableMedia } from '~/hooks/useStableMedia'
@@ -35,7 +34,6 @@ export function AppMobileBottomTabs() {
   const pathname = usePathname()
   const { tier } = useAccess()
   const { safeBottom } = useAppLayout()
-  const { itemCount } = useCart()
   const { shops, primaryShopId } = useVendorShops()
   const hasShops = shops.length > 0
   // Optimistic highlight so tab presses feel instant while the route settles.
@@ -100,7 +98,7 @@ export function AppMobileBottomTabs() {
       return
     }
     setPendingPath(href)
-    navigateApp(tab.href, { replace: true })
+    navigateApp(tab.href)
   }
 
   return (
@@ -131,7 +129,6 @@ export function AppMobileBottomTabs() {
       >
         {tabs.map((tab) => {
           const isAuthTab = tab.label === 'You'
-          const isCartTab = tab.label === 'Cart'
           const isFocused = isTabFocused(tab)
 
           if (isAuthTab) {
@@ -161,11 +158,7 @@ export function AppMobileBottomTabs() {
             <Icon
               size={isFocused ? TAB_ICON.active : TAB_ICON.inactive}
               color={isFocused ? activeColor : inactiveColor}
-              fill={
-                isFocused && tab.label !== 'Cart' && tab.label !== 'Shops'
-                  ? activeColor
-                  : 'none'
-              }
+              fill={isFocused && tab.label !== 'Shops' ? activeColor : 'none'}
               strokeWidth={isFocused ? 2.4 : 1.85}
             />
           )
@@ -204,7 +197,6 @@ export function AppMobileBottomTabs() {
               activeColor={activeColor}
               inactiveColor={inactiveColor}
               activePillBg={activePillBg}
-              badge={isCartTab ? itemCount : undefined}
               badgeBorderColor={dockSurface}
               onPress={() => pressTab(tab)}
             >

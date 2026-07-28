@@ -9,6 +9,7 @@ import { useAppBarScroll } from '~/components/navigation/AppBarScrollContext'
 import { NavCountBadge } from '~/components/navigation/NavCountBadge'
 import { NavLogo } from '~/components/navigation/NavLogo'
 import { SETTINGS_NAV, settingsSectionFromPath } from '~/components/settings/config'
+import { useCart } from '~/commerce/hooks/useCart'
 import { useUnreadNotifications } from '~/community/hooks/useUnreadNotifications'
 import { commerceRoutes, routes } from '~/lib/routes'
 import { useAppBackNavigation } from '~/hooks/useAppBackNavigation'
@@ -16,7 +17,6 @@ import { useAppUi } from '~/lib/theme/useAppUi'
 import { chromeSurfaceStyle } from '~/lib/theme/surfaces'
 
 import { AppCenterNavTabs } from '~/components/navigation/app/AppCenterNavTabs'
-import { AppMenuButton } from '~/components/navigation/app/AppMenuSheet'
 import { getAppColors } from '~/components/navigation/app/config'
 
 /** Collapse search/logo row after this scroll offset — tabs stay visible (LinkedIn-style). */
@@ -32,6 +32,7 @@ type AppMobileHeaderProps = {
 /**
  * Mobile/tablet top bar (hidden on desktop).
  * At rest: logo/search + product tabs.
+ * Utilities: cart + notifications only.
  * On scroll: product tabs only (except desktop, which keeps the full header).
  */
 export function AppMobileHeader({ minimal = false }: AppMobileHeaderProps) {
@@ -40,6 +41,7 @@ export function AppMobileHeader({ minimal = false }: AppMobileHeaderProps) {
   const pathname = usePathname()
   const { showBack } = useAppBackNavigation()
   const { scrollY } = useAppBarScroll()
+  const { itemCount } = useCart()
   const { count: unreadNotifications } = useUnreadNotifications()
 
   const isSettings = pathname === '/settings' || pathname.startsWith('/settings/')
@@ -96,7 +98,12 @@ export function AppMobileHeader({ minimal = false }: AppMobileHeaderProps) {
           )}
 
           <XStack flexShrink={0} gap={8} alignItems="center">
-            <AppMenuButton mode="sheet" size={38} />
+            <HeaderIcon
+              href={routes.cart}
+              icon={Icons.ShoppingBag}
+              label="Cart"
+              badgeCount={itemCount}
+            />
             <HeaderIcon
               href={routes.notifications}
               icon={Icons.Bell}

@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react'
-import { Link, useRouter } from 'one'
+import { AppLink } from '~/components/navigation'
+import { navigateApp } from '~/lib/platform/navigate'
 
 import {
   Button,
@@ -93,7 +94,6 @@ export function VendorListingsProductsTab({
   const [bulkUpdating, setBulkUpdating] = useState(false)
   const [deleteTarget, setDeleteTarget] = useState<ShopListingRow | null>(null)
   const [deleting, setDeleting] = useState(false)
-  const router = useRouter()
 
   const hasFilters = applied.search.trim().length > 0 || applied.type !== 'all' || applied.status !== 'all'
 
@@ -235,7 +235,7 @@ export function VendorListingsProductsTab({
 
   const rowActions = {
     onView: onOpenListing,
-    onEdit: (listingId: string) => router.push(vendorRoutes.editListing(listingId)),
+    onEdit: (listingId: string) => navigateApp(vendorRoutes.editListing(listingId)),
     onStatusChange: changeStatus,
     onDelete: (row: ShopListingRow) => setDeleteTarget(row),
   }
@@ -409,11 +409,11 @@ export function VendorListingsProductsTab({
                 : 'Create your first listing to start selling from your storefront.'}
             </Text>
             {!hasFilters ? (
-              <Link href={vendorRoutes.createListing} asChild>
+              <AppLink href={vendorRoutes.createListing} asChild>
                 <Button tone="primary" size="$3" borderRadius={999}>
                   Create listing
                 </Button>
-              </Link>
+              </AppLink>
             ) : null}
           </YStack>
         ) : isDesktop ? (

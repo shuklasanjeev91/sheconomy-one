@@ -23,11 +23,12 @@ export const appRoutes = {
   legalAds: '/legal/ads' as Href,
   cart: '/cart' as Href,
   checkout: '/checkout' as Href,
-  /** Unified omnibox results — optional `scope`: all | listings | shops | people | … */
-  search: (query?: string, scope?: string) => {
+  /** Unified omnibox results — optional `scope`: all | listings | shops | people | …; `mode`: ai */
+  search: (query?: string, scope?: string, mode?: 'ai' | null) => {
     const params = new URLSearchParams()
     if (query?.trim()) params.set('q', query.trim())
     if (scope && scope !== 'all') params.set('scope', scope)
+    if (mode === 'ai') params.set('mode', 'ai')
     const search = params.toString()
     return (search ? `/search?${search}` : '/search') as Href
   },

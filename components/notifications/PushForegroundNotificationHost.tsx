@@ -2,9 +2,10 @@ import { useEffect } from 'react'
 
 import { isIncomingCallPush } from '~/chat/lib/incoming-call-push'
 import pushClient from '~/lib/notifications/push-client'
-import { getOneSignalAppId, pathFromNotificationUrl } from '~/lib/notifications/push-config'
+import { pathFromNotificationUrl } from '~/lib/notifications/push-config'
 import { navigateApp } from '~/lib/platform/navigate'
 import { useAppToast } from '~/components/ui'
+import { usePushNotifications } from '~/providers/PushNotificationsProvider'
 
 /**
  * Shows in-app toasts when a push arrives while the app is foregrounded.
@@ -13,7 +14,7 @@ import { useAppToast } from '~/components/ui'
  */
 export function PushForegroundNotificationHost() {
   const toast = useAppToast()
-  const isConfigured = !!getOneSignalAppId()
+  const { isConfigured } = usePushNotifications()
 
   useEffect(() => {
     if (!isConfigured) return

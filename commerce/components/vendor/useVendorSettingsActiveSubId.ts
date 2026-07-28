@@ -12,8 +12,19 @@ import {
   type VendorSettingsSectionId,
 } from '~/commerce/components/vendor/vendor-nav'
 
+/**
+ * Web-only: re-render when `?section=` changes via history API.
+ * Must not run on native — RN has no browser History/`popstate`, and calling
+ * `window.addEventListener('popstate', …)` throws (`'popstate' is not a function`).
+ */
 function subscribeToBrowserSearch(callback: () => void) {
-  if (typeof window === 'undefined') return () => {}
+  if (Platform.OS !== 'web') return () => {}
+  if (typeof window === 'undefined' || typeof window.addEventListener !== 'function') {
+    return () => {}
+  }
+  if (typeof history === 'undefined' || typeof history.pushState !== 'function') {
+    return () => {}
+  }
 
   window.addEventListener('popstate', callback)
 
@@ -37,6 +48,7 @@ function subscribeToBrowserSearch(callback: () => void) {
 }
 
 function readBrowserSectionSnapshot(): string | null {
+  if (Platform.OS !== 'web') return null
   return getSearchParam('section')
 }
 

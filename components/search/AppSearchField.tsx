@@ -1,11 +1,12 @@
-import { useGlobalSearchParams, usePathname, useRouter } from 'one'
-import { useEffect, useRef, useState } from 'react'
+import { useGlobalSearchParams, usePathname } from 'one'
+import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { Platform } from 'react-native'
 
 import { SearchSuggestPanel } from '~/components/search/SearchSuggestPanel'
-import { Icons, Input, XStack, YStack } from '~/components/ui'
+import { Icons, Input, Spinner, XStack, YStack, useAppToast } from '~/components/ui'
 import { useAccess } from '~/hooks/useAccess'
 import { useAppLayout } from '~/hooks/useAppLayout'
+import { useVoiceSearch } from '~/hooks/useVoiceSearch'
 import { useUserGeo } from '~/commerce/hooks/useUserGeo'
 import { useProfile } from '~/hooks/useProfile'
 import {
@@ -13,6 +14,7 @@ import {
   recordAppSearchTerm,
   removeAppSearchTerm,
   SEARCH_SCOPE_LABELS,
+  searchQueryFromImage,
   searchScopeFromPath,
   searchScopeFromRouteParams,
   searchSuggest,
@@ -20,7 +22,9 @@ import {
   type SearchHit,
   type SearchScope,
 } from '~/lib/search'
+import { buildAiSearchHref } from '~/lib/search/ai-search'
 import { appRoutes } from '~/lib/routes'
+import { navigateApp } from '~/lib/platform/navigate'
 import { useAppUi } from '~/lib/theme/useAppUi'
 
 type AppSearchFieldProps = {
@@ -30,12 +34,50 @@ type AppSearchFieldProps = {
   scope?: SearchScope
 }
 
+function SearchIconButton({
+  label,
+  onPress,
+  disabled,
+  active,
+  children,
+}: {
+  label: string
+  onPress: () => void
+  disabled?: boolean
+  active?: boolean
+  children: ReactNode
+}) {
+  const ui = useAppUi()
+  return (
+    <XStack
+      width={28}
+      height={28}
+      flexShrink={0}
+      alignItems="center"
+      justifyContent="center"
+      borderRadius={999}
+      cursor={disabled ? 'default' : 'pointer'}
+      opacity={disabled ? 0.45 : 1}
+      backgroundColor={active ? ui.surfaceMuted : 'transparent'}
+      hoverStyle={disabled ? undefined : { backgroundColor: ui.surfaceHover }}
+      pressStyle={disabled ? undefined : { opacity: 0.8 }}
+      onPress={disabled ? undefined : onPress}
+      accessibilityRole="button"
+      aria-label={label}
+      accessibilityState={{ disabled: Boolean(disabled), selected: Boolean(active) }}
+    >
+      {children}
+    </XStack>
+  )
+}
+
 /**
- * Omnibox with suggestions and a clear control; scope stays implicit from the route.
+ * Omnibox with suggestions, voice/image/AI controls, and a clear control;
+ * scope stays implicit from the route.
  */
 export function AppSearchField({ compact, initialQuery = '', scope: scopeProp }: AppSearchFieldProps) {
   const ui = useAppUi()
-  const router = useRouter()
+  const toast = useAppToast()
   const pathname = usePathname()
   const routeParams = useGlobalSearchParams() as Record<string, string | string[] | undefined>
   const { isDesktop } = useAppLayout()
@@ -51,16 +93,37 @@ export function AppSearchField({ compact, initialQuery = '', scope: scopeProp }:
   const [focused, setFocused] = useState(false)
   const [hits, setHits] = useState<SearchHit[]>([])
   const [loading, setLoading] = useState(false)
+  const [imageBusy, setImageBusy] = useState(false)
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const blurCloseRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const submitVoiceRef = useRef<(term: string) => void>(() => {})
 
   const fieldHeight = compact ? 40 : isDesktop ? 44 : 42
   const showFocusRing = focused || open
   const placeholder = 'Search for anything'
 
+  const voice = useVoiceSearch({
+    onPartial: (text) => {
+      setQuery(text)
+      if (!open) setOpen(true)
+    },
+    onFinal: (text) => {
+      const trimmed = text.trim()
+      if (!trimmed) return
+      setQuery(trimmed)
+      submitVoiceRef.current(trimmed)
+    },
+  })
+
   useEffect(() => {
     setQuery(initialQuery)
   }, [initialQuery])
+
+  useEffect(() => {
+    if (!voice.error) return
+    toast.show('Voice search', { tone: 'danger', message: voice.error })
+    voice.clearError()
+  }, [voice.error, voice.clearError, toast])
 
   useEffect(() => {
     if (debounceRef.current) clearTimeout(debounceRef.current)
@@ -103,13 +166,27 @@ export function AppSearchField({ compact, initialQuery = '', scope: scopeProp }:
     userGeo.longitude,
   ])
 
-  function submitSearch(term?: string) {
+  function submitSearch(term?: string, mode?: 'ai' | null) {
     const trimmed = (term ?? query).trim()
     if (trimmed) recordAppSearchTerm(trimmed)
     setOpen(false)
     setFocused(false)
-    router.push(appRoutes.search(trimmed || undefined, activeScope) as never)
+    void voice.stop()
+    if (mode === 'ai') {
+      if (!trimmed) {
+        toast.show('Ask AI', {
+          tone: 'danger',
+          message: 'Describe what you are looking for, then tap Ask AI.',
+        })
+        return
+      }
+      navigateApp(buildAiSearchHref(trimmed) as never)
+      return
+    }
+    navigateApp(appRoutes.search(trimmed || undefined, activeScope) as never)
   }
+
+  submitVoiceRef.current = (term: string) => submitSearch(term)
 
   function handleFocus() {
     if (blurCloseRef.current) clearTimeout(blurCloseRef.current)
@@ -122,6 +199,29 @@ export function AppSearchField({ compact, initialQuery = '', scope: scopeProp }:
     if (!isDesktop) return
     blurCloseRef.current = setTimeout(() => setOpen(false), 180)
   }
+
+  async function handleImageSearch() {
+    if (imageBusy) return
+    setImageBusy(true)
+    setOpen(false)
+    try {
+      const result = await searchQueryFromImage()
+      if (!result) return
+      setQuery(result.query)
+      recordAppSearchTerm(result.query)
+      navigateApp(appRoutes.search(result.query, 'listings') as never)
+    } catch (error) {
+      toast.show('Image search', {
+        tone: 'danger',
+        message: error instanceof Error ? error.message : 'Could not search from that photo.',
+      })
+    } finally {
+      setImageBusy(false)
+    }
+  }
+
+  const showAskAi = !compact
+  const actionColor = ui.textMuted
 
   return (
     <YStack
@@ -139,7 +239,7 @@ export function AppSearchField({ compact, initialQuery = '', scope: scopeProp }:
         height={fieldHeight}
         minHeight={fieldHeight}
         alignItems="center"
-        gap={8}
+        gap={6}
         paddingHorizontal={compact ? 12 : 14}
         backgroundColor={ui.surface}
         borderWidth={2}
@@ -171,7 +271,9 @@ export function AppSearchField({ compact, initialQuery = '', scope: scopeProp }:
           onBlur={handleBlur}
           onSubmitEditing={() => submitSearch()}
           returnKeyType="search"
-          placeholder={placeholder}
+          placeholder={
+            voice.listening ? 'Listening…' : imageBusy ? 'Identifying product…' : placeholder
+          }
           fontSize={compact ? 14 : 15}
           fontWeight="500"
           color={ui.text}
@@ -186,26 +288,48 @@ export function AppSearchField({ compact, initialQuery = '', scope: scopeProp }:
             : {})}
         />
 
+        {imageBusy ? (
+          <Spinner size="small" color={ui.brand} />
+        ) : (
+          <SearchIconButton label="Search with image" onPress={() => void handleImageSearch()}>
+            <Icons.Camera size={15} color={actionColor} />
+          </SearchIconButton>
+        )}
+
+        {voice.supported ? (
+          <SearchIconButton
+            label={voice.listening ? 'Stop voice search' : 'Search with voice'}
+            onPress={() => void voice.toggle()}
+            active={voice.listening}
+          >
+            {voice.listening ? (
+              <Icons.MicOff size={15} color={ui.brand} />
+            ) : (
+              <Icons.Mic size={15} color={actionColor} />
+            )}
+          </SearchIconButton>
+        ) : null}
+
+        {showAskAi ? (
+          <SearchIconButton
+            label="Ask AI search"
+            onPress={() => submitSearch(undefined, 'ai')}
+            disabled={!query.trim()}
+          >
+            <Icons.Sparkles size={15} color={query.trim() ? ui.brand : actionColor} />
+          </SearchIconButton>
+        ) : null}
+
         {query.length > 0 ? (
-          <XStack
-            width={28}
-            height={28}
-            flexShrink={0}
-            alignItems="center"
-            justifyContent="center"
-            borderRadius={999}
-            cursor="pointer"
-            hoverStyle={{ backgroundColor: ui.surfaceHover }}
-            pressStyle={{ opacity: 0.8 }}
+          <SearchIconButton
+            label="Clear search"
             onPress={() => {
               setQuery('')
               setOpen(true)
             }}
-            accessibilityRole="button"
-            aria-label="Clear search"
           >
             <Icons.X size={15} color={ui.textMuted} />
-          </XStack>
+          </SearchIconButton>
         ) : null}
       </XStack>
 
@@ -227,6 +351,13 @@ export function AppSearchField({ compact, initialQuery = '', scope: scopeProp }:
         onClearRecent={() => clearAppSearchHistory()}
         onRemoveRecent={(term) => removeAppSearchTerm(term)}
         onHitPress={() => setOpen(false)}
+        onAskAi={
+          query.trim()
+            ? () => {
+                submitSearch(undefined, 'ai')
+              }
+            : undefined
+        }
       />
     </YStack>
   )

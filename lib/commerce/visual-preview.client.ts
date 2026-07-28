@@ -42,6 +42,15 @@ async function readFunctionErrorMessage(error: unknown, data: unknown, fallback:
         // ignore
       }
     }
+    // Some supabase-js versions expose a fetch Response-like object without instanceof matching.
+    if (context && typeof context === 'object' && typeof (context as { json?: unknown }).json === 'function') {
+      try {
+        const body = (await (context as Response).clone().json()) as InvokeErrorPayload
+        if (typeof body?.error === 'string' && body.error.trim()) return body.error.trim()
+      } catch {
+        // ignore
+      }
+    }
   }
   if (error instanceof Error && error.message && !/non-2xx/i.test(error.message)) {
     return error.message
@@ -84,12 +93,19 @@ export async function requestTryOn(params: {
   userId: string
   listingId: string
   userImage: PickedImage
+  title?: string | null
+  category?: string | null
+  onStatus?: (status: string) => void
 }): Promise<VisualPreviewResult> {
+  params.onStatus?.('Uploading your photo…')
   const userImagePath = await uploadUserPhoto(params.userId, params.userImage)
+  params.onStatus?.('Creating your try-on preview…')
   return invokeVisualCommerce({
     action: 'try_on',
     listingId: params.listingId,
     userImagePath,
+    title: params.title ?? null,
+    category: params.category ?? null,
   })
 }
 
@@ -98,12 +114,19 @@ export async function requestViewInSpace(params: {
   listingId: string
   spaceImage: PickedImage
   placement?: VisualPreviewPlacement
+  title?: string | null
+  category?: string | null
+  onStatus?: (status: string) => void
 }): Promise<VisualPreviewResult> {
+  params.onStatus?.('Uploading your room photo…')
   const userImagePath = await uploadUserPhoto(params.userId, params.spaceImage)
+  params.onStatus?.('Placing the product in your photo…')
   return invokeVisualCommerce({
     action: 'view_in_space',
     listingId: params.listingId,
     userImagePath,
     placement: params.placement ?? 'wall',
+    title: params.title ?? null,
+    category: params.category ?? null,
   })
 }

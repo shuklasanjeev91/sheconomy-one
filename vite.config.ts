@@ -59,6 +59,10 @@ export default defineConfig(({ mode }) => {
       watch: {
         ignored: ['**/.vercel/**', '**/dist/**'],
       },
+      // OneSignal web push SW must be allowed to control the whole origin.
+      headers: {
+        'Service-Worker-Allowed': '/',
+      },
     },
 
     resolve: {
@@ -355,31 +359,21 @@ if (!(normalizedPreloadPath in preloadedLoaderData) && !(href in preloadedLoader
             },
             'dist/esm/router/useScreens.native.js': (contents) => {
               if (!contents) return
-              // Routes are async Promise factories — Suspense is required. Never use
-              // fallback:null (blank screen) while a heavy route chunk inits.
-              if (contents.includes('sheconomy-brand-suspense')) return
+              // Brand logo splash while async route factories resolve (never empty / "Starting…").
+              if (contents.includes('sheconomy-logo-suspense')) return
               const branded = `var wrapSuspense = function (children) {
-    // sheconomy-brand-suspense: brand-tinted loading while async route modules resolve
-    var RN = require("react-native");
+    // sheconomy-logo-suspense: centered brand logo on magenta while chunks resolve
     return /* @__PURE__ */jsx(Suspense, {
-      fallback: /* @__PURE__ */jsx(RN.View, {
-        style: {
-          flex: 1,
-          width: "100%",
-          alignItems: "center",
-          justifyContent: "center",
-          backgroundColor: "#D81B60",
-          padding: 24
-        },
-        children: /* @__PURE__ */jsx(RN.Text, {
-          style: { color: "#FFFFFF", fontSize: 15, fontWeight: "700", textAlign: "center" },
-          children: "Starting…"
-        })
-      }),
+      fallback: globalThis.__SHECONOMY_SUSPENSE_FALLBACK__ || null,
       children
     });
   };`
-              if (contents.includes('sheconomy-visible-suspense') || contents.includes('wrapSuspense = function')) {
+              if (
+                contents.includes('sheconomy-no-starting-suspense') ||
+                contents.includes('sheconomy-brand-suspense') ||
+                contents.includes('sheconomy-visible-suspense') ||
+                contents.includes('wrapSuspense = function')
+              ) {
                 return contents.replace(
                   /var wrapSuspense = function \(children\) \{[\s\S]*?\n  \};/,
                   branded,
@@ -389,29 +383,20 @@ if (!(normalizedPreloadPath in preloadedLoaderData) && !(href in preloadedLoader
             },
             'dist/cjs/router/useScreens.native.js': (contents) => {
               if (!contents) return
-              if (contents.includes('sheconomy-brand-suspense')) return
+              if (contents.includes('sheconomy-logo-suspense')) return
               const branded = `var wrapSuspense = function (children) {
-    // sheconomy-brand-suspense: brand-tinted loading while async route modules resolve
-    var RN = require("react-native");
+    // sheconomy-logo-suspense: centered brand logo on magenta while chunks resolve
     return /* @__PURE__ */(0, import_jsx_runtime.jsx)(import_react2.Suspense, {
-      fallback: /* @__PURE__ */(0, import_jsx_runtime.jsx)(RN.View, {
-        style: {
-          flex: 1,
-          width: "100%",
-          alignItems: "center",
-          justifyContent: "center",
-          backgroundColor: "#D81B60",
-          padding: 24
-        },
-        children: /* @__PURE__ */(0, import_jsx_runtime.jsx)(RN.Text, {
-          style: { color: "#FFFFFF", fontSize: 15, fontWeight: "700", textAlign: "center" },
-          children: "Starting…"
-        })
-      }),
+      fallback: globalThis.__SHECONOMY_SUSPENSE_FALLBACK__ || null,
       children
     });
   };`
-              if (contents.includes('sheconomy-visible-suspense') || contents.includes('wrapSuspense = function')) {
+              if (
+                contents.includes('sheconomy-no-starting-suspense') ||
+                contents.includes('sheconomy-brand-suspense') ||
+                contents.includes('sheconomy-visible-suspense') ||
+                contents.includes('wrapSuspense = function')
+              ) {
                 return contents.replace(
                   /var wrapSuspense = function \(children\) \{[\s\S]*?\n  \};/,
                   branded,

@@ -96,7 +96,7 @@ export function CommunityRightSidebar({ pin = 'document' }: { pin?: CommunitySid
             }
 
             return (
-              <AppLink key={item.label} href={item.href}>
+              <AppLink key={item.label} href={item.href} asChild>
                 {row}
               </AppLink>
             )
@@ -108,8 +108,8 @@ export function CommunityRightSidebar({ pin = 'document' }: { pin?: CommunitySid
         <CommunityWidget
           title="Invitations"
           headerActions={
-            <AppLink href={communityRoutes.peopleTab('pending-received')}>
-              <Text fontSize={13} fontWeight="600" color={communityUi.brand}>
+            <AppLink href={communityRoutes.peopleTab('pending-received')} asChild>
+              <Text fontSize={13} fontWeight="600" color={communityUi.brand} cursor="pointer">
                 See all
               </Text>
             </AppLink>
@@ -127,8 +127,8 @@ export function CommunityRightSidebar({ pin = 'document' }: { pin?: CommunitySid
         <CommunityWidget
           title="Upcoming events"
           footer={
-            <AppLink href={communityRoutes.events}>
-              <Text fontSize={14} fontWeight="600" color={communityUi.brand}>
+            <AppLink href={communityRoutes.events} asChild>
+              <Text fontSize={14} fontWeight="600" color={communityUi.brand} cursor="pointer">
                 See all events
               </Text>
             </AppLink>
@@ -136,14 +136,16 @@ export function CommunityRightSidebar({ pin = 'document' }: { pin?: CommunitySid
         >
           <YStack gap={8}>
             {upcomingEvents.map((event) => (
-              <AppLink key={event.id} href={communityRoutes.event(event.id)}>
+              <AppLink key={event.id} href={communityRoutes.event(event.id)} asChild>
                 <YStack
+                  width="100%"
                   gap={4}
                   paddingVertical={8}
                   paddingHorizontal={8}
                   borderRadius={8}
                   cursor="pointer"
                   hoverStyle={{ backgroundColor: communityUi.divider }}
+                  pressStyle={{ opacity: 0.85 }}
                 >
                   <Text fontSize={14} fontWeight="600" color={communityUi.text} numberOfLines={2}>
                     {event.title}
@@ -164,17 +166,17 @@ export function CommunityRightSidebar({ pin = 'document' }: { pin?: CommunitySid
           title="Contacts"
           actions={
             <>
-              <AppLink href={communityRoutes.peopleTab('connections')}>
+              <AppLink href={communityRoutes.peopleTab('connections')} asChild>
                 <HeaderIconButton icon={Icons.Search} label="Search contacts" />
               </AppLink>
-              <AppLink href={communityRoutes.network}>
+              <AppLink href={communityRoutes.network} asChild>
                 <HeaderIconButton icon={Icons.MoreHorizontal} label="Network" />
               </AppLink>
             </>
           }
           footer={
-            <AppLink href={communityRoutes.peopleTab('connections')}>
-              <Text fontSize={14} fontWeight="600" color={communityUi.brand}>
+            <AppLink href={communityRoutes.peopleTab('connections')} asChild>
+              <Text fontSize={14} fontWeight="600" color={communityUi.brand} cursor="pointer">
                 See all contacts
               </Text>
             </AppLink>

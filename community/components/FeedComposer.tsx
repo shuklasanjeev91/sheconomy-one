@@ -1,4 +1,3 @@
-import { useRouter } from 'one'
 import { AppLink } from '~/components/navigation/AppLink'
 import type { Href } from 'one'
 
@@ -10,10 +9,10 @@ import { Avatar, Icons, Text, XStack, YStack } from '~/components/ui'
 import { communityRoutes, routes } from '~/lib/routes'
 import { buildSignInUrl } from '~/lib/auth/redirect'
 import { useProfile } from '~/hooks/useProfile'
+import { navigateApp } from '~/lib/platform/navigate'
 
 export function FeedComposer() {
   const communityUi = useCommunityUi()
-  const router = useRouter()
   const { profile, isAuthenticated } = useProfile()
   const name = profile?.full_name || profile?.username || 'You'
 
@@ -21,7 +20,7 @@ export function FeedComposer() {
   // are routed through sign-in first (returning to the feed afterwards).
   function compose(options: ComposerOptions = {}) {
     if (!isAuthenticated) {
-      router.push(buildSignInUrl(communityRoutes.home) as never)
+      navigateApp(buildSignInUrl(communityRoutes.home) as never)
       return
     }
     openComposer(options)
@@ -30,11 +29,14 @@ export function FeedComposer() {
   return (
     <CommunityCard padding={16} gap={12}>
         <XStack gap={10} alignItems="center">
-          <AppLink href={(isAuthenticated ? communityRoutes.profile : routes.signIn) as Href}>
-            <Avatar name={name} src={profile?.avatar_url} size="$4" cursor="pointer" />
+          <AppLink href={(isAuthenticated ? communityRoutes.profile : routes.signIn) as Href} asChild>
+            <XStack flexShrink={0} cursor="pointer" pressStyle={{ opacity: 0.85 }}>
+              <Avatar name={name} src={profile?.avatar_url} size="$4" />
+            </XStack>
           </AppLink>
           <XStack
             flex={1}
+            minWidth={0}
             backgroundColor={communityUi.pageBg}
             borderRadius={999}
             borderWidth={1}
@@ -44,7 +46,10 @@ export function FeedComposer() {
             cursor="pointer"
             animation="quick"
             hoverStyle={{ backgroundColor: communityUi.borderLight, borderColor: communityUi.brand }}
+            pressStyle={{ opacity: 0.9 }}
             onPress={() => compose()}
+            accessibilityRole="button"
+            accessibilityLabel={isAuthenticated ? 'Create a post' : 'Sign in to post'}
           >
             <Text fontSize={14} fontWeight="600" color={communityUi.textMuted}>
               {isAuthenticated ? 'Share what’s on your mind' : 'Sign in to post'}

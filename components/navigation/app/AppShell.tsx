@@ -15,12 +15,16 @@ import {
   isChatPath,
   isCommercePath,
   isCreateShopPath,
+  isVendorPath,
 } from '~/lib/routes'
 import { authViewportStyle } from '~/components/auth/auth-layout'
 import { appShellStyle, lockedAppShellStyle, meetingViewportStyle } from '~/lib/platform/viewport'
 import { useAppUi } from '~/lib/theme/useAppUi'
 
+import { ChatActionsHost } from '~/chat/components/ChatActionsHost'
 import { IncomingCallHost } from '~/chat/components/IncomingCallHost'
+import { CommunityComposerHost } from '~/community/components/CommunityComposerHost'
+import { ImageCropHost } from '~/components/media/ImageCropHost'
 import { InstantMeetingHost } from '~/co-work/components/InstantMeetingHost'
 import { ProfileOnboardingNudge } from '~/components/auth/ProfileOnboardingNudge'
 import { GenderVerificationHost } from '~/components/gender-verification/GenderVerificationHost'
@@ -108,6 +112,8 @@ export function AppShell({ children }: AppShellProps) {
 
   // Open conversations keep the app header (shared back); hide bottom tabs only.
   const chatConversationMobile = !isDesktop && isChatConversationPath(pathname)
+  // Manage Shop uses its own top bar + Etsy-style bottom tabs — hide marketplace header.
+  const hideMobileHeader = !isDesktop && isVendorPath(pathname)
 
   if (chromeless || authScreen.chromeless) {
     return (
@@ -150,7 +156,9 @@ export function AppShell({ children }: AppShellProps) {
             style={lockViewport ? lockedAppShellStyle() : appShellStyle(isDesktopWeb)}
           >
             {isDesktop ? <AppDesktopHeader /> : null}
-            {!isDesktop ? <AppMobileHeader minimal={compactMobileTopBar || chatConversationMobile} /> : null}
+            {!isDesktop && !hideMobileHeader ? (
+              <AppMobileHeader minimal={compactMobileTopBar || chatConversationMobile} />
+            ) : null}
             <ProfileOnboardingNudge />
             <YStack
               flexGrow={1}
@@ -164,6 +172,11 @@ export function AppShell({ children }: AppShellProps) {
             </YStack>
             {showCommerceFooter ? <CommerceDesktopFooter /> : null}
             {!isDesktop && !chatConversationMobile ? <AppMobileBottomTabs /> : null}
+            {/* Global overlays — bottom tabs can open these outside section layouts
+                (e.g. Create Post from /profile, New chat from any chat route). */}
+            <CommunityComposerHost />
+            <ImageCropHost />
+            <ChatActionsHost />
             <IncomingCallHost />
             <InstantMeetingHost />
           </ScreenFill>

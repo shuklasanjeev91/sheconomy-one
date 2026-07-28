@@ -1,4 +1,3 @@
-import { useRouter } from 'one'
 import { useEffect, useState } from 'react'
 
 import { Icons, Spinner, Text, XStack, YStack } from '~/components/ui'
@@ -17,6 +16,7 @@ import { helpHref } from '~/lib/help/types'
 import { useAppUi } from '~/lib/theme/useAppUi'
 import { useAiAssistOptional } from '~/providers/AiAssistProvider'
 import { useSupabase } from '~/providers/SupabaseProvider'
+import { navigateApp } from '~/lib/platform/navigate'
 
 type AiSuggestionRailProps = {
   product: AiProduct
@@ -40,7 +40,6 @@ export function AiSuggestionRail({
   inset = false,
 }: AiSuggestionRailProps) {
   const ui = useAppUi()
-  const router = useRouter()
   const { user } = useSupabase()
   const ai = useAiAssistOptional()
   const [suggestions, setSuggestions] = useState<AiSuggestion[]>([])
@@ -91,7 +90,7 @@ export function AiSuggestionRail({
       })
       return
     }
-    router.push(helpHref(product === 'account' ? '' : product) as never)
+    navigateApp(helpHref(product === 'account' ? '' : product) as never)
   }
 
   const content = (

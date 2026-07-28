@@ -1,5 +1,4 @@
 import { useState } from 'react'
-import { useRouter } from 'one'
 
 import { createDirectConversation, sendMessage } from '~/chat/lib/chats'
 import { buildIcebreakers } from '~/community/lib/icebreakers'
@@ -18,6 +17,7 @@ import { buildSignInUrl } from '~/lib/auth/redirect'
 import { chatRoutes, routes } from '~/lib/routes'
 import { useAppUi } from '~/lib/theme/useAppUi'
 import { useSupabase } from '~/providers/SupabaseProvider'
+import { navigateApp } from '~/lib/platform/navigate'
 
 type MessageIcebreakerButtonProps = {
   targetUserId: string
@@ -41,7 +41,6 @@ export function MessageIcebreakerButton({
 }: MessageIcebreakerButtonProps) {
   const ui = useAppUi()
   const toast = useAppToast()
-  const router = useRouter()
   const { user } = useSupabase()
   const [open, setOpen] = useState(false)
   const [sendingId, setSendingId] = useState<string | null>(null)
@@ -61,7 +60,7 @@ export function MessageIcebreakerButton({
 
   async function openConversation(options?: { message?: string; id?: string }) {
     if (!user?.id) {
-      router.push(buildSignInUrl(signInRedirect) as never)
+      navigateApp(buildSignInUrl(signInRedirect) as never)
       return
     }
 
@@ -83,7 +82,7 @@ export function MessageIcebreakerButton({
       if (sendError) {
         setSendingId(null)
         toast.show('Could not send message', { tone: 'danger', message: sendError })
-        router.push(chatRoutes.conversation(conversationId) as never)
+        navigateApp(chatRoutes.conversation(conversationId) as never)
         return
       }
       toast.show('Message sent', { tone: 'success' })
@@ -91,7 +90,7 @@ export function MessageIcebreakerButton({
 
     setSendingId(null)
     setOpen(false)
-    router.push(chatRoutes.conversation(conversationId) as never)
+    navigateApp(chatRoutes.conversation(conversationId) as never)
   }
 
   return (
@@ -110,7 +109,7 @@ export function MessageIcebreakerButton({
         hoverStyle={{ opacity: 0.9 }}
         onPress={() => {
           if (!user) {
-            router.push(buildSignInUrl(signInRedirect) as never)
+            navigateApp(buildSignInUrl(signInRedirect) as never)
             return
           }
           setOpen(true)

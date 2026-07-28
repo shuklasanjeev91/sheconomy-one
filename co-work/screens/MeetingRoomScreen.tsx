@@ -748,7 +748,7 @@ function MeetingRoomOverlay({
               if (props.onLeave) {
                 props.onLeave()
               } else {
-                router.replace(coWorkRoutes.home)
+                router.push(coWorkRoutes.home)
               }
             })()
           }}
@@ -761,7 +761,7 @@ function MeetingRoomOverlay({
               if (props.onLeave) {
                 props.onLeave()
               } else {
-                router.replace(coWorkRoutes.home)
+                router.push(coWorkRoutes.home)
               }
             })()
           }}

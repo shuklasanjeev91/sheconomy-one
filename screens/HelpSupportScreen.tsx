@@ -94,7 +94,7 @@ export function HelpSupportScreen() {
 
   function setProductAndUrl(next: HelpProduct) {
     setProduct(next)
-    router.replace(helpHref(next || null, articleSlug) as never)
+    router.push(helpHref(next || null, articleSlug) as never)
   }
 
   useEffect(() => {
@@ -108,7 +108,7 @@ export function HelpSupportScreen() {
         setProduct('')
         setFormProduct('commerce')
         setTicketFilter('')
-        router.replace(helpHref(null, articleSlug) as never)
+        router.push(helpHref(null, articleSlug) as never)
       }
       return
     }
@@ -180,7 +180,7 @@ export function HelpSupportScreen() {
       void markArticleViewed(article.id)
     }
     if (article.slug) {
-      router.replace(helpHref(product || article.category, article.slug) as never)
+      router.push(helpHref(product || article.category, article.slug) as never)
     }
   }
 
@@ -255,9 +255,10 @@ export function HelpSupportScreen() {
                   ai.openAssist({
                     product: (product || 'account') as never,
                     contextPage: 'help',
+                    autoSend: true,
                     prompt: product
-                      ? `Help me with ${helpProductLabel(product)}`
-                      : 'Help me get started with SHEconomy',
+                      ? `Help me with ${helpProductLabel(product)} — what should I do next in the app?`
+                      : 'I need support getting started on SHEconomy. What can you help me with?',
                   })
                 }
               >

@@ -77,12 +77,14 @@ export const Image = forwardRef<any, AppImageProps>(function Image(
   },
   ref,
 ) {
-  const uri = typeof src === 'string' && src.trim() ? src.trim() : undefined
+  const fromSource = uriFromSource(source as ImageSourcePropType | undefined)
+  const uri =
+    (typeof src === 'string' && src.trim() ? src.trim() : undefined) ||
+    (typeof fromSource === 'string' && fromSource.trim() ? fromSource.trim() : undefined)
   const label = accessibilityLabel ?? alt
 
   if (Platform.OS !== 'web') {
-    const fromSource = uriFromSource(source as ImageSourcePropType | undefined)
-    const resolved = fromSource ?? uri ?? null
+    const resolved = (typeof fromSource === 'number' ? fromSource : null) ?? uri ?? null
 
     if (resolved == null) {
       return null
@@ -138,18 +140,35 @@ export const Image = forwardRef<any, AppImageProps>(function Image(
     )
   }
 
+  if (!uri) {
+    return null
+  }
+
+  const fillParent =
+    (typeof width === 'string' && width.includes('%')) ||
+    (typeof height === 'string' && height.includes('%'))
+
   return (
     <TamaguiImage
       ref={ref}
       {...(_rest as object)}
-      src={uri ?? undefined}
-      source={source as TamaguiImageProps['source']}
+      src={uri}
       width={width}
       height={height}
       objectFit={objectFit}
       borderRadius={borderRadius}
       alt={label}
-      style={style}
+      style={
+        fillParent
+          ? ({
+              position: 'absolute',
+              inset: 0,
+              width: '100%',
+              height: '100%',
+              ...(style && typeof style === 'object' ? style : null),
+            } as object)
+          : style
+      }
       onError={onError}
       onLoad={onLoad}
     />

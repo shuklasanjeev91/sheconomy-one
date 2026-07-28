@@ -1,7 +1,6 @@
 import type { ReactNode } from 'react'
 import { useEffect, useState } from 'react'
 import { Platform } from 'react-native'
-import AsyncStorage from '@react-native-async-storage/async-storage'
 
 import { AuthBenefitsCarousel } from '~/components/auth/AuthBenefitsCarousel'
 import { AuthBrandLogo } from '~/components/auth/AuthBrandLogo'
@@ -14,13 +13,15 @@ import {
 } from '~/components/layout'
 import { Icons, ScrollView, Text, XStack, YStack } from '~/components/ui'
 import { APP_LAYOUT } from '~/lib/layout/constants'
+import {
+  hasSeenAppOnboarding,
+  markAppOnboardingSeen,
+} from '~/lib/onboarding/first-launch'
 import { elevatedCardStyle } from '~/lib/theme/surfaces'
 import { useAppLayout } from '~/hooks/useAppLayout'
 import { useAuthDesktopLayout } from '~/hooks/useAuthDesktopLayout'
 import { useAppUi, useIsDarkTheme } from '~/lib/theme/useAppUi'
 import { useThemedShadowStyle } from '~/lib/theme/useThemedShadowStyle'
-
-const AUTH_ONBOARDING_SEEN_KEY = 'sheconomy.auth.onboarding.seen'
 
 function DesktopAuthLayout({ children, footer }: { children: ReactNode; footer?: ReactNode }) {
   return (
@@ -235,9 +236,9 @@ export function AuthShell({ children, footer }: AuthShellProps) {
 
   useEffect(() => {
     let cancelled = false
-    void AsyncStorage.getItem(AUTH_ONBOARDING_SEEN_KEY)
-      .then((value) => {
-        if (!cancelled) setOnboardingComplete(value === '1')
+    void hasSeenAppOnboarding()
+      .then((seen) => {
+        if (!cancelled) setOnboardingComplete(seen)
       })
       .catch(() => {
         if (!cancelled) setOnboardingComplete(false)
@@ -249,7 +250,7 @@ export function AuthShell({ children, footer }: AuthShellProps) {
 
   function finishOnboarding() {
     setOnboardingComplete(true)
-    void AsyncStorage.setItem(AUTH_ONBOARDING_SEEN_KEY, '1').catch(() => {})
+    void markAppOnboardingSeen()
   }
 
   if (isDesktopLayout) {
@@ -263,7 +264,7 @@ export function AuthShell({ children, footer }: AuthShellProps) {
   }
 
   if (!onboardingComplete) {
-    return <AuthOnboarding onFinish={finishOnboarding} />
+    return <AuthOnboarding variant="auth" onFinish={finishOnboarding} />
   }
 
   return <MobileAuthFormView footer={footer}>{children}</MobileAuthFormView>

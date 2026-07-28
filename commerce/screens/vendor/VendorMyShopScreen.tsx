@@ -207,7 +207,7 @@ export function VendorMyShopScreen() {
     try {
       await dispatch(deleteShop(shop.id)).unwrap()
       toast.show('Shop deleted', { tone: 'success' })
-      router.replace(commerceRoutes.createShop)
+      router.push(commerceRoutes.createShop)
     } catch (error) {
       toast.show('Could not delete shop', {
         tone: 'danger',

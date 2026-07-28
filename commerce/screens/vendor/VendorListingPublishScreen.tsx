@@ -315,7 +315,7 @@ function VendorListingPublishContent() {
       setLastSavedAt(new Date().toISOString())
       toast.show('Draft saved', { tone: 'success', message: 'Your listing was saved as a draft.' })
       if (result.listing_id) {
-        router.replace(`${vendorRoutes.createListing}?id=${encodeURIComponent(result.listing_id)}` as never)
+        router.push(`${vendorRoutes.createListing}?id=${encodeURIComponent(result.listing_id)}` as never)
       }
     } catch (error) {
       toast.show('Save failed', {

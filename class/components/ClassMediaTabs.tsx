@@ -6,7 +6,7 @@ import { classRoutes, isClassAudioPath } from '~/lib/routes'
 import { useAppUi } from '~/lib/theme/useAppUi'
 
 const TABS = [
-  { id: 'video' as const, label: 'Video', href: classRoutes.home, icon: Icons.Play },
+  { id: 'video' as const, label: 'Video', href: classRoutes.video, icon: Icons.Play },
   { id: 'audio' as const, label: 'Audio', href: classRoutes.audio, icon: Icons.Radio },
   { id: 'playlists' as const, label: 'Playlists', href: classRoutes.playlists, icon: Icons.List },
 ]
@@ -14,7 +14,7 @@ const TABS = [
 export function ClassMediaTabs() {
   const ui = useAppUi()
   const pathname = usePathname()
-  // Home (`/class`) and `/class/video` share the video catalogue.
+  // In-page media chips: Home (`/class`) and `/class/video` share the video catalogue.
   const activeTab = pathname.includes('/class/playlists')
     ? 'playlists'
     : isClassAudioPath(pathname)

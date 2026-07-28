@@ -40,6 +40,8 @@ export type PublicProfile = {
   github_url: string | null
   interests: string[] | null
   profile_completion_percentage: number | null
+  date_of_birth?: string | null
+  marriage_anniversary?: string | null
 }
 
 const PUBLIC_PROFILE_SELECT =

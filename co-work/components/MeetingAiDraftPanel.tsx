@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 
 import { Button, Field, Icons, Input, Spinner, Text, XStack, YStack, useAppToast } from '~/components/ui'
 import { draftMeetingWithAi } from '~/lib/ai'
@@ -21,17 +21,20 @@ const QUICK_PROMPTS = [
 type MeetingAiDraftPanelProps = {
   timeZone: string
   onApply: (draft: MeetingAiDraftApply) => void
+  /** When set (e.g. from /co-work/schedule?prompt=…), auto-run Create with AI once. */
+  initialPrompt?: string | null
 }
 
 /**
  * Zoom / Google Meet–style natural language meeting creator.
  * Fills title, agenda/description, and suggested time on the schedule form.
  */
-export function MeetingAiDraftPanel({ timeZone, onApply }: MeetingAiDraftPanelProps) {
+export function MeetingAiDraftPanel({ timeZone, onApply, initialPrompt }: MeetingAiDraftPanelProps) {
   const { ui: coworkUi } = useCoWorkTheme()
   const toast = useAppToast()
-  const [prompt, setPrompt] = useState('')
+  const [prompt, setPrompt] = useState(initialPrompt?.trim() || '')
   const [loading, setLoading] = useState(false)
+  const autoRanRef = useRef(false)
 
   async function generate(fromPrompt?: string) {
     const text = (fromPrompt ?? prompt).trim()
@@ -79,6 +82,16 @@ export function MeetingAiDraftPanel({ timeZone, onApply }: MeetingAiDraftPanelPr
       setLoading(false)
     }
   }
+
+  useEffect(() => {
+    const seed = initialPrompt?.trim()
+    if (!seed || autoRanRef.current) return
+    autoRanRef.current = true
+    setPrompt(seed)
+    void generate(seed)
+    // One-shot bootstrap from SHEconomy AI deep link.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [initialPrompt])
 
   return (
     <YStack

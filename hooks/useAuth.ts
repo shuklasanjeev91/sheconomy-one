@@ -65,7 +65,7 @@ export function useAuth() {
 
       const { error } = await supabaseSignOut({ scope })
       await clearLocalAppState()
-      router.replace(routes.home)
+      router.push(routes.home)
       return { error: error?.message ?? null }
     },
     [router],
@@ -86,7 +86,7 @@ export function useAuth() {
       const { profile } = await enrichProfileFromAuth()
 
       if (!options?.skipOnboardingGate && needsProfileOnboarding(profile)) {
-        router.replace({
+        router.push({
           pathname: '/auth/complete-profile',
           params: {
             returnTo: returnTo ?? '',
@@ -97,7 +97,7 @@ export function useAuth() {
       }
 
       if (options?.isNewUser) {
-        router.replace({
+        router.push({
           pathname: String(appRoutes.importContacts),
           params: { returnTo: returnTo ?? '' },
         } as never)
@@ -117,11 +117,11 @@ export function useAuth() {
           .eq('id', session.user.id)
           .maybeSingle()
         tier = getAccessTier(true, data?.gender)
-        router.replace(sanitizeReturnPath(returnTo, tier, data?.is_verified) as import('one').Href)
+        router.push(sanitizeReturnPath(returnTo, tier, data?.is_verified) as import('one').Href)
         return
       }
 
-      router.replace(sanitizeReturnPath(returnTo, tier) as import('one').Href)
+      router.push(sanitizeReturnPath(returnTo, tier) as import('one').Href)
     },
     [router],
   )

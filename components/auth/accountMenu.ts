@@ -290,7 +290,7 @@ export function getAccountMenuSections({
       title: 'Class',
       subtitle: 'Videos and audio to watch',
       items: [
-        item(tier, 'video', Icons.Play, 'Video', classRoutes.home, 'class', {
+        item(tier, 'video', Icons.Play, 'Video', classRoutes.video, 'class', {
           description: 'Browse and play recorded videos',
         }),
         item(tier, 'audio', Icons.Radio, 'Audio', classRoutes.audio, 'class', {

@@ -1,4 +1,3 @@
-import { useRouter } from 'one'
 import { AppLink } from '~/components/navigation/AppLink'
 import { useEffect, useMemo, useState } from 'react'
 
@@ -21,6 +20,7 @@ import { ScrollView, Spinner, Text, XStack, YStack } from '~/components/ui'
 import { communityRoutes, routes } from '~/lib/routes'
 import { useProfile } from '~/hooks/useProfile'
 import { useSupabase } from '~/providers/SupabaseProvider'
+import { replaceApp } from '~/lib/platform/navigate'
 
 const SORT_OPTIONS: FilterOption[] = [
   { label: 'Recommended', value: 'default' },
@@ -62,7 +62,6 @@ function parseTab(value?: string): UserListKind {
 
 export function PeopleScreen({ initialTab, profileHandle }: PeopleScreenProps) {
   const communityUi = useCommunityUi()
-  const router = useRouter()
   const { user, isLoading: authLoading } = useSupabase()
   const { profile: ownProfile } = useProfile()
   const [tab, setTab] = useState<UserListKind>(parseTab(initialTab))
@@ -192,7 +191,7 @@ export function PeopleScreen({ initialTab, profileHandle }: PeopleScreenProps) {
               onPress={() => {
                 setTab(kind)
                 if (isOwnList) {
-                  router.replace(communityRoutes.peopleTab(kind) as never)
+                  replaceApp(communityRoutes.peopleTab(kind) as never)
                 }
               }}
             />

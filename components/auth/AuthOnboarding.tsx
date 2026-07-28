@@ -1,29 +1,53 @@
 import { useCallback, useRef, useState } from 'react'
 import type { NativeScrollEvent, NativeSyntheticEvent } from 'react-native'
-import { Platform } from 'react-native'
+import { Platform, StatusBar } from 'react-native'
+import * as Haptics from 'expo-haptics'
 
 import { AUTH_ONBOARDING_SLIDES } from '~/components/auth/auth-benefits'
-import { AUTH_LAYOUT, authPageStyle, authViewportStyle, useAuthLayout } from '~/components/auth/auth-layout'
+import { AUTH_LAYOUT, authViewportStyle } from '~/components/auth/auth-layout'
 import { AuthBackButton } from '~/components/auth/AuthBackButton'
-import { AuthBrandLogo } from '~/components/auth/AuthBrandLogo'
 import { BrandGradient, Button, Image, ScrollView, Text, XStack, YStack } from '~/components/ui'
 import { getSheconomyLogoUrl } from '~/lib/supabase/brand'
 import { useAppLayout } from '~/hooks/useAppLayout'
-import { useAppUi } from '~/lib/theme/useAppUi'
-
 import { BRAND_NAME } from '~/config/brand'
 
 type AuthOnboardingProps = {
   onFinish: () => void
+  /**
+   * `app` — first cold launch (native). No back chevron; “Get started” enters the app.
+   * `auth` — shown before sign-in on compact layouts; optional back to leave auth.
+   */
+  variant?: 'app' | 'auth'
 }
 
-/** Full-screen swipeable onboarding — mobile & tablet auth intro only. */
-export function AuthOnboarding({ onFinish }: AuthOnboardingProps) {
-  const ui = useAppUi()
-  const layout = useAuthLayout()
-  const { gutter, safeTop, safeBottom } = useAppLayout()
+async function hapticLight() {
+  if (Platform.OS === 'web') return
+  try {
+    await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
+  } catch {
+    // ignore missing haptics hardware
+  }
+}
+
+async function hapticSuccess() {
+  if (Platform.OS === 'web') return
+  try {
+    await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success)
+  } catch {
+    // ignore
+  }
+}
+
+/**
+ * Full-screen swipeable onboarding — professional native intro for iOS & Android
+ * (also used on compact web auth). Brand gradient canvas, large icon, clear CTAs.
+ */
+export function AuthOnboarding({ onFinish, variant = 'auth' }: AuthOnboardingProps) {
+  const layout = useAppLayout()
+  const { gutter, safeTop, safeBottom } = layout
   const slides = AUTH_ONBOARDING_SLIDES
   const brandIconUrl = getSheconomyLogoUrl('icon')
+  const isAppLaunch = variant === 'app'
 
   const [activeIndex, setActiveIndex] = useState(0)
   const [viewportWidth, setViewportWidth] = useState(0)
@@ -49,12 +73,19 @@ export function AuthOnboarding({ onFinish }: AuthOnboardingProps) {
     }
   }
 
-  function handleNext() {
+  async function handleNext() {
     if (isLast) {
+      await hapticSuccess()
       onFinish()
       return
     }
+    await hapticLight()
     goTo(activeIndex + 1)
+  }
+
+  async function handleSkip() {
+    await hapticLight()
+    onFinish()
   }
 
   return (
@@ -63,26 +94,58 @@ export function AuthOnboarding({ onFinish }: AuthOnboardingProps) {
       width="100%"
       height="100%"
       minHeight={0}
-      backgroundColor={ui.background}
-      style={{ ...authViewportStyle(), ...authPageStyle(layout) }}
+      backgroundColor="#9d0844"
+      overflow="hidden"
+      style={authViewportStyle()}
     >
+      {Platform.OS !== 'web' ? <StatusBar barStyle="light-content" /> : null}
+
+      <BrandGradient variant="brand" />
+
+      {/* Soft vignette for readable type on gradient */}
+      <YStack
+        position="absolute"
+        top={0}
+        left={0}
+        right={0}
+        bottom={0}
+        backgroundColor="rgba(26, 10, 18, 0.18)"
+        pointerEvents="none"
+      />
+
       <XStack
         alignItems="center"
         justifyContent="space-between"
         paddingHorizontal={gutter}
-        paddingTop={Math.max(safeTop, 12)}
+        paddingTop={Math.max(safeTop, Platform.OS === 'android' ? 16 : 12)}
         paddingBottom="$3"
         zIndex={2}
         gap="$3"
       >
-        <XStack flex={1} justifyContent="flex-start">
-          <AuthBackButton showLabel={false} />
+        <XStack flex={1} justifyContent="flex-start" minHeight={40}>
+          {!isAppLaunch ? <AuthBackButton showLabel={false} variant="light" /> : null}
         </XStack>
-        <XStack flex={1} justifyContent="center">
-          <AuthBrandLogo compact />
+        <XStack flex={1} justifyContent="center" alignItems="center">
+          <Text
+            fontSize={15}
+            fontWeight="800"
+            color="rgba(255,255,255,0.95)"
+            letterSpacing={0.4}
+            textTransform="uppercase"
+          >
+            {BRAND_NAME}
+          </Text>
         </XStack>
         <XStack flex={1} justifyContent="flex-end">
-          <Button tone="ghost" size="$3" borderRadius={AUTH_LAYOUT.pillRadius} onPress={onFinish}>
+          <Button
+            tone="ghost"
+            size="$3"
+            borderRadius={AUTH_LAYOUT.pillRadius}
+            onPress={() => void handleSkip()}
+            color="white"
+            hoverStyle={{ backgroundColor: 'rgba(255,255,255,0.12)' }}
+            pressStyle={{ opacity: 0.85 }}
+          >
             Skip
           </Button>
         </XStack>
@@ -92,6 +155,7 @@ export function AuthOnboarding({ onFinish }: AuthOnboardingProps) {
         flex={1}
         width="100%"
         minHeight={0}
+        zIndex={1}
         onLayout={(event) => setViewportWidth(event.nativeEvent.layout.width)}
       >
         <ScrollView
@@ -101,6 +165,7 @@ export function AuthOnboarding({ onFinish }: AuthOnboardingProps) {
           showsHorizontalScrollIndicator={false}
           onScroll={handleScroll}
           scrollEventThrottle={16}
+          decelerationRate="fast"
           width="100%"
           height="100%"
         >
@@ -113,50 +178,60 @@ export function AuthOnboarding({ onFinish }: AuthOnboardingProps) {
                 flex={1}
                 alignItems="center"
                 justifyContent="center"
-                paddingHorizontal={gutter}
+                paddingHorizontal={Math.max(gutter, 28)}
                 paddingVertical="$6"
-                gap="$6"
+                gap="$7"
               >
                 <YStack
-                  width={132}
-                  height={132}
-                  borderRadius={36}
+                  width={148}
+                  height={148}
+                  borderRadius={40}
                   alignItems="center"
                   justifyContent="center"
-                  overflow="hidden"
-                  position="relative"
-                  style={
-                    Platform.OS === 'web'
-                      ? { boxShadow: '0 20px 48px rgba(216, 27, 96, 0.28)' }
-                      : undefined
-                  }
+                  backgroundColor="rgba(255,255,255,0.16)"
+                  borderWidth={1}
+                  borderColor="rgba(255,255,255,0.28)"
+                  {...(Platform.OS === 'web'
+                    ? { style: { boxShadow: '0 24px 56px rgba(0,0,0,0.28)' } }
+                    : {
+                        shadowColor: '#000',
+                        shadowOpacity: 0.28,
+                        shadowRadius: 24,
+                        shadowOffset: { width: 0, height: 16 },
+                        elevation: 12,
+                      })}
                 >
-                  <BrandGradient variant="brand" width="100%" height="100%" position="absolute" />
                   {slide.brandLogo ? (
                     <Image
                       src={brandIconUrl}
-                      width={72}
-                      height={72}
+                      width={78}
+                      height={78}
                       objectFit="contain"
                       alt={`${BRAND_NAME} icon`}
                     />
                   ) : (
-                    <Icon size={52} color="white" strokeWidth={1.8} />
+                    <Icon size={56} color="white" strokeWidth={1.7} />
                   )}
                 </YStack>
 
-                <YStack gap="$3" alignItems="center" maxWidth={340}>
+                <YStack gap="$3" alignItems="center" maxWidth={360}>
                   <Text
-                    fontSize={28}
+                    fontSize={Platform.OS === 'web' ? 30 : 32}
                     fontWeight="800"
-                    color={ui.text}
-                    letterSpacing={-0.6}
-                    lineHeight={34}
+                    color="white"
+                    letterSpacing={-0.7}
+                    lineHeight={38}
                     textAlign="center"
                   >
                     {slide.title}
                   </Text>
-                  <Text fontSize={16} color={ui.textSecondary} lineHeight={24} textAlign="center">
+                  <Text
+                    fontSize={16}
+                    color="rgba(255,255,255,0.88)"
+                    lineHeight={24}
+                    textAlign="center"
+                    fontWeight="500"
+                  >
                     {slide.body}
                   </Text>
                 </YStack>
@@ -167,9 +242,10 @@ export function AuthOnboarding({ onFinish }: AuthOnboardingProps) {
       </YStack>
 
       <YStack
-        gap="$5"
+        zIndex={2}
+        gap="$4"
         paddingHorizontal={gutter}
-        paddingBottom={Math.max(safeBottom, 20) + 8}
+        paddingBottom={Math.max(safeBottom, 20) + 10}
         paddingTop="$2"
       >
         <XStack justifyContent="center" alignItems="center" gap={8}>
@@ -178,22 +254,42 @@ export function AuthOnboarding({ onFinish }: AuthOnboardingProps) {
             return (
               <YStack
                 key={slide.title}
-                width={active ? 22 : 8}
+                width={active ? 24 : 8}
                 height={8}
                 borderRadius={999}
-                backgroundColor={active ? ui.brand : ui.borderSubtle}
+                backgroundColor={active ? 'white' : 'rgba(255,255,255,0.35)'}
                 animation="quick"
-                onPress={() => goTo(index)}
+                onPress={() => {
+                  void hapticLight()
+                  goTo(index)
+                }}
                 cursor="pointer"
-                aria-label={`Go to slide ${index + 1}`}
+                accessibilityLabel={`Go to slide ${index + 1}`}
+                accessibilityRole="button"
               />
             )
           })}
         </XStack>
 
-        <Button tone="primary" size="$4" width="100%" borderRadius={AUTH_LAYOUT.pillRadius} onPress={handleNext}>
-          {isLast ? 'Get started' : 'Next'}
+        <Button
+          tone="primary"
+          size="$5"
+          width="100%"
+          borderRadius={AUTH_LAYOUT.pillRadius}
+          backgroundColor="white"
+          color="#9d0844"
+          fontWeight="800"
+          pressStyle={{ opacity: 0.92, scale: 0.985 }}
+          onPress={() => void handleNext()}
+        >
+          {isLast ? (isAppLaunch ? 'Get started' : 'Continue to sign in') : 'Next'}
         </Button>
+
+        {isLast && isAppLaunch ? (
+          <Text fontSize={13} color="rgba(255,255,255,0.72)" textAlign="center" fontWeight="500">
+            Browse freely — sign in when you’re ready for Community, Chat, and more.
+          </Text>
+        ) : null}
       </YStack>
     </YStack>
   )
