@@ -459,8 +459,8 @@ BEGIN
   INSERT INTO public.order_payments (
     order_id, amount, payment_status, payment_mode, cod_amount, payment_metadata
   ) VALUES (
-    v_order_id, v_total_amount, 'pending'::payment_status_enum,
-    v_payment_mode::payment_mode_enum,
+    v_order_id, v_total_amount, 'pending',
+    v_payment_mode,
     CASE WHEN v_payment_mode = 'cod' THEN v_total_amount ELSE NULL END,
     jsonb_build_object(
       'currency', v_customer_currency,
@@ -584,16 +584,20 @@ BEGIN
     -- Promote order: awaiting_payment → pending (vendor can now see & action it).
     WITH order_update AS (
       UPDATE public.orders
-      SET order_status = 'pending', updated_at = now()
-      WHERE id = v_step.order_id
+      SET order_status = 'pending',
+          updated_at   = now()
+      WHERE id           = v_step.order_id
         AND order_status = 'awaiting_payment'
       RETURNING id
     )
     INSERT INTO public.order_status_logs (
       order_id, from_status, to_status, note, system_generated, change_metadata
     )
-    SELECT id, 'awaiting_payment', 'pending',
-           'Payment confirmed — order released to vendor', true,
+    SELECT id,
+           'awaiting_payment',
+           'pending',
+           'Payment confirmed — order released to vendor',
+           true,
            jsonb_build_object(
              'payment_step_id',    v_step.id,
              'provider',           p_provider,
@@ -601,11 +605,23 @@ BEGIN
            )
     FROM order_update;
 
-    -- Promote items: awaiting_payment → pending (mirrors the order status).
+    -- Promote items: awaiting_payment → pending.
     UPDATE public.order_items
-    SET item_status = 'pending', updated_at = now()
-    WHERE order_id = v_step.order_id
+    SET item_status = 'pending',
+        updated_at  = now()
+    WHERE order_id   = v_step.order_id
       AND item_status = 'awaiting_payment';
+
+    -- Mark order_payments as completed and record the provider reference.
+    UPDATE public.order_payments
+    SET payment_status         = 'completed',
+        transaction_id         = p_provider_reference,
+        gateway_transaction_id = p_provider_reference,
+        payment_gateway        = p_provider,
+        processed_at           = now(),
+        updated_at             = now()
+    WHERE order_id = v_step.order_id
+      AND payment_status = 'pending';
 
     -- Dispatch deferred notifications (customer placed + vendor new order).
     BEGIN
