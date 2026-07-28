@@ -1,7 +1,10 @@
 import { useRouter, useLocalSearchParams } from 'one'
 import { useEffect, useState } from 'react'
 
-import { cancelCheckoutPayment } from '~/commerce/lib/checkout'
+import {
+  cancelCheckoutPayment,
+  confirmCheckoutPayment,
+} from '~/commerce/lib/checkout'
 import {
   clearPendingOrderSuccess,
   loadPendingOrderSuccess,
@@ -13,26 +16,47 @@ import { commerceRoutes } from '~/lib/routes'
 import { useAppUi } from '~/lib/theme/useAppUi'
 
 /**
- * Razorpay Payment Link callback landing.
- * Success → order success (awaiting webhook settlement).
- * Failure → cancel hold when possible, then cart / pending UX.
+ * Razorpay Payment Link callback landing page.
+ *
+ * Razorpay appends these query params on return:
+ *   razorpay_payment_id            — the payment ID (e.g. pay_xxx)
+ *   razorpay_payment_link_id       — the payment link ID
+ *   razorpay_payment_link_status   — 'paid' | 'cancelled'
+ *   razorpay_signature             — HMAC signature
+ *   status                         — 'success' | 'failure'
+ *   step                           — our checkout payment step UUID
+ *
+ * On success:
+ *   1. Call process_checkout_payment_webhook via RPC to promote the order from
+ *      awaiting_payment → pending and mark order_payments as paid.
+ *   2. Redirect to the order success screen.
+ *
+ * On failure:
+ *   Cancel the checkout hold and return to cart.
  */
 export default function RazorpayReturnRoute() {
   const ui = useAppUi()
   const router = useRouter()
-  const params = useLocalSearchParams<{ status?: string }>()
+  const params = useLocalSearchParams<{
+    status?: string
+    razorpay_payment_id?: string
+    razorpay_payment_link_status?: string
+  }>()
   const [message, setMessage] = useState('Confirming payment…')
 
   useEffect(() => {
     let cancelled = false
     void (async () => {
       const status = (params.status ?? '').toLowerCase()
-      const ok = status === 'success'
+      const linkStatus = (params.razorpay_payment_link_status ?? '').toLowerCase()
+      const paymentId = params.razorpay_payment_id ?? ''
+      const isPaid = status === 'success' || linkStatus === 'paid'
 
       const pending = await loadPendingOrderSuccess()
       if (cancelled) return
 
-      if (!ok) {
+      // ── Payment failed / cancelled ──────────────────────────────────────────
+      if (!isPaid) {
         setMessage('Payment was not completed')
         if (pending?.checkoutGroupId) {
           await cancelCheckoutPayment(pending.checkoutGroupId)
@@ -42,10 +66,7 @@ export default function RazorpayReturnRoute() {
           return
         }
         if (pending?.orderIds?.length) {
-          await savePendingOrderSuccess({
-            ...pending,
-            awaitingExternalPayment: true,
-          })
+          await savePendingOrderSuccess({ ...pending, awaitingExternalPayment: true })
           if (cancelled) return
           router.push(commerceRoutes.orderSuccess(pending.orderIds))
           return
@@ -54,22 +75,32 @@ export default function RazorpayReturnRoute() {
         return
       }
 
-      setMessage('Payment received — confirming…')
+      // ── Payment succeeded ───────────────────────────────────────────────────
+      setMessage('Payment received — confirming order…')
+
+      if (pending?.checkoutGroupId && paymentId) {
+        // Promote order: awaiting_payment → pending, mark order_payments as paid.
+        await confirmCheckoutPayment(pending.checkoutGroupId, paymentId, 'razorpay')
+      }
+
       if (pending?.orderIds?.length) {
+        // Clear the awaitingExternalPayment flag — payment is now confirmed.
         await savePendingOrderSuccess({
           ...pending,
-          awaitingExternalPayment: true,
+          awaitingExternalPayment: false,
         })
         if (cancelled) return
         router.push(commerceRoutes.orderSuccess(pending.orderIds))
         return
       }
-      router.push(commerceRoutes.orders)
+
+      // Fallback if we lost the pending snapshot (e.g. session expired).
+      router.replace(commerceRoutes.orders)
     })()
     return () => {
       cancelled = true
     }
-  }, [params.status, router])
+  }, [params.status, params.razorpay_payment_id, params.razorpay_payment_link_status, router])
 
   return (
     <FullWidthLayout>
