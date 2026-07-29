@@ -107,7 +107,15 @@ export function CommunityShell({
                 </YStack>
               </ScrollView>
             ) : (
-              <YStack flex={1} minWidth={0} minHeight={0} gap="$3" backgroundColor={communityUi.pageBg} {...LAYOUT_STRETCH}>
+              <YStack
+                flex={1}
+                minWidth={0}
+                minHeight={0}
+                gap="$3"
+                backgroundColor={communityUi.pageBg}
+                style={{ minHeight: 0, height: '100%', overflow: 'hidden' }}
+                {...LAYOUT_STRETCH}
+              >
                 {children}
               </YStack>
             )}

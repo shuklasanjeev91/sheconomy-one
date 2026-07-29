@@ -104,7 +104,7 @@ export function ScreenState({
   }
 
   return (
-    <YStack flex={1} gap="$2">
+    <YStack flex={1} minHeight={0} gap="$2" width="100%" style={{ minHeight: 0 }}>
       {showingCached ? (
         <Text
           fontSize={12}
