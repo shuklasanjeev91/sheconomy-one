@@ -1,4 +1,4 @@
-import { resolveAppOrigin } from '~/config/app-origin'
+import { buildAppUrl, resolveAppOrigin } from '~/config/app-origin'
 
 export function getWindowOrigin(): string {
   if (typeof window !== 'undefined' && typeof window.location !== 'undefined') {
@@ -17,11 +17,11 @@ export function getSearchParam(key: string): string | null {
   return new URLSearchParams(search).get(key)
 }
 
+/**
+ * Absolute public URL for share / SEO / deep links.
+ * Always uses the canonical app origin (sheconomy.in), never the current
+ * preview host (e.g. *.vercel.app) or localhost.
+ */
 export function buildAbsoluteUrl(path: string): string {
-  const normalized = path.startsWith('/') ? path : `/${path}`
-  const origin =
-    typeof window !== 'undefined' && window.location?.origin
-      ? window.location.origin
-      : resolveAppOrigin()
-  return `${origin.replace(/\/$/, '')}${normalized}`
+  return buildAppUrl(path)
 }
