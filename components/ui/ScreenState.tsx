@@ -20,6 +20,11 @@ type ScreenStateProps = {
   onRetry?: () => void
   children?: ReactNode
   minHeight?: number | string
+  /**
+   * Fill the parent flex column (FlashList hosts). Leave false inside document
+   * ScrollViews — `flex:1` there collapses content to a blank screen.
+   */
+  fill?: boolean
 }
 
 /**
@@ -38,6 +43,7 @@ export function ScreenState({
   onRetry,
   children,
   minHeight = 220,
+  fill = false,
 }: ScreenStateProps) {
   const ui = useAppUi()
 
@@ -104,7 +110,13 @@ export function ScreenState({
   }
 
   return (
-    <YStack flex={1} minHeight={0} gap="$2" width="100%" style={{ minHeight: 0 }}>
+    <YStack
+      flex={fill ? 1 : undefined}
+      minHeight={fill ? 0 : undefined}
+      gap="$2"
+      width="100%"
+      style={fill ? { minHeight: 0 } : undefined}
+    >
       {showingCached ? (
         <Text
           fontSize={12}
