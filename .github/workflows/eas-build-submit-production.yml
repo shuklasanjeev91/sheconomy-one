@@ -1,6 +1,11 @@
-# Build store binaries and submit to App Store + Play Store on every main push.
-# JS-only changes still land faster via EAS Update (eas-update-production.yml).
-# Requires: EXPO_TOKEN plus Apple/Google credentials configured in EAS.
+# Auto build + submit store binaries on every main push.
+# JS/UI still go live faster via OTA (eas-update-production.yml) — store review
+# is never instant. This keeps native binaries (permissions, plugins, SDK)
+# shipping to App Store / Play without manual steps.
+#
+# Requires EXPO_TOKEN + Apple/Google credentials on EAS.
+# Android also needs Google Play Android Developer API enabled on the GCP project
+# linked to the Play service account.
 name: EAS Build + Submit (production)
 
 on:
@@ -11,6 +16,7 @@ on:
 
 concurrency:
   group: eas-build-submit-production
+  # Do not cancel — store builds are expensive and long-running.
   cancel-in-progress: false
 
 jobs:
@@ -56,3 +62,6 @@ jobs:
           eas build --platform all --profile production --auto-submit --non-interactive --no-wait
         env:
           EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+          EXPO_PUBLIC_WEB_APP_URL: https://sheconomy.in
+          ONE_SERVER_URL: https://sheconomy.in
+          EXPO_PUBLIC_APP_ENV: production

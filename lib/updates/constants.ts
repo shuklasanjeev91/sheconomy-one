@@ -1,7 +1,7 @@
 export const UPDATE_METADATA_STORAGE_KEY = '@sheconomy/ota-update-metadata/v1'
 
 /** Minimum time between automatic update checks (startup / resume). */
-export const UPDATE_CHECK_COOLDOWN_MS = 45_000
+export const UPDATE_CHECK_COOLDOWN_MS = 10_000
 
 /** Soft cap to avoid reload loops if an update crashes on boot. */
 export const MAX_UPDATE_RELOAD_ATTEMPTS = 2

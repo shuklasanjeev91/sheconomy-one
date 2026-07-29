@@ -19,7 +19,8 @@ import {
 
 /**
  * Native (iOS / Android) OTA manager — checks on launch and resume,
- * downloads silently, prompts for restart (or forces critical updates).
+ * downloads silently, then reloads immediately so production pushes go live
+ * without a manual "Restart" tap.
  */
 export function AutomaticUpdateManager() {
   const depsRef = useRef(createNativeUpdateServiceDeps())
