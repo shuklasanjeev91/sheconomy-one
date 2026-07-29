@@ -141,6 +141,24 @@ export async function cancelCheckoutPayment(checkoutGroupId: string) {
 }
 
 /**
+ * Fetch the Razorpay payment link URL for an order that is still awaiting_payment.
+ * Returns null if no active checkout step exists (payment already complete or expired).
+ */
+export async function fetchOrderCheckoutUrl(orderId: string): Promise<string | null> {
+  const { data } = await supabase
+    .from('commerce_checkout_payment_steps' as never)
+    .select('checkout_url')
+    .eq('order_id' as never, orderId)
+    .in('status' as never, ['pending', 'requires_action'])
+    .order('created_at' as never, { ascending: false })
+    .limit(1)
+    .maybeSingle()
+
+  const row = data as { checkout_url?: string | null } | null
+  return row?.checkout_url ?? null
+}
+
+/**
  * Called from the Razorpay return URL handler after the buyer completes payment.
  * Promotes the checkout group + order + items from 'awaiting_payment' → 'pending'
  * and marks order_payments as paid.

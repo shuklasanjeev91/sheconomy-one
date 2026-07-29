@@ -460,7 +460,7 @@ BEGIN
     order_id, amount, payment_status, payment_mode, cod_amount, payment_metadata
   ) VALUES (
     v_order_id, v_total_amount, 'pending',
-    v_payment_mode,
+    v_payment_mode::payment_mode_enum,
     CASE WHEN v_payment_mode = 'cod' THEN v_total_amount ELSE NULL END,
     jsonb_build_object(
       'currency', v_customer_currency,
