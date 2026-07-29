@@ -1,5 +1,3 @@
-import { Platform } from 'react-native'
-
 import { Button, Icons, ScrollView, Text, XStack, YStack } from '~/components/ui'
 import { MeetingReactionTray } from '~/co-work/components/MeetingReactionTray'
 import { useAppLayout } from '~/hooks/useAppLayout'
@@ -20,6 +18,7 @@ type MeetingControlsProps = {
   unreadChatCount?: number
   raisedHandCount?: number
   reactionTrayOpen?: boolean
+  busy?: boolean
   onToggleAudio: () => void
   onToggleVideo: () => void
   onToggleScreen: () => void
@@ -157,6 +156,7 @@ export function MeetingControls({
   unreadChatCount = 0,
   raisedHandCount = 0,
   reactionTrayOpen = false,
+  busy = false,
   onToggleAudio,
   onToggleVideo,
   onToggleScreen,
@@ -207,125 +207,135 @@ export function MeetingControls({
         {onToggleReactions && onSendReaction ? (
           <MeetingReactionTray open={reactionTrayOpen} onSelect={onSendReaction} />
         ) : null}
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          contentContainerStyle={{ flexGrow: 1, alignItems: 'center', justifyContent: 'center' }}
-          style={{ width: '100%' }}
-        >
-          <XStack
-            minWidth={compact ? 700 : undefined}
-            paddingHorizontal="$2"
-            alignItems="center"
-            justifyContent="center"
-            gap={roomy ? '$2' : compact ? '$1' : '$1.5'}
+        <XStack width="100%" alignItems="center" gap="$2">
+          {/* Media / panels scroll; exit actions stay pinned so presses are never eaten by ScrollView. */}
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            keyboardShouldPersistTaps="handled"
+            nestedScrollEnabled
+            contentContainerStyle={{ alignItems: 'center', paddingRight: 8 }}
+            style={{ flex: 1, minWidth: 0 }}
           >
-            <ControlButton
-              label={audioEnabled ? 'Mute' : 'Unmute'}
-              icon={audioEnabled ? Icons.Mic : Icons.MicOff}
-              variant={audioEnabled ? 'neutral' : 'danger'}
-              onPress={onToggleAudio}
-              compact={compact}
-            />
-            {caps.supportsVideo ? (
+            <XStack
+              paddingHorizontal="$1"
+              alignItems="center"
+              gap={roomy ? '$2' : compact ? '$1' : '$1.5'}
+            >
               <ControlButton
-                label={videoEnabled ? 'Stop video' : 'Start video'}
-                icon={videoEnabled ? Icons.Video : Icons.VideoOff}
-                variant={videoEnabled ? 'neutral' : 'danger'}
-                onPress={onToggleVideo}
+                label={audioEnabled ? 'Mute' : 'Unmute'}
+                icon={audioEnabled ? Icons.Mic : Icons.MicOff}
+                variant={audioEnabled ? 'neutral' : 'danger'}
+                onPress={onToggleAudio}
                 compact={compact}
               />
-            ) : null}
-            {caps.supportsScreenShare ? (
-              <ControlButton
-                label={screenSharing ? 'Stop share' : 'Present'}
-                icon={Icons.ScreenShare}
-                variant={screenSharing ? 'brand' : 'neutral'}
-                onPress={onToggleScreen}
-                compact={compact}
-              />
-            ) : null}
+              {caps.supportsVideo ? (
+                <ControlButton
+                  label={videoEnabled ? 'Stop video' : 'Start video'}
+                  icon={videoEnabled ? Icons.Video : Icons.VideoOff}
+                  variant={videoEnabled ? 'neutral' : 'danger'}
+                  onPress={onToggleVideo}
+                  compact={compact}
+                />
+              ) : null}
+              {caps.supportsScreenShare ? (
+                <ControlButton
+                  label={screenSharing ? 'Stop share' : 'Present'}
+                  icon={Icons.ScreenShare}
+                  variant={screenSharing ? 'brand' : 'neutral'}
+                  onPress={onToggleScreen}
+                  compact={compact}
+                />
+              ) : null}
 
-            <DockDivider />
+              <DockDivider />
 
-            <ControlButton
-              label={handRaised ? 'Lower hand' : 'Raise hand'}
-              icon={Icons.Hand}
-              variant={handRaised ? 'brand' : 'neutral'}
-              onPress={onToggleHand}
-              compact={compact}
-            />
-            {onToggleReactions ? (
               <ControlButton
-                label="React"
-                icon={Icons.Smile}
-                variant={reactionTrayOpen ? 'brand' : 'neutral'}
-                onPress={onToggleReactions}
+                label={handRaised ? 'Lower hand' : 'Raise hand'}
+                icon={Icons.Hand}
+                variant={handRaised ? 'brand' : 'neutral'}
+                onPress={onToggleHand}
                 compact={compact}
               />
-            ) : null}
-            {caps.supportsRecording ? (
+              {onToggleReactions ? (
+                <ControlButton
+                  label="React"
+                  icon={Icons.Smile}
+                  variant={reactionTrayOpen ? 'brand' : 'neutral'}
+                  onPress={onToggleReactions}
+                  compact={compact}
+                />
+              ) : null}
+              {caps.supportsRecording ? (
+                <ControlButton
+                  label={recording ? 'Stop rec.' : 'Record'}
+                  icon={Icons.Circle}
+                  variant={recording ? 'danger' : 'neutral'}
+                  onPress={onToggleRecord}
+                  compact={compact}
+                />
+              ) : null}
+              {caps.supportsLiveCaptions ? (
+                <ControlButton
+                  label={captionsActive ? 'Hide CC' : 'Captions'}
+                  icon={Icons.Captions}
+                  variant={captionsActive ? 'brand' : 'neutral'}
+                  onPress={onToggleCaptions}
+                  compact={compact}
+                />
+              ) : null}
               <ControlButton
-                label={recording ? 'Stop rec.' : 'Record'}
-                icon={Icons.Circle}
-                variant={recording ? 'danger' : 'neutral'}
-                onPress={onToggleRecord}
+                label="Chat"
+                icon={Icons.MessageSquare}
+                variant={panel === 'chat' || unreadChatCount > 0 ? 'brand' : 'neutral'}
+                onPress={onToggleChat}
+                compact={compact}
+                badgeCount={unreadChatCount}
+              />
+              <ControlButton
+                label="Participants"
+                icon={Icons.Users}
+                variant={panel === 'people' || raisedHandCount > 0 ? 'brand' : 'neutral'}
+                onPress={onTogglePeople}
+                compact={compact}
+                badgeCount={raisedHandCount}
+              />
+              <ControlButton
+                label="Info"
+                icon={Icons.Info}
+                variant={panel === 'info' ? 'brand' : 'neutral'}
+                onPress={onToggleInfo}
                 compact={compact}
               />
-            ) : null}
-            {caps.supportsLiveCaptions ? (
-              <ControlButton
-                label={captionsActive ? 'Hide CC' : 'Captions'}
-                icon={Icons.Captions}
-                variant={captionsActive ? 'brand' : 'neutral'}
-                onPress={onToggleCaptions}
-                compact={compact}
-              />
-            ) : null}
-            <ControlButton
-              label="Chat"
-              icon={Icons.MessageSquare}
-              variant={panel === 'chat' || unreadChatCount > 0 ? 'brand' : 'neutral'}
-              onPress={onToggleChat}
-              compact={compact}
-              badgeCount={unreadChatCount}
-            />
-            <ControlButton
-              label="Participants"
-              icon={Icons.Users}
-              variant={panel === 'people' || raisedHandCount > 0 ? 'brand' : 'neutral'}
-              onPress={onTogglePeople}
-              compact={compact}
-              badgeCount={raisedHandCount}
-            />
-            <ControlButton
-              label="Info"
-              icon={Icons.Info}
-              variant={panel === 'info' ? 'brand' : 'neutral'}
-              onPress={onToggleInfo}
-              compact={compact}
-            />
-            {onShare ? (
-              <ControlButton
-                label="Share"
-                icon={Icons.Share2}
-                variant="neutral"
-                onPress={onShare}
-                compact={compact}
-              />
-            ) : null}
-            {isHost && onToggleInvite ? (
-              <ControlButton
-                label="Invite"
-                icon={Icons.UserPlus}
-                variant={panel === 'invite' ? 'brand' : 'neutral'}
-                onPress={onToggleInvite}
-                compact={compact}
-              />
-            ) : null}
+              {onShare ? (
+                <ControlButton
+                  label="Share"
+                  icon={Icons.Share2}
+                  variant="neutral"
+                  onPress={onShare}
+                  compact={compact}
+                />
+              ) : null}
+              {isHost && onToggleInvite ? (
+                <ControlButton
+                  label="Invite"
+                  icon={Icons.UserPlus}
+                  variant={panel === 'invite' ? 'brand' : 'neutral'}
+                  onPress={onToggleInvite}
+                  compact={compact}
+                />
+              ) : null}
+            </XStack>
+          </ScrollView>
 
-            <DockDivider />
-
+          <XStack
+            alignItems="center"
+            gap={compact ? '$1' : '$1.5'}
+            flexShrink={0}
+            paddingLeft="$1"
+            pointerEvents="auto"
+            zIndex={2}
+          >
             {isHost && onMuteAll ? (
               <Button
                 tone="outline"
@@ -334,6 +344,11 @@ export function MeetingControls({
                 borderColor={coworkUi.borderAccent}
                 color={coworkUi.brandLight}
                 backgroundColor={coworkUi.brandMuted}
+                cursor="pointer"
+                disabled={busy}
+                opacity={busy ? 0.55 : 1}
+                accessibilityRole="button"
+                accessibilityLabel="Mute all participants"
                 onPress={onMuteAll}
               >
                 Mute all
@@ -346,9 +361,14 @@ export function MeetingControls({
               borderColor="rgba(244,63,104,0.45)"
               color={coworkUi.danger}
               backgroundColor={coworkUi.dangerMuted}
+              cursor="pointer"
+              disabled={busy}
+              opacity={busy ? 0.55 : 1}
+              accessibilityRole="button"
+              accessibilityLabel="Leave meeting"
               onPress={onLeave}
             >
-              Leave
+              {busy ? 'Leaving…' : 'Leave'}
             </Button>
             {isHost ? (
               <Button
@@ -356,14 +376,19 @@ export function MeetingControls({
                 size={compact ? '$2' : '$3'}
                 borderRadius={999}
                 backgroundColor={coworkUi.danger}
+                cursor="pointer"
+                disabled={busy}
+                opacity={busy ? 0.55 : 1}
+                accessibilityRole="button"
+                accessibilityLabel="End meeting for everyone"
                 onPress={onEnd}
                 style={controlGradientStyle(coworkGradients.dangerControl, coworkUi.danger)}
               >
-                End
+                {busy ? 'Ending…' : 'End'}
               </Button>
             ) : null}
           </XStack>
-        </ScrollView>
+        </XStack>
       </YStack>
     </YStack>
   )
