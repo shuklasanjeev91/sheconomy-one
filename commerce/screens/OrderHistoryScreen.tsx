@@ -7,6 +7,8 @@ import {
   fetchCustomerOrderHistory,
   type CustomerOrderHistoryRow,
 } from '~/commerce/lib/buyer-account'
+import { fetchOrderCheckoutUrl } from '~/commerce/lib/checkout'
+import { openExternalUrl } from '~/lib/platform/openUrl'
 import { Button, Icons, Spinner, Text, XStack, YStack, useAppToast } from '~/components/ui'
 import { FullWidthLayout, HorizontalScrollRow, PageSection } from '~/components/layout'
 import { formatCurrency } from '~/lib/format'
@@ -59,6 +61,7 @@ export function OrderHistoryScreen() {
   const [error, setError] = useState<string | null>(null)
   const [statusFilter, setStatusFilter] = useState<OrderStatusFilter>('all')
   const visibleOrders = orders.filter((order) => matchesStatusFilter(order.order_status, statusFilter))
+  const [payingOrderId, setPayingOrderId] = useState<string | null>(null)
 
   async function handleCopyOrder(order: CustomerOrderHistoryRow) {
     const label = order.order_number ? `Order #${order.order_number}` : 'Order'
@@ -77,6 +80,24 @@ export function OrderHistoryScreen() {
     toast.show(copied ? 'Order details copied' : 'Could not copy order', {
       tone: copied ? 'success' : 'danger',
     })
+  }
+
+  async function handlePayNow(orderId: string) {
+    setPayingOrderId(orderId)
+    const checkoutUrl = await fetchOrderCheckoutUrl(orderId)
+    setPayingOrderId(null)
+    if (!checkoutUrl) {
+      toast.show('Payment link unavailable', {
+        tone: 'danger',
+        message: 'The session may have expired. Open the order and try again.',
+      })
+      return
+    }
+    if (typeof window !== 'undefined') {
+      window.location.href = checkoutUrl
+    } else {
+      await openExternalUrl(checkoutUrl)
+    }
   }
 
   const load = useCallback(async () => {
@@ -192,13 +213,33 @@ export function OrderHistoryScreen() {
                     </Text>
                   </XStack>
                   <XStack gap="$2" flexWrap="wrap">
+                    {order.order_status === 'awaiting_payment' ? (
+                      <Button
+                        tone="primary"
+                        size="$3"
+                        borderRadius={999}
+                        disabled={payingOrderId === order.order_id}
+                        onPress={() => void handlePayNow(order.order_id)}
+                      >
+                        {payingOrderId === order.order_id ? 'Opening…' : 'Pay now'}
+                      </Button>
+                    ) : (
+                      <Button
+                        tone="primary"
+                        size="$3"
+                        borderRadius={999}
+                        onPress={() => navigateApp(commerceRoutes.order(order.order_id))}
+                      >
+                        View order
+                      </Button>
+                    )}
                     <Button
-                      tone="primary"
+                      tone="outline"
                       size="$3"
                       borderRadius={999}
                       onPress={() => navigateApp(commerceRoutes.order(order.order_id))}
                     >
-                      View order
+                      Details
                     </Button>
                     <Button
                       tone="outline"

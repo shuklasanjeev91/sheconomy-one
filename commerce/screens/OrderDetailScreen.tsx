@@ -43,6 +43,7 @@ import { PageContent } from '~/components/layout'
 import { shareCustomerOrderInvoice } from '~/lib/orders/order-invoice'
 import { formatOrderAmount, formatOrderDate } from '~/lib/orders/order.utils'
 import type { OrderAddressSummary } from '~/lib/orders/vendor-orders.type'
+import { fetchOrderCheckoutUrl } from '~/commerce/lib/checkout'
 import { openExternalUrl } from '~/lib/platform/openUrl'
 import { commerceRoutes } from '~/lib/routes'
 import {
@@ -93,6 +94,7 @@ export function OrderDetailScreen({ orderId }: OrderDetailScreenProps) {
   const [downloadingItemId, setDownloadingItemId] = useState<string | null>(null)
   const [reordering, setReordering] = useState(false)
   const [invoicing, setInvoicing] = useState(false)
+  const [completingPayment, setCompletingPayment] = useState(false)
 
   const load = useCallback(
     async (opts?: { soft?: boolean }) => {
@@ -253,6 +255,26 @@ export function OrderDetailScreen({ orderId }: OrderDetailScreenProps) {
     }
   }
 
+  async function handleCompletePayment() {
+    if (!order) return
+    setCompletingPayment(true)
+    const checkoutUrl = await fetchOrderCheckoutUrl(order.id)
+    setCompletingPayment(false)
+    if (!checkoutUrl) {
+      toast.show('Payment link unavailable', {
+        tone: 'danger',
+        message: 'The payment session may have expired. Please place a new order.',
+      })
+      return
+    }
+    if (typeof window !== 'undefined') {
+      window.location.href = checkoutUrl
+    } else {
+      await openExternalUrl(checkoutUrl)
+    }
+  }
+
+  const isAwaitingPayment = order?.order_status === 'awaiting_payment'
   const bottomPad = isDesktopWeb ? '$12' : '$8'
 
   return (
@@ -368,6 +390,36 @@ export function OrderDetailScreen({ orderId }: OrderDetailScreenProps) {
               <SummaryRow label="Tax" value={formatOrderAmount(order.tax_amount, order.currency)} />
             </YStack>
           </CommercePanel>
+
+          {isAwaitingPayment ? (
+            <CommercePanel
+              gap="$3"
+              borderWidth={1.5}
+              borderColor={ui.warning ?? '#f59e0b'}
+              backgroundColor={ui.warningMuted ?? '#fffbeb'}
+            >
+              <XStack gap="$3" alignItems="flex-start">
+                <Icons.AlertCircle size={20} color={ui.warning ?? '#d97706'} flexShrink={0} marginTop={2} />
+                <YStack flex={1} gap="$1">
+                  <Text fontWeight="800" fontSize={14} color={ui.text}>
+                    Payment not completed
+                  </Text>
+                  <Text fontSize={13} color={ui.textSecondary} lineHeight={20}>
+                    Your order is reserved but we haven&apos;t received payment yet. Complete payment to confirm your order.
+                  </Text>
+                </YStack>
+              </XStack>
+              <Button
+                tone="primary"
+                size="$3"
+                borderRadius={999}
+                disabled={completingPayment}
+                onPress={() => void handleCompletePayment()}
+              >
+                {completingPayment ? 'Opening payment…' : 'Complete payment'}
+              </Button>
+            </CommercePanel>
+          ) : null}
 
           <CommercePanel gap="$3">
             <Text fontSize={14} fontWeight="800" color={ui.text}>
