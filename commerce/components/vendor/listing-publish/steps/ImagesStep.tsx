@@ -1,15 +1,16 @@
 import { useCallback, useState } from 'react'
 
 import { Button, Icons, Image, Spinner, Text, XStack, YStack, useAppToast } from '~/components/ui'
-import { pickImages, type PickedImage } from '~/lib/media/pick-image'
+import { type PickedImage } from '~/lib/media/pick-image'
+import { pickImagesWithCrop } from '~/lib/media/pick-and-crop'
 import type { ListingFormData, ListingImageDraft } from '~/lib/listing/listing.type'
 import type { AppUiTokens } from '~/lib/theme/app-ui'
 
-import { ListingPublishCard, ListingPublishFieldError } from '../ListingPublishCard'
+import { ListingPublishCard, ListingPublishFieldError } from '~/commerce/components/vendor/listing-publish/ListingPublishCard'
 import {
   LISTING_PUBLISH_COPY,
   LISTING_PUBLISH_IMAGE_HINTS,
-} from '../listing-publish.constants'
+} from '~/commerce/components/vendor/listing-publish/listing-publish.constants'
 
 type ImagesStepProps = {
   ui: AppUiTokens
@@ -27,7 +28,12 @@ export function ImagesStep({ ui, formData, errors, onChangeImages }: ImagesStepP
   const handlePick = useCallback(async () => {
     setIsPicking(true)
     try {
-      const picked = await pickImages({ multiple: true, maxCount: 12 })
+      const picked = await pickImagesWithCrop({
+        multiple: true,
+        maxCount: 12,
+        aspect: 'listing',
+        cropTitle: 'Crop listing photo',
+      })
       if (!picked.length) return
 
       const next = [...images]

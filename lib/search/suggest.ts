@@ -1,9 +1,9 @@
 import type { AccessTier } from '~/lib/auth/access'
 
-import { federatedSearch, flattenFederatedHits } from './federate'
-import { getAppSearchHistorySnapshot } from './history'
-import { searchScopeFromPath } from './scope-from-path'
-import type { SearchScope, SearchSuggestResult } from './types'
+import { federatedSearch, flattenFederatedHits } from '~/lib/search/federate'
+import { getAppSearchHistorySnapshot } from '~/lib/search/history'
+import { searchScopeFromPath } from '~/lib/search/scope-from-path'
+import type { SearchScope, SearchSuggestResult } from '~/lib/search/types'
 
 export type SuggestOptions = {
   tier: AccessTier

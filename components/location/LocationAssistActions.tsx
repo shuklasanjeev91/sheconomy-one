@@ -11,7 +11,7 @@ import {
 } from '~/lib/location'
 import { useAppUi } from '~/lib/theme/useAppUi'
 
-import { MapAddressPicker } from './MapAddressPicker'
+import { MapAddressPicker } from '~/components/location/MapAddressPicker'
 
 type LocationAssistActionsProps = {
   onResolved: (address: ResolvedAddress) => void

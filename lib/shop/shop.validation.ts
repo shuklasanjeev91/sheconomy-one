@@ -18,7 +18,7 @@ import {
   SUPPORTED_CURRENCIES,
   type ShopFormData,
   type ShopValidationResult,
-} from './shop.type'
+} from '~/lib/shop/shop.type'
 import { z } from '~/lib/zod'
 
 // ============= SHARED PRIMITIVES =============

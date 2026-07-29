@@ -29,7 +29,7 @@ import {
   SettingsSaveBar,
   SettingsSectionTitle,
   type IconType,
-} from './vendor-settings-shared'
+} from '~/commerce/screens/vendor/vendor-settings-shared'
 
 /** Social platforms editable on the Connect page, with display metadata. */
 const SOCIAL_PLATFORM_FIELDS: readonly {

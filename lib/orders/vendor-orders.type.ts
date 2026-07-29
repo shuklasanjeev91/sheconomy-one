@@ -8,7 +8,7 @@
 
 import type { Tables, TablesUpdate } from '~/lib/supabase'
 
-import type { DeliveryStatus, OrderStatus } from './order.constants'
+import type { DeliveryStatus, OrderStatus } from '~/lib/orders/order.constants'
 
 // ============= BASE ROWS =============
 

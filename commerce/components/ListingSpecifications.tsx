@@ -3,7 +3,7 @@ import type { ListingSpecification } from '~/lib/listing-detail'
 import { radius } from '~/config/tokens'
 import { useAppUi } from '~/lib/theme/useAppUi'
 
-import { SectionTitle } from './SectionTitle'
+import { SectionTitle } from '~/commerce/components/SectionTitle'
 
 type ListingSpecificationsProps = {
   specifications: ListingSpecification[]

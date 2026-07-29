@@ -15,9 +15,9 @@
 
 import { supabase, type TablesUpdate } from '~/lib/supabase'
 
-import { fail, isAdminUser, ok, resolveUserId } from './order.access'
-import { PAYMENT_MODE, PAYMENT_STATUS, type PaymentMode, type PaymentStatus } from './order.constants'
-import { validatePaymentData } from './payment.validation'
+import { fail, isAdminUser, ok, resolveUserId } from '~/lib/orders/order.access'
+import { PAYMENT_MODE, PAYMENT_STATUS, type PaymentMode, type PaymentStatus } from '~/lib/orders/order.constants'
+import { validatePaymentData } from '~/lib/orders/payment.validation'
 import type {
   CODCollectionInput,
   OrderPayment,
@@ -27,7 +27,7 @@ import type {
   PaymentWithOrder,
   ProcessPaymentInput,
   UpdatePaymentStatusMetadata,
-} from './payment.type'
+} from '~/lib/orders/payment.type'
 
 type PaymentUpdate = TablesUpdate<'order_payments'>
 

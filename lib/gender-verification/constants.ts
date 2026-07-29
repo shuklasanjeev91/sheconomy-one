@@ -1,23 +1,31 @@
 export const GENDER_VERIFICATION = {
   /** Natural blinks required for liveness (close → open cycles). */
   requiredBlinks: 3,
-  /** Fallback EAR when adaptive baseline is not ready yet (legacy). */
+  /** Fallback EAR when adaptive baseline is not ready yet. */
   earBlinkThreshold: 0.2,
   earOpenThreshold: 0.26,
-  /** Reject micro-flicker / sensor noise. */
-  minClosedMs: 80,
+  /**
+   * Minimum closed duration. Native samples are slower (~3–6 fps), so keep this
+   * low enough that a single closed sample still counts on reopen.
+   */
+  minClosedMs: 50,
   /** Reject intentional long squint / eyes held shut. */
   maxClosedMs: 900,
   /** Avoid counting the same blink twice. */
-  minBlinkGapMs: 320,
+  minBlinkGapMs: 280,
   minLivenessScore: 0.7,
   /** Human anti-spoof / liveness model floors (photo rejection). */
-  minLiveScore: 0.45,
-  minRealScore: 0.45,
+  minLiveScore: 0.4,
+  minRealScore: 0.4,
   minGenderConfidence: 0.55,
   sessionMinutes: 15,
-  /** Native camera sample rate — must be fast enough to catch a natural blink. */
-  nativeFrameIntervalMs: 140,
+  /**
+   * Native capture cadence. takePictureAsync is slow; a short interval only
+   * queues work behind processingRef — prefer fewer, lighter frames.
+   */
+  nativeFrameIntervalMs: 220,
+  /** Downscale side length before Human.detect in the native WebView. */
+  nativeDetectMaxSide: 480,
   faceApiModelBaseUrl: 'https://cdn.jsdelivr.net/npm/@vladmandic/face-api@1.7.15/model',
   humanModelBaseUrl: 'https://cdn.jsdelivr.net/npm/@vladmandic/human@3.3.6/models/',
 } as const
@@ -40,6 +48,8 @@ export const GENDER_VERIFICATION_PROMPT = {
   /** Query param + value that opens the "access restricted" modal (e.g. `?gender=restricted`). */
   restrictedQueryParam: 'gender',
   restrictedQueryValue: 'restricted',
+  /** Survives SPA redirect / reload so "Verify myself" keeps the liveness modal open. */
+  verificationFlowStorageKey: 'sheconomy:gender-verify:flow-open',
 } as const
 
 /** MediaPipe Face Mesh eye landmark indices. */

@@ -6,32 +6,18 @@ import { useScreenZoom } from '~/lib/zoom/ScreenZoomContext'
 
 /**
  * Wraps app content so screen zoom enlarges every word, icon, and image together.
- * Web: CSS `zoom` on documentElement (sharp text). Native: scale + layout expand.
+ * Web: CSS `zoom` on documentElement (sharp text).
+ * Native: do not use transform-scale wrappers — they break Switch/Radio/Button hit testing.
  */
 export function ScreenZoomRoot({ children }: { children: ReactNode }) {
-  const { scale } = useScreenZoom()
-
   if (Platform.OS === 'web') {
-    // Applied on documentElement inside ScreenZoomProvider effect —
-    // keep children untransformed so layout math stays correct under CSS zoom.
     return <>{children}</>
   }
 
-  if (scale === 1) {
-    return <View style={styles.fill}>{children}</View>
-  }
-
-  const pct = `${(100 / scale).toFixed(4)}%`
-  return (
-    <View style={styles.fill}>
-      <View style={[styles.fill, { width: pct, height: pct, transform: [{ scale }] }]}>
-        {children}
-      </View>
-    </View>
-  )
+  return <View style={styles.fill}>{children}</View>
 }
 
-/** Floating − / % / + controls — each + enlarges every word on screen. */
+/** Floating − / % / + controls — each + enlarges every word on screen (web CSS zoom). */
 export function ScreenZoomControls({
   tone = 'dark',
 }: {
@@ -54,6 +40,7 @@ export function ScreenZoomControls({
         onPress={zoomOut}
         disabled={!canZoomOut}
         accessibilityLabel="Zoom out"
+        hitSlop={8}
         style={{ opacity: canZoomOut ? 1 : 0.35, paddingHorizontal: 10, paddingVertical: 6 }}
       >
         <Text color={fg} fontSize={20} fontWeight="700" lineHeight={22}>
@@ -63,6 +50,7 @@ export function ScreenZoomControls({
       <Pressable
         onPress={reset}
         accessibilityLabel={`Zoom ${percentLabel}, tap to reset`}
+        hitSlop={8}
         style={{ paddingHorizontal: 6, paddingVertical: 6, minWidth: 48 }}
       >
         <Text color={fg} fontSize={12} fontWeight="700" textAlign="center">
@@ -73,6 +61,7 @@ export function ScreenZoomControls({
         onPress={zoomIn}
         disabled={!canZoomIn}
         accessibilityLabel="Zoom in"
+        hitSlop={8}
         style={{ opacity: canZoomIn ? 1 : 0.35, paddingHorizontal: 10, paddingVertical: 6 }}
       >
         <Text color={fg} fontSize={20} fontWeight="700" lineHeight={22}>

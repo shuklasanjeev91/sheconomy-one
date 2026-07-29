@@ -2,7 +2,7 @@ import type { AddressFormData } from '~/lib/address/address.type'
 import { ADDRESS_TYPE } from '~/lib/address/address.type'
 import { resolveCountryCode } from '~/lib/geo'
 
-import type { ResolvedAddress } from './types'
+import type { ResolvedAddress } from '~/lib/location/types'
 
 /** Map Places / reverse-geocode result into address form buffer fields. */
 export function resolvedAddressToFormPatch(

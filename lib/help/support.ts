@@ -1,12 +1,12 @@
 import { supabase } from '~/lib/supabase/client'
 
-import { filterFallbackArticles } from './faq-fallback'
+import { filterFallbackArticles } from '~/lib/help/faq-fallback'
 import type {
   HelpArticle,
   HelpProduct,
   HelpTicketPriority,
   SupportTicket,
-} from './types'
+} from '~/lib/help/types'
 
 type KbRow = {
   id: string

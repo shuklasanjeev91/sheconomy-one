@@ -19,7 +19,7 @@ import {
   VALID_STATUS_TRANSITIONS,
   type OrderStatus,
   type OrderStatusDisplay,
-} from './order.constants'
+} from '~/lib/orders/order.constants'
 
 // ============= MONEY / DATES =============
 

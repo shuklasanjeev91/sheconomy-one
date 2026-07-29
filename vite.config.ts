@@ -9,6 +9,14 @@ import { PUBLIC_SUPABASE_ANON_KEY, PUBLIC_SUPABASE_URL } from './config/supabase
 
 const fromProjectRoot = (path: string) => fileURLToPath(new URL(path, import.meta.url).toString())
 
+/** Drop Tamagui vite-plugin global caches so config HMR cannot serve stale *.tamagui.css imports. */
+function clearTamaguiViteCaches() {
+  const g = globalThis as Record<string, unknown>
+  delete g.__tamagui_vite_cache__
+  delete g.__tamagui_vite_cache_size__
+  delete g.__tamagui_vite_pending__
+}
+
 /** Vite loadEnv only reads .env files; merge CI/Vercel process.env for EXPO_PUBLIC_* keys. */
 function loadProjectEnv(mode: string) {
   const fromFiles = loadEnv(mode, process.cwd(), '')
@@ -16,6 +24,7 @@ function loadProjectEnv(mode: string) {
     'EXPO_PUBLIC_SUPABASE_URL',
     'EXPO_PUBLIC_SUPABASE_ANON_KEY',
     'EXPO_PUBLIC_WEB_APP_URL',
+    'EXPO_PUBLIC_ONESIGNAL_APP_ID',
     'ONE_SERVER_URL',
     'ONE_CACHE_KEY',
   ] as const
@@ -30,6 +39,7 @@ function loadProjectEnv(mode: string) {
 }
 
 export default defineConfig(({ mode }) => {
+  clearTamaguiViteCaches()
   const env = loadProjectEnv(mode)
   const appOrigin = (env.EXPO_PUBLIC_WEB_APP_URL || env.ONE_SERVER_URL || DEFAULT_APP_ORIGIN).replace(
     /\/$/,
@@ -48,6 +58,10 @@ export default defineConfig(({ mode }) => {
       },
       watch: {
         ignored: ['**/.vercel/**', '**/dist/**'],
+      },
+      // OneSignal web push SW must be allowed to control the whole origin.
+      headers: {
+        'Service-Worker-Allowed': '/',
       },
     },
 
@@ -69,7 +83,8 @@ export default defineConfig(({ mode }) => {
         'expo-video': fromProjectRoot('./lib/stubs/expo-video.ts'),
         'expo-sharing': fromProjectRoot('./lib/stubs/expo-sharing.ts'),
         'expo-camera': fromProjectRoot('./lib/stubs/expo-camera.ts'),
-        'expo-location': fromProjectRoot('./lib/stubs/expo-location.ts'),
+        // Location: use ~/lib/location/expo-location-module(.native) — do not
+        // alias expo-location globally or native GPS is stubbed to denied.
         'expo-clipboard': fromProjectRoot('./lib/stubs/expo-clipboard.ts'),
         'expo-file-system/legacy': fromProjectRoot('./lib/stubs/expo-file-system-legacy.ts'),
         'expo-localization': fromProjectRoot('./lib/stubs/expo-localization.ts'),
@@ -85,6 +100,15 @@ export default defineConfig(({ mode }) => {
         'react-native-webview': fromProjectRoot('./lib/stubs/react-native-webview.ts'),
         // Published package ships JSX in `.js`; Rolldown parse fails during web build.
         'react-native-qrcode-svg': fromProjectRoot('./lib/stubs/react-native-qrcode-svg.tsx'),
+        // LiveKit/debug leave Node built-ins external; Hermes has no require.
+        tty: fromProjectRoot('./lib/stubs/node-empty.ts'),
+        'node:tty': fromProjectRoot('./lib/stubs/node-empty.ts'),
+        util: fromProjectRoot('./lib/stubs/node-util.ts'),
+        'node:util': fromProjectRoot('./lib/stubs/node-util.ts'),
+        net: fromProjectRoot('./lib/stubs/node-empty.ts'),
+        'node:net': fromProjectRoot('./lib/stubs/node-empty.ts'),
+        dns: fromProjectRoot('./lib/stubs/node-empty.ts'),
+        'node:dns': fromProjectRoot('./lib/stubs/node-empty.ts'),
         'use-sync-external-store/with-selector': useSyncExternalStoreWithSelector,
         'use-sync-external-store/with-selector.js': useSyncExternalStoreWithSelector,
         // Package "main" is Node (needs tfjs-node); force browser ESM for web/SSR.
@@ -98,6 +122,63 @@ export default defineConfig(({ mode }) => {
     },
 
     plugins: [
+      {
+        name: 'sheconomy-stub-rolldown-node-require',
+        // LiveKit WebRTC nests `debug`, whose Node entry does require('tty').
+        // Hermes has no Node require — force the browser build of `debug`.
+        transform(code, id) {
+          const normalized = id.replace(/\\/g, '/')
+          if (
+            normalized.includes('/debug/src/index.js') ||
+            normalized.includes('/debug/src/index.mjs') ||
+            /\/debug\/src\/index\.[cm]?js$/.test(normalized)
+          ) {
+            if (code.includes('sheconomy-force-debug-browser')) return null
+            return {
+              code: `// sheconomy-force-debug-browser
+module.exports = require('./browser.js');
+`,
+              map: null,
+            }
+          }
+          if (normalized.includes('/debug/src/node.js') || /\/debug\/src\/node\.[cm]?js$/.test(normalized)) {
+            if (code.includes('sheconomy-force-debug-browser')) return null
+            return {
+              code: `// sheconomy-force-debug-browser
+module.exports = require('./browser.js');
+`,
+              map: null,
+            }
+          }
+          return null
+        },
+        renderChunk(code) {
+          const marker = 'Calling `require` for "'
+          if (!code.includes(marker) && !code.includes('__require("tty")') && !code.includes("__require('tty')")) {
+            return null
+          }
+          let next = code
+          if (next.includes(marker) && !next.includes('sheconomy-stub-node-builtins-v3')) {
+            const utilStub =
+              '{inspect:function(v){try{return typeof v==="string"?v:JSON.stringify(v)}catch(e){return String(v)}},format:function(){return Array.prototype.slice.call(arguments).join(" ")},promisify:function(fn){return fn},inherits:function(){},deprecate:function(fn){return fn},types:{}}'
+            const throwExact = `throw Error("Calling \`require\` for \\"" + x + "\\" in an environment that doesn't expose the \`require\` function. See https://rolldown.rs/in-depth/bundling-cjs#require-external-modules for more details.");`
+            const throwStub = `var __n=String(x||""); if (__n==="util"||__n==="node:util") return ${utilStub}; // sheconomy-stub-node-builtins-v3
+	if (__n==="tty"||__n==="node:tty"||__n==="net"||__n==="node:net"||__n==="dns"||__n==="node:dns"||__n==="fs"||__n==="node:fs"||__n==="os"||__n==="node:os"||__n==="path"||__n==="node:path"||__n==="stream"||__n==="node:stream"||__n==="events"||__n==="node:events"||__n==="assert"||__n==="url"||__n==="buffer"||__n==="crypto"||__n==="http"||__n==="https"||__n.indexOf("node:")===0) return {};
+	${throwExact}`
+            next = next.split(throwExact).join(throwStub)
+          }
+          next = next
+            .replace(/__require\(["']tty["']\)/g, '({})')
+            .replace(/__require\(["']node:tty["']\)/g, '({})')
+            .replace(/__require\(["']util["']\)/g, '({inspect:String,format:String,promisify:function(fn){return fn},types:{}})')
+            .replace(/__require\(["']node:util["']\)/g, '({inspect:String,format:String,promisify:function(fn){return fn},types:{}})')
+            .replace(/__require\(["']net["']\)/g, '({})')
+            .replace(/__require\(["']node:net["']\)/g, '({})')
+            .replace(/__require\(["']dns["']\)/g, '({})')
+            .replace(/__require\(["']node:dns["']\)/g, '({})')
+          return next === code ? null : { code: next, map: null }
+        },
+      },
       one({
         setupFile: {
           native: './lib/polyfills.ts',
@@ -113,6 +194,10 @@ export default defineConfig(({ mode }) => {
         native: {
           // Vite is One's native release bundler (wired via react-native.config.cjs).
           bundler: 'vite',
+          // IMPORTANT: `true` wraps every screen in <Suspense fallback={null}>, so
+          // navigating to listing/PDP shows a blank white screen until the async
+          // route import resolves — on device that can take minutes for heavy
+          // screens. Release Hermes bytecode fits; keep routes sync for instant paint.
           suspendRoutes: false,
         },
 
@@ -272,6 +357,53 @@ if (!(normalizedPreloadPath in preloadedLoaderData) && !(href in preloadedLoader
               }
               return next === contents ? undefined : next
             },
+            'dist/esm/router/useScreens.native.js': (contents) => {
+              if (!contents) return
+              // Brand logo splash while async route factories resolve (never empty / "Starting…").
+              if (contents.includes('sheconomy-logo-suspense')) return
+              const branded = `var wrapSuspense = function (children) {
+    // sheconomy-logo-suspense: centered brand logo on magenta while chunks resolve
+    return /* @__PURE__ */jsx(Suspense, {
+      fallback: globalThis.__SHECONOMY_SUSPENSE_FALLBACK__ || null,
+      children
+    });
+  };`
+              if (
+                contents.includes('sheconomy-no-starting-suspense') ||
+                contents.includes('sheconomy-brand-suspense') ||
+                contents.includes('sheconomy-visible-suspense') ||
+                contents.includes('wrapSuspense = function')
+              ) {
+                return contents.replace(
+                  /var wrapSuspense = function \(children\) \{[\s\S]*?\n  \};/,
+                  branded,
+                )
+              }
+              return contents
+            },
+            'dist/cjs/router/useScreens.native.js': (contents) => {
+              if (!contents) return
+              if (contents.includes('sheconomy-logo-suspense')) return
+              const branded = `var wrapSuspense = function (children) {
+    // sheconomy-logo-suspense: centered brand logo on magenta while chunks resolve
+    return /* @__PURE__ */(0, import_jsx_runtime.jsx)(import_react2.Suspense, {
+      fallback: globalThis.__SHECONOMY_SUSPENSE_FALLBACK__ || null,
+      children
+    });
+  };`
+              if (
+                contents.includes('sheconomy-no-starting-suspense') ||
+                contents.includes('sheconomy-brand-suspense') ||
+                contents.includes('sheconomy-visible-suspense') ||
+                contents.includes('wrapSuspense = function')
+              ) {
+                return contents.replace(
+                  /var wrapSuspense = function \(children\) \{[\s\S]*?\n  \};/,
+                  branded,
+                )
+              }
+              return contents
+            },
             'dist/esm/router/router.native.js': (contents) => {
               if (!contents || contents.includes('sheconomy-nav-instant')) return
               return contents.replace(
@@ -367,11 +499,20 @@ if (typeof g.Response !== 'function') {
       tamaguiPlugin({
         components: ['tamagui'],
         config: './config/tamagui.config.ts',
-        disableExtraction: true,
+        // Dev: skip CSS extraction. After vite.config HMR, Tamagui's global JS cache can
+        // re-emit `*.tamagui.css` imports while the per-instance cssMap is empty → Vite
+        // "Failed to resolve import …Avatar.tsx.tamagui.css". Production still extracts.
+        disableExtraction: mode === 'development',
       }),
     ],
 
     define: {
+      // One's native.suspendRoutes:false should set this, but the Release Hermes
+      // bundle was still evaluating `process.env.ONE_SUSPEND_ROUTES_NATIVE === "0"`
+      // at runtime (undefined) → every screen wrapped in <Suspense fallback={null}>.
+      // Instant meeting then painted a blank chromeless viewport while LiveKit inits.
+      'process.env.ONE_SUSPEND_ROUTES_NATIVE': JSON.stringify('0'),
+      'process.env.ONE_SUSPEND_ROUTES': JSON.stringify('0'),
       'import.meta.env.EXPO_PUBLIC_SUPABASE_URL': JSON.stringify(
         env.EXPO_PUBLIC_SUPABASE_URL?.trim() || PUBLIC_SUPABASE_URL,
       ),
@@ -392,6 +533,12 @@ if (typeof g.Response !== 'function') {
       ),
       'process.env.EXPO_PUBLIC_WEB_APP_URL': JSON.stringify(
         env.EXPO_PUBLIC_WEB_APP_URL ?? env.ONE_SERVER_URL ?? DEFAULT_APP_ORIGIN,
+      ),
+      'import.meta.env.EXPO_PUBLIC_ONESIGNAL_APP_ID': JSON.stringify(
+        env.EXPO_PUBLIC_ONESIGNAL_APP_ID?.trim() || '',
+      ),
+      'process.env.EXPO_PUBLIC_ONESIGNAL_APP_ID': JSON.stringify(
+        env.EXPO_PUBLIC_ONESIGNAL_APP_ID?.trim() || '',
       ),
       'process.env.ONE_SERVER_URL': JSON.stringify(
         env.ONE_SERVER_URL ?? env.EXPO_PUBLIC_WEB_APP_URL ?? DEFAULT_APP_ORIGIN,

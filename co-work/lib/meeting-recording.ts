@@ -3,7 +3,7 @@ import type { Room } from 'livekit-client'
 import { hasMediaRecorder } from '~/lib/platform/capabilities'
 import { shareBlob } from '~/lib/platform/shareBlob'
 
-import { isNativeAudioRecordingSupported } from './native-audio-recording'
+import { isNativeAudioRecordingSupported } from '~/co-work/lib/native-audio-recording'
 
 /**
  * Local/device recording helpers remain for development fallbacks only.

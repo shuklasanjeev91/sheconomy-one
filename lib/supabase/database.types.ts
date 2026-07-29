@@ -10380,6 +10380,7 @@ export type Database = {
           cover_url: string | null
           created_at: string
           date_of_birth: string | null
+          marriage_anniversary: string | null
           deleted_at: string | null
           device_info: Json
           email: string | null
@@ -10456,6 +10457,7 @@ export type Database = {
           cover_url?: string | null
           created_at?: string
           date_of_birth?: string | null
+          marriage_anniversary?: string | null
           deleted_at?: string | null
           device_info?: Json
           email?: string | null
@@ -10532,6 +10534,7 @@ export type Database = {
           cover_url?: string | null
           created_at?: string
           date_of_birth?: string | null
+          marriage_anniversary?: string | null
           deleted_at?: string | null
           device_info?: Json
           email?: string | null
@@ -16450,6 +16453,8 @@ export type Database = {
           p_billing_address_id?: string
           p_cart_id: string
           p_cart_item_ids: string[]
+          p_customer_amounts_by_shop?: Json
+          p_customer_currency?: string
           p_gift_shop_ids?: string[]
           p_idempotency_key?: string
           p_notes_by_shop?: Json
@@ -16580,6 +16585,19 @@ export type Database = {
       confirm_order_return_received: {
         Args: { p_note?: string; p_order_item_id: string }
         Returns: Json
+      }
+      connection_occasions_today: {
+        Args: { p_user_id?: string }
+        Returns: {
+          avatar_url: string | null
+          company_name: string | null
+          full_name: string | null
+          label: string
+          occasion: string
+          user_id: string
+          username: string | null
+          years: number | null
+        }[]
       }
       create_customer_order: { Args: { order_data: Json }; Returns: Json }
       create_digest_notifications: { Args: never; Returns: number }

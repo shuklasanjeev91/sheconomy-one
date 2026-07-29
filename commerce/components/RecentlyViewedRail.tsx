@@ -11,8 +11,8 @@ import { copyToClipboard } from '~/lib/platform/clipboard'
 import { getListingShareUrl } from '~/lib/share'
 import { useAppUi } from '~/lib/theme/useAppUi'
 
-import { CommerceSection } from './CommerceSection'
-import { ListingCarouselRow } from './ListingCarouselRow'
+import { CommerceSection } from '~/commerce/components/CommerceSection'
+import { ListingCarouselRow } from '~/commerce/components/ListingCarouselRow'
 
 type RecentlyViewedRailProps = {
   /** Listing ids to hide (e.g. items already in the cart). */

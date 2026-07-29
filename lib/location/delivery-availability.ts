@@ -2,7 +2,7 @@ import type { Json } from '~/lib/supabase'
 import { supabase } from '~/lib/supabase/client'
 import { resolveCountryCode } from '~/lib/geo'
 
-import type { DeliveryAvailabilityResult } from './types'
+import type { DeliveryAvailabilityResult } from '~/lib/location/types'
 
 type ShippingZoneLike = {
   countries?: string[] | string | null

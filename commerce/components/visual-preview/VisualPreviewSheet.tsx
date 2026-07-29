@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useRouter } from 'one'
 
 import {
@@ -17,9 +17,10 @@ import {
   requestTryOn,
   requestViewInSpace,
 } from '~/lib/commerce/visual-preview.client'
-import type {
-  VisualPreviewMode,
-  VisualPreviewPlacement,
+import {
+  VISUAL_PLACEMENT_OPTIONS,
+  type VisualPreviewMode,
+  type VisualPreviewPlacement,
 } from '~/lib/listing/visual-preview'
 import { captureImage, pickImages, type PickedImage } from '~/lib/media/pick-image'
 import { appRoutes } from '~/lib/routes'
@@ -32,15 +33,11 @@ type VisualPreviewSheetProps = {
   mode: VisualPreviewMode
   listingId: string
   listingTitle: string
+  listingCategory?: string | null
   listingImageUrl?: string | null
   listingShareUrl?: string | null
+  defaultPlacement?: VisualPreviewPlacement
 }
-
-const PLACEMENTS: Array<{ id: VisualPreviewPlacement; label: string }> = [
-  { id: 'wall', label: 'Wall' },
-  { id: 'floor', label: 'Floor' },
-  { id: 'table', label: 'Table' },
-]
 
 export function VisualPreviewSheet({
   open,
@@ -48,8 +45,10 @@ export function VisualPreviewSheet({
   mode,
   listingId,
   listingTitle,
+  listingCategory,
   listingImageUrl,
   listingShareUrl,
+  defaultPlacement = 'wall',
 }: VisualPreviewSheetProps) {
   const ui = useAppUi()
   const toast = useAppToast()
@@ -57,15 +56,21 @@ export function VisualPreviewSheet({
   const { user } = useSupabase()
 
   const [picked, setPicked] = useState<PickedImage | null>(null)
-  const [placement, setPlacement] = useState<VisualPreviewPlacement>('wall')
+  const [placement, setPlacement] = useState<VisualPreviewPlacement>(defaultPlacement)
   const [busy, setBusy] = useState(false)
+  const [status, setStatus] = useState<string | null>(null)
+  const [errorMessage, setErrorMessage] = useState<string | null>(null)
   const [resultUrl, setResultUrl] = useState<string | null>(null)
 
-  const title = mode === 'try_on' ? 'Try it on' : 'View in your room'
-  const guidance =
-    mode === 'try_on'
-      ? 'Upload a clear full-body or torso photo. Results are AI visualizations, not an exact fit guarantee.'
-      : 'Upload a photo of your wall or room. Results are AI visualizations — scale may not be exact.'
+  useEffect(() => {
+    if (open) setPlacement(defaultPlacement)
+  }, [open, defaultPlacement])
+
+  const isTryOn = mode === 'try_on'
+  const title = isTryOn ? 'Try it on' : 'View in your room'
+  const guidance = isTryOn
+    ? 'Upload a clear full-body or torso selfie. We’ll show a preview of this fashion item on you — not an exact fit guarantee.'
+    : 'Upload a photo of your wall or room, choose Wall / Floor / Table, and preview how this product looks in your space.'
 
   const previewUri = useMemo(() => picked?.uri ?? null, [picked])
 
@@ -73,6 +78,8 @@ export function VisualPreviewSheet({
     setPicked(null)
     setResultUrl(null)
     setBusy(false)
+    setStatus(null)
+    setErrorMessage(null)
   }
 
   function handleOpenChange(next: boolean) {
@@ -92,6 +99,7 @@ export function VisualPreviewSheet({
     const images = await pickImages({ multiple: false, maxCount: 1 })
     if (images[0]) {
       setResultUrl(null)
+      setErrorMessage(null)
       setPicked(images[0])
     }
   }
@@ -101,6 +109,7 @@ export function VisualPreviewSheet({
     const image = await captureImage()
     if (image) {
       setResultUrl(null)
+      setErrorMessage(null)
       setPicked(image)
     }
   }
@@ -108,30 +117,42 @@ export function VisualPreviewSheet({
   async function handleGenerate() {
     if (!(await ensureSignedIn()) || !user?.id) return
     if (!picked) {
+      setErrorMessage('Add a photo first using Gallery or Camera.')
       toast.show('Add a photo first', { tone: 'danger' })
       return
     }
 
     setBusy(true)
+    setErrorMessage(null)
+    setStatus('Uploading your photo…')
     try {
-      const result =
-        mode === 'try_on'
-          ? await requestTryOn({
-              userId: user.id,
-              listingId,
-              userImage: picked,
-            })
-          : await requestViewInSpace({
-              userId: user.id,
-              listingId,
-              spaceImage: picked,
-              placement,
-            })
+      const result = isTryOn
+        ? await requestTryOn({
+            userId: user.id,
+            listingId,
+            userImage: picked,
+            title: listingTitle,
+            category: listingCategory,
+            onStatus: setStatus,
+          })
+        : await requestViewInSpace({
+            userId: user.id,
+            listingId,
+            spaceImage: picked,
+            placement,
+            title: listingTitle,
+            category: listingCategory,
+            onStatus: setStatus,
+          })
+      setStatus(null)
       setResultUrl(result.resultUrl)
+      toast.show(isTryOn ? 'Try-on ready' : 'Room preview ready', { tone: 'success' })
     } catch (error) {
-      toast.show(error instanceof Error ? error.message : 'Could not generate preview', {
-        tone: 'danger',
-      })
+      const message =
+        error instanceof Error ? error.message : 'Could not generate preview. Please try again.'
+      setErrorMessage(message)
+      setStatus(null)
+      toast.show(message, { tone: 'danger' })
     } finally {
       setBusy(false)
     }
@@ -144,23 +165,34 @@ export function VisualPreviewSheet({
           {guidance}
         </Text>
 
-        {mode === 'view_in_space' ? (
-          <XStack gap="$2" flexWrap="wrap">
-            {PLACEMENTS.map((option) => {
-              const active = placement === option.id
-              return (
-                <Button
-                  key={option.id}
-                  size="$3"
-                  tone={active ? 'primary' : 'outline'}
-                  onPress={() => setPlacement(option.id)}
-                  disabled={busy}
-                >
-                  {option.label}
-                </Button>
-              )
-            })}
-          </XStack>
+        {!isTryOn ? (
+          <YStack gap="$2">
+            <Text fontSize={12} fontWeight="700" color={ui.textMuted} textTransform="uppercase" letterSpacing={0.5}>
+              Place on
+            </Text>
+            <XStack gap="$2" flexWrap="wrap">
+              {VISUAL_PLACEMENT_OPTIONS.map((option) => {
+                const active = placement === option.id
+                return (
+                  <Button
+                    key={option.id}
+                    size="$3"
+                    tone={active ? 'primary' : 'outline'}
+                    onPress={() => {
+                      setPlacement(option.id)
+                      setResultUrl(null)
+                    }}
+                    disabled={busy}
+                  >
+                    {option.label}
+                  </Button>
+                )
+              })}
+            </XStack>
+            <Text fontSize={12} color={ui.textMuted}>
+              {VISUAL_PLACEMENT_OPTIONS.find((option) => option.id === placement)?.hint}
+            </Text>
+          </YStack>
         ) : null}
 
         <XStack gap="$2" flexWrap="wrap">
@@ -184,38 +216,106 @@ export function VisualPreviewSheet({
           </Button>
         </XStack>
 
-        {(previewUri || listingImageUrl) && !resultUrl ? (
+        {!resultUrl ? (
           <XStack gap="$3" flexWrap="wrap">
-            {previewUri ? (
-              <YStack gap="$1.5" flex={1} minWidth={140}>
-                <Text fontSize={12} fontWeight="600" color={ui.textMuted}>
-                  Your photo
-                </Text>
-                <YStack width="100%" aspectRatio={3 / 4} borderRadius={12} overflow="hidden" backgroundColor={ui.surfaceMuted}>
-                  <Image source={{ uri: previewUri }} width="100%" height="100%" objectFit="cover" />
-                </YStack>
+            <YStack gap="$1.5" flex={1} minWidth={140}>
+              <Text fontSize={12} fontWeight="600" color={ui.textMuted}>
+                {isTryOn ? 'Your photo' : 'Your room'}
+              </Text>
+              <YStack
+                width="100%"
+                aspectRatio={3 / 4}
+                borderRadius={12}
+                overflow="hidden"
+                backgroundColor={ui.surfaceMuted}
+                position="relative"
+                alignItems="center"
+                justifyContent="center"
+              >
+                {previewUri ? (
+                  <Image src={previewUri} alt="Your photo" width="100%" height="100%" objectFit="cover" />
+                ) : (
+                  <Text fontSize={12} color={ui.textMuted} textAlign="center" paddingHorizontal="$3">
+                    Tap Gallery or Camera to add a photo
+                  </Text>
+                )}
               </YStack>
-            ) : null}
+            </YStack>
             {listingImageUrl ? (
               <YStack gap="$1.5" flex={1} minWidth={140}>
                 <Text fontSize={12} fontWeight="600" color={ui.textMuted}>
                   Product
                 </Text>
-                <YStack width="100%" aspectRatio={3 / 4} borderRadius={12} overflow="hidden" backgroundColor={ui.surfaceMuted}>
-                  <Image source={{ uri: listingImageUrl }} width="100%" height="100%" objectFit="cover" />
+                <YStack
+                  width="100%"
+                  aspectRatio={3 / 4}
+                  borderRadius={12}
+                  overflow="hidden"
+                  backgroundColor={ui.surfaceMuted}
+                  position="relative"
+                >
+                  <Image
+                    src={listingImageUrl}
+                    alt={listingTitle}
+                    width="100%"
+                    height="100%"
+                    objectFit="cover"
+                  />
                 </YStack>
               </YStack>
             ) : null}
           </XStack>
         ) : null}
 
+        {busy || status ? (
+          <XStack
+            alignItems="center"
+            gap="$2"
+            padding="$3"
+            borderRadius={12}
+            backgroundColor={ui.surfaceMuted}
+            borderWidth={1}
+            borderColor={ui.borderSubtle}
+          >
+            <Spinner size="small" color={ui.brand} />
+            <Text fontSize={13} color={ui.text} flex={1}>
+              {status || 'Working…'}
+            </Text>
+          </XStack>
+        ) : null}
+
+        {errorMessage ? (
+          <YStack
+            gap="$1.5"
+            padding="$3"
+            borderRadius={12}
+            backgroundColor={ui.surfaceMuted}
+            borderWidth={1}
+            borderColor={ui.danger}
+          >
+            <Text fontSize={13} fontWeight="700" color={ui.danger}>
+              Couldn’t generate preview
+            </Text>
+            <Text fontSize={13} color={ui.text} lineHeight={18}>
+              {errorMessage}
+            </Text>
+          </YStack>
+        ) : null}
+
         {resultUrl ? (
           <YStack gap="$3">
             <Text fontSize={12} fontWeight="600" color={ui.textMuted}>
-              AI preview
+              Preview
             </Text>
-            <YStack width="100%" aspectRatio={3 / 4} borderRadius={16} overflow="hidden" backgroundColor={ui.surfaceMuted}>
-              <Image source={{ uri: resultUrl }} width="100%" height="100%" objectFit="cover" />
+            <YStack
+              width="100%"
+              aspectRatio={3 / 4}
+              borderRadius={16}
+              overflow="hidden"
+              backgroundColor={ui.surfaceMuted}
+              position="relative"
+            >
+              <Image src={resultUrl} alt="Preview result" width="100%" height="100%" objectFit="cover" />
             </YStack>
             <XStack gap="$2" flexWrap="wrap">
               <Button size="$3" tone="outline" onPress={resetFlow} disabled={busy}>
@@ -226,10 +326,9 @@ export function VisualPreviewSheet({
                   payload={{
                     url: listingShareUrl,
                     title: listingTitle,
-                    text:
-                      mode === 'try_on'
-                        ? `I tried on ${listingTitle} with SHEconomy AI`
-                        : `I previewed ${listingTitle} in my space with SHEconomy AI`,
+                    text: isTryOn
+                      ? `I tried on ${listingTitle} with SHEconomy AI`
+                      : `I previewed ${listingTitle} in my space with SHEconomy AI`,
                   }}
                   label="Share listing"
                   size="$3"
@@ -243,7 +342,13 @@ export function VisualPreviewSheet({
             disabled={busy || !picked}
             icon={busy ? <Spinner size="small" /> : <Icons.Sparkles size={16} />}
           >
-            {busy ? 'Generating…' : mode === 'try_on' ? 'Generate try-on' : 'Place in photo'}
+            {busy
+              ? 'Generating…'
+              : !picked
+                ? 'Add a photo to continue'
+                : isTryOn
+                  ? 'Generate try-on'
+                  : `Place on ${placement}`}
           </Button>
         )}
       </YStack>

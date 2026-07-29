@@ -98,6 +98,18 @@ export async function createAtomicMarketplaceCheckout(input: {
   idempotencyKey: string
   notesByShop?: Record<string, string>
   giftShopIds?: string[]
+  /** Shopper's display/settlement currency (e.g. INR). */
+  customerCurrency?: string
+  /** Per-shop converted totals in customer currency for order records. */
+  customerAmountsByShop?: Record<
+    string,
+    {
+      subtotal_amount: number
+      shipping_amount: number
+      discount_amount: number
+      total_amount: number
+    }
+  >
 }): Promise<{ data: AtomicCheckoutResult | null; error: string | null }> {
   const { data, error } = await supabase.rpc('atomic_marketplace_checkout' as never, {
     p_cart_id: input.cartId,
@@ -108,6 +120,8 @@ export async function createAtomicMarketplaceCheckout(input: {
     p_idempotency_key: input.idempotencyKey,
     p_notes_by_shop: input.notesByShop ?? {},
     p_gift_shop_ids: input.giftShopIds ?? [],
+    p_customer_currency: input.customerCurrency ?? null,
+    p_customer_amounts_by_shop: input.customerAmountsByShop ?? {},
   } as never)
 
   if (error) return { data: null, error: error.message }
@@ -123,6 +137,25 @@ export async function resumeCheckoutPayment(checkoutGroupId: string) {
 export async function cancelCheckoutPayment(checkoutGroupId: string) {
   return supabase.rpc('cancel_checkout_payment' as never, {
     p_checkout_group_id: checkoutGroupId,
+  } as never)
+}
+
+/**
+ * Called from the Razorpay return URL handler after the buyer completes payment.
+ * Promotes the checkout group + order + items from 'awaiting_payment' → 'pending'
+ * and marks order_payments as paid.
+ */
+export async function confirmCheckoutPayment(
+  checkoutGroupId: string,
+  providerReference: string,
+  provider = 'razorpay',
+) {
+  return supabase.rpc('process_checkout_payment_webhook' as never, {
+    p_checkout_group_id: checkoutGroupId,
+    p_provider: provider,
+    p_provider_reference: providerReference,
+    p_status: 'paid',
+    p_metadata: { source: 'return_url' },
   } as never)
 }
 

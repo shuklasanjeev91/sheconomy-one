@@ -2,12 +2,12 @@ import 'jsr:@supabase/functions-js/edge-runtime.d.ts'
 import { createClient } from 'jsr:@supabase/supabase-js@2'
 import { EgressClient, EncodedFileOutput, EncodedFileType } from 'npm:livekit-server-sdk@2'
 
-import { corsHeaders, jsonResponse } from '../_shared/cors.ts'
+import { corsHeaders, jsonResponse } from '~/supabase/functions/_shared/cors.ts'
 import {
   extractEgressFileInfo,
   mapEgressStatusToRecordingStatus,
-} from '../_shared/recording-helpers.ts'
-import { readEgressS3Config } from '../_shared/s3-sign.ts'
+} from '~/supabase/functions/_shared/recording-helpers.ts'
+import { readEgressS3Config } from '~/supabase/functions/_shared/s3-sign.ts'
 
 type Action = 'start' | 'stop' | 'status' | 'reconcile'
 

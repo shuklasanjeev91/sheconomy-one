@@ -61,7 +61,8 @@ import {
 } from '~/components/ui'
 import { ShareButton } from '~/components/share'
 import { updateProfileImages } from '~/community/lib/profile-sections'
-import { pickImages, pickedImageToBlob, type PickedImage } from '~/lib/media/pick-image'
+import { readPickedImageBytes, type PickedImage } from '~/lib/media/pick-image'
+import { cropIfNeeded, pickImagesWithCrop } from '~/lib/media/pick-and-crop'
 import { refreshProfiles } from '~/lib/profile/refresh'
 import { patchCachedProfile } from '~/lib/profile/profile-cache'
 import { communityRoutes } from '~/lib/routes'
@@ -411,7 +412,10 @@ function ProfileHero({
   const toast = useAppToast()
   const [uploadingAvatar, setUploadingAvatar] = useState(false)
   const [uploadingCover, setUploadingCover] = useState(false)
-  /** Optimistic local URL so the photo appears immediately after upload. */
+  /**
+   * Optimistic URL — local file/blob while uploading, then the public URL until
+   * `profile.avatar_url` / `cover_url` catch up from useProfile refresh.
+   */
   const [localAvatarUrl, setLocalAvatarUrl] = useState<string | null>(null)
   const [localCoverUrl, setLocalCoverUrl] = useState<string | null>(null)
   const { progress: uploadProgress, track: trackUpload, reset: resetUpload } = useUploadProgress()
@@ -420,62 +424,99 @@ function ProfileHero({
   const coverUrl = localCoverUrl ?? profile.cover_url
 
   useEffect(() => {
-    setLocalAvatarUrl(null)
-  }, [profile.avatar_url])
+    if (!localAvatarUrl) return
+    const remote = profile.avatar_url?.trim()
+    if (!remote) return
+    // Only drop the optimistic URL once the signed-in profile has the same
+    // remote URL. Do NOT clear just because some other http avatar (e.g. Google
+    // social fallback) is already present — that wiped the new photo.
+    if (remote === localAvatarUrl.trim()) {
+      setLocalAvatarUrl(null)
+    }
+  }, [profile.avatar_url, localAvatarUrl])
 
   useEffect(() => {
-    setLocalCoverUrl(null)
-  }, [profile.cover_url])
+    if (!localCoverUrl) return
+    const remote = profile.cover_url?.trim()
+    if (!remote) return
+    if (remote === localCoverUrl.trim()) {
+      setLocalCoverUrl(null)
+    }
+  }, [profile.cover_url, localCoverUrl])
 
   async function handleUploadImage(kind: 'avatar' | 'cover', first: PickedImage) {
     if (!profile.id) return
     const setBusy = kind === 'avatar' ? setUploadingAvatar : setUploadingCover
+    const setLocal = kind === 'avatar' ? setLocalAvatarUrl : setLocalCoverUrl
     setBusy(true)
     trackUpload(1)
+    // Show the picked photo immediately (before storage finishes).
+    if (first.uri) setLocal(first.uri)
     try {
-      const blob = await pickedImageToBlob(first)
+      // Read bytes once — never re-read a RN Blob (second read can be empty while
+      // upload still "succeeds" and leaves a public URL that shows as initials).
+      const bytes = await readPickedImageBytes(first)
+      if (!bytes.byteLength) {
+        setLocal(null)
+        toast.show('Could not read that image', { tone: 'danger' })
+        return
+      }
       const upload = kind === 'avatar' ? uploadProfileAvatarImage : uploadProfileCoverImage
       const { data, error } = await upload(
         profile.id,
         {
-          blob,
-          mimeType: first.mimeType || blob.type || 'image/jpeg',
-          fileName: first.fileName,
+          arrayBuffer: bytes.buffer,
+          mimeType: bytes.mimeType || first.mimeType || 'image/jpeg',
+          fileName: first.fileName ?? bytes.fileName,
         },
         { onProgress: trackUpload },
       )
       if (error || !data?.publicUrl) {
+        setLocal(null)
         toast.show('Could not upload image', { tone: 'danger', message: error ?? undefined })
         return
       }
       const publicUrl = data.publicUrl
-      if (kind === 'avatar') setLocalAvatarUrl(publicUrl)
-      else setLocalCoverUrl(publicUrl)
+      setLocal(publicUrl)
 
       const { error: updateError, data: saved } = await updateProfileImages(
         profile.id,
         kind === 'avatar' ? { avatar_url: publicUrl } : { cover_url: publicUrl },
       )
       if (updateError || !saved) {
-        if (kind === 'avatar') setLocalAvatarUrl(null)
-        else setLocalCoverUrl(null)
+        setLocal(null)
         toast.show('Could not update photo', { tone: 'danger', message: updateError ?? undefined })
         return
       }
 
+      const nextAvatar =
+        kind === 'avatar'
+          ? (saved.avatar_url?.trim() || publicUrl)
+          : (saved.avatar_url ?? profile.avatar_url)
+      const nextCover =
+        kind === 'cover'
+          ? (saved.cover_url?.trim() || publicUrl)
+          : (saved.cover_url ?? profile.cover_url)
+
+      // Keep showing the saved public URL until useProfile catches up.
+      if (kind === 'avatar') setLocal(nextAvatar)
+      else setLocal(nextCover ?? publicUrl)
+
       // Keep the signed-in profile cache in sync so tab bar / composer pick up the photo.
       await patchCachedProfile(profile.id, {
-        avatar_url: saved.avatar_url,
-        cover_url: saved.cover_url,
+        avatar_url: nextAvatar ?? null,
+        cover_url: nextCover ?? null,
       })
       toast.show(kind === 'avatar' ? 'Profile photo updated' : 'Cover photo updated', {
         tone: 'success',
       })
       refreshProfiles()
-    } catch {
-      if (kind === 'avatar') setLocalAvatarUrl(null)
-      else setLocalCoverUrl(null)
-      toast.show('Could not update photo', { tone: 'danger' })
+    } catch (err) {
+      setLocal(null)
+      toast.show('Could not update photo', {
+        tone: 'danger',
+        message: err instanceof Error ? err.message : undefined,
+      })
     } finally {
       setBusy(false)
       resetUpload()
@@ -487,7 +528,12 @@ function ProfileHero({
     const busy = kind === 'avatar' ? uploadingAvatar : uploadingCover
     if (busy) return
     try {
-      const picked = await pickImages({ multiple: false, maxCount: 1 })
+      const picked = await pickImagesWithCrop({
+        multiple: false,
+        maxCount: 1,
+        aspect: kind === 'avatar' ? 'avatar' : 'cover',
+        cropTitle: kind === 'avatar' ? 'Profile photo' : 'Cover photo',
+      })
       const first = picked[0]
       if (!first) return
       await handleUploadImage(kind, first)
@@ -512,7 +558,11 @@ function ProfileHero({
         label="Drop a cover photo"
         onDrop={(items) => {
           const first = items[0]
-          if (first) void handleUploadImage('cover', first)
+          if (!first) return
+          void (async () => {
+            const cropped = await cropIfNeeded(first, 'cover', { cropTitle: 'Cover photo' })
+            if (cropped) void handleUploadImage('cover', cropped)
+          })()
         }}
       >
         <CoverBanner
@@ -529,7 +579,6 @@ function ProfileHero({
           marginTop={-52}
           justifyContent="space-between"
           alignItems="flex-end"
-          flexWrap="wrap"
           gap="$3"
           width="100%"
         >
@@ -542,7 +591,11 @@ function ProfileHero({
             borderRadius={999}
             onDrop={(items) => {
               const first = items[0]
-              if (first) void handleUploadImage('avatar', first)
+              if (!first) return
+              void (async () => {
+                const cropped = await cropIfNeeded(first, 'avatar', { cropTitle: 'Profile photo' })
+                if (cropped) void handleUploadImage('avatar', cropped)
+              })()
             }}
           >
           <YStack
@@ -553,7 +606,7 @@ function ProfileHero({
           >
             <Avatar
               name={displayName}
-              src={avatarUrl}
+              src={avatarUrl ?? undefined}
               size="$10"
               borderWidth={4}
               borderColor={ui.surface}
@@ -582,20 +635,25 @@ function ProfileHero({
             ) : null}
           </YStack>
           </MediaDropZone>
-          {uploadingAvatar && uploadProgress != null && uploadProgress > 0 ? (
-            <YStack width="100%" maxWidth={280} marginTop="$2">
-              <UploadProgressBar progress={uploadProgress} label="Uploading photo…" compact />
-            </YStack>
-          ) : null}
+        </XStack>
+
+        {uploadingAvatar && uploadProgress != null && uploadProgress > 0 ? (
+          <YStack width="100%" maxWidth={280} marginTop="$2">
+            <UploadProgressBar progress={uploadProgress} label="Uploading photo…" compact />
+          </YStack>
+        ) : null}
+
+        {(isOwnProfile || headerActions) ? (
           <XStack
             gap="$2"
             flexWrap="wrap"
-            paddingTop="$2"
+            paddingTop="$3"
             alignItems="center"
-            flex={1}
-            justifyContent="flex-end"
-            minWidth={0}
+            width="100%"
+            justifyContent="flex-start"
+            flexDirection="row"
           >
+            {headerActions}
             {isOwnProfile ? (
               <ShareButton
                 variant="outline"
@@ -610,9 +668,8 @@ function ProfileHero({
                 }}
               />
             ) : null}
-            {headerActions}
           </XStack>
-        </XStack>
+        ) : null}
 
         <YStack gap="$2" marginTop="$3">
           <XStack gap="$2" alignItems="center" flexWrap="wrap">

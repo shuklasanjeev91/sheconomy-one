@@ -333,6 +333,62 @@ export async function fetchProgramCategories(): Promise<{
   return { categories, error: null }
 }
 
+/** Distinct language codes for published programs (optionally scoped by media type). */
+export async function fetchPublishedProgramLanguages(options?: {
+  mediaType?: 'video' | 'audio'
+}): Promise<{ languages: string[]; error: string | null }> {
+  let query = supabase
+    .from('programs')
+    .select('language')
+    .not('published_at', 'is', null)
+
+  if (options?.mediaType) {
+    query = query.eq('media_type', options.mediaType)
+  }
+
+  const { data, error } = await query.limit(1000)
+
+  if (error) {
+    return { languages: [], error: error.message }
+  }
+
+  const codes = new Set<string>()
+  for (const row of data ?? []) {
+    const code = (typeof row.language === 'string' ? row.language : 'en').trim().toLowerCase() || 'en'
+    codes.add(code)
+  }
+
+  return {
+    languages: Array.from(codes).sort((a, b) =>
+      formatProgramLanguageLabel(a).localeCompare(formatProgramLanguageLabel(b)),
+    ),
+    error: null,
+  }
+}
+
+function formatProgramLanguageLabel(code: string) {
+  // Keep labels in sync with `~/class/lib/languages` without a circular import.
+  const labels: Record<string, string> = {
+    en: 'English',
+    hi: 'Hindi',
+    es: 'Spanish',
+    fr: 'French',
+    de: 'German',
+    pt: 'Portuguese',
+    ar: 'Arabic',
+    bn: 'Bengali',
+    ta: 'Tamil',
+    te: 'Telugu',
+    mr: 'Marathi',
+    gu: 'Gujarati',
+    kn: 'Kannada',
+    ml: 'Malayalam',
+    pa: 'Punjabi',
+    ur: 'Urdu',
+  }
+  return labels[code] ?? code.toUpperCase()
+}
+
 export const PROGRAM_PAGE_SIZE = 24
 
 export type ProgramsPageResult = {

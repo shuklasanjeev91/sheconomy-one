@@ -1,7 +1,7 @@
 import { useDispatch, useSelector, useStore } from 'react-redux'
 import type { TypedUseSelectorHook } from 'react-redux'
 
-import type { AppDispatch, RootState, store } from './index'
+import type { AppDispatch, RootState, store } from '~/lib/store/index'
 
 /** Typed `useDispatch` — knows about async thunks. */
 export const useAppDispatch = () => useDispatch<AppDispatch>()

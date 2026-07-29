@@ -1,14 +1,16 @@
 import { useMemo, useState } from 'react'
 
-import { Button, Icons, XStack } from '~/components/ui'
+import { Button, Icons, Text, XStack, YStack } from '~/components/ui'
 import {
   isVisualPreviewEnabled,
   resolveVisualPreviewMode,
+  suggestVisualPreviewPlacement,
   type VisualPreviewMode,
+  type VisualPreviewPlacement,
 } from '~/lib/listing/visual-preview'
 import { useAppUi } from '~/lib/theme/useAppUi'
 
-import { VisualPreviewSheet } from './VisualPreviewSheet'
+import { VisualPreviewSheet } from '~/commerce/components/visual-preview/VisualPreviewSheet'
 
 type ListingVisualPreviewButtonsProps = {
   listingId: string
@@ -34,39 +36,57 @@ export function ListingVisualPreviewButtons({
   const ui = useAppUi()
   const [openMode, setOpenMode] = useState<VisualPreviewMode | null>(null)
 
-  const mode = useMemo(() => {
-    if (!isVisualPreviewEnabled()) return null
-    return resolveVisualPreviewMode({
+  const listingLike = useMemo(
+    () => ({
       category,
+      title: listingTitle,
       tags,
       listing_metadata: listingMetadata,
       hasPrimaryImage,
-    })
-  }, [category, tags, listingMetadata, hasPrimaryImage])
+    }),
+    [category, listingTitle, tags, listingMetadata, hasPrimaryImage],
+  )
+
+  const mode = useMemo(() => {
+    if (!isVisualPreviewEnabled()) return null
+    return resolveVisualPreviewMode(listingLike)
+  }, [listingLike])
+
+  const defaultPlacement: VisualPreviewPlacement = useMemo(
+    () => suggestVisualPreviewPlacement(listingLike),
+    [listingLike],
+  )
 
   if (!mode) return null
 
-  const label = mode === 'try_on' ? 'Try on' : 'View in your room'
-  const icon =
-    mode === 'try_on' ? (
-      <Icons.Sparkles size={16} color={ui.brand} />
-    ) : (
-      <Icons.Home size={16} color={ui.brand} />
-    )
+  const isTryOn = mode === 'try_on'
+  const label = isTryOn ? 'Try on' : 'View in your room'
+  const subtitle = isTryOn
+    ? 'See how it looks on you'
+    : 'Preview on your wall, floor, or table'
+  const icon = isTryOn ? (
+    <Icons.Sparkles size={16} color={ui.brand} />
+  ) : (
+    <Icons.Home size={16} color={ui.brand} />
+  )
 
   return (
     <>
-      <XStack gap="$2" flexWrap="wrap">
+      <YStack gap="$1.5" width="100%">
         <Button
           size="$3"
           tone="outline"
           icon={icon}
           onPress={() => setOpenMode(mode)}
           borderColor={ui.brand}
+          alignSelf="flex-start"
         >
           {label}
         </Button>
-      </XStack>
+        <Text fontSize={12} color={ui.textMuted}>
+          {subtitle}
+        </Text>
+      </YStack>
 
       {openMode ? (
         <VisualPreviewSheet
@@ -77,8 +97,10 @@ export function ListingVisualPreviewButtons({
           mode={openMode}
           listingId={listingId}
           listingTitle={listingTitle}
+          listingCategory={category}
           listingImageUrl={listingImageUrl}
           listingShareUrl={listingShareUrl}
+          defaultPlacement={defaultPlacement}
         />
       ) : null}
     </>

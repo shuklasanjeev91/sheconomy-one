@@ -4,8 +4,8 @@ import { PhoneInput } from '~/components/forms/PhoneInput'
 import type { FormFieldState } from '~/hooks/useFormValidation'
 import type { Country } from '~/lib/phone/countries'
 
-import { Field } from './Input'
-import { Input, TextArea } from './Input'
+import { Field } from '~/components/ui/Input'
+import { Input, TextArea } from '~/components/ui/Input'
 
 type SharedProps = {
   label?: string

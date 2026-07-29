@@ -6,7 +6,7 @@
  * applied by the service against the item's *current* status.
  */
 
-import { ORDER_STATUS, PAYMENT_MODE } from './order.constants'
+import { ORDER_STATUS, PAYMENT_MODE } from '~/lib/orders/order.constants'
 import { z } from '~/lib/zod'
 
 const orderStatusValues = Object.values(ORDER_STATUS) as [string, ...string[]]

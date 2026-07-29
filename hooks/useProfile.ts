@@ -37,6 +37,7 @@ export type Profile = Pick<
   | 'interests'
   | 'profile_completion_percentage'
   | 'gender'
+  | 'phone'
 >
 
 const PROFILE_FETCH_TIMEOUT_MS = 2_500
@@ -98,6 +99,14 @@ export function useProfile() {
       setProfile(null)
     }
 
+    // Apply in-memory cache synchronously on refresh (e.g. right after avatar upload)
+    // so tab bar / menus update before the network round-trip finishes.
+    const warm = peekCachedProfile(userId)
+    if (warm) {
+      setProfile(withResolvedAvatar(warm, user))
+      setProfileUserId(userId)
+    }
+
     void readCachedProfile(userId).then((cached) => {
       if (cancelled || fetchGen.current !== gen || !cached) return
       setProfile(withResolvedAvatar(cached, user))
@@ -116,7 +125,7 @@ export function useProfile() {
     void supabase
       .from('profiles')
       .select(
-        'id, role, full_name, username, email, avatar_url, cover_url, headline, bio, is_verified, follower_count, following_count, connections_count, location, industry, occupation, business_name, website_url, portfolio_url, interests, profile_completion_percentage, gender',
+        'id, role, full_name, username, email, phone, avatar_url, cover_url, headline, bio, is_verified, follower_count, following_count, connections_count, location, industry, occupation, business_name, website_url, portfolio_url, interests, profile_completion_percentage, gender, date_of_birth, marriage_anniversary',
       )
       .eq('id', userId)
       .maybeSingle()
@@ -128,7 +137,22 @@ export function useProfile() {
           setError(profileError.message)
           setProfile(null)
         } else {
-          const resolved = withResolvedAvatar(data, user)
+          const fromDb = normalizeAvatarSrc(data?.avatar_url)
+          const warmNow = peekCachedProfile(userId)
+          const warmAvatar = normalizeAvatarSrc(warmNow?.avatar_url)
+          const warmIsUploadedStorage =
+            !!warmAvatar &&
+            warmNow?.id === userId &&
+            warmAvatar.includes('/storage/v1/object/public/')
+
+          // If the DB row is still empty but we just patched a storage avatar into
+          // cache, keep that photo instead of falling back to a social identity
+          // picture (which would make the upload look like it "didn't stick").
+          const base =
+            !fromDb && warmIsUploadedStorage && data
+              ? { ...data, avatar_url: warmAvatar }
+              : data
+          const resolved = withResolvedAvatar(base, user)
           setProfile(resolved)
           setError(null)
           // Cache the resolved row (incl. social avatar fallback) so tab bar /

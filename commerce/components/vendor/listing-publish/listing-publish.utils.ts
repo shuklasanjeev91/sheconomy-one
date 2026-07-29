@@ -25,7 +25,7 @@ import {
   LISTING_PUBLISH_IMAGE_HINTS,
   LISTING_PUBLISH_STEP_IDS,
   type ListingPublishStepId,
-} from './listing-publish.constants'
+} from '~/commerce/components/vendor/listing-publish/listing-publish.constants'
 
 export function countWords(text: string): number {
   const trimmed = text.trim()

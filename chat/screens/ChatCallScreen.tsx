@@ -3,10 +3,17 @@ import { Platform } from 'react-native'
 import { useRouter } from 'one'
 
 import type { CallType } from '~/chat/lib/calls'
-import { endCallsForMeetingCode, fetchCallById, mapCall, updateCallStatus } from '~/chat/lib/calls'
+import {
+  endCallsForMeetingCode,
+  fetchCallById,
+  fetchCallerProfile,
+  mapCall,
+  updateCallStatus,
+} from '~/chat/lib/calls'
+import { CallOverlay } from '~/chat/components/CallOverlay'
 import { Avatar, Icons, Spinner, Text, XStack, YStack } from '~/components/ui'
 import { ScreenCenter, ScreenFill } from '~/components/layout'
-import { RequireAuth } from '~/components/auth/RequireAuth'
+import { AuthSignInFlow } from '~/components/auth/AuthSignInFlow'
 import { LiveKitMeetingRoom, type LiveKitMediaControls } from '~/co-work/components/LiveKitMeetingRoom'
 import {
   endMeeting,
@@ -27,6 +34,8 @@ type ChatCallScreenProps = {
   code: string
   callType: CallType
   callId?: string
+  /** Opened from an incoming-call push — show accept UI before joining. */
+  needsAnswer?: boolean
 }
 
 const ACCEPT = brandColors.primary
@@ -40,7 +49,7 @@ function formatDuration(totalSeconds: number) {
   return `${minutes}:${seconds.toString().padStart(2, '0')}`
 }
 
-export function ChatCallScreen({ code, callType, callId }: ChatCallScreenProps) {
+export function ChatCallScreen({ code, callType, callId, needsAnswer = false }: ChatCallScreenProps) {
   const router = useRouter()
   const { user, profile, isAuthenticated, isLoading } = useProfile()
   const { safeTop, safeBottom } = useAppLayout()
@@ -50,18 +59,35 @@ export function ChatCallScreen({ code, callType, callId }: ChatCallScreenProps) 
   const [joined, setJoined] = useState(false)
   const [elapsed, setElapsed] = useState(0)
   const [resolvedCallType, setResolvedCallType] = useState<CallType>(callType)
+  const [awaitingAnswer, setAwaitingAnswer] = useState(needsAnswer)
+  const [ringerName, setRingerName] = useState('Incoming call')
+  const [ringerAvatar, setRingerAvatar] = useState<string | null>(null)
   const hungUpRef = useRef(false)
 
   useEffect(() => {
     setResolvedCallType(callType)
   }, [callType])
 
+  useEffect(() => {
+    setAwaitingAnswer(needsAnswer)
+  }, [needsAnswer])
+
   // Prefer DB truth over flaky query params (native routers sometimes drop `?type=`).
   useEffect(() => {
     if (!callId) return
     let cancelled = false
     void fetchCallById(callId).then((row) => {
-      if (!cancelled && row) setResolvedCallType(row.callType)
+      if (cancelled || !row) return
+      setResolvedCallType(row.callType)
+      if (row.status !== 'ringing') {
+        setAwaitingAnswer(false)
+      }
+      void fetchCallerProfile(row.callerId).then((caller) => {
+        if (!cancelled) {
+          setRingerName(caller.name)
+          setRingerAvatar(caller.avatarUrl)
+        }
+      })
     })
     return () => {
       cancelled = true
@@ -116,7 +142,7 @@ export function ChatCallScreen({ code, callType, callId }: ChatCallScreenProps) 
   }, [code])
 
   useEffect(() => {
-    if (!meeting || !user) return
+    if (!meeting || !user || awaitingAnswer) return
     let cancelled = false
     async function join() {
       try {
@@ -131,7 +157,7 @@ export function ChatCallScreen({ code, callType, callId }: ChatCallScreenProps) 
     return () => {
       cancelled = true
     }
-  }, [meeting, user])
+  }, [meeting, user, awaitingAnswer])
 
   useEffect(() => {
     if (!joined) return
@@ -157,7 +183,7 @@ export function ChatCallScreen({ code, callType, callId }: ChatCallScreenProps) 
             updated.status === 'missed'
           ) {
             hungUpRef.current = true
-            router.replace(chatRoutes.home)
+            router.push(chatRoutes.home)
           }
         },
       )
@@ -185,7 +211,7 @@ export function ChatCallScreen({ code, callType, callId }: ChatCallScreenProps) 
     } catch {
       // Best-effort hangup — still leave the UI.
     }
-    router.replace(chatRoutes.home)
+    router.push(chatRoutes.home)
   }, [callId, meeting, router, user])
 
   if (isLoading && !user) {
@@ -197,7 +223,45 @@ export function ChatCallScreen({ code, callType, callId }: ChatCallScreenProps) 
   }
 
   if (!isAuthenticated || !user) {
-    return <RequireAuth redirectTo={String(chatRoutes.call(code, { type: callType, callId }))} />
+    return (
+      <AuthSignInFlow
+        returnTo={String(chatRoutes.call(code, { type: callType, callId }))}
+      />
+    )
+  }
+
+  if (awaitingAnswer) {
+    return (
+      <CallOverlay
+        name={ringerName}
+        avatarUrl={ringerAvatar}
+        callType={resolvedCallType}
+        variant="incoming"
+        statusText={
+          resolvedCallType === 'video' ? 'Incoming video call…' : 'Incoming voice call…'
+        }
+        onAccept={() => {
+          void (async () => {
+            try {
+              if (callId) await updateCallStatus(callId, 'active')
+              setAwaitingAnswer(false)
+            } catch {
+              setAwaitingAnswer(false)
+            }
+          })()
+        }}
+        onDecline={() => {
+          void (async () => {
+            try {
+              if (callId) await updateCallStatus(callId, 'declined')
+            } catch {
+              // ignore
+            }
+            router.push(chatRoutes.home)
+          })()
+        }}
+      />
+    )
   }
 
   if (loading) {
@@ -221,7 +285,7 @@ export function ChatCallScreen({ code, callType, callId }: ChatCallScreenProps) 
           color={ACCEPT}
           fontWeight="700"
           cursor="pointer"
-          onPress={() => router.replace(chatRoutes.home)}
+          onPress={() => router.push(chatRoutes.home)}
         >
           Back to chats
         </Text>

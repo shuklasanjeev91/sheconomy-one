@@ -3,18 +3,18 @@ import { Platform } from 'react-native'
 import { inferCountryFromLocale } from '~/commerce/lib/infer-country-from-locale'
 import { getCountryName, getDefaultCountryCode } from '~/lib/geo/data'
 
-import { writeStoredUserGeo } from './geo-storage'
+import { writeStoredUserGeo } from '~/lib/location/geo-storage'
 import {
   expoAccuracyForPreference,
   getLocationPermissionStatus,
   permissionDeniedMessage,
   requestForegroundLocationPermission,
-} from './permissions'
+} from '~/lib/location/permissions'
 import type {
   CurrentPositionResult,
   LocationAccuracyPreference,
   LocationPermissionStatus,
-} from './types'
+} from '~/lib/location/types'
 
 type GetCurrentPositionOptions = {
   accuracy?: LocationAccuracyPreference
@@ -131,7 +131,7 @@ export async function getCurrentPosition(
       }
     }
 
-    const Location = await import('expo-location')
+    const Location = await import('~/lib/location/expo-location-module')
     const position = await Location.getCurrentPositionAsync({
       accuracy: expoAccuracyForPreference(accuracy) as never,
     })

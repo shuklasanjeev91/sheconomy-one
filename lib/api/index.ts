@@ -1,2 +1,2 @@
-export * from './result'
-export { logger } from './logger'
+export * from '~/lib/api/result'
+export { logger } from '~/lib/api/logger'

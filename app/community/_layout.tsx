@@ -1,12 +1,6 @@
 import { Slot } from 'one'
 
-import { CommunityComposerHost } from '~/community/components/CommunityComposerHost'
-
+/** Community section layout — composer overlay lives in AppShell (global). */
 export default function CommunityLayout() {
-  return (
-    <>
-      <Slot />
-      <CommunityComposerHost />
-    </>
-  )
+  return <Slot />
 }

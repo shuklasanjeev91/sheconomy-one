@@ -7,7 +7,7 @@ import {
   routes,
 } from '~/lib/routes'
 
-import type { AiProduct, AiRouteContext } from './types'
+import type { AiProduct, AiRouteContext } from '~/lib/ai/types'
 
 function normalizePath(pathname: string) {
   if (!pathname) return '/'
@@ -66,9 +66,14 @@ export function resolveAiRouteContext(pathname: string): AiRouteContext {
   if (isCoWorkPath(path)) {
     const meetingCode =
       segments[0] === 'co-work' && segments[1] === 'meeting' && segments[2] ? segments[2] : undefined
+    let contextPage = 'home'
+    if (meetingCode) contextPage = 'meeting'
+    else if (path.includes('/schedule')) contextPage = 'schedule'
+    else if (path.includes('/join')) contextPage = 'join'
+    else if (path.includes('/meetings')) contextPage = 'meetings'
     return {
       product: 'cowork',
-      contextPage: meetingCode ? 'meeting' : 'home',
+      contextPage,
       context: { route: path, ...(meetingCode ? { meeting_id: meetingCode } : {}) },
     }
   }

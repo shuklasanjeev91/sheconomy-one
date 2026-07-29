@@ -1,12 +1,6 @@
 import { Slot } from 'one'
 
-import { ChatActionsHost } from '~/chat/components/ChatActionsHost'
-
+/** Chat section layout — new-chat sheet lives in AppShell (global). */
 export default function ChatLayout() {
-  return (
-    <>
-      <Slot />
-      <ChatActionsHost />
-    </>
-  )
+  return <Slot />
 }

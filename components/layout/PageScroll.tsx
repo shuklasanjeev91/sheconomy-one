@@ -25,7 +25,7 @@ type PageScrollProps = {
  * and kills window scrolling.
  */
 export function PageScroll({ children, onRefresh, refreshing }: PageScrollProps) {
-  const { isDesktopWeb, mobileTabBarOffset } = useAppLayout()
+  const { isDesktop, isDesktopWeb, mobileTabBarOffset } = useAppLayout()
   const { setScrollY } = useAppBarScroll()
   const ui = useAppUi()
   const { refreshControl, webPullHandlers, runRefresh } = usePullToRefresh({
@@ -46,11 +46,10 @@ export function PageScroll({ children, onRefresh, refreshing }: PageScrollProps)
   if (useDocumentScroll) {
     return (
       <YStack
-        flexGrow={1}
-        flexShrink={0}
         width="100%"
         maxWidth="100%"
         alignSelf="stretch"
+        flexShrink={0}
         backgroundColor={ui.background}
       >
         {onRefresh ? (
@@ -71,10 +70,8 @@ export function PageScroll({ children, onRefresh, refreshing }: PageScrollProps)
     )
   }
 
-  // The bottom tab bar is a fixed/absolute opaque overlay, so the scroll
-  // viewport is inset by its height (via marginBottom) to end exactly at the
-  // tab bar's top edge — otherwise content scrolls behind (and is hidden by) it.
-  const bottomInset = isDesktopWeb ? 0 : mobileTabBarOffset
+  // Reserve space only when the mobile tab dock is actually shown (not desktop).
+  const bottomInset = isDesktop ? 0 : mobileTabBarOffset
 
   return (
     <ScrollView

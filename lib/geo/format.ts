@@ -1,5 +1,5 @@
-import { getCountryName, getStateByName, resolveCountryCode } from './data'
-import type { GeoLocationParts } from './types'
+import { getCountryName, getStateByName, resolveCountryCode } from '~/lib/geo/data'
+import type { GeoLocationParts } from '~/lib/geo/types'
 
 export function formatGeoLocation(parts: Partial<GeoLocationParts>): string {
   const countryCode = parts.countryCode ? resolveCountryCode(parts.countryCode) : ''

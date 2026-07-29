@@ -131,7 +131,7 @@ export function StoryComposerScreen() {
       await clearFormDraft(STORY_DRAFT_KEY)
       toast.show('Story posted', { tone: 'success' })
       refreshStories()
-      router.replace(communityRoutes.home)
+      router.push(communityRoutes.home)
     } finally {
       setIsPosting(false)
       resetUpload()
@@ -223,10 +223,11 @@ export function StoryComposerScreen() {
           <>
             <ImageUploadField
               label="Story media"
-              hint="Upload a photo or video, or drag & drop on web."
+              hint="Upload a photo or video, or drag & drop on web. Photos use 9:16."
               accept="media"
               value={storyMedia}
               onChange={setStoryMedia}
+              aspect="story"
               uploadProgress={uploadProgress}
               uploadLabel={isVideoStory ? 'Uploading video…' : 'Uploading story…'}
             />

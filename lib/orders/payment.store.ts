@@ -11,8 +11,8 @@ import { createAsyncThunk, createSlice, current, type PayloadAction } from '@red
 
 import type { AppDispatch, RootState } from '~/lib/store'
 
-import { PAYMENT_MODE, PAYMENT_STATUS, type PaymentStatus } from './order.constants'
-import * as paymentService from './payment.service'
+import { PAYMENT_MODE, PAYMENT_STATUS, type PaymentStatus } from '~/lib/orders/order.constants'
+import * as paymentService from '~/lib/orders/payment.service'
 import type {
   CODCollectionInput,
   OrderPayment,
@@ -20,7 +20,7 @@ import type {
   PaymentAnalyticsFilters,
   ProcessPaymentInput,
   UpdatePaymentStatusMetadata,
-} from './payment.type'
+} from '~/lib/orders/payment.type'
 
 // ============= STATE =============
 

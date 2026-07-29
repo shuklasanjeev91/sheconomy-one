@@ -11,7 +11,7 @@ import type { ShopSummary } from '~/lib/supabase/commerce'
 import { routes } from '~/lib/routes'
 import { useAppUi } from '~/lib/theme/useAppUi'
 
-import { StarRating } from './StarRating'
+import { StarRating } from '~/commerce/components/StarRating'
 
 type ShopSpotlightCardProps = {
   shop: ShopSummary

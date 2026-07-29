@@ -13,8 +13,8 @@ import {
   PAYMENT_ACCOUNT_STATUS,
   PAYMENT_LOG_DEFAULT_LIMIT,
   type PaymentProviderId,
-} from './payment.constants'
-import * as paymentService from './payment.service'
+} from '~/lib/payment/payment.constants'
+import * as paymentService from '~/lib/payment/payment.service'
 import type {
   ConnectedProviderSummary,
   LogPaymentEventInput,
@@ -28,12 +28,12 @@ import type {
   PaymentSettingsInput,
   ShopPaymentAccount,
   VendorPaymentSettings,
-} from './payment.type'
+} from '~/lib/payment/payment.type'
 import {
   accountsToConnectedProviders,
   mergeConnectedProviders,
   normalizeProviderId,
-} from './payment.utils'
+} from '~/lib/payment/payment.utils'
 
 // ============= STATE =============
 
@@ -298,6 +298,43 @@ export const logPaymentEvent = createAsyncThunk<
   if (input.refreshShopId) {
     await dispatch(loadPaymentLogs({ shopId: input.refreshShopId }))
   }
+  return result
+})
+
+// ─── Razorpay-specific thunks ──────────────────────────────────────────────────
+
+export const validateRazorpayCredentials = createAsyncThunk<
+  paymentService.RazorpayValidateResult,
+  paymentService.RazorpayValidateInput,
+  ThunkConfig
+>('vendorPayment/validateRazorpay', (input, { rejectWithValue }) =>
+  resolveResponse(paymentService.validateRazorpayCredentials(input), rejectWithValue),
+)
+
+export const connectRazorpay = createAsyncThunk<
+  paymentService.RazorpayConnectResult,
+  paymentService.RazorpayConnectInput,
+  ThunkConfig
+>('vendorPayment/connectRazorpay', async (input, { dispatch, rejectWithValue }) => {
+  const result = await resolveResponse(
+    paymentService.connectRazorpay(input),
+    rejectWithValue,
+  )
+  // Refresh accounts so the UI reflects the new connection
+  await dispatch(loadPaymentAccounts({ shopId: input.shopId }))
+  return result
+})
+
+export const disconnectRazorpay = createAsyncThunk<
+  ShopPaymentAccount[],
+  { shopId: string },
+  ThunkConfig
+>('vendorPayment/disconnectRazorpay', async ({ shopId }, { dispatch, rejectWithValue }) => {
+  const result = await resolveResponse(
+    paymentService.disconnectRazorpay(shopId),
+    rejectWithValue,
+  )
+  await dispatch(loadPaymentAccounts({ shopId }))
   return result
 })
 

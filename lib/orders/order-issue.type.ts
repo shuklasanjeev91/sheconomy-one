@@ -10,8 +10,8 @@
 
 import type { Tables, TablesInsert, TablesUpdate } from '~/lib/supabase'
 
-import type { IssuePriority, IssueStatus, OrderIssueType } from './order.constants'
-import type { OrderServiceResponse } from './vendor-orders.type'
+import type { IssuePriority, IssueStatus, OrderIssueType } from '~/lib/orders/order.constants'
+import type { OrderServiceResponse } from '~/lib/orders/vendor-orders.type'
 
 export type { OrderServiceResponse }
 

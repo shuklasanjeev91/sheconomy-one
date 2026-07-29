@@ -2,7 +2,7 @@ import { SaleEventErrorBoundary } from '~/commerce/components/SaleEventErrorBoun
 import { useAppDispatch } from '~/lib/store/hooks'
 import { loadEvents } from '~/lib/sale-event'
 
-import { AdminSaleEventsManager } from './components/AdminSaleEventsManager'
+import { AdminSaleEventsManager } from '~/app/admin/components/AdminSaleEventsManager'
 
 export default function AdminSaleEventsPage() {
   const dispatch = useAppDispatch()

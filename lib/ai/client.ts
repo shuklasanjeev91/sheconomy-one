@@ -2,8 +2,12 @@ import { supabase } from '~/lib/supabase'
 
 import type {
   AiFeedbackParams,
+  AiSearchParams,
+  AiSearchResult,
   AiSuggestion,
   CommentSuggestionParams,
+  DescribeSearchImageParams,
+  DescribeSearchImageResult,
   FetchAiSuggestionsParams,
   MeetingDraftParams,
   MeetingDraftResult,
@@ -13,21 +17,55 @@ import type {
   SendAiMessageResult,
   ShopDraftParams,
   ShopDraftResult,
-} from './types'
+} from '~/lib/ai/types'
+
+export type { AiSearchResult, DescribeSearchImageResult } from '~/lib/ai/types'
 
 type InvokeErrorPayload = {
   error?: string
+}
+
+/**
+ * supabase-js wraps non-2xx as FunctionsHttpError with a generic message.
+ * The real reason is usually in `data.error` or `error.context` (Response body).
+ */
+async function readFunctionErrorMessage(error: unknown, data: unknown, fallback: string) {
+  if (data && typeof data === 'object' && 'error' in data) {
+    const message = (data as InvokeErrorPayload).error
+    if (typeof message === 'string' && message.trim()) return message.trim()
+  }
+  if (error && typeof error === 'object' && 'context' in error) {
+    const context = (error as { context?: unknown }).context
+    if (typeof Response !== 'undefined' && context instanceof Response) {
+      try {
+        const body = (await context.clone().json()) as InvokeErrorPayload
+        if (typeof body?.error === 'string' && body.error.trim()) return body.error.trim()
+      } catch {
+        // ignore
+      }
+    }
+    if (context && typeof context === 'object' && typeof (context as { json?: unknown }).json === 'function') {
+      try {
+        const body = (await (context as Response).clone().json()) as InvokeErrorPayload
+        if (typeof body?.error === 'string' && body.error.trim()) return body.error.trim()
+      } catch {
+        // ignore
+      }
+    }
+  }
+  if (error instanceof Error && error.message && !/non-2xx/i.test(error.message)) {
+    return error.message
+  }
+  return fallback
 }
 
 async function invokeAiAssist<T>(body: Record<string, unknown>): Promise<T> {
   const { data, error } = await supabase.functions.invoke('ai-assist', { body })
 
   if (error) {
-    const message =
-      (data as InvokeErrorPayload | null)?.error ||
-      error.message ||
-      'SHEconomy AI is unavailable right now.'
-    throw new Error(message)
+    throw new Error(
+      await readFunctionErrorMessage(error, data, 'SHEconomy AI is unavailable right now.'),
+    )
   }
 
   if (data && typeof data === 'object' && 'error' in data && (data as InvokeErrorPayload).error) {
@@ -55,7 +93,14 @@ export async function sendAiMessage(params: SendAiMessageParams): Promise<SendAi
     message: params.message,
     sessionId: params.sessionId ?? null,
     contextPage: params.contextPage,
-    context: params.context ?? {},
+    context: {
+      ...(params.context ?? {}),
+      time_zone:
+        (typeof params.context?.time_zone === 'string' && params.context.time_zone) ||
+        (typeof Intl !== 'undefined'
+          ? Intl.DateTimeFormat().resolvedOptions().timeZone
+          : 'Asia/Kolkata'),
+    },
   })
 
   if (!result?.sessionId || !result.answer) {
@@ -201,6 +246,74 @@ export async function draftPostWithAi(params: PostDraftParams): Promise<PostDraf
   return {
     title: typeof result.title === 'string' && result.title.trim() ? result.title.trim() : null,
     content: String(result.content ?? '').trim(),
+    usedFallback: Boolean(result.usedFallback),
+  }
+}
+
+/** Turn a product photo into marketplace search keywords. */
+export async function describeSearchImage(
+  params: DescribeSearchImageParams,
+): Promise<DescribeSearchImageResult> {
+  const result = await invokeAiAssist<DescribeSearchImageResult>({
+    action: 'describe_search_image',
+    product: 'commerce',
+    message: params.dataUrl,
+  })
+
+  const query = String(result.query ?? '').trim()
+  if (!query) {
+    throw new Error('Could not identify the product. Try another photo.')
+  }
+
+  return {
+    query,
+    category:
+      typeof result.category === 'string' && result.category.trim()
+        ? result.category.trim()
+        : null,
+    attributes: Array.isArray(result.attributes)
+      ? result.attributes.map((item) => String(item).trim()).filter(Boolean).slice(0, 8)
+      : [],
+    usedFallback: Boolean(result.usedFallback),
+  }
+}
+
+/** Natural-language product search with structured filters + listing hits. */
+export async function searchWithAi(params: AiSearchParams): Promise<AiSearchResult> {
+  const result = await invokeAiAssist<AiSearchResult>({
+    action: 'ai_search',
+    product: 'commerce',
+    message: params.message,
+  })
+
+  const searchTerm = String(result.searchTerm ?? '').trim() || params.message.trim()
+  const filters = result.filters && typeof result.filters === 'object' ? result.filters : {}
+
+  return {
+    answer: String(result.answer ?? '').trim() || `Showing results for “${searchTerm}”.`,
+    searchTerm,
+    filters: {
+      minPrice:
+        typeof filters.minPrice === 'number' && Number.isFinite(filters.minPrice)
+          ? filters.minPrice
+          : null,
+      maxPrice:
+        typeof filters.maxPrice === 'number' && Number.isFinite(filters.maxPrice)
+          ? filters.maxPrice
+          : null,
+      listingType:
+        filters.listingType === 'physical' || filters.listingType === 'digital'
+          ? filters.listingType
+          : null,
+      category:
+        typeof filters.category === 'string' && filters.category.trim()
+          ? filters.category.trim()
+          : null,
+    },
+    listingIds: Array.isArray(result.listingIds)
+      ? result.listingIds.map((id) => String(id)).filter(Boolean).slice(0, 24)
+      : [],
+    deepLinks: Array.isArray(result.deepLinks) ? result.deepLinks : [],
     usedFallback: Boolean(result.usedFallback),
   }
 }

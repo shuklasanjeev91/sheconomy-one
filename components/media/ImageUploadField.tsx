@@ -13,11 +13,16 @@ import {
   useAppToast,
 } from '~/components/ui'
 import {
-  captureImage,
   pickMedia,
   pickedImageToBlob,
   type PickedImage,
 } from '~/lib/media/pick-image'
+import {
+  captureImageWithCrop,
+  cropManyIfNeeded,
+  pickImagesWithCrop,
+} from '~/lib/media/pick-and-crop'
+import type { MediaAspectPreset, AspectRatioTuple } from '~/lib/media/aspect'
 import { MediaDropZone } from '~/components/media/MediaDropZone'
 import { UploadProgressBar } from '~/components/media/UploadProgressBar'
 import type { MediaDropAccept } from '~/lib/media/files-from-data-transfer'
@@ -43,6 +48,10 @@ type ImageUploadFieldProps = {
   uploadLabel?: string
   /** What file types the drop zone accepts (default images). */
   accept?: MediaDropAccept
+  /** Crop aspect for image picks (square, cover, 16:9, …). */
+  aspect?: MediaAspectPreset | AspectRatioTuple | null
+  /** Skip crop sheet even when aspect is set. */
+  skipCrop?: boolean
 }
 
 export function ImageUploadField({
@@ -57,6 +66,8 @@ export function ImageUploadField({
   uploadProgress = null,
   uploadLabel = 'Uploading…',
   accept = 'image',
+  aspect = null,
+  skipCrop = false,
 }: ImageUploadFieldProps) {
   const ui = useAppUi()
   const toast = useAppToast()
@@ -85,20 +96,26 @@ export function ImageUploadField({
   })
 
   const mergeDropped = useCallback(
-    (picked: PickedImage[]) => {
+    async (picked: PickedImage[]) => {
       if (!picked.length || disabled) return
+      const isImageOnly = accept === 'image' || !accept
+      const nextItems =
+        isImageOnly && aspect && !skipCrop
+          ? await cropManyIfNeeded(picked, aspect, { cropTitle: label })
+          : picked
+      if (!nextItems.length) return
       if (multiple) {
-        onChange([...value, ...picked].slice(0, maxCount))
+        onChange([...value, ...nextItems].slice(0, maxCount))
       } else {
         value.forEach((item) => {
           if (Platform.OS === 'web' && item.uri.startsWith('blob:')) {
             URL.revokeObjectURL(item.uri)
           }
         })
-        onChange(picked.slice(0, 1))
+        onChange(nextItems.slice(0, 1))
       }
     },
-    [disabled, maxCount, multiple, onChange, value],
+    [accept, aspect, disabled, label, maxCount, multiple, onChange, skipCrop, value],
   )
 
   const handlePick = useCallback(async () => {
@@ -106,11 +123,32 @@ export function ImageUploadField({
 
     setIsPicking(true)
     try {
-      const picked = await pickMedia({
-        accept,
-        multiple,
-        maxCount: maxCount - value.length,
-      })
+      const slots = maxCount - value.length
+      let picked: PickedImage[] = []
+
+      if (accept === 'image' || !accept) {
+        picked = await pickImagesWithCrop({
+          multiple,
+          maxCount: slots,
+          aspect,
+          skipCrop,
+          cropTitle: label,
+        })
+      } else {
+        picked = await pickMedia({
+          accept,
+          multiple,
+          maxCount: slots,
+        })
+        if (aspect && !skipCrop) {
+          const images = picked.filter((item) => !item.mimeType?.startsWith('video/'))
+          const videos = picked.filter((item) => item.mimeType?.startsWith('video/'))
+          const croppedImages = await cropManyIfNeeded(images, aspect, {
+            cropTitle: label,
+          })
+          picked = [...croppedImages, ...videos]
+        }
+      }
 
       if (!picked.length) return
 
@@ -123,13 +161,29 @@ export function ImageUploadField({
     } finally {
       setIsPicking(false)
     }
-  }, [accept, canAddMore, disabled, maxCount, multiple, onChange, toast, value])
+  }, [
+    accept,
+    aspect,
+    canAddMore,
+    disabled,
+    label,
+    maxCount,
+    multiple,
+    onChange,
+    skipCrop,
+    toast,
+    value,
+  ])
 
   const handleCamera = useCallback(async () => {
     if (disabled || !canAddMore || !showCamera) return
     setIsPicking(true)
     try {
-      const shot = await captureImage()
+      const shot = await captureImageWithCrop({
+        aspect: aspect ?? 'square',
+        skipCrop,
+        cropTitle: label,
+      })
       if (!shot) return
       onChange([shot])
     } catch (error) {
@@ -140,7 +194,7 @@ export function ImageUploadField({
     } finally {
       setIsPicking(false)
     }
-  }, [canAddMore, disabled, onChange, showCamera, toast])
+  }, [aspect, canAddMore, disabled, label, onChange, showCamera, skipCrop, toast])
 
   function removeAt(index: number) {
     const next = value.filter((_, i) => i !== index)
@@ -177,7 +231,9 @@ export function ImageUploadField({
         accept={accept}
         multiple={multiple}
         maxCount={slotsLeft || 1}
-        onDrop={mergeDropped}
+        onDrop={(items) => {
+          void mergeDropped(items)
+        }}
         label={
           accept === 'video'
             ? 'Drop video here'

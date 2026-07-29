@@ -7,11 +7,15 @@ const corsHeaders = {
 }
 
 const BUCKET = 'visual-previews'
-const MODEL = 'gemini-2.5-flash-image'
+const DEFAULT_IMAGE_MODELS = [
+  'gemini-2.5-flash-image',
+  'gemini-3.1-flash-image-preview',
+  'gemini-3.1-flash-lite-image',
+]
 const MAX_IMAGE_BYTES = 7 * 1024 * 1024
 const SIGNED_URL_SECONDS = 60 * 60
 const RATE_LIMIT_WINDOW_MS = 60_000
-const RATE_LIMIT_MAX = 8
+const RATE_LIMIT_MAX = 20
 
 type VisualMode = 'try_on' | 'view_in_space'
 type Placement = 'wall' | 'floor' | 'table'
@@ -22,6 +26,8 @@ type RequestBody = {
   /** Storage path inside visual-previews, e.g. `{userId}/inputs/….jpg` */
   userImagePath?: string
   placement?: Placement
+  title?: string
+  category?: string
 }
 
 const rateBuckets = new Map<string, { count: number; resetAt: number }>()
@@ -33,12 +39,43 @@ function jsonResponse(body: unknown, status = 200) {
   })
 }
 
-function getGeminiKey() {
-  return (
-    Deno.env.get('GEMINI_API_KEY')?.trim() ||
-    Deno.env.get('GOOGLE_AI_API_KEY')?.trim() ||
-    ''
-  )
+function normalizeApiKey(raw: string | undefined | null): string {
+  if (!raw) return ''
+  let key = raw.trim()
+  if (
+    (key.startsWith('"') && key.endsWith('"')) ||
+    (key.startsWith("'") && key.endsWith("'"))
+  ) {
+    key = key.slice(1, -1).trim()
+  }
+  if (key.toLowerCase().startsWith('bearer ')) {
+    key = key.slice(7).trim()
+  }
+  return key
+}
+
+function collectGeminiApiKeys(): string[] {
+  const candidates = [
+    Deno.env.get('GEMINI_API_KEY'),
+    Deno.env.get('GOOGLE_AI_API_KEY'),
+  ]
+  const seen = new Set<string>()
+  const keys: string[] = []
+  for (const candidate of candidates) {
+    const key = normalizeApiKey(candidate)
+    if (!key || seen.has(key)) continue
+    seen.add(key)
+    keys.push(key)
+  }
+  return keys
+}
+
+function preferredImageModels(): string[] {
+  const preferred =
+    Deno.env.get('GEMINI_IMAGE_MODEL')?.trim() ||
+    Deno.env.get('GOOGLE_AI_IMAGE_MODEL')?.trim() ||
+    DEFAULT_IMAGE_MODELS[0]
+  return [...new Set([preferred, ...DEFAULT_IMAGE_MODELS])]
 }
 
 function allowRequest(userId: string) {
@@ -53,36 +90,72 @@ function allowRequest(userId: string) {
   return true
 }
 
-function buildPrompt(mode: VisualMode, placement: Placement) {
+function buildPrompt(
+  mode: VisualMode,
+  placement: Placement,
+  options?: { title?: string | null; category?: string | null },
+) {
+  const productHint = [options?.title, options?.category]
+    .map((part) => (typeof part === 'string' ? part.trim() : ''))
+    .filter(Boolean)
+    .join(' · ')
+
   if (mode === 'try_on') {
     return [
-      'You are generating a virtual try-on preview for an online store.',
-      'Image 1 is a photo of a person. Image 2 is a clothing/product photo.',
-      'Generate a photorealistic image of the person from image 1 wearing the garment from image 2.',
-      "Preserve the person's face, body pose, skin tone, and background as closely as possible.",
-      'Fit the garment naturally with realistic lighting and fabric folds.',
-      'Do not add logos, watermarks, or text overlays.',
+      'Create a photorealistic virtual try-on preview for an online fashion store (like Amazon Try On).',
+      'Image 1 is the shopper. Image 2 is the fashion product to wear.',
+      productHint ? `Product context: ${productHint}.` : '',
+      'Generate one image of the person from Image 1 wearing the garment/accessory from Image 2.',
+      "Keep the person's face, skin tone, body proportions, pose, hair, and background unchanged.",
+      'Replace or drape only the relevant clothing so fit, fabric texture, color, and lighting look natural.',
+      'No logos, watermarks, text, extra people, or mannequins.',
       'Output only the edited photo.',
-    ].join(' ')
+    ]
+      .filter(Boolean)
+      .join(' ')
   }
 
   const placementHint =
     placement === 'wall'
-      ? 'Mount or hang the product on a suitable wall surface in the room, with correct perspective.'
+      ? 'Place/mount the product on a suitable wall in the room (correct height, perspective, and slight contact shadow).'
       : placement === 'floor'
-        ? 'Place the product on the floor in a natural spot with correct scale and perspective.'
-        : 'Place the product on a table or surface in the room with correct scale and perspective.'
+        ? 'Place the product on the floor in a natural spot with realistic scale, perspective, and ground shadow.'
+        : 'Place the product on a table, shelf, or surface with realistic scale, perspective, and contact shadow.'
 
   return [
-    'You are generating a "view in your room" product preview for an online store.',
-    'Image 1 is a photo of a real room or wall. Image 2 is the product.',
-    'Generate a photorealistic image that places the product from image 2 into the room from image 1.',
+    'Create a photorealistic “View in your room” preview for an online store (like Amazon View in your room).',
+    'Image 1 is the customer’s room / wall photo. Image 2 is the product.',
+    productHint ? `Product context: ${productHint}.` : '',
+    'Composite the product from Image 2 into Image 1 so it looks physically present.',
     placementHint,
-    'Match lighting, shadows, and perspective so the product looks physically present.',
-    'Do not invent a different room; keep the original space recognizable.',
-    'Do not add logos, watermarks, or text overlays.',
+    'Match lighting, white balance, shadows, and perspective. Keep the original room recognizable — do not invent a different space.',
+    'Remove product studio backgrounds; no logos, watermarks, or text overlays.',
     'Output only the edited photo.',
-  ].join(' ')
+  ]
+    .filter(Boolean)
+    .join(' ')
+}
+
+function suggestPlacementFromText(text: string): Placement {
+  const haystack = text.toLowerCase()
+  if (
+    /tv|television|monitor|wall art|painting|poster|canvas|frame|mirror|shelf|soundbar|curtain|clock/.test(
+      haystack,
+    )
+  ) {
+    return 'wall'
+  }
+  if (/table lamp|lamp|vase|candle|speaker|figurine|cushion|pillow|plant pot|tray|bowl/.test(haystack)) {
+    return 'table'
+  }
+  if (
+    /sofa|couch|chair|bed|mattress|rug|carpet|desk|dining|cabinet|bookshelf|wardrobe|ottoman|refrigerator|fridge|washing machine|floor lamp/.test(
+      haystack,
+    )
+  ) {
+    return 'floor'
+  }
+  return 'floor'
 }
 
 function bytesToBase64(bytes: Uint8Array) {
@@ -135,8 +208,15 @@ type GeminiPart = {
   inline_data?: { mime_type?: string; data?: string }
 }
 
-async function callGemini(apiKey: string, prompt: string, userImage: { mimeType: string; data: string }, productImage: { mimeType: string; data: string }) {
-  const url = `https://generativelanguage.googleapis.com/v1beta/models/${MODEL}:generateContent?key=${encodeURIComponent(apiKey)}`
+async function callGeminiOnce(
+  apiKey: string,
+  model: string,
+  prompt: string,
+  userImage: { mimeType: string; data: string },
+  productImage: { mimeType: string; data: string },
+  responseModalities: string[] = ['TEXT', 'IMAGE'],
+) {
+  const url = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent?key=${encodeURIComponent(apiKey)}`
   const response = await fetch(url, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -152,7 +232,7 @@ async function callGemini(apiKey: string, prompt: string, userImage: { mimeType:
         },
       ],
       generationConfig: {
-        responseModalities: ['TEXT', 'IMAGE'],
+        responseModalities,
       },
     }),
   })
@@ -162,7 +242,7 @@ async function callGemini(apiKey: string, prompt: string, userImage: { mimeType:
     const message =
       payload?.error?.message ||
       payload?.error?.status ||
-      `Gemini request failed (${response.status}).`
+      `AI request failed (${response.status}).`
     const err = new Error(String(message))
     ;(err as Error & { status?: number }).status = response.status
     throw err
@@ -181,7 +261,7 @@ async function callGemini(apiKey: string, prompt: string, userImage: { mimeType:
       (inline as { mime_type?: string } | undefined)?.mime_type ??
       'image/jpeg'
     if (data) {
-      return { mimeType: mime, data }
+      return { mimeType: mime, data, model }
     }
   }
 
@@ -189,8 +269,67 @@ async function callGemini(apiKey: string, prompt: string, userImage: { mimeType:
   throw new Error(
     blockReason
       ? `Image generation was blocked (${blockReason}). Try a clearer photo.`
-      : 'Gemini did not return an image. Try again with a clearer photo.',
+      : 'AI did not return an image. Try again with a clearer photo.',
   )
+}
+
+function sleep(ms: number) {
+  return new Promise((resolve) => setTimeout(resolve, ms))
+}
+
+function isHardQuotaBlock(message: string) {
+  // Free-tier image models often report limit: 0 — retrying cannot help.
+  return /limit:\s*0|free_tier|billing details|plan and billing/i.test(message)
+}
+
+async function callGemini(
+  apiKeys: string[],
+  prompt: string,
+  userImage: { mimeType: string; data: string },
+  productImage: { mimeType: string; data: string },
+) {
+  const models = preferredImageModels()
+  const modalityOptions = [['TEXT', 'IMAGE'], ['IMAGE']]
+  let lastError: Error | null = null
+
+  for (const apiKey of apiKeys) {
+    for (const model of models) {
+      for (const modalities of modalityOptions) {
+        for (let attempt = 0; attempt < 2; attempt += 1) {
+          try {
+            return await callGeminiOnce(
+              apiKey,
+              model,
+              prompt,
+              userImage,
+              productImage,
+              modalities,
+            )
+          } catch (error) {
+            lastError = error instanceof Error ? error : new Error(String(error))
+            const status = (lastError as Error & { status?: number }).status
+            console.error('AI image model failed:', model, modalities.join('+'), lastError.message)
+            // Paid plan required / free-tier limit 0 — stop immediately.
+            if (status === 429 && isHardQuotaBlock(lastError.message)) {
+              throw lastError
+            }
+            // Soft rate limit — brief backoff then try next modality/model.
+            if (status === 429) {
+              await sleep(1200)
+              break
+            }
+            // Auth failures → try next key.
+            if (status === 401 || status === 403) {
+              attempt = 2
+              break
+            }
+          }
+        }
+      }
+    }
+  }
+
+  throw lastError ?? new Error('AI image generation failed.')
 }
 
 function decodeBase64(data: string) {
@@ -219,8 +358,8 @@ Deno.serve(async (req) => {
   }
 
   try {
-    const apiKey = getGeminiKey()
-    if (!apiKey) {
+    const apiKeys = collectGeminiApiKeys()
+    if (!apiKeys.length) {
       return jsonResponse(
         {
           error: 'Visual preview is not configured. Set GEMINI_API_KEY on the Edge Function.',
@@ -254,7 +393,9 @@ Deno.serve(async (req) => {
     const action = body.action
     const listingId = typeof body.listingId === 'string' ? body.listingId.trim() : ''
     const userImagePath = typeof body.userImagePath === 'string' ? body.userImagePath.trim() : ''
-    const placement: Placement =
+    const bodyTitle = typeof body.title === 'string' ? body.title.trim() : ''
+    const bodyCategory = typeof body.category === 'string' ? body.category.trim() : ''
+    let placement: Placement =
       body.placement === 'floor' || body.placement === 'table' || body.placement === 'wall'
         ? body.placement
         : 'wall'
@@ -273,7 +414,7 @@ Deno.serve(async (req) => {
     const { data: listing, error: listingError } = await admin
       .from('listings')
       .select(
-        'id, title, is_active, listing_status, listing_images(image_url, is_primary, display_order)',
+        'id, title, category, tags, is_active, listing_status, listing_images(image_url, is_primary, display_order)',
       )
       .eq('id', listingId)
       .maybeSingle()
@@ -286,31 +427,53 @@ Deno.serve(async (req) => {
       return jsonResponse({ error: 'This listing has no product image to preview with.' }, 400)
     }
 
+    const listingTitle = bodyTitle || String(listing.title ?? '').trim() || null
+    const listingCategory =
+      bodyCategory ||
+      (typeof listing.category === 'string' ? listing.category.trim() : '') ||
+      null
+
+    if (action === 'view_in_space' && !(body.placement === 'floor' || body.placement === 'table' || body.placement === 'wall')) {
+      const tags = Array.isArray(listing.tags) ? listing.tags.join(' ') : ''
+      placement = suggestPlacementFromText(`${listingTitle ?? ''} ${listingCategory ?? ''} ${tags}`)
+    }
+
     const [userImage, productImage] = await Promise.all([
       downloadStorageImage(admin, userImagePath),
       fetchImageAsInline(productUrl),
     ])
 
-    const prompt = buildPrompt(action, placement)
-    let generated: { mimeType: string; data: string }
+    const prompt = buildPrompt(action, placement, {
+      title: listingTitle,
+      category: listingCategory,
+    })
+    let generated: { mimeType: string; data: string; model: string }
     try {
-      generated = await callGemini(apiKey, prompt, userImage, productImage)
+      generated = await callGemini(apiKeys, prompt, userImage, productImage)
     } catch (error) {
       const status = (error as Error & { status?: number }).status
       const message = error instanceof Error ? error.message : 'Image generation failed.'
       if (status === 429 || /quota|rate|RESOURCE_EXHAUSTED|limit:\s*0|free_tier/i.test(message)) {
-        const billingBlocked = /limit:\s*0|free_tier/i.test(message)
+        const billingBlocked = isHardQuotaBlock(message)
         return jsonResponse(
           {
             error: billingBlocked
-              ? 'Gemini image generation is blocked for this API key (quota limit 0). Enable billing in Google AI Studio, create a new key, and update GEMINI_API_KEY on visual-commerce.'
-              : 'AI preview quota exceeded. Please try again in a minute.',
-            code: 'gemini_quota',
+              ? 'AI preview needs a paid Google AI Studio plan. Image try-on is not available on the free tier — enable billing for this API key, then try again.'
+              : 'AI preview is rate-limited right now. Please wait about a minute and try again.',
+            code: billingBlocked ? 'gemini_billing_required' : 'gemini_quota',
           },
           429,
         )
       }
-      return jsonResponse({ error: message, code: 'gemini_failed' }, 502)
+      return jsonResponse(
+        {
+          error: /quota|rate|RESOURCE_EXHAUSTED/i.test(message)
+            ? 'AI preview is rate-limited right now. Please wait about a minute and try again.'
+            : message,
+          code: 'gemini_failed',
+        },
+        502,
+      )
     }
 
     const ext = generated.mimeType.includes('png')
@@ -339,12 +502,13 @@ Deno.serve(async (req) => {
 
     return jsonResponse({
       mode: action,
+      placement: action === 'view_in_space' ? placement : null,
       resultUrl: signed.signedUrl,
       resultPath,
       expiresInSeconds: SIGNED_URL_SECONDS,
       listingId,
-      listingTitle: listing.title ?? null,
-      model: MODEL,
+      listingTitle,
+      model: generated.model,
     })
   } catch (error) {
     console.error('visual-commerce error:', error)

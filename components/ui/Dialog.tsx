@@ -2,7 +2,7 @@ import type { ComponentProps, ReactNode } from 'react'
 import { Platform } from 'react-native'
 import { Dialog as TDialog, styled, XStack } from 'tamagui'
 
-import * as Icons from '@tamagui/lucide-icons'
+import * as Icons from '~/components/ui/icons'
 import { getShadowStyle, radius } from '~/config/tokens'
 import { isNativeFullscreenOverlay } from '~/lib/platform/native-fullscreen'
 import { useAppLayout } from '~/hooks/useAppLayout'

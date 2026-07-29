@@ -10,7 +10,7 @@ import {
   LISTING_REVIEW_STATUS_VALUES,
   LISTING_REVIEW_TYPE_VALUES,
   LISTING_REVIEW_VALIDATION,
-} from './listing-reviews.constants'
+} from '~/lib/listing-reviews/listing-reviews.constants'
 import type {
   ListingReviewAnalyticsParams,
   ListingReviewBatchModerationInput,
@@ -23,7 +23,7 @@ import type {
   ListingReviewReportInput,
   ListingReviewUpdateInput,
   ListingReviewValidationResult,
-} from './listing-reviews.type'
+} from '~/lib/listing-reviews/listing-reviews.type'
 
 // ============= PRIMITIVE SCHEMAS =============
 

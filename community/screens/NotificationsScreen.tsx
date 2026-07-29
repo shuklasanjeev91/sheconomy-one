@@ -1,5 +1,4 @@
-import { useRouter } from 'one'
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState, memo } from 'react'
 
 import { CommunityCard } from '~/community/components/CommunityCard'
 import { CommunityPageHeader } from '~/community/components/CommunityPageHeader'
@@ -16,16 +15,17 @@ import {
   type AppNotification,
   type NotificationProductFilter,
 } from '~/community/lib/notifications'
-import { LoadMoreSentinel } from '~/commerce/components/LoadMoreSentinel'
 import { ScreenSearchField } from '~/components/search'
 import { CACHE_KEYS } from '~/lib/bootstrap/app-prefetch'
 import { peekAppCache, readAppCache, writeAppCache } from '~/lib/cache/app-cache'
 import { filterBySearchQuery } from '~/lib/search'
 import { useCommunityUi } from '~/community/lib/community-theme'
 import { Avatar, Button, Icons, ScrollView, Spinner, Text, XStack, YStack } from '~/components/ui'
+import { FlashList } from '@shopify/flash-list'
 import { supabase } from '~/lib/supabase/client'
 import { useAppUi } from '~/lib/theme/useAppUi'
 import { useSupabase } from '~/providers/SupabaseProvider'
+import { navigateApp } from '~/lib/platform/navigate'
 
 type NotificationsCache = {
   items: AppNotification[]
@@ -36,7 +36,6 @@ type NotificationsCache = {
 export function NotificationsScreen() {
   const communityUi = useCommunityUi()
   const ui = useAppUi()
-  const router = useRouter()
   const { user } = useSupabase()
   const cacheKey = user?.id ? CACHE_KEYS.notifications(user.id) : null
   const initial = cacheKey ? peekAppCache<NotificationsCache>(cacheKey) : null
@@ -161,16 +160,19 @@ export function NotificationsScreen() {
     [cacheKey, hasMore],
   )
 
-  async function handleOpen(notification: AppNotification) {
-    if (!notification.read) {
-      persistReadState((item) => (item.id === notification.id ? { ...item, read: true } : item))
-      await markNotificationRead(notification.id, user?.id)
-    }
-    const path = resolveNotificationPath(notification)
-    if (path && path !== '/notifications') {
-      router.push(path as never)
-    }
-  }
+  const handleOpen = useCallback(
+    async (notification: AppNotification) => {
+      if (!notification.read) {
+        persistReadState((item) => (item.id === notification.id ? { ...item, read: true } : item))
+        await markNotificationRead(notification.id, user?.id)
+      }
+      const path = resolveNotificationPath(notification)
+      if (path && path !== '/notifications') {
+        navigateApp(path as never)
+      }
+    },
+    [persistReadState, user?.id],
+  )
 
   async function handleMarkAll() {
     if (!user) return
@@ -179,100 +181,107 @@ export function NotificationsScreen() {
   }
 
   return (
-    <FullWidthLayout scroll onRefresh={() => void load(0, false)}>
-      <PageSection paddingVertical="$6" {...LAYOUT_STRETCH}>
-        <YStack gap="$4" width="100%">
-          <CommunityCard padding={18} gap={14} width="100%">
-            <CommunityPageHeader
-              title="Notifications"
-              actions={
-                user ? (
-                  <Button size="$3" tone="outline" borderRadius={999} onPress={handleMarkAll}>
-                    Mark all read
-                  </Button>
-                ) : undefined
+    <FullWidthLayout scroll={false} flex={1} onRefresh={() => void load(0, false)}>
+      <PageSection paddingVertical="$6" flex={1} minHeight={0} {...LAYOUT_STRETCH}>
+        <YStack gap="$4" width="100%" flex={1} minHeight={0}>
+          <CommunityCard padding={18} gap={14} width="100%" flex={1} minHeight={0}>
+            <FlashList
+              data={
+                !user || isLoading || items.length === 0 || visibleItems.length === 0
+                  ? []
+                  : visibleItems
+              }
+              keyExtractor={(item) => item.id}
+              renderItem={({ item: notification }) => (
+                <NotificationRow notification={notification} onOpen={handleOpen} />
+              )}
+              onEndReached={() => {
+                if (user && !query.trim() && hasMore && !isLoadingMore) {
+                  void load(page + 1, true)
+                }
+              }}
+              onEndReachedThreshold={0.5}
+              onRefresh={() => void load(0, false)}
+              refreshing={isLoading && items.length > 0}
+              style={{ flex: 1 }}
+              ListHeaderComponent={
+                <YStack gap={14} width="100%" paddingBottom={8}>
+                  <CommunityPageHeader
+                    title="Notifications"
+                    actions={
+                      user ? (
+                        <Button size="$3" tone="outline" borderRadius={999} onPress={handleMarkAll}>
+                          Mark all read
+                        </Button>
+                      ) : undefined
+                    }
+                  />
+                  {user ? (
+                    <YStack gap={10}>
+                      <ScreenSearchField
+                        value={query}
+                        onChangeText={setQuery}
+                        placeholder="Search notifications"
+                      />
+                      <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+                        <XStack gap={8} alignItems="center" paddingVertical={2}>
+                          {NOTIFICATION_PRODUCT_FILTERS.map((filter) => (
+                            <CommunityFilterPill
+                              key={filter.key || 'all'}
+                              label={filter.label}
+                              summary={filter.label}
+                              active={product === filter.key}
+                              onPress={() => setProduct(filter.key)}
+                            />
+                          ))}
+                          <CommunityFilterPill
+                            label="Unread only"
+                            summary="Unread only"
+                            active={unreadOnly}
+                            onPress={() => setUnreadOnly((v) => !v)}
+                          />
+                          {product || unreadOnly || query ? (
+                            <Text
+                              fontSize={13}
+                              fontWeight="600"
+                              color={communityUi.brand}
+                              cursor="pointer"
+                              paddingHorizontal={6}
+                              onPress={() => {
+                                setProduct('')
+                                setUnreadOnly(false)
+                                setQuery('')
+                              }}
+                            >
+                              Clear
+                            </Text>
+                          ) : null}
+                        </XStack>
+                      </ScrollView>
+                    </YStack>
+                  ) : null}
+                  {!user ? (
+                    <Text color={ui.textMuted}>Sign in to see your notifications.</Text>
+                  ) : isLoading && items.length === 0 ? (
+                    <YStack alignItems="center" paddingVertical="$6">
+                      <Spinner size="large" color={communityUi.brand} />
+                    </YStack>
+                  ) : items.length === 0 ? (
+                    <YStack alignItems="center" paddingVertical="$6" gap="$2">
+                      <Text color={ui.textMuted} fontWeight="500" textAlign="center">
+                        You are all caught up.
+                      </Text>
+                    </YStack>
+                  ) : visibleItems.length === 0 ? (
+                    <YStack alignItems="center" paddingVertical="$6" gap="$2">
+                      <Text color={ui.textMuted} fontWeight="500" textAlign="center">
+                        No notifications match your search.
+                      </Text>
+                    </YStack>
+                  ) : null}
+                </YStack>
               }
             />
-            {user ? (
-              <YStack gap={10}>
-                <ScreenSearchField
-                  value={query}
-                  onChangeText={setQuery}
-                  placeholder="Search notifications"
-                />
-                <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-                  <XStack gap={8} alignItems="center" paddingVertical={2}>
-                    {NOTIFICATION_PRODUCT_FILTERS.map((filter) => (
-                      <CommunityFilterPill
-                        key={filter.key || 'all'}
-                        label={filter.label}
-                        summary={filter.label}
-                        active={product === filter.key}
-                        onPress={() => setProduct(filter.key)}
-                      />
-                    ))}
-                    <CommunityFilterPill
-                      label="Unread only"
-                      summary="Unread only"
-                      active={unreadOnly}
-                      onPress={() => setUnreadOnly((v) => !v)}
-                    />
-                    {product || unreadOnly || query ? (
-                      <Text
-                        fontSize={13}
-                        fontWeight="600"
-                        color={communityUi.brand}
-                        cursor="pointer"
-                        paddingHorizontal={6}
-                        onPress={() => {
-                          setProduct('')
-                          setUnreadOnly(false)
-                          setQuery('')
-                        }}
-                      >
-                        Clear
-                      </Text>
-                    ) : null}
-                  </XStack>
-                </ScrollView>
-              </YStack>
-            ) : null}
-            {!user ? (
-              <Text color={ui.textMuted}>Sign in to see your notifications.</Text>
-            ) : isLoading && items.length === 0 ? (
-              <YStack alignItems="center" paddingVertical="$6">
-                <Spinner size="large" color={communityUi.brand} />
-              </YStack>
-            ) : items.length === 0 ? (
-              <YStack alignItems="center" paddingVertical="$6" gap="$2">
-                <Text color={ui.textMuted} fontWeight="500" textAlign="center">
-                  You are all caught up.
-                </Text>
-              </YStack>
-            ) : visibleItems.length === 0 ? (
-              <YStack alignItems="center" paddingVertical="$6" gap="$2">
-                <Text color={ui.textMuted} fontWeight="500" textAlign="center">
-                  No notifications match your search.
-                </Text>
-              </YStack>
-            ) : (
-              <YStack gap={0}>
-                {visibleItems.map((notification) => (
-                  <NotificationRow
-                    key={notification.id}
-                    notification={notification}
-                    onOpen={handleOpen}
-                  />
-                ))}
-                {!query.trim() ? (
-                  <LoadMoreSentinel
-                    hasMore={hasMore}
-                    isLoadingMore={isLoadingMore}
-                    onLoadMore={() => void load(page + 1, true)}
-                  />
-                ) : null}
-              </YStack>
-            )}
           </CommunityCard>
         </YStack>
       </PageSection>
@@ -280,7 +289,7 @@ export function NotificationsScreen() {
   )
 }
 
-function NotificationRow({
+const NotificationRow = memo(function NotificationRow({
   notification,
   onOpen,
 }: {
@@ -335,4 +344,4 @@ function NotificationRow({
       </YStack>
     </XStack>
   )
-}
+})

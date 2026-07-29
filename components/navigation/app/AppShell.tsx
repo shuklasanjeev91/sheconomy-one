@@ -16,18 +16,24 @@ import {
   isChatPath,
   isCommercePath,
   isCreateShopPath,
+  isVendorPath,
 } from '~/lib/routes'
 import { authViewportStyle } from '~/components/auth/auth-layout'
 import { appShellStyle, lockedAppShellStyle, meetingViewportStyle } from '~/lib/platform/viewport'
 import { useAppUi } from '~/lib/theme/useAppUi'
 
+import { ChatActionsHost } from '~/chat/components/ChatActionsHost'
 import { IncomingCallHost } from '~/chat/components/IncomingCallHost'
+import { CommunityComposerHost } from '~/community/components/CommunityComposerHost'
+import { ImageCropHost } from '~/components/media/ImageCropHost'
+import { InstantMeetingHost } from '~/co-work/components/InstantMeetingHost'
 import { ProfileOnboardingNudge } from '~/components/auth/ProfileOnboardingNudge'
 import { GenderVerificationHost } from '~/components/gender-verification/GenderVerificationHost'
+import { useInstantMeetingSession } from '~/co-work/lib/instant-meeting-session'
 
-import { AppDesktopHeader } from './AppDesktopHeader'
-import { AppMobileBottomTabs } from './AppMobileBottomTabs'
-import { AppMobileHeader } from './AppMobileHeader'
+import { AppDesktopHeader } from '~/components/navigation/app/AppDesktopHeader'
+import { AppMobileBottomTabs } from '~/components/navigation/app/AppMobileBottomTabs'
+import { AppMobileHeader } from '~/components/navigation/app/AppMobileHeader'
 
 type AppShellProps = {
   children: ReactNode
@@ -35,8 +41,11 @@ type AppShellProps = {
 
 function useChromelessRoute() {
   const pathname = usePathname()
+  const instantMeeting = useInstantMeetingSession()
   // Full-screen meeting lobby + live room — no app header/tabs (Zoom-style).
+  // Instant meetings stay on Co-Work (no /live hop) and use InstantMeetingHost.
   return (
+    !!instantMeeting ||
     pathname.startsWith('/ui-kit') ||
     pathname.startsWith('/co-work/meeting/') ||
     pathname === '/co-work/meeting' ||
@@ -107,6 +116,8 @@ export function AppShell({ children }: AppShellProps) {
 
   // Open conversations keep the app header (shared back); hide bottom tabs only.
   const chatConversationMobile = !isDesktop && isChatConversationPath(pathname)
+  // Manage Shop uses its own top bar + Etsy-style bottom tabs — hide marketplace header.
+  const hideMobileHeader = !isDesktop && isVendorPath(pathname)
 
   if (chromeless || authScreen.chromeless) {
     return (
@@ -126,7 +137,9 @@ export function AppShell({ children }: AppShellProps) {
           <AppAccessGate>
             {children}
             <IncomingCallHost />
+            <InstantMeetingHost />
           </AppAccessGate>
+          <GenderVerificationHost />
         </ScreenFill>
       </NativeSafeArea>
     )
@@ -147,11 +160,11 @@ export function AppShell({ children }: AppShellProps) {
             style={lockViewport ? lockedAppShellStyle() : appShellStyle(isDesktopWeb)}
           >
             {isDesktop ? <AppDesktopHeader /> : null}
-            {!isDesktop ? <AppMobileHeader minimal={compactMobileTopBar || chatConversationMobile} /> : null}
+            {!isDesktop && !hideMobileHeader ? (
+              <AppMobileHeader minimal={compactMobileTopBar || chatConversationMobile} />
+            ) : null}
             <ProfileOnboardingNudge />
             <YStack
-              // Sticky footer: main grows to fill short viewports; document desktop
-              // must NOT use minHeight:0 or content is clipped and window scroll dies.
               flexGrow={1}
               flexShrink={0}
               flex={stretchMainContent ? 1 : undefined}
@@ -163,11 +176,17 @@ export function AppShell({ children }: AppShellProps) {
             </YStack>
             {showCommerceFooter ? <CommerceDesktopFooter /> : null}
             {!isDesktop && !chatConversationMobile ? <AppMobileBottomTabs /> : null}
+            {/* Global overlays — bottom tabs can open these outside section layouts
+                (e.g. Create Post from /profile, New chat from any chat route). */}
+            <CommunityComposerHost />
+            <ImageCropHost />
+            <ChatActionsHost />
             <IncomingCallHost />
-            <GenderVerificationHost />
+            <InstantMeetingHost />
           </ScreenFill>
         </AppBarScrollProvider>
       </AppAccessGate>
+      <GenderVerificationHost />
     </NativeSafeArea>
   )
 }

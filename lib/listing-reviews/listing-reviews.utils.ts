@@ -4,7 +4,7 @@ import {
   LISTING_REVIEW_SORT_BY,
   LISTING_REVIEW_STATUS,
   LISTING_REVIEW_VALIDATION,
-} from './listing-reviews.constants'
+} from '~/lib/listing-reviews/listing-reviews.constants'
 import type {
   ListingReview,
   ListingReviewCreateInput,
@@ -13,7 +13,7 @@ import type {
   ListingReviewStats,
   ListingReviewSummary,
   ListingReviewWithRelations,
-} from './listing-reviews.type'
+} from '~/lib/listing-reviews/listing-reviews.type'
 
 // ============= DEFAULTS =============
 
@@ -35,11 +35,12 @@ export function buildDefaultListingReviewSummary(listingId: string): ListingRevi
 }
 
 export function fillListingReviewSummaries(
-  listingIds: string[],
+  listingIds: string[] | null | undefined,
   rows: ListingReviewSummary[] | null | undefined,
 ): ListingReviewSummary[] {
+  const ids = listingIds ?? []
   const map = new Map((rows ?? []).map((row) => [row.listing_id, row]))
-  return listingIds.map((listingId) => map.get(listingId) ?? buildDefaultListingReviewSummary(listingId))
+  return ids.map((listingId) => map.get(listingId) ?? buildDefaultListingReviewSummary(listingId))
 }
 
 // ============= SORT / FILTER =============
@@ -294,9 +295,9 @@ export function removeListingReviewById(
 }
 
 export function indexListingReviewsById(
-  reviews: ListingReviewWithRelations[],
+  reviews: ListingReviewWithRelations[] | null | undefined,
 ): Record<string, ListingReviewWithRelations> {
-  return Object.fromEntries(reviews.map((review) => [review.id, review]))
+  return Object.fromEntries((reviews ?? []).map((review) => [review.id, review]))
 }
 
 export function mergeListingReviewsById(

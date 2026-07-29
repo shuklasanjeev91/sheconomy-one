@@ -1,5 +1,5 @@
-import { PROFILE_COMPLETION, type Profile, type ProfileUpdate } from './profile.type'
-import { validateProfileData } from './profile.validation'
+import { PROFILE_COMPLETION, type Profile, type ProfileUpdate } from '~/lib/profile/profile.type'
+import { validateProfileData } from '~/lib/profile/profile.validation'
 
 /** Fields compared when detecting profile changes / diffs. */
 const DEFAULT_DIFF_FIELDS = [

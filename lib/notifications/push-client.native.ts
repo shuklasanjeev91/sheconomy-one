@@ -1,7 +1,45 @@
 import type { PushClient, PushClickPayload } from '~/lib/notifications/push-client.types'
-import { getOneSignalAppId, resolvePushPlatform } from '~/lib/notifications/push-config'
+import { resolveOneSignalAppId, resolvePushPlatform } from '~/lib/notifications/push-config'
 
 let initialized = false
+let initPromise: Promise<void> | null = null
+
+async function waitForSubscriptionId(timeoutMs = 8_000): Promise<string | null> {
+  const { OneSignal } = await import('react-native-onesignal')
+
+  const existing = await OneSignal.User.pushSubscription.getIdAsync()
+  if (existing) return existing
+
+  return new Promise((resolve) => {
+    let settled = false
+    const finish = (id: string | null) => {
+      if (settled) return
+      settled = true
+      clearTimeout(timer)
+      try {
+        OneSignal.User.pushSubscription.removeEventListener('change', onChange)
+      } catch {
+        // ignore
+      }
+      resolve(id)
+    }
+
+    const onChange = (state: { current?: { id?: string | null } }) => {
+      const id = state.current?.id
+      if (id) finish(id)
+    }
+
+    const timer = setTimeout(() => {
+      void OneSignal.User.pushSubscription.getIdAsync().then((id) => finish(id ?? null))
+    }, timeoutMs)
+
+    try {
+      OneSignal.User.pushSubscription.addEventListener('change', onChange)
+    } catch {
+      finish(null)
+    }
+  })
+}
 
 /**
  * Native (iOS / Android) OneSignal push client.
@@ -11,26 +49,42 @@ const nativePushClient: PushClient = {
   platform: resolvePushPlatform(),
 
   async init() {
-    const appId = getOneSignalAppId()
-    if (!appId || initialized) return
-    try {
-      const { OneSignal, LogLevel } = await import('react-native-onesignal')
-      OneSignal.Debug.setLogLevel(LogLevel.Warn)
-      OneSignal.initialize(appId)
-      initialized = true
-    } catch (error) {
-      console.warn('[push] Native OneSignal init failed', error)
-    }
+    if (initialized) return
+    if (initPromise) return initPromise
+
+    initPromise = (async () => {
+      try {
+        const appId = await resolveOneSignalAppId()
+        if (!appId) return
+        const { OneSignal, LogLevel } = await import('react-native-onesignal')
+        OneSignal.Debug.setLogLevel(LogLevel.Warn)
+        OneSignal.initialize(appId)
+        initialized = true
+      } catch (error) {
+        console.warn('[push] Native OneSignal init failed', error)
+        initPromise = null
+      }
+    })()
+
+    return initPromise
   },
 
   async requestPermission() {
     try {
       const { OneSignal } = await import('react-native-onesignal')
       await this.init()
+      // true = fallback to settings if previously denied on some Android versions.
       const granted = await OneSignal.Notifications.requestPermission(true)
-      if (granted) OneSignal.User.pushSubscription.optIn()
-      return granted
-    } catch {
+      if (granted) {
+        try {
+          OneSignal.User.pushSubscription.optIn()
+        } catch (error) {
+          console.warn('[push] Native optIn after grant failed', error)
+        }
+      }
+      return !!granted
+    } catch (error) {
+      console.warn('[push] Native requestPermission failed', error)
       return false
     }
   },
@@ -39,7 +93,22 @@ const nativePushClient: PushClient = {
     try {
       const { OneSignal } = await import('react-native-onesignal')
       await this.init()
-      return await OneSignal.Notifications.getPermissionAsync()
+      return !!(await OneSignal.Notifications.getPermissionAsync())
+    } catch {
+      return false
+    }
+  },
+
+  async canRequestPermission() {
+    try {
+      const { OneSignal } = await import('react-native-onesignal')
+      await this.init()
+      // If the SDK helper fails, fall back to “not yet granted”.
+      try {
+        return !!(await OneSignal.Notifications.canRequestPermission())
+      } catch {
+        return !(await OneSignal.Notifications.getPermissionAsync())
+      }
     } catch {
       return false
     }
@@ -56,6 +125,8 @@ const nativePushClient: PushClient = {
   },
 
   async logout() {
+    // OneSignal throws IllegalStateException if logout runs before initialize.
+    if (!initialized) return
     try {
       const { OneSignal } = await import('react-native-onesignal')
       OneSignal.logout()
@@ -66,9 +137,8 @@ const nativePushClient: PushClient = {
 
   async getPlayerId() {
     try {
-      const { OneSignal } = await import('react-native-onesignal')
       await this.init()
-      return await OneSignal.User.pushSubscription.getIdAsync()
+      return await waitForSubscriptionId(6_000)
     } catch {
       return null
     }
@@ -147,9 +217,11 @@ const nativePushClient: PushClient = {
             body?: string
             additionalData?: Record<string, unknown>
             launchURL?: string
+            display?: () => void
           }
         }) => {
-          event.preventDefault?.()
+          // Do not swallow the OS banner — users test with the app open.
+          // Still forward payload so in-app toasts can mirror the alert.
           const notification = event.getNotification?.() ?? null
           const data = notification?.additionalData ?? null
           const url =

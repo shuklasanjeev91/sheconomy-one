@@ -3,4 +3,4 @@ export {
   NativeScreenCapturePicker,
   useLiveKitMediaControls,
 } from '~/co-work/hooks/useLiveKitMediaControls.native'
-export { NativeLiveKitMeetingRoomLoader as LiveKitMeetingRoom } from './LiveKitMeetingRoom.native-entry'
+export { NativeLiveKitMeetingRoomLoader as LiveKitMeetingRoom } from '~/co-work/components/LiveKitMeetingRoom.native-entry'

@@ -1,7 +1,7 @@
-import { getDefaultCountryCode, resolveCountryCode } from './data'
-import { geoPartsFromAddressFields } from './format'
-import { validatePostalCode } from './postal'
-import type { GeoLocationParts } from './types'
+import { getDefaultCountryCode, resolveCountryCode } from '~/lib/geo/data'
+import { geoPartsFromAddressFields } from '~/lib/geo/format'
+import { validatePostalCode } from '~/lib/geo/postal'
+import type { GeoLocationParts } from '~/lib/geo/types'
 
 export type ValidateGeoOptions = {
   requirePostal?: boolean

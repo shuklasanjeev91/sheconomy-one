@@ -15,8 +15,8 @@ import { LISTING_TYPE_OPTIONS, LISTING_VALIDATION } from '~/lib/listing/listing.
 import type { ListingFormData, ListingType } from '~/lib/listing/listing.type'
 import type { AppUiTokens } from '~/lib/theme/app-ui'
 
-import { ListingPublishCard, ListingPublishFieldError } from '../ListingPublishCard'
-import { countWords } from '../listing-publish.utils'
+import { ListingPublishCard, ListingPublishFieldError } from '~/commerce/components/vendor/listing-publish/ListingPublishCard'
+import { countWords } from '~/commerce/components/vendor/listing-publish/listing-publish.utils'
 
 type BasicInfoStepProps = {
   ui: AppUiTokens

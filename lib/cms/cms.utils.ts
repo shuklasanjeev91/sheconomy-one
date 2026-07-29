@@ -4,7 +4,7 @@ import type {
   CmsMediaType,
   CmsPaginationMeta,
   CmsServiceResponse,
-} from './cms.type'
+} from '~/lib/cms/cms.type'
 
 // ============= SLUG =============
 

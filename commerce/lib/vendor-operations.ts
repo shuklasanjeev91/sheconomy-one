@@ -1,5 +1,5 @@
 import { supabase } from '~/lib/supabase/client'
-export { rowsToCsv } from './vendor-operation-utils'
+export { rowsToCsv } from '~/commerce/lib/vendor-operation-utils'
 
 export type VendorAnalytics = {
   revenue: number

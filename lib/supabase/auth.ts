@@ -1,4 +1,4 @@
-import { supabase } from './client'
+import { supabase } from '~/lib/supabase/client'
 
 /**
  * Passwordless auth only — no separate sign-up flow.
@@ -8,6 +8,7 @@ import { supabase } from './client'
 
 import { DEFAULT_COUNTRY, type Country } from '~/lib/phone/countries'
 import {
+  canonicalE164Phone,
   formatPhoneForDisplay as formatPhoneDisplay,
   isValidPhone as isValidNationalPhone,
   normalizePhoneNumber as normalizeE164,
@@ -134,4 +135,74 @@ export async function verifyOtp(
     return verifyEmailOtp(identifier as string, token)
   }
   return verifyPhoneOtp(identifier as string | PhoneAuthInput, token)
+}
+
+function resolveE164Phone(phone: string | PhoneAuthInput): string {
+  if (typeof phone === 'string') return canonicalE164Phone(phone)
+  const result = validateNationalPhone(phone.nationalNumber, phone.country)
+  return result.ok ? result.e164 : ''
+}
+
+/**
+ * Link or change phone on the **current** session (checkout / profile).
+ * Uses `updateUser` + `phone_change` OTP — does not call `signInWithOtp`.
+ */
+export async function sendAuthenticatedPhoneChangeOtp(phone: string | PhoneAuthInput) {
+  const normalized = resolveE164Phone(phone)
+  if (!normalized) {
+    return {
+      data: { user: null },
+      error: { message: 'Invalid phone number.', name: 'AuthApiError', status: 400 } as never,
+    }
+  }
+  return supabase.auth.updateUser({ phone: normalized })
+}
+
+/** Verify phone OTP for the logged-in user without replacing the session. */
+export async function verifyAuthenticatedPhoneChange(phone: string | PhoneAuthInput, token: string) {
+  const normalized = resolveE164Phone(phone)
+  if (!normalized) {
+    return {
+      data: { user: null, session: null },
+      error: { message: 'Invalid phone number.', name: 'AuthApiError', status: 400 } as never,
+    }
+  }
+
+  let result = await supabase.auth.verifyOtp({
+    phone: normalized,
+    token: token.trim(),
+    type: 'phone_change',
+  })
+
+  if (result.error) {
+    result = await supabase.auth.verifyOtp({
+      phone: normalized,
+      token: token.trim(),
+      type: 'sms',
+    })
+  }
+
+  return result
+}
+
+/** Send email-change OTP to the current session (does not sign the user out). */
+export async function sendAuthenticatedEmailChangeOtp(email: string) {
+  const normalized = email.trim().toLowerCase()
+  if (!isValidEmail(normalized)) {
+    return {
+      data: { user: null },
+      error: { message: 'Invalid email address.', name: 'AuthApiError', status: 400 } as never,
+    }
+  }
+  return supabase.auth.updateUser({ email: normalized })
+}
+
+/** Verify email OTP for the logged-in user without replacing the session. */
+export async function verifyAuthenticatedEmailChange(email: string, token: string) {
+  const normalized = email.trim().toLowerCase()
+  return supabase.auth.verifyOtp({
+    email: normalized,
+    token: token.trim(),
+    type: 'email_change',
+  })
 }

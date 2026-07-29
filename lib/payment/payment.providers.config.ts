@@ -5,7 +5,7 @@
  * Constants (`PAYMENT_PROVIDERS`, regions, etc.) live in `payment.constants.ts`.
  */
 
-import { PAYMENT_PROVIDERS, PAYMENT_REGIONS, CONNECTION_TYPES } from './payment.constants'
+import { PAYMENT_PROVIDERS, PAYMENT_REGIONS, CONNECTION_TYPES } from '~/lib/payment/payment.constants'
 
 export const PROVIDER_CREDENTIAL_FIELDS = {
   // India Regional
@@ -28,6 +28,33 @@ export const PROVIDER_CREDENTIAL_FIELDS = {
     ],
     modeOptions: { sandbox: "Test Mode", live: "Live Mode" },
     helpUrl: "https://docs.payu.in/",
+  },
+  [PAYMENT_PROVIDERS.RAZORPAY]: {
+    fields: [
+      {
+        key: "key_id",
+        label: "Key ID",
+        type: "text",
+        required: true,
+        placeholder: "rzp_live_xxxxxxxx or rzp_test_xxxxxxxx",
+      },
+      {
+        key: "key_secret",
+        label: "Key Secret",
+        type: "password",
+        required: true,
+        placeholder: "Your Razorpay API secret",
+      },
+      {
+        key: "webhook_secret",
+        label: "Webhook Secret",
+        type: "password",
+        required: false,
+        placeholder: "From Razorpay Dashboard → Webhooks (recommended)",
+      },
+    ],
+    modeOptions: { test: "Test Mode", live: "Live Mode" },
+    helpUrl: "https://razorpay.com/docs/payments/payment-links/",
   },
   [PAYMENT_PROVIDERS.EASEBUZZ]: {
     fields: [
@@ -737,8 +764,8 @@ export const PAYMENT_PROVIDERS_CONFIG = [
     ],
     processingTime: "Instant to 3 business days",
     fees: "2% + GST per transaction",
-    isOAuth: true,
-    connectionType: CONNECTION_TYPES.OAUTH,
+    isOAuth: false,
+    connectionType: CONNECTION_TYPES.CREDENTIAL,
     isActive: true,
     isDefault: false,
     region: PAYMENT_REGIONS.INDIA,

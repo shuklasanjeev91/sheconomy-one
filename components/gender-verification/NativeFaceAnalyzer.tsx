@@ -35,7 +35,7 @@ type PendingRequest = {
   reject: (reason: Error) => void
 }
 
-const ANALYZE_TIMEOUT_MS = 25_000
+const ANALYZE_TIMEOUT_MS = 12_000
 
 type NativeFaceAnalyzerProps = {
   onReady?: () => void

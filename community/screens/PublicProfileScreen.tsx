@@ -82,7 +82,7 @@ export function PublicProfileScreen() {
   useEffect(() => {
     if (authLoading || isLoading || !profile || !currentUser) return
     if (profile.id === currentUser.id) {
-      router.replace(routes.profile)
+      router.push(routes.profile)
     }
   }, [authLoading, currentUser, isLoading, profile, router])
 

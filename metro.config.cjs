@@ -42,6 +42,52 @@ const MEDIAPIPE_FACE_DETECTION_STUB = path.join(
   'lib/metro-stubs/mediapipe-face-detection.js',
 )
 
+// Flow/codegen specs break Metro babel-plugin-codegen after Flow strip (needed for VxRN).
+const DATETIMEPICKER_SPEC_STUBS = {
+  DateTimePickerNativeComponent: path.join(
+    projectRoot,
+    'lib/metro-stubs/datetimepicker-DateTimePickerNativeComponent.js',
+  ),
+  NativeModuleDatePicker: path.join(
+    projectRoot,
+    'lib/metro-stubs/datetimepicker-NativeModuleDatePicker.js',
+  ),
+  NativeModuleTimePicker: path.join(
+    projectRoot,
+    'lib/metro-stubs/datetimepicker-NativeModuleTimePicker.js',
+  ),
+  NativeModuleMaterialDatePicker: path.join(
+    projectRoot,
+    'lib/metro-stubs/datetimepicker-NativeModuleMaterialDatePicker.js',
+  ),
+  NativeModuleMaterialTimePicker: path.join(
+    projectRoot,
+    'lib/metro-stubs/datetimepicker-NativeModuleMaterialTimePicker.js',
+  ),
+}
+
+function datetimepickerSpecStub(moduleName, originModulePath) {
+  const fromDatetimepicker =
+    typeof originModulePath === 'string' &&
+    originModulePath.includes(`${path.sep}@react-native-community${path.sep}datetimepicker${path.sep}`)
+  if (!fromDatetimepicker && !String(moduleName).includes('datetimepicker')) {
+    return null
+  }
+
+  const base = path.basename(String(moduleName), path.extname(String(moduleName)))
+  if (DATETIMEPICKER_SPEC_STUBS[base]) {
+    return { type: 'sourceFile', filePath: DATETIMEPICKER_SPEC_STUBS[base] }
+  }
+
+  // Relative imports like ./specs/DateTimePickerNativeComponent
+  const match = String(moduleName).match(/specs\/([A-Za-z0-9_]+)(?:\.(?:js|jsx|ts|tsx))?$/)
+  if (match && DATETIMEPICKER_SPEC_STUBS[match[1]]) {
+    return { type: 'sourceFile', filePath: DATETIMEPICKER_SPEC_STUBS[match[1]] }
+  }
+
+  return null
+}
+
 function withTamaguiDedupe(config) {
   const extraNodeModules = { ...(config.resolver?.extraNodeModules ?? {}) }
   const nodeEmpty = path.join(projectRoot, 'lib/metro-stubs/node-empty.js')
@@ -70,15 +116,65 @@ function withTamaguiDedupe(config) {
         ...(config.resolver?.nodeModulesPaths ?? []).filter((p) => p !== nodeModules),
       ],
       resolveRequest(context, moduleName, platform) {
-        // Node built-ins pulled in by `qrcode` / `exceljs` (via auth QR + bulk import).
-        // Hermes has no `fs`; requiring it white-screens the native app.
+        const datetimepickerStub = datetimepickerSpecStub(
+          moduleName,
+          context.originModulePath,
+        )
+        if (datetimepickerStub) {
+          return datetimepickerStub
+        }
+
+        // LiveKit WebRTC → nested `debug` Node entry does require('tty').
+        // Hermes has no Node require (Rolldown `__require` throws). Force browser build.
+        if (
+          typeof moduleName === 'string' &&
+          (moduleName === 'debug/src/node.js' ||
+            moduleName === 'debug/src/node' ||
+            moduleName.endsWith('/debug/src/node.js') ||
+            moduleName.endsWith('/debug/src/node'))
+        ) {
+          const fromOrigin =
+            typeof context.originModulePath === 'string'
+              ? path.dirname(context.originModulePath)
+              : projectRoot
+          const candidates = [
+            path.join(fromOrigin, 'browser.js'),
+            path.join(fromOrigin, '..', 'browser.js'),
+            path.join(projectRoot, 'node_modules/debug/src/browser.js'),
+            path.join(
+              projectRoot,
+              'node_modules/@livekit/react-native-webrtc/node_modules/debug/src/browser.js',
+            ),
+          ]
+          for (const filePath of candidates) {
+            if (require('fs').existsSync(filePath)) {
+              return { type: 'sourceFile', filePath }
+            }
+          }
+        }
+
+        if (moduleName === 'util' || moduleName === 'node:util') {
+          return {
+            type: 'sourceFile',
+            filePath: path.join(projectRoot, 'lib/metro-stubs/node-util.js'),
+          }
+        }
+
         if (
           moduleName === 'fs' ||
           moduleName === 'node:fs' ||
           moduleName === 'graceful-fs' ||
           moduleName === 'fs.realpath' ||
           moduleName === 'fs-constants' ||
-          moduleName === 'fstream'
+          moduleName === 'fstream' ||
+          moduleName === 'tty' ||
+          moduleName === 'node:tty' ||
+          moduleName === 'net' ||
+          moduleName === 'node:net' ||
+          moduleName === 'dns' ||
+          moduleName === 'node:dns' ||
+          moduleName === 'os' ||
+          moduleName === 'node:os'
         ) {
           return {
             type: 'sourceFile',

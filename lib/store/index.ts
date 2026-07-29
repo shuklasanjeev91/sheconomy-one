@@ -33,10 +33,13 @@ import { vendorPaymentReducer } from '~/lib/payment/payment.store'
 import { returnPolicyReducer } from '~/lib/return-policy/return-policy.store'
 import { shippingPolicyReducer } from '~/lib/shipping-policy/shipping-policy.store'
 import { listingReviewsReducer } from '~/lib/listing-reviews/listing-reviews.store'
+import { salesAnalyticsReducer } from '~/lib/sales-analytics/sales-analytics.store'
+import { discountReducer } from '~/lib/discount/discount.store'
+import { vendorShippingReducer } from '~/lib/vendor-shipping/vendor-shipping.store'
 import { shopReviewReducer } from '~/lib/shop-review/shop-review.store'
 import { vendorOrdersReducer } from '~/lib/orders/vendor-orders.store'
 
-import { persistStorage } from './storage'
+import { persistStorage } from '~/lib/store/storage'
 
 const completionPersistConfig = {
   key: 'profile-completion',
@@ -89,6 +92,9 @@ const appReducer = combineReducers({
   returnPolicy: returnPolicyReducer,
   shippingPolicy: shippingPolicyReducer,
   listingReviews: listingReviewsReducer,
+  salesAnalytics: salesAnalyticsReducer,
+  discount: discountReducer,
+  vendorShipping: vendorShippingReducer,
   shopReview: shopReviewReducer,
   payment: paymentReducer,
   orderIssues: orderIssuesReducer,

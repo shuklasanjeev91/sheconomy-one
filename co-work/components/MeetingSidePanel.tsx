@@ -30,7 +30,7 @@ export function MeetingSidePanel({ children, fullWidth }: MeetingSidePanelProps)
         borderTopWidth={1}
         borderTopColor={coworkUi.borderAccent}
         pointerEvents="auto"
-        style={sidePanelShadow('0 -12px 48px rgba(208, 16, 96, 0.12)')}
+        style={sidePanelShadow('0 -12px 48px rgba(216, 27, 96, 0.12)')}
       >
         {children}
       </YStack>

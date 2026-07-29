@@ -15,8 +15,8 @@ import { createAsyncThunk, createSlice, current, type PayloadAction } from '@red
 import type { ShopDashboardData } from '~/commerce/lib/seller-dashboard'
 import type { AppDispatch } from '~/lib/store'
 
-import * as shopService from './shop.service'
-import type { PaginatedShops } from './shop.service'
+import * as shopService from '~/lib/shop/shop.service'
+import type { PaginatedShops } from '~/lib/shop/shop.service'
 import {
   DEFAULT_SHOP_CURRENCY,
   EMPTY_SHOP_FORM_DATA,
@@ -30,8 +30,8 @@ import {
   type ShopSummary,
   type ShopUpdate,
   type ShopValidationResult,
-} from './shop.type'
-import { validateShopData } from './shop.validation'
+} from '~/lib/shop/shop.type'
+import { validateShopData } from '~/lib/shop/shop.validation'
 
 // ============= STATE =============
 
@@ -456,13 +456,17 @@ const shopSlice = createSlice({
         // Reconcile the selected shop against the freshly loaded set. A persisted
         // `currentShop` can belong to a previous session/account, so only keep it
         // if it's actually one of this user's shops; otherwise pick their active
-        // (or first) shop.
-        const stillOwned =
-          state.currentShop != null &&
-          action.payload.some((shop) => shop.id === state.currentShop!.id)
-        if (!stillOwned) {
-          state.currentShop = action.payload.find((shop) => shop.is_active) ?? action.payload[0] ?? null
-        }
+        // (or first) shop. When still owned, replace with the fresh row so fields
+        // like shop_currency stay in sync with the server.
+        const freshCurrent =
+          state.currentShop != null
+            ? action.payload.find((shop) => shop.id === state.currentShop!.id)
+            : undefined
+        state.currentShop =
+          freshCurrent ??
+          action.payload.find((shop) => shop.is_active) ??
+          action.payload[0] ??
+          null
         state.isLoadingMyShops = false
         state.myShopsLoaded = true
       })

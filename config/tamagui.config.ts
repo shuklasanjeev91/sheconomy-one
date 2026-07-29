@@ -2,7 +2,7 @@ import { config as configBase } from '@tamagui/config/v3'
 import { createAnimations } from '@tamagui/animations-css'
 import { createTamagui } from 'tamagui'
 
-import { themes, tokens } from './themes'
+import { themes, tokens } from '~/config/themes'
 
 const extraAnimations = createAnimations({
   smooth: '250ms cubic-bezier(0.4, 0, 0.2, 1)',
@@ -12,7 +12,7 @@ const extraAnimations = createAnimations({
 
 /**
  * Tamagui v3 preset plus a custom `sheconomy` accent theme derived from the
- * logo palette (#D01060 magenta, #F87840 coral).
+ * logo palette (#D81B60 magenta, #FF8C42 coral).
  */
 const tamaguiConfig = createTamagui({
   ...configBase,

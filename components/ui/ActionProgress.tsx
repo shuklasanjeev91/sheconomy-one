@@ -1,5 +1,5 @@
 import { XStack, YStack } from 'tamagui'
-import { Text } from './Text'
+import { Text } from '~/components/ui/Text'
 
 import { Spinner } from '~/components/ui/Spinner'
 import { useAppUi } from '~/lib/theme/useAppUi'

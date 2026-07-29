@@ -4,7 +4,7 @@ import type { ReviewSummary } from '~/commerce/lib/reviews'
 import { hasVisibleReviews } from '~/commerce/lib/reviews'
 import { useAppUi } from '~/lib/theme/useAppUi'
 
-import { StarRating } from './StarRating'
+import { StarRating } from '~/commerce/components/StarRating'
 
 type RatingSummaryProps = {
   summary: ReviewSummary

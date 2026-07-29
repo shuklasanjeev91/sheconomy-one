@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 
 import { Icons, Text, XStack, YStack } from '~/components/ui'
 import { radius } from '~/config/tokens'
-import { CommercePanel } from './CommercePanel'
+import { CommercePanel } from '~/commerce/components/CommercePanel'
 import {
   fetchShopCommerceSettings,
   type ShopPartnerInfo,

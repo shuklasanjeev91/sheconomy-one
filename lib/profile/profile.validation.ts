@@ -6,7 +6,7 @@ import {
   type ProfileUpdate,
   type ProfileValidationResult,
   type UserRole,
-} from './profile.type'
+} from '~/lib/profile/profile.type'
 /**
  * Field-level validators built on top of the shared `~/lib/validation` helpers.
  * These are safe to plug directly into `useFormValidation` schemas.

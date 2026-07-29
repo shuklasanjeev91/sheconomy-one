@@ -1,8 +1,9 @@
 import { useRouter } from 'one'
+import { Platform } from 'react-native'
 import { SpaRedirect } from '~/components/navigation/SpaRedirect'
 import { AppLink } from '~/components/navigation/AppLink'
 import type { ReactNode } from 'react'
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
 import {
   Field,
@@ -23,8 +24,11 @@ import { useShopPartners } from '~/commerce/hooks/useShopPartners'
 import { useShopHeaders } from '~/commerce/hooks/useShopHeaders'
 import {
   CartCoupon,
+  CheckoutContactSection,
   CommerceButton,
   CommerceLink,
+  CommerceMobileCheckoutBar,
+  COMMERCE_MOBILE_CHECKOUT_BAR_HEIGHT,
   CommerceRadio,
   ShopPartnerChips,
   ShopRatingBadge,
@@ -41,17 +45,30 @@ import {
   type UserAddress,
 } from '~/commerce/lib/checkout'
 import { ensureShepayCheckoutUrl } from '~/commerce/lib/shepay'
+import { ensureDirectCheckoutUrl } from '~/commerce/lib/razorpay-direct'
 import {
   checkoutShippingLabel,
   onlinePaymentOptionCopy,
   resolvePostCheckoutNext,
 } from '~/commerce/lib/checkout-payment-route'
 import { savePendingOrderSuccess } from '~/commerce/lib/customer-orders'
+import {
+  computeCheckoutShippingQuote,
+  fetchDeliveryProfilesByShopIds,
+} from '~/commerce/lib/checkout-shipping'
+import type { ShippingPolicy } from '~/lib/shipping-policy/shipping-policy.type'
 import { computeSelectedTotals, useCartSelection } from '~/commerce/lib/cart-selection'
+import { ensureCartDiscountValidForCheckout, toCartOfferItems } from '~/commerce/lib/discounts'
 import { cartRequiresShipping, fetchListingTypesByIds } from '~/commerce/lib/listing-fulfillment'
 import { paymentCollectionFor } from '~/commerce/lib/shop-commerce'
 import { deliveryEstimateLabel } from '~/commerce/lib/delivery-estimate'
-import { formatCurrency } from '~/lib/format'
+import {
+  buildCustomerAmountsByShop,
+  computeCheckoutDisplayTotals,
+  computeShopDisplaySubtotal,
+  shopCurrencyFor,
+} from '~/commerce/lib/checkout-display-pricing'
+import { useFormatCurrency } from '~/hooks/useFormatCurrency'
 import { useFormValidation } from '~/hooks/useFormValidation'
 import { useProfile } from '~/hooks/useProfile'
 import { openExternalUrl } from '~/lib/platform/openUrl'
@@ -74,18 +91,21 @@ import {
 import { maxLength, minLength, required } from '~/lib/validation'
 import { useAppLayout } from '~/hooks/useAppLayout'
 import { useAppUi } from '~/lib/theme/useAppUi'
+import { resolveAuthContact } from '~/features/auth/services/account-contact'
 import { trackCommerceEvent } from '~/lib/analytics'
+import { navigateApp, replaceApp } from '~/lib/platform/navigate'
 
 const SUMMARY_WIDTH = 320
 
 export function CheckoutScreen() {
   const c = useCommercePalette()
+  const ui = useAppUi()
   const { isDesktop } = useAppLayout()
   const { user, isAuthenticated } = useProfile()
+  const { formatMoney, convertMoney, preferredCurrency } = useFormatCurrency()
   const { cart, items: cartItems, isLoading, refresh } = useCart()
   const { items, isChecking } = useStorefrontCartItems(cartItems)
   const toast = useAppToast()
-  const router = useRouter()
 
   const [addresses, setAddresses] = useState<UserAddress[]>([])
   const [recentAddresses, setRecentAddresses] = useState<RecentAddressSnapshot[]>([])
@@ -105,13 +125,33 @@ export function CheckoutScreen() {
   const [giftByShop, setGiftByShop] = useState<Record<string, boolean>>({})
   const [paymentMethod, setPaymentMethod] = useState<CheckoutPaymentMode>('online')
   const [isSubmitting, setIsSubmitting] = useState(false)
+  const [isRedirectingToPayment, setIsRedirectingToPayment] = useState(false)
   const [orderPlaced, setOrderPlaced] = useState(false)
   const [isLoadingAddresses, setIsLoadingAddresses] = useState(true)
   const [listingTypes, setListingTypes] = useState<Map<string, string>>(new Map())
+  const [deliveryProfilesByShop, setDeliveryProfilesByShop] = useState(
+    () => new Map<string, ShippingPolicy[]>(),
+  )
   const checkoutAttemptKey = useRef<string | null>(null)
+  const [contactCheckoutReady, setContactCheckoutReady] = useState(false)
+  const [addressError, setAddressError] = useState<string | null>(null)
+
+  const authContact = useMemo(() => resolveAuthContact(user), [user])
+
+  useEffect(() => {
+    setContactCheckoutReady(authContact.checkoutReady)
+  }, [authContact.checkoutReady])
 
   const availableIds = useMemo(() => items.map((item) => item.id), [items])
-  const { isSelected, noneSelected } = useCartSelection(availableIds)
+  const { isSelected, noneSelected, selectedIds } = useCartSelection(availableIds)
+  const selectedIdsKey = useMemo(
+    () => [...selectedIds].sort().join(','),
+    [[...selectedIds].sort().join(',')],
+  )
+  const itemShopKey = useMemo(
+    () => items.map((item) => `${item.id}:${item.shop_id}:${item.shop_name}`).join('|'),
+    [items],
+  )
   const { selectedItems, subtotal, unitCount, discount, total } = computeSelectedTotals(
     cart,
     items,
@@ -133,16 +173,198 @@ export function CheckoutScreen() {
   }, [cart?.id, selectedItems.length])
 
   const orderShops = useMemo(() => {
+    const selected = new Set(selectedIds)
     const map = new Map<string, string>()
-    for (const item of selectedItems) {
+    for (const item of items) {
+      if (!selected.has(item.id)) continue
       if (!map.has(item.shop_id)) map.set(item.shop_id, item.shop_name)
     }
     return [...map.entries()].map(([shopId, shopName]) => ({ shopId, shopName }))
-  }, [selectedItems])
+  }, [itemShopKey, selectedIdsKey])
 
-  const shopIds = useMemo(() => orderShops.map((shop) => shop.shopId), [orderShops])
+  const shopIdsKey = useMemo(() => {
+    const selected = new Set(selectedIdsKey ? selectedIdsKey.split(',') : [])
+    const ids = new Set<string>()
+    for (const item of items) {
+      if (!selected.has(item.id) || !item.shop_id) continue
+      ids.add(item.shop_id)
+    }
+    return [...ids].sort().join(',')
+  }, [itemShopKey, selectedIdsKey])
+
+  useEffect(() => {
+    if (!shopIdsKey) {
+      setDeliveryProfilesByShop((prev) => (prev.size === 0 ? prev : new Map()))
+      return
+    }
+    const shopIds = shopIdsKey.split(',')
+    let active = true
+    void fetchDeliveryProfilesByShopIds(shopIds)
+      .then((profiles) => {
+        if (!active) return
+        setDeliveryProfilesByShop((prev) => {
+          if (prev.size === profiles.size) {
+            let unchanged = true
+            for (const [shopId, rows] of profiles) {
+              const existing = prev.get(shopId)
+              if (!existing || existing.length !== rows.length) {
+                unchanged = false
+                break
+              }
+            }
+            if (unchanged) return prev
+          }
+          return profiles
+        })
+      })
+      .catch(() => {
+        if (active) setDeliveryProfilesByShop((prev) => (prev.size === 0 ? prev : new Map()))
+      })
+    return () => {
+      active = false
+    }
+  }, [shopIdsKey])
+
+  const needsShipping = cartRequiresShipping(
+    listingTypes,
+    selectedItems.map((item) => item.listing_id),
+  )
+
+  const checkoutAddressDraft = useMemo(
+    (): CheckoutAddressInput => ({
+      ...newAddress,
+      address_line_1: addressForm.fields.address_line_1.value.trim(),
+      address_line_2: addressForm.fields.address_line_2.value.trim(),
+    }),
+    [
+      addressForm.fields.address_line_1.value,
+      addressForm.fields.address_line_2.value,
+      newAddress,
+    ],
+  )
+
+  const addressReady = useMemo(() => {
+    if (!needsShipping) return true
+    if (useNewAddress) return !validateAddressInput(checkoutAddressDraft)
+    return Boolean(selectedAddressId)
+  }, [checkoutAddressDraft, needsShipping, selectedAddressId, useNewAddress])
+
+  const addressRequirementMessage = useMemo(() => {
+    if (!needsShipping || addressReady) return null
+    if (!useNewAddress) {
+      return addresses.length > 0
+        ? 'Select a delivery address to continue.'
+        : 'Add a delivery address to continue.'
+    }
+    if (
+      addresses.length === 0 &&
+      !checkoutAddressDraft.address_line_1.trim() &&
+      !checkoutAddressDraft.city.trim()
+    ) {
+      return 'Add a delivery address to continue.'
+    }
+    return validateAddressInput(checkoutAddressDraft) ?? 'Add a delivery address to continue.'
+  }, [addressReady, addresses.length, checkoutAddressDraft, needsShipping, useNewAddress])
+
+  const deliveryAddressNotice = addressError ?? addressRequirementMessage
+
+  useEffect(() => {
+    if (addressReady) setAddressError(null)
+  }, [addressReady])
+
+  useEffect(() => {
+    setAddressError(null)
+  }, [
+    checkoutAddressDraft.address_line_1,
+    checkoutAddressDraft.address_line_2,
+    checkoutAddressDraft.city,
+    checkoutAddressDraft.state,
+    checkoutAddressDraft.postal_code,
+    checkoutAddressDraft.country,
+    selectedAddressId,
+    useNewAddress,
+  ])
+
+  const shippingQuote = useMemo(
+    () =>
+      computeCheckoutShippingQuote({
+        cart,
+        selectedItems,
+        listingTypes,
+        deliveryProfilesByShop,
+        selectedSubtotal: subtotal,
+        selectedDiscount: discount,
+      }),
+    [cart, deliveryProfilesByShop, discount, listingTypes, selectedItems, subtotal],
+  )
+
+  const orderTotal = needsShipping ? shippingQuote.grandTotal : total
+  const shopIds = useMemo(() => (shopIdsKey ? shopIdsKey.split(',') : []), [shopIdsKey])
   const { partners: shopPartners } = useShopPartners(shopIds)
   const shopHeaders = useShopHeaders(shopIds)
+  const settlementCurrency = cart?.currency ?? 'INR'
+  const shopCurrencies = useMemo(() => {
+    const map = new Map<string, string>()
+    for (const [shopId, header] of shopHeaders) {
+      map.set(shopId, header.shopCurrency)
+    }
+    return map
+  }, [shopHeaders])
+
+  const displayTotals = useMemo(
+    () =>
+      computeCheckoutDisplayTotals({
+        selectedItems,
+        subtotal,
+        discount,
+        shippingQuote,
+        needsShipping,
+        shopCurrencies,
+        convertMoney,
+        settlementCurrency,
+      }),
+    [
+      convertMoney,
+      discount,
+      needsShipping,
+      selectedItems,
+      settlementCurrency,
+      shippingQuote,
+      shopCurrencies,
+      subtotal,
+    ],
+  )
+
+  const customerAmountsByShop = useMemo(
+    () =>
+      buildCustomerAmountsByShop({
+        selectedItems,
+        subtotal,
+        discount,
+        shippingQuote,
+        shopCurrencies,
+        convertMoney,
+        settlementCurrency,
+      }),
+    [
+      convertMoney,
+      discount,
+      selectedItems,
+      settlementCurrency,
+      shippingQuote,
+      shopCurrencies,
+      subtotal,
+    ],
+  )
+
+  const formatCheckoutMoney = useCallback(
+    (amount: number, sourceCurrency?: string | null) =>
+      formatMoney(amount, sourceCurrency ?? preferredCurrency, {
+        convert: sourceCurrency ? undefined : false,
+      }),
+    [formatMoney, preferredCurrency],
+  )
+
   const multiShop = orderShops.length > 1
 
   // Group shops by who collects the money. Every SHEPay shop can be collected in a
@@ -185,11 +407,13 @@ export function CheckoutScreen() {
     void readRecentAddresses().then(setRecentAddresses)
   }, [])
 
+  const userId = user?.id ?? null
+
   useEffect(() => {
-    if (!isAuthenticated || !user) return
+    if (!isAuthenticated || !userId) return
 
     setIsLoadingAddresses(true)
-    fetchUserAddresses(user.id)
+    fetchUserAddresses(userId)
       .then(({ addresses: rows, error }) => {
         setAddresses(rows)
         const defaultAddress = rows.find((row) => row.is_default) ?? rows[0]
@@ -199,7 +423,7 @@ export function CheckoutScreen() {
       })
       .catch(() => toast.show('Could not load addresses', { tone: 'danger' }))
       .finally(() => setIsLoadingAddresses(false))
-  }, [isAuthenticated, toast, user])
+  }, [isAuthenticated, toast, userId])
 
   if (!isAuthenticated) {
     return <SpaRedirect href={routes.signIn} />
@@ -222,16 +446,62 @@ export function CheckoutScreen() {
     return <SpaRedirect href={commerceRoutes.home} />
   }
 
-  const currency = cart.currency ?? 'INR'
-  const needsShipping = cartRequiresShipping(
-    listingTypes,
-    selectedItems.map((item) => item.listing_id),
-  )
-  const placeLabel = 'Place your order'
-  const canPlace = !noneSelected && !isSubmitting
+  const showSettlementCurrencyNote = preferredCurrency !== settlementCurrency
+
+  // Pure Razorpay-direct order: no SHEPay steps involved, payment mode is online.
+  // Used to contextualise button labels so the user understands they are going
+  // to a payment gateway, not placing a confirmed order.
+  const isRazorpayDirectOnly =
+    paymentMethod === 'online' &&
+    paymentGroups.direct.length > 0 &&
+    paymentGroups.shepay.length === 0
+
+  const placeLabel = isRazorpayDirectOnly ? 'Continue to payment' : 'Place your order'
+  const submittingLabel = isRazorpayDirectOnly ? 'Setting up payment…' : 'Placing…'
+
+  const canPlace =
+    !noneSelected &&
+    !isSubmitting &&
+    !isRedirectingToPayment &&
+    !isLoadingAddresses &&
+    contactCheckoutReady &&
+    addressReady
+  const showMobileBar = !isDesktop && !orderPlaced
+
+  function handlePlaceOrderPress() {
+    if (needsShipping && !addressReady) {
+      const message = addressRequirementMessage ?? 'Add a delivery address to continue.'
+      setAddressError(message)
+      toast.show('Delivery address required', { tone: 'warning', message })
+      return
+    }
+    if (!contactCheckoutReady) {
+      toast.show('Verify your mobile', {
+        tone: 'warning',
+        message: 'Add and verify a mobile number before placing your order.',
+      })
+      return
+    }
+    if (!canPlace) return
+    void handlePlaceOrder()
+  }
 
   async function handlePlaceOrder() {
-    if (!cart || !user || noneSelected) return
+    if (!cart || !user || noneSelected || !contactCheckoutReady) {
+      if (!contactCheckoutReady) {
+        toast.show('Verify your mobile', {
+          tone: 'warning',
+          message: 'Add and verify a mobile number before placing your order.',
+        })
+      }
+      return
+    }
+    if (needsShipping && !addressReady) {
+      const message = addressRequirementMessage ?? 'Add a delivery address to continue.'
+      setAddressError(message)
+      toast.show('Delivery address required', { tone: 'warning', message })
+      return
+    }
     setIsSubmitting(true)
 
     let shippingAddressId = selectedAddressId
@@ -257,7 +527,7 @@ export function CheckoutScreen() {
               : `${issues.length} items exceed available stock. Update quantities in your cart.`,
         })
         setIsSubmitting(false)
-        router.push(commerceRoutes.cart)
+        navigateApp(commerceRoutes.cart)
         return
       }
 
@@ -306,6 +576,24 @@ export function CheckoutScreen() {
         .map((item) => item.id)
         .sort()
         .join(',')
+
+      if (cart.applied_discount_id) {
+        const { removed } = await ensureCartDiscountValidForCheckout(
+          cart,
+          toCartOfferItems(selectedItems),
+        )
+        if (removed) {
+          await refresh()
+          toast.show('Coupon removed', {
+            tone: 'default',
+            message:
+              'The applied offer no longer applies to your selected items. Review your order and try again.',
+          })
+          setIsSubmitting(false)
+          return
+        }
+      }
+
       if (
         !checkoutAttemptKey.current ||
         !checkoutAttemptKey.current.includes(`:${selectionKey}:`)
@@ -323,6 +611,8 @@ export function CheckoutScreen() {
         giftShopIds: Object.entries(giftByShop)
           .filter(([, enabled]) => enabled)
           .map(([shopId]) => shopId),
+        customerCurrency: preferredCurrency,
+        customerAmountsByShop: customerAmountsByShop,
       })
       if (result.error || !result.data) {
         toast.show('Checkout failed', {
@@ -336,15 +626,22 @@ export function CheckoutScreen() {
       const { orderIds, orderNumbers, checkoutGroupId } = result.data
       let checkoutUrl =
         result.data.paymentSteps.find((step) => step.checkoutUrl)?.checkoutUrl ?? null
-      let shepayError: string | null = null
+      let paymentSetupError: string | null = null
       const hasShepaySteps = result.data.paymentSteps.some((step) => step.collection === 'shepay')
+      const hasDirectSteps = result.data.paymentSteps.some((step) => step.collection === 'direct')
 
       if (mode === 'online' && hasShepaySteps && !checkoutUrl) {
         const shepay = await ensureShepayCheckoutUrl(result.data.paymentSteps, {
           paymentMethodId: null,
         })
-        shepayError = shepay.error
+        paymentSetupError = shepay.error
         checkoutUrl = shepay.checkoutUrl
+      }
+
+      if (mode === 'online' && hasDirectSteps && !checkoutUrl) {
+        const direct = await ensureDirectCheckoutUrl(result.data.paymentSteps)
+        paymentSetupError = paymentSetupError ?? direct.error
+        checkoutUrl = direct.checkoutUrl ?? checkoutUrl
       }
 
       const usedAddress =
@@ -367,8 +664,8 @@ export function CheckoutScreen() {
       const next = resolvePostCheckoutNext({
         mode,
         checkoutUrl,
-        shepayError,
-        hasShepaySteps,
+        shepayError: paymentSetupError,
+        hasShepaySteps: hasShepaySteps || hasDirectSteps,
       })
 
       if (next.kind === 'cancel_and_stay') {
@@ -382,8 +679,6 @@ export function CheckoutScreen() {
         setIsSubmitting(false)
         return
       }
-
-      setOrderPlaced(true)
 
       const awaitingExternalPayment = next.kind === 'payu_bridge' || next.kind === 'external_pay'
       const pendingUrl =
@@ -404,14 +699,28 @@ export function CheckoutScreen() {
       const successHref = commerceRoutes.orderSuccess(orderIds)
 
       if (next.kind === 'payu_bridge') {
+        setOrderPlaced(true)
         void refresh()
-        router.replace(next.href as never)
+        replaceApp(next.href as never)
         return
       }
 
       if (next.kind === 'external_pay') {
+        const isRazorpayDirect = hasDirectSteps && !hasShepaySteps
+        if (Platform.OS === 'web' && isRazorpayDirect && typeof window !== 'undefined') {
+          // Same-tab redirect: razorpay-return handles the callback.
+          // Do NOT set orderPlaced — the page is destroyed immediately after redirect.
+          // The button switches to "Redirecting to payment…" for the brief moment before navigation.
+          setIsRedirectingToPayment(true)
+          setTimeout(() => {
+            window.location.href = next.url
+          }, 120)
+          return
+        }
+        // Native / non-Razorpay external: open in browser then show pending order screen.
+        setOrderPlaced(true)
         const opened = await openExternalUrl(next.url)
-        router.replace(successHref)
+        replaceApp(successHref)
         void refresh()
         if (!opened) {
           toast.show('Complete payment', {
@@ -422,9 +731,11 @@ export function CheckoutScreen() {
         return
       }
 
+      // COD / fully settled at checkout — show success immediately.
+      setOrderPlaced(true)
       trackCommerceEvent('purchase', {
-        currency,
-        value: total,
+        currency: settlementCurrency,
+        value: orderTotal,
         transactionId: orderNumbers[0] ?? orderIds[0] ?? cart.id,
         items: selectedItems.map((item) => ({
           id: item.listing_id,
@@ -443,7 +754,7 @@ export function CheckoutScreen() {
               ? `Order ${orderNumbers[0]} has been placed.`
               : 'Your order has been placed.',
       })
-      router.replace(successHref)
+      replaceApp(successHref)
       void refresh()
     } catch {
       toast.show('Checkout failed', { tone: 'danger', message: 'Please try again.' })
@@ -452,9 +763,32 @@ export function CheckoutScreen() {
   }
 
   const placeButton = (
-    <CommerceButton variant="primary" width="100%" disabled={!canPlace} onPress={handlePlaceOrder}>
-      {isSubmitting ? 'Placing…' : placeLabel}
-    </CommerceButton>
+    <YStack gap="$2" width="100%">
+      {needsShipping && deliveryAddressNotice ? (
+        <XStack
+          alignItems="center"
+          gap="$2"
+          padding="$2"
+          borderRadius={8}
+          borderWidth={1}
+          borderColor={ui.error}
+          backgroundColor={ui.roseSurface}
+        >
+          <Icons.Info size={14} color={ui.error} />
+          <Text fontSize={12} color={ui.error} fontWeight="600" flex={1}>
+            {deliveryAddressNotice}
+          </Text>
+        </XStack>
+      ) : null}
+      <CommerceButton
+        variant="primary"
+        width="100%"
+        disabled={!canPlace}
+        onPress={handlePlaceOrderPress}
+      >
+        {isRedirectingToPayment ? 'Redirecting to payment…' : isSubmitting ? submittingLabel : placeLabel}
+      </CommerceButton>
+    </YStack>
   )
 
   const orderSummary = (
@@ -467,20 +801,35 @@ export function CheckoutScreen() {
       gap="$3"
       width="100%"
     >
-      {placeButton}
-      <Text fontSize={11} color={c.secondary} textAlign="center" lineHeight={15}>
-        By placing your order, you agree to SHEconomy&apos;s privacy notice and conditions of use.
-      </Text>
+      {!isDesktop ? null : placeButton}
+      {isDesktop ? (
+        <Text fontSize={11} color={c.secondary} textAlign="center" lineHeight={15}>
+          By placing your order, you agree to SHEconomy&apos;s privacy notice and conditions of use.
+        </Text>
+      ) : null}
       <YStack height={1} backgroundColor={c.divider} />
       <Text fontSize={17} fontWeight="700" color={c.text}>
         Order summary
       </Text>
-      <SummaryRow label={`Items (${unitCount})`} value={formatCurrency(subtotal, currency)} />
-      <SummaryRow label="Delivery" value="FREE" valueColor={c.inStock} />
+      <SummaryRow
+        label={`Items (${unitCount})`}
+        value={formatCheckoutMoney(displayTotals.itemsSubtotal)}
+      />
+      <SummaryRow
+        label="Delivery"
+        value={
+          needsShipping
+            ? displayTotals.shipping <= 0
+              ? 'FREE'
+              : formatCheckoutMoney(displayTotals.shipping)
+            : 'FREE'
+        }
+        valueColor={c.inStock}
+      />
       {discount > 0 ? (
         <SummaryRow
           label={`Promotion${cart.applied_discount_name ? ` (${cart.applied_discount_name})` : ''}`}
-          value={`−${formatCurrency(discount, currency)}`}
+          value={`−${formatCheckoutMoney(displayTotals.promotion)}`}
           valueColor={c.inStock}
         />
       ) : null}
@@ -491,9 +840,15 @@ export function CheckoutScreen() {
           Order total:
         </Text>
         <Text fontSize={18} fontWeight="700" color={c.priceStrong}>
-          {formatCurrency(total, currency)}
+          {formatCheckoutMoney(displayTotals.orderTotal)}
         </Text>
       </XStack>
+      {showSettlementCurrencyNote ? (
+        <Text fontSize={11} color={c.secondary} lineHeight={15}>
+          Prices shown in {preferredCurrency}. You will be charged in {settlementCurrency} at
+          payment.
+        </Text>
+      ) : null}
       {multiShop ? (
         <Text fontSize={11} color={c.secondary} lineHeight={15}>
           {paymentGroups.direct.length
@@ -501,10 +856,18 @@ export function CheckoutScreen() {
             : `Securely collected by SHEconomy · ${orderShops.length} shops fulfil separately`}
         </Text>
       ) : null}
+      {isDesktop ? null : (
+        <>
+          {placeButton}
+          <Text fontSize={11} color={c.secondary} textAlign="center" lineHeight={15}>
+            By placing your order, you agree to SHEconomy&apos;s privacy notice and conditions of use.
+          </Text>
+        </>
+      )}
     </YStack>
   )
 
-  return (
+  const checkoutLayout = (
     <FullWidthLayout scroll>
       <PageSection paddingVertical="$5" {...LAYOUT_STRETCH}>
         <YStack
@@ -515,6 +878,9 @@ export function CheckoutScreen() {
           backgroundColor={c.page}
           padding={isDesktop ? '$4' : '$2'}
           borderRadius={12}
+          paddingBottom={
+            showMobileBar ? COMMERCE_MOBILE_CHECKOUT_BAR_HEIGHT + 24 : undefined
+          }
         >
           <XStack alignItems="center" gap="$2" paddingHorizontal="$1">
             <Icons.Lock size={16} color={c.brand} />
@@ -531,8 +897,25 @@ export function CheckoutScreen() {
             gap="$4"
           >
             <YStack flex={1} minWidth={0} width="100%" gap="$4">
+              {user ? (
+                <SectionCard step={1} title="Contact details">
+                  <CheckoutContactSection
+                    user={user}
+                    onCheckoutReadyChange={setContactCheckoutReady}
+                  />
+                </SectionCard>
+              ) : null}
+
               {needsShipping ? (
-                <SectionCard step={1} title="Delivery address">
+                <SectionCard step={2} title="Delivery address">
+                  {addresses.length === 0 ? (
+                    <XStack alignItems="center" gap="$2">
+                      <Icons.Info size={14} color={ui.badgeAccentText} />
+                      <Text fontSize={13} color={ui.badgeAccentText} fontWeight="600" flex={1}>
+                        Add a delivery address to ship this order.
+                      </Text>
+                    </XStack>
+                  ) : null}
                   {recentAddresses.length > 0 ? (
                     <YStack gap="$2">
                       <Text fontSize={12} fontWeight="600" color={c.secondary}>
@@ -554,9 +937,11 @@ export function CheckoutScreen() {
                               if (match) {
                                 setUseNewAddress(false)
                                 setSelectedAddressId(match.id)
+                                setAddressError(null)
                                 return
                               }
                               setUseNewAddress(true)
+                              setAddressError(null)
                               setNewAddress({
                                 address_line_1: recent.address_line_1,
                                 address_line_2: recent.address_line_2 ?? '',
@@ -598,6 +983,7 @@ export function CheckoutScreen() {
                             onPress={() => {
                               setUseNewAddress(false)
                               setSelectedAddressId(address.id)
+                              setAddressError(null)
                             }}
                           >
                             <YStack paddingTop="$1">
@@ -621,9 +1007,27 @@ export function CheckoutScreen() {
                   ) : null}
 
                   <XStack gap="$3" alignItems="center" flexWrap="wrap">
-                    <CommerceLink onPress={() => setUseNewAddress(true)}>
+                    <CommerceLink
+                      onPress={() => {
+                        setUseNewAddress(true)
+                        setAddressError(null)
+                      }}
+                    >
                       {addresses.length ? '+ Add a new delivery address' : '+ Add a delivery address'}
                     </CommerceLink>
+                    {addresses.length > 0 && useNewAddress ? (
+                      <CommerceLink
+                        onPress={() => {
+                          setUseNewAddress(false)
+                          setSelectedAddressId(
+                            addresses.find((row) => row.is_default)?.id ?? addresses[0]?.id ?? null,
+                          )
+                          setAddressError(null)
+                        }}
+                      >
+                        Choose a saved address
+                      </CommerceLink>
+                    ) : null}
                     <AppLink href={commerceRoutes.addresses} asChild>
                       <Text fontSize={13} color={c.link} cursor="pointer">
                         Manage addresses
@@ -728,9 +1132,17 @@ export function CheckoutScreen() {
                     listingType={needsShipping ? 'physical' : 'digital'}
                     compact
                   />
+                  {deliveryAddressNotice ? (
+                    <XStack alignItems="center" gap="$2" paddingTop="$1">
+                      <Icons.Info size={14} color={ui.error} />
+                      <Text fontSize={12} color={ui.error} fontWeight="600" flex={1}>
+                        {deliveryAddressNotice}
+                      </Text>
+                    </XStack>
+                  ) : null}
                 </SectionCard>
               ) : (
-                <SectionCard step={1} title="Digital delivery">
+                <SectionCard step={2} title="Digital delivery">
                   <Text fontSize={13} color={c.secondary} lineHeight={19}>
                     Your items are digital — files will be available to download right after
                     purchase. No shipping address required.
@@ -738,7 +1150,7 @@ export function CheckoutScreen() {
                 </SectionCard>
               )}
 
-              <SectionCard step={2} title="Payment method">
+              <SectionCard step={needsShipping ? 3 : 2} title="Payment method">
                 {paymentMethod === 'online' && paymentStepCount > 1 ? (
                   <YStack
                     gap="$2"
@@ -804,7 +1216,7 @@ export function CheckoutScreen() {
                 ) : null}
               </SectionCard>
 
-              <SectionCard step={3} title="Review your order">
+              <SectionCard step={needsShipping ? 4 : 3} title="Review your order">
                 {multiShop ? (
                   <Text fontSize={12} color={c.secondary}>
                     Your order includes items from {orderShops.length} shops. Each shop packs and
@@ -814,9 +1226,11 @@ export function CheckoutScreen() {
 
                 {orderShops.map((shop, index) => {
                   const shopItems = selectedItems.filter((item) => item.shop_id === shop.shopId)
-                  const shopSubtotal = shopItems.reduce(
-                    (sum, item) => sum + item.unit_price * item.quantity,
-                    0,
+                  const shopSubtotal = computeShopDisplaySubtotal(
+                    shopItems,
+                    shopCurrencies,
+                    convertMoney,
+                    settlementCurrency,
                   )
                   return (
                     <YStack
@@ -870,7 +1284,10 @@ export function CheckoutScreen() {
                             </Text>
                           </YStack>
                           <Text fontSize={14} fontWeight="700" color={c.priceStrong}>
-                            {formatCurrency(item.unit_price * item.quantity, currency)}
+                            {formatMoney(
+                              item.unit_price * item.quantity,
+                              shopCurrencyFor(item.shop_id, shopCurrencies, settlementCurrency),
+                            )}
                           </Text>
                         </XStack>
                       ))}
@@ -878,7 +1295,7 @@ export function CheckoutScreen() {
                         <Text fontSize={12} color={c.secondary}>
                           Shop subtotal:{' '}
                           <Text fontWeight="700" color={c.text}>
-                            {formatCurrency(shopSubtotal, currency)}
+                            {formatCheckoutMoney(shopSubtotal)}
                           </Text>
                         </Text>
                       </XStack>
@@ -927,6 +1344,26 @@ export function CheckoutScreen() {
         </YStack>
       </PageSection>
     </FullWidthLayout>
+  )
+
+  if (!showMobileBar) return checkoutLayout
+
+  return (
+    <YStack flex={1} width="100%" position="relative">
+      {checkoutLayout}
+      <CommerceMobileCheckoutBar
+        total={displayTotals.orderTotal}
+        currency={preferredCurrency}
+        formattedTotal={formatCheckoutMoney(displayTotals.orderTotal)}
+        formattedSavings={displayTotals.promotion > 0 ? formatCheckoutMoney(displayTotals.promotion) : null}
+        caption={`Order total · ${unitCount} ${unitCount === 1 ? 'item' : 'items'}`}
+        savings={displayTotals.promotion > 0 ? displayTotals.promotion : null}
+        label={isRedirectingToPayment ? 'Redirecting to payment…' : isSubmitting ? submittingLabel : placeLabel}
+        disabled={!canPlace}
+        isLoading={isSubmitting || isRedirectingToPayment}
+        onPress={handlePlaceOrderPress}
+      />
+    </YStack>
   )
 }
 

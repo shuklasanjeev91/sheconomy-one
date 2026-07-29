@@ -1,7 +1,8 @@
 import { useRouter } from 'one'
-import { AppLink } from '~/components/navigation/AppLink'
+import { Platform } from 'react-native'
 import { useState } from 'react'
 
+import { AppLink } from '~/components/navigation/AppLink'
 import { PageContent, LAYOUT_STRETCH } from '~/components/layout'
 import { IdleMount } from '~/components/IdleMount'
 import { DevicePrepCard } from '~/co-work/components/DevicePrepCard'
@@ -10,11 +11,14 @@ import {
   recordMeetingCode,
   useRecentMeetingCodes,
 } from '~/co-work/lib/recent-meeting-codes'
+import { ensureMeetingMediaPermissions } from '~/co-work/lib/meeting-media-permissions'
+import { openInstantMeetingSession } from '~/co-work/lib/instant-meeting-session'
 import { Button, Icons, Input, Spinner, Text, XStack, YStack, useAppToast } from '~/components/ui'
 import { CoWorkBrandChip, CoWorkFeatureCard, CoWorkIconBadge } from '~/co-work/components/CoWorkUi'
 import { createMeeting } from '~/co-work/lib/meetings'
 import { coworkGlassStyle, useCoWorkTheme } from '~/co-work/lib/theme'
 import { controlGradientStyle, coworkBoxShadow, pageGradientStyle } from '~/lib/platform/crossStyles'
+import { navigateApp } from '~/lib/platform/navigate'
 import { coWorkRoutes } from '~/lib/routes'
 import { useProfile } from '~/hooks/useProfile'
 import { useAppLayout } from '~/hooks/useAppLayout'
@@ -83,12 +87,26 @@ export function CoWorkScreen() {
   const recentCodes = useRecentMeetingCodes()
   const [joinCode, setJoinCode] = useState('')
   const [creating, setCreating] = useState(false)
+  const [launchOverlay, setLaunchOverlay] = useState(false)
   const [meetingsRefreshKey, setMeetingsRefreshKey] = useState(0)
 
   async function startInstantMeeting() {
     if (!user) return
     setCreating(true)
+    setLaunchOverlay(true)
     try {
+      // Permission sheets must come before navigation — LiveKit join without
+      // camera/mic access blanks or freezes the chromeless meeting route on iPad.
+      const perms = await ensureMeetingMediaPermissions()
+      if (!perms.ok) {
+        toast.show('Camera & microphone required', {
+          tone: 'error',
+          message: perms.message,
+        })
+        setLaunchOverlay(false)
+        return
+      }
+
       const hostLabel = profile?.full_name?.trim() || profile?.username?.trim() || BRAND_NAME
       const meeting = await createMeeting(user.id, {
         title: `${hostLabel} meeting`,
@@ -98,8 +116,19 @@ export function CoWorkScreen() {
         throw new Error('Meeting was created without a join code. Please try again.')
       }
       recordMeetingCode(meeting.meeting_code)
-      router.push(coWorkRoutes.meetingLive(meeting.meeting_code))
+      if (Platform.OS === 'web') {
+        // Web: dedicated live route is fine (no Hermes Suspense blank).
+        navigateApp(coWorkRoutes.meetingLive(meeting.meeting_code))
+      } else {
+        // Native Release: stay on Co-Work — InstantMeetingHost mounts LiveKit in-place.
+        openInstantMeetingSession({
+          code: meeting.meeting_code,
+          meeting,
+        })
+      }
+      setLaunchOverlay(false)
     } catch (createError) {
+      setLaunchOverlay(false)
       toast.show('Could not start meeting', {
         tone: 'error',
         message: createError instanceof Error ? createError.message : undefined,
@@ -116,14 +145,31 @@ export function CoWorkScreen() {
     router.push(coWorkRoutes.meeting(normalized))
   }
 
-  function joinWithCode(code: string) {
-    const normalized = code.replace(/\s/g, '').toUpperCase()
-    if (!normalized) return
-    recordMeetingCode(normalized)
-    router.push(coWorkRoutes.meeting(normalized))
-  }
-
   return (
+    <>
+    {launchOverlay ? (
+      <YStack
+        position="absolute"
+        top={0}
+        left={0}
+        right={0}
+        bottom={0}
+        zIndex={99999}
+        alignItems="center"
+        justifyContent="center"
+        backgroundColor="#D81B60"
+        gap="$3"
+        padding="$6"
+      >
+        <Spinner size="large" color="#fff" />
+        <Text color="#fff" fontWeight="800" fontSize={18} textAlign="center">
+          Starting meeting…
+        </Text>
+        <Text color="rgba(255,255,255,0.85)" fontSize={14} textAlign="center">
+          Connecting camera and room
+        </Text>
+      </YStack>
+    ) : null}
     <PageContent
       scroll
       backgroundColor={coworkUi.pageBg}
@@ -276,5 +322,6 @@ export function CoWorkScreen() {
         </YStack>
       </YStack>
     </PageContent>
+    </>
   )
 }

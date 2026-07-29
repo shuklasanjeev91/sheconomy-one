@@ -1,1 +1,1 @@
-export * from './useFavorites.tsx'
+export * from '~/commerce/hooks/useFavorites.tsx'

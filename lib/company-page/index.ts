@@ -1,8 +1,8 @@
-export * from './company-page.type'
-export * from './company-page.errors'
-export * from './company-page.utils'
-export * from './company-page.validation'
-export * from './company-page.service'
+export * from '~/lib/company-page/company-page.type'
+export * from '~/lib/company-page/company-page.errors'
+export * from '~/lib/company-page/company-page.utils'
+export * from '~/lib/company-page/company-page.validation'
+export * from '~/lib/company-page/company-page.service'
 export {
   companyPageReducer,
   setCurrentCompanyPage,
@@ -20,4 +20,4 @@ export {
   removeCompanyMember,
   loadCompanyPageFacets,
   loadCompanyPagePlatformStats,
-} from './company-page.store'
+} from '~/lib/company-page/company-page.store'

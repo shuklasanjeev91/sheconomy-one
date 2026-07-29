@@ -1,5 +1,5 @@
-import { GENDER_VERIFICATION } from './constants'
-import type { GenderEstimate } from './constants'
+import { GENDER_VERIFICATION } from '~/lib/gender-verification/constants'
+import type { GenderEstimate } from '~/lib/gender-verification/constants'
 
 type Point = { x: number; y: number }
 

@@ -1,12 +1,12 @@
-import { Avatar, Icons, Paragraph, Spinner, Text, XStack, YStack } from '~/components/ui'
+import { Avatar, Icons, Paragraph, Text, XStack, YStack } from '~/components/ui'
 import { getShadowStyle, radius } from '~/config/tokens'
 import type { PublicReview, ReviewSummary } from '~/commerce/lib/reviews'
 import { hasVisibleReviews } from '~/commerce/lib/reviews'
 import { useAppUi } from '~/lib/theme/useAppUi'
 
-import { RatingSummary } from './RatingSummary'
-import { SectionTitle } from './SectionTitle'
-import { StarRating } from './StarRating'
+import { RatingSummary } from '~/commerce/components/RatingSummary'
+import { SectionTitle } from '~/commerce/components/SectionTitle'
+import { StarRating } from '~/commerce/components/StarRating'
 
 type ReviewsSectionProps = {
   title: string
@@ -25,15 +25,20 @@ export function ReviewsSection({
 }: ReviewsSectionProps) {
   const ui = useAppUi()
 
-  if (isLoading) {
+  // Keep rating summary visible while review rows hydrate — never blank the
+  // bottom of PDP behind a large spinner.
+  if (isLoading && hasVisibleReviews(summary)) {
+    // Fall through to render summary; review rows fill in when ready.
+  } else if (isLoading && !reviews.length) {
     return (
-      <YStack paddingVertical="$6" alignItems="center">
-        <Spinner size="large" />
+      <YStack gap="$3" paddingTop="$2">
+        <SectionTitle title={title} />
+        <RatingSummary summary={summary} size="sm" />
       </YStack>
     )
   }
 
-  if (!hasVisibleReviews(summary) && !reviews.length) {
+  if (!isLoading && !hasVisibleReviews(summary) && !reviews.length) {
     return (
       <YStack gap="$3" paddingTop="$2">
         <SectionTitle title={title} />

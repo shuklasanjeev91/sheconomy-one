@@ -3,13 +3,16 @@ import { AppLink } from '~/components/navigation/AppLink'
 import { Platform } from 'react-native'
 import { useCallback, useEffect, useState } from 'react'
 
-import { RequireAuth } from '~/components/auth/RequireAuth'
+import { AuthSignInFlow } from '~/components/auth/AuthSignInFlow'
 import { AppPage, LAYOUT_STRETCH } from '~/components/layout'
-import { Button, Icons, ScreenState, Text, XStack, YStack } from '~/components/ui'
+import { Button, Icons, ScreenState, Text, XStack, YStack, useAppToast } from '~/components/ui'
 import { CoWorkBrandChip, CoWorkStatusPill } from '~/co-work/components/CoWorkUi'
+import { ensureMeetingMediaPermissions } from '~/co-work/lib/meeting-media-permissions'
+import { openInstantMeetingSession } from '~/co-work/lib/instant-meeting-session'
 import { fetchMyMeetings, formatMeetingCode } from '~/co-work/lib/meetings'
 import { coworkGlassStyle, useCoWorkTheme } from '~/co-work/lib/theme'
 import { coworkBoxShadow, pageGradientStyle } from '~/lib/platform/crossStyles'
+import { navigateApp } from '~/lib/platform/navigate'
 import type { Meeting } from '~/co-work/lib/types'
 import { coWorkRoutes } from '~/lib/routes'
 import { useProfile } from '~/hooks/useProfile'
@@ -44,6 +47,7 @@ function statusTone(status: Meeting['status']) {
 export function CoWorkMeetingsScreen() {
   const { ui: coworkUi, gradients: coworkGradients, shadows: coworkShadows } = useCoWorkTheme()
   const router = useRouter()
+  const toast = useAppToast()
   const { user, isAuthenticated } = useProfile()
   const [meetings, setMeetings] = useState<Meeting[]>([])
   const [loading, setLoading] = useState(true)
@@ -67,7 +71,7 @@ export function CoWorkMeetingsScreen() {
   }, [load])
 
   if (!isAuthenticated || !user) {
-    return <RequireAuth redirectTo={coWorkRoutes.meetings} />
+    return <AuthSignInFlow returnTo={String(coWorkRoutes.meetings)} />
   }
 
   return (
@@ -142,7 +146,26 @@ export function CoWorkMeetingsScreen() {
                   tone="primary"
                   size="$3"
                   borderRadius={999}
-                  onPress={() => router.push(coWorkRoutes.meetingLive(meeting.meeting_code))}
+                  onPress={() => {
+                    void (async () => {
+                      const perms = await ensureMeetingMediaPermissions()
+                      if (!perms.ok) {
+                        toast.show('Camera & microphone required', {
+                          tone: 'error',
+                          message: perms.message,
+                        })
+                        return
+                      }
+                      if (Platform.OS === 'web') {
+                        navigateApp(coWorkRoutes.meetingLive(meeting.meeting_code))
+                      } else {
+                        openInstantMeetingSession({
+                          code: meeting.meeting_code,
+                          meeting,
+                        })
+                      }
+                    })()
+                  }}
                 >
                   Start
                 </Button>
@@ -151,7 +174,7 @@ export function CoWorkMeetingsScreen() {
                   size="$3"
                   borderRadius={999}
                   borderColor={coworkUi.glassBorder}
-                  onPress={() => router.push(coWorkRoutes.meeting(meeting.meeting_code))}
+                  onPress={() => navigateApp(coWorkRoutes.meeting(meeting.meeting_code))}
                 >
                   Lobby
                 </Button>

@@ -14,12 +14,12 @@ import {
   SHOP_REVIEW_ELIGIBILITY_REASONS,
   SHOP_REVIEW_STATUS,
   SHOP_REVIEW_SUCCESS_MESSAGES,
-} from './shop-review.constants'
+} from '~/lib/shop-review/shop-review.constants'
 import {
   ShopReviewError,
   SHOP_REVIEW_ERROR_CODES,
   toFriendlyShopReviewError,
-} from './shop-review.errors'
+} from '~/lib/shop-review/shop-review.errors'
 import type {
   DeleteShopReviewResult,
   ShopReviewAccessContext,
@@ -41,14 +41,14 @@ import type {
   ShopReviewStatsQueryInput,
   ShopReviewUpdateInput,
   ShopReviewWithRelations,
-} from './shop-review.type'
+} from '~/lib/shop-review/shop-review.type'
 import {
   buildShopReviewStatsFromReviews,
   computeShopReviewPagination,
   normalizeShopReviewRow,
   normalizeShopReviewRows,
   resolveShopReviewSortColumn,
-} from './shop-review.utils'
+} from '~/lib/shop-review/shop-review.utils'
 import {
   parseShopReviewBulkModeration,
   parseShopReviewCreate,
@@ -59,7 +59,7 @@ import {
   parseShopReviewResponseCreate,
   parseShopReviewStatsQuery,
   parseShopReviewUpdate,
-} from './shop-review.validation'
+} from '~/lib/shop-review/shop-review.validation'
 
 // ============= RESPONSE HELPERS =============
 

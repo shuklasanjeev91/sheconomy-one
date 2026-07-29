@@ -32,7 +32,7 @@ import {
 } from '~/lib/cms'
 import { useAppDispatch, useAppSelector } from '~/lib/store/hooks'
 import { useAppUi } from '~/lib/theme/useAppUi'
-import { CmsCoverImage } from './CmsCoverImage'
+import { CmsCoverImage } from '~/app/admin/components/CmsCoverImage'
 
 const PAGE_SIZE = 12
 
@@ -117,7 +117,7 @@ export function AdminBlogManager() {
       >
         <LinearGradient
           fullscreen
-          colors={['rgba(208,16,96,0.14)', 'rgba(248,120,64,0.08)', 'transparent']}
+          colors={['rgba(216, 27, 96,0.14)', 'rgba(248,120,64,0.08)', 'transparent']}
           start={[0, 0]}
           end={[1, 1]}
         />
@@ -605,9 +605,9 @@ function CoverPlaceholder({ large }: { large?: boolean }) {
           borderRadius={999}
           alignItems="center"
           justifyContent="center"
-          backgroundColor="rgba(208,16,96,0.12)"
+          backgroundColor="rgba(216, 27, 96,0.12)"
           borderWidth={1}
-          borderColor="rgba(208,16,96,0.18)"
+          borderColor="rgba(216, 27, 96,0.18)"
         >
           <Icons.PenLine size={large ? 30 : 24} color={brandColors.primary} />
         </YStack>

@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { Platform } from 'react-native'
 import { useRouter } from 'one'
 import { AppLink } from '~/components/navigation/AppLink'
 
@@ -21,8 +22,9 @@ import {
   type CustomerOrderSummary,
 } from '~/commerce/lib/customer-orders'
 import { formatEstimatedDelivery } from '~/commerce/lib/customer-order-lifecycle'
-import { Button, Icons, ScreenState, Text, XStack, YStack, useAppToast } from '~/components/ui'
-import { FullWidthLayout, PageSection } from '~/components/layout'
+import { Button, Icons, Spinner, Text, XStack, YStack, useAppToast } from '~/components/ui'
+import { PageContent } from '~/components/layout'
+import { useAppLayout } from '~/hooks/useAppLayout'
 import { formatCurrency } from '~/lib/format'
 import { formatOrderDate } from '~/lib/orders/order.utils'
 import { openExternalUrl } from '~/lib/platform/openUrl'
@@ -50,6 +52,7 @@ function parseIdsFromSearch(): string[] {
 
 export function OrderSuccessScreen() {
   const ui = useAppUi()
+  const { isDesktopWeb } = useAppLayout()
   const router = useRouter()
   const toast = useAppToast()
   const { user } = useProfile()
@@ -160,8 +163,15 @@ export function OrderSuccessScreen() {
   )
 
   async function openPaymentUrl(url: string) {
+    // PayU bridge: SPA navigation within the app
     if (isAppPayUBridgeUrl(url) || /\/orders\/payu(\?|$)/.test(url)) {
-      router.replace(url as never)
+      router.push(url as never)
+      return true
+    }
+    // Razorpay Payment Link: same-tab redirect so razorpay-return handles the callback
+    // and the payment confirmation polling works correctly
+    if (Platform.OS === 'web' && /rzp\.io/.test(url) && typeof window !== 'undefined') {
+      window.location.href = url
       return true
     }
     return openExternalUrl(url)
@@ -221,138 +231,186 @@ export function OrderSuccessScreen() {
         tone: 'success',
         message: 'Reserved stock was released and items can return to your cart.',
       })
-      router.replace(commerceRoutes.cart)
+      router.push(commerceRoutes.cart)
     } finally {
       setPaymentBusy(false)
     }
   }
 
+  const bottomPad = isDesktopWeb ? '$12' : '$8'
+
   return (
-    <FullWidthLayout scroll>
-      <PageSection paddingVertical="$6">
-        <YStack gap="$5" width="100%">
-          <CommercePageHeader title={headline} subtitle={subtitle} />
-
-          {awaitingPayment && checkoutGroupId ? (
-            <CommercePanel padding="$4" gap="$3">
-              <Text fontWeight="700" fontSize={15} color={ui.text}>
-                Payment required
-              </Text>
-              <Text fontSize={13} color={ui.textSecondary} lineHeight={18}>
-                Finish checkout on PayU (SHEPay) or the seller’s payment page. Cancel releases
-                reserved stock and returns items to your cart.
-              </Text>
-              <XStack gap="$2" flexWrap="wrap">
-                <Button
-                  tone="primary"
-                  size="$3"
-                  borderRadius={999}
-                  disabled={paymentBusy}
-                  onPress={() => void handleResumePayment()}
-                >
-                  {paymentBusy
-                    ? 'Working…'
-                    : checkoutUrl && isAppPayUBridgeUrl(checkoutUrl)
-                      ? 'Continue to PayU'
-                      : 'Resume payment'}
-                </Button>
-                <Button
-                  tone="outline"
-                  size="$3"
-                  borderRadius={999}
-                  disabled={paymentBusy}
-                  onPress={() => void handleCancelCheckout()}
-                >
-                  Cancel checkout
-                </Button>
-              </XStack>
-            </CommercePanel>
-          ) : null}
-
-          <ScreenState
-            loading={isLoading && orders.length === 0}
-            error={error}
-            empty={!isLoading && !error && orders.length === 0}
-            emptyTitle="No recent order found"
-            emptyMessage="If you just paid in another tab, open Your orders — or place a new order from the cart."
-            emptyActionLabel="View your orders"
-            onEmptyAction={() => router.replace(commerceRoutes.orders)}
-            onRetry={() => void load()}
+    <PageContent
+      maxWidth={760}
+      centered
+      paddingVertical="$6"
+      paddingBottom={bottomPad}
+      gap="$5"
+    >
+      <YStack gap="$5" width="100%" flexShrink={0}>
+        <YStack gap="$3" alignItems="flex-start">
+          <XStack
+            alignItems="center"
+            justifyContent="center"
+            width={52}
+            height={52}
+            borderRadius={999}
+            backgroundColor={ui.badgeSuccessBg}
           >
-            <YStack gap="$3" width="100%">
-              {orders.map((order) => {
-                const eta = formatEstimatedDelivery(order.estimated_delivery_date)
-                const unpaid = ordersAwaitingOnlinePayment([order])
-                const paymentLine = [order.payment_mode, order.payment_status]
-                  .filter(Boolean)
-                  .join(' · ')
+            <Icons.BadgeCheck size={28} color={ui.success} />
+          </XStack>
+          <CommercePageHeader title={headline} subtitle={subtitle} />
+        </YStack>
 
-                return (
-                  <CommercePanel key={order.id} padding="$4" gap="$3">
-                    <XStack justifyContent="space-between" alignItems="flex-start" gap="$3">
-                      <YStack flex={1} gap={4}>
-                        <Text fontWeight="800" fontSize={16} color={ui.text}>
-                          Order #{order.order_number}
-                        </Text>
-                        <Text fontSize={13} color={ui.textSecondary}>
-                          {order.shop_name ?? 'Shop'}
-                          {order.item_count ? ` · ${order.item_count} items` : ''}
-                        </Text>
-                        <Text fontSize={12} color={ui.textMuted}>
-                          {unpaid
-                            ? `Awaiting payment · reserved ${formatOrderDate(order.created_at, true)}`
-                            : `Placed ${formatOrderDate(order.created_at, true)}`}
-                        </Text>
-                      </YStack>
-                      <YStack alignItems="flex-end" gap="$2">
-                        <OrderStatusBadge status={order.order_status} size="sm" />
-                        <Text fontWeight="800" fontSize={15} color={ui.text}>
-                          {formatCurrency(order.total_amount, order.currency)}
-                        </Text>
-                      </YStack>
-                    </XStack>
+        {awaitingPayment && checkoutGroupId ? (
+          <CommercePanel gap="$3">
+            <Text fontWeight="700" fontSize={15} color={ui.text}>
+              Payment required
+            </Text>
+            <Text fontSize={13} color={ui.textSecondary} lineHeight={18}>
+              Complete your payment to confirm this order. Cancelling releases reserved stock
+              and returns items to your cart.
+            </Text>
+            <XStack gap="$2" flexWrap="wrap">
+              <Button
+                tone="primary"
+                size="$3"
+                borderRadius={999}
+                disabled={paymentBusy}
+                onPress={() => void handleResumePayment()}
+              >
+                {paymentBusy
+                  ? 'Working…'
+                  : checkoutUrl && isAppPayUBridgeUrl(checkoutUrl)
+                    ? 'Continue to SHEPay'
+                    : 'Resume payment'}
+              </Button>
+              <Button
+                tone="outline"
+                size="$3"
+                borderRadius={999}
+                disabled={paymentBusy}
+                onPress={() => void handleCancelCheckout()}
+              >
+                Cancel checkout
+              </Button>
+            </XStack>
+          </CommercePanel>
+        ) : null}
 
-                    {paymentLine || eta ? (
-                      <YStack gap={2}>
-                        {paymentLine ? (
-                          <Text fontSize={12} color={ui.textSecondary} textTransform="capitalize">
-                            Payment: {paymentLine}
-                          </Text>
-                        ) : null}
-                        {eta && !unpaid ? (
-                          <Text fontSize={12} color={ui.textSecondary}>
-                            Estimated delivery: {eta}
-                          </Text>
-                        ) : null}
-                      </YStack>
-                    ) : null}
+        {isLoading && orders.length === 0 ? (
+          <YStack alignItems="center" paddingVertical="$8" gap="$3" minHeight={220}>
+            <Spinner size="large" color={ui.brand} />
+            <Text fontSize={13} color={ui.textMuted}>
+              Loading your order…
+            </Text>
+          </YStack>
+        ) : error && orders.length === 0 ? (
+          <CommercePanel alignItems="center" gap="$3">
+            <Text fontWeight="700" fontSize={16} color={ui.text} textAlign="center">
+              Couldn’t load this order
+            </Text>
+            <Text fontSize={14} color={ui.textMuted} textAlign="center">
+              {error}
+            </Text>
+            <Button tone="primary" size="$3" borderRadius={999} onPress={() => void load()}>
+              Try again
+            </Button>
+          </CommercePanel>
+        ) : !isLoading && orders.length === 0 ? (
+          <CommercePanel alignItems="center" gap="$3">
+            <Text fontWeight="700" fontSize={16} color={ui.text} textAlign="center">
+              No recent order found
+            </Text>
+            <Text fontSize={14} color={ui.textMuted} textAlign="center" lineHeight={20}>
+              If you just paid in another tab, open Your orders — or place a new order from the
+              cart.
+            </Text>
+            <Button
+              tone="primary"
+              size="$3"
+              borderRadius={999}
+              onPress={() => router.push(commerceRoutes.orders)}
+            >
+              View your orders
+            </Button>
+          </CommercePanel>
+        ) : (
+          <YStack gap="$3" width="100%">
+            {orders.map((order) => {
+              const eta = formatEstimatedDelivery(order.estimated_delivery_date)
+              const unpaid = ordersAwaitingOnlinePayment([order])
+              const paymentLine = [order.payment_mode, order.payment_status]
+                .filter(Boolean)
+                .join(' · ')
 
-                    <XStack gap="$2" flexWrap="wrap">
+              return (
+                <CommercePanel key={order.id} gap="$3">
+                  <XStack justifyContent="space-between" alignItems="flex-start" gap="$3">
+                    <YStack flex={1} gap={4} minWidth={0}>
+                      <Text fontWeight="800" fontSize={16} color={ui.text}>
+                        Order #{order.order_number}
+                      </Text>
+                      <Text fontSize={13} color={ui.textSecondary}>
+                        {order.shop_name ?? 'Shop'}
+                        {order.item_count ? ` · ${order.item_count} items` : ''}
+                      </Text>
+                      <Text fontSize={12} color={ui.textMuted}>
+                        {unpaid
+                          ? `Awaiting payment · reserved ${formatOrderDate(order.created_at, true)}`
+                          : `Placed ${formatOrderDate(order.created_at, true)}`}
+                      </Text>
+                    </YStack>
+                    <YStack alignItems="flex-end" gap="$2" flexShrink={0}>
+                      <OrderStatusBadge status={order.order_status} size="sm" />
+                      <Text fontWeight="800" fontSize={15} color={ui.text}>
+                        {formatCurrency(order.total_amount, order.currency)}
+                      </Text>
+                    </YStack>
+                  </XStack>
+
+                  {paymentLine || eta ? (
+                    <YStack gap={2}>
+                      {paymentLine ? (
+                        <Text fontSize={12} color={ui.textSecondary} textTransform="capitalize">
+                          Payment: {paymentLine}
+                        </Text>
+                      ) : null}
+                      {eta && !unpaid ? (
+                        <Text fontSize={12} color={ui.textSecondary}>
+                          Estimated delivery: {eta}
+                        </Text>
+                      ) : null}
+                    </YStack>
+                  ) : null}
+
+                  <XStack gap="$2" flexWrap="wrap">
+                    <AppLink href={commerceRoutes.order(order.id)} asChild>
+                      <Button tone="primary" size="$3" borderRadius={999}>
+                        View order
+                      </Button>
+                    </AppLink>
+                    {!unpaid ? (
                       <AppLink href={commerceRoutes.order(order.id)} asChild>
-                        <Button tone="primary" size="$3" borderRadius={999}>
-                          View order
+                        <Button
+                          tone="outline"
+                          size="$3"
+                          borderRadius={999}
+                          icon={<Icons.Truck size={14} />}
+                        >
+                          Track package
                         </Button>
                       </AppLink>
-                      {!unpaid ? (
-                        <AppLink href={commerceRoutes.order(order.id)} asChild>
-                          <Button
-                            tone="outline"
-                            size="$3"
-                            borderRadius={999}
-                            icon={<Icons.Truck size={14} />}
-                          >
-                            Track package
-                          </Button>
-                        </AppLink>
-                      ) : null}
-                    </XStack>
-                  </CommercePanel>
-                )
-              })}
-            </YStack>
-          </ScreenState>
+                    ) : null}
+                  </XStack>
+                </CommercePanel>
+              )
+            })}
+          </YStack>
+        )}
 
-          <XStack gap="$2" flexWrap="wrap">
+        {orders.length > 0 ? (
+          <XStack gap="$2" flexWrap="wrap" paddingTop="$1">
             <AppLink href={commerceRoutes.orders} asChild>
               <Button tone="outline" size="$3" borderRadius={999}>
                 All orders
@@ -364,8 +422,8 @@ export function OrderSuccessScreen() {
               </Button>
             </AppLink>
           </XStack>
-        </YStack>
-      </PageSection>
-    </FullWidthLayout>
+        ) : null}
+      </YStack>
+    </PageContent>
   )
 }

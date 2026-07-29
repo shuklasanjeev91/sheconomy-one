@@ -6,8 +6,7 @@ import { RequireVendorRole } from '~/components/auth/RouteGuard'
 import { Icons, ScrollView, Text, XStack, YStack } from '~/components/ui'
 import { getShadowStyle, radius } from '~/config/tokens'
 import { useAppLayout } from '~/hooks/useAppLayout'
-import { useAuth } from '~/hooks/useAuth'
-import { useProfile } from '~/hooks/useProfile'
+import { APP_LAYOUT } from '~/lib/layout/constants'
 import { edgePanelPositionStyle, overlayBackdropStyle } from '~/lib/layout/styles'
 import { loadMyShops } from '~/lib/shop/shop.store'
 import { useAppDispatch, useAppSelector } from '~/lib/store/hooks'
@@ -19,6 +18,8 @@ import {
   resolveVendorSettingsActiveSubId,
   type VendorNavItem,
 } from '~/commerce/components/vendor/vendor-nav'
+import { commerceRoutes } from '~/lib/routes'
+import { navigateApp } from '~/lib/platform/navigate'
 
 const EXPANDED_WIDTH = 268
 const COLLAPSED_WIDTH = 80
@@ -27,17 +28,17 @@ const TOPBAR_HEIGHT = 60
 
 export function VendorLayout() {
   const ui = useAppUi()
-  const { isDesktop, safeTop, desktopHeaderHeight } = useAppLayout()
+  const { isDesktop, safeTop, safeBottom, desktopHeaderHeight } = useAppLayout()
   const router = useRouter()
   const pathname = usePathname()
   const dispatch = useAppDispatch()
-  const { signOut } = useAuth()
-  const { profile } = useProfile()
 
   const [collapsed, setCollapsed] = useState(false)
   const [drawerOpen, setDrawerOpen] = useState(false)
 
   const currentShop = useAppSelector((s) => s.shop.currentShop)
+  const mobileTabPad =
+    !isDesktop ? APP_LAYOUT.mobileTabBarHeight + Math.max(safeBottom, 8) : 0
 
   useEffect(() => {
     // Always refresh on entering the vendor area so `myShops`/`currentShop` are
@@ -53,11 +54,6 @@ export function VendorLayout() {
   function handleSelect(item: VendorNavItem) {
     setDrawerOpen(false)
     router.push(item.href)
-  }
-
-  function handleLogout() {
-    setDrawerOpen(false)
-    void signOut()
   }
 
   const desktopHeight =
@@ -105,11 +101,8 @@ export function VendorLayout() {
                 activeSubId={activeSubId}
                 shopName={currentShop?.shop_name}
                 shopLogo={currentShop?.logo_url}
-                userName={profile?.full_name}
-                userSubtitle="Vendor account"
                 onSelect={handleSelect}
                 onToggleCollapse={() => setCollapsed((value) => !value)}
-                onLogout={handleLogout}
               />
             </YStack>
           ) : null}
@@ -148,8 +141,25 @@ export function VendorLayout() {
                     {active.label}
                   </Text>
                   <Text fontSize={11} color={ui.textMuted} fontWeight="500" numberOfLines={1}>
-                    Vendor console
+                    {currentShop?.shop_name?.trim() || 'Manage shop'}
                   </Text>
+                </YStack>
+                <YStack
+                  width={40}
+                  height={40}
+                  borderRadius={999}
+                  alignItems="center"
+                  justifyContent="center"
+                  backgroundColor={ui.surfaceMuted}
+                  cursor="pointer"
+                  animation="quick"
+                  hoverStyle={{ backgroundColor: ui.chip }}
+                  pressStyle={{ opacity: 0.75, scale: 0.96 }}
+                  onPress={() => navigateApp(commerceRoutes.home)}
+                  accessibilityRole="button"
+                  accessibilityLabel="Close manage shop and go to marketplace home"
+                >
+                  <Icons.X size={22} color={ui.text} />
                 </YStack>
               </XStack>
             ) : null}
@@ -160,7 +170,7 @@ export function VendorLayout() {
               width="100%"
               showsVerticalScrollIndicator={false}
               style={Platform.OS === 'web' ? ({ overflowY: 'auto', minHeight: 0 } as const) : undefined}
-              contentContainerStyle={{ flexGrow: 1 }}
+              contentContainerStyle={{ flexGrow: 1, paddingBottom: mobileTabPad }}
             >
               <Slot />
             </ScrollView>
@@ -199,11 +209,8 @@ export function VendorLayout() {
                   activeSubId={activeSubId}
                   shopName={currentShop?.shop_name}
                   shopLogo={currentShop?.logo_url}
-                  userName={profile?.full_name}
-                  userSubtitle="Vendor account"
                   onSelect={handleSelect}
                   onClose={() => setDrawerOpen(false)}
-                  onLogout={handleLogout}
                 />
               </YStack>
             </YStack>

@@ -259,7 +259,7 @@ function HeroSlidePanel({ slide, width, height, density, isActive, ui }: HeroSli
           ? {
               style: {
                 background: isDesktop
-                  ? 'linear-gradient(100deg, rgba(12, 6, 10, 0.88) 0%, rgba(12, 6, 10, 0.52) 42%, rgba(208, 16, 96, 0.22) 100%)'
+                  ? 'linear-gradient(100deg, rgba(12, 6, 10, 0.88) 0%, rgba(12, 6, 10, 0.52) 42%, rgba(216, 27, 96, 0.22) 100%)'
                   : 'linear-gradient(180deg, rgba(12, 6, 10, 0.55) 0%, rgba(12, 6, 10, 0.82) 55%, rgba(12, 6, 10, 0.92) 100%)',
               },
             }

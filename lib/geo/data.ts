@@ -2,7 +2,7 @@ import { City, Country, State, type ICity, type ICountry, type IState } from 'co
 
 import { inferCountryFromLocale } from '~/commerce/lib/infer-country-from-locale'
 
-import type { GeoOption } from './types'
+import type { GeoOption } from '~/lib/geo/types'
 
 let countriesCache: ICountry[] | null = null
 

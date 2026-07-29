@@ -6,7 +6,7 @@ import type {
   SHOP_REVIEW_SORT_BY_VALUES,
   SHOP_REVIEW_SORT_ORDER_VALUES,
   SHOP_REVIEW_STATUS_VALUES,
-} from './shop-review.constants'
+} from '~/lib/shop-review/shop-review.constants'
 
 export type ShopReview = Tables<'shop_reviews'>
 export type ShopReviewInsert = TablesInsert<'shop_reviews'>

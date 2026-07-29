@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
+import { Platform } from 'react-native'
 
 import { peekAppCache, readAppCache, writeAppCache } from '~/lib/cache/app-cache'
 import { useAutoRefresh } from '~/lib/cache/useAutoRefresh'
@@ -10,6 +11,10 @@ type PaginatedCacheSnapshot<T> = {
   page: number
   hasMore: boolean
 }
+
+/** Skip network revalidation when the same feed was fetched this recently. */
+const FEED_FRESH_MS = Platform.OS === 'web' ? 45_000 : 60_000
+const feedFetchedAt = new Map<string, number>()
 
 function mergeUnique<T extends { id: string }>(existing: T[], next: T[]): T[] {
   const seen = new Set(existing.map((item) => item.id))
@@ -42,6 +47,7 @@ export function usePaginatedFeed<T extends { id: string }>({
   const inFlightRef = useRef(false)
   const fetchGenerationRef = useRef(0)
   const hasItemsRef = useRef((initialSnapshot?.items?.length ?? 0) > 0)
+  const loadMoreAtRef = useRef(0)
   hasItemsRef.current = items.length > 0
 
   const persistFirstPage = useCallback(
@@ -51,6 +57,10 @@ export function usePaginatedFeed<T extends { id: string }>({
     },
     [cacheKey],
   )
+
+  const markFetched = useCallback(() => {
+    if (cacheKey) feedFetchedAt.set(cacheKey, Date.now())
+  }, [cacheKey])
 
   const loadPage = useCallback(
     async (pageToLoad: number, append: boolean, silent = false) => {
@@ -85,6 +95,7 @@ export function usePaginatedFeed<T extends { id: string }>({
         }
       } else {
         setError(null)
+        markFetched()
         const silentMerge = !append && silent && hasItemsRef.current
         setItems((current) => {
           // Silent revalidation keeps already-loaded pages below the fresh
@@ -116,7 +127,7 @@ export function usePaginatedFeed<T extends { id: string }>({
         inFlightRef.current = false
       }
     },
-    [cacheKey, enabled, fetchPage, persistFirstPage],
+    [cacheKey, enabled, fetchPage, markFetched, persistFirstPage],
   )
 
   useEffect(() => {
@@ -137,16 +148,23 @@ export function usePaginatedFeed<T extends { id: string }>({
     inFlightRef.current = false
 
     void (async () => {
+      let hasCached = false
       if (cacheKey) {
         const cached =
           peekAppCache<PaginatedCacheSnapshot<T>>(cacheKey) ??
           (await readAppCache<PaginatedCacheSnapshot<T>>(cacheKey))
         if (cancelled) return
         if (cached?.items?.length) {
+          hasCached = true
           setItems(cached.items)
           setPage(cached.page)
           setHasMore(cached.hasMore)
           setIsLoading(false)
+          const fetchedAt = feedFetchedAt.get(cacheKey) ?? 0
+          if (fetchedAt > 0 && Date.now() - fetchedAt < FEED_FRESH_MS) {
+            // Fresh enough — skip another network round-trip on tab revisit.
+            return
+          }
         } else {
           // Drop previous tab/filter results so we never flash the wrong media type.
           setItems([])
@@ -162,7 +180,8 @@ export function usePaginatedFeed<T extends { id: string }>({
       }
 
       if (!cancelled) {
-        await loadPage(0, false)
+        // Cached tabs: silent background refresh so UI stays instant.
+        await loadPage(0, false, hasCached)
       }
     })()
 
@@ -185,6 +204,10 @@ export function usePaginatedFeed<T extends { id: string }>({
     if (!enabled || !hasMore || isLoading || isLoadingMore || isRefreshing || inFlightRef.current) {
       return
     }
+    const now = Date.now()
+    // Debounce rapid onEndReached storms from FlashList during fling.
+    if (now - loadMoreAtRef.current < 400) return
+    loadMoreAtRef.current = now
     loadPage(page + 1, true)
   }, [enabled, hasMore, isLoading, isLoadingMore, isRefreshing, loadPage, page])
 

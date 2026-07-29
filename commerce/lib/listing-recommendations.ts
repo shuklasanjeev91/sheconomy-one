@@ -1,120 +1,181 @@
-import { supabase } from '~/lib/supabase/client'
+import { Platform } from 'react-native'
 
-import { fetchListingsByIds, type ListingSummary } from './commerce'
-import { ACTIVE_LISTING_FILTER } from './listing-visibility'
+import { CACHE_KEYS } from '~/lib/bootstrap/cache-keys'
+import { peekAppCache, prefetchAppCache, writeAppCache } from '~/lib/cache/app-cache'
+import { hasListingImages } from '~/commerce/lib/listing-images'
 
-const DEFAULT_LIMIT = 12
+import {
+  fetchActiveListingCards,
+  fetchListingsByIds,
+  type ListingSummary,
+} from '~/commerce/lib/commerce'
 
-async function fetchRelatedListingsFallback(
-  listingId: string,
+const DEFAULT_LIMIT = Platform.OS === 'web' ? 12 : 6
+
+function cacheKey(
+  kind: 'related' | 'shop' | 'personalized',
+  id: string,
   limit: number,
-): Promise<ListingSummary[]> {
-  const { data: source } = await supabase
-    .from('listings')
-    .select('shop_id, category, listing_type, category_assignments(category_id)')
-    .eq('id', listingId)
-    .maybeSingle()
-
-  if (!source) return []
-
-  const collected: string[] = []
-  const seen = new Set<string>([listingId])
-
-  const addIds = (ids: string[]) => {
-    for (const id of ids) {
-      if (!seen.has(id)) {
-        seen.add(id)
-        collected.push(id)
-        if (collected.length >= limit) break
-      }
-    }
-  }
-
-  const categoryIds =
-    (source.category_assignments as Array<{ category_id: string }> | null)
-      ?.map((row) => row.category_id)
-      .filter(Boolean) ?? []
-
-  if (collected.length < limit && categoryIds.length) {
-    const { data } = await supabase
-      .from('listings')
-      .select('id, category_assignments!inner(category_id)')
-      .in('category_assignments.category_id', categoryIds)
-      .eq('is_active', ACTIVE_LISTING_FILTER.is_active)
-      .eq('listing_status', ACTIVE_LISTING_FILTER.listing_status)
-      .neq('id', listingId)
-      .order('average_rating', { ascending: false, nullsFirst: false })
-      .limit(limit * 2)
-
-    addIds((data ?? []).map((row) => row.id))
-  }
-
-  if (collected.length < limit && source.shop_id) {
-    const { data } = await supabase
-      .from('listings')
-      .select('id')
-      .eq('shop_id', source.shop_id)
-      .eq('is_active', ACTIVE_LISTING_FILTER.is_active)
-      .eq('listing_status', ACTIVE_LISTING_FILTER.listing_status)
-      .neq('id', listingId)
-      .order('created_at', { ascending: false })
-      .limit(limit * 2)
-
-    addIds((data ?? []).map((row) => row.id))
-  }
-
-  if (collected.length < limit && source.category) {
-    const { data } = await supabase
-      .from('listings')
-      .select('id')
-      .eq('category', source.category)
-      .eq('is_active', ACTIVE_LISTING_FILTER.is_active)
-      .eq('listing_status', ACTIVE_LISTING_FILTER.listing_status)
-      .neq('id', listingId)
-      .order('average_rating', { ascending: false, nullsFirst: false })
-      .limit(limit * 2)
-
-    addIds((data ?? []).map((row) => row.id))
-  }
-
-  if (collected.length < limit && source.listing_type) {
-    const { data } = await supabase
-      .from('listings')
-      .select('id')
-      .eq('listing_type', source.listing_type)
-      .eq('is_active', ACTIVE_LISTING_FILTER.is_active)
-      .eq('listing_status', ACTIVE_LISTING_FILTER.listing_status)
-      .neq('id', listingId)
-      .order('created_at', { ascending: false })
-      .limit(limit * 2)
-
-    addIds((data ?? []).map((row) => row.id))
-  }
-
-  return fetchListingsByIds(collected.slice(0, limit))
+) {
+  // v2: image-required cards (invalidates stale placeholder-only rails)
+  return `listing-recs:v2:${kind}:${id}:${limit}`
 }
 
-/** Similar listings for a product detail page. */
+function withImages(items: ListingSummary[], limit?: number): ListingSummary[] {
+  const filtered = items.filter((item) => hasListingImages(item.image_urls, item.image_url))
+  return typeof limit === 'number' ? filtered.slice(0, limit) : filtered
+}
+
+/** Instant picks from already-warmed home feeds (zero network). */
+export function listingCardsFromHomeCache(
+  excludeId: string,
+  limit: number,
+): ListingSummary[] {
+  const kinds = ['trending', 'physical', 'featured', 'digital', 'latest'] as const
+  const seen = new Set<string>([excludeId])
+  const out: ListingSummary[] = []
+
+  for (const kind of kinds) {
+    const snapshot = peekAppCache<{ items: ListingSummary[] }>(CACHE_KEYS.listingFeed(kind))
+    for (const item of snapshot?.items ?? []) {
+      if (seen.has(item.id)) continue
+      if (!hasListingImages(item.image_urls, item.image_url)) continue
+      seen.add(item.id)
+      out.push(item)
+      if (out.length >= limit) return out
+    }
+  }
+  return out
+}
+
+export type RelatedListingContext = {
+  shopId?: string | null
+  category?: string | null
+  listingType?: string | null
+}
+
+/** Similar listings — native skips RPCs; prefers home cache + one light query. */
 export async function fetchRelatedListings(
   listingId: string,
   limit = DEFAULT_LIMIT,
+  context?: RelatedListingContext,
 ): Promise<ListingSummary[]> {
-  const { data: rpcRows, error } = await supabase.rpc('get_listing_recommendations', {
-    p_listing_id: listingId,
-    p_limit: limit + 4,
-  })
+  const key = cacheKey('related', listingId, limit)
+  const cached = withImages(peekAppCache<ListingSummary[]>(key) ?? [])
+  if (cached.length) return cached.slice(0, limit)
 
-  if (!error && rpcRows?.length) {
-    const ids = rpcRows.map((row) => row.id).filter((id) => id !== listingId)
-    if (ids.length) {
-      return (await fetchListingsByIds(ids)).slice(0, limit)
+  const fromHome = listingCardsFromHomeCache(listingId, limit)
+  if (fromHome.length >= Math.min(4, limit)) {
+    void writeAppCache(key, fromHome)
+    // Still refresh in background when we have category/shop context.
+    if (context?.category?.trim() || context?.listingType) {
+      void refreshRelated(listingId, limit, context, key)
     }
+    return fromHome
   }
 
-  return fetchRelatedListingsFallback(listingId, limit)
+  return refreshRelated(listingId, limit, context, key)
 }
 
-/** Other active listings from the same shop (marketplace "More from this shop"). */
+async function refreshRelated(
+  listingId: string,
+  limit: number,
+  context: RelatedListingContext | undefined,
+  key: string,
+): Promise<ListingSummary[]> {
+  const fetchLimit = Math.max(limit * 2, limit + 6)
+
+  // Native: never wait on recommendation RPCs (often multi-second).
+  if (Platform.OS !== 'web') {
+    const items = await fetchActiveListingCards({
+      category: context?.category,
+      listingType: context?.category?.trim() ? null : context?.listingType,
+      excludeId: listingId,
+      limit: fetchLimit,
+      orderBy: 'average_rating',
+    })
+    const merged = (items.length ? items : listingCardsFromHomeCache(listingId, fetchLimit)).slice(
+      0,
+      limit,
+    )
+    if (merged.length) void writeAppCache(key, merged)
+    return merged
+  }
+
+  // Web: try RPC briefly, then fall back to light cards.
+  try {
+    const { supabase } = await import('~/lib/supabase/client')
+    const { data } = await supabase.rpc('get_listing_recommendations', {
+      p_listing_id: listingId,
+      p_limit: fetchLimit,
+    })
+    const rows = (data ?? []).filter((row) => row.id !== listingId)
+    const ids = rows.map((row) => row.id)
+    if (ids.length) {
+      const hydrated = await fetchListingsByIds(ids)
+      const byId = new Map(hydrated.map((item) => [item.id, item]))
+      const items: ListingSummary[] = []
+      for (const row of rows) {
+        const card = byId.get(row.id)
+        if (card && hasListingImages(card.image_urls, card.image_url)) {
+          items.push(card)
+        } else if (row.primary_image_url && hasListingImages([row.primary_image_url])) {
+          // RPC already resolved a primary image — keep the rail filled if hydrate misses.
+          items.push({
+            id: row.id,
+            slug: row.slug ?? null,
+            title: row.title,
+            card_title: row.title,
+            price: Number(row.price),
+            listing_type: 'physical',
+            average_rating: null,
+            total_reviews: null,
+            image_url: row.primary_image_url,
+            image_urls: [row.primary_image_url],
+            images: [
+              {
+                id: `${row.id}-primary`,
+                image_url: row.primary_image_url,
+                is_primary: true,
+                display_order: 0,
+                alt_text: row.title,
+              },
+            ],
+            shop_name: row.shop_name ?? null,
+            shop_id: null,
+            category: null,
+            created_at: null,
+            currency: 'INR',
+            is_featured: false,
+            shop_rating: null,
+            shop_review_count: null,
+            shop_verified: false,
+          })
+        }
+        if (items.length >= limit) break
+      }
+      if (items.length) {
+        void writeAppCache(key, items)
+        return items
+      }
+    }
+  } catch {
+    // fall through
+  }
+
+  const items = await fetchActiveListingCards({
+    category: context?.category,
+    listingType: context?.listingType,
+    excludeId: listingId,
+    limit: fetchLimit,
+    orderBy: 'average_rating',
+  })
+  const sliced = items.slice(0, limit)
+  if (sliced.length) void writeAppCache(key, sliced)
+  return sliced
+}
+
+/** Other active listings from the same shop. */
 export async function fetchMoreFromShop(
   shopId: string,
   excludeListingId?: string | null,
@@ -122,48 +183,85 @@ export async function fetchMoreFromShop(
 ): Promise<ListingSummary[]> {
   if (!shopId) return []
 
-  let query = supabase
-    .from('listings')
-    .select('id')
-    .eq('shop_id', shopId)
-    .eq('is_active', ACTIVE_LISTING_FILTER.is_active)
-    .eq('listing_status', ACTIVE_LISTING_FILTER.listing_status)
-    .order('average_rating', { ascending: false, nullsFirst: false })
-    .limit(limit + 2)
+  const key = cacheKey('shop', `${shopId}:${excludeListingId ?? ''}`, limit)
+  const cached = withImages(peekAppCache<ListingSummary[]>(key) ?? [], limit)
+  if (cached.length) return cached
 
-  if (excludeListingId) {
-    query = query.neq('id', excludeListingId)
-  }
-
-  const { data } = await query
-  const ids = (data ?? []).map((row) => row.id).filter((id) => id !== excludeListingId)
-  if (!ids.length) return []
-  return (await fetchListingsByIds(ids)).slice(0, limit)
+  const items = await fetchActiveListingCards({
+    shopId,
+    excludeId: excludeListingId,
+    limit: Math.max(limit * 2, limit + 4),
+    orderBy: 'average_rating',
+  })
+  const sliced = withImages(items, limit)
+  if (sliced.length) void writeAppCache(key, sliced)
+  return sliced
 }
 
-/** Marketplace picks personalized for the signed-in user and demand signals. */
+/** Marketplace picks — native uses home-cache first, never blocks on RPCs. */
 export async function fetchPersonalizedListings(
   excludeIds: string[],
   limit = DEFAULT_LIMIT,
 ): Promise<ListingSummary[]> {
   const exclude = new Set(excludeIds)
-  const fetchSize = Math.max(limit * 3, 36)
-
-  const { data: recommended, error: recommendedError } = await supabase.rpc(
-    'get_marketplace_recommended_listings',
-    { max_results: fetchSize },
-  )
-
-  let ids: string[] = []
-  if (!recommendedError && recommended?.length) {
-    ids = recommended.map((row) => row.id)
-  } else {
-    const { data: trending } = await supabase.rpc('get_marketplace_trending_listings', {
-      max_results: fetchSize,
-    })
-    ids = (trending ?? []).map((row) => row.id)
+  const cacheId = excludeIds[0] ?? 'anon'
+  const key = cacheKey('personalized', cacheId, limit)
+  const cached = withImages(peekAppCache<ListingSummary[]>(key) ?? [])
+  if (cached.length) {
+    return cached.filter((item) => !exclude.has(item.id)).slice(0, limit)
   }
 
-  const filtered = ids.filter((id) => !exclude.has(id)).slice(0, limit + 6)
-  return (await fetchListingsByIds(filtered)).slice(0, limit)
+  const fromHome = listingCardsFromHomeCache(excludeIds[0] ?? '', limit).filter(
+    (item) => !exclude.has(item.id),
+  )
+  if (fromHome.length) {
+    void writeAppCache(key, fromHome)
+    return fromHome.slice(0, limit)
+  }
+
+  if (Platform.OS !== 'web') {
+    const items = await fetchActiveListingCards({
+      listingType: 'physical',
+      excludeId: excludeIds[0],
+      limit: Math.max(limit * 2, limit + 4),
+      orderBy: 'average_rating',
+    })
+    const sliced = items.filter((item) => !exclude.has(item.id)).slice(0, limit)
+    if (sliced.length) void writeAppCache(key, sliced)
+    return sliced
+  }
+
+  try {
+    const { supabase } = await import('~/lib/supabase/client')
+    const { data } = await supabase.rpc('get_marketplace_recommended_listings', {
+      max_results: Math.max(limit * 2, 24),
+    })
+    const ids = (data ?? []).map((row) => row.id).filter((id) => !exclude.has(id))
+    const items = (await fetchListingsByIds(ids)).slice(0, limit)
+    if (items.length) void writeAppCache(key, items)
+    return items
+  } catch {
+    return []
+  }
+}
+
+/** Warm PDP recommendation rails while the user is still on a listing card. */
+export function prefetchListingRecommendations(
+  listingId: string,
+  shopId?: string | null,
+  limit = DEFAULT_LIMIT,
+  context?: RelatedListingContext,
+): void {
+  if (!listingId) return
+  prefetchAppCache(cacheKey('related', listingId, limit), () =>
+    fetchRelatedListings(listingId, limit, context),
+  )
+  if (shopId) {
+    prefetchAppCache(cacheKey('shop', `${shopId}:${listingId}`, limit), () =>
+      fetchMoreFromShop(shopId, listingId, limit),
+    )
+  }
+  prefetchAppCache(cacheKey('personalized', listingId, limit), () =>
+    fetchPersonalizedListings([listingId], limit),
+  )
 }

@@ -29,7 +29,7 @@ export default function AuthCallbackRoute() {
       if (error) {
         setMessage(error)
         toast.show(error, { tone: 'danger' })
-        router.replace(buildSignInUrl(String(getReturnToFromLocation())))
+        router.push(buildSignInUrl(String(getReturnToFromLocation())))
         return
       }
       setMessage('Signed in — redirecting…')

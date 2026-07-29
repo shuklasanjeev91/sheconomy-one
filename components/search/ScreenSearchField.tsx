@@ -1,9 +1,8 @@
-import { useRouter } from 'one'
-
 import { Icons, Input, XStack } from '~/components/ui'
 import { recordAppSearchTerm } from '~/lib/search/history'
 import type { SearchScope } from '~/lib/search/types'
 import { appRoutes } from '~/lib/routes'
+import { navigateApp } from '~/lib/platform/navigate'
 import { useAppUi } from '~/lib/theme/useAppUi'
 
 type ScreenSearchFieldProps = {
@@ -32,13 +31,12 @@ export function ScreenSearchField({
   clearable = true,
 }: ScreenSearchFieldProps) {
   const ui = useAppUi()
-  const router = useRouter()
 
   function handleSubmit() {
     const trimmed = value.trim()
     if (unifiedScope && trimmed) {
       recordAppSearchTerm(trimmed)
-      router.push(appRoutes.search(trimmed, unifiedScope) as never)
+      navigateApp(appRoutes.search(trimmed, unifiedScope) as never)
     }
     onSubmit?.()
   }

@@ -16,9 +16,9 @@
 
 import { supabase } from '~/lib/supabase'
 
-import { fail, isAdminUser, ok, resolveUserId, verifyVendorShopAccess } from './order.access'
-import { ISSUE_PRIORITY, ISSUE_STATUS, ORDER_DEFAULTS, type IssueStatus } from './order.constants'
-import { validateOrderIssueData } from './order-issue.validation'
+import { fail, isAdminUser, ok, resolveUserId, verifyVendorShopAccess } from '~/lib/orders/order.access'
+import { ISSUE_PRIORITY, ISSUE_STATUS, ORDER_DEFAULTS, type IssueStatus } from '~/lib/orders/order.constants'
+import { validateOrderIssueData } from '~/lib/orders/order-issue.validation'
 import type {
   CreateOrderIssueInput,
   EnrichedOrderIssue,
@@ -31,7 +31,7 @@ import type {
   OrderServiceResponse,
   PaginatedOrderIssues,
   UpdateIssueStatusMetadata,
-} from './order-issue.type'
+} from '~/lib/orders/order-issue.type'
 
 const USER_ISSUE_SELECT = `
   *,

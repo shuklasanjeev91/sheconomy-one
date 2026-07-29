@@ -1,4 +1,5 @@
-import { Platform } from 'react-native'
+import { useEffect } from 'react'
+import { Platform, Vibration } from 'react-native'
 
 import type { CallType } from '~/chat/lib/calls'
 import { Avatar, Icons, Text, XStack, YStack } from '~/components/ui'
@@ -19,6 +20,9 @@ const OVERLAY_BG = '#0f0a0d'
 const SUBTLE = '#c9b6c1'
 const ACCEPT = brandColors.primary
 const DECLINE = '#f2385a'
+
+/** Native vibrate pattern: wait, buzz, pause — loops while ringing. */
+const RING_VIBRATE_PATTERN = [0, 700, 400, 700, 1200]
 
 function RoundButton({
   color,
@@ -55,6 +59,65 @@ function RoundButton({
   )
 }
 
+function useIncomingRing(active: boolean) {
+  useEffect(() => {
+    if (!active) return
+
+    let webAudio: { ctx: AudioContext; stop: () => void } | null = null
+
+    if (Platform.OS === 'web' && typeof window !== 'undefined') {
+      try {
+        const AudioCtx =
+          window.AudioContext ||
+          (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext
+        if (AudioCtx) {
+          const ctx = new AudioCtx()
+          const gain = ctx.createGain()
+          gain.gain.value = 0.08
+          gain.connect(ctx.destination)
+
+          let stopped = false
+          const beep = () => {
+            if (stopped) return
+            const osc = ctx.createOscillator()
+            osc.type = 'sine'
+            osc.frequency.value = 880
+            osc.connect(gain)
+            osc.start()
+            osc.stop(ctx.currentTime + 0.35)
+            window.setTimeout(beep, 900)
+          }
+          void ctx.resume().then(beep)
+          webAudio = {
+            ctx,
+            stop: () => {
+              stopped = true
+              void ctx.close()
+            },
+          }
+        }
+      } catch {
+        // ignore audio failures
+      }
+    } else {
+      try {
+        Vibration.vibrate(RING_VIBRATE_PATTERN, true)
+      } catch {
+        // ignore
+      }
+    }
+
+    return () => {
+      webAudio?.stop()
+      try {
+        Vibration.cancel()
+      } catch {
+        // ignore
+      }
+    }
+  }, [active])
+}
+
 export function CallOverlay({
   name,
   avatarUrl,
@@ -64,6 +127,8 @@ export function CallOverlay({
   onAccept,
   onDecline,
 }: CallOverlayProps) {
+  useIncomingRing(variant === 'incoming')
+
   return (
     <YStack
       position={Platform.OS === 'web' ? ('fixed' as never) : 'absolute'}

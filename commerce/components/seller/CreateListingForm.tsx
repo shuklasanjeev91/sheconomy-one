@@ -197,12 +197,13 @@ export function CreateListingForm({ shopId, onCreated, onCancel }: CreateListing
       <ValidatedBlock>
         <ImageUploadField
           label="Photos & videos"
-          hint="Add up to 5 photos or product videos. Drag & drop on web."
+          hint="Add up to 5 photos or product videos. Photos are cropped to square."
           accept="media"
           multiple
           maxCount={5}
           value={images}
           onChange={setImages}
+          aspect="listing"
           disabled={isSaving}
           uploadProgress={uploadProgress}
           uploadLabel="Uploading media…"

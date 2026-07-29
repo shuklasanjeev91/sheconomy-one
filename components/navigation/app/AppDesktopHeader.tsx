@@ -16,9 +16,9 @@ import { useVendorShops } from '~/hooks/useVendorShops'
 import { useAppLayout } from '~/hooks/useAppLayout'
 import { chromeSurfaceStyle } from '~/lib/theme/surfaces'
 
-import { AppCenterNavTabs } from './AppCenterNavTabs'
-import { AppMenuButton } from './AppMenuSheet'
-import { getAppColors } from './config'
+import { AppCenterNavTabs } from '~/components/navigation/app/AppCenterNavTabs'
+import { AppMenuButton } from '~/components/navigation/app/AppMenuSheet'
+import { getAppColors } from '~/components/navigation/app/config'
 import { useAppUi } from '~/lib/theme/useAppUi'
 
 /** Desktop header — logo + unified search | icon-only center nav | utilities + avatar. */

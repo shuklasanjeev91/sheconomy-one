@@ -1,5 +1,5 @@
-import { VendorOperationsScreen } from '~/commerce/screens/vendor/VendorOperationsScreen'
+import { VendorSalesAnalyticsScreen } from '~/commerce/screens/vendor/VendorSalesAnalyticsScreen'
 
 export default function VendorAnalyticsRoute() {
-  return <VendorOperationsScreen kind="analytics" />
+  return <VendorSalesAnalyticsScreen />
 }

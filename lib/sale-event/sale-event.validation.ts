@@ -15,7 +15,7 @@ import {
   OFFER_APPLIES_TO,
   SALE_CURRENCY_CODES,
   SALE_EVENT_STATUS,
-} from './sale-event.type'
+} from '~/lib/sale-event/sale-event.type'
 
 // ============= HELPERS =============
 

@@ -1,4 +1,4 @@
-import type { PublishListingData } from './listing-publish.orchestrator'
+import type { PublishListingData } from '~/lib/listing/listing-publish.orchestrator'
 
 /** Row lifecycle during bulk import. */
 export const BULK_IMPORT_ROW_STATUS = {

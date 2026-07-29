@@ -21,7 +21,7 @@ export function InfiniteHorizontalSection({
     if (!hasMore || isLoadingMore) return
 
     const { layoutMeasurement, contentOffset, contentSize } = event.nativeEvent
-    const nearEnd = layoutMeasurement.width + contentOffset.x >= contentSize.width - 120
+    const nearEnd = layoutMeasurement.width + contentOffset.x >= contentSize.width - 220
 
     if (nearEnd) onLoadMore()
   }
@@ -31,7 +31,8 @@ export function InfiniteHorizontalSection({
       horizontal
       showsHorizontalScrollIndicator={false}
       onScroll={handleScroll}
-      scrollEventThrottle={200}
+      onMomentumScrollEnd={handleScroll}
+      scrollEventThrottle={100}
       style={{ flexGrow: 0 }}
       contentContainerStyle={{ flexGrow: 0, alignItems: 'flex-start' }}
     >

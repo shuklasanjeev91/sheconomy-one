@@ -1,10 +1,10 @@
 import { Linking, Platform } from 'react-native'
 import type { Href } from 'one'
 
-import { navigateApp } from './navigate'
-import { inAppPathFromUrl } from './inAppPath'
+import { navigateApp } from '~/lib/platform/navigate'
+import { inAppPathFromUrl } from '~/lib/platform/inAppPath'
 
-export { inAppPathFromUrl } from './inAppPath'
+export { inAppPathFromUrl } from '~/lib/platform/inAppPath'
 
 /**
  * Soft in-app SPA navigation, or open true externals outside the shell.

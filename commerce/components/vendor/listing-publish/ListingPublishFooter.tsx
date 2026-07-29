@@ -1,12 +1,11 @@
-import { Link } from 'one'
-
+import { AppLink } from '~/components/navigation'
 import { Button, Icons, Spinner, Text, XStack, YStack } from '~/components/ui'
 import { getShadowStyle } from '~/config/tokens'
 import { vendorRoutes } from '~/lib/routes'
 import type { AppUiTokens } from '~/lib/theme/app-ui'
 
-import { LISTING_PUBLISH_COPY } from './listing-publish.constants'
-import { formatRelativeLastSaved } from './listing-publish.utils'
+import { LISTING_PUBLISH_COPY } from '~/commerce/components/vendor/listing-publish/listing-publish.constants'
+import { formatRelativeLastSaved } from '~/commerce/components/vendor/listing-publish/listing-publish.utils'
 
 type ListingPublishFooterProps = {
   ui: AppUiTokens
@@ -53,11 +52,11 @@ export function ListingPublishFooter({
       flexShrink={0}
       style={getShadowStyle('md')}
     >
-      <Link href={vendorRoutes.products} asChild>
+      <AppLink href={vendorRoutes.products} asChild>
         <Button tone="ghost" size="$3" borderRadius={999} disabled={busy}>
           {LISTING_PUBLISH_COPY.CANCEL_CHANGES}
         </Button>
-      </Link>
+      </AppLink>
 
       <Text
         fontSize={12}

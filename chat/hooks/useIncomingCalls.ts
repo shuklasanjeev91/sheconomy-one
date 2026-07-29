@@ -1,10 +1,12 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
+import { AppState, type AppStateStatus } from 'react-native'
 
 import {
   CALL_RING_TIMEOUT_MS,
   type CallerProfile,
   type ChatCall,
   fetchCallerProfile,
+  fetchPendingIncomingCall,
   mapCall,
   updateCallStatus,
 } from '~/chat/lib/calls'
@@ -13,6 +15,9 @@ import { supabase } from '~/lib/supabase/client'
 /**
  * Global listener for inbound 1:1 calls. Surfaces the current ringing call and
  * the caller's profile, and exposes accept/decline actions.
+ *
+ * Also re-checks on AppState `active` so a push can wake a backgrounded /
+ * killed app and still show the accept UI (realtime INSERT is missed offline).
  */
 export function useIncomingCalls(userId: string | null | undefined) {
   const [incoming, setIncoming] = useState<ChatCall | null>(null)
@@ -27,8 +32,38 @@ export function useIncomingCalls(userId: string | null | undefined) {
     if (timeoutRef.current) clearTimeout(timeoutRef.current)
   }, [])
 
+  const presentIncoming = useCallback(
+    (call: ChatCall) => {
+      if (call.status !== 'ringing' || !call.meetingCode) return
+      if (Date.now() - new Date(call.createdAt).getTime() > CALL_RING_TIMEOUT_MS) return
+      if (incomingRef.current) return
+
+      incomingRef.current = call
+      setIncoming(call)
+      void fetchCallerProfile(call.callerId).then(setCaller)
+
+      if (timeoutRef.current) clearTimeout(timeoutRef.current)
+      const remaining = Math.max(
+        1_000,
+        CALL_RING_TIMEOUT_MS - (Date.now() - new Date(call.createdAt).getTime()),
+      )
+      timeoutRef.current = setTimeout(() => {
+        if (incomingRef.current?.id === call.id) clear()
+      }, remaining)
+    },
+    [clear],
+  )
+
+  const refreshPending = useCallback(async () => {
+    if (!userId || incomingRef.current) return
+    const pending = await fetchPendingIncomingCall(userId)
+    if (pending) presentIncoming(pending)
+  }, [presentIncoming, userId])
+
   useEffect(() => {
     if (!userId) return
+
+    void refreshPending()
 
     const channel = supabase
       .channel(`incoming-calls:${userId}`)
@@ -41,20 +76,7 @@ export function useIncomingCalls(userId: string | null | undefined) {
           filter: `receiver_id=eq.${userId}`,
         },
         (payload) => {
-          const call = mapCall(payload.new as never)
-          if (call.status !== 'ringing' || !call.meetingCode) return
-          // Ignore stale rows (e.g. replayed history).
-          if (Date.now() - new Date(call.createdAt).getTime() > CALL_RING_TIMEOUT_MS) return
-          if (incomingRef.current) return // already handling a call
-
-          incomingRef.current = call
-          setIncoming(call)
-          void fetchCallerProfile(call.callerId).then(setCaller)
-
-          if (timeoutRef.current) clearTimeout(timeoutRef.current)
-          timeoutRef.current = setTimeout(() => {
-            if (incomingRef.current?.id === call.id) clear()
-          }, CALL_RING_TIMEOUT_MS)
+          presentIncoming(mapCall(payload.new as never))
         },
       )
       .on(
@@ -75,11 +97,17 @@ export function useIncomingCalls(userId: string | null | undefined) {
       )
       .subscribe()
 
+    const onAppState = (state: AppStateStatus) => {
+      if (state === 'active') void refreshPending()
+    }
+    const appSub = AppState.addEventListener('change', onAppState)
+
     return () => {
       void supabase.removeChannel(channel)
+      appSub.remove()
       if (timeoutRef.current) clearTimeout(timeoutRef.current)
     }
-  }, [userId, clear])
+  }, [userId, clear, presentIncoming, refreshPending])
 
   const accept = useCallback(async (): Promise<string | null> => {
     const call = incomingRef.current

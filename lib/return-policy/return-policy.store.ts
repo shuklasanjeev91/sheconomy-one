@@ -9,7 +9,7 @@ import { createAsyncThunk, createSlice, current, type PayloadAction } from '@red
 
 import type { AppDispatch, RootState } from '~/lib/store'
 
-import * as returnPolicyService from './return-policy.service'
+import * as returnPolicyService from '~/lib/return-policy/return-policy.service'
 import type {
   AssignedReturnPolicy,
   DeleteReturnPolicyResult,
@@ -18,8 +18,8 @@ import type {
   ReturnPolicyFormData,
   ReturnPolicyInput,
   ReturnPolicyValidationResult,
-} from './return-policy.type'
-import { EMPTY_RETURN_POLICY_FORM_DATA } from './return-policy.type'
+} from '~/lib/return-policy/return-policy.type'
+import { EMPTY_RETURN_POLICY_FORM_DATA } from '~/lib/return-policy/return-policy.type'
 import {
   applyDefaultPolicyChange,
   buildOptimisticListingAssignment,
@@ -30,8 +30,8 @@ import {
   sortReturnPolicies,
   upsertListingAssignment,
   upsertReturnPolicy,
-} from './return-policy.utils'
-import { validateReturnPolicyInput } from './return-policy.validation'
+} from '~/lib/return-policy/return-policy.utils'
+import { validateReturnPolicyInput } from '~/lib/return-policy/return-policy.validation'
 
 // ============= STATE =============
 

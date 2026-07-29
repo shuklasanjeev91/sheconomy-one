@@ -1,12 +1,12 @@
-export { ANALYTICS_CONFIG, EXTERNAL_ANALYTICS_ENABLED } from './config'
+export { ANALYTICS_CONFIG, EXTERNAL_ANALYTICS_ENABLED } from '~/lib/analytics/config'
 export {
   trackAnalyticsEvent,
   trackCommerceEvent,
   trackExternalPageView,
-} from './external'
+} from '~/lib/analytics/external'
 export type {
   AnalyticsProperties,
   AnalyticsValue,
   CommerceAnalyticsEvent,
   CommerceAnalyticsItem,
-} from './types'
+} from '~/lib/analytics/types'

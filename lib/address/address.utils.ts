@@ -11,7 +11,7 @@ import {
   type AddressFormData,
   type AddressStats,
   type AddressType,
-} from './address.type'
+} from '~/lib/address/address.type'
 
 type IconType = (typeof Icons)[keyof typeof Icons]
 

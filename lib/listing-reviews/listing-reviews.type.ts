@@ -8,7 +8,7 @@ import type {
   LISTING_REVIEW_SORT_ORDER_VALUES,
   LISTING_REVIEW_STATUS_VALUES,
   LISTING_REVIEW_TYPE_VALUES,
-} from './listing-reviews.constants'
+} from '~/lib/listing-reviews/listing-reviews.constants'
 
 export type ListingReview = Tables<'listing_reviews'>
 export type ListingReviewInsert = TablesInsert<'listing_reviews'>

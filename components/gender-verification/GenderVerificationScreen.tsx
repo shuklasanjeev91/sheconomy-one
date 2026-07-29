@@ -14,7 +14,9 @@ import { BRAND_NAME } from '~/config/brand'
 import { useAccess } from '~/hooks/useAccess'
 import { useAppLayout } from '~/hooks/useAppLayout'
 import { useGenderVerification } from '~/hooks/useGenderVerification'
+import { useProfile } from '~/hooks/useProfile'
 import { refreshProfiles } from '~/lib/profile/refresh'
+import { patchCachedProfile } from '~/lib/profile/profile-cache'
 import { communityRoutes } from '~/lib/routes'
 import { useAppUi } from '~/lib/theme/useAppUi'
 
@@ -22,13 +24,18 @@ export function GenderVerificationScreen() {
   const ui = useAppUi()
   const router = useRouter()
   const { isFemale } = useAccess()
+  const { profile } = useProfile()
   const { gutter, safeTop, safeBottom } = useAppLayout()
 
   const verification = useGenderVerification({
     onVerified: () => {
-      refreshProfiles()
+      if (profile?.id) {
+        void patchCachedProfile(profile.id, { is_verified: true }).then(() => refreshProfiles())
+      } else {
+        refreshProfiles()
+      }
       setTimeout(() => {
-        router.replace(communityRoutes.home)
+        router.push(communityRoutes.home)
       }, 1100)
     },
   })
@@ -36,7 +43,7 @@ export function GenderVerificationScreen() {
   useEffect(() => {
     if (Platform.OS === 'web' || !isFemale) return
     refreshProfiles()
-    router.replace(communityRoutes.home)
+    router.push(communityRoutes.home)
   }, [isFemale, router])
 
   const isRunning =

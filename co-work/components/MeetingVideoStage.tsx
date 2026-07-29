@@ -8,7 +8,7 @@ import { useMeetingGalleryTracks } from '~/co-work/hooks/useMeetingGalleryTracks
 import { meetingGalleryLayout } from '~/co-work/lib/meeting-gallery-layout'
 import { useAppLayout } from '~/hooks/useAppLayout'
 
-import { SheconomyParticipantTile } from './SheconomyParticipantTile'
+import { SheconomyParticipantTile } from '~/co-work/components/SheconomyParticipantTile'
 
 /** SHEconomy-branded video gallery — web LiveKit stage (native uses NativeLiveKitMeetingRoom). */
 export function MeetingVideoStage() {

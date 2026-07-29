@@ -45,6 +45,14 @@ function SheconomyParticipantTileBody() {
     trackRef.source === Track.Source.ScreenShare ||
     (isTrackReference(trackRef) && isScreenSharePublication(trackRef.publication))
 
+  const hasLiveVideo =
+    isTrackReference(trackRef) &&
+    !!trackRef.publication?.track &&
+    !trackRef.publication.isMuted &&
+    (trackRef.publication.kind === 'video' ||
+      trackRef.source === Track.Source.Camera ||
+      trackRef.source === Track.Source.ScreenShare)
+
   const cameraOff = useMemo(
     () =>
       !isScreen &&
@@ -58,21 +66,24 @@ function SheconomyParticipantTileBody() {
 
   return (
     <>
-      {isTrackReference(trackRef) &&
-      (trackRef.publication?.kind === 'video' ||
-        trackRef.source === Track.Source.Camera ||
-        trackRef.source === Track.Source.ScreenShare) ? (
-        <VideoTrack trackRef={trackRef} />
-      ) : null}
+      {hasLiveVideo ? <VideoTrack trackRef={trackRef} /> : null}
 
-      <div className="lk-participant-placeholder" data-camera-off={cameraOff ? 'true' : 'false'}>
-        <div className="sheconomy-participant-avatar-wrap">
-          <Avatar name={name} src={avatarUrl ?? undefined} size="$8" />
-          {!isScreen ? (
+      {/* Screen share: never show profile avatar — that looked like a broken "image" tile
+          when native→web frames were missing. Camera tiles keep the avatar fallback. */}
+      {isScreen ? (
+        !hasLiveVideo ? (
+          <div className="lk-participant-placeholder sheconomy-screen-waiting" data-camera-off="false">
+            <span className="sheconomy-participant-avatar-label">Receiving screen…</span>
+          </div>
+        ) : null
+      ) : (
+        <div className="lk-participant-placeholder" data-camera-off={cameraOff ? 'true' : 'false'}>
+          <div className="sheconomy-participant-avatar-wrap">
+            <Avatar name={name} src={avatarUrl ?? undefined} size="$8" />
             <span className="sheconomy-participant-avatar-label">Camera off</span>
-          ) : null}
+          </div>
         </div>
-      </div>
+      )}
 
       {handRaised && !isScreen ? (
         <div className="sheconomy-hand-raised" aria-label="Hand raised">
@@ -123,10 +134,19 @@ function ScreenShareQualityBooster() {
     }
 
     const remote = publication as RemoteTrackPublication
-    if (!remote.isSubscribed) remote.setSubscribed(true)
-    remote.setEnabled(true)
-    remote.setVideoDimensions(SCREEN_SHARE_SUBSCRIBE_DIMENSIONS)
-    remote.setVideoQuality(VideoQuality.HIGH)
+    const boost = () => {
+      if (!remote.isSubscribed) remote.setSubscribed(true)
+      remote.setEnabled(true)
+      remote.setVideoDimensions(SCREEN_SHARE_SUBSCRIBE_DIMENSIONS)
+      remote.setVideoQuality(VideoQuality.HIGH)
+    }
+    boost()
+    const id = window.setInterval(boost, 1500)
+    const stop = window.setTimeout(() => window.clearInterval(id), 12_000)
+    return () => {
+      window.clearInterval(id)
+      window.clearTimeout(stop)
+    }
   }, [
     trackRef.participant.identity,
     trackRef.participant.isLocal,

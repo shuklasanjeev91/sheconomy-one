@@ -1,7 +1,7 @@
 /** Bottom tab bar density from viewport width (web + native). */
 export type BottomTabWidthTier = 'compact' | 'comfortable' | 'expanded'
 
-/** Max section tabs (excluding Home, Cart, You) per width tier. */
+/** Max section tabs (excluding Home + You) per width tier. */
 export const BOTTOM_TAB_MIDDLE_LIMIT: Record<BottomTabWidthTier, number> = {
   compact: 2,
   comfortable: 3,
@@ -14,8 +14,9 @@ export function getBottomTabWidthTier(width: number, gtSm: boolean): BottomTabWi
   return 'compact'
 }
 
-export function shouldShowBottomTabLabels(tier: BottomTabWidthTier) {
-  return tier !== 'compact'
+export function shouldShowBottomTabLabels(_tier: BottomTabWidthTier) {
+  // Always show captions — icon-only tabs confuse users on phones.
+  return true
 }
 
 export function formatBottomTabLabel(label: string, tier: BottomTabWidthTier) {
@@ -31,6 +32,9 @@ export function formatBottomTabLabel(label: string, tier: BottomTabWidthTier) {
     Events: 'Events',
     Meetings: 'Meet',
     Schedule: 'Sched',
+    Listings: 'List',
+    Orders: 'Orders',
+    Stats: 'Stats',
   }
 
   if (tier === 'compact') {

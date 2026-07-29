@@ -7,7 +7,17 @@ import { GenderVerificationModal } from '~/components/gender-verification/Gender
 import { requiresGenderVerification } from '~/config/route-protection.config'
 import { useProfile } from '~/hooks/useProfile'
 import { GENDER_VERIFICATION_PROMPT } from '~/lib/gender-verification'
+import { buildVerificationDeniedRedirect } from '~/lib/gender-verification/denied-redirect'
+import { rememberSafeAppPath } from '~/lib/gender-verification/route-memory'
+import {
+  clearVerificationFlowOpen,
+  markVerificationFlowOpen,
+  peekVerificationFlowOpen,
+  readVerificationFlowOpen,
+} from '~/lib/gender-verification/verification-flow-storage'
+import { replaceApp } from '~/lib/platform/navigate'
 import { refreshProfiles } from '~/lib/profile/refresh'
+import { patchCachedProfile } from '~/lib/profile/profile-cache'
 import { persistStorage } from '~/lib/store/storage'
 
 const {
@@ -23,17 +33,12 @@ function isSuppressedRoute(pathname: string): boolean {
 }
 
 /**
- * App-wide gender-verification host. Mounted once near the shell root, it decides
- * when to surface the verification popup:
+ * App-wide verification UX host.
  *
- *  - Shows automatically when a signed-in member has `profiles.is_verified === false`.
- *  - After the member dismisses it, stays quiet for `dismissCooldownMs` (10 min)
- *    so we never nag on every screen.
- *  - Re-opens immediately (bypassing the cooldown) when the member navigates to a
- *    gender-restricted route (see `requiresGenderVerification`).
- *  - Opens the "access restricted" modal when a `?gender=restricted` flag is present.
- *
- * All timings/labels come from `GENDER_VERIFICATION_PROMPT` — nothing is hardcoded here.
+ * - Protected routes are blocked in {@link AppAccessGate}; unverified members are
+ *   redirected to their last safe route and see {@link GenderDeniedModal}.
+ * - "Verify myself" opens {@link GenderVerificationModal}; flow state persists
+ *   across redirect so the liveness check is not interrupted.
  */
 export function GenderVerificationHost() {
   const { profile, isAuthenticated } = useProfile()
@@ -42,19 +47,62 @@ export function GenderVerificationHost() {
 
   const [dismissedAt, setDismissedAt] = useState<number | null>(null)
   const [hydrated, setHydrated] = useState(false)
-  const [manualOpen, setManualOpen] = useState(false)
+  const [manualOpen, setManualOpen] = useState(() => peekVerificationFlowOpen())
   const [denied, setDenied] = useState(false)
   const [, forceTick] = useState(0)
 
-  // Path where the member last closed the modal — used to avoid re-opening on the
-  // very same page while still re-prompting when they navigate elsewhere.
   const closedOnPathRef = useRef<string | null>(null)
+  const verificationFlowRef = useRef(peekVerificationFlowOpen())
+  const didRedirectRef = useRef(false)
 
   const isVerified = profile?.is_verified === true
-  const needsVerification = isAuthenticated && !!profile && profile.is_verified === false
+  const needsVerification = isAuthenticated && !!profile && !isVerified
+  const onProtectedRoute = requiresGenderVerification(pathname)
   const suppressedRoute = isSuppressedRoute(pathname)
+  const verificationFlowActive = manualOpen || verificationFlowRef.current
 
-  // Load the last dismissal timestamp once (client-only; keeps SSR output empty).
+  useEffect(() => {
+    rememberSafeAppPath(pathname)
+  }, [pathname])
+
+  // Restore verification modal after redirect / reload.
+  useEffect(() => {
+    if (!hydrated || !needsVerification) return
+    let cancelled = false
+    void readVerificationFlowOpen().then((open) => {
+      if (cancelled || !open) return
+      verificationFlowRef.current = true
+      setManualOpen(true)
+      setDenied(false)
+    })
+    return () => {
+      cancelled = true
+    }
+  }, [hydrated, needsVerification])
+
+  // Blocked on a protected route — show denied modal and redirect (once) to last safe page.
+  useEffect(() => {
+    if (!isAuthenticated || !profile || isVerified || !onProtectedRoute) return
+    if (verificationFlowActive || peekVerificationFlowOpen()) return
+    if (didRedirectRef.current) return
+
+    setDenied(true)
+
+    const redirect = buildVerificationDeniedRedirect()
+    const redirectPath = (redirect.split('?')[0] ?? '/').replace(/\/$/, '') || '/'
+    const currentPath = pathname.replace(/\/$/, '') || '/'
+    if (currentPath === redirectPath) return
+
+    didRedirectRef.current = true
+    replaceApp(redirect)
+  }, [isAuthenticated, profile, isVerified, onProtectedRoute, pathname, verificationFlowActive])
+
+  useEffect(() => {
+    if (!onProtectedRoute) {
+      didRedirectRef.current = false
+    }
+  }, [onProtectedRoute])
+
   useEffect(() => {
     let cancelled = false
     persistStorage
@@ -73,9 +121,10 @@ export function GenderVerificationHost() {
     }
   }, [])
 
-  // Once verified, clear any dismissal record so a future unverified state prompts fresh.
   useEffect(() => {
     if (!isVerified) return
+    verificationFlowRef.current = false
+    void clearVerificationFlowOpen()
     setManualOpen(false)
     setDenied(false)
     setDismissedAt((current) => {
@@ -84,8 +133,9 @@ export function GenderVerificationHost() {
     })
   }, [isVerified])
 
-  // `?gender=restricted` → surface the access-restricted modal, then clean the URL.
   useEffect(() => {
+    if (verificationFlowActive || peekVerificationFlowOpen()) return
+
     const raw = params?.[RESTRICTED_PARAM]
     const flag = Array.isArray(raw) ? raw[0] : raw
     if (flag !== RESTRICTED_VALUE) return
@@ -96,37 +146,45 @@ export function GenderVerificationHost() {
       url.searchParams.delete(RESTRICTED_PARAM)
       window.history.replaceState({}, '', url.toString())
     }
-  }, [params])
+  }, [params, verificationFlowActive])
 
-  // Clear the "closed here" marker after navigating away so protected routes re-prompt.
   useEffect(() => {
     if (closedOnPathRef.current && closedOnPathRef.current !== pathname) {
       closedOnPathRef.current = null
     }
   }, [pathname])
 
-  // Re-evaluate exactly when the dismissal cooldown elapses (without needing navigation).
   useEffect(() => {
-    if (!needsVerification || dismissedAt === null) return
+    if (onProtectedRoute || !needsVerification || dismissedAt === null) return
     const remaining = COOLDOWN_MS - (Date.now() - dismissedAt)
     if (remaining <= 0) return
     const timer = setTimeout(() => forceTick((tick) => tick + 1), remaining + 50)
     return () => clearTimeout(timer)
-  }, [needsVerification, dismissedAt])
+  }, [needsVerification, dismissedAt, onProtectedRoute])
+
+  const closeVerificationFlow = useCallback(() => {
+    verificationFlowRef.current = false
+    void clearVerificationFlowOpen()
+    setManualOpen(false)
+  }, [])
 
   const handleVerifyClose = useCallback(() => {
     const now = Date.now()
     setDismissedAt(now)
     void persistStorage.setItem(STORAGE_KEY, String(now))
     closedOnPathRef.current = pathname
-    setManualOpen(false)
-  }, [pathname])
+    closeVerificationFlow()
+  }, [closeVerificationFlow, pathname])
 
   const handleVerified = useCallback(() => {
-    refreshProfiles()
-    setManualOpen(false)
+    if (profile?.id) {
+      void patchCachedProfile(profile.id, { is_verified: true }).then(() => refreshProfiles())
+    } else {
+      refreshProfiles()
+    }
+    closeVerificationFlow()
     setDenied(false)
-  }, [])
+  }, [closeVerificationFlow, profile?.id])
 
   const handleDeniedClose = useCallback(() => {
     const now = Date.now()
@@ -137,24 +195,32 @@ export function GenderVerificationHost() {
   }, [pathname])
 
   const handleDeniedVerify = useCallback(() => {
+    verificationFlowRef.current = true
+    void markVerificationFlowOpen()
     setDenied(false)
     setManualOpen(true)
     closedOnPathRef.current = null
   }, [])
 
-  const forcedByRoute =
-    requiresGenderVerification(pathname) && closedOnPathRef.current !== pathname
   const cooledDown = dismissedAt === null || Date.now() - dismissedAt >= COOLDOWN_MS
-  const autoShow = hydrated && needsVerification && (forcedByRoute || cooledDown)
+  const autoShow =
+    hydrated && needsVerification && !onProtectedRoute && cooledDown && !verificationFlowActive
 
-  const showDenied = denied && !suppressedRoute
+  const showDenied =
+    !verificationFlowActive &&
+    (denied || (needsVerification && onProtectedRoute)) &&
+    !suppressedRoute
   const showVerify =
-    needsVerification && !suppressedRoute && !showDenied && (manualOpen || autoShow)
+    isAuthenticated &&
+    profile?.is_verified !== true &&
+    !suppressedRoute &&
+    (verificationFlowActive || (needsVerification && !showDenied && autoShow))
 
   return (
     <>
       <GenderVerificationModal
         open={showVerify}
+        dismissible
         onClose={handleVerifyClose}
         onVerified={handleVerified}
       />

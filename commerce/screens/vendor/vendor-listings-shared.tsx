@@ -152,8 +152,30 @@ export function listingStatusLabel(status: ListingStatus | string | null | undef
 export function listingStatusTone(status: ListingStatus | string | null | undefined): 'success' | 'warning' | 'neutral' | 'danger' {
   if (status === LISTING_STATUS.ACTIVE) return 'success'
   if (status === LISTING_STATUS.DRAFT) return 'warning'
+  if (status === LISTING_STATUS.PAUSED) return 'warning'
   if (status === LISTING_STATUS.SOLD_OUT) return 'danger'
+  if (status === LISTING_STATUS.ARCHIVED) return 'neutral'
   return 'neutral'
+}
+
+/** Row-menu status actions (excludes the listing's current status). */
+export const LISTING_STATUS_ACTIONS: readonly {
+  value: ListingStatus
+  label: string
+  icon: IconType
+  tone?: 'danger' | 'warning' | 'success' | 'neutral'
+}[] = [
+  { value: LISTING_STATUS.ACTIVE, label: 'Publish', icon: Icons.CheckCircle2, tone: 'success' },
+  { value: LISTING_STATUS.DRAFT, label: 'Set to Draft', icon: Icons.FileText, tone: 'neutral' },
+  { value: LISTING_STATUS.PAUSED, label: 'Pause', icon: Icons.Pause, tone: 'warning' },
+  { value: LISTING_STATUS.SOLD_OUT, label: 'Mark Sold Out', icon: Icons.ShoppingBag, tone: 'danger' },
+  { value: LISTING_STATUS.ARCHIVED, label: 'Archive', icon: Icons.Archive, tone: 'danger' },
+]
+
+export function listingStatusActionsFor(
+  currentStatus: ListingStatus | string | null | undefined,
+): typeof LISTING_STATUS_ACTIONS[number][] {
+  return LISTING_STATUS_ACTIONS.filter((action) => action.value !== currentStatus)
 }
 
 export function listingSkuFallback(slug: string | null | undefined, id: string): string {

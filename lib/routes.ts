@@ -23,11 +23,12 @@ export const appRoutes = {
   legalAds: '/legal/ads' as Href,
   cart: '/cart' as Href,
   checkout: '/checkout' as Href,
-  /** Unified omnibox results — optional `scope`: all | listings | shops | people | … */
-  search: (query?: string, scope?: string) => {
+  /** Unified omnibox results — optional `scope`: all | listings | shops | people | …; `mode`: ai */
+  search: (query?: string, scope?: string, mode?: 'ai' | null) => {
     const params = new URLSearchParams()
     if (query?.trim()) params.set('q', query.trim())
     if (scope && scope !== 'all') params.set('scope', scope)
+    if (mode === 'ai') params.set('mode', 'ai')
     const search = params.toString()
     return (search ? `/search?${search}` : '/search') as Href
   },
@@ -91,6 +92,7 @@ export const vendorRoutes = {
   analytics: '/vendor/analytics' as Href,
   delivery: '/vendor/delivery' as Href,
   ads: '/vendor/ads' as Href,
+  createDiscount: '/vendor/ads/create' as Href,
   reviews: '/vendor/reviews' as Href,
   settings: '/vendor/settings' as Href,
   settingsSection: (section: string) =>
@@ -172,7 +174,10 @@ export const classRoutes = {
 export const coWorkRoutes = {
   home: '/co-work' as Href,
   meeting: (code: string) => `/co-work/meeting/${encodeURIComponent(code)}` as Href,
-  meetingLive: (code: string) => `/co-work/meeting/${encodeURIComponent(code)}/live` as Href,
+  // Prefer nested `/live` — keeps LiveKit out of the lobby route chunk.
+  // Flat `?live=1` used to share a file with lobby and blanked Co-Work/lobby.
+  meetingLive: (code: string) =>
+    `/co-work/meeting/${encodeURIComponent(code)}/live` as Href,
   recording: (token: string) => `/co-work/recording/${encodeURIComponent(token)}` as Href,
   schedule: '/co-work/schedule' as Href,
   meetings: '/co-work/meetings' as Href,
@@ -351,8 +356,13 @@ export function isCoWorkJoinPath(pathname: string) {
   return pathname === '/co-work/join' || pathname.startsWith('/co-work/join/')
 }
 
-export function isCoWorkLivePath(pathname: string) {
-  return /\/co-work\/meeting\/[^/]+\/live/.test(pathname)
+export function isCoWorkLivePath(pathname: string, search = '') {
+  if (/\/co-work\/meeting\/[^/]+\/live\/?$/.test(pathname)) return true
+  if (!/\/co-work\/meeting\/[^/]+\/?$/.test(pathname)) return false
+  const query = search.startsWith('?') ? search.slice(1) : search
+  const params = new URLSearchParams(query)
+  const live = (params.get('live') ?? '').toLowerCase()
+  return live === '1' || live === 'true' || live === 'yes'
 }
 
 export function isCreatePostPath(pathname: string) {

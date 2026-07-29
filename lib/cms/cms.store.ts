@@ -10,7 +10,7 @@ import { createAsyncThunk, createSlice, type PayloadAction } from '@reduxjs/tool
 
 import type { AppDispatch } from '~/lib/store'
 
-import * as cmsService from './cms.service'
+import * as cmsService from '~/lib/cms/cms.service'
 import {
   DEFAULT_CONTENT_FILTERS,
   type CmsCategory,
@@ -34,7 +34,7 @@ import {
   type CmsSeo,
   type CmsSitemapFeedRow,
   type CmsTag,
-} from './cms.type'
+} from '~/lib/cms/cms.type'
 import {
   createCategorySchema,
   createCommentSchema,
@@ -52,7 +52,7 @@ import {
   updateRedirectSchema,
   updateSeoSchema,
   updateTagSchema,
-} from './cms.validation'
+} from '~/lib/cms/cms.validation'
 
 // ============= STATE =============
 

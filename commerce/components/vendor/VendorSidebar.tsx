@@ -10,8 +10,8 @@ import {
   isVendorSettingsChildActive,
   normalizeVendorPathname,
   type VendorNavItem,
-} from './vendor-nav'
-import { useVendorSettingsActiveSubId } from './useVendorSettingsActiveSubId'
+} from '~/commerce/components/vendor/vendor-nav'
+import { useVendorSettingsActiveSubId } from '~/commerce/components/vendor/useVendorSettingsActiveSubId'
 
 const TOPBAR_HEIGHT = 60
 

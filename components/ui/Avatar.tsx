@@ -1,8 +1,9 @@
 import { forwardRef, useEffect, useState } from 'react'
-import { Image as RNImage, Platform, type StyleProp, type ViewStyle } from 'react-native'
+import { Image as ExpoImage } from 'expo-image'
+import { type StyleProp, type ViewStyle } from 'react-native'
 import type { GetProps } from 'tamagui'
 import { YStack } from 'tamagui'
-import { SizableText } from './Text'
+import { SizableText } from '~/components/ui/Text'
 import { BRAND_THEME } from '~/config/tokens'
 
 type SizeToken = '$1' | '$2' | '$2.5' | '$3' | '$4' | '$5' | '$6' | '$7' | '$8' | '$10'
@@ -35,18 +36,21 @@ function resolvePx(size: SizeToken | number | undefined): number {
   return AVATAR_PX.$6
 }
 
-/** Trim / reject empty & non-http(s) junk so we never mount a broken image. */
+/** Trim / reject empty & non-loadable junk so we never mount a broken image. */
 export function normalizeAvatarSrc(src?: string | null): string | undefined {
   if (typeof src !== 'string') return undefined
   const trimmed = src.trim()
   if (!trimmed) return undefined
-  // Allow https remote URLs and local / blob / data URIs used by pickers.
+  // Remote URLs, picker previews, and common native photo-library schemes.
   if (
     trimmed.startsWith('https://') ||
     trimmed.startsWith('http://') ||
     trimmed.startsWith('blob:') ||
     trimmed.startsWith('data:') ||
     trimmed.startsWith('file:') ||
+    trimmed.startsWith('ph://') ||
+    trimmed.startsWith('assets-library://') ||
+    trimmed.startsWith('content://') ||
     trimmed.startsWith('/')
   ) {
     return trimmed
@@ -57,8 +61,8 @@ export function normalizeAvatarSrc(src?: string | null): string | undefined {
 /**
  * Initials-fallback avatar — pass `name` to auto-derive the fallback text.
  *
- * Uses RN Image (not Tamagui Avatar.Image) so load/error and cover-crop behave
- * the same on web, iOS, and Android. Initials sit under the photo until it loads.
+ * Uses expo-image on all platforms for cache + consistent cover crop.
+ * Initials sit under the photo until it loads.
  */
 export const Avatar = forwardRef<any, AvatarProps>(function Avatar(
   { src, name, size = '$6', ring = false, borderWidth, borderColor, style, ...props },
@@ -132,21 +136,20 @@ export const Avatar = forwardRef<any, AvatarProps>(function Avatar(
       </YStack>
 
       {showImage ? (
-        <RNImage
+        <ExpoImage
           key={normalized}
+          // Object form is more reliable for file:// and remote URLs on native.
           source={{ uri: normalized }}
           accessibilityLabel={name}
+          recyclingKey={normalized}
+          cachePolicy="memory-disk"
+          contentFit="cover"
+          transition={0}
           onLoad={() => setLoaded(true)}
           onError={() => {
             setFailed(true)
             setLoaded(false)
           }}
-          // Google CDNs often block hotlinking without this on web.
-          {...(Platform.OS === 'web'
-            ? ({
-                referrerPolicy: 'no-referrer',
-              } as object)
-            : {})}
           style={{
             position: 'absolute',
             top: 0,
@@ -155,7 +158,6 @@ export const Avatar = forwardRef<any, AvatarProps>(function Avatar(
             height: px,
             zIndex: 1,
           }}
-          resizeMode="cover"
         />
       ) : null}
     </YStack>

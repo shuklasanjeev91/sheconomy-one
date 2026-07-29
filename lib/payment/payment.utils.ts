@@ -17,20 +17,21 @@ import {
   SHOW_OAUTH_IN_VENDOR_UI,
   SUPPORTED_CURRENCIES,
   type ConnectionType,
+  type PaymentAccountStatus,
   type PaymentProviderEnum,
   type PaymentProviderId,
   type PaymentRegion,
   type SupportedCurrencyCode,
-} from './payment.constants'
-import { PAYMENT_PROVIDERS_CONFIG, PROVIDER_CREDENTIAL_FIELDS } from './payment.providers.config'
-import { PAYMENT_CONNECTION_TYPE_LABELS, PAYMENT_PROVIDER_BADGE_LABELS, PAYMENT_UI_COPY } from './payment-ui.copy'
+} from '~/lib/payment/payment.constants'
+import { PAYMENT_PROVIDERS_CONFIG, PROVIDER_CREDENTIAL_FIELDS } from '~/lib/payment/payment.providers.config'
+import { PAYMENT_CONNECTION_TYPE_LABELS, PAYMENT_PROVIDER_BADGE_LABELS, PAYMENT_UI_COPY } from '~/lib/payment/payment-ui.copy'
 import type {
   ConnectedProviderSummary,
   PaymentAnalytics,
   PaymentProviderConfig,
   PaymentSetupStatus,
   ShopPaymentAccount,
-} from './payment.type'
+} from '~/lib/payment/payment.type'
 
 export function normalizeProviderId(provider: string): PaymentProviderId {
   return provider.trim().toLowerCase() as PaymentProviderId
@@ -504,6 +505,86 @@ export function sortProvidersForDisplay(
     if (aConnected !== bConnected) return bConnected - aConnected
     return order.indexOf(a.id) - order.indexOf(b.id)
   })
+}
+
+// ─── Razorpay-specific helpers ────────────────────────────────────────────────
+
+/**
+ * Mask a Razorpay Key ID for safe display.
+ * "rzp_live_AbCdEfGh" → "rzp_live_••••EfGh"
+ */
+export function maskRazorpayKeyId(keyId: string | null | undefined): string {
+  if (!keyId) return ''
+  const parts = keyId.split('_')
+  if (parts.length < 3) {
+    const last4 = keyId.slice(-4)
+    const masked = '•'.repeat(Math.max(0, keyId.length - 4))
+    return masked + last4
+  }
+  const prefix = `${parts[0]}_${parts[1]}_`
+  const rest = parts.slice(2).join('_')
+  if (rest.length <= 4) return prefix + rest
+  return `${prefix}${'•'.repeat(4)}${rest.slice(-4)}`
+}
+
+/** Return true if the accounts list includes a connected Razorpay account. */
+export function isRazorpayConnected(accounts: ShopPaymentAccount[]): boolean {
+  return accounts.some(
+    (a) =>
+      normalizeProviderId(String(a.provider)) === PAYMENT_PROVIDERS.RAZORPAY &&
+      a.status === PAYMENT_ACCOUNT_STATUS.CONNECTED,
+  )
+}
+
+/** Return the status of the vendor's Razorpay account, or null if not found. */
+export function getRazorpayStatus(
+  accounts: ShopPaymentAccount[],
+): PaymentAccountStatus | null {
+  const account = accounts.find(
+    (a) => normalizeProviderId(String(a.provider)) === PAYMENT_PROVIDERS.RAZORPAY,
+  )
+  return (account?.status as PaymentAccountStatus | undefined) ?? null
+}
+
+/** Return whether live mode is enabled in vendor payment settings. */
+export function isLiveMode(settings: { is_live_mode?: boolean | null } | null | undefined): boolean {
+  return settings?.is_live_mode === true
+}
+
+/** Human-readable label for a settlement schedule. */
+export function formatSettlementSchedule(
+  schedule: string | null | undefined,
+): string {
+  switch (schedule) {
+    case SETTLEMENT_SCHEDULES.DAILY:
+      return 'Daily'
+    case SETTLEMENT_SCHEDULES.WEEKLY:
+      return 'Weekly (every Monday)'
+    case SETTLEMENT_SCHEDULES.MONTHLY:
+      return 'Monthly (1st of month)'
+    default:
+      return schedule ?? 'Not set'
+  }
+}
+
+/**
+ * Warn when the Key ID prefix doesn't match the is_live_mode toggle.
+ * Returns a warning string, or null when everything is consistent.
+ */
+export function getRazorpayModeMismatchWarning(
+  keyId: string | null | undefined,
+  isLiveModeOn: boolean,
+): string | null {
+  if (!keyId) return null
+  const isLiveKey = keyId.startsWith('rzp_live_')
+  const isTestKey = keyId.startsWith('rzp_test_')
+  if (isLiveModeOn && isTestKey) {
+    return 'Live mode is ON but your Key ID is a test key (rzp_test_…). Switch to a live key or disable live mode.'
+  }
+  if (!isLiveModeOn && isLiveKey) {
+    return 'Live mode is OFF but your Key ID is a live key (rzp_live_…). Enable live mode or use a test key.'
+  }
+  return null
 }
 
 function normalizeSearchQuery(query: string): string {

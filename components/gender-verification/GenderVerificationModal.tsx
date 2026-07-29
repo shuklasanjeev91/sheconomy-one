@@ -15,6 +15,8 @@ import { useAppUi } from '~/lib/theme/useAppUi'
 
 type GenderVerificationModalProps = {
   open: boolean
+  /** When false, hide close / "Maybe later" (required verification on protected routes). */
+  dismissible?: boolean
   /** Dismiss the modal (postpone verification). */
   onClose: () => void
   /** Fired once the member is verified — the host refreshes the profile here. */
@@ -28,15 +30,27 @@ type GenderVerificationModalProps = {
  * `GenderVerificationErrorBoundary` so any failure — including a 413
  * image-too-large — is shown with a friendly, actionable message.
  */
-export function GenderVerificationModal({ open, onClose, onVerified }: GenderVerificationModalProps) {
+export function GenderVerificationModal({
+  open,
+  dismissible = true,
+  onClose,
+  onVerified,
+}: GenderVerificationModalProps) {
   if (!open) return null
 
   // Mounted only while open so the camera stream is released on close (the
   // liveness hook stops all tracks on unmount).
-  return <GenderVerificationModalShell onClose={onClose} onVerified={onVerified} />
+  return (
+    <GenderVerificationModalShell
+      dismissible={dismissible}
+      onClose={onClose}
+      onVerified={onVerified}
+    />
+  )
 }
 
 function GenderVerificationModalShell({
+  dismissible = true,
   onClose,
   onVerified,
 }: Omit<GenderVerificationModalProps, 'open'>) {
@@ -50,7 +64,7 @@ function GenderVerificationModalShell({
       left={0}
       right={0}
       bottom={0}
-      zIndex={200_000}
+      zIndex={200_020}
       backgroundColor="rgba(0,0,0,0.55)"
       alignItems="center"
       justifyContent={isDesktop ? 'center' : 'flex-end'}
@@ -60,32 +74,52 @@ function GenderVerificationModalShell({
         width="100%"
         maxWidth={isDesktop ? 560 : undefined}
         flex={isDesktop ? undefined : 1}
-        maxHeight={isDesktop ? '90%' : '100%'}
-        minHeight={0}
+        maxHeight={isDesktop ? ('90vh' as const) : ('100%' as const)}
+        minHeight={isDesktop ? undefined : 0}
         backgroundColor={ui.surface}
         borderRadius={isDesktop ? radius.card : 0}
         borderWidth={isDesktop ? 1 : 0}
         borderColor={ui.borderSubtle}
         overflow="hidden"
-        style={isDesktop ? getShadowStyle('lg') : undefined}
+        style={
+          Platform.OS === 'web'
+            ? ({
+                ...(isDesktop ? getShadowStyle('lg') : {}),
+                display: 'flex',
+                flexDirection: 'column',
+                ...(isDesktop ? {} : { flex: 1, minHeight: 0 }),
+              } as const)
+            : isDesktop
+              ? getShadowStyle('lg')
+              : undefined
+        }
       >
-        <ModalHeader ui={ui} onClose={onClose} />
+        <ModalHeader ui={ui} dismissible={dismissible} onClose={onClose} />
         <ScrollView
-          flex={1}
           width="100%"
-          minHeight={0}
-          showsVerticalScrollIndicator={false}
+          flex={isDesktop ? undefined : 1}
+          minHeight={isDesktop ? undefined : 0}
+          showsVerticalScrollIndicator
           keyboardShouldPersistTaps="handled"
+          style={
+            Platform.OS === 'web'
+              ? ({
+                  overflowY: 'auto',
+                  ...(isDesktop
+                    ? { maxHeight: 'calc(90vh - 72px)' }
+                    : { flex: 1, minHeight: 0 }),
+                } as const)
+              : isDesktop
+                ? undefined
+                : ({ flex: 1 } as const)
+          }
           contentContainerStyle={{
-            flexGrow: 1,
             padding: 20,
             paddingBottom: 28,
             gap: 20,
           }}
         >
-          <GenderVerificationErrorBoundary scope="Modal">
-            <VerificationFlow onClose={onClose} onVerified={onVerified} />
-          </GenderVerificationErrorBoundary>
+          <VerificationFlow dismissible={dismissible} onClose={onClose} onVerified={onVerified} />
         </ScrollView>
       </YStack>
     </YStack>
@@ -94,9 +128,11 @@ function GenderVerificationModalShell({
 
 function ModalHeader({
   ui,
+  dismissible,
   onClose,
 }: {
   ui: ReturnType<typeof useAppUi>
+  dismissible: boolean
   onClose: () => void
 }) {
   return (
@@ -129,22 +165,26 @@ function ModalHeader({
           </Text>
         </YStack>
       </XStack>
-      <Button
-        size="$2"
-        circular
-        chromeless
-        onPress={onClose}
-        aria-label="Close verification"
-        icon={<Icons.X size={20} color={ui.textSecondary} />}
-      />
+      {dismissible ? (
+        <Button
+          size="$2"
+          circular
+          chromeless
+          onPress={onClose}
+          aria-label="Close verification"
+          icon={<Icons.X size={20} color={ui.textSecondary} />}
+        />
+      ) : null}
     </XStack>
   )
 }
 
 function VerificationFlow({
+  dismissible,
   onClose,
   onVerified,
 }: {
+  dismissible: boolean
   onClose: () => void
   onVerified: () => void
 }) {
@@ -161,6 +201,7 @@ function VerificationFlow({
 
   if (verification.phase === 'success') {
     return (
+      <GenderVerificationErrorBoundary scope="Modal" onReset={verification.reset}>
       <YStack alignItems="center" gap="$3" paddingVertical="$4">
         <YStack
           width={64}
@@ -182,10 +223,12 @@ function VerificationFlow({
           Continue
         </Button>
       </YStack>
+      </GenderVerificationErrorBoundary>
     )
   }
 
   return (
+    <GenderVerificationErrorBoundary scope="Modal" onReset={verification.reset}>
     <YStack gap="$4">
       {verification.phase === 'idle' ? (
         <YStack gap="$2">
@@ -193,6 +236,27 @@ function VerificationFlow({
             Keep {BRAND_NAME} women-first with a live face check. Center your face and blink
             naturally {verification.requiredBlinks} times — photos and screen replays are rejected.
             Video stays on your device.
+          </Text>
+        </YStack>
+      ) : null}
+
+      {!verification.supported ? (
+        <YStack
+          padding="$3"
+          borderRadius={radius.chip}
+          backgroundColor="rgba(180, 83, 9, 0.08)"
+          borderWidth={1}
+          borderColor="rgba(180, 83, 9, 0.2)"
+          gap="$1.5"
+        >
+          <XStack alignItems="center" gap="$2">
+            <Icons.AlertTriangle size={16} color="#b45309" />
+            <Text fontSize={13} fontWeight="700" color="#b45309">
+              Camera required
+            </Text>
+          </XStack>
+          <Text color={ui.textSecondary} fontSize={13} lineHeight={19}>
+            Use a device with a front camera and allow browser camera access to complete verification.
           </Text>
         </YStack>
       ) : null}
@@ -260,12 +324,15 @@ function VerificationFlow({
           </Button>
         ) : null}
 
-        <Button chromeless size="$3" onPress={onClose}>
-          <Text color={ui.textMuted} fontSize={14}>
-            Maybe later
-          </Text>
-        </Button>
+        {dismissible ? (
+          <Button chromeless size="$3" onPress={onClose}>
+            <Text color={ui.textMuted} fontSize={14}>
+              Maybe later
+            </Text>
+          </Button>
+        ) : null}
       </YStack>
     </YStack>
+    </GenderVerificationErrorBoundary>
   )
 }

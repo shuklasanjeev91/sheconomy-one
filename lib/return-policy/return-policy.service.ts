@@ -9,12 +9,12 @@
 import { canManageShop } from '~/lib/shop/shop.utils'
 import { supabase } from '~/lib/supabase'
 
-import { RETURN_POLICY_SUCCESS_MESSAGES } from './return-policy.constants'
+import { RETURN_POLICY_SUCCESS_MESSAGES } from '~/lib/return-policy/return-policy.constants'
 import {
   ReturnPolicyError,
   RETURN_POLICY_ERROR_CODES,
   toFriendlyReturnPolicyError,
-} from './return-policy.errors'
+} from '~/lib/return-policy/return-policy.errors'
 import type {
   AssignedReturnPolicy,
   DeleteReturnPolicyResult,
@@ -24,8 +24,8 @@ import type {
   ReturnPolicyInput,
   ReturnPolicyServiceResponse,
   ReturnPolicyUpdate,
-} from './return-policy.type'
-import { parseReturnPolicyInput, parseReturnPolicyUpdate, validateReturnPolicyInput } from './return-policy.validation'
+} from '~/lib/return-policy/return-policy.type'
+import { parseReturnPolicyInput, parseReturnPolicyUpdate, validateReturnPolicyInput } from '~/lib/return-policy/return-policy.validation'
 
 // ============= RESPONSE HELPERS =============
 

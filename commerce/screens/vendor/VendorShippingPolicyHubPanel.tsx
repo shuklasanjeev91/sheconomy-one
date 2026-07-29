@@ -16,7 +16,7 @@ import {
 import { radius } from '~/config/tokens'
 import { loadAddresses, selectAddresses } from '~/lib/address/address.store'
 import { getDefaultCountryCode, resolveCountryCode } from '~/lib/geo'
-import { DEFAULT_SHOP_CURRENCY } from '~/lib/shop/shop.type'
+import { resolveVendorCurrency } from '~/lib/shop/current-shop-utils'
 import { toFriendlyShippingPolicyError } from '~/lib/shipping-policy/shipping-policy.errors'
 import { SHIPPING_POLICY_UI_COPY } from '~/lib/shipping-policy/shipping-policy-ui.copy'
 import { formDataToShippingPolicyInput } from '~/lib/shipping-policy/shipping-policy-ui.utils'
@@ -63,7 +63,7 @@ export function VendorShippingPolicyHubPanel({
   const isDeleting = useAppSelector(selectShippingPolicyDeleting)
   const storeError = useAppSelector(selectShippingPolicyError)
 
-  const currencyCode = shopCurrency?.trim() || DEFAULT_SHOP_CURRENCY
+  const currencyCode = resolveVendorCurrency(shopCurrency)
 
   const shopCountry = useMemo(() => {
     if (!shopAddressId) return getDefaultCountryCode()

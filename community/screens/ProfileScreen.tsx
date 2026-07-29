@@ -1,5 +1,4 @@
 import { useState } from 'react'
-import { useRouter } from 'one'
 
 import { ProfileView } from '~/community/components/profile/ProfileView'
 import type { ProfileDisplay } from '~/community/components/profile/types'
@@ -17,10 +16,10 @@ import { useAuth } from '~/hooks/useAuth'
 import { useProfile } from '~/hooks/useProfile'
 import { commerceRoutes, communityRoutes } from '~/lib/routes'
 import { useAppUi } from '~/lib/theme/useAppUi'
+import { navigateApp } from '~/lib/platform/navigate'
 
 export function ProfileScreen() {
   const ui = useAppUi()
-  const router = useRouter()
   const toast = useAppToast()
   const { profile, isLoading, error, user } = useProfile()
   const { signOut } = useAuth()
@@ -90,12 +89,12 @@ export function ProfileScreen() {
             <ProfileActionButton
               label="My network"
               variant="outline"
-              onPress={() => router.push(communityRoutes.network)}
+              onPress={() => navigateApp(communityRoutes.network)}
             />
             <ProfileActionButton
               label="My shops"
               variant="outline"
-              onPress={() => router.push(commerceRoutes.manageShop())}
+              onPress={() => navigateApp(commerceRoutes.manageShop())}
             />
           </>
         }

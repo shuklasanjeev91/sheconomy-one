@@ -9,13 +9,13 @@ import {
   SETTLEMENT_SCHEDULES,
   SUPPORTED_CURRENCIES,
   type PaymentProviderId,
-} from './payment.constants'
-import { PROVIDER_CREDENTIAL_FIELDS } from './payment.providers.config'
+} from '~/lib/payment/payment.constants'
+import { PROVIDER_CREDENTIAL_FIELDS } from '~/lib/payment/payment.providers.config'
 import type {
   PaymentSettingsInput,
   PaymentValidationResult,
   ProviderCredentialsValidationResult,
-} from './payment.type'
+} from '~/lib/payment/payment.type'
 
 const settlementScheduleSchema = z.enum([
   SETTLEMENT_SCHEDULES.DAILY,
@@ -51,8 +51,21 @@ export const paymentSettingsSchema = z.object({
   webhook_url: z
     .string()
     .trim()
-    .url('Webhook URL must be a valid HTTPS URL.')
-    .refine((url) => url.startsWith('https://'), 'Webhook URL must use HTTPS.')
+    .refine(
+      (url) => {
+        try {
+          new URL(url)
+          return true
+        } catch {
+          return false
+        }
+      },
+      'Webhook URL must be a valid URL (e.g. https://your-domain.com/webhooks).',
+    )
+    .refine(
+      (url) => url.startsWith('https://'),
+      'Webhook URL must start with https:// (two slashes after the colon).',
+    )
     .nullable()
     .optional()
     .or(z.literal('').transform(() => null)),

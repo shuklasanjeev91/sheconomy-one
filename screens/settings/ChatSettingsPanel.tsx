@@ -3,7 +3,7 @@ import {
   saveChatNotificationPrefs,
 } from '~/lib/notifications/product-preferences'
 
-import { ProductChannelSettingsPanel } from './ProductChannelSettingsPanel'
+import { ProductChannelSettingsPanel } from '~/screens/settings/ProductChannelSettingsPanel'
 
 export function ChatSettingsPanel() {
   return (

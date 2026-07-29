@@ -86,13 +86,25 @@ export async function clearCachedProfile(): Promise<void> {
 
 /**
  * Merge fields into the cached profile (e.g. after avatar upload) without waiting
- * for a network round-trip.
+ * for a network round-trip. Updates memory immediately so `refreshProfiles()`
+ * subscribers (tab bar, composer, etc.) pick up the new photo in-session.
  */
 export async function patchCachedProfile(
   userId: string,
   patch: Partial<Profile>,
 ): Promise<void> {
   if (!userId) return
+
+  // Synchronous memory update first — refreshProfiles() readers must see the new
+  // avatar/cover before any await below (avoids a race with AsyncStorage).
+  if (memoryCache?.userId === userId && memoryCache.profile?.id === userId) {
+    memoryCache = {
+      userId,
+      profile: { ...memoryCache.profile, ...patch },
+      cachedAt: new Date().toISOString(),
+    }
+  }
+
   const current = (await readCachedProfile(userId)) ?? memoryCache?.profile
   if (!current || current.id !== userId) {
     return

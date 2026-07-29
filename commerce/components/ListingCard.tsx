@@ -1,4 +1,5 @@
-import { useState } from 'react'
+import { memo, useState } from 'react'
+import { Platform } from 'react-native'
 import { useRouter } from 'one'
 
 import { AppLink } from '~/components/navigation/AppLink'
@@ -10,17 +11,38 @@ import { routes } from '~/lib/routes'
 import { useCart } from '~/commerce/hooks/useCart'
 import { useAsyncAction } from '~/hooks/useAsyncAction'
 import { useThemedShadowStyle } from '~/lib/theme/useThemedShadowStyle'
+import { motion } from '~/lib/theme/motion'
+import { prefetchNativeLoader, seedNativeLoaderCache } from '~/lib/bootstrap/native-loader-cache'
+import {
+  fetchListingDetailById,
+  listingLoaderResultFromSummary,
+} from '~/commerce/lib/listing-loader'
+import { prefetchListingRecommendations } from '~/commerce/lib/listing-recommendations'
 
-import { FavoriteButton } from './FavoriteButton'
-import { ListingBadge } from './ListingBadge'
-import { ListingImage } from './ListingImage'
-import { ListingPriceBlock } from './ListingPriceBlock'
-import { ListingTypeBadge } from './ListingTypeBadge'
-import { StarRating } from './StarRating'
+import { FavoriteButton } from '~/commerce/components/FavoriteButton'
+import { ListingBadge } from '~/commerce/components/ListingBadge'
+import { ListingImage } from '~/commerce/components/ListingImage'
+import { ListingPriceBlock } from '~/commerce/components/ListingPriceBlock'
+import { ListingTypeBadge } from '~/commerce/components/ListingTypeBadge'
+import { StarRating } from '~/commerce/components/StarRating'
 import { useOptionalMarketplacePersonalization } from '~/commerce/context/MarketplacePersonalizationContext'
 import { buildListingFulfillmentInputFromSummary, getListingCardFulfillmentLabel } from '~/commerce/lib/listing-fulfillment'
 import { useAppUi } from '~/lib/theme/useAppUi'
 import { formatRating } from '~/lib/format'
+
+function warmListingRoute(listing: ListingSummary, slug: string) {
+  if (Platform.OS === 'web' || !listing.id) return
+  const cacheKey = `route:listing:${listing.id}`
+  const aliases = slug && slug !== listing.id ? [`route:listing:${slug}`] : undefined
+  // Sync seed first — PDP paints from card data before the network returns.
+  seedNativeLoaderCache(cacheKey, listingLoaderResultFromSummary(listing), aliases)
+  prefetchNativeLoader(cacheKey, () => fetchListingDetailById(listing.id), aliases)
+  prefetchListingRecommendations(listing.id, listing.shop_id, undefined, {
+    shopId: listing.shop_id,
+    category: listing.category,
+    listingType: listing.listing_type,
+  })
+}
 
 type ListingCardProps = {
   listing: ListingSummary
@@ -32,7 +54,7 @@ type ListingCardProps = {
 /**
  * Listing tile — square image(s), heart overlay, title, optional rating, bold price.
  */
-export function ListingCard({ listing, compact, showQuickAdd }: ListingCardProps) {
+export const ListingCard = memo(function ListingCard({ listing, compact, showQuickAdd }: ListingCardProps) {
   const ui = useAppUi()
   const cardShadow = useThemedShadowStyle('sm')
   const cardShadowMd = useThemedShadowStyle('md')
@@ -54,11 +76,15 @@ export function ListingCard({ listing, compact, showQuickAdd }: ListingCardProps
       ? [imageUrls[hoverImageIndex], ...imageUrls.filter((_, index) => index !== hoverImageIndex)]
       : imageUrls
 
-  const listingHref = routes.listing(getListingSlug(listing))
+  const listingSlug = getListingSlug(listing)
+  // Native: open by id so PDP hits a single indexed lookup (not title-slug scans).
+  const listingHref = routes.listing(Platform.OS === 'web' ? listingSlug : listing.id)
 
   const deliveryHint = getListingCardFulfillmentLabel(
     buildListingFulfillmentInputFromSummary(listing),
   )
+
+  const warmListing = () => warmListingRoute(listing, listingSlug)
 
   return (
     <YStack width="100%" gap={compact ? '$1.5' : '$2'}>
@@ -68,6 +94,7 @@ export function ListingCard({ listing, compact, showQuickAdd }: ListingCardProps
         aspectRatio={1}
         onMouseEnter={() => {
           if (imageUrls.length > 1) setHoverImageIndex(1)
+          warmListing()
         }}
         onMouseLeave={() => setHoverImageIndex(0)}
       >
@@ -80,11 +107,10 @@ export function ListingCard({ listing, compact, showQuickAdd }: ListingCardProps
             backgroundColor={ui.imagePlaceholder}
             borderWidth={1}
             borderColor={ui.borderSubtle}
-            cursor="pointer"
-            animation="quick"
-            hoverStyle={{ opacity: 0.98, y: -4, ...cardShadowMd }}
-            pressStyle={{ scale: 0.985, y: 0 }}
+            {...motion.cardLift}
+            hoverStyle={{ ...motion.cardLift.hoverStyle, ...cardShadowMd }}
             style={cardShadow}
+            onPressIn={warmListing}
           >
             <ListingImage
               imageUrls={displayUrls}
@@ -140,7 +166,13 @@ export function ListingCard({ listing, compact, showQuickAdd }: ListingCardProps
       ) : null}
 
       <AppLink href={listingHref} asChild>
-        <YStack gap={4} cursor="pointer" paddingHorizontal={2} animation="quick">
+        <YStack
+          gap={4}
+          cursor="pointer"
+          paddingHorizontal={2}
+          animation="quick"
+          onPressIn={warmListing}
+        >
           <Text
             fontSize={compact ? 12 : 13}
             fontWeight="600"
@@ -185,7 +217,7 @@ export function ListingCard({ listing, compact, showQuickAdd }: ListingCardProps
       {showQuickAdd ? <QuickAddButton listing={listing} /> : null}
     </YStack>
   )
-}
+})
 
 function QuickAddButton({ listing }: { listing: ListingSummary }) {
   const { addToCart } = useCart()
@@ -212,7 +244,7 @@ function QuickAddButton({ listing }: { listing: ListingSummary }) {
                 tone: 'default',
                 message: 'Select options on the product page to add it.',
               })
-              router.push(routes.listing(getListingSlug(listing)))
+              router.push(routes.listing(Platform.OS === 'web' ? getListingSlug(listing) : listing.id))
               return
             }
             toast.show('Added to cart', { tone: 'success' })

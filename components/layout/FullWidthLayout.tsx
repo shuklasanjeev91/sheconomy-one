@@ -1,7 +1,7 @@
 import type { ReactNode } from 'react'
 import type { GetProps } from 'tamagui'
 
-import { YStack, useMedia } from '~/components/ui'
+import { YStack } from '~/components/ui'
 import { radius } from '~/config/tokens'
 import { useAppLayout } from '~/hooks/useAppLayout'
 import { APP_LAYOUT } from '~/lib/layout/constants'
@@ -10,7 +10,7 @@ import { useAppUi, useIsDarkTheme } from '~/lib/theme/useAppUi'
 import { motion } from '~/lib/theme/motion'
 import { elevatedCardStyle } from '~/lib/theme/surfaces'
 
-import { PageScroll } from './PageScroll'
+import { PageScroll } from '~/components/layout/PageScroll'
 import { pageCenterMinHeight } from '~/lib/platform/viewport'
 
 export { LAYOUT_STRETCH } from '~/lib/layout/styles'
@@ -276,14 +276,14 @@ export function AppPage({
 /** Centered loading/error placeholder spanning the content area. */
 export function PageCenter({ children }: { children: ReactNode }) {
   const ui = useAppUi()
-  const media = useMedia()
+  const { isDesktop } = useAppLayout()
 
   return (
     <YStack
       width="100%"
       maxWidth="100%"
-      flex={media.gtMd ? undefined : 1}
-      minHeight={pageCenterMinHeight(media.gtMd)}
+      flex={isDesktop ? undefined : 1}
+      minHeight={pageCenterMinHeight(isDesktop)}
       alignItems="center"
       justifyContent="center"
       alignSelf="stretch"

@@ -1,14 +1,11 @@
-import type { LucideIcon } from '@tamagui/lucide-icons'
-import { Calendar, Radio, ShieldCheck, Sparkles, Store, Users } from '@tamagui/lucide-icons'
+import type { LucideIcon } from '~/components/ui/icons'
+import { Calendar, Radio, ShieldCheck, Store, Users } from '~/components/ui/icons'
 
 import { BRAND_NAME } from '~/config/brand'
+import type { AppOnboardingSlide } from '~/lib/onboarding/slides'
 
-export type AuthBenefitSlide = {
+export type AuthBenefitSlide = AppOnboardingSlide & {
   icon: LucideIcon
-  title: string
-  body: string
-  /** Show SHEconomy brand mark instead of the Lucide icon. */
-  brandLogo?: boolean
 }
 
 export const AUTH_BENEFIT_SLIDES: AuthBenefitSlide[] = [
@@ -39,13 +36,4 @@ export const AUTH_BENEFIT_SLIDES: AuthBenefitSlide[] = [
   },
 ]
 
-/** Full-screen mobile onboarding slides (welcome + key benefits). */
-export const AUTH_ONBOARDING_SLIDES: AuthBenefitSlide[] = [
-  {
-    icon: Sparkles,
-    title: `Welcome to ${BRAND_NAME}`,
-    body: 'Where women shop, sell, learn, and grow together — one platform for commerce, community, and more.',
-    brandLogo: true,
-  },
-  ...AUTH_BENEFIT_SLIDES.slice(0, 4),
-]
+export { AUTH_ONBOARDING_SLIDES, NATIVE_APP_ONBOARDING_SLIDES } from '~/lib/onboarding/slides'

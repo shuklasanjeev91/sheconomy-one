@@ -7,7 +7,7 @@ import {
   type ListingSummary,
 } from '~/lib/supabase/commerce'
 
-import { usePaginatedFeed } from './usePaginatedFeed'
+import { usePaginatedFeed } from '~/commerce/hooks/usePaginatedFeed'
 
 type UseSearchListingsOptions = {
   query: string

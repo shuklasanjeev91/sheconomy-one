@@ -3,7 +3,7 @@ import type { Json, Tables, TablesInsert, TablesUpdate } from '~/lib/supabase'
 import type {
   SHIPPING_RATE_TYPE_VALUES,
   SHIPPING_ZONE_TYPE_VALUES,
-} from './shipping-policy.constants'
+} from '~/lib/shipping-policy/shipping-policy.constants'
 
 /** Full `delivery_profiles` row — shop-level shipping configuration. */
 export type ShippingPolicy = Tables<'delivery_profiles'>

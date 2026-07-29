@@ -18,7 +18,7 @@ import { useAiAssistOptional } from '~/providers/AiAssistProvider'
 import { commerceRoutes, communityRoutes, routes } from '~/lib/routes'
 import { useAppUi } from '~/lib/theme/useAppUi'
 
-import { getAppColors } from './config'
+import { getAppColors } from '~/components/navigation/app/config'
 
 type MenuTile = {
   label: string

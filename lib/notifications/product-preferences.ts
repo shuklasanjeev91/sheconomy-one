@@ -98,6 +98,7 @@ const COWORK_TYPES = [
   'meeting_rescheduled',
   'meeting_recording_available',
   'meeting_access_request',
+  'meeting_chat_message',
 ] as const
 
 /** Seller / Manage Shop alert channel preferences. */

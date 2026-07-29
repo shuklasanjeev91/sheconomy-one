@@ -3,7 +3,7 @@ import { Platform } from 'react-native'
 
 import { useStableMedia } from '~/hooks/useStableMedia'
 
-import { useAppBarScroll } from './AppBarScrollContext'
+import { useAppBarScroll } from '~/components/navigation/AppBarScrollContext'
 
 /** Reports window scroll position for desktop sticky header collapse. */
 export function DesktopScrollTracker() {

@@ -23,8 +23,8 @@ import {
   PAYMENT_LOG_MAX_LIMIT,
   SETTLEMENT_SCHEDULES,
   SUPPORTED_CURRENCIES,
-} from './payment.constants'
-import { PaymentError, PAYMENT_ERROR_CODES, toFriendlyPaymentError } from './payment.errors'
+} from '~/lib/payment/payment.constants'
+import { PaymentError, PAYMENT_ERROR_CODES, toFriendlyPaymentError } from '~/lib/payment/payment.errors'
 import type {
   ConnectPaymentAccountInput,
   CurrencyOption,
@@ -45,7 +45,7 @@ import type {
   ShopPaymentAccountInsert,
   ConnectedProviderSummary,
   VendorPaymentSettings,
-} from './payment.type'
+} from '~/lib/payment/payment.type'
 import {
   accountsToConnectedProviders,
   generatePaymentReference,
@@ -53,9 +53,9 @@ import {
   normalizeProviderId,
   processPaymentAnalytics,
   resolveProviderForDatabase,
-} from './payment.utils'
-import { buildDefaultPaymentSettings, validatePaymentSettings, validateProviderCredentials } from './payment.validation'
-import type { PaymentProviderId } from './payment.constants'
+} from '~/lib/payment/payment.utils'
+import { buildDefaultPaymentSettings, validatePaymentSettings, validateProviderCredentials } from '~/lib/payment/payment.validation'
+import type { PaymentProviderId } from '~/lib/payment/payment.constants'
 
 function ok<T>(data: T): PaymentServiceResponse<T> {
   return { success: true, data, error: null }
@@ -284,13 +284,18 @@ export async function savePaymentCredentials(
     const credentialsWithoutMode = { ...credentials }
     delete (credentialsWithoutMode as Record<string, string>).mode
 
+    const merchantId =
+      credentialsWithoutMode.key_id ||
+      credentialsWithoutMode.public_key ||
+      credentialsWithoutMode.merchant_key ||
+      credentialsWithoutMode.merchantId ||
+      credentialsWithoutMode.apiKey ||
+      `${provider}_${Date.now()}`
+
     const accountData = {
       shop_id: shopId,
       provider: dbProvider,
-      merchant_id:
-        credentialsWithoutMode.merchantId ||
-        credentialsWithoutMode.apiKey ||
-        `${provider}_${Date.now()}`,
+      merchant_id: merchantId,
       access_token: null,
       refresh_token: null,
       token_expiry: null,
@@ -311,6 +316,15 @@ export async function savePaymentCredentials(
       .single()
 
     if (error) throw error
+
+    await syncShopCommercePaymentRouting({
+      shopId,
+      provider,
+      connected: true,
+      keyId: credentialsWithoutMode.key_id ?? credentialsWithoutMode.public_key ?? null,
+      accountLabel: merchantId,
+    })
+
     return ok(data)
   } catch (error) {
     return fail(error, 'Could not save payment credentials.')
@@ -677,3 +691,178 @@ export function getPaymentLogStatusOptions(): PaymentFilterOption[] {
 }
 
 export { buildDefaultPaymentSettings }
+
+// ============= RAZORPAY CREDENTIAL EDGE FUNCTIONS =============
+
+export type RazorpayValidateInput = {
+  shopId: string
+  keyId: string
+  keySecret: string
+  mode: 'test' | 'live'
+}
+
+export type RazorpayValidateResult = {
+  valid: boolean
+  maskedKeyId?: string
+  mode?: string
+  error?: string
+}
+
+export type RazorpayConnectInput = {
+  shopId: string
+  keyId: string
+  keySecret: string
+  webhookSecret?: string
+  webhookUrl?: string
+  mode: 'test' | 'live'
+}
+
+export type RazorpayConnectResult = {
+  success: boolean
+  maskedKeyId?: string
+  status?: string
+  mode?: string
+  error?: string
+}
+
+export type RazorpayCreateOrderInput = {
+  shopId: string
+  amount: number
+  currency?: string
+  receipt: string
+  notes?: Record<string, string>
+}
+
+export type RazorpayCreateOrderResult = {
+  razorpayOrderId: string
+  keyId: string
+  amount: number
+  currency: string
+  mode: string
+  error?: string
+}
+
+export type RazorpayVerifyPaymentInput = {
+  shopId: string
+  razorpayOrderId: string
+  razorpayPaymentId: string
+  razorpaySignature: string
+}
+
+export type RazorpayVerifyPaymentResult = {
+  verified: boolean
+  paymentId?: string
+  error?: string
+}
+
+async function callEdgeFunction<T>(
+  functionName: string,
+  body: Record<string, unknown>,
+): Promise<T> {
+  const { data, error } = await supabase.functions.invoke<T>(functionName, { body })
+  if (error) throw error
+  return data as T
+}
+
+export async function validateRazorpayCredentials(
+  input: RazorpayValidateInput,
+): Promise<PaymentServiceResponse<RazorpayValidateResult>> {
+  try {
+    const result = await callEdgeFunction<RazorpayValidateResult>('razorpay-validate', input)
+    if (!result.valid) {
+      return fail<RazorpayValidateResult>(result.error ?? 'Validation failed')
+    }
+    return ok(result)
+  } catch (error) {
+    return fail<RazorpayValidateResult>(error, 'Could not validate Razorpay credentials.')
+  }
+}
+
+export async function connectRazorpay(
+  input: RazorpayConnectInput,
+): Promise<PaymentServiceResponse<RazorpayConnectResult>> {
+  try {
+    const result = await callEdgeFunction<RazorpayConnectResult>('razorpay-connect', input)
+    if (!result.success) {
+      return fail<RazorpayConnectResult>(result.error ?? 'Connection failed')
+    }
+    return ok(result)
+  } catch (error) {
+    return fail<RazorpayConnectResult>(error, 'Could not connect Razorpay account.')
+  }
+}
+
+export async function disconnectRazorpay(
+  shopId: string,
+): Promise<PaymentServiceResponse<ShopPaymentAccount[]>> {
+  try {
+    const { error } = await supabase.functions.invoke('razorpay-disconnect', { body: { shopId } })
+    if (error) throw error
+    // Return the updated account list for the Redux store
+    return getPaymentAccounts(shopId, 'razorpay')
+  } catch (error) {
+    return fail<ShopPaymentAccount[]>(error, 'Could not disconnect Razorpay account.')
+  }
+}
+
+export async function createRazorpayOrder(
+  input: RazorpayCreateOrderInput,
+): Promise<PaymentServiceResponse<RazorpayCreateOrderResult>> {
+  try {
+    const result = await callEdgeFunction<RazorpayCreateOrderResult>('razorpay-create-order', input)
+    if (!result.razorpayOrderId) {
+      return fail<RazorpayCreateOrderResult>((result as { error?: string }).error ?? 'Order creation failed')
+    }
+    return ok(result)
+  } catch (error) {
+    return fail<RazorpayCreateOrderResult>(error, 'Could not create Razorpay order.')
+  }
+}
+
+export async function verifyRazorpayPayment(
+  input: RazorpayVerifyPaymentInput,
+): Promise<PaymentServiceResponse<RazorpayVerifyPaymentResult>> {
+  try {
+    const result = await callEdgeFunction<RazorpayVerifyPaymentResult>('razorpay-verify-payment', input)
+    if (!result.verified) {
+      return fail<RazorpayVerifyPaymentResult>(result.error ?? 'Payment verification failed')
+    }
+    return ok(result)
+  } catch (error) {
+    return fail<RazorpayVerifyPaymentResult>(error, 'Payment verification failed.')
+  }
+}
+
+/** Keep checkout routing (`shop_commerce_settings`) aligned when a vendor connects a gateway. */
+async function syncShopCommercePaymentRouting(input: {
+  shopId: string
+  provider: string
+  connected: boolean
+  keyId?: string | null
+  accountLabel?: string | null
+}) {
+  const { shopId, provider, connected, keyId, accountLabel } = input
+  if (!shopId) return
+
+  const payload = connected
+    ? {
+        shop_id: shopId,
+        payment_connected: true,
+        payment_mode: 'direct',
+        payment_gateway: normalizeProviderId(provider),
+        payment_gateway_key_id: keyId?.trim() || null,
+        payment_account_label: accountLabel?.trim() || null,
+        updated_at: new Date().toISOString(),
+      }
+    : {
+        shop_id: shopId,
+        payment_connected: false,
+        payment_mode: 'shepay',
+        payment_gateway: null,
+        payment_gateway_key_id: null,
+        payment_account_label: null,
+        updated_at: new Date().toISOString(),
+      }
+
+  await supabase.from('shop_commerce_settings').upsert(payload, { onConflict: 'shop_id' })
+}

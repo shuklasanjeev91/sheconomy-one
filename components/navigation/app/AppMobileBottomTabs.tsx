@@ -7,7 +7,6 @@ import { XStack, YStack } from '~/components/ui'
 import { tabBarPositionStyle } from '~/lib/layout/styles'
 import { navigateApp } from '~/lib/platform/navigate'
 import { mobileTabBarDockStyle } from '~/lib/theme/surfaces'
-import { useCart } from '~/commerce/hooks/useCart'
 import { useAccess } from '~/hooks/useAccess'
 import { useAppLayout } from '~/hooks/useAppLayout'
 import { useStableMedia } from '~/hooks/useStableMedia'
@@ -20,12 +19,12 @@ import {
   getMobileBottomTabMiddleTabs,
   getMobileBottomTabSection,
   type AppMobileTabItem,
-} from './config'
+} from '~/components/navigation/app/config'
 import {
   getBottomTabWidthTier,
   shouldShowBottomTabLabels,
-} from './mobile-tab-bar-width'
-import { MobileTabBarItem } from './MobileTabBarItem'
+} from '~/components/navigation/app/mobile-tab-bar-width'
+import { MobileTabBarItem } from '~/components/navigation/app/MobileTabBarItem'
 import { useAppUi } from '~/lib/theme/useAppUi'
 
 const TAB_ICON = { active: 24, inactive: 22 } as const
@@ -35,7 +34,6 @@ export function AppMobileBottomTabs() {
   const pathname = usePathname()
   const { tier } = useAccess()
   const { safeBottom } = useAppLayout()
-  const { itemCount } = useCart()
   const { shops, primaryShopId } = useVendorShops()
   const hasShops = shops.length > 0
   // Optimistic highlight so tab presses feel instant while the route settles.
@@ -100,7 +98,7 @@ export function AppMobileBottomTabs() {
       return
     }
     setPendingPath(href)
-    navigateApp(tab.href, { replace: true })
+    navigateApp(tab.href)
   }
 
   return (
@@ -120,8 +118,9 @@ export function AppMobileBottomTabs() {
         maxWidth="100%"
         alignSelf="stretch"
         alignItems="stretch"
-        paddingTop={6}
-        paddingBottom={safeBottom > 0 ? safeBottom : Platform.OS === 'ios' ? 8 : 4}
+        paddingTop={4}
+        // Home-indicator only — avoid stacking extra bottom padding on top of safe area.
+        paddingBottom={safeBottom > 0 ? safeBottom : Platform.OS === 'ios' ? 4 : 2}
         pointerEvents="auto"
         style={mobileTabBarDockStyle(ui, {
           dark: isCoWork,
@@ -130,7 +129,6 @@ export function AppMobileBottomTabs() {
       >
         {tabs.map((tab) => {
           const isAuthTab = tab.label === 'You'
-          const isCartTab = tab.label === 'Cart'
           const isFocused = isTabFocused(tab)
 
           if (isAuthTab) {
@@ -160,11 +158,7 @@ export function AppMobileBottomTabs() {
             <Icon
               size={isFocused ? TAB_ICON.active : TAB_ICON.inactive}
               color={isFocused ? activeColor : inactiveColor}
-              fill={
-                isFocused && tab.label !== 'Cart' && tab.label !== 'Shops'
-                  ? activeColor
-                  : 'none'
-              }
+              fill={isFocused && tab.label !== 'Shops' ? activeColor : 'none'}
               strokeWidth={isFocused ? 2.4 : 1.85}
             />
           )
@@ -203,7 +197,6 @@ export function AppMobileBottomTabs() {
               activeColor={activeColor}
               inactiveColor={inactiveColor}
               activePillBg={activePillBg}
-              badge={isCartTab ? itemCount : undefined}
               badgeBorderColor={dockSurface}
               onPress={() => pressTab(tab)}
             >

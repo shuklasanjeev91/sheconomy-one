@@ -1,7 +1,7 @@
-export * from './cms.type'
-export * from './cms.utils'
-export * from './cms.validation'
-export * from './cms.service'
+export * from '~/lib/cms/cms.type'
+export * from '~/lib/cms/cms.utils'
+export * from '~/lib/cms/cms.validation'
+export * from '~/lib/cms/cms.service'
 export {
   cmsReducer,
   clearCurrentContent,
@@ -56,4 +56,4 @@ export {
   updateRedirect,
   toggleRedirectActive,
   deleteRedirect,
-} from './cms.store'
+} from '~/lib/cms/cms.store'

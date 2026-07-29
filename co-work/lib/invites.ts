@@ -1,9 +1,9 @@
 import { fetchNetworkSummary } from '~/community/lib/network'
 import { supabase } from '~/lib/supabase/client'
 
-import { getMeetingShareUrl } from './meetings'
+import { getMeetingShareUrl } from '~/co-work/lib/meetings'
 import { BRAND_COWORK_LABEL } from '~/config/brand'
-import type { Meeting, MeetingInviteCandidate, MeetingInvitee } from './types'
+import type { Meeting, MeetingInviteCandidate, MeetingInvitee } from '~/co-work/lib/types'
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 

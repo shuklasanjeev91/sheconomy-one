@@ -46,7 +46,8 @@ import { ScreenSearchField } from '~/components/search'
 import { useFormValidation } from '~/hooks/useFormValidation'
 import { useQueryParam } from '~/hooks/useQueryParams'
 import { useProfile } from '~/hooks/useProfile'
-import { pickImages, pickMedia, pickVideos, releasePickedImage, type PickedImage } from '~/lib/media/pick-image'
+import { pickMedia, pickVideos, releasePickedImage, type PickedImage } from '~/lib/media/pick-image'
+import { pickImagesWithCrop } from '~/lib/media/pick-and-crop'
 import { splitPostMediaItems } from '~/lib/media/split-post-media'
 import { communityRoutes, routes } from '~/lib/routes'
 import { uploadEventCoverImage, uploadPostImages, uploadPostVideos } from '~/lib/supabase/storage-upload'
@@ -69,6 +70,8 @@ const CELEBRATION_OCCASIONS: {
   emoji: string
   placeholder: string
 }[] = [
+  { value: 'birthday', label: 'Birthday', emoji: '🎂', placeholder: 'e.g. Turning 30!' },
+  { value: 'marriage_anniversary', label: 'Marriage anniversary', emoji: '💍', placeholder: 'e.g. 5 years together' },
   { value: 'new_job', label: 'New position', emoji: '💼', placeholder: 'e.g. Senior Designer at Acme' },
   { value: 'work_anniversary', label: 'Work anniversary', emoji: '🎊', placeholder: 'e.g. 3 years at Acme' },
   { value: 'education', label: 'Certification', emoji: '🎓', placeholder: 'e.g. Certified Product Manager' },
@@ -98,6 +101,12 @@ type CreatePostFormProps = {
   autoPickMedia?: boolean
   /** Open the video picker automatically on mount. */
   autoPickVideo?: boolean
+  /** Pre-select celebration occasion. */
+  initialOccasion?: string
+  /** Pre-fill celebration title. */
+  initialCelebrationTitle?: string
+  /** Pre-fill post body. */
+  initialContent?: string
   /**
    * When true the form is rendered inside an overlay (sheet/dialog): it drops
    * its own card chrome and closes via onSuccess instead of navigating away.
@@ -113,6 +122,9 @@ export function CreatePostForm({
   initialGifUrl,
   autoPickMedia,
   autoPickVideo,
+  initialOccasion,
+  initialCelebrationTitle,
+  initialContent,
   embedded,
 }: CreatePostFormProps) {
   const communityUi = useCommunityUi()
@@ -165,8 +177,13 @@ export function CreatePostForm({
   const [eventCover, setEventCover] = useState<PickedImage[]>([])
 
   // Celebration
-  const [occasion, setOccasion] = useState('new_job')
-  const [celebrationTitle, setCelebrationTitle] = useState('')
+  const [occasion, setOccasion] = useState(
+    () =>
+      (initialOccasion && CELEBRATION_OCCASIONS.some((o) => o.value === initialOccasion)
+        ? initialOccasion
+        : 'new_job'),
+  )
+  const [celebrationTitle, setCelebrationTitle] = useState(initialCelebrationTitle ?? '')
   const [celebrationCover, setCelebrationCover] = useState<PickedImage[]>([])
   const [articleTitle, setArticleTitle] = useState('')
   const [articleTags, setArticleTags] = useState('')
@@ -282,7 +299,12 @@ export function CreatePostForm({
     if (isPicking || photos.length >= MAX_PHOTOS) return
     setIsPicking(true)
     try {
-      const picked = await pickImages({ multiple: true, maxCount: MAX_PHOTOS - photos.length })
+      const picked = await pickImagesWithCrop({
+        multiple: true,
+        maxCount: MAX_PHOTOS - photos.length,
+        crop: true,
+        cropTitle: 'Crop photo',
+      })
       if (picked.length) {
         form.fields.imageUrl.setValue('')
         setVideos([])
@@ -417,6 +439,11 @@ export function CreatePostForm({
     ) {
       setComposeMode(initialMode)
     }
+    if (initialOccasion && CELEBRATION_OCCASIONS.some((o) => o.value === initialOccasion)) {
+      setOccasion(initialOccasion)
+    }
+    if (initialCelebrationTitle) setCelebrationTitle(initialCelebrationTitle)
+    if (initialContent) form.fields.content.onChange(initialContent)
     if (initialGifUrl) form.fields.imageUrl.setValue(initialGifUrl)
     if (autoPickMedia) void pickPostMedia()
     if (autoPickVideo) void pickPostVideos()
@@ -754,7 +781,7 @@ export function CreatePostForm({
     setVideos([])
     onSuccess?.()
     // Overlay usage closes via onSuccess; the standalone route navigates home.
-    if (!embedded) router.replace(communityRoutes.home)
+    if (!embedded) router.push(communityRoutes.home)
   }
 
   const contentPlaceholder =
@@ -871,9 +898,10 @@ export function CreatePostForm({
               />
               <ImageUploadField
                 label="Cover image"
-                hint="Optional hero image for your article."
+                hint="Optional hero image for your article (16:9)."
                 value={articleCover}
                 onChange={setArticleCover}
+                aspect="landscape"
                 uploadProgress={uploadProgress}
                 uploadLabel="Uploading cover…"
               />
@@ -1206,9 +1234,10 @@ export function CreatePostForm({
               )}
               <ImageUploadField
                 label="Cover image (optional)"
-                hint="Add a banner attendees will see on the event."
+                hint="Add a banner attendees will see on the event (16:9)."
                 value={eventCover}
                 onChange={setEventCover}
+                aspect="landscape"
                 uploadProgress={uploadProgress}
                 uploadLabel="Uploading cover…"
               />
@@ -1256,9 +1285,10 @@ export function CreatePostForm({
               </Field>
               <ImageUploadField
                 label="Photo (optional)"
-                hint="Add a photo to make your celebration stand out."
+                hint="Add a photo to make your celebration stand out (16:9)."
                 value={celebrationCover}
                 onChange={setCelebrationCover}
+                aspect="celebration"
                 uploadProgress={uploadProgress}
                 uploadLabel="Uploading photo…"
               />

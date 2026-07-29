@@ -30,8 +30,8 @@ import {
   ListingFiltersPanel,
   mergeDraftPriceInputs,
   useFilterDraftPriceState,
-} from './ListingFiltersPanel'
-import { ListingSortMenu } from './ListingSortMenu'
+} from '~/commerce/components/ListingFiltersPanel'
+import { ListingSortMenu } from '~/commerce/components/ListingSortMenu'
 import { overlayBackdropStyle, edgePanelPositionStyle } from '~/lib/layout/styles'
 import { useAppUi } from '~/lib/theme/useAppUi'
 

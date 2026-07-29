@@ -34,6 +34,7 @@ import {
   useAppToast,
 } from '~/components/ui'
 import { pickImages, pickedImageToBlob, type PickedImage } from '~/lib/media/pick-image'
+import { pickImagesWithCrop } from '~/lib/media/pick-and-crop'
 import { uploadGroupAvatarImage } from '~/lib/supabase/storage-upload'
 import { MediaDropZone } from '~/components/media/MediaDropZone'
 import { UploadProgressBar } from '~/components/media/UploadProgressBar'
@@ -179,7 +180,12 @@ export function ConversationInfoSheet({
   async function handlePickAvatar() {
     if (uploadingAvatar) return
     try {
-      const picked = await pickImages({ multiple: false, maxCount: 1 })
+      const picked = await pickImagesWithCrop({
+        multiple: false,
+        maxCount: 1,
+        aspect: 'avatar',
+        cropTitle: 'Group photo',
+      })
       const first = picked[0]
       if (!first) return
       await handleUploadAvatar(first)

@@ -8,8 +8,8 @@ import { LISTING_VALIDATION } from '~/lib/listing/listing.type'
 import { useAppDispatch, useAppSelector } from '~/lib/store/hooks'
 import type { AppUiTokens } from '~/lib/theme/app-ui'
 
-import { ListingPublishCard, ListingPublishFieldError, ListingPublishTip } from '../ListingPublishCard'
-import { LISTING_PUBLISH_COPY } from '../listing-publish.constants'
+import { ListingPublishCard, ListingPublishFieldError, ListingPublishTip } from '~/commerce/components/vendor/listing-publish/ListingPublishCard'
+import { LISTING_PUBLISH_COPY } from '~/commerce/components/vendor/listing-publish/listing-publish.constants'
 
 const SEARCH_DEBOUNCE_MS = 300
 

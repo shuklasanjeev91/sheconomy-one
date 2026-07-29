@@ -8,48 +8,48 @@
 // ---------------------------------------------------------------------------
 
 // Forms
-export * from './Button'
-export * from './Checkbox'
-export * from './ValidatedField'
-export * from './Input'
-export * from './DateTimeField'
-export * from './Label'
-export * from './Progress'
-export * from './RadioGroup'
-export * from './Select'
-export * from './Slider'
-export * from './Switch'
-export * from './ToggleGroup'
+export * from '~/components/ui/Button'
+export * from '~/components/ui/Checkbox'
+export * from '~/components/ui/ValidatedField'
+export * from '~/components/ui/Input'
+export * from '~/components/ui/DateTimeField'
+export * from '~/components/ui/Label'
+export * from '~/components/ui/Progress'
+export * from '~/components/ui/RadioGroup'
+export * from '~/components/ui/Select'
+export * from '~/components/ui/Slider'
+export * from '~/components/ui/Switch'
+export * from '~/components/ui/ToggleGroup'
 
 // Menus
-export * from './Menu'
+export * from '~/components/ui/Menu'
 
 // Panels
-export * from './Accordion'
-export * from './AlertDialog'
-export * from './ConfirmDialog'
-export * from './Dialog'
-export * from './Popover'
-export * from './Sheet'
-export * from './BottomSheet'
-export * from './NativeFullscreenAdapt'
-export * from './Tabs'
-export * from './Tooltip'
-export * from './Toast'
-export * from './ScreenState'
-export * from './Skeleton'
-export * from './ActionProgress'
+export * from '~/components/ui/Accordion'
+export * from '~/components/ui/AlertDialog'
+export * from '~/components/ui/ConfirmDialog'
+export * from '~/components/ui/Dialog'
+export * from '~/components/ui/Popover'
+export * from '~/components/ui/Sheet'
+export * from '~/components/ui/BottomSheet'
+export * from '~/components/ui/NativeFullscreenAdapt'
+export * from '~/components/ui/Tabs'
+export * from '~/components/ui/Tooltip'
+export * from '~/components/ui/Toast'
+export * from '~/components/ui/ScreenState'
+export * from '~/components/ui/Skeleton'
+export * from '~/components/ui/ActionProgress'
 
 // Content
-export * from './Avatar'
-export * from './Badge'
-export * from './Card'
-export * from './ListItem'
+export * from '~/components/ui/Avatar'
+export * from '~/components/ui/Badge'
+export * from '~/components/ui/Card'
+export * from '~/components/ui/ListItem'
 
 // Visual
-export * from './BrandGradient'
-export * from './Separator'
-export * from './Spinner'
+export * from '~/components/ui/BrandGradient'
+export * from '~/components/ui/Separator'
+export * from '~/components/ui/Spinner'
 
 // Re-export the primitives that need no restyling — layout, a11y and
 // structural helpers already work great as-is, straight from Tamagui.
@@ -75,8 +75,8 @@ export {
 } from 'tamagui'
 
 // Native-safe Image — percentage width/height must not land in RN `source`.
-export { Image } from './Image'
-export type { AppImageProps } from './Image'
+export { Image } from '~/components/ui/Image'
+export type { AppImageProps } from '~/components/ui/Image'
 
 export {
   Text,
@@ -89,7 +89,7 @@ export {
   H5,
   H6,
   MAX_FONT_SIZE_MULTIPLIER,
-} from './Text'
+} from '~/components/ui/Text'
 
 export { LinearGradient } from 'tamagui/linear-gradient'
 export { FocusScope } from '@tamagui/focus-scope'
@@ -97,6 +97,7 @@ export { FocusScope } from '@tamagui/focus-scope'
 // Namespaced (not `export *`) since lucide has icons literally named
 // `Badge`, `Menu`, etc. that would otherwise collide with our components.
 // Usage: <Icons.Check /> <Icons.ChevronDown />
-export * as Icons from '@tamagui/lucide-icons'
+// Curated subset — full @tamagui/lucide-icons re-export OOMs Hermes on device (~39MB).
+export * as Icons from '~/components/ui/icons'
 
 export { BRAND_THEME, gradients, radius, shadows, getShadowStyle } from '~/config/tokens'

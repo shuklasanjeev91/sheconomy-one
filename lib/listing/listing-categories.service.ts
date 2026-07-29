@@ -17,7 +17,7 @@
 import { supabase } from '~/lib/supabase'
 import type { Json } from '~/lib/supabase'
 
-import type { Listing } from './listing.type'
+import type { Listing } from '~/lib/listing/listing.type'
 import {
   assertCategoryDeletable,
   checkCategoryPermission,
@@ -26,8 +26,8 @@ import {
   ok,
   resolveUserId,
   verifyListingCategoryAccess,
-} from './listing-categories.access'
-import { CATEGORY_ERROR_CODES, createCategoryError } from './listing-categories.errors'
+} from '~/lib/listing/listing-categories.access'
+import { CATEGORY_ERROR_CODES, createCategoryError } from '~/lib/listing/listing-categories.errors'
 import {
   CATEGORY_PAGE_SIZE,
   CATEGORY_STATUS,
@@ -44,12 +44,12 @@ import {
   type CategoryTreeCountRow,
   type CategoryUpdate,
   type ListingCategoryAssignmentInput,
-} from './listing-categories.type'
+} from '~/lib/listing/listing-categories.type'
 import {
   validateCategoryOperation,
   transformCategoryData,
   type CategoryOperation,
-} from './listing-categories.validation'
+} from '~/lib/listing/listing-categories.validation'
 
 // ============= DERIVED SHAPES =============
 

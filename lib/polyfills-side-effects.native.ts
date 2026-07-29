@@ -1,6 +1,6 @@
 // TextDecoder/TextEncoder must exist before Supabase, LiveKit, or other deps load on Hermes.
 // Deep LiveKit package subpaths are blocked by "exports"; load via absolute path helper.
-import './livekit-encoder-polyfill.cjs'
+import '~/lib/livekit-encoder-polyfill.cjs'
 import '@azure/core-asynciterator-polyfill'
 // Hermes URL exposes `protocol` as a getter-only property. SupabaseClient does
 // `realtimeUrl.protocol = ...` on construct and crashes → white screen after splash.
@@ -11,6 +11,15 @@ import 'react-native-url-polyfill/auto'
 import 'whatwg-fetch'
 
 import { LogBox } from 'react-native'
+
+// LiveKit WebRTC pulls `debug`, whose Node entry does require('tty'). Hermes has no
+// Node require — Rolldown then throws. Mark this as a browser-like process so
+// `debug` selects its browser build instead.
+if (typeof process !== 'undefined') {
+  const proc = process as NodeJS.Process & { browser?: boolean }
+  proc.browser = true
+}
+
 
 /** RN's abort-controller polyfill lacks modern static helpers used by deps. */
 function installAbortSignalHelpers() {
@@ -81,6 +90,7 @@ import '@tamagui/native/setup-worklets'
 // Register Tamagui config on the single @tamagui/web instance before any UI mounts.
 import '~/config/tamagui.config'
 import { startNativeBootstrapPrefetch } from '~/lib/bootstrap/app-prefetch'
+import '~/lib/brand/register-suspense-fallback'
 
 globalThis.global = globalThis
 startNativeBootstrapPrefetch()

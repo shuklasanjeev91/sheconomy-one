@@ -16,7 +16,7 @@ import type {
   PaymentStatusType,
   SettlementSchedule,
   SupportedCurrencyCode,
-} from './payment.constants'
+} from '~/lib/payment/payment.constants'
 
 // ============= DB ROW TYPES =============
 

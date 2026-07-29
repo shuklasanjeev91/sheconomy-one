@@ -15,7 +15,7 @@ import {
   type AddressInput,
   type AddressType,
   type AddressValidationResult,
-} from './address.type'
+} from '~/lib/address/address.type'
 import { z } from '~/lib/zod'
 
 // ============= ZOD SCHEMA =============

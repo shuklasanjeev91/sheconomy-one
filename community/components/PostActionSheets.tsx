@@ -1,6 +1,8 @@
 import { useEffect, useRef, useState } from 'react'
+import { Platform } from 'react-native'
 
 import { SendPostSheet } from '~/chat/components/SendPostSheet'
+import { WebOnlyStyle } from '~/components/platform/WebOnlyStyle'
 import { CommunityAdaptiveSheet } from '~/community/components/CommunityAdaptiveSheet'
 import { MentionInput } from '~/community/components/MentionInput'
 import { PostComments } from '~/community/components/PostComments'
@@ -43,9 +45,9 @@ import { copyShareLink } from '~/lib/share'
 import { useAppUi } from '~/lib/theme/useAppUi'
 import { useSupabase } from '~/providers/SupabaseProvider'
 
-import { useRouter } from 'one'
 
 import { BRAND_NAME } from '~/config/brand'
+import { navigateApp } from '~/lib/platform/navigate'
 
 type Engagement = ReturnType<typeof usePostEngagement>
 
@@ -66,7 +68,6 @@ export function PostActionSheets({
 }: PostActionSheetsProps) {
   const communityUi = useCommunityUi()
   const ui = useAppUi()
-  const router = useRouter()
   const toast = useAppToast()
   const { user } = useSupabase()
   const [sendOpen, setSendOpen] = useState(false)
@@ -117,7 +118,7 @@ export function PostActionSheets({
       tone: 'default',
       message: `Sign in to ${action}.`,
     })
-    router.push(routes.signIn)
+    navigateApp(routes.signIn)
   }
 
   useEffect(() => {
@@ -170,9 +171,13 @@ export function PostActionSheets({
                   }
                 })
               }}
-              style={{
-                animation: `reactionPop 0.4s cubic-bezier(0.34, 1.56, 0.64, 1) ${index * 0.05}s both`,
-              }}
+              style={
+                Platform.OS === 'web'
+                  ? {
+                      animation: `reactionPop 0.4s cubic-bezier(0.34, 1.56, 0.64, 1) ${index * 0.05}s both`,
+                    }
+                  : undefined
+              }
             >
               <Text fontSize={40}>{reaction.emoji}</Text>
               <Text fontSize={12} fontWeight="600" color={communityUi.textMuted}>
@@ -181,12 +186,12 @@ export function PostActionSheets({
             </YStack>
           ))}
         </XStack>
-        <style>{`
+        <WebOnlyStyle>{`
           @keyframes reactionPop {
             from { transform: scale(0.4) translateY(16px); opacity: 0; }
             to { transform: scale(1) translateY(0); opacity: 1; }
           }
-        `}</style>
+        `}</WebOnlyStyle>
       </CommunityAdaptiveSheet>
 
       <CommunityAdaptiveSheet
@@ -425,7 +430,7 @@ export function PostActionSheets({
           contextText={sendContext}
           preview={sendPreview}
           onShareElsewhere={() => setShareOpen(true)}
-          onSent={(conversationId) => router.push(chatRoutes.conversation(conversationId))}
+          onSent={(conversationId) => navigateApp(chatRoutes.conversation(conversationId))}
         />
       ) : null}
 
@@ -575,7 +580,7 @@ export function PostActionSheets({
                     tone: 'default',
                     message: `${authorName} will no longer appear in your community feed.`,
                     actionLabel: 'Manage',
-                    onAction: () => router.push(appRoutes.settingsSection('privacy') as never),
+                    onAction: () => navigateApp(appRoutes.settingsSection('privacy') as never),
                   })
                   engagement.closeSheet()
                 })

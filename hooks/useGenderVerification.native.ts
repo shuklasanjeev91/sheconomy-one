@@ -9,11 +9,14 @@ import {
   type VerificationPhase,
   completeGenderVerificationSession,
   computeLivenessScore,
+  createBlinkTracker,
+  createEarCalibrator,
   createGenderVerificationSession,
-  createGestureBlinkTracker,
   isFaceCentered,
   passesAntiSpoof,
-  updateGestureBlinkTracker,
+  thresholdsFromBaseline,
+  updateBlinkTracker,
+  updateEarCalibrator,
 } from '~/lib/gender-verification'
 
 import { BRAND_NAME } from '~/config/brand'
@@ -32,7 +35,7 @@ export function useGenderVerification({ onVerified }: UseGenderVerificationOptio
     faceDetected: false,
     faceCentered: false,
     eyesClosed: false,
-    calibrated: true,
+    calibrated: false,
     avgEar: null,
     liveScore: 0,
     realScore: 0,
@@ -41,7 +44,8 @@ export function useGenderVerification({ onVerified }: UseGenderVerificationOptio
 
   const cameraRef = useRef<CameraView | null>(null)
   const analyzerRef = useRef<NativeFaceAnalyzerHandle | null>(null)
-  const blinkTrackerRef = useRef(createGestureBlinkTracker())
+  const blinkTrackerRef = useRef(createBlinkTracker())
+  const earCalibratorRef = useRef(createEarCalibrator())
   const stableFramesRef = useRef(0)
   const liveSamplesRef = useRef<number[]>([])
   const realSamplesRef = useRef<number[]>([])
@@ -137,7 +141,7 @@ export function useGenderVerification({ onVerified }: UseGenderVerificationOptio
     try {
       const picture = await camera.takePictureAsync({
         base64: true,
-        quality: 0.3,
+        quality: 0.2,
         skipProcessing: true,
         shutterSound: false,
       })
@@ -147,15 +151,26 @@ export function useGenderVerification({ onVerified }: UseGenderVerificationOptio
       const height = picture.height ?? 0
       const analysis = await analyzer.analyze(picture.base64, width, height, 'liveness')
       const face = analysis.face
+      const leftEar = face?.leftEar ?? 0.3
+      const rightEar = face?.rightEar ?? 0.3
+      const avgEar = (leftEar + rightEar) / 2
+
+      updateEarCalibrator(earCalibratorRef.current, avgEar, 8)
+      const thresholds = thresholdsFromBaseline(
+        earCalibratorRef.current.baseline,
+        GENDER_VERIFICATION.earBlinkThreshold,
+        GENDER_VERIFICATION.earOpenThreshold,
+      )
+      const eyesClosed = avgEar < thresholds.blinkThreshold
 
       setTracking({
         faceDetected: !!face,
         faceCentered: face
           ? isFaceCentered(face.box, analysis.width || width, analysis.height || height)
           : false,
-        eyesClosed: analysis.eyesClosed,
-        calibrated: true,
-        avgEar: null,
+        eyesClosed,
+        calibrated: thresholds.calibrated,
+        avgEar,
         liveScore: analysis.liveScore,
         realScore: analysis.realScore,
       })
@@ -178,23 +193,31 @@ export function useGenderVerification({ onVerified }: UseGenderVerificationOptio
       }
 
       if (analysis.gender) lastGenderRef.current = analysis.gender
-      liveSamplesRef.current = [...liveSamplesRef.current.slice(-24), analysis.liveScore]
-      realSamplesRef.current = [...realSamplesRef.current.slice(-24), analysis.realScore]
+      if (analysis.liveScore > 0) {
+        liveSamplesRef.current = [...liveSamplesRef.current.slice(-24), analysis.liveScore]
+      }
+      if (analysis.realScore > 0) {
+        realSamplesRef.current = [...realSamplesRef.current.slice(-24), analysis.realScore]
+      }
       stableFramesRef.current += 1
       setPhase('blink')
 
-      const tracker = updateGestureBlinkTracker(
-        blinkTrackerRef.current,
-        analysis.eyesClosed,
-        Date.now(),
-      )
+      const tracker = updateBlinkTracker(blinkTrackerRef.current, leftEar, rightEar, {
+        blinkThreshold: thresholds.blinkThreshold,
+        openThreshold: thresholds.openThreshold,
+        minClosedMs: GENDER_VERIFICATION.minClosedMs,
+        maxClosedMs: GENDER_VERIFICATION.maxClosedMs,
+        minBlinkGapMs: GENDER_VERIFICATION.minBlinkGapMs,
+      })
       blinkTrackerRef.current = tracker
       setBlinkCount(tracker.count)
 
       const remaining = Math.max(0, GENDER_VERIFICATION.requiredBlinks - tracker.count)
       if (remaining > 0) {
         setInstruction(
-          analysis.eyesClosed ? 'Open your eyes' : `Blink naturally — ${remaining} left`,
+          eyesClosed
+            ? 'Open your eyes'
+            : `Blink naturally — ${remaining} left`,
         )
         return
       }
@@ -204,7 +227,7 @@ export function useGenderVerification({ onVerified }: UseGenderVerificationOptio
         requiredBlinks: GENDER_VERIFICATION.requiredBlinks,
         faceCentered: true,
         stableFrames: stableFramesRef.current,
-        minStableFrames: 6,
+        minStableFrames: 4,
       })
 
       await analyzeAndSubmit(tracker.count, livenessScore, picture.base64, frameWidth, frameHeight)
@@ -253,7 +276,8 @@ export function useGenderVerification({ onVerified }: UseGenderVerificationOptio
     setError(null)
     setPhase('loading')
     setInstruction('Loading secure face models…')
-    blinkTrackerRef.current = createGestureBlinkTracker()
+    blinkTrackerRef.current = createBlinkTracker()
+    earCalibratorRef.current = createEarCalibrator()
     stableFramesRef.current = 0
     liveSamplesRef.current = []
     realSamplesRef.current = []
@@ -302,7 +326,8 @@ export function useGenderVerification({ onVerified }: UseGenderVerificationOptio
     setError(null)
     setPhase('idle')
     setInstruction('Start when you are ready')
-    blinkTrackerRef.current = createGestureBlinkTracker()
+    blinkTrackerRef.current = createBlinkTracker()
+    earCalibratorRef.current = createEarCalibrator()
     stableFramesRef.current = 0
     analyzingRef.current = false
     processingRef.current = false
@@ -310,7 +335,7 @@ export function useGenderVerification({ onVerified }: UseGenderVerificationOptio
       faceDetected: false,
       faceCentered: false,
       eyesClosed: false,
-      calibrated: true,
+      calibrated: false,
       avgEar: null,
       liveScore: 0,
       realScore: 0,

@@ -14,6 +14,7 @@ export default function ChatCallRoute() {
     code: string | string[]
     type?: string | string[]
     callId?: string | string[]
+    ring?: string | string[]
   }>()
   const code = readRouteParam(params.code)
   const typeRaw = readRouteParam(params.type).toLowerCase()
@@ -21,10 +22,16 @@ export default function ChatCallRoute() {
   // query params previously turned voice calls into video on some platforms.
   const callType: CallType = typeRaw === 'video' ? 'video' : 'audio'
   const callId = readRouteParam(params.callId) || undefined
+  const needsAnswer = readRouteParam(params.ring) === '1'
 
   return (
     <AppErrorBoundary scope="ChatCall">
-      <ChatCallScreen code={code} callType={callType} callId={callId} />
+      <ChatCallScreen
+        code={code}
+        callType={callType}
+        callId={callId}
+        needsAnswer={needsAnswer}
+      />
     </AppErrorBoundary>
   )
 }

@@ -12,8 +12,8 @@
 import { getDefaultCountryCode, resolveCountryCode } from '~/lib/geo'
 import { supabase } from '~/lib/supabase'
 
-import { toFriendlyAddressError } from './address.errors'
-import { normalizeAddressInput, validateAddressData } from './address.validation'
+import { toFriendlyAddressError } from '~/lib/address/address.errors'
+import { normalizeAddressInput, validateAddressData } from '~/lib/address/address.validation'
 import {
   ADDRESS_TYPE,
   type Address,
@@ -24,8 +24,8 @@ import {
   type AddressStats,
   type AddressType,
   type AddressUpdate,
-} from './address.type'
-import { computeAddressStats } from './address.utils'
+} from '~/lib/address/address.type'
+import { computeAddressStats } from '~/lib/address/address.utils'
 
 // ============= RESPONSE HELPERS =============
 

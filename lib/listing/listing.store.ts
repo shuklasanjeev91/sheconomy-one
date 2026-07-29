@@ -14,7 +14,7 @@ import { createAsyncThunk, createSlice, current, type PayloadAction } from '@red
 
 import type { AppDispatch } from '~/lib/store'
 
-import * as listingService from './listing.service'
+import * as listingService from '~/lib/listing/listing.service'
 import type {
   AdminListingRow,
   ListingDetails,
@@ -23,7 +23,7 @@ import type {
   PublicListing,
   RecommendedListing,
   ShopListingRow,
-} from './listing.service'
+} from '~/lib/listing/listing.service'
 import {
   EMPTY_LISTING_FORM_DATA,
   LISTING_STATUS,
@@ -37,8 +37,8 @@ import {
   type ListingUpdate,
   type ListingValidationResult,
   type PlatformListingStats,
-} from './listing.type'
-import { validateListingData } from './listing.validation'
+} from '~/lib/listing/listing.type'
+import { validateListingData } from '~/lib/listing/listing.validation'
 
 // ============= STATE =============
 

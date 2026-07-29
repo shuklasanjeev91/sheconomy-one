@@ -1,4 +1,4 @@
-import { supabase } from './client'
+import { supabase } from '~/lib/supabase/client'
 
 export const SHECONOMY_LOGO_BUCKET = 'sheconomy-logo' as const
 

@@ -10,6 +10,14 @@ export type PickedImage = {
 export type PickImagesOptions = {
   multiple?: boolean
   maxCount?: number
+  /**
+   * Target crop aspect as [width, height]. Prefer `pickImagesWithCrop` /
+   * `ImageUploadField` aspect props for the crop UI — this flag is also used
+   * by native ImagePicker `allowsEditing` when set.
+   */
+  aspect?: readonly [number, number]
+  /** Native ImagePicker crop UI (ignored on web). Default true when aspect is set. */
+  allowsEditing?: boolean
 }
 
 export type PickVideosOptions = {
@@ -345,6 +353,35 @@ export async function pickedImageToBlob(image: PickedImage): Promise<Blob> {
     throw new Error('Could not read the selected image.')
   }
   return response.blob()
+}
+
+export type PickedImageBytes = {
+  buffer: ArrayBuffer
+  mimeType: string
+  fileName?: string
+  byteLength: number
+}
+
+export async function readPickedImageBytes(image: PickedImage): Promise<PickedImageBytes> {
+  if (image.file) {
+    const buffer = await image.file.arrayBuffer()
+    if (buffer.byteLength <= 0) throw new Error('Could not read the selected image.')
+    return {
+      buffer,
+      mimeType: image.mimeType || image.file.type || 'image/jpeg',
+      fileName: image.fileName ?? image.file.name,
+      byteLength: buffer.byteLength,
+    }
+  }
+  const blob = await pickedImageToBlob(image)
+  const buffer = await blob.arrayBuffer()
+  if (buffer.byteLength <= 0) throw new Error('Could not read the selected image.')
+  return {
+    buffer,
+    mimeType: image.mimeType || blob.type || 'image/jpeg',
+    fileName: image.fileName,
+    byteLength: buffer.byteLength,
+  }
 }
 
 export function releasePickedImage(image: PickedImage) {

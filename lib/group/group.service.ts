@@ -9,7 +9,7 @@ import { isUuid } from '~/commerce/lib/seo-urls'
 import { supabase, type Json } from '~/lib/supabase'
 import { getStoragePublicUrl, uploadStorageObject } from '~/lib/supabase/storage-upload'
 
-import { toFriendlyGroupError } from './group.errors'
+import { toFriendlyGroupError } from '~/lib/group/group.errors'
 import {
   DEFAULT_GROUP_LIMIT,
   DEFAULT_GROUP_TYPE,
@@ -33,8 +33,8 @@ import {
   type GroupUpdate,
   type GroupWithCounts,
   type UpdateGroupInput,
-} from './group.type'
-import { emptyGroupEngagementStats, normalizeGroupName } from './group.utils'
+} from '~/lib/group/group.type'
+import { emptyGroupEngagementStats, normalizeGroupName } from '~/lib/group/group.utils'
 
 // ============= RESPONSE HELPERS =============
 

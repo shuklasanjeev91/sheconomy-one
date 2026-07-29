@@ -3,7 +3,7 @@ import { Platform } from 'react-native'
 
 import { readSessionValue, readSessionValueSync, writeSessionValue } from '~/lib/platform/storage'
 
-import type { LatLng } from './types'
+import type { LatLng } from '~/lib/location/types'
 
 export const USER_GEO_STORAGE_KEY = 'sheconomy:user-geo'
 

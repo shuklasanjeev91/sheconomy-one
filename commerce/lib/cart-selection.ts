@@ -1,6 +1,6 @@
 import { useSyncExternalStore } from 'react'
 
-import type { CartItemRow, CartRow } from './cart'
+import type { CartItemRow, CartRow } from '~/commerce/lib/cart'
 
 /**
  * Per-item cart selection. We persist the *deselected* ids at module scope so
@@ -8,9 +8,11 @@ import type { CartItemRow, CartRow } from './cart'
  * navigation between the cart and checkout screens.
  */
 let deselected = new Set<string>()
+let selectionRevision = 0
 const listeners = new Set<() => void>()
 
 function emit() {
+  selectionRevision += 1
   for (const listener of listeners) listener()
 }
 
@@ -53,6 +55,20 @@ export function useCartSelection(availableIds: string[]) {
     allSelected: availableIds.length > 0 && selectedIds.length === availableIds.length,
     noneSelected: selectedIds.length === 0,
   }
+}
+
+/** Subscribe to cart line checkbox changes (cart ↔ checkout selection). */
+export function useCartSelectionRevision(): number {
+  return useSyncExternalStore(
+    subscribe,
+    () => selectionRevision,
+    () => selectionRevision,
+  )
+}
+
+/** Lines the shopper has checked for checkout (shared cart ↔ checkout selection). */
+export function filterSelectedCartItems<T extends { id: string }>(items: T[]): T[] {
+  return items.filter((item) => !deselected.has(item.id))
 }
 
 function round2(value: number) {

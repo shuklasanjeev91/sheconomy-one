@@ -17,7 +17,7 @@ import { supabase } from '~/lib/supabase'
 import type { Database } from '~/lib/supabase'
 import { getStoragePublicUrl, uploadStorageObject } from '~/lib/supabase/storage-upload'
 
-import { toFriendlySaleError } from './sale-event.errors'
+import { toFriendlySaleError } from '~/lib/sale-event/sale-event.errors'
 import {
   SALE_BANNER_BUCKET,
   SALE_BANNER_MAX_BYTES,
@@ -41,7 +41,7 @@ import {
   type SaleServiceResponse,
   type UpdateEventInput,
   type VendorEnrollment,
-} from './sale-event.type'
+} from '~/lib/sale-event/sale-event.type'
 
 // ============= RESPONSE HELPERS =============
 

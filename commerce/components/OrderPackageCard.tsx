@@ -12,9 +12,11 @@ import { useAppUi } from '~/lib/theme/useAppUi'
 type OrderPackageCardProps = {
   shipment: CustomerOrderPackage
   index?: number
+  /** Render inside a parent panel without an extra card wrapper. */
+  embedded?: boolean
 }
 
-export function OrderPackageCard({ shipment, index = 0 }: OrderPackageCardProps) {
+export function OrderPackageCard({ shipment, index = 0, embedded = false }: OrderPackageCardProps) {
   const ui = useAppUi()
   const toast = useAppToast()
   const statusDisplay =
@@ -36,8 +38,8 @@ export function OrderPackageCard({ shipment, index = 0 }: OrderPackageCardProps)
     }
   }
 
-  return (
-    <CommercePanel padding="$4" gap="$3">
+  const body = (
+    <>
       <XStack justifyContent="space-between" alignItems="flex-start" gap="$2">
         <YStack flex={1} gap={2}>
           <Text fontSize={14} fontWeight="800" color={ui.text}>
@@ -88,6 +90,26 @@ export function OrderPackageCard({ shipment, index = 0 }: OrderPackageCardProps)
           Track with carrier
         </Button>
       ) : null}
+    </>
+  )
+
+  if (embedded) {
+    return (
+      <YStack
+        gap="$3"
+        paddingBottom={index > 0 ? '$3' : 0}
+        paddingTop={index > 0 ? '$3' : 0}
+        borderTopWidth={index > 0 ? 1 : 0}
+        borderTopColor={ui.borderSubtle}
+      >
+        {body}
+      </YStack>
+    )
+  }
+
+  return (
+    <CommercePanel padding="$4" gap="$3">
+      {body}
     </CommercePanel>
   )
 }

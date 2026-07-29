@@ -38,8 +38,8 @@ export function Skeleton({ width = '100%', height = 16, borderRadius = 8 }: Skel
       width={width as any}
       height={height as any}
       borderRadius={borderRadius}
-      backgroundColor={ui.surfaceMuted}
-      opacity={reduceMotion ? 1 : 0.7}
+      backgroundColor={ui.roseSurface ?? ui.surfaceMuted}
+      opacity={reduceMotion ? 1 : 0.85}
       accessibilityElementsHidden
       importantForAccessibility="no-hide-descendants"
       style={

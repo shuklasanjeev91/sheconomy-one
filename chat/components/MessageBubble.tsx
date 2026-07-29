@@ -1,3 +1,4 @@
+import { memo } from 'react'
 import { Platform } from 'react-native'
 
 import { useChatTheme } from '~/chat/lib/chat-theme'
@@ -7,12 +8,12 @@ import { extractFirstUrl } from '~/chat/lib/link-preview'
 import type { ChatMessage, PollResult, ReactionGroup } from '~/chat/lib/types'
 import { Avatar, Icons, Image, Text, XStack, YStack } from '~/components/ui'
 
-import { ChatAudioMessage } from './ChatAudioMessage'
-import { ChatMediaImage } from './ChatMediaImage'
-import { ChatMediaVideo } from './ChatMediaVideo'
-import { EventMessage } from './EventMessage'
-import { LinkPreviewCard } from './LinkPreviewCard'
-import { PollMessage } from './PollMessage'
+import { ChatAudioMessage } from '~/chat/components/ChatAudioMessage'
+import { ChatMediaImage } from '~/chat/components/ChatMediaImage'
+import { ChatMediaVideo } from '~/chat/components/ChatMediaVideo'
+import { EventMessage } from '~/chat/components/EventMessage'
+import { LinkPreviewCard } from '~/chat/components/LinkPreviewCard'
+import { PollMessage } from '~/chat/components/PollMessage'
 import { openExternalUrl } from '~/lib/platform/openUrl'
 import { communityRoutes } from '~/lib/routes'
 import { pressNavigate } from '~/components/navigation/AppLink'
@@ -183,7 +184,7 @@ function StatusTicks({
   return <Icons.Check size={15} color={color} strokeWidth={2.6} />
 }
 
-export function MessageBubble({
+export const MessageBubble = memo(function MessageBubble({
   message,
   isOwn,
   showTail,
@@ -586,4 +587,4 @@ export function MessageBubble({
       </YStack>
     </XStack>
   )
-}
+})

@@ -1,4 +1,4 @@
-import { AdminGroupsManager } from './components/AdminGroupsManager'
+import { AdminGroupsManager } from '~/app/admin/components/AdminGroupsManager'
 
 export default function AdminGroupsPage() {
   return <AdminGroupsManager />

@@ -9,8 +9,8 @@ import {
   COMPANY_PAGE_SIZES,
   COMPANY_PAGE_TYPES,
   DEFAULT_PAGE_CATEGORY,
-} from './company-page.type'
-import { normalizeCompanyPageSlug } from './company-page.utils'
+} from '~/lib/company-page/company-page.type'
+import { normalizeCompanyPageSlug } from '~/lib/company-page/company-page.utils'
 
 const optionalUrl = z
   .union([z.string().url('Must be a valid URL'), z.literal(''), z.null()])

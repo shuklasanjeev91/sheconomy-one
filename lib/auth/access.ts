@@ -1,6 +1,8 @@
 import type { Href } from 'one'
 
 import { buildSignInUrl, isSafeReturnPath } from '~/lib/auth/redirect'
+import { buildVerificationDeniedRedirect } from '~/lib/gender-verification/denied-redirect'
+import { requiresGenderVerification } from '~/config/route-protection.config'
 import {
   appRoutes,
   commerceRoutes,
@@ -23,6 +25,14 @@ export type AppFeature = 'commerce' | 'class' | 'co-work' | 'community' | 'chat'
 /** In SHEconomy, `profiles.gender === true` means female. */
 export function isFemaleProfile(gender: boolean | null | undefined): boolean {
   return gender === true
+}
+
+/** Female member who completed human verification (`gender` + liveness). */
+export function hasVerifiedFemaleAccess(
+  gender: boolean | null | undefined,
+  isVerified: boolean | null | undefined,
+): boolean {
+  return isFemaleProfile(gender) && isVerified === true
 }
 
 export function getAccessTier(
@@ -84,33 +94,60 @@ export function getPathFeature(pathname: string): AppFeature | 'auth' | 'public'
   return 'commerce'
 }
 
-export function canAccessPath(tier: AccessTier, pathname: string): boolean {
+export function canAccessPath(
+  tier: AccessTier,
+  pathname: string,
+  isVerified?: boolean | null,
+): boolean {
   if ((isCreateShopPath(pathname) || isVendorPath(pathname)) && !canManageShops(tier)) return false
 
   const area = getPathFeature(pathname)
   if (area === 'auth' || area === 'public') return true
+
+  if (requiresGenderVerification(pathname)) {
+    if (tier === 'guest') return false
+    if (tier === 'male') return false
+    return isVerified === true
+  }
+
   return canAccessFeature(tier, area)
 }
 
-export function getDefaultHomeForTier(tier: AccessTier): Href {
-  if (tier === 'female') return communityRoutes.home
+export function getDefaultHomeForTier(tier: AccessTier, isVerified?: boolean | null): Href {
+  if (tier === 'female' && isVerified === true) return communityRoutes.home
   return commerceRoutes.home
 }
 
-export function sanitizeReturnPath(path: string | null | undefined, tier: AccessTier): string {
+export function sanitizeReturnPath(
+  path: string | null | undefined,
+  tier: AccessTier,
+  isVerified?: boolean | null,
+): string {
   if (!isSafeReturnPath(path ?? null)) {
-    return getDefaultHomeForTier(tier)
+    return getDefaultHomeForTier(tier, isVerified)
   }
 
-  if (canAccessPath(tier, path!)) {
+  if (canAccessPath(tier, path!, isVerified)) {
     return path!
   }
 
-  return getDefaultHomeForTier(tier)
+  return getDefaultHomeForTier(tier, isVerified)
 }
 
-export function getAccessDeniedRedirect(tier: AccessTier, pathname: string): Href {
+export function getAccessDeniedRedirect(
+  tier: AccessTier,
+  pathname: string,
+  isVerified?: boolean | null,
+): Href {
   const feature = getPathFeature(pathname)
+
+  if (
+    tier === 'female' &&
+    isVerified !== true &&
+    requiresGenderVerification(pathname)
+  ) {
+    return buildVerificationDeniedRedirect() as Href
+  }
 
   if (isCreateShopPath(pathname) || isVendorPath(pathname)) {
     if (tier === 'guest') return buildSignInUrl(pathname)
@@ -134,7 +171,7 @@ export function getAccessDeniedRedirect(tier: AccessTier, pathname: string): Hre
     return buildSignInUrl(pathname)
   }
 
-  return getDefaultHomeForTier(tier)
+  return getDefaultHomeForTier(tier, isVerified)
 }
 
 /** Guest hit a route that requires sign-in — show auth inside the app shell. */

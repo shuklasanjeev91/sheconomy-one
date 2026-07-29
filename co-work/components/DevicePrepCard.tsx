@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { Platform } from 'react-native'
 
+import { ensureMeetingMediaPermissions } from '~/co-work/lib/meeting-media-permissions'
 import { coworkGlassStyle, useCoWorkTheme } from '~/co-work/lib/theme'
 import { Button, Icons, Text, XStack, YStack } from '~/components/ui'
 
@@ -52,28 +53,9 @@ export function DevicePrepCard() {
   async function enableDevices() {
     setBusy(true)
     try {
-      if (Platform.OS === 'web' && typeof navigator !== 'undefined' && navigator.mediaDevices?.getUserMedia) {
-        const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true })
-        stream.getTracks().forEach((track) => track.stop())
-        setCamera('granted')
-        setMic('granted')
-        return
-      }
-
-      if (Platform.OS === 'web') {
-        setCamera('denied')
-        setMic('denied')
-        return
-      }
-
-      const Camera = (await import('expo-camera')).Camera
-      const cam = await Camera.requestCameraPermissionsAsync()
-      const audio = await Camera.requestMicrophonePermissionsAsync()
-      setCamera(cam.granted ? 'granted' : 'denied')
-      setMic(audio.granted ? 'granted' : 'denied')
-    } catch {
-      setCamera('denied')
-      setMic('denied')
+      const result = await ensureMeetingMediaPermissions()
+      setCamera(result.cameraGranted ? 'granted' : 'denied')
+      setMic(result.microphoneGranted ? 'granted' : 'denied')
     } finally {
       setBusy(false)
       void refreshStatus()
@@ -125,7 +107,13 @@ export function DevicePrepCard() {
 function PermissionChip({ kind, state }: { kind: string; state: PermissionState }) {
   const { ui: coworkUi } = useCoWorkTheme()
   const label =
-    state === 'granted' ? 'Ready' : state === 'denied' ? 'Blocked' : state === 'prompt' ? 'Needed' : 'Checking'
+    state === 'granted'
+      ? 'Ready'
+      : state === 'denied'
+        ? 'Blocked'
+        : state === 'prompt'
+          ? 'Needed'
+          : 'Checking'
   const color =
     state === 'granted'
       ? coworkUi.success

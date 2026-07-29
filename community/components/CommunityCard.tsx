@@ -10,6 +10,11 @@ import { YStack, type YStackProps } from '~/components/ui'
 type CommunityCardProps = YStackProps & {
   children: ReactNode
   padding?: YStackProps['padding']
+  /**
+   * Enter / hover motion. Disable inside FlashList cells — Tamagui enterStyle
+   * (opacity/translateY) can collapse measured height and overlap neighbors.
+   */
+  animated?: boolean
 }
 
 /** Standard community feed card — elevated surface, generous radius, cross-platform shadow. */
@@ -17,10 +22,13 @@ export function CommunityCard({
   children,
   padding = '$0',
   gap = 0,
+  animated = true,
   ...props
 }: CommunityCardProps) {
   const communityUi = useCommunityUi()
   const nativeShadow = useThemedShadowStyle('sm')
+  const isWeb = Platform.OS === 'web'
+  const useMotion = isWeb && animated
 
   return (
     <YStack
@@ -29,17 +37,14 @@ export function CommunityCard({
       borderRadius={radius.card}
       borderWidth={1}
       borderColor={communityUi.borderLight}
-      overflow="hidden"
+      // List cards: avoid overflow clipping on native when FlashList under-measures.
+      // Feed posts still pass animated (default) and keep clipped corners.
+      overflow={animated ? 'hidden' : isWeb ? 'hidden' : 'visible'}
       padding={padding}
       gap={gap}
-      style={
-        Platform.OS === 'web'
-          ? { boxShadow: communityUi.cardShadow, transition: 'transform 0.2s ease, box-shadow 0.2s ease' }
-          : nativeShadow
-      }
-      animation="quick"
-      hoverStyle={Platform.OS === 'web' ? { y: -2 } : undefined}
-      {...motion.fadeUp}
+      style={isWeb ? { boxShadow: communityUi.cardShadow } : nativeShadow}
+      {...(useMotion ? motion.fadeUp : null)}
+      {...(useMotion ? motion.pressable : null)}
       {...props}
     >
       {children}

@@ -6,7 +6,7 @@
  * payment mode), now expressed as a Zod schema in this project's pattern.
  */
 
-import { PAYMENT_MODE, PAYMENT_STATUS } from './order.constants'
+import { PAYMENT_MODE, PAYMENT_STATUS } from '~/lib/orders/order.constants'
 import { z } from '~/lib/zod'
 
 const paymentModeValues = Object.values(PAYMENT_MODE) as [string, ...string[]]

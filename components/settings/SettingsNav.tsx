@@ -8,7 +8,7 @@ import {
   filterSettingsNav,
   settingsSectionFromPath,
   type SettingsNavItem,
-} from './config'
+} from '~/components/settings/config'
 
 const GROUP_LABELS: Record<SettingsNavItem['group'], string> = {
   account: 'Your account',

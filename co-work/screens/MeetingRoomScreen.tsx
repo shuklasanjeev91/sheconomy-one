@@ -38,6 +38,8 @@ type MeetingRoomScreenProps = {
   displayName: string
   avatarUrl?: string | null
   isHost: boolean
+  /** Optional — overlay host closes session; default navigates to Co-Work home. */
+  onLeave?: () => void
 }
 
 type PresenceState = ReturnType<typeof useMeetingPresence>
@@ -687,10 +689,10 @@ function MeetingRoomOverlay({
         <MeetingControls
           caps={{
             ...caps,
-            supportsVideo: !!liveKit || caps.supportsVideo,
-            supportsScreenShare: !!liveKit || caps.supportsScreenShare,
+            supportsVideo: true,
+            supportsScreenShare: true,
             supportsRecording: isHost && allowRecording && !!liveKit,
-            supportsLiveCaptions: caps.supportsLiveCaptions,
+            supportsLiveCaptions: true,
           }}
           audioEnabled={liveKit?.audioEnabled ?? true}
           videoEnabled={liveKit?.videoEnabled ?? false}
@@ -704,12 +706,24 @@ function MeetingRoomOverlay({
           raisedHandCount={raisedHandCount}
           reactionTrayOpen={reactionTrayOpen}
           onToggleAudio={() => {
-            if (!liveKit) return
+            if (!liveKit) {
+              toast.show('Still connecting…', {
+                tone: 'info',
+                message: 'Wait a moment for the room to join, then try mute again.',
+              })
+              return
+            }
             void presence.syncMediaState({ is_muted: liveKit.audioEnabled })
             liveKit.toggleAudio()
           }}
           onToggleVideo={() => {
-            if (!liveKit) return
+            if (!liveKit) {
+              toast.show('Still connecting…', {
+                tone: 'info',
+                message: 'Wait a moment for the room to join, then try video again.',
+              })
+              return
+            }
             void presence.syncMediaState({ is_video_off: liveKit.videoEnabled })
             liveKit.toggleVideo()
           }}
@@ -731,7 +745,11 @@ function MeetingRoomOverlay({
                 await recordingSession.stopRecording()
               }
               await presence.leave()
-              router.replace(coWorkRoutes.home)
+              if (props.onLeave) {
+                props.onLeave()
+              } else {
+                router.push(coWorkRoutes.home)
+              }
             })()
           }}
           onEnd={() => {
@@ -740,7 +758,11 @@ function MeetingRoomOverlay({
                 await recordingSession.stopRecording()
               }
               await presence.hostEnd()
-              router.replace(coWorkRoutes.home)
+              if (props.onLeave) {
+                props.onLeave()
+              } else {
+                router.push(coWorkRoutes.home)
+              }
             })()
           }}
         />

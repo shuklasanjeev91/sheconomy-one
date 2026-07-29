@@ -9,7 +9,7 @@ import { createAsyncThunk, createSlice, type PayloadAction } from '@reduxjs/tool
 
 import type { AppDispatch } from '~/lib/store'
 
-import * as companyPageService from './company-page.service'
+import * as companyPageService from '~/lib/company-page/company-page.service'
 import {
   DEFAULT_COMPANY_PAGE_LIMIT,
   type CompanyPage,
@@ -19,13 +19,13 @@ import {
   type CompanyPagePlatformStats,
   type CompanyPageServiceResponse,
   type CompanyPageWithCounts,
-} from './company-page.type'
+} from '~/lib/company-page/company-page.type'
 import {
   createCompanyPageSchema,
   parseOrThrow,
   setMemberRoleSchema,
   updateCompanyPageSchema,
-} from './company-page.validation'
+} from '~/lib/company-page/company-page.validation'
 
 // ============= STATE =============
 

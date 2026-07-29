@@ -81,7 +81,7 @@ export function CreateCompanyScreen() {
       toast.show('Could not create page', { tone: 'danger', message: error ?? 'Try again.' })
       return
     }
-    router.replace(communityRoutes.company(data.id))
+    router.push(communityRoutes.company(data.id))
   }
 
   return (
@@ -107,6 +107,7 @@ export function CreateCompanyScreen() {
           hint="Upload a square logo for your page."
           value={logo}
           onChange={setLogo}
+          aspect="square"
           uploadProgress={uploadProgress}
           uploadLabel="Uploading logo…"
         />

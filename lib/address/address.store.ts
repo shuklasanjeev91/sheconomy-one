@@ -13,7 +13,7 @@ import { createAsyncThunk, createSlice, current, type PayloadAction } from '@red
 
 import type { AppDispatch } from '~/lib/store'
 
-import * as addressService from './address.service'
+import * as addressService from '~/lib/address/address.service'
 import {
   EMPTY_ADDRESS_FORM_DATA,
   ADDRESS_TYPE,
@@ -23,9 +23,9 @@ import {
   type AddressStats,
   type AddressType,
   type AddressValidationResult,
-} from './address.type'
-import { sortAddressesByPriority } from './address.utils'
-import { validateAddressData } from './address.validation'
+} from '~/lib/address/address.type'
+import { sortAddressesByPriority } from '~/lib/address/address.utils'
+import { validateAddressData } from '~/lib/address/address.validation'
 
 // ============= STATE =============
 

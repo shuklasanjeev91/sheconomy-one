@@ -9,7 +9,7 @@ import { isUuid } from '~/commerce/lib/seo-urls'
 import { supabase, type Json } from '~/lib/supabase'
 import { getStoragePublicUrl, uploadStorageObject } from '~/lib/supabase/storage-upload'
 
-import { toFriendlyCompanyPageError } from './company-page.errors'
+import { toFriendlyCompanyPageError } from '~/lib/company-page/company-page.errors'
 import {
   COMPANY_COVER_BUCKET,
   COMPANY_IMAGE_MAX_BYTES,
@@ -32,8 +32,8 @@ import {
   type CompanyPageWithCounts,
   type CreateCompanyPageInput,
   type UpdateCompanyPageInput,
-} from './company-page.type'
-import { emptyEngagementStats, normalizeCompanyPageSlug } from './company-page.utils'
+} from '~/lib/company-page/company-page.type'
+import { emptyEngagementStats, normalizeCompanyPageSlug } from '~/lib/company-page/company-page.utils'
 
 // ============= RESPONSE HELPERS =============
 

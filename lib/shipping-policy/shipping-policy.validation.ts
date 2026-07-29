@@ -7,14 +7,14 @@ import {
   SHIPPING_POLICY_VALIDATION,
   SHIPPING_RATE_TYPE_VALUES,
   SHIPPING_ZONE_TYPE_VALUES,
-} from './shipping-policy.constants'
+} from '~/lib/shipping-policy/shipping-policy.constants'
 import type {
   ShippingPolicyFormData,
   ShippingPolicyInput,
   ShippingPolicyValidationResult,
   ShippingRate,
   ShippingZone,
-} from './shipping-policy.type'
+} from '~/lib/shipping-policy/shipping-policy.type'
 
 // ============= ZOD SCHEMAS =============
 

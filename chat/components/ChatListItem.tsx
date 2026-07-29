@@ -1,3 +1,4 @@
+import { memo } from 'react'
 import { Platform } from 'react-native'
 
 import { useChatTheme } from '~/chat/lib/chat-theme'
@@ -62,7 +63,7 @@ function previewText(chat: ChatSummary): string {
   return 'Photo'
 }
 
-export function ChatListItem({ chat, active, onPress, onRequestActions }: ChatListItemProps) {
+export const ChatListItem = memo(function ChatListItem({ chat, active, onPress, onRequestActions }: ChatListItemProps) {
   const theme = useChatTheme()
   const hasUnread = chat.unreadCount > 0
   const legacy = chat.lastMessageType === 'text' ? legacyPreview(chat.lastMessage) : null
@@ -193,4 +194,4 @@ export function ChatListItem({ chat, active, onPress, onRequestActions }: ChatLi
       </YStack>
     </XStack>
   )
-}
+})

@@ -222,12 +222,27 @@ export function NativeLiveKitMeetingRoom({
 
   if (!audioReady || loading || !credentials) {
     return (
-      <ScreenCenter backgroundColor="#0c080a">
-        <Spinner size="large" color={coworkUi.brand} />
-        <Text color="rgba(255,255,255,0.7)" marginTop="$3">
-          Joining Co-Work room…
-        </Text>
-      </ScreenCenter>
+      <ScreenFill backgroundColor="#0c080a" position="relative">
+        <ScreenCenter backgroundColor="#0c080a">
+          <Spinner size="large" color={coworkUi.brand} />
+          <Text color="rgba(255,255,255,0.7)" marginTop="$3">
+            {!audioReady ? 'Starting call audio…' : 'Joining Co-Work room…'}
+          </Text>
+        </ScreenCenter>
+        {/* Keep host controls / leave visible while credentials load — avoids a
+            chromeless dark void that reads as a blank crash on iPad. */}
+        <YStack
+          position="absolute"
+          top={0}
+          left={0}
+          right={0}
+          bottom={0}
+          pointerEvents="box-none"
+          zIndex={100}
+        >
+          {overlay?.(null)}
+        </YStack>
+      </ScreenFill>
     )
   }
 
@@ -564,12 +579,20 @@ function NativeVideoTile({
         />
       ) : (
         <YStack flex={1} width="100%" height="100%" alignItems="center" justifyContent="center" gap={compact ? 4 : 8}>
-          <Avatar name={name} src={avatarUrl ?? undefined} size={compact ? '$5' : '$8'} />
-          {!isScreen && !compact ? (
-            <Text fontSize={12} color="rgba(255,255,255,0.55)" fontWeight="600">
-              Camera off
+          {isScreen ? (
+            <Text fontSize={compact ? 11 : 13} color="rgba(255,255,255,0.6)" fontWeight="600" textAlign="center" paddingHorizontal="$3">
+              Receiving screen…
             </Text>
-          ) : null}
+          ) : (
+            <>
+              <Avatar name={name} src={avatarUrl ?? undefined} size={compact ? '$5' : '$8'} />
+              {!compact ? (
+                <Text fontSize={12} color="rgba(255,255,255,0.55)" fontWeight="600">
+                  Camera off
+                </Text>
+              ) : null}
+            </>
+          )}
         </YStack>
       )}
       {handRaised && !isScreen ? (

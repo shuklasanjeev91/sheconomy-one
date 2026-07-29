@@ -94,7 +94,7 @@ export function CreateShopScreen() {
   const router = useRouter()
   const toast = useAppToast()
   const dispatch = useAppDispatch()
-  const { isDesktop, safeBottom } = useAppLayout()
+  const { isDesktop, safeBottom, desktopHeaderHeight } = useAppLayout()
   const { user } = useAuth()
   const { profile } = useProfile()
 
@@ -177,7 +177,7 @@ export function CreateShopScreen() {
     if (phase === 'success' || isSubmitting || hasSubmittedRef.current) return
     if (!myShopsLoaded) return
     if (alreadyHasShop) {
-      router.replace(vendorRoutes.myShop)
+      router.push(vendorRoutes.myShop)
     }
   }, [alreadyHasShop, myShopsLoaded, isSubmitting, phase, router])
 
@@ -185,7 +185,7 @@ export function CreateShopScreen() {
   useEffect(() => {
     if (phase !== 'success') return
     if (countdown <= 0) {
-      router.replace(vendorRoutes.createListing)
+      router.push(vendorRoutes.createListing)
       return
     }
     const timer = setTimeout(() => setCountdown((value) => value - 1), 1000)
@@ -398,8 +398,25 @@ export function CreateShopScreen() {
 
   const isLastStep = stepIndex === steps.length - 1
 
+  const webShellHeight =
+    Platform.OS === 'web' && isDesktop
+      ? (`calc(100dvh - ${desktopHeaderHeight}px)` as const)
+      : undefined
+
   return (
-    <YStack flex={1} width="100%" backgroundColor={ui.background} minHeight={0}>
+    <YStack
+      flex={1}
+      width="100%"
+      backgroundColor={ui.background}
+      minHeight={0}
+      style={
+        Platform.OS === 'web'
+          ? isDesktop
+            ? ({ height: webShellHeight, minHeight: webShellHeight, overflow: 'hidden' } as const)
+            : ({ height: '100%', maxHeight: '100%', overflow: 'hidden' } as const)
+          : undefined
+      }
+    >
       <XStack flex={1} minHeight={0} alignItems="stretch">
         {isDesktop ? (
           <StepSidebar
@@ -411,10 +428,23 @@ export function CreateShopScreen() {
           />
         ) : null}
 
-        <YStack flex={1} minWidth={0}>
+        <YStack flex={1} minWidth={0} minHeight={0}>
           <ScrollView
             flex={1}
-            showsVerticalScrollIndicator={false}
+            width="100%"
+            minHeight={0}
+            showsVerticalScrollIndicator
+            keyboardShouldPersistTaps="handled"
+            style={
+              Platform.OS === 'web'
+                ? ({
+                    overflowY: 'auto',
+                    minHeight: 0,
+                    height: '100%',
+                    WebkitOverflowScrolling: 'touch',
+                  } as const)
+                : undefined
+            }
             contentContainerStyle={{
               paddingHorizontal: isDesktop ? 32 : 16,
               paddingTop: 24,
@@ -504,8 +534,8 @@ export function CreateShopScreen() {
         <SuccessOverlay
           ui={ui}
           countdown={countdown}
-          onSkip={() => router.replace(vendorRoutes.home)}
-          onContinue={() => router.replace(vendorRoutes.createListing)}
+          onSkip={() => router.push(vendorRoutes.home)}
+          onContinue={() => router.push(vendorRoutes.createListing)}
         />
       ) : null}
     </YStack>
@@ -670,7 +700,7 @@ function Callout({
   children: string
 }) {
   const bg = tone === 'warning' ? 'rgba(217, 119, 6, 0.08)' : ui.roseSurface
-  const border = tone === 'warning' ? 'rgba(217, 119, 6, 0.28)' : 'rgba(208, 16, 96, 0.2)'
+  const border = tone === 'warning' ? 'rgba(217, 119, 6, 0.28)' : 'rgba(216, 27, 96, 0.2)'
   const titleColor = tone === 'warning' ? '#b45309' : ui.brand
   return (
     <XStack gap="$3" padding="$3.5" borderRadius={radius.chip} backgroundColor={bg} borderWidth={1} borderColor={border}>

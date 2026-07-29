@@ -36,9 +36,15 @@ export function useAppBackNavigation() {
 
     if (canGoBack) {
       navigatingRef.current = true
-      startTransition(() => {
+      // Native: call back() immediately — startTransition deferred back() felt hung.
+      const runBack = () => {
         router.back()
-      })
+      }
+      if (Platform.OS === 'web') {
+        startTransition(runBack)
+      } else {
+        runBack()
+      }
 
       // Web SPAs / Slot stacks sometimes report canGoBack but back() no-ops.
       // If the path hasn't changed shortly after, fall back to the parent route.
@@ -48,7 +54,7 @@ export function useAppBackNavigation() {
           const current = window.location.pathname.replace(/\/$/, '') || '/'
           const expected = fromPath.replace(/\/$/, '') || '/'
           if (current === expected) {
-            navigateApp(fallbackHref, { replace: true })
+            navigateApp(fallbackHref)
           }
         }, 120)
         return
@@ -63,7 +69,7 @@ export function useAppBackNavigation() {
     }
 
     navigatingRef.current = false
-    navigateApp(fallbackHref, { replace: true })
+    navigateApp(fallbackHref)
   }, [fallbackHref, pathname, router])
 
   return {

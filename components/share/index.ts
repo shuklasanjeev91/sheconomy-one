@@ -1,3 +1,3 @@
-export { ShareActionRow } from './ShareActionRow'
-export { ShareButton } from './ShareButton'
-export { ShareSheet } from './ShareSheet'
+export { ShareActionRow } from '~/components/share/ShareActionRow'
+export { ShareButton } from '~/components/share/ShareButton'
+export { ShareSheet } from '~/components/share/ShareSheet'

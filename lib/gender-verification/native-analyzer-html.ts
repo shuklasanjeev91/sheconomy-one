@@ -1,8 +1,10 @@
-import { GENDER_VERIFICATION } from './constants'
+import { GENDER_VERIFICATION } from '~/lib/gender-verification/constants'
 
-/** Hidden WebView HTML: @vladmandic/human blink + antispoof + liveness + gender. */
+/** Hidden WebView HTML: @vladmandic/human mesh EAR + antispoof + liveness + gender. */
 export function getNativeAnalyzerHtml() {
   const modelBase = GENDER_VERIFICATION.humanModelBaseUrl
+  const maxSide = GENDER_VERIFICATION.nativeDetectMaxSide
+  const earBlink = GENDER_VERIFICATION.earBlinkThreshold
 
   return `<!DOCTYPE html>
 <html>
@@ -15,9 +17,14 @@ export function getNativeAnalyzerHtml() {
 <script>
 (function () {
   var modelBase = ${JSON.stringify(modelBase)};
+  var DETECT_MAX_SIDE = ${maxSide};
+  var EAR_BLINK = ${earBlink};
+  var LEFT_EYE = [33, 160, 158, 133, 153, 144];
+  var RIGHT_EYE = [362, 385, 387, 263, 373, 380];
   var human = null;
   var ready = false;
   var queue = [];
+  var canvas = null;
 
   function post(payload) {
     var json = JSON.stringify(payload);
@@ -35,6 +42,66 @@ export function getNativeAnalyzerHtml() {
     return null;
   }
 
+  function asPoint(p) {
+    if (!p) return null;
+    if (Array.isArray(p) && p.length >= 2) return { x: p[0], y: p[1] };
+    if (typeof p.x === 'number' && typeof p.y === 'number') return { x: p.x, y: p.y };
+    return null;
+  }
+
+  function earFromIndices(mesh, indices) {
+    if (!mesh || mesh.length < 400) return null;
+    var pts = [];
+    for (var i = 0; i < indices.length; i++) {
+      var pt = asPoint(mesh[indices[i]]);
+      if (!pt) return null;
+      pts.push(pt);
+    }
+    var v =
+      Math.hypot(pts[1].x - pts[5].x, pts[1].y - pts[5].y) +
+      Math.hypot(pts[2].x - pts[4].x, pts[2].y - pts[4].y);
+    var h = Math.hypot(pts[0].x - pts[3].x, pts[0].y - pts[3].y) * 2;
+    if (h <= 0) return 0.3;
+    return v / h;
+  }
+
+  function earsFromFace(face) {
+    var left = earFromIndices(face.mesh, LEFT_EYE);
+    var right = earFromIndices(face.mesh, RIGHT_EYE);
+    if (left != null && right != null) return { leftEar: left, rightEar: right };
+    return { leftEar: 0.3, rightEar: 0.3 };
+  }
+
+  function applyMode(mode) {
+    if (!human || !human.config || !human.config.face) return;
+    var isGender = mode === 'gender';
+    human.config.face.description.enabled = isGender;
+    human.config.face.antispoof.enabled = !isGender;
+    human.config.face.liveness.enabled = !isGender;
+    human.config.face.mesh.enabled = true;
+    human.config.face.iris.enabled = false;
+    human.config.face.emotion.enabled = false;
+  }
+
+  function downscale(img) {
+    var w = img.naturalWidth || img.width;
+    var h = img.naturalHeight || img.height;
+    var maxSide = Math.max(w, h);
+    if (maxSide <= DETECT_MAX_SIDE || w <= 0 || h <= 0) {
+      return { input: img, width: w, height: h };
+    }
+    var scale = DETECT_MAX_SIDE / maxSide;
+    var dw = Math.max(1, Math.round(w * scale));
+    var dh = Math.max(1, Math.round(h * scale));
+    if (!canvas) canvas = document.createElement('canvas');
+    canvas.width = dw;
+    canvas.height = dh;
+    var ctx = canvas.getContext('2d');
+    if (!ctx) return { input: img, width: w, height: h };
+    ctx.drawImage(img, 0, 0, dw, dh);
+    return { input: canvas, width: dw, height: dh };
+  }
+
   async function ensureModels() {
     if (ready && human) return;
     var Ctor = HumanCtor();
@@ -46,9 +113,10 @@ export function getNativeAnalyzerHtml() {
       warmup: 'none',
       face: {
         enabled: true,
-        detector: { maxDetected: 1, minConfidence: 0.5, rotation: true, return: true },
+        detector: { maxDetected: 1, minConfidence: 0.45, rotation: false, return: true },
         mesh: { enabled: true },
-        iris: { enabled: true },
+        iris: { enabled: false },
+        // Load description once; applyMode toggles it off during liveness frames.
         description: { enabled: true },
         emotion: { enabled: false },
         antispoof: { enabled: true },
@@ -57,10 +125,10 @@ export function getNativeAnalyzerHtml() {
       body: { enabled: false },
       hand: { enabled: false },
       object: { enabled: false },
-      gesture: { enabled: true },
+      gesture: { enabled: false },
     });
     await human.load();
-    await human.warmup();
+    applyMode('liveness');
     ready = true;
     post({ type: 'ready' });
     while (queue.length) {
@@ -84,13 +152,12 @@ export function getNativeAnalyzerHtml() {
         img.onerror = reject;
       });
 
-      var width = job.width || img.naturalWidth || img.width;
-      var height = job.height || img.naturalHeight || img.height;
-      var result = await human.detect(img);
+      applyMode(job.mode || 'liveness');
+      var prepared = downscale(img);
+      var result = await human.detect(prepared.input);
       var face = result.face && result.face[0] ? result.face[0] : null;
-      var gestures = (result.gesture || []).map(function (g) { return String(g.gesture); });
-      var blinkLeft = gestures.indexOf('blink left eye') !== -1;
-      var blinkRight = gestures.indexOf('blink right eye') !== -1;
+      var width = prepared.width;
+      var height = prepared.height;
 
       if (!face) {
         post({
@@ -103,11 +170,14 @@ export function getNativeAnalyzerHtml() {
           eyesClosed: false,
           liveScore: 0,
           realScore: 0,
-          gestures: gestures,
+          gestures: [],
         });
         return;
       }
 
+      var ears = earsFromFace(face);
+      var avgEar = (ears.leftEar + ears.rightEar) / 2;
+      var eyesClosed = avgEar < EAR_BLINK;
       var box = face.box;
       var payloadFace = {
         box: {
@@ -116,8 +186,8 @@ export function getNativeAnalyzerHtml() {
           yMin: box[1],
           yMax: box[1] + box[3],
         },
-        leftEar: blinkLeft || blinkRight ? 0.12 : 0.3,
-        rightEar: blinkLeft || blinkRight ? 0.12 : 0.3,
+        leftEar: ears.leftEar,
+        rightEar: ears.rightEar,
       };
 
       var gender = null;
@@ -135,10 +205,10 @@ export function getNativeAnalyzerHtml() {
         gender: gender,
         width: width,
         height: height,
-        eyesClosed: blinkLeft || blinkRight,
+        eyesClosed: eyesClosed,
         liveScore: Number(face.live || 0),
         realScore: Number(face.real || 0),
-        gestures: gestures,
+        gestures: [],
       });
     } catch (error) {
       post({

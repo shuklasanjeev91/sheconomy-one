@@ -12,8 +12,8 @@
 import { supabase } from '~/lib/supabase'
 import { USER_ROLES } from '~/lib/profile/profile.type'
 
-import { toFriendlyListingError } from './listing.errors'
-import type { ListingServiceResponse } from './listing.type'
+import { toFriendlyListingError } from '~/lib/listing/listing.errors'
+import type { ListingServiceResponse } from '~/lib/listing/listing.type'
 
 export function ok<T>(data: T): ListingServiceResponse<T> {
   return { data, error: null, success: true }

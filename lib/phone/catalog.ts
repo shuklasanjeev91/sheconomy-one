@@ -1,6 +1,6 @@
 import { getAllGeoCountries, getCountryByCode, getDefaultCountryCode } from '~/lib/geo'
 
-import type { Country } from './types'
+import type { Country } from '~/lib/phone/types'
 
 type PhoneRule = Pick<Country, 'minLength' | 'maxLength' | 'pattern' | 'placeholder'>
 

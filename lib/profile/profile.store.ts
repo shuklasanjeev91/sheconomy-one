@@ -12,7 +12,7 @@ import type { User } from '@supabase/supabase-js'
 import type { NetworkMember } from '~/community/lib/network'
 import type { AppDispatch } from '~/lib/store'
 
-import * as profileService from './profile.service'
+import * as profileService from '~/lib/profile/profile.service'
 import {
   type Collection,
   type EducationInput,
@@ -29,8 +29,8 @@ import {
   type SavedPost,
   type SkillInput,
   type VerificationUpdate,
-} from './profile.type'
-import { shouldShowBasicProfileModal } from './profile.utils'
+} from '~/lib/profile/profile.type'
+import { shouldShowBasicProfileModal } from '~/lib/profile/profile.utils'
 
 // ============= PROFILE SLICE =============
 

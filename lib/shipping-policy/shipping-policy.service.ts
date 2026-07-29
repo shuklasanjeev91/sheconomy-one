@@ -9,12 +9,12 @@ import { canManageShop } from '~/lib/shop/shop.utils'
 import type { Json } from '~/lib/supabase'
 import { supabase } from '~/lib/supabase'
 
-import { SHIPPING_POLICY_SUCCESS_MESSAGES } from './shipping-policy.constants'
+import { SHIPPING_POLICY_SUCCESS_MESSAGES } from '~/lib/shipping-policy/shipping-policy.constants'
 import {
   ShippingPolicyError,
   SHIPPING_POLICY_ERROR_CODES,
   toFriendlyShippingPolicyError,
-} from './shipping-policy.errors'
+} from '~/lib/shipping-policy/shipping-policy.errors'
 import type {
   AssignedShippingPolicy,
   DeleteShippingPolicyResult,
@@ -24,9 +24,9 @@ import type {
   ShippingPolicyInput,
   ShippingPolicyServiceResponse,
   ShippingPolicyUpdate,
-} from './shipping-policy.type'
-import { parseShippingPolicyInput, parseShippingPolicyUpdate, validateShippingPolicyInput } from './shipping-policy.validation'
-import { serializeShippingZones } from './shipping-policy.utils'
+} from '~/lib/shipping-policy/shipping-policy.type'
+import { parseShippingPolicyInput, parseShippingPolicyUpdate, validateShippingPolicyInput } from '~/lib/shipping-policy/shipping-policy.validation'
+import { serializeShippingZones } from '~/lib/shipping-policy/shipping-policy.utils'
 
 function ok<T>(data: T, message?: string | null): ShippingPolicyServiceResponse<T> {
   return { success: true, data, error: null, message: message ?? null }

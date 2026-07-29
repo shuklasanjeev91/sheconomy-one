@@ -23,16 +23,16 @@
 
 import { supabase } from '~/lib/supabase'
 
-import { resolveUserId, verifyShopManageAccess } from './listing.access'
-import { assignCategories, deleteListing } from './listing.service'
-import { generateListingSlug, prepareListingDataForSubmission } from './listing.utils'
-import { addImage, batchUploadImages } from './listing-images.service'
-import { replaceAttributes } from './listing-attributes.service'
-import { replaceMaterials } from './listing-materials.service'
-import { replaceVariations } from './listing-variations.service'
-import { generateUniqueSku, normalizeSku } from './sku.utils'
-import { LISTING_STATUS, LISTING_TYPES } from './listing.type'
-import type { ListingCategoryInput, ListingFormData } from './listing.type'
+import { resolveUserId, verifyShopManageAccess } from '~/lib/listing/listing.access'
+import { assignCategories, deleteListing } from '~/lib/listing/listing.service'
+import { generateListingSlug, prepareListingDataForSubmission } from '~/lib/listing/listing.utils'
+import { addImage, batchUploadImages } from '~/lib/listing/listing-images.service'
+import { replaceAttributes } from '~/lib/listing/listing-attributes.service'
+import { replaceMaterials } from '~/lib/listing/listing-materials.service'
+import { replaceVariations } from '~/lib/listing/listing-variations.service'
+import { generateUniqueSku, normalizeSku } from '~/lib/listing/sku.utils'
+import { LISTING_STATUS, LISTING_TYPES } from '~/lib/listing/listing.type'
+import type { ListingCategoryInput, ListingFormData } from '~/lib/listing/listing.type'
 
 // Shop sections — attach via existing save_shop_section RPC / vendor-operations.
 

@@ -1,14 +1,17 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
-import { Link } from 'one'
+import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react'
+import { AppLink } from '~/components/navigation'
+import { navigateApp } from '~/lib/platform/navigate'
 
 import {
   Button,
   Checkbox,
+  ConfirmDialog,
   Icons,
   Image,
   Input,
   Popover,
   PopoverContent,
+  Separator,
   Spinner,
   Text,
   XStack,
@@ -16,10 +19,14 @@ import {
   useAppToast,
 } from '~/components/ui'
 import { radius } from '~/config/tokens'
-import { loadShopListings } from '~/lib/listing/listing.store'
+import { deleteListing, loadShopListings, setListingStatus } from '~/lib/listing/listing.store'
 import type { ShopListingRow } from '~/lib/listing/listing.service'
-import { LISTING_TYPES, type ListingStatus, type ListingType } from '~/lib/listing/listing.type'
-import { formatListingPrice } from '~/lib/listing/listing.utils'
+import {
+  LISTING_TYPES,
+  type ListingStatus,
+  type ListingType,
+} from '~/lib/listing/listing.type'
+import type { VendorCurrencyInfo } from '~/lib/shop/current-shop-utils'
 import { vendorRoutes } from '~/lib/routes'
 import { useAppDispatch } from '~/lib/store/hooks'
 import type { AppUiTokens } from '~/lib/theme/app-ui'
@@ -32,10 +39,11 @@ import {
   ListingsFilterDropdown,
   ListingsPagerButton,
   listingSkuFallback,
+  listingStatusActionsFor,
   listingStatusLabel,
   listingStatusTone,
   listingTypeLabel,
-} from './vendor-listings-shared'
+} from '~/commerce/screens/vendor/vendor-listings-shared'
 
 const PAGE_SIZE = 10
 
@@ -51,16 +59,20 @@ type AppliedFilters = {
 type VendorListingsProductsTabProps = {
   ui: AppUiTokens
   shopId: string
-  currency: string
+  /** Old ProductList-style currency bundle (`symbol` / `code` / `formatAmount`). */
+  currencyInfo: VendorCurrencyInfo
   isDesktop: boolean
+  /** Bump after bulk import (or other external refresh) to reload the list. */
+  refreshKey?: number
   onOpenListing: (listingId: string) => void
 }
 
 export function VendorListingsProductsTab({
   ui,
   shopId,
-  currency,
+  currencyInfo,
   isDesktop,
+  refreshKey = 0,
   onOpenListing,
 }: VendorListingsProductsTabProps) {
   const dispatch = useAppDispatch()
@@ -76,11 +88,12 @@ export function VendorListingsProductsTab({
   const [hasMore, setHasMore] = useState(false)
   const [loading, setLoading] = useState(false)
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
-  const [menuOpenId, setMenuOpenId] = useState<string | null>(null)
   const [bulkPricePercent, setBulkPricePercent] = useState('')
   const [bulkStockDelta, setBulkStockDelta] = useState('')
   const [bulkCategory, setBulkCategory] = useState('')
   const [bulkUpdating, setBulkUpdating] = useState(false)
+  const [deleteTarget, setDeleteTarget] = useState<ShopListingRow | null>(null)
+  const [deleting, setDeleting] = useState(false)
 
   const hasFilters = applied.search.trim().length > 0 || applied.type !== 'all' || applied.status !== 'all'
 
@@ -111,7 +124,7 @@ export function VendorListingsProductsTab({
     } finally {
       setLoading(false)
     }
-  }, [applied.search, applied.status, applied.type, dispatch, page, shopId, toast])
+  }, [applied.search, applied.status, applied.type, dispatch, page, refreshKey, shopId, toast])
 
   useEffect(() => {
     void fetchPage()
@@ -182,6 +195,49 @@ export function VendorListingsProductsTab({
     setBulkStockDelta('')
     setBulkCategory('')
     await fetchPage()
+  }
+
+  async function changeStatus(listingId: string, status: ListingStatus) {
+    try {
+      await dispatch(setListingStatus({ listingId, status })).unwrap()
+      toast.show(`Status set to ${listingStatusLabel(status)}`, { tone: 'success' })
+      await fetchPage()
+    } catch (error) {
+      toast.show('Could not update status', {
+        tone: 'danger',
+        message: error instanceof Error ? error.message : String(error),
+      })
+    }
+  }
+
+  async function confirmDelete() {
+    if (!deleteTarget) return
+    setDeleting(true)
+    try {
+      await dispatch(deleteListing({ listingId: deleteTarget.id })).unwrap()
+      toast.show('Product deleted', { tone: 'success' })
+      setSelectedIds((current) => {
+        const next = new Set(current)
+        next.delete(deleteTarget.id)
+        return next
+      })
+      setDeleteTarget(null)
+      await fetchPage()
+    } catch (error) {
+      toast.show('Could not delete product', {
+        tone: 'danger',
+        message: error instanceof Error ? error.message : String(error),
+      })
+    } finally {
+      setDeleting(false)
+    }
+  }
+
+  const rowActions = {
+    onView: onOpenListing,
+    onEdit: (listingId: string) => navigateApp(vendorRoutes.editListing(listingId)),
+    onStatusChange: changeStatus,
+    onDelete: (row: ShopListingRow) => setDeleteTarget(row),
   }
 
   const statusColors = useMemo(
@@ -353,11 +409,11 @@ export function VendorListingsProductsTab({
                 : 'Create your first listing to start selling from your storefront.'}
             </Text>
             {!hasFilters ? (
-              <Link href={vendorRoutes.createListing} asChild>
+              <AppLink href={vendorRoutes.createListing} asChild>
                 <Button tone="primary" size="$3" borderRadius={999}>
                   Create listing
                 </Button>
-              </Link>
+              </AppLink>
             ) : null}
           </YStack>
         ) : isDesktop ? (
@@ -378,7 +434,7 @@ export function VendorListingsProductsTab({
                 TYPE
               </Text>
               <Text flex={0.8} fontSize={11} fontWeight="700" color={ui.textMuted} letterSpacing={0.5}>
-                PRICE
+                PRICE ({currencyInfo.code})
               </Text>
               <Text flex={0.9} fontSize={11} fontWeight="700" color={ui.textMuted} letterSpacing={0.5}>
                 STOCK
@@ -394,17 +450,11 @@ export function VendorListingsProductsTab({
                 key={row.id}
                 ui={ui}
                 row={row}
-                currency={currency}
+                currencyInfo={currencyInfo}
                 selected={selectedIds.has(row.id)}
                 statusColors={statusColors}
-                menuOpen={menuOpenId === row.id}
                 onToggleSelect={() => toggleOne(row.id)}
-                onOpenMenu={() => setMenuOpenId(row.id)}
-                onCloseMenu={() => setMenuOpenId(null)}
-                onView={() => {
-                  setMenuOpenId(null)
-                  onOpenListing(row.id)
-                }}
+                actions={rowActions}
               />
             ))}
           </YStack>
@@ -415,9 +465,9 @@ export function VendorListingsProductsTab({
                 key={row.id}
                 ui={ui}
                 row={row}
-                currency={currency}
+                currencyInfo={currencyInfo}
                 statusColors={statusColors}
-                onPress={() => onOpenListing(row.id)}
+                actions={rowActions}
               />
             ))}
           </YStack>
@@ -446,37 +496,185 @@ export function VendorListingsProductsTab({
           </XStack>
         ) : null}
       </ListingsCard>
+
+      <ConfirmDialog
+        open={Boolean(deleteTarget)}
+        onOpenChange={(open) => {
+          if (!open && !deleting) setDeleteTarget(null)
+        }}
+        title="Delete product?"
+        description={
+          deleteTarget
+            ? `“${deleteTarget.title}” will be permanently removed from your catalogue.`
+            : undefined
+        }
+        confirmLabel={deleting ? 'Deleting…' : 'Delete'}
+        cancelLabel="Cancel"
+        destructive
+        onConfirm={() => void confirmDelete()}
+      />
     </YStack>
+  )
+}
+
+type ProductRowActions = {
+  onView: (listingId: string) => void
+  onEdit: (listingId: string) => void
+  onStatusChange: (listingId: string, status: ListingStatus) => void
+  onDelete: (row: ShopListingRow) => void
+}
+
+function ProductListingActionsMenu({
+  ui,
+  row,
+  actions,
+}: {
+  ui: AppUiTokens
+  row: ShopListingRow
+  actions: ProductRowActions
+}) {
+  const [open, setOpen] = useState(false)
+  const statusActions = listingStatusActionsFor(row.listing_status)
+
+  function runAction(callback: () => void) {
+    setOpen(false)
+    callback()
+  }
+
+  return (
+    <Popover open={open} onOpenChange={setOpen} placement="bottom-end" allowFlip>
+      <Popover.Trigger asChild>
+        <YStack
+          width={32}
+          height={32}
+          borderRadius={999}
+          alignItems="center"
+          justifyContent="center"
+          cursor="pointer"
+          hoverStyle={{ backgroundColor: ui.surfaceMuted }}
+          pressStyle={{ opacity: 0.75 }}
+          onPress={(e) => e?.stopPropagation?.()}
+        >
+          <Icons.MoreVertical size={16} color={ui.textSecondary} />
+        </YStack>
+      </Popover.Trigger>
+      <PopoverContent zIndex={300000} minWidth={220}>
+        <YStack gap={2}>
+          <MenuActionRow
+            ui={ui}
+            label="View details"
+            icon={<Icons.Eye size={16} color={ui.textSecondary} />}
+            onPress={() => runAction(() => actions.onView(row.id))}
+          />
+          <MenuActionRow
+            ui={ui}
+            label="Edit"
+            icon={<Icons.Pencil size={16} color={ui.textSecondary} />}
+            onPress={() => runAction(() => actions.onEdit(row.id))}
+          />
+
+          <Separator marginVertical="$1.5" borderColor={ui.borderSubtle} />
+
+          <YStack paddingHorizontal="$1" paddingBottom="$1">
+            <Text fontSize={11} fontWeight="700" color={ui.textMuted} letterSpacing={0.4}>
+              SET STATUS
+            </Text>
+          </YStack>
+
+          {statusActions.map((action) => {
+            const Icon = action.icon
+            const color =
+              action.tone === 'success'
+                ? '#1F7A45'
+                : action.tone === 'warning'
+                  ? '#9A6700'
+                  : action.tone === 'danger'
+                    ? ui.danger
+                    : ui.textSecondary
+            return (
+              <MenuActionRow
+                key={action.value}
+                ui={ui}
+                label={action.label}
+                icon={<Icon size={16} color={color} />}
+                onPress={() => runAction(() => actions.onStatusChange(row.id, action.value))}
+              />
+            )
+          })}
+
+          <Separator marginVertical="$1.5" borderColor={ui.borderSubtle} />
+
+          <MenuActionRow
+            ui={ui}
+            label="Delete"
+            tone="danger"
+            icon={<Icons.Trash2 size={16} color={ui.danger} />}
+            onPress={() => runAction(() => actions.onDelete(row))}
+          />
+        </YStack>
+      </PopoverContent>
+    </Popover>
+  )
+}
+
+function MenuActionRow({
+  ui,
+  label,
+  icon,
+  tone = 'default',
+  onPress,
+}: {
+  ui: AppUiTokens
+  label: string
+  icon?: ReactNode
+  tone?: 'default' | 'danger'
+  onPress: () => void
+}) {
+  return (
+    <XStack
+      alignItems="center"
+      gap="$2.5"
+      paddingHorizontal="$2.5"
+      paddingVertical="$2.5"
+      borderRadius={radius.chip}
+      cursor="pointer"
+      hoverStyle={{ backgroundColor: ui.surfaceMuted }}
+      pressStyle={{ opacity: 0.85 }}
+      onPress={onPress}
+    >
+      {icon}
+      <Text fontSize={13.5} fontWeight="600" color={tone === 'danger' ? ui.danger : ui.text}>
+        {label}
+      </Text>
+    </XStack>
   )
 }
 
 function ProductTableRow({
   ui,
   row,
-  currency,
+  currencyInfo,
   selected,
   statusColors,
-  menuOpen,
   onToggleSelect,
-  onOpenMenu,
-  onCloseMenu,
-  onView,
+  actions,
 }: {
   ui: AppUiTokens
   row: ShopListingRow
-  currency: string
+  currencyInfo: VendorCurrencyInfo
   selected: boolean
   statusColors: Record<string, { bg: string; text: string; dot: string }>
-  menuOpen: boolean
   onToggleSelect: () => void
-  onOpenMenu: () => void
-  onCloseMenu: () => void
-  onView: () => void
+  actions: ProductRowActions
 }) {
   const tone = listingStatusTone(row.listing_status)
   const palette = statusColors[tone]
   const stock = row.quantity ?? 0
   const isOutOfStock = row.listing_type === LISTING_TYPES.PHYSICAL && stock <= 0
+  const priceLabel =
+    row.price == null || Number(row.price) === 0
+      ? 'Free'
+      : currencyInfo.formatAmount(row.price)
 
   return (
     <XStack
@@ -488,7 +686,7 @@ function ProductTableRow({
       gap="$2"
       cursor="pointer"
       hoverStyle={{ backgroundColor: ui.surfaceMuted }}
-      onPress={onView}
+      onPress={() => actions.onView(row.id)}
     >
       <XStack width={44} alignItems="center" justifyContent="center" onPress={(e) => e?.stopPropagation?.()}>
         <Checkbox checked={selected} onCheckedChange={onToggleSelect} />
@@ -515,7 +713,7 @@ function ProductTableRow({
             {row.title}
           </Text>
           <Text fontSize={11.5} color={ui.textMuted} fontWeight="600">
-            SKU: {listingSkuFallback(row.slug, row.id)}
+            SKU: {row.sku?.trim() || listingSkuFallback(row.slug, row.id)}
           </Text>
         </YStack>
       </XStack>
@@ -529,7 +727,7 @@ function ProductTableRow({
       </XStack>
 
       <Text flex={0.8} fontSize={13.5} fontWeight="700" color={ui.text}>
-        {formatListingPrice(row.price, currency)}
+        {priceLabel}
       </Text>
 
       <Text flex={0.9} fontSize={13} fontWeight="700" color={isOutOfStock ? ui.danger : ui.text}>
@@ -540,7 +738,7 @@ function ProductTableRow({
             : `${stock} in stock`}
       </Text>
 
-      <XStack flex={0.9}>
+      <XStack flex={0.9} gap="$1.5" flexWrap="wrap" alignItems="center">
         <XStack
           alignItems="center"
           gap={6}
@@ -554,29 +752,22 @@ function ProductTableRow({
             {listingStatusLabel(row.listing_status)}
           </Text>
         </XStack>
+        {!row.is_active ? (
+          <XStack
+            paddingHorizontal="$2"
+            paddingVertical={3}
+            borderRadius={999}
+            backgroundColor="#FFF0E1"
+          >
+            <Text fontSize={10.5} fontWeight="700" color="#B45309">
+              Hidden
+            </Text>
+          </XStack>
+        ) : null}
       </XStack>
 
       <XStack width={44} justifyContent="center" onPress={(e) => e?.stopPropagation?.()}>
-        <Popover open={menuOpen} onOpenChange={(open) => (open ? onOpenMenu() : onCloseMenu())} placement="bottom-end">
-          <Popover.Trigger asChild>
-            <YStack
-              width={32}
-              height={32}
-              borderRadius={999}
-              alignItems="center"
-              justifyContent="center"
-              cursor="pointer"
-              hoverStyle={{ backgroundColor: ui.surfaceMuted }}
-            >
-              <Icons.MoreVertical size={16} color={ui.textSecondary} />
-            </YStack>
-          </Popover.Trigger>
-          <PopoverContent>
-            <YStack minWidth={160} gap={2}>
-              <MenuAction ui={ui} label="View details" onPress={onView} />
-            </YStack>
-          </PopoverContent>
-        </Popover>
+        <ProductListingActionsMenu ui={ui} row={row} actions={actions} />
       </XStack>
     </XStack>
   )
@@ -585,19 +776,23 @@ function ProductTableRow({
 function ProductMobileCard({
   ui,
   row,
-  currency,
+  currencyInfo,
   statusColors,
-  onPress,
+  actions,
 }: {
   ui: AppUiTokens
   row: ShopListingRow
-  currency: string
+  currencyInfo: VendorCurrencyInfo
   statusColors: Record<string, { bg: string; text: string; dot: string }>
-  onPress: () => void
+  actions: ProductRowActions
 }) {
   const tone = listingStatusTone(row.listing_status)
   const palette = statusColors[tone]
   const stock = row.quantity ?? 0
+  const priceLabel =
+    row.price == null || Number(row.price) === 0
+      ? 'Free'
+      : currencyInfo.formatAmount(row.price)
 
   return (
     <XStack
@@ -609,7 +804,7 @@ function ProductMobileCard({
       backgroundColor={ui.surfaceMuted}
       cursor="pointer"
       pressStyle={{ opacity: 0.85 }}
-      onPress={onPress}
+      onPress={() => actions.onView(row.id)}
     >
       <YStack
         width={56}
@@ -627,11 +822,16 @@ function ProductMobileCard({
         )}
       </YStack>
       <YStack flex={1} minWidth={0} gap="$1.5">
-        <Text fontSize={14} fontWeight="800" color={ui.text} numberOfLines={2}>
-          {row.title}
-        </Text>
+        <XStack alignItems="flex-start" justifyContent="space-between" gap="$2">
+          <Text flex={1} fontSize={14} fontWeight="800" color={ui.text} numberOfLines={2}>
+            {row.title}
+          </Text>
+          <YStack onPress={(e) => e?.stopPropagation?.()}>
+            <ProductListingActionsMenu ui={ui} row={row} actions={actions} />
+          </YStack>
+        </XStack>
         <Text fontSize={12} color={ui.textMuted}>
-          {formatListingPrice(row.price, currency)} · {listingTypeLabel(row.listing_type)}
+          {priceLabel} · {listingTypeLabel(row.listing_type)}
         </Text>
         <XStack alignItems="center" gap="$2" flexWrap="wrap">
           <XStack
@@ -647,6 +847,13 @@ function ProductMobileCard({
               {listingStatusLabel(row.listing_status)}
             </Text>
           </XStack>
+          {!row.is_active ? (
+            <XStack paddingHorizontal="$2" paddingVertical={3} borderRadius={999} backgroundColor="#FFF0E1">
+              <Text fontSize={10.5} fontWeight="700" color="#B45309">
+                Hidden
+              </Text>
+            </XStack>
+          ) : null}
           {row.listing_type === LISTING_TYPES.PHYSICAL ? (
             <Text fontSize={11.5} fontWeight="600" color={stock <= 0 ? ui.danger : ui.textSecondary}>
               {stock <= 0 ? 'Out of stock' : `${stock} in stock`}
@@ -654,23 +861,6 @@ function ProductMobileCard({
           ) : null}
         </XStack>
       </YStack>
-    </XStack>
-  )
-}
-
-function MenuAction({ ui, label, onPress }: { ui: AppUiTokens; label: string; onPress: () => void }) {
-  return (
-    <XStack
-      paddingHorizontal="$3"
-      paddingVertical="$2.5"
-      borderRadius={radius.chip}
-      cursor="pointer"
-      hoverStyle={{ backgroundColor: ui.surfaceMuted }}
-      onPress={onPress}
-    >
-      <Text fontSize={13} fontWeight="600" color={ui.text}>
-        {label}
-      </Text>
     </XStack>
   )
 }

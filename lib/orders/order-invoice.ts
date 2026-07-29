@@ -13,9 +13,12 @@
  * identically inside the isolated print iframe, independent of the app's CSS.
  */
 
-import { ORDER_DEFAULTS } from './order.constants'
-import { formatOrderAmount, formatOrderDate } from './order.utils'
-import type { OrderAddressSummary, VendorOrderItem } from './vendor-orders.type'
+import { ORDER_DEFAULTS } from '~/lib/orders/order.constants'
+import { formatOrderAmount, formatOrderDate } from '~/lib/orders/order.utils'
+import type { OrderAddressSummary, VendorOrderItem } from '~/lib/orders/vendor-orders.type'
+import {
+  formatCustomerContactPhone,
+} from '~/features/auth/services/account-contact'
 
 const DEFAULT_BRAND_COLOR = '#be185d'
 
@@ -258,6 +261,7 @@ export function buildOrderInvoiceHtml(item: VendorOrderItem, options: OrderInvoi
   const order = item.orders
   const currency = order?.currency ?? ORDER_DEFAULTS.CURRENCY
   const customer = order?.profiles
+  const customerPhoneLabel = formatCustomerContactPhone({ profilePhone: customer?.phone })
   const shopName = resolveShopName(item, options.shopName)
   const orderNumber = order?.order_number ?? item.order_id ?? 'N/A'
   const orderDate = formatOrderDate(order?.created_at ?? item.created_at, true)
@@ -294,7 +298,7 @@ export function buildOrderInvoiceHtml(item: VendorOrderItem, options: OrderInvoi
     orderDate,
     customerName: customer?.full_name || 'Anonymous',
     customerEmail: customer?.email || 'N/A',
-    customerPhone: customer?.phone || 'N/A',
+    customerPhone: customerPhoneLabel !== 'Not added' ? customerPhoneLabel : 'N/A',
     shippingLines,
     currency,
     itemsHtml,

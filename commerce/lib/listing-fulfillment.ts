@@ -4,7 +4,7 @@ import { formatCurrency } from '~/lib/format'
 import {
   resolveTransitDaysForShop,
   type ShopShippingSummary,
-} from './shop-shipping'
+} from '~/commerce/lib/shop-shipping'
 
 export type DeliveryProfile = {
   id: string

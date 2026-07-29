@@ -11,6 +11,7 @@ describe('buildCustomerOrderInvoiceHtml', () => {
       shopName: 'Demo Shop',
       customerName: 'Ada',
       customerEmail: 'ada@example.com',
+      customerPhone: '+91 98765 43210',
       shippingAddress: {
         address_line_1: '12 Market St',
         city: 'Bengaluru',
@@ -49,6 +50,7 @@ describe('buildCustomerOrderInvoiceHtml', () => {
     expect(html).toContain('Scarf')
     expect(html).toContain('Tote')
     expect(html).toContain('12 Market St')
+    expect(html).toContain('+91 98765 43210')
     expect(html).toContain('cod')
   })
 })

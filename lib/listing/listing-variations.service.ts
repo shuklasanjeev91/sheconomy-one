@@ -8,14 +8,14 @@
 
 import { supabase } from '~/lib/supabase'
 
-import { fail, ok, resolveUserId, verifyListingManageAccess } from './listing.access'
-import { LISTING_TYPES } from './listing.type'
+import { fail, ok, resolveUserId, verifyListingManageAccess } from '~/lib/listing/listing.access'
+import { LISTING_TYPES } from '~/lib/listing/listing.type'
 import type {
   ListingServiceResponse,
   ListingVariation,
   ListingVariationInsert,
   ListingVariationUpdate,
-} from './listing.type'
+} from '~/lib/listing/listing.type'
 
 function toNumber(value: unknown): number | null {
   if (value === null || value === undefined || value === '') return null

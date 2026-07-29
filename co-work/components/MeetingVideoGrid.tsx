@@ -1,6 +1,6 @@
 import { XStack, YStack } from '~/components/ui'
 
-import { VideoTile } from './VideoTile'
+import { VideoTile } from '~/co-work/components/VideoTile'
 import { chunkGalleryRows, meetingGalleryLayout } from '~/co-work/lib/meeting-gallery-layout'
 import type { RemoteParticipantState } from '~/co-work/lib/types'
 import { useWindowDimensions } from 'react-native'

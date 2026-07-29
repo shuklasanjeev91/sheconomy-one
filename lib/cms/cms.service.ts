@@ -39,7 +39,7 @@ import {
   type CmsServiceResponse,
   type CmsSitemapFeedRow,
   type CmsTag,
-} from './cms.type'
+} from '~/lib/cms/cms.type'
 import {
   autoExcerpt,
   buildPaginationMeta,
@@ -52,7 +52,7 @@ import {
   ok,
   pageToRange,
   toMessage,
-} from './cms.utils'
+} from '~/lib/cms/cms.utils'
 
 // ============= SELECT FRAGMENTS =============
 // Keep join selects as single-line strings so the Supabase typed parser accepts them.

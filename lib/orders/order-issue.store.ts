@@ -19,8 +19,8 @@ import {
   type IssuePriority,
   type IssueStatus,
   type OrderIssueType,
-} from './order.constants'
-import * as orderIssueService from './order-issue.service'
+} from '~/lib/orders/order.constants'
+import * as orderIssueService from '~/lib/orders/order-issue.service'
 import type {
   CreateOrderIssueInput,
   EnrichedOrderIssue,
@@ -33,7 +33,7 @@ import type {
   PaginatedOrderIssues,
   PaginationMeta,
   UpdateIssueStatusMetadata,
-} from './order-issue.type'
+} from '~/lib/orders/order-issue.type'
 
 // ============= STATE =============
 

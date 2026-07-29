@@ -2,8 +2,10 @@
  * Strip Flow types from @react-native-community/datetimepicker so Vite/oxc/rolldown
  * can parse it during native Xcode/EAS createBundle (they do not support Flow).
  *
- * Codegen still needs the original Flow specs (see package.json codegenConfig.jsSrcsDir).
- * We keep those under src/specs-codegen and point codegen at that folder.
+ * - `src/specs` is stripped (VxRN/Rolldown Release bundle).
+ * - `src/specs-codegen` keeps Flow for native codegen (codegenConfig.jsSrcsDir).
+ * - Metro expo-updates should not transform Flow/codegen specs; see metro.config.cjs
+ *   resolveRequest stubs for `datetimepicker/src/specs/*`.
  *
  * Also patch zod Class rest-param constructor (illegal use-strict after CJS transform).
  */
@@ -47,7 +49,7 @@ function walkAndStrip(dir) {
     const p = path.join(dir, name)
     const st = fs.statSync(p)
     if (st.isDirectory()) {
-      // Codegen originals live here — leave Flow intact.
+      // Native codegen originals — leave Flow intact.
       if (name === 'specs-codegen') continue
       walkAndStrip(p)
       continue
@@ -111,7 +113,7 @@ function ensureCodegenFlowSpecs() {
 if (fs.existsSync(srcDir)) {
   ensureCodegenFlowSpecs()
   walkAndStrip(srcDir)
-  console.log('[strip-datetimepicker-flow] stripped Flow from datetimepicker src (incl. specs)')
+  console.log('[strip-datetimepicker-flow] stripped Flow from datetimepicker src (including specs)')
 }
 
 const zodUtil = path.join(__dirname, '../node_modules/zod/v4/core/util.js')

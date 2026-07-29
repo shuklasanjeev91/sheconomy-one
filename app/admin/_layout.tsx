@@ -1,3 +1,3 @@
-import { AdminLayout } from './layout'
+import { AdminLayout } from '~/app/admin/layout'
 
 export default AdminLayout

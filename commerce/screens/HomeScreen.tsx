@@ -58,8 +58,14 @@ export function HomeScreen({ data, error, loading = false }: HomeScreenProps) {
 
   if (isLoading) {
     return (
-      <FullWidthLayout scroll>
-        <YStack gap="$5" paddingBottom="$2" width="100%" backgroundColor={ui.background}>
+      <FullWidthLayout scroll backgroundColor={ui.roseTint}>
+        <YStack
+          gap="$5"
+          paddingBottom="$2"
+          width="100%"
+          minHeight={520}
+          backgroundColor={ui.roseTint}
+        >
           <PageSection bleed paddingTop={0}>
             <Skeleton height={220} borderRadius={0} />
           </PageSection>

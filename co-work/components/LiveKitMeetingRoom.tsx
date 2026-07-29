@@ -4,4 +4,4 @@ export type { LiveKitMediaControls, LiveKitMeetingRoomProps } from '~/co-work/li
  * Keeping the default web-safe avoids blank meeting screens when platform
  * extensions fail to resolve (Vite would otherwise load the native entry).
  */
-export { LiveKitMeetingRoom, useLiveKitMediaControls } from './LiveKitMeetingRoom.web'
+export { LiveKitMeetingRoom, useLiveKitMediaControls } from '~/co-work/components/LiveKitMeetingRoom.web'

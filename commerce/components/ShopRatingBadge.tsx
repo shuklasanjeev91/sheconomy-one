@@ -3,7 +3,7 @@ import type { ShopHeaderInfo } from '~/commerce/hooks/useShopHeaders'
 import { formatRating } from '~/lib/format'
 import { useAppUi } from '~/lib/theme/useAppUi'
 
-import { StarRating } from './StarRating'
+import { StarRating } from '~/commerce/components/StarRating'
 
 /** Compact shop rating + verified badge for cart/checkout shop groups. */
 export function ShopRatingBadge({ info }: { info?: ShopHeaderInfo }) {

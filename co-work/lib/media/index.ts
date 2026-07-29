@@ -7,7 +7,7 @@ import {
   supportsLiveKitVideo,
 } from '~/lib/platform/capabilities'
 
-import type { MediaCapabilities } from '../types'
+import type { MediaCapabilities } from '~/co-work/lib/types'
 
 export function getMediaCapabilities(): MediaCapabilities {
   const platform = getRuntimePlatform()
@@ -38,14 +38,14 @@ export class WebMediaSession {
   private screenStream: MediaStream | null = null
   private peers = new Map<string, RTCPeerConnection>()
   private callbacks: MediaSessionCallbacks
-  private sendSignal: (payload: import('../types').SignalPayload) => void
+  private sendSignal: (payload: import('~/co-work/lib/types').SignalPayload) => void
   private selfId: string
   private audioEnabled = true
   private videoEnabled = true
 
   constructor(
     selfId: string,
-    sendSignal: (payload: import('../types').SignalPayload) => void,
+    sendSignal: (payload: import('~/co-work/lib/types').SignalPayload) => void,
     callbacks: MediaSessionCallbacks,
   ) {
     this.selfId = selfId
@@ -165,7 +165,7 @@ export class WebMediaSession {
     }
   }
 
-  async handleSignal(payload: import('../types').SignalPayload) {
+  async handleSignal(payload: import('~/co-work/lib/types').SignalPayload) {
     if (payload.type === 'offer' && payload.to === this.selfId) {
       await this.connectToPeer(payload.from, false)
       const peer = this.peers.get(payload.from)
@@ -218,7 +218,7 @@ export class WebMediaSession {
 
 export function createMediaSession(
   selfId: string,
-  sendSignal: (payload: import('../types').SignalPayload) => void,
+  sendSignal: (payload: import('~/co-work/lib/types').SignalPayload) => void,
   callbacks: MediaSessionCallbacks,
 ): WebMediaSession | null {
   if (typeof navigator === 'undefined' || !navigator.mediaDevices?.getUserMedia) return null

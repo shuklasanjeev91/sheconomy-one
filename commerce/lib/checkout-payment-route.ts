@@ -112,7 +112,7 @@ export function orderSuccessHeadline(input: {
 
 export function orderSuccessSubtitle(input: { awaitingPayment: boolean }): string {
   if (input.awaitingPayment) {
-    return 'Your order is reserved until payment succeeds. Continue on PayU or the seller gateway, or cancel to release stock.'
+    return 'Your order is reserved until payment is confirmed. Complete your payment or cancel to release the reserved stock.'
   }
   return 'Save your order numbers. You can track every package from Your orders.'
 }
@@ -156,7 +156,9 @@ export function resolvePostCheckoutNext(input: {
   if (!input.checkoutUrl) {
     return {
       kind: 'cancel_and_stay',
-      error: 'Seller payment link is not ready. Please try again or contact the shop.',
+      error:
+        input.shepayError ??
+        'Seller payment link is not ready. Please try again or contact the shop.',
     }
   }
   if (isAppPayUBridgeUrl(input.checkoutUrl)) {

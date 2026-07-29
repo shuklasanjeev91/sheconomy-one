@@ -1,8 +1,8 @@
 import { useState, type ReactNode } from 'react'
 
-import { AppBottomSheet } from './BottomSheet'
-import { Button } from './Button'
-import { Text } from './Text'
+import { AppBottomSheet } from '~/components/ui/BottomSheet'
+import { Button } from '~/components/ui/Button'
+import { Text } from '~/components/ui/Text'
 import { XStack, YStack } from 'tamagui'
 
 type ConfirmDialogProps = {

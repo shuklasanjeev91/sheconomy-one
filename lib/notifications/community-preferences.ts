@@ -50,6 +50,8 @@ const COMMUNITY_TYPES = [
   'company_followed',
   'event_rsvp_received',
   'event_registration_received',
+  'event_reminder_60min',
+  'event_reminder_15min',
   'profile_viewed',
   'network_suggestions_digest',
   'article_published',

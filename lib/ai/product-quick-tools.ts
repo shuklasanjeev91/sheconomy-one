@@ -9,7 +9,7 @@ import {
   routes,
 } from '~/lib/routes'
 
-import type { AiProduct } from './types'
+import type { AiProduct } from '~/lib/ai/types'
 
 export type ProductQuickTool = {
   id: string

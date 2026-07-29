@@ -15,14 +15,20 @@
  *     and `components/auth/RouteGuard.tsx`) on top of Supabase RLS.
  *
  * Gender note: in SHEconomy `profiles.gender === true` means **female**. The
- * platform is women-first, so the seller/vendor surfaces are gender-restricted.
- * Community / chat / class / co-work gender gating is handled by the existing
- * tier system (`lib/auth/access.ts` + `AppAccessGate`); this config focuses on
- * **role** + **auth** + the **vendor/listing** gender gate so the two layers do
- * not duplicate each other.
+ * platform is women-first: community / chat / notifications require female tier
+ * (`lib/auth/access.ts`) **and** `profiles.is_verified === true`. The verification
+ * modal (`GenderVerificationHost`) enforces the liveness gate on protected routes.
+ * Unverified members are redirected off protected routes (see `AppAccessGate`) and
+ * shown `GenderDeniedModal` on their last safe route.
  */
 
 import { USER_ROLES, type UserRole } from '~/lib/profile/profile.type'
+import {
+  isChatPath,
+  isCommunityPath,
+  isNotificationsPath,
+  isVendorPath,
+} from '~/lib/routes'
 
 /** How a route decides access. */
 export type RouteAccessLevel =
@@ -89,11 +95,17 @@ export const DEFAULT_ROUTES: Record<UserRole, string> = {
 export const FALLBACK_HOME = '/'
 
 /**
- * Routes that require **gender verification** (female, `gender === true`).
- * Community / chat gender gating is owned by the tier layer, so it is not
- * repeated here.
+ * Routes where unverified members (`is_verified !== true`) must complete human
+ * verification before using the surface. Unverified members are redirected away by
+ * `AppAccessGate` and see `GenderDeniedModal` on their previous safe route.
  */
-export const GENDER_RESTRICTED_ROUTES: readonly string[] = ['/vendor', '/create-listing']
+export const GENDER_RESTRICTED_ROUTES: readonly string[] = [
+  '/vendor',
+  '/create-listing',
+  '/community',
+  '/chat',
+  '/notifications',
+]
 
 /**
  * Routes that require identity verification (`profiles.is_verified`). Disabled
@@ -129,7 +141,13 @@ export function getRouteAccessRule(pathname: string): RouteAccessRule {
 /** Whether `pathname` is gender-restricted (and the gate is enabled). */
 export function requiresGenderVerification(pathname: string): boolean {
   if (!FEATURE_FLAGS.ENABLE_GENDER_VERIFICATION) return false
-  return GENDER_RESTRICTED_ROUTES.some((route) => matchesPrefix(pathname, route))
+  return (
+    GENDER_RESTRICTED_ROUTES.some((route) => matchesPrefix(pathname, route)) ||
+    isCommunityPath(pathname) ||
+    isChatPath(pathname) ||
+    isNotificationsPath(pathname) ||
+    isVendorPath(pathname)
+  )
 }
 
 /** Whether `pathname` requires identity verification (and the gate is enabled). */

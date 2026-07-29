@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
+import { Platform } from 'react-native'
 
 import {
   fetchListingReviews,
@@ -27,7 +28,8 @@ export function useListingReviews(
     setIsLoading(true)
     setError(null)
 
-    fetchListingReviews(listingId).then((result) => {
+    const limit = Platform.OS === 'web' ? 12 : 6
+    fetchListingReviews(listingId, limit).then((result) => {
       if (!active) return
       setReviews(result.reviews)
       setComputed(result.summary)

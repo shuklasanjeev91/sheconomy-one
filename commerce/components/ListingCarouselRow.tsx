@@ -1,7 +1,8 @@
 import { ScrollView, XStack, YStack, useMedia } from '~/components/ui'
 import type { ListingSummary } from '~/lib/supabase/commerce'
+import { hasListingImages } from '~/lib/listing-images'
 
-import { ListingCard } from './ListingCard'
+import { ListingCard } from '~/commerce/components/ListingCard'
 
 type ListingCarouselRowProps = {
   listings: ListingSummary[]
@@ -12,8 +13,11 @@ type ListingCarouselRowProps = {
 export function ListingCarouselRow({ listings, compact = true }: ListingCarouselRowProps) {
   const media = useMedia()
   const cardWidth = media.gtLg ? 220 : media.gtMd ? 200 : media.gtSm ? 168 : 160
+  const visible = listings.filter((listing) =>
+    hasListingImages(listing.image_urls, listing.image_url),
+  )
 
-  if (!listings.length) return null
+  if (!visible.length) return null
 
   return (
     <ScrollView
@@ -23,7 +27,7 @@ export function ListingCarouselRow({ listings, compact = true }: ListingCarousel
       contentContainerStyle={{ flexGrow: 0, alignItems: 'stretch' }}
     >
       <XStack gap="$3" paddingRight="$4" alignItems="stretch">
-        {listings.map((listing) => (
+        {visible.map((listing) => (
           <YStack key={listing.id} width={cardWidth} flexShrink={0}>
             <ListingCard listing={listing} compact={compact} />
           </YStack>

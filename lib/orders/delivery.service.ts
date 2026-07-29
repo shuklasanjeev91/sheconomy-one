@@ -29,9 +29,9 @@ import {
   resolveUserId,
   verifyOrderItemAccess,
   verifyVendorShopAccess,
-} from './order.access'
-import { DELIVERY_STATUS, type DeliveryStatus } from './order.constants'
-import { getCourierName, validateDeliveryData, validateWithSuggestions } from './tracking.validation'
+} from '~/lib/orders/order.access'
+import { DELIVERY_STATUS, type DeliveryStatus } from '~/lib/orders/order.constants'
+import { getCourierName, validateDeliveryData, validateWithSuggestions } from '~/lib/orders/tracking.validation'
 import type {
   CreateDeliveryInput,
   CreateTrackingInput,
@@ -47,7 +47,7 @@ import type {
   TrackableDeliveryOptions,
   UpdateDeliveryStatusMetadata,
   VendorDeliveryOptions,
-} from './delivery.type'
+} from '~/lib/orders/delivery.type'
 
 const DEFAULT_DELIVERY_MODE = 'standard'
 

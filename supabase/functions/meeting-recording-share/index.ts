@@ -1,12 +1,12 @@
 import 'jsr:@supabase/functions-js/edge-runtime.d.ts'
 import { createClient } from 'jsr:@supabase/supabase-js@2'
 
-import { corsHeaders, jsonResponse } from '../_shared/cors.ts'
-import { createShareToken, hashShareToken } from '../_shared/recording-helpers.ts'
+import { corsHeaders, jsonResponse } from '~/supabase/functions/_shared/cors.ts'
+import { createShareToken, hashShareToken } from '~/supabase/functions/_shared/recording-helpers.ts'
 import {
   createRecordingDownloadUrl,
   createRecordingPlaybackUrl,
-} from '../_shared/s3-sign.ts'
+} from '~/supabase/functions/_shared/s3-sign.ts'
 
 type Action = 'list' | 'createShare' | 'revokeShare' | 'resolve' | 'download'
 

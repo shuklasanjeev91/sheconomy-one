@@ -4,7 +4,7 @@ import type { GetProps } from 'tamagui'
 import { Input as TInput, TextArea as TTextArea, YStack } from 'tamagui'
 
 import { AppTextField } from '~/components/forms/AppTextField'
-import { SizableText } from './Text'
+import { SizableText } from '~/components/ui/Text'
 import { BRAND_THEME } from '~/config/tokens'
 
 const sharedFieldStyle = {

@@ -9,18 +9,20 @@ import { useAppBarScroll } from '~/components/navigation/AppBarScrollContext'
 import { NavCountBadge } from '~/components/navigation/NavCountBadge'
 import { NavLogo } from '~/components/navigation/NavLogo'
 import { SETTINGS_NAV, settingsSectionFromPath } from '~/components/settings/config'
+import { useCart } from '~/commerce/hooks/useCart'
 import { useUnreadNotifications } from '~/community/hooks/useUnreadNotifications'
 import { commerceRoutes, routes } from '~/lib/routes'
 import { useAppBackNavigation } from '~/hooks/useAppBackNavigation'
 import { useAppUi } from '~/lib/theme/useAppUi'
 import { chromeSurfaceStyle } from '~/lib/theme/surfaces'
 
-import { AppCenterNavTabs } from './AppCenterNavTabs'
-import { AppMenuButton } from './AppMenuSheet'
-import { getAppColors } from './config'
+import { AppCenterNavTabs } from '~/components/navigation/app/AppCenterNavTabs'
+import { getAppColors } from '~/components/navigation/app/config'
 
 /** Collapse search/logo row after this scroll offset — tabs stay visible (LinkedIn-style). */
 const SCROLL_TABS_ONLY_THRESHOLD = 36
+/** Header layout animation is web-only — on native it lags every back/tab chrome change. */
+const headerAnim = Platform.OS === 'web' ? ('quick' as const) : undefined
 
 type AppMobileHeaderProps = {
   /** Compact detail chrome — back + search, no section tab row. */
@@ -30,6 +32,7 @@ type AppMobileHeaderProps = {
 /**
  * Mobile/tablet top bar (hidden on desktop).
  * At rest: logo/search + product tabs.
+ * Utilities: cart + notifications only.
  * On scroll: product tabs only (except desktop, which keeps the full header).
  */
 export function AppMobileHeader({ minimal = false }: AppMobileHeaderProps) {
@@ -38,6 +41,7 @@ export function AppMobileHeader({ minimal = false }: AppMobileHeaderProps) {
   const pathname = usePathname()
   const { showBack } = useAppBackNavigation()
   const { scrollY } = useAppBarScroll()
+  const { itemCount } = useCart()
   const { count: unreadNotifications } = useUnreadNotifications()
 
   const isSettings = pathname === '/settings' || pathname.startsWith('/settings/')
@@ -56,9 +60,10 @@ export function AppMobileHeader({ minimal = false }: AppMobileHeaderProps) {
       width="100%"
       position={Platform.OS === 'web' ? 'sticky' : 'relative'}
       top={Platform.OS === 'web' ? 0 : undefined}
-      $gtMd={{ display: 'none' }}
+      // Web-only: Tamagui `$gtMd` on native iPad can hide this header entirely.
+      {...(Platform.OS === 'web' ? { $gtMd: { display: 'none' as const } } : { display: 'flex' })}
       style={chromeSurfaceStyle(ui)}
-      animation="quick"
+      animation={headerAnim}
     >
       {showChromeRow ? (
         <XStack
@@ -68,7 +73,7 @@ export function AppMobileHeader({ minimal = false }: AppMobileHeaderProps) {
           alignItems="center"
           gap="$2.5"
           style={{ minHeight: 56 }}
-          animation="quick"
+          animation={headerAnim}
         >
           <XStack flexShrink={0} alignItems="center">
             {showBack ? <AppHeaderBackButton /> : <NavLogo compact href={commerceRoutes.home} />}
@@ -93,7 +98,12 @@ export function AppMobileHeader({ minimal = false }: AppMobileHeaderProps) {
           )}
 
           <XStack flexShrink={0} gap={8} alignItems="center">
-            <AppMenuButton mode="sheet" size={38} />
+            <HeaderIcon
+              href={routes.cart}
+              icon={Icons.ShoppingBag}
+              label="Cart"
+              badgeCount={itemCount}
+            />
             <HeaderIcon
               href={routes.notifications}
               icon={Icons.Bell}
@@ -144,7 +154,7 @@ function HeaderIcon({
       overflow="visible"
       cursor="pointer"
       aria-label={label}
-      animation="quick"
+      {...(Platform.OS === 'web' ? { animation: 'quick' as const } : {})}
       hoverStyle={{ backgroundColor: colors.chipHover, scale: 1.04 }}
       pressStyle={{ opacity: 0.75, scale: 0.94 }}
       {...(onPress ? { onPress } : {})}
