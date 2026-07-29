@@ -1,0 +1,5 @@
+# Keep EAS mobile archives smaller / avoid shipping desktop-only tooling.
+electron/
+electron-builder.yml
+**/*.map
+**/.DS_Store
