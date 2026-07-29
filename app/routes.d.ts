@@ -49,7 +49,6 @@ declare module 'one' {
         | `/admin/components/CmsCoverImage`
         | `/admin/groups`
         | `/admin/layout`
-        | `/admin/moderation`
         | `/admin/orders`
         | `/admin/payments`
         | `/admin/products`

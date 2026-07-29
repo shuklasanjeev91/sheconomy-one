@@ -262,6 +262,32 @@ export function parseWebBuildErrors(input) {
 `
             },
           },
+          '@react-native/assets-registry': {
+            // Package is CJS (`module.exports = {...}`) but `expo-asset` (pulled in by
+            // `expo-image`) imports it with named ESM imports. `ssr.noExternal` inlines it,
+            // so Vite SSR evaluates it as ESM and throws `module is not defined`.
+            // One's built-in Flow patch for this module is skipped on this Node version
+            // ("Patch transform failed"), so convert the CJS tail to ESM here instead.
+            // Key must stay `**/*.js` — user patches only override built-ins by exact key.
+            '**/*.js': (contents) => {
+              if (!contents || contents.includes('sheconomy-esm-assets-registry')) return
+              const cjsExport = contents.match(/module\.exports\s*=\s*\{([^{}]*)\}\s*;?\s*$/)
+              if (!cjsExport) return
+              const names = cjsExport[1].trim().replace(/,$/, '').trim()
+              // Only rewrite the plain shorthand form (`{a, b}`) these files ship with.
+              if (!names || /[:()=]/.test(names)) return
+              return contents.replace(
+                cjsExport[0],
+                [
+                  '// sheconomy-esm-assets-registry',
+                  `export {${names}};`,
+                  // RN's RelativeImageStub/resolveAssetSource `require()` this module.
+                  `export default {${names}};`,
+                  '',
+                ].join('\n'),
+              )
+            },
+          },
           vxrn: {
             'dist/config/getViteServerConfig.mjs': (contents) => {
               if (!contents || contents.includes('sheconomy-vite-ws')) return

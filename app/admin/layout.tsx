@@ -145,13 +145,6 @@ const NAV_GROUPS: AdminNavGroup[] = [
         href: '/admin/analytics' as Href,
       },
       {
-        id: 'moderation',
-        label: 'Moderation',
-        description: 'Reports, flags, and safety tools.',
-        icon: Icons.ShieldCheck,
-        href: '/admin/moderation' as Href,
-      },
-      {
         id: 'settings',
         label: 'Settings',
         description: 'Platform configuration and preferences.',

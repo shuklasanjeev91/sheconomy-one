@@ -224,7 +224,6 @@ STATIC_ROUTES = [
     "/admin/analytics",
     "/admin/cms",
     "/admin/blog",
-    "/admin/moderation",
     "/admin/settings",
     "/admin/cart",
     "/admin/sale-events",
