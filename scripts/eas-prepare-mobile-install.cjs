@@ -1,6 +1,5 @@
 /**
- * Strip desktop-only deps before EAS mobile installs.
- * Electron postinstall / sharp (via miniflare) can fail builders and abort yarn.
+ * Strip desktop-only deps / force-skip fragile native builds before EAS yarn install.
  * Requires YARN_ENABLE_IMMUTABLE_INSTALLS=false on the EAS profile.
  */
 const fs = require('node:fs')
@@ -27,6 +26,14 @@ pkg.dependenciesMeta = {
   '@electron/rebuild': { built: false },
   esbuild: { built: false },
   workerd: { built: false },
+  'cpu-features': { built: false },
+  'dtrace-provider': { built: false },
+}
+
+// Replace sharp with a no-op package so install never tries to compile it.
+pkg.resolutions = {
+  ...(pkg.resolutions || {}),
+  sharp: 'npm:empty-npm-package@1.0.0',
 }
 
 fs.writeFileSync(path, `${JSON.stringify(pkg, null, 2)}\n`)
