@@ -1,5 +1,9 @@
-# Publish OTA (EAS Update) to the production channel when main advances.
-# Requires repo secret EXPO_TOKEN from https://expo.dev/settings/access-tokens
+# Publish OTA to production on every main push — this is what makes JS/UI
+# changes live on installed App Store / Play Store apps within seconds
+# (force-quit + reopen, or resume after cooldown). Native binary changes still
+# need EAS Build + Submit (see eas-build-submit-production.yml).
+#
+# Requires repo secret EXPO_TOKEN: https://expo.dev/settings/access-tokens
 name: EAS Update (production)
 
 on:
@@ -68,3 +72,6 @@ jobs:
           EXPO_PUBLIC_SUPABASE_URL: ${{ secrets.EXPO_PUBLIC_SUPABASE_URL }}
           EXPO_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.EXPO_PUBLIC_SUPABASE_ANON_KEY }}
           EXPO_PUBLIC_ONESIGNAL_APP_ID: ${{ secrets.EXPO_PUBLIC_ONESIGNAL_APP_ID }}
+          EXPO_PUBLIC_WEB_APP_URL: https://sheconomy.in
+          ONE_SERVER_URL: https://sheconomy.in
+          EXPO_PUBLIC_APP_ENV: production
