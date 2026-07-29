@@ -25,9 +25,6 @@ import { APP_LAYOUT } from '~/lib/layout/constants'
 const SUGGESTION_INTERVAL = 3
 const FEED_LIST_BOTTOM_PAD =
   Platform.OS === 'web' ? 24 : APP_LAYOUT.mobileTabBarHeight + 64
-/** Hide stories + create post once the feed has scrolled past this offset. */
-const HIDE_COMPOSER_SCROLL_Y = 48
-const chromeAnim = Platform.OS === 'web' ? ('quick' as const) : undefined
 
 export function CommunityFeedScreen() {
   const [sort, setSort] = useState<FeedSort>('recent')
@@ -35,7 +32,7 @@ export function CommunityFeedScreen() {
   // Use window-width layout (not Tamagui useMedia) so phones are never treated as
   // desktop — otherwise suggestions are skipped here and the right rail is also hidden.
   const { isWide } = useAppLayout()
-  const { scrollY, setScrollY } = useAppBarScroll()
+  const { setScrollY } = useAppBarScroll()
   const { items, isLoading, isLoadingMore, isRefreshing, hasMore, error, loadMore, refresh, removeItem, patchItem } =
     useCommunityFeed(true, sort, contentFilter ?? undefined)
   // Load suggestions immediately so FlashList can interleave them with the first paint.
@@ -59,7 +56,6 @@ export function CommunityFeedScreen() {
 
   // Only skip in-feed suggestions when the right sidebar actually shows them.
   const showSuggestionsInFeed = !isWide && sections.length > 0
-  const showFeedChrome = scrollY <= HIDE_COMPOSER_SCROLL_Y
 
   const feedEntries = useMemo((): FeedEntry[] => {
     if (!showSuggestionsInFeed) {
@@ -117,9 +113,14 @@ export function CommunityFeedScreen() {
 
   const getItemType = useCallback((entry: FeedEntry) => entry.type, [])
 
+  // Keep chrome inside the list so one scroller owns the middle column
+  // (stories/composer outside FlashList left FlashList with no bounded height → no scroll).
   const listHeader = useMemo(
     () => (
       <YStack gap="$3" width="100%" paddingBottom="$2">
+        <StoriesStrip />
+        <TodayCelebrationsCard />
+        <FeedComposer />
         <FeedFilterChips value={contentFilter} onChange={setContentFilter} />
         <FeedSortBar value={sort} onChange={setSort} />
       </YStack>
@@ -130,23 +131,15 @@ export function CommunityFeedScreen() {
   const listFooter = useMemo(
     () => (
       <YStack paddingVertical="$3" width="100%">
-        {isLoadingMore ? null : null}
         {!hasMore && items.length > 0 ? <LoadMoreEnd /> : null}
       </YStack>
     ),
-    [hasMore, isLoadingMore, items.length],
+    [hasMore, items.length],
   )
 
   return (
     <CommunityShell scroll={false} refreshing={isRefreshing} onRefresh={onRefresh}>
-      <YStack flex={1} width="100%" gap="$3">
-        {showFeedChrome ? (
-          <YStack gap="$3" width="100%" animation={chromeAnim}>
-            <StoriesStrip />
-            <TodayCelebrationsCard />
-            <FeedComposer />
-          </YStack>
-        ) : null}
+      <YStack flex={1} width="100%" minHeight={0} style={{ minHeight: 0 }}>
         <ScreenState
           loading={isLoading && items.length === 0}
           error={error}
@@ -159,27 +152,33 @@ export function CommunityFeedScreen() {
           onRetry={refresh}
         >
           {items.length > 0 ? (
-            <FlashList
-              data={feedEntries}
-              renderItem={renderItem}
-              keyExtractor={keyExtractor}
-              getItemType={getItemType}
-              extraData={sections}
-              ListHeaderComponent={listHeader}
-              ListFooterComponent={listFooter}
-              onScroll={onFeedScroll}
-              scrollEventThrottle={16}
-              onEndReached={() => {
-                if (!endReachedReadyRef.current) return
-                if (hasMore && !isLoadingMore) loadMore()
-              }}
-              onEndReachedThreshold={0.4}
-              onRefresh={onRefresh}
-              refreshing={isRefreshing}
-              drawDistance={Platform.OS === 'web' ? 500 : 250}
-              style={{ flex: 1, width: '100%' }}
-              contentContainerStyle={{ paddingBottom: FEED_LIST_BOTTOM_PAD }}
-            />
+            <YStack flex={1} minHeight={0} width="100%" style={{ minHeight: 0 }}>
+              <FlashList
+                data={feedEntries}
+                renderItem={renderItem}
+                keyExtractor={keyExtractor}
+                getItemType={getItemType}
+                extraData={sections}
+                ListHeaderComponent={listHeader}
+                ListFooterComponent={listFooter}
+                onScroll={onFeedScroll}
+                scrollEventThrottle={16}
+                onEndReached={() => {
+                  if (!endReachedReadyRef.current) return
+                  if (hasMore && !isLoadingMore) loadMore()
+                }}
+                onEndReachedThreshold={0.4}
+                onRefresh={onRefresh}
+                refreshing={isRefreshing}
+                drawDistance={Platform.OS === 'web' ? 500 : 250}
+                style={
+                  Platform.OS === 'web'
+                    ? ({ flex: 1, width: '100%', height: '100%', minHeight: 0, overflowY: 'auto' } as const)
+                    : { flex: 1, width: '100%' }
+                }
+                contentContainerStyle={{ paddingBottom: FEED_LIST_BOTTOM_PAD }}
+              />
+            </YStack>
           ) : (
             listHeader
           )}
