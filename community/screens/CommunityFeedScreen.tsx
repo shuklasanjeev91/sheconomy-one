@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { FlashList } from '@shopify/flash-list'
 import { Platform, type NativeScrollEvent, type NativeSyntheticEvent } from 'react-native'
 
-import { LoadMoreEnd } from '~/commerce/components/LoadMoreSentinel'
+import { LoadMoreEnd, LoadMoreSentinel } from '~/commerce/components/LoadMoreSentinel'
 import { CommunitySuggestionSectionCard } from '~/community/components/CommunitySuggestionSectionCard'
 import { StoriesStrip } from '~/community/components/StoriesStrip'
 import { CommunityShell } from '~/community/components/CommunityShell'
@@ -21,10 +21,17 @@ import { useAppBarScroll } from '~/components/navigation/AppBarScrollContext'
 import { ScreenState, YStack } from '~/components/ui'
 import { useAppLayout } from '~/hooks/useAppLayout'
 import { APP_LAYOUT } from '~/lib/layout/constants'
+import { isWebRuntime } from '~/lib/platform/capabilities'
 
 const SUGGESTION_INTERVAL = 3
 const FEED_LIST_BOTTOM_PAD =
   Platform.OS === 'web' ? 24 : APP_LAYOUT.mobileTabBarHeight + 64
+
+/**
+ * FlashList v2 is New-Architecture oriented and has been blanking /community
+ * on web reload. Web uses shell ScrollView + mapped rows; native keeps FlashList.
+ */
+const USE_FLASH_LIST = !isWebRuntime()
 
 export function CommunityFeedScreen() {
   const [sort, setSort] = useState<FeedSort>('recent')
@@ -84,6 +91,32 @@ export function CommunityFeedScreen() {
     [patchItem],
   )
 
+  const renderEntry = useCallback(
+    (entry: FeedEntry) => {
+      if (entry.type === 'post') {
+        return (
+          <YStack key={entry.post.id} width="100%" paddingBottom={12}>
+            <FeedPostCard
+              post={entry.post}
+              onPostDeleted={removeItem}
+              onPostUpdated={onPostUpdated}
+            />
+          </YStack>
+        )
+      }
+      return (
+        <YStack
+          key={`suggestion-${entry.section.kind}-${entry.slot}`}
+          width="100%"
+          paddingBottom={12}
+        >
+          <CommunitySuggestionSectionCard section={entry.section} limit={3} />
+        </YStack>
+      )
+    },
+    [onPostUpdated, removeItem],
+  )
+
   const renderItem = useCallback(
     ({ item }: { item: FeedEntry }) => {
       if (item.type === 'post') {
@@ -113,8 +146,6 @@ export function CommunityFeedScreen() {
 
   const getItemType = useCallback((entry: FeedEntry) => entry.type, [])
 
-  // Keep chrome inside the list so one scroller owns the middle column
-  // (stories/composer outside FlashList left FlashList with no bounded height → no scroll).
   const listHeader = useMemo(
     () => (
       <YStack gap="$3" width="100%" paddingBottom="$2">
@@ -130,16 +161,32 @@ export function CommunityFeedScreen() {
 
   const listFooter = useMemo(
     () => (
-      <YStack paddingVertical="$3" width="100%">
+      <YStack paddingVertical="$3" width="100%" paddingBottom={FEED_LIST_BOTTOM_PAD}>
         {!hasMore && items.length > 0 ? <LoadMoreEnd /> : null}
       </YStack>
     ),
     [hasMore, items.length],
   )
 
+  const onEndReached = useCallback(() => {
+    if (!endReachedReadyRef.current) return
+    if (hasMore && !isLoadingMore) loadMore()
+  }, [hasMore, isLoadingMore, loadMore])
+
   return (
-    <CommunityShell scroll={false} refreshing={isRefreshing} onRefresh={onRefresh}>
-      <YStack flex={1} width="100%" minHeight={0} style={{ minHeight: 0 }}>
+    <CommunityShell
+      // Web: shell ScrollView owns the middle column (avoids FlashList blank reload).
+      // Native: FlashList owns scrolling inside a locked shell.
+      scroll={!USE_FLASH_LIST}
+      refreshing={isRefreshing}
+      onRefresh={onRefresh}
+    >
+      <YStack
+        flex={USE_FLASH_LIST ? 1 : undefined}
+        width="100%"
+        minHeight={USE_FLASH_LIST ? 0 : undefined}
+        style={USE_FLASH_LIST ? { minHeight: 0 } : undefined}
+      >
         <ScreenState
           loading={isLoading && items.length === 0}
           error={error}
@@ -150,35 +197,42 @@ export function CommunityFeedScreen() {
           emptyActionLabel="Create post"
           onEmptyAction={() => openComposer()}
           onRetry={refresh}
+          fill={USE_FLASH_LIST}
         >
           {items.length > 0 ? (
-            <YStack flex={1} minHeight={0} width="100%" style={{ minHeight: 0 }}>
-              <FlashList
-                data={feedEntries}
-                renderItem={renderItem}
-                keyExtractor={keyExtractor}
-                getItemType={getItemType}
-                extraData={sections}
-                ListHeaderComponent={listHeader}
-                ListFooterComponent={listFooter}
-                onScroll={onFeedScroll}
-                scrollEventThrottle={16}
-                onEndReached={() => {
-                  if (!endReachedReadyRef.current) return
-                  if (hasMore && !isLoadingMore) loadMore()
-                }}
-                onEndReachedThreshold={0.4}
-                onRefresh={onRefresh}
-                refreshing={isRefreshing}
-                drawDistance={Platform.OS === 'web' ? 500 : 250}
-                style={
-                  Platform.OS === 'web'
-                    ? ({ flex: 1, width: '100%', height: '100%', minHeight: 0, overflowY: 'auto' } as const)
-                    : { flex: 1, width: '100%' }
-                }
-                contentContainerStyle={{ paddingBottom: FEED_LIST_BOTTOM_PAD }}
-              />
-            </YStack>
+            USE_FLASH_LIST ? (
+              <YStack flex={1} minHeight={0} width="100%" style={{ minHeight: 0 }}>
+                <FlashList
+                  data={feedEntries}
+                  renderItem={renderItem}
+                  keyExtractor={keyExtractor}
+                  getItemType={getItemType}
+                  extraData={sections}
+                  ListHeaderComponent={listHeader}
+                  ListFooterComponent={listFooter}
+                  onScroll={onFeedScroll}
+                  scrollEventThrottle={16}
+                  onEndReached={onEndReached}
+                  onEndReachedThreshold={0.4}
+                  onRefresh={onRefresh}
+                  refreshing={isRefreshing}
+                  drawDistance={250}
+                  style={{ flex: 1, width: '100%' }}
+                  contentContainerStyle={{ paddingBottom: FEED_LIST_BOTTOM_PAD }}
+                />
+              </YStack>
+            ) : (
+              <YStack width="100%" gap="$3">
+                {listHeader}
+                {feedEntries.map(renderEntry)}
+                <LoadMoreSentinel
+                  hasMore={hasMore}
+                  isLoadingMore={isLoadingMore}
+                  onLoadMore={onEndReached}
+                />
+                {!hasMore ? listFooter : null}
+              </YStack>
+            )
           ) : (
             listHeader
           )}
