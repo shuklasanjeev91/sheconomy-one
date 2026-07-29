@@ -58,6 +58,11 @@ function uriFromSource(source: ImageSourcePropType | undefined): string | number
  *
  * Native: `expo-image` for disk/memory cache and FlashList recycling.
  * Web: Tamagui Image (DOM-friendly `src` / `alt`).
+ *
+ * Absolute “fill parent” is only used when BOTH axes are percentage-based (or
+ * both omitted on native). A common call site is `width="100%" height={168}` —
+ * that must stay in normal flow. Treating `%` width alone as absolute made
+ * feed/cover photos escape their cards and paint the whole Community page.
  */
 export const Image = forwardRef<any, AppImageProps>(function Image(
   {
@@ -82,6 +87,10 @@ export const Image = forwardRef<any, AppImageProps>(function Image(
     (typeof src === 'string' && src.trim() ? src.trim() : undefined) ||
     (typeof fromSource === 'string' && fromSource.trim() ? fromSource.trim() : undefined)
   const label = accessibilityLabel ?? alt
+  const percentWidth = typeof width === 'string' && width.includes('%')
+  const percentHeight = typeof height === 'string' && height.includes('%')
+  /** Fill a sized parent — requires both axes to be fluid (or both unset on native). */
+  const fillParentAxes = percentWidth && percentHeight
 
   if (Platform.OS !== 'web') {
     const resolved = (typeof fromSource === 'number' ? fromSource : null) ?? uri ?? null
@@ -93,10 +102,7 @@ export const Image = forwardRef<any, AppImageProps>(function Image(
     const w = numericDim(width)
     const h = numericDim(height)
     const radius = numericDim(borderRadius)
-    const fillParent =
-      (typeof width === 'string' && width.includes('%')) ||
-      (typeof height === 'string' && height.includes('%')) ||
-      (width == null && height == null)
+    const fillParent = fillParentAxes || (width == null && height == null)
 
     const recycleKey =
       recyclingKey ?? (typeof resolved === 'string' ? resolved : String(resolved))
@@ -129,8 +135,10 @@ export const Image = forwardRef<any, AppImageProps>(function Image(
                   ...(radius != null ? { borderRadius: radius } : null),
                 }
               : {
-                  width: w ?? (width as number | undefined),
-                  height: h ?? (height as number | undefined),
+                  width: percentWidth ? ('100%' as unknown as number) : (w ?? (width as number | undefined)),
+                  height: percentHeight
+                    ? ('100%' as unknown as number)
+                    : (h ?? (height as number | undefined)),
                   ...(radius != null ? { borderRadius: radius } : null),
                 },
             style as StyleProp<ImageStyle>,
@@ -144,10 +152,6 @@ export const Image = forwardRef<any, AppImageProps>(function Image(
     return null
   }
 
-  const fillParent =
-    (typeof width === 'string' && width.includes('%')) ||
-    (typeof height === 'string' && height.includes('%'))
-
   return (
     <TamaguiImage
       ref={ref}
@@ -159,7 +163,7 @@ export const Image = forwardRef<any, AppImageProps>(function Image(
       borderRadius={borderRadius}
       alt={label}
       style={
-        fillParent
+        fillParentAxes
           ? ({
               position: 'absolute',
               inset: 0,
@@ -167,7 +171,15 @@ export const Image = forwardRef<any, AppImageProps>(function Image(
               height: '100%',
               ...(style && typeof style === 'object' ? style : null),
             } as object)
-          : style
+          : percentWidth
+            ? ({
+                width: '100%',
+                height: typeof height === 'number' ? height : height,
+                display: 'block',
+                maxWidth: '100%',
+                ...(style && typeof style === 'object' ? style : null),
+              } as object)
+            : style
       }
       onError={onError}
       onLoad={onLoad}

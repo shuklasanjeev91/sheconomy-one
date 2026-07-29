@@ -1027,7 +1027,9 @@ function PostEventCard({
       overflow="hidden"
     >
       {post.image_url ? (
-        <Image src={post.image_url} width="100%" height={168} objectFit="cover" alt="" />
+        <YStack width="100%" height={168} overflow="hidden" position="relative" backgroundColor={communityUi.pageBg}>
+          <Image src={post.image_url} width="100%" height={168} objectFit="cover" alt="" />
+        </YStack>
       ) : null}
       <YStack padding={12} gap={8}>
         <XStack gap={8} alignItems="center">
