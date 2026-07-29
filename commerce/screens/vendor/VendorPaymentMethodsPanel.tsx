@@ -1,13 +1,12 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { Platform } from 'react-native'
 
 import { PaymentErrorBoundary } from '~/commerce/components/PaymentErrorBoundary'
 import { PaymentProviderCard } from '~/commerce/components/vendor/payment/PaymentProviderCard'
-import { PaymentProviderSearchField } from '~/commerce/components/vendor/payment/PaymentProviderSearchField'
 import { PaymentSummaryCards } from '~/commerce/components/vendor/payment/PaymentSummaryCards'
 import { Icons, Spinner, Text, XStack, YStack, useAppToast } from '~/components/ui'
 import { radius } from '~/config/tokens'
 import { PAYMENT_UI_COPY } from '~/lib/payment/payment-ui.copy'
+
 import { toFriendlyPaymentError } from '~/lib/payment/payment.errors'
 import {
   checkPaymentSetupStatus,
@@ -22,9 +21,9 @@ import {
   selectVendorPaymentSettings,
   setVendorPaymentShopId,
 } from '~/lib/payment/payment.store'
-import { PAYMENT_ACCOUNT_STATUS } from '~/lib/payment/payment.constants'
+import { PAYMENT_ACCOUNT_STATUS, PAYMENT_PROVIDERS } from '~/lib/payment/payment.constants'
 import type { PaymentProviderConfig } from '~/lib/payment/payment.type'
-import { filterPaymentProvidersByQuery, getFrontendVisibleProviders, sortProvidersForDisplay } from '~/lib/payment/payment.utils'
+import { getFrontendVisibleProviders, sortProvidersForDisplay } from '~/lib/payment/payment.utils'
 import { useAppDispatch, useAppSelector } from '~/lib/store/hooks'
 import type { AppUiTokens } from '~/lib/theme/app-ui'
 
@@ -56,7 +55,6 @@ export function VendorPaymentMethodsPanel({
   const [selectedProvider, setSelectedProvider] = useState<PaymentProviderConfig | null>(null)
   const [drawerOpen, setDrawerOpen] = useState(false)
   const [initializedShopId, setInitializedShopId] = useState<string | null>(null)
-  const [searchQuery, setSearchQuery] = useState('')
 
   const refreshPaymentState = useCallback(async () => {
     await Promise.all([
@@ -103,17 +101,15 @@ export function VendorPaymentMethodsPanel({
     return ids
   }, [accounts, connectedProviders])
 
+  // Only Razorpay is live for now — other providers will appear here once enabled.
   const providers = useMemo(
-    () => sortProvidersForDisplay(getFrontendVisibleProviders(), connectedIds),
+    () =>
+      sortProvidersForDisplay(
+        getFrontendVisibleProviders().filter((p) => p.id === PAYMENT_PROVIDERS.RAZORPAY),
+        connectedIds,
+      ),
     [connectedIds],
   )
-
-  const filteredProviders = useMemo(
-    () => filterPaymentProvidersByQuery(providers, searchQuery),
-    [providers, searchQuery],
-  )
-
-  const hasSearchQuery = searchQuery.trim().length > 0
 
   const connectedCount = connectedIds.size
   const isInitialLoading =
@@ -171,81 +167,17 @@ export function VendorPaymentMethodsPanel({
           </XStack>
         ) : null}
 
-        <YStack gap="$3">
-          <Text fontSize={18} fontWeight="800" color={ui.text} letterSpacing={-0.2}>
-            {PAYMENT_UI_COPY.availableProviders}
-          </Text>
-
-          <PaymentProviderSearchField
-            ui={ui}
-            value={searchQuery}
-            onChange={setSearchQuery}
-            resultCount={filteredProviders.length}
-            totalCount={providers.length}
-          />
-
-          {hasSearchQuery && filteredProviders.length === 0 ? (
-            <YStack
-              gap="$2"
-              padding="$5"
-              borderRadius={radius.card}
-              borderWidth={1}
-              borderColor={ui.borderSubtle}
-              backgroundColor={ui.surfaceMuted}
-              alignItems="center"
-            >
-              <Icons.Search size={28} color={ui.textMuted} />
-              <Text fontSize={14} fontWeight="600" color={ui.textSecondary} textAlign="center">
-                {PAYMENT_UI_COPY.noSearchResults}
-              </Text>
-            </YStack>
-          ) : Platform.OS === 'web' ? (
-            <YStack
-              width="100%"
-              style={{
-                display: 'grid',
-                gridTemplateColumns: isDesktop
-                  ? 'repeat(2, minmax(280px, 1fr))'
-                  : 'minmax(0, 1fr)',
-                gap: 12,
-                width: '100%',
-              }}
-            >
-              {filteredProviders.map((provider) => (
-                <YStack key={provider.id} width="100%" minWidth={0}>
-                  <PaymentProviderCard
-                    ui={ui}
-                    provider={provider}
-                    accounts={accounts}
-                    connectedProviders={connectedProviders}
-                    onPress={openProvider}
-                  />
-                </YStack>
-              ))}
-            </YStack>
-          ) : (
-            <XStack gap="$3" flexWrap="wrap" width="100%" alignItems="flex-start">
-              {filteredProviders.map((provider) => (
-                <XStack
-                  key={provider.id}
-                  flexBasis={isDesktop ? '47%' : '100%'}
-                  flexGrow={isDesktop ? 1 : 0}
-                  flexShrink={0}
-                  minWidth={isDesktop ? 280 : undefined}
-                  width={isDesktop ? undefined : '100%'}
-                  alignSelf="stretch"
-                >
-                  <PaymentProviderCard
-                    ui={ui}
-                    provider={provider}
-                    accounts={accounts}
-                    connectedProviders={connectedProviders}
-                    onPress={openProvider}
-                  />
-                </XStack>
-              ))}
-            </XStack>
-          )}
+        <YStack gap="$3" width="100%">
+          {providers.map((provider) => (
+            <PaymentProviderCard
+              key={provider.id}
+              ui={ui}
+              provider={provider}
+              accounts={accounts}
+              connectedProviders={connectedProviders}
+              onPress={openProvider}
+            />
+          ))}
         </YStack>
       </YStack>
 
