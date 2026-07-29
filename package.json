@@ -8,7 +8,7 @@
     "node": "22.x"
   },
   "scripts": {
-    "eas-build-pre-install": "corepack enable && node scripts/eas-prepare-mobile-install.cjs",
+    "eas-build-pre-install": "corepack enable",
     "postinstall": "one patch || true && node scripts/strip-datetimepicker-flow.cjs && node scripts/patch-react-native-voice-android.cjs && node scripts/patch-rn-setup-xhr.cjs && node scripts/patch-whatwg-fetch.cjs && node scripts/patch-phoenix-rn.cjs && node scripts/patch-otp-verify-hint.cjs && node scripts/bundle-zod-v3.cjs && node scripts/dedupe-tamagui-lucide.cjs && node scripts/patch-vxrn-hermes-async-gen.cjs && node scripts/patch-async-generator-function-hermes.cjs && node scripts/patch-vxrn-hermes-prod-bundle.cjs && node scripts/patch-vxrn-bundle-exit.cjs && node scripts/patch-vxrn-stub-node-require.cjs && node scripts/patch-metro-stub-node-require.cjs",
     "android": "one run:android",
     "build": "VXRN_FORCE_PATCH=1 ONE_CACHE_KEY=${ONE_CACHE_KEY:-202607151} one build && node scripts/patch-vercel-output.mjs",
@@ -147,7 +147,10 @@
   },
   "packageManager": "yarn@4.17.0",
   "dependenciesMeta": {
-    "sharp": {
+    "@electron/rebuild": {
+      "built": false
+    },
+    "dtrace-provider": {
       "built": false
     },
     "electron": {
@@ -156,11 +159,18 @@
     "electron-builder": {
       "built": false
     },
-    "@electron/rebuild": {
+    "esbuild": {
+      "built": false
+    },
+    "sharp": {
+      "built": false
+    },
+    "workerd": {
       "built": false
     }
   },
   "resolutions": {
+    "sharp": "npm:empty-npm-package@1.0.0",
     "@babel/runtime": "7.29.7",
     "@tamagui/core": "2.4.0",
     "@tamagui/helpers": "2.4.0",
