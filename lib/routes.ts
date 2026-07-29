@@ -410,6 +410,11 @@ export function isCreateShopPath(pathname: string) {
   return pathname === '/create-my-shop' || pathname.startsWith('/create-my-shop/')
 }
 
+/** Admin console (`/admin/*`) — renders its own chrome, no storefront footer. */
+export function isAdminPath(pathname: string) {
+  return pathname === '/admin' || pathname.startsWith('/admin/')
+}
+
 export function isProfilePath(pathname: string) {
   return isAccountPath(pathname)
 }
