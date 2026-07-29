@@ -10,6 +10,14 @@ const onesignalMode =
   profile === 'preview' || profile === 'production' ? 'production' : 'development'
 
 const expo = JSON.parse(JSON.stringify(appJson.expo))
+
+// Allow targeting an older store runtime for OTA (e.g. App Store 5.0.14)
+// without permanently changing app.json. Used by CI / manual publish:
+//   EAS_UPDATE_RUNTIME_VERSION=5.0.14 yarn update:production
+if (process.env.EAS_UPDATE_RUNTIME_VERSION) {
+  expo.runtimeVersion = process.env.EAS_UPDATE_RUNTIME_VERSION
+}
+
 expo.plugins = (expo.plugins || []).map((plugin) => {
   if (Array.isArray(plugin) && plugin[0] === 'onesignal-expo-plugin') {
     return [
