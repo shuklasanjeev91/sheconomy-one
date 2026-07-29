@@ -11,6 +11,7 @@ import { CommerceDesktopFooter } from '~/commerce/navigation/CommerceDesktopFoot
 import { useAppLayout } from '~/hooks/useAppLayout'
 import { useAuthScreen } from '~/hooks/useAuthScreen'
 import {
+  isAdminPath,
   isChatConversationPath,
   isChatPath,
   isCommercePath,
@@ -89,7 +90,10 @@ export function AppShell({ children }: AppShellProps) {
   const authScreen = useAuthScreen()
   const compactMobileTopBar = useCompactMobileTopBar()
   const showCommerceFooter =
-    isDesktopWeb && isCommercePath(pathname) && !isCreateShopPath(pathname)
+    isDesktopWeb &&
+    isCommercePath(pathname) &&
+    !isCreateShopPath(pathname) &&
+    !isAdminPath(pathname)
 
   // Chat is a true two-pane app — lock the shell so panes get a definite height.
   // Community / class / co-work / commerce use PageScroll (document on desktop web).
