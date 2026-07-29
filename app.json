@@ -111,7 +111,7 @@
       "usesAppleSignIn": true,
       "icon": "./public/app-icon.png",
       "associatedDomains": [
-        "applinks:sheconomy-one-sanjeev-shuklas-projects.vercel.app"
+        "applinks:sheconomy.in"
       ],
       "infoPlist": {
         "CFBundleDisplayName": "SHEconomy",
@@ -169,7 +169,7 @@
           "data": [
             {
               "scheme": "https",
-              "host": "sheconomy-one-sanjeev-shuklas-projects.vercel.app",
+              "host": "sheconomy.in",
               "pathPrefix": "/"
             }
           ],

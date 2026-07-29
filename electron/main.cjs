@@ -1,7 +1,7 @@
 const { app, BrowserWindow, shell } = require('electron')
 const path = require('path')
 
-const PRODUCTION_URL = 'https://sheconomy-one-sanjeev-shuklas-projects.vercel.app'
+const PRODUCTION_URL = 'https://sheconomy.in'
 const isDev = !app.isPackaged
 const APP_URL =
   process.env.SHECONOMY_DESKTOP_URL || (isDev ? 'http://localhost:8081' : PRODUCTION_URL)

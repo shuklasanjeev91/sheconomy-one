@@ -299,8 +299,7 @@ const oneBundlerOptions = {
     scheme: 'sheconomy',
     prefixes: [
       'sheconomy://',
-      'https://sheconomy-one-eight.vercel.app',
-      'https://sheconomy-one-sanjeev-shuklas-projects.vercel.app',
+      'https://sheconomy.in',
     ],
   },
   setupFile: {

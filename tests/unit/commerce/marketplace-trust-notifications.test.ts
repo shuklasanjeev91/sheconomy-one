@@ -32,7 +32,7 @@ describe('marketplace trust notification deep links', () => {
         type: 'order_refund_pending_buyer',
         contextType: 'order',
         contextId: orderId,
-        actionUrl: `https://sheconomy.com/orders/${orderId}`,
+        actionUrl: `https://sheconomy.in/orders/${orderId}`,
       }),
     ).toBe(`/orders/${orderId}`)
   })

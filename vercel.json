@@ -5,8 +5,8 @@
     "env": {
       "NODE_OPTIONS": "--max-old-space-size=6144",
       "ONE_CACHE_KEY": "202607281",
-      "ONE_SERVER_URL": "https://sheconomy-one-sanjeev-shuklas-projects.vercel.app",
-      "EXPO_PUBLIC_WEB_APP_URL": "https://sheconomy-one-sanjeev-shuklas-projects.vercel.app"
+      "ONE_SERVER_URL": "https://sheconomy.in",
+      "EXPO_PUBLIC_WEB_APP_URL": "https://sheconomy.in"
     }
   },
   "cleanUrls": true,

@@ -26,5 +26,5 @@ Output lands in `dist-desktop/`.
 For production packaging, point Electron at your deployed URL:
 
 ```bash
-SHECONOMY_DESKTOP_URL=https://app.sheconomy.com yarn desktop:build:win
+SHECONOMY_DESKTOP_URL=https://sheconomy.in yarn desktop:build:win
 ```
