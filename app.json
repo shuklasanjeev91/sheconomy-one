@@ -10,9 +10,7 @@
       "ios",
       "android"
     ],
-    "runtimeVersion": {
-      "policy": "appVersion"
-    },
+    "runtimeVersion": "6.0",
     "updates": {
       "enabled": true,
       "checkAutomatically": "ON_LOAD",
@@ -104,7 +102,7 @@
     },
     "ios": {
       "bundleIdentifier": "com.sheconomy.ecommerce",
-      "buildNumber": "97",
+      "buildNumber": "98",
       "appleTeamId": "52H73QK4CL",
       "supportsTablet": true,
       "requireFullScreen": false,
@@ -155,7 +153,7 @@
     },
     "android": {
       "package": "com.sheconomy.ecommerce",
-      "versionCode": 104,
+      "versionCode": 107,
       "softwareKeyboardLayoutMode": "resize",
       "adaptiveIcon": {
         "foregroundImage": "./public/app-icon.png",
