@@ -16,7 +16,7 @@ function webAppOrigin(): string {
   if (Platform.OS === 'web' && typeof window !== 'undefined') {
     return window.location.origin
   }
-  return 'https://app.sheconomy.com'
+  return 'https://sheconomy.in'
 }
 
 /** URL encoded into the QR (opens mobile approve route when scanned). */

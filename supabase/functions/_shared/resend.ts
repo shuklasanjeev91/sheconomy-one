@@ -30,5 +30,5 @@ export async function sendResendEmail(
 }
 
 export function appBaseUrl() {
-  return (Deno.env.get('PUBLIC_APP_URL') ?? 'https://sheconomy.com').replace(/\/$/, '')
+  return (Deno.env.get('PUBLIC_APP_URL') ?? 'https://sheconomy.in').replace(/\/$/, '')
 }

@@ -53,17 +53,17 @@ Set these in the Supabase Dashboard → Settings → Vault, or via CLI:
 | Secret | Description | Example |
 |---|---|---|
 | `PAYMENT_ENCRYPTION_KEY` | 32-byte AES key (64 hex chars). **Must match local `.env`.** | `openssl rand -hex 32` |
-| `PUBLIC_APP_URL` | Canonical web origin. Used as the Razorpay callbackUrl base. | `https://sheconomy-one-sanjeev-shuklas-projects.vercel.app` |
+| `PUBLIC_APP_URL` | Canonical web origin. Used as the Razorpay callbackUrl base. | `https://sheconomy.in` |
 
 **Critical:** Without `PAYMENT_ENCRYPTION_KEY`, credential decryption fails and checkout is blocked.  
-**Important:** Without `PUBLIC_APP_URL`, the Razorpay return URL defaults to `https://sheconomy.com` which will not route the buyer back correctly.
+**Important:** Without `PUBLIC_APP_URL`, the Razorpay return URL defaults to `https://sheconomy.in` which will not route the buyer back correctly.
 
 ### Set via CLI
 
 ```bash
 supabase secrets set \
   PAYMENT_ENCRYPTION_KEY=<64-hex-chars> \
-  PUBLIC_APP_URL=https://sheconomy-one-sanjeev-shuklas-projects.vercel.app \
+  PUBLIC_APP_URL=https://sheconomy.in \
   --project-ref zsaqrrzwygzwrlzgymxk
 ```
 

@@ -74,7 +74,7 @@ async function sendResendEmail(apiKey: string, payload: {
 function resolvePublicAppOrigin(): string {
   return (
     Deno.env.get('PUBLIC_APP_URL')?.replace(/\/$/, '') ||
-    'https://sheconomy-one-eight.vercel.app'
+    'https://sheconomy.in'
   )
 }
 

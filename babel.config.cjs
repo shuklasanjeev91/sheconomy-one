@@ -9,7 +9,7 @@ const oneBundlerOptions = {
     "scheme": "sheconomy",
     "prefixes": [
       "sheconomy://",
-      "https://sheconomy-one-sanjeev-shuklas-projects.vercel.app"
+      "https://sheconomy.in"
     ]
   },
   "setupFile": {

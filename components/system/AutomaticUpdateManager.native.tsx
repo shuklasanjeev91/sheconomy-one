@@ -63,10 +63,18 @@ export function AutomaticUpdateManager() {
         setStatus('downloaded')
         setPendingUpdateId(result.updateId)
         setCritical(result.critical)
-        const metadata = await readUpdateMetadata()
-        // Critical: always prompt (no dismiss). Optional: respect "Later".
-        if (result.critical || shouldPromptForDownloadedUpdate(result, metadata)) {
-          setPromptOpen(true)
+        // Apply immediately so store users get JS/asset OTA without waiting
+        // for a manual "Restart" tap. Critical and optional both reload.
+        setBusy(true)
+        setStatus('restarting')
+        const outcome = await applyDownloadedUpdate(deps, result.updateId)
+        if (outcome === 'failed') {
+          setBusy(false)
+          setStatus('failed')
+          const metadata = await readUpdateMetadata()
+          if (result.critical || shouldPromptForDownloadedUpdate(result, metadata)) {
+            setPromptOpen(true)
+          }
         }
         break
       }

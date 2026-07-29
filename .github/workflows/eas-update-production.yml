@@ -18,6 +18,11 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: read
+    env:
+      NODE_OPTIONS: --max-old-space-size=8192
+      EXPO_PUBLIC_WEB_APP_URL: https://sheconomy.in
+      ONE_SERVER_URL: https://sheconomy.in
+      EXPO_PUBLIC_APP_ENV: production
     steps:
       - name: Check for EXPO_TOKEN
         run: |
@@ -58,3 +63,8 @@ jobs:
             MESSAGE="OTA from ${GITHUB_SHA::7}"
           fi
           eas update --channel production --message "$MESSAGE" --non-interactive
+        env:
+          EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+          EXPO_PUBLIC_SUPABASE_URL: ${{ secrets.EXPO_PUBLIC_SUPABASE_URL }}
+          EXPO_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.EXPO_PUBLIC_SUPABASE_ANON_KEY }}
+          EXPO_PUBLIC_ONESIGNAL_APP_ID: ${{ secrets.EXPO_PUBLIC_ONESIGNAL_APP_ID }}

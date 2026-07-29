@@ -26,7 +26,7 @@ Deno.serve(async (request) => {
   const appBase =
     Deno.env.get('PUBLIC_APP_URL')?.replace(/\/$/, '') ||
     Deno.env.get('APP_URL')?.replace(/\/$/, '') ||
-    'https://sheconomy.com'
+    'https://sheconomy.in'
 
   if (!supabaseUrl || !serviceRole) {
     return jsonResponse({ error: 'Razorpay direct checkout is not configured' }, 503)

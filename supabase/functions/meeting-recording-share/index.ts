@@ -179,7 +179,7 @@ Deno.serve(async (req) => {
 
     const plainToken = createShareToken()
     const tokenHash = await hashShareToken(plainToken)
-    const appUrl = (Deno.env.get('PUBLIC_APP_URL') ?? 'https://sheconomy.com').replace(/\/$/, '')
+    const appUrl = (Deno.env.get('PUBLIC_APP_URL') ?? 'https://sheconomy.in').replace(/\/$/, '')
     const sharePath = `/co-work/recording/${encodeURIComponent(plainToken)}`
     const shareUrl = `${appUrl}${sharePath}`
 

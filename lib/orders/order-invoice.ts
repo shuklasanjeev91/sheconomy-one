@@ -245,7 +245,7 @@ function renderInvoiceDocument(input: {
 
     <div style="margin-top:36px;padding-top:16px;border-top:1px solid #e5e7eb;text-align:center;font-size:12px;color:#6b7280;">
       <p style="margin:2px 0;">Thank you for shopping with SHEconomy!</p>
-      <p style="margin:2px 0;">SHEconomy | sheconomy.com | ${escapeHtml(new Date().toLocaleDateString())}</p>
+      <p style="margin:2px 0;">SHEconomy | sheconomy.in | ${escapeHtml(new Date().toLocaleDateString())}</p>
     </div>
   </div>
 </body>

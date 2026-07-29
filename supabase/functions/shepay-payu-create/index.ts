@@ -29,7 +29,7 @@ Deno.serve(async (request) => {
   const appBase =
     Deno.env.get('PUBLIC_APP_URL')?.replace(/\/$/, '') ||
     Deno.env.get('APP_URL')?.replace(/\/$/, '') ||
-    'https://sheconomy.com'
+    'https://sheconomy.in'
   const payuBase =
     Deno.env.get('PAYU_BASE_URL')?.replace(/\/$/, '') || 'https://test.payu.in'
 

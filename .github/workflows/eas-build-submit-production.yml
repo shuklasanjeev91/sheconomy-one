@@ -1,0 +1,58 @@
+# Build store binaries and submit to App Store + Play Store on every main push.
+# JS-only changes still land faster via EAS Update (eas-update-production.yml).
+# Requires: EXPO_TOKEN plus Apple/Google credentials configured in EAS.
+name: EAS Build + Submit (production)
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+concurrency:
+  group: eas-build-submit-production
+  cancel-in-progress: false
+
+jobs:
+  build-and-submit:
+    name: Build and submit iOS + Android
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Check for EXPO_TOKEN
+        run: |
+          if [ -z "${{ secrets.EXPO_TOKEN }}" ]; then
+            echo "Add repository secret EXPO_TOKEN (Expo access token)."
+            exit 1
+          fi
+
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Enable Corepack (Yarn 4)
+        run: corepack enable
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22.14.0
+          cache: yarn
+
+      - name: Setup EAS
+        uses: expo/expo-github-action@v8
+        with:
+          eas-version: latest
+          token: ${{ secrets.EXPO_TOKEN }}
+
+      - name: Install dependencies
+        run: yarn install --immutable
+        env:
+          YARN_ENABLE_GLOBAL_CACHE: 'false'
+          YARN_NODE_LINKER: node-modules
+
+      - name: Build and auto-submit store binaries
+        run: |
+          eas build --platform all --profile production --auto-submit --non-interactive --no-wait
+        env:
+          EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}

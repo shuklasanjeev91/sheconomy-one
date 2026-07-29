@@ -299,7 +299,7 @@ export function extractCategorySeoMeta(
   category: Category,
   options: { siteName?: string; baseUrl?: string } = {},
 ): CategorySeoMeta {
-  const { siteName = 'SHEconomy', baseUrl = 'https://sheconomy.com' } = options
+  const { siteName = 'SHEconomy', baseUrl = 'https://sheconomy.in' } = options
   const url = `${baseUrl}/categories/${category.seo_name || category.category_id}`
 
   return {

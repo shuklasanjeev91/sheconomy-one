@@ -54,9 +54,9 @@ describe('checkoutShippingLabel', () => {
 describe('isAppPayUBridgeUrl', () => {
   it('matches PayU bridge only, not payu-return', () => {
     expect(isAppPayUBridgeUrl('/orders/payu?action=x')).toBe(true)
-    expect(isAppPayUBridgeUrl('https://sheconomy.com/orders/payu')).toBe(true)
+    expect(isAppPayUBridgeUrl('https://sheconomy.in/orders/payu')).toBe(true)
     expect(isAppPayUBridgeUrl('/orders/payu-return?status=success')).toBe(false)
-    expect(isAppPayUBridgeUrl('https://sheconomy.com/orders/payu-return')).toBe(false)
+    expect(isAppPayUBridgeUrl('https://sheconomy.in/orders/payu-return')).toBe(false)
   })
 })
 
@@ -135,7 +135,7 @@ describe('resolvePostCheckoutNext', () => {
   })
 
   it('routes SHEPay to in-app PayU bridge', () => {
-    const url = 'https://sheconomy.com/orders/payu?action=https%3A%2F%2Ftest.payu.in%2F_payment&payload=%7B%7D'
+    const url = 'https://sheconomy.in/orders/payu?action=https%3A%2F%2Ftest.payu.in%2F_payment&payload=%7B%7D'
     expect(
       resolvePostCheckoutNext({
         mode: 'online',
