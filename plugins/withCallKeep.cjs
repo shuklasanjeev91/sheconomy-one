@@ -23,16 +23,6 @@ const ANDROID_PERMISSIONS = [
   'android.permission.FOREGROUND_SERVICE_MICROPHONE',
 ]
 
-function ensureUsesPermission(manifest, name) {
-  if (!manifest['uses-permission']) manifest['uses-permission'] = []
-  const exists = manifest['uses-permission'].some(
-    (entry) => entry?.$?.['android:name'] === name,
-  )
-  if (!exists) {
-    manifest['uses-permission'].push({ $: { 'android:name': name } })
-  }
-}
-
 function ensureService(application, service) {
   if (!application.service) application.service = []
   const name = service.$['android:name']
@@ -46,15 +36,12 @@ function ensureService(application, service) {
 }
 
 function withCallKeepAndroid(config) {
+  // Prefer Expo's permission helper — it writes into <manifest>, not the XML root.
   config = AndroidConfig.Permissions.withPermissions(config, ANDROID_PERMISSIONS)
 
   return withAndroidManifest(config, (mod) => {
-    const manifest = mod.modResults
-    for (const permission of ANDROID_PERMISSIONS) {
-      ensureUsesPermission(manifest, permission)
-    }
-
-    const application = AndroidConfig.Manifest.getMainApplicationOrThrow(manifest)
+    const androidManifest = mod.modResults
+    const application = AndroidConfig.Manifest.getMainApplicationOrThrow(androidManifest)
 
     ensureService(application, {
       $: {
