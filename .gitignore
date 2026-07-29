@@ -33,6 +33,11 @@ tsconfig.tsbuildinfo
 
 .expo
 
+# Desktop packaging artifacts (source under electron/ stays tracked)
+dist-desktop/
+electron/dist/
+electron/node_modules/
+
 # playwright
 test-results/
 playwright-report/
