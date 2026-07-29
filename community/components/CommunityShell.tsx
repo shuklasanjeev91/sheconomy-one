@@ -102,12 +102,12 @@ export function CommunityShell({
                   paddingBottom: 24,
                 }}
               >
-                <YStack flex={1} minWidth={0} gap="$3" {...LAYOUT_STRETCH}>
+                <YStack flex={1} minWidth={0} gap="$3" backgroundColor={communityUi.pageBg} {...LAYOUT_STRETCH}>
                   {children}
                 </YStack>
               </ScrollView>
             ) : (
-              <YStack flex={1} minWidth={0} minHeight={0} gap="$3" {...LAYOUT_STRETCH}>
+              <YStack flex={1} minWidth={0} minHeight={0} gap="$3" backgroundColor={communityUi.pageBg} {...LAYOUT_STRETCH}>
                 {children}
               </YStack>
             )}
@@ -131,7 +131,7 @@ export function CommunityShell({
         <PageColumns gap={COMMUNITY_LAYOUT.columnGap} flex={scroll ? undefined : 1} minHeight={scroll ? undefined : 0}>
           {showSidebars ? <CommunityLeftSidebar pin="document" /> : null}
 
-          <YStack flex={1} minWidth={0} minHeight={scroll ? undefined : 0} gap="$3" {...LAYOUT_STRETCH}>
+          <YStack flex={1} minWidth={0} minHeight={scroll ? undefined : 0} gap="$3" backgroundColor={communityUi.pageBg} {...LAYOUT_STRETCH}>
             {children}
           </YStack>
 

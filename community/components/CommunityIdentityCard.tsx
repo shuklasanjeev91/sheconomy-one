@@ -86,7 +86,7 @@ export function CommunityIdentityCard() {
     >
       <AppLink href={href} asChild>
         <YStack cursor="pointer">
-          <YStack height={56} width="100%" overflow="hidden" backgroundColor={communityUi.brand}>
+          <YStack height={56} width="100%" overflow="hidden" backgroundColor={communityUi.brand} position="relative">
             {profile.cover_url ? (
               <Image src={profile.cover_url} width="100%" height={56} objectFit="cover" alt="" />
             ) : (
