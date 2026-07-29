@@ -1,6 +1,6 @@
-import { useRouter } from 'one'
 import { Platform } from 'react-native'
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { RoomEvent } from 'livekit-client'
 
 import { ShareSheet } from '~/components/share'
 import { ScreenCenter } from '~/components/layout'
@@ -29,8 +29,39 @@ import { coworkGlassStyle, useCoWorkTheme } from '~/co-work/lib/theme'
 import { controlGradientStyle, footerFadeStyle } from '~/lib/platform/crossStyles'
 import type { Meeting } from '~/co-work/lib/types'
 import { useAppLayout } from '~/hooks/useAppLayout'
+import { navigateApp } from '~/lib/platform/navigate'
 import { coWorkRoutes } from '~/lib/routes'
 import { copyShareLink } from '~/lib/share'
+
+const MUTE_ALL_DATA_TOPIC = 'sheconomy.mute-all'
+
+function encodeMuteAllPayload(from: string): Uint8Array {
+  return new TextEncoder().encode(JSON.stringify({ type: MUTE_ALL_DATA_TOPIC, from }))
+}
+
+function decodeMuteAllPayload(payload: Uint8Array): { from?: string } | null {
+  try {
+    const parsed = JSON.parse(new TextDecoder().decode(payload)) as { type?: string; from?: string }
+    if (parsed?.type !== MUTE_ALL_DATA_TOPIC) return null
+    return { from: parsed.from }
+  } catch {
+    return null
+  }
+}
+
+async function withTimeout<T>(promise: Promise<T>, ms: number): Promise<T | null> {
+  let timer: ReturnType<typeof setTimeout> | undefined
+  try {
+    return await Promise.race([
+      promise,
+      new Promise<null>((resolve) => {
+        timer = setTimeout(() => resolve(null), ms)
+      }),
+    ])
+  } finally {
+    if (timer) clearTimeout(timer)
+  }
+}
 
 type MeetingRoomScreenProps = {
   meeting: Meeting
@@ -134,6 +165,7 @@ function MeetingRoomOverlay({
   userId,
   displayName,
   isHost,
+  onLeave,
   presence,
   caps,
   title,
@@ -145,13 +177,14 @@ function MeetingRoomOverlay({
   liveKit?: LiveKitMediaControls
 }) {
   const { ui: coworkUi, gradients: coworkGradients } = useCoWorkTheme()
-  const router = useRouter()
   const toast = useAppToast()
   const { isMobile, isTablet, isDesktop, safeTop } = useAppLayout()
   const [dismissedError, setDismissedError] = useState<string | null>(null)
   const [meetingState, setMeetingState] = useState(meeting)
   const [shareOpen, setShareOpen] = useState(false)
   const [reactionTrayOpen, setReactionTrayOpen] = useState(false)
+  const [exiting, setExiting] = useState(false)
+  const exitingRef = useRef(false)
 
   const allowRecording = meeting.security_settings?.allowRecording !== false
   const autoRecord = !!meeting.meeting_options?.autoRecord && isHost && allowRecording
@@ -219,16 +252,32 @@ function MeetingRoomOverlay({
       presence.registerMediaHandlers({})
       return
     }
+
+    const applyRemoteMuteAll = () => {
+      if (liveKit.audioEnabled) {
+        void presence.syncMediaState({ is_muted: true })
+        liveKit.toggleAudio()
+      }
+    }
+
     presence.registerMediaHandlers({
-      onMuteAll: () => {
-        if (liveKit.audioEnabled) {
-          void presence.syncMediaState({ is_muted: true })
-          liveKit.toggleAudio()
-        }
-      },
+      onMuteAll: applyRemoteMuteAll,
     })
-    return () => presence.registerMediaHandlers({})
-  }, [liveKit, presence.registerMediaHandlers, presence.syncMediaState])
+
+    const onData = (payload: Uint8Array, participant?: { identity?: string }) => {
+      const decoded = decodeMuteAllPayload(payload)
+      if (!decoded) return
+      if (participant?.identity === liveKit.localParticipant.identity) return
+      if (decoded.from === userId) return
+      applyRemoteMuteAll()
+    }
+
+    liveKit.room.on(RoomEvent.DataReceived, onData)
+    return () => {
+      liveKit.room.off(RoomEvent.DataReceived, onData)
+      presence.registerMediaHandlers({})
+    }
+  }, [liveKit, presence.registerMediaHandlers, presence.syncMediaState, userId])
 
   useEffect(() => {
     const notice = presence.latestChatNotice
@@ -377,6 +426,91 @@ function MeetingRoomOverlay({
       })
     })
   }, [meeting.meeting_code, toast])
+
+  const exitToCoWork = useCallback(() => {
+    if (onLeave) {
+      onLeave()
+      return
+    }
+    navigateApp(coWorkRoutes.home)
+  }, [onLeave])
+
+  const disconnectLiveKit = useCallback(() => {
+    const room = liveKit?.room
+    if (!room) return
+    try {
+      room.disconnect(true)
+    } catch {
+      // Room may already be tearing down.
+    }
+  }, [liveKit?.room])
+
+  const handleMuteAll = useCallback(() => {
+    if (!isHost) return
+    const signaled = presence.muteAll()
+    let published = false
+    if (liveKit?.room) {
+      try {
+        void liveKit.room.localParticipant.publishData(encodeMuteAllPayload(userId), {
+          reliable: true,
+        })
+        published = true
+      } catch {
+        published = false
+      }
+    }
+    if (signaled || published) {
+      toast.show('Mute all sent', {
+        tone: 'success',
+        message: 'Participants will be asked to mute their microphones.',
+      })
+      return
+    }
+    toast.show('Could not mute all', {
+      tone: 'danger',
+      message: 'Live updates are disconnected. Reconnect and try again.',
+    })
+  }, [isHost, liveKit?.room, presence, toast, userId])
+
+  const handleLeave = useCallback(() => {
+    if (exitingRef.current) return
+    exitingRef.current = true
+    setExiting(true)
+    void (async () => {
+      try {
+        if (isHost && recordingSession.recording) {
+          await withTimeout(recordingSession.stopRecording(), 4000)
+        }
+        disconnectLiveKit()
+        await withTimeout(presence.leave(), 4000)
+      } finally {
+        exitToCoWork()
+      }
+    })()
+  }, [
+    disconnectLiveKit,
+    exitToCoWork,
+    isHost,
+    presence,
+    recordingSession,
+  ])
+
+  const handleEnd = useCallback(() => {
+    if (!isHost || exitingRef.current) return
+    exitingRef.current = true
+    setExiting(true)
+    void (async () => {
+      try {
+        if (recordingSession.recording) {
+          await withTimeout(recordingSession.stopRecording(), 4000)
+        }
+        disconnectLiveKit()
+        await withTimeout(presence.hostEnd(), 4000)
+      } finally {
+        exitToCoWork()
+      }
+    })()
+  }, [disconnectLiveKit, exitToCoWork, isHost, presence, recordingSession])
 
   const panelTop = roomy ? 92 : 96
   // Meeting routes are chromeless (no app tab bar). Only clear the home indicator.
@@ -705,6 +839,7 @@ function MeetingRoomOverlay({
           unreadChatCount={presence.unreadChatCount}
           raisedHandCount={raisedHandCount}
           reactionTrayOpen={reactionTrayOpen}
+          busy={exiting}
           onToggleAudio={() => {
             if (!liveKit) {
               toast.show('Still connecting…', {
@@ -738,33 +873,9 @@ function MeetingRoomOverlay({
           onToggleInfo={() => presence.togglePanel('info')}
           onToggleInvite={isHost ? () => presence.togglePanel('invite') : undefined}
           onShare={() => setShareOpen(true)}
-          onMuteAll={isHost ? () => presence.muteAll() : undefined}
-          onLeave={() => {
-            void (async () => {
-              if (isHost && recordingSession.recording) {
-                await recordingSession.stopRecording()
-              }
-              await presence.leave()
-              if (props.onLeave) {
-                props.onLeave()
-              } else {
-                router.push(coWorkRoutes.home)
-              }
-            })()
-          }}
-          onEnd={() => {
-            void (async () => {
-              if (recordingSession.recording) {
-                await recordingSession.stopRecording()
-              }
-              await presence.hostEnd()
-              if (props.onLeave) {
-                props.onLeave()
-              } else {
-                router.push(coWorkRoutes.home)
-              }
-            })()
-          }}
+          onMuteAll={isHost ? handleMuteAll : undefined}
+          onLeave={handleLeave}
+          onEnd={handleEnd}
         />
       </YStack>
 

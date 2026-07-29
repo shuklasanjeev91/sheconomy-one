@@ -217,8 +217,7 @@ function getSheconomyLivekitCss(ui: CoWorkUiTokens, shadows: CoWorkShadows) {
     height: 100%;
     pointer-events: none;
   }
-`
-}
+`}
 
 export function LiveKitMeetingRoom({
   meetingId,

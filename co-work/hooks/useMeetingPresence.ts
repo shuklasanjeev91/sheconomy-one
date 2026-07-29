@@ -139,8 +139,10 @@ export function useMeetingPresence({
     }, POLL_INTERVAL_MS)
   }, [refreshChat, refreshParticipants])
 
-  const sendSignal = useCallback((payload: SignalPayload) => {
-    if (channelRef.current) broadcastSignal(channelRef.current, payload)
+  const sendSignal = useCallback((payload: SignalPayload): boolean => {
+    if (!channelRef.current) return false
+    broadcastSignal(channelRef.current, payload)
+    return true
   }, [])
 
   const pushFloatingReaction = useCallback(
@@ -308,8 +310,18 @@ export function useMeetingPresence({
     realtimeActiveRef.current = false
     const channel = channelRef.current
     channelRef.current = null
-    if (channel) await unsubscribeMeetingChannel(channel)
-    await leaveMeetingParticipant(meeting.id, userId)
+    if (channel) {
+      try {
+        await unsubscribeMeetingChannel(channel)
+      } catch {
+        // Best-effort — still leave the participant row.
+      }
+    }
+    try {
+      await leaveMeetingParticipant(meeting.id, userId)
+    } catch {
+      // Navigation / UI exit must not hang on a failed leave update.
+    }
   }, [meeting.id, stopPolling, userId])
 
   useEffect(() => {
@@ -380,7 +392,11 @@ export function useMeetingPresence({
   }, [disconnect])
 
   const hostEnd = useCallback(async () => {
-    await endMeeting(meeting.id)
+    try {
+      await endMeeting(meeting.id)
+    } catch {
+      // Still disconnect locally so the host can exit the room UI.
+    }
     connectGenerationRef.current += 1
     await disconnect()
   }, [disconnect, meeting.id])
@@ -400,8 +416,8 @@ export function useMeetingPresence({
     })
   }, [sendSignal, userId])
 
-  const muteAll = useCallback(() => {
-    sendSignal({ type: 'mute-all', from: userId })
+  const muteAll = useCallback((): boolean => {
+    return sendSignal({ type: 'mute-all', from: userId })
   }, [sendSignal, userId])
 
   const broadcastCaption = useCallback(
