@@ -111,7 +111,6 @@
       "usesAppleSignIn": true,
       "icon": "./public/app-icon.png",
       "associatedDomains": [
-        "applinks:sheconomy-one-sanjeev-shuklas-projects.vercel.app",
         "applinks:sheconomy-one-sanjeev-shuklas-projects.vercel.app"
       ],
       "infoPlist": {
