@@ -146,6 +146,20 @@
     "vitest": "^3.2.4"
   },
   "packageManager": "yarn@4.17.0",
+  "dependenciesMeta": {
+    "sharp": {
+      "built": false
+    },
+    "electron": {
+      "built": false
+    },
+    "electron-builder": {
+      "built": false
+    },
+    "@electron/rebuild": {
+      "built": false
+    }
+  },
   "resolutions": {
     "@babel/runtime": "7.29.7",
     "@tamagui/core": "2.4.0",
