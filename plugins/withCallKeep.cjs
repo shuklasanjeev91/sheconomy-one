@@ -17,7 +17,8 @@ const ANDROID_PERMISSIONS = [
   'android.permission.READ_PHONE_STATE',
   'android.permission.READ_PHONE_NUMBERS',
   'android.permission.MANAGE_OWN_CALLS',
-  'android.permission.READ_CALL_LOG',
+  // READ_CALL_LOG is a Play-restricted permission (default dialer / SMS apps).
+  // VoIP CallKeep works without it; including it blocks production uploads.
   'android.permission.USE_FULL_SCREEN_INTENT',
   'android.permission.FOREGROUND_SERVICE_PHONE_CALL',
   'android.permission.FOREGROUND_SERVICE_MICROPHONE',

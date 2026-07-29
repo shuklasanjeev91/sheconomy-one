@@ -4,6 +4,39 @@ export const APP_SCHEME = 'sheconomy'
 /** Default production web origin when env vars are unset. */
 export const DEFAULT_APP_ORIGIN = 'https://sheconomy.in'
 
+/** Preview / deploy hosts that must never appear in share or deep links. */
+function isEphemeralOrigin(origin: string): boolean {
+  try {
+    const host = new URL(origin).hostname.toLowerCase()
+    return (
+      host === 'localhost' ||
+      host.endsWith('.localhost') ||
+      host === '127.0.0.1' ||
+      host.endsWith('.vercel.app') ||
+      host.endsWith('.now.sh') ||
+      host.endsWith('.netlify.app') ||
+      host.endsWith('.expo.dev') ||
+      host.endsWith('.exp.direct')
+    )
+  } catch {
+    return true
+  }
+}
+
+function normalizeOrigin(value: string): string | undefined {
+  const trimmed = value.trim().replace(/\/$/, '')
+  if (!trimmed) return undefined
+  try {
+    const url = new URL(trimmed.includes('://') ? trimmed : `https://${trimmed}`)
+    if (url.protocol !== 'http:' && url.protocol !== 'https:') return undefined
+    const origin = url.origin
+    if (isEphemeralOrigin(origin)) return undefined
+    return origin
+  } catch {
+    return undefined
+  }
+}
+
 function readEnvOrigin(): string | undefined {
   const candidates = [
     typeof process !== 'undefined' ? process.env.EXPO_PUBLIC_WEB_APP_URL : undefined,
@@ -11,8 +44,9 @@ function readEnvOrigin(): string | undefined {
   ]
 
   for (const value of candidates) {
-    if (value && typeof value === 'string' && value.trim().length > 0) {
-      return value.trim().replace(/\/$/, '')
+    if (value && typeof value === 'string') {
+      const origin = normalizeOrigin(value)
+      if (origin) return origin
     }
   }
 

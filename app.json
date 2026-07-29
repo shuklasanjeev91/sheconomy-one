@@ -102,7 +102,7 @@
     },
     "ios": {
       "bundleIdentifier": "com.sheconomy.ecommerce",
-      "buildNumber": "98",
+      "buildNumber": "102",
       "appleTeamId": "52H73QK4CL",
       "supportsTablet": true,
       "requireFullScreen": false,
@@ -118,7 +118,6 @@
           "voip",
           "remote-notification"
         ],
-        "NSUserTrackingUsageDescription": "This permission is used to deliver personalized push notifications.",
         "NSFaceIDUsageDescription": "Unlock SHEconomy with Face ID when biometric unlock is enabled.",
         "NSContactsUsageDescription": "Allow access so you can select contacts to connect with people you know. SHEconomy only uploads the contacts you choose.",
         "NSLocationWhenInUseUsageDescription": "Allow SHEconomy to use your location to autofill delivery addresses, check PIN availability, and show nearby shops. Precise location is optional.",
@@ -153,7 +152,7 @@
     },
     "android": {
       "package": "com.sheconomy.ecommerce",
-      "versionCode": 107,
+      "versionCode": 111,
       "softwareKeyboardLayoutMode": "resize",
       "adaptiveIcon": {
         "foregroundImage": "./public/app-icon.png",
@@ -197,7 +196,6 @@
         "android.permission.READ_PHONE_STATE",
         "android.permission.READ_PHONE_NUMBERS",
         "android.permission.CALL_PHONE",
-        "android.permission.READ_CALL_LOG",
         "android.permission.USE_FULL_SCREEN_INTENT"
       ]
     },

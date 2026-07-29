@@ -495,11 +495,7 @@ export async function sendMeetingChatMessage(
   }
 }
 
-import { buildAbsoluteUrl } from '~/lib/platform/url'
-
-export function getMeetingShareUrl(code: string): string {
-  return buildAbsoluteUrl(`/co-work/meeting/${encodeURIComponent(code)}`)
-}
+export { getMeetingShareUrl } from '~/lib/share/urls'
 
 export function formatMeetingCode(code: string): string {
   const clean = code.replace(/\s/g, '').toUpperCase()
