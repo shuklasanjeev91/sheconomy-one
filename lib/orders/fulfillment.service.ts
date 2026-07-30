@@ -24,6 +24,7 @@ import {
   ORDER_DEFAULTS,
   type FulfillmentStatus,
 } from '~/lib/orders/order.constants'
+import { eventTypeForStatus, fulfillmentStatusLabel } from '~/lib/orders/fulfillment.utils'
 import { validateFulfillmentData } from '~/lib/orders/fulfillment.validation'
 import type {
   CarrierService,
@@ -249,10 +250,14 @@ export async function updateFulfillmentStatus(
     if (error) return fail(error, 'Failed to update fulfillment status')
 
     await createFulfillmentEvent(fulfillmentId, {
-      event_type: FULFILLMENT_EVENT_TYPE.STATUS_CHANGE,
+      event_type: eventTypeForStatus(status),
       previous_status: current.fulfillment_status,
       new_status: status,
-      event_description: `Status updated to ${status}`,
+      event_description:
+        metadata.exception_reason?.trim() ||
+        metadata.cancellation_reason?.trim() ||
+        metadata.return_reason?.trim() ||
+        `Status updated to ${fulfillmentStatusLabel(status)}`,
       triggered_by: metadata.updated_by ?? id,
       source_system: metadata.source_system,
       event_data: metadata,

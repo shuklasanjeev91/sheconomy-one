@@ -7,6 +7,22 @@ import { inAppPathFromUrl } from '~/lib/platform/inAppPath'
 export { inAppPathFromUrl } from '~/lib/platform/inAppPath'
 
 /**
+ * Accept only well-formed http(s) URLs, normalized. Use before rendering any
+ * user- or vendor-supplied link so `javascript:` / `data:` schemes can't slip
+ * through. Returns `null` when the value is unusable.
+ */
+export function safeHttpUrl(url: string | null | undefined): string | null {
+  if (!url?.trim()) return null
+  try {
+    const parsed = new URL(url.trim())
+    if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') return null
+    return parsed.toString()
+  } catch {
+    return null
+  }
+}
+
+/**
  * Soft in-app SPA navigation, or open true externals outside the shell.
  * Never assigns `window.location` (no hard reload).
  */

@@ -47,7 +47,9 @@ import { useAppUi } from '~/lib/theme/useAppUi'
 import { OrderStatusBadge } from '~/commerce/components/vendor/OrderStatusBadge'
 import { getVendorOrderActions, type VendorOrderAction } from '~/commerce/components/vendor/vendor-order-actions'
 import { VendorAddTrackingDrawer, type TrackingFormValues } from '~/commerce/screens/vendor/VendorAddTrackingDrawer'
-import { ActionButton, VendorOrderDetailDrawer } from '~/commerce/screens/vendor/VendorOrderDetailDrawer'
+import { VendorOrderDetailDrawer } from '~/commerce/screens/vendor/VendorOrderDetailDrawer'
+import { VendorActionButton } from '~/commerce/components/vendor/VendorActionButton'
+
 
 const PAGE_SIZE = 10
 
@@ -639,7 +641,7 @@ function OrderRow({ ui, item, role, updating, isLast, onOpen, onAdvance }: RowPr
       <XStack flex={1.6} minWidth={0} justifyContent="flex-end" gap="$1.5" flexWrap="wrap">
         {actions.length > 0 ? (
           actions.map((action) => (
-            <ActionButton
+            <VendorActionButton
               key={action.key}
               ui={ui}
               action={action}
@@ -728,7 +730,7 @@ function OrderCard({ ui, item, role, updating, onOpen, onAdvance }: CardProps) {
 
       <XStack gap="$2" flexWrap="wrap">
         {actions.map((action) => (
-          <ActionButton
+          <VendorActionButton
             key={action.key}
             ui={ui}
             action={action}

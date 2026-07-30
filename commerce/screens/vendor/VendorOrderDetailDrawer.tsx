@@ -39,6 +39,7 @@ import {
 } from '~/commerce/lib/customer-order-trust'
 
 import { OrderStatusBadge } from '~/commerce/components/vendor/OrderStatusBadge'
+import { VendorActionButton } from '~/commerce/components/vendor/VendorActionButton'
 import { getVendorOrderActions, type VendorOrderAction } from '~/commerce/components/vendor/vendor-order-actions'
 
 const PANEL_WIDTH = 460
@@ -595,7 +596,7 @@ function DrawerBody({
         {actions.length > 0 ? (
           <XStack gap="$2">
             {actions.map((action) => (
-              <ActionButton
+              <VendorActionButton
                 key={action.key}
                 ui={ui}
                 action={action}
@@ -707,55 +708,3 @@ function SummaryRow({
   )
 }
 
-type ActionButtonProps = {
-  ui: AppUiTokens
-  action: VendorOrderAction
-  disabled?: boolean
-  flex?: number
-  onPress: () => void
-}
-
-/** Renders a status action with tone-aware colours (green accept, red reject, brand advance). */
-export function ActionButton({ ui, action, disabled, flex, onPress }: ActionButtonProps) {
-  const Icon = (Icons as Record<string, IconType>)[action.icon] ?? Icons.ArrowRight
-
-  if (action.tone === 'success') {
-    return (
-      <Button
-        size="$3"
-        borderRadius={999}
-        flex={flex}
-        disabled={disabled}
-        backgroundColor={ui.success}
-        color={ui.onBrand}
-        borderWidth={0}
-        icon={<Icon size={15} color={ui.onBrand} />}
-        onPress={onPress}
-      >
-        {action.label}
-      </Button>
-    )
-  }
-
-  if (action.tone === 'destructive') {
-    return (
-      <Button size="$3" borderRadius={999} flex={flex} tone="destructive" disabled={disabled} icon={<Icon size={15} />} onPress={onPress}>
-        {action.label}
-      </Button>
-    )
-  }
-
-  if (action.tone === 'outline') {
-    return (
-      <Button size="$3" borderRadius={999} flex={flex} tone="outline" disabled={disabled} icon={<Icon size={15} />} onPress={onPress}>
-        {action.label}
-      </Button>
-    )
-  }
-
-  return (
-    <Button size="$3" borderRadius={999} flex={flex} tone="primary" disabled={disabled} icon={<Icon size={15} />} onPress={onPress}>
-      {action.label}
-    </Button>
-  )
-}

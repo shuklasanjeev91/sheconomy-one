@@ -7,11 +7,11 @@ import type { AppUiTokens } from '~/lib/theme/app-ui'
 
 import {
   VENDOR_NAV_GROUPS,
-  isVendorSettingsChildActive,
-  normalizeVendorPathname,
+  getVendorSectionNavItemId,
+  isVendorNavChildActive,
   type VendorNavItem,
 } from '~/commerce/components/vendor/vendor-nav'
-import { useVendorSettingsActiveSubId } from '~/commerce/components/vendor/useVendorSettingsActiveSubId'
+import { useVendorActiveSubId } from '~/commerce/components/vendor/useVendorActiveSubId'
 
 const TOPBAR_HEIGHT = 60
 
@@ -38,10 +38,10 @@ export function VendorSidebar({
   onToggleCollapse,
   onClose,
 }: VendorSidebarProps) {
-  const pathname = usePathname()
-  const settingsActiveSubId = useVendorSettingsActiveSubId()
-  const onSettingsPage = normalizeVendorPathname(pathname) === '/vendor/settings'
-  const resolvedActiveSubId = onSettingsPage ? settingsActiveSubId ?? activeSubIdProp : activeSubIdProp
+  // The URL-derived id wins so the highlighted row stays in sync with
+  // `?section=` changes that the router's params can lag behind on web.
+  const urlActiveSubId = useVendorActiveSubId()
+  const resolvedActiveSubId = urlActiveSubId ?? activeSubIdProp
 
   return (
     <YStack flex={1} minHeight={0}>
@@ -178,12 +178,11 @@ type VendorNavEntryProps = {
 
 function VendorNavEntry({ ui, item, activeId, activeSubId, collapsed, onSelect }: VendorNavEntryProps) {
   const pathname = usePathname()
-  const onSettingsPage = normalizeVendorPathname(pathname) === '/vendor/settings'
   const children = item.children ?? []
   const hasChildren = children.length > 0
-  const groupActive = item.id === activeId || (item.id === 'settings' && onSettingsPage)
+  const groupActive = item.id === activeId || item.id === getVendorSectionNavItemId(pathname)
   const hasActiveChild = Boolean(
-    activeSubId && children.some((child) => isVendorSettingsChildActive(child, activeSubId)),
+    activeSubId && children.some((child) => isVendorNavChildActive(child, activeSubId)),
   )
 
   const [expanded, setExpanded] = useState(groupActive)
@@ -229,7 +228,7 @@ function VendorNavEntry({ ui, item, activeId, activeSubId, collapsed, onSelect }
               key={child.id}
               ui={ui}
               item={child}
-              active={isVendorSettingsChildActive(child, activeSubId)}
+              active={isVendorNavChildActive(child, activeSubId)}
               collapsed={false}
               isChild
               onPress={() => onSelect(child)}

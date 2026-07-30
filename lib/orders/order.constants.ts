@@ -419,4 +419,6 @@ export const FULFILLMENT_DEFAULTS = {
   /** Prefix for auto-generated `fulfillment_number`s. */
   NUMBER_PREFIX: 'FUL',
   EVENT_SOURCE_SYSTEM: 'internal',
+  /** `source_system` stamped on events the vendor triggers from their console. */
+  VENDOR_SOURCE_SYSTEM: 'vendor_console',
 } as const

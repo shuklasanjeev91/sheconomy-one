@@ -2,14 +2,10 @@ import { useSyncExternalStore } from 'react'
 import { Platform } from 'react-native'
 import { useGlobalSearchParams, usePathname } from 'one'
 
-import { getSearchParam } from '~/lib/platform/url'
-
 import {
-  getVendorSettingsActiveSubId,
-  normalizeSettingsSectionParam,
-  normalizeVendorPathname,
-  readSettingsSectionFromPathname,
-  type VendorSettingsSectionId,
+  readSectionFromLocation,
+  resolveVendorActiveSubId,
+  resolveVendorSection,
 } from '~/commerce/components/vendor/vendor-nav'
 
 /**
@@ -47,31 +43,31 @@ function subscribeToBrowserSearch(callback: () => void) {
   }
 }
 
-function readBrowserSectionSnapshot(): string | null {
-  if (Platform.OS !== 'web') return null
-  return getSearchParam('section')
-}
-
-/** Active settings sub-nav id (`settings-payments`, etc.) synced with the URL. */
-export function useVendorSettingsActiveSubId(): string | undefined {
-  const pathname = usePathname()
+/** The `?section=` value the URL currently points at, kept in sync on web. */
+function useSectionParam(): string | string[] | undefined | null {
   const globalParams = useGlobalSearchParams() as Record<string, string | string[] | undefined>
   const browserSection = useSyncExternalStore(
     subscribeToBrowserSearch,
-    readBrowserSectionSnapshot,
+    readSectionFromLocation,
     () => null,
   )
+  return browserSection ?? globalParams.section
+}
 
-  const normalizedPath = normalizeVendorPathname(pathname)
-  if (normalizedPath !== '/vendor/settings') return undefined
+/**
+ * Active sub-nav id (`orders-issues`, `settings-payments`, …) synced with the
+ * URL. Returns `undefined` on pages that don't host `?section=` sub-pages.
+ */
+export function useVendorActiveSubId(): string | undefined {
+  const pathname = usePathname()
+  return resolveVendorActiveSubId(pathname, useSectionParam())
+}
 
-  const fromPathname = readSettingsSectionFromPathname(pathname)
-  const rawParam = globalParams.section
-  const fromGlobal = Array.isArray(rawParam) ? rawParam[0] : rawParam
-
-  const section: VendorSettingsSectionId = normalizeSettingsSectionParam(
-    fromPathname ?? browserSection ?? fromGlobal ?? 'general',
-  )
-
-  return getVendorSettingsActiveSubId(section)
+/**
+ * Normalized section id for the current section-hosting page (`all`, `issues`,
+ * …), or `null` elsewhere. Used by host screens to pick which panel to render.
+ */
+export function useVendorSectionId(): string | null {
+  const pathname = usePathname()
+  return resolveVendorSection(pathname, useSectionParam())?.section ?? null
 }

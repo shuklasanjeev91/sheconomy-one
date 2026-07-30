@@ -89,6 +89,8 @@ export const vendorRoutes = {
   editListing: (id: string) => `/vendor/create-listing?id=${encodeURIComponent(id)}` as Href,
   products: '/vendor/products' as Href,
   orders: '/vendor/orders' as Href,
+  ordersSection: (section: string) =>
+    `/vendor/orders?section=${encodeURIComponent(section)}` as Href,
   analytics: '/vendor/analytics' as Href,
   delivery: '/vendor/delivery' as Href,
   ads: '/vendor/ads' as Href,

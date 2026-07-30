@@ -19,9 +19,45 @@ export type VendorNavItem = {
 }
 
 /** Build a `/vendor/settings?section=<id>` link for a settings sub-item. */
-function settingsHref(section: string): Href {
+function settingsHref(section: VendorSettingsSectionId): Href {
   return vendorRoutes.settingsSection(section)
 }
+
+/** Build a `/vendor/orders?section=<id>` link for an orders sub-item. */
+function ordersHref(section: VendorOrdersSectionId): Href {
+  return vendorRoutes.ordersSection(section)
+}
+
+/**
+ * Orders sub-sections, surfaced as a dropdown under the main "Orders" item.
+ * All sections below are implemented in VendorOrdersScreen.
+ */
+const ORDERS_CHILDREN: VendorNavItem[] = [
+  {
+    id: 'orders-all',
+    label: 'All orders',
+    description: 'Every line item sold, with status and fulfilment actions.',
+    icon: Icons.ClipboardList,
+    href: ordersHref('all'),
+    ready: true,
+  },
+  {
+    id: 'orders-issues',
+    label: 'Issues & requests',
+    description: 'Cancellations, returns, refunds, and customer complaints.',
+    icon: Icons.AlertTriangle,
+    href: ordersHref('issues'),
+    ready: true,
+  },
+  {
+    id: 'orders-fulfillments',
+    label: 'Fulfilments',
+    description: 'Pick, pack, and ship queue with carrier scan history.',
+    icon: Icons.PackageCheck,
+    href: ordersHref('fulfillments'),
+    ready: true,
+  },
+]
 
 /**
  * Settings sub-sections, surfaced as a dropdown under the main "Settings" item.
@@ -116,8 +152,9 @@ export const VENDOR_NAV_GROUPS: VendorNavGroup[] = [
         label: 'Orders',
         description: 'Track and fulfil customer orders.',
         icon: Icons.ShoppingBag,
-        href: vendorRoutes.orders,
+        href: ORDERS_CHILDREN[0].href,
         ready: true,
+        children: ORDERS_CHILDREN,
       },
     ],
   },
@@ -176,6 +213,14 @@ export const VENDOR_NAV_GROUPS: VendorNavGroup[] = [
 
 export const VENDOR_NAV_ITEMS: VendorNavItem[] = VENDOR_NAV_GROUPS.flatMap((group) => group.items)
 
+// ============= SECTION-HOSTED SUB-PAGES =============
+//
+// A few `/vendor/*` pages render their sub-pages from a `?section=` query param
+// instead of nested routes, so a single screen file owns the section switch and
+// deep links behave identically on web and native. Each hosting page registers
+// itself below; everything sub-nav related (URL parsing, highlighted row) is
+// derived from that registry rather than hard-coded per page.
+
 export const VENDOR_SETTINGS_SECTION_IDS = [
   'general',
   'connect',
@@ -188,29 +233,33 @@ export const VENDOR_SETTINGS_SECTION_IDS = [
 
 export type VendorSettingsSectionId = (typeof VENDOR_SETTINGS_SECTION_IDS)[number]
 
-export function normalizeSettingsSectionParam(
-  raw: string | string[] | undefined | null,
-): VendorSettingsSectionId {
-  const value = (Array.isArray(raw) ? raw[0] : raw)?.trim().toLowerCase()
-  if (value && VENDOR_SETTINGS_SECTION_IDS.includes(value as VendorSettingsSectionId)) {
-    return value as VendorSettingsSectionId
-  }
-  return 'general'
+export const VENDOR_ORDERS_SECTION_IDS = ['all', 'issues', 'fulfillments'] as const
+
+export type VendorOrdersSectionId = (typeof VENDOR_ORDERS_SECTION_IDS)[number]
+
+type VendorSectionRoute = {
+  /** Nav item that owns these sections (also the sub-nav id prefix). */
+  navItemId: string
+  /** Normalized pathname of the hosting page. */
+  path: string
+  sectionIds: readonly string[]
+  defaultSection: string
 }
 
-/** Parse `?section=` from the browser location (web fallback when router params lag). */
-export function readSettingsSectionFromLocation(): string | null {
-  if (typeof window === 'undefined') return null
-  try {
-    return new URLSearchParams(window.location.search).get('section')
-  } catch {
-    return null
-  }
-}
-
-export function getVendorSettingsActiveSubId(section: VendorSettingsSectionId): string {
-  return `settings-${section}`
-}
+const VENDOR_SECTION_ROUTES: VendorSectionRoute[] = [
+  {
+    navItemId: 'orders',
+    path: '/vendor/orders',
+    sectionIds: VENDOR_ORDERS_SECTION_IDS,
+    defaultSection: 'all',
+  },
+  {
+    navItemId: 'settings',
+    path: '/vendor/settings',
+    sectionIds: VENDOR_SETTINGS_SECTION_IDS,
+    defaultSection: 'general',
+  },
+]
 
 /** Strip query/hash segments so pathname comparisons stay stable on web. */
 export function normalizeVendorPathname(pathname: string): string {
@@ -218,7 +267,46 @@ export function normalizeVendorPathname(pathname: string): string {
   return pathOnly.replace(/\/+$/, '') || '/vendor'
 }
 
-export function readSettingsSectionFromPathname(pathname: string): string | null {
+/** The section-hosting page a pathname belongs to, if any. */
+function findVendorSectionRoute(pathname: string): VendorSectionRoute | null {
+  const normalized = normalizeVendorPathname(pathname)
+  return VENDOR_SECTION_ROUTES.find((route) => route.path === normalized) ?? null
+}
+
+/** The nav item id that owns the `?section=` param on this pathname. */
+export function getVendorSectionNavItemId(pathname: string): string | null {
+  return findVendorSectionRoute(pathname)?.navItemId ?? null
+}
+
+function normalizeSectionFor(
+  route: VendorSectionRoute,
+  raw: string | string[] | undefined | null,
+): string {
+  const value = (Array.isArray(raw) ? raw[0] : raw)?.trim().toLowerCase()
+  return value && route.sectionIds.includes(value) ? value : route.defaultSection
+}
+
+export function normalizeSettingsSectionParam(
+  raw: string | string[] | undefined | null,
+): VendorSettingsSectionId {
+  const route = VENDOR_SECTION_ROUTES.find((entry) => entry.navItemId === 'settings')!
+  return normalizeSectionFor(route, raw) as VendorSettingsSectionId
+}
+
+export function normalizeOrdersSectionParam(
+  raw: string | string[] | undefined | null,
+): VendorOrdersSectionId {
+  const route = VENDOR_SECTION_ROUTES.find((entry) => entry.navItemId === 'orders')!
+  return normalizeSectionFor(route, raw) as VendorOrdersSectionId
+}
+
+/** Sub-nav id for a section row (e.g. `orders-issues`, `settings-payments`). */
+export function getVendorSectionSubId(navItemId: string, section: string): string {
+  return `${navItemId}-${section}`
+}
+
+/** Read `?section=` out of a full path that still carries its query string. */
+export function readSectionFromPathname(pathname: string): string | null {
   const queryStart = pathname.indexOf('?')
   if (queryStart === -1) return null
   const query = pathname.slice(queryStart + 1).split('#')[0]
@@ -229,43 +317,66 @@ export function readSettingsSectionFromPathname(pathname: string): string | null
   }
 }
 
-/** Resolve highlighted settings sub-nav id from pathname + section param / URL. */
-export function resolveVendorSettingsActiveSubId(
+/** Parse `?section=` from the browser location (web fallback when router params lag). */
+export function readSectionFromLocation(): string | null {
+  if (Platform.OS !== 'web' || typeof window === 'undefined') return null
+  try {
+    return new URLSearchParams(window.location.search).get('section')
+  } catch {
+    return null
+  }
+}
+
+/**
+ * Resolve which section-hosted sub-page the current URL points at.
+ *
+ * Reads the section from the pathname first, then the browser location, then
+ * the router param — on web the router's params can lag a `history.pushState`,
+ * so the URL is the more reliable source.
+ */
+export function resolveVendorSection(
+  pathname: string,
+  rawSection?: string | string[] | null,
+): { navItemId: string; section: string } | null {
+  const route = findVendorSectionRoute(pathname)
+  if (!route) return null
+
+  const paramValue = Array.isArray(rawSection) ? rawSection[0] : rawSection
+  const section = normalizeSectionFor(
+    route,
+    readSectionFromPathname(pathname) ?? readSectionFromLocation() ?? paramValue,
+  )
+
+  return { navItemId: route.navItemId, section }
+}
+
+/** Resolve the highlighted sub-nav id from the pathname + section param / URL. */
+export function resolveVendorActiveSubId(
   pathname: string,
   rawSection?: string | string[] | null,
 ): string | undefined {
-  const normalizedPath = normalizeVendorPathname(pathname)
-  if (normalizedPath !== '/vendor/settings') return undefined
+  const resolved = resolveVendorSection(pathname, rawSection)
+  if (!resolved) return undefined
+  return getVendorSectionSubId(resolved.navItemId, resolved.section)
+}
 
-  const fromPathname = readSettingsSectionFromPathname(pathname)
-  const fromLocation =
-    Platform.OS === 'web' && typeof window !== 'undefined'
-      ? new URLSearchParams(window.location.search).get('section')
-      : null
-  const paramValue = Array.isArray(rawSection) ? rawSection[0] : rawSection
-
-  const section = normalizeSettingsSectionParam(
-    fromPathname ?? fromLocation ?? paramValue ?? 'general',
+/** The sub-nav id a nav child's href resolves to, if it targets a section page. */
+function subIdFromHref(href: Href | string): string | null {
+  const raw = String(href)
+  const route = findVendorSectionRoute(raw)
+  if (!route) return null
+  const match = raw.match(/[?&]section=([^&]+)/)
+  const section = normalizeSectionFor(
+    route,
+    match?.[1] ? decodeURIComponent(match[1]) : null,
   )
-
-  return getVendorSettingsActiveSubId(section)
+  return getVendorSectionSubId(route.navItemId, section)
 }
 
-export function parseSettingsSectionFromHref(href: Href | string): VendorSettingsSectionId | null {
-  const match = String(href).match(/[?&]section=([^&]+)/)
-  if (!match?.[1]) return null
-  return normalizeSettingsSectionParam(decodeURIComponent(match[1]))
-}
-
-export function isVendorSettingsChildActive(
-  child: VendorNavItem,
-  activeSubId?: string,
-): boolean {
-  if (activeSubId && child.id === activeSubId) return true
+export function isVendorNavChildActive(child: VendorNavItem, activeSubId?: string): boolean {
   if (!activeSubId) return false
-  const activeSection = activeSubId.replace(/^settings-/, '')
-  const childSection = parseSettingsSectionFromHref(child.href)
-  return childSection != null && childSection === activeSection
+  if (child.id === activeSubId) return true
+  return subIdFromHref(child.href) === activeSubId
 }
 
 /** Resolve the active nav item from the current pathname (defaults to My Shop). */
