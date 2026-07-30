@@ -51,7 +51,8 @@ Mention in the public description (or “About this app”) that SHEconomy suppo
 
 ## Engineering checklist (already in repo)
 
-- [`app.json`](../../app.json) — `expo-build-properties` `compileSdkVersion` / `targetSdkVersion` **35**; `versionCode` bumped for resubmit
+- [`app.json`](../../app.json) — `expo-build-properties` with `compileSdkVersion` **36** and `targetSdkVersion` **35**; `versionCode` bumped for resubmit
+  - Play requires target API 35+. Newer AndroidX (`activity` 1.11 / `core` 1.17) needs `compileSdk` 36 while target can stay 35.
 - [`plugins/withCallKeep.cjs`](../../plugins/withCallKeep.cjs) — `foregroundServiceType=microphone|phoneCall` (no camera)
 - [`plugins/withAndroidFgsCompliance.cjs`](../../plugins/withAndroidFgsCompliance.cjs) — strips unused location FGS; re-asserts CallKeep types
 - Postinstall patches — visible CallKeep + MediaProjection notifications
