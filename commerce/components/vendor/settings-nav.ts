@@ -5,6 +5,7 @@ type IconType = (typeof Icons)[keyof typeof Icons]
 /** Stable identifiers for each shop-settings section. */
 export type SettingsSectionId =
   | 'general'
+  | 'gst'
   | 'connect'
   | 'payments'
   | 'notifications'
@@ -35,12 +36,20 @@ export const SETTINGS_SECTIONS: readonly SettingsSection[] = [
     ready: true,
   },
   {
+    id: 'gst',
+    label: 'GST Compliance',
+    description: 'GST registration, number, and document management.',
+    icon: Icons.FileText,
+    ready: true,
+  },
+  {
     id: 'connect',
     label: 'Connect',
     description: 'Manage your contact details, shop address, and social platforms.',
     icon: Icons.Share2,
     ready: true,
   },
+
   {
     id: 'payments',
     label: 'Payment Methods',

@@ -27,6 +27,8 @@ import { z } from '~/lib/zod'
 const EMAIL_REGEX = /^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}$/
 /** URL that must include an http(s) scheme. */
 const URL_REGEX = /^https?:\/\/[a-zA-Z0-9-]+(\.[a-zA-Z0-9-]+)+([/?].*)?$/i
+/** GST Number format: 15 characters, alphanumeric, pattern: 2 digits + 10 chars + 1 digit + 1 alpha + 1 digit */
+const GST_REGEX = /^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z]{1}[1-9A-Z]{1}Z[0-9A-Z]{1}$/
 
 const SUPPORTED_CURRENCY_CODES = SUPPORTED_CURRENCIES.map((currency) => currency.code)
 
@@ -50,6 +52,31 @@ export function validateShopPhoneNumber(value: string): string | null {
 
   const result = validateNationalPhone(trimmed, DEFAULT_COUNTRY)
   return result.ok ? null : result.error
+}
+
+/** Validate GST Number format. */
+export function validateGstNumber(value: string): string | null {
+  const trimmed = value.trim().toUpperCase()
+  if (!trimmed) return null
+  
+  if (!GST_REGEX.test(trimmed)) {
+    return 'Please enter a valid 15-character GST number (e.g., 22AAAAA0000A1Z5).'
+  }
+  return null
+}
+
+/** Validate GST document is present. */
+export function validateGstDocument(uri: string): string | null {
+  if (!uri || !uri.trim()) {
+    return 'Please upload your GST certificate document.'
+  }
+  return null
+}
+
+/** Validate GST revenue declaration. */
+export function validateGstRevenueDeclaration(value: boolean): string | null {
+  // No validation needed for boolean, but we keep the function for consistency
+  return null
 }
 
 // ============= FIELD VALIDATORS (for `useFormValidation`) =============
@@ -88,6 +115,15 @@ export const websiteUrlValidator: Validator = optionalUrl(
 export const shopCurrencyValidator: Validator = (value: string) =>
   !value || isSupportedCurrency(value) ? null : 'Please select a valid currency.'
 
+export const gstNumberValidator: Validator = (value: string) => validateGstNumber(value)
+
+export const gstDocumentValidator: Validator = (value: string) => {
+  if (!value || !value.trim()) {
+    return 'Please upload your GST certificate document.'
+  }
+  return null
+}
+
 /** Named lookup so callers can validate a single field generically. */
 export const shopFieldValidators: Partial<Record<keyof ShopFormData, Validator>> = {
   shop_name: shopNameValidator,
@@ -96,6 +132,13 @@ export const shopFieldValidators: Partial<Record<keyof ShopFormData, Validator>>
   shop_phone_number: shopPhoneValidator,
   website_url: websiteUrlValidator,
   shop_currency: shopCurrencyValidator,
+  // GST fields
+  gst_number: gstNumberValidator,
+  gst_document_uri: gstDocumentValidator,
+  gst_revenue_above_20l: (value: unknown) => {
+    // Boolean validation - just ensure it's a boolean
+    return typeof value === 'boolean' ? null : 'Please select an option.'
+  },
 }
 
 /** Validate a single field value. Unknown fields are treated as valid. */
@@ -105,7 +148,16 @@ export function validateShopField(
 ): { isValid: boolean; error: string | null } {
   const validator = shopFieldValidators[field]
   if (!validator) return { isValid: true, error: null }
-  const error = validator(typeof value === 'string' ? value : (value ?? '').toString())
+  
+  // Handle different value types
+  let stringValue = ''
+  if (typeof value === 'string') {
+    stringValue = value
+  } else if (value !== null && value !== undefined) {
+    stringValue = String(value)
+  }
+  
+  const error = validator(stringValue)
   return { isValid: !error, error }
 }
 
@@ -152,6 +204,48 @@ const socialLinksSchema = z
   .optional()
   .default({})
 
+/** GST Schema for validation */
+const gstSchema = z
+  .object({
+    gst_revenue_above_20l: z.boolean().default(false),
+    gst_number: z
+      .string()
+      .trim()
+      .optional()
+      .default('')
+      .refine(
+        (val) => {
+          if (!val) return true // Optional when revenue is false
+          return GST_REGEX.test(val.toUpperCase())
+        },
+        'Please enter a valid 15-character GST number (e.g., 22AAAAA0000A1Z5).'
+      ),
+    gst_document_uri: z
+      .string()
+      .trim()
+      .optional()
+      .default(''),
+    gst_document_path: z
+      .string()
+      .trim()
+      .optional()
+      .default(''),
+  })
+  .refine(
+    (data) => {
+      // If revenue is above 20L, GST number and document are required
+      if (data.gst_revenue_above_20l) {
+        return Boolean(data.gst_number && data.gst_number.trim()) &&
+               Boolean(data.gst_document_uri && data.gst_document_uri.trim())
+      }
+      return true
+    },
+    {
+      message: 'GST number and certificate are required when revenue exceeds ₹20 Lakh.',
+      path: ['gst_compliance'],
+    }
+  )
+
 /** Full shop create/update payload schema. */
 export const shopSchema = z
   .object({
@@ -193,11 +287,49 @@ export const shopSchema = z
     shop_hours: z.record(z.string(), z.string()).optional().default({}),
     shop_metadata: z.record(z.string(), z.unknown()).optional().default({}),
     shop_address_id: z.string().uuid().nullable().optional(),
+    // GST fields
+    gst_revenue_above_20l: z.boolean().default(false),
+    gst_number: z
+      .string()
+      .trim()
+      .optional()
+      .default('')
+      .refine(
+        (val) => {
+          if (!val) return true
+          return GST_REGEX.test(val.toUpperCase())
+        },
+        'Please enter a valid 15-character GST number (e.g., 22AAAAA0000A1Z5).'
+      ),
+    gst_document_uri: z
+      .string()
+      .trim()
+      .optional()
+      .default(''),
+    gst_document_path: z
+      .string()
+      .trim()
+      .optional()
+      .default(''),
   })
   .refine((data) => Boolean(data.shop_email || data.shop_phone_number), {
     message: 'Please provide either an email address or phone number.',
     path: ['shop_contact'],
   })
+  .refine(
+    (data) => {
+      // If revenue is above 20L, GST number and document are required
+      if (data.gst_revenue_above_20l) {
+        return Boolean(data.gst_number && data.gst_number.trim()) &&
+               Boolean(data.gst_document_uri && data.gst_document_uri.trim())
+      }
+      return true
+    },
+    {
+      message: 'GST number and certificate are required when revenue exceeds ₹20 Lakh.',
+      path: ['gst_compliance'],
+    }
+  )
 
 export type ShopSchemaInput = z.input<typeof shopSchema>
 export type ShopSchemaOutput = z.output<typeof shopSchema>
@@ -281,10 +413,31 @@ export function validateShopStep(
           }
         }
       }
-      isComplete =
-        Boolean(
-          data.social_links && Object.values(data.social_links).some((val) => val && val.trim()),
-        ) && Object.keys(errors).length === 0
+      isComplete = Object.keys(errors).length === 0
+      break
+    }
+    case 'gstCompliance': {
+      // Validate GST fields
+      if (data.gst_revenue_above_20l) {
+        collect('gst_number')
+        collect('gst_document_uri')
+        
+        if (!data.gst_number || !data.gst_number.trim()) {
+          errors.gst_number = 'Please enter your GST registration number.'
+        } else {
+          const gstError = validateGstNumber(data.gst_number)
+          if (gstError) errors.gst_number = gstError
+        }
+        
+        if (!data.gst_document_uri || !data.gst_document_uri.trim()) {
+          errors.gst_document_path = 'Please upload your GST certificate document.'
+        }
+        
+        isComplete = Object.keys(errors).length === 0
+      } else {
+        // No GST required - step is complete
+        isComplete = true
+      }
       break
     }
     default:
@@ -300,9 +453,66 @@ export function isShopReadyForSubmission(data: Partial<ShopFormData>): {
   missingFields: string[]
 } {
   const requiredFields: (keyof ShopFormData)[] = ['shop_name']
+  
+  // Add GST fields if revenue is above 20L
+  if (data.gst_revenue_above_20l) {
+    requiredFields.push('gst_number', 'gst_document_uri')
+  }
+  
   const missingFields = requiredFields.filter((field) => {
     const value = data[field]
+    if (field === 'gst_revenue_above_20l') {
+      return value === undefined || value === null
+    }
     return !value || (typeof value === 'string' && value.trim() === '')
   })
+  
+  // Special validation for GST number format if present
+  if (data.gst_number && data.gst_number.trim()) {
+    const gstError = validateGstNumber(data.gst_number)
+    if (gstError) {
+      missingFields.push('gst_number') // Invalid format
+    }
+  }
+  
   return { isReady: missingFields.length === 0, missingFields }
+}
+
+/**
+ * Validate GST-specific fields for the GST step.
+ * Returns detailed validation results for GST compliance step.
+ */
+export function validateGstStep(data: Partial<ShopFormData>): {
+  isValid: boolean
+  errors: Record<string, string>
+  isComplete: boolean
+} {
+  const errors: Record<string, string> = {}
+  let isComplete = false
+
+  if (data.gst_revenue_above_20l) {
+    // Validate GST number
+    if (!data.gst_number || !data.gst_number.trim()) {
+      errors.gst_number = 'Please enter your GST registration number.'
+    } else {
+      const gstError = validateGstNumber(data.gst_number)
+      if (gstError) errors.gst_number = gstError
+    }
+
+    // Validate GST document
+    if (!data.gst_document_uri || !data.gst_document_uri.trim()) {
+      errors.gst_document_path = 'Please upload your GST certificate document.'
+    }
+
+    isComplete = Object.keys(errors).length === 0
+  } else {
+    // No GST required - step is complete
+    isComplete = true
+  }
+
+  return {
+    isValid: Object.keys(errors).length === 0,
+    errors,
+    isComplete,
+  }
 }

@@ -73,6 +73,14 @@ const SETTINGS_CHILDREN: VendorNavItem[] = [
     ready: true,
   },
   {
+    id: 'settings-gst',
+    label: 'GST Compliance',
+    description: 'GST registration, number, and document management.',
+    icon: Icons.FileText,
+    href: settingsHref('gst'),
+    ready: true,
+  },
+  {
     id: 'settings-connect',
     label: 'Connect',
     description: 'Contact details, shop address, and social platforms.',
@@ -223,6 +231,7 @@ export const VENDOR_NAV_ITEMS: VendorNavItem[] = VENDOR_NAV_GROUPS.flatMap((grou
 
 export const VENDOR_SETTINGS_SECTION_IDS = [
   'general',
+  'gst',
   'connect',
   'payments',
   'notifications',

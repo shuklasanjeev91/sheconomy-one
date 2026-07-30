@@ -25,10 +25,22 @@ export type ShopListingsSummary = Database['public']['Views']['shop_listings_sum
 /** Re-export the compact browse shape so shop consumers have a single import surface. */
 export type { ShopSummary }
 
-/**
- * The subset of shop columns collected by the multi-step create/edit form.
- * Everything is optional so partial updates (autosave) type-check cleanly.
- */
+// ─── GST / Tax Compliance ────────────────────────────────────────────────────
+
+export type GstComplianceData = {
+  /** Vendor self-declared: revenue exceeds ₹20L/year */
+  revenue_above_20l: boolean
+  /** GST registration number e.g. 22AAAAA0000A1Z5 */
+  gst_number?: string
+  /** Supabase Storage path (not public URL — fetch via signed URL) */
+  gst_document_path?: string
+  /** Submission timestamp */
+  submitted_at?: string
+  /** Admin verification status */
+  gst_verified?: boolean
+}
+
+// Add these fields to your existing ShopFormData type:
 export type ShopFormData = {
   shop_name: string
   shop_description: string
@@ -42,6 +54,11 @@ export type ShopFormData = {
   social_links: Record<string, string>
   shop_currency: string
   shop_metadata: Record<string, unknown>
+  // ✅ NEW GST fields
+  gst_revenue_above_20l: boolean
+  gst_number: string
+  gst_document_path: string   // storage path after upload
+  gst_document_uri: string    // local file URI before upload (not saved to DB)
 }
 
 /** Sort options accepted by the public shop directory. */
@@ -206,7 +223,7 @@ export const COMMON_SHOP_CATEGORIES: readonly string[] = [
 ]
 
 export type ShopCreationStep = {
-  id: 'basicInfo' | 'contact' | 'categories' | 'currency' | 'socialMedia'
+  id: 'basicInfo' | 'contact' | 'categories' | 'currency' | 'socialMedia' | 'gstCompliance'
   title: string
   subtitle: string
   description: string
@@ -266,6 +283,15 @@ export const SHOP_CREATION_STEPS: readonly ShopCreationStep[] = [
     required: false,
     fields: ['social_links'],
   },
+  {
+    id: 'gstCompliance',
+    title: 'Tax & GST',
+    subtitle: 'Compliance declaration',
+    description: 'Declare your GST compliance',
+    icon: 'file-text',
+    required: false,
+    fields: ['gst_revenue_above_20l', 'gst_number', 'gst_document_path', 'gst_document_uri'],
+  },
 ]
 
 /** Social platforms accepted in `social_links`. */
@@ -296,4 +322,8 @@ export const EMPTY_SHOP_FORM_DATA: ShopFormData = {
   social_links: {},
   shop_currency: DEFAULT_SHOP_CURRENCY,
   shop_metadata: {},
+  gst_revenue_above_20l: false,
+  gst_number: '',
+  gst_document_path: '',
+  gst_document_uri: '',
 }
