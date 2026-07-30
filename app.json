@@ -113,7 +113,7 @@
     },
     "ios": {
       "bundleIdentifier": "com.sheconomy.ecommerce",
-      "buildNumber": "102",
+      "buildNumber": "104",
       "appleTeamId": "52H73QK4CL",
       "supportsTablet": true,
       "requireFullScreen": false,
