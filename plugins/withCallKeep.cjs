@@ -50,7 +50,9 @@ function withCallKeepAndroid(config) {
         'android:label': 'SHEconomy',
         'android:permission': 'android.permission.BIND_TELECOM_CONNECTION_SERVICE',
         'android:exported': 'true',
-        'android:foregroundServiceType': 'camera|microphone|phoneCall',
+        // microphone + phoneCall only — matches FOREGROUND_SERVICE_* permissions
+        // and CallKeep runtime startForeground (no FOREGROUND_SERVICE_CAMERA).
+        'android:foregroundServiceType': 'microphone|phoneCall',
       },
       'intent-filter': [
         {

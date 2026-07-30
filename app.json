@@ -21,6 +21,17 @@
       "./plugins/withUniversalDeviceSupport.cjs",
       "./plugins/withGoogleModularHeaders.cjs",
       "./plugins/withCallKeep.cjs",
+      "./plugins/withAndroidFgsCompliance.cjs",
+      [
+        "expo-build-properties",
+        {
+          "android": {
+            "compileSdkVersion": 35,
+            "targetSdkVersion": 35,
+            "minSdkVersion": 24
+          }
+        }
+      ],
       [
         "onesignal-expo-plugin",
         {
@@ -152,7 +163,7 @@
     },
     "android": {
       "package": "com.sheconomy.ecommerce",
-      "versionCode": 111,
+      "versionCode": 112,
       "softwareKeyboardLayoutMode": "resize",
       "adaptiveIcon": {
         "foregroundImage": "./public/app-icon.png",

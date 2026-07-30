@@ -44,8 +44,12 @@ async function ensureSetup(): Promise<boolean> {
           selfManaged: true,
           foregroundService: {
             channelId: 'com.sheconomy.ecommerce.calls',
-            channelName: 'Incoming calls',
+            channelName: 'SHEconomy calls',
             notificationTitle: 'SHEconomy call in progress',
+            // Extra key read by scripts/patch-callkeep-fgs-notification.cjs
+            ...({
+              notificationText: 'A call is active. Tap to return to SHEconomy.',
+            } as Record<string, string>),
           },
         },
       })
@@ -77,6 +81,8 @@ export async function setupNativeIncomingCalls(
 
   // Defer CallKit / ConnectionService init until after first paint so cold
   // start does not race Hermes GC (Release launch crashes on large bundles).
+  // Setup alone does NOT start an Android FGS — that begins only when
+  // displayIncomingCall / outgoing ConnectionService connections are created.
   await new Promise<void>((resolve) => {
     setTimeout(resolve, 1_500)
   })
