@@ -2767,6 +2767,13 @@ __metadata:
   languageName: node
   linkType: hard
 
+"@expo/schema-utils@npm:^55.0.5":
+  version: 55.0.5
+  resolution: "@expo/schema-utils@npm:55.0.5"
+  checksum: 10/641d387235261f35f83deb8c338c870f7087325f79d61eb54cbea118b1426d410877440215359a79e5d6378bef085cd2996373d6828211c98850442d0fb6733e
+  languageName: node
+  linkType: hard
+
 "@expo/sdk-runtime-versions@npm:^1.0.0":
   version: 1.0.0
   resolution: "@expo/sdk-runtime-versions@npm:1.0.0"
@@ -8053,6 +8060,7 @@ __metadata:
     expo-apple-authentication: "npm:~55.0.13"
     expo-asset: "npm:~55.0.17"
     expo-audio: "npm:~55.0.15"
+    expo-build-properties: "npm:~55.0.0"
     expo-camera: "npm:~55.0.20"
     expo-clipboard: "npm:~55.0.14"
     expo-contacts: "npm:~55.0.15"
@@ -11412,6 +11420,19 @@ __metadata:
     react: "*"
     react-native: "*"
   checksum: 10/9c3b26f8fcf3489c01a572eb9df8135ccc025f3e12abb4055cc3d7a755b0be5fd605cde72e7ec21ad8c1ca5c7fdbce6685921ea8c0628f027057b07135a42b9e
+  languageName: node
+  linkType: hard
+
+"expo-build-properties@npm:~55.0.0":
+  version: 55.0.16
+  resolution: "expo-build-properties@npm:55.0.16"
+  dependencies:
+    "@expo/schema-utils": "npm:^55.0.5"
+    resolve-from: "npm:^5.0.0"
+    semver: "npm:^7.6.0"
+  peerDependencies:
+    expo: "*"
+  checksum: 10/8e22b6694ac081d11343572181b128d216b6bc3a1d12a748c7ebf62f9b455caff725f61597d504f6129b5efc0f843af5732debe274882d12a80fd65f0eff47dd
   languageName: node
   linkType: hard
 
