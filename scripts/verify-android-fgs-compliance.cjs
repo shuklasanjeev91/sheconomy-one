@@ -75,10 +75,12 @@ const hasBuildProps = plugins.some(
     Array.isArray(entry) &&
     entry[0] === 'expo-build-properties' &&
     entry[1]?.android?.targetSdkVersion === 35 &&
-    entry[1]?.android?.compileSdkVersion === 35,
+    Number(entry[1]?.android?.compileSdkVersion) >= 36,
 )
 if (!hasBuildProps) {
-  errors.push('app.json must include expo-build-properties with compile/targetSdkVersion 35')
+  errors.push(
+    'app.json must include expo-build-properties with targetSdkVersion 35 and compileSdkVersion >= 36',
+  )
 }
 
 const hasFgsPlugin = plugins.includes('./plugins/withAndroidFgsCompliance.cjs')
