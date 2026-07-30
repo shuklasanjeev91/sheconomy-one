@@ -13,7 +13,12 @@ const {
 const CALLKEEP_SERVICE = 'io.wazo.callkeep.VoiceConnectionService'
 const LOCATION_TASK_SERVICE = 'expo.modules.location.services.LocationTaskService'
 
-function ensureToolsNamespace(manifest) {
+function ensureToolsNamespace(doc) {
+  // modResults is { manifest: { $: attrs, ... } }. Putting `$` on the document
+  // itself serializes as invalid `<root xmlns:tools>` and breaks EAS
+  // "Configure expo-updates".
+  const manifest = doc?.manifest
+  if (!manifest) return
   if (!manifest.$) manifest.$ = {}
   if (!manifest.$['xmlns:tools']) {
     manifest.$['xmlns:tools'] = 'http://schemas.android.com/tools'

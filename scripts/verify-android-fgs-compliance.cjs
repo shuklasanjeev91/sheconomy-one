@@ -138,6 +138,11 @@ for (const manifestPath of mergedManifestCandidates) {
   if (manifest.includes('camera|microphone|phoneCall')) {
     errors.push('Merged manifest still declares camera FGS type on CallKeep')
   }
+  if (manifest.trimStart().startsWith('<root')) {
+    errors.push(
+      'AndroidManifest has invalid <root> wrapper — tools xmlns must be on <manifest>, not the document',
+    )
+  }
   if (
     manifest.includes('LocationTaskService') &&
     !manifest.includes('tools:node="remove"')
