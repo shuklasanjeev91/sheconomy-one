@@ -46,8 +46,8 @@ import { ScreenSearchField } from '~/components/search'
 import { useFormValidation } from '~/hooks/useFormValidation'
 import { useQueryParam } from '~/hooks/useQueryParams'
 import { useProfile } from '~/hooks/useProfile'
-import { pickMedia, pickVideos, releasePickedImage, type PickedImage } from '~/lib/media/pick-image'
-import { pickImagesWithCrop } from '~/lib/media/pick-and-crop'
+import { pickMedia, pickImages, pickVideos, releasePickedImage, type PickedImage } from '~/lib/media/pick-image'
+import { fitImagesForPostCard } from '~/lib/media/fit-post-image'
 import { splitPostMediaItems } from '~/lib/media/split-post-media'
 import { communityRoutes, routes } from '~/lib/routes'
 import { uploadEventCoverImage, uploadPostImages, uploadPostVideos } from '~/lib/supabase/storage-upload'
@@ -279,18 +279,21 @@ export function CreatePostForm({
 
   const applyPostMediaItems = useCallback(
     (items: PickedImage[]) => {
-      const { photos: imageItems, videos: videoItems } = splitPostMediaItems(items)
-      if (imageItems.length) {
-        form.fields.imageUrl.setValue('')
-        videos.forEach(releasePickedImage)
-        setVideos([])
-        setPhotos((current) => [...current, ...imageItems].slice(0, MAX_PHOTOS))
-      } else if (videoItems.length) {
-        form.fields.imageUrl.setValue('')
-        photos.forEach(releasePickedImage)
-        setPhotos([])
-        setVideos((current) => [...current, ...videoItems].slice(0, MAX_VIDEOS))
-      }
+      void (async () => {
+        const { photos: imageItems, videos: videoItems } = splitPostMediaItems(items)
+        if (imageItems.length) {
+          const fitted = await fitImagesForPostCard(imageItems)
+          form.fields.imageUrl.setValue('')
+          videos.forEach(releasePickedImage)
+          setVideos([])
+          setPhotos((current) => [...current, ...fitted].slice(0, MAX_PHOTOS))
+        } else if (videoItems.length) {
+          form.fields.imageUrl.setValue('')
+          photos.forEach(releasePickedImage)
+          setPhotos([])
+          setVideos((current) => [...current, ...videoItems].slice(0, MAX_VIDEOS))
+        }
+      })()
     },
     [form.fields.imageUrl, photos, videos],
   )
@@ -299,17 +302,16 @@ export function CreatePostForm({
     if (isPicking || photos.length >= MAX_PHOTOS) return
     setIsPicking(true)
     try {
-      const picked = await pickImagesWithCrop({
+      // LinkedIn/Facebook: no crop step — keep natural aspect, auto-fit to feed size.
+      const picked = await pickImages({
         multiple: true,
         maxCount: MAX_PHOTOS - photos.length,
-        crop: true,
-        cropTitle: 'Crop photo',
       })
-      if (picked.length) {
-        form.fields.imageUrl.setValue('')
-        setVideos([])
-        setPhotos((current) => [...current, ...picked].slice(0, MAX_PHOTOS))
-      }
+      if (!picked.length) return
+      const fitted = await fitImagesForPostCard(picked)
+      form.fields.imageUrl.setValue('')
+      setVideos([])
+      setPhotos((current) => [...current, ...fitted].slice(0, MAX_PHOTOS))
     } catch (error) {
       toast.show('Could not add photo', {
         tone: 'danger',
@@ -949,22 +951,24 @@ export function CreatePostForm({
             </Text>
           ) : null}
 
-          {/* Photo previews */}
+          {/* Photo previews — contain like the feed post card (no crop) */}
           {composeMode === 'text' && photos.length > 0 ? (
             <XStack gap={8} flexWrap="wrap">
               {photos.map((photo, index) => (
                 <YStack
                   key={`${photo.uri}-${index}`}
                   width={photos.length === 1 ? '100%' : 120}
-                  height={photos.length === 1 ? 260 : 120}
+                  height={photos.length === 1 ? 280 : 120}
                   borderRadius={12}
                   overflow="hidden"
                   borderWidth={1}
                   borderColor={communityUi.border}
-                  backgroundColor={communityUi.pageBg}
+                  backgroundColor="#0a0a0a"
                   position="relative"
+                  alignItems="center"
+                  justifyContent="center"
                 >
-                  <Image src={photo.uri} width="100%" height="100%" objectFit="cover" alt="" />
+                  <Image src={photo.uri} width="100%" height="100%" objectFit="contain" alt="" />
                   <YStack
                     position="absolute"
                     top={6}

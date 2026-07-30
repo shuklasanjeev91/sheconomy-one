@@ -10,6 +10,7 @@ export function ImageCropHost() {
       open={!!current}
       image={current?.image ?? null}
       aspect={current?.aspect ?? null}
+      shape={current?.shape ?? 'rect'}
       title={current?.title}
       onCancel={() => resolveImageCrop(null)}
       onConfirm={(image) => resolveImageCrop(image)}

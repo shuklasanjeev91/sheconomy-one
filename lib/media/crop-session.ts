@@ -3,10 +3,14 @@ import { useSyncExternalStore } from 'react'
 import type { AspectRatioTuple } from '~/lib/media/aspect'
 import type { PickedImage } from '~/lib/media/pick-image'
 
+/** Circle for profile avatars; rect for cover / post / listing crops. */
+export type CropShape = 'rect' | 'circle'
+
 export type ImageCropRequest = {
   id: string
   image: PickedImage
   aspect: AspectRatioTuple | null
+  shape: CropShape
   title?: string
 }
 
@@ -40,13 +44,18 @@ function advance() {
  */
 export function requestImageCrop(
   image: PickedImage,
-  options: { aspect?: AspectRatioTuple | null; title?: string } = {},
+  options: {
+    aspect?: AspectRatioTuple | null
+    shape?: CropShape
+    title?: string
+  } = {},
 ): Promise<PickedImage | null> {
   return new Promise((resolve) => {
     const pending: PendingCrop = {
       id: `crop-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
       image,
       aspect: options.aspect ?? null,
+      shape: options.shape ?? 'rect',
       title: options.title,
       resolve,
     }
