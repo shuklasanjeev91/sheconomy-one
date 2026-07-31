@@ -122,6 +122,7 @@ declare module 'one' {
         | `/payment-methods`
         | `/profile`
         | `/search`
+        | `/seller/dashboard`
         | `/settings`
         | `/settings/`
         | `/settings/about`
