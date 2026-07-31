@@ -39,7 +39,6 @@
           "disableLocation": true
         }
       ],
-      
       "one/expo-plugin",
       [
         "@livekit/react-native-expo-plugin",
@@ -115,7 +114,7 @@
     },
     "ios": {
       "bundleIdentifier": "com.sheconomy.ecommerce",
-      "buildNumber": "107",
+      "buildNumber": "108",
       "appleTeamId": "52H73QK4CL",
       "supportsTablet": true,
       "requireFullScreen": false,
