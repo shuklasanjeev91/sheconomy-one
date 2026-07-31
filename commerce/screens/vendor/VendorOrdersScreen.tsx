@@ -39,15 +39,21 @@ import {
   updateOrderItemStatus,
 } from '~/lib/orders/vendor-orders.store'
 import type { VendorOrderItem } from '~/lib/orders/vendor-orders.type'
-import { commerceRoutes } from '~/lib/routes'
+import { commerceRoutes, vendorRoutes } from '~/lib/routes'
 import { useAppDispatch, useAppSelector } from '~/lib/store/hooks'
 import type { AppUiTokens } from '~/lib/theme/app-ui'
 import { useAppUi } from '~/lib/theme/useAppUi'
 
 import { OrderStatusBadge } from '~/commerce/components/vendor/OrderStatusBadge'
+import { VendorSectionTabs } from '~/commerce/components/vendor/VendorPanelParts'
 import { getVendorOrderActions, type VendorOrderAction } from '~/commerce/components/vendor/vendor-order-actions'
 import { VendorAddTrackingDrawer, type TrackingFormValues } from '~/commerce/screens/vendor/VendorAddTrackingDrawer'
-import { ActionButton, VendorOrderDetailDrawer } from '~/commerce/screens/vendor/VendorOrderDetailDrawer'
+import { VendorFulfillmentsPanel } from '~/commerce/screens/vendor/VendorFulfillmentsPanel'
+import { VendorOrderIssuesPanel } from '~/commerce/screens/vendor/VendorOrderIssuesPanel'
+import { VendorOrderDetailDrawer } from '~/commerce/screens/vendor/VendorOrderDetailDrawer'
+import { VendorActionButton } from '~/commerce/components/vendor/VendorActionButton'
+import { useVendorSectionId } from '~/commerce/components/vendor/useVendorActiveSubId'
+
 
 const PAGE_SIZE = 10
 
@@ -91,6 +97,7 @@ export function VendorOrdersScreen() {
   const toast = useAppToast()
   const dispatch = useAppDispatch()
   const { profile } = useProfile()
+  const activeSection = useVendorSectionId() ?? 'all'
 
   const shop = useAppSelector((s) => s.shop.currentShop)
   const isLoadingMyShops = useAppSelector((s) => s.shop.isLoadingMyShops)
@@ -267,6 +274,28 @@ export function VendorOrdersScreen() {
       ? currentItem
       : orders.find((item) => item.id === selectedItemId) ?? null
 
+  const sectionTabs = (
+    <VendorSectionTabs
+      ui={ui}
+      activeId={activeSection}
+      tabs={[
+        { id: 'all', label: 'All orders', icon: Icons.ClipboardList, href: String(vendorRoutes.orders) },
+        {
+          id: 'issues',
+          label: 'Issues & requests',
+          icon: Icons.AlertTriangle,
+          href: String(vendorRoutes.ordersSection('issues')),
+        },
+        {
+          id: 'fulfillments',
+          label: 'Fulfillments',
+          icon: Icons.PackageCheck,
+          href: String(vendorRoutes.ordersSection('fulfillments')),
+        },
+      ]}
+    />
+  )
+
   if (!shop && (isLoadingMyShops || !myShopsLoaded)) {
     return (
       <YStack flex={1} alignItems="center" justifyContent="center" minHeight={360}>
@@ -277,6 +306,30 @@ export function VendorOrdersScreen() {
 
   if (!shop) {
     return <NoShopState ui={ui} />
+  }
+
+  if (activeSection === 'issues') {
+    return (
+      <VendorOrderIssuesPanel
+        ui={ui}
+        isDesktop={isDesktop}
+        shopId={shop.id}
+        shopName={shop.shop_name ?? 'Orders'}
+        tabs={sectionTabs}
+      />
+    )
+  }
+
+  if (activeSection === 'fulfillments') {
+    return (
+      <VendorFulfillmentsPanel
+        ui={ui}
+        isDesktop={isDesktop}
+        shopId={shop.id}
+        shopName={shop.shop_name ?? 'Orders'}
+        tabs={sectionTabs}
+      />
+    )
   }
 
   const total = pagination.total
@@ -327,6 +380,8 @@ export function VendorOrdersScreen() {
             Refresh
           </Button>
         </XStack>
+
+        {sectionTabs}
 
         {/* Toolbar */}
         <YStack
@@ -639,7 +694,7 @@ function OrderRow({ ui, item, role, updating, isLast, onOpen, onAdvance }: RowPr
       <XStack flex={1.6} minWidth={0} justifyContent="flex-end" gap="$1.5" flexWrap="wrap">
         {actions.length > 0 ? (
           actions.map((action) => (
-            <ActionButton
+            <VendorActionButton
               key={action.key}
               ui={ui}
               action={action}
@@ -728,7 +783,7 @@ function OrderCard({ ui, item, role, updating, onOpen, onAdvance }: CardProps) {
 
       <XStack gap="$2" flexWrap="wrap">
         {actions.map((action) => (
-          <ActionButton
+          <VendorActionButton
             key={action.key}
             ui={ui}
             action={action}

@@ -137,6 +137,12 @@ export async function updateIssueStatus(
         break
       case ISSUE_STATUS.ESCALATED:
         if (metadata.escalated_to) updates.assigned_to = metadata.escalated_to
+        // No comments table yet, so `resolution_note` doubles as the latest
+        // handler note — see the deferred comment feature in the doc.
+        if (metadata.resolution_note) updates.resolution_note = metadata.resolution_note
+        break
+      case ISSUE_STATUS.WAITING_CUSTOMER:
+        if (metadata.resolution_note) updates.resolution_note = metadata.resolution_note
         break
       default:
         break

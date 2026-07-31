@@ -15,7 +15,7 @@ import { useAppUi } from '~/lib/theme/useAppUi'
 import { VendorSidebar } from '~/commerce/components/vendor/VendorSidebar'
 import {
   getActiveVendorNavItem,
-  resolveVendorSettingsActiveSubId,
+  resolveVendorActiveSubId,
   type VendorNavItem,
 } from '~/commerce/components/vendor/vendor-nav'
 import { commerceRoutes } from '~/lib/routes'
@@ -49,7 +49,7 @@ export function VendorLayout() {
 
   const active = getActiveVendorNavItem(pathname)
   const globalParams = useGlobalSearchParams() as Record<string, string | string[] | undefined>
-  const activeSubId = resolveVendorSettingsActiveSubId(pathname, globalParams.section)
+  const activeSubId = resolveVendorActiveSubId(pathname, globalParams.section)
 
   function handleSelect(item: VendorNavItem) {
     setDrawerOpen(false)

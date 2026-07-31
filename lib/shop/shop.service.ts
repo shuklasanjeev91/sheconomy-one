@@ -27,7 +27,7 @@ import { fetchShopDashboard, type ShopDashboardData } from '~/commerce/lib/selle
 import { slugifyTitle } from '~/commerce/lib/seo-urls'
 import { INVALIDATION_TOPICS, invalidateCache } from '~/lib/cache/invalidation'
 import { supabase } from '~/lib/supabase'
-import { uploadShopLogoImage } from '~/lib/supabase/storage-upload'
+import { uploadShopLogoImage, uploadShopGstDocument } from '~/lib/supabase/storage-upload'
 
 import { toFriendlyShopError } from '~/lib/shop/shop.errors'
 import {
@@ -314,6 +314,8 @@ export async function getPublicShops(
  * `seller_create_shop_with_points` RPC, then persists any extra form fields
  * (contact, categories, hours, social links, logo) and returns the full row.
  */
+
+
 export async function createShop(
   formData: Partial<ShopFormData>,
   userId?: string | null,
@@ -322,8 +324,17 @@ export async function createShop(
   if (!id) return fail('User not authenticated')
 
   const shopName = formData.shop_name?.trim() ?? ''
-  if (shopName.length < 2) {
-    return fail('Shop name must be at least 2 characters.')
+  if (shopName.length < 2) return fail('Shop name must be at least 2 characters.')
+
+  // ✅ Validate GST fields if revenue declared above 20L
+  if (formData.gst_revenue_above_20l) {
+    const gstNumber = formData.gst_number?.trim() ?? ''
+    if (!gstNumber || gstNumber.length !== 15) {
+      return fail('Please enter a valid 15-character GST number.')
+    }
+    if (!formData.gst_document_uri) {
+      return fail('Please upload your GST certificate document.')
+    }
   }
 
   try {
@@ -336,10 +347,65 @@ export async function createShop(
     if (error) return fail(error)
     if (!shopId) return fail('Shop creation did not return an id.')
 
+    // ✅ Upload GST document if provided
+    let gstDocumentPath: string | null = null
+    if (formData.gst_revenue_above_20l && formData.gst_document_uri) {
+      try {
+        const mimeType =
+          (formData.shop_metadata?._gst_doc_mime as string) ?? 'application/pdf'
+        const fileName =
+          (formData.shop_metadata?._gst_doc_name as string) ?? 'gst-document'
+
+        // Convert URI to blob
+        const response = await fetch(formData.gst_document_uri)
+        const blob = await response.blob()
+
+        const { data: uploadData, error: uploadError } = await uploadShopGstDocument(
+          id,
+          shopId,
+          { blob, mimeType, fileName },
+        )
+
+        if (uploadError || !uploadData) {
+          // Non-fatal: log warning but don't block shop creation
+          console.warn('[createShop] GST document upload failed:', uploadError)
+        } else {
+          gstDocumentPath = uploadData.path
+        }
+      } catch (uploadErr) {
+        console.warn('[createShop] GST document upload error:', uploadErr)
+      }
+    }
+
+    // ✅ Build GST metadata to store in shop_metadata jsonb
+    const gstMeta: Record<string, unknown> = {}
+    if (formData.gst_revenue_above_20l) {
+      gstMeta.gst_compliance = {
+        revenue_above_20l: true,
+        gst_number: formData.gst_number?.trim() ?? '',
+        gst_document_path: gstDocumentPath ?? '',
+        submitted_at: new Date().toISOString(),
+        gst_verified: false,  // admin verifies later
+      }
+    } else {
+      gstMeta.gst_compliance = {
+        revenue_above_20l: false,
+        submitted_at: new Date().toISOString(),
+      }
+    }
+
     invalidateShopCaches()
 
-    // Persist any additional fields the create form collected.
-    const extras = buildExtraUpdate(formData)
+    // ✅ Build extras — clean up internal _gst_doc_* keys before saving
+    const rawMeta = { ...(formData.shop_metadata ?? {}) }
+    delete rawMeta._gst_doc_mime
+    delete rawMeta._gst_doc_name
+
+    const extras = buildExtraUpdate({
+      ...formData,
+      shop_metadata: { ...rawMeta, ...gstMeta },
+    })
+
     if (Object.keys(extras).length > 0) {
       const updateResult = await updateShop(shopId, extras)
       if (updateResult.success && updateResult.data) return ok<Shop | null>(updateResult.data)
@@ -350,6 +416,7 @@ export async function createShop(
     return fail(error)
   }
 }
+
 
 /** Refresh every browse/home feed that can show this shop. */
 function invalidateShopCaches() {
@@ -382,6 +449,10 @@ function buildExtraUpdate(formData: Partial<ShopFormData>): ShopUpdate {
   return update
 }
 
+
+
+// ============= UPDATE SHOP =============
+
 export async function updateShop(
   shopId: string,
   updates: ShopUpdate,
@@ -402,6 +473,268 @@ export async function updateShop(
     return ok(data)
   } catch (error) {
     return fail(error)
+  }
+}
+// ============= UPDATE SHOP WITH GST SUPPORT =============
+
+/**
+ * Update shop with GST information. Handles uploading new GST documents
+ * and updating metadata. This should be used when updating GST details
+ * from the vendor settings screen.
+ */
+export async function updateShopWithGst(
+  shopId: string,
+  updates: {
+    gst_revenue_above_20l?: boolean
+    gst_number?: string
+    gst_document_uri?: string
+    gst_document_path?: string
+  },
+  userId?: string | null,
+): Promise<ShopServiceResponse<Shop>> {
+  if (!shopId) return fail('Shop ID is required')
+  
+  const id = await resolveUserId(userId)
+  if (!id) return fail('User not authenticated')
+
+  try {
+    // Get current shop to check existing GST data
+    const currentShop = await getShopById(shopId)
+    if (!currentShop.success || !currentShop.data) {
+      return fail('Shop not found')
+    }
+
+    const metadata = (currentShop.data.shop_metadata as Record<string, unknown>) ?? {}
+    const gstCompliance = (metadata.gst_compliance as Record<string, unknown>) ?? {}
+    
+    const currentGstNumber = gstCompliance.gst_number as string ?? ''
+    const currentGstPath = gstCompliance.gst_document_path as string ?? ''
+    const currentGstVerified = gstCompliance.gst_verified as boolean ?? false
+
+    // Check if GST details are changing
+    const isGstChanging = 
+      (updates.gst_number !== undefined && updates.gst_number !== currentGstNumber) ||
+      (updates.gst_document_uri !== undefined && updates.gst_document_uri !== currentGstPath)
+
+    let gstDocumentPath = updates.gst_document_path || currentGstPath
+    let gstDocumentPublicUrl = gstCompliance.gst_document_url as string ?? ''
+
+    // Upload new GST document if provided
+    if (updates.gst_document_uri && updates.gst_document_uri !== currentGstPath) {
+      try {
+        // Handle blob URL (web) or file URI (native)
+        let blob: Blob
+        let mimeType = 'application/pdf'
+        let fileName = `gst-document-${Date.now()}.pdf`
+
+        // Check if it's a blob URL (web) or data URI
+        if (updates.gst_document_uri.startsWith('blob:')) {
+          const response = await fetch(updates.gst_document_uri)
+          blob = await response.blob()
+          mimeType = blob.type || 'application/pdf'
+          const ext = mimeType.split('/')[1] || 'pdf'
+          fileName = `gst-document-${Date.now()}.${ext}`
+        } else if (updates.gst_document_uri.startsWith('data:')) {
+          // Handle data URI (base64)
+          const response = await fetch(updates.gst_document_uri)
+          blob = await response.blob()
+          mimeType = blob.type || 'application/pdf'
+          const ext = mimeType.split('/')[1] || 'pdf'
+          fileName = `gst-document-${Date.now()}.${ext}`
+        } else if (updates.gst_document_uri.startsWith('file://')) {
+          // Handle native file URI - for React Native
+          // This would need platform-specific handling
+          // For now, we'll try to fetch it
+          try {
+            const response = await fetch(updates.gst_document_uri)
+            blob = await response.blob()
+            mimeType = blob.type || 'application/pdf'
+            const ext = mimeType.split('/')[1] || 'pdf'
+            fileName = `gst-document-${Date.now()}.${ext}`
+          } catch (fetchErr) {
+            // If fetch fails on native, we might need to use a different approach
+            console.warn('Could not fetch native file URI:', fetchErr)
+            throw new Error('Unable to process GST document. Please try again.')
+          }
+        } else {
+          // Assume it's a regular URL or path
+          const response = await fetch(updates.gst_document_uri)
+          blob = await response.blob()
+          mimeType = blob.type || 'application/pdf'
+          const ext = mimeType.split('/')[1] || 'pdf'
+          fileName = `gst-document-${Date.now()}.${ext}`
+        }
+
+        // Upload to Supabase Storage
+        const { data: uploadData, error: uploadError } = await uploadShopGstDocument(
+          id,
+          shopId,
+          { blob, mimeType, fileName },
+        )
+
+        if (uploadError || !uploadData) {
+          console.warn('[updateShopWithGst] GST document upload failed:', uploadError)
+          // Don't fail the entire update if upload fails, just log it
+        } else {
+          gstDocumentPath = uploadData.path
+          gstDocumentPublicUrl = uploadData.publicUrl
+        }
+      } catch (uploadErr) {
+        console.warn('[updateShopWithGst] GST document upload error:', uploadErr)
+        // Continue without blocking the update
+      }
+    }
+
+    // Build updated GST compliance object
+    const revenueAbove20l = updates.gst_revenue_above_20l ?? 
+                          (gstCompliance.revenue_above_20l as boolean ?? false)
+    
+    let updatedGstCompliance: Record<string, unknown> = {
+      ...gstCompliance,
+      revenue_above_20l: revenueAbove20l,
+      updated_at: new Date().toISOString(),
+    }
+
+    // Handle different scenarios
+    if (revenueAbove20l) {
+      // GST is required - update GST details
+      if (updates.gst_number !== undefined) {
+        updatedGstCompliance.gst_number = updates.gst_number.trim().toUpperCase()
+      }
+      if (gstDocumentPath) {
+        updatedGstCompliance.gst_document_path = gstDocumentPath
+        updatedGstCompliance.gst_document_url = gstDocumentPublicUrl
+      }
+      
+      // Reset verification if GST details changed
+      if (isGstChanging && currentGstVerified) {
+        updatedGstCompliance.gst_verified = false
+        updatedGstCompliance.gst_verified_at = null
+        updatedGstCompliance.gst_verified_by = null
+      }
+    } else {
+      // No GST required - clear GST details
+      updatedGstCompliance.gst_number = ''
+      updatedGstCompliance.gst_document_path = ''
+      updatedGstCompliance.gst_document_url = ''
+      updatedGstCompliance.gst_verified = false
+      updatedGstCompliance.gst_verified_at = null
+      updatedGstCompliance.gst_verified_by = null
+    }
+
+    // Update shop metadata
+    const updatedMetadata = {
+      ...metadata,
+      gst_compliance: updatedGstCompliance,
+    }
+
+    // Use the main update function
+    return updateShop(shopId, {
+      shop_metadata: updatedMetadata as ShopUpdate['shop_metadata'],
+    })
+  } catch (error) {
+    return fail(error)
+  }
+}
+
+// ============= ADMIN: VERIFY GST =============
+
+/**
+ * Admin function to verify a shop's GST registration.
+ * Sets gst_verified to true and records verification timestamp.
+ */
+export async function verifyShopGst(
+  shopId: string,
+  adminUserId: string,
+): Promise<ShopServiceResponse<Shop>> {
+  if (!shopId || !adminUserId) return fail('Shop ID and admin user ID are required')
+
+  try {
+    const currentShop = await getShopById(shopId)
+    if (!currentShop.success || !currentShop.data) {
+      return fail('Shop not found')
+    }
+
+    const metadata = (currentShop.data.shop_metadata as Record<string, unknown>) ?? {}
+    const gstCompliance = (metadata.gst_compliance as Record<string, unknown>) ?? {}
+
+    // Check if GST details exist
+    if (!gstCompliance.revenue_above_20l) {
+      return fail('Shop does not have GST registration details')
+    }
+
+    const gstNumber = gstCompliance.gst_number as string
+    const gstDocumentPath = gstCompliance.gst_document_path as string
+
+    if (!gstNumber || !gstDocumentPath) {
+      return fail('GST details are incomplete')
+    }
+
+    // Update verification status
+    const updatedGstCompliance = {
+      ...gstCompliance,
+      gst_verified: true,
+      gst_verified_at: new Date().toISOString(),
+      gst_verified_by: adminUserId,
+    }
+
+    const updatedMetadata = {
+      ...metadata,
+      gst_compliance: updatedGstCompliance,
+    }
+
+    return updateShop(shopId, {
+      shop_metadata: updatedMetadata as ShopUpdate['shop_metadata'],
+    })
+  } catch (error) {
+    return fail(error)
+  }
+}
+
+// ============= GET GST INFO =============
+
+/**
+ * Get GST information for a shop from metadata.
+ * Helper function to extract GST data from shop object.
+ */
+export function getGstInfoFromShop(shop: Shop | null): {
+  revenue_above_20l: boolean
+  gst_number: string
+  gst_document_path: string
+  gst_document_url: string
+  gst_verified: boolean
+  gst_verified_at: string | null
+  gst_verified_by: string | null
+  submitted_at: string | null
+  updated_at: string | null
+} {
+  if (!shop) {
+    return {
+      revenue_above_20l: false,
+      gst_number: '',
+      gst_document_path: '',
+      gst_document_url: '',
+      gst_verified: false,
+      gst_verified_at: null,
+      gst_verified_by: null,
+      submitted_at: null,
+      updated_at: null,
+    }
+  }
+
+  const metadata = (shop.shop_metadata as Record<string, unknown>) ?? {}
+  const gst = (metadata.gst_compliance as Record<string, unknown>) ?? {}
+
+  return {
+    revenue_above_20l: typeof gst.revenue_above_20l === 'boolean' ? gst.revenue_above_20l : false,
+    gst_number: typeof gst.gst_number === 'string' ? gst.gst_number : '',
+    gst_document_path: typeof gst.gst_document_path === 'string' ? gst.gst_document_path : '',
+    gst_document_url: typeof gst.gst_document_url === 'string' ? gst.gst_document_url : '',
+    gst_verified: typeof gst.gst_verified === 'boolean' ? gst.gst_verified : false,
+    gst_verified_at: typeof gst.gst_verified_at === 'string' ? gst.gst_verified_at : null,
+    gst_verified_by: typeof gst.gst_verified_by === 'string' ? gst.gst_verified_by : null,
+    submitted_at: typeof gst.submitted_at === 'string' ? gst.submitted_at : null,
+    updated_at: typeof gst.updated_at === 'string' ? gst.updated_at : null,
   }
 }
 

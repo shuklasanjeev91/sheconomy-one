@@ -388,3 +388,61 @@ export async function uploadVisualPreviewInput(
     { ...options, maxBytes: 7 * 1024 * 1024 },
   )
 }
+
+
+// ─── GST Document Upload ─────────────────────────────────────────────────────
+
+/**
+ * Upload a vendor's GST document to the private shop-gst-documents bucket.
+ * Returns the storage PATH (not a public URL — use a signed URL to read it).
+ * Path format: {userId}/shops/{shopId}/gst/{timestamp}-{random}.{ext}
+ */
+export async function uploadShopGstDocument(
+  userId: string,
+  shopId: string,
+  file: { blob: Blob; mimeType: string; fileName?: string },
+  options?: { onProgress?: UploadProgressHandler },
+): Promise<{ data: UploadResult | null; error: string | null }> {
+  const ext = file.fileName?.split('.').pop() ?? extensionForMime(file.mimeType)
+  const path = `${userId}/shops/${shopId}/gst/${Date.now()}-${randomSuffix()}.${ext}`
+
+  const size = file.blob.size
+  if (size <= 0) return { data: null, error: 'Document file is empty.' }
+  if (size > 10 * 1024 * 1024) return { data: null, error: 'GST document must be 10 MB or smaller.' }
+
+  const { error } = await uploadBlobWithProgress(
+    'shop-gst-documents',
+    path,
+    file.blob,
+    file.mimeType,
+    { upsert: true, onProgress: options?.onProgress },
+  )
+
+  if (error) return { data: null, error }
+
+  // Note: bucket is PRIVATE — no public URL. Return path only.
+  return {
+    data: {
+      path,
+      publicUrl: '', // intentionally empty — use signed URL
+    },
+    error: null,
+  }
+}
+
+/**
+ * Get a short-lived signed URL to view a vendor's GST document.
+ * Use this in admin review screens or vendor settings.
+ * Expires in 1 hour by default.
+ */
+export async function getGstDocumentSignedUrl(
+  path: string,
+  expiresInSeconds = 3600,
+): Promise<string | null> {
+  const { data, error } = await supabase.storage
+    .from('shop-gst-documents')
+    .createSignedUrl(path, expiresInSeconds)
+
+  if (error || !data?.signedUrl) return null
+  return data.signedUrl
+}

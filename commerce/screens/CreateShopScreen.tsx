@@ -60,6 +60,7 @@ const STEP_ICONS = {
   tag: Icons.Tag,
   'dollar-sign': Icons.DollarSign,
   'share-2': Icons.Share2,
+  'file-text': Icons.FileText,
 } as const
 
 const SOCIAL_FIELDS = [
@@ -86,6 +87,11 @@ function normalizeDraft(raw: unknown): ShopFormData {
     social_links: draft.social_links && typeof draft.social_links === 'object' ? draft.social_links : {},
     shop_hours: draft.shop_hours && typeof draft.shop_hours === 'object' ? draft.shop_hours : {},
     shop_metadata: draft.shop_metadata && typeof draft.shop_metadata === 'object' ? draft.shop_metadata : {},
+    // GST fields - preserve boolean and string values, reset URIs
+    gst_revenue_above_20l: typeof draft.gst_revenue_above_20l === 'boolean' ? draft.gst_revenue_above_20l : false,
+    gst_number: typeof draft.gst_number === 'string' ? draft.gst_number : '',
+    gst_document_path: typeof draft.gst_document_path === 'string' ? draft.gst_document_path : '',
+    gst_document_uri: '', // Always reset - blob URLs don't survive page reloads
   }
 }
 
@@ -159,9 +165,17 @@ export function CreateShopScreen() {
   }, [user?.email, user?.phone])
 
   // Persist the draft as the user edits (skip until the initial load completes).
+  // Never persist gst_document_uri — it's a blob URL that won't survive reload.
   useEffect(() => {
     if (!hydrated || phase === 'success') return
-    void persistStorage.setItem(DRAFT_STORAGE_KEY, JSON.stringify(formData))
+    const { gst_document_uri, ...persistable } = formData
+    // Also clean up any potential blob URL references in metadata
+    if (persistable.shop_metadata && typeof persistable.shop_metadata === 'object') {
+      const cleanMetadata = { ...persistable.shop_metadata }
+      delete cleanMetadata._gst_doc_uri
+      persistable.shop_metadata = cleanMetadata
+    }
+    void persistStorage.setItem(DRAFT_STORAGE_KEY, JSON.stringify(persistable))
   }, [formData, hydrated, phase])
 
   useUnsavedChangesGuard({
@@ -210,7 +224,6 @@ export function CreateShopScreen() {
 
   const setField = useCallback(<K extends keyof ShopFormData>(field: K, value: ShopFormData[K]) => {
     setFormData((current) => ({ ...current, [field]: value }))
-    // Realtime: mark dirty/touched and re-validate on every change.
     setTouched((current) => ({ ...current, [field as string]: true }))
     const { error } = validateShopField(field, value)
     setErrors((current) => {
@@ -277,6 +290,27 @@ export function CreateShopScreen() {
   )
 
   const handleNext = useCallback(() => {
+    // GST step validation on Next press
+    if (currentStep.id === 'gstCompliance') {
+      if (formData.gst_revenue_above_20l) {
+        const gstErrors: Record<string, string> = {}
+        if (!formData.gst_number?.trim() || formData.gst_number.trim().length !== 15) {
+          gstErrors.gst_number = 'Enter a valid 15-character GST number.'
+        }
+        if (!formData.gst_document_uri?.trim()) {
+          gstErrors.gst_document_path = 'Please upload your GST certificate.'
+        }
+        if (Object.keys(gstErrors).length > 0) {
+          setErrors((current) => ({ ...current, ...gstErrors }))
+          toast.show('Please complete GST details', { tone: 'danger' })
+          return
+        }
+      }
+      setErrors({})
+      goToStep(stepIndex + 1)
+      return
+    }
+
     if (!validateCurrentStep(currentStep)) {
       toast.show('Please fix the highlighted fields', { tone: 'danger' })
       return
@@ -294,12 +328,33 @@ export function CreateShopScreen() {
     }
     setErrors({})
     goToStep(stepIndex + 1)
-  }, [currentStep, goToStep, nameAvailable, nameChecking, stepIndex, toast, validateCurrentStep])
+  }, [currentStep, formData, goToStep, nameAvailable, nameChecking, stepIndex, toast, validateCurrentStep])
 
   const handleSubmit = useCallback(async () => {
     if (!user?.id) {
       toast.show('You need to be signed in', { tone: 'danger' })
       return
+    }
+
+    // GST validation on final submit
+    if (formData.gst_revenue_above_20l) {
+      const gstErrors: Record<string, string> = {}
+      if (!formData.gst_number?.trim() || formData.gst_number.trim().length !== 15) {
+        gstErrors.gst_number = 'Enter a valid 15-character GST number.'
+      }
+      if (!formData.gst_document_uri?.trim()) {
+        gstErrors.gst_document_path = 'Please upload your GST certificate.'
+      }
+      if (Object.keys(gstErrors).length > 0) {
+        setErrors((current) => ({ ...current, ...gstErrors }))
+        const lastStep = steps.findIndex((s) => s.id === 'gstCompliance')
+        if (lastStep >= 0) goToStep(lastStep)
+        toast.show('GST details required', {
+          tone: 'danger',
+          message: 'Please complete your GST information.',
+        })
+        return
+      }
     }
 
     const validation = validateShopData(formData)
@@ -381,9 +436,6 @@ export function CreateShopScreen() {
 
   // ---- Gate / loading states -------------------------------------------------
 
-  // Only gate the initial form phase — never tear down the success overlay
-  // (a profile refetch after role promotion can briefly re-enter loading).
-  // Vendors with no shop must see the form; only bounce existing shop owners.
   const isBlocked = myShopsLoaded && alreadyHasShop
   if (phase === 'form' && (!myShopsLoaded || !hydrated || isBlocked)) {
     return (
@@ -479,20 +531,47 @@ export function CreateShopScreen() {
                 />
               ) : null}
               {currentStep.id === 'contact' ? (
-                <ContactStep ui={ui} formData={formData} errors={errors} touched={touched} setField={setField} onBlur={handleBlur} accountEmail={user?.email ?? null} />
+                <ContactStep
+                  ui={ui}
+                  formData={formData}
+                  errors={errors}
+                  touched={touched}
+                  setField={setField}
+                  onBlur={handleBlur}
+                  accountEmail={user?.email ?? null}
+                />
               ) : null}
               {currentStep.id === 'categories' ? (
                 <CategoriesStep ui={ui} formData={formData} onToggle={toggleCategory} />
               ) : null}
               {currentStep.id === 'currency' ? (
-                <CurrencyStep ui={ui} formData={formData} showAll={showAllCurrencies} onShowAll={() => setShowAllCurrencies(true)} onSelect={(code) => setField('shop_currency', code)} />
+                <CurrencyStep
+                  ui={ui}
+                  formData={formData}
+                  showAll={showAllCurrencies}
+                  onShowAll={() => setShowAllCurrencies(true)}
+                  onSelect={(code) => setField('shop_currency', code)}
+                />
               ) : null}
               {currentStep.id === 'socialMedia' ? (
                 <SocialStep ui={ui} formData={formData} errors={errors} onChange={setSocialLink} />
               ) : null}
+              {currentStep.id === 'gstCompliance' ? (
+                <GstStep
+                  ui={ui}
+                  formData={formData}
+                  errors={errors}
+                  setField={setField}
+                />
+              ) : null}
             </YStack>
 
-            <XStack marginTop="$5" gap="$3" flexDirection={isDesktop ? 'row' : 'column-reverse'} justifyContent="space-between">
+            <XStack
+              marginTop="$5"
+              gap="$3"
+              flexDirection={isDesktop ? 'row' : 'column-reverse'}
+              justifyContent="space-between"
+            >
               <Button
                 tone="ghost"
                 size="$4"
@@ -510,7 +589,11 @@ export function CreateShopScreen() {
                   borderRadius={999}
                   disabled={isSubmitting}
                   onPress={handleSubmit}
-                  icon={isSubmitting ? <Spinner size="small" color="white" /> : <Icons.Store size={16} color="white" />}
+                  icon={
+                    isSubmitting
+                      ? <Spinner size="small" color="white" />
+                      : <Icons.Store size={16} color="white" />
+                  }
                 >
                   {isSubmitting ? 'Creating shop…' : 'Create My Shop'}
                 </Button>
@@ -623,7 +706,9 @@ function StepSidebar({
               >
                 {step.title}
               </Text>
-              {isActive ? <YStack width={3} height={20} borderRadius={999} backgroundColor={ui.brand} /> : null}
+              {isActive ? (
+                <YStack width={3} height={20} borderRadius={999} backgroundColor={ui.brand} />
+              ) : null}
             </XStack>
           )
         })}
@@ -649,7 +734,17 @@ function StepSidebar({
   )
 }
 
-function ProgressHeader({ ui, stepIndex, total, percent }: { ui: Ui; stepIndex: number; total: number; percent: number }) {
+function ProgressHeader({
+  ui,
+  stepIndex,
+  total,
+  percent,
+}: {
+  ui: Ui
+  stepIndex: number
+  total: number
+  percent: number
+}) {
   return (
     <YStack gap="$2" marginBottom="$4">
       <XStack justifyContent="space-between" alignItems="center">
@@ -661,7 +756,13 @@ function ProgressHeader({ ui, stepIndex, total, percent }: { ui: Ui; stepIndex: 
         </Text>
       </XStack>
       <YStack height={6} borderRadius={999} backgroundColor={ui.chip} overflow="hidden">
-        <YStack height="100%" width={`${percent}%`} borderRadius={999} backgroundColor={ui.brand} animation="quick" />
+        <YStack
+          height="100%"
+          width={`${percent}%`}
+          borderRadius={999}
+          backgroundColor={ui.brand}
+          animation="quick"
+        />
       </YStack>
     </YStack>
   )
@@ -671,7 +772,14 @@ function StepHeader({ ui, step }: { ui: Ui; step: ShopCreationStep }) {
   const Icon = stepIconFor(step.icon)
   return (
     <XStack gap="$3" alignItems="center">
-      <YStack width={48} height={48} borderRadius={radius.chip} alignItems="center" justifyContent="center" backgroundColor={ui.roseSurface}>
+      <YStack
+        width={48}
+        height={48}
+        borderRadius={radius.chip}
+        alignItems="center"
+        justifyContent="center"
+        backgroundColor={ui.roseSurface}
+      >
         <Icon size={24} color={ui.brand} />
       </YStack>
       <YStack flex={1} minWidth={0}>
@@ -703,7 +811,14 @@ function Callout({
   const border = tone === 'warning' ? 'rgba(217, 119, 6, 0.28)' : 'rgba(216, 27, 96, 0.2)'
   const titleColor = tone === 'warning' ? '#b45309' : ui.brand
   return (
-    <XStack gap="$3" padding="$3.5" borderRadius={radius.chip} backgroundColor={bg} borderWidth={1} borderColor={border}>
+    <XStack
+      gap="$3"
+      padding="$3.5"
+      borderRadius={radius.chip}
+      backgroundColor={bg}
+      borderWidth={1}
+      borderColor={border}
+    >
       <YStack marginTop={1}>{icon}</YStack>
       <YStack flex={1} minWidth={0} gap="$1">
         <Text fontSize={14} fontWeight="700" color={titleColor}>
@@ -881,11 +996,23 @@ function BasicInfoStep({
 
   return (
     <YStack gap="$4">
-      <Callout ui={ui} tone="brand" icon={<Icons.Lightbulb size={18} color={ui.brand} />} title="Make a great first impression">
-        Your shop name and description are the first things buyers see. Keep it clear, memorable, and reflective of your products.
+      <Callout
+        ui={ui}
+        tone="brand"
+        icon={<Icons.Lightbulb size={18} color={ui.brand} />}
+        title="Make a great first impression"
+      >
+        Your shop name and description are the first things buyers see. Keep it clear, memorable,
+        and reflective of your products.
       </Callout>
-      <Callout ui={ui} tone="warning" icon={<Icons.AlertTriangle size={18} color="#b45309" />} title="Review prohibited items">
-        Before proceeding, ensure your inventory complies with our Prohibited Items Policy to avoid account suspension.
+      <Callout
+        ui={ui}
+        tone="warning"
+        icon={<Icons.AlertTriangle size={18} color="#b45309" />}
+        title="Review prohibited items"
+      >
+        Before proceeding, ensure your inventory complies with our Prohibited Items Policy to avoid
+        account suspension.
       </Callout>
 
       <XStack alignItems="center" justifyContent="space-between" gap="$2" flexWrap="wrap">
@@ -909,11 +1036,11 @@ function BasicInfoStep({
             opacity={aiLoading ? 0.7 : 1}
             hoverStyle={{ backgroundColor: ui.surfaceMuted }}
             pressStyle={{ opacity: 0.85 }}
-            onPress={() => {
-              if (!aiLoading) void suggestWithAi('names')
-            }}
+            onPress={() => { if (!aiLoading) void suggestWithAi('names') }}
           >
-            {aiLoading ? <Spinner size="small" color={ui.brand} /> : <Icons.Sparkles size={13} color={ui.brand} />}
+            {aiLoading
+              ? <Spinner size="small" color={ui.brand} />
+              : <Icons.Sparkles size={13} color={ui.brand} />}
             <Text fontSize={12} fontWeight="700" color={ui.brand}>
               Name ideas
             </Text>
@@ -931,9 +1058,7 @@ function BasicInfoStep({
             opacity={aiLoading ? 0.7 : 1}
             hoverStyle={{ backgroundColor: ui.surfaceMuted }}
             pressStyle={{ opacity: 0.85 }}
-            onPress={() => {
-              if (!aiLoading) void suggestWithAi('description')
-            }}
+            onPress={() => { if (!aiLoading) void suggestWithAi('description') }}
           >
             <Icons.Pencil size={13} color={ui.brand} />
             <Text fontSize={12} fontWeight="700" color={ui.brand}>
@@ -965,7 +1090,12 @@ function BasicInfoStep({
                   pressStyle={{ opacity: 0.85 }}
                   onPress={() => setField('shop_name', name)}
                 >
-                  <Text fontSize={12} fontWeight="600" color={selected ? ui.brand : ui.text} numberOfLines={1}>
+                  <Text
+                    fontSize={12}
+                    fontWeight="600"
+                    color={selected ? ui.brand : ui.text}
+                    numberOfLines={1}
+                  >
                     {name}
                   </Text>
                 </XStack>
@@ -1004,7 +1134,7 @@ function BasicInfoStep({
                   </Text>
                 </XStack>
               )
-            : 'Between 2 and 200 characters. We’ll check if the name is free as you type.'
+            : 'Between 2 and 200 characters. We\'ll check if the name is free as you type.'
         }
       >
         <Input
@@ -1061,11 +1191,22 @@ function ContactStep({
   const phoneRequired = !formData.shop_email?.trim()
   return (
     <YStack gap="$4">
-      <Callout ui={ui} tone="warning" icon={<Icons.Info size={18} color="#b45309" />} title="Contact information required">
+      <Callout
+        ui={ui}
+        tone="warning"
+        icon={<Icons.Info size={18} color="#b45309" />}
+        title="Contact information required"
+      >
         Provide at least one contact method (email or phone) so customers can reach you.
       </Callout>
 
-      <FieldShell ui={ui} label="Phone Number" required={phoneRequired} error={touched.shop_phone_number ? errors.shop_phone_number : undefined} hint="We’ll check the number against your selected country code.">
+      <FieldShell
+        ui={ui}
+        label="Phone Number"
+        required={phoneRequired}
+        error={touched.shop_phone_number ? errors.shop_phone_number : undefined}
+        hint="We'll check the number against your selected country code."
+      >
         <PhoneInput
           value={formData.shop_phone_number}
           onChange={(value) => setField('shop_phone_number', value)}
@@ -1079,7 +1220,11 @@ function ContactStep({
         label="Email Address"
         required={emailRequired}
         error={touched.shop_email ? errors.shop_email : undefined}
-        hint={accountEmail && formData.shop_email === accountEmail ? 'This email is linked to your primary account.' : undefined}
+        hint={
+          accountEmail && formData.shop_email === accountEmail
+            ? 'This email is linked to your primary account.'
+            : undefined
+        }
       >
         <Input
           value={formData.shop_email}
@@ -1101,7 +1246,11 @@ function ContactStep({
         </XStack>
       ) : null}
 
-      <FieldShell ui={ui} label="Website URL (optional)" error={touched.website_url ? errors.website_url : undefined}>
+      <FieldShell
+        ui={ui}
+        label="Website URL (optional)"
+        error={touched.website_url ? errors.website_url : undefined}
+      >
         <Input
           value={formData.website_url}
           onChangeText={(value) => setField('website_url', value)}
@@ -1116,11 +1265,24 @@ function ContactStep({
   )
 }
 
-function CategoriesStep({ ui, formData, onToggle }: { ui: Ui; formData: ShopFormData; onToggle: (category: string) => void }) {
+function CategoriesStep({
+  ui,
+  formData,
+  onToggle,
+}: {
+  ui: Ui
+  formData: ShopFormData
+  onToggle: (category: string) => void
+}) {
   const selected = formData.shop_categories ?? []
   return (
     <YStack gap="$4">
-      <Callout ui={ui} tone="brand" icon={<Icons.Info size={18} color={ui.brand} />} title="Help customers find you">
+      <Callout
+        ui={ui}
+        tone="brand"
+        icon={<Icons.Info size={18} color={ui.brand} />}
+        title="Help customers find you"
+      >
         Accurate categories ensure your products appear in the right search results and collections.
       </Callout>
 
@@ -1157,12 +1319,16 @@ function CategoriesStep({ ui, formData, onToggle }: { ui: Ui; formData: ShopForm
               cursor={isDisabled ? 'not-allowed' : 'pointer'}
               hoverStyle={isDisabled ? undefined : { borderColor: ui.brand }}
               pressStyle={isDisabled ? undefined : { opacity: 0.7 }}
-              onPress={() => {
-                if (!isDisabled) onToggle(category)
-              }}
+              onPress={() => { if (!isDisabled) onToggle(category) }}
             >
               <Icons.Tag size={16} color={isSelected ? ui.brand : ui.icon} />
-              <Text flex={1} fontSize={14} fontWeight={isSelected ? '700' : '500'} color={isSelected ? ui.text : ui.textSecondary} numberOfLines={1}>
+              <Text
+                flex={1}
+                fontSize={14}
+                fontWeight={isSelected ? '700' : '500'}
+                color={isSelected ? ui.text : ui.textSecondary}
+                numberOfLines={1}
+              >
                 {category}
               </Text>
               <YStack
@@ -1201,8 +1367,14 @@ function CurrencyStep({
   const visible = showAll ? SUPPORTED_CURRENCIES : SUPPORTED_CURRENCIES.slice(0, INITIAL_CURRENCY_COUNT)
   return (
     <YStack gap="$4">
-      <Callout ui={ui} tone="warning" icon={<Icons.Info size={18} color="#b45309" />} title="Choose pricing currency">
-        Select the primary currency you will use to price your products or services. This can be changed later in settings.
+      <Callout
+        ui={ui}
+        tone="warning"
+        icon={<Icons.Info size={18} color="#b45309" />}
+        title="Choose pricing currency"
+      >
+        Select the primary currency you will use to price your products or services. This can be
+        changed later in settings.
       </Callout>
 
       <XStack flexWrap="wrap" gap="$2.5">
@@ -1227,7 +1399,14 @@ function CurrencyStep({
               pressStyle={{ opacity: 0.7 }}
               onPress={() => onSelect(currency.code)}
             >
-              <YStack width={36} height={36} borderRadius={999} alignItems="center" justifyContent="center" backgroundColor={isSelected ? ui.brand : ui.chip}>
+              <YStack
+                width={36}
+                height={36}
+                borderRadius={999}
+                alignItems="center"
+                justifyContent="center"
+                backgroundColor={isSelected ? ui.brand : ui.chip}
+              >
                 <Text fontSize={15} fontWeight="700" color={isSelected ? ui.onBrand : ui.textSecondary}>
                   {currency.symbol}
                 </Text>
@@ -1248,7 +1427,14 @@ function CurrencyStep({
 
       {!showAll ? (
         <YStack alignItems="center">
-          <Text fontSize={13} fontWeight="700" color={ui.brand} cursor="pointer" onPress={onShowAll} pressStyle={{ opacity: 0.6 }}>
+          <Text
+            fontSize={13}
+            fontWeight="700"
+            color={ui.brand}
+            cursor="pointer"
+            onPress={onShowAll}
+            pressStyle={{ opacity: 0.6 }}
+          >
             Load more currencies
           </Text>
         </YStack>
@@ -1270,8 +1456,14 @@ function SocialStep({
 }) {
   return (
     <YStack gap="$4">
-      <Callout ui={ui} tone="brand" icon={<Icons.Megaphone size={18} color={ui.brand} />} title="Expand your reach">
-        Linking your social accounts helps customers find you and builds trust. Connecting profiles is optional.
+      <Callout
+        ui={ui}
+        tone="brand"
+        icon={<Icons.Megaphone size={18} color={ui.brand} />}
+        title="Expand your reach"
+      >
+        Linking your social accounts helps customers find you and builds trust. Connecting profiles
+        is optional.
       </Callout>
 
       <XStack flexWrap="wrap" gap="$3.5">
@@ -1282,7 +1474,15 @@ function SocialStep({
               <Text fontSize={13} fontWeight="600" color={ui.text}>
                 {label}
               </Text>
-              <XStack alignItems="center" gap="$2" borderWidth={1} borderColor={error ? ui.error : ui.borderSubtle} borderRadius={radius.chip} paddingLeft="$3" backgroundColor={ui.surface}>
+              <XStack
+                alignItems="center"
+                gap="$2"
+                borderWidth={1}
+                borderColor={error ? ui.error : ui.borderSubtle}
+                borderRadius={radius.chip}
+                paddingLeft="$3"
+                backgroundColor={ui.surface}
+              >
                 <Icon size={16} color={ui.icon} />
                 <Input
                   flex={1}
@@ -1309,6 +1509,253 @@ function SocialStep({
   )
 }
 
+// ─── GstStep Component ───────────────────────────────────────────────────────
+
+function GstStep({
+  ui,
+  formData,
+  errors,
+  setField,
+}: {
+  ui: Ui
+  formData: ShopFormData
+  errors: Record<string, string>
+  setField: <K extends keyof ShopFormData>(field: K, value: ShopFormData[K]) => void
+}) {
+  const toast = useAppToast()
+  const [fileName, setFileName] = useState<string | null>(null)
+
+  const pickDocument = useCallback(async () => {
+    try {
+      if (Platform.OS === 'web') {
+        const input = document.createElement('input')
+        input.type = 'file'
+        input.accept = 'application/pdf,image/jpeg,image/png,image/webp'
+        input.onchange = async (e) => {
+          const file = (e.target as HTMLInputElement).files?.[0]
+          if (!file) return
+          setFileName(file.name)
+          const uri = URL.createObjectURL(file)
+          setField('gst_document_uri', uri)
+          setField('shop_metadata', {
+            ...formData.shop_metadata,
+            _gst_doc_mime: file.type,
+            _gst_doc_name: file.name,
+          })
+        }
+        input.click()
+      } else {
+        const { default: DocumentPicker } = await import('expo-document-picker')
+        const result = await DocumentPicker.getDocumentAsync({
+          type: ['application/pdf', 'image/jpeg', 'image/png', 'image/webp'],
+          copyToCacheDirectory: true,
+        })
+        if (result.canceled) return
+        const asset = result.assets[0]
+        if (!asset) return
+        setFileName(asset.name)
+        setField('gst_document_uri', asset.uri)
+        setField('shop_metadata', {
+          ...formData.shop_metadata,
+          _gst_doc_mime: asset.mimeType ?? 'application/pdf',
+          _gst_doc_name: asset.name,
+        })
+      }
+    } catch {
+      toast.show('Could not open file picker', { tone: 'danger' })
+    }
+  }, [formData.shop_metadata, setField, toast])
+
+  const removeDocument = useCallback(() => {
+    setFileName(null)
+    setField('gst_document_uri', '')
+    setField('gst_document_path', '')
+    const meta = { ...formData.shop_metadata }
+    delete meta._gst_doc_mime
+    delete meta._gst_doc_name
+    setField('shop_metadata', meta)
+  }, [formData.shop_metadata, setField])
+
+  return (
+    <YStack gap="$5">
+      <Callout
+        ui={ui}
+        tone="warning"
+        icon={<Icons.FileText size={18} color="#b45309" />}
+        title="GST Compliance (India)"
+      >
+        As per Indian tax law, businesses with annual revenue exceeding ₹20 Lakh must register for
+        GST. Please declare your status honestly — false declarations may result in account
+        suspension.
+      </Callout>
+
+      <XStack
+        gap="$3"
+        padding="$4"
+        borderRadius={radius.chip}
+        borderWidth={1.5}
+        borderColor={formData.gst_revenue_above_20l ? ui.brand : ui.borderSubtle}
+        backgroundColor={formData.gst_revenue_above_20l ? ui.roseSurface : ui.surface}
+        cursor="pointer"
+        pressStyle={{ opacity: 0.8 }}
+        onPress={() => setField('gst_revenue_above_20l', !formData.gst_revenue_above_20l)}
+      >
+        <YStack
+          width={22}
+          height={22}
+          borderRadius={6}
+          borderWidth={2}
+          borderColor={formData.gst_revenue_above_20l ? ui.brand : ui.border}
+          backgroundColor={formData.gst_revenue_above_20l ? ui.brand : 'transparent'}
+          alignItems="center"
+          justifyContent="center"
+          marginTop={2}
+          flexShrink={0}
+        >
+          {formData.gst_revenue_above_20l
+            ? <Icons.Check size={13} color={ui.onBrand} />
+            : null}
+        </YStack>
+
+        <YStack flex={1} gap="$1">
+          <Text fontSize={14} fontWeight="700" color={ui.text}>
+            My annual revenue exceeds ₹20 Lakh
+          </Text>
+          <Text fontSize={13} color={ui.textSecondary} lineHeight={18}>
+            I understand I am required to register for GST and submit my registration details below.
+          </Text>
+        </YStack>
+      </XStack>
+
+      {formData.gst_revenue_above_20l ? (
+        <YStack gap="$4" animation="quick" enterStyle={{ opacity: 0, y: -8 }}>
+
+          <FieldShell
+            ui={ui}
+            label="GST Registration Number"
+            required
+            error={errors.gst_number}
+            hint="15-character GST number e.g. 22AAAAA0000A1Z5"
+          >
+            <Input
+              value={formData.gst_number}
+              onChangeText={(value) => setField('gst_number', value.toUpperCase().trim())}
+              placeholder="22AAAAA0000A1Z5"
+              autoCapitalize="characters"
+              maxLength={15}
+              invalid={Boolean(errors.gst_number)}
+            />
+          </FieldShell>
+
+          <YStack gap="$2">
+            <Text fontSize={13} fontWeight="600" color={ui.text}>
+              GST Certificate / Document
+              <Text color={ui.brand}> *</Text>
+            </Text>
+
+            {fileName ? (
+              <XStack
+                alignItems="center"
+                gap="$3"
+                padding="$3"
+                borderRadius={radius.chip}
+                borderWidth={1}
+                borderColor={ui.brand}
+                backgroundColor={ui.roseSurface}
+              >
+                <Icons.FileText size={18} color={ui.brand} />
+                <Text flex={1} fontSize={13} color={ui.text} numberOfLines={1}>
+                  {fileName}
+                </Text>
+                <XStack
+                  padding="$1"
+                  cursor="pointer"
+                  pressStyle={{ opacity: 0.6 }}
+                  onPress={removeDocument}
+                >
+                  <Icons.X size={16} color={ui.error} />
+                </XStack>
+              </XStack>
+            ) : (
+              <XStack
+                alignItems="center"
+                justifyContent="center"
+                gap="$2"
+                padding="$4"
+                borderRadius={radius.chip}
+                borderWidth={1.5}
+                borderStyle="dashed"
+                borderColor={errors.gst_document_path ? ui.error : ui.borderSubtle}
+                backgroundColor={ui.surfaceMuted}
+                cursor="pointer"
+                hoverStyle={{ borderColor: ui.brand, backgroundColor: ui.roseSurface }}
+                pressStyle={{ opacity: 0.8 }}
+                onPress={pickDocument}
+              >
+                <Icons.Upload size={18} color={ui.icon} />
+                <YStack>
+                  <Text fontSize={13} fontWeight="700" color={ui.text}>
+                    Upload GST Document
+                  </Text>
+                  <Text fontSize={11} color={ui.textMuted}>
+                    PDF, JPG, PNG or WebP · Max 10 MB
+                  </Text>
+                </YStack>
+              </XStack>
+            )}
+
+            {errors.gst_document_path ? (
+              <XStack gap="$1.5" alignItems="center">
+                <Icons.AlertCircle size={13} color={ui.error} />
+                <Text fontSize={12} color={ui.error}>
+                  {errors.gst_document_path}
+                </Text>
+              </XStack>
+            ) : null}
+          </YStack>
+
+          <XStack
+            gap="$3"
+            padding="$3.5"
+            borderRadius={radius.chip}
+            backgroundColor="rgba(217, 119, 6, 0.06)"
+            borderWidth={1}
+            borderColor="rgba(217, 119, 6, 0.20)"
+          >
+            <Icons.Clock size={16} color="#b45309" />
+            <Text fontSize={12} color="#b45309" flex={1} lineHeight={18}>
+              GST documents are reviewed by our team within 2–3 business days. Your shop will be
+              active immediately, but GST verification will be shown as pending until reviewed.
+            </Text>
+          </XStack>
+        </YStack>
+      ) : (
+        <XStack
+          gap="$3"
+          padding="$4"
+          borderRadius={radius.chip}
+          backgroundColor={ui.surfaceMuted}
+          borderWidth={1}
+          borderColor={ui.borderSubtle}
+        >
+          <Icons.CheckCircle2 size={18} color={ui.badgeSuccessText} />
+          <YStack flex={1} gap="$1">
+            <Text fontSize={14} fontWeight="700" color={ui.text}>
+              No GST Required
+            </Text>
+            <Text fontSize={13} color={ui.textSecondary} lineHeight={18}>
+              Your shop is below the ₹20 Lakh threshold. No GST registration needed. You can update
+              this later in shop settings if your revenue grows.
+            </Text>
+          </YStack>
+        </XStack>
+      )}
+    </YStack>
+  )
+}
+
+// ─── Success Overlay ─────────────────────────────────────────────────────────
+
 function SuccessOverlay({
   ui,
   countdown,
@@ -1330,7 +1777,12 @@ function SuccessOverlay({
       justifyContent={nativeFullscreen ? 'flex-start' : 'center'}
       padding={nativeFullscreen ? 0 : '$4'}
     >
-      <YStack fullscreen backgroundColor="rgba(10, 10, 15, 0.55)" animation="quick" enterStyle={{ opacity: 0 }} />
+      <YStack
+        fullscreen
+        backgroundColor="rgba(10, 10, 15, 0.55)"
+        animation="quick"
+        enterStyle={{ opacity: 0 }}
+      />
       <YStack
         width="100%"
         maxWidth={nativeFullscreen ? '100%' : 420}
@@ -1349,7 +1801,14 @@ function SuccessOverlay({
         enterStyle={{ opacity: 0, scale: 0.96, y: 8 }}
         style={nativeFullscreen ? undefined : getShadowStyle('lg')}
       >
-        <YStack width={72} height={72} borderRadius={999} alignItems="center" justifyContent="center" backgroundColor={ui.roseSurface}>
+        <YStack
+          width={72}
+          height={72}
+          borderRadius={999}
+          alignItems="center"
+          justifyContent="center"
+          backgroundColor={ui.roseSurface}
+        >
           <Icons.PartyPopper size={34} color={ui.brand} />
         </YStack>
 
@@ -1363,7 +1822,13 @@ function SuccessOverlay({
         </YStack>
 
         <YStack width="100%" gap="$2.5">
-          <Button tone="primary" size="$4" borderRadius={999} onPress={onContinue} icon={<Icons.Plus size={16} color="white" />}>
+          <Button
+            tone="primary"
+            size="$4"
+            borderRadius={999}
+            onPress={onContinue}
+            icon={<Icons.Plus size={16} color="white" />}
+          >
             Create my first listing
           </Button>
           <Button tone="ghost" size="$3" borderRadius={999} onPress={onSkip}>

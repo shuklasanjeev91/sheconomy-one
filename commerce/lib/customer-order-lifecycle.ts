@@ -5,17 +5,26 @@
 
 import {
   DELIVERY_STATUS_DISPLAY,
-  OPEN_ISSUE_STATUSES,
   ORDER_ISSUE_TYPE,
   ORDER_STATUS,
   ORDER_STATUS_DISPLAY,
   ORDER_STATUS_PROGRESS,
   type DeliveryStatus,
-  type IssueStatus,
   type OrderIssueType,
   type OrderStatus,
 } from '~/lib/orders/order.constants'
+import {
+  isCancellationIssueType,
+  isOpenIssueStatus,
+  isReturnIssueType,
+  issueStatusLabel,
+  issueTypeLabel,
+} from '~/lib/orders/order-issue.utils'
 import { formatOrderDate, getOrderStatusDisplay } from '~/lib/orders/order.utils'
+import { safeHttpUrl } from '~/lib/platform/openUrl'
+
+// Issue presentation/classification is shared with the vendor + admin surfaces.
+export { isCancellationIssueType, isOpenIssueStatus, isReturnIssueType, issueStatusLabel, issueTypeLabel }
 
 /** Statuses where the customer may still request cancellation (pre-shipment). */
 export const PRE_SHIPMENT_ORDER_STATUSES: OrderStatus[] = [
@@ -101,20 +110,6 @@ export function isPreShipmentStatus(status: string | null | undefined): boolean 
 export function isShippedOrLater(status: string | null | undefined): boolean {
   const normalized = normalizeOrderStatus(status)
   return Boolean(normalized && SHIPPED_OR_LATER.includes(normalized))
-}
-
-export function isOpenIssueStatus(status: string | null | undefined): boolean {
-  return Boolean(status && (OPEN_ISSUE_STATUSES as string[]).includes(status))
-}
-
-export function isCancellationIssueType(issueType: string | null | undefined): boolean {
-  return issueType === ORDER_ISSUE_TYPE.CANCELLATION_REQUEST
-}
-
-export function isReturnIssueType(issueType: string | null | undefined): boolean {
-  return (
-    issueType === ORDER_ISSUE_TYPE.RETURN_REQUEST || issueType === ORDER_ISSUE_TYPE.REFUND_REQUEST
-  )
 }
 
 export function findOpenReturnRequest<T extends { issue_type?: string | null; status?: string | null; order_item_id?: string | null }>(
@@ -279,15 +274,7 @@ export function getCustomerOrderActionEligibility(input: {
 
 /** Accept only http(s) carrier tracking URLs. */
 export function sanitizeCarrierTrackingUrl(url: string | null | undefined): string | null {
-  if (!url?.trim()) return null
-  const trimmed = url.trim()
-  try {
-    const parsed = new URL(trimmed)
-    if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') return null
-    return parsed.toString()
-  } catch {
-    return null
-  }
+  return safeHttpUrl(url)
 }
 
 export function formatEstimatedDelivery(date: string | null | undefined): string | null {
@@ -527,19 +514,6 @@ export function supportIssueTypeOptions(): Array<{ value: OrderIssueType; label:
     { value: ORDER_ISSUE_TYPE.CUSTOMER_COMPLAINT, label: 'Other complaint' },
     { value: ORDER_ISSUE_TYPE.OTHER, label: 'Something else' },
   ]
-}
-
-export function issueStatusLabel(status: IssueStatus | string | null | undefined): string {
-  if (!status) return 'Unknown'
-  return String(status).replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase())
-}
-
-export function issueTypeLabel(issueType: string | null | undefined): string {
-  if (!issueType) return 'Issue'
-  if (issueType === ORDER_ISSUE_TYPE.CANCELLATION_REQUEST) return 'Cancellation request'
-  if (issueType === ORDER_ISSUE_TYPE.RETURN_REQUEST) return 'Return request'
-  if (issueType === ORDER_ISSUE_TYPE.REFUND_REQUEST) return 'Refund request'
-  return String(issueType).replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase())
 }
 
 export function returnReasonOptions(): Array<{ value: string; label: string }> {

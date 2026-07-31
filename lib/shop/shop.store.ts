@@ -181,6 +181,54 @@ export const updateShop = createAsyncThunk<
   resolveResponse(shopService.updateShop(shopId, updates), rejectWithValue) as Promise<Shop>,
 )
 
+// ============= GST THUNKS =============
+
+/**
+ * Update shop GST information with document upload support.
+ * Handles the full GST update flow including file upload.
+ */
+export const updateShopGst = createAsyncThunk<
+  Shop,
+  {
+    shopId: string
+    gst_revenue_above_20l?: boolean
+    gst_number?: string
+    gst_document_uri?: string
+    gst_document_path?: string
+    userId?: string | null
+  },
+  ThunkConfig
+>('shop/updateShopGst', async ({ shopId, userId, ...gstUpdates }, { rejectWithValue }) => {
+  const response = await shopService.updateShopWithGst(shopId, gstUpdates, userId)
+  if (!response.success || !response.data) {
+    return rejectWithValue(response.error ?? 'Failed to update GST information.')
+  }
+  return response.data
+})
+
+/**
+ * Admin: Verify a shop's GST registration.
+ */
+export const verifyShopGst = createAsyncThunk<
+  Shop,
+  { shopId: string; adminUserId: string },
+  ThunkConfig
+>('shop/verifyShopGst', async ({ shopId, adminUserId }, { rejectWithValue }) => {
+  const response = await shopService.verifyShopGst(shopId, adminUserId)
+  if (!response.success || !response.data) {
+    return rejectWithValue(response.error ?? 'Failed to verify GST.')
+  }
+  return response.data
+})
+
+/**
+ * Get GST information for a shop (synchronous helper).
+ * This doesn't make an API call, just extracts from shop metadata.
+ */
+export const getGstInfoFromShop = (shop: Shop | null) => {
+  return shopService.getGstInfoFromShop(shop)
+}
+
 export const deleteShop = createAsyncThunk<string, string, ThunkConfig>(
   'shop/deleteShop',
   async (shopId, { rejectWithValue }) => {
@@ -577,6 +625,87 @@ const shopSlice = createSlice({
       .addCase(updateShop.rejected, (state, action) => {
         restoreShops(state, takeRollback<ShopsSnapshot>(action.meta.requestId))
         state.error = action.payload ?? 'Failed to update shop.'
+        state.isUpdating = false
+      })
+
+      // ---- GST update (optimistic merge) ----
+      .addCase(updateShopGst.pending, (state, action) => {
+        state.isUpdating = true
+        state.error = null
+        stashRollback(action.meta.requestId, snapshotShops(state))
+        // Optimistically update the shop metadata with GST changes
+        const { shopId, gst_revenue_above_20l, gst_number, gst_document_path } = action.meta.arg
+        const shop = state.myShops.find(s => s.id === shopId)
+        if (shop) {
+          const metadata = { ...(shop.shop_metadata as Record<string, unknown> ?? {}) }
+          const gstCompliance = { ...(metadata.gst_compliance as Record<string, unknown> ?? {}) }
+          
+          if (gst_revenue_above_20l !== undefined) {
+            gstCompliance.revenue_above_20l = gst_revenue_above_20l
+            if (!gst_revenue_above_20l) {
+              gstCompliance.gst_number = ''
+              gstCompliance.gst_document_path = ''
+              gstCompliance.gst_document_url = ''
+              gstCompliance.gst_verified = false
+            }
+          }
+          if (gst_number !== undefined) {
+            gstCompliance.gst_number = gst_number
+            // Reset verification if GST number changed
+            if (gstCompliance.gst_verified) {
+              gstCompliance.gst_verified = false
+              gstCompliance.gst_verified_at = null
+            }
+          }
+          if (gst_document_path !== undefined) {
+            gstCompliance.gst_document_path = gst_document_path
+            // Reset verification if document changed
+            if (gstCompliance.gst_verified) {
+              gstCompliance.gst_verified = false
+              gstCompliance.gst_verified_at = null
+            }
+          }
+          
+          metadata.gst_compliance = gstCompliance
+          patchShopEverywhere(state, shopId, { shop_metadata: metadata as Shop['shop_metadata'] })
+        }
+      })
+      .addCase(updateShopGst.fulfilled, (state, action) => {
+        rollbackRegistry.delete(action.meta.requestId)
+        replaceShopEverywhere(state, action.payload)
+        state.isUpdating = false
+      })
+      .addCase(updateShopGst.rejected, (state, action) => {
+        restoreShops(state, takeRollback<ShopsSnapshot>(action.meta.requestId))
+        state.error = action.payload ?? 'Failed to update GST information.'
+        state.isUpdating = false
+      })
+
+      // ---- GST verify ----
+      .addCase(verifyShopGst.pending, (state, action) => {
+        state.isUpdating = true
+        state.error = null
+        stashRollback(action.meta.requestId, snapshotShops(state))
+        // Optimistically mark as verified
+        const { shopId } = action.meta.arg
+        const shop = state.myShops.find(s => s.id === shopId)
+        if (shop) {
+          const metadata = { ...(shop.shop_metadata as Record<string, unknown> ?? {}) }
+          const gstCompliance = { ...(metadata.gst_compliance as Record<string, unknown> ?? {}) }
+          gstCompliance.gst_verified = true
+          gstCompliance.gst_verified_at = new Date().toISOString()
+          metadata.gst_compliance = gstCompliance
+          patchShopEverywhere(state, shopId, { shop_metadata: metadata as Shop['shop_metadata'] })
+        }
+      })
+      .addCase(verifyShopGst.fulfilled, (state, action) => {
+        rollbackRegistry.delete(action.meta.requestId)
+        replaceShopEverywhere(state, action.payload)
+        state.isUpdating = false
+      })
+      .addCase(verifyShopGst.rejected, (state, action) => {
+        restoreShops(state, takeRollback<ShopsSnapshot>(action.meta.requestId))
+        state.error = action.payload ?? 'Failed to verify GST.'
         state.isUpdating = false
       })
 
