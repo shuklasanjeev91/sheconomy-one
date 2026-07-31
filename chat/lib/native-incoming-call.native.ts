@@ -21,7 +21,17 @@ function normalizeUuid(callId: string): string {
   return callId.trim().toLowerCase()
 }
 
+/**
+ * Android: CallKeep ConnectionService uses phoneCall/microphone FGS types that
+ * Google Play rejected for this marketplace app. Use the in-app IncomingCallHost
+ * overlay + push notifications instead (no native telecom FGS).
+ */
+function androidCallKeepDisabled(): boolean {
+  return Platform.OS === 'android'
+}
+
 async function ensureSetup(): Promise<boolean> {
+  if (androidCallKeepDisabled()) return false
   if (setupPromise) return setupPromise
 
   setupPromise = (async () => {
@@ -46,18 +56,12 @@ async function ensureSetup(): Promise<boolean> {
             channelId: 'com.sheconomy.ecommerce.calls',
             channelName: 'SHEconomy calls',
             notificationTitle: 'SHEconomy call in progress',
-            // Extra key read by scripts/patch-callkeep-fgs-notification.cjs
             ...({
               notificationText: 'A call is active. Tap to return to SHEconomy.',
             } as Record<string, string>),
           },
         },
       })
-
-      if (Platform.OS === 'android') {
-        RNCallKeep.setAvailable(true)
-        RNCallKeep.registerAndroidEvents()
-      }
 
       return !!ok
     } catch (error) {
@@ -71,7 +75,7 @@ async function ensureSetup(): Promise<boolean> {
 }
 
 /**
- * Initialize CallKit (iOS) / ConnectionService (Android) and wire answer/decline.
+ * Initialize CallKit (iOS). Android is a no-op — in-app overlay handles UI.
  * Returns an unsubscribe that removes listeners (does not tear down CallKeep).
  */
 export async function setupNativeIncomingCalls(
@@ -79,10 +83,12 @@ export async function setupNativeIncomingCalls(
 ): Promise<() => void> {
   if (nextHandlers) handlers = nextHandlers
 
-  // Defer CallKit / ConnectionService init until after first paint so cold
-  // start does not race Hermes GC (Release launch crashes on large bundles).
-  // Setup alone does NOT start an Android FGS — that begins only when
-  // displayIncomingCall / outgoing ConnectionService connections are created.
+  if (androidCallKeepDisabled()) {
+    return () => {}
+  }
+
+  // Defer CallKit init until after first paint so cold start does not race
+  // Hermes GC (Release launch crashes on large bundles).
   await new Promise<void>((resolve) => {
     setTimeout(resolve, 1_500)
   })
@@ -90,14 +96,6 @@ export async function setupNativeIncomingCalls(
 
   const onAnswer = ({ callUUID }: { callUUID: string }) => {
     const id = normalizeUuid(callUUID)
-    try {
-      if (Platform.OS === 'android') {
-        RNCallKeep.backToForeground()
-        RNCallKeep.setCurrentCallActive(id)
-      }
-    } catch {
-      // ignore
-    }
     handlers.onAnswer?.(id)
   }
 
@@ -108,8 +106,6 @@ export async function setupNativeIncomingCalls(
   }
 
   const onShowUi = ({ callUUID }: { callUUID: string }) => {
-    // Self-managed Android: native system UI may not appear; keep JS overlay as UI.
-    // CallKeep still owns telecom session state for audio focus.
     void callUUID
   }
 
@@ -138,8 +134,10 @@ export async function setupNativeIncomingCalls(
   }
 }
 
-/** Show the system incoming-call UI (CallKit / ConnectionService). */
+/** Show the system incoming-call UI (CallKit on iOS). No-op on Android. */
 export function displayNativeIncomingCall(info: NativeIncomingCallInfo): void {
+  if (androidCallKeepDisabled()) return
+
   const uuid = normalizeUuid(info.callId)
   if (!uuid || activeUuids.has(uuid)) return
 
@@ -162,6 +160,8 @@ export function displayNativeIncomingCall(info: NativeIncomingCallInfo): void {
 }
 
 export function endNativeIncomingCall(callId: string): void {
+  if (androidCallKeepDisabled()) return
+
   const uuid = normalizeUuid(callId)
   if (!uuid) return
   activeUuids.delete(uuid)
@@ -177,12 +177,11 @@ export function endNativeIncomingCall(callId: string): void {
 }
 
 export function markNativeIncomingCallActive(callId: string): void {
+  if (androidCallKeepDisabled()) return
+
   const uuid = normalizeUuid(callId)
   if (!uuid) return
   try {
-    if (Platform.OS === 'android') {
-      RNCallKeep.setCurrentCallActive(uuid)
-    }
     RNCallKeep.answerIncomingCall(uuid)
   } catch {
     // ignore

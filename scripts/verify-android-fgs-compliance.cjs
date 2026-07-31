@@ -1,5 +1,5 @@
 /**
- * Static checks for Google Play FGS + targetSdk 35 compliance before EAS submit.
+ * Static checks for Google Play FGS-free Android AAB + targetSdk 36.
  * Run: yarn verify:android-fgs
  *
  * Also inspects android/ after prebuild when present.
@@ -11,34 +11,6 @@ const root = path.join(__dirname, '..')
 const appJsonPath = path.join(root, 'app.json')
 const callKeepPluginPath = path.join(root, 'plugins', 'withCallKeep.cjs')
 const fgsPluginPath = path.join(root, 'plugins', 'withAndroidFgsCompliance.cjs')
-const callKeepJava = path.join(
-  root,
-  'node_modules',
-  '@livekit',
-  'react-native-callkeep',
-  'android',
-  'src',
-  'main',
-  'java',
-  'io',
-  'wazo',
-  'callkeep',
-  'VoiceConnectionService.java',
-)
-const webrtcNotify = path.join(
-  root,
-  'node_modules',
-  '@livekit',
-  'react-native-webrtc',
-  'android',
-  'src',
-  'main',
-  'java',
-  'com',
-  'oney',
-  'WebRTCModule',
-  'MediaProjectionNotification.java',
-)
 const mergedManifestCandidates = [
   path.join(root, 'android', 'app', 'src', 'main', 'AndroidManifest.xml'),
 ]
@@ -74,60 +46,67 @@ const hasBuildProps = plugins.some(
   (entry) =>
     Array.isArray(entry) &&
     entry[0] === 'expo-build-properties' &&
-    entry[1]?.android?.targetSdkVersion === 35 &&
+    entry[1]?.android?.targetSdkVersion === 36 &&
     Number(entry[1]?.android?.compileSdkVersion) >= 36,
 )
 if (!hasBuildProps) {
   errors.push(
-    'app.json must include expo-build-properties with targetSdkVersion 35 and compileSdkVersion >= 36',
+    'app.json must include expo-build-properties with targetSdkVersion 36 and compileSdkVersion >= 36',
   )
 }
 
-const hasFgsPlugin = plugins.includes('./plugins/withAndroidFgsCompliance.cjs')
-if (!hasFgsPlugin) {
+const fgsPluginIndex = plugins.indexOf('./plugins/withAndroidFgsCompliance.cjs')
+if (fgsPluginIndex < 0) {
   errors.push('app.json must register ./plugins/withAndroidFgsCompliance.cjs')
+} else if (fgsPluginIndex !== plugins.length - 1) {
+  errors.push(
+    'withAndroidFgsCompliance.cjs must be the last Expo plugin so tools:node=remove wins over LiveKit/WebRTC merges',
+  )
 }
 
 const versionCode = appJson.expo?.android?.versionCode
-if (typeof versionCode !== 'number' || versionCode < 112) {
-  warnings.push(`android.versionCode is ${versionCode}; expected >= 112 for Play resubmit`)
+if (typeof versionCode !== 'number' || versionCode < 119) {
+  warnings.push(`android.versionCode is ${versionCode}; expected >= 119 for Play resubmit`)
 }
 
 const perms = appJson.expo?.android?.permissions ?? []
-for (const required of [
+for (const forbidden of [
   'android.permission.FOREGROUND_SERVICE',
   'android.permission.FOREGROUND_SERVICE_MEDIA_PROJECTION',
   'android.permission.FOREGROUND_SERVICE_MICROPHONE',
   'android.permission.FOREGROUND_SERVICE_PHONE_CALL',
+  'android.permission.FOREGROUND_SERVICE_CAMERA',
+  'android.permission.FOREGROUND_SERVICE_LOCATION',
+  'android.permission.MANAGE_OWN_CALLS',
+  'android.permission.CALL_PHONE',
+  'android.permission.USE_FULL_SCREEN_INTENT',
 ]) {
-  if (!perms.includes(required)) {
-    errors.push(`Missing android permission ${required}`)
+  if (perms.includes(forbidden)) {
+    errors.push(`Do not declare ${forbidden} — Android FGS/telecom must stay out of the AAB`)
   }
 }
-if (perms.includes('android.permission.FOREGROUND_SERVICE_CAMERA')) {
-  errors.push('Do not declare FOREGROUND_SERVICE_CAMERA unless camera FGS type is used')
-}
-if (perms.includes('android.permission.FOREGROUND_SERVICE_LOCATION')) {
-  errors.push('Do not declare FOREGROUND_SERVICE_LOCATION; background location is disabled')
+
+const livekitPlugin = plugins.find(
+  (entry) => Array.isArray(entry) && entry[0] === '@livekit/react-native-expo-plugin',
+)
+if (livekitPlugin?.[1]?.android?.enableScreenShareService !== false) {
+  errors.push('LiveKit enableScreenShareService must be false on Android')
 }
 
-mustInclude(callKeepPluginPath, "microphone|phoneCall", 'CallKeep FGS types')
-mustNotInclude(callKeepPluginPath, 'camera|microphone|phoneCall', 'CallKeep camera type removed')
-mustInclude(fgsPluginPath, 'tools:node', 'FGS compliance plugin removes location service')
-
-if (fs.existsSync(callKeepJava)) {
-  mustInclude(callKeepJava, 'IMPORTANCE_DEFAULT', 'CallKeep notification importance patch')
-  mustInclude(callKeepJava, 'FOREGROUND_SERVICE_TYPE_PHONE_CALL', 'CallKeep startForeground types patch')
-  mustNotInclude(callKeepJava, 'IMPORTANCE_NONE', 'CallKeep must not use IMPORTANCE_NONE')
-} else {
-  warnings.push('CallKeep Java not found — run yarn install / postinstall patches')
+const screenSharePlugin = plugins.find(
+  (entry) => Array.isArray(entry) && entry[0] === 'expo-livekit-screen-share',
+)
+if (
+  screenSharePlugin?.[1]?.android?.enableScreenShareService !== false ||
+  screenSharePlugin?.[1]?.android?.foregroundServicePermission !== false
+) {
+  errors.push('expo-livekit-screen-share Android FGS flags must be false')
 }
 
-if (fs.existsSync(webrtcNotify)) {
-  mustInclude(webrtcNotify, 'setOngoing(true)', 'WebRTC screen-share notification ongoing patch')
-} else {
-  warnings.push('WebRTC MediaProjectionNotification not found — run yarn install')
-}
+mustInclude(callKeepPluginPath, 'withCallKeepIos', 'CallKeep is iOS-only')
+mustNotInclude(callKeepPluginPath, 'VoiceConnectionService', 'CallKeep must not register Android ConnectionService')
+mustInclude(fgsPluginPath, 'MediaProjectionService', 'FGS plugin removes MediaProjectionService')
+mustInclude(fgsPluginPath, "tools:node", 'FGS compliance plugin uses tools:node=remove')
 
 for (const manifestPath of mergedManifestCandidates) {
   if (!fs.existsSync(manifestPath)) {
@@ -137,44 +116,71 @@ for (const manifestPath of mergedManifestCandidates) {
     continue
   }
   const manifest = read(manifestPath)
-  if (manifest.includes('camera|microphone|phoneCall')) {
-    errors.push('Merged manifest still declares camera FGS type on CallKeep')
-  }
   if (manifest.trimStart().startsWith('<root')) {
     errors.push(
       'AndroidManifest has invalid <root> wrapper — tools xmlns must be on <manifest>, not the document',
     )
   }
+  for (const name of [
+    'FOREGROUND_SERVICE_MEDIA_PROJECTION',
+    'FOREGROUND_SERVICE_MICROPHONE',
+    'FOREGROUND_SERVICE_PHONE_CALL',
+    'FOREGROUND_SERVICE_CAMERA',
+    'FOREGROUND_SERVICE_LOCATION',
+  ]) {
+    // Positive declaration without tools:node=remove is a fail.
+    const re = new RegExp(
+      `android:name="android\\.permission\\.${name}"(?![^>]*tools:node="remove")`,
+    )
+    // Simpler: any line with the permission that does not also contain tools:node="remove"
+    const lines = manifest.split('\n').filter((line) => line.includes(name))
+    for (const line of lines) {
+      if (!line.includes('tools:node="remove"') && !line.includes("tools:node='remove'")) {
+        errors.push(`Merged manifest still declares ${name} without tools:node=remove`)
+      }
+    }
+  }
   if (
-    manifest.includes('LocationTaskService') &&
+    manifest.includes('VoiceConnectionService') &&
     !manifest.includes('tools:node="remove"')
   ) {
-    warnings.push(
-      'LocationTaskService present in app manifest — ensure tools:node=remove merges correctly in AAB',
-    )
+    // More precise check below
   }
-  if (!manifest.includes('targetSdkVersion') && !fs.existsSync(path.join(root, 'android', 'gradle.properties'))) {
-    warnings.push('Could not confirm targetSdk from app manifest alone; check android/app/build.gradle')
+  const voiceLines = manifest.split('\n').filter((line) => line.includes('VoiceConnectionService'))
+  for (const line of voiceLines) {
+    if (!line.includes('tools:node="remove"')) {
+      errors.push('VoiceConnectionService must be tools:node=remove only (no live ConnectionService)')
+    }
+  }
+  const mediaLines = manifest
+    .split('\n')
+    .filter((line) => line.includes('MediaProjectionService'))
+  for (const line of mediaLines) {
+    if (!line.includes('tools:node="remove"')) {
+      errors.push('MediaProjectionService must be tools:node=remove only')
+    }
   }
 }
 
 const gradlePath = path.join(root, 'android', 'app', 'build.gradle')
 if (fs.existsSync(gradlePath)) {
   const gradle = read(gradlePath)
-  if (!/targetSdkVersion\s+35|targetSdk\s+35/.test(gradle)) {
-    // Expo may inject via rootProject.ext
-    const propsPath = path.join(root, 'android', 'gradle.properties')
-    const extPath = path.join(root, 'android', 'build.gradle')
-    const blob = [gradle, fs.existsSync(propsPath) ? read(propsPath) : '', fs.existsSync(extPath) ? read(extPath) : ''].join(
-      '\n',
+  const propsPath = path.join(root, 'android', 'gradle.properties')
+  const extPath = path.join(root, 'android', 'build.gradle')
+  const blob = [
+    gradle,
+    fs.existsSync(propsPath) ? read(propsPath) : '',
+    fs.existsSync(extPath) ? read(extPath) : '',
+  ].join('\n')
+  if (!/targetSdkVersion\s*=?\s*36|targetSdk\s*=?\s*36/.test(blob)) {
+    // Stale local prebuild is OK as a warning — EAS regenerates.
+    warnings.push(
+      'Local android/ build files do not show targetSdk 36 — regenerate with prebuild/EAS before comparing',
     )
-    if (!/targetSdkVersion\s*=?\s*35|targetSdk\s*=?\s*35/.test(blob)) {
-      errors.push('android/ build files do not show targetSdk 35 after prebuild')
-    }
   }
 }
 
-console.log('=== Android FGS / API 35 compliance check ===')
+console.log('=== Android FGS-free / API 36 compliance check ===')
 for (const warning of warnings) console.warn('WARN:', warning)
 for (const error of errors) console.error('ERR:', error)
 
@@ -183,6 +189,6 @@ if (errors.length) {
   process.exit(1)
 }
 
-console.log('\nOK — config and patches look compliant.')
-console.log('Next: EAS production AAB → confirm targetSdk=35 in Play Console → resubmit with FGS declaration video.')
+console.log('\nOK — config strips Android FGS types and targets API 36.')
+console.log('Next: EAS production AAB → confirm Target SDK = 36 and no FGS permissions in App bundle explorer.')
 console.log('See doc/android-play-fgs/README.md')

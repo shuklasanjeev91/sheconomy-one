@@ -1,70 +1,43 @@
-# Google Play — Foreground Services + Target API 35
+# Google Play — No Android Foreground Services + Target API 36
 
-Use this package when resubmitting after Policy status rejections for **Permissions for Foreground Services** and **Target API level (Android 15 / API 35)**.
+Use this when resubmitting after **Permissions for Foreground Services** rejections and target-API warnings.
 
-## What the app uses FGS for
+## Why we removed FGS (Jul 2026)
 
-| Type | Permission | When it runs | User-visible signal |
-|------|------------|--------------|---------------------|
-| `phoneCall` + `microphone` | `FOREGROUND_SERVICE_PHONE_CALL`, `FOREGROUND_SERVICE_MICROPHONE` | Incoming/outgoing SHEconomy voice or video call via CallKeep ConnectionService | Ongoing notification: **“SHEconomy call in progress”** |
-| `mediaProjection` | `FOREGROUND_SERVICE_MEDIA_PROJECTION` | User taps **Share screen** in a co-work meeting | Ongoing notification: **“Screen sharing”** / “You are currently sharing your screen.” |
+Play rejected `phoneCall` / `microphone` / `mediaProjection` for SHEconomy with:
 
-We do **not** use:
+- Permission use not declared or incorrectly declared
+- Functionality not initiated by or perceptible to the user
+- Insufficient demonstration of use
+- Lack of material user impact
 
-- `FOREGROUND_SERVICE_CAMERA` / `camera` FGS type (camera for meetings runs in the activity; CallKeep FGS is mic + phoneCall only)
-- `FOREGROUND_SERVICE_LOCATION` / location FGS (background location is disabled; LocationTaskService is stripped from the merged manifest)
+For a marketplace app, ConnectionService + MediaProjection FGS are not core. The Android AAB now **declares zero typed FGS permissions**.
 
-## Play Console — Foreground service declarations
+| Platform | Calls | Screen share |
+|----------|-------|--------------|
+| Android | In-app overlay + push (no CallKeep FGS) | Disabled |
+| iOS | CallKit | Broadcast Extension |
+| Web | In-app | Browser screen share |
 
-Declare only the types above. Suggested answers:
+## Engineering checklist (in repo)
 
-### phoneCall / microphone
-
-- **Why needed:** Keep the VoIP / LiveKit meeting audio session alive when the user leaves the app or locks the screen during an active call.
-- **User initiation:** User places a call or answers an incoming call (system incoming-call UI / in-app overlay).
-- **Impact if delayed/stopped:** Call audio drops; participants cannot continue the conversation.
-- **How users notice it:** Persistent “SHEconomy call in progress” notification; tapping returns to the call.
-
-### mediaProjection
-
-- **Why needed:** Capture and stream the device screen during a meeting after the user grants the system MediaProjection consent dialog.
-- **User initiation:** User taps **Share screen** in the meeting controls.
-- **Impact if delayed/stopped:** Screen share stops for other participants.
-- **How users notice it:** Persistent “Screen sharing” notification until they stop sharing.
-
-## Demo video checklist (30–60 seconds)
-
-Record on a physical Android device (API 34+ preferred):
-
-1. Open SHEconomy → start or join a **voice/video meeting / 1:1 call**.
-2. Press Home so the app backgrounds — show the **call-in-progress** notification in the shade.
-3. Return to the app → **end the call** → confirm the notification clears.
-4. Join a meeting → tap **Share screen** → accept the system dialog.
-5. Background the app — show the **Screen sharing** notification.
-6. Return → stop sharing → confirm the notification clears.
-
-Upload that video in the Play Console FGS declaration form.
-
-## Store listing / Data safety notes
-
-Mention in the public description (or “About this app”) that SHEconomy supports **voice/video meetings** and optional **screen sharing**, and that Android shows an ongoing notification while a call or screen share is active.
-
-## Engineering checklist (already in repo)
-
-- [`app.json`](../../app.json) — `expo-build-properties` with `compileSdkVersion` **36** and `targetSdkVersion` **35**; `versionCode` bumped for resubmit
-  - Play requires target API 35+. Newer AndroidX (`activity` 1.11 / `core` 1.17) needs `compileSdk` 36 while target can stay 35.
-- [`plugins/withCallKeep.cjs`](../../plugins/withCallKeep.cjs) — `foregroundServiceType=microphone|phoneCall` (no camera)
-- [`plugins/withAndroidFgsCompliance.cjs`](../../plugins/withAndroidFgsCompliance.cjs) — strips unused location FGS; re-asserts CallKeep types
-- Postinstall patches — visible CallKeep + MediaProjection notifications
+- [`app.json`](../../app.json) — `targetSdkVersion` **36**, `compileSdkVersion` **36**; no `FOREGROUND_SERVICE_*` in `android.permissions`
+- LiveKit / expo-livekit-screen-share Android screen-share flags **false**
+- [`plugins/withCallKeep.cjs`](../../plugins/withCallKeep.cjs) — **iOS only** (no Android ConnectionService)
+- [`plugins/withAndroidFgsCompliance.cjs`](../../plugins/withAndroidFgsCompliance.cjs) — last plugin; `tools:node=remove` for:
+  - `VoiceConnectionService` / CallKeep messaging service
+  - `MediaProjectionService` (merged from WebRTC even when unused)
+  - `LocationTaskService`
+  - All `FOREGROUND_SERVICE*` + telecom call permissions
 - Verify: `yarn verify:android-fgs`
 
-## Resubmit steps
+## Play Console steps
 
-1. `yarn install` (applies FGS notification patches)
-2. `yarn verify:android-fgs`
-3. Build production AAB (`eas build -p android --profile production`)
-4. In Play Console → App bundle explorer: confirm **Target SDK = 35**
-5. Complete FGS declarations + upload demo video
-6. Submit the new version (`versionCode` ≥ 112)
+1. Upload new production AAB (`versionCode` ≥ 119).
+2. App bundle explorer: confirm **Target SDK = 36**.
+3. App bundle explorer / App content → Foreground service permissions:
+   - Confirm the new bundle does **not** list `FOREGROUND_SERVICE_PHONE_CALL`, `_MICROPHONE`, or `_MEDIA_PROJECTION`.
+   - If the form still shows old types from a previous upload, answer that this release no longer uses them / clear declarations for the new release as Play allows.
+4. Submit the new release for review.
 
-Do not resubmit until declarations, video, and AAB targetSdk all match.
+Do **not** re-declare phoneCall / microphone / mediaProjection FGS for Android unless you restore those services and ship a demo video that clearly shows core use.

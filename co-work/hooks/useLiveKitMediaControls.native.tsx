@@ -90,6 +90,12 @@ export function useLiveKitMediaControls(preferSpeaker = true): LiveKitMediaContr
   const toggleScreenShare = useCallback(async () => {
     const enabling = !screenSharingRef.current
 
+    // Android MediaProjection FGS was rejected by Play for this app — screen
+    // share stays available on iOS (Broadcast Extension) and web only.
+    if (enabling && Platform.OS === 'android') {
+      throw new Error('Screen sharing is not available on Android in this version.')
+    }
+
     if (enabling && Platform.OS === 'ios') {
       if (isIosSimulator()) {
         throw new Error('Screen sharing requires a physical iPhone or iPad.')

@@ -21,13 +21,12 @@
       "./plugins/withUniversalDeviceSupport.cjs",
       "./plugins/withGoogleModularHeaders.cjs",
       "./plugins/withCallKeep.cjs",
-      "./plugins/withAndroidFgsCompliance.cjs",
       [
         "expo-build-properties",
         {
           "android": {
             "compileSdkVersion": 36,
-            "targetSdkVersion": 35,
+            "targetSdkVersion": 36,
             "minSdkVersion": 24
           }
         }
@@ -45,7 +44,7 @@
         {
           "android": {
             "audioType": "communication",
-            "enableScreenShareService": true
+            "enableScreenShareService": false
           }
         }
       ],
@@ -57,8 +56,8 @@
             "appGroupIdentifier": "group.com.sheconomy.ecommerce"
           },
           "android": {
-            "enableScreenShareService": true,
-            "foregroundServicePermission": true
+            "enableScreenShareService": false,
+            "foregroundServicePermission": false
           }
         }
       ],
@@ -103,7 +102,8 @@
           "microphonePermission": "Allow SHEconomy to use the microphone for video meetings and live captions.",
           "speechRecognitionPermission": "Allow SHEconomy to convert speech to live captions in meetings."
         }
-      ]
+      ],
+      "./plugins/withAndroidFgsCompliance.cjs"
     ],
     "icon": "./public/app-icon.png",
     "splash": {
@@ -113,7 +113,7 @@
     },
     "ios": {
       "bundleIdentifier": "com.sheconomy.ecommerce",
-      "buildNumber": "104",
+      "buildNumber": "105",
       "appleTeamId": "52H73QK4CL",
       "supportsTablet": true,
       "requireFullScreen": false,
@@ -163,7 +163,7 @@
     },
     "android": {
       "package": "com.sheconomy.ecommerce",
-      "versionCode": 117,
+      "versionCode": 119,
       "softwareKeyboardLayoutMode": "resize",
       "adaptiveIcon": {
         "foregroundImage": "./public/app-icon.png",
@@ -198,16 +198,7 @@
         "android.permission.READ_CONTACTS",
         "android.permission.WRITE_CONTACTS",
         "android.permission.BLUETOOTH_CONNECT",
-        "android.permission.MODIFY_AUDIO_SETTINGS",
-        "android.permission.FOREGROUND_SERVICE",
-        "android.permission.FOREGROUND_SERVICE_MEDIA_PROJECTION",
-        "android.permission.FOREGROUND_SERVICE_MICROPHONE",
-        "android.permission.FOREGROUND_SERVICE_PHONE_CALL",
-        "android.permission.MANAGE_OWN_CALLS",
-        "android.permission.READ_PHONE_STATE",
-        "android.permission.READ_PHONE_NUMBERS",
-        "android.permission.CALL_PHONE",
-        "android.permission.USE_FULL_SCREEN_INTENT"
+        "android.permission.MODIFY_AUDIO_SETTINGS"
       ]
     },
     "extra": {
