@@ -136,6 +136,7 @@ function NativeYoutubeWatchPlayer({
 <html>
   <head>
     <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1" />
+    <meta name="referrer" content="strict-origin-when-cross-origin" />
     <style>
       html, body, #player { margin: 0; width: 100%; height: 100%; background: #000; overflow: hidden; }
     </style>
@@ -163,7 +164,8 @@ function NativeYoutubeWatchPlayer({
             autoplay: ${autoPlay ? 1 : 0},
             playsinline: 1,
             rel: 0,
-            modestbranding: 1
+            modestbranding: 1,
+            origin: 'https://com.sheconomy.ecommerce'
           },
           events: {
             onStateChange: function (event) {
@@ -183,11 +185,15 @@ function NativeYoutubeWatchPlayer({
   return (
     <YStack width="100%" aspectRatio={16 / 9} borderRadius={12} overflow="hidden" backgroundColor="#000">
       <WebView
-        source={{ html }}
+        source={{ html, baseUrl: 'https://com.sheconomy.ecommerce' }}
         style={{ flex: 1, backgroundColor: '#000' }}
         allowsFullscreenVideo
         mediaPlaybackRequiresUserAction={false}
         allowsInlineMediaPlayback
+        javaScriptEnabled
+        domStorageEnabled
+        originWhitelist={['*']}
+        userAgent="Mozilla/5.0 (Linux; Android 13; Mobile) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Mobile Safari/537.36"
         onMessage={(event: { nativeEvent: { data: string } }) => {
           if (event.nativeEvent.data === 'ended') onEndedRef.current?.()
         }}

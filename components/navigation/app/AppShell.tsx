@@ -34,6 +34,7 @@ import { useInstantMeetingSession } from '~/co-work/lib/instant-meeting-session'
 import { AppDesktopHeader } from '~/components/navigation/app/AppDesktopHeader'
 import { AppMobileBottomTabs } from '~/components/navigation/app/AppMobileBottomTabs'
 import { AppMobileHeader } from '~/components/navigation/app/AppMobileHeader'
+import { WarmTopTabRoutes } from '~/components/navigation/app/WarmTopTabRoutes'
 
 type AppShellProps = {
   children: ReactNode
@@ -174,6 +175,7 @@ export function AppShell({ children }: AppShellProps) {
             >
               {children}
             </YStack>
+            <WarmTopTabRoutes />
             {showCommerceFooter ? <CommerceDesktopFooter /> : null}
             {!isDesktop && !chatConversationMobile ? <AppMobileBottomTabs /> : null}
             {/* Global overlays — bottom tabs can open these outside section layouts

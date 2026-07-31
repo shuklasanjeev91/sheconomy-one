@@ -385,16 +385,20 @@ if (!(normalizedPreloadPath in preloadedLoaderData) && !(href in preloadedLoader
             },
             'dist/esm/router/useScreens.native.js': (contents) => {
               if (!contents) return
-              // Brand logo splash while async route factories resolve (never empty / "Starting…").
-              if (contents.includes('sheconomy-logo-suspense')) return
+              // Prefer skip Suspense entirely when suspendRoutes:false (avoids blank tab flash).
+              if (contents.includes('sheconomy-skip-suspense-routes')) return
               const branded = `var wrapSuspense = function (children) {
-    // sheconomy-logo-suspense: centered brand logo on magenta while chunks resolve
+    // sheconomy-skip-suspense-routes: native.suspendRoutes:false → no blank fallback flash
+    if (process.env.ONE_SUSPEND_ROUTES_NATIVE === "0") {
+      return children;
+    }
     return /* @__PURE__ */jsx(Suspense, {
       fallback: globalThis.__SHECONOMY_SUSPENSE_FALLBACK__ || null,
       children
     });
   };`
               if (
+                contents.includes('sheconomy-logo-suspense') ||
                 contents.includes('sheconomy-no-starting-suspense') ||
                 contents.includes('sheconomy-brand-suspense') ||
                 contents.includes('sheconomy-visible-suspense') ||
@@ -409,15 +413,19 @@ if (!(normalizedPreloadPath in preloadedLoaderData) && !(href in preloadedLoader
             },
             'dist/cjs/router/useScreens.native.js': (contents) => {
               if (!contents) return
-              if (contents.includes('sheconomy-logo-suspense')) return
+              if (contents.includes('sheconomy-skip-suspense-routes')) return
               const branded = `var wrapSuspense = function (children) {
-    // sheconomy-logo-suspense: centered brand logo on magenta while chunks resolve
+    // sheconomy-skip-suspense-routes: native.suspendRoutes:false → no blank fallback flash
+    if (process.env.ONE_SUSPEND_ROUTES_NATIVE === "0") {
+      return children;
+    }
     return /* @__PURE__ */(0, import_jsx_runtime.jsx)(import_react2.Suspense, {
       fallback: globalThis.__SHECONOMY_SUSPENSE_FALLBACK__ || null,
       children
     });
   };`
               if (
+                contents.includes('sheconomy-logo-suspense') ||
                 contents.includes('sheconomy-no-starting-suspense') ||
                 contents.includes('sheconomy-brand-suspense') ||
                 contents.includes('sheconomy-visible-suspense') ||

@@ -1,6 +1,7 @@
-import { AppLink } from '~/components/navigation/AppLink'
+import { Platform } from 'react-native'
 import type { Href } from 'one'
 
+import { AppLink } from '~/components/navigation/AppLink'
 import { CommunityCard } from '~/community/components/CommunityCard'
 import { openComposer, type ComposerOptions } from '~/community/lib/composer-store'
 import { useCommunityUi } from '~/community/lib/community-theme'
@@ -15,6 +16,11 @@ export function FeedComposer() {
   const communityUi = useCommunityUi()
   const { profile, isAuthenticated } = useProfile()
   const name = profile?.full_name || profile?.username || 'You'
+
+  // Native uses the bottom-tab Create Post entry — hide the feed prompt card.
+  if (Platform.OS !== 'web') {
+    return null
+  }
 
   // Every entry point opens the shared composer overlay. Unauthenticated users
   // are routed through sign-in first (returning to the feed afterwards).

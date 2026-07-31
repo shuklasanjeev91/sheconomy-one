@@ -7,49 +7,50 @@ type LiveKitRoomPlatform = 'web' | 'native'
 /**
  * Shared LiveKit room options for co-work meetings and chat calls.
  * Tuned for clear speech (AEC/NS/AGC), reliable web↔native video, and Bluetooth-friendly capture.
+ *
+ * Screen share: disable adaptiveStream on both platforms. Adaptive stream often
+ * observes a 0×0 RTCView/video element on the first layout pass and requests no
+ * layers — Android then logs "Dropping frame - No surface" / blank tiles on every
+ * platform pair. Explicit subscribe boost handles quality instead.
  */
 export function getLiveKitRoomOptions(platform: LiveKitRoomPlatform = 'web'): RoomOptions {
   const shared: RoomOptions = {
-    dynacast: true,
+    // Dynacast can pause the only screen-share layer when no viewer has
+    // reported dimensions yet — keep it off so Present always forwards.
+    dynacast: false,
+    adaptiveStream: false,
     audioCaptureDefaults: {
       ...CALL_AUDIO_CAPTURE,
       channelCount: 1,
-      // Prefer voice-processing path over music/raw mic where the browser supports it.
       ...(platform === 'web' ? { voiceIsolation: true } : {}),
     },
     videoCaptureDefaults: {
       resolution: { width: 1280, height: 720, frameRate: 24 },
     },
     publishDefaults: {
-      // VP8 is the most reliable cross-platform codec for web ↔ RN.
       videoCodec: 'vp8',
       audioPreset: AudioPresets.speech,
       dtx: true,
       red: true,
       stopMicTrackOnMute: true,
+      // Camera can still simulcast; screen share uses screenShareSimulcastLayers: [].
       simulcast: true,
-      // Single high layer for screen share — avoids black tiles when a viewer
-      // (especially web adaptiveStream) requests a low layer mobile never sent.
-      screenShareEncoding: ScreenSharePresets.h1080fps15.encoding,
+      screenShareEncoding: ScreenSharePresets.h720fps15.encoding,
       screenShareSimulcastLayers: [],
+      backupCodec: false,
     },
   }
 
   if (platform === 'native') {
     return {
       ...shared,
-      // RN density-aware adaptive stream; dual PC path avoids black remote video
-      // regressions with livekit-client ≥ 2.19.2 on React Native.
-      adaptiveStream: { pixelDensity: 'screen' },
+      // Dual PC path avoids black remote video regressions with livekit-client ≥ 2.19.2.
       singlePeerConnection: false,
     }
   }
 
   return {
     ...shared,
-    // Prefer explicit HIGH quality for remote screen shares (see bindRemoteScreenShareQuality).
-    // Default adaptiveStream can request a missing low layer from mobile publishers →
-    // empty video + avatar placeholder on web (native→web).
-    adaptiveStream: false,
+    // Web defaults are fine with a single peer connection.
   }
 }

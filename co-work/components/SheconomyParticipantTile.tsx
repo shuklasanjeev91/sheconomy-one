@@ -66,7 +66,18 @@ function SheconomyParticipantTileBody() {
 
   return (
     <>
-      {hasLiveVideo ? <VideoTrack trackRef={trackRef} /> : null}
+      {hasLiveVideo ? (
+        <VideoTrack
+          trackRef={trackRef}
+          manageSubscription={false}
+          style={{
+            width: '100%',
+            height: '100%',
+            objectFit: isScreen ? 'contain' : 'cover',
+            background: '#0c080a',
+          }}
+        />
+      ) : null}
 
       {/* Screen share: never show profile avatar — that looked like a broken "image" tile
           when native→web frames were missing. Camera tiles keep the avatar fallback. */}

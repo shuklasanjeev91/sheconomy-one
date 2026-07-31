@@ -11,7 +11,7 @@ import { usePresence } from '~/chat/hooks/usePresence'
 import { useUserChats } from '~/chat/hooks/useUserChats'
 import type { ChatSummary } from '~/chat/lib/types'
 import { useChatTheme } from '~/chat/lib/chat-theme'
-import { Button, Icons, Spinner, Text, XStack, YStack } from '~/components/ui'
+import { Button, Icons, ListSkeleton, Text, XStack, YStack } from '~/components/ui'
 import { useAppLayout } from '~/hooks/useAppLayout'
 import { chatRoutes, routes } from '~/lib/routes'
 import { useSupabase } from '~/providers/SupabaseProvider'
@@ -68,8 +68,8 @@ export function ChatScreen({ chatId = null, filter = 'all' }: ChatScreenProps) {
   // ---- Auth states ---------------------------------------------------------
   if (authLoading && chats.length === 0) {
     return (
-      <YStack flex={1} minHeight={0} backgroundColor={theme.pageBg} alignItems="center" justifyContent="center" style={fillStyle}>
-        <Spinner size="large" color={theme.brand} />
+      <YStack flex={1} minHeight={0} backgroundColor={theme.pageBg} style={fillStyle}>
+        <ListSkeleton rows={8} />
       </YStack>
     )
   }
@@ -166,8 +166,8 @@ export function ChatScreen({ chatId = null, filter = 'all' }: ChatScreenProps) {
           onConversationChanged={reload}
         />
       ) : chatId && isLoading && visibleChats.length === 0 ? (
-        <YStack flex={1} alignItems="center" justifyContent="center">
-          <Spinner size="large" color={theme.brand} />
+        <YStack flex={1} minHeight={0}>
+          <ListSkeleton rows={8} />
         </YStack>
       ) : (
         <YStack flex={1} minHeight={0}>
@@ -192,8 +192,8 @@ function EmptyThreadPlaceholder({ loading }: { loading: boolean }) {
 
   if (loading) {
     return (
-      <YStack flex={1} alignItems="center" justifyContent="center" backgroundColor={theme.threadBg}>
-        <Spinner size="large" color={theme.brand} />
+      <YStack flex={1} backgroundColor={theme.threadBg}>
+        <ListSkeleton rows={8} />
       </YStack>
     )
   }

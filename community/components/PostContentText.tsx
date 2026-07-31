@@ -38,22 +38,23 @@ export function PostContentText({
     <YStack width="100%" minWidth={0} gap={4}>
       <Text fontSize={fontSize} color={ui.text} lineHeight={lineHeight} whiteSpace="pre-wrap">
         <PostTextSegments segments={parsePostText(visibleContent)} />
-        {canCollapse && !expanded ? (
-          <>
-            {' '}
-            <Text
-              fontSize={fontSize}
-              fontWeight="600"
-              color={ui.textMuted}
-              cursor="pointer"
-              onPress={() => setExpanded(true)}
-              hoverStyle={{ color: communityUi.brand, textDecorationLine: 'underline' }}
-            >
-              see more
-            </Text>
-          </>
-        ) : null}
       </Text>
+      {canCollapse && !expanded ? (
+        <Text
+          fontSize={fontSize}
+          fontWeight="600"
+          color={ui.textMuted}
+          cursor="pointer"
+          alignSelf="flex-start"
+          onPress={(e: { stopPropagation?: () => void }) => {
+            e.stopPropagation?.()
+            setExpanded(true)
+          }}
+          hoverStyle={{ color: communityUi.brand, textDecorationLine: 'underline' }}
+        >
+          see more
+        </Text>
+      ) : null}
       {canCollapse && expanded ? (
         <Text
           fontSize={14}
@@ -61,7 +62,10 @@ export function PostContentText({
           color={ui.textMuted}
           cursor="pointer"
           alignSelf="flex-start"
-          onPress={() => setExpanded(false)}
+          onPress={(e: { stopPropagation?: () => void }) => {
+            e.stopPropagation?.()
+            setExpanded(false)
+          }}
           hoverStyle={{ color: communityUi.brand, textDecorationLine: 'underline' }}
         >
           see less

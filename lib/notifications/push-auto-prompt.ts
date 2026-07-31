@@ -4,10 +4,9 @@ import {
 } from '~/lib/platform/storage'
 
 /**
- * Persists after the user has *actually decided* the OS permission
- * (granted or denied) — not merely after we attempted to show a dialog.
- * Bumped to v5 so devices stuck after silent auto-prompt skips see the
- * in-app subscribe dialog again.
+ * Persists after the user finished the push opt-in flow once:
+ * Allow, Not now, OS grant, or OS deny — so login never auto-asks again.
+ * Settings → Enable can clear this via resetPushPermissionMemory.
  */
 const STORAGE_KEY = 'sheconomy:push-permission-decided-v5'
 

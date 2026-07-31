@@ -14,7 +14,7 @@ import type { ChatSummary } from '~/chat/lib/types'
 import {
   AppBottomSheet,
   Icons,
-  Spinner,
+  ListSkeleton,
   Text,
   XStack,
   YStack,
@@ -231,8 +231,8 @@ export function ChatListPane({
       ) : null}
 
       {isLoading ? (
-        <YStack flex={1} alignItems="center" justifyContent="center" paddingVertical="$8">
-          <Spinner size="large" color={theme.brand} />
+        <YStack flex={1} minHeight={0}>
+          <ListSkeleton rows={8} />
         </YStack>
       ) : chats.length === 0 ? (
         <YStack flex={1} alignItems="center" justifyContent="center" paddingHorizontal={32} gap={12}>

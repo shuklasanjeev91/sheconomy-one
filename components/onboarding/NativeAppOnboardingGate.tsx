@@ -1,8 +1,9 @@
 import { useEffect, useState, type ReactNode } from 'react'
-import { Platform } from 'react-native'
+import { InteractionManager, Platform } from 'react-native'
+import * as SplashScreen from 'expo-splash-screen'
 
 import { AuthOnboarding } from '~/components/auth/AuthOnboarding'
-import { BrandSplashFallback } from '~/components/brand/BrandSplashFallback'
+import { NativeBootPlaceholder } from '~/components/brand/NativeBootPlaceholder'
 import {
   hasSeenAppOnboarding,
   markAppOnboardingSeen,
@@ -10,6 +11,10 @@ import {
 
 type NativeAppOnboardingGateProps = {
   children: ReactNode
+}
+
+function hideNativeSplash() {
+  void SplashScreen.hideAsync().catch(() => {})
 }
 
 /**
@@ -33,6 +38,7 @@ export function NativeAppOnboardingGate({ children }: NativeAppOnboardingGatePro
       })
       .catch(() => {
         if (cancelled) return
+        // Fail open into onboarding so first launch never skips the intro.
         setShowIntro(true)
         setReady(true)
       })
@@ -42,12 +48,36 @@ export function NativeAppOnboardingGate({ children }: NativeAppOnboardingGatePro
     }
   }, [])
 
+  useEffect(() => {
+    if (Platform.OS === 'web' || !ready) return
+
+    // Hide splash as soon as boot UI (onboarding or app) can paint — never leave
+    // a brand-magenta windowBackground stuck on screen.
+    const task = InteractionManager.runAfterInteractions(() => {
+      requestAnimationFrame(() => {
+        hideNativeSplash()
+      })
+    })
+    return () => {
+      task.cancel()
+    }
+  }, [ready, showIntro])
+
+  useEffect(() => {
+    if (Platform.OS === 'web') return
+    // Hard failsafe — never leave splash / magenta window longer than 2.5s.
+    const timer = setTimeout(() => {
+      hideNativeSplash()
+    }, 2500)
+    return () => clearTimeout(timer)
+  }, [])
+
   if (Platform.OS === 'web') {
     return <>{children}</>
   }
 
   if (!ready) {
-    return <BrandSplashFallback />
+    return <NativeBootPlaceholder />
   }
 
   if (showIntro) {
@@ -57,6 +87,7 @@ export function NativeAppOnboardingGate({ children }: NativeAppOnboardingGatePro
         onFinish={() => {
           setShowIntro(false)
           void markAppOnboardingSeen()
+          hideNativeSplash()
         }}
       />
     )

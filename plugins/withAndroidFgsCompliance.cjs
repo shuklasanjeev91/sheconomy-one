@@ -1,14 +1,12 @@
 /**
- * Google Play FGS compliance (resubmit after policy rejection):
+ * Google Play FGS compliance (partial):
  *
- * SHEconomy's Android store listing is marketplace-first. VoIP ConnectionService
- * and MediaProjection screen-share FGS types were rejected ("lack of material
- * user impact" / not core). This plugin strips those services + typed FGS
- * permissions from the merged AndroidManifest so the AAB declares none.
+ * Strip VoIP ConnectionService / phone-call / unused location FGS types that
+ * were rejected for this marketplace listing. Keep MediaProjection so Co-Work
+ * screen share works on Android (user-initiated Present → system capture UI +
+ * ongoing "sharing screen" notification).
  *
  * iOS CallKit / Broadcast Extension are unchanged.
- * Android meetings still work in-foreground via LiveKit; system call UI and
- * screen share are disabled on Android only.
  */
 const {
   AndroidConfig,
@@ -20,14 +18,11 @@ const SERVICES_TO_REMOVE = [
   'expo.modules.location.services.LocationTaskService',
   'io.wazo.callkeep.VoiceConnectionService',
   'io.wazo.callkeep.RNCallKeepBackgroundMessagingService',
-  'com.oney.WebRTCModule.MediaProjectionService',
 ]
 
 const PERMISSIONS_TO_REMOVE = [
-  'android.permission.FOREGROUND_SERVICE',
   'android.permission.FOREGROUND_SERVICE_CAMERA',
   'android.permission.FOREGROUND_SERVICE_LOCATION',
-  'android.permission.FOREGROUND_SERVICE_MEDIA_PROJECTION',
   'android.permission.FOREGROUND_SERVICE_MICROPHONE',
   'android.permission.FOREGROUND_SERVICE_PHONE_CALL',
   'android.permission.MANAGE_OWN_CALLS',
@@ -36,6 +31,8 @@ const PERMISSIONS_TO_REMOVE = [
   'android.permission.READ_PHONE_STATE',
   'android.permission.READ_PHONE_NUMBERS',
 ]
+
+const SCREEN_SHARE_SERVICE_META = 'io.livekit.reactnative.expo.ENABLE_SCREEN_SHARE_SERVICE'
 
 function ensureToolsNamespace(doc) {
   // modResults is { manifest: { $: attrs, ... } }. Putting `$` on the document
@@ -74,6 +71,18 @@ function ensureRemovePermission(manifest, name) {
   })
 }
 
+function ensurePermission(manifest, name) {
+  if (!manifest['uses-permission']) manifest['uses-permission'] = []
+  manifest['uses-permission'] = manifest['uses-permission'].filter(
+    (entry) => entry?.$?.['android:name'] !== name,
+  )
+  manifest['uses-permission'].push({
+    $: {
+      'android:name': name,
+    },
+  })
+}
+
 function withAndroidFgsCompliance(config) {
   return withAndroidManifest(config, (mod) => {
     const androidManifest = mod.modResults
@@ -90,14 +99,27 @@ function withAndroidFgsCompliance(config) {
       ensureRemovePermission(manifest, name)
     }
 
-    // Ensure LiveKit screen-share meta-data does not re-enable MediaProjection FGS.
-    if (application['meta-data']) {
-      for (const item of application['meta-data']) {
-        if (item?.$?.['android:name'] === 'io.livekit.reactnative.expo.ENABLE_SCREEN_SHARE_SERVICE') {
-          item.$['android:value'] = 'false'
-        }
-      }
+    // Keep MediaProjection FGS for Co-Work Present (Android screen share).
+    ensurePermission(manifest, 'android.permission.FOREGROUND_SERVICE')
+    ensurePermission(manifest, 'android.permission.FOREGROUND_SERVICE_MEDIA_PROJECTION')
+
+    // Drop any tools:node=remove for MediaProjectionService so WebRTC's merge wins.
+    if (application.service) {
+      application.service = application.service.filter(
+        (service) => service?.$?.['android:name'] !== 'com.oney.WebRTCModule.MediaProjectionService',
+      )
     }
+
+    if (!application['meta-data']) application['meta-data'] = []
+    application['meta-data'] = application['meta-data'].filter(
+      (item) => item?.$?.['android:name'] !== SCREEN_SHARE_SERVICE_META,
+    )
+    application['meta-data'].push({
+      $: {
+        'android:name': SCREEN_SHARE_SERVICE_META,
+        'android:value': 'true',
+      },
+    })
 
     return mod
   })
@@ -106,5 +128,5 @@ function withAndroidFgsCompliance(config) {
 module.exports = createRunOncePlugin(
   withAndroidFgsCompliance,
   'withAndroidFgsCompliance',
-  '2.0.0',
+  '3.0.0',
 )

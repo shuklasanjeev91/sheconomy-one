@@ -1,7 +1,10 @@
 import { Image, StyleSheet, View } from 'react-native'
 
-import { BRAND_LOGO_URL, BRAND_NAME } from '~/config/brand'
+import { BRAND_NAME } from '~/config/brand'
 import { brandColors } from '~/config/brand-colors'
+
+/** Bundled logo — never depends on network during cold start. */
+const brandLogo = require('../../public/app-icon.png')
 
 /**
  * Full-screen brand splash — magenta background + centered logo.
@@ -12,7 +15,7 @@ export function BrandSplashFallback() {
   return (
     <View style={styles.root} accessibilityRole="image" accessibilityLabel={BRAND_NAME}>
       <Image
-        source={{ uri: BRAND_LOGO_URL }}
+        source={brandLogo}
         style={styles.logo}
         resizeMode="contain"
         accessibilityIgnoresInvertColors

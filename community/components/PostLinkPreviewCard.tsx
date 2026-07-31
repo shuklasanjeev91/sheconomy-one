@@ -24,6 +24,17 @@ function hostFromUrl(url: string): string {
   }
 }
 
+function decodeBasicHtmlEntities(value: string | null | undefined): string | null {
+  if (!value) return null
+  return value
+    .replace(/&amp;/g, '&')
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;/g, "'")
+    .replace(/&#10;/g, '\n')
+}
+
 /** professional Open Graph unfurl card for a URL shared in a post. */
 export function PostLinkPreviewCard({ preview, loading, onRemove }: PostLinkPreviewCardProps) {
   const ui = useCommunityUi()
@@ -49,16 +60,19 @@ export function PostLinkPreviewCard({ preview, loading, onRemove }: PostLinkPrev
 
   if (!preview) return null
 
-  const site = preview.siteName || hostFromUrl(preview.url)
+  const site = decodeBasicHtmlEntities(preview.siteName || hostFromUrl(preview.url))
   const embed = getVideoEmbed(preview)
   const coverImage = preview.image || getVideoPosterUrl(preview.url)
+  const title = decodeBasicHtmlEntities(preview.title)
+  const description = decodeBasicHtmlEntities(preview.description)
 
   const openLink = () => {
     void openExternalUrl(preview.url)
   }
 
   if (embed) {
-    const videoSrc = embed.kind === 'iframe' ? preview.url : embed.src
+    // Prefer resolved embed/file src so YouTube `/embed/ID` and Vimeo players work.
+    const videoSrc = embed.src
     return (
       <YStack
         position="relative"
@@ -86,14 +100,14 @@ export function PostLinkPreviewCard({ preview, loading, onRemove }: PostLinkPrev
           <Text fontSize={11} fontWeight="600" color={ui.textMuted} numberOfLines={1}>
             {site.toUpperCase()}
           </Text>
-          {preview.title ? (
+          {title ? (
             <Text fontSize={15} fontWeight="700" color={ui.text} numberOfLines={2}>
-              {preview.title}
+              {title}
             </Text>
           ) : null}
-          {preview.description ? (
+          {description ? (
             <Text fontSize={13} color={ui.textMuted} numberOfLines={2}>
-              {preview.description}
+              {description}
             </Text>
           ) : null}
         </YStack>
@@ -118,7 +132,7 @@ export function PostLinkPreviewCard({ preview, loading, onRemove }: PostLinkPrev
             width="100%"
             height={MEDIA_HEIGHT}
             objectFit="cover"
-            alt={preview.title ?? 'Link preview'}
+            alt={title ?? 'Link preview'}
           />
         </YStack>
       ) : null}
@@ -134,14 +148,14 @@ export function PostLinkPreviewCard({ preview, loading, onRemove }: PostLinkPrev
         <Text fontSize={11} fontWeight="600" color={ui.textMuted} numberOfLines={1}>
           {site.toUpperCase()}
         </Text>
-        {preview.title ? (
+        {title ? (
           <Text fontSize={15} fontWeight="700" color={ui.text} numberOfLines={2}>
-            {preview.title}
+            {title}
           </Text>
         ) : null}
-        {preview.description ? (
+        {description ? (
           <Text fontSize={13} color={ui.textMuted} numberOfLines={2}>
-            {preview.description}
+            {description}
           </Text>
         ) : null}
       </YStack>

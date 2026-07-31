@@ -1,5 +1,10 @@
 // TextDecoder/TextEncoder must exist before Supabase, LiveKit, or other deps load on Hermes.
 // Deep LiveKit package subpaths are blocked by "exports"; load via absolute path helper.
+import { installDOMExceptionPolyfill } from '~/lib/polyfills/dom-exception'
+
+// Must run before LiveKit / WebRTC — bare `DOMException` refs throw on Hermes.
+installDOMExceptionPolyfill()
+
 import '~/lib/livekit-encoder-polyfill.cjs'
 import '@azure/core-asynciterator-polyfill'
 // Hermes URL exposes `protocol` as a getter-only property. SupabaseClient does
@@ -11,6 +16,14 @@ import 'react-native-url-polyfill/auto'
 import 'whatwg-fetch'
 
 import { LogBox } from 'react-native'
+import * as SplashScreen from 'expo-splash-screen'
+
+// Keep the native splash briefly until NativeAppOnboardingGate paints, then
+// force-hide so brand magenta never sticks as a blank unwanted screen.
+void SplashScreen.preventAutoHideAsync().catch(() => {})
+setTimeout(() => {
+  void SplashScreen.hideAsync().catch(() => {})
+}, 2500)
 
 // LiveKit WebRTC pulls `debug`, whose Node entry does require('tty'). Hermes has no
 // Node require — Rolldown then throws. Mark this as a browser-like process so
@@ -30,9 +43,12 @@ function installAbortSignalHelpers() {
     AbortSignalImpl.timeout = (ms: number) => {
       const controller = new AbortController()
       const id = setTimeout(() => {
+        const DOMExceptionImpl = (globalThis as typeof globalThis & {
+          DOMException?: typeof DOMException
+        }).DOMException
         controller.abort(
-          typeof DOMException === 'function'
-            ? new DOMException('The operation was aborted due to timeout', 'TimeoutError')
+          typeof DOMExceptionImpl === 'function'
+            ? new DOMExceptionImpl('The operation was aborted due to timeout', 'TimeoutError')
             : undefined,
         )
       }, ms)
@@ -88,7 +104,8 @@ import '@tamagui/native/setup-teleport'
 import '@tamagui/native/setup-worklets'
 
 // Register Tamagui config on the single @tamagui/web instance before any UI mounts.
-import '~/config/tamagui.config'
+// Native must use the RN animations config — web CSS animations crash Hermes.
+import '~/config/tamagui.config.native'
 import { startNativeBootstrapPrefetch } from '~/lib/bootstrap/app-prefetch'
 import '~/lib/brand/register-suspense-fallback'
 

@@ -112,12 +112,17 @@ function getSheconomyLivekitCss(ui: CoWorkUiTokens, shadows: CoWorkShadows) {
     object-fit: cover !important;
     object-position: center center;
     background: #0c080a;
+    display: block !important;
+    position: absolute !important;
+    inset: 0 !important;
+    z-index: 1;
   }
   .sheconomy-participant-tile[data-lk-source='screen_share'] video,
   .sheconomy-participant-tile[data-lk-source='screen_share'] .lk-video-track,
   .sheconomy-video-gallery--screen .sheconomy-participant-tile[data-lk-source='screen_share'] video {
     object-fit: contain !important;
     background: #0c080a;
+    z-index: 2;
   }
   .sheconomy-video-gallery--screen {
     display: flex;
@@ -138,6 +143,7 @@ function getSheconomyLivekitCss(ui: CoWorkUiTokens, shadows: CoWorkShadows) {
   .sheconomy-participant-tile[data-lk-source='screen_share'] .lk-participant-placeholder {
     /* Never paint the camera-off avatar over a screen-share tile. */
     background: #0c080a;
+    z-index: 0;
   }
   .sheconomy-screen-waiting {
     display: flex;
@@ -145,6 +151,9 @@ function getSheconomyLivekitCss(ui: CoWorkUiTokens, shadows: CoWorkShadows) {
     justify-content: center;
     width: 100%;
     height: 100%;
+    position: absolute;
+    inset: 0;
+    z-index: 0;
   }
   .sheconomy-participant-avatar-wrap {
     display: flex;

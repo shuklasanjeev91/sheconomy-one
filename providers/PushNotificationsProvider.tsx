@@ -62,7 +62,8 @@ async function waitForPlayerId(attempts = 10, delayMs = 600): Promise<string | n
 }
 
 async function rememberDecisionIfSettled() {
-  // Only persist “don’t auto-prompt again” once OS is no longer in "default".
+  // Prefer marking when OS is no longer promptable; callers also mark after any
+  // user-facing Allow / Not now / OS grant / OS deny so Android re-prompts stop.
   const stillPromptable = await pushClient.canRequestPermission()
   if (!stillPromptable) {
     await markPushPermissionDecided()
@@ -174,8 +175,10 @@ export function PushNotificationsProvider({ children }: { children: ReactNode })
       pushSessionActiveRef.current = true
       const granted = await pushClient.requestPermission()
       setPermissionGranted(granted)
-      await rememberDecisionIfSettled()
+      // User finished the Allow flow — never auto-ask again on next login.
+      await markPushPermissionDecided()
       if (!granted) {
+        setSubscribePromptVisible(false)
         return {
           ok: false,
           error:
@@ -184,6 +187,7 @@ export function PushNotificationsProvider({ children }: { children: ReactNode })
         }
       }
       const id = await registerIfPossible(user.id, true)
+      setSubscribePromptVisible(false)
       if (!id) {
         return {
           ok: false,
@@ -193,7 +197,6 @@ export function PushNotificationsProvider({ children }: { children: ReactNode })
         }
       }
       setPermissionGranted(true)
-      setSubscribePromptVisible(false)
       return { ok: true }
     } catch (error) {
       return {
@@ -278,14 +281,16 @@ export function PushNotificationsProvider({ children }: { children: ReactNode })
 
           if (permitted) {
             const id = await registerIfPossible(userId, true)
-            setPermissionGranted(!!id)
-            setSubscribePromptVisible(!id)
-            if (id) await markPushPermissionDecided()
+            setPermissionGranted(true)
+            // Already granted — never re-show the subscribe dialog just because
+            // player id registration lagged; register quietly and mark decided.
+            setSubscribePromptVisible(false)
+            await markPushPermissionDecided()
             if (!cancelled) handledUserRef.current = userId
             console.info(
               id
                 ? '[push] already permitted — registered device'
-                : '[push] permitted in browser but device not registered — show prompt',
+                : '[push] already permitted — registration pending, no prompt',
             )
             return
           }
@@ -303,28 +308,33 @@ export function PushNotificationsProvider({ children }: { children: ReactNode })
           const shouldPrompt = await shouldAutoPromptPush()
           if (cancelled) return
 
-          // Always offer the in-app dialog when we can still request — browsers
-          // require a click before their permission UI will appear.
-          if (shouldPrompt) {
-            setSubscribePromptVisible(true)
-            console.info('[push] showing in-app subscribe prompt')
+          if (!shouldPrompt) {
+            if (!cancelled) handledUserRef.current = userId
+            console.info('[push] auto-prompt already decided — skip')
+            return
           }
 
+          // Offer the in-app dialog once — browsers require a click before OS UI.
+          setSubscribePromptVisible(true)
+          console.info('[push] showing in-app subscribe prompt')
+
           // Native can also present the system sheet without a gesture.
-          if (Platform.OS !== 'web' && shouldPrompt) {
+          if (Platform.OS !== 'web') {
             console.info('[push] requesting OS permission')
             const granted = await pushClient.requestPermission()
             if (cancelled) return
 
             setPermissionGranted(granted)
-            await rememberDecisionIfSettled()
+            // Mark decided after any OS grant/deny so Android does not re-ask.
+            await markPushPermissionDecided()
 
             if (granted) {
               setSubscribePromptVisible(false)
               await registerIfPossible(userId, true)
               console.info('[push] permission granted — device registered')
             } else {
-              console.info('[push] permission not granted — keep in-app prompt if needed')
+              setSubscribePromptVisible(false)
+              console.info('[push] permission not granted — will not auto-ask again')
             }
           }
 

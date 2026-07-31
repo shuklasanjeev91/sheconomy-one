@@ -1,6 +1,7 @@
 import {
   Room,
   RoomEvent,
+  ScreenSharePresets,
   Track,
   VideoQuality,
   type LocalParticipant,
@@ -12,29 +13,36 @@ import {
   type TrackPublishOptions,
 } from 'livekit-client'
 
-/** Prefer a single high-quality layer — mobile screen share often has no low simulcast. */
-export const SCREEN_SHARE_SUBSCRIBE_DIMENSIONS = { width: 1920, height: 1080 } as const
+/** Prefer a single mid/high layer so adaptiveStream never asks for a missing low simulcast. */
+export const SCREEN_SHARE_SUBSCRIBE_DIMENSIONS = { width: 1280, height: 720 } as const
 
+/**
+ * Publish options for screen share.
+ * Use `screenShareEncoding` (not `videoEncoding`) — LiveKit's computeVideoEncodings
+ * only reads screenShareEncoding when source is ScreenShare.
+ */
 export const SCREEN_SHARE_PUBLISH_OPTIONS: TrackPublishOptions = {
-  simulcast: false,
   source: Track.Source.ScreenShare,
   videoCodec: 'vp8',
-  videoEncoding: {
-    maxBitrate: 3_000_000,
-    maxFramerate: 15,
-  },
+  simulcast: false,
+  screenShareSimulcastLayers: [],
+  screenShareEncoding: ScreenSharePresets.h720fps15.encoding,
+  backupCodec: false,
 }
 
 export const WEB_SCREEN_SHARE_CAPTURE: ScreenShareCaptureOptions = {
-  audio: true,
-  resolution: { width: 1920, height: 1080, frameRate: 15 },
+  // System audio is optional and fails on many browsers; video is required.
+  audio: false,
+  resolution: ScreenSharePresets.h720fps15.resolution,
   contentHint: 'detail',
+  // Prefer sharing a tab/window rather than the meeting page itself (blank recursion).
+  selfBrowserSurface: 'exclude',
+  surfaceSwitching: 'include',
+  preferCurrentTab: false,
 }
 
 export const NATIVE_SCREEN_SHARE_CAPTURE: ScreenShareCaptureOptions = {
-  // Stable mid-res layer so web + native receivers always get a real stream
-  // (adaptiveStream must not request a missing low simulcast layer).
-  resolution: { width: 1280, height: 720, frameRate: 15 },
+  resolution: ScreenSharePresets.h720fps15.resolution,
   contentHint: 'detail',
 }
 
@@ -58,6 +66,15 @@ export async function setLocalScreenShareEnabled(
 
   const capture = platform === 'web' ? WEB_SCREEN_SHARE_CAPTURE : NATIVE_SCREEN_SHARE_CAPTURE
   await localParticipant.setScreenShareEnabled(true, capture, SCREEN_SHARE_PUBLISH_OPTIONS)
+
+  // Ensure the published track is unmuted/enabled after the OS capture sheet.
+  const publication = localParticipant.getTrackPublication(Track.Source.ScreenShare)
+  if (publication?.track) {
+    if (publication.isMuted) {
+      await publication.unmute()
+    }
+    publication.track.mediaStreamTrack.enabled = true
+  }
 }
 
 export function boostScreenSharePublication(publication: RemoteTrackPublication) {
@@ -81,8 +98,7 @@ function boostParticipantScreenShares(participant: RemoteParticipant) {
 /**
  * Keep remote screen shares subscribed at full quality on every viewer platform.
  * Without this, adaptiveStream can request a low layer a publisher never sent
- * (especially Android/iOS → web), so the stage tile stays empty and shows the
- * avatar/"image" placeholder instead of the shared screen.
+ * (especially Android/iOS → web), so the stage tile stays empty.
  */
 export function bindRemoteScreenShareQuality(room: Room): () => void {
   const boostAllRemotes = () => {
@@ -113,7 +129,6 @@ export function bindRemoteScreenShareQuality(room: Room): () => void {
   }
 
   const onLocalTrackPublished = () => {
-    // Re-boost remotes after local publish renegotiation (screen share toggle).
     boostAllRemotes()
   }
 
@@ -133,8 +148,8 @@ export function bindRemoteScreenShareQuality(room: Room): () => void {
   room.on(RoomEvent.TrackStreamStateChanged, onTrackStreamStateChanged)
 
   // Adaptive stream can re-request a low layer a moment after subscribe — re-assert.
-  const reinforce = setInterval(boostAllRemotes, 2000)
-  const stopReinforce = setTimeout(() => clearInterval(reinforce), 20_000)
+  const reinforce = setInterval(boostAllRemotes, 1500)
+  const stopReinforce = setTimeout(() => clearInterval(reinforce), 30_000)
 
   return () => {
     clearInterval(reinforce)

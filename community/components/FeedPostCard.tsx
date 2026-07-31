@@ -19,6 +19,7 @@ import type {
   CommunityPost,
   OriginalPostPreview,
   PostCelebration,
+  PostLinkPreview,
   PostProduct,
   PostShop,
 } from '~/community/lib/community'
@@ -31,6 +32,7 @@ import {
 } from '~/community/lib/post-type-surface'
 import { Avatar, Button, Icons, Image, Text, XStack, YStack, useAppToast } from '~/components/ui'
 import { radius } from '~/config/tokens'
+import { extractFirstUrl, parseVideoProvider } from '~/lib/link-preview'
 import { commerceRoutes, communityRoutes, routes } from '~/lib/routes'
 import { navigateApp } from '~/lib/platform/navigate'
 import { useSupabase } from '~/providers/SupabaseProvider'
@@ -38,6 +40,22 @@ import { rsvpToPostEvent, cancelPostEventRsvp, fetchPostEventRsvpState } from '~
 import { CongratulateSheet } from '~/community/components/CongratulateSheet'
 
 import { BRAND_MEMBER_LABEL } from '~/config/brand'
+
+function linkPreviewFromContent(content: string): PostLinkPreview | null {
+  const url = extractFirstUrl(content)
+  if (!url) return null
+  const provider = parseVideoProvider(url)
+  if (!provider) return null
+  return {
+    url,
+    title: null,
+    description: null,
+    image: provider.thumbnail,
+    siteName: provider.siteName,
+    video: provider.embed,
+    videoType: 'text/html',
+  }
+}
 
 function formatPostTime(value: string | null) {
   if (!value) return ''
@@ -104,6 +122,10 @@ export const FeedPostCard = memo(function FeedPostCard({
     if (!isEventPost) return true
     return item.url !== post.image_url
   })
+  const linkPreview = useMemo(
+    () => post.link ?? (mediaItems.length === 0 ? linkPreviewFromContent(post.content) : null),
+    [mediaItems.length, post.content, post.link],
+  )
 
   const articleHref = communityRoutes.article(post.id)
   const isArticle = post.post_type === 'article' || !!post.article_title
@@ -289,68 +311,115 @@ export const FeedPostCard = memo(function FeedPostCard({
 
         <YStack paddingHorizontal={16} paddingBottom={12} gap={10}>
           {!compactArticle && isArticle ? (
-            <AppLink href={articleHref} asChild>
-              <YStack
-                width="100%"
-                gap={10}
-                borderRadius={12}
-                borderWidth={1}
-                borderColor={communityUi.border}
-                overflow="hidden"
-                backgroundColor={communityUi.pageBg}
-                cursor="pointer"
-                hoverStyle={{ borderColor: communityUi.brand }}
-                pressStyle={{ opacity: 0.92 }}
-              >
-                {post.image_url || mediaItems[0]?.kind === 'image' ? (
-                  <Image
-                    src={post.image_url || mediaItems[0]?.url || ''}
-                    width="100%"
-                    height={160}
-                    objectFit="cover"
-                    alt=""
-                  />
-                ) : null}
-                <YStack padding={14} gap={8}>
-                  <XStack gap={8} alignItems="center">
-                    <Icons.Newspaper size={16} color={communityUi.brand} />
-                    <Text
-                      fontSize={12}
-                      fontWeight="700"
-                      color={communityUi.brand}
-                      textTransform="uppercase"
-                      letterSpacing={0.4}
-                    >
-                      Article
-                    </Text>
-                  </XStack>
-                  {post.article_title ? (
-                    <Text fontSize={20} fontWeight="800" color={communityUi.text} letterSpacing={-0.3} lineHeight={26}>
-                      {post.article_title}
-                    </Text>
-                  ) : null}
-                  <PostContentText content={post.content} collapsible />
-                  <Text fontSize={13} fontWeight="700" color={communityUi.brand}>
-                    Read article →
-                  </Text>
-                </YStack>
-              </YStack>
-            </AppLink>
-          ) : null}
-
-          {!compactArticle && !isArticle ? (
-            <>
+            <YStack
+              width="100%"
+              gap={10}
+              borderRadius={12}
+              borderWidth={1}
+              borderColor={communityUi.border}
+              overflow="hidden"
+              backgroundColor={communityUi.pageBg}
+            >
               {linkToDetail ? (
-                <AppLink href={detailHref} asChild>
-                  <YStack width="100%" cursor="pointer" pressStyle={{ opacity: 0.92 }}>
-                    <PostContentText content={post.content} />
+                <AppLink href={articleHref} asChild>
+                  <YStack
+                    width="100%"
+                    cursor="pointer"
+                    hoverStyle={{ borderColor: communityUi.brand }}
+                    pressStyle={{ opacity: 0.92 }}
+                  >
+                    {post.image_url || mediaItems[0]?.kind === 'image' ? (
+                      <Image
+                        src={post.image_url || mediaItems[0]?.url || ''}
+                        width="100%"
+                        height={160}
+                        objectFit="cover"
+                        alt=""
+                      />
+                    ) : null}
+                    <YStack padding={14} gap={8} paddingBottom={0}>
+                      <XStack gap={8} alignItems="center">
+                        <Icons.Newspaper size={16} color={communityUi.brand} />
+                        <Text
+                          fontSize={12}
+                          fontWeight="700"
+                          color={communityUi.brand}
+                          textTransform="uppercase"
+                          letterSpacing={0.4}
+                        >
+                          Article
+                        </Text>
+                      </XStack>
+                      {post.article_title ? (
+                        <Text
+                          fontSize={20}
+                          fontWeight="800"
+                          color={communityUi.text}
+                          letterSpacing={-0.3}
+                          lineHeight={26}
+                        >
+                          {post.article_title}
+                        </Text>
+                      ) : null}
+                    </YStack>
                   </YStack>
                 </AppLink>
               ) : (
-                <PostContentText content={post.content} />
+                <>
+                  {post.image_url || mediaItems[0]?.kind === 'image' ? (
+                    <Image
+                      src={post.image_url || mediaItems[0]?.url || ''}
+                      width="100%"
+                      height={160}
+                      objectFit="cover"
+                      alt=""
+                    />
+                  ) : null}
+                  <YStack padding={14} gap={8} paddingBottom={0}>
+                    <XStack gap={8} alignItems="center">
+                      <Icons.Newspaper size={16} color={communityUi.brand} />
+                      <Text
+                        fontSize={12}
+                        fontWeight="700"
+                        color={communityUi.brand}
+                        textTransform="uppercase"
+                        letterSpacing={0.4}
+                      >
+                        Article
+                      </Text>
+                    </XStack>
+                    {post.article_title ? (
+                      <Text
+                        fontSize={20}
+                        fontWeight="800"
+                        color={communityUi.text}
+                        letterSpacing={-0.3}
+                        lineHeight={26}
+                      >
+                        {post.article_title}
+                      </Text>
+                    ) : null}
+                  </YStack>
+                </>
               )}
-            </>
+              <YStack padding={14} paddingTop={8} gap={8}>
+                <PostContentText content={post.content} collapsible />
+                {linkToDetail ? (
+                  <AppLink href={articleHref}>
+                    <Text fontSize={13} fontWeight="700" color={communityUi.brand} cursor="pointer">
+                      Read article →
+                    </Text>
+                  </AppLink>
+                ) : (
+                  <Text fontSize={13} fontWeight="700" color={communityUi.brand}>
+                    Read article →
+                  </Text>
+                )}
+              </YStack>
+            </YStack>
           ) : null}
+
+          {!compactArticle && !isArticle ? <PostContentText content={post.content} collapsible /> : null}
 
           {post.originalPost ? (
             <OriginalPostEmbed original={post.originalPost} />
@@ -384,8 +453,8 @@ export const FeedPostCard = memo(function FeedPostCard({
           {!isArticle && mediaItems.length > 0 ? (
             <PostMedia items={mediaItems} onPress={openMedia} />
           ) : null}
-          {post.link && mediaItems.length === 0 && !isArticle ? (
-            <PostLinkPreviewCard preview={post.link} />
+          {linkPreview && mediaItems.length === 0 && !isArticle ? (
+            <PostLinkPreviewCard preview={linkPreview} />
           ) : null}
           {post.product ? <PostProductCard product={post.product} /> : null}
           {post.shop ? <PostShopCard shop={post.shop} /> : null}
@@ -1086,19 +1155,23 @@ function OriginalPostEmbed({ original }: { original: OriginalPostPreview }) {
   const communityUi = useCommunityUi()
 
   return (
-    <AppLink href={communityRoutes.post(original.id)} asChild>
-      <YStack
-        width="100%"
-        borderWidth={1}
-        borderColor={communityUi.border}
-        borderRadius={8}
-        overflow="hidden"
-        backgroundColor={communityUi.pageBg}
-        cursor="pointer"
-        hoverStyle={{ borderColor: communityUi.brandLight }}
-        pressStyle={{ opacity: 0.92 }}
-      >
-        <XStack padding={12} gap={10} alignItems="flex-start">
+    <YStack
+      width="100%"
+      borderWidth={1}
+      borderColor={communityUi.border}
+      borderRadius={8}
+      overflow="hidden"
+      backgroundColor={communityUi.pageBg}
+    >
+      <AppLink href={communityRoutes.post(original.id)} asChild>
+        <XStack
+          padding={12}
+          gap={10}
+          alignItems="flex-start"
+          cursor="pointer"
+          hoverStyle={{ backgroundColor: communityUi.hoverBg }}
+          pressStyle={{ opacity: 0.92 }}
+        >
           <Avatar
             name={original.authorName}
             src={original.authorAvatar ?? undefined}
@@ -1118,33 +1191,33 @@ function OriginalPostEmbed({ original }: { original: OriginalPostPreview }) {
             </Text>
           </YStack>
         </XStack>
-        {original.content ? (
-          <YStack paddingHorizontal={12} paddingBottom={12}>
-            <PostContentText content={original.content} fontSize={14} lineHeight={22} />
-          </YStack>
-        ) : null}
-        {(() => {
-          const originalMedia = collectPostMedia(original)
-          if (!originalMedia.length) return null
-          if (originalMedia.length === 1) {
-            return (
-              <YStack height={200} backgroundColor={communityUi.pageBg}>
-                <PostMediaSlide
-                  item={originalMedia[0]}
-                  width={0}
-                  height={200}
-                  fit="contain"
-                  fill
-                  responsive={false}
-                />
-              </YStack>
-            )
-          }
+      </AppLink>
+      {original.content ? (
+        <YStack paddingHorizontal={12} paddingBottom={12}>
+          <PostContentText content={original.content} fontSize={14} lineHeight={22} />
+        </YStack>
+      ) : null}
+      {(() => {
+        const originalMedia = collectPostMedia(original)
+        if (!originalMedia.length) return null
+        if (originalMedia.length === 1) {
           return (
-            <PostMediaCarousel items={originalMedia} height={200} fit="contain" rounded={false} />
+            <YStack height={200} backgroundColor={communityUi.pageBg}>
+              <PostMediaSlide
+                item={originalMedia[0]}
+                width={0}
+                height={200}
+                fit="contain"
+                fill
+                responsive={false}
+              />
+            </YStack>
           )
-        })()}
-      </YStack>
-    </AppLink>
+        }
+        return (
+          <PostMediaCarousel items={originalMedia} height={200} fit="contain" rounded={false} />
+        )
+      })()}
+    </YStack>
   )
 }

@@ -38,6 +38,18 @@ export function InstantMeetingHost() {
     setLoadError(null)
 
     try {
+      // Ensure Hermes globals before LiveKit/WebRTC evaluate.
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
+      const { installDOMExceptionPolyfill } = require('~/lib/polyfills/dom-exception') as {
+        installDOMExceptionPolyfill: () => void
+      }
+      installDOMExceptionPolyfill()
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
+      const { ensureLiveKitNativeGlobals } = require('~/lib/livekit/register-native-globals') as {
+        ensureLiveKitNativeGlobals: () => void
+      }
+      ensureLiveKitNativeGlobals()
+
       // Sync require keeps LiveKit out of the AppShell module graph until open.
       // eslint-disable-next-line @typescript-eslint/no-require-imports
       const mod = require('~/co-work/components/InstantMeetingBody') as {
@@ -71,20 +83,22 @@ export function InstantMeetingHost() {
     >
       <AppErrorBoundary scope="InstantMeeting" alwaysShowError>
         {!Body ? (
-          <YStack flex={1} alignItems="center" justifyContent="center" gap="$3" padding="$6">
+          <YStack flex={1} alignItems="center" justifyContent="center" gap="$4" padding="$6">
             {loadError ? (
               <>
-                <Text color="#fff" fontSize={18} fontWeight="700" textAlign="center">
+                <Text color="#fff" fontSize={22} fontWeight="800" textAlign="center" letterSpacing={-0.3}>
                   Could not open meeting
                 </Text>
-                <Text color="#f5a3c0" textAlign="center">
+                <Text color="#f5a3c0" textAlign="center" fontSize={14} lineHeight={20} maxWidth={340}>
                   {loadError}
                 </Text>
                 <Text
                   color="#fff"
+                  fontWeight="600"
                   textDecorationLine="underline"
                   onPress={closeInstantMeetingSession}
                   marginTop="$2"
+                  accessibilityRole="button"
                 >
                   Back to Co-Work
                 </Text>
@@ -92,7 +106,9 @@ export function InstantMeetingHost() {
             ) : (
               <>
                 <Spinner size="large" color="#D81B60" />
-                <Text color="#ccc">Starting meeting…</Text>
+                <Text color="#ccc" fontSize={15}>
+                  Starting meeting…
+                </Text>
               </>
             )}
           </YStack>

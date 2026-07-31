@@ -3,7 +3,7 @@ import { YStack } from 'tamagui'
 import { Text } from '~/components/ui/Text'
 
 import { Button } from '~/components/ui/Button'
-import { Spinner } from '~/components/ui/Spinner'
+import { FeedPostSkeleton, ListSkeleton } from '~/components/ui/Skeleton'
 import { useAppUi } from '~/lib/theme/useAppUi'
 
 type ScreenStateProps = {
@@ -25,6 +25,9 @@ type ScreenStateProps = {
    * ScrollViews — `flex:1` there collapses content to a blank screen.
    */
   fill?: boolean
+  /** First-paint placeholder while loading (defaults to feed skeleton). */
+  loadingFallback?: ReactNode
+  loadingVariant?: 'feed' | 'list'
 }
 
 /**
@@ -44,24 +47,22 @@ export function ScreenState({
   children,
   minHeight = 220,
   fill = false,
+  loadingFallback,
+  loadingVariant = 'feed',
 }: ScreenStateProps) {
   const ui = useAppUi()
 
   if (loading) {
     return (
       <YStack
-        alignItems="center"
-        justifyContent="center"
-        paddingVertical="$8"
-        gap="$3"
+        width="100%"
         minHeight={minHeight}
+        flex={fill ? 1 : undefined}
         accessibilityLabel="Loading"
         accessibilityRole="progressbar"
       >
-        <Spinner size="large" color={ui.brand} />
-        <Text fontSize={13} color={ui.textMuted}>
-          Loading…
-        </Text>
+        {loadingFallback ??
+          (loadingVariant === 'list' ? <ListSkeleton rows={6} /> : <FeedPostSkeleton count={3} />)}
       </YStack>
     )
   }
