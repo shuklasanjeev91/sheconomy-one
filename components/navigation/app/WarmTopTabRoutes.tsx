@@ -8,6 +8,7 @@ import { InteractionManager, Platform } from 'react-native'
 export function WarmTopTabRoutes() {
   useEffect(() => {
     let cancelled = false
+    let timer: ReturnType<typeof setTimeout> | null = null
 
     const warm = () => {
       if (cancelled) return
@@ -24,19 +25,20 @@ export function WarmTopTabRoutes() {
     }
 
     if (Platform.OS === 'web') {
-      const id = window.setTimeout(warm, 600)
+      timer = setTimeout(warm, 2500)
       return () => {
         cancelled = true
-        window.clearTimeout(id)
+        if (timer) clearTimeout(timer)
       }
     }
 
     const handle = InteractionManager.runAfterInteractions(() => {
-      warm()
+      timer = setTimeout(warm, 2000)
     })
     return () => {
       cancelled = true
       handle.cancel?.()
+      if (timer) clearTimeout(timer)
     }
   }, [])
 

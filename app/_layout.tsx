@@ -7,6 +7,9 @@ import { MetaTheme, SchemeProvider, useUserScheme } from '@vxrn/color-scheme'
 import { ToastProvider, ToastViewport } from '@tamagui/toast'
 import type { ReactNode } from 'react'
 
+// Static Tamagui design-system CSS (vite tamaguiPlugin `outputCSS`) — keeps SSR HTML small.
+import '../public/tamagui.css'
+
 import { AppErrorBoundary } from '~/components/AppErrorBoundary'
 import { BiometricUnlockGate } from '~/components/auth/BiometricUnlockGate'
 import config from '~/config/tamagui.config'
@@ -266,7 +269,12 @@ function ThemedApp({ children }: { children: React.ReactNode }) {
   const insets = useSafeAreaInsets()
 
   return (
-    <TamaguiProvider config={config} defaultTheme={userScheme.value}>
+    <TamaguiProvider
+      config={config}
+      defaultTheme={userScheme.value}
+      // Themes/tokens come from public/tamagui.css — do not re-inject on SSR (multi-MB HTML).
+      disableInjectCSS
+    >
       <Theme name={userScheme.value}>
         <YStack
           flex={Platform.OS === 'web' ? undefined : 1}

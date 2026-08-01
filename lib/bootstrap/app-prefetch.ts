@@ -40,23 +40,24 @@ export function startCoreTabPrefetch(): void {
     const result = await fetchCategoriesPage(0, COMMERCE_HORIZONTAL_PAGE_SIZE)
     return toPageSnapshot(result.items, 0, result.hasMore)
   })
-  prefetchAppCache(CACHE_KEYS.shops, async () => {
-    const result = await fetchShopsPage(0, COMMERCE_HORIZONTAL_PAGE_SIZE)
-    return toPageSnapshot(result.items, 0, result.hasMore)
-  })
-  // Warm the same listing feeds home bootstrap seeds (covers early tab focus before home loader finishes).
-  for (const kind of ['physical', 'digital', 'trending'] as const) {
-    prefetchAppCache(CACHE_KEYS.listingFeed(kind), async () => {
-      const result = await fetchListingFeedPage(kind, 0)
-      return toPageSnapshot(result.items, 0, result.hasMore)
-    })
-  }
   prefetchAppCache(`${CACHE_KEYS.community}:recent`, async () => {
     const result = await fetchCommunityFeedPage(0)
     return toPageSnapshot(result.items, 0, result.hasMore)
   })
 
+  // Shops + listing feeds after home/community — less contention on cold start.
   scheduleIdle(() => {
+    if (deferredStarted) return
+    prefetchAppCache(CACHE_KEYS.shops, async () => {
+      const result = await fetchShopsPage(0, COMMERCE_HORIZONTAL_PAGE_SIZE)
+      return toPageSnapshot(result.items, 0, result.hasMore)
+    })
+    for (const kind of ['physical', 'digital', 'trending'] as const) {
+      prefetchAppCache(CACHE_KEYS.listingFeed(kind), async () => {
+        const result = await fetchListingFeedPage(kind, 0)
+        return toPageSnapshot(result.items, 0, result.hasMore)
+      })
+    }
     startDeferredTabPrefetch()
   })
 }
@@ -82,10 +83,13 @@ export function startDeferredTabPrefetch(): void {
   })
 }
 
-/** Native cold start — begin fetching before React mounts. */
+/** Native cold start — begin fetching after a short delay so home paint wins. */
 export function startNativeBootstrapPrefetch(): void {
   if (Platform.OS === 'web') return
-  startCoreTabPrefetch()
+  // Avoid flooding the network during the first frames of a cold start.
+  setTimeout(() => {
+    startCoreTabPrefetch()
+  }, 1200)
 }
 
 /** After first paint, warm remaining tab caches and user-scoped data. */

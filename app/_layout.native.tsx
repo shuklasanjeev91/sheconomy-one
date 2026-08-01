@@ -32,10 +32,12 @@ import { store } from '~/lib/store'
 import { PushNotificationsProvider } from '~/providers/PushNotificationsProvider'
 import { PushForegroundNotificationHost } from '~/components/notifications/PushForegroundNotificationHost'
 import { PushSubscribePromptHost } from '~/components/notifications/PushSubscribePromptHost'
+import { AutomaticUpdateManager } from '~/components/system/AutomaticUpdateManager'
 import { SupabaseProvider } from '~/providers/SupabaseProvider'
 import { AiAssistProvider } from '~/providers/AiAssistProvider'
 import { ConnectivityProvider } from '~/providers/ConnectivityProvider'
 import { NativeAppOnboardingGate } from '~/components/onboarding/NativeAppOnboardingGate'
+import { AppBootstrapPrefetch } from '~/components/navigation/AppBootstrapPrefetch'
 
 function AppProviders({ children }: { children: ReactNode }) {
   useAppFonts()
@@ -56,8 +58,10 @@ function AppProviders({ children }: { children: ReactNode }) {
                             <ScreenZoomProvider>
                               <ScreenZoomRoot>
                                 <ConnectivityProvider>
+                                  <AutomaticUpdateManager />
                                   <PushSubscribePromptHost />
                                   <PushForegroundNotificationHost />
+                                  <AppBootstrapPrefetch />
                                   <AppErrorBoundary scope="AppShell">
                                     <NativeAppOnboardingGate>
                                       <AppShell>{children}</AppShell>

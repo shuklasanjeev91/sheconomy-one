@@ -536,6 +536,9 @@ if (typeof g.Response !== 'function') {
         // re-emit `*.tamagui.css` imports while the per-instance cssMap is empty → Vite
         // "Failed to resolve import …Avatar.tsx.tamagui.css". Production still extracts.
         disableExtraction: mode === 'development',
+        // Emit design-system CSS once as a static file so SSR HTML does not inline
+        // multi-MB theme/token styles (was ~3.5MB per document → multi-second TTFB).
+        outputCSS: './public/tamagui.css',
       }),
     ],
 

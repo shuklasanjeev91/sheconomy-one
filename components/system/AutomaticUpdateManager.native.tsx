@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { AppState, type AppStateStatus } from 'react-native'
+import { AppState, InteractionManager, type AppStateStatus } from 'react-native'
 import * as Updates from 'expo-updates'
 
 import { MaintenanceScreen } from '~/components/system/MaintenanceScreen'
@@ -16,6 +16,7 @@ import {
   shouldPromptForDownloadedUpdate,
   type UpdateStatus,
 } from '~/lib/updates'
+import { UPDATE_CHECK_STARTUP_DELAY_MS } from '~/lib/updates/constants'
 
 /**
  * Native (iOS / Android) OTA manager — checks on launch and resume,
@@ -100,7 +101,15 @@ export function AutomaticUpdateManager() {
     }
 
     void markUpdateApplied(deps, Updates.updateId ?? null)
-    void check(false)
+
+    // Defer first check so home/network aren't competing with OTA download on cold start.
+    let cancelled = false
+    let timer: ReturnType<typeof setTimeout> | null = null
+    const interaction = InteractionManager.runAfterInteractions(() => {
+      timer = setTimeout(() => {
+        if (!cancelled) void check(false)
+      }, UPDATE_CHECK_STARTUP_DELAY_MS)
+    })
 
     let lastState: AppStateStatus = AppState.currentState
     const subscription = AppState.addEventListener('change', (next) => {
@@ -111,6 +120,9 @@ export function AutomaticUpdateManager() {
     })
 
     return () => {
+      cancelled = true
+      interaction.cancel?.()
+      if (timer) clearTimeout(timer)
       subscription.remove()
     }
   }, [check])
