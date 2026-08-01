@@ -6,8 +6,8 @@ import * as Haptics from 'expo-haptics'
 import { AUTH_ONBOARDING_SLIDES } from '~/components/auth/auth-benefits'
 import { AUTH_LAYOUT, authViewportStyle } from '~/components/auth/auth-layout'
 import { AuthBackButton } from '~/components/auth/AuthBackButton'
-import { BrandGradient, Button, Image, ScrollView, Text, XStack, YStack } from '~/components/ui'
-import { getSheconomyLogoUrl } from '~/lib/supabase/brand'
+import { BrandGradient, Button, ScrollView, Text, XStack, YStack } from '~/components/ui'
+import { BrandLogo } from '~/components/brand/BrandLogo'
 import { useAppLayout } from '~/hooks/useAppLayout'
 import { BRAND_NAME } from '~/config/brand'
 
@@ -46,7 +46,6 @@ export function AuthOnboarding({ onFinish, variant = 'auth' }: AuthOnboardingPro
   const layout = useAppLayout()
   const { gutter, safeTop, safeBottom } = layout
   const slides = AUTH_ONBOARDING_SLIDES
-  const brandIconUrl = getSheconomyLogoUrl('icon')
   const isAppLaunch = variant === 'app'
 
   const [activeIndex, setActiveIndex] = useState(0)
@@ -202,13 +201,7 @@ export function AuthOnboarding({ onFinish, variant = 'auth' }: AuthOnboardingPro
                       })}
                 >
                   {slide.brandLogo ? (
-                    <Image
-                      src={brandIconUrl}
-                      width={78}
-                      height={78}
-                      objectFit="contain"
-                      alt={`${BRAND_NAME} icon`}
-                    />
+                    <BrandLogo variant="icon" width={78} height={78} />
                   ) : (
                     <Icon size={56} color="white" strokeWidth={1.7} />
                   )}

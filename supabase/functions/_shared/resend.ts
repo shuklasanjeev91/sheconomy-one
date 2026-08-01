@@ -1,3 +1,5 @@
+import { resolvePublicAppOrigin } from './app-url.ts'
+
 const DEFAULT_FROM = 'SHEconomy <noreply@sheconomy.com>'
 
 export async function sendResendEmail(
@@ -30,5 +32,5 @@ export async function sendResendEmail(
 }
 
 export function appBaseUrl() {
-  return (Deno.env.get('PUBLIC_APP_URL') ?? 'https://sheconomy.in').replace(/\/$/, '')
+  return resolvePublicAppOrigin()
 }

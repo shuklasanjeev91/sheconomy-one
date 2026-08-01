@@ -31,8 +31,6 @@ type ListingMobileStickyBuyBarProps = {
   onCheckout?: () => void
 }
 
-const BAR_HEIGHT = 76
-
 /** Cross-platform sticky buy bar above bottom tabs — price + dual CTAs or qty + checkout. */
 export function ListingMobileStickyBuyBar({
   price,
@@ -56,18 +54,18 @@ export function ListingMobileStickyBuyBar({
 }: ListingMobileStickyBuyBarProps) {
   const ui = useAppUi()
   const { mobileTabBarOffset } = useAppLayout()
+  const isNative = Platform.OS !== 'web'
 
   return (
-    <XStack
-      minHeight={BAR_HEIGHT}
-      paddingHorizontal="$4"
-      paddingVertical="$3"
+    <YStack
+      width="100%"
+      paddingHorizontal={isNative ? '$3' : '$4'}
+      paddingTop="$2.5"
+      paddingBottom="$2.5"
       backgroundColor={ui.surface}
       borderTopWidth={1}
       borderTopColor={ui.borderSubtle}
-      alignItems="center"
-      gap="$3"
-      width="100%"
+      gap="$2"
       style={{
         ...bottomBarPositionStyle(mobileTabBarOffset),
         ...getShadowStyle('md'),
@@ -80,19 +78,19 @@ export function ListingMobileStickyBuyBar({
           : {}),
       }}
     >
-      <YStack flex={0} minWidth={100} maxWidth={140} gap={0}>
-        <ListingPriceBlock
-          price={price}
-          mrp={mrp}
-          currency={currency}
-          priceIncludesTax={priceIncludesTax}
-          taxPercent={taxPercent}
-          size="sm"
-        />
-      </YStack>
+      <XStack alignItems="center" justifyContent="space-between" gap="$2" minWidth={0}>
+        <YStack flexShrink={1} minWidth={0} maxWidth={isNative ? 128 : 160}>
+          <ListingPriceBlock
+            price={price}
+            mrp={mrp}
+            currency={currency}
+            priceIncludesTax={priceIncludesTax}
+            taxPercent={taxPercent}
+            size="sm"
+          />
+        </YStack>
 
-      {inCart ? (
-        <XStack flex={1} gap="$2" justifyContent="flex-end" alignItems="center" minWidth={0}>
+        {inCart ? (
           <ListingQuantityStepper
             quantity={quantity}
             maxQuantity={maxQuantity}
@@ -101,31 +99,37 @@ export function ListingMobileStickyBuyBar({
             onDecrease={() => onDecreaseQuantity?.()}
             onIncrease={() => onIncreaseQuantity?.()}
           />
-          <Theme name={BRAND_THEME}>
-            <Button
-              tone="primary"
-              size="$3.5"
-              flex={1}
-              maxWidth={160}
-              borderRadius={999}
-              disabled={disabled}
-              onPress={onCheckout}
-            >
-              Checkout
-            </Button>
-          </Theme>
-        </XStack>
+        ) : null}
+      </XStack>
+
+      {inCart ? (
+        <Theme name={BRAND_THEME}>
+          <Button
+            tone="primary"
+            size="$4"
+            width="100%"
+            borderRadius={999}
+            disabled={disabled}
+            onPress={onCheckout}
+            letterSpacing={0}
+          >
+            Checkout
+          </Button>
+        </Theme>
       ) : (
-        <XStack flex={1} gap="$2" justifyContent="flex-end" minWidth={0}>
+        <XStack gap="$2" width="100%" minWidth={0}>
           <Theme name={BRAND_THEME}>
             <Button
               tone="primary"
-              size="$3.5"
+              size="$4"
               flex={1}
-              maxWidth={onBuyNow ? 140 : 200}
+              minWidth={0}
               borderRadius={999}
               disabled={disabled || isLoading}
               onPress={onPress}
+              letterSpacing={0}
+              fontSize={isNative ? 14 : 15}
+              paddingHorizontal={isNative ? '$3' : '$4'}
               icon={isLoading ? <Spinner size="small" color="white" /> : undefined}
             >
               {isLoading ? '…' : label}
@@ -134,20 +138,24 @@ export function ListingMobileStickyBuyBar({
           {onBuyNow ? (
             <Button
               tone="outline"
-              size="$3.5"
+              size="$4"
               flex={1}
-              maxWidth={140}
+              minWidth={0}
               borderRadius={999}
               disabled={disabled || isLoading}
               onPress={onBuyNow}
+              letterSpacing={0}
+              fontSize={isNative ? 14 : 15}
+              paddingHorizontal={isNative ? '$3' : '$4'}
             >
               {buyNowLabel}
             </Button>
           ) : null}
         </XStack>
       )}
-    </XStack>
+    </YStack>
   )
 }
 
-export const LISTING_MOBILE_STICKY_BAR_HEIGHT = BAR_HEIGHT
+/** Approx height for scroll padding under the sticky bar (two-row native layout). */
+export const LISTING_MOBILE_STICKY_BAR_HEIGHT = Platform.OS === 'web' ? 76 : 108

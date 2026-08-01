@@ -5,35 +5,63 @@ export const APP_SCHEME = 'sheconomy'
 export const DEFAULT_APP_ORIGIN = 'https://sheconomy.in'
 
 /** Preview / deploy hosts that must never appear in share or deep links. */
-function isEphemeralOrigin(origin: string): boolean {
-  try {
-    const host = new URL(origin).hostname.toLowerCase()
-    return (
-      host === 'localhost' ||
-      host.endsWith('.localhost') ||
-      host === '127.0.0.1' ||
-      host.endsWith('.vercel.app') ||
-      host.endsWith('.now.sh') ||
-      host.endsWith('.netlify.app') ||
-      host.endsWith('.expo.dev') ||
-      host.endsWith('.exp.direct')
-    )
-  } catch {
-    return true
-  }
+function isEphemeralHost(hostname: string): boolean {
+  const host = hostname.toLowerCase()
+  return (
+    host === 'localhost' ||
+    host.endsWith('.localhost') ||
+    host === '127.0.0.1' ||
+    host.endsWith('.vercel.app') ||
+    host.endsWith('.now.sh') ||
+    host.endsWith('.netlify.app') ||
+    host.endsWith('.expo.dev') ||
+    host.endsWith('.exp.direct')
+  )
 }
 
-function normalizeOrigin(value: string): string | undefined {
+/**
+ * Known brand hosts that must always surface as the apex production domain.
+ * Covers legacy sheconomy.com links and www variants.
+ */
+function isBrandAliasHost(hostname: string): boolean {
+  const host = hostname.toLowerCase()
+  return (
+    host === 'sheconomy.in' ||
+    host === 'www.sheconomy.in' ||
+    host === 'sheconomy.com' ||
+    host === 'www.sheconomy.com'
+  )
+}
+
+function parseOrigin(value: string): string | undefined {
   const trimmed = value.trim().replace(/\/$/, '')
   if (!trimmed) return undefined
   try {
     const url = new URL(trimmed.includes('://') ? trimmed : `https://${trimmed}`)
     if (url.protocol !== 'http:' && url.protocol !== 'https:') return undefined
-    const origin = url.origin
-    if (isEphemeralOrigin(origin)) return undefined
-    return origin
+    return url.origin
   } catch {
     return undefined
+  }
+}
+
+/**
+ * Normalize a candidate origin for public share / notification / deep links.
+ * Ephemeral hosts (*.vercel.app, localhost, …) and brand aliases collapse to
+ * https://sheconomy.in. Unknown non-ephemeral origins are kept (staging).
+ */
+export function normalizeAppOrigin(value?: string | null): string {
+  if (!value) return DEFAULT_APP_ORIGIN
+  const origin = parseOrigin(value)
+  if (!origin) return DEFAULT_APP_ORIGIN
+  try {
+    const host = new URL(origin).hostname
+    if (isEphemeralHost(host) || isBrandAliasHost(host)) {
+      return DEFAULT_APP_ORIGIN
+    }
+    return origin
+  } catch {
+    return DEFAULT_APP_ORIGIN
   }
 }
 
@@ -44,9 +72,16 @@ function readEnvOrigin(): string | undefined {
   ]
 
   for (const value of candidates) {
-    if (value && typeof value === 'string') {
-      const origin = normalizeOrigin(value)
-      if (origin) return origin
+    if (!value || typeof value !== 'string') continue
+    const origin = parseOrigin(value)
+    if (!origin) continue
+    try {
+      const host = new URL(origin).hostname
+      if (isEphemeralHost(host)) continue
+      if (isBrandAliasHost(host)) return DEFAULT_APP_ORIGIN
+      return origin
+    } catch {
+      continue
     }
   }
 
@@ -56,6 +91,27 @@ function readEnvOrigin(): string | undefined {
 /** Canonical HTTPS origin for web + native (share links, WebViews, API callbacks). */
 export function resolveAppOrigin(): string {
   return readEnvOrigin() ?? DEFAULT_APP_ORIGIN
+}
+
+/**
+ * Rewrite an absolute URL onto the canonical public origin when the host is
+ * ephemeral (Vercel preview) or a brand alias (sheconomy.com / www).
+ * Relative paths are left unchanged.
+ */
+export function canonicalizePublicUrl(url: string | null | undefined): string | null {
+  if (!url) return null
+  const trimmed = url.trim()
+  if (!trimmed) return null
+  if (trimmed.startsWith('/') || trimmed.startsWith('sheconomy://')) return trimmed
+  try {
+    const parsed = new URL(trimmed)
+    if (isEphemeralHost(parsed.hostname) || isBrandAliasHost(parsed.hostname)) {
+      return `${DEFAULT_APP_ORIGIN}${parsed.pathname}${parsed.search}${parsed.hash}`
+    }
+    return trimmed
+  } catch {
+    return trimmed
+  }
 }
 
 export function getAppHost(): string {

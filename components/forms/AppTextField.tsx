@@ -19,6 +19,7 @@ export type AppTextFieldProps = {
   onFocus?: RNTextInputProps['onFocus']
   onEndEditing?: RNTextInputProps['onEndEditing']
   placeholder?: string
+  placeholderTextColor?: string
   editable?: boolean
   disabled?: boolean
   invalid?: boolean
@@ -38,6 +39,8 @@ export type AppTextFieldProps = {
   embedded?: boolean
   multiline?: boolean
   numberOfLines?: number
+  fontSize?: number
+  color?: string
   style?: StyleProp<TextStyle>
   containerStyle?: StyleProp<ViewStyle>
   autoFocus?: boolean
@@ -58,6 +61,7 @@ export const AppTextField = forwardRef<RNTextInputType, AppTextFieldProps>(
       onFocus,
       onEndEditing,
       placeholder,
+      placeholderTextColor,
       editable,
       disabled = false,
       invalid = false,
@@ -75,6 +79,8 @@ export const AppTextField = forwardRef<RNTextInputType, AppTextFieldProps>(
       embedded = false,
       multiline = false,
       numberOfLines,
+      fontSize,
+      color,
       style,
       containerStyle,
       autoFocus,
@@ -85,18 +91,24 @@ export const AppTextField = forwardRef<RNTextInputType, AppTextFieldProps>(
   ) {
     const ui = useAppUi()
     const isEditable = editable ?? !disabled
+    const resolvedFontSize = fontSize ?? (embedded ? 15 : 16)
 
     const container: ViewStyle = useMemo(
       () =>
         embedded
           ? {
+              // Grow horizontally inside row shells. Do not set height: '100%' here —
+              // parents that only use minHeight (auth email) expand when children
+              // claim percentage height.
               flex: 1,
               minWidth: 0,
               justifyContent: 'center',
             }
           : {
               width: '100%',
-              minHeight: 52,
+              ...(multiline
+                ? { minHeight: 96 }
+                : { height: 52, minHeight: 52, overflow: 'hidden' as const }),
               borderRadius: 14,
               borderWidth: 1,
               borderColor: invalid ? ui.error : ui.borderSubtle,
@@ -104,23 +116,34 @@ export const AppTextField = forwardRef<RNTextInputType, AppTextFieldProps>(
               paddingHorizontal: 14,
               justifyContent: 'center',
             },
-      [embedded, invalid, ui.borderSubtle, ui.error, ui.surface],
+      [embedded, invalid, multiline, ui.borderSubtle, ui.error, ui.surface],
     )
 
     const inputStyle: TextStyle = useMemo(
       () => ({
         width: '100%',
-        fontSize: 16,
+        // Embedded shells (search ~40–44px, auth ~56px): drop vertical padding so
+        // text is not clipped. Avoid flex/height:100%/lineHeight — those inflate
+        // shells that size from content (auth) while search passes height via Input.
+        ...(embedded && !multiline
+          ? {
+              paddingVertical: 0,
+              paddingHorizontal: 0,
+              margin: 0,
+            }
+          : {
+              paddingVertical: Platform.OS === 'ios' ? 14 : 12,
+            }),
+        fontSize: resolvedFontSize,
         fontWeight: '500',
-        color: ui.text,
-        paddingVertical: Platform.OS === 'ios' ? 14 : 12,
+        color: color ?? ui.text,
         ...(Platform.OS === 'web'
           ? ({ outlineStyle: 'none', outlineWidth: 0 } as object)
           : null),
         backgroundColor: 'transparent',
         ...(multiline ? { minHeight: 96, textAlignVertical: 'top' as const } : null),
       }),
-      [multiline, ui.text],
+      [color, embedded, multiline, resolvedFontSize, ui.text],
     )
 
     return (
@@ -141,7 +164,7 @@ export const AppTextField = forwardRef<RNTextInputType, AppTextFieldProps>(
             onEndEditing?.(event)
           }}
           placeholder={placeholder}
-          placeholderTextColor={ui.textMuted}
+          placeholderTextColor={placeholderTextColor ?? ui.textMuted}
           editable={isEditable}
           autoCapitalize={autoCapitalize}
           autoCorrect={autoCorrect}
@@ -169,6 +192,7 @@ export const AppTextField = forwardRef<RNTextInputType, AppTextFieldProps>(
             ? {
                 underlineColorAndroid: 'transparent',
                 textAlignVertical: multiline ? ('top' as const) : ('center' as const),
+                includeFontPadding: false,
               }
             : null)}
           style={[inputStyle, style]}

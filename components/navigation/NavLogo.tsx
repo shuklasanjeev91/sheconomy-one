@@ -1,9 +1,7 @@
-import { Image, XStack } from '~/components/ui'
+import { XStack } from '~/components/ui'
 import { AppLink } from '~/components/navigation/AppLink'
-import { getSheconomyLogoUrl } from '~/lib/supabase/brand'
+import { BrandLogo } from '~/components/brand/BrandLogo'
 import { routes } from '~/lib/routes'
-
-import { BRAND_NAME } from '~/config/brand'
 
 type NavLogoProps = {
   compact?: boolean
@@ -11,8 +9,6 @@ type NavLogoProps = {
 }
 
 export function NavLogo({ compact, href = routes.commerce.home }: NavLogoProps) {
-  const logoUrl = getSheconomyLogoUrl(compact ? 'icon' : 'primary')
-
   return (
     <AppLink href={href} replace asChild>
       <XStack
@@ -22,12 +18,11 @@ export function NavLogo({ compact, href = routes.commerce.home }: NavLogoProps) 
         hoverStyle={{ opacity: 0.88 }}
         pressStyle={{ opacity: 0.75 }}
       >
-        <Image
-          src={logoUrl}
+        <BrandLogo
+          compact={compact}
           width={compact ? 36 : 148}
           height={compact ? 36 : 40}
-          objectFit="contain"
-          alt={`${BRAND_NAME} home`}
+          accessibilityLabel="SHEconomy home"
         />
       </XStack>
     </AppLink>

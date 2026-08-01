@@ -37,6 +37,8 @@ function withIosUniversalDevices(config) {
   config = withXcodeProject(config, (mod) => {
     const project = mod.modResults
     const configurations = project.pbxXCBuildConfigurationSection()
+    const buildNumber = String(config.ios?.buildNumber || config.version || '1')
+    const marketingVersion = String(config.version || '1.0')
 
     for (const key of Object.keys(configurations)) {
       const entry = configurations[key]
@@ -46,6 +48,13 @@ function withIosUniversalDevices(config) {
       // Main app + extensions should all be universal (1 = iPhone, 2 = iPad).
       if (settings.TARGETED_DEVICE_FAMILY != null) {
         settings.TARGETED_DEVICE_FAMILY = '"1,2"'
+      }
+
+      // Keep ScreenShare / NSE CFBundleVersion aligned with the parent app.
+      // Mismatched extension versions break ReplayKit screen share on device.
+      if (settings.PRODUCT_BUNDLE_IDENTIFIER) {
+        settings.CURRENT_PROJECT_VERSION = buildNumber
+        settings.MARKETING_VERSION = marketingVersion
       }
     }
 

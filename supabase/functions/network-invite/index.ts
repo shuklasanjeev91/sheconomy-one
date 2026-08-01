@@ -1,7 +1,7 @@
 import 'jsr:@supabase/functions-js/edge-runtime.d.ts'
 import { createClient } from 'jsr:@supabase/supabase-js@2'
 
-import { appBaseUrl, sendResendEmail } from '~/supabase/functions/_shared/resend.ts'
+import { appBaseUrl, sendResendEmail } from '../_shared/resend.ts'
 
 const BRAND_NAME = 'SHEconomy'
 const corsHeaders = {

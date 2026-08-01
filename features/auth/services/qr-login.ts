@@ -1,5 +1,4 @@
-import { Platform } from 'react-native'
-
+import { resolveAppOrigin } from '~/config/app-origin'
 import { supabase } from '~/lib/supabase/client'
 import { supabaseConfig } from '~/lib/supabase/env'
 
@@ -9,19 +8,9 @@ export type QrChallenge = {
   expires_at: string
 }
 
-function webAppOrigin(): string {
-  if (typeof process !== 'undefined' && process.env.EXPO_PUBLIC_WEB_APP_URL) {
-    return process.env.EXPO_PUBLIC_WEB_APP_URL.replace(/\/$/, '')
-  }
-  if (Platform.OS === 'web' && typeof window !== 'undefined') {
-    return window.location.origin
-  }
-  return 'https://sheconomy.in'
-}
-
 /** URL encoded into the QR (opens mobile approve route when scanned). */
 export function buildQrLoginUrl(deviceCode: string): string {
-  return `${webAppOrigin()}/auth/qr?c=${encodeURIComponent(deviceCode)}`
+  return `${resolveAppOrigin()}/auth/qr?c=${encodeURIComponent(deviceCode)}`
 }
 
 export async function createQrLoginChallenge(): Promise<{

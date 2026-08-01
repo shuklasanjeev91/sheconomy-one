@@ -131,7 +131,7 @@ export function PhoneInput({
           alignItems="center"
           gap="$1.5"
           paddingHorizontal={compact ? '$2' : '$3'}
-          minHeight={inputHeight}
+          height={inputHeight}
           borderRadius={AUTH_LAYOUT.inputRadius}
           borderWidth={1}
           borderColor={invalid ? ui.error : ui.borderSubtle}
@@ -184,7 +184,7 @@ export function PhoneInput({
             invalid={invalid}
             maxLength={country.maxLength + 8}
             importantForAutofill="yes"
-            containerStyle={{ minHeight: inputHeight }}
+            containerStyle={{ height: inputHeight, minHeight: inputHeight }}
           />
         </View>
       </View>

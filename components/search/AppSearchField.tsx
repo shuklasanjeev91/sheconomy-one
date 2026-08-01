@@ -283,7 +283,7 @@ export function AppSearchField({ compact, initialQuery = '', scope: scopeProp }:
           {...(Platform.OS === 'web'
             ? ({
                 onClick: handleFocus,
-                style: { outline: 'none' },
+                style: { outline: 'none', height: '100%', lineHeight: `${compact ? 14 : 15}px` },
               } as object)
             : {})}
         />

@@ -3,7 +3,7 @@
     "name": "SHEconomy",
     "slug": "sheconomy",
     "owner": "sheconomy",
-    "version": "6.0",
+    "version": "6.0.1",
     "scheme": "sheconomy",
     "newArchEnabled": true,
     "platforms": [
@@ -15,13 +15,36 @@
       "enabled": true,
       "checkAutomatically": "ON_LOAD",
       "fallbackToCacheTimeout": 0,
-      "url": "https://u.expo.dev/61412da1-9fab-4374-83f5-9e7eba296400"
+      "url": "https://u.expo.dev/61412da1-9fab-4374-83f5-9e7eba296400",
+      "requestHeaders": {
+        "expo-channel-name": "production"
+      }
     },
     "plugins": [
       "./plugins/withUniversalDeviceSupport.cjs",
       "./plugins/withAndroidBrandWindowBackground.cjs",
       "./plugins/withGoogleModularHeaders.cjs",
       "./plugins/withCallKeep.cjs",
+      [
+        "expo-splash-screen",
+        {
+          "backgroundColor": "#D81B60",
+          "image": "./public/splash-logo-android.png",
+          "imageWidth": 240,
+          "resizeMode": "contain",
+          "android": {
+            "image": "./public/splash-logo-android.png",
+            "imageWidth": 240,
+            "backgroundColor": "#D81B60"
+          },
+          "ios": {
+            "image": "./public/splash.png",
+            "enableFullScreenImage_legacy": true,
+            "resizeMode": "contain",
+            "backgroundColor": "#D81B60"
+          }
+        }
+      ],
       [
         "expo-build-properties",
         {
@@ -108,13 +131,16 @@
     ],
     "icon": "./public/app-icon.png",
     "splash": {
-      "image": "./public/splash.png",
+      "image": "./public/splash-logo-android.png",
       "resizeMode": "contain",
+      "backgroundColor": "#D81B60"
+    },
+    "androidStatusBar": {
       "backgroundColor": "#D81B60"
     },
     "ios": {
       "bundleIdentifier": "com.sheconomy.ecommerce",
-      "buildNumber": "108",
+      "buildNumber": "114",
       "appleTeamId": "52H73QK4CL",
       "supportsTablet": true,
       "requireFullScreen": false,
@@ -127,7 +153,6 @@
         "CFBundleDisplayName": "SHEconomy",
         "UIBackgroundModes": [
           "audio",
-          "voip",
           "remote-notification"
         ],
         "NSFaceIDUsageDescription": "Unlock SHEconomy with Face ID when biometric unlock is enabled.",
@@ -164,7 +189,7 @@
     },
     "android": {
       "package": "com.sheconomy.ecommerce",
-      "versionCode": 126,
+      "versionCode": 133,
       "softwareKeyboardLayoutMode": "resize",
       "adaptiveIcon": {
         "foregroundImage": "./public/app-icon-adaptive.png",

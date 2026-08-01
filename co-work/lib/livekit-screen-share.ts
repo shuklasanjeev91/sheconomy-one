@@ -20,6 +20,8 @@ export const SCREEN_SHARE_SUBSCRIBE_DIMENSIONS = { width: 1280, height: 720 } as
  * Publish options for screen share.
  * Use `screenShareEncoding` (not `videoEncoding`) — LiveKit's computeVideoEncodings
  * only reads screenShareEncoding when source is ScreenShare.
+ *
+ * Force VP8 + no simulcast so web ↔ iOS ↔ Android all subscribe the same layer.
  */
 export const SCREEN_SHARE_PUBLISH_OPTIONS: TrackPublishOptions = {
   source: Track.Source.ScreenShare,
@@ -41,9 +43,10 @@ export const WEB_SCREEN_SHARE_CAPTURE: ScreenShareCaptureOptions = {
   preferCurrentTab: false,
 }
 
+/** Native getDisplayMedia ignores most web-only constraints — keep this minimal. */
 export const NATIVE_SCREEN_SHARE_CAPTURE: ScreenShareCaptureOptions = {
+  audio: false,
   resolution: ScreenSharePresets.h720fps15.resolution,
-  contentHint: 'detail',
 }
 
 export function isScreenSharePublication(publication: TrackPublication | undefined | null): boolean {
@@ -52,6 +55,22 @@ export function isScreenSharePublication(publication: TrackPublication | undefin
 
 export function isScreenShareSource(source: Track.Source | undefined | null): boolean {
   return source === Track.Source.ScreenShare
+}
+
+async function waitForLocalScreenShareTrack(
+  localParticipant: LocalParticipant,
+  timeoutMs = 8_000,
+): Promise<TrackPublication | null> {
+  const existing = localParticipant.getTrackPublication(Track.Source.ScreenShare)
+  if (existing?.track) return existing
+
+  const started = Date.now()
+  while (Date.now() - started < timeoutMs) {
+    await new Promise((resolve) => setTimeout(resolve, 150))
+    const publication = localParticipant.getTrackPublication(Track.Source.ScreenShare)
+    if (publication?.track) return publication
+  }
+  return localParticipant.getTrackPublication(Track.Source.ScreenShare) ?? null
 }
 
 export async function setLocalScreenShareEnabled(
@@ -68,12 +87,16 @@ export async function setLocalScreenShareEnabled(
   await localParticipant.setScreenShareEnabled(true, capture, SCREEN_SHARE_PUBLISH_OPTIONS)
 
   // Ensure the published track is unmuted/enabled after the OS capture sheet.
-  const publication = localParticipant.getTrackPublication(Track.Source.ScreenShare)
+  // On native, the MediaStream can attach a moment after setScreenShareEnabled resolves.
+  const publication = await waitForLocalScreenShareTrack(localParticipant)
   if (publication?.track) {
     if (publication.isMuted) {
       await publication.unmute()
     }
-    publication.track.mediaStreamTrack.enabled = true
+    const mediaTrack = publication.track.mediaStreamTrack
+    if (mediaTrack && 'enabled' in mediaTrack) {
+      mediaTrack.enabled = true
+    }
   }
 }
 
@@ -147,9 +170,9 @@ export function bindRemoteScreenShareQuality(room: Room): () => void {
   room.on(RoomEvent.LocalTrackPublished, onLocalTrackPublished)
   room.on(RoomEvent.TrackStreamStateChanged, onTrackStreamStateChanged)
 
-  // Adaptive stream can re-request a low layer a moment after subscribe — re-assert.
+  // Adaptive stream / SFU can renegotiate shortly after subscribe — re-assert.
   const reinforce = setInterval(boostAllRemotes, 1500)
-  const stopReinforce = setTimeout(() => clearInterval(reinforce), 30_000)
+  const stopReinforce = setTimeout(() => clearInterval(reinforce), 45_000)
 
   return () => {
     clearInterval(reinforce)

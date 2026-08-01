@@ -570,8 +570,14 @@ function NativeVideoTile({
     }
   }, [width, height])
 
-  const trackSid = isTrackReference(trackRef) ? trackRef.publication.trackSid : null
-  const showVideo = isTrackReference(trackRef) && !cameraOff && !!surfaceSize
+  const publication = isTrackReference(trackRef) ? trackRef.publication : null
+  const mediaTrack = publication?.track ?? null
+  // Remount key must change when the MediaStream attaches. Mounting RTCView with an
+  // empty streamURL (publication exists, track not subscribed yet) leaves Android/iOS
+  // stuck on a blank surface even after the remote screen-share track arrives.
+  const mediaReadyToken = mediaTrack?.sid ?? mediaTrack?.mediaStream?.id ?? null
+  const trackSid = publication?.trackSid ?? null
+  const showVideo = !!mediaTrack && !!mediaReadyToken && !!surfaceSize && (isScreen || !cameraOff)
 
   return (
     <YStack
@@ -596,10 +602,10 @@ function NativeVideoTile({
         }
       }}
     >
-      {showVideo && surfaceSize ? (
+      {showVideo && surfaceSize && isTrackReference(trackRef) ? (
         <VideoTrack
-          // Remount when track or size changes so EGL surface attaches cleanly.
-          key={`${trackSid ?? 'track'}-${surfaceSize.w}x${surfaceSize.h}-${isScreen ? 'ss' : 'cam'}`}
+          // Remount when the live MediaStream attaches or tile size changes.
+          key={`${trackSid ?? 'track'}-${mediaReadyToken}-${surfaceSize.w}x${surfaceSize.h}-${isScreen ? 'ss' : 'cam'}`}
           trackRef={trackRef}
           style={{
             position: 'absolute',

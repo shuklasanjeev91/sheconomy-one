@@ -48,7 +48,8 @@ export function ScreenSearchField({
       alignItems="center"
       gap={8}
       paddingHorizontal={isPlain ? 0 : 12}
-      paddingVertical={isPlain ? 0 : 10}
+      paddingVertical={0}
+      height={isPlain ? undefined : 42}
       minHeight={isPlain ? undefined : 42}
       borderRadius={isPlain ? 0 : 999}
       borderWidth={isPlain ? 0 : 1}
@@ -61,6 +62,7 @@ export function ScreenSearchField({
       <Input
         flex={1}
         minWidth={0}
+        unstyled
         value={value}
         onChangeText={onChangeText}
         onSubmitEditing={handleSubmit}

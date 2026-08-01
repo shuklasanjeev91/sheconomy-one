@@ -90,16 +90,18 @@ export function useLiveKitMediaControls(preferSpeaker = true): LiveKitMediaContr
   const toggleScreenShare = useCallback(async () => {
     const enabling = !screenSharingRef.current
 
-    if (enabling && Platform.OS === 'ios') {
-      if (isIosSimulator()) {
-        throw new Error('Screen sharing requires a physical iPhone or iPad.')
-      }
-      await showIosBroadcastPicker()
-    }
-
     try {
+      if (enabling && Platform.OS === 'ios') {
+        if (isIosSimulator()) {
+          throw new Error('Screen sharing requires a physical iPhone or iPad.')
+        }
+        // Show ReplayKit picker first; getDisplayMedia then waits for Start Broadcast.
+        await showIosBroadcastPicker()
+      }
+
       // Android: LiveKit/WebRTC shows the MediaProjection consent sheet, then
       // runs MediaProjectionService (FGS) while presenting.
+      // iOS: connects to ScreenShareExtension via the app-group socket.
       await setLocalScreenShareEnabled(localParticipant, enabling, 'native')
     } catch (error) {
       if (isAbortOrCancelError(error)) {
@@ -109,7 +111,7 @@ export function useLiveKitMediaControls(preferSpeaker = true): LiveKitMediaContr
           }
           throw new Error(
             enabling
-              ? 'Screen share was cancelled. Choose Start Broadcast in the system sheet to present.'
+              ? 'Screen share was cancelled. Choose SHEconomy → Start Broadcast in the system sheet.'
               : 'Could not stop screen share.',
           )
         }

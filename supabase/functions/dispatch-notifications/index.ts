@@ -1,6 +1,8 @@
 import 'jsr:@supabase/functions-js/edge-runtime.d.ts'
 import { createClient } from 'jsr:@supabase/supabase-js@2'
 
+import { resolvePublicAppOrigin, toCanonicalPublicUrl } from '../_shared/app-url.ts'
+
 const BRAND_NAME = 'SHEconomy'
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -71,25 +73,9 @@ async function sendResendEmail(apiKey: string, payload: {
   }
 }
 
-function resolvePublicAppOrigin(): string {
-  return (
-    Deno.env.get('PUBLIC_APP_URL')?.replace(/\/$/, '') ||
-    'https://sheconomy.in'
-  )
-}
-
 /** OneSignal requires absolute http(s) URLs for web_url / app_url. */
-function toAbsoluteHttpUrl(url: string | null | undefined, appOrigin: string): string | null {
-  if (!url) return null
-  const trimmed = url.trim()
-  if (!trimmed) return null
-  if (/^https?:\/\//i.test(trimmed)) return trimmed
-  if (trimmed.startsWith('sheconomy://')) {
-    const path = trimmed.replace(/^sheconomy:\/\//, '').replace(/^\//, '')
-    return `${appOrigin}/${path}`
-  }
-  if (trimmed.startsWith('/')) return `${appOrigin}${trimmed}`
-  return `${appOrigin}/${trimmed}`
+function toAbsoluteHttpUrl(url: string | null | undefined, _appOrigin?: string): string | null {
+  return toCanonicalPublicUrl(url)
 }
 
 function onesignalResponseError(body: unknown): string | null {
@@ -373,11 +359,12 @@ Deno.serve(async (req) => {
     for (const notification of (notifications ?? []) as NotificationRow[]) {
       const channels = (notification.channels ?? []).map((c) => c.toLowerCase()) as DeliveryChannel[]
       let delivery = notification.delivery_status ?? {}
+      const publicActionUrl = toCanonicalPublicUrl(notification.action_url) ?? ''
       const vars = {
         ...(notification.data ?? {}),
         title: notification.title,
         message: notification.message,
-        action_url: notification.action_url ?? '',
+        action_url: publicActionUrl,
       }
 
       let template: TemplateRow | null = null
@@ -418,8 +405,8 @@ Deno.serve(async (req) => {
             const html =
               substitute(template?.email_body_template, vars) ||
               `<p>${notification.message}</p>${
-                notification.action_url
-                  ? `<p><a href="${notification.action_url}">Open in ${BRAND_NAME}</a></p>`
+                publicActionUrl
+                  ? `<p><a href="${publicActionUrl}">Open in ${BRAND_NAME}</a></p>`
                   : ''
               }`
             await sendResendEmail(resendKey, { to: email, subject, html })
@@ -458,11 +445,11 @@ Deno.serve(async (req) => {
               apiKey: oneSignalKey,
               playerIds,
               externalIds: [notification.recipient_id],
+              url: publicActionUrl || notification.action_url,
               title:
                 substitute(template?.push_title_template, vars) || notification.title,
               body:
                 substitute(template?.push_body_template, vars) || notification.message,
-              url: notification.action_url,
               data: vars,
               isIncomingCall,
             })
@@ -497,7 +484,7 @@ Deno.serve(async (req) => {
               body:
                 substitute(template?.whatsapp_template, vars) ||
                 `${notification.title}\n${notification.message}${
-                  notification.action_url ? `\n${notification.action_url}` : ''
+                  publicActionUrl ? `\n${publicActionUrl}` : ''
                 }`,
             })
             delivery = markChannel(delivery, 'whatsapp', 'sent')
@@ -531,7 +518,7 @@ Deno.serve(async (req) => {
               body:
                 substitute(template?.sms_template, vars) ||
                 `${notification.title}: ${notification.message}${
-                  notification.action_url ? ` ${notification.action_url}` : ''
+                  publicActionUrl ? ` ${publicActionUrl}` : ''
                 }`,
             })
             delivery = markChannel(delivery, 'sms', 'sent')

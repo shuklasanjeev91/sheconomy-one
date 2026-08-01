@@ -37,23 +37,35 @@ const COPY: Record<
   },
   privacy: {
     title: 'Privacy policy',
-    updated: 'July 15, 2026',
+    updated: 'August 1, 2026',
     sections: [
       {
+        heading: 'Who we are',
+        body: `${BRAND_NAME} (“we”, “us”) operates the ${BRAND_NAME} marketplace, community, chat, classes, and co-work meeting experiences. This policy explains what data we collect, how we use it, who we share it with, and how you can control or delete it.`,
+      },
+      {
         heading: 'What we collect',
-        body: `We collect account details, profile information, and activity needed to operate ${BRAND_NAME} — including orders, shop data, community posts, and support requests.`,
+        body: `We collect account details (email, phone, name, profile photo), profile and shop information, marketplace activity (listings, orders, addresses, payments metadata), community content (posts, comments, messages), device and usage data needed for security and performance, and optional permissions you grant — camera and microphone for video meetings and gender/liveness verification, photos for uploads, contacts you choose to connect with, and location while using address or nearby-shop features.`,
       },
       {
         heading: 'How we use information',
-        body: 'We use your information to provide and improve the product, personalize discovery (including region and currency preferences), process payments, and keep the community safe.',
+        body: 'We use your information to provide and improve the product, personalize discovery (including region and currency preferences), process orders and payments, enable chat and meetings, send transactional and optional marketing notifications, prevent fraud and abuse, and keep the community safe.',
+      },
+      {
+        heading: 'Third parties',
+        body: 'We use service providers that process data on our behalf under contractual protections comparable to this policy, including hosting and auth (Supabase), push notifications (OneSignal), real-time meetings (LiveKit), payment processors for checkout, analytics (for example Microsoft Clarity where enabled), and Apple/Google for sign-in and store distribution. We do not sell your personal information.',
+      },
+      {
+        heading: 'Retention and deletion',
+        body: `We keep account and transaction records while your account is active and as needed for legal, tax, dispute, and security obligations. You can start account deletion in the app under Settings → Account → Delete account. Deletion deactivates your account immediately and schedules permanent removal; limited records may be retained where the law requires.`,
       },
       {
         heading: 'Your choices',
-        body: 'You can review privacy-related controls in Settings → Privacy, and manage country, language, and currency from the marketplace footer.',
+        body: 'You can review privacy-related controls in Settings → Privacy, manage notifications on your device, and manage country, language, and currency from the marketplace footer. You may withdraw optional permissions in system settings; some features will not work without them.',
       },
       {
         heading: 'Contact',
-        body: 'Privacy questions can be sent through Help Center → Contact us.',
+        body: 'Privacy questions and data requests can be sent through Help Center → Contact us.',
       },
     ],
   },

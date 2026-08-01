@@ -481,7 +481,8 @@ function AuthInputShell({
         alignItems: 'center',
         gap: 12,
         paddingHorizontal: 14,
-        minHeight: 56,
+        // Fixed height so embedded TextInput cannot inflate the shell.
+        height: 56,
         borderRadius: AUTH_LAYOUT.inputRadius,
         borderWidth: 1,
         borderColor: invalid ? ui.error : ui.borderSubtle,

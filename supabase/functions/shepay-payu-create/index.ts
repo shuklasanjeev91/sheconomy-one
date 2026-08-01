@@ -1,8 +1,9 @@
 import 'jsr:@supabase/functions-js/edge-runtime.d.ts'
 import { createClient } from 'jsr:@supabase/supabase-js@2'
 
-import { corsHeaders, jsonResponse } from '~/supabase/functions/_shared/cors.ts'
-import { payURequestHash } from '~/supabase/functions/_shared/payu.ts'
+import { resolvePublicAppOrigin } from '../_shared/app-url.ts'
+import { corsHeaders, jsonResponse } from '../_shared/cors.ts'
+import { payURequestHash } from '../_shared/payu.ts'
 
 type CreateBody = {
   payment_step_id?: string
@@ -26,10 +27,7 @@ Deno.serve(async (request) => {
   const salt = Deno.env.get('PAYU_MERCHANT_SALT')?.trim()
   const supabaseUrl = Deno.env.get('SUPABASE_URL')
   const serviceRole = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')
-  const appBase =
-    Deno.env.get('PUBLIC_APP_URL')?.replace(/\/$/, '') ||
-    Deno.env.get('APP_URL')?.replace(/\/$/, '') ||
-    'https://sheconomy.in'
+  const appBase = resolvePublicAppOrigin()
   const payuBase =
     Deno.env.get('PAYU_BASE_URL')?.replace(/\/$/, '') || 'https://test.payu.in'
 

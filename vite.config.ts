@@ -4,7 +4,7 @@ import { defineConfig, loadEnv } from 'vite'
 import { one } from 'one/vite'
 import { tamaguiPlugin } from '@tamagui/vite-plugin'
 
-import { APP_SCHEME, DEFAULT_APP_ORIGIN } from './config/app-origin'
+import { APP_SCHEME, DEFAULT_APP_ORIGIN, normalizeAppOrigin } from './config/app-origin'
 import { PUBLIC_SUPABASE_ANON_KEY, PUBLIC_SUPABASE_URL } from './config/supabase-public'
 
 const fromProjectRoot = (path: string) => fileURLToPath(new URL(path, import.meta.url).toString())
@@ -41,9 +41,8 @@ function loadProjectEnv(mode: string) {
 export default defineConfig(({ mode }) => {
   clearTamaguiViteCaches()
   const env = loadProjectEnv(mode)
-  const appOrigin = (env.EXPO_PUBLIC_WEB_APP_URL || env.ONE_SERVER_URL || DEFAULT_APP_ORIGIN).replace(
-    /\/$/,
-    '',
+  const appOrigin = normalizeAppOrigin(
+    env.EXPO_PUBLIC_WEB_APP_URL || env.ONE_SERVER_URL || DEFAULT_APP_ORIGIN,
   )
   const useSyncExternalStoreWithSelector = fromProjectRoot(
     './lib/stubs/use-sync-external-store-with-selector.ts',
@@ -553,30 +552,22 @@ if (typeof g.Response !== 'function') {
       'import.meta.env.EXPO_PUBLIC_SUPABASE_ANON_KEY': JSON.stringify(
         env.EXPO_PUBLIC_SUPABASE_ANON_KEY?.trim() || PUBLIC_SUPABASE_ANON_KEY,
       ),
-      'import.meta.env.EXPO_PUBLIC_WEB_APP_URL': JSON.stringify(
-        env.EXPO_PUBLIC_WEB_APP_URL ?? env.ONE_SERVER_URL ?? DEFAULT_APP_ORIGIN,
-      ),
-      'import.meta.env.ONE_SERVER_URL': JSON.stringify(
-        env.ONE_SERVER_URL ?? env.EXPO_PUBLIC_WEB_APP_URL ?? DEFAULT_APP_ORIGIN,
-      ),
+      'import.meta.env.EXPO_PUBLIC_WEB_APP_URL': JSON.stringify(appOrigin),
+      'import.meta.env.ONE_SERVER_URL': JSON.stringify(appOrigin),
       'process.env.EXPO_PUBLIC_SUPABASE_URL': JSON.stringify(
         env.EXPO_PUBLIC_SUPABASE_URL?.trim() || PUBLIC_SUPABASE_URL,
       ),
       'process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY': JSON.stringify(
         env.EXPO_PUBLIC_SUPABASE_ANON_KEY?.trim() || PUBLIC_SUPABASE_ANON_KEY,
       ),
-      'process.env.EXPO_PUBLIC_WEB_APP_URL': JSON.stringify(
-        env.EXPO_PUBLIC_WEB_APP_URL ?? env.ONE_SERVER_URL ?? DEFAULT_APP_ORIGIN,
-      ),
+      'process.env.EXPO_PUBLIC_WEB_APP_URL': JSON.stringify(appOrigin),
       'import.meta.env.EXPO_PUBLIC_ONESIGNAL_APP_ID': JSON.stringify(
         env.EXPO_PUBLIC_ONESIGNAL_APP_ID?.trim() || '',
       ),
       'process.env.EXPO_PUBLIC_ONESIGNAL_APP_ID': JSON.stringify(
         env.EXPO_PUBLIC_ONESIGNAL_APP_ID?.trim() || '',
       ),
-      'process.env.ONE_SERVER_URL': JSON.stringify(
-        env.ONE_SERVER_URL ?? env.EXPO_PUBLIC_WEB_APP_URL ?? DEFAULT_APP_ORIGIN,
-      ),
+      'process.env.ONE_SERVER_URL': JSON.stringify(appOrigin),
       'process.env.ONE_CACHE_KEY': JSON.stringify(env.ONE_CACHE_KEY?.trim() || '202607151'),
       'import.meta.env.ONE_CACHE_KEY': JSON.stringify(env.ONE_CACHE_KEY?.trim() || '202607151'),
     },

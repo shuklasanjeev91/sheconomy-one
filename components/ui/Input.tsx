@@ -90,6 +90,7 @@ export const Input = forwardRef<any, InputProps>(function Input({ invalid, ...pr
       onBlur,
       onFocus,
       placeholder,
+      placeholderTextColor,
       editable,
       disabled,
       autoComplete,
@@ -111,6 +112,8 @@ export const Input = forwardRef<any, InputProps>(function Input({ invalid, ...pr
       flex,
       width,
       height,
+      fontSize,
+      color,
     } = props as InputProps & {
       onChangeText?: (text: string) => void
       disabled?: boolean
@@ -126,9 +129,18 @@ export const Input = forwardRef<any, InputProps>(function Input({ invalid, ...pr
       flex?: number
       width?: number | string
       height?: number | string
+      fontSize?: number
+      color?: string
+      placeholderTextColor?: string
     }
 
     const embedded = isEmbeddedField({ borderWidth, unstyled })
+    const resolvedFontSize =
+      typeof fontSize === 'number'
+        ? fontSize
+        : typeof fontSize === 'string' && /^\d+(\.\d+)?$/.test(fontSize)
+          ? Number(fontSize)
+          : undefined
 
     return (
       <AppTextField
@@ -138,6 +150,9 @@ export const Input = forwardRef<any, InputProps>(function Input({ invalid, ...pr
         onBlur={onBlur as never}
         onFocus={onFocus as never}
         placeholder={placeholder != null ? String(placeholder) : undefined}
+        placeholderTextColor={
+          typeof placeholderTextColor === 'string' ? placeholderTextColor : undefined
+        }
         editable={editable}
         disabled={Boolean(disabled)}
         invalid={invalid}
@@ -156,10 +171,17 @@ export const Input = forwardRef<any, InputProps>(function Input({ invalid, ...pr
         numberOfLines={numberOfLines}
         autoFocus={autoFocus}
         embedded={embedded}
+        fontSize={resolvedFontSize}
+        color={typeof color === 'string' ? color : undefined}
         containerStyle={{
           ...(typeof flex === 'number' ? { flex } : null),
           ...(width != null ? { width: width as never } : null),
-          ...(height != null && !embedded ? { minHeight: height as never } : null),
+          ...(height != null && !embedded
+            ? { height: height as never, minHeight: height as never }
+            : null),
+          // Stretch into fixed-height search shells only — never force % height
+          // when the parent sizes from minHeight alone.
+          ...(embedded ? { alignSelf: 'stretch' as const } : null),
         }}
       />
     )

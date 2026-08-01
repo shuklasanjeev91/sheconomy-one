@@ -1,7 +1,6 @@
-# Auto build + submit store binaries on every main push.
-# JS/UI still go live faster via OTA (eas-update-production.yml) — store review
-# is never instant. This keeps native binaries (permissions, plugins, SDK)
-# shipping to App Store / Play without manual steps.
+# Manual store binary build + submit. JS/UI goes live via OTA
+# (eas-update-production.yml on every main push). Run this workflow only when
+# native changes need a new App Store / Play binary.
 #
 # Requires EXPO_TOKEN + Apple/Google credentials on EAS.
 # Android also needs Google Play Android Developer API enabled on the GCP project
@@ -9,9 +8,6 @@
 name: EAS Build + Submit (production)
 
 on:
-  push:
-    branches:
-      - main
   workflow_dispatch:
 
 concurrency:
@@ -48,7 +44,7 @@ jobs:
       - name: Setup EAS
         uses: expo/expo-github-action@v8
         with:
-          eas-version: latest
+          eas-version: 16.28.0
           token: ${{ secrets.EXPO_TOKEN }}
 
       - name: Install dependencies

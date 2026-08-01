@@ -1,6 +1,7 @@
 import 'jsr:@supabase/functions-js/edge-runtime.d.ts'
 import { createClient } from 'jsr:@supabase/supabase-js@2'
 
+import { resolvePublicAppOrigin } from '../_shared/app-url.ts'
 import { corsHeaders, jsonResponse } from '../_shared/cors.ts'
 import { decryptSecret } from '../_shared/encryption.ts'
 import {
@@ -23,10 +24,7 @@ Deno.serve(async (request) => {
 
   const supabaseUrl = Deno.env.get('SUPABASE_URL')
   const serviceRole = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')
-  const appBase =
-    Deno.env.get('PUBLIC_APP_URL')?.replace(/\/$/, '') ||
-    Deno.env.get('APP_URL')?.replace(/\/$/, '') ||
-    'https://sheconomy.in'
+  const appBase = resolvePublicAppOrigin()
 
   if (!supabaseUrl || !serviceRole) {
     return jsonResponse({ error: 'Razorpay direct checkout is not configured' }, 503)

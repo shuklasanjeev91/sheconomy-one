@@ -1,7 +1,7 @@
 # Publish OTA to production on every main push — this is what makes JS/UI
 # changes live on installed App Store / Play Store apps within seconds
 # (force-quit + reopen, or resume after cooldown). Native binary changes still
-# need EAS Build + Submit (see eas-build-submit-production.yml).
+# need EAS Build + Submit (see eas-build-submit-production.yml — manual only).
 #
 # Requires repo secret EXPO_TOKEN: https://expo.dev/settings/access-tokens
 name: EAS Update (production)
@@ -27,6 +27,10 @@ jobs:
       EXPO_PUBLIC_WEB_APP_URL: https://sheconomy.in
       ONE_SERVER_URL: https://sheconomy.in
       EXPO_PUBLIC_APP_ENV: production
+      # Public client defaults (same as eas.json production). Secrets override when set.
+      EXPO_PUBLIC_SUPABASE_URL_DEFAULT: https://zsaqrrzwygzwrlzgymxk.supabase.co
+      EXPO_PUBLIC_SUPABASE_ANON_KEY_DEFAULT: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InpzYXFycnp3eWd6d3Jsemd5bXhrIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTEyNTYwMzMsImV4cCI6MjA2NjgzMjAzM30.cFeln0b7EtzPaNmuGTCr3sDn_nU_8uNjaIYL9ER1_U0
+      EXPO_PUBLIC_ONESIGNAL_APP_ID_DEFAULT: d43662df-5e0b-46eb-9ee1-258220fc7e4b
     steps:
       - name: Check for EXPO_TOKEN
         run: |
@@ -51,7 +55,7 @@ jobs:
       - name: Setup EAS
         uses: expo/expo-github-action@v8
         with:
-          eas-version: latest
+          eas-version: 16.28.0
           token: ${{ secrets.EXPO_TOKEN }}
 
       - name: Install dependencies
@@ -60,18 +64,57 @@ jobs:
           YARN_ENABLE_GLOBAL_CACHE: 'false'
           YARN_NODE_LINKER: node-modules
 
+      - name: Resolve public Expo env
+        id: expo_env
+        run: |
+          SUPABASE_URL='${{ secrets.EXPO_PUBLIC_SUPABASE_URL }}'
+          SUPABASE_ANON='${{ secrets.EXPO_PUBLIC_SUPABASE_ANON_KEY }}'
+          ONESIGNAL='${{ secrets.EXPO_PUBLIC_ONESIGNAL_APP_ID }}'
+          if [ -z "$SUPABASE_URL" ]; then SUPABASE_URL="$EXPO_PUBLIC_SUPABASE_URL_DEFAULT"; fi
+          if [ -z "$SUPABASE_ANON" ]; then SUPABASE_ANON="$EXPO_PUBLIC_SUPABASE_ANON_KEY_DEFAULT"; fi
+          if [ -z "$ONESIGNAL" ]; then ONESIGNAL="$EXPO_PUBLIC_ONESIGNAL_APP_ID_DEFAULT"; fi
+          {
+            echo "EXPO_PUBLIC_SUPABASE_URL=$SUPABASE_URL"
+            echo "EXPO_PUBLIC_SUPABASE_ANON_KEY=$SUPABASE_ANON"
+            echo "EXPO_PUBLIC_ONESIGNAL_APP_ID=$ONESIGNAL"
+          } >> "$GITHUB_ENV"
+          echo "Resolved public Expo env for OTA bundle (secrets override defaults when set)."
+
       - name: Publish EAS Update (production)
+        id: publish
         run: |
           MESSAGE=$(printf '%s' "${{ github.event.head_commit.message }}" | head -n 1 | cut -c1-200)
           if [ -z "$MESSAGE" ]; then
             MESSAGE="OTA from ${GITHUB_SHA::7}"
           fi
+          echo "PUBLISH_MESSAGE<<EOF" >> "$GITHUB_ENV"
+          echo "$MESSAGE" >> "$GITHUB_ENV"
+          echo "EOF" >> "$GITHUB_ENV"
           eas update --channel production --message "$MESSAGE" --non-interactive
         env:
           EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
-          EXPO_PUBLIC_SUPABASE_URL: ${{ secrets.EXPO_PUBLIC_SUPABASE_URL }}
-          EXPO_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.EXPO_PUBLIC_SUPABASE_ANON_KEY }}
-          EXPO_PUBLIC_ONESIGNAL_APP_ID: ${{ secrets.EXPO_PUBLIC_ONESIGNAL_APP_ID }}
           EXPO_PUBLIC_WEB_APP_URL: https://sheconomy.in
           ONE_SERVER_URL: https://sheconomy.in
           EXPO_PUBLIC_APP_ENV: production
+
+      - name: Verify latest production update
+        run: |
+          set -euo pipefail
+          SHORT_SHA="${GITHUB_SHA::7}"
+          OUTPUT=$(eas update:list --branch production --limit 1 --non-interactive 2>&1)
+          echo "$OUTPUT"
+          echo "$OUTPUT" | grep -qi 'Runtime Version[[:space:]]*6\.0' \
+            || { echo "Expected runtimeVersion 6.0 on production branch."; exit 1; }
+          echo "$OUTPUT" | grep -Eqi 'Platforms[[:space:]]*.*android' \
+            || { echo "Expected android platform on latest update."; exit 1; }
+          echo "$OUTPUT" | grep -Eqi 'Platforms[[:space:]]*.*ios' \
+            || { echo "Expected ios platform on latest update."; exit 1; }
+          # Newest group should reference this commit SHA or the publish message.
+          if ! echo "$OUTPUT" | grep -Fq "$SHORT_SHA" && ! echo "$OUTPUT" | grep -Fq "$PUBLISH_MESSAGE"; then
+            echo "Latest update does not mention SHA $SHORT_SHA or publish message."
+            echo "Publish message was: $PUBLISH_MESSAGE"
+            exit 1
+          fi
+          echo "Verified latest production OTA (runtime 6.0, android+ios)."
+        env:
+          EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}

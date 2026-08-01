@@ -2,6 +2,7 @@ import { Platform } from 'react-native'
 import * as WebBrowser from 'expo-web-browser'
 import type { Provider } from '@supabase/supabase-js'
 
+import { normalizeAppOrigin } from '~/config/app-origin'
 import { tryNativeGoogleSignIn } from '~/features/auth/services/native-google'
 import { supabase } from '~/lib/supabase/client'
 
@@ -10,11 +11,13 @@ WebBrowser.maybeCompleteAuthSession()
 export type OAuthProvider = 'google' | 'apple' | 'linkedin_oidc'
 
 export function resolveOAuthRedirectUrl(): string {
-  if (typeof process !== 'undefined' && process.env.EXPO_PUBLIC_WEB_APP_URL) {
-    return `${process.env.EXPO_PUBLIC_WEB_APP_URL.replace(/\/$/, '')}/auth/callback`
-  }
+  // Web OAuth must return to the current host (localhost / preview allowlists).
+  // Public share + notification links use resolveAppOrigin() → sheconomy.in.
   if (Platform.OS === 'web' && typeof window !== 'undefined') {
     return `${window.location.origin}/auth/callback`
+  }
+  if (typeof process !== 'undefined' && process.env.EXPO_PUBLIC_WEB_APP_URL) {
+    return `${normalizeAppOrigin(process.env.EXPO_PUBLIC_WEB_APP_URL)}/auth/callback`
   }
   return 'sheconomy://auth/callback'
 }

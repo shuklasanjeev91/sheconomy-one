@@ -1,6 +1,10 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
-import { DEFAULT_APP_ORIGIN } from '~/config/app-origin'
+import {
+  DEFAULT_APP_ORIGIN,
+  canonicalizePublicUrl,
+  normalizeAppOrigin,
+} from '~/config/app-origin'
 import { buildAbsoluteUrl } from '~/lib/platform/url'
 import { getListingShareUrl, getMeetingShareUrl, getPostShareUrl } from '~/lib/share/urls'
 
@@ -26,6 +30,19 @@ describe('buildAbsoluteUrl', () => {
     vi.stubEnv('ONE_SERVER_URL', 'http://localhost:8081')
 
     expect(buildAbsoluteUrl('listings/foo')).toBe(`${DEFAULT_APP_ORIGIN}/listings/foo`)
+  })
+
+  it('maps brand aliases (.com / www) to sheconomy.in', () => {
+    expect(normalizeAppOrigin('https://sheconomy.com')).toBe(DEFAULT_APP_ORIGIN)
+    expect(normalizeAppOrigin('https://www.sheconomy.in/path')).toBe(DEFAULT_APP_ORIGIN)
+    expect(canonicalizePublicUrl('https://sheconomy.com/community/post/1')).toBe(
+      'https://sheconomy.in/community/post/1',
+    )
+    expect(
+      canonicalizePublicUrl(
+        'https://sheconomy-one-sanjeev-shuklas-projects.vercel.app/co-work/meeting/ABC',
+      ),
+    ).toBe('https://sheconomy.in/co-work/meeting/ABC')
   })
 
   it('builds meeting, listing, and post share URLs on sheconomy.in', () => {

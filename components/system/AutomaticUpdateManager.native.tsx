@@ -91,6 +91,14 @@ export function AutomaticUpdateManager() {
     const deps = depsRef.current
     if (deps.isDev || !Updates.isEnabled) return
 
+    // Local Release installs historically omitted the EAS channel; without
+    // expo-channel-name, checkForUpdateAsync never sees production OTAs.
+    if (!Updates.channel) {
+      console.warn(
+        '[updates] No EAS channel on this binary — ensure EXUpdatesRequestHeaders / UPDATES_CONFIGURATION_REQUEST_HEADERS_KEY set expo-channel-name=production',
+      )
+    }
+
     void markUpdateApplied(deps, Updates.updateId ?? null)
     void check(false)
 

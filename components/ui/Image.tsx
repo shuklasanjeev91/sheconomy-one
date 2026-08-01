@@ -93,7 +93,13 @@ export const Image = forwardRef<any, AppImageProps>(function Image(
   const fillParentAxes = percentWidth && percentHeight
 
   if (Platform.OS !== 'web') {
-    const resolved = (typeof fromSource === 'number' ? fromSource : null) ?? uri ?? null
+    // Prefer bundled `require()` numbers, then remote URI strings.
+    // expo-image needs `{ uri }` for http(s) — a bare string often renders blank.
+    const bundled =
+      (typeof fromSource === 'number' ? fromSource : null) ??
+      (typeof source === 'number' ? source : null)
+    const resolved =
+      bundled ?? (uri != null ? ({ uri } as const) : null)
 
     if (resolved == null) {
       return null
@@ -105,7 +111,7 @@ export const Image = forwardRef<any, AppImageProps>(function Image(
     const fillParent = fillParentAxes || (width == null && height == null)
 
     const recycleKey =
-      recyclingKey ?? (typeof resolved === 'string' ? resolved : String(resolved))
+      recyclingKey ?? (typeof uri === 'string' ? uri : String(bundled ?? 'image'))
 
     return (
       <ExpoImage

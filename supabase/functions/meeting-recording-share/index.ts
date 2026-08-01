@@ -1,12 +1,13 @@
 import 'jsr:@supabase/functions-js/edge-runtime.d.ts'
 import { createClient } from 'jsr:@supabase/supabase-js@2'
 
-import { corsHeaders, jsonResponse } from '~/supabase/functions/_shared/cors.ts'
-import { createShareToken, hashShareToken } from '~/supabase/functions/_shared/recording-helpers.ts'
+import { resolvePublicAppOrigin } from '../_shared/app-url.ts'
+import { corsHeaders, jsonResponse } from '../_shared/cors.ts'
+import { createShareToken, hashShareToken } from '../_shared/recording-helpers.ts'
 import {
   createRecordingDownloadUrl,
   createRecordingPlaybackUrl,
-} from '~/supabase/functions/_shared/s3-sign.ts'
+} from '../_shared/s3-sign.ts'
 
 type Action = 'list' | 'createShare' | 'revokeShare' | 'resolve' | 'download'
 
@@ -179,7 +180,7 @@ Deno.serve(async (req) => {
 
     const plainToken = createShareToken()
     const tokenHash = await hashShareToken(plainToken)
-    const appUrl = (Deno.env.get('PUBLIC_APP_URL') ?? 'https://sheconomy.in').replace(/\/$/, '')
+    const appUrl = resolvePublicAppOrigin()
     const sharePath = `/co-work/recording/${encodeURIComponent(plainToken)}`
     const shareUrl = `${appUrl}${sharePath}`
 
