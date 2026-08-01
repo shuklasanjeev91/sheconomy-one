@@ -20,6 +20,9 @@ const BUNDLED_LOGOS = {
   primary: require('../../assets/brand/logo-wordmark.png'),
 } as const
 
+/** Bump when brand PNGs change so clients clearly pick up the OTA asset set. */
+const BRAND_LOGO_OTA_REV = 'india-flag-2'
+
 /** App-wide brand mark — local assets so OTA updates include the India flag. */
 export function BrandLogo({
   variant,
@@ -54,12 +57,14 @@ export function BrandLogo({
 
   return (
     <Image
+      key={`${resolved}-${BRAND_LOGO_OTA_REV}`}
       source={bundled}
       width={w}
       height={h}
       objectFit="contain"
       alt={label}
       accessibilityLabel={label}
+      recyclingKey={`brand-logo-${resolved}-${BRAND_LOGO_OTA_REV}`}
     />
   )
 }
