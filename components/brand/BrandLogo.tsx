@@ -2,6 +2,7 @@ import { Platform, Image as RNImage, View } from 'react-native'
 
 import { IndianFlagPaint } from '~/components/brand/IndianFlagPaint'
 import { Image } from '~/components/ui'
+import { getBrandLogoSource } from '~/lib/brand/logo-assets'
 import type { SheconomyLogoVariant } from '~/lib/supabase/brand'
 
 import { BRAND_NAME } from '~/config/brand'
@@ -24,7 +25,19 @@ const BUNDLED_LOGOS = {
 } as const
 
 /** Bump when brand OTA assets / paint treatment change. */
-const BRAND_LOGO_OTA_REV = 'india-paint-1'
+const BRAND_LOGO_OTA_REV = 'india-paint-ssr-1'
+
+function webLogoSrc(variant: SheconomyLogoVariant, bundled: number): string {
+  try {
+    const uri = RNImage.resolveAssetSource(bundled)?.uri
+    if (typeof uri === 'string' && uri.length > 0) return uri
+  } catch {
+    // SSR / incomplete asset registry — fall through
+  }
+  if (typeof bundled === 'string') return bundled
+  // Remote CDN fallback keeps web SSR rendering if bundled resolve fails
+  return getBrandLogoSource(variant).src
+}
 
 /** App-wide brand mark with Flipkart/Amazon-style painted India accent. */
 export function BrandLogo({
@@ -50,7 +63,7 @@ export function BrandLogo({
     Platform.OS === 'web' ? (
       <Image
         key={`${resolved}-${BRAND_LOGO_OTA_REV}`}
-        src={RNImage.resolveAssetSource(bundled)?.uri}
+        src={webLogoSrc(resolved, bundled)}
         width={w}
         height={h}
         objectFit="contain"

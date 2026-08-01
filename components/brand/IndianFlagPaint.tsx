@@ -1,14 +1,4 @@
-import { useEffect } from 'react'
-import { AccessibilityInfo, Platform, StyleSheet, View } from 'react-native'
-import Animated, {
-  Easing,
-  useAnimatedStyle,
-  useSharedValue,
-  withDelay,
-  withRepeat,
-  withSequence,
-  withTiming,
-} from 'react-native-reanimated'
+import { StyleSheet, View } from 'react-native'
 
 const SAFFRON = '#FF9933'
 const WHITE = '#FFFFFF'
@@ -20,70 +10,9 @@ type IndianFlagPaintProps = {
 }
 
 /**
- * Festive painted tricolor (Flipkart/Amazon style) — soft brush strokes,
- * not a rectangular national flag. Subtle draw + shimmer animation.
+ * SSR/web painted tricolor — no react-native-reanimated (avoids Vercel FUNCTION_INVOCATION_FAILED).
  */
 export function IndianFlagPaint({ size = 22 }: IndianFlagPaintProps) {
-  const progress = useSharedValue(0)
-  const shimmer = useSharedValue(0)
-  const reduceMotion = useSharedValue(0)
-
-  useEffect(() => {
-    let mounted = true
-    void AccessibilityInfo.isReduceMotionEnabled?.().then((enabled) => {
-      if (!mounted) return
-      reduceMotion.value = enabled ? 1 : 0
-      if (enabled) {
-        progress.value = 1
-        shimmer.value = 0
-        return
-      }
-      progress.value = 0
-      progress.value = withTiming(1, { duration: 1100, easing: Easing.out(Easing.cubic) })
-      shimmer.value = withDelay(
-        900,
-        withRepeat(
-          withSequence(
-            withTiming(1, { duration: 1400, easing: Easing.inOut(Easing.sin) }),
-            withTiming(0, { duration: 1400, easing: Easing.inOut(Easing.sin) }),
-          ),
-          -1,
-          false,
-        ),
-      )
-    })
-    return () => {
-      mounted = false
-    }
-  }, [progress, shimmer, reduceMotion])
-
-  const saffronStyle = useAnimatedStyle(() => ({
-    opacity: Math.min(1, progress.value * 1.4) * (0.82 + shimmer.value * 0.18),
-    transform: [
-      { rotate: '-28deg' },
-      { translateX: (1 - progress.value) * -6 },
-      { scaleX: 0.55 + progress.value * 0.45 },
-    ],
-  }))
-
-  const whiteStyle = useAnimatedStyle(() => ({
-    opacity: Math.min(1, Math.max(0, (progress.value - 0.18) * 1.5)) * (0.9 + shimmer.value * 0.1),
-    transform: [
-      { rotate: '-28deg' },
-      { translateX: (1 - progress.value) * -4 },
-      { scaleX: 0.55 + progress.value * 0.45 },
-    ],
-  }))
-
-  const greenStyle = useAnimatedStyle(() => ({
-    opacity: Math.min(1, Math.max(0, (progress.value - 0.36) * 1.6)) * (0.82 + shimmer.value * 0.18),
-    transform: [
-      { rotate: '-28deg' },
-      { translateX: (1 - progress.value) * -2 },
-      { scaleX: 0.55 + progress.value * 0.45 },
-    ],
-  }))
-
   const strokeW = Math.max(18, size * 1.15)
   const strokeH = Math.max(3.5, size * 0.22)
   const gap = Math.max(1.5, size * 0.08)
@@ -101,7 +30,7 @@ export function IndianFlagPaint({ size = 22 }: IndianFlagPaintProps) {
         },
       ]}
     >
-      <Animated.View
+      <View
         style={[
           styles.stroke,
           {
@@ -110,11 +39,11 @@ export function IndianFlagPaint({ size = 22 }: IndianFlagPaintProps) {
             backgroundColor: SAFFRON,
             top: 0,
             borderRadius: strokeH,
+            opacity: 0.92,
           },
-          saffronStyle,
         ]}
       />
-      <Animated.View
+      <View
         style={[
           styles.stroke,
           {
@@ -123,13 +52,13 @@ export function IndianFlagPaint({ size = 22 }: IndianFlagPaintProps) {
             backgroundColor: WHITE,
             top: strokeH + gap,
             borderRadius: strokeH,
-            borderWidth: Platform.OS === 'web' ? 0.5 : StyleSheet.hairlineWidth,
+            borderWidth: StyleSheet.hairlineWidth,
             borderColor: 'rgba(0,0,0,0.12)',
+            opacity: 0.95,
           },
-          whiteStyle,
         ]}
       />
-      <Animated.View
+      <View
         style={[
           styles.stroke,
           {
@@ -138,8 +67,8 @@ export function IndianFlagPaint({ size = 22 }: IndianFlagPaintProps) {
             backgroundColor: GREEN,
             top: (strokeH + gap) * 2,
             borderRadius: strokeH,
+            opacity: 0.92,
           },
-          greenStyle,
         ]}
       />
     </View>
@@ -154,7 +83,7 @@ const styles = StyleSheet.create({
   stroke: {
     position: 'absolute',
     left: 0,
-    // Soft painted edge
+    transform: [{ rotate: '-28deg' }],
     shadowColor: '#000',
     shadowOpacity: 0.18,
     shadowRadius: 1.5,
