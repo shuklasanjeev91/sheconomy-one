@@ -7,9 +7,6 @@ import { MetaTheme, SchemeProvider, useUserScheme } from '@vxrn/color-scheme'
 import { ToastProvider, ToastViewport } from '@tamagui/toast'
 import type { ReactNode } from 'react'
 
-// Static Tamagui design-system CSS (vite tamaguiPlugin `outputCSS`) — keeps SSR HTML small.
-import '../public/tamagui.css'
-
 import { AppErrorBoundary } from '~/components/AppErrorBoundary'
 import { BiometricUnlockGate } from '~/components/auth/BiometricUnlockGate'
 import config from '~/config/tamagui.config'
@@ -79,6 +76,8 @@ export default function Layout() {
           <meta name="application-name" content="SHEconomy" />
           <meta name="theme-color" content="#D81B60" />
           <MetaTheme lightColor="#fef5f9" darkColor="#1c0f14" />
+          {/* Cached design-system CSS (vite outputCSS → public/tamagui.css). Avoid JS import so Vite does not fold it into the layout chunk. */}
+          <link rel="stylesheet" href="/tamagui.css" />
           <meta
             name="google-site-verification"
             content="-NBqtpzczzj-BY1yV4J8jtUZZAjChrU5HUFYuYIcMtI"

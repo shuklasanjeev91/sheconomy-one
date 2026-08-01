@@ -2,6 +2,7 @@ export {
   DEFAULT_REMOTE_UPDATE_CONFIG,
   MAX_UPDATE_RELOAD_ATTEMPTS,
   UPDATE_CHECK_COOLDOWN_MS,
+  UPDATE_CHECK_STARTUP_DELAY_MS,
   UPDATE_METADATA_STORAGE_KEY,
 } from '~/lib/updates/constants'
 export { logUpdate } from '~/lib/updates/logging'
