@@ -1,4 +1,5 @@
-import { Platform, Image as RNImage, View } from 'react-native'
+import { View } from 'react-native'
+import { useState } from 'react'
 
 import { IndianFlagPaint } from '~/components/brand/IndianFlagPaint'
 import { Image } from '~/components/ui'
@@ -9,37 +10,14 @@ import { BRAND_NAME } from '~/config/brand'
 
 type BrandLogoProps = {
   variant?: SheconomyLogoVariant
-  /** Compact square mark (nav). Ignored when variant is explicitly set. */
   compact?: boolean
   width?: number
   height?: number
   accessibilityLabel?: string
-  /** Festive painted tricolor accent (default on). */
   showIndiaPaint?: boolean
 }
 
-/** Bundled brand marks (no baked rectangular flag — paint overlay is OTA). */
-const BUNDLED_LOGOS = {
-  icon: require('../../assets/brand/logo-icon.png'),
-  primary: require('../../assets/brand/logo-wordmark.png'),
-} as const
-
-/** Bump when brand OTA assets / paint treatment change. */
-const BRAND_LOGO_OTA_REV = 'india-paint-ssr-1'
-
-function webLogoSrc(variant: SheconomyLogoVariant, bundled: number): string {
-  try {
-    const uri = RNImage.resolveAssetSource(bundled)?.uri
-    if (typeof uri === 'string' && uri.length > 0) return uri
-  } catch {
-    // SSR / incomplete asset registry — fall through
-  }
-  if (typeof bundled === 'string') return bundled
-  // Remote CDN fallback keeps web SSR rendering if bundled resolve fails
-  return getBrandLogoSource(variant).src
-}
-
-/** App-wide brand mark with Flipkart/Amazon-style painted India accent. */
+/** Web/SSR brand mark — remote URLs only (no Metro `require`, safe for Vercel). */
 export function BrandLogo({
   variant,
   compact = false,
@@ -49,7 +27,8 @@ export function BrandLogo({
   showIndiaPaint = true,
 }: BrandLogoProps) {
   const resolved: SheconomyLogoVariant = variant ?? (compact ? 'icon' : 'primary')
-  const bundled = BUNDLED_LOGOS[resolved]
+  const { src, fallbackSrc } = getBrandLogoSource(resolved)
+  const [uri, setUri] = useState(src)
   const w =
     width ??
     (resolved === 'icon' ? (compact ? 36 : 40) : compact ? 120 : 160)
@@ -59,29 +38,20 @@ export function BrandLogo({
   const label = accessibilityLabel ?? `${BRAND_NAME} logo`
   const paintSize = Math.max(14, Math.round(Math.min(w, h) * (resolved === 'icon' ? 0.55 : 0.42)))
 
-  const logo =
-    Platform.OS === 'web' ? (
-      <Image
-        key={`${resolved}-${BRAND_LOGO_OTA_REV}`}
-        src={webLogoSrc(resolved, bundled)}
-        width={w}
-        height={h}
-        objectFit="contain"
-        alt={label}
-        accessibilityLabel={label}
-      />
-    ) : (
-      <Image
-        key={`${resolved}-${BRAND_LOGO_OTA_REV}`}
-        source={bundled}
-        width={w}
-        height={h}
-        objectFit="contain"
-        alt={label}
-        accessibilityLabel={label}
-        recyclingKey={`brand-logo-${resolved}-${BRAND_LOGO_OTA_REV}`}
-      />
-    )
+  const logo = (
+    <Image
+      key={uri}
+      src={uri}
+      width={w}
+      height={h}
+      objectFit="contain"
+      alt={label}
+      accessibilityLabel={label}
+      onError={() => {
+        if (uri !== fallbackSrc) setUri(fallbackSrc)
+      }}
+    />
+  )
 
   if (!showIndiaPaint) return logo
 
