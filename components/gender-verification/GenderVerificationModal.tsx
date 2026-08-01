@@ -55,7 +55,7 @@ function GenderVerificationModalShell({
   onVerified,
 }: Omit<GenderVerificationModalProps, 'open'>) {
   const ui = useAppUi()
-  const { isDesktop } = useAppLayout()
+  const { isDesktop, safeTop, safeBottom } = useAppLayout()
 
   return (
     <YStack
@@ -69,6 +69,8 @@ function GenderVerificationModalShell({
       alignItems="center"
       justifyContent={isDesktop ? 'center' : 'flex-end'}
       padding={isDesktop ? '$4' : 0}
+      // Keep backdrop from eating header presses; children manage their own hits.
+      pointerEvents="box-none"
     >
       <YStack
         width="100%"
@@ -81,6 +83,11 @@ function GenderVerificationModalShell({
         borderWidth={isDesktop ? 1 : 0}
         borderColor={ui.borderSubtle}
         overflow="hidden"
+        // Full-bleed on phones: clear notch / home indicator without using `top`
+        // offsets (those shift the header over the ScrollView and steal presses).
+        paddingTop={isDesktop ? 0 : safeTop}
+        paddingBottom={isDesktop ? 0 : Math.max(safeBottom, 8)}
+        pointerEvents="auto"
         style={
           Platform.OS === 'web'
             ? ({
@@ -144,8 +151,12 @@ function ModalHeader({
       borderBottomWidth={1}
       borderBottomColor={ui.borderSubtle}
       backgroundColor={ui.background}
+      // Sit above the body ScrollView so the close control always receives taps
+      // on iOS / Android (sibling scroll views can otherwise steal hits).
+      zIndex={2}
+      position="relative"
     >
-      <XStack alignItems="center" gap="$3" flex={1}>
+      <XStack alignItems="center" gap="$3" flex={1} minWidth={0} pointerEvents="none">
         <YStack
           width={40}
           height={40}
@@ -156,7 +167,7 @@ function ModalHeader({
         >
           <Icons.Shield size={20} color={ui.brand} />
         </YStack>
-        <YStack flex={1}>
+        <YStack flex={1} minWidth={0}>
           <Text fontSize={16} fontWeight="800" color={ui.text}>
             Human verification
           </Text>
@@ -166,14 +177,22 @@ function ModalHeader({
         </YStack>
       </XStack>
       {dismissible ? (
-        <Button
-          size="$2"
-          circular
-          chromeless
-          onPress={onClose}
+        <XStack
+          width={44}
+          height={44}
+          alignItems="center"
+          justifyContent="center"
+          borderRadius={999}
+          cursor="pointer"
           aria-label="Close verification"
-          icon={<Icons.X size={20} color={ui.textSecondary} />}
-        />
+          accessibilityRole="button"
+          hitSlop={{ top: 8, right: 8, bottom: 8, left: 8 }}
+          hoverStyle={{ backgroundColor: ui.surfaceHover }}
+          pressStyle={{ opacity: 0.75, scale: 0.96 }}
+          onPress={onClose}
+        >
+          <Icons.X size={22} color={ui.textSecondary} />
+        </XStack>
       ) : null}
     </XStack>
   )
