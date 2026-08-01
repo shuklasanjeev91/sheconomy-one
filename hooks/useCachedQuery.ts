@@ -29,6 +29,7 @@ export function useCachedQuery<T>({
   fetcher,
   watchKeys,
 }: UseCachedQueryOptions<T>): CachedQueryResult<T> {
+  // Prefer in-memory; disk hydrate happens via warmCriticalAppCaches on boot.
   const initial = cacheKey ? peekAppCache<T>(cacheKey) : null
   const [data, setData] = useState<T | null>(initial)
   const [isLoading, setIsLoading] = useState(enabled && !initial)

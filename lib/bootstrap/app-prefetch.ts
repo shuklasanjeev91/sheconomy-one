@@ -18,6 +18,7 @@ import {
 import { prefetchAppCache } from '~/lib/cache/app-cache'
 import { CACHE_KEYS } from '~/lib/bootstrap/cache-keys'
 import { prefetchNativeLoader, readNativeLoaderCache } from '~/lib/bootstrap/native-loader-cache'
+import { warmCriticalAppCaches } from '~/lib/bootstrap/warm-app-cache'
 import { fetchCategoriesPage, fetchShopsPage } from '~/lib/supabase/commerce'
 import { scheduleIdle } from '~/lib/schedule-idle'
 
@@ -34,6 +35,9 @@ function toPageSnapshot<T>(items: T[], page: number, hasMore: boolean) {
 export function startCoreTabPrefetch(): void {
   if (coreStarted) return
   coreStarted = true
+
+  // Disk → memory (and native loader seed) before network storms.
+  warmCriticalAppCaches()
 
   prefetchNativeLoader(CACHE_KEYS.home, homeLoader)
   prefetchAppCache(CACHE_KEYS.categories, async () => {

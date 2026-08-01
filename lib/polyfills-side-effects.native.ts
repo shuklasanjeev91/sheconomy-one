@@ -89,10 +89,13 @@ import '@tamagui/native/setup-worklets'
 
 // Register Tamagui config on the single @tamagui/web instance before any UI mounts.
 import '~/config/tamagui.config'
+import { warmCriticalAppCaches } from '~/lib/bootstrap/warm-app-cache'
 import { startNativeBootstrapPrefetch } from '~/lib/bootstrap/app-prefetch'
 import '~/lib/brand/register-suspense-fallback'
 
 globalThis.global = globalThis
+// Disk → memory before network prefetch so Home can paint from last session.
+warmCriticalAppCaches()
 startNativeBootstrapPrefetch()
 
 // Do NOT call LiveKit `registerGlobals()` here. It starts WebRTC threads immediately

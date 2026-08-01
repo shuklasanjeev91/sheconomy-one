@@ -3,7 +3,9 @@ import { useEffect, useRef, useState } from 'react'
 import {
   prefetchNativeLoader,
   readNativeLoaderCache,
+  seedNativeLoaderCache,
 } from '~/lib/bootstrap/native-loader-cache'
+import { peekAppCache, readAppCache } from '~/lib/cache/app-cache'
 
 type LoaderResult<T> = {
   data: T | null
@@ -20,8 +22,7 @@ type UseNativeLoaderOptions = {
  * Run a route loader on native — Metro serves empty loader stubs in dev.
  * Loader identity must not retrigger fetches (call sites often pass inline lambdas).
  *
- * If a seed (or completed) cache entry exists, paint immediately and still
- * subscribe to any in-flight upgrade promise.
+ * Paint order: in-memory native loader → last-session disk cache → network.
  */
 export function useNativeLoader<T>(
   loader: () => Promise<T>,
@@ -29,11 +30,14 @@ export function useNativeLoader<T>(
 ): LoaderResult<T> {
   const { cacheKey } = options
   const cached = cacheKey ? readNativeLoaderCache<T>(cacheKey) : undefined
+  const diskPeek = !cached?.data && cacheKey ? peekAppCache<T>(cacheKey) : null
   const loaderRef = useRef(loader)
   loaderRef.current = loader
 
-  const [data, setData] = useState<T | null>(cached?.data ?? null)
-  const [loading, setLoading] = useState(cached?.data === undefined && !cached?.error)
+  const [data, setData] = useState<T | null>(cached?.data ?? diskPeek ?? null)
+  const [loading, setLoading] = useState(
+    cached?.data === undefined && diskPeek == null && !cached?.error,
+  )
   const [error, setError] = useState<string | null>(cached?.error ?? null)
 
   useEffect(() => {
@@ -48,35 +52,52 @@ export function useNativeLoader<T>(
 
     const run = () => loaderRef.current()
 
-    if (cacheKey) {
-      const entry = readNativeLoaderCache<T>(cacheKey)
+    const attachPromise = (promise?: Promise<T>) => {
+      if (!promise) return
+      promise
+        .then((value) => finish(value, null))
+        .catch((err: unknown) => {
+          if (cancelled) return
+          // Keep seed/previous data; only blank when we have nothing.
+          setError(err instanceof Error ? err.message : String(err))
+          setLoading(false)
+        })
+    }
+
+    void (async () => {
+      if (!cacheKey) {
+        run()
+          .then((value) => finish(value, null))
+          .catch((err) => finish(null, err instanceof Error ? err.message : String(err)))
+        return
+      }
+
+      let entry = readNativeLoaderCache<T>(cacheKey)
+
+      if (entry?.data === undefined) {
+        const fromDisk = peekAppCache<T>(cacheKey) ?? (await readAppCache<T>(cacheKey))
+        if (cancelled) return
+        if (fromDisk != null) {
+          seedNativeLoaderCache(cacheKey, fromDisk)
+          finish(fromDisk, null)
+          entry = readNativeLoaderCache<T>(cacheKey)
+        }
+      }
 
       if (entry?.data !== undefined) {
         finish(entry.data, entry.error ?? null)
         if (entry.promise) {
-          entry.promise
-            .then((value) => finish(value, null))
-            .catch((err: unknown) => {
-              // Keep seed/previous data; only surface error if we have nothing.
-              if (cancelled) return
-              setError(err instanceof Error ? err.message : String(err))
-              setLoading(false)
-            })
+          attachPromise(entry.promise)
+        } else {
+          prefetchNativeLoader(cacheKey, run)
+          attachPromise(readNativeLoaderCache<T>(cacheKey)?.promise)
         }
-        return () => {
-          cancelled = true
-        }
+        return
       }
 
       if (entry?.promise) {
-        entry.promise
-          .then((value) => finish(value, null))
-          .catch((err: unknown) =>
-            finish(null, err instanceof Error ? err.message : String(err)),
-          )
-        return () => {
-          cancelled = true
-        }
+        attachPromise(entry.promise)
+        return
       }
 
       prefetchNativeLoader(cacheKey, run)
@@ -84,21 +105,8 @@ export function useNativeLoader<T>(
       if (next?.data !== undefined) {
         finish(next.data, next.error ?? null)
       }
-      if (next?.promise) {
-        next.promise
-          .then((value) => finish(value, null))
-          .catch((err: unknown) =>
-            finish(null, err instanceof Error ? err.message : String(err)),
-          )
-        return () => {
-          cancelled = true
-        }
-      }
-    }
-
-    run()
-      .then((value) => finish(value, null))
-      .catch((err) => finish(null, err instanceof Error ? err.message : String(err)))
+      attachPromise(next?.promise)
+    })()
 
     return () => {
       cancelled = true
