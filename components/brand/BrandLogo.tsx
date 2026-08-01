@@ -1,8 +1,6 @@
-import { useState } from 'react'
+import { Platform, Image as RNImage } from 'react-native'
 
-import { IndianFlagBadge } from '~/components/brand/IndianFlagBadge'
-import { Image, YStack } from '~/components/ui'
-import { getBrandLogoSource } from '~/lib/brand/logo-assets'
+import { Image } from '~/components/ui'
 import type { SheconomyLogoVariant } from '~/lib/supabase/brand'
 
 import { BRAND_NAME } from '~/config/brand'
@@ -14,55 +12,54 @@ type BrandLogoProps = {
   width?: number
   height?: number
   accessibilityLabel?: string
-  /** Show India flag badge on the logo corner (default true). */
-  showIndiaFlag?: boolean
 }
 
-/** App-wide brand mark — always loaded from Supabase Storage. */
+/** Bundled marks with India flag stamped in the corner (shipped via OTA). */
+const BUNDLED_LOGOS = {
+  icon: require('../../assets/brand/logo-icon.png'),
+  primary: require('../../assets/brand/logo-wordmark.png'),
+} as const
+
+/** App-wide brand mark — local assets so OTA updates include the India flag. */
 export function BrandLogo({
   variant,
   compact = false,
   width,
   height,
   accessibilityLabel,
-  showIndiaFlag = true,
 }: BrandLogoProps) {
   const resolved: SheconomyLogoVariant = variant ?? (compact ? 'icon' : 'primary')
-  const { src, fallbackSrc } = getBrandLogoSource(resolved)
-  const [uri, setUri] = useState(src)
+  const bundled = BUNDLED_LOGOS[resolved]
   const w =
     width ??
     (resolved === 'icon' ? (compact ? 36 : 40) : compact ? 120 : 160)
   const h =
     height ??
     (resolved === 'icon' ? (compact ? 36 : 40) : compact ? 32 : 44)
-  const flagSize = Math.max(10, Math.round(Math.min(w, h) * 0.32))
+  const label = accessibilityLabel ?? `${BRAND_NAME} logo`
 
-  return (
-    <YStack width={w} height={h} position="relative">
+  if (Platform.OS === 'web') {
+    const resolvedAsset = RNImage.resolveAssetSource(bundled)
+    return (
       <Image
-        key={uri}
-        src={uri}
+        src={resolvedAsset?.uri}
         width={w}
         height={h}
         objectFit="contain"
-        alt={accessibilityLabel ?? `${BRAND_NAME} logo`}
-        accessibilityLabel={accessibilityLabel ?? `${BRAND_NAME} logo`}
-        onError={() => {
-          if (uri !== fallbackSrc) setUri(fallbackSrc)
-        }}
+        alt={label}
+        accessibilityLabel={label}
       />
-      {showIndiaFlag ? (
-        <YStack
-          position="absolute"
-          right={0}
-          bottom={0}
-          zIndex={2}
-          pointerEvents="none"
-        >
-          <IndianFlagBadge size={flagSize} />
-        </YStack>
-      ) : null}
-    </YStack>
+    )
+  }
+
+  return (
+    <Image
+      source={bundled}
+      width={w}
+      height={h}
+      objectFit="contain"
+      alt={label}
+      accessibilityLabel={label}
+    />
   )
 }
