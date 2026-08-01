@@ -1,5 +1,7 @@
 /** Normalized post media for feed / profile / detail UI (web + iOS + Android). */
 
+import { parseVideoProvider } from '~/lib/link-preview'
+
 export type PostMediaKind = 'image' | 'video'
 
 export type PostMediaItem = {
@@ -24,11 +26,14 @@ export function normalizeUrlList(value: unknown): string[] {
     .map((url) => url.trim())
 }
 
+/** True for direct video files and known watch/embed hosts (YouTube, Vimeo). */
 export function isVideoMediaUrl(url: string): boolean {
+  if (parseVideoProvider(url)) return true
   const lower = url.toLowerCase().split('?')[0] ?? url.toLowerCase()
   return (
     /\.(mp4|webm|mov|m4v|mkv|ogg|m3u8)$/.test(lower) ||
     lower.includes('/video/') ||
+    lower.includes('/embed/') ||
     lower.includes('content-type=video')
   )
 }

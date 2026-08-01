@@ -352,6 +352,7 @@ function mapLinkPreview(value: unknown): PostLinkPreview | null {
   const provider = parseVideoProvider(url)
   const title = typeof data.title === 'string' ? data.title : null
   const description = typeof data.description === 'string' ? data.description : null
+  // Prefer API fields; fall back to provider thumbnail/embed for video-only unfurls.
   const image =
     (typeof data.image === 'string' ? data.image : null) ?? provider?.thumbnail ?? null
   const video =

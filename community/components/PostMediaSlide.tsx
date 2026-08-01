@@ -2,10 +2,13 @@ import { createElement, useState } from 'react'
 import { Platform, useWindowDimensions } from 'react-native'
 
 import type { PostMediaItem } from '~/community/lib/post-media'
+import { isVideoMediaUrl } from '~/community/lib/post-media'
 import { isGifUrl } from '~/community/lib/giphy'
 import { AutoplayVideo } from '~/components/media/AutoplayVideo'
 import { NativeVideoFile } from '~/lib/native/NativeMediaPlayers'
+import { parseVideoProvider } from '~/lib/link-preview'
 import {
+  extractYoutubeId,
   getVideoPosterUrl,
   videoSrcWithFirstFrame,
 } from '~/lib/media/video-thumbnail'
@@ -78,14 +81,20 @@ export function PostMediaSlide({
         : height
   const frameHeight = useResponsive ? responsiveHeight : height
 
-  if (item.kind === 'video') {
-    const poster = getVideoPosterUrl(item.url, posterUrl)
+  const provider = parseVideoProvider(item.url)
+  const isEmbedOrVideo = item.kind === 'video' || !!provider || isVideoMediaUrl(item.url)
 
-    if (autoplayInView) {
+  if (isEmbedOrVideo) {
+    const poster = getVideoPosterUrl(item.url, posterUrl)
+    // Prefer watch/page URL so AutoplayVideo can derive YouTube id + poster.
+    const playSrc = item.url
+
+    // Embed hosts (YouTube/Vimeo) always use the in-view autoplay player.
+    if (provider || extractYoutubeId(item.url) || autoplayInView) {
       return (
-        <YStack width={frameWidth} height={frameHeight}>
+        <YStack width={frameWidth} height={frameHeight} backgroundColor="#000" overflow="hidden">
           <AutoplayVideo
-            src={item.url}
+            src={playSrc}
             posterUrl={poster}
             height={frameHeight}
             objectFit={fit}
