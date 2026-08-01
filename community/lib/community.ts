@@ -352,6 +352,7 @@ function mapLinkPreview(value: unknown): PostLinkPreview | null {
   const description = typeof data.description === 'string' ? data.description : null
   const image = typeof data.image === 'string' ? data.image : null
   const video = typeof data.video === 'string' ? data.video : null
+  // Video-only unfurls (YouTube/Vimeo) are valid even without title/body copy.
   if (!title && !description && !image && !video) return null
   return {
     url,
@@ -1039,7 +1040,10 @@ export async function createCommunityPost(
   const shop = input.shop?.shopId ? input.shop : null
   const linkPreview =
     input.linkPreview?.url &&
-    (input.linkPreview.title || input.linkPreview.description || input.linkPreview.image)
+    (input.linkPreview.title ||
+      input.linkPreview.description ||
+      input.linkPreview.image ||
+      input.linkPreview.video)
       ? input.linkPreview
       : null
   if (!content && !hasImage && !isEvent && !hasPoll && !celebration && !product && !shop) {

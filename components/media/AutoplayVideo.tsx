@@ -1,12 +1,15 @@
 import { createElement, useEffect, useId, useRef, useState } from 'react'
-import { Platform } from 'react-native'
+import { Platform, StyleSheet, View } from 'react-native'
+import Constants from 'expo-constants'
 import { useVideoPlayer, VideoView } from 'expo-video'
 
+import { resolveAppOrigin } from '~/config/app-origin'
 import {
   claimAutoplay,
   releaseAutoplay,
   subscribeAutoplay,
 } from '~/lib/media/autoplay-controller'
+import { parseVideoProvider } from '~/lib/link-preview'
 import {
   extractYoutubeId,
   getVideoPosterUrl,
@@ -15,6 +18,24 @@ import {
 import { useInView } from '~/hooks/useInView'
 import { Icons, Image, Text, XStack, YStack } from '~/components/ui'
 
+/** YouTube Error 153 fix — embedded players require `https://` + app package / bundle id. */
+function youtubeEmbedReferer(): string {
+  const bundleId =
+    (Platform.OS === 'ios'
+      ? Constants.expoConfig?.ios?.bundleIdentifier
+      : Constants.expoConfig?.android?.package) || 'com.sheconomy.ecommerce'
+  return `https://${bundleId}`
+}
+
+function buildYoutubeEmbedSrc(youtubeId: string, muted: boolean): string {
+  const origin = encodeURIComponent(resolveAppOrigin())
+  return (
+    `https://www.youtube.com/embed/${youtubeId}` +
+    `?autoplay=1&mute=${muted ? 1 : 0}&controls=0&loop=1&playlist=${youtubeId}` +
+    `&playsinline=1&rel=0&modestbranding=1&enablejsapi=1&origin=${origin}`
+  )
+}
+
 type AutoplayVideoProps = {
   src: string
   posterUrl?: string | null
@@ -22,7 +43,7 @@ type AutoplayVideoProps = {
   height?: number | string
   aspectRatio?: number
   objectFit?: 'cover' | 'contain'
-  /** LinkedIn-style muted autoplay when in view (default true). */
+  /** LinkedIn-style muted autoplay when ≥55% visible (default true). */
   autoplayInView?: boolean
   borderRadius?: number
 }
@@ -30,6 +51,7 @@ type AutoplayVideoProps = {
 /**
  * LinkedIn-style video: muted autoplay when ≥55% visible, pause when scrolled away,
  * exclusive (one at a time), unmute/mute toggle, loops while active.
+ * YouTube/Vimeo watch URLs and direct files — web + iOS + Android (no `.native.tsx`).
  */
 export function AutoplayVideo({
   src,
@@ -42,12 +64,16 @@ export function AutoplayVideo({
 }: AutoplayVideoProps) {
   const reactId = useId()
   const playerId = `autoplay-${reactId}`
+  // Measure a real RN View — Tamagui stacks don't reliably expose measureInWindow.
   const { ref, inView } = useInView({ threshold: 0.55, enabled: autoplayInView })
   const [isActive, setIsActive] = useState(false)
   const [muted, setMuted] = useState(true)
   const [userPaused, setUserPaused] = useState(false)
   const poster = getVideoPosterUrl(src, posterUrl)
-  const youtubeId = extractYoutubeId(src)
+  const provider = parseVideoProvider(src)
+  const youtubeId =
+    extractYoutubeId(src) ?? (provider?.provider === 'youtube' ? provider.id : null)
+  const vimeoEmbed = provider?.provider === 'vimeo' ? provider.embed : null
 
   useEffect(() => subscribeAutoplay((active) => setIsActive(active === playerId)), [playerId])
 
@@ -66,23 +92,31 @@ export function AutoplayVideo({
 
   const shouldPlay = autoplayInView && isActive && !userPaused
 
+  const frameStyle = {
+    width: '100%' as const,
+    height: typeof height === 'number' ? height : height === '100%' ? ('100%' as const) : undefined,
+    aspectRatio: height ? undefined : aspectRatio,
+    backgroundColor: '#000',
+    overflow: 'hidden' as const,
+    borderRadius,
+    position: 'relative' as const,
+  }
+
   return (
-    <YStack
-      ref={ref as never}
-      width="100%"
-      height={height}
-      aspectRatio={height ? undefined : aspectRatio}
-      backgroundColor="#000"
-      overflow="hidden"
-      borderRadius={borderRadius}
-      position="relative"
-    >
+    <View ref={ref as never} style={frameStyle} collapsable={false}>
       {youtubeId ? (
         <YoutubeAutoplay
           youtubeId={youtubeId}
           title="Video"
           shouldPlay={shouldPlay}
           muted={muted}
+          poster={poster}
+        />
+      ) : vimeoEmbed ? (
+        <IframeAutoplay
+          embedSrc={`${vimeoEmbed}?autoplay=1&muted=${muted ? 1 : 0}&loop=1`}
+          title="Video"
+          shouldPlay={shouldPlay}
           poster={poster}
         />
       ) : Platform.OS === 'web' ? (
@@ -128,7 +162,7 @@ export function AutoplayVideo({
           icon={userPaused || !shouldPlay ? Icons.Play : Icons.Pause}
         />
       </XStack>
-    </YStack>
+    </View>
   )
 }
 
@@ -185,41 +219,120 @@ function YoutubeAutoplay({
     )
   }
 
-  const src = `https://www.youtube.com/embed/${youtubeId}?autoplay=1&mute=${muted ? 1 : 0}&controls=0&loop=1&playlist=${youtubeId}&playsinline=1&rel=0&modestbranding=1`
+  const embedSrc = buildYoutubeEmbedSrc(youtubeId, muted)
 
   if (Platform.OS === 'web') {
     return createElement('iframe', {
-      key: `${src}`,
-      src,
+      key: embedSrc,
+      src: embedSrc,
       title,
-      allow: 'accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture',
+      allow:
+        'accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture',
+      allowFullScreen: true,
+      referrerPolicy: 'strict-origin-when-cross-origin',
+      style: { width: '100%', height: '100%', border: 0, backgroundColor: '#000' },
+    })
+  }
+
+  return <NativeYoutubeEmbed key={embedSrc} embedSrc={embedSrc} title={title} />
+}
+
+function IframeAutoplay({
+  embedSrc,
+  title,
+  shouldPlay,
+  poster,
+}: {
+  embedSrc: string
+  title: string
+  shouldPlay: boolean
+  poster: string | null
+}) {
+  if (!shouldPlay) {
+    return poster ? (
+      <Image src={poster} width="100%" height="100%" objectFit="cover" alt={title} />
+    ) : (
+      <YStack flex={1} backgroundColor="#111" />
+    )
+  }
+
+  if (Platform.OS === 'web') {
+    return createElement('iframe', {
+      key: embedSrc,
+      src: embedSrc,
+      title,
+      allow:
+        'accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture',
       allowFullScreen: true,
       style: { width: '100%', height: '100%', border: 0, backgroundColor: '#000' },
     })
   }
 
-  return <NativeYoutubeEmbed src={src} />
+  return <NativeIframeEmbed key={embedSrc} src={embedSrc} title={title} />
 }
 
-function NativeYoutubeEmbed({ src }: { src: string }) {
-  const [WebView, setWebView] = useState<React.ComponentType<{
-    source: { uri: string }
-    style: object
-    allowsFullscreenVideo?: boolean
-    mediaPlaybackRequiresUserAction?: boolean
-  }> | null>(null)
+function NativeIframeEmbed({ src, title }: { src: string; title: string }) {
+  const [WebView, setWebView] = useState<React.ComponentType<Record<string, unknown>> | null>(null)
+  const isYoutube = /youtube\.com|youtu\.be|youtube-nocookie\.com/i.test(src)
 
   useEffect(() => {
     void import('react-native-webview').then((module) => setWebView(() => module.WebView as never))
   }, [])
 
   if (!WebView) return <YStack flex={1} backgroundColor="#111" />
+
   return (
     <WebView
-      source={{ uri: src }}
-      style={{ flex: 1, backgroundColor: '#000' }}
+      source={{
+        uri: src,
+        ...(isYoutube ? { headers: { Referer: youtubeEmbedReferer() } } : null),
+      }}
+      style={StyleSheet.absoluteFillObject}
       allowsFullscreenVideo
+      allowsInlineMediaPlayback
       mediaPlaybackRequiresUserAction={false}
+      javaScriptEnabled
+      domStorageEnabled
+      scrollEnabled={false}
+      originWhitelist={['*']}
+      setSupportMultipleWindows={false}
+      accessibilityLabel={title}
+    />
+  )
+}
+
+/**
+ * Native YouTube embed — loads the official /embed URL with an explicit Referer.
+ * Missing Referer triggers YouTube "Error 153: Video player configuration error".
+ */
+function NativeYoutubeEmbed({ embedSrc, title }: { embedSrc: string; title: string }) {
+  const [WebView, setWebView] = useState<React.ComponentType<Record<string, unknown>> | null>(null)
+
+  useEffect(() => {
+    void import('react-native-webview').then((module) => setWebView(() => module.WebView as never))
+  }, [])
+
+  if (!WebView) return <YStack flex={1} backgroundColor="#111" />
+
+  return (
+    <WebView
+      source={{
+        uri: embedSrc,
+        headers: {
+          Referer: youtubeEmbedReferer(),
+        },
+      }}
+      style={StyleSheet.absoluteFillObject}
+      allowsFullscreenVideo
+      allowsInlineMediaPlayback
+      mediaPlaybackRequiresUserAction={false}
+      javaScriptEnabled
+      domStorageEnabled
+      scrollEnabled={false}
+      nestedScrollEnabled={false}
+      originWhitelist={['*']}
+      setSupportMultipleWindows={false}
+      accessibilityLabel={title}
     />
   )
 }

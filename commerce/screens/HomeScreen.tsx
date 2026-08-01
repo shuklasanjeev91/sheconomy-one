@@ -16,7 +16,6 @@ import {
   Card,
   Icons,
   Paragraph,
-  Skeleton,
   Spinner,
   Text,
   Theme,
@@ -30,7 +29,11 @@ import { BRAND_THEME, radius } from '~/config/tokens'
 import { useAppUi } from '~/lib/theme/useAppUi'
 import { useCategoriesFeed } from '~/commerce/hooks/useCategoriesFeed'
 import { useShopsFeed } from '~/commerce/hooks/useShopsFeed'
-import { type HomeBootstrapData } from '~/commerce/lib/commerce'
+import {
+  type CommerceStats,
+  type HomeBootstrapData,
+  type HomeHeroImageSet,
+} from '~/commerce/lib/commerce'
 import { commerceRoutes, routes } from '~/lib/routes'
 import { useAccess } from '~/hooks/useAccess'
 
@@ -45,58 +48,40 @@ type HomeScreenProps = {
   loading?: boolean
 }
 
+const EMPTY_STATS: CommerceStats = {
+  total_active_listings: 0,
+  shops_with_listings: 0,
+  total_featured_listings: 0,
+  new_listings_this_week: 0,
+  physical_listings: 0,
+  digital_listings: 0,
+}
+
+const EMPTY_HERO_IMAGES: HomeHeroImageSet = {
+  shops: [],
+  physical: [],
+  digital: [],
+  trending: [],
+  sell: [],
+}
+
 /**
  * Marketplace home — one UI for web, iOS, and Android.
  * Route files only differ on how loader data is fetched (SSR vs native).
+ *
+ * Never swaps the home return for `public/splash.png` / a brand splash.
+ * Paint the home shell immediately; sections fill in as feeds resolve.
  */
 export function HomeScreen({ data, error, loading = false }: HomeScreenProps) {
   const ui = useAppUi()
   const { canManageShops } = useAccess()
-  const categoriesFeed = useCategoriesFeed(!!data)
-  const shopsFeed = useShopsFeed(!!data)
-  const isLoading = loading || (!data && !error)
+  // Start category/shop rails even before bootstrap stats arrive.
+  const feedsEnabled = !error || !!data
+  const categoriesFeed = useCategoriesFeed(feedsEnabled)
+  const shopsFeed = useShopsFeed(feedsEnabled)
 
-  if (isLoading) {
-    return (
-      <FullWidthLayout scroll backgroundColor={ui.roseTint}>
-        <YStack
-          gap="$5"
-          paddingBottom="$2"
-          width="100%"
-          minHeight={520}
-          backgroundColor={ui.roseTint}
-        >
-          <PageSection bleed paddingTop={0}>
-            <Skeleton height={220} borderRadius={0} />
-          </PageSection>
-          <PageSection paddingTop="$2" gap="$3">
-            <XStack gap="$2">
-              <Skeleton height={36} width={96} borderRadius={999} />
-              <Skeleton height={36} width={88} borderRadius={999} />
-              <Skeleton height={36} width={110} borderRadius={999} />
-            </XStack>
-          </PageSection>
-          <PageSection gap="$3">
-            <Skeleton height={18} width="42%" />
-            <XStack gap="$3">
-              <Skeleton height={180} width={140} borderRadius={16} />
-              <Skeleton height={180} width={140} borderRadius={16} />
-              <Skeleton height={180} width={140} borderRadius={16} />
-            </XStack>
-          </PageSection>
-          <PageSection gap="$3">
-            <Skeleton height={18} width="36%" />
-            <XStack gap="$3" flexWrap="wrap">
-              <Skeleton height={210} width="47%" borderRadius={16} />
-              <Skeleton height={210} width="47%" borderRadius={16} />
-            </XStack>
-          </PageSection>
-        </YStack>
-      </FullWidthLayout>
-    )
-  }
-
-  if (error || !data) {
+  // Only hard-fail after the loader finished with nothing usable.
+  if (!loading && (error || !data)) {
     return (
       <FullWidthLayout>
         <PageSection paddingVertical="$10">
@@ -121,7 +106,8 @@ export function HomeScreen({ data, error, loading = false }: HomeScreenProps) {
     )
   }
 
-  const { stats, heroImages } = data
+  const stats = data?.stats ?? EMPTY_STATS
+  const heroImages = data?.heroImages ?? EMPTY_HERO_IMAGES
   const heroSlides = buildHomeHeroSlides(stats, {
     includeSellerSlide: canManageShops,
     images: heroImages,

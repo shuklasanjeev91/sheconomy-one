@@ -1,36 +1,23 @@
-import { Image, StyleSheet, View } from 'react-native'
+import { StyleSheet, View } from 'react-native'
 
-import { BRAND_LOGO_URL, BRAND_NAME } from '~/config/brand'
 import { brandColors } from '~/config/brand-colors'
 
 /**
- * Full-screen brand splash — magenta background + centered logo.
- * Used while native gates / async routes resolve so cold start never
- * shows an empty brand-colored frame.
+ * Lightweight route/gate placeholder — plain RN View only.
+ * Must NOT use Tamagui (`YStack` / theme hooks): this element is mounted as
+ * One's Suspense fallback via `globalThis.__SHECONOMY_SUSPENSE_FALLBACK__`
+ * before TamaguiProvider is available.
+ *
+ * Soft rose wash (not splash.png) so HomeScreen can paint immediately.
  */
 export function BrandSplashFallback() {
-  return (
-    <View style={styles.root} accessibilityRole="image" accessibilityLabel={BRAND_NAME}>
-      <Image
-        source={{ uri: BRAND_LOGO_URL }}
-        style={styles.logo}
-        resizeMode="contain"
-        accessibilityIgnoresInvertColors
-      />
-    </View>
-  )
+  return <View style={styles.root} />
 }
 
 const styles = StyleSheet.create({
   root: {
     flex: 1,
     width: '100%',
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: brandColors.primary,
-  },
-  logo: {
-    width: 168,
-    height: 168,
+    backgroundColor: brandColors.roseTint,
   },
 })

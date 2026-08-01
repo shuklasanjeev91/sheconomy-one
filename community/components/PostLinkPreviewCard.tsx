@@ -58,7 +58,8 @@ export function PostLinkPreviewCard({ preview, loading, onRemove }: PostLinkPrev
   }
 
   if (embed) {
-    const videoSrc = embed.kind === 'iframe' ? preview.url : embed.src
+    // Prefer the original page URL so YouTube id / poster derivation stays reliable.
+    const videoSrc = preview.url || embed.src
     return (
       <YStack
         position="relative"

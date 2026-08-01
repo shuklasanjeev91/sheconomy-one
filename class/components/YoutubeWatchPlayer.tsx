@@ -1,7 +1,18 @@
 import { createElement, useEffect, useId, useRef, useState } from 'react'
 import { Platform } from 'react-native'
+import Constants from 'expo-constants'
 
+import { resolveAppOrigin } from '~/config/app-origin'
 import { YStack } from '~/components/ui'
+
+/** YouTube Error 153 fix — embed Referer must be `https://` + bundle / package id. */
+function youtubeEmbedReferer(): string {
+  const bundleId =
+    (Platform.OS === 'ios'
+      ? Constants.expoConfig?.ios?.bundleIdentifier
+      : Constants.expoConfig?.android?.package) || 'com.sheconomy.ecommerce'
+  return `https://${bundleId}`
+}
 
 type YoutubeWatchPlayerProps = {
   youtubeId: string
@@ -132,10 +143,12 @@ function NativeYoutubeWatchPlayer({
     void import('react-native-webview').then((module) => setWebView(() => module.WebView))
   }, [])
 
+  const origin = resolveAppOrigin()
   const html = `<!DOCTYPE html>
 <html>
   <head>
     <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1" />
+    <meta name="referrer" content="strict-origin-when-cross-origin" />
     <style>
       html, body, #player { margin: 0; width: 100%; height: 100%; background: #000; overflow: hidden; }
     </style>
@@ -163,7 +176,9 @@ function NativeYoutubeWatchPlayer({
             autoplay: ${autoPlay ? 1 : 0},
             playsinline: 1,
             rel: 0,
-            modestbranding: 1
+            modestbranding: 1,
+            enablejsapi: 1,
+            origin: ${JSON.stringify(origin)}
           },
           events: {
             onStateChange: function (event) {
@@ -183,11 +198,14 @@ function NativeYoutubeWatchPlayer({
   return (
     <YStack width="100%" aspectRatio={16 / 9} borderRadius={12} overflow="hidden" backgroundColor="#000">
       <WebView
-        source={{ html }}
+        // baseUrl + Referer satisfy YouTube's Error 153 requirements on iOS/Android WebViews.
+        source={{ html, baseUrl: youtubeEmbedReferer() }}
         style={{ flex: 1, backgroundColor: '#000' }}
         allowsFullscreenVideo
         mediaPlaybackRequiresUserAction={false}
         allowsInlineMediaPlayback
+        javaScriptEnabled
+        domStorageEnabled
         onMessage={(event: { nativeEvent: { data: string } }) => {
           if (event.nativeEvent.data === 'ended') onEndedRef.current?.()
         }}

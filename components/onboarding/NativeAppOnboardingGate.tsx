@@ -2,7 +2,6 @@ import { useEffect, useState, type ReactNode } from 'react'
 import { Platform } from 'react-native'
 
 import { AuthOnboarding } from '~/components/auth/AuthOnboarding'
-import { BrandSplashFallback } from '~/components/brand/BrandSplashFallback'
 import {
   hasSeenAppOnboarding,
   markAppOnboardingSeen,
@@ -16,6 +15,9 @@ type NativeAppOnboardingGateProps = {
  * iOS / Android only — shows the professional first-launch carousel once,
  * then unlocks the main app shell. Web is a no-op (auth shell still owns
  * compact-web onboarding before sign-in).
+ *
+ * While the AsyncStorage check runs, render children immediately so HomeScreen
+ * is not replaced by `public/splash.png` / a brand splash image.
  */
 export function NativeAppOnboardingGate({ children }: NativeAppOnboardingGateProps) {
   const [ready, setReady] = useState(Platform.OS === 'web')
@@ -46,8 +48,9 @@ export function NativeAppOnboardingGate({ children }: NativeAppOnboardingGatePro
     return <>{children}</>
   }
 
+  // Keep the app shell mounted while storage resolves — no splash image gate.
   if (!ready) {
-    return <BrandSplashFallback />
+    return <>{children}</>
   }
 
   if (showIntro) {
