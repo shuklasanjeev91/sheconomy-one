@@ -85,11 +85,10 @@ test.describe('guest mobile commerce tabs', () => {
     await expect(page).toHaveURL(/\/shops/, { timeout: 20_000 })
   })
 
-  test('Create shop bottom tab is present (short label on phone)', async ({ page }) => {
+  test('Create shop bottom tab is present with full label', async ({ page }) => {
     const pageErrors = await gotoHydrated(page, '/')
     expect(pageErrors).toEqual([])
-    // Narrow widths abbreviate "Create shop" → "Create".
-    await expect(page.getByRole('tab', { name: /create|manage shop/i })).toBeVisible({
+    await expect(page.getByRole('tab', { name: /create shop|manage shop/i })).toBeVisible({
       timeout: 20_000,
     })
   })

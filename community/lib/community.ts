@@ -7,6 +7,7 @@ import { supabase } from '~/lib/supabase/client'
 import { extractHashtags, extractMentions } from '~/community/lib/post-text'
 import { notifyHashtagFollowers } from '~/community/lib/hashtag-follows'
 import { isVideoMediaUrl, normalizeUrlList } from '~/community/lib/post-media'
+import { extractFirstUrl, parseVideoProvider } from '~/lib/link-preview'
 
 export const COMMUNITY_PAGE_SIZE = 15
 
@@ -348,20 +349,26 @@ function mapLinkPreview(value: unknown): PostLinkPreview | null {
   if (!data) return null
   const url = typeof data.url === 'string' ? data.url : ''
   if (!url) return null
+  const provider = parseVideoProvider(url)
   const title = typeof data.title === 'string' ? data.title : null
   const description = typeof data.description === 'string' ? data.description : null
-  const image = typeof data.image === 'string' ? data.image : null
-  const video = typeof data.video === 'string' ? data.video : null
-  // Video-only unfurls (YouTube/Vimeo) are valid even without title/body copy.
+  // Prefer API fields; fall back to provider thumbnail/embed for video-only unfurls.
+  const image =
+    (typeof data.image === 'string' ? data.image : null) ?? provider?.thumbnail ?? null
+  const video =
+    (typeof data.video === 'string' ? data.video : null) ?? provider?.embed ?? null
   if (!title && !description && !image && !video) return null
   return {
     url,
     title,
     description,
     image,
-    siteName: typeof data.siteName === 'string' ? data.siteName : null,
+    siteName:
+      (typeof data.siteName === 'string' ? data.siteName : null) ?? provider?.siteName ?? null,
     video,
-    videoType: typeof data.videoType === 'string' ? data.videoType : null,
+    videoType:
+      (typeof data.videoType === 'string' ? data.videoType : null) ??
+      (provider ? 'text/html' : null),
   }
 }
 
@@ -1038,15 +1045,41 @@ export async function createCommunityPost(
       : null
   const product = input.product?.listingId ? input.product : null
   const shop = input.shop?.shopId ? input.shop : null
+  const rawLink = input.linkPreview?.url
+    ? input.linkPreview
+    : (() => {
+        const url = extractFirstUrl(content)
+        const provider = url ? parseVideoProvider(url) : null
+        if (!url || !provider) return null
+        return {
+          url,
+          title: null,
+          description: null,
+          image: provider.thumbnail,
+          siteName: provider.siteName,
+          video: provider.embed,
+          videoType: 'text/html',
+        } satisfies PostLinkPreview
+      })()
+  const providerFromLink = rawLink?.url ? parseVideoProvider(rawLink.url) : null
   const linkPreview =
-    input.linkPreview?.url &&
-    (input.linkPreview.title ||
-      input.linkPreview.description ||
-      input.linkPreview.image ||
-      input.linkPreview.video)
-      ? input.linkPreview
+    rawLink &&
+    (rawLink.title ||
+      rawLink.description ||
+      rawLink.image ||
+      rawLink.video ||
+      providerFromLink)
+      ? {
+          ...rawLink,
+          title: rawLink.title ?? null,
+          description: rawLink.description ?? null,
+          image: rawLink.image ?? providerFromLink?.thumbnail ?? null,
+          siteName: rawLink.siteName ?? providerFromLink?.siteName ?? null,
+          video: rawLink.video ?? providerFromLink?.embed ?? null,
+          videoType: rawLink.videoType ?? (providerFromLink ? 'text/html' : null),
+        }
       : null
-  if (!content && !hasImage && !isEvent && !hasPoll && !celebration && !product && !shop) {
+  if (!content && !hasImage && !isEvent && !hasPoll && !celebration && !product && !shop && !linkPreview) {
     return { id: null, error: 'Write something or add media before posting.' }
   }
 

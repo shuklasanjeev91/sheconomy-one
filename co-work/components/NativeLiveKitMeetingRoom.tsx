@@ -558,6 +558,21 @@ function NativeVideoTile({
       isPlaceholder: !isTrackReference(trackRef),
     })
 
+  // Android RTCView often never recovers from a 0×0 first layout ("Dropping frame - No surface").
+  // Gate the VideoTrack until we have real pixel size, then mount with explicit dimensions.
+  const [surfaceSize, setSurfaceSize] = useState<{ w: number; h: number } | null>(
+    width > 1 && height > 1 ? { w: Math.floor(width), h: Math.floor(height) } : null,
+  )
+
+  useEffect(() => {
+    if (width > 1 && height > 1) {
+      setSurfaceSize({ w: Math.floor(width), h: Math.floor(height) })
+    }
+  }, [width, height])
+
+  const trackSid = isTrackReference(trackRef) ? trackRef.publication.trackSid : null
+  const showVideo = isTrackReference(trackRef) && !cameraOff && !!surfaceSize
+
   return (
     <YStack
       width={fill ? '100%' : width}
@@ -570,12 +585,32 @@ function NativeVideoTile({
       borderColor={handRaised && !isScreen ? coworkUi.brandLight : 'rgba(255,255,255,0.12)'}
       backgroundColor="#1a1216"
       position="relative"
+      collapsable={false}
+      onLayout={(event) => {
+        const { width: layoutW, height: layoutH } = event.nativeEvent.layout
+        if (layoutW > 1 && layoutH > 1) {
+          const next = { w: Math.floor(layoutW), h: Math.floor(layoutH) }
+          setSurfaceSize((prev) =>
+            prev && prev.w === next.w && prev.h === next.h ? prev : next,
+          )
+        }
+      }}
     >
-      {isTrackReference(trackRef) && !cameraOff ? (
+      {showVideo && surfaceSize ? (
         <VideoTrack
+          // Remount when track or size changes so EGL surface attaches cleanly.
+          key={`${trackSid ?? 'track'}-${surfaceSize.w}x${surfaceSize.h}-${isScreen ? 'ss' : 'cam'}`}
           trackRef={trackRef}
-          style={{ width: '100%', height: '100%' }}
+          style={{
+            position: 'absolute',
+            top: 0,
+            left: 0,
+            width: surfaceSize.w,
+            height: surfaceSize.h,
+          }}
           objectFit={isScreen ? 'contain' : 'cover'}
+          mirror={false}
+          zOrder={isScreen ? 0 : compact ? 1 : 0}
         />
       ) : (
         <YStack flex={1} width="100%" height="100%" alignItems="center" justifyContent="center" gap={compact ? 4 : 8}>
@@ -624,6 +659,7 @@ function NativeVideoTile({
         borderWidth={1}
         borderColor="rgba(255,255,255,0.12)"
         maxWidth="90%"
+        zIndex={5}
       >
         <Text fontSize={compact ? 10 : 12} fontWeight="700" color="#fff" numberOfLines={1}>
           {name}

@@ -364,13 +364,6 @@ function MeetingRoomOverlay({
       toast.show('Connect to the meeting to share your screen', { tone: 'info' })
       return
     }
-    if (Platform.OS === 'android') {
-      toast.show('Screen share is not available on Android', {
-        tone: 'info',
-        message: 'Use iOS or the web app to present your screen in a meeting.',
-      })
-      return
-    }
     if (!caps.supportsScreenShare) {
       toast.show('Screen share is not available on this device', {
         tone: 'info',
@@ -391,7 +384,9 @@ function MeetingRoomOverlay({
           ? undefined
           : Platform.OS === 'ios'
             ? 'Keep the broadcast extension running while you present.'
-            : undefined,
+            : Platform.OS === 'android'
+              ? 'Allow screen capture in the system prompt. A sharing notification stays on while you present.'
+              : undefined,
       })
     } catch (screenError) {
       const message =

@@ -19,6 +19,7 @@
     },
     "plugins": [
       "./plugins/withUniversalDeviceSupport.cjs",
+      "./plugins/withAndroidBrandWindowBackground.cjs",
       "./plugins/withGoogleModularHeaders.cjs",
       "./plugins/withCallKeep.cjs",
       [
@@ -44,7 +45,7 @@
         {
           "android": {
             "audioType": "communication",
-            "enableScreenShareService": false
+            "enableScreenShareService": true
           }
         }
       ],
@@ -56,8 +57,8 @@
             "appGroupIdentifier": "group.com.sheconomy.ecommerce"
           },
           "android": {
-            "enableScreenShareService": false,
-            "foregroundServicePermission": false
+            "enableScreenShareService": true,
+            "foregroundServicePermission": true
           }
         }
       ],
@@ -113,7 +114,7 @@
     },
     "ios": {
       "bundleIdentifier": "com.sheconomy.ecommerce",
-      "buildNumber": "105",
+      "buildNumber": "108",
       "appleTeamId": "52H73QK4CL",
       "supportsTablet": true,
       "requireFullScreen": false,
@@ -163,10 +164,10 @@
     },
     "android": {
       "package": "com.sheconomy.ecommerce",
-      "versionCode": 123,
+      "versionCode": 126,
       "softwareKeyboardLayoutMode": "resize",
       "adaptiveIcon": {
-        "foregroundImage": "./public/app-icon.png",
+        "foregroundImage": "./public/app-icon-adaptive.png",
         "backgroundColor": "#D81B60"
       },
       "icon": "./public/app-icon.png",
@@ -198,7 +199,9 @@
         "android.permission.READ_CONTACTS",
         "android.permission.WRITE_CONTACTS",
         "android.permission.BLUETOOTH_CONNECT",
-        "android.permission.MODIFY_AUDIO_SETTINGS"
+        "android.permission.MODIFY_AUDIO_SETTINGS",
+        "android.permission.FOREGROUND_SERVICE",
+        "android.permission.FOREGROUND_SERVICE_MEDIA_PROJECTION"
       ]
     },
     "extra": {

@@ -27,10 +27,9 @@ export function PushSubscribePromptHost() {
   async function onAllow() {
     setBusy(true)
     try {
-      const result = await enablePush()
-      if (result.ok) {
-        dismissSubscribePrompt()
-      }
+      await enablePush()
+      // enablePush marks decided; always dismiss so we never loop the dialog.
+      dismissSubscribePrompt()
     } finally {
       setBusy(false)
     }

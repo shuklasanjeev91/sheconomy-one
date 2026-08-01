@@ -1,7 +1,11 @@
 import AsyncStorage from '@react-native-async-storage/async-storage'
 
-/** Persisted after the user finishes or skips the intro carousel. */
-export const APP_ONBOARDING_SEEN_KEY = 'sheconomy.auth.onboarding.seen'
+/**
+ * Persisted after the user finishes or skips the intro carousel.
+ * Bump the suffix when the intro must be shown again after an update
+ * (e.g. launch UX fix) so existing installs still get the carousel once.
+ */
+export const APP_ONBOARDING_SEEN_KEY = 'sheconomy.auth.onboarding.seen.v2'
 
 export async function hasSeenAppOnboarding(): Promise<boolean> {
   try {
@@ -24,6 +28,8 @@ export async function markAppOnboardingSeen(): Promise<void> {
 export async function resetAppOnboardingSeen(): Promise<void> {
   try {
     await AsyncStorage.removeItem(APP_ONBOARDING_SEEN_KEY)
+    // Clear legacy key from earlier builds too.
+    await AsyncStorage.removeItem('sheconomy.auth.onboarding.seen')
   } catch {
     // ignore
   }

@@ -23,7 +23,7 @@ import {
 import { LoadMoreEnd, LoadMoreSentinel } from '~/commerce/components/LoadMoreSentinel'
 import { usePaginatedFeed } from '~/commerce/hooks/usePaginatedFeed'
 import { CACHE_KEYS } from '~/lib/bootstrap/app-prefetch'
-import { Icons, Spinner, Text, XStack, YStack } from '~/components/ui'
+import { CardGridSkeleton, Icons, Text, XStack, YStack } from '~/components/ui'
 import { getShadowStyle, radius } from '~/config/tokens'
 import { mediaTabFromPath } from '~/class/lib/media-tab'
 import { useAppUi } from '~/lib/theme/useAppUi'
@@ -177,9 +177,7 @@ export function ClassesScreen() {
       ) : null}
 
       {feed.isLoading && programs.length === 0 ? (
-        <YStack alignItems="center" paddingVertical="$10" width="100%">
-          <Spinner size="large" />
-        </YStack>
+        <CardGridSkeleton count={4} />
       ) : programs.length === 0 ? (
         <YStack
           alignItems="center"

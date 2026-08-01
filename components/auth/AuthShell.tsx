@@ -8,6 +8,7 @@ import { AuthOnboarding } from '~/components/auth/AuthOnboarding'
 import { AUTH_COPY } from '~/components/auth/auth-copy'
 import { AUTH_LAYOUT, authHeroStyle, authPageStyle, authViewportStyle, useAuthLayout } from '~/components/auth/auth-layout'
 import { AuthBackButton } from '~/components/auth/AuthBackButton'
+import { NativeBootPlaceholder } from '~/components/brand/NativeBootPlaceholder'
 import {
   PageRail,
 } from '~/components/layout'
@@ -257,10 +258,9 @@ export function AuthShell({ children, footer }: AuthShellProps) {
     return <DesktopAuthLayout footer={footer}>{children}</DesktopAuthLayout>
   }
 
+  // Neutral boot placeholder — never brand-magenta (stuck splash look).
   if (onboardingComplete === null) {
-    return (
-      <YStack flex={1} width="100%" height="100%" backgroundColor="$background" style={authViewportStyle()} />
-    )
+    return <NativeBootPlaceholder />
   }
 
   if (!onboardingComplete) {

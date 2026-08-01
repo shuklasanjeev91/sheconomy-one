@@ -78,3 +78,43 @@ export function ListSkeleton({ rows = 4 }: { rows?: number }) {
     </YStack>
   )
 }
+
+/** Feed-shaped placeholders for Community / similar list screens. */
+export function FeedPostSkeleton({ count = 3 }: { count?: number }) {
+  return (
+    <YStack gap="$4" padding="$3" width="100%">
+      {Array.from({ length: count }).map((_, index) => (
+        <YStack key={index} gap="$3" width="100%">
+          <XStack gap="$3" alignItems="center">
+            <Skeleton width={44} height={44} borderRadius={22} />
+            <YStack flex={1} gap="$2">
+              <Skeleton height={14} width="45%" />
+              <Skeleton height={12} width="30%" />
+            </YStack>
+          </XStack>
+          <Skeleton height={12} width="92%" />
+          <Skeleton height={12} width="78%" />
+          <Skeleton height={180} borderRadius={12} />
+          <XStack gap="$4">
+            <Skeleton height={12} width={56} />
+            <Skeleton height={12} width={72} />
+            <Skeleton height={12} width={64} />
+          </XStack>
+        </YStack>
+      ))}
+    </YStack>
+  )
+}
+
+/** Card grid placeholders for Class / shop rails. */
+export function CardGridSkeleton({ count = 4 }: { count?: number }) {
+  return (
+    <XStack flexWrap="wrap" gap="$3" width="100%" paddingVertical="$2">
+      {Array.from({ length: count }).map((_, index) => (
+        <YStack key={index} width="47%" flexGrow={1} flexBasis="45%">
+          <CardSkeleton />
+        </YStack>
+      ))}
+    </XStack>
+  )
+}

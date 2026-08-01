@@ -93,11 +93,11 @@ export const MobileTabBarItem = forwardRef<
             fontSize={compactLabel ? 9 : 10}
             fontWeight={isFocused ? '700' : '500'}
             color={isFocused ? activeColor : inactiveColor}
-            numberOfLines={1}
+            numberOfLines={2}
             letterSpacing={isFocused ? 0.15 : 0.05}
             textAlign="center"
             width="100%"
-            lineHeight={12}
+            lineHeight={11}
             opacity={isFocused ? 1 : 0.92}
           >
             {label}

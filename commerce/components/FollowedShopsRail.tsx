@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState } from 'react'
 
 import { ShopSpotlightCard } from '~/commerce/components/ShopSpotlightCard'
 import type { ShopSummary } from '~/commerce/lib/commerce'
-import { Spinner, Text, XStack, YStack } from '~/components/ui'
+import { ScrollView, Text, XStack, YStack } from '~/components/ui'
 import { AppLink } from '~/components/navigation/AppLink'
 import { getFollowedShops } from '~/lib/shop/shop.service'
 import type { Shop } from '~/lib/shop/shop.type'
@@ -48,11 +48,21 @@ export function FollowedShopsRail({ inset }: FollowedShopsRailProps) {
           </Text>
         </AppLink>
       </XStack>
-      <XStack gap="$3" flexWrap="wrap">
-        {shops.slice(0, 6).map((shop) => (
-          <ShopSpotlightCard key={shop.id} shop={toShopSummary(shop)} />
-        ))}
-      </XStack>
+      {/* Single horizontal row — matches "Shops you'll love" / recently viewed rails. */}
+      <ScrollView
+        horizontal
+        showsHorizontalScrollIndicator={false}
+        style={{ flexGrow: 0 }}
+        contentContainerStyle={{ flexGrow: 0, alignItems: 'flex-start' }}
+      >
+        <XStack gap="$3" paddingRight="$4" alignItems="stretch">
+          {shops.slice(0, 12).map((shop) => (
+            <YStack key={shop.id} flexShrink={0}>
+              <ShopSpotlightCard shop={toShopSummary(shop)} />
+            </YStack>
+          ))}
+        </XStack>
+      </ScrollView>
     </YStack>
   )
 }
