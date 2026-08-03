@@ -48,6 +48,8 @@ export const LISTING_IMAGE_HOST_ALLOWLIST = {
     'f003.backblazeb2.com',
     'f004.backblazeb2.com',
     'pub-images.r2.dev',
+    'zsaqrrzwygzwrlzgymxk.supabase.co',
+    'dfasp73o8frrg.cloudfront.net',
   ],
   wildcardSuffixes: [
     '.dropboxusercontent.com',
@@ -59,6 +61,14 @@ export const LISTING_IMAGE_HOST_ALLOWLIST = {
     '.cloudflareimages.com',
     '.imageshack.com',
     '.staticflickr.com',
+    '.supabase.co',
+    '.ibb.co',
+    '.dropbox.com',
+    '.res.cloudinary.com',
+    '.imgur.com',
+    '.postimg.cc',
+    '.unsplash.com',
+    '.cloudfront.net',
   ],
 } as const
 

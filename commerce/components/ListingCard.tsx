@@ -1,4 +1,4 @@
-import { memo, useState } from 'react'
+import { memo, useState, useMemo } from 'react'
 import { Platform } from 'react-native'
 import { useRouter } from 'one'
 
@@ -34,7 +34,6 @@ function warmListingRoute(listing: ListingSummary, slug: string) {
   if (Platform.OS === 'web' || !listing.id) return
   const cacheKey = `route:listing:${listing.id}`
   const aliases = slug && slug !== listing.id ? [`route:listing:${slug}`] : undefined
-  // Sync seed first — PDP paints from card data before the network returns.
   seedNativeLoaderCache(cacheKey, listingLoaderResultFromSummary(listing), aliases)
   prefetchNativeLoader(cacheKey, () => fetchListingDetailById(listing.id), aliases)
   prefetchListingRecommendations(listing.id, listing.shop_id, undefined, {
@@ -47,7 +46,6 @@ function warmListingRoute(listing: ListingSummary, slug: string) {
 type ListingCardProps = {
   listing: ListingSummary
   compact?: boolean
-  /** Show an inline "Add to cart" button (used on wishlist/favorites). */
   showQuickAdd?: boolean
 }
 
@@ -71,13 +69,16 @@ export const ListingCard = memo(function ListingCard({ listing, compact, showQui
       : []
   const [hoverImageIndex, setHoverImageIndex] = useState(0)
   const cardTitle = listing.card_title || listing.title
-  const displayUrls =
-    hoverImageIndex > 0 && imageUrls[hoverImageIndex]
-      ? [imageUrls[hoverImageIndex], ...imageUrls.filter((_, index) => index !== hoverImageIndex)]
-      : imageUrls
+
+  // ─── FIX: Memoize displayUrls to prevent new array on every render ────
+  const displayUrls = useMemo(() => {
+    if (hoverImageIndex > 0 && imageUrls[hoverImageIndex]) {
+      return [imageUrls[hoverImageIndex], ...imageUrls.filter((_, i) => i !== hoverImageIndex)]
+    }
+    return imageUrls
+  }, [imageUrls, hoverImageIndex])
 
   const listingSlug = getListingSlug(listing)
-  // Native: open by id so PDP hits a single indexed lookup (not title-slug scans).
   const listingHref = routes.listing(Platform.OS === 'web' ? listingSlug : listing.id)
 
   const deliveryHint = getListingCardFulfillmentLabel(
