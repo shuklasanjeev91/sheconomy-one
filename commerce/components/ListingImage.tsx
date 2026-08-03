@@ -1,5 +1,4 @@
-import { useEffect, useState } from 'react'
-
+import { useEffect, useState, useMemo, memo, useRef } from 'react'
 import { Icons, Image, YStack } from '~/components/ui'
 import { ListingMediaPreview } from '~/components/media/ListingMediaPreview'
 import { listingMediaKind } from '~/commerce/lib/listing-media'
@@ -17,8 +16,26 @@ type ListingImageProps = {
   placeholderIconSize?: number
 }
 
-/** Listing photo with URL normalization and automatic fallback to the next image. */
-export function ListingImage({
+// ─── Custom equality check for memo ──────────────────────────────────────
+function arePropsEqual(prev: ListingImageProps, next: ListingImageProps): boolean {
+  // Compare imageUrls by content (join with '|') to avoid re‑render on new array references
+  const prevUrls = prev.imageUrls?.join('|') ?? ''
+  const nextUrls = next.imageUrls?.join('|') ?? ''
+  if (prevUrls !== nextUrls) return false
+
+  // Compare other props shallowly
+  return (
+    prev.fallbackUrl === next.fallbackUrl &&
+    prev.imageType === next.imageType &&
+    prev.alt === next.alt &&
+    prev.width === next.width &&
+    prev.height === next.height &&
+    prev.objectFit === next.objectFit &&
+    prev.placeholderIconSize === next.placeholderIconSize
+  )
+}
+
+export const ListingImage = memo(function ListingImage({
   imageUrls,
   fallbackUrl,
   imageType,
@@ -29,17 +46,30 @@ export function ListingImage({
   placeholderIconSize = 28,
 }: ListingImageProps) {
   const ui = useAppUi()
-  const urls = getListingImageUrls(imageUrls, fallbackUrl)
+
+  // ─── Memoize URLs to avoid recomputation on every render ──────────────
+  const urls = useMemo(() => getListingImageUrls(imageUrls, fallbackUrl), [imageUrls, fallbackUrl])
   const [activeIndex, setActiveIndex] = useState(0)
   const [failed, setFailed] = useState(false)
-  const src = urls[activeIndex] ?? null
-  const kind = src ? listingMediaKind(src, imageType) : 'image'
 
+  // ─── Stable key for URL content ────────────────────────────────────────
+  const urlsKey = useMemo(() => urls.join('|'), [urls])
+  const prevUrlsKeyRef = useRef<string>(urlsKey)
+
+  // ─── Memoize src and kind ──────────────────────────────────────────────
+  const src = useMemo(() => urls[activeIndex] ?? null, [urls, activeIndex])
+  const kind = useMemo(() => (src ? listingMediaKind(src, imageType) : 'image'), [src, imageType])
+
+  // ─── Reset only when URL content actually changes ─────────────────────
   useEffect(() => {
-    setActiveIndex(0)
-    setFailed(false)
-  }, [urls.join('|')])
+    if (prevUrlsKeyRef.current !== urlsKey) {
+      setActiveIndex(0)
+      setFailed(false)
+      prevUrlsKeyRef.current = urlsKey
+    }
+  }, [urlsKey])
 
+  // ─── Placeholder ──────────────────────────────────────────────────────
   if (!src || failed) {
     return (
       <YStack
@@ -55,34 +85,18 @@ export function ListingImage({
     )
   }
 
-  if (kind === 'video') {
-    return (
-      <ListingMediaPreview
-        url={src}
-        kind="video"
-        alt={alt}
-        width={width}
-        height={height}
-        objectFit={objectFit}
-        placeholderIconSize={placeholderIconSize}
-      />
-    )
-  }
-
+  // ─── Render via ListingMediaPreview for all media types ──────────────
   return (
-    <Image
-      src={src}
+    <ListingMediaPreview
+      url={src}
+      kind={kind}
       alt={alt}
       width={width}
       height={height}
       objectFit={objectFit}
-      onError={() => {
-        if (activeIndex < urls.length - 1) {
-          setActiveIndex((index) => index + 1)
-          return
-        }
-        setFailed(true)
-      }}
+      placeholderIconSize={placeholderIconSize}
+      muted={true}
+      controls={false}
     />
   )
-}
+}, arePropsEqual)

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useState, memo } from 'react'
 import { useParams } from 'one'
 import { AppLink } from '~/components/navigation/AppLink'
 import {
@@ -89,7 +89,49 @@ type ListingScreenProps = {
   awaitingInitial?: boolean
 }
 
-/** Shared listing detail UI — web uses `useLoader`, native uses `useNativeLoader`. */
+// ─── Memoized thumbnail component for desktop ──────────────────────────────
+
+const ThumbnailImage = memo(function ThumbnailImage({
+  image,
+  title,
+  isActive,
+  onPress,
+}: {
+  image: { id: string; image_url: string; image_type?: string | null; alt_text?: string | null }
+  title: string
+  isActive: boolean
+  onPress: () => void
+}) {
+  const ui = useAppUi()
+  // Memoize the single‑element array so it doesn't change on every render
+  const imageUrlArray = useMemo(() => [image.image_url], [image.image_url])
+
+  return (
+    <XStack
+      width={72}
+      height={72}
+      borderRadius={radius.chip}
+      overflow="hidden"
+      borderWidth={isActive ? 2 : 1}
+      borderColor={isActive ? ui.text : ui.panelBorder}
+      cursor="pointer"
+      onPress={onPress}
+    >
+      <ListingImage
+        imageUrls={imageUrlArray}
+        imageType={image.image_type}
+        alt={image.alt_text ?? title}
+        width={72}
+        height={72}
+        objectFit="cover"
+        placeholderIconSize={20}
+      />
+    </XStack>
+  )
+})
+
+// ─── Main ListingScreen ──────────────────────────────────────────────────────
+
 export function ListingScreen({
   initial = null,
   awaitingInitial = false,
@@ -184,6 +226,25 @@ export function ListingScreen({
     }
   }, [listing?.id, listing?.shop_id])
 
+  // ─── Memoized image sorting and gallery URLs ──────────────────────────────
+  const sortedImages = useMemo(() => {
+    return [...images].sort(
+      (a, b) => (a.is_primary ? -1 : 0) - (b.is_primary ? -1 : 0) || a.display_order - b.display_order,
+    )
+  }, [images])
+
+  const galleryUrls = useMemo(() => sortedImages.map((image) => image.image_url), [sortedImages])
+
+  const activeImage = useMemo(
+    () => sortedImages[activeImageIndex] ?? sortedImages[0],
+    [sortedImages, activeImageIndex],
+  )
+
+  const activeGalleryUrls = useMemo(() => {
+    if (!activeImage) return []
+    return [activeImage.image_url, ...galleryUrls.filter((url) => url !== activeImage.image_url)]
+  }, [activeImage, galleryUrls])
+
   if (isLoading && !listing) {
     return (
       <PageCenter>
@@ -211,15 +272,6 @@ export function ListingScreen({
   }
 
   const currency = listing.shops?.shop_currency ?? 'INR'
-  const sortedImages = [...images].sort(
-    (a, b) => (a.is_primary ? -1 : 0) - (b.is_primary ? -1 : 0) || a.display_order - b.display_order,
-  )
-  const galleryUrls = sortedImages.map((image) => image.image_url)
-  const activeImage = sortedImages[activeImageIndex] ?? sortedImages[0]
-  const activeGalleryUrls = activeImage
-    ? [activeImage.image_url, ...galleryUrls.filter((url) => url !== activeImage.image_url)]
-    : galleryUrls
-
   const selectedVariations = getSelectedVariations(variations, variantSelection)
   const displayPrice = getVariantPrice(listing.price, selectedVariations)
   const displayStock = getVariantStock(listing.stock, selectedVariations)
@@ -314,7 +366,6 @@ export function ListingScreen({
 
   const isDigital = isDigitalListing(listing.listing_type)
   const buyNowLabel = isDigital ? 'Buy & download' : 'Buy it now'
-  /** PageScroll already insets for the tab bar; only clear the sticky buy bar. */
   const mobileBottomInset = LISTING_MOBILE_STICKY_BAR_HEIGHT + 16
   const listingShareSlug = slug ?? listing.id
   const listingShareButton = (
@@ -380,6 +431,7 @@ export function ListingScreen({
     listingType: listing.listing_type ?? null,
   }
 
+  // ─── Mobile layout ──────────────────────────────────────────────────────────
   if (!isDesktop) {
     return (
       <YStack flex={1} width="100%" backgroundColor={ui.surface} position="relative">
@@ -503,7 +555,7 @@ export function ListingScreen({
 
               <Separator borderColor={ui.panelBorder} />
               <ReviewsSection
-                title={`Reviews for this item`}
+                title="Reviews for this item"
                 summary={reviewSummary}
                 reviews={reviews}
                 isLoading={reviewsLoading}
@@ -539,6 +591,8 @@ export function ListingScreen({
       </YStack>
     )
   }
+
+  // ─── Desktop layout ──────────────────────────────────────────────────────────
 
   const imageGallery = (
     <StickyRail flex={1.2} minWidth={0} width="100%" maxWidth="100%">
@@ -582,27 +636,13 @@ export function ListingScreen({
           <ScrollView horizontal showsHorizontalScrollIndicator={false}>
             <XStack gap="$2">
               {sortedImages.map((image, index) => (
-                <XStack
+                <ThumbnailImage
                   key={image.id}
-                  width={72}
-                  height={72}
-                  borderRadius={radius.chip}
-                  overflow="hidden"
-                  borderWidth={activeImageIndex === index ? 2 : 1}
-                  borderColor={activeImageIndex === index ? ui.text : ui.panelBorder}
-                  cursor="pointer"
+                  image={image}
+                  title={listing.title}
+                  isActive={activeImageIndex === index}
                   onPress={() => setActiveImageIndex(index)}
-                >
-                  <ListingImage
-                    imageUrls={[image.image_url]}
-                    imageType={image.image_type}
-                    alt={image.alt_text ?? listing.title}
-                    width={72}
-                    height={72}
-                    objectFit="cover"
-                    placeholderIconSize={20}
-                  />
-                </XStack>
+                />
               ))}
             </XStack>
           </ScrollView>
@@ -808,4 +848,3 @@ export function ListingScreen({
     </PageScroll>
   )
 }
-
