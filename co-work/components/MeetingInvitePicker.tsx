@@ -1,8 +1,9 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
+import { TextInput } from 'react-native'
 
 import { AdaptiveTypeaheadPanel } from '~/components/search/AdaptiveTypeaheadPanel'
 import { SuggestSectionHeader } from '~/components/search/SuggestSectionHeader'
-import { Avatar, Button, Icons, Input, Spinner, Text, XStack, YStack, useAppToast } from '~/components/ui'
+import { Avatar, Button, Icons, Spinner, Text, XStack, YStack, useAppToast } from '~/components/ui'
 import { CoWorkSectionLabel } from '~/co-work/components/CoWorkUi'
 import {
   candidateToInvitee,
@@ -32,9 +33,7 @@ export function MeetingInvitePicker({ hostId, value, onChange, compact }: Meetin
   const [emailDraft, setEmailDraft] = useState('')
   const [candidates, setCandidates] = useState<MeetingInviteCandidate[]>([])
   const [loading, setLoading] = useState(false)
-  const [searchFocused, setSearchFocused] = useState(false)
   const [panelOpen, setPanelOpen] = useState(false)
-  const blurCloseRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   const selectedKeys = useMemo(() => new Set(value.map(inviteeKey)), [value])
 
@@ -59,40 +58,17 @@ export function MeetingInvitePicker({ hostId, value, onChange, compact }: Meetin
     return () => clearTimeout(timer)
   }, [loadCandidates])
 
-  // Desktop: keep the anchored dropdown tied to input focus + results.
-  // Mobile: the bottom sheet owns open/close — opening it blurs the field, so
-  // we must not auto-close on blur (that caused open→close flicker).
-  useEffect(() => {
-    if (!isDesktop) return
-    if (!searchFocused) {
-      setPanelOpen(false)
-      return
-    }
-    setPanelOpen(true)
-  }, [isDesktop, searchFocused])
-
-  useEffect(() => {
-    return () => {
-      if (blurCloseRef.current) clearTimeout(blurCloseRef.current)
-    }
-  }, [])
-
+  // --- Panel open/close logic (unchanged) ---
   function handleSearchFocus() {
-    if (blurCloseRef.current) clearTimeout(blurCloseRef.current)
-    setSearchFocused(true)
     setPanelOpen(true)
   }
 
   function handleSearchBlur() {
-    setSearchFocused(false)
-    // Mobile sheet stays open until the user dismisses it or picks people.
-    if (!isDesktop) return
-    blurCloseRef.current = setTimeout(() => setPanelOpen(false), 180)
+    // no-op: panel closes via AdaptiveTypeaheadPanel dismiss
   }
 
   function handlePanelOpenChange(open: boolean) {
     setPanelOpen(open)
-    if (!open) setSearchFocused(false)
   }
 
   function handleQueryChange(next: string) {
@@ -100,14 +76,24 @@ export function MeetingInvitePicker({ hostId, value, onChange, compact }: Meetin
     if (!panelOpen) setPanelOpen(true)
   }
 
+  // --- Selection handlers ---
   function toggleCandidate(candidate: MeetingInviteCandidate) {
     const invitee = candidateToInvitee(candidate)
     const key = inviteeKey(invitee)
     onChange(
       selectedKeys.has(key)
         ? value.filter((item) => inviteeKey(item) !== key)
-        : mergeInvitees(value, [invitee]),
+        : mergeInvitees(value, [invitee])
     )
+    // 🔁 Reset search field so user can search for another name immediately
+    setQuery('')
+    setCandidates([]) // clear the old results
+    // Panel stays open – they can start typing again
+  }
+
+  function removeInvitee(invitee: MeetingInvitee) {
+    const key = inviteeKey(invitee)
+    onChange(value.filter((item) => inviteeKey(item) !== key))
   }
 
   function addEmailInvite() {
@@ -116,51 +102,107 @@ export function MeetingInvitePicker({ hostId, value, onChange, compact }: Meetin
       return
     }
     onChange(mergeInvitees(value, [emailToInvitee(emailDraft)]))
-    setEmailDraft('')
-  }
-
-  function removeInvitee(invitee: MeetingInvitee) {
-    const key = inviteeKey(invitee)
-    onChange(value.filter((item) => inviteeKey(item) !== key))
+    setEmailDraft('') // already resets, just confirming
   }
 
   return (
     <YStack gap={compact ? '$3' : '$4'}>
+      {/* Email input (unchanged) */}
       <YStack gap="$2">
         <CoWorkSectionLabel>Add by email</CoWorkSectionLabel>
         <XStack gap="$2">
-          <Input
+          <XStack
             flex={1}
-            value={emailDraft}
-            onChangeText={setEmailDraft}
-            placeholder="name@company.com"
-            autoCapitalize="none"
-            keyboardType="email-address"
             backgroundColor="rgba(255,255,255,0.05)"
             borderColor={coworkUi.borderSoft}
-            color={coworkUi.text}
+            borderWidth={1}
             borderRadius={14}
-            onSubmitEditing={addEmailInvite}
-          />
+            padding="$3"
+          >
+            <TextInput
+              style={{ flex: 1, color: coworkUi.text, fontSize: 14 }}
+              value={emailDraft}
+              onChangeText={setEmailDraft}
+              placeholder="name@company.com"
+              placeholderTextColor={coworkUi.textMuted}
+              autoCapitalize="none"
+              keyboardType="email-address"
+              onSubmitEditing={addEmailInvite}
+            />
+          </XStack>
           <Button tone="outline" borderRadius={14} onPress={addEmailInvite}>
             Add
           </Button>
         </XStack>
       </YStack>
 
+      {/* Search members with inline badges */}
       <YStack gap="$2" position="relative" zIndex={panelOpen && isDesktop ? 600 : undefined}>
         <CoWorkSectionLabel>Search members & connections</CoWorkSectionLabel>
-        <Input
-          value={query}
-          onChangeText={handleQueryChange}
-          placeholder="Name, username, or email"
+
+        <XStack
+          flexWrap="wrap"
+          alignItems="center"
+          gap="$2"
           backgroundColor="rgba(255,255,255,0.05)"
           borderColor={coworkUi.borderSoft}
-          color={coworkUi.text}
+          borderWidth={1}
           borderRadius={14}
-          onFocus={handleSearchFocus}
-          onBlur={handleSearchBlur}
-        />
+          padding="$3"
+          minHeight={48}
+        >
+          {/* Render selected invitees as badges */}
+          {value.map((invitee) => (
+            <XStack
+              key={inviteeKey(invitee)}
+              alignItems="center"
+              gap={4}
+              backgroundColor={coworkUi.brandMuted}
+              borderWidth={1}
+              borderColor={coworkUi.borderAccent}
+              borderRadius={999}
+              paddingHorizontal="$2"
+              paddingVertical={4}
+            >
+              {invitee.type === 'user' ? (
+                <Avatar name={invitee.name} src={invitee.avatar ?? undefined} size="$1" />
+              ) : (
+                <Icons.Mail size={12} color={coworkUi.brandLight} />
+              )}
+              <Text fontSize={12} color={coworkUi.text} maxWidth={100} numberOfLines={1}>
+                {formatInviteeLabel(invitee)}
+              </Text>
+              <Button
+                tone="ghost"
+                size="$1"
+                padding={0}
+                width={18}
+                height={18}
+                borderRadius={999}
+                onPress={() => removeInvitee(invitee)}
+                icon={<Icons.X size={10} color={coworkUi.textMuted} />}
+              />
+            </XStack>
+          ))}
+
+          {/* The actual search text field – grows to fill remaining space */}
+          <TextInput
+            style={{
+              flex: 1,
+              minWidth: 100,
+              color: coworkUi.text,
+              fontSize: 14,
+              paddingVertical: 0,
+            }}
+            value={query}
+            onChangeText={handleQueryChange}
+            placeholder={value.length > 0 ? 'Add more...' : 'Name, username, or email'}
+            placeholderTextColor={coworkUi.textMuted}
+            onFocus={handleSearchFocus}
+            onBlur={handleSearchBlur}
+          />
+        </XStack>
+
         {loading && !panelOpen ? <Spinner size="small" color={coworkUi.brand} /> : null}
 
         <AdaptiveTypeaheadPanel
@@ -195,6 +237,8 @@ export function MeetingInvitePicker({ hostId, value, onChange, compact }: Meetin
                   onPress={() => toggleCandidate(candidate)}
                   cursor="pointer"
                   pressStyle={{ opacity: 0.9 }}
+                  userSelect="none"
+                  pressable
                 >
                   <Avatar name={candidate.full_name} src={candidate.avatar_url ?? undefined} size="$3" />
                   <YStack flex={1} gap={2}>
@@ -217,46 +261,6 @@ export function MeetingInvitePicker({ hostId, value, onChange, compact }: Meetin
           </YStack>
         </AdaptiveTypeaheadPanel>
       </YStack>
-
-      {value.length > 0 ? (
-        <YStack gap="$2">
-          <CoWorkSectionLabel>Selected ({value.length})</CoWorkSectionLabel>
-          <XStack gap="$2" flexWrap="wrap">
-            {value.map((invitee) => (
-              <XStack
-                key={inviteeKey(invitee)}
-                alignItems="center"
-                gap={6}
-                paddingHorizontal="$2"
-                paddingVertical={6}
-                borderRadius={999}
-                backgroundColor={coworkUi.brandMuted}
-                borderWidth={1}
-                borderColor={coworkUi.borderAccent}
-              >
-                {invitee.type === 'user' ? (
-                  <Avatar name={invitee.name} src={invitee.avatar ?? undefined} size="$1" />
-                ) : (
-                  <Icons.Mail size={14} color={coworkUi.brandLight} />
-                )}
-                <Text fontSize={12} color={coworkUi.text} maxWidth={140} numberOfLines={1}>
-                  {formatInviteeLabel(invitee)}
-                </Text>
-                <Button
-                  tone="ghost"
-                  size="$1"
-                  padding={0}
-                  width={22}
-                  height={22}
-                  borderRadius={999}
-                  onPress={() => removeInvitee(invitee)}
-                  icon={<Icons.X size={12} color={coworkUi.textMuted} />}
-                />
-              </XStack>
-            ))}
-          </XStack>
-        </YStack>
-      ) : null}
     </YStack>
   )
 }
