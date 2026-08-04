@@ -123,6 +123,7 @@ declare module 'one' {
         | `/profile`
         | `/search`
         | `/seller/dashboard`
+        | `/seller/dashboard/crm-helpers`
         | `/settings`
         | `/settings/`
         | `/settings/about`
