@@ -3,7 +3,7 @@ import { AppLink } from '~/components/navigation/AppLink'
 import { useEffect, useState } from 'react'
 
 import { CoWorkStatusPill } from '~/co-work/components/CoWorkUi'
-import { fetchMyMeetings, formatMeetingCode } from '~/co-work/lib/meetings'
+import { fetchUpcomingMeetings, formatMeetingCode } from '~/co-work/lib/meetings'
 import { recordMeetingCode } from '~/co-work/lib/recent-meeting-codes'
 import { coworkGlassStyle, useCoWorkTheme } from '~/co-work/lib/theme'
 import type { Meeting } from '~/co-work/lib/types'
@@ -69,15 +69,13 @@ export function UpcomingMeetingsStrip({
   }
 
   useEffect(() => {
-    if (!user?.id) {
-      setMeetings([])
-      return
-    }
     let active = true
     setLoading(true)
-    void fetchMyMeetings(user.id)
+    void fetchUpcomingMeetings()
       .then((rows) => {
         if (!active) return
+        // The fetchUpcomingMeetings already filters for upcoming meetings
+        // Only show meetings with status: scheduled, instant, or active
         const upcoming = rows
           .filter((m) => m.status === 'scheduled' || m.status === 'instant' || m.status === 'active')
           .slice(0, 6)
@@ -92,7 +90,7 @@ export function UpcomingMeetingsStrip({
     return () => {
       active = false
     }
-  }, [refreshKey, user?.id])
+  }, [refreshKey])
 
   if (!user) return null
 
