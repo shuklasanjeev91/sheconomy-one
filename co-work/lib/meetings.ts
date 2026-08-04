@@ -176,10 +176,13 @@ export async function fetchMyMeetings(userId: string): Promise<Meeting[]> {
 }
 
 export async function fetchUpcomingMeetings(): Promise<Meeting[]> {
+  const now = new Date().toISOString()
+
   const { data, error } = await supabase
     .from('meetings')
     .select(MEETING_SELECT)
     .in('status', ['scheduled', 'instant', 'active'])
+    .gte('scheduled_at', now) // Only get meetings scheduled for now or in the future
     .order('scheduled_at', { ascending: true, nullsFirst: false })
     .limit(30)
 
@@ -245,13 +248,13 @@ export async function createMeeting(hostId: string, input: CreateMeetingInput): 
     authenticated_users_only: security.authenticatedUsersOnly ?? false,
     ...(passcode
       ? {
-          passcode,
-          requirePasscode: true,
-          require_passcode: true,
-        }
+        passcode,
+        requirePasscode: true,
+        require_passcode: true,
+      }
       : {
-          requirePasscode: security.requirePasscode ?? false,
-        }),
+        requirePasscode: security.requirePasscode ?? false,
+      }),
   }
 
   const meetingOptions = {
