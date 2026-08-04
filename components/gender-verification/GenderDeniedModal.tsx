@@ -59,6 +59,7 @@ export function GenderDeniedModal({ open, onClose, onVerify }: GenderDeniedModal
           borderBottomWidth={1}
           borderBottomColor={ui.borderSubtle}
           backgroundColor={ui.background}
+          top={60}
         >
           <XStack alignItems="center" gap="$3" flex={1}>
             <YStack
@@ -96,6 +97,7 @@ export function GenderDeniedModal({ open, onClose, onVerify }: GenderDeniedModal
             borderRadius={radius.chip}
             backgroundColor={ui.roseSurface}
             gap="$1.5"
+            top={44}
           >
             <Text fontSize={15} fontWeight="700" color={ui.text}>
               This platform is built for women
@@ -111,6 +113,7 @@ export function GenderDeniedModal({ open, onClose, onVerify }: GenderDeniedModal
             borderRadius={radius.chip}
             backgroundColor={ui.surfaceMuted}
             gap="$2"
+            top={34}
           >
             <Text fontSize={13} fontWeight="700" color={ui.text}>
               What you can still do
@@ -129,11 +132,11 @@ export function GenderDeniedModal({ open, onClose, onVerify }: GenderDeniedModal
             ))}
           </YStack>
 
-          <Text fontSize={12} color={ui.textMuted} textAlign="center" lineHeight={18}>
+          <Text fontSize={12} color={ui.textMuted} textAlign="center" lineHeight={18} top={24}>
             Thank you for understanding and supporting women in business on {BRAND_NAME}.
           </Text>
 
-          <YStack gap="$2.5">
+          <YStack gap="$2.5" top={24}>
             <Button tone="primary" size="$4" borderRadius={radius.pill} onPress={onVerify}>
               Verify myself
             </Button>
