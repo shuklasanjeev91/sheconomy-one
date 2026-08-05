@@ -505,6 +505,8 @@ export function CheckoutScreen() {
     setIsSubmitting(true)
 
     let shippingAddressId = selectedAddressId
+    /** Web Razorpay same-tab handoff — leave the button in a busy state until navigation. */
+    let keepSubmittingForRedirect = false
 
     try {
       // Validate stock up-front so a multi-shop order never places some orders
@@ -514,7 +516,6 @@ export function CheckoutScreen() {
       )
       if (stockError) {
         toast.show('Could not verify stock', { tone: 'danger', message: stockError })
-        setIsSubmitting(false)
         return
       }
       if (issues.length > 0) {
@@ -526,7 +527,6 @@ export function CheckoutScreen() {
               ? `Only ${first.available} left of "${first.title}". Update the quantity in your cart.`
               : `${issues.length} items exceed available stock. Update quantities in your cart.`,
         })
-        setIsSubmitting(false)
         navigateApp(commerceRoutes.cart)
         return
       }
@@ -534,7 +534,6 @@ export function CheckoutScreen() {
       if (needsShipping) {
         if (useNewAddress) {
           if (!addressForm.validateAll()) {
-            setIsSubmitting(false)
             return
           }
           const draftAddress: CheckoutAddressInput = {
@@ -545,20 +544,17 @@ export function CheckoutScreen() {
           const addressValidationError = validateAddressInput(draftAddress)
           if (addressValidationError) {
             toast.show('Check your address', { tone: 'danger', message: addressValidationError })
-            setIsSubmitting(false)
             return
           }
           const { address, error } = await saveUserAddress(user.id, draftAddress)
           if (error || !address) {
             toast.show('Could not save address', { tone: 'danger', message: error ?? undefined })
-            setIsSubmitting(false)
             return
           }
           shippingAddressId = address.id
         }
         if (!shippingAddressId) {
           toast.show('Select a delivery address', { tone: 'danger' })
-          setIsSubmitting(false)
           return
         }
       } else if (!shippingAddressId && addresses[0]?.id) {
@@ -567,7 +563,6 @@ export function CheckoutScreen() {
 
       if (!shippingAddressId) {
         toast.show('Add an address for your order records', { tone: 'danger' })
-        setIsSubmitting(false)
         return
       }
 
@@ -589,7 +584,6 @@ export function CheckoutScreen() {
             message:
               'The applied offer no longer applies to your selected items. Review your order and try again.',
           })
-          setIsSubmitting(false)
           return
         }
       }
@@ -619,7 +613,6 @@ export function CheckoutScreen() {
           tone: 'danger',
           message: result.error ?? 'Please try again.',
         })
-        setIsSubmitting(false)
         return
       }
 
@@ -676,7 +669,6 @@ export function CheckoutScreen() {
           tone: 'danger',
           message: next.error,
         })
-        setIsSubmitting(false)
         return
       }
 
@@ -711,23 +703,26 @@ export function CheckoutScreen() {
           // Same-tab redirect: razorpay-return handles the callback.
           // Do NOT set orderPlaced — the page is destroyed immediately after redirect.
           // The button switches to "Redirecting to payment…" for the brief moment before navigation.
+          keepSubmittingForRedirect = true
           setIsRedirectingToPayment(true)
           setTimeout(() => {
             window.location.href = next.url
           }, 120)
           return
         }
-        // Native / non-Razorpay external: open in browser then show pending order screen.
+        // Native / non-Razorpay external: navigate first, then open payment (never await
+        // Linking.openURL — it can hang while Safari is open and looks like infinite loading).
         setOrderPlaced(true)
-        const opened = await openExternalUrl(next.url)
         replaceApp(successHref)
         void refresh()
-        if (!opened) {
-          toast.show('Complete payment', {
-            tone: 'info',
-            message: 'Allow pop-ups, or use Resume payment on the next screen.',
-          })
-        }
+        void openExternalUrl(next.url).then((opened) => {
+          if (!opened) {
+            toast.show('Complete payment', {
+              tone: 'info',
+              message: 'Allow pop-ups, or use Resume payment on the next screen.',
+            })
+          }
+        })
         return
       }
 
@@ -758,7 +753,10 @@ export function CheckoutScreen() {
       void refresh()
     } catch {
       toast.show('Checkout failed', { tone: 'danger', message: 'Please try again.' })
-      setIsSubmitting(false)
+    } finally {
+      if (!keepSubmittingForRedirect) {
+        setIsSubmitting(false)
+      }
     }
   }
 
