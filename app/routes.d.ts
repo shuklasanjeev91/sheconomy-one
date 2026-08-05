@@ -122,6 +122,8 @@ declare module 'one' {
         | `/payment-methods`
         | `/profile`
         | `/search`
+        | `/seller-landing`
+        | `/seller-landing/`
         | `/seller/dashboard`
         | `/settings`
         | `/settings/`

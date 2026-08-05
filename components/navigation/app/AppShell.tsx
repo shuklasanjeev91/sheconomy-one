@@ -54,6 +54,7 @@ function useChromelessRoute() {
   )
 }
 
+
 function useCompactMobileTopBar() {
   const pathname = usePathname()
   if (
@@ -98,6 +99,7 @@ export function AppShell({ children }: AppShellProps) {
   const pathname = usePathname()
   const chromeless = useChromelessRoute()
   const authScreen = useAuthScreen()
+  const isSellerLanding = pathname === '/seller-landing' || pathname.startsWith('/seller-landing/')
   const compactMobileTopBar = useCompactMobileTopBar()
   const showCommerceFooter =
     isDesktopWeb &&
@@ -177,7 +179,7 @@ export function AppShell({ children }: AppShellProps) {
             </YStack>
             <WarmTopTabRoutes />
             {showCommerceFooter ? <CommerceDesktopFooter /> : null}
-            {!isDesktop && !chatConversationMobile ? <AppMobileBottomTabs /> : null}
+            {!isDesktop && !chatConversationMobile && !isSellerLanding ? <AppMobileBottomTabs /> : null}
             {/* Global overlays — bottom tabs can open these outside section layouts
                 (e.g. Create Post from /profile, New chat from any chat route). */}
             <CommunityComposerHost />

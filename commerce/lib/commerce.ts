@@ -233,12 +233,13 @@ const LISTING_CATALOG_SELECT = `
   listing_delivery_profiles(
     delivery_profiles(${DELIVERY_PROFILE_FIELDS})
   ),
-  shops(
+  shops!inner(
     shop_name,
     shop_currency,
     average_rating,
     total_reviews,
     verified,
+    is_active,
     shop_metadata,
     delivery_profiles(${DELIVERY_PROFILE_FIELDS})
   )
@@ -268,12 +269,13 @@ const LISTING_CARD_SELECT = `
   shipping_required,
   listing_metadata,
   listing_images!inner(id, image_url, is_primary, display_order, alt_text, image_metadata),
-  shops(
+  shops!inner(
     shop_name,
     shop_currency,
     average_rating,
     total_reviews,
-    verified
+    verified,
+    is_active
   )
 `
 
@@ -400,6 +402,8 @@ export async function fetchListingsByIds(ids: string[]): Promise<ListingSummary[
     .in('id', ids)
     .eq('is_active', true)
     .eq('listing_status', 'active')
+    .eq('shops.is_active', true)
+    .eq('shops.verified', true)
 
   if (error || !data?.length) return []
 
@@ -429,6 +433,8 @@ export async function fetchActiveListingCards(
     .select(LISTING_CARD_SELECT)
     .eq('is_active', ACTIVE_LISTING_FILTER.is_active)
     .eq('listing_status', ACTIVE_LISTING_FILTER.listing_status)
+    .eq('shops.is_active', true)
+    .eq('shops.verified', true)
     .limit(limit + (filters.excludeId ? 2 : 0))
 
   if (filters.shopId) query = query.eq('shop_id', filters.shopId)
@@ -697,6 +703,8 @@ export async function fetchListingFeedPage(
     .select(LISTING_CATALOG_SELECT, { count: 'exact' })
     .eq('is_active', ACTIVE_LISTING_FILTER.is_active)
     .eq('listing_status', ACTIVE_LISTING_FILTER.listing_status)
+    .eq('shops.is_active', true)
+    .eq('shops.verified', true)
 
   if (kind === 'physical' || options?.listingType === 'physical') {
     query = query.eq('listing_type', 'physical')
@@ -1129,6 +1137,8 @@ export async function fetchCategoryListingsPage(
     .in('category_assignments.category_id', categoryIds)
     .eq('is_active', ACTIVE_LISTING_FILTER.is_active)
     .eq('listing_status', ACTIVE_LISTING_FILTER.listing_status)
+    .eq('shops.is_active', true)
+    .eq('shops.verified', true)
 
   if (listingIdConstraint) {
     baseQuery = baseQuery.in('id', listingIdConstraint)

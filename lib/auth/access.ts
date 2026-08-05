@@ -83,6 +83,7 @@ function isHelpPath(pathname: string) {
 export function getPathFeature(pathname: string): AppFeature | 'auth' | 'public' {
   if (pathname.startsWith('/auth/')) return 'auth'
   if (pathname === '/ui-kit' || pathname.startsWith('/ui-kit/')) return 'public'
+  if (pathname === '/seller-landing' || pathname.startsWith('/seller-landing/')) return 'public'
   if (isHelpPath(pathname)) return 'public'
   if (isPublicProfilePath(pathname)) return 'public'
   if (isClassPath(pathname)) return 'class'
