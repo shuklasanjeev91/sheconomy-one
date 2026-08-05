@@ -1,8 +1,8 @@
 import 'jsr:@supabase/functions-js/edge-runtime.d.ts'
 import { createClient } from 'jsr:@supabase/supabase-js@2'
 
-import { corsHeaders, jsonResponse } from '~/supabase/functions/_shared/cors.ts'
-import { payUResponseHash } from '~/supabase/functions/_shared/payu.ts'
+import { corsHeaders, jsonResponse } from '../_shared/cors.ts'
+import { payUResponseHash, resolvePayuCredentials, type PayuCredentials } from '../_shared/payu.ts'
 
 function pick(form: Record<string, string>, ...keys: string[]) {
   for (const key of keys) {
@@ -26,17 +26,48 @@ async function parseBody(request: Request): Promise<Record<string, string>> {
   return out
 }
 
+function collectCredentialCandidates(): PayuCredentials[] {
+  const active = resolvePayuCredentials()
+  const out: PayuCredentials[] = []
+  if (active) out.push(active)
+
+  const liveKey =
+    Deno.env.get('PAYU_LIVE_MERCHANT_KEY')?.trim() || Deno.env.get('PAYU_MERCHANT_KEY')?.trim()
+  const liveSalt =
+    Deno.env.get('PAYU_LIVE_MERCHANT_SALT')?.trim() || Deno.env.get('PAYU_MERCHANT_SALT')?.trim()
+  if (liveKey && liveSalt && !out.some((c) => c.key === liveKey && c.salt === liveSalt)) {
+    out.push({
+      mode: 'live',
+      key: liveKey,
+      salt: liveSalt,
+      baseUrl: 'https://secure.payu.in',
+    })
+  }
+
+  const testKey = Deno.env.get('PAYU_TEST_MERCHANT_KEY')?.trim()
+  const testSalt = Deno.env.get('PAYU_TEST_MERCHANT_SALT')?.trim()
+  if (testKey && testSalt && !out.some((c) => c.key === testKey && c.salt === testSalt)) {
+    out.push({
+      mode: 'test',
+      key: testKey,
+      salt: testSalt,
+      baseUrl: 'https://test.payu.in',
+    })
+  }
+
+  return out
+}
+
 Deno.serve(async (request) => {
   if (request.method === 'OPTIONS') {
     return new Response('ok', { headers: corsHeaders })
   }
   if (request.method !== 'POST') return jsonResponse({ error: 'Method not allowed' }, 405)
 
-  const key = Deno.env.get('PAYU_MERCHANT_KEY')?.trim()
-  const salt = Deno.env.get('PAYU_MERCHANT_SALT')?.trim()
   const supabaseUrl = Deno.env.get('SUPABASE_URL')
   const serviceRole = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')
-  if (!key || !salt || !supabaseUrl || !serviceRole) {
+  const candidates = collectCredentialCandidates()
+  if (!candidates.length || !supabaseUrl || !serviceRole) {
     return jsonResponse({ error: 'SHEPay webhook not configured' }, 503)
   }
 
@@ -54,30 +85,45 @@ Deno.serve(async (request) => {
   const udf5 = pick(form, 'udf5')
   const hash = pick(form, 'hash')
   const mihpayid = pick(form, 'mihpayid')
+  const responseKey = pick(form, 'key')
 
   if (!status || !txnid || !udf1 || !hash) {
     return jsonResponse({ error: 'Missing PayU fields' }, 400)
   }
 
-  const expected = await payUResponseHash(
-    {
-      key,
-      txnid,
-      amount,
-      productinfo,
-      firstname,
-      email,
-      udf1,
-      udf2,
-      udf3,
-      udf4,
-      udf5,
-      status,
-    },
-    salt,
-  )
+  const ordered = responseKey
+    ? [
+        ...candidates.filter((c) => c.key === responseKey),
+        ...candidates.filter((c) => c.key !== responseKey),
+      ]
+    : candidates
 
-  if (expected.toLowerCase() !== hash.toLowerCase()) {
+  let matched: PayuCredentials | null = null
+  for (const cred of ordered) {
+    const expected = await payUResponseHash(
+      {
+        key: cred.key,
+        txnid,
+        amount,
+        productinfo,
+        firstname,
+        email,
+        udf1,
+        udf2,
+        udf3,
+        udf4,
+        udf5,
+        status,
+      },
+      cred.salt,
+    )
+    if (expected.toLowerCase() === hash.toLowerCase()) {
+      matched = cred
+      break
+    }
+  }
+
+  if (!matched) {
     return jsonResponse({ error: 'Invalid PayU hash' }, 401)
   }
 
@@ -106,5 +152,5 @@ Deno.serve(async (request) => {
   })
 
   if (error) return jsonResponse({ error: error.message }, 500)
-  return jsonResponse({ ok: true, result: data })
+  return jsonResponse({ ok: true, result: data, payu_env: matched.mode })
 })

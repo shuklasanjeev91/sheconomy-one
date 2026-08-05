@@ -1,5 +1,9 @@
 import { supabase } from '~/lib/supabase/client'
 import { savePayuBridgeSession } from '~/commerce/lib/payu-bridge'
+import {
+  resolvePayuPaymentMode,
+  type PayuPaymentModeId,
+} from '~/commerce/lib/payu-payment-modes'
 
 export type ShepayPayuCreateResult = {
   checkout_url: string
@@ -9,19 +13,32 @@ export type ShepayPayuCreateResult = {
   payment_step_id: string
 }
 
+export type ShepayPayuSessionOptions = {
+  paymentMethodId?: string | null
+  /** Checkout chip id — preferred over raw pg */
+  payuMode?: PayuPaymentModeId | string | null
+  payuPg?: string | null
+  payuBankcode?: string | null
+  extraFields?: Record<string, string> | null
+}
+
 /** Create a PayU SHEPay session for a checkout payment step (collection=shepay). */
 export async function createShepayPayuSession(
   paymentStepId: string,
-  options?: { paymentMethodId?: string | null; payuPg?: string | null },
+  options?: ShepayPayuSessionOptions,
 ): Promise<{
   data: ShepayPayuCreateResult | null
   error: string | null
 }> {
+  const mode = resolvePayuPaymentMode(options?.payuMode)
   const { data, error } = await supabase.functions.invoke('shepay-payu-create', {
     body: {
       payment_step_id: paymentStepId,
       payment_method_id: options?.paymentMethodId ?? null,
-      pg: options?.payuPg ?? null,
+      mode: mode.id,
+      pg: options?.payuPg ?? mode.pg ?? null,
+      bankcode: options?.payuBankcode ?? mode.bankcode ?? null,
+      extra_fields: options?.extraFields ?? mode.extraFields ?? null,
     },
   })
 
@@ -43,7 +60,7 @@ export async function createShepayPayuSession(
 /** For each SHEPay step without a URL, create a PayU session and return the first checkout URL. */
 export async function ensureShepayCheckoutUrl(
   paymentSteps: Array<{ id: string; collection?: string; checkoutUrl?: string | null }>,
-  options?: { paymentMethodId?: string | null; payuPg?: string | null },
+  options?: ShepayPayuSessionOptions,
 ): Promise<{ checkoutUrl: string | null; error: string | null }> {
   const shepaySteps = paymentSteps.filter((step) => step.collection === 'shepay')
 

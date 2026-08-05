@@ -30,7 +30,7 @@ describe('onlinePaymentOptionCopy', () => {
       shepayShops: [{ shopName: 'Platform Shop' }],
       directShops: [],
     })
-    expect(copy.title).toBe('Pay online')
+    expect(copy.title).toBe('Pay online via SHEPay')
     expect(copy.subtitle.toLowerCase()).toContain('payu')
   })
 
