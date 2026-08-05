@@ -48,7 +48,7 @@ const NON_COMMERCE_PREFIXES = [
   '/help',
   '/legal',
   '/vendor',
-  '/seller-landing',
+  '/sellerlanding',
 ] as const
 
 export const commerceRoutes = {

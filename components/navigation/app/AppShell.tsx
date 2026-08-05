@@ -99,7 +99,7 @@ export function AppShell({ children }: AppShellProps) {
   const pathname = usePathname()
   const chromeless = useChromelessRoute()
   const authScreen = useAuthScreen()
-  const isSellerLanding = pathname === '/seller-landing' || pathname.startsWith('/seller-landing/')
+  const isSellerLanding = pathname === '/sellerlanding' || pathname.startsWith('/sellerlanding/')
   const compactMobileTopBar = useCompactMobileTopBar()
   const showCommerceFooter =
     isDesktopWeb &&
