@@ -6,21 +6,39 @@
  *
  * Usage:
  *   GET https://<project>.supabase.co/functions/v1/image-proxy?url=<encoded-url>
- *
- * This is the Deno/Edge port of the old Next.js /api/image-proxy route.
- * Logic is identical — only the runtime changed.
  */
 import 'jsr:@supabase/functions-js/edge-runtime.d.ts'
 import { corsHeaders } from '../_shared/cors.ts'
 
-// ─── Helpers ─────────────────────────────────────────────────────────────────
+// ─── Config ───────────────────────────────────────────────────────────────────
 
-const PROXY_REQUIRED_HOSTS = new Set([
-  'ibb.co',
-  'www.ibb.co',
-  'dropbox.com',
-  'www.dropbox.com',
-])
+/**
+ * Hard timeout on every outbound fetch.
+ * Without this, a slow host causes Supabase to kill the function with 502
+ * after ~12s. We fail fast with 504 instead.
+ */
+const FETCH_TIMEOUT_MS = 8_000
+
+/**
+ * A realistic browser UA so hosts like imgbb don't block the request.
+ * The old "SHEconomyProxy/1.0" UA was likely getting rate-limited.
+ */
+const BROWSER_UA =
+  'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36'
+
+const PAGE_FETCH_HEADERS = {
+  'user-agent': BROWSER_UA,
+  accept: 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
+  'accept-language': 'en-US,en;q=0.5',
+  'cache-control': 'no-cache',
+}
+
+const IMAGE_FETCH_HEADERS = {
+  'user-agent': BROWSER_UA,
+  accept: 'image/webp,image/avif,image/*,*/*;q=0.8',
+}
+
+// ─── Allowlists ───────────────────────────────────────────────────────────────
 
 const ALLOWED_HOSTS_EXACT = new Set([
   'ibb.co', 'www.ibb.co', 'i.ibb.co',
@@ -49,6 +67,12 @@ const ALLOWED_HOST_SUFFIXES = [
   '.cloudflareimages.com',
   '.imageshack.com',
   '.staticflickr.com',
+  '.supabase.co',
+  '.ibb.co',
+  '.dropbox.com',
+  '.imgur.com',
+  '.postimg.cc',
+  '.cloudfront.net',
 ]
 
 function isAllowedHost(hostname: string): boolean {
@@ -59,6 +83,8 @@ function isAllowedHost(hostname: string): boolean {
 
 function isIbb(hostname: string): boolean {
   const h = hostname.toLowerCase()
+  // Only share pages (ibb.co / www.ibb.co) need HTML scraping.
+  // Direct URLs (i.ibb.co) are fetched straight.
   return h === 'ibb.co' || h === 'www.ibb.co'
 }
 
@@ -67,12 +93,50 @@ function isDropbox(hostname: string): boolean {
   return h === 'dropbox.com' || h === 'www.dropbox.com'
 }
 
+// ─── HTML og:image extraction ─────────────────────────────────────────────────
+
+/**
+ * Extract a direct image URL from a share-page HTML string.
+ *
+ * imgbb changed their meta-tag attribute ORDER in 2024/2025:
+ *   old: <meta property="og:image" content="...">
+ *   new: <meta content="..." property="og:image">
+ *
+ * We try all orderings + twitter:image as a further fallback.
+ */
 function extractOgImage(html: string): string | null {
-  const m = html.match(/<meta[^>]+property=["']og:image["'][^>]+content=["']([^"']+)["']/i)
-  if (m?.[1]) return m[1]
-  const l = html.match(/<link[^>]+rel=["']image_src["'][^>]+href=["']([^"']+)["']/i)
+  // Standard: property first, then content
+  const m1 = html.match(
+    /<meta[^>]+property=["']og:image["'][^>]+content=["']([^"']+)["']/i,
+  )
+  if (m1?.[1]) return m1[1]
+
+  // imgbb's current format: content first, then property
+  const m2 = html.match(
+    /<meta[^>]+content=["']([^"']+)["'][^>]+property=["']og:image["']/i,
+  )
+  if (m2?.[1]) return m2[1]
+
+  // Twitter card: <meta name="twitter:image" content="...">
+  const m3 = html.match(
+    /<meta[^>]+name=["']twitter:image["'][^>]+content=["']([^"']+)["']/i,
+  )
+  if (m3?.[1]) return m3[1]
+
+  // Twitter card reversed: content first, then name
+  const m4 = html.match(
+    /<meta[^>]+content=["']([^"']+)["'][^>]+name=["']twitter:image["']/i,
+  )
+  if (m4?.[1]) return m4[1]
+
+  // Legacy rel=image_src <link>
+  const l = html.match(
+    /<link[^>]+rel=["']image_src["'][^>]+href=["']([^"']+)["']/i,
+  )
   return l?.[1] ?? null
 }
+
+// ─── Other helpers ────────────────────────────────────────────────────────────
 
 function buildDropboxRawUrl(u: URL): string {
   const c = new URL(u.toString())
@@ -92,16 +156,22 @@ function mimeFromPath(pathname: string): string | null {
   return ext ? (map[ext] ?? null) : null
 }
 
+function isTimeout(e: unknown): boolean {
+  return e instanceof Error && (e.name === 'TimeoutError' || e.name === 'AbortError')
+}
+
 // ─── Handler ─────────────────────────────────────────────────────────────────
 
 Deno.serve(async (request) => {
-  // CORS preflight
   if (request.method === 'OPTIONS') {
     return new Response('ok', { headers: corsHeaders })
   }
 
   if (request.method !== 'GET') {
-    return Response.json({ error: 'Method not allowed' }, { status: 405, headers: corsHeaders })
+    return Response.json(
+      { error: 'Method not allowed' },
+      { status: 405, headers: corsHeaders },
+    )
   }
 
   try {
@@ -109,7 +179,10 @@ Deno.serve(async (request) => {
     const source = searchParams.get('url')
 
     if (!source) {
-      return Response.json({ error: 'Missing url parameter' }, { status: 400, headers: corsHeaders })
+      return Response.json(
+        { error: 'Missing url parameter' },
+        { status: 400, headers: corsHeaders },
+      )
     }
 
     let parsed: URL
@@ -120,7 +193,10 @@ Deno.serve(async (request) => {
     }
 
     if (parsed.protocol !== 'https:' && parsed.protocol !== 'http:') {
-      return Response.json({ error: 'Only http/https supported' }, { status: 400, headers: corsHeaders })
+      return Response.json(
+        { error: 'Only http/https supported' },
+        { status: 400, headers: corsHeaders },
+      )
     }
 
     if (!isAllowedHost(parsed.hostname)) {
@@ -133,71 +209,128 @@ Deno.serve(async (request) => {
     let targetUrl = parsed.toString()
     let originalPathMime: string | null = null
 
-    // ── IBB: fetch page → extract og:image ──
+    // ── IBB share page → extract og:image direct URL ─────────────────────────
     if (isIbb(parsed.hostname)) {
-      const pageRes = await fetch(targetUrl, {
-        redirect: 'follow',
-        headers: { 'user-agent': 'Mozilla/5.0 (compatible; SHEconomyProxy/1.0)' },
-      })
-      if (!pageRes.ok) {
-        return Response.json({ error: 'Failed to load IBB page' }, { status: 502, headers: corsHeaders })
+      let pageRes: Response
+      try {
+        pageRes = await fetch(targetUrl, {
+          signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
+          redirect: 'follow',
+          headers: PAGE_FETCH_HEADERS,
+        })
+      } catch (e) {
+        return Response.json(
+          {
+            error: isTimeout(e)
+              ? `IBB page did not respond within ${FETCH_TIMEOUT_MS / 1000}s`
+              : 'Failed to reach IBB',
+            details: (e as Error)?.message,
+          },
+          { status: 504, headers: corsHeaders },
+        )
       }
+
+      if (!pageRes.ok) {
+        return Response.json(
+          { error: `IBB page returned HTTP ${pageRes.status}` },
+          { status: 502, headers: corsHeaders },
+        )
+      }
+
       const html = await pageRes.text()
       const ogImage = extractOgImage(html)
+
       if (!ogImage) {
-        return Response.json({ error: 'Could not extract image from IBB' }, { status: 422, headers: corsHeaders })
+        return Response.json(
+          { error: 'Could not extract direct image URL from IBB page (og:image / twitter:image not found)' },
+          { status: 422, headers: corsHeaders },
+        )
       }
-      const ogParsed = new URL(ogImage)
+
+      let ogParsed: URL
+      try {
+        ogParsed = new URL(ogImage)
+      } catch {
+        return Response.json(
+          { error: 'Extracted IBB image URL is invalid' },
+          { status: 422, headers: corsHeaders },
+        )
+      }
+
       if (!isAllowedHost(ogParsed.hostname)) {
-        return Response.json({ error: 'Resolved host not allowed' }, { status: 403, headers: corsHeaders })
+        return Response.json(
+          { error: 'Resolved host not allowed' },
+          { status: 403, headers: corsHeaders },
+        )
       }
+
       targetUrl = ogImage
     }
 
-    // ── Dropbox /scl/fi/ → raw download URL ──
+    // ── Dropbox /scl/fi/ → raw download URL ──────────────────────────────────
     if (isDropbox(parsed.hostname) && parsed.pathname.startsWith('/scl/fi/')) {
       originalPathMime = mimeFromPath(parsed.pathname)
       targetUrl = buildDropboxRawUrl(parsed)
     }
 
-    // ── Fetch the actual image ──
-    const upstream = await fetch(targetUrl, {
-      redirect: 'follow',
-      headers: { 'user-agent': 'Mozilla/5.0 (compatible; SHEconomyProxy/1.0)' },
-    })
+    // ── Fetch the actual image ────────────────────────────────────────────────
+    let upstream: Response
+    try {
+      upstream = await fetch(targetUrl, {
+        signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
+        redirect: 'follow',
+        headers: IMAGE_FETCH_HEADERS,
+      })
+    } catch (e) {
+      return Response.json(
+        {
+          error: isTimeout(e)
+            ? `Image fetch did not respond within ${FETCH_TIMEOUT_MS / 1000}s`
+            : 'Failed to fetch image',
+          details: (e as Error)?.message,
+        },
+        { status: 504, headers: corsHeaders },
+      )
+    }
 
     if (!upstream.ok || !upstream.body) {
-      return Response.json({ error: 'Failed to fetch image' }, { status: 502, headers: corsHeaders })
+      return Response.json(
+        { error: `Upstream returned HTTP ${upstream.status}` },
+        { status: 502, headers: corsHeaders },
+      )
     }
 
     const upstreamType = (upstream.headers.get('content-type') ?? '')
-      .split(';')[0].trim().toLowerCase()
+      .split(';')[0]
+      .trim()
+      .toLowerCase()
 
     let contentType = upstreamType
 
     if (!upstreamType.startsWith('image/')) {
-      // Try to infer from resolved URL or original Dropbox path
       const inferred =
         mimeFromPath(new URL(upstream.url || targetUrl).pathname) ??
         originalPathMime
       if (inferred) {
         contentType = inferred
       } else {
-        return Response.json({ error: 'URL is not an image' }, { status: 415, headers: corsHeaders })
+        return Response.json(
+          { error: 'URL is not an image' },
+          { status: 415, headers: corsHeaders },
+        )
       }
     }
 
     const responseHeaders = new Headers({
       ...corsHeaders,
       'Content-Type': contentType,
-      'Cache-Control': 'public, max-age=86400, s-maxage=86400', // 24h — images don't change
+      'Cache-Control': 'public, max-age=86400, s-maxage=86400',
     })
 
     const contentLength = upstream.headers.get('content-length')
     if (contentLength) responseHeaders.set('Content-Length', contentLength)
 
     return new Response(upstream.body, { status: 200, headers: responseHeaders })
-
   } catch (err) {
     return Response.json(
       { error: 'Proxy error', details: (err as Error)?.message },

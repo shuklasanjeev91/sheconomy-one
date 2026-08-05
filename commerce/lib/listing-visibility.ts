@@ -8,6 +8,16 @@ export const ACTIVE_LISTING_FILTER = {
   listing_status: ACTIVE_LISTING_STATUS,
 } as const
 
+/**
+ * Shop must be active AND verified for its listings to appear in the storefront.
+ * Applied as `.eq('shops.is_active', true).eq('shops.verified', true)` on queries
+ * that join `shops!inner(...)`.
+ */
+export const ACTIVE_SHOP_FILTER = {
+  is_active: true,
+  verified: true,
+} as const
+
 export type ListingVisibilityFields = {
   is_active?: boolean | null
   listing_status?: string | null
@@ -25,10 +35,12 @@ export async function fetchActiveListingIdSet(ids: string[]): Promise<Set<string
 
   const { data, error } = await supabase
     .from('listings')
-    .select('id')
+    .select('id, shops!inner(is_active, verified)')
     .in('id', ids)
     .eq('is_active', ACTIVE_LISTING_FILTER.is_active)
     .eq('listing_status', ACTIVE_LISTING_FILTER.listing_status)
+    .eq('shops.is_active', ACTIVE_SHOP_FILTER.is_active)
+    .eq('shops.verified', ACTIVE_SHOP_FILTER.verified)
 
   if (error || !data?.length) return new Set()
 
