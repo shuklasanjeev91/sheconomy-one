@@ -33,6 +33,7 @@ import { PushNotificationsProvider } from '~/providers/PushNotificationsProvider
 import { PushForegroundNotificationHost } from '~/components/notifications/PushForegroundNotificationHost'
 import { PushSubscribePromptHost } from '~/components/notifications/PushSubscribePromptHost'
 import { AutomaticUpdateManager } from '~/components/system/AutomaticUpdateManager'
+import { UniversalLinksHost } from '~/components/system/UniversalLinksHost'
 import { SupabaseProvider } from '~/providers/SupabaseProvider'
 import { AiAssistProvider } from '~/providers/AiAssistProvider'
 import { ConnectivityProvider } from '~/providers/ConnectivityProvider'
@@ -59,6 +60,7 @@ function AppProviders({ children }: { children: ReactNode }) {
                               <ScreenZoomRoot>
                                 <ConnectivityProvider>
                                   <AutomaticUpdateManager />
+                                  <UniversalLinksHost />
                                   <PushSubscribePromptHost />
                                   <PushForegroundNotificationHost />
                                   <AppBootstrapPrefetch />

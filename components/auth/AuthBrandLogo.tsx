@@ -5,8 +5,8 @@ export function AuthBrandLogo({ compact = false }: { compact?: boolean }) {
   return (
     <BrandLogo
       compact={compact}
-      width={compact ? 40 : 160}
-      height={compact ? 40 : 44}
+      width={compact ? 48 : 180}
+      height={compact ? 48 : 52}
     />
   )
 }

@@ -51,6 +51,7 @@ import {
   onlinePaymentOptionCopy,
   resolvePostCheckoutNext,
 } from '~/commerce/lib/checkout-payment-route'
+import { parsePayuBridgeParams, savePayuBridgeSession } from '~/commerce/lib/payu-bridge'
 import { savePendingOrderSuccess } from '~/commerce/lib/customer-orders'
 import {
   computeCheckoutShippingQuote,
@@ -699,6 +700,19 @@ export function CheckoutScreen() {
       const successHref = commerceRoutes.orderSuccess(orderIds)
 
       if (next.kind === 'payu_bridge') {
+        // Stash action+fields so native bridge does not rely only on huge query strings.
+        try {
+          const parsed = new URL(next.href, 'https://sheconomy.local')
+          const stashed = parsePayuBridgeParams(
+            parsed.searchParams.get('action') ?? '',
+            parsed.searchParams.get('payload') ?? '',
+          )
+          if (stashed.action && stashed.fields) {
+            savePayuBridgeSession(stashed.action, stashed.fields)
+          }
+        } catch {
+          // keep navigating; bridge may still read query params
+        }
         setOrderPlaced(true)
         void refresh()
         replaceApp(next.href as never)

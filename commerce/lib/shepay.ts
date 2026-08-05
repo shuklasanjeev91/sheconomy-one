@@ -1,4 +1,5 @@
 import { supabase } from '~/lib/supabase/client'
+import { savePayuBridgeSession } from '~/commerce/lib/payu-bridge'
 
 export type ShepayPayuCreateResult = {
   checkout_url: string
@@ -31,6 +32,10 @@ export async function createShepayPayuSession(
   const payload = data as ShepayPayuCreateResult & { error?: string }
   if (payload?.error) return { data: null, error: payload.error }
   if (!payload?.checkout_url) return { data: null, error: 'SHEPay did not return a checkout URL' }
+
+  if (payload.action_url && payload.fields) {
+    savePayuBridgeSession(payload.action_url, payload.fields)
+  }
 
   return { data: payload, error: null }
 }
