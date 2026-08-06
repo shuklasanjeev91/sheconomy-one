@@ -102,9 +102,13 @@ export function isPayuReturnUrl(url: string | null | undefined): boolean {
   if (!url) return false
   try {
     const parsed = new URL(url, 'https://sheconomy.local')
-    return /\/orders\/payu-return\/?$/.test(parsed.pathname)
+    return (
+      /\/orders\/payu-return\/?$/.test(parsed.pathname) ||
+      /\/api\/payu-return\/?$/.test(parsed.pathname) ||
+      /\/functions\/v1\/shepay-payu-return\/?$/.test(parsed.pathname)
+    )
   } catch {
-    return /\/orders\/payu-return(\?|$)/.test(url)
+    return /\/orders\/payu-return(\?|$)/.test(url) || /shepay-payu-return(\?|$)/.test(url)
   }
 }
 
@@ -121,4 +125,31 @@ export function payuReturnStatusFromUrl(url: string): 'success' | 'failure' {
 
 export function payuReturnHref(status: 'success' | 'failure'): string {
   return `/orders/payu-return?status=${status}`
+}
+
+/** Browser form POST to PayU `_payment` (same as Postman curl, client-side). */
+export function submitPayuFormPost(
+  actionUrl: string,
+  fields: Record<string, string>,
+  target: '_self' | '_blank' = '_self',
+): void {
+  if (typeof document === 'undefined') return
+  const form = document.createElement('form')
+  form.method = 'POST'
+  form.action = actionUrl
+  form.target = target
+  form.style.display = 'none'
+  for (const [name, value] of Object.entries(fields)) {
+    const input = document.createElement('input')
+    input.type = 'hidden'
+    input.name = name
+    input.value = String(value ?? '')
+    form.appendChild(input)
+  }
+  document.body.appendChild(form)
+  form.submit()
+  // Keep form briefly for _blank; remove for _self (page unloads).
+  if (target === '_blank') {
+    window.setTimeout(() => form.remove(), 2000)
+  }
 }

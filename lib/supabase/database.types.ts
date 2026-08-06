@@ -12557,6 +12557,106 @@ export type Database = {
           },
         ]
       }
+      shepay_pending_settlements: {
+        Row: {
+          amount: number
+          checkout_group_id: string | null
+          child_merchant_key: string | null
+          child_mid: string | null
+          created_at: string
+          currency: string
+          error_message: string | null
+          id: string
+          payment_step_id: string | null
+          payu_id: string
+          release_payload: Json | null
+          released_at: string | null
+          shop_id: string
+          status: string
+          txnid: string | null
+          updated_at: string
+        }
+        Insert: {
+          amount: number
+          checkout_group_id?: string | null
+          child_merchant_key?: string | null
+          child_mid?: string | null
+          created_at?: string
+          currency?: string
+          error_message?: string | null
+          id?: string
+          payment_step_id?: string | null
+          payu_id: string
+          release_payload?: Json | null
+          released_at?: string | null
+          shop_id: string
+          status?: string
+          txnid?: string | null
+          updated_at?: string
+        }
+        Update: {
+          amount?: number
+          checkout_group_id?: string | null
+          child_merchant_key?: string | null
+          child_mid?: string | null
+          created_at?: string
+          currency?: string
+          error_message?: string | null
+          id?: string
+          payment_step_id?: string | null
+          payu_id?: string
+          release_payload?: Json | null
+          released_at?: string | null
+          shop_id?: string
+          status?: string
+          txnid?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "shepay_pending_settlements_checkout_group_id_fkey"
+            columns: ["checkout_group_id"]
+            isOneToOne: false
+            referencedRelation: "commerce_checkout_groups"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "shepay_pending_settlements_payment_step_id_fkey"
+            columns: ["payment_step_id"]
+            isOneToOne: false
+            referencedRelation: "commerce_checkout_payment_steps"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "shepay_pending_settlements_shop_id_fkey"
+            columns: ["shop_id"]
+            isOneToOne: false
+            referencedRelation: "active_listings_view"
+            referencedColumns: ["shop_id"]
+          },
+          {
+            foreignKeyName: "shepay_pending_settlements_shop_id_fkey"
+            columns: ["shop_id"]
+            isOneToOne: false
+            referencedRelation: "payment_analytics"
+            referencedColumns: ["shop_id"]
+          },
+          {
+            foreignKeyName: "shepay_pending_settlements_shop_id_fkey"
+            columns: ["shop_id"]
+            isOneToOne: false
+            referencedRelation: "shop_listings_summary"
+            referencedColumns: ["shop_id"]
+          },
+          {
+            foreignKeyName: "shepay_pending_settlements_shop_id_fkey"
+            columns: ["shop_id"]
+            isOneToOne: false
+            referencedRelation: "shops"
+            referencedColumns: ["id"]
+          },
+        ]
+      },
       shop_payment_accounts: {
         Row: {
           access_token: string | null

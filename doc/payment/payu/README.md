@@ -1,86 +1,55 @@
-# SHEPay / PayU Merchant Hosted Checkout
+# PayU / SHEPay — live multi-vendor bundle checkout
 
-SHEPay collects marketplace payments through PayU’s **Merchant Hosted** `_payment` form POST on **web and native** (iOS/Android WebView bridge).
+## Buyer flow
 
-Docs: [Custom Checkout (Merchant Hosted)](https://docs.payu.in/docs/custom-checkout-merchant-hosted)
+1. Multi-shop cart → `atomic_marketplace_checkout` creates **N orders** (one per shop).
+2. Client calls `finalize_shepay_bundle_charge` → **one** SHEPay charge step with `metadata.allocations[]`.
+3. Buyer pays once via live S2S (`shepay-payu-create` → `https://secure.payu.in/_payment`).
+4. Webhook marks **all** allocated orders paid, then:
+   - Shops **with** a connected child merchant → Automate **absolute `payment_split`** + **`release_settlement`** (immediate).
+   - Shops **without** a child merchant → amount stays on the parent and is stored in `shepay_pending_settlements`.
+5. When a vendor later connects SHEPay (`shepay-release-pending`), held rows are split + released automatically.
 
-## Flow (web + native)
+Buyers are **not** blocked if a shop has not connected PayU yet.
 
-1. Buyer places an online order with SHEPay collection.
-2. Edge function `shepay-payu-create` builds a signed PayU form (key, txnid, amount, hash, surl/furl).
-3. App opens `/orders/payu`:
-   - **Web:** hidden form auto-POST to PayU.
-   - **Native:** same HTML loaded in `WebView`; return URLs intercepted to `/orders/payu-return`.
-4. PayU shows enabled methods (or a preferred `pg` / `bankcode` when the buyer preselects one).
-5. Webhook `shepay-payu-webhook` confirms status (accepts **test or live** salt).
+## Vendor setup (easy)
 
-**PCI note:** Card PAN/CVV are **not** collected in the SHEconomy app. PayU hosts those fields.
+1. Vendor taps **Connect SHEPay** → **Open PayU setup** (same email/phone + shop code if asked).
+2. Vendor taps **Fetch my details & activate**.
+3. `shepay-sync-child` uses PayU Hub (`fetch_child_merchants`) to pull **pg_key** + **mid**, saves them, sets platform webhook, and releases held settlements.
 
-## Credentials (from PayU Dashboard → Developer → API Keys)
+Manual paste of key/MID remains available as a fallback.
 
-| Env | MID | Endpoint |
-|-----|-----|----------|
-| **Live** | `13665697` | `https://secure.payu.in/_payment` |
-| **Test** | `9267496` | `https://test.payu.in/_payment` |
-
-Toggle **Test Mode / Live Mode** in the PayU header to see each key/salt pair.
-
-### Supabase secrets
-
-Never commit key/salt. Set on project `zsaqrrzwygzwrlzgymxk`:
-
-```bash
-npx supabase secrets set \
-  PAYU_ENV=live \
-  PAYU_LIVE_MERCHANT_KEY='…' \
-  PAYU_LIVE_MERCHANT_SALT='…' \
-  PAYU_LIVE_MID='13665697' \
-  PAYU_TEST_MERCHANT_KEY='…' \
-  PAYU_TEST_MERCHANT_SALT='…' \
-  PAYU_TEST_MID='9267496' \
-  PAYU_MERCHANT_KEY='…' \
-  PAYU_MERCHANT_SALT='…' \
-  PAYU_BASE_URL='https://secure.payu.in' \
-  --project-ref zsaqrrzwygzwrlzgymxk
-```
+### Hub secrets (required for auto-fetch)
 
 | Secret | Purpose |
 |--------|---------|
-| `PAYU_ENV` | `live` (production / App Store) or `test` (sandbox) |
-| `PAYU_LIVE_*` | Live key / salt / MID |
-| `PAYU_TEST_*` | Test key / salt / MID |
-| `PAYU_MERCHANT_KEY` / `SALT` | Fallback (usually same as live) |
-| `PAYU_BASE_URL` | Live endpoint override |
+| `PAYU_HUB_CLIENT_ID` | Hub OAuth client id |
+| `PAYU_HUB_CLIENT_SECRET` | Hub OAuth client secret |
+| `PAYU_LIVE_MID` | Parent merchant MID for Sub Account Listing |
+| `PAYU_HUB_BASE_URL` | Optional, default `https://accounts.payu.in` |
+| `PAYU_ONBOARDING_BASE_URL` | Optional, default `https://onboarding.payu.in` |
 
-Redeploy after secret changes:
+Scopes on the Hub client: `fetch_child_merchants` (required), `refer_child_merchant` (optional for future create flow).
+
+## Vendor setup (legacy notes)
+
+- SHEPay only (Via SHEconomy).
+- Save **child merchant key** + **Child MID** (required for release).
+- `shop_commerce_settings.payment_mode = shepay`.
+- Until connected: sales still work; payouts show as **Amount on hold** and auto-transfer on connect.
+
+## Secrets (live)
+
+| Secret | Purpose |
+|--------|---------|
+| `PAYU_LIVE_MERCHANT_KEY` / `PAYU_MERCHANT_KEY` | Parent merchant key |
+| `PAYU_LIVE_MERCHANT_SALT` / `PAYU_MERCHANT_SALT` | Parent salt |
+| `PAYU_ENV=live` | Forced in code; secret kept for clarity |
+
+## Deploy
 
 ```bash
-npx supabase functions deploy shepay-payu-create shepay-payu-webhook --project-ref zsaqrrzwygzwrlzgymxk
+npx supabase db push --project-ref zsaqrrzwygzwrlzgymxk
+npx supabase functions deploy shepay-payu-create shepay-payu-bin shepay-payu-verify shepay-payu-webhook shepay-release-pending shepay-sync-child --project-ref zsaqrrzwygzwrlzgymxk
 ```
-
-Webhook URL (configure in PayU Dashboard → Developer → Webhooks for **both** Test and Live):
-
-`https://zsaqrrzwygzwrlzgymxk.supabase.co/functions/v1/shepay-payu-webhook`
-
-## Payment methods (`pg` / `bankcode`)
-
-| Method | pg | bankcode | Notes |
-|--------|----|----------|-------|
-| All (default) | _(omit)_ | — | PayU shows every method enabled on the dashboard |
-| Cards | `CC` | `CC` | Visa / MC / Amex etc. on PayU page |
-| Net Banking | `NB` | bank-specific | |
-| Wallets | `CASH` | wallet code | Paytm, PhonePe, etc. |
-| UPI | `UPI` | — | |
-| UPI Intent | `UPI` | `INTENT` | |
-| UPI / Store QR | `UPI` | `UPIDBQR` | |
-| EMI | `EMI` | plan/bank | |
-| BNPL | `BNPL` | provider | |
-| PayPal | `PAYPAL` | — | Activate in PayU Dashboard |
-| Pluxee (Sodexo) | `MC` | `SODEXO` | |
-| NEFT/RTGS | `NEFTRTGS` | `EFTAXTPV` | `api_version=6` |
-
-Enable each method under **PayU Dashboard → Payment Gateway** (per Test/Live mode).
-
-## Checkout UX
-
-Checkout chips under **Pay online** set `mode` → edge function maps to `pg`/`bankcode`. Default **All** omits `pg` so PayU’s full picker is used.

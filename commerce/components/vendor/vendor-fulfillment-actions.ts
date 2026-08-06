@@ -43,6 +43,7 @@ type StatusCopy = {
   hint: string
 }
 
+/** Happy-path pick/pack only — shipped / OFD / delivered come from courier tracking. */
 const ADVANCE_COPY: Partial<Record<FulfillmentStatus, StatusCopy>> = {
   [FULFILLMENT_STATUS.PROCESSING]: {
     label: 'Start picking',
@@ -54,25 +55,7 @@ const ADVANCE_COPY: Partial<Record<FulfillmentStatus, StatusCopy>> = {
     label: 'Mark packed',
     tone: 'primary',
     icon: 'PackageCheck',
-    hint: 'Packed and waiting for the carrier to collect.',
-  },
-  [FULFILLMENT_STATUS.SHIPPED]: {
-    label: 'Mark shipped',
-    tone: 'primary',
-    icon: 'Truck',
-    hint: 'Records the tracking number and starts the delivery clock.',
-  },
-  [FULFILLMENT_STATUS.OUT_FOR_DELIVERY]: {
-    label: 'Out for delivery',
-    tone: 'primary',
-    icon: 'Truck',
-    hint: 'The carrier is on the final leg.',
-  },
-  [FULFILLMENT_STATUS.DELIVERED]: {
-    label: 'Mark delivered',
-    tone: 'success',
-    icon: 'PackageCheck',
-    hint: 'Closes out the fulfilment as delivered.',
+    hint: 'Packed and waiting for the carrier to collect. Add tracking from Orders to ship.',
   },
   [FULFILLMENT_STATUS.DELIVERY_FAILED]: {
     label: 'Delivery failed',

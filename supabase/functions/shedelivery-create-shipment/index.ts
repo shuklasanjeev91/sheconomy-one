@@ -1,7 +1,7 @@
 import 'jsr:@supabase/functions-js/edge-runtime.d.ts'
 import { createClient } from 'jsr:@supabase/supabase-js@2'
 
-import { corsHeaders, jsonResponse } from '~/supabase/functions/_shared/cors.ts'
+import { corsHeaders, jsonResponse } from '../_shared/cors.ts'
 
 type Body = {
   order_id: string
@@ -113,21 +113,8 @@ Deno.serve(async (request) => {
     )
   }
 
-  await admin
-    .from('order_delivery')
-    .upsert(
-      {
-        order_id: body.order_id,
-        shiprocket_order_id: partner === 'shiprocket' ? shipmentId : null,
-        tracking_number: awb,
-        tracking_url: trackingUrl,
-        carrier: partner,
-        status: 'label_created',
-        updated_at: new Date().toISOString(),
-      } as never,
-      { onConflict: 'order_id' },
-    )
-
+  // Client saves the AWB via createTracking after review — do not write
+  // legacy column names onto order_delivery here.
   return jsonResponse({
     partner,
     shipment_id: shipmentId,

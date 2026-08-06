@@ -3,16 +3,19 @@ import { describe, expect, it } from 'vitest'
 import {
   PAYU_ALLOWED_PG,
   applyPayuPaymentModeFields,
+  payuGroupIdForMode,
+  payuModeNeedsS2s,
   resolvePayuPaymentMode,
 } from '~/commerce/lib/payu-payment-modes'
 
 describe('payu-payment-modes', () => {
-  it('defaults to all methods (no pg)', () => {
+  it('defaults all methods to UPI intent (never omit pg — that opens PayU picker)', () => {
     const mode = resolvePayuPaymentMode(null)
     expect(mode.id).toBe('all')
-    expect(mode.pg).toBeUndefined()
+    expect(mode.pg).toBe('UPI')
+    expect(mode.bankcode).toBe('INTENT')
     const fields = applyPayuPaymentModeFields({}, { modeId: 'all' })
-    expect(fields.pg).toBeUndefined()
+    expect(fields).toMatchObject({ pg: 'UPI', bankcode: 'INTENT' })
   })
 
   it('maps cards / wallets / pluxee / neft per PayU docs', () => {
@@ -34,10 +37,43 @@ describe('payu-payment-modes', () => {
       pg: 'UPI',
       bankcode: 'INTENT',
     })
+    expect(applyPayuPaymentModeFields({}, { modeId: 'upi_gpay' })).toMatchObject({
+      pg: 'UPI',
+      bankcode: 'TEZ',
+    })
+    expect(applyPayuPaymentModeFields({}, { modeId: 'upi_phonepe' })).toMatchObject({
+      pg: 'UPI',
+      bankcode: 'PHONEPE',
+    })
+    expect(applyPayuPaymentModeFields({}, { modeId: 'upi_collect' })).toMatchObject({
+      pg: 'UPI',
+      bankcode: 'UPI',
+    })
+    expect(resolvePayuPaymentMode('upi_collect').needsVpa).toBe(true)
+    expect(resolvePayuPaymentMode('upi_gpay').seamlessS2s).toBe(true)
+    expect(applyPayuPaymentModeFields({}, { modeId: 'nb_hdfc' })).toMatchObject({
+      pg: 'NB',
+      bankcode: 'HDFB',
+    })
+    expect(payuModeNeedsS2s('nb_hdfc')).toBe(false)
+    expect(payuModeNeedsS2s('upi_gpay')).toBe(true)
+    expect(payuModeNeedsS2s('cards')).toBe(true)
     expect(applyPayuPaymentModeFields({}, { modeId: 'qr' })).toMatchObject({
       pg: 'UPI',
-      bankcode: 'UPIDBQR',
+      bankcode: 'INTENT',
     })
+    expect(applyPayuPaymentModeFields({}, { modeId: 'upi_qr' })).toMatchObject({
+      pg: 'UPI',
+      bankcode: 'INTENT',
+    })
+  })
+
+  it('maps concrete options back to method groups', () => {
+    expect(payuGroupIdForMode('upi_phonepe')).toBe('upi')
+    expect(payuGroupIdForMode('upi_qr')).toBe('upi')
+    expect(payuGroupIdForMode('cards')).toBe('cards')
+    expect(payuGroupIdForMode('nb_sbi')).toBe('netbanking')
+    expect(payuGroupIdForMode('wallet_paytm')).toBe('wallets')
   })
 
   it('rejects unknown pg values', () => {
