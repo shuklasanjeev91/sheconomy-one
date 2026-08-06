@@ -22,9 +22,15 @@ export function useSearchListings({
   pageSize = COMMERCE_PAGE_SIZE,
   enabled = true,
 }: UseSearchListingsOptions) {
+  // Compare by value so parent object identity churn does not restart the feed.
+  const filterKey = JSON.stringify(filters ?? {})
+
   const fetchPage = useCallback(
-    (page: number) => searchListingsPage(query, page, { pageSize, ...filters }),
-    [query, filters, pageSize],
+    (page: number) => {
+      const parsed = JSON.parse(filterKey) as ListingBrowseFilters
+      return searchListingsPage(query, page, { pageSize, ...parsed })
+    },
+    [query, filterKey, pageSize],
   )
 
   return usePaginatedFeed<ListingSummary>({

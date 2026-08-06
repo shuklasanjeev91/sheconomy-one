@@ -27,13 +27,14 @@ export type CheckoutLineItem = {
 
 /**
  * How this order's payment is collected under SHEconomy's 0-commission model.
- * `direct` = paid straight to the seller's own gateway (no commission);
- * `shepay` = collected by SHEconomy/SHEPay (commission billed to the seller).
+ * `direct` = paid straight to the seller's own gateway;
+ * `shepay` = collected via SHEPay / PayU split to the vendor (still 0% commission).
  */
 export type PaymentRouting = {
   collection: 'direct' | 'shepay'
   gateway?: string | null
   shopId?: string | null
+  /** Always false — SHEconomy does not take commission (PayU split settles to vendors). */
   commissionApplies: boolean
 }
 
@@ -125,7 +126,54 @@ export async function createAtomicMarketplaceCheckout(input: {
   } as never)
 
   if (error) return { data: null, error: error.message }
-  return parseAtomicCheckoutPayload(data as Record<string, unknown> | null)
+  const parsed = parseAtomicCheckoutPayload(data as Record<string, unknown> | null)
+  if (parsed.error || !parsed.data) return parsed
+
+  // Online: collapse per-shop SHEPay steps into one cart-level charge step.
+  if (input.paymentMode === 'online') {
+    const { data: bundle, error: bundleError } = await supabase.rpc(
+      'finalize_shepay_bundle_charge' as never,
+      { p_checkout_group_id: parsed.data.checkoutGroupId } as never,
+    )
+    if (bundleError) {
+      return { data: null, error: bundleError.message }
+    }
+    const bundleRow = bundle as Record<string, unknown> | null
+    if (bundleRow && bundleRow.success === false) {
+      return {
+        data: null,
+        error: typeof bundleRow.message === 'string' ? bundleRow.message : 'Could not prepare SHEPay charge',
+      }
+    }
+
+    // Reload steps so the client sees the single charge row.
+    const { data: steps } = await supabase
+      .from('commerce_checkout_payment_steps' as never)
+      .select('id, order_id, shop_id, collection, provider, status, amount, checkout_url')
+      .eq('checkout_group_id' as never, parsed.data.checkoutGroupId)
+      .order('created_at' as never, { ascending: true })
+
+    if (Array.isArray(steps) && steps.length) {
+      parsed.data.paymentSteps = steps.map((step) => {
+        const row = step as Record<string, unknown>
+        return {
+          id: String(row.id ?? ''),
+          orderId: String(row.order_id ?? ''),
+          shopId: String(row.shop_id ?? ''),
+          collection: String(row.collection ?? 'shepay') as
+            | 'direct'
+            | 'shepay'
+            | 'cod',
+          provider: typeof row.provider === 'string' ? row.provider : null,
+          status: String(row.status ?? 'pending'),
+          amount: Number(row.amount ?? 0),
+          checkoutUrl: typeof row.checkout_url === 'string' ? row.checkout_url : null,
+        }
+      })
+    }
+  }
+
+  return parsed
 }
 
 export async function resumeCheckoutPayment(checkoutGroupId: string) {

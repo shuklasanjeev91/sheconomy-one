@@ -21,6 +21,7 @@ import {
   PAYMENT_CREDENTIAL_DEFAULT_MODE,
   PAYMENT_LOG_DEFAULT_LIMIT,
   PAYMENT_LOG_MAX_LIMIT,
+  PAYMENT_PROVIDERS,
   SETTLEMENT_SCHEDULES,
   SUPPORTED_CURRENCIES,
 } from '~/lib/payment/payment.constants'
@@ -37,6 +38,7 @@ import type {
   PaymentLogsPage,
   PaymentOAuthTokens,
   PaymentServiceResponse,
+  PaymentCredentialsResult,
   PaymentSetupStatus,
   PaymentSettingsInput,
   SavePaymentCredentialsInput,
@@ -292,6 +294,15 @@ export async function savePaymentCredentials(
       credentialsWithoutMode.apiKey ||
       `${provider}_${Date.now()}`
 
+    const onboardedVia =
+      String(credentialsWithoutMode.onboarded_via ?? '').trim().toLowerCase() === 'sheconomy'
+        ? 'sheconomy'
+        : 'own'
+    const childMerchantKey =
+      String(credentialsWithoutMode.child_merchant_key ?? '').trim() ||
+      (onboardedVia === 'sheconomy' ? String(merchantId) : '')
+    const childMid = String(credentialsWithoutMode.child_mid ?? '').trim()
+
     const accountData = {
       shop_id: shopId,
       provider: dbProvider,
@@ -301,13 +312,18 @@ export async function savePaymentCredentials(
       token_expiry: null,
       status: PAYMENT_ACCOUNT_STATUS.CONNECTED,
       connected_at: new Date().toISOString(),
-        metadata: {
-          connection_type: 'credential',
-          mode,
-          credentials: JSON.stringify(credentialsWithoutMode),
-          configured_at: new Date().toISOString(),
-        } as Json,
-      }
+      metadata: {
+        connection_type: 'credential',
+        mode: provider === PAYMENT_PROVIDERS.PAYU ? 'live' : mode,
+        credentials: JSON.stringify(credentialsWithoutMode),
+        configured_at: new Date().toISOString(),
+        onboarded_via: provider === PAYMENT_PROVIDERS.PAYU ? 'sheconomy' : onboardedVia,
+        ...(childMerchantKey
+          ? { child_merchant_key: childMerchantKey, merchant_key: childMerchantKey }
+          : {}),
+        ...(childMid ? { child_mid: childMid } : {}),
+      } as Json,
+    }
 
     const { data, error } = await supabase
       .from('shop_payment_accounts')
@@ -321,9 +337,24 @@ export async function savePaymentCredentials(
       shopId,
       provider,
       connected: true,
-      keyId: credentialsWithoutMode.key_id ?? credentialsWithoutMode.public_key ?? null,
+      keyId:
+        credentialsWithoutMode.key_id ??
+        credentialsWithoutMode.public_key ??
+        credentialsWithoutMode.merchant_key ??
+        null,
       accountLabel: merchantId,
+      paymentMode: normalizeProviderId(provider) === PAYMENT_PROVIDERS.PAYU ? 'shepay' : 'direct',
     })
+
+    // Held checkout amounts (orders paid before child merchant existed) → auto-release.
+    if (normalizeProviderId(provider) === PAYMENT_PROVIDERS.PAYU && childMerchantKey && childMid) {
+      void callEdgeFunction<{ ok?: boolean; released?: number; failed?: number }>(
+        'shepay-release-pending',
+        { shopId },
+      ).catch((releaseError) => {
+        console.warn('shepay-release-pending failed', releaseError)
+      })
+    }
 
     return ok(data)
   } catch (error) {
@@ -331,7 +362,10 @@ export async function savePaymentCredentials(
   }
 }
 
-export async function getPaymentCredentials(shopId: string, provider: PaymentProviderId | string) {
+export async function getPaymentCredentials(
+  shopId: string,
+  provider: PaymentProviderId | string,
+): Promise<PaymentServiceResponse<PaymentCredentialsResult>> {
   try {
     const dbProvider = resolveProviderForDatabase(normalizeProviderId(provider))
     if (!shopId || !dbProvider) {
@@ -364,9 +398,31 @@ export async function getPaymentCredentials(shopId: string, provider: PaymentPro
       }
     }
 
+    if (!credentials) {
+      credentials = {}
+    }
+    if (typeof metadata?.child_mid === 'string' && metadata.child_mid.trim()) {
+      credentials.child_mid = metadata.child_mid.trim()
+    }
+    if (typeof metadata?.child_merchant_key === 'string' && metadata.child_merchant_key.trim()) {
+      credentials.child_merchant_key = metadata.child_merchant_key.trim()
+      credentials.merchant_key = credentials.merchant_key || metadata.child_merchant_key.trim()
+      credentials.onboarded_via = 'sheconomy'
+    } else if (
+      metadata?.onboarded_via === 'sheconomy' &&
+      typeof metadata?.merchant_key === 'string' &&
+      metadata.merchant_key.trim()
+    ) {
+      credentials.merchant_key = metadata.merchant_key.trim()
+      credentials.child_merchant_key = metadata.merchant_key.trim()
+      credentials.onboarded_via = 'sheconomy'
+    }
+
+    const hasAnyCredential = Object.keys(credentials).length > 0
+
     return ok({
       provider: normalizeProviderId(String(data.provider)),
-      credentials,
+      credentials: hasAnyCredential ? credentials : null,
       mode,
       status: data.status,
       connectedAt: data.connected_at,
@@ -840,15 +896,21 @@ async function syncShopCommercePaymentRouting(input: {
   connected: boolean
   keyId?: string | null
   accountLabel?: string | null
+  /** PayU child via SHEconomy → shepay (platform collect + Automate split). */
+  paymentMode?: 'shepay' | 'direct' | 'own_gateway' | null
 }) {
-  const { shopId, provider, connected, keyId, accountLabel } = input
+  const { shopId, provider, connected, keyId, accountLabel, paymentMode } = input
   if (!shopId) return
+
+  const resolvedMode =
+    paymentMode ??
+    (normalizeProviderId(provider) === PAYMENT_PROVIDERS.PAYU ? 'shepay' : 'direct')
 
   const payload = connected
     ? {
         shop_id: shopId,
         payment_connected: true,
-        payment_mode: 'direct',
+        payment_mode: resolvedMode,
         payment_gateway: normalizeProviderId(provider),
         payment_gateway_key_id: keyId?.trim() || null,
         payment_account_label: accountLabel?.trim() || null,
@@ -866,3 +928,63 @@ async function syncShopCommercePaymentRouting(input: {
 
   await supabase.from('shop_commerce_settings').upsert(payload, { onConflict: 'shop_id' })
 }
+
+export type ShepaySyncPreview = {
+  ok: boolean
+  hubConfigured: boolean
+  shopId: string
+  shopName?: string
+  email: string
+  phone: string
+  shopCode: string
+  webhookUrl: string
+  onboardingUrl: string
+  hint?: string
+  error?: string
+}
+
+export type ShepaySyncConnectResult = ShepaySyncPreview & {
+  connected?: boolean
+  childMid?: string
+  merchantKeyMasked?: string
+  onboardingCompleted?: boolean
+}
+
+export async function previewShepaySync(
+  shopId: string,
+): Promise<PaymentServiceResponse<ShepaySyncPreview>> {
+  try {
+    if (!shopId) throw new PaymentError(PAYMENT_ERROR_CODES.INVALID_INPUT, 'Shop ID is required.')
+    const data = await callEdgeFunction<ShepaySyncPreview>('shepay-sync-child', {
+      shopId,
+      action: 'preview',
+    })
+    if (!data?.ok && data?.error) return fail(data.error)
+    return ok(data)
+  } catch (error) {
+    return fail(error, 'Could not prepare SHEPay setup.')
+  }
+}
+
+export async function connectShepayFromPayu(
+  input: { shopId: string; email?: string; phone?: string },
+): Promise<PaymentServiceResponse<ShepaySyncConnectResult>> {
+  try {
+    if (!input.shopId) {
+      throw new PaymentError(PAYMENT_ERROR_CODES.INVALID_INPUT, 'Shop ID is required.')
+    }
+    const data = await callEdgeFunction<ShepaySyncConnectResult>('shepay-sync-child', {
+      shopId: input.shopId,
+      action: 'connect',
+      email: input.email,
+      phone: input.phone,
+    })
+    if (!data?.ok || !data.connected) {
+      return fail(data?.error ?? 'Could not fetch SHEPay details from PayU.')
+    }
+    return ok(data)
+  } catch (error) {
+    return fail(error, 'Could not connect SHEPay automatically.')
+  }
+}
+

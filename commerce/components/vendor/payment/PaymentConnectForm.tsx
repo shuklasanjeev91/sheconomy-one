@@ -48,6 +48,7 @@ import { useAppDispatch, useAppSelector } from '~/lib/store/hooks'
 import type { AppUiTokens } from '~/lib/theme/app-ui'
 
 import { PaymentProviderIcon } from '~/commerce/components/vendor/payment/PaymentProviderIcon'
+import { ShepayEasyConnect } from '~/commerce/components/vendor/payment/ShepayEasyConnect'
 
 type PaymentConnectFormProps = {
   ui: AppUiTokens
@@ -72,7 +73,59 @@ function MetadataCell({ ui, label, value }: { ui: AppUiTokens; label: string; va
   )
 }
 
+function isShepayProvider(provider: PaymentProviderConfig): boolean {
+  return (
+    provider.id === PAYMENT_PROVIDERS.PAYU ||
+    String(provider.id).toLowerCase() === 'payu' ||
+    provider.name === 'SHEPay'
+  )
+}
+
 export function PaymentConnectForm({
+  ui,
+  shopId,
+  provider,
+  connected,
+  initialWebhookUrl,
+  onClose,
+  onConnected,
+}: PaymentConnectFormProps) {
+  // SHEPay must never show the old credential/webhook form.
+  if (isShepayProvider(provider)) {
+    return (
+      <YStack flex={1} minHeight={0}>
+        <ScrollView
+          flex={1}
+          showsVerticalScrollIndicator={false}
+          contentContainerStyle={{ paddingBottom: 32, paddingTop: 4 }}
+        >
+          <ShepayEasyConnect
+            ui={ui}
+            shopId={shopId}
+            connected={connected}
+            onClose={onClose}
+            onConnected={onConnected}
+          />
+        </ScrollView>
+      </YStack>
+    )
+  }
+
+  return (
+    <PaymentConnectFormGeneric
+      ui={ui}
+      shopId={shopId}
+      provider={provider}
+      connected={connected}
+      initialWebhookUrl={initialWebhookUrl}
+      onClose={onClose}
+      onConnected={onConnected}
+    />
+  )
+}
+
+/** Non-SHEPay providers only — keeps Razorpay / others unchanged. */
+function PaymentConnectFormGeneric({
   ui,
   shopId,
   provider,
@@ -153,7 +206,6 @@ export function PaymentConnectForm({
   }
 
   async function runValidationCheck() {
-    // Always run local field validation first
     const payload = { ...credentials, webhook_url: webhookUrl }
     const localResult = validateProviderCredentialForm(provider.id, payload)
     if (!localResult.isValid) {
@@ -164,13 +216,15 @@ export function PaymentConnectForm({
     }
     setFieldErrors({})
 
-    // For Razorpay: make a real API call to verify credentials against Razorpay
     if (provider.id === PAYMENT_PROVIDERS.RAZORPAY) {
       const keyId = credentials.key_id?.trim() ?? ''
       const keySecret = credentials.key_secret?.trim() ?? ''
       if (!keyId || !keySecret) {
         setTestPassed(false)
-        toast.show(PAYMENT_UI_COPY.testFailed, { tone: 'danger', message: 'Key ID and Key Secret are required.' })
+        toast.show(PAYMENT_UI_COPY.testFailed, {
+          tone: 'danger',
+          message: 'Key ID and Key Secret are required.',
+        })
         return
       }
 
@@ -185,7 +239,6 @@ export function PaymentConnectForm({
             mode: (mode === 'live' ? 'live' : 'test') as 'test' | 'live',
           }),
         ).unwrap()
-
         setTestPassed(true)
         toast.show(
           `${PAYMENT_UI_COPY.testSuccess} · ${result.maskedKeyId ?? keyId.slice(0, 12) + '…'}`,
@@ -203,35 +256,11 @@ export function PaymentConnectForm({
       return
     }
 
-    // Generic providers: local validation only
     setTestPassed(true)
     toast.show(PAYMENT_UI_COPY.testSuccess, { tone: 'success' })
   }
 
   async function handleConnect() {
-    setFieldErrors({})
-
-    if (oauthFlow) {
-      try {
-        await dispatch(
-          connectPaymentAccount({
-            shopId,
-            provider: provider.id,
-            merchantId: `oauth_${shopId.slice(0, 8)}`,
-          }),
-        ).unwrap()
-        toast.show(PAYMENT_UI_COPY.connectSuccess, { tone: 'success' })
-        onConnected?.()
-        onClose()
-      } catch (error) {
-        toast.show(PAYMENT_UI_COPY.connectFailed, {
-          tone: 'danger',
-          message: toFriendlyPaymentError(error),
-        })
-      }
-      return
-    }
-
     const payload = { ...credentials, webhook_url: webhookUrl }
     const validation = validateProviderCredentialForm(provider.id, payload)
     if (!validation.isValid) {
@@ -243,7 +272,6 @@ export function PaymentConnectForm({
 
     try {
       if (provider.id === PAYMENT_PROVIDERS.RAZORPAY) {
-        // Razorpay uses encrypted edge function (BYOK — credentials never stored plain-text)
         await dispatch(
           connectRazorpay({
             shopId,
@@ -251,7 +279,7 @@ export function PaymentConnectForm({
             keySecret: credentialValues.key_secret?.trim() ?? '',
             webhookSecret: credentialValues.webhook_secret?.trim() || undefined,
             webhookUrl: webhookValue?.trim() || undefined,
-            mode: (mode === 'live' ? 'live' : 'test') as 'test' | 'live',
+            mode: 'live' as 'test' | 'live',
           }),
         ).unwrap()
       } else {
@@ -260,7 +288,7 @@ export function PaymentConnectForm({
             shopId,
             provider: provider.id,
             credentials: credentialValues,
-            mode,
+            mode: 'live',
           }),
         ).unwrap()
 
@@ -324,10 +352,7 @@ export function PaymentConnectForm({
         <YStack gap="$4">
           <XStack alignItems="center" gap="$3">
             <PaymentProviderIcon provider={provider} size={48} />
-            <YStack flex={1} gap="$1">
-              <Text fontSize={22} fontWeight="800" color={ui.text} letterSpacing={-0.3}>
-                {provider.name}
-              </Text>
+            <YStack gap="$1">
               <Text fontSize={13} color={ui.textSecondary} lineHeight={19}>
                 {paymentConnectDescription(provider.name)}
               </Text>
@@ -344,7 +369,13 @@ export function PaymentConnectForm({
           >
             <XStack alignItems="center" gap="$2">
               <Icons.Shield size={18} color={ui.brand} />
-              <Text fontSize={11} fontWeight="800" color={ui.brand} letterSpacing={0.5} textTransform="uppercase">
+              <Text
+                fontSize={11}
+                fontWeight="800"
+                color={ui.brand}
+                letterSpacing={0.5}
+                textTransform="uppercase"
+              >
                 {PAYMENT_UI_COPY.secureStorageTitle}
               </Text>
             </XStack>
@@ -354,7 +385,11 @@ export function PaymentConnectForm({
           </YStack>
 
           <XStack gap="$3" flexWrap="wrap">
-            <MetadataCell ui={ui} label={PAYMENT_UI_COPY.region} value={getRegionDisplayName(provider.region)} />
+            <MetadataCell
+              ui={ui}
+              label={PAYMENT_UI_COPY.region}
+              value={getRegionDisplayName(provider.region)}
+            />
             <MetadataCell
               ui={ui}
               label={PAYMENT_UI_COPY.connection}
@@ -368,13 +403,17 @@ export function PaymentConnectForm({
             <MetadataCell ui={ui} label={PAYMENT_UI_COPY.fees} value={getProviderFeesLabel(provider)} />
           </XStack>
 
-       
-
           {oauthFlow ? (
-            <YStack gap="$3" padding="$4" borderRadius={radius.card} borderWidth={1} borderColor={ui.borderSubtle}>
+            <YStack
+              gap="$3"
+              padding="$4"
+              borderRadius={radius.card}
+              borderWidth={1}
+              borderColor={ui.borderSubtle}
+            >
               <Text fontSize={14} color={ui.textSecondary} lineHeight={21}>
-                Connect your {provider.name} account through the provider dashboard. After authorization, return here
-                to confirm the connection.
+                Connect your {provider.name} account through the provider dashboard. After
+                authorization, return here to confirm the connection.
               </Text>
               {provider.dashboardUrl ? (
                 <Button
@@ -538,39 +577,29 @@ export function PaymentConnectForm({
                         return next
                       })
                     }
-                    setTestPassed(null)
                   }}
-                  placeholder="https://your-domain.com/webhooks/payu"
+                  placeholder="https://your-domain.com/webhooks"
                   autoCapitalize="none"
                   autoCorrect={false}
                 />
-                <Text fontSize={12} color={ui.textMuted} marginTop="$1.5">
-                  {PAYMENT_UI_COPY.webhookHint}
-                </Text>
               </Field>
+              <Text fontSize={12} color={ui.textMuted}>
+                {PAYMENT_UI_COPY.webhookHint}
+              </Text>
 
-              {credentialConfig.helpUrl ? (
-                <XStack
-                  alignItems="center"
-                  gap="$1.5"
-                  cursor="pointer"
+              {provider.dashboardUrl || provider.website ? (
+                <Button
+                  tone="ghost"
+                  size="$3"
                   alignSelf="flex-start"
-                  onPress={() => void openExternalUrl(credentialConfig.helpUrl)}
+                  icon={<Icons.ExternalLink size={14} />}
+                  onPress={() => void openExternalUrl(provider.dashboardUrl || provider.website)}
                 >
-                  <Text fontSize={13} fontWeight="700" color={ui.brand}>
-                    {PAYMENT_UI_COPY.viewDocumentation}
-                  </Text>
-                  <Icons.ExternalLink size={14} color={ui.brand} />
-                </XStack>
+                  {PAYMENT_UI_COPY.viewDocumentation}
+                </Button>
               ) : null}
 
-              <YStack gap="$2.5" paddingTop="$2">
-                <Text fontSize={15} fontWeight="800" color={ui.text}>
-                  Test Connection
-                </Text>
-                <Text fontSize={13} color={ui.textSecondary}>
-                  Run a validation check before saving your credentials.
-                </Text>
+              <YStack gap="$2">
                 <Button
                   tone="outline"
                   size="$3"
@@ -604,12 +633,7 @@ export function PaymentConnectForm({
                 ) : null}
               </YStack>
 
-              <YStack
-                gap="$2.5"
-                paddingTop="$3"
-                borderTopWidth={1}
-                borderTopColor={ui.borderSubtle}
-              >
+              <YStack gap="$2.5" paddingTop="$3" borderTopWidth={1} borderTopColor={ui.borderSubtle}>
                 {connected ? (
                   <Button
                     tone="outline"
@@ -655,9 +679,42 @@ export function PaymentConnectForm({
                   </Button>
                 </XStack>
               </YStack>
-
             </YStack>
-          ) : null}
+          ) : (
+            <YStack gap="$3">
+              <Text fontSize={14} color={ui.textSecondary}>
+                Supported: {supportedMethods.join(', ') || '—'}
+              </Text>
+              <Button
+                tone="primary"
+                size="$4"
+                borderRadius={999}
+                onPress={() =>
+                  void dispatch(
+                    connectPaymentAccount({
+                      shopId,
+                      provider: provider.id,
+                      merchantId: `${provider.id}_${Date.now()}`,
+                    }),
+                  )
+                    .unwrap()
+                    .then(() => {
+                      toast.show(PAYMENT_UI_COPY.connectSuccess, { tone: 'success' })
+                      onConnected?.()
+                      onClose()
+                    })
+                    .catch((error) => {
+                      toast.show(PAYMENT_UI_COPY.connectFailed, {
+                        tone: 'danger',
+                        message: toFriendlyPaymentError(error),
+                      })
+                    })
+                }
+              >
+                {connectLabel}
+              </Button>
+            </YStack>
+          )}
         </YStack>
       </ScrollView>
     </YStack>

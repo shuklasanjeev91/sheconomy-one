@@ -205,6 +205,14 @@ export const connectPaymentAccount = createAsyncThunk<
   ),
 )
 
+export const connectShepayFromPayu = createAsyncThunk<
+  paymentService.ShepaySyncConnectResult,
+  { shopId: string; email?: string; phone?: string },
+  ThunkConfig
+>('vendorPayment/connectShepayFromPayu', ({ shopId, email, phone }, { rejectWithValue }) =>
+  resolveResponse(paymentService.connectShepayFromPayu({ shopId, email, phone }), rejectWithValue),
+)
+
 export const savePaymentCredentials = createAsyncThunk<
   ShopPaymentAccount,
   {
@@ -454,6 +462,18 @@ const vendorPaymentSlice = createSlice({
         restoreAccounts(state, takeRollback(action.meta.requestId))
         state.loading.connecting = false
         state.error = action.payload ?? 'Failed to save payment credentials.'
+      })
+
+      .addCase(connectShepayFromPayu.pending, (state) => {
+        state.loading.connecting = true
+        state.error = null
+      })
+      .addCase(connectShepayFromPayu.fulfilled, (state) => {
+        state.loading.connecting = false
+      })
+      .addCase(connectShepayFromPayu.rejected, (state, action) => {
+        state.loading.connecting = false
+        state.error = action.payload ?? 'Could not connect SHEPay automatically.'
       })
 
       .addCase(disconnectPaymentAccount.pending, (state, action) => {
