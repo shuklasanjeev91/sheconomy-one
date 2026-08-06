@@ -122,9 +122,9 @@ declare module 'one' {
         | `/payment-methods`
         | `/profile`
         | `/search`
-        | `/seller-landing`
-        | `/seller-landing/`
         | `/seller/dashboard`
+        | `/sellerlanding`
+        | `/sellerlanding/`
         | `/settings`
         | `/settings/`
         | `/settings/about`
