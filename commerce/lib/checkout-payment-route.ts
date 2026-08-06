@@ -38,8 +38,9 @@ export function onlinePaymentOptionCopy(input: {
 
   if (hasShepay && !hasDirect) {
     return {
-      title: 'Pay online',
-      subtitle: 'UPI, cards, net banking & wallets on the next secure PayU page',
+      title: 'Pay online via SHEPay',
+      subtitle:
+        'Cards, UPI, net banking, wallets, EMI, BNPL, PayPal & more on the next secure PayU page',
     }
   }
 

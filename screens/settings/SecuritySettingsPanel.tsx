@@ -218,9 +218,9 @@ export function SecuritySettingsPanel() {
   }
 
   const linkedProviders = new Set(identities.map((i) => i.provider))
-  const linkTargets: OAuthProvider[] = ['google', 'apple', 'linkedin_oidc'].filter(
+  const linkTargets: OAuthProvider[] = (['google', 'apple'] as OAuthProvider[]).filter(
     (p) => !linkedProviders.has(p),
-  ) as OAuthProvider[]
+  )
 
   return (
     <SettingsPanel

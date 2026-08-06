@@ -14,6 +14,7 @@ import {
   ordersAwaitingOnlinePayment,
 } from '~/commerce/lib/checkout-payment-route'
 import { firstCheckoutUrlFromSteps } from '~/commerce/lib/checkout-utils'
+import { parsePayuBridgeParams, savePayuBridgeSession } from '~/commerce/lib/payu-bridge'
 import {
   clearPendingOrderSuccess,
   fetchCustomerOrdersByIds,
@@ -165,6 +166,18 @@ export function OrderSuccessScreen() {
   async function openPaymentUrl(url: string) {
     // PayU bridge: SPA navigation within the app
     if (isAppPayUBridgeUrl(url) || /\/orders\/payu(\?|$)/.test(url)) {
+      try {
+        const parsed = new URL(url, 'https://sheconomy.local')
+        const stashed = parsePayuBridgeParams(
+          parsed.searchParams.get('action') ?? '',
+          parsed.searchParams.get('payload') ?? '',
+        )
+        if (stashed.action && stashed.fields) {
+          savePayuBridgeSession(stashed.action, stashed.fields)
+        }
+      } catch {
+        // continue with navigation
+      }
       router.push(url as never)
       return true
     }

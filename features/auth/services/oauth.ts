@@ -27,7 +27,8 @@ export function isAppleSignInAvailable(): boolean {
 }
 
 export function isLinkedInSignInAvailable(): boolean {
-  return true
+  // LinkedIn sign-in removed from the product surface (still linkable only if already connected).
+  return false
 }
 
 function extractAuthCode(url: string | null | undefined): string | null {
@@ -134,18 +135,49 @@ export async function startOAuthSignIn(
   return exchangeOAuthUrlForSession(result.url)
 }
 
-async function tryNativeAppleSignIn(): Promise<{ handled: boolean; error: string | null }> {
-  try {
-    const AppleAuthentication = await import('expo-apple-authentication')
-    const available = await AppleAuthentication.isAvailableAsync()
-    if (!available) return { handled: false, error: null }
+const APPLE_SIGN_IN_TIMEOUT_MS = 90_000
 
-    const credential = await AppleAuthentication.signInAsync({
-      requestedScopes: [
-        AppleAuthentication.AppleAuthenticationScope.FULL_NAME,
-        AppleAuthentication.AppleAuthenticationScope.EMAIL,
-      ],
-    })
+function withTimeout<T>(promise: Promise<T>, ms: number, message: string): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    const timer = setTimeout(() => reject(new Error(message)), ms)
+    promise.then(
+      (value) => {
+        clearTimeout(timer)
+        resolve(value)
+      },
+      (error) => {
+        clearTimeout(timer)
+        reject(error)
+      },
+    )
+  })
+}
+
+async function tryNativeAppleSignIn(): Promise<{ handled: boolean; error: string | null }> {
+  let AppleAuthentication: typeof import('expo-apple-authentication')
+  try {
+    AppleAuthentication = await import('expo-apple-authentication')
+  } catch {
+    // Module unavailable in this binary — allow browser OAuth fallback.
+    return { handled: false, error: null }
+  }
+
+  try {
+    const available = await AppleAuthentication.isAvailableAsync()
+    if (!available) {
+      return { handled: false, error: null }
+    }
+
+    const credential = await withTimeout(
+      AppleAuthentication.signInAsync({
+        requestedScopes: [
+          AppleAuthentication.AppleAuthenticationScope.FULL_NAME,
+          AppleAuthentication.AppleAuthenticationScope.EMAIL,
+        ],
+      }),
+      APPLE_SIGN_IN_TIMEOUT_MS,
+      'Sign in with Apple timed out. Please try again.',
+    )
 
     if (!credential.identityToken) {
       return { handled: true, error: 'Apple did not return an identity token.' }
@@ -161,7 +193,6 @@ async function tryNativeAppleSignIn(): Promise<{ handled: boolean; error: string
     }
     return { handled: true, error: null }
   } catch (error) {
-    // Module missing or user cancelled → fall back to browser OAuth.
     if (
       error &&
       typeof error === 'object' &&
@@ -170,7 +201,12 @@ async function tryNativeAppleSignIn(): Promise<{ handled: boolean; error: string
     ) {
       return { handled: true, error: 'Apple sign-in was cancelled.' }
     }
-    return { handled: false, error: null }
+    // Native Apple UI was presented (or timed out). Do not silently fall back to
+    // browser OAuth — that path often appears "unresponsive" on App Review devices.
+    if (error instanceof Error && error.message) {
+      return { handled: true, error: error.message }
+    }
+    return { handled: true, error: 'Apple sign-in failed. Please try again.' }
   }
 }
 

@@ -47,10 +47,15 @@ import {
 import { ensureShepayCheckoutUrl } from '~/commerce/lib/shepay'
 import { ensureDirectCheckoutUrl } from '~/commerce/lib/razorpay-direct'
 import {
+  PAYU_CHECKOUT_MODES,
+  type PayuPaymentModeId,
+} from '~/commerce/lib/payu-payment-modes'
+import {
   checkoutShippingLabel,
   onlinePaymentOptionCopy,
   resolvePostCheckoutNext,
 } from '~/commerce/lib/checkout-payment-route'
+import { parsePayuBridgeParams, savePayuBridgeSession } from '~/commerce/lib/payu-bridge'
 import { savePendingOrderSuccess } from '~/commerce/lib/customer-orders'
 import {
   computeCheckoutShippingQuote,
@@ -124,6 +129,7 @@ export function CheckoutScreen() {
   const [notesByShop, setNotesByShop] = useState<Record<string, string>>({})
   const [giftByShop, setGiftByShop] = useState<Record<string, boolean>>({})
   const [paymentMethod, setPaymentMethod] = useState<CheckoutPaymentMode>('online')
+  const [payuMode, setPayuMode] = useState<PayuPaymentModeId>('all')
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [isRedirectingToPayment, setIsRedirectingToPayment] = useState(false)
   const [orderPlaced, setOrderPlaced] = useState(false)
@@ -633,6 +639,7 @@ export function CheckoutScreen() {
       if (mode === 'online' && hasShepaySteps && !checkoutUrl) {
         const shepay = await ensureShepayCheckoutUrl(result.data.paymentSteps, {
           paymentMethodId: null,
+          payuMode,
         })
         paymentSetupError = shepay.error
         checkoutUrl = shepay.checkoutUrl
@@ -699,6 +706,19 @@ export function CheckoutScreen() {
       const successHref = commerceRoutes.orderSuccess(orderIds)
 
       if (next.kind === 'payu_bridge') {
+        // Stash action+fields so native bridge does not rely only on huge query strings.
+        try {
+          const parsed = new URL(next.href, 'https://sheconomy.local')
+          const stashed = parsePayuBridgeParams(
+            parsed.searchParams.get('action') ?? '',
+            parsed.searchParams.get('payload') ?? '',
+          )
+          if (stashed.action && stashed.fields) {
+            savePayuBridgeSession(stashed.action, stashed.fields)
+          }
+        } catch {
+          // keep navigating; bridge may still read query params
+        }
         setOrderPlaced(true)
         void refresh()
         replaceApp(next.href as never)
@@ -1169,10 +1189,10 @@ export function CheckoutScreen() {
                     {paymentGroups.shepay.length ? (
                       <PaymentRouteRow
                         icon={<Icons.ShieldCheck size={14} color={c.brand} />}
-                        title="SHEPay (PayU hosted)"
+                        title="SHEPay (PayU merchant hosted)"
                         detail={`${paymentGroups.shepay
                           .map((shop) => shop.shopName)
-                          .join(', ')} · choose UPI, card, or net banking on PayU`}
+                          .join(', ')} · cards, UPI, net banking, wallets & more`}
                       />
                     ) : null}
                     {paymentGroups.direct.map((group) => (
@@ -1205,6 +1225,49 @@ export function CheckoutScreen() {
                   subtitle={onlineCopy.subtitle}
                   onPress={() => setPaymentMethod('online')}
                 />
+
+                {paymentMethod === 'online' && paymentGroups.shepay.length ? (
+                  <YStack gap="$2" paddingTop="$1">
+                    <Text fontSize={12} color={c.secondary} fontWeight="600">
+                      Preferred PayU method
+                    </Text>
+                    <XStack flexWrap="wrap" gap="$1.5">
+                      {PAYU_CHECKOUT_MODES.filter((mode) =>
+                        ['all', 'upi', 'cards', 'netbanking', 'wallets', 'emi', 'bnpl', 'paypal', 'pluxee', 'neft', 'qr'].includes(
+                          mode.id,
+                        ),
+                      ).map((mode) => {
+                        const selected = payuMode === mode.id
+                        return (
+                          <YStack
+                            key={mode.id}
+                            onPress={() => setPayuMode(mode.id)}
+                            paddingHorizontal="$2.5"
+                            paddingVertical="$1.5"
+                            borderRadius={999}
+                            borderWidth={1}
+                            borderColor={selected ? c.brand : c.border}
+                            backgroundColor={selected ? c.chip : 'transparent'}
+                            cursor="pointer"
+                            pressStyle={{ opacity: 0.85 }}
+                          >
+                            <Text
+                              fontSize={12}
+                              fontWeight={selected ? '700' : '500'}
+                              color={selected ? c.brand : c.secondary}
+                            >
+                              {mode.shortLabel}
+                            </Text>
+                          </YStack>
+                        )
+                      })}
+                    </XStack>
+                    <Text fontSize={11} color={c.secondary} lineHeight={16}>
+                      Card details are entered on PayU’s secure page. Enable each method in the PayU
+                      Dashboard if it does not appear at checkout.
+                    </Text>
+                  </YStack>
+                ) : null}
 
                 {needsShipping ? (
                   <PaymentOption

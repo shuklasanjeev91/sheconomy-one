@@ -49,12 +49,16 @@ type AccountMenuOptions = {
   primaryShopId?: string | null
   cartCount?: number
   wishlistCount?: number
+  /** Show Admin console link when the signed-in user has admin role. */
+  isAdmin?: boolean
   /**
    * Mobile / compact chrome already shows center + bottom tabs.
    * When true, omit destinations that those tabs already cover.
    */
   omitChromeDuplicates?: boolean
 }
+
+const ADMIN_HOME = '/admin' as Href
 
 function item(
   tier: AccessTier,
@@ -124,8 +128,12 @@ export function getAccountQuickActions({
 export function getAccountMenuSections({
   tier,
   hasShops,
+  isAdmin = false,
   omitChromeDuplicates = false,
-}: Pick<AccountMenuOptions, 'tier' | 'hasShops' | 'primaryShopId' | 'omitChromeDuplicates'>): AccountMenuSection[] {
+}: Pick<
+  AccountMenuOptions,
+  'tier' | 'hasShops' | 'primaryShopId' | 'isAdmin' | 'omitChromeDuplicates'
+>): AccountMenuSection[] {
   const sections: AccountMenuSection[] = []
 
   sections.push({
@@ -151,6 +159,23 @@ export function getAccountMenuSections({
       }),
     ],
   })
+
+  if (isAdmin) {
+    sections.push({
+      id: 'admin',
+      title: 'Admin',
+      subtitle: 'Platform console',
+      items: [
+        {
+          id: 'admin-console',
+          icon: Icons.ShieldCheck,
+          label: 'Admin',
+          description: 'Users, shops, orders, and platform tools',
+          href: ADMIN_HOME,
+        },
+      ],
+    })
+  }
 
   // Quick actions already cover Orders / Cart / Wishlist — only shops + payments here.
   sections.push({
