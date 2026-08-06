@@ -27,7 +27,8 @@ export function isAppleSignInAvailable(): boolean {
 }
 
 export function isLinkedInSignInAvailable(): boolean {
-  return true
+  // LinkedIn sign-in removed from the product surface (still linkable only if already connected).
+  return false
 }
 
 function extractAuthCode(url: string | null | undefined): string | null {
@@ -134,6 +135,24 @@ export async function startOAuthSignIn(
   return exchangeOAuthUrlForSession(result.url)
 }
 
+const APPLE_SIGN_IN_TIMEOUT_MS = 90_000
+
+function withTimeout<T>(promise: Promise<T>, ms: number, message: string): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    const timer = setTimeout(() => reject(new Error(message)), ms)
+    promise.then(
+      (value) => {
+        clearTimeout(timer)
+        resolve(value)
+      },
+      (error) => {
+        clearTimeout(timer)
+        reject(error)
+      },
+    )
+  })
+}
+
 function isAppleSignInCanceled(error: unknown): boolean {
   if (!error || typeof error !== 'object') return false
   const code = String((error as { code?: string }).code ?? '')
@@ -162,19 +181,29 @@ async function tryNativeAppleSignIn(): Promise<{
   error: string | null
   cancelled?: boolean
 }> {
+  let AppleAuthentication: typeof import('expo-apple-authentication')
   try {
-    const AppleAuthentication = await import('expo-apple-authentication')
+    AppleAuthentication = await import('expo-apple-authentication')
+  } catch {
+    return { error: 'Sign in with Apple is not available on this build.' }
+  }
+
+  try {
     const available = await AppleAuthentication.isAvailableAsync()
     if (!available) {
       return { error: 'Sign in with Apple is not available on this device.' }
     }
 
-    const credential = await AppleAuthentication.signInAsync({
-      requestedScopes: [
-        AppleAuthentication.AppleAuthenticationScope.FULL_NAME,
-        AppleAuthentication.AppleAuthenticationScope.EMAIL,
-      ],
-    })
+    const credential = await withTimeout(
+      AppleAuthentication.signInAsync({
+        requestedScopes: [
+          AppleAuthentication.AppleAuthenticationScope.FULL_NAME,
+          AppleAuthentication.AppleAuthenticationScope.EMAIL,
+        ],
+      }),
+      APPLE_SIGN_IN_TIMEOUT_MS,
+      'Sign in with Apple timed out. Please try again.',
+    )
 
     if (!credential.identityToken) {
       return { error: 'Apple did not return an identity token. Please try again.' }

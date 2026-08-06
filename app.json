@@ -140,19 +140,21 @@
     },
     "ios": {
       "bundleIdentifier": "com.sheconomy.ecommerce",
-      "buildNumber": "116",
+      "buildNumber": "119",
       "appleTeamId": "52H73QK4CL",
       "supportsTablet": true,
       "requireFullScreen": false,
       "usesAppleSignIn": true,
       "icon": "./public/app-icon.png",
       "associatedDomains": [
-        "applinks:sheconomy.in"
+        "applinks:sheconomy.in",
+        "applinks:www.sheconomy.in",
+        "webcredentials:sheconomy.in",
+        "webcredentials:www.sheconomy.in"
       ],
       "infoPlist": {
         "CFBundleDisplayName": "SHEconomy",
         "UIBackgroundModes": [
-          "audio",
           "remote-notification"
         ],
         "NSFaceIDUsageDescription": "Unlock SHEconomy with Face ID when biometric unlock is enabled.",
@@ -189,7 +191,7 @@
     },
     "android": {
       "package": "com.sheconomy.ecommerce",
-      "versionCode": 135,
+      "versionCode": 136,
       "softwareKeyboardLayoutMode": "resize",
       "adaptiveIcon": {
         "foregroundImage": "./public/app-icon-adaptive.png",
@@ -205,6 +207,23 @@
               "scheme": "https",
               "host": "sheconomy.in",
               "pathPrefix": "/"
+            },
+            {
+              "scheme": "https",
+              "host": "www.sheconomy.in",
+              "pathPrefix": "/"
+            }
+          ],
+          "category": [
+            "BROWSABLE",
+            "DEFAULT"
+          ]
+        },
+        {
+          "action": "VIEW",
+          "data": [
+            {
+              "scheme": "sheconomy"
             }
           ],
           "category": [

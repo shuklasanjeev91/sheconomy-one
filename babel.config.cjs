@@ -9,7 +9,8 @@ const oneBundlerOptions = {
     "scheme": "sheconomy",
     "prefixes": [
       "sheconomy://",
-      "https://sheconomy.in"
+      "https://sheconomy.in",
+      "https://www.sheconomy.in"
     ]
   },
   "setupFile": {

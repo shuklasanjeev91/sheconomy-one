@@ -32,6 +32,7 @@ import { InAppNotificationHost } from '~/components/notifications/InAppNotificat
 import { PushForegroundNotificationHost } from '~/components/notifications/PushForegroundNotificationHost'
 import { PushSubscribePromptHost } from '~/components/notifications/PushSubscribePromptHost'
 import { AutomaticUpdateManager } from '~/components/system/AutomaticUpdateManager'
+import { OpenInAppHost } from '~/components/system/OpenInAppHost'
 import { AiAssistProvider } from '~/providers/AiAssistProvider'
 import { ScreenZoomProvider } from '~/lib/zoom/ScreenZoomContext'
 import { ScreenZoomRoot } from '~/components/media/ScreenZoomRoot'
@@ -75,6 +76,7 @@ export default function Layout() {
           <meta name="apple-mobile-web-app-title" content="SHEconomy" />
           <meta name="application-name" content="SHEconomy" />
           <meta name="theme-color" content="#D81B60" />
+          <meta name="apple-itunes-app" content="app-id=6499198194" />
           <MetaTheme lightColor="#fef5f9" darkColor="#1c0f14" />
           {/* Cached design-system CSS (vite outputCSS → public/tamagui.css). Avoid JS import so Vite does not fold it into the layout chunk. */}
           <link rel="stylesheet" href="/tamagui.css" />
@@ -229,6 +231,7 @@ function AppProviders({ children }: { children: React.ReactNode }) {
                             <ScreenZoomProvider>
                               <ScreenZoomRoot>
                                 <AutomaticUpdateManager />
+                                <OpenInAppHost />
                                 <PwaBootstrap />
                                 <InAppNotificationHost />
                                 <PushForegroundNotificationHost />

@@ -105,13 +105,11 @@ export async function setupNativeIncomingCalls(
     handlers.onDecline?.(id)
   }
 
-  const onShowUi = ({ callUUID }: { callUUID: string }) => {
-    void callUUID
-  }
-
+  // iOS CallKit: answerCall / endCall only.
+  // Do NOT register `showIncomingCallUi` — that event is Android self-managed only and
+  // throws "RNCallKeepShowIncomingCallUi is not a supported event type" on iOS.
   RNCallKeep.addEventListener('answerCall', onAnswer)
   RNCallKeep.addEventListener('endCall', onEnd)
-  RNCallKeep.addEventListener('showIncomingCallUi', onShowUi)
 
   try {
     const initial = await RNCallKeep.getInitialEvents()
@@ -130,7 +128,6 @@ export async function setupNativeIncomingCalls(
   return () => {
     RNCallKeep.removeEventListener('answerCall')
     RNCallKeep.removeEventListener('endCall')
-    RNCallKeep.removeEventListener('showIncomingCallUi')
   }
 }
 
