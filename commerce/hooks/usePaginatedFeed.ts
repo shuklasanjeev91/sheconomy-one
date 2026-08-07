@@ -80,51 +80,54 @@ export function usePaginatedFeed<T extends { id: string }>({
         setIsLoading(true)
       }
 
-      const result = await fetchPage(pageToLoad)
+      try {
+        const result = await fetchPage(pageToLoad)
 
-      // Stale response after tab/filter change — ignore.
-      if (generation !== fetchGenerationRef.current) {
-        return
-      }
-
-      if (result.error) {
-        // Preserve cached / already-loaded content instead of wiping the list.
-        setError(result.error)
-        if (!append && !hasItemsRef.current) {
-          setHasMore(false)
+        // Stale response after tab/filter change — ignore payload, but always
+        // clear this request's loading flags so skeletons cannot stick forever.
+        if (generation !== fetchGenerationRef.current) {
+          return
         }
-      } else {
-        setError(null)
-        markFetched()
-        const silentMerge = !append && silent && hasItemsRef.current
-        setItems((current) => {
-          // Silent revalidation keeps already-loaded pages below the fresh
-          // first page so scroll position and pagination are preserved.
-          const nextItems = append
-            ? mergeUnique(current, result.items)
-            : silentMerge
-              ? mergeUnique(result.items, current)
-              : result.items
-          if (!append && cacheKey) {
-            void persistFirstPage({
-              items: result.items,
-              page: 0,
-              hasMore: result.hasMore,
-            })
+
+        if (result.error) {
+          // Preserve cached / already-loaded content instead of wiping the list.
+          setError(result.error)
+          if (!append && !hasItemsRef.current) {
+            setHasMore(false)
           }
-          return nextItems
-        })
-        if (!silentMerge) {
-          setPage(pageToLoad)
-          setHasMore(result.hasMore)
+        } else {
+          setError(null)
+          markFetched()
+          const silentMerge = !append && silent && hasItemsRef.current
+          setItems((current) => {
+            // Silent revalidation keeps already-loaded pages below the fresh
+            // first page so scroll position and pagination are preserved.
+            const nextItems = append
+              ? mergeUnique(current, result.items)
+              : silentMerge
+                ? mergeUnique(result.items, current)
+                : result.items
+            if (!append && cacheKey) {
+              void persistFirstPage({
+                items: result.items,
+                page: 0,
+                hasMore: result.hasMore,
+              })
+            }
+            return nextItems
+          })
+          if (!silentMerge) {
+            setPage(pageToLoad)
+            setHasMore(result.hasMore)
+          }
         }
-      }
-
-      setIsLoading(false)
-      setIsRefreshing(false)
-      setIsLoadingMore(false)
-      if (generation === fetchGenerationRef.current) {
-        inFlightRef.current = false
+      } finally {
+        if (generation === fetchGenerationRef.current) {
+          setIsLoading(false)
+          setIsRefreshing(false)
+          setIsLoadingMore(false)
+          inFlightRef.current = false
+        }
       }
     },
     [cacheKey, enabled, fetchPage, markFetched, persistFirstPage],

@@ -2138,7 +2138,8 @@ Deno.serve(async (req) => {
 
       const systemPrompt = [
         'You are SHEconomy shopping search. Convert natural language into structured marketplace search.',
-        'Extract a concise searchTerm (2-8 words), optional INR price bounds, optional listingType physical|digital, optional category, and a short shopper-facing rationale.',
+        'Extract a concise searchTerm (1-5 words of searchable product/brand keywords), optional INR price bounds, optional listingType physical|digital, optional category, and a short shopper-facing rationale.',
+        'If the user typed a shop or brand name (even alone), keep that name as the searchTerm. Do not pad brand/shop queries with category words like "ayurvedic", "organic", "personal care", or "wellness".',
         'Do not mention Gemini, Google, or model names in rationale.',
         'Return ONLY JSON: {"searchTerm":"...","category":null,"minPrice":null,"maxPrice":null,"listingType":null,"rationale":"..."}',
       ].join('\n')

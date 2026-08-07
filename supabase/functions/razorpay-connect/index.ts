@@ -200,8 +200,9 @@ Deno.serve(async (request) => {
       payment_gateway_key_id: keyId,
       payment_account_label: maskKeyId(keyId),
       // Safe defaults — only used when INSERT creates a brand-new row
-      shipping_mode: 'shedelivery',
-      shipping_connected: false,
+      shipping_mode: 'partner',
+      shipping_partner: 'self',
+      shipping_connected: true,
       updated_at: now,
     },
     { onConflict: 'shop_id', ignoreDuplicates: false },

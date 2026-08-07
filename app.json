@@ -186,7 +186,15 @@
         ],
         "ITSAppUsesNonExemptEncryption": false,
         "RTCScreenSharingExtension": "com.sheconomy.ecommerce.ScreenShareExtension",
-        "RTCAppGroupIdentifier": "group.com.sheconomy.ecommerce"
+        "RTCAppGroupIdentifier": "group.com.sheconomy.ecommerce",
+        "LSApplicationQueriesSchemes": [
+          "upi",
+          "tez",
+          "gpay",
+          "phonepe",
+          "paytmmp",
+          "paytm"
+        ]
       }
     },
     "android": {

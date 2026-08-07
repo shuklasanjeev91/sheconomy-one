@@ -22,6 +22,8 @@ export {
   CommerceRadio,
 } from '~/commerce/components/commerce-ui'
 export { CheckoutContactSection } from '~/commerce/components/CheckoutContactSection'
+export { CheckoutPayuPanel } from '~/commerce/components/CheckoutPayuPanel'
+export { CheckoutPayuMethodPicker } from '~/commerce/components/CheckoutPayuMethodPicker'
 export { CartCoupon } from '~/commerce/components/CartCoupon'
 export {
   CommerceMobileCheckoutBar,

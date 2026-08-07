@@ -122,10 +122,10 @@ declare module 'one' {
         | `/payment-methods`
         | `/profile`
         | `/search`
-        | `/seller-landing`
-        | `/seller-landing/`
         | `/seller/dashboard`
         | `/seller/dashboard/crm-helpers`
+        | `/sellerlanding`
+        | `/sellerlanding/`
         | `/settings`
         | `/settings/`
         | `/settings/about`
@@ -163,6 +163,11 @@ declare module 'one' {
         | `/(store)/listing/${OneRouter.SingleRoutePart<T>}`
         | `/(store)/orders/${OneRouter.SingleRoutePart<T>}`
         | `/(store)/shop/${OneRouter.SingleRoutePart<T>}`
+        | `/(store)/shop/${OneRouter.SingleRoutePart<T>}/privacy`
+        | `/(store)/shop/${OneRouter.SingleRoutePart<T>}/refunds`
+        | `/(store)/shop/${OneRouter.SingleRoutePart<T>}/returns`
+        | `/(store)/shop/${OneRouter.SingleRoutePart<T>}/shipping`
+        | `/(store)/shop/${OneRouter.SingleRoutePart<T>}/terms`
         | `/admin/blog/${OneRouter.SingleRoutePart<T>}`
         | `/browse/${OneRouter.SingleRoutePart<T>}`
         | `/category/${OneRouter.SingleRoutePart<T>}`
@@ -189,12 +194,22 @@ declare module 'one' {
         | `/profile/${OneRouter.SingleRoutePart<T>}/followers`
         | `/profile/${OneRouter.SingleRoutePart<T>}/following`
         | `/shop/${OneRouter.SingleRoutePart<T>}`
+        | `/shop/${OneRouter.SingleRoutePart<T>}/privacy`
+        | `/shop/${OneRouter.SingleRoutePart<T>}/refunds`
+        | `/shop/${OneRouter.SingleRoutePart<T>}/returns`
+        | `/shop/${OneRouter.SingleRoutePart<T>}/shipping`
+        | `/shop/${OneRouter.SingleRoutePart<T>}/terms`
       DynamicRouteTemplate:
         | `/(store)/browse/[kind]`
         | `/(store)/category/[slug]`
         | `/(store)/listing/[slug]`
         | `/(store)/orders/[id]`
         | `/(store)/shop/[slug]`
+        | `/(store)/shop/[slug]/privacy`
+        | `/(store)/shop/[slug]/refunds`
+        | `/(store)/shop/[slug]/returns`
+        | `/(store)/shop/[slug]/shipping`
+        | `/(store)/shop/[slug]/terms`
         | `/admin/blog/[id]`
         | `/browse/[kind]`
         | `/category/[slug]`
@@ -221,6 +236,11 @@ declare module 'one' {
         | `/profile/[username]/followers`
         | `/profile/[username]/following`
         | `/shop/[slug]`
+        | `/shop/[slug]/privacy`
+        | `/shop/[slug]/refunds`
+        | `/shop/[slug]/returns`
+        | `/shop/[slug]/shipping`
+        | `/shop/[slug]/terms`
       IsTyped: true
       RouteTypes: {
         '/(store)/browse/[kind]': RouteInfo<{ kind: string }>
@@ -228,6 +248,11 @@ declare module 'one' {
         '/(store)/listing/[slug]': RouteInfo<{ slug: string }>
         '/(store)/orders/[id]': RouteInfo<{ id: string }>
         '/(store)/shop/[slug]': RouteInfo<{ slug: string }>
+        '/(store)/shop/[slug]/privacy': RouteInfo<{ slug: string }>
+        '/(store)/shop/[slug]/refunds': RouteInfo<{ slug: string }>
+        '/(store)/shop/[slug]/returns': RouteInfo<{ slug: string }>
+        '/(store)/shop/[slug]/shipping': RouteInfo<{ slug: string }>
+        '/(store)/shop/[slug]/terms': RouteInfo<{ slug: string }>
         '/admin/blog/[id]': RouteInfo<{ id: string }>
         '/browse/[kind]': RouteInfo<{ kind: string }>
         '/category/[slug]': RouteInfo<{ slug: string }>
@@ -254,6 +279,11 @@ declare module 'one' {
         '/profile/[username]/followers': RouteInfo<{ username: string }>
         '/profile/[username]/following': RouteInfo<{ username: string }>
         '/shop/[slug]': RouteInfo<{ slug: string }>
+        '/shop/[slug]/privacy': RouteInfo<{ slug: string }>
+        '/shop/[slug]/refunds': RouteInfo<{ slug: string }>
+        '/shop/[slug]/returns': RouteInfo<{ slug: string }>
+        '/shop/[slug]/shipping': RouteInfo<{ slug: string }>
+        '/shop/[slug]/terms': RouteInfo<{ slug: string }>
       }
     }
   }
