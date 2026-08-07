@@ -1,15 +1,20 @@
 import { useRouter } from 'one'
-import { AppLink } from '~/components/navigation/AppLink'
-import { Platform } from 'react-native'
+import { AppState, Platform, type AppStateStatus } from 'react-native'
 import { useCallback, useEffect, useState } from 'react'
 
 import { AuthSignInFlow } from '~/components/auth/AuthSignInFlow'
 import { AppPage, LAYOUT_STRETCH } from '~/components/layout'
-import { Button, Icons, ScreenState, Text, XStack, YStack, useAppToast } from '~/components/ui'
+import { Button, ScreenState, Text, XStack, YStack, useAppToast } from '~/components/ui'
 import { CoWorkBrandChip, CoWorkStatusPill } from '~/co-work/components/CoWorkUi'
 import { ensureMeetingMediaPermissions } from '~/co-work/lib/meeting-media-permissions'
 import { openInstantMeetingSession } from '~/co-work/lib/instant-meeting-session'
-import { fetchMyMeetings, formatMeetingCode } from '~/co-work/lib/meetings'
+import {
+  fetchMyMeetings,
+  filterMeetingsWithinRetention,
+  formatMeetingCode,
+  getMeetingAnchorAt,
+  getMeetingRetentionExpiresAt,
+} from '~/co-work/lib/meetings'
 import { coworkGlassStyle, useCoWorkTheme } from '~/co-work/lib/theme'
 import { coworkBoxShadow, pageGradientStyle } from '~/lib/platform/crossStyles'
 import { navigateApp } from '~/lib/platform/navigate'
@@ -20,8 +25,8 @@ import { useProfile } from '~/hooks/useProfile'
 import { BRAND_NAME } from '~/config/brand'
 
 function formatWhen(meeting: Meeting) {
-  const raw = meeting.scheduled_at ?? meeting.started_at ?? meeting.created_at
-  if (!raw) return 'Time TBD'
+  const anchor = getMeetingAnchorAt(meeting)
+  if (!anchor) return 'Time TBD'
   return new Intl.DateTimeFormat(undefined, {
     weekday: 'short',
     month: 'short',
@@ -29,7 +34,7 @@ function formatWhen(meeting: Meeting) {
     hour: 'numeric',
     minute: '2-digit',
     timeZone: meeting.time_zone ?? undefined,
-  }).format(new Date(raw))
+  }).format(anchor)
 }
 
 function statusTone(status: Meeting['status']) {
@@ -53,21 +58,69 @@ export function CoWorkMeetingsScreen() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
-  const load = useCallback(async () => {
+  const load = useCallback(async (opts?: { silent?: boolean }) => {
     if (!user) return
-    setLoading(true)
-    setError(null)
+    if (!opts?.silent) {
+      setLoading(true)
+      setError(null)
+    }
     try {
+      // fetchMyMeetings soft-deletes hosted rows past 24h and filters the list.
       setMeetings(await fetchMyMeetings(user.id))
     } catch (loadError) {
-      setError(loadError instanceof Error ? loadError.message : 'Failed to load meetings')
+      if (!opts?.silent) {
+        setError(loadError instanceof Error ? loadError.message : 'Failed to load meetings')
+      }
     } finally {
-      setLoading(false)
+      if (!opts?.silent) setLoading(false)
     }
   }, [user])
 
   useEffect(() => {
     void load()
+  }, [load])
+
+  // Drop expired cards while this screen stays open (Android / iOS / web).
+  useEffect(() => {
+    if (!meetings.length) return
+
+    const now = Date.now()
+    const stillValid = filterMeetingsWithinRetention(meetings, now)
+    if (stillValid.length !== meetings.length) {
+      setMeetings(stillValid)
+      void load({ silent: true })
+      return
+    }
+
+    let nextExpiryMs: number | null = null
+    for (const meeting of meetings) {
+      const expiresAt = getMeetingRetentionExpiresAt(meeting)
+      if (!expiresAt) continue
+      const expiresMs = expiresAt.getTime()
+      if (expiresMs <= now) continue
+      if (nextExpiryMs == null || expiresMs < nextExpiryMs) {
+        nextExpiryMs = expiresMs
+      }
+    }
+
+    if (nextExpiryMs == null) return
+
+    const delay = Math.min(Math.max(nextExpiryMs - now + 50, 0), 2_147_483_647)
+    const timer = setTimeout(() => {
+      setMeetings((prev) => filterMeetingsWithinRetention(prev))
+      void load({ silent: true })
+    }, delay)
+
+    return () => clearTimeout(timer)
+  }, [meetings, load])
+
+  // Re-check retention when returning from background on real devices.
+  useEffect(() => {
+    const onChange = (state: AppStateStatus) => {
+      if (state === 'active') void load({ silent: true })
+    }
+    const sub = AppState.addEventListener('change', onChange)
+    return () => sub.remove()
   }, [load])
 
   if (!isAuthenticated || !user) {
