@@ -24,6 +24,7 @@ import {
   type CartRow,
   type CartWithItems,
 } from '~/commerce/lib/cart'
+import { fetchCartBundle } from '~/commerce/lib/cart-rpc-fetch'
 import {
   applyCouponCode,
   autoApplyBestOffer,
@@ -189,6 +190,7 @@ export function CartProvider({ children }: { children: ReactNode }) {
     setError(null)
 
     try {
+      const asGuest = !userId
       const sessionId = userId ? null : await getCartSessionId()
       const { cart, error: cartError } = await withCartTimeout(
         getOrCreateCart({
@@ -199,8 +201,9 @@ export function CartProvider({ children }: { children: ReactNode }) {
       )
 
       if (cartError || !cart) {
-        setCartData(null)
         setError(cartError ?? 'Could not load cart')
+        // Never wipe an on-screen cart on a transient load failure (guest JWT 401s).
+        if (!soft) setCartData(null)
         return
       }
 
@@ -215,17 +218,28 @@ export function CartProvider({ children }: { children: ReactNode }) {
         ).catch(() => undefined)
       }
 
-      const { data, error: itemsError } = await withCartTimeout(
-        fetchCartWithItems(cart.id),
+      const bundle = await withCartTimeout(
+        asGuest
+          ? fetchCartBundle(cart.id, true)
+          : fetchCartWithItems(cart.id).then((result) => ({
+              data: result.data
+                ? {
+                    cart: result.data.cart,
+                    items: result.data.items,
+                    savedItems: result.data.savedItems,
+                  }
+                : null,
+              error: result.error,
+            })),
         'Loading cart items',
       )
-      if (itemsError || !data) {
-        setCartData(null)
-        setError(itemsError ?? 'Could not load cart items')
+      if (bundle.error || !bundle.data) {
+        setError(bundle.error ?? 'Could not load cart items')
+        if (!soft) setCartData(null)
         return
       }
 
-      let next = data
+      let next: CartWithItems = bundle.data
 
       // Discount reconcile is best-effort — never block cart paint / checkout.
       try {
@@ -236,8 +250,11 @@ export function CartProvider({ children }: { children: ReactNode }) {
             'Reconciling cart discount',
           )
           if (changed) {
-            const fresh = await withCartTimeout(fetchCartWithItems(cart.id), 'Refreshing cart')
-            next = fresh.data ?? next
+            const fresh = await withCartTimeout(
+              asGuest ? fetchCartBundle(cart.id, true) : fetchCartWithItems(cart.id),
+              'Refreshing cart',
+            )
+            if (fresh.data) next = fresh.data
           }
 
           if (next.cart.applied_discount_id) {
@@ -258,7 +275,7 @@ export function CartProvider({ children }: { children: ReactNode }) {
       setCartData(next)
     } catch (error) {
       setError(error instanceof Error ? error.message : 'Could not load cart')
-      setCartData(null)
+      if (!hasCartItemsRef.current) setCartData(null)
     } finally {
       setIsLoading(false)
     }
@@ -358,6 +375,7 @@ export function CartProvider({ children }: { children: ReactNode }) {
             quantity: options?.quantity,
             variantId: options?.variantId,
             personalizationNote: options?.personalizationNote,
+            asGuest: !userId,
           })
 
           if (addError) {

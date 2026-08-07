@@ -72,6 +72,7 @@ import { useFormValidation } from '~/hooks/useFormValidation'
 import { useProfile } from '~/hooks/useProfile'
 import { openExternalUrl } from '~/lib/platform/openUrl'
 import { commerceRoutes, routes } from '~/lib/routes'
+import { buildSignInUrl } from '~/lib/auth/redirect'
 import { createEmptyAddressInput } from '~/commerce/components/AddressForm'
 import { validateAddressInput } from '~/commerce/lib/addresses'
 import { LocationFields, addressGeoFromInput, patchAddressFromGeo } from '~/components/geo'
@@ -446,7 +447,7 @@ export function CheckoutScreen() {
   }, [isAuthenticated, toast, userId])
 
   if (!isAuthenticated) {
-    return <SpaRedirect href={routes.signIn} />
+    return <SpaRedirect href={buildSignInUrl(String(commerceRoutes.checkout))} />
   }
 
   // Only block the full page on first paint — background cart/address refreshes must not remount.

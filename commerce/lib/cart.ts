@@ -142,12 +142,15 @@ export async function addListingToCart(options: {
   variantId?: string | null
   /** Optional buyer note / personalization stored on the cart line. */
   personalizationNote?: string | null
+  /** Guest session carts must use anon auth (stale JWTs 401 otherwise). */
+  asGuest?: boolean
 }): Promise<{ item: CartItemRow | null; error: string | null }> {
   const { item: data, error } = await fetchAddToCart({
     cartId: options.cartId,
     listingId: options.listingId,
     quantity: options.quantity,
     variantId: options.variantId,
+    asGuest: options.asGuest,
   })
 
   if (error) {

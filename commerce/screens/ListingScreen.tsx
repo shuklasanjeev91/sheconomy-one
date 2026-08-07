@@ -77,10 +77,12 @@ import { buildShopShippingSummary } from '~/commerce/lib/shop-shipping'
 import { mergeReviewSummary } from '~/commerce/lib/reviews'
 import { getShopSlug } from '~/lib/supabase/commerce'
 import { commerceRoutes } from '~/lib/routes'
+import { buildSignInUrl } from '~/lib/auth/redirect'
 import { getListingShareUrl } from '~/lib/share'
 import { useAppUi } from '~/lib/theme/useAppUi'
 import { usePageSeo } from '~/components/seo/RouteSeo'
 import { trackCommerceEvent } from '~/lib/analytics'
+import { useSupabase } from '~/providers/SupabaseProvider'
 
 import { BRAND_SHOP_LABEL } from '~/config/brand'
 import { navigateApp } from '~/lib/platform/navigate'
@@ -155,6 +157,7 @@ export function ListingScreen({
     totalReviews: listing?.total_reviews,
   })
   const { addToCart, items: cartItems, updateQuantity, removeItem } = useCart()
+  const { user } = useSupabase()
   const toast = useAppToast()
   const { isDesktop } = useAppLayout()
 
@@ -318,7 +321,12 @@ export function ListingScreen({
         setPersonalizationNote('')
         toast.show('Added to cart', { tone: 'success', duration: 2500 })
         if (goToCheckout) {
-          navigateApp(commerceRoutes.checkout)
+          // Guests must sign in before checkout — keep cart (session) and return here after auth.
+          if (!user) {
+            navigateApp(buildSignInUrl(String(commerceRoutes.checkout)))
+          } else {
+            navigateApp(commerceRoutes.checkout)
+          }
         }
       } catch (error) {
         setOptimisticInCart(false)
@@ -364,6 +372,10 @@ export function ListingScreen({
   }
 
   function goToCheckout() {
+    if (!user) {
+      navigateApp(buildSignInUrl(String(commerceRoutes.checkout)))
+      return
+    }
     navigateApp(commerceRoutes.checkout)
   }
 
