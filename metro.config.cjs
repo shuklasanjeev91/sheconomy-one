@@ -300,6 +300,7 @@ const oneBundlerOptions = {
     prefixes: [
       'sheconomy://',
       'https://sheconomy.in',
+      'https://www.sheconomy.in',
     ],
   },
   setupFile: {

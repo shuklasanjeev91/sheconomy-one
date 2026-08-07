@@ -18,6 +18,7 @@ type AuthOnboardingProps = {
    * `auth` — shown before sign-in on compact layouts; optional back to leave auth.
    */
   variant?: 'app' | 'auth'
+  returnTo?: string | null
 }
 
 async function hapticLight() {
@@ -42,7 +43,7 @@ async function hapticSuccess() {
  * Full-screen swipeable onboarding — professional native intro for iOS & Android
  * (also used on compact web auth). Brand gradient canvas, large icon, clear CTAs.
  */
-export function AuthOnboarding({ onFinish, variant = 'auth' }: AuthOnboardingProps) {
+export function AuthOnboarding({ onFinish, variant = 'auth', returnTo }: AuthOnboardingProps) {
   const layout = useAppLayout()
   const { gutter, safeTop, safeBottom } = layout
   const slides = AUTH_ONBOARDING_SLIDES
@@ -122,7 +123,7 @@ export function AuthOnboarding({ onFinish, variant = 'auth' }: AuthOnboardingPro
         gap="$3"
       >
         <XStack flex={1} justifyContent="flex-start" minHeight={40}>
-          {!isAppLaunch ? <AuthBackButton showLabel={false} variant="light" /> : null}
+          {!isAppLaunch ? <AuthBackButton showLabel={false} variant="light" returnTo={returnTo} /> : null}
         </XStack>
         <XStack flex={1} justifyContent="center" alignItems="center">
           <Text

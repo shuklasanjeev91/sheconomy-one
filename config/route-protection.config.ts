@@ -15,9 +15,10 @@
  *     and `components/auth/RouteGuard.tsx`) on top of Supabase RLS.
  *
  * Gender note: in SHEconomy `profiles.gender === true` means **female**. The
- * platform is women-first: community / chat / notifications require female tier
- * (`lib/auth/access.ts`) **and** `profiles.is_verified === true`. The verification
- * modal (`GenderVerificationHost`) enforces the liveness gate on protected routes.
+ * platform is women-first: community / chat / notifications require a **verified
+ * female** tier (`lib/auth/access.ts` — `gender` + `is_verified`). Guests, males,
+ * and members who **skip** verification keep limited access (Commerce, Classes,
+ * Co-Work). The verification modal always offers Skip; camera/face data is optional.
  * Unverified members are redirected off protected routes (see `AppAccessGate`) and
  * shown `GenderDeniedModal` on their last safe route.
  */

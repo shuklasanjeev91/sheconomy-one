@@ -108,7 +108,7 @@ export function useAuth() {
         data: { session },
       } = await supabase.auth.getSession()
 
-      let tier = getAccessTier(!!session?.user, false)
+      let tier = getAccessTier(!!session?.user, false, false)
 
       if (session?.user?.id) {
         const { data } = await supabase
@@ -116,7 +116,7 @@ export function useAuth() {
           .select('gender, is_verified')
           .eq('id', session.user.id)
           .maybeSingle()
-        tier = getAccessTier(true, data?.gender)
+        tier = getAccessTier(true, data?.gender, data?.is_verified)
         router.push(sanitizeReturnPath(returnTo, tier, data?.is_verified) as import('one').Href)
         return
       }

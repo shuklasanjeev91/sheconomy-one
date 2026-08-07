@@ -1,5 +1,5 @@
 import type { RefObject } from 'react'
-import { Platform, StyleSheet } from 'react-native'
+import { Platform, StyleSheet, useWindowDimensions } from 'react-native'
 import type { CameraView } from 'expo-camera'
 import { CameraView as ExpoCameraView } from 'expo-camera'
 import type { PermissionResponse } from 'expo-modules-core'
@@ -32,7 +32,22 @@ function ringColor(phase: VerificationPhase, tracking?: FaceTrackingStatus, bran
   if (tracking?.eyesClosed) return '#0ea5e9'
   if (tracking?.faceCentered) return '#22c55e'
   if (tracking?.faceDetected) return '#f59e0b'
-  return 'rgba(255,255,255,0.7)'
+  return 'rgba(255,255,255,0.55)'
+}
+
+function placeholderCopy(
+  phase: VerificationPhase,
+  cameraPermission?: PermissionResponse | null,
+): string {
+  if (cameraPermission?.granted === false && cameraPermission?.canAskAgain === false) {
+    return 'Camera is blocked. Enable it in Settings → SHEconomy → Camera.'
+  }
+  if (cameraPermission?.granted === false && cameraPermission?.status === 'denied') {
+    return 'Allow camera access when prompted to continue.'
+  }
+  if (phase === 'idle') return 'Tap Start when you are ready'
+  if (phase === 'loading') return 'Checking permission…'
+  return 'Preparing camera…'
 }
 
 export function FaceCaptureOverlay({
@@ -49,27 +64,28 @@ export function FaceCaptureOverlay({
   onAnalyzerReady,
 }: FaceCaptureOverlayProps) {
   const ui = useAppUi()
+  const { width: windowWidth } = useWindowDimensions()
   const showCamera =
-    phase === 'loading' ||
-    phase === 'camera' ||
-    phase === 'position' ||
-    phase === 'blink' ||
-    phase === 'analyze'
+    phase === 'camera' || phase === 'position' || phase === 'blink' || phase === 'analyze'
   const ring = ringColor(phase, tracking, ui.brand)
   const progress = Math.min(1, blinkCount / Math.max(1, requiredBlinks))
 
+  // Portrait frame — avoids the oversized circle on iPad while staying face-friendly.
+  const frameWidth = Math.min(320, Math.max(240, windowWidth - 64))
+  const frameHeight = Math.round(frameWidth * 1.25)
+
   const body = (
-    <YStack width="100%" alignItems="center" gap="$4">
+    <YStack width="100%" alignItems="center" gap="$3.5">
       <YStack
-        width="100%"
-        maxWidth={380}
-        aspectRatio={1}
-        borderRadius={999}
+        width={frameWidth}
+        height={frameHeight}
+        borderRadius={frameWidth / 2}
         overflow="hidden"
-        backgroundColor="#111"
+        backgroundColor="#0f0f10"
         borderWidth={3}
         borderColor={ring}
         position="relative"
+        alignSelf="center"
       >
         {Platform.OS !== 'web' ? (
           showCamera && cameraPermission?.granted ? (
@@ -77,18 +93,19 @@ export function FaceCaptureOverlay({
               ref={cameraRef}
               style={StyleSheet.absoluteFill}
               facing="front"
+              mode="picture"
               mirror
               onCameraReady={onCameraReady}
             />
           ) : (
-            <YStack flex={1} alignItems="center" justifyContent="center" gap="$3" padding="$4">
-              {phase === 'loading' ? <Spinner size="large" color="white" /> : <Icons.ScanFace size={36} color="rgba(255,255,255,0.85)" />}
-              <Text fontSize={14} color="rgba(255,255,255,0.75)" textAlign="center">
-                {cameraPermission?.granted === false
-                  ? 'Allow camera access to continue'
-                  : phase === 'idle'
-                    ? 'Camera ready when you start'
-                    : 'Preparing camera…'}
+            <YStack flex={1} alignItems="center" justifyContent="center" gap="$3" padding="$5">
+              {phase === 'loading' ? (
+                <Spinner size="large" color="white" />
+              ) : (
+                <Icons.ScanFace size={40} color="rgba(255,255,255,0.9)" />
+              )}
+              <Text fontSize={14} color="rgba(255,255,255,0.78)" textAlign="center" lineHeight={20}>
+                {placeholderCopy(phase, cameraPermission)}
               </Text>
             </YStack>
           )
@@ -113,16 +130,31 @@ export function FaceCaptureOverlay({
                 alignItems="center"
                 justifyContent="center"
                 gap="$3"
-                padding="$4"
+                padding="$5"
               >
-                <Icons.ScanFace size={36} color="rgba(255,255,255,0.85)" />
-                <Text fontSize={14} color="rgba(255,255,255,0.75)" textAlign="center">
-                  Camera ready when you start
+                <Icons.ScanFace size={40} color="rgba(255,255,255,0.9)" />
+                <Text fontSize={14} color="rgba(255,255,255,0.78)" textAlign="center">
+                  Tap Start when you are ready
                 </Text>
               </YStack>
             ) : null}
           </>
         )}
+
+        {/* Soft oval guide so users know where to place their face */}
+        {showCamera && cameraPermission?.granted ? (
+          <YStack
+            position="absolute"
+            top="12%"
+            left="14%"
+            right="14%"
+            bottom="18%"
+            borderRadius={999}
+            borderWidth={1.5}
+            borderColor="rgba(255,255,255,0.35)"
+            pointerEvents="none"
+          />
+        ) : null}
 
         {phase === 'loading' || phase === 'analyze' ? (
           <YStack
@@ -135,17 +167,18 @@ export function FaceCaptureOverlay({
             justifyContent="center"
             backgroundColor="rgba(0,0,0,0.45)"
             gap="$2"
+            pointerEvents="none"
           >
             <Spinner size="large" color="white" />
             <Text fontSize={13} color="white" fontWeight="600">
-              {phase === 'loading' ? 'Loading models…' : 'Checking liveness…'}
+              {phase === 'loading' ? 'Getting ready…' : 'Checking liveness…'}
             </Text>
           </YStack>
         ) : null}
       </YStack>
 
-      <YStack width="100%" maxWidth={380} gap="$3" alignItems="center">
-        <Text fontSize={18} fontWeight="700" color={ui.text} textAlign="center" lineHeight={24}>
+      <YStack width="100%" maxWidth={frameWidth + 40} gap="$2.5" alignItems="center">
+        <Text fontSize={17} fontWeight="700" color={ui.text} textAlign="center" lineHeight={24}>
           {instruction}
         </Text>
 
@@ -173,7 +206,7 @@ export function FaceCaptureOverlay({
                 borderRadius={999}
               />
             </YStack>
-            <XStack justifyContent="center" gap="$3" marginTop="$1">
+            <XStack justifyContent="center" gap="$3.5" marginTop="$1">
               <Text fontSize={11} color={tracking?.faceDetected ? ui.brand : ui.textMuted}>
                 {tracking?.faceDetected ? '● Face' : '○ Face'}
               </Text>
@@ -227,8 +260,7 @@ export function VerificationSteps({ phase }: VerificationStepsProps) {
     <XStack width="100%" alignItems="center" justifyContent="center" gap="$2">
       {steps.map((step, index) => {
         const state = stateOf(step.id)
-        const color =
-          state === 'done' || state === 'active' ? ui.brand : ui.textMuted
+        const color = state === 'done' || state === 'active' ? ui.brand : ui.textMuted
         return (
           <XStack key={step.id} alignItems="center" gap="$2">
             <XStack alignItems="center" gap={8}>
@@ -243,7 +275,11 @@ export function VerificationSteps({ phase }: VerificationStepsProps) {
                 {state === 'done' ? (
                   <Icons.Check size={12} color={ui.onBrand} />
                 ) : (
-                  <Text fontSize={11} fontWeight="800" color={state === 'active' ? ui.onBrand : ui.textMuted}>
+                  <Text
+                    fontSize={11}
+                    fontWeight="800"
+                    color={state === 'active' ? ui.onBrand : ui.textMuted}
+                  >
                     {index + 1}
                   </Text>
                 )}
@@ -261,4 +297,3 @@ export function VerificationSteps({ phase }: VerificationStepsProps) {
     </XStack>
   )
 }
-

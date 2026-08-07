@@ -11,7 +11,7 @@
 import type { Href } from 'one'
 
 import { appRoutes } from '~/lib/routes'
-import { isFemaleProfile } from '~/lib/auth/access'
+import { hasVerifiedFemaleAccess } from '~/lib/auth/access'
 import { USER_ROLES, type UserRole } from '~/lib/profile/profile.type'
 import {
   DEFAULT_ROUTES,
@@ -149,7 +149,11 @@ export function resolveRouteAccess(input: ResolveRouteAccessInput): RouteAccessD
 
   const adminBypass = isAdminRole(role) && FEATURE_FLAGS.ADMIN_BYPASSES_RESTRICTIONS
 
-  if (!adminBypass && requiresGenderVerification(pathname) && !isFemaleProfile(gender)) {
+  if (
+    !adminBypass &&
+    requiresGenderVerification(pathname) &&
+    !hasVerifiedFemaleAccess(gender, isVerified)
+  ) {
     return {
       status: 'redirect',
       href: appRoutes.verifyGender,
@@ -232,7 +236,11 @@ export function resolveRoleAccess(
 
   const adminBypass = isAdminRole(role) && FEATURE_FLAGS.ADMIN_BYPASSES_RESTRICTIONS
 
-  if (!adminBypass && options.requireGenderVerification && !isFemaleProfile(gender)) {
+  if (
+    !adminBypass &&
+    options.requireGenderVerification &&
+    !hasVerifiedFemaleAccess(gender, isVerified)
+  ) {
     return {
       status: 'redirect',
       href: appRoutes.verifyGender,

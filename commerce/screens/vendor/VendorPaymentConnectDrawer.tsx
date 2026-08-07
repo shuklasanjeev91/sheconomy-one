@@ -4,14 +4,15 @@ import { Icons, Text, XStack, YStack } from '~/components/ui'
 import { getShadowStyle } from '~/config/tokens'
 import { useLockBodyScroll } from '~/hooks/useLockBodyScroll'
 import { overlayBackdropStyle } from '~/lib/layout/styles'
-import { PAYMENT_UI_COPY } from '~/lib/payment/payment-ui.copy'
+import { PAYMENT_PROVIDERS } from '~/lib/payment/payment.constants'
 import { isProviderConnected } from '~/lib/payment/payment.utils'
 import type { ConnectedProviderSummary, PaymentProviderConfig, ShopPaymentAccount } from '~/lib/payment/payment.type'
 import type { AppUiTokens } from '~/lib/theme/app-ui'
 
+import { ShepayEasyConnect } from '~/commerce/components/vendor/payment/ShepayEasyConnect'
 import { PaymentConnectForm } from '~/commerce/components/vendor/payment/PaymentConnectForm'
 
-const PANEL_WIDTH = 720
+const PANEL_WIDTH = 560
 
 type VendorPaymentConnectDrawerProps = {
   ui: AppUiTokens
@@ -25,6 +26,14 @@ type VendorPaymentConnectDrawerProps = {
   safeBottom: number
   onClose: () => void
   onConnected?: () => void
+}
+
+function isShepay(provider: PaymentProviderConfig): boolean {
+  return (
+    provider.id === PAYMENT_PROVIDERS.PAYU ||
+    String(provider.id).toLowerCase() === 'payu' ||
+    provider.name === 'SHEPay'
+  )
 }
 
 export function VendorPaymentConnectDrawer({
@@ -45,9 +54,14 @@ export function VendorPaymentConnectDrawer({
   if (!open || !provider) return null
 
   const connected = isProviderConnected(provider.id, accounts, connectedProviders)
-  const drawerTitle = connected
-    ? `${PAYMENT_UI_COPY.configure} ${provider.name}`
-    : `${PAYMENT_UI_COPY.connectPrefix} ${provider.name}`
+  const shepay = isShepay(provider)
+  const drawerTitle = shepay
+    ? connected
+      ? 'Your PayU details'
+      : 'Get paid'
+    : connected
+      ? `Configure ${provider.name}`
+      : `Connect ${provider.name}`
 
   const panelPositionStyle =
     Platform.OS === 'web'
@@ -104,7 +118,7 @@ export function VendorPaymentConnectDrawer({
             >
               <Icons.ArrowLeft size={16} color={ui.brand} />
               <Text fontSize={12} fontWeight="700" color={ui.brand} letterSpacing={0.3}>
-                {PAYMENT_UI_COPY.connectDrawerBack}
+                Back
               </Text>
             </XStack>
             <Text fontSize={16} fontWeight="800" color={ui.text} numberOfLines={1} flex={1}>
@@ -133,15 +147,25 @@ export function VendorPaymentConnectDrawer({
           paddingTop="$4"
           paddingBottom={16 + safeBottom}
         >
-          <PaymentConnectForm
-            ui={ui}
-            shopId={shopId}
-            provider={provider}
-            connected={connected}
-            initialWebhookUrl={webhookUrl}
-            onClose={onClose}
-            onConnected={onConnected}
-          />
+          {shepay ? (
+            <ShepayEasyConnect
+              ui={ui}
+              shopId={shopId}
+              connected={connected}
+              onClose={onClose}
+              onConnected={onConnected}
+            />
+          ) : (
+            <PaymentConnectForm
+              ui={ui}
+              shopId={shopId}
+              provider={provider}
+              connected={connected}
+              initialWebhookUrl={webhookUrl}
+              onClose={onClose}
+              onConnected={onConnected}
+            />
+          )}
         </YStack>
       </YStack>
     </>

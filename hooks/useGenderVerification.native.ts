@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
+import { Linking } from 'react-native'
 import type { CameraView } from 'expo-camera'
-import { useCameraPermissions } from 'expo-camera'
+import { Camera, useCameraPermissions } from 'expo-camera'
 
 import type { NativeFaceAnalyzerHandle } from '~/components/gender-verification/NativeFaceAnalyzer'
 import {
@@ -41,6 +42,8 @@ export function useGenderVerification({ onVerified }: UseGenderVerificationOptio
     realScore: 0,
   })
   const [cameraPermission, requestCameraPermission] = useCameraPermissions()
+  /** Local grant flag — hook state can lag one render behind `requestCameraPermissionsAsync`. */
+  const [cameraGranted, setCameraGranted] = useState(false)
 
   const cameraRef = useRef<CameraView | null>(null)
   const analyzerRef = useRef<NativeFaceAnalyzerHandle | null>(null)
@@ -67,6 +70,34 @@ export function useGenderVerification({ onVerified }: UseGenderVerificationOptio
   }, [])
 
   useEffect(() => stopCaptureLoop, [stopCaptureLoop])
+
+  useEffect(() => {
+    if (cameraPermission?.granted) setCameraGranted(true)
+  }, [cameraPermission?.granted])
+
+  const openCameraSettings = useCallback(() => {
+    void Linking.openSettings()
+  }, [])
+
+  const ensureCameraPermission = useCallback(async () => {
+    // Prefer the imperative API (same as Co-Work) so the system sheet always runs
+    // from this user gesture, even if the hook state is stale.
+    if (cameraPermission?.granted || cameraGranted) {
+      setCameraGranted(true)
+      return cameraPermission ?? { granted: true, canAskAgain: true, status: 'granted' as const }
+    }
+
+    const permission = await Camera.requestCameraPermissionsAsync()
+    if (permission.granted) {
+      setCameraGranted(true)
+      try {
+        await requestCameraPermission()
+      } catch {
+        // ignore — Camera.request already returned the definitive result
+      }
+    }
+    return permission
+  }, [cameraGranted, cameraPermission, requestCameraPermission])
 
   const analyzeAndSubmit = useCallback(
     async (detectedBlinks: number, livenessScore: number, base64: string, width: number, height: number) => {
@@ -141,8 +172,7 @@ export function useGenderVerification({ onVerified }: UseGenderVerificationOptio
     try {
       const picture = await camera.takePictureAsync({
         base64: true,
-        quality: 0.2,
-        skipProcessing: true,
+        quality: 0.35,
         shutterSound: false,
       })
       if (!picture.base64 || !loopActiveRef.current) return
@@ -243,39 +273,77 @@ export function useGenderVerification({ onVerified }: UseGenderVerificationOptio
   const startCaptureLoop = useCallback(() => {
     if (loopActiveRef.current) return
     loopActiveRef.current = true
+    setInstruction('Center your face, then blink naturally')
     intervalRef.current = setInterval(() => {
       void processFrame()
     }, GENDER_VERIFICATION.nativeFrameIntervalMs)
     void processFrame()
   }, [processFrame])
 
-  const tryStartVerification = useCallback(() => {
-    if (!sessionIdRef.current || !analyzerReady || !cameraReadyRef.current) return
-    if (!cameraPermission?.granted) return
+  const settleTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  const clearSettleTimer = useCallback(() => {
+    if (settleTimerRef.current) {
+      clearTimeout(settleTimerRef.current)
+      settleTimerRef.current = null
+    }
+  }, [])
+
+  const scheduleCaptureLoop = useCallback(() => {
+    clearSettleTimer()
+    // AVCapturePhotoOutput needs a moment after Allow / session start — early
+    // takePicture used to SIGABRT the app (maxPhotoDimensions still 0).
+    settleTimerRef.current = setTimeout(() => {
+      settleTimerRef.current = null
+      if (!sessionIdRef.current || !cameraReadyRef.current) return
+      if (analyzingRef.current) return
+      startCaptureLoop()
+    }, GENDER_VERIFICATION.nativeCameraSettleMs)
+  }, [clearSettleTimer, startCaptureLoop])
+
+  /** Mount the camera preview once session + models are ready (no photos yet). */
+  const armCameraPreview = useCallback(() => {
+    if (!sessionIdRef.current || !analyzerReady) return
+    if (!cameraGranted && !cameraPermission?.granted) return
     if (loopActiveRef.current || analyzingRef.current) return
-    if (phase === 'success' || phase === 'error') return
+    if (phase === 'success' || phase === 'error' || phase === 'idle') return
+    if (
+      phase === 'camera' ||
+      phase === 'position' ||
+      phase === 'blink' ||
+      phase === 'analyze'
+    ) {
+      return
+    }
     setPhase('camera')
-    setInstruction('Center your face, then blink naturally')
-    startCaptureLoop()
-  }, [analyzerReady, cameraPermission?.granted, phase, startCaptureLoop])
+    setInstruction('Starting camera…')
+  }, [analyzerReady, cameraGranted, cameraPermission?.granted, phase])
 
   const onCameraReady = useCallback(() => {
     cameraReadyRef.current = true
-    tryStartVerification()
-  }, [tryStartVerification])
+    setInstruction('Preparing camera…')
+    scheduleCaptureLoop()
+  }, [scheduleCaptureLoop])
 
   const onAnalyzerReady = useCallback(() => {
     setAnalyzerReady(true)
   }, [])
 
   useEffect(() => {
-    tryStartVerification()
-  }, [tryStartVerification])
+    armCameraPreview()
+  }, [armCameraPreview])
+
+  useEffect(
+    () => () => {
+      clearSettleTimer()
+    },
+    [clearSettleTimer],
+  )
 
   const start = useCallback(async () => {
     setError(null)
     setPhase('loading')
-    setInstruction('Loading secure face models…')
+    setInstruction('Checking camera permission…')
     blinkTrackerRef.current = createBlinkTracker()
     earCalibratorRef.current = createEarCalibrator()
     stableFramesRef.current = 0
@@ -286,39 +354,46 @@ export function useGenderVerification({ onVerified }: UseGenderVerificationOptio
     analyzingRef.current = false
     processingRef.current = false
     cameraReadyRef.current = false
+    clearSettleTimer()
     stopCaptureLoop()
+
+    // Ask for camera first (user gesture) — iOS only shows the sheet once while
+    // status is undetermined. A previous Deny means canAskAgain=false and no sheet.
+    const permission = await ensureCameraPermission()
+    if (!permission.granted) {
+      const blocked = permission.canAskAgain === false
+      const message = blocked
+        ? 'Camera access is blocked. Open Settings → SHEconomy → Camera, turn it on, then try again.'
+        : 'Camera permission is required for liveness verification. Please allow camera access when prompted.'
+      setError(message)
+      setInstruction(message)
+      setPhase('error')
+      return
+    }
+
+    setInstruction('Loading secure face models…')
 
     const { sessionId: createdSessionId, error: sessionError } =
       await createGenderVerificationSession()
     if (sessionError || !createdSessionId) {
       setError(sessionError ?? 'Could not start verification session.')
+      setInstruction(sessionError ?? 'Could not start verification session.')
       setPhase('error')
       return
     }
     sessionIdRef.current = createdSessionId
 
-    let permission = cameraPermission
-    if (!permission?.granted) permission = await requestCameraPermission()
-    if (!permission?.granted) {
-      setError('Camera permission is required for liveness verification.')
-      setPhase('error')
-      return
-    }
-
     if (!analyzerReady) {
       setInstruction('Loading secure face models…')
       return
     }
-    tryStartVerification()
-  }, [
-    analyzerReady,
-    cameraPermission,
-    requestCameraPermission,
-    stopCaptureLoop,
-    tryStartVerification,
-  ])
+    // Mount preview; takePicture waits for onCameraReady + settle delay.
+    setPhase('camera')
+    setInstruction('Starting camera…')
+  }, [analyzerReady, clearSettleTimer, ensureCameraPermission, stopCaptureLoop])
 
   const reset = useCallback(() => {
+    clearSettleTimer()
     stopCaptureLoop()
     sessionIdRef.current = null
     cameraReadyRef.current = false
@@ -340,7 +415,12 @@ export function useGenderVerification({ onVerified }: UseGenderVerificationOptio
       liveScore: 0,
       realScore: 0,
     })
-  }, [stopCaptureLoop])
+  }, [clearSettleTimer, stopCaptureLoop])
+
+  const cameraBlocked =
+    !cameraGranted &&
+    cameraPermission?.granted === false &&
+    cameraPermission?.canAskAgain === false
 
   return {
     supported: true,
@@ -353,8 +433,12 @@ export function useGenderVerification({ onVerified }: UseGenderVerificationOptio
     containerRef,
     cameraRef,
     analyzerRef,
-    cameraPermission,
+    cameraPermission: cameraGranted
+      ? { ...(cameraPermission ?? { status: 'granted' as const, canAskAgain: true }), granted: true }
+      : cameraPermission,
+    cameraBlocked,
     requestCameraPermission,
+    openCameraSettings,
     onCameraReady,
     onAnalyzerReady,
     start,

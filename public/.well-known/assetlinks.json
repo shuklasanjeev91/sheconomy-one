@@ -4,7 +4,9 @@
     "target": {
       "namespace": "android_app",
       "package_name": "com.sheconomy.ecommerce",
-      "sha256_cert_fingerprints": ["REPLACE_WITH_ANDROID_RELEASE_SHA256"]
+      "sha256_cert_fingerprints": [
+        "71:16:DF:82:0B:50:93:71:BB:AB:34:60:65:50:40:6B:52:BB:1D:00:BA:07:B4:2D:26:F9:BF:2A:4E:C4:B4:31"
+      ]
     }
   }
 ]

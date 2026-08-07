@@ -25,13 +25,13 @@ describe('onlinePaymentOptionCopy', () => {
     })
   })
 
-  it('uses SHEPay PayU hosted when no seller gateway', () => {
+  it('uses Online payment when no seller gateway', () => {
     const copy = onlinePaymentOptionCopy({
       shepayShops: [{ shopName: 'Platform Shop' }],
       directShops: [],
     })
-    expect(copy.title).toBe('Pay online')
-    expect(copy.subtitle.toLowerCase()).toContain('payu')
+    expect(copy.title).toBe('Online payment')
+    expect(copy.subtitle.toLowerCase()).toContain('upi')
   })
 
   it('describes mixed carts', () => {
@@ -39,14 +39,15 @@ describe('onlinePaymentOptionCopy', () => {
       shepayShops: [{ shopName: 'A' }],
       directShops: [{ shopId: '2', shopName: 'B', gateway: 'Stripe' }],
     })
-    expect(copy.title).toBe('Pay online')
+    expect(copy.title).toBe('Online payment')
     expect(copy.subtitle.toLowerCase()).toContain('shepay')
   })
 })
 
 describe('checkoutShippingLabel', () => {
-  it('defaults to SHEDelivery', () => {
-    expect(checkoutShippingLabel(null)).toBe('SHEDelivery')
+  it('defaults to Seller ships', () => {
+    expect(checkoutShippingLabel(null)).toBe('Seller ships')
+    expect(checkoutShippingLabel({ shippingLabel: 'SHEDelivery' })).toBe('Seller ships')
     expect(checkoutShippingLabel({ shippingLabel: 'Shiprocket' })).toBe('Shiprocket')
   })
 })
@@ -134,7 +135,30 @@ describe('resolvePostCheckoutNext', () => {
     })
   })
 
-  it('routes SHEPay to in-app PayU bridge', () => {
+  it('prefers on-checkout PayU panel when payment step is ready', () => {
+    expect(
+      resolvePostCheckoutNext({
+        mode: 'online',
+        checkoutUrl: null,
+        shepayError: null,
+        hasShepaySteps: true,
+        payuInline: {
+          actionUrl: '',
+          fields: {},
+          txnid: '',
+          paymentStepId: 'step-1',
+        },
+      }),
+    ).toEqual({
+      kind: 'payu_inline',
+      actionUrl: '',
+      fields: {},
+      txnid: '',
+      paymentStepId: 'step-1',
+    })
+  })
+
+  it('routes SHEPay to in-app PayU bridge when no inline session', () => {
     const url = 'https://sheconomy.in/orders/payu?action=https%3A%2F%2Ftest.payu.in%2F_payment&payload=%7B%7D'
     expect(
       resolvePostCheckoutNext({

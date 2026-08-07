@@ -250,10 +250,6 @@ export function VendorOrderListPanel({
             order_item_id: trackingItem.id,
             tracking_number: values.tracking_number,
             courier_slug: values.courier_slug,
-            delivery_mode: values.delivery_mode,
-            shipping_date: values.shipping_date,
-            estimated_delivery_date: values.estimated_delivery_date,
-            note: values.note,
             custom_tracking_url: values.custom_tracking_url,
             delivery_address: address as unknown as Json,
             notify_customer: values.notify_customer,
@@ -262,7 +258,7 @@ export function VendorOrderListPanel({
       ).unwrap()
       toast.show('Shipment added', {
         tone: 'success',
-        message: 'Tracking saved — the order is now marked as shipped.',
+        message: 'Tracking saved. Status will update automatically from the courier.',
       })
       setTrackingItem(null)
       loadPage()

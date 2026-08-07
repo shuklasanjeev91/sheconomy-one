@@ -48,6 +48,7 @@ const NON_COMMERCE_PREFIXES = [
   '/help',
   '/legal',
   '/vendor',
+  '/sellerlanding',
 ] as const
 
 /** Public CMS blog — listing + article reader. */
@@ -82,6 +83,11 @@ export const commerceRoutes = {
   browse: (kind: string) => `/browse/${kind}` as Href,
   listing: (slug: string) => `/listing/${encodeURIComponent(slug)}` as Href,
   shop: (slug: string) => `/shop/${encodeURIComponent(slug)}` as Href,
+  shopPrivacy: (slug: string) => `/shop/${encodeURIComponent(slug)}/privacy` as Href,
+  shopTerms: (slug: string) => `/shop/${encodeURIComponent(slug)}/terms` as Href,
+  shopReturns: (slug: string) => `/shop/${encodeURIComponent(slug)}/returns` as Href,
+  shopRefunds: (slug: string) => `/shop/${encodeURIComponent(slug)}/refunds` as Href,
+  shopShipping: (slug: string) => `/shop/${encodeURIComponent(slug)}/shipping` as Href,
   following: '/following' as Href,
 } as const
 

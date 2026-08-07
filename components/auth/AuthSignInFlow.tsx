@@ -54,6 +54,7 @@ export function AuthSignInFlow({ returnTo }: AuthSignInFlowProps) {
 
   return (
     <AuthShell
+      returnTo={returnTo}
       footer={
         <XStack
           alignItems="flex-start"
@@ -71,6 +72,15 @@ export function AuthSignInFlow({ returnTo }: AuthSignInFlowProps) {
     >
       <YStack gap="$5">
         <GoogleOneTap enabled={oneTapReady} onSuccess={finishSocial} />
+
+        {/* Social first on native so Sign in with Apple is equally prominent (App Store 4.8). */}
+        {Platform.OS !== 'web' ? (
+          <SocialSignInButtons
+            onSuccess={(provider) => {
+              void completeSignIn(returnTo, { provider })
+            }}
+          />
+        ) : null}
 
         <AuthMethodTabs value={mode} onChange={setMode} />
         <AuthOtpForm
@@ -94,23 +104,24 @@ export function AuthSignInFlow({ returnTo }: AuthSignInFlowProps) {
           </Button>
         ) : null}
 
-        <SocialSignInButtons
-          onSuccess={(provider) => {
-            void completeSignIn(returnTo, { provider })
-          }}
-        />
-
         {Platform.OS === 'web' ? (
-          showQrLogin ? (
-            <QrLoginPanel
-              onSuccess={() => void completeSignIn(returnTo, { provider: 'qr' })}
-              onCancel={() => setShowQrLogin(false)}
+          <>
+            <SocialSignInButtons
+              onSuccess={(provider) => {
+                void completeSignIn(returnTo, { provider })
+              }}
             />
-          ) : (
-            <Button tone="ghost" size="$3" onPress={() => setShowQrLogin(true)}>
-              Log in with phone (QR code)
-            </Button>
-          )
+            {showQrLogin ? (
+              <QrLoginPanel
+                onSuccess={() => void completeSignIn(returnTo, { provider: 'qr' })}
+                onCancel={() => setShowQrLogin(false)}
+              />
+            ) : (
+              <Button tone="ghost" size="$3" onPress={() => setShowQrLogin(true)}>
+                Log in with phone (QR code)
+              </Button>
+            )}
+          </>
         ) : null}
       </YStack>
     </AuthShell>

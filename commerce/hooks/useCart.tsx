@@ -14,8 +14,10 @@ import {
   fetchCartWithItems,
   getCartSessionId,
   getOrCreateCart,
+  getRememberedGuestCartId,
   mergeGuestCartWithUser,
   moveSavedCartItemToCart,
+  rememberGuestCartId,
   removeCartDiscount,
   removeCartItem,
   saveCartItemForLater,
@@ -24,6 +26,7 @@ import {
   type CartRow,
   type CartWithItems,
 } from '~/commerce/lib/cart'
+import { fetchCartBundle, resolveCartActor } from '~/commerce/lib/cart-rpc-fetch'
 import {
   applyCouponCode,
   autoApplyBestOffer,
@@ -63,6 +66,32 @@ type CartContextValue = {
 
 const CartContext = createContext<CartContextValue | null>(null)
 
+/** Prevent Add to Cart / cart refresh from hanging forever on a stuck network call. */
+const CART_OPERATION_TIMEOUT_MS = 12_000
+
+function withCartTimeout<T>(promise: Promise<T>, label: string): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    const timer = setTimeout(() => {
+      reject(new Error(`${label} timed out. Check your connection and try again.`))
+    }, CART_OPERATION_TIMEOUT_MS)
+    promise.then(
+      (value) => {
+        clearTimeout(timer)
+        resolve(value)
+      },
+      (error) => {
+        clearTimeout(timer)
+        reject(error)
+      },
+    )
+  })
+}
+
+/** Run the full Add-to-Cart path under one deadline (session + create + add). */
+async function runCartMutation<T>(label: string, work: () => Promise<T>): Promise<T> {
+  return withCartTimeout(work(), label)
+}
+
 function readCartMetadata(cart: CartRow | null | undefined): Record<string, unknown> {
   const raw = cart?.cart_metadata
   if (raw && typeof raw === 'object' && !Array.isArray(raw)) {
@@ -101,10 +130,32 @@ export function CartProvider({ children }: { children: ReactNode }) {
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [autoApplied, setAutoApplied] = useState(false)
-  const mergedRef = useRef(false)
+  const mergedSessionRef = useRef<string | null>(null)
+  const mergeInflightRef = useRef<Promise<void> | null>(null)
   // Stop auto-applying until the shopper applies a code or the cart subtotal changes.
   const couponOptOutRef = useRef(false)
   const optOutSubtotalRef = useRef<number | null>(null)
+  const hasCartItemsRef = useRef(false)
+  hasCartItemsRef.current = (cartData?.items.length ?? 0) + (cartData?.savedItems?.length ?? 0) > 0
+
+  /**
+   * Never replace a cart that still has lines with a different empty cart.
+   * That race is what empties the UI during guest add → loadCart and guest → sign-in.
+   */
+  const commitCartData = useCallback((next: CartWithItems | null) => {
+    setCartData((prev) => {
+      if (!next) {
+        if (hasCartItemsRef.current) return prev
+        return null
+      }
+      const prevCount = (prev?.items.length ?? 0) + (prev?.savedItems.length ?? 0)
+      const nextCount = next.items.length + next.savedItems.length
+      if (prevCount > 0 && nextCount === 0 && prev && prev.cart.id !== next.cart.id) {
+        return prev
+      }
+      return next
+    })
+  }, [])
 
   const tryAutoApply = useCallback(async (data: CartWithItems): Promise<CartWithItems> => {
     if (couponOptOutRef.current) {
@@ -146,79 +197,171 @@ export function CartProvider({ children }: { children: ReactNode }) {
     return fresh.data ?? data
   }, [])
 
-  const loadCart = useCallback(async () => {
-    if (authLoading) return
+  const userId = user?.id ?? null
 
-    setIsLoading(true)
+  const loadCart = useCallback(async () => {
+    if (authLoading) {
+      // Keep initial spinner only until auth resolves; never leave loading stuck after soft refresh.
+      return
+    }
+
+    // Soft refresh when cart is already on screen — avoids checkout full-page remounts
+    // when auth session identity churns but user.id is unchanged.
+    const soft = hasCartItemsRef.current
+    if (!soft) setIsLoading(true)
     setError(null)
 
     try {
-      const sessionId = user ? null : await getCartSessionId()
-      const { cart, error: cartError } = await getOrCreateCart({
-        userId: user?.id,
-        sessionId,
-      })
+      // Guest → sign-in: merge session cart into the user cart BEFORE loading,
+      // otherwise we paint an empty user cart and checkout redirects away.
+      if (userId) {
+        const sessionId = await getCartSessionId()
+        if (mergedSessionRef.current !== sessionId) {
+          if (!mergeInflightRef.current) {
+            mergeInflightRef.current = withCartTimeout(
+              mergeGuestCartWithUser({ sessionId, userId }),
+              'Merging guest cart',
+            )
+              .then(() => {
+                mergedSessionRef.current = sessionId
+                return rememberGuestCartId(null)
+              })
+              .catch((error) => {
+                console.warn(
+                  '[cart] merge failed',
+                  error instanceof Error ? error.message : error,
+                )
+                // Still mark attempted so we don't loop forever on hard failures.
+                mergedSessionRef.current = sessionId
+              })
+              .finally(() => {
+                mergeInflightRef.current = null
+              })
+          }
+          await mergeInflightRef.current
+        }
+      }
+
+      const actor = await resolveCartActor(userId)
+      let { cart, error: cartError } = await withCartTimeout(
+        getOrCreateCart({
+          userId: actor.userId,
+          sessionId: actor.sessionId,
+        }),
+        'Loading cart',
+      )
+
+      // Recover guest lines if session id drifted but we still remember the cart row.
+      if (actor.asGuest && cart?.id) {
+        const rememberedId = await getRememberedGuestCartId()
+        if (rememberedId && rememberedId !== cart.id) {
+          const remembered = await fetchCartBundle(rememberedId, true).catch(() => null)
+          const rememberedCount =
+            (remembered?.data?.items.length ?? 0) + (remembered?.data?.savedItems.length ?? 0)
+          if (rememberedCount > 0 && remembered?.data?.cart) {
+            cart = remembered.data.cart
+            cartError = null
+          }
+        }
+      }
 
       if (cartError || !cart) {
-        setCartData(null)
         setError(cartError ?? 'Could not load cart')
-        setIsLoading(false)
+        // Never wipe an on-screen cart on a transient load failure (guest JWT 401s).
+        if (!soft) commitCartData(null)
         return
+      }
+
+      if (actor.asGuest) {
+        void rememberGuestCartId(cart.id)
       }
 
       if (cart.status === 'abandoned') {
-        await supabase
-          .from('carts')
-          .update({ status: 'active', last_activity_at: new Date().toISOString() })
-          .eq('id', cart.id)
+        await withCartTimeout(
+          supabase
+            .from('carts')
+            .update({ status: 'active', last_activity_at: new Date().toISOString() })
+            .eq('id', cart.id)
+            .then(() => undefined),
+          'Reactivating cart',
+        ).catch(() => undefined)
       }
 
-      const { data, error: itemsError } = await fetchCartWithItems(cart.id)
-      if (itemsError || !data) {
-        setCartData(null)
-        setError(itemsError ?? 'Could not load cart items')
-        setIsLoading(false)
+      const asGuest = actor.asGuest
+      const bundle = await withCartTimeout(
+        asGuest
+          ? fetchCartBundle(cart.id, true)
+          : fetchCartWithItems(cart.id).then((result) => ({
+              data: result.data
+                ? {
+                    cart: result.data.cart,
+                    items: result.data.items,
+                    savedItems: result.data.savedItems,
+                  }
+                : null,
+              error: result.error,
+            })),
+        'Loading cart items',
+      )
+      if (bundle.error || !bundle.data) {
+        setError(bundle.error ?? 'Could not load cart items')
+        if (!soft) commitCartData(null)
         return
       }
 
-      let next = data
+      let next: CartWithItems = bundle.data
 
-      if (next.cart.applied_discount_id) {
-        const selectedItems = filterSelectedCartItems(next.items)
-        const changed = await reconcileCartDiscount(
-          next.cart,
-          toCartOfferItems(selectedItems),
-        )
-        if (changed) {
-          const fresh = await fetchCartWithItems(cart.id)
-          next = fresh.data ?? next
-        }
-
+      // Discount reconcile is best-effort — never block cart paint / checkout.
+      try {
         if (next.cart.applied_discount_id) {
-          const autoId = readAutoAppliedDiscountId(next.cart)
-          setAutoApplied(autoId === next.cart.applied_discount_id)
+          const selectedItems = filterSelectedCartItems(next.items)
+          const changed = await withCartTimeout(
+            reconcileCartDiscount(next.cart, toCartOfferItems(selectedItems)),
+            'Reconciling cart discount',
+          )
+          if (changed) {
+            const fresh = await withCartTimeout(
+              asGuest ? fetchCartBundle(cart.id, true) : fetchCartWithItems(cart.id),
+              'Refreshing cart',
+            )
+            if (fresh.data) next = fresh.data
+          }
+
+          if (next.cart.applied_discount_id) {
+            const autoId = readAutoAppliedDiscountId(next.cart)
+            setAutoApplied(autoId === next.cart.applied_discount_id)
+          } else {
+            next = await withCartTimeout(tryAutoApply(next), 'Applying cart offer')
+            if (!next.cart.applied_discount_id) setAutoApplied(false)
+          }
         } else {
-          // Discount dropped by reconcile — try best offer again unless opted out.
-          next = await tryAutoApply(next)
+          next = await withCartTimeout(tryAutoApply(next), 'Applying cart offer')
           if (!next.cart.applied_discount_id) setAutoApplied(false)
         }
-      } else {
-        next = await tryAutoApply(next)
-        if (!next.cart.applied_discount_id) setAutoApplied(false)
+      } catch {
+        // Show cart without offers rather than spinning forever.
       }
 
-      setCartData(next)
-    } catch {
-      setError('Could not load cart')
-      setCartData(null)
+      commitCartData(next)
+    } catch (error) {
+      setError(error instanceof Error ? error.message : 'Could not load cart')
+      if (!hasCartItemsRef.current) commitCartData(null)
     } finally {
       setIsLoading(false)
     }
-  }, [authLoading, tryAutoApply, user])
+  }, [authLoading, commitCartData, tryAutoApply, userId])
 
   useEffect(() => {
+    if (authLoading) return
     void loadCart()
-  }, [loadCart])
+  }, [authLoading, loadCart])
+
+  // Never leave the cart provider stuck on the initial spinner (App Store 2.1).
+  useEffect(() => {
+    if (!isLoading) return
+    const timer = setTimeout(() => setIsLoading(false), 15_000)
+    return () => clearTimeout(timer)
+  }, [isLoading])
 
   const selectionRevision = useCartSelectionRevision()
 
@@ -240,7 +383,7 @@ export function CartProvider({ children }: { children: ReactNode }) {
         next = await tryAutoApply(next)
       }
 
-      setCartData(next)
+      commitCartData(next)
       if (!next.cart.applied_discount_id) {
         setAutoApplied(false)
       } else {
@@ -252,76 +395,105 @@ export function CartProvider({ children }: { children: ReactNode }) {
     return () => {
       cancelled = true
     }
-  }, [selectionRevision, cartData?.cart?.applied_discount_id, cartData?.items, tryAutoApply])
+  }, [selectionRevision, cartData?.cart?.applied_discount_id, cartData?.items, commitCartData, tryAutoApply])
 
+  // Reset merge marker when the shopper signs out so the next guest session can merge again.
   useEffect(() => {
-    if (!user || mergedRef.current) return
-
-    let active = true
-    ;(async () => {
-      const sessionId = await getCartSessionId()
-      const { error: mergeError } = await mergeGuestCartWithUser({
-        sessionId,
-        userId: user.id,
-      })
-      if (!active) return
-      mergedRef.current = true
-      if (!mergeError) {
-        await loadCart()
-      }
-    })()
-
-    return () => {
-      active = false
-    }
-  }, [user, loadCart])
+    if (!userId) mergedSessionRef.current = null
+  }, [userId])
 
   const addToCart = useCallback(
     async (
       listingId: string,
       options?: { quantity?: number; variantId?: string | null; personalizationNote?: string | null },
     ) => {
-      let cartId = cartData?.cart.id
+      try {
+        // Always resolve the cart for the *current* identity first.
+        // Reusing a stale cartData.id (guest cart after sign-in, or vice versa) makes
+        // add succeed via SECURITY DEFINER while loadCart refreshes an empty cart —
+        // UI looks like Add to Cart did nothing.
+        return await runCartMutation('Adding to cart', async () => {
+          // Stale in-memory `user` without a usable JWT must use a guest session cart.
+          const actor = await resolveCartActor(userId)
+          const { cart, error: cartError } = await getOrCreateCart({
+            userId: actor.userId,
+            sessionId: actor.sessionId,
+          })
+          if (cartError || !cart?.id) {
+            return { error: cartError ?? 'Could not create cart' }
+          }
 
-      if (!cartId) {
-        const sessionId = user ? null : await getCartSessionId()
-        const { cart, error: cartError } = await getOrCreateCart({
-          userId: user?.id,
-          sessionId,
+          if (actor.asGuest) {
+            void rememberGuestCartId(cart.id)
+          }
+
+          const { item, error: addError } = await addListingToCart({
+            cartId: cart.id,
+            listingId,
+            quantity: options?.quantity,
+            variantId: options?.variantId,
+            personalizationNote: options?.personalizationNote,
+            asGuest: actor.asGuest,
+          })
+
+          if (addError) {
+            return { error: addError }
+          }
+
+          // Optimistic UI — flip sticky bar to Checkout immediately.
+          if (item) {
+            setCartData((prev) => {
+              const baseItems =
+                prev?.cart.id === cart.id ? prev.items.filter((row) => row.id !== item.id) : []
+              const baseSaved =
+                prev?.cart.id === cart.id
+                  ? prev.savedItems.filter((row) => row.id !== item.id)
+                  : []
+              const nextItems = [...baseItems, item]
+              const itemsSubtotal = nextItems.reduce(
+                (sum, row) => sum + (row.total_price ?? row.unit_price * row.quantity),
+                0,
+              )
+              hasCartItemsRef.current = nextItems.length + baseSaved.length > 0
+              return {
+                cart: {
+                  ...cart,
+                  items_subtotal: itemsSubtotal,
+                  total_amount: itemsSubtotal - (cart.discount_amount ?? 0),
+                },
+                items: nextItems,
+                savedItems: baseSaved,
+              }
+            })
+            setIsLoading(false)
+            setError(null)
+          }
+
+          trackCommerceEvent('add_to_cart', {
+            currency: 'INR',
+            items: [
+              {
+                id: listingId,
+                name: listingId,
+                quantity: options?.quantity ?? 1,
+              },
+            ],
+          })
+
+          // Soft refresh in background — commitCartData will not clobber non-empty → empty.
+          void loadCart()
+          return { error: null }
         })
-        if (cartError || !cart) {
-          return { error: cartError ?? 'Could not create cart' }
+      } catch (error) {
+        return {
+          error:
+            error instanceof Error
+              ? error.message
+              : 'Could not add to cart. Please try again.',
         }
-        cartId = cart.id
       }
-
-      const { error: addError } = await addListingToCart({
-        cartId,
-        listingId,
-        quantity: options?.quantity,
-        variantId: options?.variantId,
-        personalizationNote: options?.personalizationNote,
-      })
-
-      if (addError) {
-        return { error: addError }
-      }
-
-      trackCommerceEvent('add_to_cart', {
-        currency: 'INR',
-        items: [
-          {
-            id: listingId,
-            name: listingId,
-            quantity: options?.quantity ?? 1,
-          },
-        ],
-      })
-
-      await loadCart()
-      return { error: null }
     },
-    [cartData?.cart.id, loadCart, user],
+    [loadCart, userId],
   )
 
   const updateQuantity = useCallback(

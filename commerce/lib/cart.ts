@@ -1,10 +1,14 @@
 import AsyncStorage from '@react-native-async-storage/async-storage'
 
+import { fetchAddToCart, fetchGetOrCreateCart } from '~/commerce/lib/cart-rpc-fetch'
 import { supabase } from '~/lib/supabase/client'
 import type { Json, Tables } from '~/lib/supabase'
 import { splitCartItems } from '~/commerce/lib/cart-shelf'
 
 const CART_SESSION_KEY = 'sheconomy:cart-session'
+const GUEST_CART_ID_KEY = 'sheconomy:guest-cart-id'
+/** AsyncStorage can hang on some iPadOS builds — never block Add to Cart on it. */
+const CART_SESSION_STORAGE_TIMEOUT_MS = 2_500
 
 export type CartRow = Tables<'carts'>
 export type CartItemRow = Tables<'cart_items'>
@@ -17,6 +21,12 @@ export type CartWithItems = {
 
 export { splitCartItems } from '~/commerce/lib/cart-shelf'
 
+/** In-memory fallback so guest carts still work if device storage never resolves. */
+let memoryCartSessionId: string | null = null
+/** Single-flight so parallel add/load/merge never mint two different session ids. */
+let cartSessionIdInflight: Promise<string> | null = null
+let memoryGuestCartId: string | null = null
+
 async function createSessionId() {
   if (typeof crypto !== 'undefined' && 'randomUUID' in crypto) {
     return crypto.randomUUID()
@@ -24,13 +34,95 @@ async function createSessionId() {
   return `sess_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`
 }
 
-export async function getCartSessionId(): Promise<string> {
-  const existing = await AsyncStorage.getItem(CART_SESSION_KEY)
-  if (existing) return existing
+function withStorageTimeout<T>(promise: Promise<T>, ms: number): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    const timer = setTimeout(() => reject(new Error('cart-session-storage-timeout')), ms)
+    promise.then(
+      (value) => {
+        clearTimeout(timer)
+        resolve(value)
+      },
+      (error) => {
+        clearTimeout(timer)
+        reject(error)
+      },
+    )
+  })
+}
 
-  const sessionId = await createSessionId()
-  await AsyncStorage.setItem(CART_SESSION_KEY, sessionId)
-  return sessionId
+export async function getCartSessionId(): Promise<string> {
+  if (memoryCartSessionId) return memoryCartSessionId
+  if (cartSessionIdInflight) return cartSessionIdInflight
+
+  cartSessionIdInflight = (async () => {
+    try {
+      const existing = await withStorageTimeout(
+        AsyncStorage.getItem(CART_SESSION_KEY),
+        CART_SESSION_STORAGE_TIMEOUT_MS,
+      )
+      if (existing) {
+        memoryCartSessionId = existing
+        return existing
+      }
+    } catch {
+      // Fall through to create a session — do not hang purchase CTAs.
+    }
+
+    const sessionId = await createSessionId()
+    memoryCartSessionId = sessionId
+    try {
+      await withStorageTimeout(
+        AsyncStorage.setItem(CART_SESSION_KEY, sessionId),
+        CART_SESSION_STORAGE_TIMEOUT_MS,
+      )
+    } catch {
+      // Memory session is enough for this app launch; next launch may mint a new one.
+    }
+    return sessionId
+  })()
+
+  try {
+    return await cartSessionIdInflight
+  } finally {
+    cartSessionIdInflight = null
+  }
+}
+
+/** Remember the guest cart row so a drifted session id can still recover lines. */
+export async function rememberGuestCartId(cartId: string | null): Promise<void> {
+  memoryGuestCartId = cartId
+  try {
+    if (cartId) {
+      await withStorageTimeout(
+        AsyncStorage.setItem(GUEST_CART_ID_KEY, cartId),
+        CART_SESSION_STORAGE_TIMEOUT_MS,
+      )
+    } else {
+      await withStorageTimeout(
+        AsyncStorage.removeItem(GUEST_CART_ID_KEY),
+        CART_SESSION_STORAGE_TIMEOUT_MS,
+      )
+    }
+  } catch {
+    // memory is enough for this launch
+  }
+}
+
+export async function getRememberedGuestCartId(): Promise<string | null> {
+  if (memoryGuestCartId) return memoryGuestCartId
+  try {
+    const existing = await withStorageTimeout(
+      AsyncStorage.getItem(GUEST_CART_ID_KEY),
+      CART_SESSION_STORAGE_TIMEOUT_MS,
+    )
+    if (existing) {
+      memoryGuestCartId = existing
+      return existing
+    }
+  } catch {
+    // ignore
+  }
+  return null
 }
 
 export async function getOrCreateCart(options: {
@@ -38,17 +130,10 @@ export async function getOrCreateCart(options: {
   sessionId?: string | null
 }): Promise<{ cart: CartRow | null; error: string | null }> {
   const sessionId = options.sessionId ?? (options.userId ? null : await getCartSessionId())
-
-  const { data, error } = await supabase.rpc('get_or_create_cart', {
-    p_user_id: options.userId ?? undefined,
-    p_session_id: sessionId ?? undefined,
+  return fetchGetOrCreateCart({
+    userId: options.userId ?? null,
+    sessionId,
   })
-
-  if (error) {
-    return { cart: null, error: error.message }
-  }
-
-  return { cart: data, error: null }
 }
 
 export async function fetchCartItems(cartId: string): Promise<{
@@ -105,16 +190,19 @@ export async function addListingToCart(options: {
   variantId?: string | null
   /** Optional buyer note / personalization stored on the cart line. */
   personalizationNote?: string | null
+  /** Guest session carts must use anon auth (stale JWTs 401 otherwise). */
+  asGuest?: boolean
 }): Promise<{ item: CartItemRow | null; error: string | null }> {
-  const { data, error } = await supabase.rpc('add_to_cart', {
-    p_cart_id: options.cartId,
-    p_listing_id: options.listingId,
-    p_quantity: options.quantity ?? 1,
-    p_variant_id: options.variantId ?? undefined,
+  const { item: data, error } = await fetchAddToCart({
+    cartId: options.cartId,
+    listingId: options.listingId,
+    quantity: options.quantity,
+    variantId: options.variantId,
+    asGuest: options.asGuest,
   })
 
   if (error) {
-    return { item: null, error: error.message }
+    return { item: null, error }
   }
 
   const note = options.personalizationNote?.trim()
@@ -123,7 +211,8 @@ export async function addListingToCart(options: {
       data.item_metadata && typeof data.item_metadata === 'object' && !Array.isArray(data.item_metadata)
         ? (data.item_metadata as Record<string, unknown>)
         : {}
-    await supabase
+    // Best-effort — never block the Add to Cart CTA on note persistence.
+    void supabase
       .from('cart_items')
       .update({
         item_metadata: { ...existing, personalization_note: note },
@@ -131,10 +220,16 @@ export async function addListingToCart(options: {
       })
       .eq('id', data.id)
       .eq('cart_id', options.cartId)
+      .then(({ error: noteError }) => {
+        if (noteError) {
+          console.warn('[cart] personalization note update failed', noteError.message)
+        }
+      })
   }
 
-  await supabase.rpc('update_cart_totals', { p_cart_id: options.cartId })
-  await recordCartAddAnalytics({
+  // Totals already run inside add_to_cart RPC — do not await secondary writes on the CTA path.
+  void supabase.rpc('update_cart_totals', { p_cart_id: options.cartId })
+  void recordCartAddAnalytics({
     cartId: options.cartId,
     listingId: options.listingId,
     quantity: options.quantity ?? 1,

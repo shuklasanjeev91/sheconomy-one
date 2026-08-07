@@ -36,7 +36,7 @@ export const GENDER_ERROR_MESSAGES: Record<GenderErrorCode, string> = {
   [GENDER_ERROR_CODES.IMAGE_TOO_LARGE]:
     'Your face is too close to the camera. Please move back a little so your whole face fits inside the oval, then try again.',
   [GENDER_ERROR_CODES.CAMERA_DENIED]:
-    'Camera access was blocked. Please allow camera permission in your browser or device settings and try again.',
+    'Camera access was blocked. Go to Settings → SHEconomy → Camera, turn it on, then try again.',
   [GENDER_ERROR_CODES.CAMERA_UNAVAILABLE]:
     'We couldn’t find an available camera. Make sure no other app is using it, then try again.',
   [GENDER_ERROR_CODES.FACE_NOT_DETECTED]:

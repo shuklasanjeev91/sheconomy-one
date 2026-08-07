@@ -52,7 +52,7 @@ const FACET_LISTING_SELECT = `
   average_rating,
   listing_type,
   listing_images!inner(id),
-  shops(shop_name, slug),
+  shops!inner(shop_name, slug, is_active, verified),
   category_assignments!inner(category_id)
 `
 
@@ -106,6 +106,8 @@ async function fetchCategoryListingRows(categoryIds: string[]): Promise<ListingF
       .in('category_assignments.category_id', categoryIds)
       .eq('is_active', ACTIVE.is_active)
       .eq('listing_status', ACTIVE.listing_status)
+      .eq('shops.is_active', true)
+      .eq('shops.verified', true)
       .range(from, to)
 
     if (error || !data?.length) break

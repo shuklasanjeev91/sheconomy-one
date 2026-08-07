@@ -1,13 +1,13 @@
-import { startTransition, useCallback, useRef } from 'react'
-import { Platform } from 'react-native'
-import { useLocalSearchParams, usePathname, useRouter } from 'one'
+import { useCallback, useRef } from 'react'
 import type { Href } from 'one'
+import { useLocalSearchParams } from 'one'
 
 import {
   AUTH_RETURN_TO_PARAM,
+  isSafeReturnPath,
   normalizeReturnPath,
 } from '~/lib/auth/redirect'
-import { commerceRoutes } from '~/lib/routes'
+import { getDefaultHomeForTier } from '~/lib/auth/access'
 import { navigateApp } from '~/lib/platform/navigate'
 import { useAccess } from '~/hooks/useAccess'
 import { Icons, Text, XStack } from '~/components/ui'
@@ -17,14 +17,26 @@ type AuthBackButtonProps = {
   /** `light` sits on the brand gradient; `dark` on neutral surfaces. */
   variant?: 'light' | 'dark'
   showLabel?: boolean
+  /**
+   * Preferred post-dismiss path from the auth gate (e.g. the route that
+   * triggered sign-in). Only used when the current tier can access it —
+   * otherwise we exit to the default home (avoids bouncing back into the gate).
+   */
+  returnTo?: string | null
 }
 
-export function AuthBackButton({ variant = 'dark', showLabel = true }: AuthBackButtonProps) {
+/**
+ * Leave the auth gate. Do not use `router.back()` — on native, auth is often an
+ * in-place overlay with no stack entry, so back() no-ops and the button looks broken.
+ */
+export function AuthBackButton({
+  variant = 'dark',
+  showLabel = true,
+  returnTo: returnToProp,
+}: AuthBackButtonProps) {
   const ui = useAppUi()
-  const router = useRouter()
-  const pathname = usePathname()
   const params = useLocalSearchParams<Record<string, string | string[] | undefined>>()
-  const { sanitizeReturnPath } = useAccess()
+  const { tier, isVerified, canAccessPath } = useAccess()
   const navigatingRef = useRef(false)
 
   const isLight = variant === 'light'
@@ -39,50 +51,20 @@ export function AuthBackButton({ variant = 'dark', showLabel = true }: AuthBackB
 
     const raw = params[AUTH_RETURN_TO_PARAM]
     const fromParams = Array.isArray(raw) ? raw[0] : raw
+    const candidate = normalizeReturnPath(returnToProp ?? fromParams ?? null, '')
 
-    if (fromParams) {
-      // Explicit returnTo in URL — sanitizeReturnPath handles access-tier checks
-      // (guests are sent to home when the destination is gated).
-      const target = sanitizeReturnPath(normalizeReturnPath(fromParams)) as Href
-      navigateApp(target)
-      setTimeout(() => { navigatingRef.current = false }, 300)
-      return
-    }
-
-    // No explicit returnTo — this is an in-place auth gate (URL is the actual
-    // route being protected, e.g. /community, /class/…).
-    // Use the router's own history check, mirroring useAppBackNavigation.
-    let canGoBack = false
-    try {
-      canGoBack = typeof router.canGoBack === 'function' && router.canGoBack()
-    } catch {
-      canGoBack = false
-    }
-
-    if (!canGoBack) {
-      navigatingRef.current = false
-      navigateApp(commerceRoutes.home as Href)
-      return
-    }
-
-    if (Platform.OS === 'web') {
-      const fromPath = pathname
-      startTransition(() => { router.back() })
-      // Web SPAs sometimes report canGoBack but back() silently no-ops.
-      // If the path hasn't changed after 120 ms, push home instead.
-      window.setTimeout(() => {
-        navigatingRef.current = false
-        const current = (window.location.pathname.replace(/\/$/, '') || '/') as string
-        const expected = (fromPath.replace(/\/$/, '') || '/') as string
-        if (current === expected) {
-          navigateApp(commerceRoutes.home as Href)
-        }
-      }, 120)
+    let target: Href
+    if (isSafeReturnPath(candidate) && canAccessPath(candidate)) {
+      target = candidate as Href
     } else {
-      router.back()
-      requestAnimationFrame(() => { navigatingRef.current = false })
+      target = getDefaultHomeForTier(tier, isVerified)
     }
-  }, [pathname, params, router, sanitizeReturnPath])
+
+    navigateApp(target)
+    setTimeout(() => {
+      navigatingRef.current = false
+    }, 400)
+  }, [params, returnToProp, canAccessPath, tier, isVerified])
 
   return (
     <XStack
@@ -98,6 +80,8 @@ export function AuthBackButton({ variant = 'dark', showLabel = true }: AuthBackB
       hoverStyle={{ backgroundColor: bgHover }}
       pressStyle={{ opacity: 0.85, scale: 0.98 }}
       onPress={handleBack}
+      hitSlop={12}
+      zIndex={20}
     >
       <Icons.ArrowLeft size={20} color={color} />
       {showLabel ? (

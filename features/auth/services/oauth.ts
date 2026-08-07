@@ -27,7 +27,8 @@ export function isAppleSignInAvailable(): boolean {
 }
 
 export function isLinkedInSignInAvailable(): boolean {
-  return true
+  // LinkedIn sign-in removed from the product surface (still linkable only if already connected).
+  return false
 }
 
 function extractAuthCode(url: string | null | undefined): string | null {
@@ -82,15 +83,15 @@ export async function completeOAuthFromCurrentUrl(
  */
 export async function startOAuthSignIn(
   provider: OAuthProvider,
-): Promise<{ error: string | null; pendingRedirect?: boolean }> {
+): Promise<{ error: string | null; pendingRedirect?: boolean; cancelled?: boolean }> {
   if (provider === 'apple' && !isAppleSignInAvailable()) {
     return { error: 'Sign in with Apple is available on iOS and Web.' }
   }
 
-  // Prefer native Apple ID token on iOS when the module is installed.
+  // iOS must use native Sign in with Apple (App Store). Do not silently fall
+  // back to browser OAuth — that path often appears unresponsive on review devices.
   if (provider === 'apple' && Platform.OS === 'ios') {
-    const native = await tryNativeAppleSignIn()
-    if (native.handled) return { error: native.error }
+    return tryNativeAppleSignIn()
   }
 
   // Prefer native Google account picker on iOS/Android when configured.
@@ -134,21 +135,96 @@ export async function startOAuthSignIn(
   return exchangeOAuthUrlForSession(result.url)
 }
 
-async function tryNativeAppleSignIn(): Promise<{ handled: boolean; error: string | null }> {
-  try {
-    const AppleAuthentication = await import('expo-apple-authentication')
-    const available = await AppleAuthentication.isAvailableAsync()
-    if (!available) return { handled: false, error: null }
+const APPLE_SIGN_IN_TIMEOUT_MS = 90_000
 
-    const credential = await AppleAuthentication.signInAsync({
-      requestedScopes: [
-        AppleAuthentication.AppleAuthenticationScope.FULL_NAME,
-        AppleAuthentication.AppleAuthenticationScope.EMAIL,
-      ],
-    })
+function withTimeout<T>(promise: Promise<T>, ms: number, message: string): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    const timer = setTimeout(() => reject(new Error(message)), ms)
+    promise.then(
+      (value) => {
+        clearTimeout(timer)
+        resolve(value)
+      },
+      (error) => {
+        clearTimeout(timer)
+        reject(error)
+      },
+    )
+  })
+}
+
+function isAppleSignInCanceled(error: unknown): boolean {
+  if (!error || typeof error !== 'object') return false
+  const code = String((error as { code?: string }).code ?? '')
+  return (
+    code === 'ERR_REQUEST_CANCELED' ||
+    code === 'ERR_REQUEST_CANCELLED' ||
+    code === 'ERR_CANCELED'
+  )
+}
+
+function appleSignInErrorMessage(error: unknown): string {
+  if (error && typeof error === 'object') {
+    const code = String((error as { code?: string }).code ?? '')
+    const message = String((error as { message?: string }).message ?? '')
+    const combined = `${code} ${message}`.toLowerCase()
+    // iPadOS shows a system alert + Settings button when Apple Account/iCloud
+    // session is incomplete (e.g. Settings shows name but iCloud is still "Set Up").
+    if (
+      combined.includes('settings') ||
+      combined.includes('apple account') ||
+      combined.includes('apple id') ||
+      combined.includes('icloud')
+    ) {
+      return 'Finish Apple Account setup in Settings (open iCloud and complete Set Up), then try Sign in with Apple again.'
+    }
+    // AuthorizationError code 1000 — entitlement / AuthKit session issues.
+    if (code === 'ERR_REQUEST_UNKNOWN' || message.includes('1000')) {
+      return 'Sign in with Apple could not start. In Settings → Apple Account, finish iCloud setup, then try again.'
+    }
+    if (message) return message
+  }
+  if (error instanceof Error && error.message) return error.message
+  return 'Apple sign-in failed. Please try again.'
+}
+
+/**
+ * Native Sign in with Apple → Supabase ID token exchange.
+ * Always returns an explicit error or cancelled flag — never a silent no-op success.
+ */
+async function tryNativeAppleSignIn(): Promise<{
+  error: string | null
+  cancelled?: boolean
+}> {
+  let AppleAuthentication: typeof import('expo-apple-authentication')
+  try {
+    AppleAuthentication = await import('expo-apple-authentication')
+  } catch {
+    return {
+      error:
+        'Sign in with Apple is missing from this build. Please update the app or use another sign-in method.',
+    }
+  }
+
+  try {
+    const available = await AppleAuthentication.isAvailableAsync()
+    if (!available) {
+      return { error: 'Sign in with Apple is not available on this device.' }
+    }
+
+    const credential = await withTimeout(
+      AppleAuthentication.signInAsync({
+        requestedScopes: [
+          AppleAuthentication.AppleAuthenticationScope.FULL_NAME,
+          AppleAuthentication.AppleAuthenticationScope.EMAIL,
+        ],
+      }),
+      APPLE_SIGN_IN_TIMEOUT_MS,
+      'Sign in with Apple timed out. Please try again.',
+    )
 
     if (!credential.identityToken) {
-      return { handled: true, error: 'Apple did not return an identity token.' }
+      return { error: 'Apple did not return an identity token. Please try again.' }
     }
 
     const { error } = await supabase.auth.signInWithIdToken({
@@ -157,20 +233,43 @@ async function tryNativeAppleSignIn(): Promise<{ handled: boolean; error: string
     })
 
     if (error) {
-      return { handled: true, error: error.message || 'Apple sign-in failed.' }
+      const msg = error.message || 'Apple sign-in failed.'
+      const lower = msg.toLowerCase()
+      if (lower.includes('not enabled') || lower.includes('provider_disabled')) {
+        return {
+          error:
+            'Apple sign-in is not enabled on the server. Enable the Apple provider in Supabase Auth, then try again.',
+        }
+      }
+      if (lower.includes('audience') || lower.includes('client id') || lower.includes('unacceptable')) {
+        return {
+          error:
+            'Apple sign-in is misconfigured (bundle ID missing from Supabase Apple Client IDs).',
+        }
+      }
+      return { error: msg }
     }
-    return { handled: true, error: null }
+
+    // Full name is only returned the first time the user authorizes the app.
+    const given = credential.fullName?.givenName?.trim()
+    const family = credential.fullName?.familyName?.trim()
+    const fullName = [given, family].filter(Boolean).join(' ')
+    if (fullName) {
+      void supabase.auth.updateUser({
+        data: {
+          full_name: fullName,
+          given_name: given ?? undefined,
+          family_name: family ?? undefined,
+        },
+      })
+    }
+
+    return { error: null }
   } catch (error) {
-    // Module missing or user cancelled → fall back to browser OAuth.
-    if (
-      error &&
-      typeof error === 'object' &&
-      'code' in error &&
-      (error as { code?: string }).code === 'ERR_REQUEST_CANCELED'
-    ) {
-      return { handled: true, error: 'Apple sign-in was cancelled.' }
+    if (isAppleSignInCanceled(error)) {
+      return { error: null, cancelled: true }
     }
-    return { handled: false, error: null }
+    return { error: appleSignInErrorMessage(error) }
   }
 }
 

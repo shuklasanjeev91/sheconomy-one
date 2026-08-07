@@ -87,5 +87,43 @@ function patchInstantNavInRouterBundles() {
   }
 }
 
+function patchWellKnownHeaders() {
+  const configPath = resolve(process.cwd(), '.vercel/output/config.json')
+  if (!existsSync(configPath)) return
+
+  const config = JSON.parse(readFileSync(configPath, 'utf8'))
+  const routes = Array.isArray(config.routes) ? [...config.routes] : []
+
+  const wellKnownHeaders = [
+    {
+      src: '/\\.well-known/apple-app-site-association',
+      headers: {
+        'Content-Type': 'application/json',
+        'Cache-Control': 'public, max-age=300',
+      },
+      continue: true,
+    },
+    {
+      src: '/\\.well-known/assetlinks\\.json',
+      headers: {
+        'Content-Type': 'application/json',
+        'Cache-Control': 'public, max-age=60',
+      },
+      continue: true,
+    },
+  ]
+
+  // Drop prior well-known header routes so re-runs stay idempotent.
+  const withoutOld = routes.filter((route) => {
+    const src = typeof route?.src === 'string' ? route.src : ''
+    return !src.includes('.well-known/apple-app-site-association') && !src.includes('.well-known/assetlinks')
+  })
+
+  config.routes = [...wellKnownHeaders, ...withoutOld]
+  writeFileSync(configPath, `${JSON.stringify(config)}\n`)
+  console.log('[patch-vercel-output] well-known Content-Type headers applied')
+}
+
 patchVercelOutputConfig()
+patchWellKnownHeaders()
 patchInstantNavInRouterBundles()

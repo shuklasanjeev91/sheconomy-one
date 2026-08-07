@@ -38,6 +38,7 @@ import {
   updateProfileAbout,
   updateProfileInterests,
   updateSkill,
+  validateSkillInput,
   type AboutInput,
   type EducationInput,
   type ExperienceInput,
@@ -97,6 +98,7 @@ export function ProfileBackgroundSections({
   const [experienceForm, setExperienceForm] = useState<ExperienceInput>(EMPTY_EXPERIENCE_INPUT)
   const [educationForm, setEducationForm] = useState<EducationInput>(EMPTY_EDUCATION_INPUT)
   const [skillForm, setSkillForm] = useState<SkillInput>(EMPTY_SKILL_INPUT)
+  const [skillsList, setSkillsList] = useState<SkillInput[]>([{ ...EMPTY_SKILL_INPUT }])
   const [languageForm, setLanguageForm] = useState<LanguageInput>(EMPTY_LANGUAGE_INPUT)
   const [aboutForm, setAboutForm] = useState<AboutInput>({})
   const [interestsForm, setInterestsForm] = useState('')
@@ -136,8 +138,13 @@ export function ProfileBackgroundSections({
   }
 
   function openSkill(row?: ProfileSkill) {
-    setSkillForm(row ? skillInputFromRow(row) : EMPTY_SKILL_INPUT)
-    setEditingId(row?.id ?? null)
+    if (row) {
+      setSkillForm(skillInputFromRow(row))
+      setEditingId(row.id)
+    } else {
+      setSkillsList([{ ...EMPTY_SKILL_INPUT }])
+      setEditingId(null)
+    }
     setSheetKind('skill')
   }
 
@@ -171,9 +178,32 @@ export function ProfileBackgroundSections({
         ? await updateEducation(profile.id, editingId, educationForm)
         : await createEducation(profile.id, educationForm))
     } else if (sheetKind === 'skill') {
-      ;({ error } = editingId
-        ? await updateSkill(profile.id, editingId, skillForm)
-        : await createSkill(profile.id, skillForm))
+      if (editingId) {
+        ;({ error } = await updateSkill(profile.id, editingId, skillForm))
+      } else {
+        const filledSkills = skillsList.filter((s) => s.skill_name.trim())
+        if (!filledSkills.length) {
+          toast.show('Add at least one skill', { tone: 'danger' })
+          setIsSaving(false)
+          return
+        }
+        for (const skill of filledSkills) {
+          const validErr = validateSkillInput(skill)
+          if (validErr) {
+            error = validErr
+            break
+          }
+        }
+        if (!error) {
+          for (const skill of filledSkills) {
+            const result = await createSkill(profile.id, skill)
+            if (result.error) {
+              error = result.error
+              break
+            }
+          }
+        }
+      }
     } else if (sheetKind === 'language') {
       ;({ error } = editingId
         ? await updateLanguage(profile.id, editingId, languageForm)
@@ -238,7 +268,7 @@ export function ProfileBackgroundSections({
           : sheetKind === 'skill'
             ? editingId
               ? 'Edit skill'
-              : 'Add skill'
+              : 'Add skills'
             : sheetKind === 'language'
               ? editingId
                 ? 'Edit language'
@@ -312,7 +342,11 @@ export function ProfileBackgroundSections({
         ) : sheetKind === 'education' ? (
           <EducationForm value={educationForm} onChange={setEducationForm} />
         ) : sheetKind === 'skill' ? (
-          <SkillForm value={skillForm} onChange={setSkillForm} />
+          editingId ? (
+            <SkillForm value={skillForm} onChange={setSkillForm} />
+          ) : (
+            <MultiSkillForm value={skillsList} onChange={setSkillsList} />
+          )
         ) : sheetKind === 'language' ? (
           <LanguageForm value={languageForm} onChange={setLanguageForm} />
         ) : sheetKind === 'interests' ? (
@@ -774,7 +808,9 @@ function SkillRow({
   }
 
   const meta = [
-    skill.proficiency_level,
+    skill.proficiency_level
+      ? skill.proficiency_level.charAt(0).toUpperCase() + skill.proficiency_level.slice(1)
+      : null,
     skill.years_of_experience != null ? `${skill.years_of_experience}+ yrs` : null,
   ]
     .filter(Boolean)
@@ -1311,7 +1347,13 @@ function EducationForm({
   )
 }
 
-function SkillForm({ value, onChange }: { value: SkillInput; onChange: (value: SkillInput) => void }) {
+function SkillFormFields({
+  value,
+  onChange,
+}: {
+  value: SkillInput
+  onChange: (value: SkillInput) => void
+}) {
   const ui = useAppUi()
 
   function patch(partial: Partial<SkillInput>) {
@@ -1319,7 +1361,7 @@ function SkillForm({ value, onChange }: { value: SkillInput; onChange: (value: S
   }
 
   return (
-    <YStack gap="$3" paddingHorizontal="$4" paddingBottom="$4">
+    <YStack gap="$3">
       <Field label="Skill" required>
         <Input
           value={value.skill_name}
@@ -1344,6 +1386,76 @@ function SkillForm({ value, onChange }: { value: SkillInput; onChange: (value: S
           keyboardType="number-pad"
         />
       </Field>
+    </YStack>
+  )
+}
+
+function SkillForm({ value, onChange }: { value: SkillInput; onChange: (value: SkillInput) => void }) {
+  return (
+    <YStack paddingHorizontal="$4" paddingBottom="$4">
+      <SkillFormFields value={value} onChange={onChange} />
+    </YStack>
+  )
+}
+
+function MultiSkillForm({
+  value,
+  onChange,
+}: {
+  value: SkillInput[]
+  onChange: (value: SkillInput[]) => void
+}) {
+  const ui = useAppUi()
+
+  function updateAt(index: number, updated: SkillInput) {
+    onChange(value.map((item, i) => (i === index ? updated : item)))
+  }
+
+  function addEntry() {
+    onChange([...value, { ...EMPTY_SKILL_INPUT }])
+  }
+
+  function removeAt(index: number) {
+    onChange(value.filter((_, i) => i !== index))
+  }
+
+  return (
+    <YStack gap="$4" paddingHorizontal="$4" paddingBottom="$4">
+      {value.map((skill, index) => (
+        <YStack key={index} gap="$3">
+          {index > 0 && <Separator />}
+          {value.length > 1 && (
+            <XStack justifyContent="space-between" alignItems="center">
+              <Text fontSize={14} fontWeight="600" color={ui.textSecondary}>
+                Skill {index + 1}
+              </Text>
+              <XStack
+                width={32}
+                height={32}
+                alignItems="center"
+                justifyContent="center"
+                borderRadius={999}
+                cursor="pointer"
+                hoverStyle={{ backgroundColor: ui.surfaceHover }}
+                onPress={() => removeAt(index)}
+                accessibilityLabel="Remove skill"
+              >
+                <Icons.X size={15} color={ui.textMuted} />
+              </XStack>
+            </XStack>
+          )}
+          <SkillFormFields value={skill} onChange={(updated) => updateAt(index, updated)} />
+        </YStack>
+      ))}
+      <Button
+        tone="outline"
+        size="$3"
+        icon={<Icons.Plus size={15} />}
+        onPress={addEntry}
+        marginTop="$1"
+      >
+        Add another skill
+      </Button>
     </YStack>
   )
 }

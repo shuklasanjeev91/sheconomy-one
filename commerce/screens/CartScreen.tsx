@@ -50,12 +50,15 @@ import { copyToClipboard } from '~/lib/platform/clipboard'
 import { commerceRoutes } from '~/lib/routes'
 import { useAppLayout } from '~/hooks/useAppLayout'
 import { navigateApp } from '~/lib/platform/navigate'
+import { buildSignInUrl } from '~/lib/auth/redirect'
+import { useSupabase } from '~/providers/SupabaseProvider'
 
 const SUMMARY_WIDTH = 300
 
 export function CartScreen() {
   const c = useCommercePalette()
   const { isDesktop } = useAppLayout()
+  const { user } = useSupabase()
   const {
     cart,
     items: cartItems,
@@ -117,6 +120,15 @@ export function CartScreen() {
 
   const availableIds = useMemo(() => items.map((item) => item.id), [items])
   const { isSelected, allSelected, noneSelected } = useCartSelection(availableIds)
+
+  function goToCheckout() {
+    // Keep guest cart (session id) and return to checkout after auth.
+    if (!user) {
+      navigateApp(buildSignInUrl(String(commerceRoutes.checkout)))
+      return
+    }
+    navigateApp(commerceRoutes.checkout)
+  }
 
   const settlementCurrency = cart?.currency ?? 'INR'
   const shopCurrencies = useMemo(() => {
@@ -408,7 +420,7 @@ export function CartScreen() {
       <CommerceButton
         variant="primary"
         disabled={checkoutBlocked}
-        onPress={() => navigateApp(commerceRoutes.checkout)}
+        onPress={goToCheckout}
         width="100%"
       >
         Proceed to buy ({unitCount} {unitCount === 1 ? 'item' : 'items'})
@@ -782,7 +794,7 @@ export function CartScreen() {
         savings={discount || null}
         label="Proceed to buy"
         disabled={checkoutBlocked}
-        onPress={() => navigateApp(commerceRoutes.checkout)}
+        onPress={goToCheckout}
       />
     </YStack>
   )

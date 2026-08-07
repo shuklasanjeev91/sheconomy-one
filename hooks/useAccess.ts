@@ -21,8 +21,8 @@ export function useAccess() {
   const isVerified = profile?.is_verified === true
 
   const tier = useMemo(
-    () => getAccessTier(isAuthenticated, profile?.gender),
-    [isAuthenticated, profile?.gender],
+    () => getAccessTier(isAuthenticated, profile?.gender, isVerified),
+    [isAuthenticated, profile?.gender, isVerified],
   )
 
   return useMemo(
@@ -32,7 +32,9 @@ export function useAccess() {
       isRefreshing,
       isAuthenticated,
       isVerified,
+      /** Verified female with full women-first access. */
       isFemale: tier === 'female',
+      /** Signed-in limited access (male or skipped / unverified). */
       isMale: tier === 'male',
       isGuest: tier === 'guest',
       canManageShops: canManageShops(tier),

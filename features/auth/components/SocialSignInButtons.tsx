@@ -1,13 +1,14 @@
 import { useState } from 'react'
-import { Platform } from 'react-native'
+import { Alert, Platform } from 'react-native'
 
+import { AppleSignInButton } from '~/features/auth/components/AppleSignInButton'
 import { Button, Spinner, Text, XStack, YStack, useAppToast } from '~/components/ui'
 import {
   isAppleSignInAvailable,
-  isLinkedInSignInAvailable,
   startOAuthSignIn,
   type OAuthProvider,
 } from '~/features/auth/services/oauth'
+import { supabase } from '~/lib/supabase/client'
 import { useAppUi } from '~/lib/theme/useAppUi'
 
 type SocialSignInButtonsProps = {
@@ -16,6 +17,13 @@ type SocialSignInButtonsProps = {
   acceptedTerms?: boolean
   /** Called after a successful native / non-redirect social sign-in. */
   onSuccess?: (provider: OAuthProvider) => void
+}
+
+function showSignInError(toast: ReturnType<typeof useAppToast>, message: string) {
+  toast.show(message, { tone: 'danger' })
+  if (Platform.OS !== 'web') {
+    Alert.alert('Sign in failed', message)
+  }
 }
 
 export function SocialSignInButtons({
@@ -33,64 +41,70 @@ export function SocialSignInButtons({
       toast.show('Please accept Terms and Privacy to continue', { tone: 'warning' })
       return
     }
+    if (busy != null) return
+
     setBusy(provider)
-    const result = await startOAuthSignIn(provider)
-    setBusy(null)
-    if (result.error) {
-      toast.show(result.error, { tone: 'danger' })
-      return
+    try {
+      const result = await startOAuthSignIn(provider)
+      if (result.cancelled) return
+      if (result.error) {
+        showSignInError(toast, result.error)
+        return
+      }
+      if (result.pendingRedirect) return
+
+      // Guard against false "success" with no session (merge regressions / cancelled flows).
+      const {
+        data: { session },
+      } = await supabase.auth.getSession()
+      if (!session) {
+        showSignInError(toast, 'Sign-in did not complete. Please try again.')
+        return
+      }
+
+      onSuccess?.(provider)
+    } catch (error) {
+      const message =
+        error instanceof Error && error.message
+          ? error.message
+          : 'Unable to complete social sign-in. Please try again.'
+      showSignInError(toast, message)
+    } finally {
+      setBusy(null)
     }
-    if (result.pendingRedirect) return
-    onSuccess?.(provider)
   }
+
+  const controlsLocked = Boolean(disabled || busy != null)
 
   return (
     <YStack gap="$3">
       <XStack alignItems="center" gap="$3">
         <YStack flex={1} height={1} backgroundColor={ui.borderSubtle} />
         <Text fontSize={12} color={ui.textMuted} fontWeight="600">
-          Or continue with
+          {Platform.OS === 'web' ? 'Or continue with' : 'Continue with'}
         </Text>
         <YStack flex={1} height={1} backgroundColor={ui.borderSubtle} />
       </XStack>
+
+      {/* Apple first — App Store Guideline 4.8 / review discoverability above the fold. */}
+      {isAppleSignInAvailable() ? (
+        <AppleSignInButton
+          disabled={controlsLocked}
+          busy={busy === 'apple'}
+          onPress={() => void handle('apple')}
+        />
+      ) : null}
+
       <Button
         tone="outline"
         size="$4"
         borderRadius={999}
-        disabled={disabled || busy != null}
+        disabled={controlsLocked}
         onPress={() => void handle('google')}
         icon={busy === 'google' ? <Spinner size="small" /> : undefined}
       >
         {busy === 'google' ? 'Connecting…' : 'Continue with Google'}
       </Button>
-      {isAppleSignInAvailable() ? (
-        <Button
-          tone="outline"
-          size="$4"
-          borderRadius={999}
-          disabled={disabled || busy != null}
-          onPress={() => void handle('apple')}
-          icon={busy === 'apple' ? <Spinner size="small" /> : undefined}
-        >
-          {busy === 'apple'
-            ? 'Connecting…'
-            : Platform.OS === 'ios'
-              ? 'Sign in with Apple'
-              : 'Continue with Apple'}
-        </Button>
-      ) : null}
-      {isLinkedInSignInAvailable() ? (
-        <Button
-          tone="outline"
-          size="$4"
-          borderRadius={999}
-          disabled={disabled || busy != null}
-          onPress={() => void handle('linkedin_oidc')}
-          icon={busy === 'linkedin_oidc' ? <Spinner size="small" /> : undefined}
-        >
-          {busy === 'linkedin_oidc' ? 'Connecting…' : 'Continue with LinkedIn'}
-        </Button>
-      ) : null}
     </YStack>
   )
 }

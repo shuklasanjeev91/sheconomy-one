@@ -91,18 +91,22 @@ export function UnifiedSearchScreen({
   const [aiLoading, setAiLoading] = useState(false)
   const [aiError, setAiError] = useState<string | null>(null)
 
-  const filters = aiMode
-    ? { ...initialFilters, ...aiFilters }
-    : initialFilters
+  const filters = useMemo(
+    () => (aiMode ? { ...initialFilters, ...aiFilters } : initialFilters),
+    [aiMode, initialFilters, aiFilters],
+  )
   const scopes = availableSearchScopes(tier)
 
   const [result, setResult] = useState<FederatedSearchResult | null>(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
-  const effectiveListingQuery = aiMode ? (aiSearchTerm ?? '').trim() : query
-  const listingsBrowseEnabled =
-    scope === 'listings' && effectiveListingQuery.length > 0 && (!aiMode || Boolean(aiSearchTerm))
+  // Prefer the original typed query when AI pads a brand/shop name with fluff —
+  // search_listings matches tokens, but keeping the shop name first ranks better.
+  const effectiveListingQuery = aiMode
+    ? (aiSearchTerm?.trim() || query)
+    : query
+  const listingsBrowseEnabled = scope === 'listings' && effectiveListingQuery.length > 0
   const listingsFeed = useSearchListings({
     query: effectiveListingQuery,
     filters,
@@ -419,13 +423,12 @@ export function UnifiedSearchScreen({
               title="Listing results"
               subtitle={
                 !listingsFeed.isLoading &&
-                !aiLoading &&
                 listingsFeed.items.length > 0
                   ? `${listingsFeed.items.length}${listingsFeed.hasMore ? '+' : ''} listings`
                   : undefined
               }
               items={listingsFeed.items}
-              isLoading={listingsFeed.isLoading || aiLoading}
+              isLoading={listingsFeed.isLoading && listingsFeed.items.length === 0}
               isLoadingMore={listingsFeed.isLoadingMore}
               hasMore={listingsFeed.hasMore}
               error={listingsFeed.error}

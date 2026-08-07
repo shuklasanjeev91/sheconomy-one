@@ -17,7 +17,7 @@ import { useGenderVerification } from '~/hooks/useGenderVerification'
 import { useProfile } from '~/hooks/useProfile'
 import { refreshProfiles } from '~/lib/profile/refresh'
 import { patchCachedProfile } from '~/lib/profile/profile-cache'
-import { communityRoutes } from '~/lib/routes'
+import { commerceRoutes, communityRoutes } from '~/lib/routes'
 import { useAppUi } from '~/lib/theme/useAppUi'
 
 export function GenderVerificationScreen() {
@@ -46,6 +46,10 @@ export function GenderVerificationScreen() {
     router.push(communityRoutes.home)
   }, [isFemale, router])
 
+  const handleSkip = () => {
+    router.push(commerceRoutes.home)
+  }
+
   const isRunning =
     verification.phase !== 'idle' &&
     verification.phase !== 'error' &&
@@ -69,7 +73,7 @@ export function GenderVerificationScreen() {
           <XStack alignItems="center" justifyContent="space-between">
             <AuthBackButton variant="dark" />
             <Text fontSize={12} fontWeight="700" color={ui.textMuted}>
-              Private · On your device
+              Private · On your device · Optional
             </Text>
           </XStack>
 
@@ -88,8 +92,9 @@ export function GenderVerificationScreen() {
               Confirm it&apos;s you
             </Text>
             <Text fontSize={15} color={ui.textMuted} textAlign="center" lineHeight={22} maxWidth={420}>
-              Center your face and blink naturally {verification.requiredBlinks} times. This quick
-              check helps keep {BRAND_NAME} safe — your video stays on this device.
+              Optional check — center your face and blink naturally {verification.requiredBlinks}{' '}
+              times to unlock Community and Chat. Your video stays on this device. Skip anytime to
+              keep using Commerce, Classes, and Co-Work.
             </Text>
           </YStack>
 
@@ -176,12 +181,39 @@ export function GenderVerificationScreen() {
                     Reset
                   </Button>
                 ) : null}
+                {'cameraBlocked' in verification && verification.cameraBlocked ? (
+                  <Button
+                    tone="primary"
+                    size="$4"
+                    borderRadius={radius.pill}
+                    width="100%"
+                    onPress={() => {
+                      if ('openCameraSettings' in verification) verification.openCameraSettings()
+                    }}
+                  >
+                    Open Settings
+                  </Button>
+                ) : null}
+                <Button
+                  tone="outline"
+                  size="$4"
+                  borderRadius={radius.pill}
+                  width="100%"
+                  onPress={handleSkip}
+                  aria-label="Skip gender verification"
+                >
+                  Skip for now
+                </Button>
+                <Text fontSize={12} color={ui.textMuted} textAlign="center" lineHeight={17}>
+                  Continue with Commerce, Classes, and Co-Work without sharing camera data.
+                </Text>
               </YStack>
             )}
           </YStack>
 
           <Text fontSize={12} color={ui.textMuted} textAlign="center" lineHeight={18}>
-            Processed on your device. We save only a verification result — never your video.
+            Processed on your device. We save only a verification result — never your video. Skipping
+            is always available.
           </Text>
         </YStack>
       </ScrollView>

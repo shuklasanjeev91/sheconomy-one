@@ -93,13 +93,26 @@ export const Image = forwardRef<any, AppImageProps>(function Image(
   const fillParentAxes = percentWidth && percentHeight
 
   if (Platform.OS !== 'web') {
-    // Prefer bundled `require()` numbers, then remote URI strings.
-    // expo-image needs `{ uri }` for http(s) — a bare string often renders blank.
-    const bundled =
-      (typeof fromSource === 'number' ? fromSource : null) ??
-      (typeof source === 'number' ? source : null)
+    // Prefer the original `source` for bundled `require()` assets. Packager
+    // objects include `__packager_asset` / scale metadata — stripping them down
+    // to `{ uri: relativePath }` makes expo-image render blank (e.g. nav BrandLogo).
+    const bundledNumber =
+      typeof source === 'number'
+        ? source
+        : typeof fromSource === 'number'
+          ? fromSource
+          : null
+    const packagerSource =
+      bundledNumber == null &&
+      source != null &&
+      typeof source === 'object' &&
+      !Array.isArray(source)
+        ? source
+        : null
     const resolved =
-      bundled ?? (uri != null ? ({ uri } as const) : null)
+      bundledNumber ??
+      packagerSource ??
+      (uri != null ? ({ uri } as const) : null)
 
     if (resolved == null) {
       return null
@@ -111,12 +124,17 @@ export const Image = forwardRef<any, AppImageProps>(function Image(
     const fillParent = fillParentAxes || (width == null && height == null)
 
     const recycleKey =
-      recyclingKey ?? (typeof uri === 'string' ? uri : String(bundled ?? 'image'))
+      recyclingKey ??
+      (typeof uri === 'string'
+        ? uri
+        : typeof bundledNumber === 'number'
+          ? String(bundledNumber)
+          : 'image')
 
     return (
       <ExpoImage
         ref={ref}
-        source={resolved}
+        source={resolved as never}
         accessibilityLabel={label}
         contentFit={contentFitFor(objectFit)}
         cachePolicy="memory-disk"

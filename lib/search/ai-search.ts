@@ -6,6 +6,32 @@ export type AiSearchModeResult = AiSearchResult & {
 }
 
 /**
+ * Prefer the shopper's typed brand/shop name when AI padded it with category fluff.
+ * Keeps ranking and ILIKE matching aligned with what they typed.
+ */
+export function resolveAiListingSearchTerm(original: string, aiTerm: string): string {
+  const typed = original.trim()
+  const generated = aiTerm.trim()
+  if (!typed) return generated
+  if (!generated) return typed
+
+  const typedTokens = typed.split(/\s+/).filter(Boolean)
+  if (typedTokens.length > 2) return generated
+
+  const typedLower = typed.toLowerCase()
+  const generatedLower = generated.toLowerCase()
+  if (
+    generatedLower !== typedLower &&
+    generatedLower.includes(typedLower) &&
+    generated.length > typed.length + 2
+  ) {
+    return typed
+  }
+
+  return generated
+}
+
+/**
  * Natural-language marketplace search via the ai-assist edge function.
  */
 export async function runAiSearch(message: string): Promise<AiSearchModeResult> {
@@ -28,7 +54,7 @@ export async function runAiSearch(message: string): Promise<AiSearchModeResult> 
 
   return {
     ...result,
-    searchTerm: result.searchTerm.trim() || trimmed,
+    searchTerm: resolveAiListingSearchTerm(trimmed, result.searchTerm.trim() || trimmed),
     filters,
   }
 }

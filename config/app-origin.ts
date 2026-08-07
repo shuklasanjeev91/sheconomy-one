@@ -124,7 +124,8 @@ export function getAppHost(): string {
 
 /** Prefixes One Router uses to map incoming URLs to in-app routes. */
 export function getAppLinkingPrefixes(origin = resolveAppOrigin()): string[] {
-  return [`${APP_SCHEME}://`, `${APP_SCHEME}:///`, origin]
+  const hosts = new Set([origin, DEFAULT_APP_ORIGIN, 'https://www.sheconomy.in'])
+  return [`${APP_SCHEME}://`, `${APP_SCHEME}:///`, ...hosts]
 }
 
 /** Deep link into the native app, or HTTPS path on web. */

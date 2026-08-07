@@ -59,6 +59,7 @@ export function GenderDeniedModal({ open, onClose, onVerify }: GenderDeniedModal
           borderBottomWidth={1}
           borderBottomColor={ui.borderSubtle}
           backgroundColor={ui.background}
+          top={60}
         >
           <XStack alignItems="center" gap="$3" flex={1}>
             <YStack
@@ -96,13 +97,14 @@ export function GenderDeniedModal({ open, onClose, onVerify }: GenderDeniedModal
             borderRadius={radius.chip}
             backgroundColor={ui.roseSurface}
             gap="$1.5"
+            top={44}
           >
             <Text fontSize={15} fontWeight="700" color={ui.text}>
               This platform is built for women
             </Text>
             <Text fontSize={13} color={ui.textSecondary} lineHeight={20}>
-              Our marketplace and community are designed to support women entrepreneurs and business
-              owners. Some seller features stay locked until you verify.
+              Community, Chat, and some seller tools stay locked until you verify. You can skip and
+              still use Commerce, Classes, and Co-Work.
             </Text>
           </YStack>
 
@@ -111,14 +113,15 @@ export function GenderDeniedModal({ open, onClose, onVerify }: GenderDeniedModal
             borderRadius={radius.chip}
             backgroundColor={ui.surfaceMuted}
             gap="$2"
+            top={34}
           >
             <Text fontSize={13} fontWeight="700" color={ui.text}>
               What you can still do
             </Text>
             {[
               'Browse and purchase products',
+              'Join Classes and Co-Work sessions',
               'Support women-owned businesses',
-              'Access community and educational content',
             ].map((item) => (
               <XStack key={item} gap="$2" alignItems="flex-start">
                 <Icons.Check size={15} color={ui.brand} />
@@ -129,16 +132,16 @@ export function GenderDeniedModal({ open, onClose, onVerify }: GenderDeniedModal
             ))}
           </YStack>
 
-          <Text fontSize={12} color={ui.textMuted} textAlign="center" lineHeight={18}>
+          <Text fontSize={12} color={ui.textMuted} textAlign="center" lineHeight={18} top={24}>
             Thank you for understanding and supporting women in business on {BRAND_NAME}.
           </Text>
 
-          <YStack gap="$2.5">
+          <YStack gap="$2.5" top={24}>
             <Button tone="primary" size="$4" borderRadius={radius.pill} onPress={onVerify}>
               Verify myself
             </Button>
             <Button tone="outline" size="$4" borderRadius={radius.pill} onPress={onClose}>
-              I understand
+              Skip — continue browsing
             </Button>
           </YStack>
         </ScrollView>
