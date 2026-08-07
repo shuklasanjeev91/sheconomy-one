@@ -62,12 +62,28 @@ export function AppleSignInButton({ disabled, busy, onPress }: AppleSignInButton
     onPress: () => void
   }>
 
+  if (busy) {
+    return (
+      <Button
+        tone="outline"
+        size="$4"
+        borderRadius={999}
+        disabled
+        icon={<Spinner size="small" />}
+      >
+        Connecting…
+      </Button>
+    )
+  }
+
   return (
     <YStack
       width="100%"
       height={48}
-      opacity={disabled || busy ? 0.55 : 1}
-      pointerEvents={disabled || busy ? 'none' : 'auto'}
+      opacity={disabled ? 0.55 : 1}
+      // Keep the system button hittable on iPad (ScrollView / stacking quirks).
+      zIndex={1}
+      pointerEvents={disabled ? 'none' : 'auto'}
     >
       <AppleAuthenticationButton
         buttonType={apple.AppleAuthenticationButtonType.SIGN_IN}

@@ -24,12 +24,20 @@ import { useAuthDesktopLayout } from '~/hooks/useAuthDesktopLayout'
 import { useAppUi, useIsDarkTheme } from '~/lib/theme/useAppUi'
 import { useThemedShadowStyle } from '~/lib/theme/useThemedShadowStyle'
 
-function DesktopAuthLayout({ children, footer }: { children: ReactNode; footer?: ReactNode }) {
+function DesktopAuthLayout({
+  children,
+  footer,
+  returnTo,
+}: {
+  children: ReactNode
+  footer?: ReactNode
+  returnTo?: string | null
+}) {
   return (
     <YStack flex={1} width="100%" height="100%" minHeight={0} overflow="hidden" style={authViewportStyle()}>
       <XStack flex={1} width="100%" height="100%" alignItems="stretch" overflow="hidden">
         <YStack flex={1} width="50%" maxWidth="50%" height="100%" minHeight={0} minWidth={0}>
-          <DesktopMarketingPanel />
+          <DesktopMarketingPanel returnTo={returnTo} />
         </YStack>
         <DesktopAuthFormColumn footer={footer}>{children}</DesktopAuthFormColumn>
       </XStack>
@@ -40,6 +48,8 @@ function DesktopAuthLayout({ children, footer }: { children: ReactNode; footer?:
 type AuthShellProps = {
   children: ReactNode
   footer?: ReactNode
+  /** Where "Back" should try to go when the route is guest-accessible. */
+  returnTo?: string | null
 }
 
 function TrustBadges({ light = false }: { light?: boolean }) {
@@ -96,7 +106,7 @@ function AuthFormCard({ children, footer }: { children: ReactNode; footer?: Reac
   )
 }
 
-function DesktopMarketingPanel() {
+function DesktopMarketingPanel({ returnTo }: { returnTo?: string | null }) {
   const layout = useAuthLayout()
   const { gutter } = useAppLayout()
 
@@ -117,7 +127,7 @@ function DesktopMarketingPanel() {
       <YStack gap="$6" zIndex={1} width="100%" maxWidth="100%">
         <XStack alignItems="center" justifyContent="space-between" gap="$3">
           <AuthBrandLogo />
-          <AuthBackButton variant="light" />
+          <AuthBackButton variant="light" returnTo={returnTo} />
         </XStack>
         <YStack gap="$3">
           <Text color="white" fontSize={36} fontWeight="800" lineHeight={42} letterSpacing={-1}>
@@ -137,7 +147,15 @@ function DesktopMarketingPanel() {
   )
 }
 
-function MobileAuthFormView({ children, footer }: { children: ReactNode; footer?: ReactNode }) {
+function MobileAuthFormView({
+  children,
+  footer,
+  returnTo,
+}: {
+  children: ReactNode
+  footer?: ReactNode
+  returnTo?: string | null
+}) {
   const ui = useAppUi()
   const { gutter, safeTop, safeBottom } = useAppLayout()
 
@@ -163,8 +181,8 @@ function MobileAuthFormView({ children, footer }: { children: ReactNode; footer?
           paddingBottom: Math.max(safeBottom, 20) + 8,
         }}
       >
-        <XStack justifyContent="flex-end" width="100%" marginBottom="$2">
-          <AuthBackButton showLabel={false} />
+        <XStack justifyContent="flex-end" width="100%" marginBottom="$2" zIndex={20}>
+          <AuthBackButton showLabel={false} returnTo={returnTo} />
         </XStack>
         <YStack alignItems="center" width="100%" paddingVertical="$4" marginBottom="$3" gap="$2">
           <AuthBrandLogo />
@@ -233,7 +251,7 @@ function DesktopAuthFormColumn({ children, footer }: { children: ReactNode; foot
 }
 
 /** Full-screen auth shell — desktop 50/50 split; mobile/tablet onboarding then form. */
-export function AuthShell({ children, footer }: AuthShellProps) {
+export function AuthShell({ children, footer, returnTo }: AuthShellProps) {
   const isDesktopLayout = useAuthDesktopLayout()
   // null = still reading storage; avoid flashing onboarding for returning users
   const [onboardingComplete, setOnboardingComplete] = useState<boolean | null>(null)
@@ -258,7 +276,11 @@ export function AuthShell({ children, footer }: AuthShellProps) {
   }
 
   if (isDesktopLayout) {
-    return <DesktopAuthLayout footer={footer}>{children}</DesktopAuthLayout>
+    return (
+      <DesktopAuthLayout footer={footer} returnTo={returnTo}>
+        {children}
+      </DesktopAuthLayout>
+    )
   }
 
   // Neutral boot placeholder — never brand-magenta (stuck splash look).
@@ -267,8 +289,12 @@ export function AuthShell({ children, footer }: AuthShellProps) {
   }
 
   if (!onboardingComplete) {
-    return <AuthOnboarding variant="auth" onFinish={finishOnboarding} />
+    return <AuthOnboarding variant="auth" onFinish={finishOnboarding} returnTo={returnTo} />
   }
 
-  return <MobileAuthFormView footer={footer}>{children}</MobileAuthFormView>
+  return (
+    <MobileAuthFormView footer={footer} returnTo={returnTo}>
+      {children}
+    </MobileAuthFormView>
+  )
 }

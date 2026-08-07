@@ -1,5 +1,5 @@
-import { useEffect, useState } from 'react'
-import { Platform } from 'react-native'
+import { useState } from 'react'
+import { Alert, Platform } from 'react-native'
 
 import { AppleSignInButton } from '~/features/auth/components/AppleSignInButton'
 import { Button, Spinner, Text, XStack, YStack, useAppToast } from '~/components/ui'
@@ -8,6 +8,7 @@ import {
   startOAuthSignIn,
   type OAuthProvider,
 } from '~/features/auth/services/oauth'
+import { supabase } from '~/lib/supabase/client'
 import { useAppUi } from '~/lib/theme/useAppUi'
 
 type SocialSignInButtonsProps = {
@@ -18,13 +19,12 @@ type SocialSignInButtonsProps = {
   onSuccess?: (provider: OAuthProvider) => void
 }
 
-const APPLE_BUTTON_HEIGHT = 48
-
-/** Load only on iOS so web/Android bundles stay free of the native Apple button view. */
-const AppleAuthentication =
-  Platform.OS === 'ios'
-    ? (require('expo-apple-authentication') as typeof import('expo-apple-authentication'))
-    : null
+function showSignInError(toast: ReturnType<typeof useAppToast>, message: string) {
+  toast.show(message, { tone: 'danger' })
+  if (Platform.OS !== 'web') {
+    Alert.alert('Sign in failed', message)
+  }
+}
 
 export function SocialSignInButtons({
   disabled,
@@ -35,23 +35,6 @@ export function SocialSignInButtons({
   const ui = useAppUi()
   const toast = useAppToast()
   const [busy, setBusy] = useState<OAuthProvider | null>(null)
-  /** iOS: only render Apple's system button after `isAvailableAsync()` is true. */
-  const [appleNativeReady, setAppleNativeReady] = useState(false)
-
-  useEffect(() => {
-    if (Platform.OS !== 'ios' || !AppleAuthentication) return
-    let cancelled = false
-    void AppleAuthentication.isAvailableAsync()
-      .then((available) => {
-        if (!cancelled) setAppleNativeReady(available)
-      })
-      .catch(() => {
-        if (!cancelled) setAppleNativeReady(false)
-      })
-    return () => {
-      cancelled = true
-    }
-  }, [])
 
   async function handle(provider: OAuthProvider) {
     if (requireConsent && !acceptedTerms) {
@@ -59,30 +42,39 @@ export function SocialSignInButtons({
       return
     }
     if (busy != null) return
+
     setBusy(provider)
     try {
       const result = await startOAuthSignIn(provider)
+      if (result.cancelled) return
       if (result.error) {
-        toast.show(result.error, { tone: 'danger' })
+        showSignInError(toast, result.error)
         return
       }
       if (result.pendingRedirect) return
+
+      // Guard against false "success" with no session (merge regressions / cancelled flows).
+      const {
+        data: { session },
+      } = await supabase.auth.getSession()
+      if (!session) {
+        showSignInError(toast, 'Sign-in did not complete. Please try again.')
+        return
+      }
+
       onSuccess?.(provider)
     } catch (error) {
       const message =
         error instanceof Error && error.message
           ? error.message
           : 'Unable to complete social sign-in. Please try again.'
-      toast.show(message, { tone: 'danger' })
+      showSignInError(toast, message)
     } finally {
       setBusy(null)
     }
   }
 
   const controlsLocked = Boolean(disabled || busy != null)
-  const showWebAppleButton = Platform.OS === 'web' && isAppleSignInAvailable()
-  const showIosAppleButton =
-    Platform.OS === 'ios' && appleNativeReady && AppleAuthentication != null
 
   return (
     <YStack gap="$3">
@@ -93,14 +85,16 @@ export function SocialSignInButtons({
         </Text>
         <YStack flex={1} height={1} backgroundColor={ui.borderSubtle} />
       </XStack>
+
       {/* Apple first — App Store Guideline 4.8 / review discoverability above the fold. */}
       {isAppleSignInAvailable() ? (
         <AppleSignInButton
-          disabled={disabled || busy != null}
+          disabled={controlsLocked}
           busy={busy === 'apple'}
           onPress={() => void handle('apple')}
         />
       ) : null}
+
       <Button
         tone="outline"
         size="$4"

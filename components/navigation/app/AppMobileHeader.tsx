@@ -75,8 +75,9 @@ export function AppMobileHeader({ minimal = false }: AppMobileHeaderProps) {
           style={{ minHeight: 56 }}
           animation={headerAnim}
         >
-          <XStack flexShrink={0} alignItems="center">
-            {showBack ? <AppHeaderBackButton /> : <NavLogo compact href={commerceRoutes.home} />}
+          <XStack flexShrink={0} alignItems="center" gap="$1.5" minHeight={36}>
+            {showBack ? <AppHeaderBackButton /> : null}
+            <NavLogo compact href={commerceRoutes.home} />
           </XStack>
 
           {isSettings ? (

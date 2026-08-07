@@ -54,6 +54,7 @@ export function AuthSignInFlow({ returnTo }: AuthSignInFlowProps) {
 
   return (
     <AuthShell
+      returnTo={returnTo}
       footer={
         <XStack
           alignItems="flex-start"
