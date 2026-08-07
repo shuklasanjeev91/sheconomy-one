@@ -83,15 +83,15 @@ export async function completeOAuthFromCurrentUrl(
  */
 export async function startOAuthSignIn(
   provider: OAuthProvider,
-): Promise<{ error: string | null; pendingRedirect?: boolean }> {
+): Promise<{ error: string | null; pendingRedirect?: boolean; cancelled?: boolean }> {
   if (provider === 'apple' && !isAppleSignInAvailable()) {
     return { error: 'Sign in with Apple is available on iOS and Web.' }
   }
 
-  // Prefer native Apple ID token on iOS when the module is installed.
+  // iOS must use native Sign in with Apple (App Store). Do not silently fall
+  // back to browser OAuth — that looks like a dead / non-responsive button.
   if (provider === 'apple' && Platform.OS === 'ios') {
-    const native = await tryNativeAppleSignIn()
-    if (native.handled) return { error: native.error }
+    return tryNativeAppleSignIn()
   }
 
   // Prefer native Google account picker on iOS/Android when configured.
@@ -180,7 +180,7 @@ async function tryNativeAppleSignIn(): Promise<{ handled: boolean; error: string
     )
 
     if (!credential.identityToken) {
-      return { handled: true, error: 'Apple did not return an identity token.' }
+      return { error: 'Apple did not return an identity token. Please try again.' }
     }
 
     const { error } = await supabase.auth.signInWithIdToken({
@@ -189,9 +189,24 @@ async function tryNativeAppleSignIn(): Promise<{ handled: boolean; error: string
     })
 
     if (error) {
-      return { handled: true, error: error.message || 'Apple sign-in failed.' }
+      return { error: error.message || 'Apple sign-in failed.' }
     }
-    return { handled: true, error: null }
+
+    // Full name is only returned the first time the user authorizes the app.
+    const given = credential.fullName?.givenName?.trim()
+    const family = credential.fullName?.familyName?.trim()
+    const fullName = [given, family].filter(Boolean).join(' ')
+    if (fullName) {
+      void supabase.auth.updateUser({
+        data: {
+          full_name: fullName,
+          given_name: given ?? undefined,
+          family_name: family ?? undefined,
+        },
+      })
+    }
+
+    return { error: null }
   } catch (error) {
     if (
       error &&

@@ -63,6 +63,27 @@ type CartContextValue = {
 
 const CartContext = createContext<CartContextValue | null>(null)
 
+/** Prevent Add to Cart / cart refresh from hanging forever on a stuck network call. */
+const CART_OPERATION_TIMEOUT_MS = 20_000
+
+function withCartTimeout<T>(promise: Promise<T>, label: string): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    const timer = setTimeout(() => {
+      reject(new Error(`${label} timed out. Check your connection and try again.`))
+    }, CART_OPERATION_TIMEOUT_MS)
+    promise.then(
+      (value) => {
+        clearTimeout(timer)
+        resolve(value)
+      },
+      (error) => {
+        clearTimeout(timer)
+        reject(error)
+      },
+    )
+  })
+}
+
 function readCartMetadata(cart: CartRow | null | undefined): Record<string, unknown> {
   const raw = cart?.cart_metadata
   if (raw && typeof raw === 'object' && !Array.isArray(raw)) {
@@ -182,7 +203,10 @@ export function CartProvider({ children }: { children: ReactNode }) {
           .eq('id', cart.id)
       }
 
-      const { data, error: itemsError } = await fetchCartWithItems(cart.id)
+      const { data, error: itemsError } = await withCartTimeout(
+        fetchCartWithItems(cart.id),
+        'Loading cart items',
+      )
       if (itemsError || !data) {
         setCartData(null)
         setError(itemsError ?? 'Could not load cart items')
@@ -216,8 +240,8 @@ export function CartProvider({ children }: { children: ReactNode }) {
       }
 
       setCartData(next)
-    } catch {
-      setError('Could not load cart')
+    } catch (error) {
+      setError(error instanceof Error ? error.message : 'Could not load cart')
       setCartData(null)
     } finally {
       setIsLoading(false)
@@ -290,45 +314,62 @@ export function CartProvider({ children }: { children: ReactNode }) {
       listingId: string,
       options?: { quantity?: number; variantId?: string | null; personalizationNote?: string | null },
     ) => {
-      let cartId = cartData?.cart.id
+      try {
+        let cartId = cartData?.cart.id
 
-      if (!cartId) {
-        const sessionId = user ? null : await getCartSessionId()
-        const { cart, error: cartError } = await getOrCreateCart({
-          userId: user?.id,
-          sessionId,
-        })
-        if (cartError || !cart) {
-          return { error: cartError ?? 'Could not create cart' }
+        if (!cartId) {
+          const sessionId = user ? null : await getCartSessionId()
+          const { cart, error: cartError } = await withCartTimeout(
+            getOrCreateCart({
+              userId: user?.id,
+              sessionId,
+            }),
+            'Creating cart',
+          )
+          if (cartError || !cart) {
+            return { error: cartError ?? 'Could not create cart' }
+          }
+          cartId = cart.id
         }
-        cartId = cart.id
+
+        const { error: addError } = await withCartTimeout(
+          addListingToCart({
+            cartId,
+            listingId,
+            quantity: options?.quantity,
+            variantId: options?.variantId,
+            personalizationNote: options?.personalizationNote,
+          }),
+          'Adding to cart',
+        )
+
+        if (addError) {
+          return { error: addError }
+        }
+
+        trackCommerceEvent('add_to_cart', {
+          currency: 'INR',
+          items: [
+            {
+              id: listingId,
+              name: listingId,
+              quantity: options?.quantity ?? 1,
+            },
+          ],
+        })
+
+        // Refresh in the background so the Add to Cart button never waits forever
+        // on discount reconcile / secondary cart fetches.
+        void loadCart()
+        return { error: null }
+      } catch (error) {
+        return {
+          error:
+            error instanceof Error
+              ? error.message
+              : 'Could not add to cart. Please try again.',
+        }
       }
-
-      const { error: addError } = await addListingToCart({
-        cartId,
-        listingId,
-        quantity: options?.quantity,
-        variantId: options?.variantId,
-        personalizationNote: options?.personalizationNote,
-      })
-
-      if (addError) {
-        return { error: addError }
-      }
-
-      trackCommerceEvent('add_to_cart', {
-        currency: 'INR',
-        items: [
-          {
-            id: listingId,
-            name: listingId,
-            quantity: options?.quantity ?? 1,
-          },
-        ],
-      })
-
-      await loadCart()
-      return { error: null }
     },
     [cartData?.cart.id, loadCart, user],
   )

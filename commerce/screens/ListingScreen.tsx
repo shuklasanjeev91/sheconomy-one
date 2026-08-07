@@ -281,36 +281,52 @@ export function ListingScreen({
 
   async function handleAddToCart(goToCheckout = false) {
     setIsAddingToCart(true)
-    const { error: cartError } = await addToCart(listing.id, {
-      quantity: 1,
-      variantId: selectedVariantId,
-      personalizationNote: personalizationNote.trim() || null,
-    })
-    setIsAddingToCart(false)
+    try {
+      const { error: cartError } = await addToCart(listing.id, {
+        quantity: 1,
+        variantId: selectedVariantId,
+        personalizationNote: personalizationNote.trim() || null,
+      })
 
-    if (cartError) {
-      toast.show('Could not add to cart', { tone: 'danger', message: cartError })
-      return
-    }
+      if (cartError) {
+        toast.show('Could not add to cart', { tone: 'danger', message: cartError })
+        return
+      }
 
-    setPersonalizationNote('')
-    toast.show('Added to cart', { tone: 'success' })
-    if (goToCheckout) {
-      navigateApp(commerceRoutes.checkout)
+      setPersonalizationNote('')
+      toast.show('Added to cart', { tone: 'success' })
+      if (goToCheckout) {
+        navigateApp(commerceRoutes.checkout)
+      }
+    } catch {
+      toast.show('Could not add to cart', {
+        tone: 'danger',
+        message: 'Something went wrong. Please try again.',
+      })
+    } finally {
+      setIsAddingToCart(false)
     }
   }
 
   async function handleQuantityChange(nextQuantity: number) {
     if (!cartItem) return
     setIsUpdatingQuantity(true)
-    const { error: qtyError } =
-      nextQuantity <= 0
-        ? await removeItem(cartItem.id)
-        : await updateQuantity(cartItem.id, nextQuantity)
-    setIsUpdatingQuantity(false)
+    try {
+      const { error: qtyError } =
+        nextQuantity <= 0
+          ? await removeItem(cartItem.id)
+          : await updateQuantity(cartItem.id, nextQuantity)
 
-    if (qtyError) {
-      toast.show('Could not update quantity', { tone: 'danger', message: qtyError })
+      if (qtyError) {
+        toast.show('Could not update quantity', { tone: 'danger', message: qtyError })
+      }
+    } catch {
+      toast.show('Could not update quantity', {
+        tone: 'danger',
+        message: 'Something went wrong. Please try again.',
+      })
+    } finally {
+      setIsUpdatingQuantity(false)
     }
   }
 
