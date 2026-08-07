@@ -197,8 +197,10 @@ export function buildListingFulfillmentInfo(input: ListingFulfillmentInput): Lis
     shippingCostLabel = `${formatCurrency(profile.fixed_fee, currency)} shipping`
   } else if (profile?.shipping_rate_type === 'free') {
     shippingCostLabel = 'Free shipping'
-  } else if (input.shopShipping?.rail === 'shedelivery') {
-    shippingCostLabel = 'Shipping via SHEDelivery'
+  } else if (input.shopShipping?.rail === 'shedelivery' || input.shopShipping?.rail === 'own_account') {
+    shippingCostLabel = input.shopShipping.providerLabel
+      ? `Shipping via ${input.shopShipping.providerLabel}`
+      : 'Seller ships'
   } else if (input.shopShipping?.providerLabel) {
     shippingCostLabel = `Shipping via ${input.shopShipping.providerLabel}`
   }
@@ -258,11 +260,8 @@ export function getListingCardFulfillmentLabel(input: ListingFulfillmentInput): 
 
   if (info.hasDeliveryEstimate) {
     const estimate = info.estimatedDeliveryLabel.replace('Estimated delivery ', 'Est. delivery ')
-    if (info.providerLabel && info.providerLabel !== 'SHEDelivery') {
+    if (info.providerLabel && info.providerLabel !== 'Seller ships') {
       return estimate
-    }
-    if (info.providerLabel === 'SHEDelivery') {
-      return `${estimate} · SHEDelivery`
     }
     return estimate
   }

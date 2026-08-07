@@ -2,103 +2,57 @@ import { useEffect, useMemo, useState, type ComponentType } from 'react'
 import { Platform } from 'react-native'
 import { useLocalSearchParams, useRouter } from 'one'
 
+import {
+  buildPayuAutoSubmitHtml,
+  consumePayuBridgeSession,
+  firstSearchParam,
+  isPayuReturnUrl,
+  parsePayuBridgeParams,
+  payuReturnHref,
+  payuReturnStatusFromUrl,
+} from '~/commerce/lib/payu-bridge'
 import { Button, Spinner, Text, YStack } from '~/components/ui'
 import { FullWidthLayout } from '~/components/layout'
-import { resolveAppOrigin } from '~/config/app-origin'
 import { commerceRoutes } from '~/lib/routes'
 import { useAppUi } from '~/lib/theme/useAppUi'
 
-function escapeHtmlAttr(value: string): string {
-  return value
-    .replace(/&/g, '&amp;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&#39;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-}
-
-/** Auto-submitting PayU hosted-checkout form (works in browser document and WebView). */
-function buildPayUAutoSubmitHtml(action: string, fields: Record<string, string>): string {
-  const inputs = Object.entries(fields)
-    .map(
-      ([name, value]) =>
-        `<input type="hidden" name="${escapeHtmlAttr(name)}" value="${escapeHtmlAttr(String(value ?? ''))}" />`,
-    )
-    .join('')
-
-  return `<!DOCTYPE html>
-<html>
-  <head>
-    <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Secure payment</title>
-    <style>
-      body {
-        margin: 0;
-        min-height: 100vh;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-        color: #444;
-        background: #faf7f8;
-      }
-    </style>
-  </head>
-  <body onload="document.getElementById('payu-form').submit()">
-    <form id="payu-form" method="POST" action="${escapeHtmlAttr(action)}">${inputs}</form>
-    <p>Redirecting to secure payment…</p>
-  </body>
-</html>`
-}
-
-function isPayUReturnUrl(url: string): boolean {
-  try {
-    const parsed = new URL(url)
-    return /\/orders\/payu-return\/?$/.test(parsed.pathname)
-  } catch {
-    return /\/orders\/payu-return(\?|$)/.test(url)
-  }
-}
-
-function toInAppPayUReturnHref(url: string): string {
-  try {
-    const parsed = new URL(url)
-    return `${parsed.pathname}${parsed.search}`
-  } catch {
-    const idx = url.indexOf('/orders/payu-return')
-    return idx >= 0 ? url.slice(idx) : url
-  }
-}
+const NATIVE_BRIDGE_TIMEOUT_MS = 45_000
 
 /**
  * Auto-POST bridge to PayU `_payment` (merchant-hosted form flow).
  * Query: ?action=<payu_url>&payload=<json fields>
+ * Native also accepts an in-memory session (avoids huge URL query issues).
  *
- * Web: submits a hidden form via `document`.
- * iOS/Android: loads the same auto-submit HTML inside a WebView so purchase
- * never sits on an indefinite “Redirecting…” spinner (App Store rejection).
+ * Web: injects a hidden form and submits it.
+ * iOS/Android: loads the same form in a WebView and intercepts PayU return URLs.
  */
 export function PayUBridgeScreen() {
   const ui = useAppUi()
   const router = useRouter()
-  const params = useLocalSearchParams<{ action?: string; payload?: string }>()
-  const [WebViewComponent, setWebViewComponent] = useState<ComponentType<any> | null>(null)
+  const params = useLocalSearchParams<{ action?: string | string[]; payload?: string | string[] }>()
   const [nativeError, setNativeError] = useState<string | null>(null)
+  const [WebView, setWebView] = useState<ComponentType<Record<string, unknown>> | null>(null)
+  const [showEscape, setShowEscape] = useState(false)
 
-  const { action, fields, error } = useMemo(() => {
-    try {
-      const actionUrl = typeof params.action === 'string' ? params.action : ''
-      const raw = typeof params.payload === 'string' ? params.payload : ''
-      if (!actionUrl || !raw) {
-        return { action: '', fields: null as Record<string, string> | null, error: 'Missing payment payload' }
-      }
-      const parsed = JSON.parse(raw) as Record<string, string>
-      return { action: actionUrl, fields: parsed, error: null as string | null }
-    } catch {
-      return { action: '', fields: null, error: 'Invalid payment payload' }
+  const [bridge] = useState(() => {
+    const fromQuery = parsePayuBridgeParams(
+      firstSearchParam(params.action),
+      firstSearchParam(params.payload),
+    )
+    if (fromQuery.fields && fromQuery.action) return fromQuery
+
+    const session = consumePayuBridgeSession()
+    if (session) {
+      return { action: session.action, fields: session.fields, error: null as string | null }
     }
-  }, [params.action, params.payload])
+    return fromQuery
+  })
+  const { action, fields, error } = bridge
+
+  const html = useMemo(() => {
+    if (!action || !fields) return null
+    return buildPayuAutoSubmitHtml(action, fields)
+  }, [action, fields])
 
   const html = useMemo(() => {
     if (!action || !fields) return null
@@ -127,17 +81,28 @@ export function PayUBridgeScreen() {
     let cancelled = false
     void import('react-native-webview')
       .then((module) => {
-        if (!cancelled) setWebViewComponent(() => module.WebView)
+        if (!cancelled) setWebView(() => module.WebView as never)
       })
       .catch(() => {
-        if (!cancelled) {
-          setNativeError('Unable to open the payment page on this device.')
-        }
+        if (!cancelled) setNativeError('Could not open the payment page. Please try again.')
       })
     return () => {
       cancelled = true
     }
   }, [])
+
+  useEffect(() => {
+    if (Platform.OS === 'web' || error || nativeError) return
+    const timer = setTimeout(() => setShowEscape(true), NATIVE_BRIDGE_TIMEOUT_MS)
+    return () => clearTimeout(timer)
+  }, [error, nativeError])
+
+  function handleReturnNavigation(url: string): boolean {
+    if (!isPayuReturnUrl(url)) return false
+    const status = payuReturnStatusFromUrl(url)
+    router.replace(payuReturnHref(status) as never)
+    return true
+  }
 
   const displayError = error ?? nativeError
 
@@ -151,7 +116,7 @@ export function PayUBridgeScreen() {
           <Text color={ui.textSecondary} textAlign="center">
             You can return to your cart and try checkout again.
           </Text>
-          <Button tone="primary" size="$4" borderRadius={999} onPress={() => router.push(commerceRoutes.cart)}>
+          <Button tone="primary" borderRadius={999} onPress={() => router.replace(commerceRoutes.cart as never)}>
             Back to cart
           </Button>
         </YStack>
@@ -160,51 +125,58 @@ export function PayUBridgeScreen() {
   }
 
   if (Platform.OS !== 'web' && html) {
-    if (!WebViewComponent) {
+    if (!WebView) {
       return (
         <FullWidthLayout>
           <YStack flex={1} alignItems="center" justifyContent="center" gap="$3" padding="$6">
             <Spinner size="large" />
-            <Text color={ui.textSecondary}>Opening secure payment…</Text>
+            <Text color={ui.textSecondary}>Preparing secure payment…</Text>
+            {showEscape ? (
+              <Button tone="outline" borderRadius={999} onPress={() => router.replace(commerceRoutes.cart as never)}>
+                Cancel and go back
+              </Button>
+            ) : null}
           </YStack>
         </FullWidthLayout>
       )
     }
 
-    const WebView = WebViewComponent
     return (
       <FullWidthLayout>
-        <YStack flex={1} width="100%" backgroundColor={ui.background}>
+        <YStack flex={1} width="100%" minHeight={0}>
           <WebView
             originWhitelist={['*']}
-            source={{ html, baseUrl: resolveAppOrigin() }}
+            source={{ html, baseUrl: 'https://sheconomy.in' }}
             style={{ flex: 1, width: '100%', backgroundColor: 'transparent' }}
             startInLoadingState
             javaScriptEnabled
             domStorageEnabled
+            sharedCookiesEnabled
+            thirdPartyCookiesEnabled
             setSupportMultipleWindows={false}
-            onError={() => {
-              setNativeError('Payment page failed to load. Please try again.')
-            }}
-            onHttpError={() => {
-              setNativeError('Payment page failed to load. Please try again.')
-            }}
             onShouldStartLoadWithRequest={(request: { url?: string }) => {
               const url = request?.url ?? ''
-              if (!url || url === 'about:blank') return true
-              if (isPayUReturnUrl(url)) {
-                router.replace(toInAppPayUReturnHref(url) as never)
-                return false
-              }
+              if (handleReturnNavigation(url)) return false
               return true
             }}
             onNavigationStateChange={(navState: { url?: string }) => {
               const url = navState?.url ?? ''
-              if (url && isPayUReturnUrl(url)) {
-                router.replace(toInAppPayUReturnHref(url) as never)
-              }
+              handleReturnNavigation(url)
+            }}
+            onHttpError={() => {
+              setNativeError('Payment page failed to load. Please try again.')
+            }}
+            onError={() => {
+              setNativeError('Could not open the payment page. Please try again.')
             }}
           />
+          {showEscape ? (
+            <YStack padding="$3" borderTopWidth={1} borderTopColor={ui.borderSubtle}>
+              <Button tone="outline" borderRadius={999} onPress={() => router.replace(commerceRoutes.cart as never)}>
+                Cancel payment
+              </Button>
+            </YStack>
+          ) : null}
         </YStack>
       </FullWidthLayout>
     )

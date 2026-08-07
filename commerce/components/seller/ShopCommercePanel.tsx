@@ -85,12 +85,11 @@ export function ShopCommercePanel({ shop }: ShopCommercePanelProps) {
           Payments & delivery
         </Text>
         <Text fontSize={14} color={ui.textSecondary} lineHeight={20}>
-          SHEconomy runs on a 0% commission model. Connect your own payment gateway and courier to
-          get paid directly with no commission — or let SHEPay & SHEDelivery handle it for you.
+          0% SHEconomy commission. SHEPay uses PayU split payouts to your account. You book your
+          own courier and dispatch orders yourself — then add the AWB on Orders.
         </Text>
       </YStack>
 
-      {/* Payments */}
       <YStack gap="$3">
         <Text fontSize={15} fontWeight="700" color={ui.text}>
           How do you want to get paid?
@@ -139,51 +138,57 @@ export function ShopCommercePanel({ shop }: ShopCommercePanelProps) {
         <OptionCard
           selected={form.paymentManaged}
           icon={<Icons.ShieldCheck size={18} color={ui.brand} />}
-          title="Use SHEPay (managed by SHEconomy)"
-          subtitle="We securely collect payments and pay out to your bank. A small commission applies."
+          title="Use SHEPay (PayU split)"
+          subtitle="Buyers pay via SHEPay. Funds settle to your PayU child merchant — 0% SHEconomy commission."
+          badge="0% commission"
           onPress={() => patch({ paymentManaged: true })}
         />
       </YStack>
 
       <YStack height={1} backgroundColor={ui.border} />
 
-      {/* Delivery */}
       <YStack gap="$3">
         <Text fontSize={15} fontWeight="700" color={ui.text}>
-          How do you want to ship orders?
+          How do you ship orders?
         </Text>
-        <OptionCard
-          selected={!form.shippingManaged}
-          icon={<Icons.Truck size={18} color={ui.brand} />}
-          title="Use my own courier"
-          subtitle="Ship with your own logistics partner or in-house delivery."
-          onPress={() => patch({ shippingManaged: false })}
-        />
-        {!form.shippingManaged ? (
-          <YStack gap="$3" paddingLeft="$3">
-            <ChoiceRow
-              label="Courier partner"
-              options={SHIPPING_PARTNER_OPTIONS}
-              value={form.shippingPartner}
-              onChange={(value) => patch({ shippingPartner: value })}
-            />
-            <Field label="Account label (optional)">
-              <Input
-                value={form.shippingAccountLabel}
-                placeholder="e.g. My Shiprocket account"
-                onChangeText={(value) => patch({ shippingAccountLabel: value })}
-              />
-            </Field>
+        <XStack
+          gap="$3"
+          padding="$3.5"
+          borderRadius={12}
+          borderWidth={1.5}
+          borderColor={ui.brand}
+          backgroundColor={ui.chip}
+          alignItems="flex-start"
+        >
+          <YStack paddingTop={2}>
+            <Icons.Truck size={18} color={ui.brand} />
           </YStack>
-        ) : null}
+          <YStack flex={1} minWidth={0} gap={2}>
+            <Text fontSize={14} fontWeight="700" color={ui.text}>
+              You book and dispatch
+            </Text>
+            <Text fontSize={12} color={ui.textSecondary} lineHeight={17}>
+              Arrange pickup with your courier, then paste the AWB on Orders so we can track and
+              notify the buyer automatically.
+            </Text>
+          </YStack>
+        </XStack>
 
-        <OptionCard
-          selected={form.shippingManaged}
-          icon={<Icons.PackageCheck size={18} color={ui.brand} />}
-          title="Use SHEDelivery (managed)"
-          subtitle="SHEconomy arranges pickup and delivery for your orders."
-          onPress={() => patch({ shippingManaged: true })}
-        />
+        <YStack gap="$3" paddingLeft="$1">
+          <ChoiceRow
+            label="Primary courier (for your records)"
+            options={SHIPPING_PARTNER_OPTIONS}
+            value={form.shippingPartner}
+            onChange={(value) => patch({ shippingPartner: value })}
+          />
+          <Field label="Account label (optional)">
+            <Input
+              value={form.shippingAccountLabel}
+              placeholder="e.g. My Delhivery account"
+              onChangeText={(value) => patch({ shippingAccountLabel: value })}
+            />
+          </Field>
+        </YStack>
       </YStack>
 
       <Button

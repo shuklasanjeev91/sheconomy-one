@@ -167,22 +167,28 @@ export function CartProvider({ children }: { children: ReactNode }) {
     return fresh.data ?? data
   }, [])
 
-  const loadCart = useCallback(async () => {
-    // Auth still hydrating — keep the spinner; this callback re-runs when auth settles.
-    if (authLoading) return
+  const userId = user?.id ?? null
+  const hasCartItemsRef = useRef(false)
+  hasCartItemsRef.current = (cartData?.items.length ?? 0) + (cartData?.savedItems?.length ?? 0) > 0
 
-    setIsLoading(true)
+  const loadCart = useCallback(async () => {
+    if (authLoading) {
+      // Keep initial spinner only until auth resolves; never leave loading stuck after soft refresh.
+      return
+    }
+
+    // Soft refresh when cart is already on screen — avoids checkout full-page remounts
+    // when auth session identity churns but user.id is unchanged.
+    const soft = hasCartItemsRef.current
+    if (!soft) setIsLoading(true)
     setError(null)
 
     try {
-      const sessionId = user ? null : await getCartSessionId()
-      const { cart, error: cartError } = await withCartTimeout(
-        getOrCreateCart({
-          userId: user?.id,
-          sessionId,
-        }),
-        'Loading cart',
-      )
+      const sessionId = userId ? null : await getCartSessionId()
+      const { cart, error: cartError } = await getOrCreateCart({
+        userId: userId ?? undefined,
+        sessionId,
+      })
 
       if (cartError || !cart) {
         setCartData(null)
@@ -240,11 +246,12 @@ export function CartProvider({ children }: { children: ReactNode }) {
     } finally {
       setIsLoading(false)
     }
-  }, [authLoading, tryAutoApply, user])
+  }, [authLoading, tryAutoApply, userId])
 
   useEffect(() => {
+    if (authLoading) return
     void loadCart()
-  }, [loadCart])
+  }, [authLoading, loadCart])
 
   const selectionRevision = useCartSelectionRevision()
 
@@ -300,7 +307,7 @@ export function CartProvider({ children }: { children: ReactNode }) {
     return () => {
       active = false
     }
-  }, [user, loadCart])
+  }, [user?.id, loadCart])
 
   const addToCart = useCallback(
     async (

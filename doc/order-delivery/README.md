@@ -59,25 +59,33 @@ explicit `userId` if you have it, otherwise the session user is used.
 
 ---
 
-## 3. The "Ready to Ship" flow (why the drawer exists)
+## 3. The "Add tracking" flow (courier-driven status)
 
-Shipping an item **requires tracking information**. On the vendor Orders page the
-"Ready to Ship" action does **not** advance the status directly — it opens the
-**Add Tracking Info** drawer. The item only becomes `shipped` once a delivery
-record with a valid tracking number is created:
+Vendors never manually set In Transit / Out for Delivery / Delivered. They
+**select a courier, then enter the AWB**. Status advances from courier feeds:
 
 ```
-Ready to Ship  ──▶  Add Tracking drawer  ──▶  createTracking (validate + insert order_delivery)
-                                                        │
-                                                        ▼
-                                    DB trigger sync_order_item_status_from_delivery(_insert)
-                                                        │
-                                                        ▼
-                                    order_items.item_status → 'shipped'  (then orders.order_status)
+Add tracking  ──▶  select courier → enter AWB  ──▶  createTracking (order_delivery = shipped)
+                                                      │
+                    ┌─────────────────────────────────┼─────────────────────────────────┐
+                    ▼                                 ▼                                 ▼
+         sync_order_item_status            notify_delivery_status_change      courier-track-sync
+         (item → shipped)                  (buyer templates if notify on)     (direct courier APIs +
+                                                                              SHEDelivery webhooks)
+                                                                              → in_transit → OFD → delivered
 ```
 
-If the vendor cancels without adding tracking, **nothing changes** — the item
-stays in its current status.
+Providers (auto status for any courier the vendor picks):
+1. **Direct courier API** when available (Delhivery, DTDC, Xpressbees, BlueDart, Ecom Express, Shiprocket)
+2. **AfterShip** (`AFTERSHIP_API_KEY`) — covers most couriers worldwide
+3. **TrackingMore** (`TRACKINGMORE_API_KEY`) — fallback aggregator
+4. Always stores a **public courier track URL** for the buyer
+
+**Model:** vendors book and dispatch themselves (no managed SHEDelivery). SHEPay uses PayU split — **0% SHEconomy commission**.
+
+Optional direct secrets: `DELHIVERY_API_TOKEN`, `DTDC_API_KEY`, `XPRESSBEES_TOKEN`, BlueDart / Ecom Express keys, `SHIPROCKET_*` (for tracking Shiprocket AWBs only).
+
+If the vendor cancels the drawer without saving, **nothing changes**.
 
 ```tsx
 // In VendorOrdersScreen: intercept the shipped transition.
@@ -229,25 +237,16 @@ import { DeliveryErrorBoundary } from '~/commerce/components/DeliveryErrorBounda
 
 ---
 
-## 11. Notes / deferrals
+## 11. Notes
 
-- **External AfterShip API not migrated** — the legacy client `tracking-service`
-  called an `/api/tracking` route (AfterShip create/list/get/update). There is no
-  such route in this project yet, so only the **local** pieces are migrated:
-  tracking-number validation + creating the `order_delivery` record
-  (`createTracking`). When a carrier webhook/route lands later, map its status
-  with a `mapTrackingToDeliveryStatus`-style helper and call
-  `updateDeliveryStatus`.
-- **Schema folding** — the modern `order_delivery` table has no bespoke columns
-  for `current_location`, `carrier_notes`, `delivered_to`, `failure_reason`,
-  `return_reason`, `exception_details`, `retry_count`. Those are folded into the
-  `delivery_metadata` JSON blob (merged, never clobbered), same approach as the
-  payment migration's `payment_metadata`.
-- **Notify Customer** — the toggle preference is stored on
-  `delivery_metadata.notify_customer`; wiring the actual customer email is a
-  follow-up (no notification service is migrated yet).
-- **Barcode scan** — the drawer's "Scan" affordance is a placeholder
-  (coming-soon toast) until camera scanning is added.
+- **Courier sync** — direct courier APIs first, then **AfterShip** / **TrackingMore**
+  for any other carrier. Cron every 20 minutes; also invoked after `createTracking`.
+- **Fulfillment model** — vendors book and dispatch; paste AWB on Orders. No managed
+  SHEDelivery booking.
+- **Payments** — SHEPay = PayU split to vendor child MID; **0% SHEconomy commission**.
+- **Secrets** — set `AFTERSHIP_API_KEY` (recommended) and/or `TRACKINGMORE_API_KEY`;
+  optional per-courier tokens + `SHIPROCKET_*` for tracking those AWBs.
+- **Schema folding** — location / notes / failure details live in
+  `delivery_metadata` JSON.
 - **Foundation is shared** — delivery reuses `order.constants.ts`,
-  `order.utils.ts`, `order.errors.ts` and `order.access.ts`; nothing is
-  duplicated.
+  `order.utils.ts`, `order.errors.ts` and `order.access.ts`.

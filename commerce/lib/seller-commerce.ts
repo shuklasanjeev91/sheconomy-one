@@ -1,19 +1,17 @@
 import { supabase } from '~/lib/supabase/client'
 
 /**
- * Seller-facing view of a shop's payment + delivery setup. Under SHEconomy's
- * 0-commission model a seller either:
- *  - connects their own gateway/courier (buyers pay them directly, no commission), or
- *  - uses SHEPay / SHEDelivery (SHEconomy collects/ships and charges a commission).
+ * Seller-facing payment + delivery setup.
+ * - SHEPay = PayU split collection (0% SHEconomy commission).
+ * - Shipping = vendor books and dispatches with their own courier (no managed SHEDelivery).
  */
 export type ShopCommerceForm = {
-  /** true = SHEPay (managed by SHEconomy); false = seller's own gateway. */
+  /** true = SHEPay (PayU split); false = seller's own gateway. */
   paymentManaged: boolean
   paymentGateway: string
   paymentAccountLabel: string
   paymentKeyId: string
-  /** true = SHEDelivery (managed); false = seller's own courier. */
-  shippingManaged: boolean
+  /** Vendor's courier partner for display (always self-ship). */
   shippingPartner: string
   shippingAccountLabel: string
 }
@@ -23,18 +21,20 @@ export type CommerceOption = { value: string; label: string; hint?: string }
 export const PAYMENT_GATEWAY_OPTIONS: CommerceOption[] = [
   { value: 'razorpay', label: 'Razorpay' },
   { value: 'stripe', label: 'Stripe' },
-  { value: 'payu', label: 'PayU' },
+  { value: 'payu', label: 'SHEPay' },
   { value: 'cashfree', label: 'Cashfree' },
   { value: 'paytm', label: 'Paytm' },
   { value: 'phonepe', label: 'PhonePe' },
 ]
 
 export const SHIPPING_PARTNER_OPTIONS: CommerceOption[] = [
+  { value: 'self', label: 'Self / own courier' },
   { value: 'shiprocket', label: 'Shiprocket' },
   { value: 'delhivery', label: 'Delhivery' },
   { value: 'bluedart', label: 'BlueDart' },
+  { value: 'dtdc', label: 'DTDC' },
+  { value: 'xpressbees', label: 'Xpressbees' },
   { value: 'pickrr', label: 'Pickrr' },
-  { value: 'self', label: 'Self / own courier' },
 ]
 
 export const DEFAULT_COMMERCE_FORM: ShopCommerceForm = {
@@ -42,8 +42,7 @@ export const DEFAULT_COMMERCE_FORM: ShopCommerceForm = {
   paymentGateway: 'razorpay',
   paymentAccountLabel: '',
   paymentKeyId: '',
-  shippingManaged: true,
-  shippingPartner: 'shiprocket',
+  shippingPartner: 'self',
   shippingAccountLabel: '',
 }
 
@@ -62,14 +61,17 @@ type CommerceSettingsRow = {
 function rowToForm(row: CommerceSettingsRow | null): ShopCommerceForm {
   if (!row) return { ...DEFAULT_COMMERCE_FORM }
   const paymentManaged = !(row.payment_connected && row.payment_gateway)
-  const shippingManaged = !(row.shipping_connected && row.shipping_partner)
+  // Legacy shedelivery / unconnected → treat as self-ship.
+  const partner =
+    row.shipping_partner ||
+    (row.shipping_mode === 'shedelivery' ? 'self' : null) ||
+    DEFAULT_COMMERCE_FORM.shippingPartner
   return {
     paymentManaged,
     paymentGateway: row.payment_gateway || DEFAULT_COMMERCE_FORM.paymentGateway,
     paymentAccountLabel: row.payment_account_label ?? '',
     paymentKeyId: row.payment_gateway_key_id ?? '',
-    shippingManaged,
-    shippingPartner: row.shipping_partner || DEFAULT_COMMERCE_FORM.shippingPartner,
+    shippingPartner: partner === 'shedelivery' ? 'self' : partner,
     shippingAccountLabel: row.shipping_account_label ?? '',
   }
 }
@@ -97,6 +99,7 @@ export async function saveShopCommerceForm(
   shopId: string,
   form: ShopCommerceForm,
 ): Promise<{ error: string | null }> {
+  const partner = form.shippingPartner.trim() || 'self'
   const payload = {
     shop_id: shopId,
     payment_connected: !form.paymentManaged,
@@ -104,10 +107,11 @@ export async function saveShopCommerceForm(
     payment_gateway: form.paymentManaged ? null : form.paymentGateway,
     payment_account_label: form.paymentManaged ? null : form.paymentAccountLabel.trim() || null,
     payment_gateway_key_id: form.paymentManaged ? null : form.paymentKeyId.trim() || null,
-    shipping_connected: !form.shippingManaged,
-    shipping_mode: form.shippingManaged ? 'shedelivery' : 'partner',
-    shipping_partner: form.shippingManaged ? null : form.shippingPartner,
-    shipping_account_label: form.shippingManaged ? null : form.shippingAccountLabel.trim() || null,
+    // Always vendor self-ship — never shedelivery managed mode.
+    shipping_connected: true,
+    shipping_mode: 'partner',
+    shipping_partner: partner,
+    shipping_account_label: form.shippingAccountLabel.trim() || null,
     updated_at: new Date().toISOString(),
   }
 

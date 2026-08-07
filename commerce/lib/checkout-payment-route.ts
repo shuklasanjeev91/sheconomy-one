@@ -38,28 +38,29 @@ export function onlinePaymentOptionCopy(input: {
 
   if (hasShepay && !hasDirect) {
     return {
-      title: 'Pay online',
-      subtitle: 'UPI, cards, net banking & wallets on the next secure PayU page',
+      title: 'Online payment',
+      subtitle: 'Pay with UPI, card, net banking, or wallet · SHEPay (PayU) · 0% commission',
     }
   }
 
   return {
-    title: 'Pay online',
-    subtitle: 'SHEPay (PayU) for some shops · pay other sellers via their own gateway',
+    title: 'Online payment',
+    subtitle: 'SHEPay for some shops · other sellers via their own gateway · 0% commission',
   }
 }
 
-/** Shipping line for a shop: connected partner label or SHEDelivery default. */
+/** Shipping line for a shop: connected partner label or vendor self-ship default. */
 export function checkoutShippingLabel(info: {
   shippingLabel?: string | null
   shippingConnected?: boolean
 } | null | undefined): string {
   const label = info?.shippingLabel?.trim()
-  if (label) return label
-  return 'SHEDelivery'
+  if (label && label.toLowerCase() !== 'shedelivery') return label
+  return 'Seller ships'
 }
 
 export type PostCheckoutNext =
+  | { kind: 'payu_inline'; actionUrl: string; fields: Record<string, string>; txnid: string; paymentStepId: string }
   | { kind: 'payu_bridge'; href: string }
   | { kind: 'external_pay'; url: string }
   | { kind: 'success' }
@@ -131,17 +132,40 @@ export function toInAppPayUHref(checkoutUrl: string): string {
 /**
  * Decide where checkout goes after atomic order create for online/COD.
  * Online SHEPay must not land on success before PayU; failures cancel and stay.
+ * Prefer on-checkout merchant-hosted panel (payu_inline) when a payment step is ready.
  */
 export function resolvePostCheckoutNext(input: {
   mode: 'online' | 'cod'
   checkoutUrl: string | null
   shepayError: string | null
   hasShepaySteps: boolean
+  /** On-checkout PayU panel — Pay click runs seamless curl / form post. */
+  payuInline?: {
+    actionUrl: string
+    fields: Record<string, string>
+    txnid: string
+    paymentStepId: string
+  } | null
 }): PostCheckoutNext {
   if (input.mode === 'cod') return { kind: 'success' }
 
   if (input.hasShepaySteps) {
-    if (input.shepayError || !input.checkoutUrl) {
+    if (input.shepayError && !input.payuInline?.paymentStepId) {
+      return {
+        kind: 'cancel_and_stay',
+        error: input.shepayError ?? 'Payment setup incomplete. Please try again.',
+      }
+    }
+    if (input.payuInline?.paymentStepId) {
+      return {
+        kind: 'payu_inline',
+        actionUrl: input.payuInline.actionUrl || '',
+        fields: input.payuInline.fields || {},
+        txnid: input.payuInline.txnid || '',
+        paymentStepId: input.payuInline.paymentStepId,
+      }
+    }
+    if (!input.checkoutUrl) {
       return {
         kind: 'cancel_and_stay',
         error: input.shepayError ?? 'Payment setup incomplete. Please try again.',

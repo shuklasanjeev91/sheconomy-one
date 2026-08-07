@@ -100,7 +100,7 @@ export function ShopPartnerChips({ info }: { info?: ShopPartnerInfo }) {
       <PartnerChip
         icon={<Icons.Truck size={13} color={ui.textSecondary} />}
         label="Ships via"
-        value={info?.shippingLabel ?? 'SHEDelivery'}
+        value={info?.shippingLabel ?? 'Seller ships'}
       />
       <PartnerChip
         icon={<Icons.CreditCard size={13} color={ui.textSecondary} />}

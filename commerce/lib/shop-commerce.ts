@@ -25,7 +25,7 @@ const PAYMENT_LABELS: Record<string, string> = {
   shepay: 'SHEPay',
   razorpay: 'Razorpay',
   stripe: 'Stripe',
-  payu: 'PayU',
+  payu: 'SHEPay',
   cashfree: 'Cashfree',
   breeze: 'Breeze',
   paytm: 'Paytm',
@@ -33,13 +33,16 @@ const PAYMENT_LABELS: Record<string, string> = {
 }
 
 const SHIPPING_LABELS: Record<string, string> = {
-  shedelivery: 'SHEDelivery',
+  shedelivery: 'Seller ships',
   shiprocket: 'Shiprocket',
   pickrr: 'Pickrr',
   delhivery: 'Delhivery',
   bluedart: 'BlueDart',
-  own: 'Seller shipping',
-  self: 'Seller shipping',
+  dtdc: 'DTDC',
+  xpressbees: 'Xpressbees',
+  own: 'Seller ships',
+  self: 'Seller ships',
+  partner: 'Seller ships',
 }
 
 function titleCase(value: string): string {
@@ -61,7 +64,7 @@ function labelFor(map: Record<string, string>, key: string | null | undefined): 
 /** Platform defaults when a shop hasn't connected its own partners. */
 const DEFAULT_PARTNERS = {
   paymentLabel: 'SHEPay',
-  shippingLabel: 'SHEDelivery',
+  shippingLabel: 'Seller ships',
 }
 
 function resolvePartner(row: CommerceSettingsRow): ShopPartnerInfo {
@@ -94,16 +97,51 @@ export function partnerComboKey(info: ShopPartnerInfo): string {
 }
 
 /**
- * Who collects the buyer's payment for a shop, under SHEconomy's 0-commission model:
- * - `direct`: the seller connected their own gateway (e.g. Razorpay). Funds go
- *   straight to the seller's bank and SHEconomy charges no commission.
- * - `shepay`: the seller uses SHEPay/SHEDelivery. SHEconomy collects the payment
- *   and charges a commission (billed to the seller, invisible to the buyer).
+ * Who collects the buyer's payment for a shop.
+ * Marketplace checkout always uses SHEPay (platform collect + Automate split).
+ * Own-gateway / direct routing has been removed.
  */
 export type PaymentCollection = 'direct' | 'shepay'
 
-export function paymentCollectionFor(info: ShopPartnerInfo | undefined): PaymentCollection {
-  return info?.paymentConnected ? 'direct' : 'shepay'
+export function paymentCollectionFor(_info: ShopPartnerInfo | undefined): PaymentCollection {
+  return 'shepay'
+}
+
+/** True when a shop has a connected PayU/SHEPay child merchant for Automate splits. */
+export async function fetchShepayReadyShopIds(shopIds: string[]): Promise<{
+  ready: Set<string>
+  missing: string[]
+}> {
+  const unique = [...new Set(shopIds.filter(Boolean))]
+  const ready = new Set<string>()
+  if (!unique.length) return { ready, missing: [] }
+
+  const { data } = await supabase
+    .from('shop_payment_accounts')
+    .select('shop_id, provider, status, metadata')
+    .in('shop_id', unique)
+    .eq('provider', 'payu')
+    .eq('status', 'connected')
+
+  for (const row of data ?? []) {
+    const meta =
+      row.metadata && typeof row.metadata === 'object'
+        ? (row.metadata as Record<string, unknown>)
+        : {}
+    const childKey =
+      (typeof meta.child_merchant_key === 'string' && meta.child_merchant_key.trim()) ||
+      (meta.onboarded_via === 'sheconomy' && typeof meta.merchant_key === 'string'
+        ? meta.merchant_key.trim()
+        : '')
+    const childMid = typeof meta.child_mid === 'string' && meta.child_mid.trim()
+    // Child key + MID required so Automate split + release_settlement can run after capture.
+    if (childKey && childMid && row.shop_id) ready.add(String(row.shop_id))
+  }
+
+  return {
+    ready,
+    missing: unique.filter((id) => !ready.has(id)),
+  }
 }
 
 /**
@@ -119,7 +157,7 @@ export function arePartnersUniform(partners: Iterable<ShopPartnerInfo>): boolean
 /**
  * Fetch each shop's payment gateway and shipping partner (shop-wise). Shops
  * without an explicit setting fall back to the platform defaults (SHEPay /
- * SHEDelivery). Only non-sensitive display fields are read.
+ * Seller ships). Only non-sensitive display fields are read.
  */
 export async function fetchShopCommerceSettings(
   shopIds: string[],

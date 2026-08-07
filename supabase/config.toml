@@ -396,13 +396,34 @@ verify_jwt = false
 [functions.shepay-payu-webhook]
 verify_jwt = false
 
+# PayU browser POST to surl/furl → 303 to SPA (no JWT).
+[functions.shepay-payu-return]
+verify_jwt = false
+
 # SHEDelivery partner tracking webhooks (no JWT).
 [functions.shedelivery-webhook]
+verify_jwt = false
+
+# Courier AWB poller (cron secret or authenticated invoke).
+[functions.courier-track-sync]
 verify_jwt = false
 
 # Authenticated SHEPay session create (JWT required — default).
 [functions.shepay-payu-create]
 verify_jwt = true
+
+# Authenticated PayU getBinInfo (JWT).
+[functions.shepay-payu-bin]
+verify_jwt = true
+
+# Authenticated: auto-fetch PayU child key/MID and activate SHEPay.
+[functions.shepay-sync-child]
+verify_jwt = true
+
+# Authenticated: release held SHEPay settlements after child merchant connect.
+[functions.shepay-release-pending]
+verify_jwt = true
+
 
 # Authenticated Razorpay direct seller checkout (JWT required — default).
 [functions.razorpay-direct-create]

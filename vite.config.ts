@@ -4,7 +4,7 @@ import { defineConfig, loadEnv } from 'vite'
 import { one } from 'one/vite'
 import { tamaguiPlugin } from '@tamagui/vite-plugin'
 
-import { APP_SCHEME, DEFAULT_APP_ORIGIN, normalizeAppOrigin } from './config/app-origin'
+import { APP_SCHEME, DEFAULT_APP_ORIGIN, getAppLinkingPrefixes, normalizeAppOrigin } from './config/app-origin'
 import { PUBLIC_SUPABASE_ANON_KEY, PUBLIC_SUPABASE_URL } from './config/supabase-public'
 
 const fromProjectRoot = (path: string) => fileURLToPath(new URL(path, import.meta.url).toString())
@@ -186,7 +186,7 @@ module.exports = require('./browser.js');
         router: {
           linking: {
             scheme: APP_SCHEME,
-            prefixes: [`${APP_SCHEME}://`, appOrigin],
+            prefixes: getAppLinkingPrefixes(appOrigin),
           },
         },
 

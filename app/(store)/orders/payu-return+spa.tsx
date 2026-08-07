@@ -1,5 +1,6 @@
 import { useRouter, useLocalSearchParams } from 'one'
 import { useEffect, useState } from 'react'
+import { Platform } from 'react-native'
 
 import { cancelCheckoutPayment } from '~/commerce/lib/checkout'
 import {
@@ -13,14 +14,14 @@ import { commerceRoutes } from '~/lib/routes'
 import { useAppUi } from '~/lib/theme/useAppUi'
 
 /**
- * PayU surl/furl landing.
+ * PayU surl/furl landing (after shepay-payu-return 303).
+ * Failure: cart is usually restored by the edge bridge; SPA cancel is a backup.
  * Success → order success (awaiting until webhook settles).
- * Failure → cancel hold when possible, then pending/fail UX (never “confirmed”).
  */
 export default function PayUReturnRoute() {
   const ui = useAppUi()
   const router = useRouter()
-  const params = useLocalSearchParams<{ status?: string }>()
+  const params = useLocalSearchParams<{ status?: string; embed?: string; cg?: string }>()
   const [message, setMessage] = useState('Confirming payment…')
 
   useEffect(() => {
@@ -28,17 +29,39 @@ export default function PayUReturnRoute() {
     void (async () => {
       const status = (params.status ?? '').toLowerCase()
       const ok = status === 'success'
+      const cgFromUrl = typeof params.cg === 'string' ? params.cg.trim() : ''
+      const embed =
+        String(params.embed ?? '') === '1' ||
+        String(params.embed ?? '').toLowerCase() === 'true'
+
+      if (embed && Platform.OS === 'web' && typeof window !== 'undefined') {
+        try {
+          window.parent?.postMessage(
+            { type: 'payu-embed-return', status: ok ? 'success' : 'failure' },
+            '*',
+          )
+          setMessage(ok ? 'Payment received' : 'Payment was not completed')
+          return
+        } catch {
+          // fall through to full navigation
+        }
+      }
 
       const pending = await loadPendingOrderSuccess()
       if (cancelled) return
 
       if (!ok) {
-        setMessage('Payment was not completed')
-        if (pending?.checkoutGroupId) {
-          await cancelCheckoutPayment(pending.checkoutGroupId)
+        setMessage('Payment was not completed — restoring your cart…')
+        const checkoutGroupId = cgFromUrl || pending?.checkoutGroupId || null
+        if (checkoutGroupId) {
+          // Edge bridge usually already cancelled; safe to call again (no-op if cancelled).
+          const { error } = await cancelCheckoutPayment(checkoutGroupId)
+          if (error) {
+            console.warn('cancelCheckoutPayment', error.message)
+          }
           await clearPendingOrderSuccess()
           if (cancelled) return
-          router.push(commerceRoutes.cart)
+          router.replace(commerceRoutes.cart)
           return
         }
         if (pending?.orderIds?.length) {
@@ -47,10 +70,10 @@ export default function PayUReturnRoute() {
             awaitingExternalPayment: true,
           })
           if (cancelled) return
-          router.push(commerceRoutes.orderSuccess(pending.orderIds))
+          router.replace(commerceRoutes.orderSuccess(pending.orderIds))
           return
         }
-        router.push(commerceRoutes.cart)
+        router.replace(commerceRoutes.cart)
         return
       }
 
@@ -61,15 +84,15 @@ export default function PayUReturnRoute() {
           awaitingExternalPayment: true,
         })
         if (cancelled) return
-        router.push(commerceRoutes.orderSuccess(pending.orderIds))
+        router.replace(commerceRoutes.orderSuccess(pending.orderIds))
         return
       }
-      router.push(commerceRoutes.orders)
+      router.replace(commerceRoutes.orders)
     })()
     return () => {
       cancelled = true
     }
-  }, [params.status, router])
+  }, [params.status, params.embed, params.cg, router])
 
   return (
     <FullWidthLayout>

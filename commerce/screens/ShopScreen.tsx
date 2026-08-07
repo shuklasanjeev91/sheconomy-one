@@ -457,6 +457,27 @@ export function ShopScreen(
                   <FactRow label="Currency" value={shop.shop_currency} />
                 ) : null}
                 {shop.website_url ? <FactRow label="Website" value={shop.website_url} /> : null}
+                <YStack height={1} backgroundColor={ui.borderSubtle} />
+                <Text fontSize={14} fontWeight="700" color={ui.text}>
+                  Shop policies
+                </Text>
+                <XStack flexWrap="wrap" gap="$3">
+                  {(
+                    [
+                      ['Privacy', commerceRoutes.shopPrivacy(shop.slug || slug)],
+                      ['Terms', commerceRoutes.shopTerms(shop.slug || slug)],
+                      ['Returns', commerceRoutes.shopReturns(shop.slug || slug)],
+                      ['Refunds', commerceRoutes.shopRefunds(shop.slug || slug)],
+                      ['Shipping', commerceRoutes.shopShipping(shop.slug || slug)],
+                    ] as const
+                  ).map(([label, href]) => (
+                    <AppLink key={label} href={href}>
+                      <Text fontSize={13} fontWeight="600" color={ui.brand}>
+                        {label}
+                      </Text>
+                    </AppLink>
+                  ))}
+                </XStack>
               </YStack>
               <YStack width={isDesktop ? 300 : '100%'} flexShrink={0}>
                 {buyBox}

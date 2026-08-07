@@ -26,10 +26,10 @@ export type VendorOrderAction = {
 const ADVANCE_LABELS: Partial<Record<OrderStatus, string>> = {
   [ORDER_STATUS.CONFIRMED]: 'Accept',
   [ORDER_STATUS.PROCESSING]: 'Start Processing',
-  [ORDER_STATUS.SHIPPED]: 'Ready to Ship',
-  [ORDER_STATUS.IN_TRANSIT]: 'Mark In Transit',
-  [ORDER_STATUS.OUT_FOR_DELIVERY]: 'Out for Delivery',
-  [ORDER_STATUS.DELIVERED]: 'Mark Delivered',
+  [ORDER_STATUS.SHIPPED]: 'Add tracking',
+  [ORDER_STATUS.IN_TRANSIT]: 'In transit',
+  [ORDER_STATUS.OUT_FOR_DELIVERY]: 'Out for delivery',
+  [ORDER_STATUS.DELIVERED]: 'Delivered',
   [ORDER_STATUS.COMPLETED]: 'Complete Order',
 }
 
@@ -52,17 +52,16 @@ function primaryForwardStatus(current: OrderStatus): OrderStatus | null {
     case ORDER_STATUS.CONFIRMED:
       return ORDER_STATUS.PROCESSING
     case ORDER_STATUS.PROCESSING:
-      return ORDER_STATUS.SHIPPED
     case ORDER_STATUS.PARTIALLY_SHIPPED:
+      // Opens Add Tracking drawer — status then advances from courier APIs only.
       return ORDER_STATUS.SHIPPED
-    case ORDER_STATUS.SHIPPED:
-      return ORDER_STATUS.IN_TRANSIT
-    case ORDER_STATUS.IN_TRANSIT:
-      return ORDER_STATUS.OUT_FOR_DELIVERY
-    case ORDER_STATUS.OUT_FOR_DELIVERY:
-      return ORDER_STATUS.DELIVERED
     case ORDER_STATUS.DELIVERED:
       return ORDER_STATUS.COMPLETED
+    case ORDER_STATUS.SHIPPED:
+    case ORDER_STATUS.IN_TRANSIT:
+    case ORDER_STATUS.OUT_FOR_DELIVERY:
+      // Carrier-driven — no vendor button.
+      return null
     default:
       return null
   }

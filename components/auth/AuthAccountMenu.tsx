@@ -12,6 +12,7 @@ import {
 import { Avatar, Icons, Text, XStack, YStack } from '~/components/ui'
 import { useCart } from '~/commerce/hooks/useCart'
 import { useFavorites } from '~/commerce/hooks/useFavorites'
+import { isAdminRole, normalizeRole } from '~/lib/auth/route-protection'
 import { navigateApp } from '~/lib/platform/navigate'
 import { routes } from '~/lib/routes'
 import { useAccess } from '~/hooks/useAccess'
@@ -45,6 +46,8 @@ export function AuthUserMenuContent({ onClose }: AuthUserMenuContentProps) {
       ? routes.userProfile(profile.username)
       : routes.profile
 
+  const isAdmin = isAdminRole(normalizeRole(profile?.role))
+
   const quickActions = useMemo(
     () =>
       getAccountQuickActions({
@@ -62,9 +65,10 @@ export function AuthUserMenuContent({ onClose }: AuthUserMenuContentProps) {
         tier,
         hasShops: shops.length > 0,
         primaryShopId: shops[0]?.id ?? null,
+        isAdmin,
         omitChromeDuplicates: !isDesktop,
       }),
-    [tier, shops, isDesktop],
+    [tier, shops, isAdmin, isDesktop],
   )
 
   function go(href: Href) {

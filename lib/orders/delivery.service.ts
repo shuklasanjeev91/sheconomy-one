@@ -125,6 +125,14 @@ export async function createDelivery(
 
     const { data, error } = await supabase.from('order_delivery').insert(payload).select('*').single()
     if (error) return fail(error, 'Failed to create delivery record')
+
+    // Kick an immediate track sync (cron continues for later milestones).
+    if (data?.id && data.tracking_number) {
+      void supabase.functions
+        .invoke('courier-track-sync', { body: { delivery_id: data.id } })
+        .catch(() => undefined)
+    }
+
     return ok(data as OrderDelivery)
   } catch (error) {
     return fail(error, 'An unexpected error occurred while creating delivery record')
@@ -164,7 +172,7 @@ export async function createTracking(
     delivery_status: DELIVERY_STATUS.SHIPPED,
     delivery_metadata: {
       courier_slug: input.courier_slug,
-      notify_customer: input.notify_customer ?? false,
+      notify_customer: input.notify_customer ?? true,
     } as unknown as Json,
   }
 

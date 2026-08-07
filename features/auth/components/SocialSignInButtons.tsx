@@ -1,10 +1,10 @@
 import { useEffect, useState } from 'react'
 import { Platform } from 'react-native'
 
+import { AppleSignInButton } from '~/features/auth/components/AppleSignInButton'
 import { Button, Spinner, Text, XStack, YStack, useAppToast } from '~/components/ui'
 import {
   isAppleSignInAvailable,
-  isLinkedInSignInAvailable,
   startOAuthSignIn,
   type OAuthProvider,
 } from '~/features/auth/services/oauth'
@@ -59,11 +59,9 @@ export function SocialSignInButtons({
       return
     }
     if (busy != null) return
-
     setBusy(provider)
     try {
       const result = await startOAuthSignIn(provider)
-      if (result.cancelled) return
       if (result.error) {
         toast.show(result.error, { tone: 'danger' })
         return
@@ -91,10 +89,18 @@ export function SocialSignInButtons({
       <XStack alignItems="center" gap="$3">
         <YStack flex={1} height={1} backgroundColor={ui.borderSubtle} />
         <Text fontSize={12} color={ui.textMuted} fontWeight="600">
-          Or continue with
+          {Platform.OS === 'web' ? 'Or continue with' : 'Continue with'}
         </Text>
         <YStack flex={1} height={1} backgroundColor={ui.borderSubtle} />
       </XStack>
+      {/* Apple first — App Store Guideline 4.8 / review discoverability above the fold. */}
+      {isAppleSignInAvailable() ? (
+        <AppleSignInButton
+          disabled={disabled || busy != null}
+          busy={busy === 'apple'}
+          onPress={() => void handle('apple')}
+        />
+      ) : null}
       <Button
         tone="outline"
         size="$4"
@@ -105,66 +111,6 @@ export function SocialSignInButtons({
       >
         {busy === 'google' ? 'Connecting…' : 'Continue with Google'}
       </Button>
-
-      {showIosAppleButton && AppleAuthentication ? (
-        <YStack
-          width="100%"
-          height={APPLE_BUTTON_HEIGHT}
-          opacity={controlsLocked ? 0.55 : 1}
-          pointerEvents={controlsLocked ? 'none' : 'auto'}
-        >
-          {busy === 'apple' ? (
-            <XStack
-              height={APPLE_BUTTON_HEIGHT}
-              alignItems="center"
-              justifyContent="center"
-              gap="$2"
-              borderRadius={999}
-              borderWidth={1}
-              borderColor={ui.borderSubtle}
-            >
-              <Spinner size="small" />
-              <Text fontSize={15} fontWeight="700" color={ui.text}>
-                Connecting…
-              </Text>
-            </XStack>
-          ) : (
-            <AppleAuthentication.AppleAuthenticationButton
-              buttonType={AppleAuthentication.AppleAuthenticationButtonType.SIGN_IN}
-              buttonStyle={AppleAuthentication.AppleAuthenticationButtonStyle.WHITE_OUTLINE}
-              cornerRadius={999}
-              style={{ width: '100%', height: APPLE_BUTTON_HEIGHT }}
-              onPress={() => void handle('apple')}
-            />
-          )}
-        </YStack>
-      ) : null}
-
-      {showWebAppleButton ? (
-        <Button
-          tone="outline"
-          size="$4"
-          borderRadius={999}
-          disabled={controlsLocked}
-          onPress={() => void handle('apple')}
-          icon={busy === 'apple' ? <Spinner size="small" /> : undefined}
-        >
-          {busy === 'apple' ? 'Connecting…' : 'Continue with Apple'}
-        </Button>
-      ) : null}
-
-      {isLinkedInSignInAvailable() ? (
-        <Button
-          tone="outline"
-          size="$4"
-          borderRadius={999}
-          disabled={controlsLocked}
-          onPress={() => void handle('linkedin_oidc')}
-          icon={busy === 'linkedin_oidc' ? <Spinner size="small" /> : undefined}
-        >
-          {busy === 'linkedin_oidc' ? 'Connecting…' : 'Continue with LinkedIn'}
-        </Button>
-      ) : null}
     </YStack>
   )
 }

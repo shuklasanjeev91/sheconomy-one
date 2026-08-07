@@ -166,11 +166,11 @@ function MobileAuthFormView({ children, footer }: { children: ReactNode; footer?
         <XStack justifyContent="flex-end" width="100%" marginBottom="$2">
           <AuthBackButton showLabel={false} />
         </XStack>
-        <YStack alignItems="center" width="100%" paddingVertical="$3" marginBottom="$2">
+        <YStack alignItems="center" width="100%" paddingVertical="$4" marginBottom="$3" gap="$2">
           <AuthBrandLogo />
         </YStack>
         <PageRail maxWidth={APP_LAYOUT.maxFormWidth} centered gap="$4" width="100%" alignSelf="center">
-          <YStack gap="$1" width="100%">
+          <YStack gap="$1" width="100%" alignItems="center">
             <Text fontSize={22} fontWeight="800" color={ui.text} letterSpacing={-0.4} textAlign="center">
               {AUTH_COPY.title}
             </Text>
@@ -214,6 +214,9 @@ function DesktopAuthFormColumn({ children, footer }: { children: ReactNode; foot
         }}
       >
         <PageRail maxWidth={APP_LAYOUT.maxFormWidth} centered gap="$5" width="100%" alignSelf="center">
+          <YStack alignItems="center" width="100%" marginBottom="$1">
+            <AuthBrandLogo />
+          </YStack>
           <YStack gap="$1.5" width="100%">
             <Text fontSize={30} fontWeight="800" color={ui.text} letterSpacing={-0.8} lineHeight={36}>
               {AUTH_COPY.title}

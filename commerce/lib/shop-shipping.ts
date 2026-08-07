@@ -84,7 +84,7 @@ function formatProviderLabel(provider: ShopShippingProvider) {
   const type = normalizeProviderType(provider.provider_type)
   const name = provider.provider_name?.trim()
 
-  if (type && SHEDELIVERY_TYPES.has(type)) return 'SHEDelivery'
+  if (type && SHEDELIVERY_TYPES.has(type)) return 'Seller ships'
   if (type === 'shiprocket' || name?.toLowerCase().includes('shiprocket')) return 'Shiprocket'
   if (type === 'pickrr' || name?.toLowerCase().includes('pickrr')) return 'Pickrr'
   if (name) return name
@@ -182,8 +182,9 @@ export function buildShopShippingSummary(input: {
   let providerLabel: string | null = null
 
   if (metadataRail && SHEDELIVERY_TYPES.has(metadataRail)) {
-    rail = 'shedelivery'
-    providerLabel = 'SHEDelivery'
+    // Legacy shedelivery rail → vendor self-ship.
+    rail = 'own_account'
+    providerLabel = 'Seller ships'
   } else if (metadataRail && OWN_ACCOUNT_TYPES.has(metadataRail)) {
     rail = 'own_account'
     providerLabel = formatProviderLabel({
@@ -202,8 +203,8 @@ export function buildShopShippingSummary(input: {
           : account.provider
   } else if (primaryProvider) {
     if (SHEDELIVERY_TYPES.has(primaryType)) {
-      rail = 'shedelivery'
-      providerLabel = 'SHEDelivery'
+      rail = 'own_account'
+      providerLabel = 'Seller ships'
     } else if (OWN_ACCOUNT_TYPES.has(primaryType)) {
       rail = 'own_account'
       providerLabel = formatProviderLabel(primaryProvider)
@@ -289,7 +290,7 @@ export function resolveTransitDaysForShop(
 
 export function getShopCardDeliveryHint(summary: ShopShippingSummary | null | undefined) {
   if (!summary) return null
-  if (summary.rail === 'shedelivery') return 'SHEDelivery'
+  if (summary.rail === 'shedelivery') return 'Seller ships'
   if (summary.providerLabel) return `Ships via ${summary.providerLabel}`
   if (summary.shipsFrom) return `Ships from ${summary.shipsFrom}`
   return null

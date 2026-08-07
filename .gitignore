@@ -1,3 +1,6 @@
+.tmp-supabase-config/
+.tmp-payu/
+
 .yarn/*
 !.yarn/patches
 !.yarn/plugins
