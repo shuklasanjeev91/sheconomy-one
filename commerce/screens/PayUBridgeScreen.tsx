@@ -54,11 +54,6 @@ export function PayUBridgeScreen() {
     return buildPayuAutoSubmitHtml(action, fields)
   }, [action, fields])
 
-  const html = useMemo(() => {
-    if (!action || !fields) return null
-    return buildPayUAutoSubmitHtml(action, fields)
-  }, [action, fields])
-
   useEffect(() => {
     if (Platform.OS !== 'web' || !action || !fields || typeof document === 'undefined') return
     const form = document.createElement('form')

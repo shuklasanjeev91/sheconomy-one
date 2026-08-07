@@ -153,19 +153,45 @@ function withTimeout<T>(promise: Promise<T>, ms: number, message: string): Promi
   })
 }
 
-async function tryNativeAppleSignIn(): Promise<{ handled: boolean; error: string | null }> {
+function isAppleSignInCanceled(error: unknown): boolean {
+  if (!error || typeof error !== 'object') return false
+  const code = String((error as { code?: string }).code ?? '')
+  return (
+    code === 'ERR_REQUEST_CANCELED' ||
+    code === 'ERR_REQUEST_CANCELLED' ||
+    code === 'ERR_CANCELED'
+  )
+}
+
+function appleSignInErrorMessage(error: unknown): string {
+  if (error && typeof error === 'object') {
+    const code = String((error as { code?: string }).code ?? '')
+    const message = String((error as { message?: string }).message ?? '')
+    // AuthorizationError code 1000 — usually missing Sign in with Apple entitlement.
+    if (code === 'ERR_REQUEST_UNKNOWN' || message.includes('1000')) {
+      return 'Sign in with Apple is not available on this build. Please try again or use another sign-in method.'
+    }
+    if (message) return message
+  }
+  if (error instanceof Error && error.message) return error.message
+  return 'Apple sign-in failed. Please try again.'
+}
+
+async function tryNativeAppleSignIn(): Promise<{
+  error: string | null
+  cancelled?: boolean
+}> {
   let AppleAuthentication: typeof import('expo-apple-authentication')
   try {
     AppleAuthentication = await import('expo-apple-authentication')
   } catch {
-    // Module unavailable in this binary — allow browser OAuth fallback.
-    return { handled: false, error: null }
+    return { error: 'Sign in with Apple is not available on this build.' }
   }
 
   try {
     const available = await AppleAuthentication.isAvailableAsync()
     if (!available) {
-      return { handled: false, error: null }
+      return { error: 'Sign in with Apple is not available on this device.' }
     }
 
     const credential = await withTimeout(
@@ -208,20 +234,10 @@ async function tryNativeAppleSignIn(): Promise<{ handled: boolean; error: string
 
     return { error: null }
   } catch (error) {
-    if (
-      error &&
-      typeof error === 'object' &&
-      'code' in error &&
-      (error as { code?: string }).code === 'ERR_REQUEST_CANCELED'
-    ) {
-      return { handled: true, error: 'Apple sign-in was cancelled.' }
+    if (isAppleSignInCanceled(error)) {
+      return { error: null, cancelled: true }
     }
-    // Native Apple UI was presented (or timed out). Do not silently fall back to
-    // browser OAuth — that path often appears "unresponsive" on App Review devices.
-    if (error instanceof Error && error.message) {
-      return { handled: true, error: error.message }
-    }
-    return { handled: true, error: 'Apple sign-in failed. Please try again.' }
+    return { error: appleSignInErrorMessage(error) }
   }
 }
 

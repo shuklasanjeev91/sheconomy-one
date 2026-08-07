@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
 import { Platform } from 'react-native'
 
 import { AppleSignInButton } from '~/features/auth/components/AppleSignInButton'
@@ -18,14 +18,6 @@ type SocialSignInButtonsProps = {
   onSuccess?: (provider: OAuthProvider) => void
 }
 
-const APPLE_BUTTON_HEIGHT = 48
-
-/** Load only on iOS so web/Android bundles stay free of the native Apple button view. */
-const AppleAuthentication =
-  Platform.OS === 'ios'
-    ? (require('expo-apple-authentication') as typeof import('expo-apple-authentication'))
-    : null
-
 export function SocialSignInButtons({
   disabled,
   requireConsent,
@@ -35,23 +27,6 @@ export function SocialSignInButtons({
   const ui = useAppUi()
   const toast = useAppToast()
   const [busy, setBusy] = useState<OAuthProvider | null>(null)
-  /** iOS: only render Apple's system button after `isAvailableAsync()` is true. */
-  const [appleNativeReady, setAppleNativeReady] = useState(false)
-
-  useEffect(() => {
-    if (Platform.OS !== 'ios' || !AppleAuthentication) return
-    let cancelled = false
-    void AppleAuthentication.isAvailableAsync()
-      .then((available) => {
-        if (!cancelled) setAppleNativeReady(available)
-      })
-      .catch(() => {
-        if (!cancelled) setAppleNativeReady(false)
-      })
-    return () => {
-      cancelled = true
-    }
-  }, [])
 
   async function handle(provider: OAuthProvider) {
     if (requireConsent && !acceptedTerms) {
@@ -62,6 +37,7 @@ export function SocialSignInButtons({
     setBusy(provider)
     try {
       const result = await startOAuthSignIn(provider)
+      if (result.cancelled) return
       if (result.error) {
         toast.show(result.error, { tone: 'danger' })
         return
@@ -78,11 +54,6 @@ export function SocialSignInButtons({
       setBusy(null)
     }
   }
-
-  const controlsLocked = Boolean(disabled || busy != null)
-  const showWebAppleButton = Platform.OS === 'web' && isAppleSignInAvailable()
-  const showIosAppleButton =
-    Platform.OS === 'ios' && appleNativeReady && AppleAuthentication != null
 
   return (
     <YStack gap="$3">
@@ -105,7 +76,7 @@ export function SocialSignInButtons({
         tone="outline"
         size="$4"
         borderRadius={999}
-        disabled={controlsLocked}
+        disabled={disabled || busy != null}
         onPress={() => void handle('google')}
         icon={busy === 'google' ? <Spinner size="small" /> : undefined}
       >
