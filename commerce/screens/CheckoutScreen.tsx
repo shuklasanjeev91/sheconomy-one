@@ -17,11 +17,12 @@ import {
   YStack,
   useAppToast,
 } from '~/components/ui'
-import { FullWidthLayout, LAYOUT_STRETCH, PageSection, StickyRail } from '~/components/layout'
+import { FullWidthLayout, LAYOUT_STRETCH, PageRail, PageSection, StickyRail } from '~/components/layout'
 import { useCart } from '~/commerce/hooks/useCart'
 import { useStorefrontCartItems } from '~/commerce/hooks/useStorefrontCartItems'
 import { useShopPartners } from '~/commerce/hooks/useShopPartners'
 import { useShopHeaders } from '~/commerce/hooks/useShopHeaders'
+import { CheckoutPayuPanel, type CheckoutPayuSession } from '~/commerce/components/CheckoutPayuPanel'
 import {
   CartCoupon,
   CheckoutContactSection,
@@ -45,6 +46,7 @@ import {
   type UserAddress,
 } from '~/commerce/lib/checkout'
 import { createShepayPayuSession } from '~/commerce/lib/shepay'
+import { platformPayuService } from '~/lib/platform-payu'
 import {
   checkoutShippingLabel,
   resolvePostCheckoutNext,
@@ -97,6 +99,9 @@ import { navigateApp, replaceApp } from '~/lib/platform/navigate'
 
 const SUMMARY_WIDTH = 320
 
+/** Who processes an online charge after checkout is created. */
+type CheckoutOnlineProvider = 'shepay' | 'platform_payu'
+
 export function CheckoutScreen() {
   const c = useCommercePalette()
   const ui = useAppUi()
@@ -124,6 +129,7 @@ export function CheckoutScreen() {
   const [notesByShop, setNotesByShop] = useState<Record<string, string>>({})
   const [giftByShop, setGiftByShop] = useState<Record<string, boolean>>({})
   const [paymentMethod, setPaymentMethod] = useState<CheckoutPaymentMode>('online')
+  const [onlineProvider, setOnlineProvider] = useState<CheckoutOnlineProvider>('platform_payu')
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [isRedirectingToPayment, setIsRedirectingToPayment] = useState(false)
   const [orderPlaced, setOrderPlaced] = useState(false)
@@ -135,6 +141,12 @@ export function CheckoutScreen() {
   const checkoutAttemptKey = useRef<string | null>(null)
   const [contactCheckoutReady, setContactCheckoutReady] = useState(false)
   const [addressError, setAddressError] = useState<string | null>(null)
+  const [platformPayuSession, setPlatformPayuSession] = useState<CheckoutPayuSession | null>(null)
+  const [platformCheckoutMeta, setPlatformCheckoutMeta] = useState<{
+    orderIds: string[]
+    orderNumbers: string[]
+    checkoutGroupId: string | null
+  } | null>(null)
 
   const authContact = useMemo(() => resolveAuthContact(user), [user])
 
@@ -367,21 +379,48 @@ export function CheckoutScreen() {
 
   const multiShop = orderShops.length > 1
 
-  // Marketplace: all shops collect via a single SHEPay charge (Automate split after pay).
   const paymentGroups = useMemo(() => {
     const shepay = orderShops.map((shop) => ({ shopId: shop.shopId, shopName: shop.shopName }))
     return { shepay, direct: [] as { shopId: string; shopName: string; gateway: string }[] }
   }, [orderShops])
 
-  const onlineCopy = useMemo(
+  /** Platform PayU initiates one order payment — single-shop checkout only. */
+  const platformPayuAvailable = !multiShop && orderShops.length > 0
+  const shepayAvailable = paymentGroups.shepay.length > 0
+
+  const shopsUsePlatformPayuDefault = useMemo(() => {
+    if (!orderShops.length) return false
+    return orderShops.every((shop) => !shopPartners.get(shop.shopId)?.paymentConnected)
+  }, [orderShops, shopPartners])
+
+  const defaultOnlineProvider = useMemo((): CheckoutOnlineProvider => {
+    if (platformPayuAvailable && shopsUsePlatformPayuDefault) return 'platform_payu'
+    return 'shepay'
+  }, [platformPayuAvailable, shopsUsePlatformPayuDefault])
+
+  useEffect(() => {
+    setOnlineProvider(defaultOnlineProvider)
+  }, [shopIdsKey, defaultOnlineProvider])
+
+  const shepayOnlineCopy = useMemo(
     () => ({
       title: 'Online (SHEPay)',
       subtitle:
         orderShops.length > 1
           ? `One secure payment · split automatically to ${orderShops.length} shops`
-          : 'Pay securely with UPI, cards, net banking or wallets',
+          : 'Marketplace checkout · UPI, cards, net banking & wallets',
     }),
     [orderShops.length],
+  )
+
+  const platformPayuOnlineCopy = useMemo(
+    () => ({
+      title: 'Online (PayU)',
+      subtitle: shopsUsePlatformPayuDefault
+        ? 'Default checkout · Pay securely with UPI, cards, net banking or wallets'
+        : 'Pay securely with UPI, cards, net banking or wallets via PayU',
+    }),
+    [shopsUsePlatformPayuDefault],
   )
 
   useEffect(() => {
@@ -470,13 +509,77 @@ export function CheckoutScreen() {
   if (!orderPlaced && hasChecked && !isLoading && (!cart || items.length === 0)) {
     return <SpaRedirect href={commerceRoutes.cart} />
   }
-  if (!cart) {
+  if (!cart && !platformPayuSession) {
     return <SpaRedirect href={commerceRoutes.home} />
+  }
+
+  if (platformPayuSession && platformCheckoutMeta) {
+    return (
+      <FullWidthLayout scroll>
+        <PageSection paddingVertical="$6" paddingBottom="$10" {...LAYOUT_STRETCH}>
+          <PageRail maxWidth={960} centered width="100%">
+            <YStack gap="$4" flexShrink={0}>
+              <Text fontSize={22} fontWeight="700" color={c.text}>
+                Complete payment
+              </Text>
+              <Text fontSize={14} color={c.secondary}>
+                Pay with UPI or card — you stay on SHEconomy until your bank step.
+              </Text>
+              <CheckoutPayuPanel
+              ui={ui}
+              brandColor={c.brand}
+              borderColor={c.border}
+              chipColor={c.chip}
+              secondaryColor={c.secondary}
+              initialMode="upi_intent"
+              amountLabel={formatCheckoutMoney(displayTotals.orderTotal)}
+              disabledMethodSections={['netbanking', 'wallets', 'more']}
+              session={platformPayuSession}
+              onPaid={() => {
+                trackCommerceEvent('purchase', {
+                  currency: settlementCurrency,
+                  value: orderTotal,
+                  transactionId:
+                    platformCheckoutMeta.orderNumbers[0] ??
+                    platformCheckoutMeta.orderIds[0] ??
+                    cart?.id ??
+                    '',
+                  items: selectedItems.map((item) => ({
+                    id: item.listing_id,
+                    name: item.listing_id,
+                    price: item.unit_price ?? undefined,
+                    quantity: item.quantity,
+                  })),
+                })
+                toast.show('Payment received', { tone: 'success', message: 'Your order is confirmed.' })
+                replaceApp(commerceRoutes.orderSuccess(platformCheckoutMeta.orderIds) as never)
+                void refresh()
+              }}
+              onFailed={(message) => {
+                toast.show('Payment failed', { tone: 'danger', message })
+              }}
+              onCancel={async () => {
+                if (platformCheckoutMeta.checkoutGroupId) {
+                  await cancelCheckoutPayment(platformCheckoutMeta.checkoutGroupId)
+                }
+                setPlatformPayuSession(null)
+                setPlatformCheckoutMeta(null)
+                toast.show('Payment cancelled', {
+                  tone: 'default',
+                  message: 'Your order was not charged. You can try again.',
+                })
+              }}
+            />
+            </YStack>
+          </PageRail>
+        </PageSection>
+      </FullWidthLayout>
+    )
   }
 
   const showSettlementCurrencyNote = preferredCurrency !== settlementCurrency
 
-  // Marketplace checkout always uses SHEPay for online payment.
+  // Online payment can route via Platform PayU (single shop) or SHEPay (marketplace bundle).
   const placeLabel = 'Place your order'
   const submittingLabel = 'Placing…'
 
@@ -644,9 +747,70 @@ export function CheckoutScreen() {
       let paymentSetupError: string | null = null
       const shepayStep = result.data.paymentSteps.find((step) => step.collection === 'shepay')
       const hasShepaySteps = Boolean(shepayStep)
+      const hasDirectSteps = result.data.paymentSteps.some((step) => step.collection === 'direct')
+      const usePlatformPayu =
+        mode === 'online' && onlineProvider === 'platform_payu' && platformPayuAvailable
+
+      /** Platform PayU: create payment record, then merchant-hosted panel on our screen. */
+      if (usePlatformPayu && orderIds.length === 1) {
+        const primaryShop = orderShops[0]
+        const payu = await platformPayuService.initiatePayment({
+          order_id: orderIds[0],
+          amount: result.data.totalAmount,
+          productinfo: orderNumbers[0] ? `Order ${orderNumbers[0]}` : 'Sheconomy order',
+          shop_id: primaryShop?.shopId,
+        })
+        if (!payu.success || !payu.data?.order_payment_id) {
+          if (checkoutGroupId) await cancelCheckoutPayment(checkoutGroupId)
+          toast.show('Payment setup incomplete', {
+            tone: 'danger',
+            message: payu.error ?? 'Could not start payment. Please try again.',
+          })
+          setIsSubmitting(false)
+          return
+        }
+
+        const usedAddressEarly =
+          addresses.find((row) => row.id === shippingAddressId) ??
+          (useNewAddress
+            ? ({
+                address_line_1: newAddress.address_line_1,
+                address_line_2: newAddress.address_line_2,
+                city: newAddress.city,
+                state: newAddress.state,
+                postal_code: newAddress.postal_code,
+                country: newAddress.country,
+                address_label: newAddress.address_label,
+              } as RecentAddressSnapshot)
+            : null)
+        if (usedAddressEarly) {
+          void rememberRecentAddress(usedAddressEarly as never).then(setRecentAddresses)
+        }
+
+        await savePendingOrderSuccess({
+          orderIds,
+          orderNumbers,
+          createdAt: Date.now(),
+          paymentMode: mode,
+          awaitingExternalPayment: true,
+          checkoutGroupId,
+          checkoutUrl: null,
+        })
+
+        setPlatformCheckoutMeta({ orderIds, orderNumbers, checkoutGroupId })
+        setPlatformPayuSession({
+          provider: 'platform_payu',
+          orderPaymentId: payu.data.order_payment_id,
+          txnid: payu.data.txnid,
+          actionUrl: payu.data.payuUrl,
+          fields: payu.data.params,
+        })
+        setIsSubmitting(false)
+        return
+      }
 
       /** PayU Hosted: create session then POST immediately (no intermediate checkout screen). */
-      if (mode === 'online' && shepayStep) {
+      if (mode === 'online' && onlineProvider === 'shepay' && shepayStep) {
         setIsRedirectingToPayment(true)
         const payu = await createShepayPayuSession(shepayStep.id, {
           checkoutStyle: 'hosted',
@@ -1246,7 +1410,7 @@ export function CheckoutScreen() {
               )}
 
               <SectionCard step={needsShipping ? 3 : 2} title="Payment method">
-                {paymentMethod === 'online' && multiShop ? (
+                {paymentMethod === 'online' && multiShop && onlineProvider === 'shepay' ? (
                   <XStack
                     gap="$2"
                     alignItems="center"
@@ -1261,14 +1425,49 @@ export function CheckoutScreen() {
                     </Text>
                   </XStack>
                 ) : null}
-                {paymentGroups.shepay.length ? (
+                {paymentMethod === 'online' &&
+                platformPayuAvailable &&
+                onlineProvider === 'platform_payu' &&
+                shopsUsePlatformPayuDefault ? (
+                  <XStack
+                    gap="$2"
+                    alignItems="center"
+                    padding="$2.5"
+                    borderRadius={10}
+                    backgroundColor={c.chip}
+                    marginBottom="$2"
+                  >
+                    <Icons.ShieldCheck size={15} color={c.brand} />
+                    <Text fontSize={12} color={c.secondary} flex={1}>
+                      Secure PayU checkout — the platform default when a seller has not connected their
+                      own gateway.
+                    </Text>
+                  </XStack>
+                ) : null}
+                {platformPayuAvailable || shepayAvailable ? (
                   <YStack gap="$2">
-                    <PaymentOption
-                      selected={paymentMethod === 'online'}
-                      title={onlineCopy.title}
-                      subtitle="UPI, cards, net banking & wallets — choose on the secure payment page"
-                      onPress={() => setPaymentMethod('online')}
-                    />
+                    {platformPayuAvailable ? (
+                      <PaymentOption
+                        selected={paymentMethod === 'online' && onlineProvider === 'platform_payu'}
+                        title={platformPayuOnlineCopy.title}
+                        subtitle={platformPayuOnlineCopy.subtitle}
+                        onPress={() => {
+                          setPaymentMethod('online')
+                          setOnlineProvider('platform_payu')
+                        }}
+                      />
+                    ) : null}
+                    {shepayAvailable ? (
+                      <PaymentOption
+                        selected={paymentMethod === 'online' && onlineProvider === 'shepay'}
+                        title={shepayOnlineCopy.title}
+                        subtitle={shepayOnlineCopy.subtitle}
+                        onPress={() => {
+                          setPaymentMethod('online')
+                          setOnlineProvider('shepay')
+                        }}
+                      />
+                    ) : null}
                     {needsShipping ? (
                       <PaymentOption
                         selected={paymentMethod === 'cod'}
@@ -1287,7 +1486,7 @@ export function CheckoutScreen() {
                   />
                 ) : (
                   <Text fontSize={13} color={c.secondary}>
-                    {onlineCopy.subtitle}
+                    {platformPayuOnlineCopy.subtitle}
                   </Text>
                 )}
               </SectionCard>

@@ -400,6 +400,25 @@ verify_jwt = false
 [functions.shepay-payu-return]
 verify_jwt = false
 
+# Platform PayU (default gateway when vendor has no own provider).
+[functions.platform-payu-initiate]
+verify_jwt = true
+
+[functions.platform-payu-charge]
+verify_jwt = true
+
+[functions.platform-payu-verify]
+verify_jwt = true
+
+[functions.platform-payu-bin]
+verify_jwt = true
+
+[functions.platform-payu-callback]
+verify_jwt = false
+
+[functions.platform-payu-webhook]
+verify_jwt = false
+
 # SHEDelivery partner tracking webhooks (no JWT).
 [functions.shedelivery-webhook]
 verify_jwt = false

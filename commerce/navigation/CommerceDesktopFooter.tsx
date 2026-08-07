@@ -30,7 +30,7 @@ export function CommerceDesktopFooter() {
     : commerceRoutes.createShop
 
   return (
-    <YStack width="100%" flexShrink={0} marginTop="auto">
+    <YStack width="100%" flexShrink={0}>
       <YStack
         backgroundColor={ui.surfaceMuted}
         borderTopWidth={1}

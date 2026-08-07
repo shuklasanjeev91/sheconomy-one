@@ -45,9 +45,17 @@ function useChromelessRoute() {
   const instantMeeting = useInstantMeetingSession()
   // Full-screen meeting lobby + live room — no app header/tabs (Zoom-style).
   // Instant meetings stay on Co-Work (no /live hop) and use InstantMeetingHost.
+  const embedPayuReturn =
+    Platform.OS === 'web' &&
+    typeof window !== 'undefined' &&
+    pathname.startsWith('/orders/payu-return') &&
+    new URLSearchParams(window.location.search).get('embed') === '1'
+
   return (
     !!instantMeeting ||
     pathname.startsWith('/ui-kit') ||
+    pathname.startsWith('/payu-embed-return') ||
+    embedPayuReturn ||
     pathname.startsWith('/co-work/meeting/') ||
     pathname === '/co-work/meeting' ||
     pathname.startsWith('/chat/call/')
@@ -106,13 +114,16 @@ export function AppShell({ children }: AppShellProps) {
     isDesktopWeb &&
     isCommercePath(pathname) &&
     !isCreateShopPath(pathname) &&
-    !isAdminPath(pathname)
+    !isAdminPath(pathname) &&
+    pathname !== '/checkout'
 
   // Chat is a true two-pane app — lock the shell so panes get a definite height.
   // Community / class / co-work / commerce use PageScroll (document on desktop web).
   const lockViewport = isChatPath(pathname)
-  /** Desktop web document pages: grow with content; sticky footer via flexGrow (no minHeight:0). */
+  /** Desktop web document pages: window scroll; main column flexes on short pages. */
   const documentDesktop = Platform.OS === 'web' && isDesktopWeb && !lockViewport
+  const documentDesktopFlex =
+    Platform.OS === 'web' && documentDesktop ? ({ flex: '1 0 auto' } as const) : undefined
   const stretchMainContent =
     lockViewport || Platform.OS !== 'web' || !isDesktopWeb
   const clipShellOverflow =
@@ -155,13 +166,17 @@ export function AppShell({ children }: AppShellProps) {
         <AppBarScrollProvider>
           <DesktopScrollTracker />
           <ScreenFill
-            flex={Platform.OS === 'web' && !stretchMainContent ? undefined : 1}
+            flex={stretchMainContent ? 1 : undefined}
             flexGrow={documentDesktop ? 1 : undefined}
+            flexShrink={documentDesktop ? 0 : undefined}
             flexDirection="column"
             position="relative"
             backgroundColor={ui.background}
             overflow={clipShellOverflow ? 'hidden' : 'visible'}
-            style={lockViewport ? lockedAppShellStyle() : appShellStyle(isDesktopWeb)}
+            style={{
+              ...(lockViewport ? lockedAppShellStyle() : appShellStyle(isDesktopWeb)),
+              ...documentDesktopFlex,
+            }}
           >
             {isDesktop ? <AppDesktopHeader /> : null}
             {!isDesktop && !hideMobileHeader ? (
@@ -175,6 +190,7 @@ export function AppShell({ children }: AppShellProps) {
               width="100%"
               maxWidth="100%"
               minHeight={stretchMainContent ? 0 : undefined}
+              style={documentDesktopFlex}
             >
               {children}
             </YStack>

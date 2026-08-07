@@ -21,8 +21,12 @@ import { useAppUi } from '~/lib/theme/useAppUi'
 export default function PayUReturnRoute() {
   const ui = useAppUi()
   const router = useRouter()
-  const params = useLocalSearchParams<{ status?: string; embed?: string; cg?: string }>()
+  const params = useLocalSearchParams<{ status?: string; embed?: string; cg?: string; txn?: string }>()
   const [message, setMessage] = useState('Confirming payment…')
+
+  const embedParam =
+    String(params.embed ?? '') === '1' ||
+    String(params.embed ?? '').toLowerCase() === 'true'
 
   useEffect(() => {
     let cancelled = false
@@ -30,16 +34,43 @@ export default function PayUReturnRoute() {
       const status = (params.status ?? '').toLowerCase()
       const ok = status === 'success'
       const cgFromUrl = typeof params.cg === 'string' ? params.cg.trim() : ''
-      const embed =
-        String(params.embed ?? '') === '1' ||
-        String(params.embed ?? '').toLowerCase() === 'true'
+      const embed = embedParam
+
+      const pending = await loadPendingOrderSuccess()
+      if (cancelled) return
 
       if (embed && Platform.OS === 'web' && typeof window !== 'undefined') {
         try {
+          if (ok && pending?.orderIds?.length) {
+            await savePendingOrderSuccess({
+              ...pending,
+              awaitingExternalPayment: false,
+            })
+          }
           window.parent?.postMessage(
-            { type: 'payu-embed-return', status: ok ? 'success' : 'failure' },
-            '*',
+            {
+              type: 'payu-embed-return',
+              status: ok ? 'success' : 'failure',
+              txn: typeof params.txn === 'string' ? params.txn : '',
+              orderIds: pending?.orderIds ?? [],
+            },
+            window.location.origin,
           )
+
+          if (window.top && window.top !== window.self) {
+            const origin = window.location.origin
+            const target = ok
+              ? pending?.orderIds?.length
+                ? String(commerceRoutes.orderSuccess(pending.orderIds))
+                : String(commerceRoutes.orders)
+              : String(commerceRoutes.checkout)
+            try {
+              window.top.location.href = target.startsWith('http') ? target : `${origin}${target}`
+            } catch {
+              // sandbox may block — parent postMessage is the primary path
+            }
+          }
+
           setMessage(ok ? 'Payment received' : 'Payment was not completed')
           return
         } catch {
@@ -47,7 +78,6 @@ export default function PayUReturnRoute() {
         }
       }
 
-      const pending = await loadPendingOrderSuccess()
       if (cancelled) return
 
       if (!ok) {
@@ -92,7 +122,18 @@ export default function PayUReturnRoute() {
     return () => {
       cancelled = true
     }
-  }, [params.status, params.embed, params.cg, router])
+  }, [embedParam, params.status, params.cg, params.txn, router])
+
+  if (embedParam && Platform.OS === 'web') {
+    return (
+      <YStack flex={1} alignItems="center" justifyContent="center" gap="$2" padding="$4" minHeight={120}>
+        <Spinner size="small" />
+        <Text color={ui.textSecondary} fontSize={13} textAlign="center">
+          {message}
+        </Text>
+      </YStack>
+    )
+  }
 
   return (
     <FullWidthLayout>
