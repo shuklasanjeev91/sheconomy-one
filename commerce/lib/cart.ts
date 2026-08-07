@@ -5,6 +5,8 @@ import type { Json, Tables } from '~/lib/supabase'
 import { splitCartItems } from '~/commerce/lib/cart-shelf'
 
 const CART_SESSION_KEY = 'sheconomy:cart-session'
+/** AsyncStorage can hang on some iPadOS builds — never block Add to Cart on it. */
+const CART_SESSION_STORAGE_TIMEOUT_MS = 2_500
 
 export type CartRow = Tables<'carts'>
 export type CartItemRow = Tables<'cart_items'>
@@ -17,6 +19,9 @@ export type CartWithItems = {
 
 export { splitCartItems } from '~/commerce/lib/cart-shelf'
 
+/** In-memory fallback so guest carts still work if device storage never resolves. */
+let memoryCartSessionId: string | null = null
+
 async function createSessionId() {
   if (typeof crypto !== 'undefined' && 'randomUUID' in crypto) {
     return crypto.randomUUID()
@@ -24,12 +29,50 @@ async function createSessionId() {
   return `sess_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`
 }
 
+function withStorageTimeout<T>(promise: Promise<T>, ms: number): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    const timer = setTimeout(() => reject(new Error('cart-session-storage-timeout')), ms)
+    promise.then(
+      (value) => {
+        clearTimeout(timer)
+        resolve(value)
+      },
+      (error) => {
+        clearTimeout(timer)
+        reject(error)
+      },
+    )
+  })
+}
+
 export async function getCartSessionId(): Promise<string> {
-  const existing = await AsyncStorage.getItem(CART_SESSION_KEY)
-  if (existing) return existing
+  if (memoryCartSessionId) return memoryCartSessionId
+
+  try {
+    const existing = await withStorageTimeout(
+      AsyncStorage.getItem(CART_SESSION_KEY),
+      CART_SESSION_STORAGE_TIMEOUT_MS,
+    )
+    if (existing) {
+      memoryCartSessionId = existing
+      return existing
+    }
+  } catch {
+    // Fall through to create a session — do not hang purchase CTAs.
+  }
 
   const sessionId = await createSessionId()
-  await AsyncStorage.setItem(CART_SESSION_KEY, sessionId)
+  memoryCartSessionId = sessionId
+  try {
+    void withStorageTimeout(
+      AsyncStorage.setItem(CART_SESSION_KEY, sessionId),
+      CART_SESSION_STORAGE_TIMEOUT_MS,
+    ).catch(() => {
+      // Memory session is enough for this app launch.
+    })
+  } catch {
+    // ignore
+  }
   return sessionId
 }
 

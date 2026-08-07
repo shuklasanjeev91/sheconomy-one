@@ -102,7 +102,7 @@ export function CheckoutScreen() {
   const { isDesktop } = useAppLayout()
   const { user, isAuthenticated } = useProfile()
   const { formatMoney, convertMoney, preferredCurrency } = useFormatCurrency()
-  const { cart, items: cartItems, isLoading, refresh } = useCart()
+  const { cart, items: cartItems, isLoading, refresh, error: cartError } = useCart()
   const { items, hasChecked } = useStorefrontCartItems(cartItems)
   const toast = useAppToast()
 
@@ -404,13 +404,23 @@ export function CheckoutScreen() {
       return
     }
     if (!userId) {
-      // Profile still hydrating — keep the gate until we have an id.
+      // Profile still hydrating — keep the gate until we have an id, but never forever.
       setIsLoadingAddresses(true)
-      return
+      const hydrateTimeout = setTimeout(() => setIsLoadingAddresses(false), 8_000)
+      return () => clearTimeout(hydrateTimeout)
     }
 
     let cancelled = false
     setIsLoadingAddresses(true)
+    const fetchTimeout = setTimeout(() => {
+      if (cancelled) return
+      setIsLoadingAddresses(false)
+      toast.show('Could not load addresses', {
+        tone: 'danger',
+        message: 'Taking too long. You can still enter a new address.',
+      })
+    }, 12_000)
+
     fetchUserAddresses(userId)
       .then(({ addresses: rows, error }) => {
         if (cancelled) return
@@ -425,11 +435,13 @@ export function CheckoutScreen() {
         toast.show('Could not load addresses', { tone: 'danger' })
       })
       .finally(() => {
+        clearTimeout(fetchTimeout)
         if (!cancelled) setIsLoadingAddresses(false)
       })
 
     return () => {
       cancelled = true
+      clearTimeout(fetchTimeout)
     }
   }, [isAuthenticated, toast, userId])
 
@@ -438,8 +450,9 @@ export function CheckoutScreen() {
   }
 
   // Only block the full page on first paint — background cart/address refreshes must not remount.
+  // If cart load failed, fail open instead of spinning forever (App Store 2.1 purchase completeness).
   const showInitialSpinner =
-    (isLoading && cartItems.length === 0) ||
+    (isLoading && cartItems.length === 0 && !cartError) ||
     isLoadingAddresses ||
     (cartItems.length > 0 && !hasChecked)
 

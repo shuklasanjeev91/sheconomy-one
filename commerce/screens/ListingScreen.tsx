@@ -280,7 +280,12 @@ export function ListingScreen({
   const cartItem = findCartItemForListing(cartItems, listing.id, selectedVariantId)
 
   async function handleAddToCart(goToCheckout = false) {
+    if (isAddingToCart || outOfStock) return
     setIsAddingToCart(true)
+    // Hard UI failsafe — never leave the purchase CTA spinning for App Review / flaky networks.
+    const failsafe = setTimeout(() => {
+      setIsAddingToCart(false)
+    }, 15_000)
     try {
       const { error: cartError } = await addToCart(listing.id, {
         quantity: 1,
@@ -304,6 +309,7 @@ export function ListingScreen({
         message: 'Something went wrong. Please try again.',
       })
     } finally {
+      clearTimeout(failsafe)
       setIsAddingToCart(false)
     }
   }

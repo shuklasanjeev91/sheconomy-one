@@ -64,7 +64,7 @@ type CartContextValue = {
 const CartContext = createContext<CartContextValue | null>(null)
 
 /** Prevent Add to Cart / cart refresh from hanging forever on a stuck network call. */
-const CART_OPERATION_TIMEOUT_MS = 20_000
+const CART_OPERATION_TIMEOUT_MS = 12_000
 
 function withCartTimeout<T>(promise: Promise<T>, label: string): Promise<T> {
   return new Promise<T>((resolve, reject) => {
@@ -82,6 +82,11 @@ function withCartTimeout<T>(promise: Promise<T>, label: string): Promise<T> {
       },
     )
   })
+}
+
+/** Run the full Add-to-Cart path under one deadline (session + create + add). */
+async function runCartMutation<T>(label: string, work: () => Promise<T>): Promise<T> {
+  return withCartTimeout(work(), label)
 }
 
 function readCartMetadata(cart: CartRow | null | undefined): Record<string, unknown> {
@@ -185,10 +190,13 @@ export function CartProvider({ children }: { children: ReactNode }) {
 
     try {
       const sessionId = userId ? null : await getCartSessionId()
-      const { cart, error: cartError } = await getOrCreateCart({
-        userId: userId ?? undefined,
-        sessionId,
-      })
+      const { cart, error: cartError } = await withCartTimeout(
+        getOrCreateCart({
+          userId: userId ?? undefined,
+          sessionId,
+        }),
+        'Loading cart',
+      )
 
       if (cartError || !cart) {
         setCartData(null)
@@ -197,10 +205,14 @@ export function CartProvider({ children }: { children: ReactNode }) {
       }
 
       if (cart.status === 'abandoned') {
-        await supabase
-          .from('carts')
-          .update({ status: 'active', last_activity_at: new Date().toISOString() })
-          .eq('id', cart.id)
+        await withCartTimeout(
+          supabase
+            .from('carts')
+            .update({ status: 'active', last_activity_at: new Date().toISOString() })
+            .eq('id', cart.id)
+            .then(() => undefined),
+          'Reactivating cart',
+        ).catch(() => undefined)
       }
 
       const { data, error: itemsError } = await withCartTimeout(
@@ -215,28 +227,32 @@ export function CartProvider({ children }: { children: ReactNode }) {
 
       let next = data
 
-      if (next.cart.applied_discount_id) {
-        const selectedItems = filterSelectedCartItems(next.items)
-        const changed = await reconcileCartDiscount(
-          next.cart,
-          toCartOfferItems(selectedItems),
-        )
-        if (changed) {
-          const fresh = await fetchCartWithItems(cart.id)
-          next = fresh.data ?? next
-        }
-
+      // Discount reconcile is best-effort — never block cart paint / checkout.
+      try {
         if (next.cart.applied_discount_id) {
-          const autoId = readAutoAppliedDiscountId(next.cart)
-          setAutoApplied(autoId === next.cart.applied_discount_id)
+          const selectedItems = filterSelectedCartItems(next.items)
+          const changed = await withCartTimeout(
+            reconcileCartDiscount(next.cart, toCartOfferItems(selectedItems)),
+            'Reconciling cart discount',
+          )
+          if (changed) {
+            const fresh = await withCartTimeout(fetchCartWithItems(cart.id), 'Refreshing cart')
+            next = fresh.data ?? next
+          }
+
+          if (next.cart.applied_discount_id) {
+            const autoId = readAutoAppliedDiscountId(next.cart)
+            setAutoApplied(autoId === next.cart.applied_discount_id)
+          } else {
+            next = await withCartTimeout(tryAutoApply(next), 'Applying cart offer')
+            if (!next.cart.applied_discount_id) setAutoApplied(false)
+          }
         } else {
-          // Discount dropped by reconcile — try best offer again unless opted out.
-          next = await tryAutoApply(next)
+          next = await withCartTimeout(tryAutoApply(next), 'Applying cart offer')
           if (!next.cart.applied_discount_id) setAutoApplied(false)
         }
-      } else {
-        next = await tryAutoApply(next)
-        if (!next.cart.applied_discount_id) setAutoApplied(false)
+      } catch {
+        // Show cart without offers rather than spinning forever.
       }
 
       setCartData(next)
@@ -252,6 +268,13 @@ export function CartProvider({ children }: { children: ReactNode }) {
     if (authLoading) return
     void loadCart()
   }, [authLoading, loadCart])
+
+  // Never leave the cart provider stuck on the initial spinner (App Store 2.1).
+  useEffect(() => {
+    if (!isLoading) return
+    const timer = setTimeout(() => setIsLoading(false), 15_000)
+    return () => clearTimeout(timer)
+  }, [isLoading])
 
   const selectionRevision = useCartSelectionRevision()
 
@@ -315,53 +338,51 @@ export function CartProvider({ children }: { children: ReactNode }) {
       options?: { quantity?: number; variantId?: string | null; personalizationNote?: string | null },
     ) => {
       try {
-        let cartId = cartData?.cart.id
+        // One outer deadline covers session storage + cart create + add RPC.
+        // Use userId (not truthy user object) so a half-hydrated session still gets a guest cart.
+        return await runCartMutation('Adding to cart', async () => {
+          let cartId = cartData?.cart.id
 
-        if (!cartId) {
-          const sessionId = user ? null : await getCartSessionId()
-          const { cart, error: cartError } = await withCartTimeout(
-            getOrCreateCart({
-              userId: user?.id,
+          if (!cartId) {
+            const sessionId = userId ? null : await getCartSessionId()
+            const { cart, error: cartError } = await getOrCreateCart({
+              userId: userId ?? undefined,
               sessionId,
-            }),
-            'Creating cart',
-          )
-          if (cartError || !cart) {
-            return { error: cartError ?? 'Could not create cart' }
+            })
+            if (cartError || !cart) {
+              return { error: cartError ?? 'Could not create cart' }
+            }
+            cartId = cart.id
           }
-          cartId = cart.id
-        }
 
-        const { error: addError } = await withCartTimeout(
-          addListingToCart({
+          const { error: addError } = await addListingToCart({
             cartId,
             listingId,
             quantity: options?.quantity,
             variantId: options?.variantId,
             personalizationNote: options?.personalizationNote,
-          }),
-          'Adding to cart',
-        )
+          })
 
-        if (addError) {
-          return { error: addError }
-        }
+          if (addError) {
+            return { error: addError }
+          }
 
-        trackCommerceEvent('add_to_cart', {
-          currency: 'INR',
-          items: [
-            {
-              id: listingId,
-              name: listingId,
-              quantity: options?.quantity ?? 1,
-            },
-          ],
+          trackCommerceEvent('add_to_cart', {
+            currency: 'INR',
+            items: [
+              {
+                id: listingId,
+                name: listingId,
+                quantity: options?.quantity ?? 1,
+              },
+            ],
+          })
+
+          // Refresh in the background so the Add to Cart button never waits forever
+          // on discount reconcile / secondary cart fetches.
+          void loadCart()
+          return { error: null }
         })
-
-        // Refresh in the background so the Add to Cart button never waits forever
-        // on discount reconcile / secondary cart fetches.
-        void loadCart()
-        return { error: null }
       } catch (error) {
         return {
           error:
@@ -371,7 +392,7 @@ export function CartProvider({ children }: { children: ReactNode }) {
         }
       }
     },
-    [cartData?.cart.id, loadCart, user],
+    [cartData?.cart.id, loadCart, userId],
   )
 
   const updateQuantity = useCallback(
