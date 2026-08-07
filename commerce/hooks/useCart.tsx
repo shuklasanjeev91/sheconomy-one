@@ -338,25 +338,22 @@ export function CartProvider({ children }: { children: ReactNode }) {
       options?: { quantity?: number; variantId?: string | null; personalizationNote?: string | null },
     ) => {
       try {
-        // One outer deadline covers session storage + cart create + add RPC.
-        // Use userId (not truthy user object) so a half-hydrated session still gets a guest cart.
+        // Always resolve the cart for the *current* identity first.
+        // Reusing a stale cartData.id (guest cart after sign-in, or vice versa) makes
+        // add succeed via SECURITY DEFINER while loadCart refreshes an empty cart —
+        // UI looks like Add to Cart did nothing.
         return await runCartMutation('Adding to cart', async () => {
-          let cartId = cartData?.cart.id
-
-          if (!cartId) {
-            const sessionId = userId ? null : await getCartSessionId()
-            const { cart, error: cartError } = await getOrCreateCart({
-              userId: userId ?? undefined,
-              sessionId,
-            })
-            if (cartError || !cart) {
-              return { error: cartError ?? 'Could not create cart' }
-            }
-            cartId = cart.id
+          const sessionId = userId ? null : await getCartSessionId()
+          const { cart, error: cartError } = await getOrCreateCart({
+            userId: userId ?? undefined,
+            sessionId,
+          })
+          if (cartError || !cart) {
+            return { error: cartError ?? 'Could not create cart' }
           }
 
-          const { error: addError } = await addListingToCart({
-            cartId,
+          const { item, error: addError } = await addListingToCart({
+            cartId: cart.id,
             listingId,
             quantity: options?.quantity,
             variantId: options?.variantId,
@@ -365,6 +362,34 @@ export function CartProvider({ children }: { children: ReactNode }) {
 
           if (addError) {
             return { error: addError }
+          }
+
+          // Optimistic UI — flip sticky bar to Checkout immediately.
+          if (item) {
+            setCartData((prev) => {
+              const baseItems =
+                prev?.cart.id === cart.id ? prev.items.filter((row) => row.id !== item.id) : []
+              const baseSaved =
+                prev?.cart.id === cart.id
+                  ? prev.savedItems.filter((row) => row.id !== item.id)
+                  : []
+              const nextItems = [...baseItems, item]
+              const itemsSubtotal = nextItems.reduce(
+                (sum, row) => sum + (row.total_price ?? row.unit_price * row.quantity),
+                0,
+              )
+              return {
+                cart: {
+                  ...cart,
+                  items_subtotal: itemsSubtotal,
+                  total_amount: itemsSubtotal - (cart.discount_amount ?? 0),
+                },
+                items: nextItems,
+                savedItems: baseSaved,
+              }
+            })
+            setIsLoading(false)
+            setError(null)
           }
 
           trackCommerceEvent('add_to_cart', {
@@ -378,8 +403,6 @@ export function CartProvider({ children }: { children: ReactNode }) {
             ],
           })
 
-          // Refresh in the background so the Add to Cart button never waits forever
-          // on discount reconcile / secondary cart fetches.
           void loadCart()
           return { error: null }
         })
@@ -392,7 +415,7 @@ export function CartProvider({ children }: { children: ReactNode }) {
         }
       }
     },
-    [cartData?.cart.id, loadCart, userId],
+    [loadCart, userId],
   )
 
   const updateQuantity = useCallback(

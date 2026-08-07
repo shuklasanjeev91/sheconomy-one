@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState, memo } from 'react'
+import { Alert, Platform } from 'react-native'
 import { useParams } from 'one'
 import { AppLink } from '~/components/navigation/AppLink'
 import {
@@ -285,7 +286,7 @@ export function ListingScreen({
     // Hard UI failsafe — never leave the purchase CTA spinning for App Review / flaky networks.
     const failsafe = setTimeout(() => {
       setIsAddingToCart(false)
-    }, 15_000)
+    }, 12_000)
     try {
       const { error: cartError } = await addToCart(listing.id, {
         quantity: 1,
@@ -294,20 +295,31 @@ export function ListingScreen({
       })
 
       if (cartError) {
-        toast.show('Could not add to cart', { tone: 'danger', message: cartError })
+        toast.show('Could not add to cart', { tone: 'danger', message: cartError, duration: 5000 })
+        if (Platform.OS !== 'web') {
+          Alert.alert('Could not add to cart', cartError)
+        }
         return
       }
 
       setPersonalizationNote('')
-      toast.show('Added to cart', { tone: 'success' })
+      toast.show('Added to cart', { tone: 'success', duration: 2500 })
       if (goToCheckout) {
         navigateApp(commerceRoutes.checkout)
       }
-    } catch {
+    } catch (error) {
+      const message =
+        error instanceof Error && error.message
+          ? error.message
+          : 'Something went wrong. Please try again.'
       toast.show('Could not add to cart', {
         tone: 'danger',
-        message: 'Something went wrong. Please try again.',
+        message,
+        duration: 5000,
       })
+      if (Platform.OS !== 'web') {
+        Alert.alert('Could not add to cart', message)
+      }
     } finally {
       clearTimeout(failsafe)
       setIsAddingToCart(false)

@@ -1,12 +1,12 @@
 import '~/lib/supabase/setup-polyfill'
 
-import AsyncStorage from '@react-native-async-storage/async-storage'
 import { createClient } from '@supabase/supabase-js'
 import { Platform } from 'react-native'
 
 import type { Database } from '~/lib/supabase/database.types'
 import { supabaseConfig } from '~/lib/supabase/env'
 import { getRealtimeTransport } from '~/lib/supabase/realtime-ws'
+import { safeAuthStorage } from '~/lib/supabase/safe-auth-storage'
 
 const authOptions = {
   flowType: 'pkce' as const,
@@ -32,7 +32,7 @@ export const supabase = createClient<Database>(
     : {
         auth: {
           ...authOptions,
-          storage: AsyncStorage,
+          storage: safeAuthStorage,
         },
         ...(realtime ? { realtime } : {}),
       },

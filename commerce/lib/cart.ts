@@ -166,7 +166,8 @@ export async function addListingToCart(options: {
       data.item_metadata && typeof data.item_metadata === 'object' && !Array.isArray(data.item_metadata)
         ? (data.item_metadata as Record<string, unknown>)
         : {}
-    const { error: noteError } = await supabase
+    // Best-effort — never block the Add to Cart CTA on note persistence.
+    void supabase
       .from('cart_items')
       .update({
         item_metadata: { ...existing, personalization_note: note },
@@ -174,13 +175,14 @@ export async function addListingToCart(options: {
       })
       .eq('id', data.id)
       .eq('cart_id', options.cartId)
-    if (noteError) {
-      // Item is already in the cart; note is best-effort.
-      console.warn('[cart] personalization note update failed', noteError.message)
-    }
+      .then(({ error: noteError }) => {
+        if (noteError) {
+          console.warn('[cart] personalization note update failed', noteError.message)
+        }
+      })
   }
 
-  // Totals + analytics must not block Add to Cart UI (hung RPCs looked like infinite loading).
+  // Totals already run inside add_to_cart RPC — do not await secondary writes on the CTA path.
   void supabase.rpc('update_cart_totals', { p_cart_id: options.cartId })
   void recordCartAddAnalytics({
     cartId: options.cartId,
