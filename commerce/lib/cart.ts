@@ -1,5 +1,6 @@
 import AsyncStorage from '@react-native-async-storage/async-storage'
 
+import { fetchAddToCart, fetchGetOrCreateCart } from '~/commerce/lib/cart-rpc-fetch'
 import { supabase } from '~/lib/supabase/client'
 import type { Json, Tables } from '~/lib/supabase'
 import { splitCartItems } from '~/commerce/lib/cart-shelf'
@@ -81,17 +82,10 @@ export async function getOrCreateCart(options: {
   sessionId?: string | null
 }): Promise<{ cart: CartRow | null; error: string | null }> {
   const sessionId = options.sessionId ?? (options.userId ? null : await getCartSessionId())
-
-  const { data, error } = await supabase.rpc('get_or_create_cart', {
-    p_user_id: options.userId ?? undefined,
-    p_session_id: sessionId ?? undefined,
+  return fetchGetOrCreateCart({
+    userId: options.userId ?? null,
+    sessionId,
   })
-
-  if (error) {
-    return { cart: null, error: error.message }
-  }
-
-  return { cart: data, error: null }
 }
 
 export async function fetchCartItems(cartId: string): Promise<{
@@ -149,15 +143,15 @@ export async function addListingToCart(options: {
   /** Optional buyer note / personalization stored on the cart line. */
   personalizationNote?: string | null
 }): Promise<{ item: CartItemRow | null; error: string | null }> {
-  const { data, error } = await supabase.rpc('add_to_cart', {
-    p_cart_id: options.cartId,
-    p_listing_id: options.listingId,
-    p_quantity: options.quantity ?? 1,
-    p_variant_id: options.variantId ?? undefined,
+  const { item: data, error } = await fetchAddToCart({
+    cartId: options.cartId,
+    listingId: options.listingId,
+    quantity: options.quantity,
+    variantId: options.variantId,
   })
 
   if (error) {
-    return { item: null, error: error.message }
+    return { item: null, error }
   }
 
   const note = options.personalizationNote?.trim()

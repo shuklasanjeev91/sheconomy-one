@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, memo } from 'react'
+import { useEffect, useMemo, useRef, useState, memo } from 'react'
 import { Alert, Platform } from 'react-native'
 import { useParams } from 'one'
 import { AppLink } from '~/components/navigation/AppLink'
@@ -181,11 +181,19 @@ export function ListingScreen({
   const [activeImageIndex, setActiveImageIndex] = useState(0)
   const [galleryLightboxOpen, setGalleryLightboxOpen] = useState(false)
   const [isAddingToCart, setIsAddingToCart] = useState(false)
+  const [optimisticInCart, setOptimisticInCart] = useState(false)
+  const addingRef = useRef(false)
   const [isUpdatingQuantity, setIsUpdatingQuantity] = useState(false)
   const [personalizationNote, setPersonalizationNote] = useState('')
   const [returnPolicy, setReturnPolicy] = useState<ListingReturnPolicy | null>(null)
   const variationGroups = useMemo(() => groupListingVariations(variations), [variations])
   const [variantSelection, setVariantSelection] = useState<Record<string, string>>({})
+
+  useEffect(() => {
+    setOptimisticInCart(false)
+    addingRef.current = false
+    setIsAddingToCart(false)
+  }, [listing?.id])
 
   useEffect(() => {
     setGalleryLightboxOpen(false)
@@ -279,51 +287,58 @@ export function ListingScreen({
   const selectedVariantId = selectedVariations[0]?.id ?? null
   const outOfStock = displayStock === 0
   const cartItem = findCartItemForListing(cartItems, listing.id, selectedVariantId)
+  const showInCart = Boolean(cartItem) || optimisticInCart
 
-  async function handleAddToCart(goToCheckout = false) {
-    if (isAddingToCart || outOfStock) return
+  function handleAddToCart(goToCheckout = false) {
+    if (addingRef.current || outOfStock) return
+    addingRef.current = true
     setIsAddingToCart(true)
-    // Hard UI failsafe — never leave the purchase CTA spinning for App Review / flaky networks.
-    const failsafe = setTimeout(() => {
-      setIsAddingToCart(false)
-    }, 12_000)
-    try {
-      const { error: cartError } = await addToCart(listing.id, {
-        quantity: 1,
-        variantId: selectedVariantId,
-        personalizationNote: personalizationNote.trim() || null,
-      })
+    // Unlock the CTA immediately — never leave App Review staring at a spinner.
+    // Network work continues in the background; failures roll back optimistic UI.
+    setOptimisticInCart(true)
+    setIsAddingToCart(false)
 
-      if (cartError) {
-        toast.show('Could not add to cart', { tone: 'danger', message: cartError, duration: 5000 })
-        if (Platform.OS !== 'web') {
-          Alert.alert('Could not add to cart', cartError)
+    void (async () => {
+      try {
+        const { error: cartError } = await addToCart(listing.id, {
+          quantity: 1,
+          variantId: selectedVariantId,
+          personalizationNote: personalizationNote.trim() || null,
+        })
+
+        if (cartError) {
+          setOptimisticInCart(false)
+          toast.show('Could not add to cart', { tone: 'danger', message: cartError, duration: 5000 })
+          if (Platform.OS !== 'web') {
+            Alert.alert('Could not add to cart', cartError)
+          }
+          return
         }
-        return
-      }
 
-      setPersonalizationNote('')
-      toast.show('Added to cart', { tone: 'success', duration: 2500 })
-      if (goToCheckout) {
-        navigateApp(commerceRoutes.checkout)
+        setPersonalizationNote('')
+        toast.show('Added to cart', { tone: 'success', duration: 2500 })
+        if (goToCheckout) {
+          navigateApp(commerceRoutes.checkout)
+        }
+      } catch (error) {
+        setOptimisticInCart(false)
+        const message =
+          error instanceof Error && error.message
+            ? error.message
+            : 'Something went wrong. Please try again.'
+        toast.show('Could not add to cart', {
+          tone: 'danger',
+          message,
+          duration: 5000,
+        })
+        if (Platform.OS !== 'web') {
+          Alert.alert('Could not add to cart', message)
+        }
+      } finally {
+        addingRef.current = false
+        setIsAddingToCart(false)
       }
-    } catch (error) {
-      const message =
-        error instanceof Error && error.message
-          ? error.message
-          : 'Something went wrong. Please try again.'
-      toast.show('Could not add to cart', {
-        tone: 'danger',
-        message,
-        duration: 5000,
-      })
-      if (Platform.OS !== 'web') {
-        Alert.alert('Could not add to cart', message)
-      }
-    } finally {
-      clearTimeout(failsafe)
-      setIsAddingToCart(false)
-    }
+    })()
   }
 
   async function handleQuantityChange(nextQuantity: number) {
@@ -608,9 +623,9 @@ export function ListingScreen({
           priceIncludesTax={listing.price_includes_tax}
           taxPercent={listing.tax_percent}
           currency={currency}
-          disabled={outOfStock && !cartItem}
+          disabled={outOfStock && !showInCart}
           isLoading={isAddingToCart}
-          inCart={!!cartItem}
+          inCart={showInCart}
           quantity={cartItem?.quantity ?? 1}
           maxQuantity={displayStock}
           isUpdatingQuantity={isUpdatingQuantity}
@@ -784,14 +799,14 @@ export function ListingScreen({
         onChange={setPersonalizationNote}
       />
 
-      {cartItem ? (
+      {showInCart ? (
         <XStack gap="$3" flexWrap="wrap" alignItems="center">
           <ListingQuantityStepper
-            quantity={cartItem.quantity}
+            quantity={cartItem?.quantity ?? 1}
             maxQuantity={displayStock}
-            disabled={isUpdatingQuantity}
-            onDecrease={() => handleQuantityChange(cartItem.quantity - 1)}
-            onIncrease={() => handleQuantityChange(cartItem.quantity + 1)}
+            disabled={isUpdatingQuantity || !cartItem}
+            onDecrease={() => cartItem && handleQuantityChange(cartItem.quantity - 1)}
+            onIncrease={() => cartItem && handleQuantityChange(cartItem.quantity + 1)}
           />
           <Theme name={BRAND_THEME}>
             <Button
@@ -815,11 +830,10 @@ export function ListingScreen({
               flex={1}
               minWidth={200}
               borderRadius={999}
-              disabled={isAddingToCart || outOfStock}
+              disabled={addingRef.current || outOfStock}
               onPress={() => handleAddToCart(false)}
-              icon={isAddingToCart ? <Spinner size="small" color="white" /> : undefined}
             >
-              {outOfStock ? 'Out of stock' : isAddingToCart ? 'Adding…' : 'Add to cart'}
+              {outOfStock ? 'Out of stock' : 'Add to cart'}
             </Button>
           </Theme>
           <Button
@@ -828,7 +842,7 @@ export function ListingScreen({
             borderRadius={999}
             flex={1}
             minWidth={200}
-            disabled={isAddingToCart || outOfStock}
+            disabled={addingRef.current || outOfStock}
             onPress={() => handleAddToCart(true)}
           >
             {buyNowLabel}
