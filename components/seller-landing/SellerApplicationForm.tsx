@@ -25,7 +25,7 @@ import { useAuth } from '~/hooks/useAuth'
 import { useAppLayout } from '~/hooks/useAppLayout'
 import { useProfile } from '~/hooks/useProfile'
 import { isValidPhone } from '~/lib/phone/phone'
-import { vendorRoutes } from '~/lib/routes'
+import { commerceRoutes, vendorRoutes } from '~/lib/routes'
 import { createShop } from '~/lib/shop/shop.store'
 import { COMMON_SHOP_CATEGORIES, type Shop } from '~/lib/shop/shop.type'
 import { generateShopSlug } from '~/lib/shop/shop.utils'
@@ -655,9 +655,8 @@ export function SellerApplicationForm() {
 
   const handleFaceVerified = useCallback(() => {
     // ── Advance the form immediately so the modal closes in this render cycle.
-    // Doing this before any await prevents the success screen's "Continue"
-    // button (which calls onClose = handleVerificationRetry) from firing after
-    // the modal is already in a verified state, which was resetting the form.
+    // Doing this before any await prevents a post-success dismiss handler from
+    // resetting the form after verification already succeeded.
     setIsGenderVerified(true)
     setCurrentStep(3)
     toast.show('Identity verified — set up your shop!', { tone: 'success' })
@@ -716,11 +715,15 @@ export function SellerApplicationForm() {
     }
   }, [userId, profile?.id, toast])
 
-  const handleVerificationRetry = () => {
-    setCurrentStep(1)
+  /** App Store 5.1.1 — face check is optional; skip returns to limited browsing. */
+  const handleVerificationSkip = useCallback(() => {
     setIsGenderVerified(false)
-    toast.show('Verification reset — start over with OTP.', { tone: 'error' })
-  }
+    setCurrentStep(1)
+    toast.show('Skipped verification — you can still use Commerce, Classes, and Co-Work.', {
+      tone: 'success',
+    })
+    router.push(commerceRoutes.home)
+  }, [router, toast])
 
   // ─────────────────────────────────────────────────────────────────────────
   // Shop creation
@@ -1724,11 +1727,11 @@ export function SellerApplicationForm() {
         )}
       </YStack>
 
-      {/* Face verification modal — renders on step 2, non-dismissible */}
+      {/* Face verification modal — skip always available (camera data optional). */}
       <GenderVerificationModal
         open={currentStep === 2 && !isGenderVerified}
-        dismissible={false}
-        onClose={handleVerificationRetry}
+        dismissible
+        onClose={handleVerificationSkip}
         onVerified={handleFaceVerified}
       />
     </YStack>

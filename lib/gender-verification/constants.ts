@@ -23,7 +23,9 @@ export const GENDER_VERIFICATION = {
    * Native capture cadence. takePictureAsync is slow; a short interval only
    * queues work behind processingRef — prefer fewer, lighter frames.
    */
-  nativeFrameIntervalMs: 220,
+  nativeFrameIntervalMs: 400,
+  /** Wait after onCameraReady before takePicture — photo output dims need a beat after Allow. */
+  nativeCameraSettleMs: 1200,
   /** Downscale side length before Human.detect in the native WebView. */
   nativeDetectMaxSide: 480,
   faceApiModelBaseUrl: 'https://cdn.jsdelivr.net/npm/@vladmandic/face-api@1.7.15/model',

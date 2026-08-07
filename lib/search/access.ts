@@ -44,10 +44,10 @@ export function searchScopeGateHref(tier: AccessTier, scope: SearchScope): strin
     if (tier === 'guest') return String(buildSignInUrl(String(communityRoutes.people)))
     return String(appRoutes.verifyGender)
   }
-  if (CLASS_SCOPES.includes(scope) && tier === 'guest') {
+  if (CLASS_SCOPES.includes(scope) && !canAccessSearchScope(tier, scope)) {
     return String(buildSignInUrl(String(classRoutes.home)))
   }
-  if (COWORK_SCOPES.includes(scope) && tier === 'guest') {
+  if (COWORK_SCOPES.includes(scope) && !canAccessSearchScope(tier, scope)) {
     return String(buildSignInUrl(String(coWorkRoutes.meetings)))
   }
   return String(appRoutes.signIn)

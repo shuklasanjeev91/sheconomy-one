@@ -2,8 +2,8 @@ import { test, expect, type Page } from '@playwright/test'
 
 /**
  * Guest-tier interaction smoke.
- * Community / Chat / account require verified female access — guests must land
- * on sign-in (that redirect is the functional behavior we assert).
+ * All center tabs stay visible. Community / Chat / account still gate guests
+ * to sign-in (or verification for signed-in limited members).
  */
 
 function attachPageErrors(page: Page) {
@@ -28,14 +28,16 @@ async function gotoHydrated(page: Page, path: string) {
 }
 
 test.describe('guest product navigation (web)', () => {
-  test('commerce home exposes center nav', async ({ page }) => {
+  test('commerce home exposes all center nav tabs', async ({ page }) => {
     const pageErrors = await gotoHydrated(page, '/')
     expect(pageErrors).toEqual([])
-    // Desktop center nav is icon-first; accessible name comes from aria-label / title.
-    await expect(page.getByRole('link', { name: /community/i }).first()).toBeVisible({
+    await expect(page.getByRole('link', { name: /commerce/i }).first()).toBeVisible({
       timeout: 20_000,
     })
+    await expect(page.getByRole('link', { name: /community/i }).first()).toBeVisible()
     await expect(page.getByRole('link', { name: /chat/i }).first()).toBeVisible()
+    await expect(page.getByRole('link', { name: /classes/i }).first()).toBeVisible()
+    await expect(page.getByRole('link', { name: /co-work/i }).first()).toBeVisible()
   })
 
   test('guest community route shows sign-in (access gate)', async ({ page }) => {

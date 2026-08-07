@@ -37,6 +37,7 @@ function isSuppressedRoute(pathname: string): boolean {
  *
  * - Protected routes are blocked in {@link AppAccessGate}; unverified members are
  *   redirected to their last safe route and see {@link GenderDeniedModal}.
+ * - Verification is optional — Skip keeps Commerce / Classes / Co-Work access.
  * - "Verify myself" opens {@link GenderVerificationModal}; flow state persists
  *   across redirect so the liveness check is not interrupted.
  */

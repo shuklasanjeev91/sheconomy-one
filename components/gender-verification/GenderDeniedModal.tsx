@@ -103,8 +103,8 @@ export function GenderDeniedModal({ open, onClose, onVerify }: GenderDeniedModal
               This platform is built for women
             </Text>
             <Text fontSize={13} color={ui.textSecondary} lineHeight={20}>
-              Our marketplace and community are designed to support women entrepreneurs and business
-              owners. Some seller features stay locked until you verify.
+              Community, Chat, and some seller tools stay locked until you verify. You can skip and
+              still use Commerce, Classes, and Co-Work.
             </Text>
           </YStack>
 
@@ -120,8 +120,8 @@ export function GenderDeniedModal({ open, onClose, onVerify }: GenderDeniedModal
             </Text>
             {[
               'Browse and purchase products',
+              'Join Classes and Co-Work sessions',
               'Support women-owned businesses',
-              'Access community and educational content',
             ].map((item) => (
               <XStack key={item} gap="$2" alignItems="flex-start">
                 <Icons.Check size={15} color={ui.brand} />
@@ -141,7 +141,7 @@ export function GenderDeniedModal({ open, onClose, onVerify }: GenderDeniedModal
               Verify myself
             </Button>
             <Button tone="outline" size="$4" borderRadius={radius.pill} onPress={onClose}>
-              I understand
+              Skip — continue browsing
             </Button>
           </YStack>
         </ScrollView>
