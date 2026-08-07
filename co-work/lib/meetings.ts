@@ -15,6 +15,38 @@ const MEETING_SELECT =
 const PARTICIPANT_SELECT =
   'id, meeting_id, user_id, status, is_host, is_muted, is_video_off, joined_at, left_at, profile:profiles!meeting_participants_user_id_fkey(full_name, username, avatar_url)'
 
+/** Keep meetings listed until 24h after the same anchor used for display time. */
+export const MEETING_LIST_RETENTION_MS = 24 * 60 * 60 * 1000
+
+type MeetingTimeFields = Pick<Meeting, 'scheduled_at' | 'started_at' | 'created_at'>
+
+/** Same timestamp shown via formatWhen: scheduled → started → created. */
+export function getMeetingAnchorAt(meeting: MeetingTimeFields): Date | null {
+  const raw = meeting.scheduled_at ?? meeting.started_at ?? meeting.created_at
+  if (!raw) return null
+  const date = new Date(raw)
+  return Number.isFinite(date.getTime()) ? date : null
+}
+
+export function getMeetingRetentionExpiresAt(meeting: MeetingTimeFields): Date | null {
+  const anchor = getMeetingAnchorAt(meeting)
+  if (!anchor) return null
+  return new Date(anchor.getTime() + MEETING_LIST_RETENTION_MS)
+}
+
+export function isMeetingPastRetention(meeting: MeetingTimeFields, nowMs = Date.now()): boolean {
+  const expiresAt = getMeetingRetentionExpiresAt(meeting)
+  if (!expiresAt) return false
+  return nowMs >= expiresAt.getTime()
+}
+
+export function filterMeetingsWithinRetention<T extends MeetingTimeFields>(
+  meetings: T[],
+  nowMs = Date.now(),
+): T[] {
+  return meetings.filter((meeting) => !isMeetingPastRetention(meeting, nowMs))
+}
+
 function parseJson<T>(value: unknown): T | null {
   if (!value || typeof value !== 'object') return null
   return value as T
@@ -127,7 +159,10 @@ export async function fetchHostedMeetings(userId: string): Promise<Meeting[]> {
     .limit(50)
 
   if (error) throw new Error(error.message)
-  return (data ?? []).map((row) => mapMeeting(row as Record<string, unknown>))
+  const meetings = (data ?? []).map((row) => mapMeeting(row as Record<string, unknown>))
+  // Expire first so retention filtering cannot skip the soft-delete write.
+  await expireHostedMeetingsPastRetention(meetings, userId)
+  return filterMeetingsWithinRetention(meetings)
 }
 
 /** Meetings the user hosts or is invited to as a participant. */
@@ -146,6 +181,7 @@ export function mergeHostedAndInvitedMeetings(
 }
 
 export async function fetchMyMeetings(userId: string): Promise<Meeting[]> {
+  // Hosted path already expires + filters meetings past the 24h retention window.
   const hosted = await fetchHostedMeetings(userId)
 
   const { data: participantRows, error } = await supabase
@@ -171,7 +207,9 @@ export async function fetchMyMeetings(userId: string): Promise<Meeting[]> {
     .in('status', ['scheduled', 'instant', 'active'])
     .order('scheduled_at', { ascending: true, nullsFirst: false })
 
-  const invited = (invitedMeetings ?? []).map((row) => mapMeeting(row as Record<string, unknown>))
+  const invited = filterMeetingsWithinRetention(
+    (invitedMeetings ?? []).map((row) => mapMeeting(row as Record<string, unknown>)),
+  )
   return mergeHostedAndInvitedMeetings(hosted, invited)
 }
 
@@ -187,7 +225,9 @@ export async function fetchUpcomingMeetings(): Promise<Meeting[]> {
     .limit(30)
 
   if (error) throw new Error(error.message)
-  return (data ?? []).map((row) => mapMeeting(row as Record<string, unknown>))
+  return filterMeetingsWithinRetention(
+    (data ?? []).map((row) => mapMeeting(row as Record<string, unknown>)),
+  )
 }
 
 export async function fetchMeetingByCode(code: string): Promise<Meeting | null> {
@@ -225,7 +265,9 @@ export async function searchMeetings(query: string, limit = 12): Promise<Meeting
     .limit(limit)
 
   if (error) throw new Error(error.message)
-  return (data ?? []).map((row) => mapMeeting(row as Record<string, unknown>))
+  return filterMeetingsWithinRetention(
+    (data ?? []).map((row) => mapMeeting(row as Record<string, unknown>)),
+  )
 }
 
 export async function createMeeting(hostId: string, input: CreateMeetingInput): Promise<Meeting> {
@@ -345,6 +387,28 @@ export async function endMeeting(meetingId: string): Promise<void> {
     .update({ status: 'left', left_at: now })
     .eq('meeting_id', meetingId)
     .eq('status', 'admitted')
+}
+
+/** Soft-delete hosted meetings that are past the 24h retention window. */
+export async function expireHostedMeetingsPastRetention(
+  meetings: Meeting[],
+  hostUserId: string,
+  nowMs = Date.now(),
+): Promise<void> {
+  const expiredHosted = meetings.filter(
+    (meeting) => meeting.host_id === hostUserId && isMeetingPastRetention(meeting, nowMs),
+  )
+  if (!expiredHosted.length) return
+
+  await Promise.all(
+    expiredHosted.map(async (meeting) => {
+      try {
+        await endMeeting(meeting.id)
+      } catch {
+        // Best-effort: list filtering still hides expired rows if persist fails.
+      }
+    }),
+  )
 }
 
 export async function verifyMeetingPasscode(meetingId: string, passcode: string): Promise<boolean> {
