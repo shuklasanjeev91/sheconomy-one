@@ -22,7 +22,6 @@ export const SKILL_PROFICIENCY_OPTIONS = [
   'Beginner',
   'Intermediate',
   'Advanced',
-  'Expert',
 ] as const
 
 export const LANGUAGE_PROFICIENCY_OPTIONS = [
@@ -142,10 +141,15 @@ export function educationInputFromRow(row: ProfileEducation): EducationInput {
   }
 }
 
+function capitalizeFirst(s: string): string {
+  if (!s) return s
+  return s.charAt(0).toUpperCase() + s.slice(1)
+}
+
 export function skillInputFromRow(row: ProfileSkill): SkillInput {
   return {
     skill_name: row.skill_name,
-    proficiency_level: row.proficiency_level ?? '',
+    proficiency_level: row.proficiency_level ? capitalizeFirst(row.proficiency_level) : '',
     years_of_experience:
       row.years_of_experience != null ? String(row.years_of_experience) : '',
   }
@@ -320,7 +324,7 @@ export async function createSkill(userId: string, input: SkillInput): Promise<{ 
   const { error } = await supabase.from('skills').insert({
     user_id: userId,
     skill_name: input.skill_name.trim(),
-    proficiency_level: trimOrNull(input.proficiency_level),
+    proficiency_level: trimOrNull(input.proficiency_level)?.toLowerCase() ?? null,
     years_of_experience: parseYearsExperience(input.years_of_experience),
   })
 
@@ -339,7 +343,7 @@ export async function updateSkill(
     .from('skills')
     .update({
       skill_name: input.skill_name.trim(),
-      proficiency_level: trimOrNull(input.proficiency_level),
+      proficiency_level: trimOrNull(input.proficiency_level)?.toLowerCase() ?? null,
       years_of_experience: parseYearsExperience(input.years_of_experience),
     })
     .eq('id', id)
