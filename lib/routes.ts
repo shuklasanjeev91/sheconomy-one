@@ -51,6 +51,12 @@ const NON_COMMERCE_PREFIXES = [
   '/sellerlanding',
 ] as const
 
+/** Public CMS blog — listing + article reader. */
+export const blogRoutes = {
+  home: '/blog' as Href,
+  post: (slug: string) => `/blog/${encodeURIComponent(slug)}` as Href,
+} as const
+
 export const commerceRoutes = {
   home: '/' as Href,
   /** Guided multi-step seller onboarding for any signed-in member without a shop. */
@@ -199,6 +205,7 @@ export const routes = {
   signUp: appRoutes.signUp,
   verifyGender: appRoutes.verifyGender,
   commerce: commerceRoutes,
+  blog: blogRoutes,
   vendor: vendorRoutes,
   community: communityRoutes,
   chat: chatRoutes,

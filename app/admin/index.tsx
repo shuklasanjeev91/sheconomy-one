@@ -526,7 +526,6 @@ function AdminDashboard() {
             { label: 'Payments', href: '/admin/payments' as Href, icon: Icons.CreditCard },
             { label: 'Categories', href: '/admin/categories' as Href, icon: Icons.Package },
             { label: 'CMS', href: '/admin/cms' as Href, icon: Icons.Settings },
-            { label: 'Blog', href: '/admin/blog' as Href, icon: Icons.FileText },
           ].map((action) => (
             <Button key={action.label} tone="outline" icon={action.icon} onPress={() => router.push(action.href)}>
               {action.label}

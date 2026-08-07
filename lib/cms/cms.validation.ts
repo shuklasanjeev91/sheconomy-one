@@ -356,9 +356,11 @@ export const listContentParamsSchema = z.object({
 })
 
 export const listCommentsParamsSchema = z.object({
-  content_id: uuidSchema,
+  content_id: uuidSchema.optional(),
   parent_id: uuidSchema.optional().nullable(),
   is_approved: z.boolean().optional(),
+  is_flagged: z.boolean().optional(),
+  search: trimString(z.string().max(200)).optional(),
   page: z.number().int().min(1).default(1),
   limit: z.number().int().min(1).max(100).default(20),
 })

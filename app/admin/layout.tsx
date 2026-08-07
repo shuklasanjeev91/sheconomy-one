@@ -1,10 +1,11 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Platform } from 'react-native'
 import { Slot, usePathname, useRouter } from 'one'
 import { SpaRedirect } from '~/components/navigation/SpaRedirect'
 import type { Href } from 'one'
 
 import { RequireAdmin } from '~/components/auth/RouteGuard'
+import { CMS_NAV_ITEMS } from '~/app/admin/components/cms/cmsNav'
 import { Icons, ScrollView, Text, XStack, YStack } from '~/components/ui'
 import { getShadowStyle, radius } from '~/config/tokens'
 import { useAppLayout } from '~/hooks/useAppLayout'
@@ -20,6 +21,7 @@ type AdminNavItem = {
   description: string
   icon: IconType
   href: Href
+  children?: AdminNavItem[]
 }
 
 type AdminNavGroup = {
@@ -122,15 +124,15 @@ const NAV_GROUPS: AdminNavGroup[] = [
         id: 'cms',
         label: 'CMS',
         description: 'Edit platform content, landing pages, and editorial blocks.',
-        icon: Icons.Settings,
-        href: '/admin/cms' as Href,
-      },
-      {
-        id: 'blog',
-        label: 'Blog',
-        description: 'Browse CMS posts, engagement, authors, and article details.',
         icon: Icons.FileText,
-        href: '/admin/blog' as Href,
+        href: '/admin/cms' as Href,
+        children: CMS_NAV_ITEMS.map((item) => ({
+          id: `cms-${item.id}`,
+          label: item.label,
+          description: item.description,
+          icon: item.icon,
+          href: item.href,
+        })),
       },
     ],
   },
@@ -188,8 +190,13 @@ export function AdminLayout() {
   const pathname = usePathname()
   const [collapsed, setCollapsed] = useState(false)
   const [drawerOpen, setDrawerOpen] = useState(false)
+  const [cmsOpen, setCmsOpen] = useState(() => pathname.startsWith('/admin/cms'))
 
   const active = getActiveNavItem(pathname)
+
+  useEffect(() => {
+    if (pathname.startsWith('/admin/cms')) setCmsOpen(true)
+  }, [pathname])
 
   function handleSelect(item: AdminNavItem) {
     setDrawerOpen(false)
@@ -238,6 +245,9 @@ export function AdminLayout() {
               ui={ui}
               collapsed={collapsed}
               activeId={active.id}
+              pathname={pathname}
+              cmsOpen={cmsOpen}
+              onToggleCms={() => setCmsOpen((value) => !value)}
               onSelect={handleSelect}
               onToggleCollapse={() => setCollapsed((value) => !value)}
             />
@@ -338,6 +348,9 @@ export function AdminLayout() {
                 ui={ui}
                 collapsed={false}
                 activeId={active.id}
+                pathname={pathname}
+                cmsOpen={cmsOpen}
+                onToggleCms={() => setCmsOpen((value) => !value)}
                 onSelect={handleSelect}
                 onClose={() => setDrawerOpen(false)}
               />
@@ -358,6 +371,9 @@ type AdminSidebarProps = {
   ui: AppUiTokens
   collapsed: boolean
   activeId: string
+  pathname: string
+  cmsOpen: boolean
+  onToggleCms: () => void
   onSelect: (item: AdminNavItem) => void
   onToggleCollapse?: () => void
   onClose?: () => void
@@ -367,6 +383,9 @@ function AdminSidebar({
   ui,
   collapsed,
   activeId,
+  pathname,
+  cmsOpen,
+  onToggleCms,
   onSelect,
   onToggleCollapse,
   onClose,
@@ -447,16 +466,59 @@ function AdminSidebar({
                   {group.title}
                 </Text>
               ) : null}
-              {group.items.map((item) => (
-                <AdminNavRow
-                  key={item.id}
-                  ui={ui}
-                  item={item}
-                  active={item.id === activeId}
-                  collapsed={collapsed}
-                  onPress={() => onSelect(item)}
-                />
-              ))}
+              {group.items.map((item) => {
+                const hasChildren = Boolean(item.children?.length)
+                const childActive =
+                  hasChildren &&
+                  item.children!.some((child) => {
+                    const href = String(child.href).replace(/\/+$/, '')
+                    const current = pathname.replace(/\/+$/, '')
+                    return current === href || current.startsWith(`${href}/`)
+                  })
+                const parentActive = item.id === activeId || childActive
+
+                return (
+                  <YStack key={item.id} gap="$1">
+                    <AdminNavRow
+                      ui={ui}
+                      item={item}
+                      active={parentActive && !hasChildren}
+                      collapsed={collapsed}
+                      expanded={hasChildren ? cmsOpen : undefined}
+                      onPress={() => {
+                        if (hasChildren && !collapsed) {
+                          onToggleCms()
+                          if (!cmsOpen) onSelect(item)
+                          return
+                        }
+                        onSelect(item)
+                      }}
+                    />
+                    {hasChildren && cmsOpen && !collapsed
+                      ? item.children!.map((child) => {
+                          const href = String(child.href).replace(/\/+$/, '')
+                          const current = pathname.replace(/\/+$/, '')
+                          const exact =
+                            href === '/admin/cms'
+                              ? current === href
+                              : current === href || current.startsWith(`${href}/`)
+                          return (
+                            <XStack key={child.id} paddingLeft="$4">
+                              <AdminNavRow
+                                ui={ui}
+                                item={child}
+                                active={exact}
+                                collapsed={false}
+                                dense
+                                onPress={() => onSelect(child)}
+                              />
+                            </XStack>
+                          )
+                        })
+                      : null}
+                  </YStack>
+                )
+              })}
             </YStack>
           ))}
         </YStack>
@@ -529,17 +591,27 @@ type AdminNavRowProps = {
   item: AdminNavItem
   active: boolean
   collapsed: boolean
+  dense?: boolean
+  expanded?: boolean
   onPress: () => void
 }
 
-function AdminNavRow({ ui, item, active, collapsed, onPress }: AdminNavRowProps) {
+function AdminNavRow({
+  ui,
+  item,
+  active,
+  collapsed,
+  dense,
+  expanded,
+  onPress,
+}: AdminNavRowProps) {
   const Icon = item.icon ?? Icons.Circle
 
   return (
     <XStack
       alignItems="center"
       gap="$2.5"
-      paddingVertical="$2.5"
+      paddingVertical={dense ? '$2' : '$2.5'}
       paddingHorizontal={collapsed ? 0 : '$2'}
       justifyContent={collapsed ? 'center' : 'flex-start'}
       borderRadius={radius.chip}
@@ -549,18 +621,26 @@ function AdminNavRow({ ui, item, active, collapsed, onPress }: AdminNavRowProps)
       hoverStyle={{ backgroundColor: active ? ui.brand : ui.surfaceMuted }}
       pressStyle={{ opacity: 0.85 }}
       onPress={onPress}
+      width="100%"
     >
-      <Icon size={20} color={active ? ui.onBrand : ui.textSecondary} />
+      <Icon size={dense ? 16 : 20} color={active ? ui.onBrand : ui.textSecondary} />
       {!collapsed ? (
         <Text
           flex={1}
-          fontSize={14}
+          fontSize={dense ? 13 : 14}
           fontWeight={active ? '700' : '500'}
           color={active ? ui.onBrand : ui.text}
           numberOfLines={1}
         >
           {item.label}
         </Text>
+      ) : null}
+      {!collapsed && expanded !== undefined ? (
+        expanded ? (
+          <Icons.ChevronDown size={16} color={active ? ui.onBrand : ui.textSecondary} />
+        ) : (
+          <Icons.ChevronRight size={16} color={active ? ui.onBrand : ui.textSecondary} />
+        )
       ) : null}
     </XStack>
   )

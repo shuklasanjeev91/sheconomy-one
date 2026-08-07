@@ -156,9 +156,11 @@ export type CmsListMediaParams = {
 }
 
 export type CmsListCommentsParams = {
-  content_id: string
+  content_id?: string
   parent_id?: string | null
   is_approved?: boolean
+  is_flagged?: boolean
+  search?: string
   page?: number
   limit?: number
 }

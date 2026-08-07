@@ -32,14 +32,17 @@ declare module 'one' {
         | `/admin`
         | `/admin/`
         | `/admin/analytics`
-        | `/admin/blog`
         | `/admin/cart`
         | `/admin/categories`
         | `/admin/cms`
+        | `/admin/cms/categories`
+        | `/admin/cms/comments`
+        | `/admin/cms/media`
+        | `/admin/cms/new`
+        | `/admin/cms/redirects`
+        | `/admin/cms/tags`
         | `/admin/company-pages`
         | `/admin/components/AdminAnalyticsManager`
-        | `/admin/components/AdminBlogDetail`
-        | `/admin/components/AdminBlogManager`
         | `/admin/components/AdminCmsManager`
         | `/admin/components/AdminCompanyPagesManager`
         | `/admin/components/AdminGroupsManager`
@@ -47,6 +50,19 @@ declare module 'one' {
         | `/admin/components/AdminSettingsManager`
         | `/admin/components/AdminShopsManager`
         | `/admin/components/CmsCoverImage`
+        | `/admin/components/cms/AdminCmsCategoriesPage`
+        | `/admin/components/cms/AdminCmsCommentsPage`
+        | `/admin/components/cms/AdminCmsContentForm`
+        | `/admin/components/cms/AdminCmsContentList`
+        | `/admin/components/cms/AdminCmsMediaPage`
+        | `/admin/components/cms/AdminCmsRedirectsPage`
+        | `/admin/components/cms/AdminCmsTagsPage`
+        | `/admin/components/cms/CmsMarkdownEditor`
+        | `/admin/components/cms/CmsMediaPickerPanel`
+        | `/admin/components/cms/CmsPageShell`
+        | `/admin/components/cms/CmsSeoFields`
+        | `/admin/components/cms/CmsTagsInput`
+        | `/admin/components/cms/cmsNav`
         | `/admin/groups`
         | `/admin/layout`
         | `/admin/orders`
@@ -64,6 +80,7 @@ declare module 'one' {
         | `/auth/sign-in`
         | `/auth/sign-up`
         | `/auth/verify-gender`
+        | `/blog`
         | `/browse`
         | `/cart`
         | `/category`
@@ -168,7 +185,8 @@ declare module 'one' {
         | `/(store)/shop/${OneRouter.SingleRoutePart<T>}/returns`
         | `/(store)/shop/${OneRouter.SingleRoutePart<T>}/shipping`
         | `/(store)/shop/${OneRouter.SingleRoutePart<T>}/terms`
-        | `/admin/blog/${OneRouter.SingleRoutePart<T>}`
+        | `/admin/cms/${OneRouter.SingleRoutePart<T>}`
+        | `/blog/${OneRouter.SingleRoutePart<T>}`
         | `/browse/${OneRouter.SingleRoutePart<T>}`
         | `/category/${OneRouter.SingleRoutePart<T>}`
         | `/chat/${OneRouter.SingleRoutePart<T>}`
@@ -210,7 +228,8 @@ declare module 'one' {
         | `/(store)/shop/[slug]/returns`
         | `/(store)/shop/[slug]/shipping`
         | `/(store)/shop/[slug]/terms`
-        | `/admin/blog/[id]`
+        | `/admin/cms/[id]`
+        | `/blog/[slug]`
         | `/browse/[kind]`
         | `/category/[slug]`
         | `/chat/[id]`
@@ -253,7 +272,8 @@ declare module 'one' {
         '/(store)/shop/[slug]/returns': RouteInfo<{ slug: string }>
         '/(store)/shop/[slug]/shipping': RouteInfo<{ slug: string }>
         '/(store)/shop/[slug]/terms': RouteInfo<{ slug: string }>
-        '/admin/blog/[id]': RouteInfo<{ id: string }>
+        '/admin/cms/[id]': RouteInfo<{ id: string }>
+        '/blog/[slug]': RouteInfo<{ slug: string }>
         '/browse/[kind]': RouteInfo<{ kind: string }>
         '/category/[slug]': RouteInfo<{ slug: string }>
         '/chat/[id]': RouteInfo<{ id: string }>

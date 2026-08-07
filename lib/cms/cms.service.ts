@@ -952,21 +952,34 @@ export async function listComments(
   params: CmsListCommentsParams,
 ): Promise<CmsServiceResponse<CmsCommentWithAuthor[]>> {
   try {
-    const { content_id, parent_id, is_approved, page = 1, limit = 20 } = params
+    const {
+      content_id,
+      parent_id,
+      is_approved,
+      is_flagged,
+      search,
+      page = 1,
+      limit = 20,
+    } = params
     const { from, to } = pageToRange(page, limit)
 
     let q = supabase
       .from('cms_blog_comments')
       .select(COMMENT_SELECT, { count: 'exact' })
-      .eq('content_id', content_id)
       .is('deleted_at', null)
-      .order('created_at', { ascending: true })
+      .order('created_at', { ascending: content_id ? true : false })
       .range(from, to)
 
+    if (content_id) q = q.eq('content_id', content_id)
     if (parent_id !== undefined) {
       q = parent_id === null ? q.is('parent_id', null) : q.eq('parent_id', parent_id)
     }
     if (is_approved !== undefined) q = q.eq('is_approved', is_approved)
+    if (is_flagged !== undefined) q = q.eq('is_flagged', is_flagged)
+    if (search?.trim()) {
+      const term = search.trim().replace(/[%_]/g, '')
+      if (term) q = q.ilike('body', `%${term}%`)
+    }
 
     const { data, error, count } = await q
     if (error) throw error

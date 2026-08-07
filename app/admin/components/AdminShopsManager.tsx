@@ -1,17 +1,15 @@
 import { useEffect, useMemo, useState, type ReactNode } from 'react'
 
 import {
+  ImageUploadField,
+  preparePickedImagesForUpload,
+} from '~/components/media/ImageUploadField'
+import {
   Badge,
   Button,
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogOverlay,
-  DialogTitle,
   Icons,
   Image,
   Input,
-  ScrollView,
   Select,
   SelectContent,
   SelectItem,
@@ -27,10 +25,14 @@ import {
 import { PhoneInput } from '~/components/forms/PhoneInput'
 import { getShadowStyle, radius } from '~/config/tokens'
 import { useAppLayout } from '~/hooks/useAppLayout'
+import { useUploadProgress } from '~/hooks/useUploadProgress'
 import { useAppDispatch, useAppSelector } from '~/lib/store/hooks'
+import type { PickedImage } from '~/lib/media/pick-image'
 import { validateShopField } from '~/lib/shop/shop.validation'
 import { optionalUrl, slug as slugValidator } from '~/lib/validation'
 import { supabase } from '~/lib/supabase'
+import { uploadShopLogoImage } from '~/lib/supabase/storage-upload'
+import { useSupabase } from '~/providers/SupabaseProvider'
 import {
   adminUpdateShop,
   createShop,
@@ -54,6 +56,7 @@ const PAGE_SIZE = 20
 type ShopStatusFilter = 'all' | 'active' | 'inactive'
 type VerificationFilter = 'all' | 'verified' | 'pending'
 type FormMode = 'create' | 'edit'
+type AdminShopView = 'list' | 'details' | 'editor'
 
 type OwnerProfile = {
   id: string
@@ -106,6 +109,7 @@ const EMPTY_FORM: ShopFormState = {
 export function AdminShopsManager() {
   const dispatch = useAppDispatch()
   const toast = useAppToast()
+  const { user } = useSupabase()
   const { isDesktop, safeBottom } = useAppLayout()
   const {
     adminShops,
@@ -124,15 +128,17 @@ export function AdminShopsManager() {
   const [verificationFilter, setVerificationFilter] = useState<VerificationFilter>('all')
   const [categoryFilter, setCategoryFilter] = useState('all')
   const [selectedShopId, setSelectedShopId] = useState<string | null>(null)
-  const [detailsOpen, setDetailsOpen] = useState(false)
+  const [view, setView] = useState<AdminShopView>('list')
   const [formMode, setFormMode] = useState<FormMode>('create')
-  const [formOpen, setFormOpen] = useState(false)
   const [form, setForm] = useState<ShopFormState>(EMPTY_FORM)
+  const [logoImages, setLogoImages] = useState<PickedImage[]>([])
+  const [isUploadingLogo, setIsUploadingLogo] = useState(false)
   const [ownerProfilesById, setOwnerProfilesById] = useState<Record<string, OwnerProfile>>({})
+  const { progress: uploadProgress, track: trackUpload, reset: resetUpload } = useUploadProgress()
 
   const selectedShop = adminShops.find((shop) => shop.id === selectedShopId) ?? adminShops[0] ?? null
   const selectedOwner = selectedShop ? ownerProfilesById[selectedShop.user_id] ?? null : null
-  const isBusy = isCreating || isUpdating || isDeleting
+  const isBusy = isCreating || isUpdating || isDeleting || isUploadingLogo
 
   const filters = useMemo(
     () => ({
@@ -192,7 +198,7 @@ export function AdminShopsManager() {
 
   function openShopDetails(shopId: string) {
     setSelectedShopId(shopId)
-    setDetailsOpen(true)
+    setView('details')
   }
 
   function loadMore() {
@@ -207,7 +213,9 @@ export function AdminShopsManager() {
   function openCreateForm() {
     setFormMode('create')
     setForm(EMPTY_FORM)
-    setFormOpen(true)
+    setLogoImages([])
+    resetUpload()
+    setView('editor')
   }
 
   function openEditForm(shop: Shop) {
@@ -227,71 +235,114 @@ export function AdminShopsManager() {
       seoTitle: shop.seo_title ?? '',
       seoDescription: shop.seo_description ?? '',
     })
-    setFormOpen(true)
+    setLogoImages([])
+    resetUpload()
+    setView('editor')
   }
 
   async function submitForm() {
     const categories = splitCsv(form.categoriesText)
 
-    if (formMode === 'create') {
-      const created = await dispatch(
-        createShop({
-          userId: form.ownerUserId.trim() || undefined,
-          formData: {
-            shop_name: form.shop_name.trim(),
-            shop_description: form.shop_description.trim(),
-            logo_url: form.logo_url.trim(),
-            website_url: form.website_url.trim(),
-            shop_phone_number: form.shop_phone_number.trim(),
-            shop_email: form.shop_email.trim(),
-            shop_currency: form.shop_currency.trim().toUpperCase() || 'INR',
-            shop_categories: categories,
-          },
-        }),
-      ).unwrap()
+    async function uploadSelectedLogo(shopId: string, ownerUserId: string) {
+      if (!logoImages.length) return form.logo_url
+      if (!user?.id) throw new Error('You must be signed in to upload a shop image.')
 
-      if (created?.id && (form.slug || form.seoTitle || form.seoDescription)) {
-        await dispatch(
-          adminUpdateShop({
-            shopId: created.id,
-            updates: {
-              slug: nullableText(form.slug),
-              seo_title: nullableText(form.seoTitle),
-              seo_description: nullableText(form.seoDescription),
+      setIsUploadingLogo(true)
+      const [file] = await preparePickedImagesForUpload(logoImages.slice(0, 1))
+      if (!file) throw new Error('Please select a valid image.')
+
+      // Prefer the shop owner's folder so storage paths stay with the storefront.
+      const storageUserId = ownerUserId.trim() || user.id
+      trackUpload(1)
+      const { data, error: uploadError } = await uploadShopLogoImage(
+        storageUserId,
+        shopId,
+        file,
+        { onProgress: trackUpload },
+      )
+      if (uploadError || !data) {
+        throw new Error(uploadError ?? 'Shop logo upload failed.')
+      }
+      return data.publicUrl
+    }
+
+    try {
+      if (formMode === 'create') {
+        const created = await dispatch(
+          createShop({
+            userId: form.ownerUserId.trim() || undefined,
+            formData: {
+              shop_name: form.shop_name.trim(),
+              shop_description: form.shop_description.trim(),
+              logo_url: '',
+              website_url: form.website_url.trim(),
+              shop_phone_number: form.shop_phone_number.trim(),
+              shop_email: form.shop_email.trim(),
+              shop_currency: form.shop_currency.trim().toUpperCase() || 'INR',
+              shop_categories: categories,
             },
           }),
         ).unwrap()
+
+        if (!created?.id) throw new Error('The shop could not be created.')
+        const ownerUserId = created.user_id || form.ownerUserId.trim() || user?.id || ''
+        const logoUrl = await uploadSelectedLogo(created.id, ownerUserId)
+        const hasPostCreateUpdates =
+          Boolean(logoUrl) || Boolean(form.slug || form.seoTitle || form.seoDescription)
+
+        if (hasPostCreateUpdates) {
+          await dispatch(
+            adminUpdateShop({
+              shopId: created.id,
+              updates: {
+                logo_url: nullableText(logoUrl),
+                slug: nullableText(form.slug),
+                seo_title: nullableText(form.seoTitle),
+                seo_description: nullableText(form.seoDescription),
+              },
+            }),
+          ).unwrap()
+        }
+
+        setSelectedShopId(created.id)
+        toast.show('Shop created', {
+          tone: 'success',
+          message: 'The shop and uploaded logo were saved.',
+        })
+      } else {
+        if (!selectedShop) return
+        const logoUrl = await uploadSelectedLogo(selectedShop.id, selectedShop.user_id)
+        const updates: ShopUpdate = {
+          shop_name: form.shop_name.trim(),
+          shop_description: nullableText(form.shop_description),
+          logo_url: nullableText(logoUrl),
+          website_url: nullableText(form.website_url),
+          shop_phone_number: nullableText(form.shop_phone_number),
+          shop_email: nullableText(form.shop_email),
+          shop_currency: form.shop_currency.trim().toUpperCase() || 'INR',
+          shop_categories: categories,
+          slug: nullableText(form.slug),
+          seo_title: nullableText(form.seoTitle),
+          seo_description: nullableText(form.seoDescription),
+        }
+
+        await dispatch(adminUpdateShop({ shopId: selectedShop.id, updates })).unwrap()
+        toast.show('Shop updated', { tone: 'success' })
       }
 
-      if (created?.id) setSelectedShopId(created.id)
-      setFormOpen(false)
-      toast.show('Shop created', {
-        tone: 'success',
-        message: 'Successfully shop created.',
-      })
+      setLogoImages([])
+      resetUpload()
+      setView('details')
       dispatch(loadPlatformStats())
       dispatch(loadAdminShops({ filters, pagination: { limit: PAGE_SIZE, offset: 0 } }))
-      return
+    } catch (submitError) {
+      toast.show(formMode === 'create' ? 'Could not create shop' : 'Could not update shop', {
+        tone: 'danger',
+        message: submitError instanceof Error ? submitError.message : 'Try again.',
+      })
+    } finally {
+      setIsUploadingLogo(false)
     }
-
-    if (!selectedShop) return
-
-    const updates: ShopUpdate = {
-      shop_name: form.shop_name.trim(),
-      shop_description: nullableText(form.shop_description),
-      logo_url: nullableText(form.logo_url),
-      website_url: nullableText(form.website_url),
-      shop_phone_number: nullableText(form.shop_phone_number),
-      shop_email: nullableText(form.shop_email),
-      shop_currency: form.shop_currency.trim().toUpperCase() || 'INR',
-      shop_categories: categories,
-      slug: nullableText(form.slug),
-      seo_title: nullableText(form.seoTitle),
-      seo_description: nullableText(form.seoDescription),
-    }
-
-    await dispatch(adminUpdateShop({ shopId: selectedShop.id, updates })).unwrap()
-    setFormOpen(false)
   }
 
   async function toggleVerified(shop: Shop) {
@@ -307,64 +358,88 @@ export function AdminShopsManager() {
   async function softDeleteShop(shop: Shop) {
     await dispatch(deleteShop(shop.id)).unwrap()
     dispatch(loadPlatformStats())
+    setView('list')
   }
 
   return (
     <YStack width="100%" gap="$4" paddingHorizontal={isDesktop ? '$6' : '$4'} paddingTop="$5" paddingBottom={safeBottom + 28}>
-      <AdminShopHeader
-        total={totalAdminShops}
-        platformStats={platformStats}
-        onCreate={openCreateForm}
-      />
-
       {error ? (
         <YStack padding="$3" borderRadius={radius.card} backgroundColor="$red3" borderWidth={1} borderColor="$red7">
           <Text color="$red11" fontWeight="700">{error}</Text>
         </YStack>
       ) : null}
 
-      <AdminShopFilters
-        search={search}
-        statusFilter={statusFilter}
-        verificationFilter={verificationFilter}
-        categoryFilter={categoryFilter}
-        onSearchChange={setSearch}
-        onStatusChange={setStatusFilter}
-        onVerificationChange={setVerificationFilter}
-        onCategoryChange={setCategoryFilter}
-      />
+      {view === 'list' ? (
+        <>
+          <AdminShopHeader
+            total={totalAdminShops}
+            platformStats={platformStats}
+            onCreate={openCreateForm}
+          />
+          <AdminShopFilters
+            search={search}
+            statusFilter={statusFilter}
+            verificationFilter={verificationFilter}
+            categoryFilter={categoryFilter}
+            onSearchChange={setSearch}
+            onStatusChange={setStatusFilter}
+            onVerificationChange={setVerificationFilter}
+            onCategoryChange={setCategoryFilter}
+          />
+          <AdminShopList
+            shops={adminShops}
+            selectedShopId={selectedShop?.id ?? null}
+            loading={isLoadingShops}
+            hasMore={hasMoreAdminShops}
+            total={totalAdminShops}
+            onSelect={openShopDetails}
+            onLoadMore={loadMore}
+          />
+        </>
+      ) : null}
 
-      <AdminShopList
-        shops={adminShops}
-        selectedShopId={selectedShop?.id ?? null}
-        loading={isLoadingShops}
-        hasMore={hasMoreAdminShops}
-        total={totalAdminShops}
-        onSelect={openShopDetails}
-        onLoadMore={loadMore}
-      />
+      {view === 'details' ? (
+        <YStack gap="$4" width="100%" maxWidth={1180} alignSelf="center">
+          <XStack alignItems="center" justifyContent="space-between" gap="$3" flexWrap="wrap">
+            <Button tone="ghost" icon={Icons.ArrowLeft} onPress={() => setView('list')}>
+              Back to shops
+            </Button>
+            {selectedShop ? (
+              <Button icon={Icons.Pencil} onPress={() => openEditForm(selectedShop)}>
+                Edit shop
+              </Button>
+            ) : null}
+          </XStack>
+          {selectedShop ? (
+            <ShopDetailsPanel
+              shop={selectedShop}
+              owner={selectedOwner}
+              busy={isBusy}
+              onEdit={() => openEditForm(selectedShop)}
+              onToggleVerified={() => toggleVerified(selectedShop)}
+              onToggleActive={() => toggleActive(selectedShop)}
+              onDelete={() => softDeleteShop(selectedShop)}
+            />
+          ) : (
+            <EmptyPanel title="No shop selected" description="Return to the shop list and select a shop." />
+          )}
+        </YStack>
+      ) : null}
 
-      <ShopDetailsDialog
-        open={detailsOpen}
-        shop={selectedShop}
-        owner={selectedOwner}
-        busy={isBusy}
-        onOpenChange={setDetailsOpen}
-        onEdit={() => selectedShop && openEditForm(selectedShop)}
-        onToggleVerified={() => selectedShop && toggleVerified(selectedShop)}
-        onToggleActive={() => selectedShop && toggleActive(selectedShop)}
-        onDelete={() => selectedShop && softDeleteShop(selectedShop)}
-      />
-
-      <ShopEditorDialog
-        open={formOpen}
-        mode={formMode}
-        form={form}
-        busy={isBusy}
-        onOpenChange={setFormOpen}
-        onChange={(patch) => setForm((current) => ({ ...current, ...patch }))}
-        onSubmit={submitForm}
-      />
+      {view === 'editor' ? (
+        <ShopEditorPage
+          mode={formMode}
+          form={form}
+          currentLogoUrl={formMode === 'edit' ? form.logo_url : null}
+          logoImages={logoImages}
+          uploadProgress={uploadProgress}
+          busy={isBusy}
+          onCancel={() => setView(formMode === 'edit' ? 'details' : 'list')}
+          onLogoImagesChange={setLogoImages}
+          onChange={(patch) => setForm((current) => ({ ...current, ...patch }))}
+          onSubmit={submitForm}
+        />
+      ) : null}
     </YStack>
   )
 }
@@ -674,69 +749,6 @@ function ShopRow({ shop, active, onPress }: { shop: Shop; active: boolean; onPre
   )
 }
 
-function ShopDetailsDialog({
-  open,
-  shop,
-  owner,
-  busy,
-  onOpenChange,
-  onEdit,
-  onToggleVerified,
-  onToggleActive,
-  onDelete,
-}: {
-  open: boolean
-  shop: Shop | null
-  owner: OwnerProfile | null
-  busy: boolean
-  onOpenChange: (open: boolean) => void
-  onEdit: () => void
-  onToggleVerified: () => void
-  onToggleActive: () => void
-  onDelete: () => void
-}) {
-  return (
-    <Dialog modal open={open} onOpenChange={onOpenChange}>
-      <Dialog.Portal>
-        <DialogOverlay />
-        <DialogContent maxWidth={960} maxHeight="92vh" width="94%" padding={0} overflow="hidden">
-          <YStack
-            padding="$5"
-            paddingTop="$6"
-            paddingRight="$10"
-            gap="$3"
-            backgroundColor="$color2"
-            borderBottomWidth={1}
-            borderBottomColor="$borderColor"
-          >
-            <YStack gap="$1">
-              <DialogTitle>{shop?.shop_name ?? 'Shop details'}</DialogTitle>
-              <DialogDescription>
-                Review the shop, owner profile, SEO, tax, metadata, and admin controls.
-              </DialogDescription>
-            </YStack>
-          </YStack>
-          <ScrollView maxHeight="74vh" showsVerticalScrollIndicator={false} contentContainerStyle={{ padding: 20 }}>
-            {shop ? (
-              <ShopDetailsPanel
-                shop={shop}
-                owner={owner}
-                busy={busy}
-                onEdit={onEdit}
-                onToggleVerified={onToggleVerified}
-                onToggleActive={onToggleActive}
-                onDelete={onDelete}
-              />
-            ) : (
-              <EmptyPanel title="No shop selected" description="Select a shop to view details." />
-            )}
-          </ScrollView>
-        </DialogContent>
-      </Dialog.Portal>
-    </Dialog>
-  )
-}
-
 export function ShopDetailsPanel({
   shop,
   owner,
@@ -866,28 +878,34 @@ export function ShopDetailsPanel({
   )
 }
 
-function ShopEditorDialog({
-  open,
+function ShopEditorPage({
   mode,
   form,
+  currentLogoUrl,
+  logoImages,
+  uploadProgress,
   busy,
-  onOpenChange,
+  onCancel,
+  onLogoImagesChange,
   onChange,
   onSubmit,
 }: {
-  open: boolean
   mode: FormMode
   form: ShopFormState
+  currentLogoUrl: string | null
+  logoImages: PickedImage[]
+  uploadProgress: number | null
   busy: boolean
-  onOpenChange: (open: boolean) => void
+  onCancel: () => void
+  onLogoImagesChange: (images: PickedImage[]) => void
   onChange: (patch: Partial<ShopFormState>) => void
   onSubmit: () => void
 }) {
   const [fieldErrors, setFieldErrors] = useState<Partial<Record<keyof ShopFormState, string>>>({})
 
   useEffect(() => {
-    if (!open) setFieldErrors({})
-  }, [open])
+    setFieldErrors({})
+  }, [mode])
 
   function patchField(patch: Partial<ShopFormState>) {
     onChange(patch)
@@ -911,7 +929,6 @@ function ShopEditorDialog({
         'shop_email',
         'shop_phone_number',
         'website_url',
-        'logo_url',
         'shop_currency',
         'slug',
       ] as const
@@ -925,17 +942,39 @@ function ShopEditorDialog({
   }
 
   return (
-    <Dialog modal open={open} onOpenChange={onOpenChange}>
-      <Dialog.Portal>
-        <DialogOverlay />
-        <DialogContent maxWidth={760} maxHeight="90vh" width="92%">
-          <DialogTitle>{mode === 'create' ? 'Create shop' : 'Edit shop'}</DialogTitle>
-          <DialogDescription>
-            Fill the shop details, contact information, categories, and SEO metadata.
-          </DialogDescription>
+    <YStack width="100%" maxWidth={1180} alignSelf="center" gap="$4">
+      <XStack alignItems="center" justifyContent="space-between" gap="$3" flexWrap="wrap">
+        <Button tone="ghost" icon={Icons.ArrowLeft} onPress={onCancel} disabled={busy}>
+          Back
+        </Button>
+        <Button onPress={handleSubmit} disabled={busy || !form.shop_name.trim()}>
+          {busy ? 'Saving...' : mode === 'create' ? 'Create shop' : 'Save changes'}
+        </Button>
+      </XStack>
 
-          <ScrollView maxHeight="68vh" showsVerticalScrollIndicator={false}>
-            <YStack gap="$3" paddingRight="$1">
+      <YStack gap="$1">
+        <Text fontSize={26} fontWeight="800" color="$color12">
+          {mode === 'create' ? 'Create shop' : 'Edit shop'}
+        </Text>
+        <Text color="$color10">
+          Add storefront details, upload the shop logo, and configure search metadata.
+        </Text>
+      </YStack>
+
+      <XStack gap="$4" alignItems="flex-start" flexWrap="wrap">
+        <YStack
+          flex={2}
+          minWidth={280}
+          gap="$4"
+          padding="$4"
+          borderRadius={radius.card}
+          borderWidth={1}
+          borderColor="$borderColor"
+          backgroundColor="$background"
+          style={getShadowStyle('sm')}
+        >
+          <Text fontSize={16} fontWeight="800" color="$color12">Shop information</Text>
+          <YStack gap="$3">
               {mode === 'create' ? (
                 <Field label="Owner user id">
                   <Input value={form.ownerUserId} onChangeText={(ownerUserId) => patchField({ ownerUserId })} placeholder="Owner UUID, optional if current user is owner" />
@@ -985,14 +1024,6 @@ function ShopEditorDialog({
                   invalid={Boolean(fieldErrors.website_url)}
                 />
               </Field>
-              <Field label="Logo URL" error={fieldErrors.logo_url}>
-                <Input
-                  value={form.logo_url}
-                  onChangeText={(logo_url) => patchField({ logo_url })}
-                  placeholder="https://..."
-                  invalid={Boolean(fieldErrors.logo_url)}
-                />
-              </Field>
               <XStack gap="$3" flexWrap="wrap">
                 <YStack flex={1} minWidth={160}>
                   <Field label="Currency" error={fieldErrors.shop_currency}>
@@ -1011,6 +1042,60 @@ function ShopEditorDialog({
                   </Field>
                 </YStack>
               </XStack>
+          </YStack>
+        </YStack>
+
+        <YStack flex={1} minWidth={280} gap="$4">
+          <YStack
+            gap="$3"
+            padding="$4"
+            borderRadius={radius.card}
+            borderWidth={1}
+            borderColor="$borderColor"
+            backgroundColor="$background"
+            style={getShadowStyle('sm')}
+          >
+            <Text fontSize={16} fontWeight="800" color="$color12">Shop logo</Text>
+            {currentLogoUrl && logoImages.length === 0 ? (
+              <XStack alignItems="center" gap="$3">
+                <Image
+                  source={{ uri: currentLogoUrl }}
+                  width={72}
+                  height={72}
+                  borderRadius={radius.card}
+                  backgroundColor="$color3"
+                />
+                <YStack flex={1} gap="$1">
+                  <Text fontWeight="700" color="$color12">Current logo</Text>
+                  <Text fontSize={12} color="$color10">
+                    Drop a new image below to replace it.
+                  </Text>
+                </YStack>
+              </XStack>
+            ) : null}
+            <ImageUploadField
+              label={currentLogoUrl ? 'Replace logo' : 'Upload logo'}
+              value={logoImages}
+              onChange={onLogoImagesChange}
+              aspect="square"
+              disabled={busy}
+              hint="Drag and drop an image or browse your device. PNG, JPG, WebP, or GIF up to 8 MB."
+              uploadProgress={uploadProgress}
+              uploadLabel="Uploading to shop-images…"
+            />
+          </YStack>
+
+          <YStack
+            gap="$3"
+            padding="$4"
+            borderRadius={radius.card}
+            borderWidth={1}
+            borderColor="$borderColor"
+            backgroundColor="$background"
+            style={getShadowStyle('sm')}
+          >
+            <Text fontSize={16} fontWeight="800" color="$color12">Search and sharing</Text>
+            <YStack gap="$3">
               <Field label="Slug" error={fieldErrors.slug}>
                 <Input
                   value={form.slug}
@@ -1026,17 +1111,17 @@ function ShopEditorDialog({
                 <TextArea value={form.seoDescription} onChangeText={(seoDescription) => patchField({ seoDescription })} placeholder="Search description" />
               </Field>
             </YStack>
-          </ScrollView>
+          </YStack>
+        </YStack>
+      </XStack>
 
-          <XStack gap="$2" justifyContent="flex-end" flexWrap="wrap">
-            <Button tone="outline" onPress={() => onOpenChange(false)} disabled={busy}>Cancel</Button>
-            <Button onPress={handleSubmit} disabled={busy || !form.shop_name.trim()}>
-              {busy ? 'Saving...' : mode === 'create' ? 'Create shop' : 'Save changes'}
-            </Button>
-          </XStack>
-        </DialogContent>
-      </Dialog.Portal>
-    </Dialog>
+      <XStack gap="$2" justifyContent="flex-end" flexWrap="wrap">
+        <Button tone="outline" onPress={onCancel} disabled={busy}>Cancel</Button>
+        <Button onPress={handleSubmit} disabled={busy || !form.shop_name.trim()}>
+          {busy ? 'Saving...' : mode === 'create' ? 'Create shop' : 'Save changes'}
+        </Button>
+      </XStack>
+    </YStack>
   )
 }
 

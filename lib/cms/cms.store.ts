@@ -181,21 +181,28 @@ function seoRecordKey(seo: CmsSeo): string {
 // ============= CONTENT THUNKS =============
 
 export const loadContents = createAsyncThunk<
-  { items: CmsContentDetail[]; meta: CmsPaginationMeta; filters: CmsListContentParams },
-  Partial<CmsListContentParams> | undefined,
+  {
+    items: CmsContentDetail[]
+    meta: CmsPaginationMeta
+    filters: CmsListContentParams
+    append: boolean
+  },
+  (Partial<CmsListContentParams> & { append?: boolean }) | undefined,
   ThunkConfig
 >('cms/loadContents', async (overrides = {}, { getState, rejectWithValue }) => {
   try {
+    const { append = false, ...filterOverrides } = overrides
     const current = getState().cms.contentFilters
     const params = parseOrThrow(listContentParamsSchema, {
       ...current,
-      ...overrides,
+      ...filterOverrides,
     })
     const result = await resolveResponse(cmsService.listContents(params), rejectWithValue)
     return {
       items: result.data,
       meta: result.meta ?? emptyMeta(params.limit),
       filters: params,
+      append,
     }
   } catch (err) {
     return rejectWithValue(err instanceof Error ? err.message : 'Failed to load content.')
@@ -797,13 +804,14 @@ const cmsSlice = createSlice({
       .addCase(loadContents.pending, (state, action) => {
         setFetching(state)
         state.contentError = null
-        state.contentFilters = { ...state.contentFilters, ...action.meta.arg }
+        const { append: _append, ...filters } = action.meta.arg ?? {}
+        state.contentFilters = { ...state.contentFilters, ...filters }
       })
       .addCase(loadContents.fulfilled, (state, action) => {
         clearFetching(state)
-        const page = action.payload.meta.page
-        state.items =
-          page > 1 ? [...state.items, ...action.payload.items] : action.payload.items
+        state.items = action.payload.append
+          ? [...state.items, ...action.payload.items]
+          : action.payload.items
         state.contentMeta = action.payload.meta
         state.contentFilters = action.payload.filters
       })

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useState } from 'react'
 import { Platform } from 'react-native'
 
 import {
@@ -152,6 +152,9 @@ export function ImageUploadField({
 
       if (!picked.length) return
 
+      if (!multiple) {
+        value.forEach(revokeWebBlobUrl)
+      }
       onChange(multiple ? [...value, ...picked].slice(0, maxCount) : picked)
     } catch (error) {
       toast.show(pickMediaErrorLabel(accept), {
@@ -197,6 +200,8 @@ export function ImageUploadField({
   }, [aspect, canAddMore, disabled, label, onChange, showCamera, skipCrop, toast])
 
   function removeAt(index: number) {
+    const removed = value[index]
+    if (removed) revokeWebBlobUrl(removed)
     const next = value.filter((_, i) => i !== index)
     onChange(next)
   }
@@ -352,14 +357,6 @@ function ImagePreviewTile({
   const ui = useAppUi()
   const isVideo = image.mimeType?.startsWith('video/')
 
-  useEffect(() => {
-    return () => {
-      if (Platform.OS === 'web' && image.uri.startsWith('blob:')) {
-        URL.revokeObjectURL(image.uri)
-      }
-    }
-  }, [image.uri])
-
   return (
     <YStack
       width={96}
@@ -418,6 +415,15 @@ function ImagePreviewTile({
       </YStack>
     </YStack>
   )
+}
+
+function revokeWebBlobUrl(image: PickedImage) {
+  if (Platform.OS !== 'web' || !image.uri.startsWith('blob:')) return
+  try {
+    URL.revokeObjectURL(image.uri)
+  } catch {
+    // The browser may already have released this object URL.
+  }
 }
 
 /** Alias — supports photos, videos, and files via `accept`. */

@@ -1142,7 +1142,202 @@ export async function adminUpdateShop(
   shopId: string,
   updates: ShopUpdate,
 ): Promise<ShopServiceResponse<Shop>> {
-  return updateShop(shopId, updates)
+  if (!shopId) return fail('Shop ID is required')
+
+  const payload = sanitizeAdminShopUpdates(updates)
+
+  // 1) Edge function (service role) — heals address ownership/type and bypasses RLS.
+  try {
+    const { data, error } = await supabase.functions.invoke<{
+      ok?: boolean
+      data?: Shop | null
+      error?: string | null
+    }>('admin-update-shop', {
+      body: { shopId, updates: payload },
+    })
+
+    if (!error && data?.ok && data.data) {
+      invalidateShopCaches()
+      return ok(data.data)
+    }
+
+    // Function missing / not deployed yet — continue to other paths.
+    const missingFn =
+      !!error &&
+      (/not found|FunctionsHttpError|Failed to send|404/i.test(error.message ?? '') ||
+        /not found|404/i.test(String((data as { error?: string } | null)?.error ?? '')))
+
+    if (error && !missingFn && data?.error) {
+      // Deployed function returned a real business error.
+      return fail(data.error)
+    }
+    if (!error && data && data.ok === false && data.error) {
+      return fail(data.error)
+    }
+  } catch {
+    // Fall through when the function is unavailable.
+  }
+
+  // 2) Privileged RPC when SQL migration is applied.
+  try {
+    const { data, error } = await supabase.rpc('admin_update_shop', {
+      p_shop_id: shopId,
+      p_updates: payload,
+    })
+
+    if (!error && data) {
+      invalidateShopCaches()
+      return ok(data as Shop)
+    }
+
+    if (error && !isMissingAdminUpdateShopRpc(error)) {
+      return fail(error)
+    }
+  } catch (error) {
+    if (!isMissingAdminUpdateShopRpc(error)) {
+      return fail(error)
+    }
+  }
+
+  // 3) Direct update, then P0001 heal: unlink address → save fields → relink.
+  const direct = await updateShop(shopId, payload)
+  if (direct.success) return direct
+  if (!isShopAddressTriggerError(direct.error)) return direct
+
+  return healAdminShopUpdateAroundAddress(shopId, payload)
+}
+
+function isShopAddressTriggerError(error: unknown): boolean {
+  const message =
+    typeof error === 'string'
+      ? error
+      : error && typeof error === 'object' && 'message' in error
+        ? String((error as { message?: unknown }).message ?? '')
+        : ''
+  return /Invalid shop_address_id|shop or business/i.test(message)
+}
+
+/**
+ * Admin-only recovery when the shops trigger rejects updates because addresses RLS
+ * hides the owner's row. Clear the link (keeping a metadata backup), apply field
+ * updates, then restore the link when possible.
+ */
+async function healAdminShopUpdateAroundAddress(
+  shopId: string,
+  payload: ShopUpdate,
+): Promise<ShopServiceResponse<Shop>> {
+  try {
+    const current = await getShopById(shopId)
+    if (!current.success || !current.data) {
+      return fail(current.error ?? 'Shop not found')
+    }
+
+    const addressId = current.data.shop_address_id
+    if (!addressId) {
+      return fail(
+        'Invalid shop_address_id: address must belong to the same user and be of type shop or business',
+      )
+    }
+
+    // Best-effort heal of address type/owner (may be blocked by RLS for admins).
+    await supabase
+      .from('addresses')
+      .update({
+        address_type: 'shop',
+        address_label: 'Shop',
+        user_id: current.data.user_id,
+      })
+      .eq('id', addressId)
+
+    const existingMeta =
+      current.data.shop_metadata && typeof current.data.shop_metadata === 'object'
+        ? (current.data.shop_metadata as Record<string, unknown>)
+        : {}
+
+    const unlink = await updateShop(shopId, {
+      shop_address_id: null,
+      shop_metadata: {
+        ...existingMeta,
+        _admin_pending_shop_address_id: addressId,
+      } as ShopUpdate['shop_metadata'],
+    })
+    if (!unlink.success) {
+      return fail(unlink.error ?? 'Could not prepare shop address for update.')
+    }
+
+    const updated = await updateShop(shopId, payload)
+    if (!updated.success) {
+      await updateShop(shopId, {
+        shop_address_id: addressId,
+        shop_metadata: existingMeta as ShopUpdate['shop_metadata'],
+      })
+      return fail(updated.error ?? 'Could not update shop.')
+    }
+
+    const relink = await updateShop(shopId, {
+      shop_address_id: addressId,
+      shop_metadata: {
+        ...existingMeta,
+        ...((payload.shop_metadata as Record<string, unknown> | undefined) ?? {}),
+      } as ShopUpdate['shop_metadata'],
+    })
+
+    // Clear the pending backup whether or not relink succeeded after a clean restore.
+    if (relink.success && relink.data) {
+      const cleanedMeta = { ...existingMeta }
+      delete cleanedMeta._admin_pending_shop_address_id
+      await updateShop(shopId, {
+        shop_metadata: cleanedMeta as ShopUpdate['shop_metadata'],
+      })
+      const finalShop = await getShopById(shopId)
+      invalidateShopCaches()
+      return finalShop.success && finalShop.data ? ok(finalShop.data) : ok(relink.data)
+    }
+
+    // Field updates saved. Address id is retained in shop_metadata until DB fix is applied.
+    invalidateShopCaches()
+    const refreshed = await getShopById(shopId)
+    if (refreshed.success && refreshed.data) return ok(refreshed.data)
+    return updated
+  } catch (error) {
+    return fail(error)
+  }
+}
+
+function isMissingAdminUpdateShopRpc(error: unknown): boolean {
+  if (!error) return false
+  if (typeof error === 'string') {
+    return /admin_update_shop|PGRST202|schema cache|could not find the function/i.test(error)
+  }
+  if (typeof error !== 'object') return false
+  const code = 'code' in error ? String((error as { code?: unknown }).code ?? '') : ''
+  const message =
+    'message' in error ? String((error as { message?: unknown }).message ?? '') : ''
+  const details =
+    'details' in error ? String((error as { details?: unknown }).details ?? '') : ''
+  const hint = 'hint' in error ? String((error as { hint?: unknown }).hint ?? '') : ''
+  return (
+    code === 'PGRST202' ||
+    /admin_update_shop|could not find the function|schema cache/i.test(
+      `${message} ${details} ${hint}`,
+    )
+  )
+}
+
+/** Drop undefined keys and never rewrite ownership through admin updates. */
+function sanitizeAdminShopUpdates(updates: ShopUpdate): ShopUpdate {
+  const payload: ShopUpdate = { ...updates }
+  delete (payload as { id?: string }).id
+  delete (payload as { user_id?: string }).user_id
+  delete (payload as { created_at?: string }).created_at
+  // Keep an existing shop_address_id untouched unless explicitly provided.
+  if (payload.shop_address_id === undefined) {
+    delete (payload as { shop_address_id?: string | null }).shop_address_id
+  }
+  for (const key of Object.keys(payload) as (keyof ShopUpdate)[]) {
+    if (payload[key] === undefined) delete payload[key]
+  }
+  return payload
 }
 
 /** Admin dashboard: platform-wide shop counts. */
