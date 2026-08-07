@@ -16407,6 +16407,13 @@ export type Database = {
           updated_at: string
         }[]
       }
+      admin_update_shop: {
+        Args: {
+          p_shop_id: string
+          p_updates: Json
+        }
+        Returns: Database["public"]["Tables"]["shops"]["Row"]
+      }
       apply_discount_to_cart: {
         Args: {
           p_cart_id: string

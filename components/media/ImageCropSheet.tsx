@@ -7,17 +7,11 @@ import {
   useWindowDimensions,
   type LayoutChangeEvent,
 } from 'react-native'
-import { Gesture, GestureDetector } from 'react-native-gesture-handler'
-import Animated, {
-  runOnJS,
-  useAnimatedStyle,
-  useSharedValue,
-} from 'react-native-reanimated'
 import Svg, { Circle, Defs, Mask, Rect as SvgRect } from 'react-native-svg'
 
+import { CropStage } from '~/components/media/CropStage'
 import {
   Button,
-  Image,
   Sheet,
   SheetFrame,
   SheetOverlay,
@@ -36,6 +30,7 @@ import {
   type CropRect,
 } from '~/lib/media/crop-image'
 import type { CropShape } from '~/lib/media/crop-session'
+import type { CropStageHandle, CropTransform } from '~/lib/media/crop-stage'
 import type { PickedImage } from '~/lib/media/pick-image'
 
 type ImageCropSheetProps = {
@@ -49,7 +44,6 @@ type ImageCropSheetProps = {
 }
 
 type Viewport = { width: number; height: number }
-type Transform = { x: number; y: number; scale: number }
 
 const MIN_ZOOM = 1
 const MAX_ZOOM = 4
@@ -84,17 +78,8 @@ export function ImageCropSheet({
   const [error, setError] = useState<string | null>(null)
   const [zoomLabel, setZoomLabel] = useState(1)
 
-  const translateX = useSharedValue(0)
-  const translateY = useSharedValue(0)
-  const scale = useSharedValue(1)
-  const startX = useSharedValue(0)
-  const startY = useSharedValue(0)
-  const startScale = useSharedValue(1)
-  const frameW = useSharedValue(0)
-  const frameH = useSharedValue(0)
-  const fittedW = useSharedValue(0)
-  const fittedH = useSharedValue(0)
-  const valuesRef = useRef<Transform>({ x: 0, y: 0, scale: 1 })
+  const stageRef = useRef<CropStageHandle | null>(null)
+  const transformRef = useRef<CropTransform>({ x: 0, y: 0, scale: 1 })
 
   const isCircle = shape === 'circle'
 
@@ -143,51 +128,16 @@ export function ImageCropSheet({
     }
   }, [frame.height, frame.width, sourceSize])
 
-  useEffect(() => {
-    frameW.value = frame.width
-    frameH.value = frame.height
-    fittedW.value = fitted?.width ?? 0
-    fittedH.value = fitted?.height ?? 0
-  }, [fitted?.height, fitted?.width, fittedH, fittedW, frame.height, frame.width, frameH, frameW])
-
-  const syncTransform = useCallback((next: Transform) => {
-    valuesRef.current = next
+  const handleTransformChange = useCallback((next: CropTransform) => {
+    transformRef.current = next
     setZoomLabel((prev) => (Math.abs(prev - next.scale) < 0.001 ? prev : next.scale))
   }, [])
 
-  const clampTranslation = useCallback(
-    (x: number, y: number, liveScale: number) => {
-      if (!fitted) return { x: 0, y: 0 }
-      const displayW = fitted.width * liveScale
-      const displayH = fitted.height * liveScale
-      const maxX = Math.max(0, (displayW - frame.width) / 2)
-      const maxY = Math.max(0, (displayH - frame.height) / 2)
-      return {
-        x: Math.min(maxX, Math.max(-maxX, x)),
-        y: Math.min(maxY, Math.max(-maxY, y)),
-      }
-    },
-    [fitted, frame.height, frame.width],
-  )
-
-  const applyTransform = useCallback(
-    (x: number, y: number, liveScale: number) => {
-      const nextScale = Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, liveScale))
-      const clamped = clampTranslation(x, y, nextScale)
-      translateX.value = clamped.x
-      translateY.value = clamped.y
-      scale.value = nextScale
-      syncTransform({ x: clamped.x, y: clamped.y, scale: nextScale })
-    },
-    [clampTranslation, scale, syncTransform, translateX, translateY],
-  )
-
   const resetTransform = useCallback(() => {
-    translateX.value = 0
-    translateY.value = 0
-    scale.value = 1
-    syncTransform({ x: 0, y: 0, scale: 1 })
-  }, [scale, syncTransform, translateX, translateY])
+    transformRef.current = { x: 0, y: 0, scale: 1 }
+    setZoomLabel(1)
+    stageRef.current?.setTransform({ x: 0, y: 0, scale: 1 })
+  }, [])
 
   useEffect(() => {
     if (!open || !image) {
@@ -214,12 +164,6 @@ export function ImageCropSheet({
   }, [image, open, resetTransform])
 
   useEffect(() => {
-    if (!fitted) return
-    applyTransform(valuesRef.current.x, valuesRef.current.y, valuesRef.current.scale)
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [fitted?.width, fitted?.height, frame.width, frame.height])
-
-  useEffect(() => {
     if (!open || Platform.OS !== 'web') return
     const onKey = (event: KeyboardEvent) => {
       if (event.key === 'Escape') {
@@ -231,67 +175,6 @@ export function ImageCropSheet({
     return () => window.removeEventListener('keydown', onKey)
   }, [open, onCancel])
 
-  const pan = Gesture.Pan()
-    .onBegin(() => {
-      startX.value = translateX.value
-      startY.value = translateY.value
-    })
-    .onUpdate((event) => {
-      'worklet'
-      const nextX = startX.value + event.translationX
-      const nextY = startY.value + event.translationY
-      const displayW = fittedW.value * scale.value
-      const displayH = fittedH.value * scale.value
-      const maxX = Math.max(0, (displayW - frameW.value) / 2)
-      const maxY = Math.max(0, (displayH - frameH.value) / 2)
-      translateX.value = Math.min(maxX, Math.max(-maxX, nextX))
-      translateY.value = Math.min(maxY, Math.max(-maxY, nextY))
-    })
-    .onEnd(() => {
-      'worklet'
-      runOnJS(syncTransform)({
-        x: translateX.value,
-        y: translateY.value,
-        scale: scale.value,
-      })
-    })
-
-  const pinch = Gesture.Pinch()
-    .onBegin(() => {
-      startScale.value = scale.value
-      startX.value = translateX.value
-      startY.value = translateY.value
-    })
-    .onUpdate((event) => {
-      'worklet'
-      const nextScale = Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, startScale.value * event.scale))
-      scale.value = nextScale
-      const displayW = fittedW.value * nextScale
-      const displayH = fittedH.value * nextScale
-      const maxX = Math.max(0, (displayW - frameW.value) / 2)
-      const maxY = Math.max(0, (displayH - frameH.value) / 2)
-      translateX.value = Math.min(maxX, Math.max(-maxX, startX.value))
-      translateY.value = Math.min(maxY, Math.max(-maxY, startY.value))
-    })
-    .onEnd(() => {
-      'worklet'
-      runOnJS(syncTransform)({
-        x: translateX.value,
-        y: translateY.value,
-        scale: scale.value,
-      })
-    })
-
-  const composed = Gesture.Simultaneous(pan, pinch)
-
-  const animatedStyle = useAnimatedStyle(() => ({
-    transform: [
-      { translateX: translateX.value },
-      { translateY: translateY.value },
-      { scale: scale.value },
-    ],
-  }))
-
   const onViewportLayout = useCallback((event: LayoutChangeEvent) => {
     const { width, height } = event.nativeEvent.layout
     if (width <= 0 || height <= 0) return
@@ -302,35 +185,25 @@ export function ImageCropSheet({
     )
   }, [])
 
-  const onWheelZoom = useCallback(
-    (event: { nativeEvent?: { deltaY?: number }; deltaY?: number; preventDefault?: () => void }) => {
-      const deltaY = event.nativeEvent?.deltaY ?? event.deltaY ?? 0
-      event.preventDefault?.()
-      applyTransform(
-        valuesRef.current.x,
-        valuesRef.current.y,
-        valuesRef.current.scale + (deltaY > 0 ? -0.12 : 0.12),
-      )
-    },
-    [applyTransform],
-  )
+  function currentScale() {
+    return (stageRef.current?.getTransform() ?? transformRef.current).scale
+  }
 
   function setZoom(next: number) {
-    applyTransform(valuesRef.current.x, valuesRef.current.y, next)
+    const current = stageRef.current?.getTransform() ?? transformRef.current
+    stageRef.current?.setTransform({ ...current, scale: next })
   }
 
   function computeCropRect(): CropRect | null {
     if (!sourceSize || !fitted) return null
-    const { x, y, scale: liveScale } = valuesRef.current
+    const { x, y, scale: liveScale } = stageRef.current?.getTransform() ?? transformRef.current
     const displayW = fitted.width * liveScale
     const displayH = fitted.height * liveScale
-    const imageLeft = (viewport.width - displayW) / 2 + x
-    const imageTop = (viewport.height - displayH) / 2 + y
-    const frameLeft = (viewport.width - frame.width) / 2
-    const frameTop = (viewport.height - frame.height) / 2
 
-    const relX = (frameLeft - imageLeft) / displayW
-    const relY = (frameTop - imageTop) / displayH
+    // Image and crop frame are both centered in the stage, so the offset between
+    // them only depends on their sizes and the current translation.
+    const relX = ((displayW - frame.width) / 2 - x) / displayW
+    const relY = ((displayH - frame.height) / 2 - y) / displayH
     const relW = frame.width / displayW
     const relH = frame.height / displayH
 
@@ -355,32 +228,22 @@ export function ImageCropSheet({
     return { originX, originY, width, height }
   }
 
-  async function handleConfirm() {
+  const handleConfirm = useCallback(async () => {
     if (!image || busy) return
     setBusy(true)
     setError(null)
     try {
-      valuesRef.current = {
-        x: translateX.value,
-        y: translateY.value,
-        scale: scale.value,
-      }
-      const crop =
-        computeCropRect() ??
-        (sourceSize && aspect
-          ? centeredCropRect(sourceSize.width, sourceSize.height, aspect)
-          : sourceSize
-            ? { originX: 0, originY: 0, width: sourceSize.width, height: sourceSize.height }
-            : null)
+      const crop = computeCropRect()
       if (!crop) throw new Error('Could not crop this image.')
       const result = await cropPickedImage(image, crop)
+      // Resolve the pending picker only after the cropped file is fully ready.
+      // The host closes this sheet and ImageUploadField then receives the new preview.
       onConfirm(result)
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Could not crop this image.')
-    } finally {
       setBusy(false)
     }
-  }
+  }, [aspect, busy, fitted, frame.height, frame.width, image, onConfirm, sourceSize])
 
   const ratioHint = aspectLabel(aspect)
   const headerTitle =
@@ -430,15 +293,21 @@ export function ImageCropSheet({
         bottom={0}
       >
         {open ? (
-          <YStack flex={1} width="100%" height="100%" backgroundColor="#000">
+          <YStack flex={1} width="100%" height="100%" backgroundColor="#050505">
             {/* LinkedIn-style top bar: Cancel · title · spacer */}
             <XStack
+              flexShrink={0}
+              minHeight={64}
               paddingTop={Math.max(safeTop, Platform.OS === 'web' ? 16 : 8)}
               paddingHorizontal={16}
               paddingBottom={10}
               alignItems="center"
               justifyContent="space-between"
               gap={12}
+              backgroundColor="#111"
+              borderBottomWidth={StyleSheet.hairlineWidth}
+              borderBottomColor="rgba(255,255,255,0.12)"
+              zIndex={3}
             >
               <Pressable
                 onPress={onCancel}
@@ -470,32 +339,26 @@ export function ImageCropSheet({
             {/* Full-bleed stage */}
             <YStack
               flex={1}
+              minHeight={220}
               width="100%"
-              backgroundColor="#000"
+              backgroundColor="#080808"
               alignItems="center"
               justifyContent="center"
               overflow="hidden"
               onLayout={onViewportLayout}
-              // @ts-expect-error — web wheel
-              onWheel={Platform.OS === 'web' ? onWheelZoom : undefined}
             >
               {fitted && image ? (
-                <GestureDetector gesture={composed}>
-                  <Animated.View
-                    style={[
-                      {
-                        position: 'absolute',
-                        width: fitted.width,
-                        height: fitted.height,
-                        left: (viewport.width - fitted.width) / 2,
-                        top: (viewport.height - fitted.height) / 2,
-                      },
-                      animatedStyle,
-                    ]}
-                  >
-                    <Image src={image.uri} width="100%" height="100%" objectFit="cover" alt="" />
-                  </Animated.View>
-                </GestureDetector>
+                <CropStage
+                  ref={stageRef}
+                  uri={image.uri}
+                  imageWidth={fitted.width}
+                  imageHeight={fitted.height}
+                  frameWidth={frame.width}
+                  frameHeight={frame.height}
+                  minZoom={MIN_ZOOM}
+                  maxZoom={MAX_ZOOM}
+                  onTransformChange={handleTransformChange}
+                />
               ) : (
                 <Spinner size="large" color="white" />
               )}
@@ -505,7 +368,15 @@ export function ImageCropSheet({
                 <View pointerEvents="none" style={StyleSheet.absoluteFill}>
                   <Svg width={viewport.width} height={viewport.height}>
                     <Defs>
-                      <Mask id={maskId}>
+                      <Mask
+                        id={maskId}
+                        x={0}
+                        y={0}
+                        width={viewport.width}
+                        height={viewport.height}
+                        maskUnits="userSpaceOnUse"
+                        maskContentUnits="userSpaceOnUse"
+                      >
                         <SvgRect width={viewport.width} height={viewport.height} fill="#fff" />
                         {isCircle ? (
                           <Circle
@@ -562,13 +433,15 @@ export function ImageCropSheet({
 
             {/* LinkedIn-style bottom controls */}
             <YStack
+              flexShrink={0}
               paddingHorizontal={20}
               paddingTop={14}
               paddingBottom={Math.max(safeBottom, 18)}
               gap={14}
-              backgroundColor="#000"
+              backgroundColor="#111"
               borderTopWidth={StyleSheet.hairlineWidth}
               borderTopColor="rgba(255,255,255,0.12)"
+              zIndex={3}
             >
               <Text fontSize={13} color="rgba(255,255,255,0.55)" textAlign="center">
                 Drag to reposition
@@ -578,7 +451,7 @@ export function ImageCropSheet({
               <XStack alignItems="center" gap={14} width="100%">
                 <Pressable
                   accessibilityLabel="Zoom out"
-                  onPress={() => setZoom(valuesRef.current.scale - 0.12)}
+                  onPress={() => setZoom(currentScale() - 0.12)}
                   disabled={busy || zoomLabel <= MIN_ZOOM}
                   hitSlop={8}
                   style={styles.zoomChip}
@@ -606,7 +479,7 @@ export function ImageCropSheet({
 
                 <Pressable
                   accessibilityLabel="Zoom in"
-                  onPress={() => setZoom(valuesRef.current.scale + 0.12)}
+                  onPress={() => setZoom(currentScale() + 0.12)}
                   disabled={busy || zoomLabel >= MAX_ZOOM}
                   hitSlop={8}
                   style={styles.zoomChip}
@@ -628,10 +501,11 @@ export function ImageCropSheet({
                 size="$5"
                 width="100%"
                 disabled={busy || !image}
-                onPress={() => void handleConfirm()}
+                onPress={handleConfirm}
                 borderRadius={24}
+                accessibilityLabel={busy ? 'Saving cropped photo' : 'Use cropped photo'}
               >
-                {busy ? 'Saving…' : 'Save photo'}
+                {busy ? 'Preparing photo…' : 'Use this photo'}
               </Button>
             </YStack>
           </YStack>

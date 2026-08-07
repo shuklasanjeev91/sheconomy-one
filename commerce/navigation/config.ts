@@ -4,6 +4,7 @@ import { BRAND_NAME } from '~/config/brand'
 import { helpHref } from '~/lib/help/types'
 import {
   appRoutes,
+  blogRoutes,
   classRoutes,
   commerceRoutes,
   communityRoutes,
@@ -45,6 +46,7 @@ export const COMMERCE_FOOTER_COLUMNS: { title: string; links: NavLinkItem[] }[] 
     title: 'About',
     links: [
       { href: appRoutes.settingsSection('about'), label: `About ${BRAND_NAME}` },
+      { href: blogRoutes.home, label: 'Blog' },
       { href: communityRoutes.home, label: 'Community' },
       { href: communityRoutes.jobs, label: 'Careers' },
       { href: communityRoutes.companies, label: 'Companies' },
