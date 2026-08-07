@@ -6,6 +6,7 @@ import type { Json, Tables } from '~/lib/supabase'
 import { splitCartItems } from '~/commerce/lib/cart-shelf'
 
 const CART_SESSION_KEY = 'sheconomy:cart-session'
+const GUEST_CART_ID_KEY = 'sheconomy:guest-cart-id'
 /** AsyncStorage can hang on some iPadOS builds — never block Add to Cart on it. */
 const CART_SESSION_STORAGE_TIMEOUT_MS = 2_500
 
@@ -22,6 +23,9 @@ export { splitCartItems } from '~/commerce/lib/cart-shelf'
 
 /** In-memory fallback so guest carts still work if device storage never resolves. */
 let memoryCartSessionId: string | null = null
+/** Single-flight so parallel add/load/merge never mint two different session ids. */
+let cartSessionIdInflight: Promise<string> | null = null
+let memoryGuestCartId: string | null = null
 
 async function createSessionId() {
   if (typeof crypto !== 'undefined' && 'randomUUID' in crypto) {
@@ -48,33 +52,77 @@ function withStorageTimeout<T>(promise: Promise<T>, ms: number): Promise<T> {
 
 export async function getCartSessionId(): Promise<string> {
   if (memoryCartSessionId) return memoryCartSessionId
+  if (cartSessionIdInflight) return cartSessionIdInflight
+
+  cartSessionIdInflight = (async () => {
+    try {
+      const existing = await withStorageTimeout(
+        AsyncStorage.getItem(CART_SESSION_KEY),
+        CART_SESSION_STORAGE_TIMEOUT_MS,
+      )
+      if (existing) {
+        memoryCartSessionId = existing
+        return existing
+      }
+    } catch {
+      // Fall through to create a session — do not hang purchase CTAs.
+    }
+
+    const sessionId = await createSessionId()
+    memoryCartSessionId = sessionId
+    try {
+      await withStorageTimeout(
+        AsyncStorage.setItem(CART_SESSION_KEY, sessionId),
+        CART_SESSION_STORAGE_TIMEOUT_MS,
+      )
+    } catch {
+      // Memory session is enough for this app launch; next launch may mint a new one.
+    }
+    return sessionId
+  })()
 
   try {
+    return await cartSessionIdInflight
+  } finally {
+    cartSessionIdInflight = null
+  }
+}
+
+/** Remember the guest cart row so a drifted session id can still recover lines. */
+export async function rememberGuestCartId(cartId: string | null): Promise<void> {
+  memoryGuestCartId = cartId
+  try {
+    if (cartId) {
+      await withStorageTimeout(
+        AsyncStorage.setItem(GUEST_CART_ID_KEY, cartId),
+        CART_SESSION_STORAGE_TIMEOUT_MS,
+      )
+    } else {
+      await withStorageTimeout(
+        AsyncStorage.removeItem(GUEST_CART_ID_KEY),
+        CART_SESSION_STORAGE_TIMEOUT_MS,
+      )
+    }
+  } catch {
+    // memory is enough for this launch
+  }
+}
+
+export async function getRememberedGuestCartId(): Promise<string | null> {
+  if (memoryGuestCartId) return memoryGuestCartId
+  try {
     const existing = await withStorageTimeout(
-      AsyncStorage.getItem(CART_SESSION_KEY),
+      AsyncStorage.getItem(GUEST_CART_ID_KEY),
       CART_SESSION_STORAGE_TIMEOUT_MS,
     )
     if (existing) {
-      memoryCartSessionId = existing
+      memoryGuestCartId = existing
       return existing
     }
   } catch {
-    // Fall through to create a session — do not hang purchase CTAs.
-  }
-
-  const sessionId = await createSessionId()
-  memoryCartSessionId = sessionId
-  try {
-    void withStorageTimeout(
-      AsyncStorage.setItem(CART_SESSION_KEY, sessionId),
-      CART_SESSION_STORAGE_TIMEOUT_MS,
-    ).catch(() => {
-      // Memory session is enough for this app launch.
-    })
-  } catch {
     // ignore
   }
-  return sessionId
+  return null
 }
 
 export async function getOrCreateCart(options: {

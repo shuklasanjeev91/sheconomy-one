@@ -295,11 +295,21 @@ export function ListingScreen({
   function handleAddToCart(goToCheckout = false) {
     if (addingRef.current || outOfStock) return
     addingRef.current = true
-    setIsAddingToCart(true)
-    // Unlock the CTA immediately — never leave App Review staring at a spinner.
-    // Network work continues in the background; failures roll back optimistic UI.
-    setOptimisticInCart(true)
-    setIsAddingToCart(false)
+
+    // Add to cart: unlock CTA immediately (Checkout UI) so the pink button never sticks
+    // on a spinner. Buy now still shows a short loading state, but only navigates after
+    // the server confirms — otherwise guests land on sign-in with a failed/empty cart.
+    if (!goToCheckout) {
+      setOptimisticInCart(true)
+      setIsAddingToCart(false)
+    } else {
+      setIsAddingToCart(true)
+    }
+
+    const failsafe = setTimeout(() => {
+      addingRef.current = false
+      setIsAddingToCart(false)
+    }, 12_000)
 
     void (async () => {
       try {
@@ -318,6 +328,7 @@ export function ListingScreen({
           return
         }
 
+        setOptimisticInCart(true)
         setPersonalizationNote('')
         toast.show('Added to cart', { tone: 'success', duration: 2500 })
         if (goToCheckout) {
@@ -343,6 +354,7 @@ export function ListingScreen({
           Alert.alert('Could not add to cart', message)
         }
       } finally {
+        clearTimeout(failsafe)
         addingRef.current = false
         setIsAddingToCart(false)
       }
@@ -372,6 +384,8 @@ export function ListingScreen({
   }
 
   function goToCheckout() {
+    // Require a confirmed cart line before sending guests to sign-in / checkout.
+    if (!cartItem && !optimisticInCart) return
     if (!user) {
       navigateApp(buildSignInUrl(String(commerceRoutes.checkout)))
       return

@@ -14,8 +14,10 @@ import {
   fetchCartWithItems,
   getCartSessionId,
   getOrCreateCart,
+  getRememberedGuestCartId,
   mergeGuestCartWithUser,
   moveSavedCartItemToCart,
+  rememberGuestCartId,
   removeCartDiscount,
   removeCartItem,
   saveCartItemForLater,
@@ -24,7 +26,7 @@ import {
   type CartRow,
   type CartWithItems,
 } from '~/commerce/lib/cart'
-import { fetchCartBundle } from '~/commerce/lib/cart-rpc-fetch'
+import { fetchCartBundle, resolveCartActor } from '~/commerce/lib/cart-rpc-fetch'
 import {
   applyCouponCode,
   autoApplyBestOffer,
@@ -128,10 +130,32 @@ export function CartProvider({ children }: { children: ReactNode }) {
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [autoApplied, setAutoApplied] = useState(false)
-  const mergedRef = useRef(false)
+  const mergedSessionRef = useRef<string | null>(null)
+  const mergeInflightRef = useRef<Promise<void> | null>(null)
   // Stop auto-applying until the shopper applies a code or the cart subtotal changes.
   const couponOptOutRef = useRef(false)
   const optOutSubtotalRef = useRef<number | null>(null)
+  const hasCartItemsRef = useRef(false)
+  hasCartItemsRef.current = (cartData?.items.length ?? 0) + (cartData?.savedItems?.length ?? 0) > 0
+
+  /**
+   * Never replace a cart that still has lines with a different empty cart.
+   * That race is what empties the UI during guest add → loadCart and guest → sign-in.
+   */
+  const commitCartData = useCallback((next: CartWithItems | null) => {
+    setCartData((prev) => {
+      if (!next) {
+        if (hasCartItemsRef.current) return prev
+        return null
+      }
+      const prevCount = (prev?.items.length ?? 0) + (prev?.savedItems.length ?? 0)
+      const nextCount = next.items.length + next.savedItems.length
+      if (prevCount > 0 && nextCount === 0 && prev && prev.cart.id !== next.cart.id) {
+        return prev
+      }
+      return next
+    })
+  }, [])
 
   const tryAutoApply = useCallback(async (data: CartWithItems): Promise<CartWithItems> => {
     if (couponOptOutRef.current) {
@@ -174,8 +198,6 @@ export function CartProvider({ children }: { children: ReactNode }) {
   }, [])
 
   const userId = user?.id ?? null
-  const hasCartItemsRef = useRef(false)
-  hasCartItemsRef.current = (cartData?.items.length ?? 0) + (cartData?.savedItems?.length ?? 0) > 0
 
   const loadCart = useCallback(async () => {
     if (authLoading) {
@@ -190,21 +212,68 @@ export function CartProvider({ children }: { children: ReactNode }) {
     setError(null)
 
     try {
-      const asGuest = !userId
-      const sessionId = userId ? null : await getCartSessionId()
-      const { cart, error: cartError } = await withCartTimeout(
+      // Guest → sign-in: merge session cart into the user cart BEFORE loading,
+      // otherwise we paint an empty user cart and checkout redirects away.
+      if (userId) {
+        const sessionId = await getCartSessionId()
+        if (mergedSessionRef.current !== sessionId) {
+          if (!mergeInflightRef.current) {
+            mergeInflightRef.current = withCartTimeout(
+              mergeGuestCartWithUser({ sessionId, userId }),
+              'Merging guest cart',
+            )
+              .then(() => {
+                mergedSessionRef.current = sessionId
+                return rememberGuestCartId(null)
+              })
+              .catch((error) => {
+                console.warn(
+                  '[cart] merge failed',
+                  error instanceof Error ? error.message : error,
+                )
+                // Still mark attempted so we don't loop forever on hard failures.
+                mergedSessionRef.current = sessionId
+              })
+              .finally(() => {
+                mergeInflightRef.current = null
+              })
+          }
+          await mergeInflightRef.current
+        }
+      }
+
+      const actor = await resolveCartActor(userId)
+      let { cart, error: cartError } = await withCartTimeout(
         getOrCreateCart({
-          userId: userId ?? undefined,
-          sessionId,
+          userId: actor.userId,
+          sessionId: actor.sessionId,
         }),
         'Loading cart',
       )
 
+      // Recover guest lines if session id drifted but we still remember the cart row.
+      if (actor.asGuest && cart?.id) {
+        const rememberedId = await getRememberedGuestCartId()
+        if (rememberedId && rememberedId !== cart.id) {
+          const remembered = await fetchCartBundle(rememberedId, true).catch(() => null)
+          const rememberedCount =
+            (remembered?.data?.items.length ?? 0) + (remembered?.data?.savedItems.length ?? 0)
+          if (rememberedCount > 0 && remembered?.data?.cart) {
+            cart = remembered.data.cart
+            cartError = null
+          }
+        }
+      }
+
       if (cartError || !cart) {
         setError(cartError ?? 'Could not load cart')
         // Never wipe an on-screen cart on a transient load failure (guest JWT 401s).
-        if (!soft) setCartData(null)
+        if (!soft) commitCartData(null)
         return
+      }
+
+      if (actor.asGuest) {
+        void rememberGuestCartId(cart.id)
       }
 
       if (cart.status === 'abandoned') {
@@ -218,6 +287,7 @@ export function CartProvider({ children }: { children: ReactNode }) {
         ).catch(() => undefined)
       }
 
+      const asGuest = actor.asGuest
       const bundle = await withCartTimeout(
         asGuest
           ? fetchCartBundle(cart.id, true)
@@ -235,7 +305,7 @@ export function CartProvider({ children }: { children: ReactNode }) {
       )
       if (bundle.error || !bundle.data) {
         setError(bundle.error ?? 'Could not load cart items')
-        if (!soft) setCartData(null)
+        if (!soft) commitCartData(null)
         return
       }
 
@@ -272,14 +342,14 @@ export function CartProvider({ children }: { children: ReactNode }) {
         // Show cart without offers rather than spinning forever.
       }
 
-      setCartData(next)
+      commitCartData(next)
     } catch (error) {
       setError(error instanceof Error ? error.message : 'Could not load cart')
-      if (!hasCartItemsRef.current) setCartData(null)
+      if (!hasCartItemsRef.current) commitCartData(null)
     } finally {
       setIsLoading(false)
     }
-  }, [authLoading, tryAutoApply, userId])
+  }, [authLoading, commitCartData, tryAutoApply, userId])
 
   useEffect(() => {
     if (authLoading) return
@@ -313,7 +383,7 @@ export function CartProvider({ children }: { children: ReactNode }) {
         next = await tryAutoApply(next)
       }
 
-      setCartData(next)
+      commitCartData(next)
       if (!next.cart.applied_discount_id) {
         setAutoApplied(false)
       } else {
@@ -325,29 +395,12 @@ export function CartProvider({ children }: { children: ReactNode }) {
     return () => {
       cancelled = true
     }
-  }, [selectionRevision, cartData?.cart?.applied_discount_id, cartData?.items, tryAutoApply])
+  }, [selectionRevision, cartData?.cart?.applied_discount_id, cartData?.items, commitCartData, tryAutoApply])
 
+  // Reset merge marker when the shopper signs out so the next guest session can merge again.
   useEffect(() => {
-    if (!user || mergedRef.current) return
-
-    let active = true
-    ;(async () => {
-      const sessionId = await getCartSessionId()
-      const { error: mergeError } = await mergeGuestCartWithUser({
-        sessionId,
-        userId: user.id,
-      })
-      if (!active) return
-      mergedRef.current = true
-      if (!mergeError) {
-        await loadCart()
-      }
-    })()
-
-    return () => {
-      active = false
-    }
-  }, [user?.id, loadCart])
+    if (!userId) mergedSessionRef.current = null
+  }, [userId])
 
   const addToCart = useCallback(
     async (
@@ -360,13 +413,18 @@ export function CartProvider({ children }: { children: ReactNode }) {
         // add succeed via SECURITY DEFINER while loadCart refreshes an empty cart —
         // UI looks like Add to Cart did nothing.
         return await runCartMutation('Adding to cart', async () => {
-          const sessionId = userId ? null : await getCartSessionId()
+          // Stale in-memory `user` without a usable JWT must use a guest session cart.
+          const actor = await resolveCartActor(userId)
           const { cart, error: cartError } = await getOrCreateCart({
-            userId: userId ?? undefined,
-            sessionId,
+            userId: actor.userId,
+            sessionId: actor.sessionId,
           })
-          if (cartError || !cart) {
+          if (cartError || !cart?.id) {
             return { error: cartError ?? 'Could not create cart' }
+          }
+
+          if (actor.asGuest) {
+            void rememberGuestCartId(cart.id)
           }
 
           const { item, error: addError } = await addListingToCart({
@@ -375,7 +433,7 @@ export function CartProvider({ children }: { children: ReactNode }) {
             quantity: options?.quantity,
             variantId: options?.variantId,
             personalizationNote: options?.personalizationNote,
-            asGuest: !userId,
+            asGuest: actor.asGuest,
           })
 
           if (addError) {
@@ -396,6 +454,7 @@ export function CartProvider({ children }: { children: ReactNode }) {
                 (sum, row) => sum + (row.total_price ?? row.unit_price * row.quantity),
                 0,
               )
+              hasCartItemsRef.current = nextItems.length + baseSaved.length > 0
               return {
                 cart: {
                   ...cart,
@@ -421,6 +480,7 @@ export function CartProvider({ children }: { children: ReactNode }) {
             ],
           })
 
+          // Soft refresh in background — commitCartData will not clobber non-empty → empty.
           void loadCart()
           return { error: null }
         })

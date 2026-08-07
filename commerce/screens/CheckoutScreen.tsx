@@ -467,7 +467,7 @@ export function CheckoutScreen() {
     )
   }
 
-  if (!orderPlaced && hasChecked && (!cart || items.length === 0)) {
+  if (!orderPlaced && hasChecked && !isLoading && (!cart || items.length === 0)) {
     return <SpaRedirect href={commerceRoutes.cart} />
   }
   if (!cart) {
