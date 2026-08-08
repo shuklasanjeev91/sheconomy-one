@@ -1,7 +1,8 @@
-import { useEffect, useMemo, useState } from 'react'
-import { useParams, useRouter } from 'one'
+import { useEffect, useMemo, useRef, useState } from 'react'
+import { useRouter } from 'one'
 
-import { BlogCard, blogCardColumnWidth } from '~/blog/components/BlogCard'
+import { BlogCard } from '~/blog/components/BlogCard'
+import { BlogPostsGrid } from '~/blog/components/BlogPostsGrid'
 import { BlogCommentSection } from '~/blog/components/BlogCommentSection'
 import { BlogLikeButton } from '~/blog/components/BlogLikeButton'
 import { BlogPostContent } from '~/blog/components/BlogPostContent'
@@ -26,7 +27,6 @@ import { useAppLayout } from '~/hooks/useAppLayout'
 import { useAuth } from '~/hooks/useAuth'
 import {
   checkLike,
-  clearCurrentContent,
   getContentCoverUrl,
   getContentTeaser,
   incrementViewCount,
@@ -38,33 +38,52 @@ import { blogRoutes, commerceRoutes } from '~/lib/routes'
 import { useAppDispatch, useAppSelector } from '~/lib/store/hooks'
 import { useAppUi } from '~/lib/theme/useAppUi'
 
-export function BlogDetailScreen() {
+function isReadablePost(post: CmsContentDetail | null | undefined, slug: string) {
+  if (!post || !slug) return false
+  if (post.slug !== slug) return false
+  if (post.deleted_at) return false
+  return post.status === 'published'
+}
+
+export function BlogDetailScreen({ slug: slugProp }: { slug?: string }) {
   const dispatch = useAppDispatch()
   const router = useRouter()
   const ui = useAppUi()
-  const { isDesktop, isTablet, safeBottom, gutter, mobileTabBarOffset } = useAppLayout()
-  const relatedCardWidth = blogCardColumnWidth(isDesktop, isTablet)
+  const { isDesktop, safeBottom, gutter, mobileTabBarOffset } = useAppLayout()
   const { isAuthenticated } = useAuth()
-  const { slug } = useParams<{ slug: string }>()
+  const slug = (slugProp || '').trim()
 
-  const { currentContent, isFetching, contentError } = useAppSelector((s) => s.cms)
+  const { currentContent, items, contentError } = useAppSelector((s) => s.cms)
   const [related, setRelated] = useState<CmsContentDetail[]>([])
-  const [initialized, setInitialized] = useState(false)
+  const [loadState, setLoadState] = useState<'idle' | 'loading' | 'done'>('idle')
   const [viewTracked, setViewTracked] = useState(false)
+  const requestId = useRef(0)
 
-  const content =
-    currentContent && currentContent.slug === slug && currentContent.status === 'published'
-      ? currentContent
-      : null
+  const cachedFromList = useMemo(
+    () => items.find((p) => p.slug === slug && p.status === 'published') ?? null,
+    [items, slug],
+  )
+
+  const content = useMemo(() => {
+    if (isReadablePost(currentContent, slug)) return currentContent as CmsContentDetail
+    if (isReadablePost(cachedFromList, slug)) return cachedFromList as CmsContentDetail
+    return null
+  }, [currentContent, cachedFromList, slug])
 
   useEffect(() => {
-    if (!slug) return
-    setInitialized(false)
-    setViewTracked(false)
-    void dispatch(loadContentBySlug(slug)).finally(() => setInitialized(true))
-    return () => {
-      dispatch(clearCurrentContent())
+    if (!slug) {
+      setLoadState('done')
+      return
     }
+    const id = ++requestId.current
+    setLoadState('loading')
+    setViewTracked(false)
+    void dispatch(loadContentBySlug(slug))
+      .unwrap()
+      .catch(() => undefined)
+      .finally(() => {
+        if (requestId.current === id) setLoadState('done')
+      })
   }, [dispatch, slug])
 
   useEffect(() => {
@@ -103,6 +122,7 @@ export function BlogDetailScreen() {
     }
   }, [content?.id, content?.category_id])
 
+  const coverHeight = isDesktop ? 360 : 200
   const cover = content ? getContentCoverUrl(content) : ''
   const teaser = content ? getContentTeaser(content, 220) : ''
   const tags =
@@ -125,10 +145,10 @@ export function BlogDetailScreen() {
 
   const bottomPad = safeBottom + (isDesktop ? 48 : mobileTabBarOffset + 24)
 
-  if (!initialized || (isFetching && !content)) {
+  if (!content && loadState !== 'done') {
     return (
       <PageScroll>
-        <YStack paddingHorizontal={gutter}>
+        <YStack paddingHorizontal={gutter} width="100%">
           <BlogPostSkeleton />
         </YStack>
       </PageScroll>
@@ -152,7 +172,10 @@ export function BlogDetailScreen() {
             Post not found
           </Text>
           <Text color={ui.textSecondary} textAlign="center">
-            {contentError || 'This article does not exist or has been removed.'}
+            {contentError ||
+              (!slug
+                ? 'Missing article link.'
+                : 'This article does not exist or has been removed.')}
           </Text>
           <Button icon={Icons.ArrowLeft} onPress={() => router.push(blogRoutes.home)}>
             Back to Blog
@@ -165,7 +188,6 @@ export function BlogDetailScreen() {
   return (
     <PageScroll>
       <YStack width="100%" backgroundColor={ui.background} paddingBottom={bottomPad}>
-        {/* Breadcrumb */}
         <YStack
           width="100%"
           borderBottomWidth={1}
@@ -216,8 +238,7 @@ export function BlogDetailScreen() {
           paddingTop={isDesktop ? '$6' : '$4'}
           gap="$5"
         >
-          {/* Header */}
-          <YStack gap="$3">
+          <YStack gap="$3" width="100%">
             {content.cms_categories?.name ? (
               <Badge tone="brand" alignSelf="flex-start">
                 {content.cms_categories.name}
@@ -269,22 +290,20 @@ export function BlogDetailScreen() {
             </XStack>
           </YStack>
 
-          {/* Cover */}
           {cover ? (
             <YStack
               width="100%"
-              height={isDesktop ? 360 : 200}
+              height={coverHeight}
               borderRadius={radius.card}
               overflow="hidden"
               borderWidth={1}
               borderColor={ui.borderSubtle}
               style={getShadowStyle('sm')}
             >
-              <CmsCoverImage url={cover} alt={content.title} height="100%" />
+              <CmsCoverImage url={cover} alt={content.title} width="100%" height={coverHeight} />
             </YStack>
           ) : null}
 
-          {/* Tags */}
           {tags.length ? (
             <XStack gap="$2" flexWrap="wrap">
               {tags.map((tag) =>
@@ -297,8 +316,8 @@ export function BlogDetailScreen() {
             </XStack>
           ) : null}
 
-          {/* Body */}
           <YStack
+            width="100%"
             padding={isDesktop ? '$5' : '$4'}
             borderRadius={radius.card}
             borderWidth={1}
@@ -309,8 +328,8 @@ export function BlogDetailScreen() {
             <BlogPostContent body={content.body} format={content.body_format} />
           </YStack>
 
-          {/* Actions */}
           <XStack
+            width="100%"
             alignItems="center"
             justifyContent="space-between"
             flexWrap="wrap"
@@ -338,9 +357,9 @@ export function BlogDetailScreen() {
             </Button>
           </XStack>
 
-          {/* Comments */}
           {content.allow_comments !== false ? (
             <YStack
+              width="100%"
               padding={isDesktop ? '$5' : '$4'}
               borderRadius={radius.card}
               borderWidth={1}
@@ -355,24 +374,16 @@ export function BlogDetailScreen() {
             </YStack>
           ) : null}
 
-          {/* Related */}
           {related.length ? (
-            <YStack gap="$4" marginTop="$2">
+            <YStack gap="$4" marginTop="$2" width="100%">
               <Text fontSize={22} fontWeight="800" color={ui.text}>
                 Related Articles
               </Text>
-              <XStack gap="$4" flexWrap="wrap" width="100%">
+              <BlogPostsGrid>
                 {related.map((post) => (
-                  <YStack
-                    key={post.id}
-                    width={relatedCardWidth as any}
-                    flexShrink={0}
-                    maxWidth="100%"
-                  >
-                    <BlogCard post={post} />
-                  </YStack>
+                  <BlogCard key={post.id} post={post} />
                 ))}
-              </XStack>
+              </BlogPostsGrid>
             </YStack>
           ) : null}
         </YStack>
