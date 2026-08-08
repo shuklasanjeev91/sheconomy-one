@@ -1,7 +1,11 @@
 import { useEffect, useState, useMemo, memo, useRef } from 'react'
-import { Icons, Image, YStack } from '~/components/ui'
+import { Icons, YStack } from '~/components/ui'
 import { ListingMediaPreview } from '~/components/media/ListingMediaPreview'
 import { listingMediaKind } from '~/commerce/lib/listing-media'
+import {
+  LISTING_CARD_IMAGE_EDGE,
+  type ListingImageDisplaySize,
+} from '~/commerce/lib/images/listing-image-url'
 import { getListingImageUrls } from '~/lib/listing-images'
 import { useAppUi } from '~/lib/theme/useAppUi'
 
@@ -14,16 +18,18 @@ type ListingImageProps = {
   height?: number | string
   objectFit?: 'cover' | 'contain' | 'fill'
   placeholderIconSize?: number
+  /**
+   * Pixel size for Supabase image transforms. Defaults from numeric width/height,
+   * otherwise {@link LISTING_CARD_IMAGE_EDGE} for fluid card tiles.
+   */
+  displaySize?: ListingImageDisplaySize | null
 }
 
-// ─── Custom equality check for memo ──────────────────────────────────────
 function arePropsEqual(prev: ListingImageProps, next: ListingImageProps): boolean {
-  // Compare imageUrls by content (join with '|') to avoid re‑render on new array references
   const prevUrls = prev.imageUrls?.join('|') ?? ''
   const nextUrls = next.imageUrls?.join('|') ?? ''
   if (prevUrls !== nextUrls) return false
 
-  // Compare other props shallowly
   return (
     prev.fallbackUrl === next.fallbackUrl &&
     prev.imageType === next.imageType &&
@@ -31,8 +37,40 @@ function arePropsEqual(prev: ListingImageProps, next: ListingImageProps): boolea
     prev.width === next.width &&
     prev.height === next.height &&
     prev.objectFit === next.objectFit &&
-    prev.placeholderIconSize === next.placeholderIconSize
+    prev.placeholderIconSize === next.placeholderIconSize &&
+    prev.displaySize?.width === next.displaySize?.width &&
+    prev.displaySize?.height === next.displaySize?.height &&
+    prev.displaySize?.quality === next.displaySize?.quality &&
+    prev.displaySize?.resize === next.displaySize?.resize
   )
+}
+
+function resolveDisplaySize(
+  width: number | string | undefined,
+  height: number | string | undefined,
+  displaySize: ListingImageDisplaySize | null | undefined,
+): ListingImageDisplaySize {
+  if (displaySize?.width || displaySize?.height) {
+    return {
+      width: displaySize.width,
+      height: displaySize.height,
+      quality: displaySize.quality ?? 72,
+      resize: displaySize.resize ?? 'cover',
+    }
+  }
+
+  const w = typeof width === 'number' && width > 0 ? Math.round(width * 2) : undefined
+  const h = typeof height === 'number' && height > 0 ? Math.round(height * 2) : undefined
+  if (w || h) {
+    return { width: w ?? h, height: h ?? w, quality: 72, resize: 'cover' }
+  }
+
+  return {
+    width: LISTING_CARD_IMAGE_EDGE,
+    height: LISTING_CARD_IMAGE_EDGE,
+    quality: 72,
+    resize: 'cover',
+  }
 }
 
 export const ListingImage = memo(function ListingImage({
@@ -44,23 +82,24 @@ export const ListingImage = memo(function ListingImage({
   height = '100%',
   objectFit = 'cover',
   placeholderIconSize = 28,
+  displaySize,
 }: ListingImageProps) {
   const ui = useAppUi()
 
-  // ─── Memoize URLs to avoid recomputation on every render ──────────────
   const urls = useMemo(() => getListingImageUrls(imageUrls, fallbackUrl), [imageUrls, fallbackUrl])
   const [activeIndex, setActiveIndex] = useState(0)
   const [failed, setFailed] = useState(false)
 
-  // ─── Stable key for URL content ────────────────────────────────────────
   const urlsKey = useMemo(() => urls.join('|'), [urls])
   const prevUrlsKeyRef = useRef<string>(urlsKey)
 
-  // ─── Memoize src and kind ──────────────────────────────────────────────
   const src = useMemo(() => urls[activeIndex] ?? null, [urls, activeIndex])
   const kind = useMemo(() => (src ? listingMediaKind(src, imageType) : 'image'), [src, imageType])
+  const resolvedDisplaySize = useMemo(
+    () => resolveDisplaySize(width, height, displaySize),
+    [width, height, displaySize],
+  )
 
-  // ─── Reset only when URL content actually changes ─────────────────────
   useEffect(() => {
     if (prevUrlsKeyRef.current !== urlsKey) {
       setActiveIndex(0)
@@ -69,7 +108,6 @@ export const ListingImage = memo(function ListingImage({
     }
   }, [urlsKey])
 
-  // ─── Placeholder ──────────────────────────────────────────────────────
   if (!src || failed) {
     return (
       <YStack
@@ -85,7 +123,6 @@ export const ListingImage = memo(function ListingImage({
     )
   }
 
-  // ─── Render via ListingMediaPreview for all media types ──────────────
   return (
     <ListingMediaPreview
       url={src}
@@ -97,6 +134,7 @@ export const ListingImage = memo(function ListingImage({
       placeholderIconSize={placeholderIconSize}
       muted={true}
       controls={false}
+      displaySize={resolvedDisplaySize}
     />
   )
 }, arePropsEqual)

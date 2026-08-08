@@ -18,6 +18,16 @@ if (process.env.EAS_UPDATE_RUNTIME_VERSION) {
   expo.runtimeVersion = process.env.EAS_UPDATE_RUNTIME_VERSION
 }
 
+// Local USB Release/Debug installs must run the bundled JS. Otherwise
+// expo-updates can pull the production channel OTA on launch and wipe local fixes.
+if (!process.env.EAS_BUILD) {
+  expo.updates = {
+    ...(expo.updates || {}),
+    enabled: false,
+    checkAutomatically: 'NEVER',
+  }
+}
+
 expo.plugins = (expo.plugins || []).map((plugin) => {
   if (Array.isArray(plugin) && plugin[0] === 'onesignal-expo-plugin') {
     return [

@@ -1,4 +1,4 @@
-import { Platform } from 'react-native'
+import { Modal, Platform } from 'react-native'
 
 import {
   FaceCaptureOverlay,
@@ -10,7 +10,7 @@ import { getShadowStyle, radius } from '~/config/tokens'
 import { BRAND_NAME } from '~/config/brand'
 import { useAppLayout } from '~/hooks/useAppLayout'
 import { useGenderVerification } from '~/hooks/useGenderVerification'
-import { toFriendlyGenderError } from '~/lib/gender-verification'
+import { toFriendlyGenderError, HUMAN_VERIFICATION_DISCLAIMER } from '~/lib/gender-verification'
 import { useAppUi } from '~/lib/theme/useAppUi'
 
 type GenderVerificationModalProps = {
@@ -37,15 +37,31 @@ export function GenderVerificationModal({
   onClose,
   onVerified,
 }: GenderVerificationModalProps) {
-  if (!open) return null
-
-  return (
+  const shell = (
     <GenderVerificationModalShell
       dismissible={dismissible}
       onClose={onClose}
       onVerified={onVerified}
     />
   )
+
+  // Native: RN Modal escapes SafeArea / overflow:hidden shell clipping.
+  if (Platform.OS !== 'web') {
+    return (
+      <Modal
+        visible={open}
+        transparent
+        animationType="slide"
+        onRequestClose={onClose}
+        statusBarTranslucent
+      >
+        {open ? shell : null}
+      </Modal>
+    )
+  }
+
+  if (!open) return null
+  return shell
 }
 
 function GenderVerificationModalShell({
@@ -144,7 +160,7 @@ function ModalHeader({
             Human verification
           </Text>
           <Text fontSize={12} color={ui.textMuted}>
-            Optional · on-device · women-first
+            Optional · on-device · real person
           </Text>
         </YStack>
       </XStack>
@@ -236,11 +252,28 @@ function VerificationFlow({
           }}
         >
           {verification.phase === 'idle' ? (
-            <Text fontSize={14} color={ui.textSecondary} lineHeight={21}>
-              Optional face check — blink {verification.requiredBlinks} times to unlock Community and
-              Chat. Video stays on this device. Skip anytime to keep using Commerce, Classes, and
-              Co-Work.
-            </Text>
+            <YStack gap="$3">
+              <Text fontSize={14} color={ui.textSecondary} lineHeight={21}>
+                Optional face check — blink {verification.requiredBlinks} times to unlock Community,
+                Chat, and Create store. Video stays on this device. Skip anytime to keep using
+                Commerce, Classes, and Co-Work.
+              </Text>
+              <YStack
+                padding="$3"
+                borderRadius={radius.chip}
+                backgroundColor={ui.surfaceMuted}
+                borderWidth={1}
+                borderColor={ui.borderSubtle}
+                gap="$1.5"
+              >
+                <Text fontSize={13} fontWeight="700" color={ui.text}>
+                  Our commitment
+                </Text>
+                <Text fontSize={12} color={ui.textSecondary} lineHeight={18}>
+                  {HUMAN_VERIFICATION_DISCLAIMER}
+                </Text>
+              </YStack>
+            </YStack>
           ) : null}
 
           {!verification.supported ? (
@@ -362,7 +395,7 @@ function VerificationFlow({
             size="$4"
             borderRadius={radius.pill}
             onPress={onClose}
-            aria-label="Skip gender verification"
+            aria-label="Skip human verification"
           >
             Skip for now
           </Button>

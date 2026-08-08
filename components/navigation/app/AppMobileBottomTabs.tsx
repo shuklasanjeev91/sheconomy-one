@@ -5,7 +5,10 @@ import { Platform, useWindowDimensions } from 'react-native'
 import { AuthButton } from '~/components/auth'
 import { XStack, YStack } from '~/components/ui'
 import { tabBarPositionStyle } from '~/lib/layout/styles'
+import { buildSignInUrl } from '~/lib/auth/redirect'
+import { openHumanVerification } from '~/lib/gender-verification/open-request'
 import { navigateApp } from '~/lib/platform/navigate'
+import { isCreateShopPath } from '~/lib/routes'
 import { mobileTabBarDockStyle } from '~/lib/theme/surfaces'
 import { useAccess } from '~/hooks/useAccess'
 import { useAppLayout } from '~/hooks/useAppLayout'
@@ -32,7 +35,7 @@ const TAB_ICON = { active: 24, inactive: 22 } as const
 /** Native-style full-width bottom tab bar — frosted dock, pill active states. */
 export function AppMobileBottomTabs() {
   const pathname = usePathname()
-  const { tier } = useAccess()
+  const { tier, isGuest, isFemale, isAuthenticated } = useAccess()
   const { safeBottom } = useAppLayout()
   const { shops, primaryShopId } = useVendorShops()
   const hasShops = shops.length > 0
@@ -93,6 +96,20 @@ export function AppMobileBottomTabs() {
 
   function pressTab(tab: AppMobileTabItem) {
     const href = focusPathForTab(tab)
+
+    // Create shop requires Human verification for limited members.
+    if (isCreateShopPath(href) && !hasShops) {
+      if (isFemale) {
+        // fall through to navigate
+      } else if (isAuthenticated) {
+        openHumanVerification({ returnTo: href })
+        return
+      } else {
+        navigateApp(buildSignInUrl(href))
+        return
+      }
+    }
+
     if (tab.match ? tab.match(pathname) : pathname === tab.href) {
       setPendingPath(null)
       return

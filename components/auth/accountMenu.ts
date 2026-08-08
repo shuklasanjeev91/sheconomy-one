@@ -7,6 +7,7 @@ import {
   canManageShops,
   resolveFeatureNavHref,
 } from '~/lib/auth/access'
+import { buildSignInUrl } from '~/lib/auth/redirect'
 import {
   chatRoutes,
   classRoutes,
@@ -212,9 +213,7 @@ export function getAccountMenuSections({
   })
 
   if (canManageShops(tier)) {
-    const shopManagerHref = hasShops
-      ? commerceRoutes.manageShop()
-      : commerceRoutes.createShop
+    const shopManagerHref = hasShops ? commerceRoutes.manageShop() : commerceRoutes.createShop
 
     sections.push({
       id: 'shop-manager',
@@ -419,7 +418,7 @@ export function getGuestAccountMenuSections(
           icon: Icons.PlusCircle,
           label: 'Open a shop',
           description: 'Seller tools and storefront setup',
-          href: commerceRoutes.createShop,
+          href: buildSignInUrl(String(commerceRoutes.createShop)) as Href,
         },
       ],
     },

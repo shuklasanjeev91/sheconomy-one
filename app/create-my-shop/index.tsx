@@ -4,8 +4,8 @@ import { CreateShopScreen } from '~/commerce/screens/CreateShopScreen'
 
 export default function CreateMyShopRoute() {
   return (
-    // Any signed-in member can open a shop, but seller tools are women-first —
-    // guests are sent to sign in and unverified users to gender verification.
+    // Any signed-in member can open a shop, but seller tools need Human verification —
+    // guests are sent to sign in and unverified users to Human verification.
     <RouteGuard allowedRoles={[]} requireGenderVerification signInReturnTo="/create-my-shop">
       <ShopErrorBoundary scope="CreateShop">
         <CreateShopScreen />

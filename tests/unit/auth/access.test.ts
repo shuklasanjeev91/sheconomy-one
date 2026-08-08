@@ -8,6 +8,8 @@ import {
   getGuestSignInReturnTo,
   getVisibleFeatures,
   hasVerifiedFemaleAccess,
+  resolveFeatureNavHref,
+  sanitizeReturnPath,
 } from '~/lib/auth/access'
 
 describe('access tiers (skip verification / women-first)', () => {
@@ -15,9 +17,11 @@ describe('access tiers (skip verification / women-first)', () => {
     expect(getAccessTier(false, null, null)).toBe('guest')
     expect(getAccessTier(true, false, false)).toBe('male')
     expect(getAccessTier(true, true, false)).toBe('male')
+    expect(getAccessTier(true, false, true)).toBe('male')
     expect(getAccessTier(true, true, true)).toBe('female')
     expect(hasVerifiedFemaleAccess(true, true)).toBe(true)
     expect(hasVerifiedFemaleAccess(true, false)).toBe(false)
+    expect(hasVerifiedFemaleAccess(false, true)).toBe(false)
   })
 
   it('guests and limited members share Commerce, Classes, and Co-Work', () => {
@@ -49,8 +53,33 @@ describe('access tiers (skip verification / women-first)', () => {
     expect(getGuestSignInReturnTo('guest', '/community')).toBe('/community')
   })
 
-  it('sends limited members away from community toward a safe browse path', () => {
+  it('opens Human verification for limited members on community / chat', () => {
     const redirect = String(getAccessDeniedRedirect('male', '/community', false))
+    expect(redirect).toMatch(/human=verify/)
+    expect(redirect).toMatch(/returnTo=/)
+    expect(redirect).not.toMatch(/gender=restricted/)
+
+    const chatNav = String(resolveFeatureNavHref('male', '/chat', 'chat'))
+    expect(chatNav).toMatch(/human=verify/)
+
+    const communityNav = String(resolveFeatureNavHref('male', '/community', 'community'))
+    expect(communityNav).toMatch(/human=verify/)
+  })
+
+  it('keeps account gate on the restricted modal path for limited members', () => {
+    const redirect = String(getAccessDeniedRedirect('male', '/settings', false))
     expect(redirect).toMatch(/gender=restricted/)
+  })
+
+  it('preserves Community intent after auth via Human verification open', () => {
+    const path = sanitizeReturnPath('/community', 'male', false)
+    expect(path).toMatch(/human=verify/)
+    expect(decodeURIComponent(path)).toContain('/community')
+  })
+
+  it('preserves Create store intent after auth via Human verification open', () => {
+    const path = sanitizeReturnPath('/create-my-shop', 'male', false)
+    expect(path).toMatch(/human=verify/)
+    expect(decodeURIComponent(path)).toContain('/create-my-shop')
   })
 })

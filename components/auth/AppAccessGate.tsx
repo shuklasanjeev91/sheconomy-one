@@ -7,6 +7,7 @@ import { AuthSignInFlow } from '~/components/auth/AuthSignInFlow'
 import { PageCenter } from '~/components/layout'
 import { Spinner, YStack } from '~/components/ui'
 import { canAccessPath as checkAccessPath, getGuestSignInReturnTo } from '~/lib/auth/access'
+import { isChatPath, isCommunityPath, isCreateShopPath } from '~/lib/routes'
 import { useAccess } from '~/hooks/useAccess'
 import { useAppLayout } from '~/hooks/useAppLayout'
 
@@ -29,6 +30,16 @@ function Shell({ children, documentScroll }: { children: ReactNode; documentScro
   )
 }
 
+function pathNeedsAuthOrVerify(pathname: string): boolean {
+  return (
+    getGuestSignInReturnTo('guest', pathname) != null ||
+    isCommunityPath(pathname) ||
+    isChatPath(pathname) ||
+    isCreateShopPath(pathname) ||
+    !checkAccessPath('male', pathname, false)
+  )
+}
+
 /** Redirects users away from routes their access tier cannot use. */
 export function AppAccessGate({ children }: AppAccessGateProps) {
   const pathname = usePathname()
@@ -42,6 +53,14 @@ export function AppAccessGate({ children }: AppAccessGateProps) {
   const guestCanBrowseWhileAuthLoads = !isAuthenticated && guestCanBrowsePath
 
   if (isLoading) {
+    // Authenticated but profile still loading — don't paint women-first / create-shop trees.
+    if (isAuthenticated && pathNeedsAuthOrVerify(pathname)) {
+      return (
+        <PageCenter>
+          <Spinner size="large" />
+        </PageCenter>
+      )
+    }
     if (isAuthenticated || guestCanBrowseWhileAuthLoads || guestCanBrowsePath) {
       return <Shell documentScroll={useDocumentScroll}>{children}</Shell>
     }

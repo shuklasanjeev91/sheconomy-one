@@ -5,6 +5,7 @@ import { Icons } from '~/components/ui'
 import { openComposer } from '~/community/lib/composer-store'
 import { openNewChat } from '~/chat/lib/chat-actions-store'
 import type { AccessTier, AppFeature } from '~/lib/auth/access'
+import { buildHumanVerificationOpenRedirect } from '~/lib/gender-verification/denied-redirect'
 import {
   chatRoutes,
   classRoutes,
@@ -278,10 +279,10 @@ export function getAuthMobileTab(tier: AccessTier): AppMobileTabItem {
 
   if (tier === 'male') {
     return {
-      href: routes.verifyGender,
+      href: buildHumanVerificationOpenRedirect({ returnTo: String(routes.profile) }) as Href,
       label: 'You',
       icon: Icons.User,
-      match: (path) => path.startsWith('/auth/verify-gender'),
+      match: (path) => path.includes('human=verify') || path.startsWith('/auth/verify-gender'),
     }
   }
 

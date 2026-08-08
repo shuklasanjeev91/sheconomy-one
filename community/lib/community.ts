@@ -758,7 +758,7 @@ async function fetchPostsPage(
 
   let query = supabase
     .from('posts_with_stats')
-    .select(POST_STATS_SELECT, { count: 'exact' })
+    .select(POST_STATS_SELECT)
     .eq('is_deleted', false)
 
   if (filter?.feed === 'photos') {
@@ -789,7 +789,7 @@ async function fetchPostsPage(
       ? query.order('engagement_score', { ascending: false, nullsFirst: false })
       : query.order('created_at', { ascending: false })
 
-  const { data, error, count } = await query.range(from, to)
+  const { data, error } = await query.range(from, to)
 
   if (error) {
     return { items: [], page, pageSize, hasMore: false, error: error.message }
@@ -798,13 +798,12 @@ async function fetchPostsPage(
   const mapped = ((data ?? []) as PostRow[]).map((row) => mapPost(row))
   const enriched = await enrichPosts(mapped)
   const items = await applyFeedExclusions(enriched)
-  const total = count ?? 0
 
   return {
     items,
     page,
     pageSize,
-    hasMore: total ? to + 1 < total : items.length === pageSize,
+    hasMore: (data?.length ?? 0) === pageSize,
     error: null,
   }
 }
@@ -818,7 +817,7 @@ async function fetchFilteredPostsPage(
   const from = page * pageSize
   const to = from + pageSize - 1
 
-  let idQuery = supabase.from('posts').select('id', { count: 'exact' }).eq('is_deleted', false)
+  let idQuery = supabase.from('posts').select('id').eq('is_deleted', false)
 
   if (filter.companyId) idQuery = idQuery.eq('company_id', filter.companyId)
   if (filter.groupId) idQuery = idQuery.eq('group_id', filter.groupId)
@@ -828,7 +827,7 @@ async function fetchFilteredPostsPage(
       ? idQuery.order('engagement_score', { ascending: false, nullsFirst: false })
       : idQuery.order('created_at', { ascending: false })
 
-  const { data: idRows, error: idError, count } = await idQuery.range(from, to)
+  const { data: idRows, error: idError } = await idQuery.range(from, to)
 
   if (idError) {
     return { items: [], page, pageSize, hasMore: false, error: idError.message }
@@ -852,13 +851,12 @@ async function fetchFilteredPostsPage(
 
   const mapped = ((data ?? []) as PostRow[]).map((row) => mapPost(row))
   const items = await enrichPosts(mapped)
-  const total = count ?? 0
 
   return {
     items,
     page,
     pageSize,
-    hasMore: total ? to + 1 < total : items.length === pageSize,
+    hasMore: ids.length === pageSize,
     error: null,
   }
 }
@@ -954,9 +952,9 @@ export async function fetchHashtagFeedPage(
   const from = page * pageSize
   const to = from + pageSize - 1
 
-  const { data: idRows, error: idError, count } = await supabase
+  const { data: idRows, error: idError } = await supabase
     .from('posts')
-    .select('id', { count: 'exact' })
+    .select('id')
     .contains('tags', [normalized])
     .eq('is_deleted', false)
     .order('created_at', { ascending: false })
@@ -984,13 +982,12 @@ export async function fetchHashtagFeedPage(
 
   const mapped = ((data ?? []) as PostRow[]).map((row) => mapPost(row))
   const items = await enrichPosts(mapped)
-  const total = count ?? 0
 
   return {
     items,
     page,
     pageSize,
-    hasMore: total ? to + 1 < total : items.length === pageSize,
+    hasMore: ids.length === pageSize,
     error: null,
   }
 }

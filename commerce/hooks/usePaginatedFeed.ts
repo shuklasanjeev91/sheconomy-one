@@ -3,6 +3,7 @@ import { Platform } from 'react-native'
 
 import { peekAppCache, readAppCache, writeAppCache } from '~/lib/cache/app-cache'
 import { useAutoRefresh } from '~/lib/cache/useAutoRefresh'
+import { scheduleIdle } from '~/lib/schedule-idle'
 import type { PaginatedResult } from '~/lib/supabase/commerce'
 import { useOnReconnect } from '~/providers/ConnectivityProvider'
 
@@ -10,6 +11,11 @@ type PaginatedCacheSnapshot<T> = {
   items: T[]
   page: number
   hasMore: boolean
+}
+
+type PrefetchBuffer<T> = {
+  page: number
+  result: PaginatedResult<T>
 }
 
 /** Skip network revalidation when the same feed was fetched this recently. */
@@ -28,6 +34,8 @@ type UsePaginatedFeedOptions<T> = {
   cacheKey?: string
   /** Extra invalidation topics that should silently refresh this feed. */
   watchKeys?: string[]
+  /** Idle-prefetch the next page after a successful load. Default true. */
+  prefetchNext?: boolean
 }
 
 export function usePaginatedFeed<T extends { id: string }>({
@@ -35,6 +43,7 @@ export function usePaginatedFeed<T extends { id: string }>({
   enabled = true,
   cacheKey,
   watchKeys,
+  prefetchNext = true,
 }: UsePaginatedFeedOptions<T>) {
   const initialSnapshot = cacheKey ? peekAppCache<PaginatedCacheSnapshot<T>>(cacheKey) : null
   const [items, setItems] = useState<T[]>(initialSnapshot?.items ?? [])
@@ -48,7 +57,23 @@ export function usePaginatedFeed<T extends { id: string }>({
   const fetchGenerationRef = useRef(0)
   const hasItemsRef = useRef((initialSnapshot?.items?.length ?? 0) > 0)
   const loadMoreAtRef = useRef(0)
+  const pageRef = useRef(initialSnapshot?.page ?? 0)
+  const hasMoreRef = useRef(initialSnapshot?.hasMore ?? true)
+  const prefetchBufferRef = useRef<PrefetchBuffer<T> | null>(null)
+  const prefetchInFlightRef = useRef<number | null>(null)
+  const cancelIdlePrefetchRef = useRef<(() => void) | null>(null)
+  const fetchPageRef = useRef(fetchPage)
+  fetchPageRef.current = fetchPage
   hasItemsRef.current = items.length > 0
+  pageRef.current = page
+  hasMoreRef.current = hasMore
+
+  const clearPrefetch = useCallback(() => {
+    cancelIdlePrefetchRef.current?.()
+    cancelIdlePrefetchRef.current = null
+    prefetchBufferRef.current = null
+    prefetchInFlightRef.current = null
+  }, [])
 
   const persistFirstPage = useCallback(
     async (snapshot: PaginatedCacheSnapshot<T>) => {
@@ -62,6 +87,66 @@ export function usePaginatedFeed<T extends { id: string }>({
     if (cacheKey) feedFetchedAt.set(cacheKey, Date.now())
   }, [cacheKey])
 
+  const schedulePrefetch = useCallback(
+    (afterPage: number, generation: number) => {
+      if (!prefetchNext) return
+      cancelIdlePrefetchRef.current?.()
+      cancelIdlePrefetchRef.current = null
+
+      const nextPage = afterPage + 1
+      if (prefetchBufferRef.current?.page === nextPage) return
+      if (prefetchInFlightRef.current === nextPage) return
+
+      cancelIdlePrefetchRef.current = scheduleIdle(() => {
+        if (generation !== fetchGenerationRef.current) return
+        if (!hasMoreRef.current) return
+        if (pageRef.current !== afterPage) return
+        if (prefetchBufferRef.current?.page === nextPage) return
+        if (prefetchInFlightRef.current === nextPage) return
+
+        prefetchInFlightRef.current = nextPage
+        void fetchPageRef
+          .current(nextPage)
+          .then((result) => {
+            if (generation !== fetchGenerationRef.current) return
+            if (pageRef.current !== afterPage) return
+            if (result.error) return
+            prefetchBufferRef.current = { page: nextPage, result }
+          })
+          .finally(() => {
+            if (prefetchInFlightRef.current === nextPage) {
+              prefetchInFlightRef.current = null
+            }
+          })
+      }, 1500)
+    },
+    [prefetchNext],
+  )
+
+  const applyAppendResult = useCallback(
+    (pageToLoad: number, result: PaginatedResult<T>, generation: number) => {
+      if (generation !== fetchGenerationRef.current) return
+
+      if (result.error) {
+        setError(result.error)
+        return
+      }
+
+      setError(null)
+      markFetched()
+      setItems((current) => mergeUnique(current, result.items))
+      setPage(pageToLoad)
+      pageRef.current = pageToLoad
+      setHasMore(result.hasMore)
+      hasMoreRef.current = result.hasMore
+
+      if (result.hasMore) {
+        schedulePrefetch(pageToLoad, generation)
+      }
+    },
+    [markFetched, schedulePrefetch],
+  )
+
   const loadPage = useCallback(
     async (pageToLoad: number, append: boolean, silent = false) => {
       if (!enabled) return
@@ -69,6 +154,10 @@ export function usePaginatedFeed<T extends { id: string }>({
       if (append && inFlightRef.current) return
 
       const generation = append ? fetchGenerationRef.current : ++fetchGenerationRef.current
+      if (!append) {
+        clearPrefetch()
+      }
+
       inFlightRef.current = true
       if (append) {
         setIsLoadingMore(true)
@@ -94,6 +183,7 @@ export function usePaginatedFeed<T extends { id: string }>({
           setError(result.error)
           if (!append && !hasItemsRef.current) {
             setHasMore(false)
+            hasMoreRef.current = false
           }
         } else {
           setError(null)
@@ -118,7 +208,15 @@ export function usePaginatedFeed<T extends { id: string }>({
           })
           if (!silentMerge) {
             setPage(pageToLoad)
+            pageRef.current = pageToLoad
             setHasMore(result.hasMore)
+            hasMoreRef.current = result.hasMore
+            if (result.hasMore) {
+              schedulePrefetch(pageToLoad, generation)
+            }
+          } else if (result.hasMore && pageRef.current === 0) {
+            // Fresh first page while keeping scroll pages — warm page 1.
+            schedulePrefetch(0, generation)
           }
         }
       } finally {
@@ -130,14 +228,25 @@ export function usePaginatedFeed<T extends { id: string }>({
         }
       }
     },
-    [cacheKey, enabled, fetchPage, markFetched, persistFirstPage],
+    [
+      cacheKey,
+      clearPrefetch,
+      enabled,
+      fetchPage,
+      markFetched,
+      persistFirstPage,
+      schedulePrefetch,
+    ],
   )
 
   useEffect(() => {
     if (!enabled) {
+      clearPrefetch()
       setItems([])
       setPage(0)
+      pageRef.current = 0
       setHasMore(true)
+      hasMoreRef.current = true
       setIsLoading(false)
       setIsRefreshing(false)
       setIsLoadingMore(false)
@@ -149,6 +258,7 @@ export function usePaginatedFeed<T extends { id: string }>({
     // Invalidate any in-flight response from the previous key/fetcher.
     fetchGenerationRef.current += 1
     inFlightRef.current = false
+    clearPrefetch()
 
     void (async () => {
       let hasCached = false
@@ -161,24 +271,33 @@ export function usePaginatedFeed<T extends { id: string }>({
           hasCached = true
           setItems(cached.items)
           setPage(cached.page)
+          pageRef.current = cached.page
           setHasMore(cached.hasMore)
+          hasMoreRef.current = cached.hasMore
           setIsLoading(false)
           const fetchedAt = feedFetchedAt.get(cacheKey) ?? 0
           if (fetchedAt > 0 && Date.now() - fetchedAt < FEED_FRESH_MS) {
             // Fresh enough — skip another network round-trip on tab revisit.
+            if (cached.hasMore) {
+              schedulePrefetch(cached.page, fetchGenerationRef.current)
+            }
             return
           }
         } else {
           // Drop previous tab/filter results so we never flash the wrong media type.
           setItems([])
           setPage(0)
+          pageRef.current = 0
           setHasMore(true)
+          hasMoreRef.current = true
           setIsLoading(true)
         }
       } else {
         setItems([])
         setPage(0)
+        pageRef.current = 0
         setHasMore(true)
+        hasMoreRef.current = true
         setIsLoading(true)
       }
 
@@ -190,6 +309,8 @@ export function usePaginatedFeed<T extends { id: string }>({
 
     return () => {
       cancelled = true
+      cancelIdlePrefetchRef.current?.()
+      cancelIdlePrefetchRef.current = null
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps -- reload when key/enabled/fetcher changes
   }, [cacheKey, enabled, fetchPage])
@@ -204,19 +325,31 @@ export function usePaginatedFeed<T extends { id: string }>({
   useAutoRefresh([cacheKey, ...(watchKeys ?? [])], silentRefresh)
 
   const loadMore = useCallback(() => {
-    if (!enabled || !hasMore || isLoading || isLoadingMore || isRefreshing || inFlightRef.current) {
+    if (!enabled || !hasMoreRef.current || isLoading || isLoadingMore || isRefreshing) {
       return
     }
     const now = Date.now()
     // Debounce rapid onEndReached storms from FlashList during fling.
     if (now - loadMoreAtRef.current < 400) return
     loadMoreAtRef.current = now
-    loadPage(page + 1, true)
-  }, [enabled, hasMore, isLoading, isLoadingMore, isRefreshing, loadPage, page])
+
+    const nextPage = pageRef.current + 1
+    const buffered = prefetchBufferRef.current
+    if (buffered?.page === nextPage && !buffered.result.error) {
+      if (inFlightRef.current) return
+      prefetchBufferRef.current = null
+      const generation = fetchGenerationRef.current
+      applyAppendResult(nextPage, buffered.result, generation)
+      return
+    }
+
+    if (inFlightRef.current) return
+    void loadPage(nextPage, true)
+  }, [applyAppendResult, enabled, isLoading, isLoadingMore, isRefreshing, loadPage])
 
   const refresh = useCallback(() => {
     if (!enabled) return
-    loadPage(0, false)
+    void loadPage(0, false)
   }, [enabled, loadPage])
 
   useOnReconnect(() => {

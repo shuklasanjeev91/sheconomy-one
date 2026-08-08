@@ -197,54 +197,6 @@ const LISTING_IMAGE_FIELDS = `
   image_metadata
 `
 
-const DELIVERY_PROFILE_FIELDS = `
-  id,
-  profile_name,
-  processing_time_min,
-  processing_time_max,
-  fixed_fee,
-  free_shipping_threshold,
-  shipping_rate_type,
-  delivery_metadata,
-  is_default,
-  is_active
-`
-
-/** Catalog feeds — card-ready fields only (no nested shipping rails). */
-const LISTING_CATALOG_SELECT = `
-  id,
-  slug,
-  title,
-  meta_title,
-  price,
-  mrp,
-  price_includes_tax,
-  tax_percent,
-  listing_type,
-  average_rating,
-  total_reviews,
-  shop_id,
-  category,
-  created_at,
-  is_featured,
-  shipping_required,
-  listing_metadata,
-  listing_images!inner(${LISTING_IMAGE_FIELDS}),
-  listing_delivery_profiles(
-    delivery_profiles(${DELIVERY_PROFILE_FIELDS})
-  ),
-  shops!inner(
-    shop_name,
-    shop_currency,
-    average_rating,
-    total_reviews,
-    verified,
-    is_active,
-    shop_metadata,
-    delivery_profiles(${DELIVERY_PROFILE_FIELDS})
-  )
-`
-
 /**
  * Ultra-light card hydrate for recommendation rails / by-id lookups.
  * Require at least one listing_images row — storefront cards without photos
@@ -504,6 +456,9 @@ export function isBrowseFeedKind(value: string): value is BrowseFeedKind {
 export const COMMERCE_PAGE_SIZE = 24
 export const COMMERCE_HORIZONTAL_PAGE_SIZE = 12
 
+/** Enough IDs for ~4 feed pages without pulling the entire catalog ranking. */
+const FEED_RANKING_ID_LIMIT = 96
+
 export type PaginatedResult<T> = {
   items: T[]
   page: number
@@ -547,7 +502,7 @@ let recommendedIdsPromise: Promise<string[]> | null = null
 async function getTrendingListingIds(): Promise<string[]> {
   if (!trendingIdsPromise) {
     trendingIdsPromise = supabase
-      .rpc('get_marketplace_trending_listings', { max_results: 1000 })
+      .rpc('get_marketplace_trending_listings', { max_results: FEED_RANKING_ID_LIMIT })
       .then(({ data, error }) => {
         if (error) return []
         return (data ?? []).map((row) => row.id)
@@ -560,7 +515,7 @@ async function getTrendingListingIds(): Promise<string[]> {
 async function buildRecommendedListingIds(): Promise<string[]> {
   const { data: recommended, error: recommendedError } = await supabase.rpc(
     'get_marketplace_recommended_listings',
-    { max_results: 1000 },
+    { max_results: FEED_RANKING_ID_LIMIT },
   )
 
   if (!recommendedError && recommended?.length) {
@@ -568,9 +523,9 @@ async function buildRecommendedListingIds(): Promise<string[]> {
   }
 
   const [trendingResult, bestsellerResult, ratedResult] = await Promise.all([
-    supabase.rpc('get_marketplace_trending_listings', { max_results: 400 }),
+    supabase.rpc('get_marketplace_trending_listings', { max_results: FEED_RANKING_ID_LIMIT }),
     supabase.rpc('get_marketplace_bestseller_listings', {
-      max_results: 400,
+      max_results: FEED_RANKING_ID_LIMIT,
       min_orders: 2,
     }),
     supabase
@@ -581,7 +536,7 @@ async function buildRecommendedListingIds(): Promise<string[]> {
       .gte('average_rating', 4)
       .gte('total_reviews', 2)
       .order('average_rating', { ascending: false, nullsFirst: false })
-      .limit(200),
+      .limit(FEED_RANKING_ID_LIMIT),
   ])
 
   const scores = new Map<string, number>()
@@ -609,6 +564,7 @@ async function buildRecommendedListingIds(): Promise<string[]> {
   const ranked = Array.from(scores.entries())
     .sort((a, b) => b[1] - a[1])
     .map(([id]) => id)
+    .slice(0, FEED_RANKING_ID_LIMIT)
 
   if (ranked.length) return ranked
 
@@ -618,7 +574,7 @@ async function buildRecommendedListingIds(): Promise<string[]> {
     .eq('is_active', ACTIVE_LISTING_FILTER.is_active)
     .eq('listing_status', ACTIVE_LISTING_FILTER.listing_status)
     .order('created_at', { ascending: false })
-    .limit(200)
+    .limit(FEED_RANKING_ID_LIMIT)
 
   return (latest ?? []).map((row) => row.id)
 }
@@ -700,7 +656,7 @@ export async function fetchListingFeedPage(
 
   let query = supabase
     .from('listings')
-    .select(LISTING_CATALOG_SELECT, { count: 'exact' })
+    .select(LISTING_CARD_SELECT)
     .eq('is_active', ACTIVE_LISTING_FILTER.is_active)
     .eq('listing_status', ACTIVE_LISTING_FILTER.listing_status)
     .eq('shops.is_active', true)
@@ -722,7 +678,7 @@ export async function fetchListingFeedPage(
     delete browseFilters.listingType
   }
 
-  const { data, error, count } = await applyListingBrowseFilters(
+  const { data, error } = await applyListingBrowseFilters(
     query as unknown as BrowseFilterQuery,
     browseFilters,
     kind === 'latest' ? 'newest' : 'relevance',
@@ -733,13 +689,12 @@ export async function fetchListingFeedPage(
   }
 
   const items = ((data ?? []) as ListingRow[]).map(mapListingRow)
-  const total = count ?? 0
 
   return {
     items,
     page,
     pageSize,
-    hasMore: total ? to + 1 < total : items.length === pageSize,
+    hasMore: items.length === pageSize,
     error: null,
   }
 }
@@ -796,7 +751,7 @@ export async function fetchShopsBrowsePage(
     ? 'id, shop_name, slug, logo_url, shop_description, average_rating, total_reviews, verified, shop_currency, shop_addresses!inner(city, state, country)'
     : SHOP_BROWSE_SELECT
 
-  let query = supabase.from('shops').select(select, { count: 'exact' }).eq('is_active', true)
+  let query = supabase.from('shops').select(select).eq('is_active', true)
 
   if (country) {
     query = query.eq('shop_addresses.country', country)
@@ -827,7 +782,7 @@ export async function fetchShopsBrowsePage(
       break
   }
 
-  const { data, error, count } = await query.range(from, to)
+  const { data, error } = await query.range(from, to)
 
   if (error) {
     return {
@@ -843,15 +798,14 @@ export async function fetchShopsBrowsePage(
   const items = (data ?? []).map((row) =>
     mapShopSummaryRow(row as ShopSummary & { shop_addresses?: unknown }),
   )
-  const total = count ?? 0
 
   return {
     items,
     page,
     pageSize,
-    hasMore: total ? to + 1 < total : items.length === pageSize,
+    hasMore: items.length === pageSize,
     error: null,
-    totalCount: total,
+    totalCount: items.length,
   }
 }
 
@@ -871,9 +825,9 @@ export async function fetchShopsPage(
   const from = page * pageSize
   const to = from + pageSize - 1
 
-  const { data, error, count } = await supabase
+  const { data, error } = await supabase
     .from('shops')
-    .select(SHOP_BROWSE_SELECT, { count: 'exact' })
+    .select(SHOP_BROWSE_SELECT)
     .eq('is_active', true)
     .order('average_rating', { ascending: false, nullsFirst: false })
     .range(from, to)
@@ -882,12 +836,14 @@ export async function fetchShopsPage(
     return { items: [], page, pageSize, hasMore: false, error: error.message }
   }
 
-  const total = count ?? 0
+  const items = (data ?? []).map((row) =>
+    mapShopSummaryRow(row as ShopSummary & { shop_addresses?: unknown }),
+  )
   return {
-    items: (data ?? []).map((row) => mapShopSummaryRow(row as ShopSummary & { shop_addresses?: unknown })),
+    items,
     page,
     pageSize,
-    hasMore: total ? to + 1 < total : (data?.length ?? 0) === pageSize,
+    hasMore: items.length === pageSize,
     error: null,
   }
 }
@@ -899,11 +855,9 @@ export async function fetchCategoriesPage(
   const from = page * pageSize
   const to = from + pageSize - 1
 
-  const { data, error, count } = await supabase
+  const { data, error } = await supabase
     .from('categories_with_counts')
-    .select('category_id, category, category_image_url, category_icon, product_count, seo_name', {
-      count: 'exact',
-    })
+    .select('category_id, category, category_image_url, category_icon, product_count, seo_name')
     .order('product_count', { ascending: false, nullsFirst: false })
     .range(from, to)
 
@@ -911,9 +865,7 @@ export async function fetchCategoriesPage(
     // View may not be migrated yet — fall back to active categories table scan.
     const legacy = await supabase
       .from('categories')
-      .select('category_id, category, category_image_url, category_icon, product_count, seo_name', {
-        count: 'exact',
-      })
+      .select('category_id, category, category_image_url, category_icon, product_count, seo_name')
       .eq('status', 'A')
       .not('category', 'ilike', '%without category%')
       .order('product_count', { ascending: false, nullsFirst: false })
@@ -933,12 +885,11 @@ export async function fetchCategoriesPage(
         product_count: row.product_count,
         seo_name: row.seo_name,
       }))
-    const legacyTotal = legacy.count ?? 0
     return {
       items: legacyItems,
       page,
       pageSize,
-      hasMore: legacyTotal ? to + 1 < legacyTotal : (legacy.data?.length ?? 0) === pageSize,
+      hasMore: (legacy.data?.length ?? 0) === pageSize,
       error: null,
     }
   }
@@ -954,12 +905,11 @@ export async function fetchCategoriesPage(
       seo_name: row.seo_name,
     }))
 
-  const total = count ?? 0
   return {
     items,
     page,
     pageSize,
-    hasMore: total ? to + 1 < total : (data?.length ?? 0) === pageSize,
+    hasMore: (data?.length ?? 0) === pageSize,
     error: null,
   }
 }
@@ -1133,7 +1083,7 @@ export async function fetchCategoryListingsPage(
 
   let baseQuery = supabase
     .from('listings')
-    .select(`${LISTING_CATALOG_SELECT}, category_assignments!inner(category_id)`, { count: 'exact' })
+    .select(`${LISTING_CARD_SELECT}, category_assignments!inner(category_id)`)
     .in('category_assignments.category_id', categoryIds)
     .eq('is_active', ACTIVE_LISTING_FILTER.is_active)
     .eq('listing_status', ACTIVE_LISTING_FILTER.listing_status)
@@ -1148,7 +1098,7 @@ export async function fetchCategoryListingsPage(
     baseQuery = baseQuery.in('shop_id', filters.shopIds)
   }
 
-  const { data, error, count } = await applyListingBrowseFilters(
+  const { data, error } = await applyListingBrowseFilters(
     baseQuery as unknown as BrowseFilterQuery,
     filters,
   ).range(from, to)
@@ -1158,13 +1108,12 @@ export async function fetchCategoryListingsPage(
   }
 
   const items = ((data ?? []) as ListingRow[]).map(mapListingRow)
-  const total = count ?? 0
 
   return {
     items,
     page,
     pageSize,
-    hasMore: total ? to + 1 < total : items.length === pageSize,
+    hasMore: items.length === pageSize,
     error: null,
   }
 }

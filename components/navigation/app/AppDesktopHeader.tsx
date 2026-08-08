@@ -9,6 +9,8 @@ import { NavLogo } from '~/components/navigation/NavLogo'
 import { useCart } from '~/commerce/hooks/useCart'
 import { useUnreadNotifications } from '~/community/hooks/useUnreadNotifications'
 import { commerceRoutes, routes } from '~/lib/routes'
+import { openHumanVerification } from '~/lib/gender-verification/open-request'
+import { navigateApp } from '~/lib/platform/navigate'
 import { useAccess } from '~/hooks/useAccess'
 import { useAppBackNavigation } from '~/hooks/useAppBackNavigation'
 import { useProfile } from '~/hooks/useProfile'
@@ -27,7 +29,7 @@ export function AppDesktopHeader() {
   const { gutter } = useAppLayout()
   const colors = getAppColors(ui)
   const { isAuthenticated } = useProfile()
-  const { canManageShops } = useAccess()
+  const { canManageShops, isFemale } = useAccess()
   const { shops, isLoading: shopsLoading, primaryShopId } = useVendorShops()
   const { itemCount } = useCart()
   const { count: unreadNotifications } = useUnreadNotifications()
@@ -36,7 +38,17 @@ export function AppDesktopHeader() {
   const hasShops = shops.length > 0
   const sellerHubHref =
     hasShops && primaryShopId ? commerceRoutes.manageShop(primaryShopId) : commerceRoutes.createShop
+  const createShopPath = String(commerceRoutes.createShop)
   const showCreateShop = canManageShops && isAuthenticated && !shopsLoading && !hasShops
+
+  function pressCreateShop() {
+    if (isFemale) {
+      navigateApp(createShopPath)
+      return
+    }
+    // Authenticated or still hydrating after first sign-in → open Human verification.
+    openHumanVerification({ returnTo: createShopPath })
+  }
 
   return (
     <YStack
@@ -90,23 +102,24 @@ export function AppDesktopHeader() {
                 />
               ) : null}
               {showCreateShop ? (
-                <AppLink href={commerceRoutes.createShop} asChild>
-                  <XStack
-                    height={40}
-                    paddingHorizontal="$3"
-                    borderRadius={999}
-                    backgroundColor={colors.brand}
-                    alignItems="center"
-                    justifyContent="center"
-                    cursor="pointer"
-                    hoverStyle={{ opacity: 0.92 }}
-                    aria-label="Create shop"
-                  >
-                    <Text fontSize={12} fontWeight="700" color={ui.onBrand}>
-                      Open shop
-                    </Text>
-                  </XStack>
-                </AppLink>
+                <XStack
+                  height={40}
+                  paddingHorizontal="$3"
+                  borderRadius={999}
+                  backgroundColor={colors.brand}
+                  alignItems="center"
+                  justifyContent="center"
+                  cursor="pointer"
+                  hoverStyle={{ opacity: 0.92 }}
+                  aria-label="Create shop"
+                  role="button"
+                  accessibilityRole="button"
+                  onPress={pressCreateShop}
+                >
+                  <Text fontSize={12} fontWeight="700" color={ui.onBrand}>
+                    Open shop
+                  </Text>
+                </XStack>
               ) : null}
             </>
           ) : null}

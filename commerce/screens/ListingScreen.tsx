@@ -698,6 +698,7 @@ export function ListingScreen({
               height="100%"
               objectFit="cover"
               placeholderIconSize={48}
+              displaySize={{ width: 1200, height: 1200, quality: 78, resize: 'cover' }}
             />
           ) : (
             <YStack flex={1} alignItems="center" justifyContent="center">

@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
+import type { Href } from 'one'
 import { Platform } from 'react-native'
 import { useLocalSearchParams, usePathname } from 'one'
 
@@ -6,115 +7,192 @@ import { GenderDeniedModal } from '~/components/gender-verification/GenderDenied
 import { GenderVerificationModal } from '~/components/gender-verification/GenderVerificationModal'
 import { requiresGenderVerification } from '~/config/route-protection.config'
 import { useProfile } from '~/hooks/useProfile'
+import { hasVerifiedFemaleAccess } from '~/lib/auth/access'
 import { GENDER_VERIFICATION_PROMPT } from '~/lib/gender-verification'
-import { buildVerificationDeniedRedirect } from '~/lib/gender-verification/denied-redirect'
+import { buildVerificationDeniedRedirect, isHumanVerificationIntentPath } from '~/lib/gender-verification/denied-redirect'
 import { rememberSafeAppPath } from '~/lib/gender-verification/route-memory'
+import {
+  clearVerificationReturnTo,
+  readVerificationReturnTo,
+  rememberVerificationReturnTo,
+} from '~/lib/gender-verification/return-to-storage'
 import {
   clearVerificationFlowOpen,
   markVerificationFlowOpen,
   peekVerificationFlowOpen,
   readVerificationFlowOpen,
 } from '~/lib/gender-verification/verification-flow-storage'
+import {
+  subscribeHumanVerificationOpen,
+  clearPendingHumanVerificationOpen,
+  peekPendingHumanVerificationOpen,
+} from '~/lib/gender-verification/open-request'
 import { replaceApp } from '~/lib/platform/navigate'
 import { refreshProfiles } from '~/lib/profile/refresh'
 import { patchCachedProfile } from '~/lib/profile/profile-cache'
 import { persistStorage } from '~/lib/store/storage'
 
 const {
-  dismissCooldownMs: COOLDOWN_MS,
   dismissStorageKey: STORAGE_KEY,
   restrictedQueryParam: RESTRICTED_PARAM,
   restrictedQueryValue: RESTRICTED_VALUE,
+  verifyQueryParam: VERIFY_PARAM,
+  verifyQueryValue: VERIFY_VALUE,
+  returnToQueryParam: RETURN_TO_PARAM,
 } = GENDER_VERIFICATION_PROMPT
 
 /** Routes that own their own verification UI (or shouldn't be interrupted). */
 function isSuppressedRoute(pathname: string): boolean {
-  return pathname.startsWith('/auth') || pathname.startsWith('/ui-kit')
+  return pathname.startsWith('/ui-kit') || pathname.startsWith('/auth/verify-gender')
+}
+
+function readParam(
+  params: Record<string, string | string[] | undefined>,
+  key: string,
+): string | undefined {
+  const raw = params?.[key]
+  return Array.isArray(raw) ? raw[0] : raw
+}
+
+function stripQueryParams(keys: string[]) {
+  if (Platform.OS !== 'web' || typeof window === 'undefined') return
+  const url = new URL(window.location.href)
+  let changed = false
+  for (const key of keys) {
+    if (url.searchParams.has(key)) {
+      url.searchParams.delete(key)
+      changed = true
+    }
+  }
+  if (changed) window.history.replaceState({}, '', url.toString())
 }
 
 /**
- * App-wide verification UX host.
+ * App-wide Human verification UX host.
  *
- * - Protected routes are blocked in {@link AppAccessGate}; unverified members are
- *   redirected to their last safe route and see {@link GenderDeniedModal}.
- * - Verification is optional — Skip keeps Commerce / Classes / Co-Work access.
- * - "Verify myself" opens {@link GenderVerificationModal}; flow state persists
- *   across redirect so the liveness check is not interrupted.
+ * Full women-first access requires verified female (`gender === true` AND
+ * `is_verified`). `is_verified` alone must NOT suppress the modal — phone OTP
+ * / legacy rows can set that flag without female access.
  */
 export function GenderVerificationHost() {
   const { profile, isAuthenticated } = useProfile()
   const pathname = usePathname()
   const params = useLocalSearchParams()
 
-  const [dismissedAt, setDismissedAt] = useState<number | null>(null)
   const [hydrated, setHydrated] = useState(false)
   const [manualOpen, setManualOpen] = useState(() => peekVerificationFlowOpen())
   const [denied, setDenied] = useState(false)
-  const [, forceTick] = useState(0)
 
   const closedOnPathRef = useRef<string | null>(null)
   const verificationFlowRef = useRef(peekVerificationFlowOpen())
   const didRedirectRef = useRef(false)
+  const isAuthenticatedRef = useRef(isAuthenticated)
+  const hasFullAccessRef = useRef(hasVerifiedFemaleAccess(profile?.gender, profile?.is_verified))
+  isAuthenticatedRef.current = isAuthenticated
+  hasFullAccessRef.current = hasVerifiedFemaleAccess(profile?.gender, profile?.is_verified)
 
-  const isVerified = profile?.is_verified === true
-  const needsVerification = isAuthenticated && !!profile && !isVerified
+  const hasFullAccess = hasVerifiedFemaleAccess(profile?.gender, profile?.is_verified)
+  const needsVerification = isAuthenticated && !!profile && !hasFullAccess
   const onProtectedRoute = requiresGenderVerification(pathname)
+  const onIntentRoute = isHumanVerificationIntentPath(pathname)
   const suppressedRoute = isSuppressedRoute(pathname)
   const verificationFlowActive = manualOpen || verificationFlowRef.current
+
+  const openVerificationUi = useCallback(() => {
+    if (hasFullAccessRef.current) {
+      clearPendingHumanVerificationOpen()
+      return
+    }
+    verificationFlowRef.current = true
+    void markVerificationFlowOpen()
+    setDenied(false)
+    setManualOpen(true)
+  }, [])
 
   useEffect(() => {
     rememberSafeAppPath(pathname)
   }, [pathname])
 
-  // Restore verification modal after redirect / reload.
   useEffect(() => {
-    if (!hydrated || !needsVerification) return
+    return subscribeHumanVerificationOpen(() => {
+      if (hasFullAccessRef.current) {
+        clearPendingHumanVerificationOpen()
+        return
+      }
+      if (!isAuthenticatedRef.current) return
+      openVerificationUi()
+    })
+  }, [openVerificationUi])
+
+  useEffect(() => {
+    if (!isAuthenticated || hasFullAccess) return
+    if (
+      verificationFlowRef.current ||
+      peekVerificationFlowOpen() ||
+      peekPendingHumanVerificationOpen()
+    ) {
+      openVerificationUi()
+    }
+  }, [isAuthenticated, hasFullAccess, openVerificationUi])
+
+  useEffect(() => {
+    if (!hydrated || !isAuthenticated || hasFullAccess) return
     let cancelled = false
     void readVerificationFlowOpen().then((open) => {
       if (cancelled || !open) return
-      verificationFlowRef.current = true
-      setManualOpen(true)
-      setDenied(false)
+      openVerificationUi()
     })
     return () => {
       cancelled = true
     }
-  }, [hydrated, needsVerification])
+  }, [hydrated, isAuthenticated, hasFullAccess, openVerificationUi])
 
-  // Blocked on a protected route — show denied modal and redirect (once) to last safe page.
+  // Blocked on a protected / intent route — treat missing profile as limited.
   useEffect(() => {
-    if (!isAuthenticated || !profile || isVerified || !onProtectedRoute) return
+    if (!isAuthenticated || hasFullAccess) return
+    if (!onProtectedRoute && !onIntentRoute) return
     if (verificationFlowActive || peekVerificationFlowOpen()) return
     if (didRedirectRef.current) return
 
-    setDenied(true)
+    if (onIntentRoute) {
+      void rememberVerificationReturnTo(pathname)
+      openVerificationUi()
+    } else {
+      setDenied(true)
+    }
 
-    const redirect = buildVerificationDeniedRedirect()
-    const redirectPath = (redirect.split('?')[0] ?? '/').replace(/\/$/, '') || '/'
+    const redirectHref = onIntentRoute
+      ? (buildVerificationDeniedRedirect().split('?')[0] ?? '/')
+      : buildVerificationDeniedRedirect()
+
+    const redirectPath = (String(redirectHref).split('?')[0] ?? '/').replace(/\/$/, '') || '/'
     const currentPath = pathname.replace(/\/$/, '') || '/'
     if (currentPath === redirectPath) return
 
     didRedirectRef.current = true
-    replaceApp(redirect)
-  }, [isAuthenticated, profile, isVerified, onProtectedRoute, pathname, verificationFlowActive])
+    replaceApp(redirectHref as Href)
+  }, [
+    isAuthenticated,
+    hasFullAccess,
+    onProtectedRoute,
+    onIntentRoute,
+    pathname,
+    verificationFlowActive,
+    openVerificationUi,
+  ])
 
   useEffect(() => {
-    if (!onProtectedRoute) {
+    if (!onProtectedRoute && !onIntentRoute) {
       didRedirectRef.current = false
     }
-  }, [onProtectedRoute])
+  }, [onProtectedRoute, onIntentRoute])
 
   useEffect(() => {
     let cancelled = false
-    persistStorage
+    void persistStorage
       .getItem(STORAGE_KEY)
-      .then((raw) => {
-        if (cancelled) return
-        const parsed = raw ? Number(raw) : NaN
-        setDismissedAt(Number.isFinite(parsed) ? parsed : null)
-        setHydrated(true)
-      })
-      .catch(() => {
+      .catch(() => null)
+      .finally(() => {
         if (!cancelled) setHydrated(true)
       })
     return () => {
@@ -123,30 +201,56 @@ export function GenderVerificationHost() {
   }, [])
 
   useEffect(() => {
-    if (!isVerified) return
+    if (!hasFullAccess) return
     verificationFlowRef.current = false
+    clearPendingHumanVerificationOpen()
     void clearVerificationFlowOpen()
+    void clearVerificationReturnTo()
     setManualOpen(false)
     setDenied(false)
-    setDismissedAt((current) => {
-      if (current !== null) void persistStorage.removeItem(STORAGE_KEY)
-      return null
-    })
-  }, [isVerified])
+    void persistStorage.removeItem(STORAGE_KEY)
+  }, [hasFullAccess])
+
+  useEffect(() => {
+    if (!isAuthenticated || hasFullAccess || suppressedRoute) return
+    if (verificationFlowActive || peekVerificationFlowOpen()) {
+      if (readParam(params, VERIFY_PARAM) === VERIFY_VALUE) {
+        stripQueryParams([VERIFY_PARAM, RETURN_TO_PARAM])
+      }
+      return
+    }
+
+    const flag = readParam(params, VERIFY_PARAM)
+    if (flag !== VERIFY_VALUE) return
+
+    const returnTo = readParam(params, RETURN_TO_PARAM)
+    if (returnTo) {
+      try {
+        void rememberVerificationReturnTo(decodeURIComponent(returnTo))
+      } catch {
+        void rememberVerificationReturnTo(returnTo)
+      }
+    }
+
+    openVerificationUi()
+    stripQueryParams([VERIFY_PARAM, RETURN_TO_PARAM])
+  }, [
+    params,
+    isAuthenticated,
+    hasFullAccess,
+    suppressedRoute,
+    verificationFlowActive,
+    openVerificationUi,
+  ])
 
   useEffect(() => {
     if (verificationFlowActive || peekVerificationFlowOpen()) return
 
-    const raw = params?.[RESTRICTED_PARAM]
-    const flag = Array.isArray(raw) ? raw[0] : raw
+    const flag = readParam(params, RESTRICTED_PARAM)
     if (flag !== RESTRICTED_VALUE) return
 
     setDenied(true)
-    if (Platform.OS === 'web' && typeof window !== 'undefined') {
-      const url = new URL(window.location.href)
-      url.searchParams.delete(RESTRICTED_PARAM)
-      window.history.replaceState({}, '', url.toString())
-    }
+    stripQueryParams([RESTRICTED_PARAM])
   }, [params, verificationFlowActive])
 
   useEffect(() => {
@@ -155,67 +259,60 @@ export function GenderVerificationHost() {
     }
   }, [pathname])
 
-  useEffect(() => {
-    if (onProtectedRoute || !needsVerification || dismissedAt === null) return
-    const remaining = COOLDOWN_MS - (Date.now() - dismissedAt)
-    if (remaining <= 0) return
-    const timer = setTimeout(() => forceTick((tick) => tick + 1), remaining + 50)
-    return () => clearTimeout(timer)
-  }, [needsVerification, dismissedAt, onProtectedRoute])
-
   const closeVerificationFlow = useCallback(() => {
     verificationFlowRef.current = false
+    clearPendingHumanVerificationOpen()
     void clearVerificationFlowOpen()
     setManualOpen(false)
   }, [])
 
   const handleVerifyClose = useCallback(() => {
-    const now = Date.now()
-    setDismissedAt(now)
-    void persistStorage.setItem(STORAGE_KEY, String(now))
+    void persistStorage.setItem(STORAGE_KEY, String(Date.now()))
     closedOnPathRef.current = pathname
+    void clearVerificationReturnTo()
     closeVerificationFlow()
   }, [closeVerificationFlow, pathname])
 
   const handleVerified = useCallback(() => {
     if (profile?.id) {
-      void patchCachedProfile(profile.id, { is_verified: true }).then(() => refreshProfiles())
+      void patchCachedProfile(profile.id, { is_verified: true, gender: true }).then(() =>
+        refreshProfiles(),
+      )
     } else {
       refreshProfiles()
     }
     closeVerificationFlow()
     setDenied(false)
+
+    void readVerificationReturnTo().then((returnTo) => {
+      void clearVerificationReturnTo()
+      if (returnTo) {
+        replaceApp(returnTo as Href)
+      }
+    })
   }, [closeVerificationFlow, profile?.id])
 
   const handleDeniedClose = useCallback(() => {
-    const now = Date.now()
-    setDismissedAt(now)
-    void persistStorage.setItem(STORAGE_KEY, String(now))
+    void persistStorage.setItem(STORAGE_KEY, String(Date.now()))
     closedOnPathRef.current = pathname
     setDenied(false)
   }, [pathname])
 
   const handleDeniedVerify = useCallback(() => {
-    verificationFlowRef.current = true
-    void markVerificationFlowOpen()
-    setDenied(false)
-    setManualOpen(true)
     closedOnPathRef.current = null
-  }, [])
-
-  const cooledDown = dismissedAt === null || Date.now() - dismissedAt >= COOLDOWN_MS
-  const autoShow =
-    hydrated && needsVerification && !onProtectedRoute && cooledDown && !verificationFlowActive
+    openVerificationUi()
+  }, [openVerificationUi])
 
   const showDenied =
     !verificationFlowActive &&
-    (denied || (needsVerification && onProtectedRoute)) &&
+    (denied || (needsVerification && onProtectedRoute && !onIntentRoute)) &&
     !suppressedRoute
+
   const showVerify =
     isAuthenticated &&
-    profile?.is_verified !== true &&
+    !hasFullAccess &&
     !suppressedRoute &&
-    (verificationFlowActive || (needsVerification && !showDenied && autoShow))
+    (manualOpen || verificationFlowRef.current)
 
   return (
     <>

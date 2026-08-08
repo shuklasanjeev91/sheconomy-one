@@ -1,6 +1,7 @@
 import type { AccessTier } from '~/lib/auth/access'
 import { canAccessFeature } from '~/lib/auth/access'
 import { buildSignInUrl } from '~/lib/auth/redirect'
+import { buildHumanVerificationOpenRedirect } from '~/lib/gender-verification/denied-redirect'
 import { appRoutes, classRoutes, communityRoutes, coWorkRoutes } from '~/lib/routes'
 
 import type { SearchScope } from '~/lib/search/types'
@@ -42,7 +43,7 @@ export function blockedSearchScopes(tier: AccessTier): SearchScope[] {
 export function searchScopeGateHref(tier: AccessTier, scope: SearchScope): string {
   if (COMMUNITY_SCOPES.includes(scope)) {
     if (tier === 'guest') return String(buildSignInUrl(String(communityRoutes.people)))
-    return String(appRoutes.verifyGender)
+    return buildHumanVerificationOpenRedirect({ returnTo: String(communityRoutes.people) })
   }
   if (CLASS_SCOPES.includes(scope) && !canAccessSearchScope(tier, scope)) {
     return String(buildSignInUrl(String(classRoutes.home)))

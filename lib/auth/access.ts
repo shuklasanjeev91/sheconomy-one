@@ -1,7 +1,11 @@
 import type { Href } from 'one'
 
 import { buildSignInUrl, isSafeReturnPath } from '~/lib/auth/redirect'
-import { buildVerificationDeniedRedirect } from '~/lib/gender-verification/denied-redirect'
+import {
+  buildHumanVerificationOpenRedirect,
+  buildVerificationDeniedRedirect,
+  isHumanVerificationIntentPath,
+} from '~/lib/gender-verification/denied-redirect'
 import { requiresGenderVerification } from '~/config/route-protection.config'
 import {
   appRoutes,
@@ -19,7 +23,7 @@ import {
 
 /**
  * Guest / limited (male or skipped verification) / verified female (full access).
- * Skipping or failing gender verification keeps the member on the limited tier.
+ * Skipping or failing human verification keeps the member on the limited tier.
  */
 export type AccessTier = 'guest' | 'male' | 'female'
 
@@ -119,6 +123,9 @@ export function canAccessPath(
     return tier === 'female'
   }
 
+  // Create shop is path-reachable for signed-in members only after Human verification.
+  if (isCreateShopPath(pathname) && tier === 'male') return false
+
   return canAccessFeature(tier, area)
 }
 
@@ -134,6 +141,14 @@ export function sanitizeReturnPath(
 ): string {
   if (!isSafeReturnPath(path ?? null)) {
     return getDefaultHomeForTier(tier, isVerified)
+  }
+
+  // After auth, preserve Community / Chat / Create store intent → Human verification.
+  // Create store is path-allowed for limited members but still requires verification.
+  if (tier === 'male' && isHumanVerificationIntentPath(path!)) {
+    if (!canAccessPath(tier, path!, isVerified) || isCreateShopPath(path!)) {
+      return buildHumanVerificationOpenRedirect({ returnTo: path! })
+    }
   }
 
   if (canAccessPath(tier, path!, isVerified)) {
@@ -154,14 +169,14 @@ export function getAccessDeniedRedirect(
     if (tier === 'guest') return buildSignInUrl(pathname)
   }
 
-  if (
-    tier === 'male' &&
-    (feature === 'community' ||
-      feature === 'chat' ||
-      feature === 'account' ||
-      requiresGenderVerification(pathname))
-  ) {
-    return buildVerificationDeniedRedirect() as Href
+  if (tier === 'male') {
+    if (isHumanVerificationIntentPath(pathname) || feature === 'community' || feature === 'chat') {
+      return buildHumanVerificationOpenRedirect({ returnTo: pathname }) as Href
+    }
+
+    if (feature === 'account' || requiresGenderVerification(pathname)) {
+      return buildVerificationDeniedRedirect() as Href
+    }
   }
 
   if (
@@ -192,9 +207,15 @@ export function getVisibleFeatures(tier: AccessTier): AppFeature[] {
   return Array.from(TIER_FEATURES[tier])
 }
 
-/** Header nav target — feature route, or sign-in / verify-gender gate when blocked. */
+/**
+ * Header nav target — feature route, sign-in (guest), or Human verification open
+ * (limited member on Community / Chat). Account stays on the denied modal path.
+ */
 export function resolveFeatureNavHref(tier: AccessTier, href: string, feature: AppFeature): Href {
   if (canAccessFeature(tier, feature)) return href as Href
   if (tier === 'guest') return buildSignInUrl(href)
+  if (feature === 'community' || feature === 'chat') {
+    return buildHumanVerificationOpenRedirect({ returnTo: href }) as Href
+  }
   return buildVerificationDeniedRedirect() as Href
 }

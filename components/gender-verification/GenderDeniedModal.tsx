@@ -4,21 +4,21 @@ import { Button, Icons, ScrollView, Text, XStack, YStack } from '~/components/ui
 import { getShadowStyle, radius } from '~/config/tokens'
 import { BRAND_NAME } from '~/config/brand'
 import { useAppLayout } from '~/hooks/useAppLayout'
+import { HUMAN_VERIFICATION_DISCLAIMER } from '~/lib/gender-verification'
 import { useAppUi } from '~/lib/theme/useAppUi'
 
 type GenderDeniedModalProps = {
   open: boolean
   /** Acknowledge and dismiss ("I understand"). */
   onClose: () => void
-  /** Kick off verification instead ("Verify myself"). */
+  /** Kick off Human verification instead. */
   onVerify: () => void
 }
 
 /**
  * "Access restricted" modal shown when someone reaches a women-first feature
- * they can't use yet (e.g. via `?gender=restricted`). Explains what limited
- * access still allows and offers a path to verify. Migrated from the legacy
- * `gender-denied-modal`, restyled with the app's brand tokens.
+ * outside the main Community / Chat / Create store entry points (e.g. account).
+ * Offers a path into Human verification.
  */
 export function GenderDeniedModal({ open, onClose, onVerify }: GenderDeniedModalProps) {
   const ui = useAppUi()
@@ -77,7 +77,7 @@ export function GenderDeniedModal({ open, onClose, onVerify }: GenderDeniedModal
                 Access restricted
               </Text>
               <Text fontSize={12} color={ui.textMuted}>
-                This feature is women-first
+                Human verification required
               </Text>
             </YStack>
           </XStack>
@@ -100,11 +100,26 @@ export function GenderDeniedModal({ open, onClose, onVerify }: GenderDeniedModal
             top={44}
           >
             <Text fontSize={15} fontWeight="700" color={ui.text}>
-              This platform is built for women
+              This space is for verified women
             </Text>
             <Text fontSize={13} color={ui.textSecondary} lineHeight={20}>
-              Community, Chat, and some seller tools stay locked until you verify. You can skip and
-              still use Commerce, Classes, and Co-Work.
+              Community, Chat, and some seller tools stay locked until you complete Human
+              verification. You can skip and still use Commerce, Classes, and Co-Work.
+            </Text>
+          </YStack>
+
+          <YStack
+            padding="$3.5"
+            borderRadius={radius.chip}
+            backgroundColor={ui.surfaceMuted}
+            gap="$2"
+            top={34}
+          >
+            <Text fontSize={13} fontWeight="700" color={ui.text}>
+              Our commitment
+            </Text>
+            <Text fontSize={12} color={ui.textSecondary} lineHeight={18}>
+              {HUMAN_VERIFICATION_DISCLAIMER}
             </Text>
           </YStack>
 
@@ -138,7 +153,7 @@ export function GenderDeniedModal({ open, onClose, onVerify }: GenderDeniedModal
 
           <YStack gap="$2.5" top={24}>
             <Button tone="primary" size="$4" borderRadius={radius.pill} onPress={onVerify}>
-              Verify myself
+              Start human verification
             </Button>
             <Button tone="outline" size="$4" borderRadius={radius.pill} onPress={onClose}>
               Skip — continue browsing

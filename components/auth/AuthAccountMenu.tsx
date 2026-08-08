@@ -13,8 +13,9 @@ import { Avatar, Icons, Text, XStack, YStack } from '~/components/ui'
 import { useCart } from '~/commerce/hooks/useCart'
 import { useFavorites } from '~/commerce/hooks/useFavorites'
 import { isAdminRole, normalizeRole } from '~/lib/auth/route-protection'
+import { openHumanVerification } from '~/lib/gender-verification/open-request'
 import { navigateApp } from '~/lib/platform/navigate'
-import { routes } from '~/lib/routes'
+import { isCreateShopPath, routes } from '~/lib/routes'
 import { useAccess } from '~/hooks/useAccess'
 import { useAuth } from '~/hooks/useAuth'
 import { useAppLayout } from '~/hooks/useAppLayout'
@@ -31,7 +32,7 @@ type AuthUserMenuContentProps = {
 
 export function AuthUserMenuContent({ onClose }: AuthUserMenuContentProps) {
   const { profile } = useProfile()
-  const { tier, isMale } = useAccess()
+  const { tier, isMale, isFemale } = useAccess()
   const { signOut } = useAuth()
   const { shops } = useVendorShops()
   const { itemCount: cartCount } = useCart()
@@ -40,11 +41,9 @@ export function AuthUserMenuContent({ onClose }: AuthUserMenuContentProps) {
   const ai = useAiAssistOptional()
 
   const displayName = profile?.full_name || profile?.username || 'Your account'
-  const profileHref = isMale
-    ? routes.verifyGender
-    : profile?.username
-      ? routes.userProfile(profile.username)
-      : routes.profile
+  const profileHref = profile?.username
+    ? routes.userProfile(profile.username)
+    : routes.profile
 
   const isAdmin = isAdminRole(normalizeRole(profile?.role))
 
@@ -72,9 +71,27 @@ export function AuthUserMenuContent({ onClose }: AuthUserMenuContentProps) {
   )
 
   function go(href: Href) {
+    const raw = String(href)
+    const pathOnly = (raw.split('?')[0] ?? raw) || '/'
+
+    if (isCreateShopPath(pathOnly) && !isFemale) {
+      openHumanVerification({ returnTo: pathOnly })
+      requestAnimationFrame(() => onClose())
+      return
+    }
+
     // Navigate first — closing a sheet/popover first can swallow the press.
     navigateApp(href)
     requestAnimationFrame(() => onClose())
+  }
+
+  function goProfile() {
+    if (isMale) {
+      openHumanVerification({ returnTo: String(routes.profile) })
+      requestAnimationFrame(() => onClose())
+      return
+    }
+    go(profileHref)
   }
 
   return (
@@ -84,7 +101,7 @@ export function AuthUserMenuContent({ onClose }: AuthUserMenuContentProps) {
         username={profile?.username}
         email={profile?.email}
         avatarUrl={profile?.avatar_url}
-        onPress={() => go(profileHref)}
+        onPress={goProfile}
       />
 
       <QuickActionsRow actions={quickActions} onNavigate={go} />

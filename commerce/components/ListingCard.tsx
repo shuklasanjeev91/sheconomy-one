@@ -119,6 +119,7 @@ export const ListingCard = memo(function ListingCard({ listing, compact, showQui
               width="100%"
               height="100%"
               objectFit="cover"
+              displaySize={{ width: 640, height: 640, quality: 72, resize: 'cover' }}
             />
           </YStack>
         </AppLink>
