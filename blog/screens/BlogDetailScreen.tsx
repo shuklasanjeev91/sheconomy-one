@@ -9,6 +9,7 @@ import { BlogPostContent } from '~/blog/components/BlogPostContent'
 import { BlogPostSkeleton } from '~/blog/components/BlogSkeletons'
 import { BlogShareButton } from '~/blog/components/BlogShareButton'
 import { estimateReadTime, formatBlogDate, formatCount } from '~/blog/lib/blog-utils'
+import { useBlogCoverSize } from '~/blog/lib/useBlogCoverSize'
 import { CmsCoverImage } from '~/app/admin/components/CmsCoverImage'
 import { AppLink } from '~/components/navigation/AppLink'
 import { PageScroll } from '~/components/layout/PageScroll'
@@ -21,6 +22,7 @@ import {
   Text,
   XStack,
   YStack,
+  Separator,
 } from '~/components/ui'
 import { getShadowStyle, radius } from '~/config/tokens'
 import { useAppLayout } from '~/hooks/useAppLayout'
@@ -49,9 +51,11 @@ export function BlogDetailScreen({ slug: slugProp }: { slug?: string }) {
   const dispatch = useAppDispatch()
   const router = useRouter()
   const ui = useAppUi()
-  const { isDesktop, safeBottom, gutter, mobileTabBarOffset } = useAppLayout()
+  const { isDesktop, isTablet, safeBottom, gutter, mobileTabBarOffset } = useAppLayout()
   const { isAuthenticated } = useAuth()
   const slug = (slugProp || '').trim()
+  const articleMax = isDesktop ? 760 : isTablet ? 680 : 640
+  const coverSize = useBlogCoverSize(articleMax)
 
   const { currentContent, items, contentError } = useAppSelector((s) => s.cms)
   const [related, setRelated] = useState<CmsContentDetail[]>([])
@@ -122,7 +126,6 @@ export function BlogDetailScreen({ slug: slugProp }: { slug?: string }) {
     }
   }, [content?.id, content?.category_id])
 
-  const coverHeight = isDesktop ? 360 : 200
   const cover = content ? getContentCoverUrl(content) : ''
   const teaser = content ? getContentTeaser(content, 220) : ''
   const tags =
@@ -187,7 +190,12 @@ export function BlogDetailScreen({ slug: slugProp }: { slug?: string }) {
 
   return (
     <PageScroll>
-      <YStack width="100%" backgroundColor={ui.background} paddingBottom={bottomPad}>
+      <YStack 
+        width="100%" 
+        backgroundColor={ui.background} 
+        paddingBottom={bottomPad}
+      >
+        {/* Enhanced Breadcrumb */}
         <YStack
           width="100%"
           borderBottomWidth={1}
@@ -197,7 +205,7 @@ export function BlogDetailScreen({ slug: slugProp }: { slug?: string }) {
           paddingHorizontal={gutter}
         >
           <XStack
-            maxWidth={860}
+            maxWidth={articleMax}
             width="100%"
             alignSelf="center"
             alignItems="center"
@@ -205,110 +213,218 @@ export function BlogDetailScreen({ slug: slugProp }: { slug?: string }) {
             flexWrap="wrap"
           >
             <AppLink href={commerceRoutes.home}>
-              <Text fontSize={13} color={ui.textMuted}>
+              <Text fontSize={13} color={ui.textMuted} hoverColor={ui.text}>
                 Home
               </Text>
             </AppLink>
             <Icons.ChevronRight size={12} color={ui.textMuted} />
             <AppLink href={blogRoutes.home}>
-              <Text fontSize={13} color={ui.textMuted}>
+              <Text fontSize={13} color={ui.textMuted} hoverColor={ui.text}>
                 Blog
               </Text>
             </AppLink>
             {content.cms_categories?.name ? (
               <>
                 <Icons.ChevronRight size={12} color={ui.textMuted} />
-                <Text fontSize={13} color={ui.textMuted}>
+                <Text fontSize={13} color={ui.textSecondary} numberOfLines={1}>
                   {content.cms_categories.name}
                 </Text>
               </>
             ) : null}
-            <Icons.ChevronRight size={12} color={ui.textMuted} />
-            <Text fontSize={13} fontWeight="600" color={ui.text} numberOfLines={1} flexShrink={1}>
-              {content.title}
-            </Text>
           </XStack>
         </YStack>
 
+        {/* Article column */}
         <YStack
           width="100%"
-          maxWidth={860}
+          maxWidth={articleMax}
           alignSelf="center"
           paddingHorizontal={gutter}
-          paddingTop={isDesktop ? '$6' : '$4'}
+          paddingTop={isDesktop ? '$8' : '$6'}
           gap="$5"
         >
-          <YStack gap="$3" width="100%">
-            {content.cms_categories?.name ? (
-              <Badge tone="brand" alignSelf="flex-start">
-                {content.cms_categories.name}
-              </Badge>
-            ) : null}
+          {/* Header Section */}
+          <YStack gap="$4" width="100%">
+            {/* Category Badges */}
+            <XStack gap="$2" flexWrap="wrap" alignItems="center">
+              {content.cms_categories?.name ? (
+                <Badge 
+                  tone="brand" 
+                  size="sm"
+                  style={{
+                    paddingVertical: 4,
+                    paddingHorizontal: 12,
+                    borderRadius: 20,
+                  }}
+                >
+                  {content.cms_categories.name}
+                </Badge>
+              ) : null}
+              {content.is_featured ? (
+                <Badge 
+                  tone="neutral" 
+                  size="sm"
+                  style={{
+                    paddingVertical: 4,
+                    paddingHorizontal: 12,
+                    borderRadius: 20,
+                  }}
+                >
+                  Featured
+                </Badge>
+              ) : null}
+            </XStack>
 
+            {/* Title */}
             <Text
               fontSize={isDesktop ? 40 : 28}
               fontWeight="800"
               color={ui.text}
               letterSpacing={-0.5}
-              lineHeight={isDesktop ? 48 : 34}
+              lineHeight={isDesktop ? 48 : 36}
             >
               {content.title}
             </Text>
 
+            {/* Teaser */}
             {teaser ? (
-              <Text fontSize={isDesktop ? 18 : 16} color={ui.textSecondary} lineHeight={26}>
+              <Text 
+                fontSize={isDesktop ? 20 : 16} 
+                color={ui.textSecondary} 
+                lineHeight={28}
+                fontWeight="400"
+              >
                 {teaser}
               </Text>
             ) : null}
 
-            <XStack gap="$4" flexWrap="wrap" alignItems="center" marginTop="$1">
-              <XStack gap="$2.5" alignItems="center">
-                <Avatar name={authorName} src={content.author?.avatar_url} size={40} />
-                <YStack>
-                  <Text fontSize={14} fontWeight="700" color={ui.text}>
+            {/* Author & Metadata */}
+            <XStack
+              gap="$4"
+              flexWrap="wrap"
+              alignItems="center"
+              paddingVertical="$3"
+              borderBottomWidth={1}
+              borderBottomColor={ui.borderSubtle}
+              paddingBottom="$4"
+            >
+              <XStack gap="$3" alignItems="center" flex={1} minWidth={200}>
+                <Avatar 
+                  name={authorName} 
+                  src={content.author?.avatar_url} 
+                  size={48}
+                  style={{
+                    borderWidth: 2,
+                    borderColor: ui.borderSubtle,
+                  }}
+                />
+                <YStack flex={1} minWidth={0}>
+                  <Text 
+                    fontSize={15} 
+                    fontWeight="700" 
+                    color={ui.text}
+                    numberOfLines={1}
+                  >
                     {authorName}
                   </Text>
-                  <Text fontSize={12} color={ui.textMuted}>
-                    {formatBlogDate(content.published_at ?? content.created_at, 'long')}
-                  </Text>
+                  <XStack gap="$2" alignItems="center">
+                    <Text fontSize={13} color={ui.textMuted}>
+                      {formatBlogDate(content.published_at ?? content.created_at, 'long')}
+                    </Text>
+                    <Text fontSize={13} color={ui.textMuted}>·</Text>
+                    <XStack gap="$1" alignItems="center">
+                      <Icons.Clock size={14} color={ui.textMuted} />
+                      <Text fontSize={13} color={ui.textMuted}>
+                        {readTime} min read
+                      </Text>
+                    </XStack>
+                  </XStack>
                 </YStack>
               </XStack>
-              <XStack gap="$3" alignItems="center">
+              
+              {/* Stats */}
+              <XStack gap="$4" alignItems="center" flexWrap="wrap">
                 <XStack gap="$1.5" alignItems="center">
-                  <Icons.Clock size={14} color={ui.textMuted} />
-                  <Text fontSize={13} color={ui.textMuted}>
-                    {readTime} min read
+                  <Icons.Eye size={16} color={ui.textMuted} />
+                  <Text fontSize={14} color={ui.textMuted}>
+                    {formatCount(content.view_count ?? 0)}
                   </Text>
                 </XStack>
-                <XStack gap="$1.5" alignItems="center">
-                  <Icons.Eye size={14} color={ui.textMuted} />
-                  <Text fontSize={13} color={ui.textMuted}>
-                    {formatCount(content.view_count ?? 0)} views
-                  </Text>
-                </XStack>
+                {content.like_count !== undefined && (
+                  <XStack gap="$1.5" alignItems="center">
+                    <Icons.Heart size={16} color={ui.textMuted} />
+                    <Text fontSize={14} color={ui.textMuted}>
+                      {formatCount(content.like_count)}
+                    </Text>
+                  </XStack>
+                )}
+                {content.comment_count !== undefined && (
+                  <XStack gap="$1.5" alignItems="center">
+                    <Icons.MessageCircle size={16} color={ui.textMuted} />
+                    <Text fontSize={14} color={ui.textMuted}>
+                      {formatCount(content.comment_count)}
+                    </Text>
+                  </XStack>
+                )}
               </XStack>
             </XStack>
           </YStack>
 
+          {/* Cover Image - Enhanced */}
           {cover ? (
             <YStack
               width="100%"
-              height={coverHeight}
+              maxWidth={coverSize.width}
+              height={coverSize.height}
+              alignSelf="center"
               borderRadius={radius.card}
               overflow="hidden"
+              backgroundColor={ui.surfaceMuted}
               borderWidth={1}
               borderColor={ui.borderSubtle}
-              style={getShadowStyle('sm')}
+              style={{
+                ...getShadowStyle('md'),
+                position: 'relative',
+              }}
             >
-              <CmsCoverImage url={cover} alt={content.title} width="100%" height={coverHeight} />
+              <CmsCoverImage
+                url={cover}
+                alt={content.title}
+                width="100%"
+                height={coverSize.height}
+                style={{
+                  objectFit: 'cover',
+                }}
+              />
+              {/* Optional overlay gradient */}
+              <YStack
+                position="absolute"
+                bottom={0}
+                left={0}
+                right={0}
+                height="30%"
+                style={{
+                  background: `linear-gradient(transparent, ${ui.background}80)`,
+                }}
+              />
             </YStack>
           ) : null}
 
+          {/* Tags */}
           {tags.length ? (
-            <XStack gap="$2" flexWrap="wrap">
+            <XStack gap="$2" flexWrap="wrap" paddingVertical="$2">
               {tags.map((tag) =>
                 tag ? (
-                  <Badge key={tag.id} tone="neutral" size="sm">
+                  <Badge 
+                    key={tag.id} 
+                    tone="neutral" 
+                    size="sm"
+                    style={{
+                      paddingVertical: 4,
+                      paddingHorizontal: 12,
+                      borderRadius: 20,
+                    }}
+                  >
                     #{tag.name}
                   </Badge>
                 ) : null,
@@ -316,30 +432,41 @@ export function BlogDetailScreen({ slug: slugProp }: { slug?: string }) {
             </XStack>
           ) : null}
 
+          <Separator />
+
+          {/* Article body - Enhanced */}
           <YStack
             width="100%"
-            padding={isDesktop ? '$5' : '$4'}
-            borderRadius={radius.card}
-            borderWidth={1}
-            borderColor={ui.borderSubtle}
-            backgroundColor={ui.surface}
-            style={getShadowStyle('sm')}
+            maxWidth="100%"
+            overflow="hidden"
+            paddingVertical="$2"
+            gap="$3"
           >
+            <Text
+              fontSize={11}
+              fontWeight="700"
+              color={ui.textMuted}
+              letterSpacing={1.2}
+              textTransform="uppercase"
+            >
+              Article
+            </Text>
             <BlogPostContent body={content.body} format={content.body_format} />
           </YStack>
 
+          {/* Divider */}
+          <Separator />
+
+          {/* Action Bar - Enhanced */}
           <XStack
             width="100%"
             alignItems="center"
             justifyContent="space-between"
             flexWrap="wrap"
-            gap="$3"
-            paddingVertical="$3"
-            borderTopWidth={1}
-            borderBottomWidth={1}
-            borderColor={ui.borderSubtle}
+            gap="$4"
+            paddingVertical="$4"
           >
-            <XStack gap="$2" flexWrap="wrap">
+            <XStack gap="$3" flexWrap="wrap">
               <BlogLikeButton
                 contentId={content.id}
                 slug={content.slug}
@@ -349,7 +476,7 @@ export function BlogDetailScreen({ slug: slugProp }: { slug?: string }) {
             </XStack>
             <Button
               size="$3"
-              tone="ghost"
+              tone="outline"
               icon={Icons.ArrowLeft}
               onPress={() => router.push(blogRoutes.home)}
             >
@@ -357,15 +484,39 @@ export function BlogDetailScreen({ slug: slugProp }: { slug?: string }) {
             </Button>
           </XStack>
 
+          {/* Comments Section - Enhanced */}
           {content.allow_comments !== false ? (
             <YStack
               width="100%"
-              padding={isDesktop ? '$5' : '$4'}
+              padding={isDesktop ? '$6' : '$5'}
               borderRadius={radius.card}
               borderWidth={1}
               borderColor={ui.borderSubtle}
               backgroundColor={ui.surface}
+              style={{
+                ...getShadowStyle('sm'),
+                marginTop: '$4',
+              }}
             >
+              <XStack alignItems="center" gap="$2" marginBottom="$4">
+                <Icons.MessageCircle size={20} color={ui.text} />
+                <Text fontSize={18} fontWeight="700" color={ui.text}>
+                  Comments
+                </Text>
+                {content.comment_count !== undefined && content.comment_count > 0 && (
+                  <Badge 
+                    tone="neutral" 
+                    size="sm"
+                    style={{
+                      paddingVertical: 2,
+                      paddingHorizontal: 10,
+                      borderRadius: 12,
+                    }}
+                  >
+                    {content.comment_count}
+                  </Badge>
+                )}
+              </XStack>
               <BlogCommentSection
                 contentId={content.id}
                 slug={content.slug}
@@ -373,20 +524,34 @@ export function BlogDetailScreen({ slug: slugProp }: { slug?: string }) {
               />
             </YStack>
           ) : null}
+        </YStack>
 
-          {related.length ? (
-            <YStack gap="$4" marginTop="$2" width="100%">
-              <Text fontSize={22} fontWeight="800" color={ui.text}>
+        {/* Related Articles - Enhanced */}
+        {related.length ? (
+          <YStack
+            width="100%"
+            maxWidth={1120}
+            alignSelf="center"
+            paddingHorizontal={gutter}
+            paddingTop="$10"
+            paddingBottom="$6"
+            gap="$5"
+          >
+            <YStack gap="$2">
+              <Text fontSize={24} fontWeight="800" color={ui.text}>
                 Related Articles
               </Text>
-              <BlogPostsGrid>
-                {related.map((post) => (
-                  <BlogCard key={post.id} post={post} />
-                ))}
-              </BlogPostsGrid>
+              <Text fontSize={15} color={ui.textSecondary}>
+                Continue your learning journey with these related posts
+              </Text>
             </YStack>
-          ) : null}
-        </YStack>
+            <BlogPostsGrid>
+              {related.map((post) => (
+                <BlogCard key={post.id} post={post} />
+              ))}
+            </BlogPostsGrid>
+          </YStack>
+        ) : null}
       </YStack>
     </PageScroll>
   )
