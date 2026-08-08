@@ -15,7 +15,7 @@ import { useAccess } from '~/hooks/useAccess'
 import { useProfile } from '~/hooks/useProfile'
 import { navigateApp } from '~/lib/platform/navigate'
 import { useAiAssistOptional } from '~/providers/AiAssistProvider'
-import { commerceRoutes, communityRoutes, routes } from '~/lib/routes'
+import { blogRoutes, commerceRoutes, communityRoutes, routes } from '~/lib/routes'
 import { useAppUi } from '~/lib/theme/useAppUi'
 
 import { getAppColors } from '~/components/navigation/app/config'
@@ -38,6 +38,7 @@ function useExploreTiles(): MenuTile[] {
 
   return [
     { label: 'Shops', icon: Icons.Store, href: commerceRoutes.shops, color: '#8b5cf6' },
+    { label: 'Blog', icon: Icons.FileText, href: blogRoutes.home, color: '#D81B60' },
     ...(hasCommunity
       ? ([
           { label: 'Groups', icon: Icons.UsersRound, href: communityRoutes.groups, color: '#f59e0b' },

@@ -85,6 +85,7 @@ function useCompactMobileTopBar() {
     pathname.startsWith('/help') ||
     pathname.startsWith('/profile') ||
     pathname.startsWith('/notifications') ||
+    pathname.startsWith('/blog') ||
     pathname.startsWith('/community/') ||
     pathname.startsWith('/class/') ||
     pathname.startsWith('/co-work/') ||

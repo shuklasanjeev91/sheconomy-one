@@ -187,14 +187,16 @@ export const loadContents = createAsyncThunk<
     filters: CmsListContentParams
     append: boolean
   },
-  (Partial<CmsListContentParams> & { append?: boolean }) | undefined,
+  (Partial<CmsListContentParams> & { append?: boolean; replaceFilters?: boolean }) | undefined,
   ThunkConfig
 >('cms/loadContents', async (overrides = {}, { getState, rejectWithValue }) => {
   try {
-    const { append = false, ...filterOverrides } = overrides
-    const current = getState().cms.contentFilters
+    const { append = false, replaceFilters = false, ...filterOverrides } = overrides
+    // Public blog (and other “fresh” lists) must not inherit admin CMS filters
+    // (category / author / type) left in the shared cms slice.
+    const base = replaceFilters ? DEFAULT_CONTENT_FILTERS : getState().cms.contentFilters
     const params = parseOrThrow(listContentParamsSchema, {
-      ...current,
+      ...base,
       ...filterOverrides,
     })
     const result = await resolveResponse(cmsService.listContents(params), rejectWithValue)
@@ -804,8 +806,11 @@ const cmsSlice = createSlice({
       .addCase(loadContents.pending, (state, action) => {
         setFetching(state)
         state.contentError = null
-        const { append: _append, ...filters } = action.meta.arg ?? {}
-        state.contentFilters = { ...state.contentFilters, ...filters }
+        const { append: _append, replaceFilters, ...filters } = action.meta.arg ?? {}
+        state.contentFilters = {
+          ...(replaceFilters ? DEFAULT_CONTENT_FILTERS : state.contentFilters),
+          ...filters,
+        }
       })
       .addCase(loadContents.fulfilled, (state, action) => {
         clearFetching(state)

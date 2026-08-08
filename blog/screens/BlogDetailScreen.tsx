@@ -1,8 +1,15 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useParams, useRouter } from 'one'
 
+import { BlogCard, blogCardColumnWidth } from '~/blog/components/BlogCard'
+import { BlogCommentSection } from '~/blog/components/BlogCommentSection'
+import { BlogLikeButton } from '~/blog/components/BlogLikeButton'
+import { BlogPostContent } from '~/blog/components/BlogPostContent'
+import { BlogPostSkeleton } from '~/blog/components/BlogSkeletons'
+import { BlogShareButton } from '~/blog/components/BlogShareButton'
+import { estimateReadTime, formatBlogDate, formatCount } from '~/blog/lib/blog-utils'
 import { CmsCoverImage } from '~/app/admin/components/CmsCoverImage'
-import { CmsMarkdownBody } from '~/components/blog/CmsMarkdownBody'
+import { AppLink } from '~/components/navigation/AppLink'
 import { PageScroll } from '~/components/layout/PageScroll'
 import { usePageSeo } from '~/components/seo/RouteSeo'
 import {
@@ -10,10 +17,7 @@ import {
   Badge,
   Button,
   Icons,
-  Spinner,
   Text,
-  TextArea,
-  useAppToast,
   XStack,
   YStack,
 } from '~/components/ui'
@@ -22,83 +26,31 @@ import { useAppLayout } from '~/hooks/useAppLayout'
 import { useAuth } from '~/hooks/useAuth'
 import {
   checkLike,
-  createComment,
+  clearCurrentContent,
   getContentCoverUrl,
   getContentTeaser,
   incrementViewCount,
-  loadComments,
+  listContents,
   loadContentBySlug,
-  toggleLike,
-  type CmsCommentWithAuthor,
+  type CmsContentDetail,
 } from '~/lib/cms'
-import { blogRoutes } from '~/lib/routes'
+import { blogRoutes, commerceRoutes } from '~/lib/routes'
 import { useAppDispatch, useAppSelector } from '~/lib/store/hooks'
 import { useAppUi } from '~/lib/theme/useAppUi'
-
-function formatDate(value: string | null | undefined) {
-  if (!value) return ''
-  const d = new Date(value)
-  if (Number.isNaN(d.getTime())) return ''
-  return d.toLocaleDateString('en-IN', {
-    day: 'numeric',
-    month: 'long',
-    year: 'numeric',
-  })
-}
-
-function CommentRow({ comment }: { comment: CmsCommentWithAuthor }) {
-  const ui = useAppUi()
-  const name = comment.author?.full_name || comment.author?.username || 'Member'
-
-  return (
-    <XStack
-      gap="$3"
-      padding="$3.5"
-      borderRadius={radius.card}
-      borderWidth={1}
-      borderColor={ui.borderSubtle}
-      backgroundColor={ui.surface}
-      alignItems="flex-start"
-    >
-      <Avatar name={name} src={comment.author?.avatar_url} size={40} />
-      <YStack flex={1} minWidth={0} gap="$1.5">
-        <XStack justifyContent="space-between" gap="$2" flexWrap="wrap">
-          <Text fontSize={14} fontWeight="700" color={ui.text} numberOfLines={1}>
-            {name}
-          </Text>
-          <Text fontSize={12} color={ui.textMuted}>
-            {formatDate(comment.created_at)}
-          </Text>
-        </XStack>
-        <Text fontSize={15} color={ui.text} lineHeight={22}>
-          {comment.body}
-        </Text>
-      </YStack>
-    </XStack>
-  )
-}
 
 export function BlogDetailScreen() {
   const dispatch = useAppDispatch()
   const router = useRouter()
-  const toast = useAppToast()
   const ui = useAppUi()
-  const { isDesktop, safeBottom, gutter, mobileTabBarOffset } = useAppLayout()
-  const { isAuthenticated, signIn } = useAuth()
+  const { isDesktop, isTablet, safeBottom, gutter, mobileTabBarOffset } = useAppLayout()
+  const relatedCardWidth = blogCardColumnWidth(isDesktop, isTablet)
+  const { isAuthenticated } = useAuth()
   const { slug } = useParams<{ slug: string }>()
 
-  const {
-    currentContent,
-    comments,
-    isFetching,
-    isCreating,
-    contentError,
-    likedContentIds,
-    likeCounts,
-  } = useAppSelector((s) => s.cms)
-
-  const [commentBody, setCommentBody] = useState('')
-  const [pendingNotice, setPendingNotice] = useState(false)
+  const { currentContent, isFetching, contentError } = useAppSelector((s) => s.cms)
+  const [related, setRelated] = useState<CmsContentDetail[]>([])
+  const [initialized, setInitialized] = useState(false)
+  const [viewTracked, setViewTracked] = useState(false)
 
   const content =
     currentContent && currentContent.slug === slug && currentContent.status === 'published'
@@ -107,33 +59,57 @@ export function BlogDetailScreen() {
 
   useEffect(() => {
     if (!slug) return
-    void dispatch(loadContentBySlug(slug))
+    setInitialized(false)
+    setViewTracked(false)
+    void dispatch(loadContentBySlug(slug)).finally(() => setInitialized(true))
+    return () => {
+      dispatch(clearCurrentContent())
+    }
   }, [dispatch, slug])
 
   useEffect(() => {
-    if (!content?.id) return
-    void dispatch(checkLike(content.id))
-    void dispatch(
-      loadComments({
-        content_id: content.id,
-        is_approved: true,
-        page: 1,
-        limit: 50,
-      }),
-    )
+    if (!content?.id || viewTracked) return
     void incrementViewCount(content.id)
-  }, [content?.id, dispatch])
+    setViewTracked(true)
+  }, [content?.id, viewTracked])
+
+  useEffect(() => {
+    if (content?.id && isAuthenticated) {
+      void dispatch(checkLike(content.id))
+    }
+  }, [content?.id, dispatch, isAuthenticated])
+
+  useEffect(() => {
+    let cancelled = false
+    async function loadRelated() {
+      if (!content?.category_id) {
+        setRelated([])
+        return
+      }
+      const result = await listContents({
+        type: 'post',
+        status: 'published',
+        category_id: content.category_id,
+        limit: 4,
+        order_by: 'published_at',
+        ascending: false,
+      })
+      if (cancelled || !result.success || !result.data) return
+      setRelated(result.data.filter((p) => p.id !== content.id).slice(0, 3))
+    }
+    void loadRelated()
+    return () => {
+      cancelled = true
+    }
+  }, [content?.id, content?.category_id])
 
   const cover = content ? getContentCoverUrl(content) : ''
-  const teaser = content ? getContentTeaser(content, 200) : ''
-  const liked = content ? !!likedContentIds[content.id] : false
-  const likeCount = content ? (likeCounts[content.id] ?? content.like_count ?? 0) : 0
-  const approvedComments = useMemo(
-    () => comments.filter((c) => c.is_approved && !c.deleted_at),
-    [comments],
-  )
+  const teaser = content ? getContentTeaser(content, 220) : ''
   const tags =
-    content?.cms_content_tag_map?.map((link) => link.cms_tags?.name).filter(Boolean) ?? []
+    content?.cms_content_tag_map?.map((link) => link.cms_tags).filter(Boolean) ?? []
+  const readTime = estimateReadTime(content?.body || '')
+  const authorName =
+    content?.author?.full_name || content?.author?.username || 'SHEconomy Team'
 
   usePageSeo(
     useMemo(() => {
@@ -147,59 +123,13 @@ export function BlogDetailScreen() {
     }, [content, cover, teaser]),
   )
 
-  async function handleLike() {
-    if (!content) return
-    if (!isAuthenticated) {
-      signIn(blogRoutes.post(content.slug))
-      return
-    }
-    try {
-      await dispatch(toggleLike(content.id)).unwrap()
-    } catch (err) {
-      toast.show(typeof err === 'string' ? err : 'Could not update like', { tone: 'danger' })
-    }
-  }
+  const bottomPad = safeBottom + (isDesktop ? 48 : mobileTabBarOffset + 24)
 
-  async function handleComment() {
-    if (!content) return
-    if (!isAuthenticated) {
-      signIn(blogRoutes.post(content.slug))
-      return
-    }
-    const body = commentBody.trim()
-    if (!body) {
-      toast.show('Write a comment first', { tone: 'warning' })
-      return
-    }
-    try {
-      await dispatch(
-        createComment({
-          content_id: content.id,
-          body,
-        }),
-      ).unwrap()
-      setCommentBody('')
-      setPendingNotice(true)
-      toast.show('Comment submitted for review', { tone: 'success' })
-      void dispatch(
-        loadComments({
-          content_id: content.id,
-          is_approved: true,
-          page: 1,
-          limit: 50,
-        }),
-      )
-    } catch (err) {
-      toast.show(typeof err === 'string' ? err : 'Could not post comment', { tone: 'danger' })
-    }
-  }
-
-  if (isFetching && !content) {
+  if (!initialized || (isFetching && !content)) {
     return (
       <PageScroll>
-        <YStack minHeight={420} alignItems="center" justifyContent="center" gap="$2">
-          <Spinner size="large" />
-          <Text color={ui.textMuted}>Opening article…</Text>
+        <YStack paddingHorizontal={gutter}>
+          <BlogPostSkeleton />
         </YStack>
       </PageScroll>
     )
@@ -209,289 +139,242 @@ export function BlogDetailScreen() {
     return (
       <PageScroll>
         <YStack
-          width="100%"
           maxWidth={720}
+          width="100%"
           alignSelf="center"
           paddingHorizontal={gutter}
-          paddingVertical="$8"
+          paddingVertical="$10"
+          alignItems="center"
           gap="$3"
         >
+          <Icons.FileText size={48} color={ui.textMuted} />
           <Text fontSize={24} fontWeight="800" color={ui.text}>
             Post not found
           </Text>
-          <Text color={ui.textSecondary}>
-            {contentError || 'This blog post may be unpublished or removed.'}
+          <Text color={ui.textSecondary} textAlign="center">
+            {contentError || 'This article does not exist or has been removed.'}
           </Text>
-          <Button alignSelf="flex-start" icon={Icons.ArrowLeft} onPress={() => router.push(blogRoutes.home)}>
-            Back to all posts
+          <Button icon={Icons.ArrowLeft} onPress={() => router.push(blogRoutes.home)}>
+            Back to Blog
           </Button>
         </YStack>
       </PageScroll>
     )
   }
 
-  const commentsEnabled = content.allow_comments !== false
-  const bottomPad = safeBottom + (isDesktop ? 48 : mobileTabBarOffset + 24)
-
   return (
     <PageScroll>
       <YStack width="100%" backgroundColor={ui.background} paddingBottom={bottomPad}>
-        {/* Cover */}
-        {cover ? (
-          <YStack
+        {/* Breadcrumb */}
+        <YStack
+          width="100%"
+          borderBottomWidth={1}
+          borderBottomColor={ui.borderSubtle}
+          backgroundColor={ui.surfaceMuted}
+          paddingVertical="$3"
+          paddingHorizontal={gutter}
+        >
+          <XStack
+            maxWidth={860}
             width="100%"
-            height={isDesktop ? 420 : 240}
-            backgroundColor={ui.roseSurface}
-            overflow="hidden"
-          >
-            <CmsCoverImage url={cover} alt={content.title} height="100%" />
-          </YStack>
-        ) : (
-          <YStack
-            width="100%"
-            height={isDesktop ? 180 : 120}
-            backgroundColor={ui.roseSurface}
+            alignSelf="center"
             alignItems="center"
-            justifyContent="center"
+            gap="$2"
+            flexWrap="wrap"
           >
-            <Icons.FileText size={40} color={ui.brand} />
-          </YStack>
-        )}
+            <AppLink href={commerceRoutes.home}>
+              <Text fontSize={13} color={ui.textMuted}>
+                Home
+              </Text>
+            </AppLink>
+            <Icons.ChevronRight size={12} color={ui.textMuted} />
+            <AppLink href={blogRoutes.home}>
+              <Text fontSize={13} color={ui.textMuted}>
+                Blog
+              </Text>
+            </AppLink>
+            {content.cms_categories?.name ? (
+              <>
+                <Icons.ChevronRight size={12} color={ui.textMuted} />
+                <Text fontSize={13} color={ui.textMuted}>
+                  {content.cms_categories.name}
+                </Text>
+              </>
+            ) : null}
+            <Icons.ChevronRight size={12} color={ui.textMuted} />
+            <Text fontSize={13} fontWeight="600" color={ui.text} numberOfLines={1} flexShrink={1}>
+              {content.title}
+            </Text>
+          </XStack>
+        </YStack>
 
         <YStack
           width="100%"
-          maxWidth={760}
+          maxWidth={860}
           alignSelf="center"
           paddingHorizontal={gutter}
-          marginTop={cover ? (isDesktop ? -56 : -36) : '$4'}
+          paddingTop={isDesktop ? '$6' : '$4'}
           gap="$5"
         >
-          <YStack
-            gap="$4"
-            padding={isDesktop ? '$5' : '$4'}
-            borderRadius={radius.card}
-            backgroundColor={ui.surface}
-            borderWidth={1}
-            borderColor={ui.borderSubtle}
-            style={getShadowStyle('md')}
-          >
-            <XStack
-              alignItems="center"
-              gap="$2"
-              cursor="pointer"
-              alignSelf="flex-start"
-              onPress={() => router.push(blogRoutes.home)}
-              hoverStyle={{ opacity: 0.85 }}
-            >
-              <Icons.ArrowLeft size={18} color={ui.textMuted} />
-              <Text fontSize={14} fontWeight="600" color={ui.textMuted}>
-                All blog posts
-              </Text>
-            </XStack>
-
-            <XStack gap="$2" flexWrap="wrap" alignItems="center">
-              {content.cms_categories?.name ? (
-                <Badge tone="neutral">{content.cms_categories.name}</Badge>
-              ) : (
-                <Badge tone="neutral">Blog</Badge>
-              )}
-              {content.is_featured ? <Badge tone="brand">Featured</Badge> : null}
-              <Text fontSize={13} color={ui.textMuted}>
-                {formatDate(content.published_at ?? content.created_at)}
-              </Text>
-            </XStack>
+          {/* Header */}
+          <YStack gap="$3">
+            {content.cms_categories?.name ? (
+              <Badge tone="brand" alignSelf="flex-start">
+                {content.cms_categories.name}
+              </Badge>
+            ) : null}
 
             <Text
-              fontSize={isDesktop ? 38 : 28}
+              fontSize={isDesktop ? 40 : 28}
               fontWeight="800"
               color={ui.text}
-              letterSpacing={-0.7}
-              lineHeight={isDesktop ? 46 : 34}
+              letterSpacing={-0.5}
+              lineHeight={isDesktop ? 48 : 34}
             >
               {content.title}
             </Text>
 
             {teaser ? (
-              <Text fontSize={16} color={ui.textSecondary} lineHeight={24}>
+              <Text fontSize={isDesktop ? 18 : 16} color={ui.textSecondary} lineHeight={26}>
                 {teaser}
               </Text>
             ) : null}
 
-            {content.author ? (
+            <XStack gap="$4" flexWrap="wrap" alignItems="center" marginTop="$1">
               <XStack gap="$2.5" alignItems="center">
-                <Avatar
-                  name={content.author.full_name || content.author.username || 'Author'}
-                  src={content.author.avatar_url}
-                  size={40}
-                />
+                <Avatar name={authorName} src={content.author?.avatar_url} size={40} />
                 <YStack>
                   <Text fontSize={14} fontWeight="700" color={ui.text}>
-                    {content.author.full_name || content.author.username || 'Author'}
+                    {authorName}
                   </Text>
                   <Text fontSize={12} color={ui.textMuted}>
-                    {(content.view_count ?? 0).toLocaleString()} views
+                    {formatBlogDate(content.published_at ?? content.created_at, 'long')}
                   </Text>
                 </YStack>
               </XStack>
-            ) : null}
-
-            {tags.length ? (
-              <XStack gap="$2" flexWrap="wrap">
-                {tags.map((tag) => (
-                  <Badge key={String(tag)} tone="neutral" size="sm">
-                    #{tag}
-                  </Badge>
-                ))}
+              <XStack gap="$3" alignItems="center">
+                <XStack gap="$1.5" alignItems="center">
+                  <Icons.Clock size={14} color={ui.textMuted} />
+                  <Text fontSize={13} color={ui.textMuted}>
+                    {readTime} min read
+                  </Text>
+                </XStack>
+                <XStack gap="$1.5" alignItems="center">
+                  <Icons.Eye size={14} color={ui.textMuted} />
+                  <Text fontSize={13} color={ui.textMuted}>
+                    {formatCount(content.view_count ?? 0)} views
+                  </Text>
+                </XStack>
               </XStack>
-            ) : null}
+            </XStack>
           </YStack>
 
-          {/* Article body */}
+          {/* Cover */}
+          {cover ? (
+            <YStack
+              width="100%"
+              height={isDesktop ? 360 : 200}
+              borderRadius={radius.card}
+              overflow="hidden"
+              borderWidth={1}
+              borderColor={ui.borderSubtle}
+              style={getShadowStyle('sm')}
+            >
+              <CmsCoverImage url={cover} alt={content.title} height="100%" />
+            </YStack>
+          ) : null}
+
+          {/* Tags */}
+          {tags.length ? (
+            <XStack gap="$2" flexWrap="wrap">
+              {tags.map((tag) =>
+                tag ? (
+                  <Badge key={tag.id} tone="neutral" size="sm">
+                    #{tag.name}
+                  </Badge>
+                ) : null,
+              )}
+            </XStack>
+          ) : null}
+
+          {/* Body */}
           <YStack
-            gap="$4"
             padding={isDesktop ? '$5' : '$4'}
-            borderRadius={radius.card}
-            backgroundColor={ui.surface}
-            borderWidth={1}
-            borderColor={ui.borderSubtle}
-          >
-            <CmsMarkdownBody source={content.body} format={content.body_format} />
-          </YStack>
-
-          {/* Like / engagement */}
-          <YStack
-            gap="$3"
-            padding="$4"
             borderRadius={radius.card}
             borderWidth={1}
             borderColor={ui.borderSubtle}
             backgroundColor={ui.surface}
             style={getShadowStyle('sm')}
           >
-            <Text fontSize={16} fontWeight="800" color={ui.text}>
-              Enjoyed this post?
-            </Text>
-            <XStack gap="$2" flexWrap="wrap" alignItems="center">
-              <Button
-                size="$4"
-                tone={liked ? 'primary' : 'outline'}
-                icon={Icons.Heart}
-                onPress={() => void handleLike()}
-              >
-                {liked ? 'Liked' : 'Like'} · {likeCount}
-              </Button>
-              <Button size="$4" tone="outline" icon={Icons.MessageSquare}>
-                {approvedComments.length} comments
-              </Button>
-            </XStack>
-            {!isAuthenticated ? (
-              <Text fontSize={13} color={ui.textMuted}>
-                Sign in to like this post or leave a comment.
-              </Text>
-            ) : null}
+            <BlogPostContent body={content.body} format={content.body_format} />
           </YStack>
+
+          {/* Actions */}
+          <XStack
+            alignItems="center"
+            justifyContent="space-between"
+            flexWrap="wrap"
+            gap="$3"
+            paddingVertical="$3"
+            borderTopWidth={1}
+            borderBottomWidth={1}
+            borderColor={ui.borderSubtle}
+          >
+            <XStack gap="$2" flexWrap="wrap">
+              <BlogLikeButton
+                contentId={content.id}
+                slug={content.slug}
+                initialCount={content.like_count ?? 0}
+              />
+              <BlogShareButton title={content.title} slug={content.slug} />
+            </XStack>
+            <Button
+              size="$3"
+              tone="ghost"
+              icon={Icons.ArrowLeft}
+              onPress={() => router.push(blogRoutes.home)}
+            >
+              All Articles
+            </Button>
+          </XStack>
 
           {/* Comments */}
-          <YStack
-            gap="$4"
-            padding={isDesktop ? '$5' : '$4'}
-            borderRadius={radius.card}
-            borderWidth={1}
-            borderColor={ui.borderSubtle}
-            backgroundColor={ui.surface}
-            style={getShadowStyle('sm')}
-          >
-            <YStack gap="$1">
-              <Text fontSize={20} fontWeight="800" color={ui.text}>
-                Comments
-              </Text>
-              <Text fontSize={13} color={ui.textMuted}>
-                Approved comments appear here. New comments are reviewed in Admin CMS.
-              </Text>
+          {content.allow_comments !== false ? (
+            <YStack
+              padding={isDesktop ? '$5' : '$4'}
+              borderRadius={radius.card}
+              borderWidth={1}
+              borderColor={ui.borderSubtle}
+              backgroundColor={ui.surface}
+            >
+              <BlogCommentSection
+                contentId={content.id}
+                slug={content.slug}
+                commentCount={content.comment_count ?? 0}
+              />
             </YStack>
+          ) : null}
 
-            {!commentsEnabled ? (
-              <Text color={ui.textMuted}>Comments are closed for this post.</Text>
-            ) : (
-              <YStack gap="$3">
-                <YStack
-                  gap="$3"
-                  padding="$3.5"
-                  borderRadius={radius.card}
-                  backgroundColor={ui.surfaceMuted}
-                  borderWidth={1}
-                  borderColor={ui.borderSubtle}
-                >
-                  <TextArea
-                    value={commentBody}
-                    onChangeText={setCommentBody}
-                    placeholder={
-                      isAuthenticated ? 'Write a thoughtful comment…' : 'Sign in to leave a comment'
-                    }
-                    minHeight={110}
-                    editable={isAuthenticated}
-                    backgroundColor={ui.surface}
-                  />
-                  <XStack gap="$2" flexWrap="wrap" justifyContent="space-between" alignItems="center">
-                    {pendingNotice ? (
-                      <Text fontSize={13} color={ui.textSecondary} flex={1} minWidth={180}>
-                        Thanks — your comment is waiting for admin approval.
-                      </Text>
-                    ) : (
-                      <YStack flex={1} />
-                    )}
-                    {isAuthenticated ? (
-                      <Button
-                        size="$3"
-                        disabled={isCreating || !commentBody.trim()}
-                        onPress={() => void handleComment()}
-                      >
-                        {isCreating ? 'Posting…' : 'Post comment'}
-                      </Button>
-                    ) : (
-                      <Button size="$3" onPress={() => signIn(blogRoutes.post(content.slug))}>
-                        Sign in to comment
-                      </Button>
-                    )}
-                  </XStack>
-                </YStack>
-
-                {approvedComments.length === 0 ? (
+          {/* Related */}
+          {related.length ? (
+            <YStack gap="$4" marginTop="$2">
+              <Text fontSize={22} fontWeight="800" color={ui.text}>
+                Related Articles
+              </Text>
+              <XStack gap="$4" flexWrap="wrap" width="100%">
+                {related.map((post) => (
                   <YStack
-                    padding="$4"
-                    alignItems="center"
-                    gap="$2"
-                    borderRadius={radius.card}
-                    borderWidth={1}
-                    borderColor={ui.borderSubtle}
+                    key={post.id}
+                    width={relatedCardWidth as any}
+                    flexShrink={0}
+                    maxWidth="100%"
                   >
-                    <Icons.MessageSquare size={28} color={ui.textMuted} />
-                    <Text fontWeight="700" color={ui.text}>
-                      No comments yet
-                    </Text>
-                    <Text color={ui.textMuted} textAlign="center">
-                      Be the first to share your thoughts.
-                    </Text>
+                    <BlogCard post={post} />
                   </YStack>
-                ) : (
-                  <YStack gap="$3">
-                    {approvedComments.map((comment) => (
-                      <CommentRow key={comment.id} comment={comment} />
-                    ))}
-                  </YStack>
-                )}
-              </YStack>
-            )}
-          </YStack>
-
-          <Button
-            alignSelf="flex-start"
-            tone="outline"
-            icon={Icons.ArrowLeft}
-            onPress={() => router.push(blogRoutes.home)}
-          >
-            Back to all posts
-          </Button>
+                ))}
+              </XStack>
+            </YStack>
+          ) : null}
         </YStack>
       </YStack>
     </PageScroll>

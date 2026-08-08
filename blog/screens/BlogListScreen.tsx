@@ -1,225 +1,70 @@
-import { useEffect, useMemo, useState } from 'react'
-import { Platform } from 'react-native'
-import { useRouter } from 'one'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 
-import { CmsCoverImage } from '~/app/admin/components/CmsCoverImage'
+import { BlogCard, blogCardColumnWidth } from '~/blog/components/BlogCard'
+import { BlogCategoryFilter } from '~/blog/components/BlogCategoryFilter'
+import { BlogFeaturedCard } from '~/blog/components/BlogFeaturedCard'
+import { BlogPagination } from '~/blog/components/BlogPagination'
+import { BlogSearch } from '~/blog/components/BlogSearch'
+import { BlogFeaturedSkeleton, BlogListSkeleton } from '~/blog/components/BlogSkeletons'
+import { BlogSortSelect } from '~/blog/components/BlogSortSelect'
+import { BlogTagFilter } from '~/blog/components/BlogTagFilter'
+import { parseBlogSort } from '~/blog/lib/blog-utils'
 import { PageScroll } from '~/components/layout/PageScroll'
 import { usePageSeo } from '~/components/seo/RouteSeo'
-import {
-  Badge,
-  Button,
-  Icons,
-  Input,
-  Spinner,
-  Text,
-  XStack,
-  YStack,
-} from '~/components/ui'
-import { getShadowStyle, radius } from '~/config/tokens'
+import { AppBottomSheet, Button, Icons, Spinner, Text, XStack, YStack } from '~/components/ui'
+import { radius } from '~/config/tokens'
 import { useAppLayout } from '~/hooks/useAppLayout'
-import {
-  getContentCoverUrl,
-  getContentTeaser,
-  loadContents,
-  type CmsContentDetail,
-} from '~/lib/cms'
-import { blogRoutes } from '~/lib/routes'
+import { loadCategories, loadContents, loadTags } from '~/lib/cms'
 import { useAppDispatch, useAppSelector } from '~/lib/store/hooks'
 import { useAppUi } from '~/lib/theme/useAppUi'
 
-function formatDate(value: string | null | undefined) {
-  if (!value) return ''
-  const d = new Date(value)
-  if (Number.isNaN(d.getTime())) return ''
-  return d.toLocaleDateString('en-IN', {
-    day: 'numeric',
-    month: 'short',
-    year: 'numeric',
-  })
-}
+const POSTS_PER_PAGE = 9
 
-function cardWidth(isDesktop: boolean, isTablet: boolean) {
-  if (Platform.OS === 'web') {
-    if (isDesktop) return 'calc((100% - 32px) / 3)'
-    if (isTablet) return 'calc((100% - 16px) / 2)'
-    return '100%'
-  }
-  return '100%'
-}
-
-function MetaRow({ item }: { item: CmsContentDetail }) {
+function FilterChip({ label, onRemove }: { label: string; onRemove: () => void }) {
   const ui = useAppUi()
-  return (
-    <XStack gap="$3" alignItems="center" flexWrap="wrap">
-      <XStack gap="$1.5" alignItems="center">
-        <Icons.Heart size={14} color={ui.textMuted} />
-        <Text fontSize={12} color={ui.textMuted} fontWeight="600">
-          {item.like_count ?? 0}
-        </Text>
-      </XStack>
-      <XStack gap="$1.5" alignItems="center">
-        <Icons.MessageSquare size={14} color={ui.textMuted} />
-        <Text fontSize={12} color={ui.textMuted} fontWeight="600">
-          {item.comment_count ?? 0}
-        </Text>
-      </XStack>
-      <Text fontSize={12} color={ui.textMuted}>
-        {formatDate(item.published_at ?? item.created_at)}
-      </Text>
-    </XStack>
-  )
-}
-
-function FeaturedPost({ item, onPress }: { item: CmsContentDetail; onPress: () => void }) {
-  const ui = useAppUi()
-  const { isDesktop } = useAppLayout()
-  const cover = getContentCoverUrl(item)
-  const teaser = getContentTeaser(item, isDesktop ? 220 : 140)
-
   return (
     <XStack
-      width="100%"
-      flexDirection={isDesktop ? 'row' : 'column'}
-      borderRadius={radius.card}
-      borderWidth={1}
-      borderColor={ui.borderSubtle}
-      backgroundColor={ui.surface}
-      overflow="hidden"
-      cursor="pointer"
-      style={getShadowStyle('md')}
-      hoverStyle={{ borderColor: ui.brand }}
-      pressStyle={{ opacity: 0.95 }}
-      onPress={onPress}
+      alignItems="center"
+      gap="$1.5"
+      paddingHorizontal="$3"
+      paddingVertical="$1.5"
+      borderRadius={radius.pill}
+      backgroundColor={ui.roseSurface}
     >
-      <YStack
-        width={isDesktop ? '48%' : '100%'}
-        height={isDesktop ? 320 : 200}
-        backgroundColor={ui.roseSurface}
-        flexShrink={0}
-      >
-        {cover ? (
-          <CmsCoverImage url={cover} alt={item.title} height="100%" />
-        ) : (
-          <YStack flex={1} alignItems="center" justifyContent="center">
-            <Icons.FileText size={48} color={ui.brand} />
-          </YStack>
-        )}
-      </YStack>
-      <YStack flex={1} gap="$3" padding={isDesktop ? '$5' : '$4'} justifyContent="center" minWidth={0}>
-        <XStack gap="$2" flexWrap="wrap" alignItems="center">
-          <Badge tone="brand">Featured</Badge>
-          {item.cms_categories?.name ? (
-            <Badge tone="neutral">{item.cms_categories.name}</Badge>
-          ) : null}
-        </XStack>
-        <Text
-          fontSize={isDesktop ? 30 : 24}
-          fontWeight="800"
-          color={ui.text}
-          letterSpacing={-0.5}
-          numberOfLines={3}
-        >
-          {item.title}
-        </Text>
-        {teaser ? (
-          <Text fontSize={15} color={ui.textSecondary} lineHeight={22} numberOfLines={isDesktop ? 4 : 3}>
-            {teaser}
-          </Text>
-        ) : null}
-        <MetaRow item={item} />
-        <XStack alignItems="center" gap="$2" marginTop="$1">
-          <Text fontSize={14} fontWeight="700" color={ui.brand}>
-            Read article
-          </Text>
-          <Icons.ArrowRight size={16} color={ui.brand} />
-        </XStack>
-      </YStack>
+      <Text fontSize={12} fontWeight="600" color={ui.brand}>
+        {label}
+      </Text>
+      <XStack cursor="pointer" onPress={onRemove} pressStyle={{ opacity: 0.7 }}>
+        <Icons.X size={12} color={ui.brand} />
+      </XStack>
     </XStack>
-  )
-}
-
-function BlogCard({
-  item,
-  width,
-  onPress,
-}: {
-  item: CmsContentDetail
-  width: string | number
-  onPress: () => void
-}) {
-  const ui = useAppUi()
-  const cover = getContentCoverUrl(item)
-  const teaser = getContentTeaser(item, 110)
-
-  return (
-    <YStack
-      width={width as any}
-      borderRadius={radius.card}
-      borderWidth={1}
-      borderColor={ui.borderSubtle}
-      backgroundColor={ui.surface}
-      overflow="hidden"
-      cursor="pointer"
-      style={getShadowStyle('sm')}
-      hoverStyle={{ borderColor: ui.brand }}
-      pressStyle={{ opacity: 0.94 }}
-      onPress={onPress}
-      minHeight={320}
-    >
-      <YStack height={168} backgroundColor={ui.surfaceMuted} width="100%">
-        {cover ? (
-          <CmsCoverImage url={cover} alt={item.title} height={168} />
-        ) : (
-          <YStack flex={1} alignItems="center" justifyContent="center" backgroundColor={ui.roseSurface}>
-            <Icons.FileText size={32} color={ui.brand} />
-          </YStack>
-        )}
-      </YStack>
-      <YStack gap="$2.5" padding="$3.5" flex={1}>
-        <XStack gap="$2" flexWrap="wrap" alignItems="center">
-          {item.cms_categories?.name ? (
-            <Badge tone="neutral" size="sm">
-              {item.cms_categories.name}
-            </Badge>
-          ) : (
-            <Badge tone="neutral" size="sm">
-              Blog
-            </Badge>
-          )}
-        </XStack>
-        <Text fontSize={17} fontWeight="800" color={ui.text} numberOfLines={2} letterSpacing={-0.2}>
-          {item.title}
-        </Text>
-        {teaser ? (
-          <Text fontSize={13} color={ui.textSecondary} numberOfLines={3} lineHeight={19} flex={1}>
-            {teaser}
-          </Text>
-        ) : (
-          <YStack flex={1} />
-        )}
-        <XStack alignItems="center" justifyContent="space-between" gap="$2" marginTop="$1">
-          <MetaRow item={item} />
-          <Icons.ChevronRight size={16} color={ui.brand} />
-        </XStack>
-      </YStack>
-    </YStack>
   )
 }
 
 export function BlogListScreen() {
   const dispatch = useAppDispatch()
-  const router = useRouter()
   const ui = useAppUi()
   const { isDesktop, isTablet, safeBottom, gutter } = useAppLayout()
+  const cardWidth = blogCardColumnWidth(isDesktop, isTablet)
 
-  const { items, contentMeta, isFetching, contentError } = useAppSelector((s) => s.cms)
+  const { items, contentMeta, isFetching, categories, tags, contentError } = useAppSelector(
+    (s) => s.cms,
+  )
+
   const [search, setSearch] = useState('')
+  const [categoryId, setCategoryId] = useState('')
+  const [activeTags, setActiveTags] = useState<string[]>([])
+  const [sort, setSort] = useState('published_at:desc')
+  const [page, setPage] = useState(1)
+  const [filtersOpen, setFiltersOpen] = useState(false)
+
+  const { order_by, ascending } = useMemo(() => parseBlogSort(sort), [sort])
 
   usePageSeo(
     useMemo(
       () => ({
-        title: 'Blog',
-        description: 'Stories, updates, and guides from SHEconomy.',
+        title: 'Blog | SHEconomy',
+        description: 'Insights, stories, and resources for women building a new economy.',
         type: 'website' as const,
       }),
       [],
@@ -227,228 +72,303 @@ export function BlogListScreen() {
   )
 
   useEffect(() => {
-    void dispatch(
-      loadContents({
-        page: 1,
-        limit: 12,
-        type: 'post',
-        status: 'published',
-        order_by: 'published_at',
-        ascending: false,
-        search: undefined,
-      }),
-    )
+    void dispatch(loadCategories())
+    void dispatch(loadTags())
   }, [dispatch])
 
-  function refresh(page = 1, nextSearch = search) {
+  useEffect(() => {
     void dispatch(
       loadContents({
-        page,
-        limit: 12,
+        replaceFilters: true,
         type: 'post',
         status: 'published',
-        order_by: 'published_at',
-        ascending: false,
-        search: nextSearch.trim() || undefined,
+        search: search.trim() || undefined,
+        category_id: categoryId || undefined,
+        tag_ids: activeTags.length ? activeTags : undefined,
+        order_by,
+        ascending,
+        page,
+        limit: POSTS_PER_PAGE,
+        author_id: undefined,
+        vendor_id: undefined,
+        is_featured: undefined,
       }),
     )
-  }
+  }, [dispatch, search, categoryId, activeTags, order_by, ascending, page])
 
-  const posts = useMemo(
-    () => items.filter((item) => item.status === 'published' && item.type === 'post'),
-    [items],
+  const handleSearch = useCallback((val: string) => {
+    setSearch(val)
+    setPage(1)
+  }, [])
+
+  const handleCategorySelect = useCallback((id: string) => {
+    setCategoryId(id)
+    setPage(1)
+  }, [])
+
+  const handleTagToggle = useCallback((tagId: string) => {
+    setActiveTags((prev) =>
+      prev.includes(tagId) ? prev.filter((id) => id !== tagId) : [...prev, tagId],
+    )
+    setPage(1)
+  }, [])
+
+  const handleSort = useCallback((val: string) => {
+    setSort(val)
+    setPage(1)
+  }, [])
+
+  const handleClearAll = useCallback(() => {
+    setSearch('')
+    setCategoryId('')
+    setActiveTags([])
+    setSort('published_at:desc')
+    setPage(1)
+  }, [])
+
+  const hasFilters =
+    !!search || !!categoryId || activeTags.length > 0 || sort !== 'published_at:desc'
+
+  const featuredPost =
+    !hasFilters && page === 1 ? (items.find((p) => p.is_featured) ?? null) : null
+  const regularPosts = featuredPost ? items.filter((p) => p.id !== featuredPost.id) : items
+
+  const filterPanel = (
+    <YStack gap="$5">
+      <BlogCategoryFilter
+        categories={categories}
+        activeCategory={categoryId}
+        onSelect={handleCategorySelect}
+      />
+      <BlogTagFilter tags={tags} activeTags={activeTags} onToggle={handleTagToggle} />
+      {hasFilters ? (
+        <Button size="$3" tone="outline" icon={Icons.X} onPress={handleClearAll}>
+          Clear all filters
+        </Button>
+      ) : null}
+    </YStack>
   )
-  const featured = posts.find((p) => p.is_featured) ?? null
-  const gridPosts = featured ? posts.filter((p) => p.id !== featured.id) : posts
-  const width = cardWidth(isDesktop, isTablet)
-
-  function openPost(item: CmsContentDetail) {
-    router.push(blogRoutes.post(item.slug))
-  }
 
   return (
-    <PageScroll onRefresh={async () => refresh(1)}>
-      <YStack width="100%" backgroundColor={ui.background}>
-        <YStack
-          width="100%"
-          backgroundColor={ui.roseSurface}
-          borderBottomWidth={1}
-          borderBottomColor={ui.borderSubtle}
-          paddingHorizontal={gutter}
-          paddingTop={isDesktop ? '$7' : '$5'}
-          paddingBottom={isDesktop ? '$6' : '$4'}
-        >
-          <YStack width="100%" maxWidth={1120} alignSelf="center" gap="$4">
-            <YStack gap="$2" maxWidth={640}>
-              <Text
-                fontSize={12}
-                fontWeight="700"
-                color={ui.brand}
-                letterSpacing={1}
-                textTransform="uppercase"
-              >
-                SHEconomy Journal
-              </Text>
-              <Text
-                fontSize={isDesktop ? 40 : 30}
-                fontWeight="800"
-                color={ui.text}
-                letterSpacing={-0.8}
-              >
-                Blog
-              </Text>
-              <Text fontSize={15} color={ui.textSecondary} lineHeight={22}>
-                Browse all posts. Tap any story to read the full article, then like and comment.
-              </Text>
-            </YStack>
-
-            <XStack
-              gap="$2"
-              flexWrap="wrap"
-              alignItems="center"
-              padding="$2"
-              borderRadius={radius.card}
-              backgroundColor={ui.surface}
-              borderWidth={1}
-              borderColor={ui.borderSubtle}
-              style={getShadowStyle('sm')}
-              maxWidth={560}
-              width="100%"
-            >
-              <Icons.Search size={18} color={ui.textMuted} />
-              <Input
-                flex={1}
-                minWidth={160}
-                value={search}
-                onChangeText={setSearch}
-                placeholder="Search blog posts…"
-                borderWidth={0}
-                backgroundColor="transparent"
-                onSubmitEditing={() => refresh(1)}
-              />
-              <Button size="$3" onPress={() => refresh(1)}>
-                Search
-              </Button>
-              {search.trim() ? (
-                <Button
-                  size="$3"
-                  tone="outline"
-                  onPress={() => {
-                    setSearch('')
-                    refresh(1, '')
-                  }}
-                >
-                  Clear
-                </Button>
-              ) : null}
-            </XStack>
-          </YStack>
-        </YStack>
-
+    <PageScroll
+      onRefresh={async () => {
+        setPage(1)
+        void dispatch(
+          loadContents({
+            replaceFilters: true,
+            type: 'post',
+            status: 'published',
+            search: search.trim() || undefined,
+            category_id: categoryId || undefined,
+            tag_ids: activeTags.length ? activeTags : undefined,
+            order_by,
+            ascending,
+            page: 1,
+            limit: POSTS_PER_PAGE,
+          }),
+        )
+      }}
+    >
+      <YStack
+        width="100%"
+        minHeight="100%"
+        backgroundColor={ui.background}
+        paddingBottom={safeBottom + 48}
+      >
         <YStack
           width="100%"
           maxWidth={1120}
           alignSelf="center"
           paddingHorizontal={gutter}
-          paddingTop={isDesktop ? '$6' : '$4'}
-          paddingBottom={safeBottom + 48}
+          paddingTop={isDesktop ? '$8' : '$5'}
           gap="$5"
         >
+          {/* Header — matches sheconomy_web blogs */}
+          <YStack alignItems="center" gap="$2" marginBottom="$2">
+            <Text
+              fontSize={isDesktop ? 42 : 30}
+              fontWeight="800"
+              color={ui.brand}
+              textAlign="center"
+              letterSpacing={-0.6}
+            >
+              SHEconomy Blog
+            </Text>
+            <Text
+              fontSize={isDesktop ? 17 : 15}
+              color={ui.textSecondary}
+              textAlign="center"
+              maxWidth={560}
+              lineHeight={24}
+            >
+              Insights, stories, and resources for women building a new economy
+            </Text>
+            <YStack
+              width={96}
+              height={4}
+              borderRadius={999}
+              backgroundColor={ui.brand}
+              marginTop="$2"
+            />
+          </YStack>
+
+          {/* Search + filters toggle */}
+          <XStack gap="$3" flexWrap="wrap" alignItems="center" justifyContent="center">
+            <BlogSearch value={search} onSearch={handleSearch} />
+            {!isDesktop ? (
+              <Button
+                size="$3"
+                tone="outline"
+                icon={Icons.SlidersHorizontal}
+                onPress={() => setFiltersOpen(true)}
+              >
+                Filters
+                {categoryId || activeTags.length
+                  ? ` (${(categoryId ? 1 : 0) + activeTags.length})`
+                  : ''}
+              </Button>
+            ) : null}
+          </XStack>
+
+          <YStack gap="$2" alignItems="center">
+            <Text fontSize={12} fontWeight="700" color={ui.textMuted}>
+              Sort by
+            </Text>
+            <BlogSortSelect value={sort} onSort={handleSort} />
+          </YStack>
+
+          {/* Desktop filters */}
+          {isDesktop ? (
+            <YStack gap="$4">
+              <BlogCategoryFilter
+                categories={categories}
+                activeCategory={categoryId}
+                onSelect={handleCategorySelect}
+              />
+              <BlogTagFilter tags={tags} activeTags={activeTags} onToggle={handleTagToggle} />
+            </YStack>
+          ) : null}
+
+          {/* Active filter chips */}
+          {hasFilters ? (
+            <XStack gap="$2" flexWrap="wrap" alignItems="center">
+              <Text fontSize={13} color={ui.textMuted}>
+                Showing:
+              </Text>
+              {search ? (
+                <FilterChip label={`“${search}”`} onRemove={() => handleSearch('')} />
+              ) : null}
+              {categoryId ? (
+                <FilterChip
+                  label={categories.find((c) => c.id === categoryId)?.name || 'Category'}
+                  onRemove={() => handleCategorySelect('')}
+                />
+              ) : null}
+              {activeTags.map((tid) => {
+                const tag = tags.find((t) => t.id === tid)
+                return tag ? (
+                  <FilterChip
+                    key={tid}
+                    label={`#${tag.name}`}
+                    onRemove={() => handleTagToggle(tid)}
+                  />
+                ) : null
+              })}
+              <Button size="$2" tone="ghost" onPress={handleClearAll}>
+                Clear all
+              </Button>
+            </XStack>
+          ) : null}
+
           {contentError ? <Text color={ui.error}>{contentError}</Text> : null}
 
-          {isFetching && posts.length === 0 ? (
-            <YStack minHeight={300} alignItems="center" justifyContent="center" gap="$2">
-              <Spinner size="large" />
-              <Text color={ui.textMuted}>Loading blog posts…</Text>
+          {/* Featured */}
+          {featuredPost ? (
+            <YStack marginBottom="$2">
+              {isFetching && items.length === 0 ? (
+                <BlogFeaturedSkeleton />
+              ) : (
+                <BlogFeaturedCard post={featuredPost} />
+              )}
             </YStack>
-          ) : posts.length === 0 ? (
+          ) : null}
+
+          {/* Grid */}
+          {isFetching && items.length === 0 ? (
+            <BlogListSkeleton count={POSTS_PER_PAGE} />
+          ) : regularPosts.length === 0 ? (
             <YStack
-              minHeight={260}
               alignItems="center"
               justifyContent="center"
-              gap="$2"
-              padding="$6"
+              gap="$3"
+              paddingVertical="$10"
               borderRadius={radius.card}
               borderWidth={1}
               borderColor={ui.borderSubtle}
               backgroundColor={ui.surface}
             >
-              <Icons.FileText size={42} color={ui.textMuted} />
-              <Text fontSize={18} fontWeight="700" color={ui.text}>
-                No blog posts yet
+              <Icons.Search size={40} color={ui.textMuted} />
+              <Text fontSize={20} fontWeight="700" color={ui.text}>
+                No articles found
               </Text>
               <Text color={ui.textMuted} textAlign="center" maxWidth={360}>
-                When an admin publishes a post in CMS, it will show up here.
+                {hasFilters
+                  ? 'Try adjusting your search or filters'
+                  : 'Blog posts will appear here once published'}
               </Text>
+              {hasFilters ? (
+                <Button size="$3" tone="outline" onPress={handleClearAll}>
+                  Clear filters
+                </Button>
+              ) : null}
             </YStack>
           ) : (
-            <>
-              {featured && !search.trim() ? (
-                <YStack gap="$3">
-                  <Text fontSize={13} fontWeight="700" color={ui.textMuted} letterSpacing={0.4}>
-                    FEATURED
-                  </Text>
-                  <FeaturedPost item={featured} onPress={() => openPost(featured)} />
-                </YStack>
-              ) : null}
-
-              <YStack gap="$3">
-                <XStack justifyContent="space-between" alignItems="center" flexWrap="wrap" gap="$2">
-                  <Text fontSize={18} fontWeight="800" color={ui.text}>
-                    {search.trim() ? 'Search results' : 'All posts'}
-                  </Text>
-                  <Text fontSize={13} color={ui.textMuted}>
-                    {contentMeta.total} {contentMeta.total === 1 ? 'post' : 'posts'}
-                  </Text>
-                </XStack>
-
-                <XStack gap="$4" flexWrap="wrap" width="100%">
-                  {(search.trim() ? posts : gridPosts).map((item) => (
-                    <BlogCard
-                      key={item.id}
-                      item={item}
-                      width={width}
-                      onPress={() => openPost(item)}
-                    />
-                  ))}
-                </XStack>
-              </YStack>
-            </>
+            <YStack gap="$6">
+              <XStack gap="$4" flexWrap="wrap" width="100%" alignItems="stretch">
+                {regularPosts.map((post) => (
+                  <YStack
+                    key={post.id}
+                    width={cardWidth as any}
+                    flexShrink={0}
+                    maxWidth="100%"
+                  >
+                    <BlogCard post={post} />
+                  </YStack>
+                ))}
+              </XStack>
+              <BlogPagination
+                meta={contentMeta}
+                onPageChange={(p) => {
+                  setPage(p)
+                }}
+              />
+            </YStack>
           )}
 
-          {contentMeta.totalPages > 1 ? (
+          {isFetching && items.length > 0 ? (
             <XStack
-              justifyContent="space-between"
+              alignSelf="center"
               alignItems="center"
-              flexWrap="wrap"
-              gap="$3"
-              paddingTop="$2"
+              gap="$2"
+              paddingHorizontal="$4"
+              paddingVertical="$2.5"
+              borderRadius={radius.pill}
+              backgroundColor={ui.surface}
+              borderWidth={1}
+              borderColor={ui.borderSubtle}
             >
+              <Spinner size="small" />
               <Text fontSize={13} color={ui.textMuted}>
-                Page {contentMeta.page} of {contentMeta.totalPages}
+                Loading…
               </Text>
-              <XStack gap="$2">
-                <Button
-                  size="$3"
-                  tone="outline"
-                  disabled={!contentMeta.hasPrevPage || isFetching}
-                  onPress={() => refresh(contentMeta.page - 1)}
-                >
-                  Previous
-                </Button>
-                <Button
-                  size="$3"
-                  tone="outline"
-                  disabled={!contentMeta.hasNextPage || isFetching}
-                  onPress={() => refresh(contentMeta.page + 1)}
-                >
-                  Next
-                </Button>
-              </XStack>
             </XStack>
           ) : null}
         </YStack>
       </YStack>
+
+      <AppBottomSheet open={filtersOpen} onOpenChange={setFiltersOpen} title="Filters" scrollable>
+        <YStack padding="$4">{filterPanel}</YStack>
+      </AppBottomSheet>
     </PageScroll>
   )
 }

@@ -2,7 +2,7 @@ import { useMemo, type ReactNode } from 'react'
 
 import { Image, Text, XStack, YStack } from '~/components/ui'
 import { radius } from '~/config/tokens'
-import { cleanCmsBody } from '~/lib/cms'
+import { cleanCmsBody, stripHtml } from '~/lib/cms'
 import { useAppUi } from '~/lib/theme/useAppUi'
 
 function renderInline(text: string, keyPrefix: string) {
@@ -59,12 +59,25 @@ export function CmsMarkdownBody({
 
   const blocks = useMemo(() => {
     if (!cleaned.trim()) return [] as ReactNode[]
-    if (format === 'plain') {
-      return cleaned.split(/\n+/).map((line, i) => (
-        <Text key={`p-${i}`} color={ui.text} lineHeight={24} fontSize={16}>
-          {line}
-        </Text>
-      ))
+    if (format === 'plain' || format === 'html') {
+      // HTML posts often include poster/marketing markup — show readable text only.
+      const text =
+        format === 'html'
+          ? stripHtml(
+              cleaned
+                .replace(/<\/(p|div|h[1-6]|li|br|tr)>/gi, '\n')
+                .replace(/<br\s*\/?>/gi, '\n'),
+            )
+          : cleaned
+      return text
+        .split(/\n+/)
+        .map((line) => line.trim())
+        .filter(Boolean)
+        .map((line, i) => (
+          <Text key={`p-${i}`} color={ui.text} lineHeight={26} fontSize={16}>
+            {line}
+          </Text>
+        ))
     }
 
     const lines = cleaned.replace(/\r\n/g, '\n').split('\n')
