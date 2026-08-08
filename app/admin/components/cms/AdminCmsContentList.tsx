@@ -78,7 +78,7 @@ export function AdminCmsContentList() {
   const [busyId, setBusyId] = useState<string | null>(null)
 
   useEffect(() => {
-    void dispatch(loadContents({ page: 1 }))
+    void dispatch(loadContents({ page: 1, replaceFilters: true }))
     void dispatch(loadCategories())
   }, [dispatch])
 
@@ -265,6 +265,7 @@ export function AdminCmsContentList() {
               setCategoryId('all')
               void dispatch(
                 loadContents({
+                  replaceFilters: true,
                   page: 1,
                   search: undefined,
                   type: undefined,
