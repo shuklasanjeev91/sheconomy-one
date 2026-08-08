@@ -15,6 +15,7 @@ import { useAccess } from '~/hooks/useAccess'
 import { useAppLayout } from '~/hooks/useAppLayout'
 import { useGenderVerification } from '~/hooks/useGenderVerification'
 import { useProfile } from '~/hooks/useProfile'
+import { HUMAN_VERIFICATION_DISCLAIMER } from '~/lib/gender-verification'
 import { refreshProfiles } from '~/lib/profile/refresh'
 import { patchCachedProfile } from '~/lib/profile/profile-cache'
 import { commerceRoutes, communityRoutes } from '~/lib/routes'
@@ -79,7 +80,7 @@ export function GenderVerificationScreen() {
 
           <YStack gap="$2" alignItems="center">
             <Text fontSize={13} fontWeight="700" color={ui.brand} letterSpacing={1}>
-              VERIFICATION
+              HUMAN VERIFICATION
             </Text>
             <Text
               fontSize={30}
@@ -93,9 +94,26 @@ export function GenderVerificationScreen() {
             </Text>
             <Text fontSize={15} color={ui.textMuted} textAlign="center" lineHeight={22} maxWidth={420}>
               Optional check — center your face and blink naturally {verification.requiredBlinks}{' '}
-              times to unlock Community and Chat. Your video stays on this device. Skip anytime to
-              keep using Commerce, Classes, and Co-Work.
+              times to unlock Community, Chat, and Create store. Your video stays on this device. Skip
+              anytime to keep using Commerce, Classes, and Co-Work.
             </Text>
+            <YStack
+              width="100%"
+              maxWidth={420}
+              padding="$3"
+              borderRadius={radius.chip}
+              backgroundColor={ui.surfaceMuted}
+              borderWidth={1}
+              borderColor={ui.borderSubtle}
+              gap="$1.5"
+            >
+              <Text fontSize={13} fontWeight="700" color={ui.text} textAlign="center">
+                Our commitment
+              </Text>
+              <Text fontSize={12} color={ui.textSecondary} textAlign="center" lineHeight={18}>
+                {HUMAN_VERIFICATION_DISCLAIMER}
+              </Text>
+            </YStack>
           </YStack>
 
           <YStack
@@ -200,7 +218,7 @@ export function GenderVerificationScreen() {
                   borderRadius={radius.pill}
                   width="100%"
                   onPress={handleSkip}
-                  aria-label="Skip gender verification"
+                  aria-label="Skip human verification"
                 >
                   Skip for now
                 </Button>

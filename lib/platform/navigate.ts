@@ -3,6 +3,8 @@ import type { Href } from 'one'
 import { router } from 'one'
 import { Platform } from 'react-native'
 
+import { consumeHumanVerificationHref } from '~/lib/gender-verification/open-request'
+
 export type NavigateAppOptions = {
   /**
    * @deprecated Ignored — the app standardizes on `router.push` only.
@@ -18,10 +20,25 @@ function normalizeLocation(pathWithOptionalQuery: string): string {
   return query ? `${normalizedPath}?${query}` : normalizedPath
 }
 
+function currentPathname(): string {
+  if (Platform.OS === 'web' && typeof window !== 'undefined') {
+    return window.location.pathname.replace(/\/$/, '') || '/'
+  }
+  return ''
+}
+
 function isCurrentLocation(href: string): boolean {
   if (Platform.OS !== 'web' || typeof window === 'undefined') return false
   const current = `${window.location.pathname}${window.location.search}`
   return normalizeLocation(current) === normalizeLocation(href)
+}
+
+function samePathOnly(href: string): boolean {
+  const [path = '/'] = href.split('?')
+  const normalized = path.replace(/\/$/, '') || '/'
+  const current = currentPathname()
+  if (!current) return false
+  return current === normalized
 }
 
 function isNavigatorNotReadyError(error: unknown): boolean {
@@ -39,21 +56,7 @@ function fallbackWebAssign(target: string): boolean {
   return true
 }
 
-/**
- * Soft in-app navigation — **always** `router.push` on web, iOS, and Android.
- *
- * Cross-platform contract:
- * - Web + native share this single entry point (do not branch on Platform for push).
- * - Never uses `router.replace`.
- * - Keeps the Vite / Expo SPA shell mounted (no hard reload for normal navigations).
- *
- * Prefer `navigateApp` / `pushApp` / `AppLink` / `usePushRoute` over calling
- * `useRouter().push` directly so same-path guards and mount-retry stay consistent.
- */
-export function navigateApp(href: Href | string, _options?: NavigateAppOptions): void {
-  const target = (typeof href === 'string' ? href : String(href)) as Href
-  if (isCurrentLocation(String(target))) return
-
+function pushTarget(target: Href): void {
   const go = () => {
     // Intentionally identical on web, iOS, and Android: One/Expo `router.push`.
     try {
@@ -88,6 +91,37 @@ export function navigateApp(href: Href | string, _options?: NavigateAppOptions):
     return
   }
   go()
+}
+
+/**
+ * Soft in-app navigation — **always** `router.push` on web, iOS, and Android.
+ *
+ * Cross-platform contract:
+ * - Web + native share this single entry point (do not branch on Platform for push).
+ * - Never uses `router.replace`.
+ * - Keeps the Vite / Expo SPA shell mounted (no hard reload for normal navigations).
+ * - `?human=verify` opens Human verification immediately (even when already on `/`).
+ *
+ * Prefer `navigateApp` / `pushApp` / `AppLink` / `usePushRoute` over calling
+ * `useRouter().push` directly so same-path guards and mount-retry stay consistent.
+ */
+export function navigateApp(href: Href | string, _options?: NavigateAppOptions): void {
+  const rawTarget = typeof href === 'string' ? href : String(href)
+
+  // Human verification intent — open modal even if the path would not change
+  // (native often no-ops same-route query-only pushes).
+  const verifyNav = consumeHumanVerificationHref(rawTarget)
+  if (verifyNav) {
+    const next = verifyNav.cleanedHref
+    if (isCurrentLocation(next) || samePathOnly(next)) {
+      return
+    }
+    pushTarget(next as Href)
+    return
+  }
+
+  if (isCurrentLocation(rawTarget)) return
+  pushTarget(rawTarget as Href)
 }
 
 /** @deprecated Use `navigateApp` / `pushApp` — also `router.push` only. */

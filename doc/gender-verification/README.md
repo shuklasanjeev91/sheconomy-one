@@ -1,16 +1,16 @@
-# Gender Verification — Developer Guide
+# Human Verification — Developer Guide
 
 SHEconomy is **women-first**. Full community and seller access is gated behind an
-on-device **face liveness + gender** check. Everything lives under
-**`lib/gender-verification/`** (logic) and
+on-device **Human verification** check (face liveness + gender estimate). Everything
+lives under **`lib/gender-verification/`** (logic) and
 **`components/gender-verification/`** (UI), and the app-wide prompt is mounted
 once in the global shell.
 
 > **TL;DR** — The check runs entirely on the device: a **3-blink MediaPipe**
 > liveness test plus a bundled face model for the gender estimate. Only the
-> resulting *scores* are sent to Supabase (never the video). An authenticated
-> member with `profiles.is_verified === false` is prompted automatically via a
-> dismissible modal; every failure is turned into a friendly, actionable message.
+> resulting *scores* are sent to Supabase (never the video). The UI is titled
+> **Human verification** and opens **only on intent** (Community / Chat /
+> Create store — auth first if guest). It does **not** auto-prompt after login.
 
 ---
 
@@ -18,19 +18,20 @@ once in the global shell.
 
 | File | What it holds |
 |------|---------------|
-| `lib/gender-verification/constants.ts` | Tunables: `GENDER_VERIFICATION` (blink count, thresholds), `GENDER_VERIFICATION_PROMPT` (cooldown, storage key, restricted flag), `VerificationPhase` type |
+| `lib/gender-verification/constants.ts` | Tunables: `GENDER_VERIFICATION`, `GENDER_VERIFICATION_PROMPT` (`?human=verify`, returnTo), `HUMAN_VERIFICATION_DISCLAIMER` |
 | `lib/gender-verification/blink.ts` | Blink tracker + liveness scoring (EAR-based) |
 | `lib/gender-verification/landmarks.ts` | MediaPipe Face Mesh helpers (face detection, eye-aspect-ratio, centering) |
 | `lib/gender-verification/gender-estimate.ts` | On-device gender estimate from the video frame |
 | `lib/gender-verification/api.ts` | Supabase RPC wrappers (`create_…` / `complete_gender_verification_session`) |
 | `lib/gender-verification/errors.ts` | **Centralised error handling** — `GenderVerificationError`, `GENDER_ERROR_CODES`, `toFriendlyGenderError()` (incl. **413 → "step back"**) |
+| `lib/gender-verification/denied-redirect.ts` | `buildHumanVerificationOpenRedirect` / `buildVerificationDeniedRedirect` |
 | `hooks/useGenderVerification.ts` (`.web` / `.native`) | The verification state machine (`phase`, `start`, `reset`, blink progress, camera refs) |
 | `components/gender-verification/GenderVerificationPanel.tsx` | Shared presentational pieces: `VerificationSteps`, `FaceCaptureOverlay` |
 | `components/gender-verification/GenderVerificationScreen.tsx` | Full-page flow (route `/auth/verify-gender`) |
 | `components/gender-verification/GenderVerificationModal.tsx` | **App-wide popup** version of the flow |
-| `components/gender-verification/GenderDeniedModal.tsx` | "Access restricted" modal for women-first features |
+| `components/gender-verification/GenderDeniedModal.tsx` | "Access restricted" modal for non-intent gated surfaces |
 | `components/gender-verification/GenderVerificationErrorBoundary.tsx` | Error boundary that renders friendly errors + retry |
-| `components/gender-verification/GenderVerificationHost.tsx` | **Glue** — decides *when* the modals appear (auto-show / cooldown / route / `?gender=restricted`) |
+| `components/gender-verification/GenderVerificationHost.tsx` | **Glue** — intent-only (`?human=verify`), denied (`?gender=restricted`), returnTo after success |
 
 The host is mounted once near the shell root (`components/navigation/app/AppShell.tsx`),
 so the prompt works on every non-auth screen without per-page wiring.
@@ -39,21 +40,18 @@ so the prompt works on every non-auth screen without per-page wiring.
 
 ## 2. When the prompt appears
 
-`GenderVerificationHost` reads the signed-in `profile` and the current path and
-applies these rules (all timings come from `GENDER_VERIFICATION_PROMPT` — nothing
-is hardcoded in components):
+`GenderVerificationHost` is **intent-only** (no auto-show after login):
 
-1. **Auto-show** when `isAuthenticated && profile.is_verified === false`.
-2. **Don't nag.** After the member closes the modal, stay quiet for
-   `dismissCooldownMs` (**10 minutes**). The dismissal timestamp is persisted
-   cross-platform via `persistStorage` under `dismissStorageKey`.
-3. **Re-prompt on intent.** If the member navigates to a **gender-restricted
-   route** (`requiresGenderVerification(pathname)` — e.g. `/vendor`,
-   `/create-listing`), the modal opens immediately, bypassing the cooldown.
-4. **Restricted flag.** A `?gender=restricted` query opens `GenderDeniedModal`
-   and the URL is cleaned up (web).
-5. **On success**, the profile is refreshed and the dismissal record is cleared,
-   so a future unverified state prompts fresh.
+1. **Community / Chat / Create store** — guest → sign-in with `returnTo`; signed-in
+   limited member → `?human=verify` opens the Human verification modal (skips the
+   access-restricted modal for these entry points).
+2. **Post-auth return** — if `returnTo` was Community / Chat / Create store and the
+   member is still limited, `sanitizeReturnPath` opens Human verification instead of
+   silently dropping the intent.
+3. **Other gated surfaces** (e.g. account) may still use `?gender=restricted` →
+   `GenderDeniedModal`, which offers “Start human verification”.
+4. **On success**, profile is refreshed and the member is sent to the remembered
+   `returnTo` when present.
 
 Suppressed on `/auth/*` (the full-page `/auth/verify-gender` owns its own UI) and
 `/ui-kit`. The host is only mounted in the main app chrome, so meetings / kiosk

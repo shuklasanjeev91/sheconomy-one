@@ -34,15 +34,14 @@ export const GENDER_VERIFICATION = {
 
 
 /**
- * UX config for the app-wide verification prompt (the modal that opens on its
- * own when an authenticated member is not yet verified). Every timing/label
- * lives here so the host and modal contain **no magic numbers**.
+ * UX config for the app-wide Human verification prompt.
+ * The modal opens only on intent (Community / Chat / Create store), not after login.
+ * Timings and query flags live here so the host/modal contain **no magic numbers**.
  */
 export const GENDER_VERIFICATION_PROMPT = {
   /**
-   * Quiet window after the user dismisses the modal. We don't nag on every
-   * screen — the prompt re-appears only after this cooldown, or immediately if
-   * the member navigates to a gender-restricted route.
+   * Quiet window after the user dismisses the modal (denied / skip). Used so we
+   * don't re-open the denied modal immediately on the same navigation.
    */
   dismissCooldownMs: 10 * 60 * 1000,
   /** Cross-platform storage key holding the last dismissal timestamp (epoch ms). */
@@ -50,9 +49,20 @@ export const GENDER_VERIFICATION_PROMPT = {
   /** Query param + value that opens the "access restricted" modal (e.g. `?gender=restricted`). */
   restrictedQueryParam: 'gender',
   restrictedQueryValue: 'restricted',
-  /** Survives SPA redirect / reload so "Verify myself" keeps the liveness modal open. */
+  /** Query param + value that opens Human verification directly (e.g. `?human=verify`). */
+  verifyQueryParam: 'human',
+  verifyQueryValue: 'verify',
+  /** Optional return path after a successful Human verification (`?returnTo=/community`). */
+  returnToQueryParam: 'returnTo',
+  /** Survives SPA redirect / reload so an in-progress verify session stays open. */
   verificationFlowStorageKey: 'sheconomy:gender-verify:flow-open',
+  /** Persisted return path after verify success (when query is cleaned). */
+  returnToStorageKey: 'sheconomy:human-verify:return-to',
 } as const
+
+/** Shown in Human verification UI — respect + security framing. */
+export const HUMAN_VERIFICATION_DISCLAIMER =
+  'We respect all users. Human verification only confirms that you are a real person and that access to women-first spaces is limited to women — for community safety and security. Checks run on-device; we do not upload your video.'
 
 /** MediaPipe Face Mesh eye landmark indices. */
 export const LEFT_EYE_INDICES = [33, 160, 158, 133, 153, 144] as const

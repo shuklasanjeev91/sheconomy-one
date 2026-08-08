@@ -130,7 +130,7 @@ export function useGenderVerification({ onVerified }: UseGenderVerificationOptio
         if (!gender) throw new Error('Could not analyze your face. Try again in good lighting.')
         if (!gender.isFemale || gender.confidence < GENDER_VERIFICATION.minGenderConfidence) {
           throw new Error(
-            `${BRAND_NAME} is women-first. Verification did not meet the required confidence.`,
+            `${BRAND_NAME} could not confirm Human verification with the required confidence.`,
           )
         }
 

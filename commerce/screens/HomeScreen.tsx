@@ -185,51 +185,52 @@ export function HomeScreen({ data, error, loading = false }: HomeScreenProps) {
           inset
         />
 
-        <InfiniteListingSection
-          kind="featured"
-          title="Recommended for you"
-          subtitle="Ranked by your activity, location, and demand"
-          actionLabel="See more"
-          actionHref={commerceRoutes.browse('featured')}
-          inset
-        />
+        <IdleMount>
+          <InfiniteListingSection
+            kind="featured"
+            title="Recommended for you"
+            subtitle="Ranked by your activity, location, and demand"
+            actionLabel="See more"
+            actionHref={commerceRoutes.browse('featured')}
+            inset
+          />
 
-        <InfiniteListingSection
-          kind="trending"
-          title="Popular right now"
-          actionLabel="See more"
-          actionHref={commerceRoutes.browse('trending')}
-          inset
-        />
+          <InfiniteListingSection
+            kind="trending"
+            title="Popular right now"
+            actionLabel="See more"
+            actionHref={commerceRoutes.browse('trending')}
+            inset
+          />
 
-        {shopsFeed.items.length > 0 ? (
-          <PageSection>
-            <CommerceSection title="Shops you'll love" actionLabel="See more" actionHref={commerceRoutes.shops}>
-              <InfiniteHorizontalSection
-                hasMore={shopsFeed.hasMore}
-                isLoadingMore={shopsFeed.isLoadingMore}
-                onLoadMore={shopsFeed.loadMore}
-              >
-                {shopsFeed.items.map((shop) => (
-                  <ShopSpotlightCard key={shop.id} shop={shop} />
-                ))}
-              </InfiniteHorizontalSection>
-            </CommerceSection>
-          </PageSection>
-        ) : shopsFeed.isLoading && shopsFeed.items.length === 0 ? (
-          <PageSection>
-            <Spinner size="small" />
-          </PageSection>
-        ) : null}
+          {shopsFeed.items.length > 0 ? (
+            <PageSection>
+              <CommerceSection title="Shops you'll love" actionLabel="See more" actionHref={commerceRoutes.shops}>
+                <InfiniteHorizontalSection
+                  hasMore={shopsFeed.hasMore}
+                  isLoadingMore={shopsFeed.isLoadingMore}
+                  onLoadMore={shopsFeed.loadMore}
+                >
+                  {shopsFeed.items.map((shop) => (
+                    <ShopSpotlightCard key={shop.id} shop={shop} />
+                  ))}
+                </InfiniteHorizontalSection>
+              </CommerceSection>
+            </PageSection>
+          ) : shopsFeed.isLoading && shopsFeed.items.length === 0 ? (
+            <PageSection>
+              <Spinner size="small" />
+            </PageSection>
+          ) : null}
 
-        <InfiniteListingSection
-          kind="latest"
-          title="New arrivals"
-          actionLabel="See more"
-          actionHref={commerceRoutes.browse('latest')}
-          inset
-        />
-
+          <InfiniteListingSection
+            kind="latest"
+            title="New arrivals"
+            actionLabel="See more"
+            actionHref={commerceRoutes.browse('latest')}
+            inset
+          />
+        </IdleMount>
         {canManageShops ? (
           <PageSection>
             <YStack

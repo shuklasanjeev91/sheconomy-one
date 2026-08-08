@@ -14,6 +14,7 @@ import { signOut as supabaseSignOut, type SignOutScope } from '~/lib/supabase/au
 import { supabase } from '~/lib/supabase'
 import { appRoutes, routes } from '~/lib/routes'
 import { clearCachedProfile } from '~/lib/profile/profile-cache'
+import { navigateApp } from '~/lib/platform/navigate'
 import { persistor, resetStore, store } from '~/lib/store'
 import { useSupabase } from '~/providers/SupabaseProvider'
 
@@ -117,11 +118,11 @@ export function useAuth() {
           .eq('id', session.user.id)
           .maybeSingle()
         tier = getAccessTier(true, data?.gender, data?.is_verified)
-        router.push(sanitizeReturnPath(returnTo, tier, data?.is_verified) as import('one').Href)
+        navigateApp(sanitizeReturnPath(returnTo, tier, data?.is_verified))
         return
       }
 
-      router.push(sanitizeReturnPath(returnTo, tier) as import('one').Href)
+      navigateApp(sanitizeReturnPath(returnTo, tier))
     },
     [router],
   )

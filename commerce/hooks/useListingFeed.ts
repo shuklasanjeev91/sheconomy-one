@@ -15,6 +15,8 @@ type UseListingFeedOptions = {
   shopId?: string
   pageSize?: number
   enabled?: boolean
+  /** Prefetch page N+1 after a successful load (disable on home first-page rails). */
+  prefetchNext?: boolean
 }
 
 export function useListingFeed({
@@ -22,6 +24,7 @@ export function useListingFeed({
   shopId,
   pageSize = COMMERCE_PAGE_SIZE,
   enabled = true,
+  prefetchNext = true,
 }: UseListingFeedOptions) {
   const fetchPage = useCallback(
     (page: number) => fetchListingFeedPage(kind, page, { pageSize, shopId }),
@@ -31,5 +34,5 @@ export function useListingFeed({
   // Shop-scoped feeds are unique per shop; only share the home section keys.
   const cacheKey = shopId ? undefined : CACHE_KEYS.listingFeed(kind)
 
-  return usePaginatedFeed<ListingSummary>({ fetchPage, enabled, cacheKey })
+  return usePaginatedFeed<ListingSummary>({ fetchPage, enabled, cacheKey, prefetchNext })
 }

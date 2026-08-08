@@ -10,8 +10,8 @@
 
 import type { Href } from 'one'
 
-import { appRoutes } from '~/lib/routes'
 import { hasVerifiedFemaleAccess } from '~/lib/auth/access'
+import { buildHumanVerificationOpenRedirect } from '~/lib/gender-verification/denied-redirect'
 import { USER_ROLES, type UserRole } from '~/lib/profile/profile.type'
 import {
   DEFAULT_ROUTES,
@@ -88,7 +88,7 @@ export type RouteAccessDecision =
   | { status: 'allow' }
   /** Guest hit a members-only route — show inline sign-in, return here after. */
   | { status: 'signin'; returnTo: string; reason: RouteDenyReason; message: string }
-  /** Send the user elsewhere silently (gender/verification gate, guest-only). */
+  /** Send the user elsewhere silently (human verification gate, guest-only). */
   | { status: 'redirect'; href: Href; reason: RouteDenyReason; message: string }
   /** Signed in but not allowed — show a clear "access denied" screen. */
   | { status: 'denied'; href: Href; reason: RouteDenyReason; message: string }
@@ -98,8 +98,8 @@ export const ACCESS_MESSAGES: Record<RouteDenyReason, string> = {
   guest_only: 'You are already signed in.',
   auth_required: 'Please sign in to continue.',
   gender_required:
-    'SHEconomy seller tools are for women. Complete gender verification to continue.',
-  verification_required: 'Please complete verification to access this area.',
+    'SHEconomy seller tools are for women. Complete human verification to continue.',
+  verification_required: 'Please complete human verification to access this area.',
   insufficient_role: "You don't have permission to access this area.",
   incomplete_profile: 'Finish setting up your profile to continue.',
 }
@@ -156,7 +156,7 @@ export function resolveRouteAccess(input: ResolveRouteAccessInput): RouteAccessD
   ) {
     return {
       status: 'redirect',
-      href: appRoutes.verifyGender,
+      href: buildHumanVerificationOpenRedirect({ returnTo: pathname }) as Href,
       reason: 'gender_required',
       message: ACCESS_MESSAGES.gender_required,
     }
@@ -165,7 +165,7 @@ export function resolveRouteAccess(input: ResolveRouteAccessInput): RouteAccessD
   if (!adminBypass && requiresVerification(pathname) && !isVerified) {
     return {
       status: 'redirect',
-      href: appRoutes.verifyGender,
+      href: buildHumanVerificationOpenRedirect({ returnTo: pathname }) as Href,
       reason: 'verification_required',
       message: ACCESS_MESSAGES.verification_required,
     }
@@ -243,7 +243,7 @@ export function resolveRoleAccess(
   ) {
     return {
       status: 'redirect',
-      href: appRoutes.verifyGender,
+      href: buildHumanVerificationOpenRedirect({ returnTo: pathname }) as Href,
       reason: 'gender_required',
       message: ACCESS_MESSAGES.gender_required,
     }
@@ -252,7 +252,7 @@ export function resolveRoleAccess(
   if (!adminBypass && options.requireVerification && !isVerified) {
     return {
       status: 'redirect',
-      href: appRoutes.verifyGender,
+      href: buildHumanVerificationOpenRedirect({ returnTo: pathname }) as Href,
       reason: 'verification_required',
       message: ACCESS_MESSAGES.verification_required,
     }

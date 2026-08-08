@@ -420,7 +420,7 @@ export async function fetchPublishedProgramsPage(
 
   let query = supabase
     .from('programs')
-    .select(PROGRAM_SELECT, { count: 'exact' })
+    .select(PROGRAM_SELECT)
     .not('published_at', 'is', null)
 
   if (options?.category) {
@@ -459,7 +459,7 @@ export async function fetchPublishedProgramsPage(
       break
   }
 
-  const { data, error, count } = await query.range(from, to)
+  const { data, error } = await query.range(from, to)
 
   if (error) {
     return { programs: [], page, pageSize, hasMore: false, error: error.message }
@@ -468,13 +468,12 @@ export async function fetchPublishedProgramsPage(
   const programs = await enrichProgramAuthors((data as ProgramRow[]).map(mapProgram), {
     resolveByTitle: false,
   })
-  const total = count ?? 0
 
   return {
     programs,
     page,
     pageSize,
-    hasMore: total ? to + 1 < total : programs.length === pageSize,
+    hasMore: (data?.length ?? 0) === pageSize,
     error: null,
   }
 }

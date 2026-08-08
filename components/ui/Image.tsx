@@ -139,6 +139,8 @@ export const Image = forwardRef<any, AppImageProps>(function Image(
         contentFit={contentFitFor(objectFit)}
         cachePolicy="memory-disk"
         recyclingKey={recycleKey}
+        transition={0}
+        priority="normal"
         onError={typeof onError === 'function' ? () => (onError as () => void)() : undefined}
         onLoad={
           typeof onLoad === 'function'

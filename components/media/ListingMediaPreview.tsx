@@ -1,4 +1,4 @@
-import { useCallback, useState, useMemo, memo } from 'react'
+import { useCallback, useEffect, useMemo, useState, memo } from 'react'
 import { Platform } from 'react-native'
 
 import { Icons, Image, YStack } from '~/components/ui'
@@ -8,6 +8,7 @@ import {
   getListingImageFallbackUrl,
   LISTING_IMAGE_PLACEHOLDER,
   markListingImageBroken,
+  type ListingImageDisplaySize,
 } from '~/commerce/lib/images/listing-image-url'
 import { useAppUi } from '~/lib/theme/useAppUi'
 
@@ -21,6 +22,8 @@ type ListingMediaPreviewProps = {
   placeholderIconSize?: number
   muted?: boolean
   controls?: boolean
+  /** When set, Supabase images are resized via the render API (faster cards). */
+  displaySize?: ListingImageDisplaySize | null
 }
 
 /** Listing gallery tile — photo or inline video preview. */
@@ -34,78 +37,40 @@ export const ListingMediaPreview = memo(function ListingMediaPreview({
   placeholderIconSize = 28,
   muted = true,
   controls = false,
+  displaySize = null,
 }: ListingMediaPreviewProps) {
   const ui = useAppUi()
 
-  // console.log('📥 [ListingMediaPreview] INPUT URL:', {
-  //   url,
-  //   kind,
-  //   alt,
-  //   urlType: typeof url,
-  //   urlLength: url?.length,
-  // })
+  const { resolvedUrl, fallbackUrl } = useMemo(() => {
+    const resolved = getListingImageUrl(url, undefined, displaySize)
+    const fallback = getListingImageFallbackUrl(url, displaySize)
+    return { resolvedUrl: resolved, fallbackUrl: fallback }
+  }, [url, displaySize])
 
-  // ─── Use useMemo to cache resolved URLs ─────────────────────────────
-  const { resolvedUrl, fallbackUrl, isProxy } = useMemo(() => {
-    const resolved = getListingImageUrl(url)
-    const fallback = getListingImageFallbackUrl(url)
-    const proxy = resolved?.includes('/functions/v1/image-proxy')
-    
-    // console.log('🧩 [ListingMediaPreview] RESOLVED:', {
-    //   rawUrl: url,
-    //   resolvedUrl: resolved,
-    //   fallbackUrl: fallback,
-    //   kind,
-    //   isProxy: proxy,
-    //   isIbbCo: url?.includes('ibb.co'),
-    //   isIbbPage: url?.match(/^https?:\/\/ibb\.co\/[A-Za-z0-9]+$/) !== null,
-    //   isIbbDirect: url?.match(/^https?:\/\/i\.ibb\.co\//) !== null,
-    // })
-    
-    return { resolvedUrl: resolved, fallbackUrl: fallback, isProxy: proxy }
-  }, [url, kind])
-
-  // Only initialize state once with useMemo
   const [currentSrc, setCurrentSrc] = useState(resolvedUrl)
   const [triedFallback, setTriedFallback] = useState(false)
 
-  // console.log('🖼️ [Render Image] CURRENT SRC:', {
-  //   currentSrc,
-  //   triedFallback,
-  //   isProxy: currentSrc?.includes('/functions/v1/image-proxy'),
-  //   renderUrl: currentSrc,
-  //   urlDomain: currentSrc ? new URL(currentSrc).hostname : 'none',
-  //   urlPath: currentSrc ? new URL(currentSrc).pathname : 'none',
-  // })
+  // Keep src in sync when FlashList recycles the cell or size/url changes.
+  useEffect(() => {
+    setCurrentSrc(resolvedUrl)
+    setTriedFallback(false)
+  }, [resolvedUrl])
 
   const handleImageError = useCallback(() => {
-    // Keep error logs
-    console.log('❌ Image failed:', {
-      currentSrc,
-      fallbackUrl,
-      triedFallback,
-      isProxy: currentSrc?.includes('/functions/v1/image-proxy'),
-    })
-
-    if (!triedFallback && fallbackUrl !== LISTING_IMAGE_PLACEHOLDER) {
-      console.log('🔁 Switching to fallback')
+    if (!triedFallback && fallbackUrl !== LISTING_IMAGE_PLACEHOLDER && fallbackUrl !== currentSrc) {
       setTriedFallback(true)
       setCurrentSrc(fallbackUrl)
-    } else {
-      console.log('🛑 Using placeholder')
-      markListingImageBroken(url)
-      setCurrentSrc(LISTING_IMAGE_PLACEHOLDER)
+      return
     }
-  }, [triedFallback, fallbackUrl, url])
+    markListingImageBroken(url)
+    setCurrentSrc(LISTING_IMAGE_PLACEHOLDER)
+  }, [triedFallback, fallbackUrl, url, currentSrc])
 
   if (!url) {
-    // Keep this error case log
-    console.log('🚫 [ListingMediaPreview] No URL provided')
     return <ImagePlaceholder ui={ui} size={placeholderIconSize} />
   }
 
   if (kind === 'video' && Platform.OS === 'web') {
-    // console.log('🎬 [Video Render]', { currentSrc, muted, controls })
     return (
       <video
         src={currentSrc}
@@ -141,17 +106,12 @@ export const ListingMediaPreview = memo(function ListingMediaPreview({
 
   // ── Web: use <img> so we get native onError fallback chaining ──
   if (Platform.OS === 'web') {
-    // console.log('🖼️ [Web Image Render]', {
-    //   currentSrc,
-    //   isProxy: currentSrc?.includes('/functions/v1/image-proxy'),
-    //   objectFit,
-    //   imgSrc: currentSrc,
-    //   isValidUrl: currentSrc ? currentSrc.startsWith('http') || currentSrc.startsWith('data:') : false,
-    // })
     return (
       <img
         src={currentSrc}
         alt={alt}
+        loading="lazy"
+        decoding="async"
         onError={handleImageError}
         style={{
           width: typeof width === 'number' ? `${width}px` : width,
@@ -163,12 +123,6 @@ export const ListingMediaPreview = memo(function ListingMediaPreview({
     )
   }
 
-  // ── Native: Expo Image handles fallback natively ──
-  // console.log('📱 [Native Image Render]', {
-  //   currentSrc,
-  //   isProxy: currentSrc?.includes('/functions/v1/image-proxy'),
-  //   objectFit,
-  // })
   return (
     <Image
       src={currentSrc}
@@ -176,12 +130,11 @@ export const ListingMediaPreview = memo(function ListingMediaPreview({
       width={width}
       height={height}
       objectFit={objectFit}
+      recyclingKey={currentSrc}
       onError={handleImageError}
     />
   )
 })
-
-// ─── Internal placeholder ─────────────────────────────────────────────────────
 
 function ImagePlaceholder({ ui, size }: { ui: ReturnType<typeof useAppUi>; size: number }) {
   return (

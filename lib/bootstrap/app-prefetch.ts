@@ -56,7 +56,7 @@ export function startCoreTabPrefetch(): void {
       const result = await fetchShopsPage(0, COMMERCE_HORIZONTAL_PAGE_SIZE)
       return toPageSnapshot(result.items, 0, result.hasMore)
     })
-    for (const kind of ['physical', 'digital', 'trending'] as const) {
+    for (const kind of ['physical', 'digital', 'trending', 'featured', 'latest'] as const) {
       prefetchAppCache(CACHE_KEYS.listingFeed(kind), async () => {
         const result = await fetchListingFeedPage(kind, 0)
         return toPageSnapshot(result.items, 0, result.hasMore)
