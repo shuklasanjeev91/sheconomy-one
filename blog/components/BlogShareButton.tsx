@@ -3,7 +3,7 @@ import { Platform } from 'react-native'
 
 import { Button, Icons, Popover, Text, useAppToast, XStack, YStack } from '~/components/ui'
 import { radius } from '~/config/tokens'
-import { getAppOrigin } from '~/config/app-origin'
+import { buildAppUrl } from '~/config/app-origin'
 import { blogRoutes } from '~/lib/routes'
 import { copyShareLink, openShareTarget, shareViaSystem } from '~/lib/share/actions'
 import { useAppUi } from '~/lib/theme/useAppUi'
@@ -16,7 +16,7 @@ export function BlogShareButton({ title, slug }: { title: string; slug: string }
   const url =
     Platform.OS === 'web' && typeof window !== 'undefined'
       ? `${window.location.origin}${path}`
-      : `${getAppOrigin()}${path}`
+      : buildAppUrl(path)
 
   const payload = { url, title, text: title }
 
