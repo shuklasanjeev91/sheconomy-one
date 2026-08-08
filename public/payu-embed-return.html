@@ -1,0 +1,81 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Completing payment</title>
+    <style>
+      body {
+        margin: 0;
+        font-family: system-ui, sans-serif;
+        background: #fff;
+        color: #444;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        min-height: 100vh;
+      }
+    </style>
+    <script>
+      (function () {
+        var params = new URLSearchParams(window.location.search)
+        var status = String(params.get('status') || '').toLowerCase()
+        var ok = status === 'success'
+        var txn = String(params.get('txn') || '')
+        var orderIds = []
+        var key = 'commerce:pending-order-success'
+
+        try {
+          var raw = window.sessionStorage.getItem(key)
+          if (raw) {
+            var snap = JSON.parse(raw)
+            if (snap && Array.isArray(snap.orderIds)) {
+              orderIds = snap.orderIds
+            }
+            if (ok && orderIds.length) {
+              snap.awaitingExternalPayment = false
+              window.sessionStorage.setItem(key, JSON.stringify(snap))
+            }
+          }
+        } catch (e) {
+          /* ignore */
+        }
+
+        var payload = {
+          type: 'payu-embed-return',
+          status: ok ? 'success' : 'failure',
+          txn: txn,
+          orderIds: orderIds,
+        }
+
+        try {
+          if (window.parent && window.parent !== window) {
+            window.parent.postMessage(payload, window.location.origin)
+          }
+        } catch (e) {
+          /* ignore */
+        }
+
+        var target = ok
+          ? orderIds.length
+            ? '/orders/success?ids=' + encodeURIComponent(orderIds.join(','))
+            : '/orders'
+          : '/checkout'
+
+        if (window.top && window.top !== window) {
+          try {
+            window.top.location.href = target
+            return
+          } catch (e) {
+            /* sandbox may block — parent postMessage is the fallback */
+          }
+        }
+
+        window.location.replace(target)
+      })()
+    </script>
+  </head>
+  <body>
+    <p>Completing payment…</p>
+  </body>
+</html>

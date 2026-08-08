@@ -34,6 +34,8 @@ type ChargeBody = {
   device_info?: string | null
   card?: CardBody | null
   three_ds2_request_data?: string | Record<string, unknown> | null
+  /** Checkout page origin — 3DS iframe must return here (localhost in dev). */
+  app_origin?: string | null
 }
 
 function digitsOnly(value: string): string {
@@ -139,6 +141,8 @@ Deno.serve(async (request) => {
 
   const callbackBase = `${supabaseUrl.replace(/\/$/, '')}/functions/v1/platform-payu-callback`
   const actionUrl = `${payuBase}/_payment`
+  const appOrigin = String(body.app_origin ?? '').trim()
+  const returnOriginQuery = appOrigin ? `&app_origin=${encodeURIComponent(appOrigin)}` : ''
 
   const fields: Record<string, string> = {
     key,
@@ -154,8 +158,8 @@ Deno.serve(async (request) => {
     udf4,
     udf5,
     hash,
-    surl: `${callbackBase}?status=success&embed=1`,
-    furl: `${callbackBase}?status=failure&embed=1`,
+    surl: `${callbackBase}?status=success&embed=1${returnOriginQuery}`,
+    furl: `${callbackBase}?status=failure&embed=1${returnOriginQuery}`,
   }
 
   applyPayuPaymentModeFields(fields, {

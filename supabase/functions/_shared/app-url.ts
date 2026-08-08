@@ -36,7 +36,10 @@ export function resolvePublicAppOrigin(): string {
     if (!value?.trim()) continue
     try {
       const url = new URL(value.includes('://') ? value.trim() : `https://${value.trim()}`)
-      if (isEphemeralHost(url.hostname) || isBrandAliasHost(url.hostname)) {
+      if (isEphemeralHost(url.hostname)) {
+        return url.origin
+      }
+      if (isBrandAliasHost(url.hostname)) {
         return DEFAULT_PUBLIC_APP_ORIGIN
       }
       return url.origin
@@ -45,6 +48,25 @@ export function resolvePublicAppOrigin(): string {
     }
   }
   return DEFAULT_PUBLIC_APP_ORIGIN
+}
+
+/** Payment return URLs must land on the same origin as checkout (localhost in dev). */
+export function resolvePaymentAppOrigin(preferred?: string | null): string {
+  const trimmed = String(preferred ?? '').trim()
+  if (trimmed) {
+    try {
+      const url = new URL(trimmed)
+      if (url.protocol === 'http:' || url.protocol === 'https:') {
+        const host = url.hostname.toLowerCase()
+        if (isEphemeralHost(host) || isBrandAliasHost(host)) {
+          return url.origin
+        }
+      }
+    } catch {
+      // fall through
+    }
+  }
+  return resolvePublicAppOrigin()
 }
 
 /**

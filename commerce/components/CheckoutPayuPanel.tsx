@@ -295,6 +295,14 @@ export function CheckoutPayuPanel({
     return () => window.removeEventListener('message', onEmbedReturn)
   }, [onFailed, onPaid])
 
+  function isPayuEmbedReturnHref(href: string): boolean {
+    return (
+      href.includes('/payu-embed-return.html') ||
+      href.includes('/payu-embed-return') ||
+      href.includes('/orders/payu-return')
+    )
+  }
+
   function handleAcsIframeLoad() {
     if (Platform.OS !== 'web') return
     const frame = acsIframeRef.current
@@ -302,22 +310,30 @@ export function CheckoutPayuPanel({
     try {
       const href = frame.contentWindow?.location?.href ?? ''
       if (!href || href === 'about:blank') return
-      if (href.includes('/payu-embed-return') || href.includes('/orders/payu-return')) {
-        const parsed = new URL(href)
-        const ok = parsed.searchParams.get('status')?.toLowerCase() === 'success'
-        if (ok) {
-          setAcsHtml(null)
-          setBusy(false)
-          onPaid()
-        } else if (parsed.searchParams.get('status')) {
-          setAcsHtml(null)
-          onFailed('Payment was not completed')
-        }
+      if (!isPayuEmbedReturnHref(href)) return
+      const parsed = new URL(href)
+      const ok = parsed.searchParams.get('status')?.toLowerCase() === 'success'
+      if (ok) {
+        setAcsHtml(null)
+        setBusy(false)
+        setError(null)
+        onPaid()
+      } else if (parsed.searchParams.get('status')) {
+        setAcsHtml(null)
+        onFailed('Payment was not completed')
       }
     } catch {
       // cross-origin while on bank page — expected
     }
   }
+
+  /** Poll iframe when bank redirects back to our embed return (same-origin). */
+  useEffect(() => {
+    if (Platform.OS !== 'web' || !acsHtml) return
+    const timer = window.setInterval(() => handleAcsIframeLoad(), 700)
+    return () => window.clearInterval(timer)
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- poll while ACS iframe is open
+  }, [acsHtml])
 
   useEffect(() => {
     if (!isCards || hideMethodPicker) return
@@ -440,6 +456,14 @@ export function CheckoutPayuPanel({
             extraFields: Object.keys(extras).length ? extras : null,
             card: isCards ? cardPayload : null,
             threeDs2RequestData: isCards ? buildPayuThreeDS2RequestData() : null,
+            appOrigin:
+              Platform.OS === 'web' && typeof window !== 'undefined'
+                ? window.location.origin
+                : null,
+            deviceInfo:
+              Platform.OS === 'web' && typeof navigator !== 'undefined'
+                ? navigator.userAgent
+                : null,
           })
         : await createShepayPayuSession(session.paymentStepId ?? '', {
             payuMode: chargeMode,
@@ -588,11 +612,12 @@ export function CheckoutPayuPanel({
         {/* @ts-expect-error web-only iframe for ACS / bank OTP */}
         <iframe
           ref={acsIframeRef}
+          name="payu_acs_frame"
           title="Bank authentication"
           srcDoc={acsHtml}
           onLoad={handleAcsIframeLoad}
           style={{ width: '100%', flex: 1, minHeight: 360, border: 'none' }}
-          sandbox="allow-forms allow-scripts allow-same-origin allow-top-navigation allow-top-navigation-by-user-activation allow-popups"
+          sandbox="allow-forms allow-scripts allow-same-origin allow-top-navigation allow-top-navigation-by-user-activation allow-popups allow-popups-to-escape-sandbox"
         />
         <XStack padding="$2" justifyContent="center">
           <Button tone="outline" borderRadius={999} size="$2" onPress={() => void handleIvePaid()}>

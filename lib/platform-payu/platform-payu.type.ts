@@ -51,6 +51,8 @@ export type PlatformPayuChargeOptions = {
   deviceInfo?: string | null
   card?: PlatformPayuCardPayload | null
   threeDs2RequestData?: Record<string, unknown> | string | null
+  /** Web checkout origin for 3DS return (window.location.origin). */
+  appOrigin?: string | null
 }
 
 export type PlatformPayuVerifyResult = {

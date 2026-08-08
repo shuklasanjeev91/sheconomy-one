@@ -120,6 +120,10 @@ Deno.serve(async (request) => {
   const embed =
     url.searchParams.get('embed') === '1' ||
     url.searchParams.get('embed')?.toLowerCase() === 'true'
+  const appOrigin =
+    url.searchParams.get('app_origin')?.trim() ||
+    url.searchParams.get('appOrigin')?.trim() ||
+    null
 
   if (request.method !== 'POST' && request.method !== 'GET') {
     return new Response('Method Not Allowed', { status: 405, headers: corsHeaders })
@@ -149,7 +153,7 @@ Deno.serve(async (request) => {
       status: 303,
       headers: {
         ...corsHeaders,
-        Location: platformPayuAppRedirect('failure', txnid, 'tampered', { embed }),
+        Location: platformPayuAppRedirect('failure', txnid, 'tampered', { embed, appOrigin }),
         'Cache-Control': 'no-store',
       },
     })
@@ -165,7 +169,10 @@ Deno.serve(async (request) => {
     status: 303,
     headers: {
       ...corsHeaders,
-      Location: platformPayuAppRedirect(ok ? 'success' : 'failure', txnid, reason, { embed }),
+      Location: platformPayuAppRedirect(ok ? 'success' : 'failure', txnid, reason, {
+        embed,
+        appOrigin,
+      }),
       'Cache-Control': 'no-store',
     },
   })

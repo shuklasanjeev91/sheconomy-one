@@ -51,13 +51,13 @@ export default function PayUEmbedReturnRoute() {
       if (window.top && window.top !== window.self) {
         const target = ok
           ? orderIds.length
-            ? String(commerceRoutes.orderSuccess(orderIds))
+            ? `/orders/success?ids=${encodeURIComponent(orderIds.join(','))}`
             : String(commerceRoutes.orders)
           : String(commerceRoutes.checkout)
         try {
-          window.top.location.href = target.startsWith('http')
-            ? target
-            : `${origin}${target}`
+          window.top.location.replace(
+            target.startsWith('http') ? target : `${origin}${target}`,
+          )
         } catch {
           // sandbox may block — parent postMessage is the primary path
         }

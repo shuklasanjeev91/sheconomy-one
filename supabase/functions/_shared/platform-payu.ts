@@ -4,7 +4,7 @@
  * Keys/salts: PAYU_TEST_* or PAYU_LIVE_* / PAYU_MERCHANT_* from existing secrets.
  */
 
-import { resolvePublicAppOrigin } from './app-url.ts'
+import { resolvePaymentAppOrigin } from './app-url.ts'
 import {
   payURequestHash,
   payUResponseHash,
@@ -140,7 +140,7 @@ export async function buildPlatformPayuPaymentFields(input: {
   udf4: string
   udf5: string
   supabaseUrl: string
-  /** When true, callback redirects to /payu-embed-return for iframe 3DS. */
+  /** When true, callback redirects to /payu-embed-return.html for iframe 3DS. */
   embed?: boolean
 }): Promise<PlatformPayuFormFields> {
   const { creds, txnid, amount, productinfo, firstname, email, phone } = input
@@ -243,11 +243,12 @@ export function platformPayuAppRedirect(
   status: 'success' | 'failure',
   txnid: string,
   reason?: string,
-  options?: { embed?: boolean },
+  options?: { embed?: boolean; appOrigin?: string | null },
 ): string {
-  const appBase = resolvePublicAppOrigin()
+  const appBase = resolvePaymentAppOrigin(options?.appOrigin)
   if (options?.embed) {
-    const dest = new URL('/payu-embed-return', appBase)
+    // Static HTML — no React/AppShell inside the 3DS iframe.
+    const dest = new URL('/payu-embed-return.html', appBase)
     dest.searchParams.set('status', status === 'success' ? 'success' : 'failure')
     if (txnid) dest.searchParams.set('txn', txnid)
     return dest.toString()

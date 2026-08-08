@@ -117,6 +117,7 @@ export function createPlatformPayuService(supabase: SupabaseClient) {
             device_info: options?.deviceInfo ?? null,
             card: options?.card ?? null,
             three_ds2_request_data: options?.threeDs2RequestData ?? null,
+            app_origin: options?.appOrigin ?? null,
           },
         })
 
