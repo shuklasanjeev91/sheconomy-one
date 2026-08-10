@@ -54,7 +54,7 @@ export function BlogDetailScreen({ slug: slugProp }: { slug?: string }) {
   const { isDesktop, isTablet, safeBottom, gutter, mobileTabBarOffset } = useAppLayout()
   const { isAuthenticated } = useAuth()
   const slug = (slugProp || '').trim()
-  const coverSize = useBlogCoverSize(760) // Use a fixed size for cover
+  const coverSize = useBlogCoverSize(760)
 
   const { currentContent, items, contentError } = useAppSelector((s) => s.cms)
   const [related, setRelated] = useState<CmsContentDetail[]>([])
@@ -147,6 +147,8 @@ export function BlogDetailScreen({ slug: slugProp }: { slug?: string }) {
 
   const bottomPad = safeBottom + (isDesktop ? 48 : mobileTabBarOffset + 24)
 
+  const isPhone = !isDesktop && !isTablet
+
   if (!content && loadState !== 'done') {
     return (
       <PageScroll>
@@ -193,51 +195,52 @@ export function BlogDetailScreen({ slug: slugProp }: { slug?: string }) {
         width="100%" 
         backgroundColor={ui.background} 
         paddingBottom={bottomPad}
-        // Full width for all screens
         style={{
           width: '100%',
           maxWidth: '100%',
         }}
       >
-        {/* Breadcrumb - Full width with some padding */}
-        <YStack
-          width="100%"
-          borderBottomWidth={1}
-          borderBottomColor={ui.borderSubtle}
-          backgroundColor={ui.surfaceMuted}
-          paddingVertical="$3"
-          paddingHorizontal={isDesktop ? '$6' : '$4'}
-          style={{
-            width: '100%',
-          }}
-        >
-          <XStack
+        {/* Breadcrumb - Only show on desktop and tablet, hidden on mobile */}
+        {!isPhone && (
+          <YStack
             width="100%"
-            alignItems="center"
-            gap="$2"
-            flexWrap="wrap"
+            borderBottomWidth={1}
+            borderBottomColor={ui.borderSubtle}
+            backgroundColor={ui.surfaceMuted}
+            paddingVertical="$3"
+            paddingHorizontal={isDesktop ? '$6' : '$4'}
+            style={{
+              width: '100%',
+            }}
           >
-            <AppLink href={commerceRoutes.home}>
-              <Text fontSize={13} color={ui.textMuted} hoverColor={ui.text}>
-                Home
-              </Text>
-            </AppLink>
-            <Icons.ChevronRight size={12} color={ui.textMuted} />
-            <AppLink href={blogRoutes.home}>
-              <Text fontSize={13} color={ui.textMuted} hoverColor={ui.text}>
-                Blog
-              </Text>
-            </AppLink>
-            {content.cms_categories?.name ? (
-              <>
-                <Icons.ChevronRight size={12} color={ui.textMuted} />
-                <Text fontSize={13} color={ui.textSecondary} numberOfLines={1}>
-                  {content.cms_categories.name}
+            <XStack
+              width="100%"
+              alignItems="center"
+              gap="$2"
+              flexWrap="wrap"
+            >
+              <AppLink href={commerceRoutes.home}>
+                <Text fontSize={13} color={ui.textMuted} hoverColor={ui.text}>
+                  Home
                 </Text>
-              </>
-            ) : null}
-          </XStack>
-        </YStack>
+              </AppLink>
+              <Icons.ChevronRight size={12} color={ui.textMuted} />
+              <AppLink href={blogRoutes.home}>
+                <Text fontSize={13} color={ui.textMuted} hoverColor={ui.text}>
+                  Blog
+                </Text>
+              </AppLink>
+              {content.cms_categories?.name ? (
+                <>
+                  <Icons.ChevronRight size={12} color={ui.textMuted} />
+                  <Text fontSize={13} color={ui.textSecondary} numberOfLines={1}>
+                    {content.cms_categories.name}
+                  </Text>
+                </>
+              ) : null}
+            </XStack>
+          </YStack>
+        )}
 
         {/* Article column - Full width for all screens */}
         <YStack
