@@ -148,6 +148,9 @@ export function BlogDetailScreen({ slug: slugProp }: { slug?: string }) {
 
   const bottomPad = safeBottom + (isDesktop ? 48 : mobileTabBarOffset + 24)
 
+  // Check if it's a phone screen (not desktop and not tablet)
+  const isPhone = !isDesktop && !isTablet
+
   if (!content && loadState !== 'done') {
     return (
       <PageScroll>
@@ -194,53 +197,70 @@ export function BlogDetailScreen({ slug: slugProp }: { slug?: string }) {
         width="100%" 
         backgroundColor={ui.background} 
         paddingBottom={bottomPad}
+        // Add full screen on phone
+        {...(isPhone && {
+          minHeight: '100vh',
+          paddingTop: 0,
+        })}
       >
-        {/* Enhanced Breadcrumb */}
-        <YStack
-          width="100%"
-          borderBottomWidth={1}
-          borderBottomColor={ui.borderSubtle}
-          backgroundColor={ui.surfaceMuted}
-          paddingVertical="$3"
-          paddingHorizontal={gutter}
-        >
-          <XStack
-            maxWidth={articleMax}
+        {/* Enhanced Breadcrumb - Only show on desktop and tablet */}
+        {!isPhone && (
+          <YStack
             width="100%"
-            alignSelf="center"
-            alignItems="center"
-            gap="$2"
-            flexWrap="wrap"
+            borderBottomWidth={1}
+            borderBottomColor={ui.borderSubtle}
+            backgroundColor={ui.surfaceMuted}
+            paddingVertical="$3"
+            paddingHorizontal={gutter}
           >
-            <AppLink href={commerceRoutes.home}>
-              <Text fontSize={13} color={ui.textMuted} hoverColor={ui.text}>
-                Home
-              </Text>
-            </AppLink>
-            <Icons.ChevronRight size={12} color={ui.textMuted} />
-            <AppLink href={blogRoutes.home}>
-              <Text fontSize={13} color={ui.textMuted} hoverColor={ui.text}>
-                Blog
-              </Text>
-            </AppLink>
-            {content.cms_categories?.name ? (
-              <>
-                <Icons.ChevronRight size={12} color={ui.textMuted} />
-                <Text fontSize={13} color={ui.textSecondary} numberOfLines={1}>
-                  {content.cms_categories.name}
+            <XStack
+              maxWidth={articleMax}
+              width="100%"
+              alignSelf="center"
+              alignItems="center"
+              gap="$2"
+              flexWrap="wrap"
+            >
+              <AppLink href={commerceRoutes.home}>
+                <Text fontSize={13} color={ui.textMuted} hoverColor={ui.text}>
+                  Home
                 </Text>
-              </>
-            ) : null}
-          </XStack>
-        </YStack>
+              </AppLink>
+              <Icons.ChevronRight size={12} color={ui.textMuted} />
+              <AppLink href={blogRoutes.home}>
+                <Text fontSize={13} color={ui.textMuted} hoverColor={ui.text}>
+                  Blog
+                </Text>
+              </AppLink>
+              {content.cms_categories?.name ? (
+                <>
+                  <Icons.ChevronRight size={12} color={ui.textMuted} />
+                  <Text fontSize={13} color={ui.textSecondary} numberOfLines={1}>
+                    {content.cms_categories.name}
+                  </Text>
+                </>
+              ) : null}
+            </XStack>
+          </YStack>
+        )}
 
-        {/* Article column */}
+        {/* Article column - Full width on phone */}
         <YStack
           width="100%"
-          maxWidth={articleMax}
+          // On phone, remove maxWidth and padding constraints
+          {...(isPhone 
+            ? {
+                maxWidth: '100%',
+                paddingHorizontal: '$4',
+                paddingTop: '$4',
+              }
+            : {
+                maxWidth: articleMax,
+                paddingHorizontal: gutter,
+                paddingTop: isDesktop ? '$8' : '$6',
+              }
+          )}
           alignSelf="center"
-          paddingHorizontal={gutter}
-          paddingTop={isDesktop ? '$8' : '$6'}
           gap="$5"
         >
           {/* Header Section */}
@@ -275,13 +295,13 @@ export function BlogDetailScreen({ slug: slugProp }: { slug?: string }) {
               ) : null}
             </XStack>
 
-            {/* Title */}
+            {/* Title - Responsive font size */}
             <Text
-              fontSize={isDesktop ? 40 : 28}
+              fontSize={isPhone ? 28 : (isDesktop ? 40 : 28)}
               fontWeight="800"
               color={ui.text}
               letterSpacing={-0.5}
-              lineHeight={isDesktop ? 48 : 36}
+              lineHeight={isPhone ? 36 : (isDesktop ? 48 : 36)}
             >
               {content.title}
             </Text>
@@ -289,7 +309,7 @@ export function BlogDetailScreen({ slug: slugProp }: { slug?: string }) {
             {/* Teaser */}
             {teaser ? (
               <Text 
-                fontSize={isDesktop ? 20 : 16} 
+                fontSize={isPhone ? 16 : (isDesktop ? 20 : 16)} 
                 color={ui.textSecondary} 
                 lineHeight={28}
                 fontWeight="400"
@@ -298,9 +318,9 @@ export function BlogDetailScreen({ slug: slugProp }: { slug?: string }) {
               </Text>
             ) : null}
 
-            {/* Author & Metadata */}
+            {/* Author & Metadata - Responsive layout */}
             <XStack
-              gap="$4"
+              gap="$3"
               flexWrap="wrap"
               alignItems="center"
               paddingVertical="$3"
@@ -312,7 +332,7 @@ export function BlogDetailScreen({ slug: slugProp }: { slug?: string }) {
                 <Avatar 
                   name={authorName} 
                   src={content.author?.avatar_url} 
-                  size={48}
+                  size={isPhone ? 40 : 48}
                   style={{
                     borderWidth: 2,
                     borderColor: ui.borderSubtle,
@@ -320,21 +340,21 @@ export function BlogDetailScreen({ slug: slugProp }: { slug?: string }) {
                 />
                 <YStack flex={1} minWidth={0}>
                   <Text 
-                    fontSize={15} 
+                    fontSize={isPhone ? 14 : 15} 
                     fontWeight="700" 
                     color={ui.text}
                     numberOfLines={1}
                   >
                     {authorName}
                   </Text>
-                  <XStack gap="$2" alignItems="center">
-                    <Text fontSize={13} color={ui.textMuted}>
+                  <XStack gap="$2" alignItems="center" flexWrap="wrap">
+                    <Text fontSize={isPhone ? 12 : 13} color={ui.textMuted}>
                       {formatBlogDate(content.published_at ?? content.created_at, 'long')}
                     </Text>
-                    <Text fontSize={13} color={ui.textMuted}>·</Text>
+                    <Text fontSize={isPhone ? 12 : 13} color={ui.textMuted}>·</Text>
                     <XStack gap="$1" alignItems="center">
-                      <Icons.Clock size={14} color={ui.textMuted} />
-                      <Text fontSize={13} color={ui.textMuted}>
+                      <Icons.Clock size={isPhone ? 12 : 14} color={ui.textMuted} />
+                      <Text fontSize={isPhone ? 12 : 13} color={ui.textMuted}>
                         {readTime} min read
                       </Text>
                     </XStack>
@@ -342,26 +362,34 @@ export function BlogDetailScreen({ slug: slugProp }: { slug?: string }) {
                 </YStack>
               </XStack>
               
-              {/* Stats */}
-              <XStack gap="$4" alignItems="center" flexWrap="wrap">
+              {/* Stats - Stack on phone */}
+              <XStack 
+                gap="$3" 
+                alignItems="center" 
+                flexWrap="wrap"
+                {...(isPhone && {
+                  paddingTop: '$2',
+                  width: '100%',
+                })}
+              >
                 <XStack gap="$1.5" alignItems="center">
-                  <Icons.Eye size={16} color={ui.textMuted} />
-                  <Text fontSize={14} color={ui.textMuted}>
+                  <Icons.Eye size={isPhone ? 14 : 16} color={ui.textMuted} />
+                  <Text fontSize={isPhone ? 13 : 14} color={ui.textMuted}>
                     {formatCount(content.view_count ?? 0)}
                   </Text>
                 </XStack>
                 {content.like_count !== undefined && (
                   <XStack gap="$1.5" alignItems="center">
-                    <Icons.Heart size={16} color={ui.textMuted} />
-                    <Text fontSize={14} color={ui.textMuted}>
+                    <Icons.Heart size={isPhone ? 14 : 16} color={ui.textMuted} />
+                    <Text fontSize={isPhone ? 13 : 14} color={ui.textMuted}>
                       {formatCount(content.like_count)}
                     </Text>
                   </XStack>
                 )}
                 {content.comment_count !== undefined && (
                   <XStack gap="$1.5" alignItems="center">
-                    <Icons.MessageCircle size={16} color={ui.textMuted} />
-                    <Text fontSize={14} color={ui.textMuted}>
+                    <Icons.MessageCircle size={isPhone ? 14 : 16} color={ui.textMuted} />
+                    <Text fontSize={isPhone ? 13 : 14} color={ui.textMuted}>
                       {formatCount(content.comment_count)}
                     </Text>
                   </XStack>
@@ -370,20 +398,20 @@ export function BlogDetailScreen({ slug: slugProp }: { slug?: string }) {
             </XStack>
           </YStack>
 
-          {/* Cover Image - Enhanced */}
+          {/* Cover Image - Full width on phone */}
           {cover ? (
             <YStack
               width="100%"
-              maxWidth={coverSize.width}
-              height={coverSize.height}
+              maxWidth={isPhone ? '100%' : coverSize.width}
+              height={isPhone ? 220 : coverSize.height}
               alignSelf="center"
-              borderRadius={radius.card}
+              borderRadius={isPhone ? 0 : radius.card}
               overflow="hidden"
               backgroundColor={ui.surfaceMuted}
-              borderWidth={1}
+              borderWidth={isPhone ? 0 : 1}
               borderColor={ui.borderSubtle}
               style={{
-                ...getShadowStyle('md'),
+                ...(isPhone ? {} : getShadowStyle('md')),
                 position: 'relative',
               }}
             >
@@ -391,7 +419,7 @@ export function BlogDetailScreen({ slug: slugProp }: { slug?: string }) {
                 url={cover}
                 alt={content.title}
                 width="100%"
-                height={coverSize.height}
+                height={isPhone ? 220 : coverSize.height}
                 style={{
                   objectFit: 'cover',
                 }}
