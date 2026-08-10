@@ -1,29 +1,17 @@
-import { Platform } from 'react-native'
-import { useRouter } from 'one'
-
 import { CmsCoverImage } from '~/app/admin/components/CmsCoverImage'
 import { Badge, Icons, Text, XStack, YStack } from '~/components/ui'
 import { getShadowStyle, radius } from '~/config/tokens'
-import { useAppLayout } from '~/hooks/useAppLayout'
 import { getContentCoverUrl, getContentTeaser, type CmsContentDetail } from '~/lib/cms'
+import { navigateApp } from '~/lib/platform/navigate'
 import { blogRoutes } from '~/lib/routes'
 import { useAppUi } from '~/lib/theme/useAppUi'
 
 import { estimateReadTime, formatBlogDate, formatCount } from '~/blog/lib/blog-utils'
 
-/** Stable column width for the blog grid (avoids % + flexGrow collapse). */
-export function blogCardColumnWidth(isDesktop: boolean, isTablet: boolean) {
-  if (Platform.OS === 'web') {
-    if (isDesktop) return 'calc((100% - 32px) / 3)'
-    if (isTablet) return 'calc((100% - 16px) / 2)'
-    return '100%'
-  }
-  return '100%'
-}
+export { blogCardColumnWidth, blogGridColumns } from '~/blog/components/BlogPostsGrid'
 
 export function BlogCard({ post }: { post: CmsContentDetail }) {
   const ui = useAppUi()
-  const router = useRouter()
   const cover = getContentCoverUrl(post)
   const teaser = getContentTeaser(post, 150)
   const readTime = estimateReadTime(post.body || '')
@@ -31,6 +19,7 @@ export function BlogCard({ post }: { post: CmsContentDetail }) {
   return (
     <YStack
       width="100%"
+      minWidth={0}
       borderRadius={radius.card}
       borderWidth={1}
       borderColor={ui.borderSubtle}
@@ -40,7 +29,7 @@ export function BlogCard({ post }: { post: CmsContentDetail }) {
       style={getShadowStyle('sm')}
       hoverStyle={{ borderColor: ui.brand, y: -2 }}
       pressStyle={{ opacity: 0.96 }}
-      onPress={() => router.push(blogRoutes.post(post.slug))}
+      onPress={() => navigateApp(blogRoutes.post(post.slug))}
       role="link"
     >
       <YStack height={200} backgroundColor={ui.surfaceMuted} width="100%" position="relative">

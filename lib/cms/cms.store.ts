@@ -838,18 +838,29 @@ const cmsSlice = createSlice({
         state.contentError = action.payload ?? 'Failed to load content.'
         state.currentContent = null
       })
-      .addCase(loadContentBySlug.pending, (state) => {
+      .addCase(loadContentBySlug.pending, (state, action) => {
         setFetching(state)
         state.contentError = null
+        // Keep matching cached content while refetching; drop stale detail only.
+        if (state.currentContent && state.currentContent.slug !== action.meta.arg) {
+          state.currentContent = null
+        }
       })
       .addCase(loadContentBySlug.fulfilled, (state, action) => {
         clearFetching(state)
+        // Ignore stale responses (e.g. React Strict Mode double-fetch).
+        if (action.meta.arg && action.payload.slug !== action.meta.arg) return
         state.currentContent = action.payload
+        state.contentError = null
       })
       .addCase(loadContentBySlug.rejected, (state, action) => {
         clearFetching(state)
-        state.contentError = action.payload ?? 'Failed to load content.'
+        // Ignore stale failures after a newer slug already loaded.
+        if (state.currentContent && state.currentContent.slug !== action.meta.arg) {
+          return
+        }
         state.currentContent = null
+        state.contentError = action.payload ?? 'Failed to load content.'
       })
       .addCase(createContent.pending, (state) => {
         state.isCreating = true

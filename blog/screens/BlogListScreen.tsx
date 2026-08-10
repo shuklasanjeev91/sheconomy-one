@@ -1,9 +1,10 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 
-import { BlogCard, blogCardColumnWidth } from '~/blog/components/BlogCard'
+import { BlogCard } from '~/blog/components/BlogCard'
 import { BlogCategoryFilter } from '~/blog/components/BlogCategoryFilter'
 import { BlogFeaturedCard } from '~/blog/components/BlogFeaturedCard'
 import { BlogPagination } from '~/blog/components/BlogPagination'
+import { BlogPostsGrid } from '~/blog/components/BlogPostsGrid'
 import { BlogSearch } from '~/blog/components/BlogSearch'
 import { BlogFeaturedSkeleton, BlogListSkeleton } from '~/blog/components/BlogSkeletons'
 import { BlogSortSelect } from '~/blog/components/BlogSortSelect'
@@ -44,8 +45,7 @@ function FilterChip({ label, onRemove }: { label: string; onRemove: () => void }
 export function BlogListScreen() {
   const dispatch = useAppDispatch()
   const ui = useAppUi()
-  const { isDesktop, isTablet, safeBottom, gutter } = useAppLayout()
-  const cardWidth = blogCardColumnWidth(isDesktop, isTablet)
+  const { isDesktop, safeBottom, gutter } = useAppLayout()
 
   const { items, contentMeta, isFetching, categories, tags, contentError } = useAppSelector(
     (s) => s.cms,
@@ -323,19 +323,12 @@ export function BlogListScreen() {
               ) : null}
             </YStack>
           ) : (
-            <YStack gap="$6">
-              <XStack gap="$4" flexWrap="wrap" width="100%" alignItems="stretch">
+            <YStack gap="$6" width="100%">
+              <BlogPostsGrid>
                 {regularPosts.map((post) => (
-                  <YStack
-                    key={post.id}
-                    width={cardWidth as any}
-                    flexShrink={0}
-                    maxWidth="100%"
-                  >
-                    <BlogCard post={post} />
-                  </YStack>
+                  <BlogCard key={post.id} post={post} />
                 ))}
-              </XStack>
+              </BlogPostsGrid>
               <BlogPagination
                 meta={contentMeta}
                 onPageChange={(p) => {
