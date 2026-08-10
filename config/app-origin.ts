@@ -4,6 +4,20 @@ export const APP_SCHEME = 'sheconomy'
 /** Default production web origin when env vars are unset. */
 export const DEFAULT_APP_ORIGIN = 'https://sheconomy.in'
 
+/**
+ * Origin used for links that must open the installed app (share sheets,
+ * invites, notification action URLs, QR codes).
+ *
+ * `sheconomy.in` answers every request with a 308 to `www`. Neither Android's
+ * Digital Asset Links fetcher nor Apple's AASA fetcher follows redirects, so
+ * the apex cannot be verified and a browser handles apex links even when the
+ * app is installed. `www` serves directly, so deep links are handed out there.
+ *
+ * Keep `DEFAULT_APP_ORIGIN` for payment callbacks, SEO, and Supabase-stored
+ * URLs — those already canonicalize on the apex.
+ */
+export const DEEP_LINK_ORIGIN = 'https://www.sheconomy.in'
+
 /** Preview / deploy hosts that must never appear in share or deep links. */
 function isEphemeralHost(hostname: string): boolean {
   const host = hostname.toLowerCase()
@@ -124,14 +138,27 @@ export function getAppHost(): string {
 
 /** Prefixes One Router uses to map incoming URLs to in-app routes. */
 export function getAppLinkingPrefixes(origin = resolveAppOrigin()): string[] {
-  const hosts = new Set([origin, DEFAULT_APP_ORIGIN, 'https://www.sheconomy.in'])
+  const hosts = new Set([origin, DEFAULT_APP_ORIGIN, DEEP_LINK_ORIGIN])
   return [`${APP_SCHEME}://`, `${APP_SCHEME}:///`, ...hosts]
+}
+
+/**
+ * Origin for links that should open the installed app. Brand hosts collapse to
+ * the App-Link-verified host; staging / self-hosted origins are left alone.
+ */
+export function resolveDeepLinkOrigin(): string {
+  const origin = resolveAppOrigin()
+  try {
+    return isBrandAliasHost(new URL(origin).hostname) ? DEEP_LINK_ORIGIN : origin
+  } catch {
+    return DEEP_LINK_ORIGIN
+  }
 }
 
 /** Deep link into the native app, or HTTPS path on web. */
 export function buildAppUrl(path: string): string {
   const normalized = path.startsWith('/') ? path : `/${path}`
-  return `${resolveAppOrigin()}${normalized}`
+  return `${resolveDeepLinkOrigin()}${normalized}`
 }
 
 /** Custom-scheme URL for "open in app" buttons from web marketing pages. */

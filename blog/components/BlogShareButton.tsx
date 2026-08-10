@@ -1,10 +1,9 @@
 import { useState } from 'react'
-import { Platform } from 'react-native'
 
 import { Button, Icons, Popover, Text, useAppToast, XStack, YStack } from '~/components/ui'
 import { radius } from '~/config/tokens'
-import { getAppOrigin } from '~/config/app-origin'
 import { blogRoutes } from '~/lib/routes'
+import { buildAbsoluteUrl } from '~/lib/platform/url'
 import { copyShareLink, openShareTarget, shareViaSystem } from '~/lib/share/actions'
 import { useAppUi } from '~/lib/theme/useAppUi'
 
@@ -12,11 +11,7 @@ export function BlogShareButton({ title, slug }: { title: string; slug: string }
   const ui = useAppUi()
   const toast = useAppToast()
   const [open, setOpen] = useState(false)
-  const path = String(blogRoutes.post(slug))
-  const url =
-    Platform.OS === 'web' && typeof window !== 'undefined'
-      ? `${window.location.origin}${path}`
-      : `${getAppOrigin()}${path}`
+  const url = buildAbsoluteUrl(String(blogRoutes.post(slug)))
 
   const payload = { url, title, text: title }
 

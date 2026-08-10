@@ -1,11 +1,9 @@
+// Keep first: `livekit-client` extends DOMException while it evaluates.
+import '~/lib/polyfills/install-dom-exception'
+
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useWindowDimensions } from 'react-native'
 import { ConnectionState, RoomEvent, Track } from 'livekit-client'
-
-import { ensureLiveKitNativeGlobals } from '~/lib/livekit/register-native-globals'
-
-ensureLiveKitNativeGlobals()
-
 import {
   LiveKitRoom,
   VideoTrack,

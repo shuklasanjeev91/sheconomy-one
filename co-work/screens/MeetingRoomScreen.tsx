@@ -1,3 +1,7 @@
+// Keep first: `livekit-client` extends DOMException while it evaluates, and a
+// universal link can make this the very first screen module Hermes loads.
+import '~/lib/polyfills/install-dom-exception'
+
 import { Platform } from 'react-native'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { RoomEvent } from 'livekit-client'

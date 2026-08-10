@@ -118,6 +118,23 @@ export function detectMobileDevice(userAgent?: string): DeviceInfo {
 }
 
 /**
+ * Embedded webviews used by messaging / social apps.
+ *
+ * These matter for deep linking: iOS Universal Links are ignored inside an
+ * in-app browser, so a `sheconomy://` handoff is the only way out of them.
+ * WhatsApp on Android uses a plain Chrome Custom Tab and adds no marker, so
+ * Android handoff is driven by `isAndroid` rather than this check.
+ */
+export function isInAppBrowser(userAgent?: string): boolean {
+  const ua = resolveUserAgent(userAgent)
+  if (!ua) return false
+
+  return /FBAN|FBAV|FB_IAB|FBIOS|Instagram|LinkedInApp|Snapchat|Pinterest|MicroMessenger|Line\/|Twitter|GSA\//i.test(
+    ua
+  )
+}
+
+/**
  * Current device info. On native this trusts `Platform.OS`; on web it inspects
  * the browser user-agent.
  */

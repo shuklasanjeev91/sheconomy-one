@@ -181,7 +181,14 @@ function MobileAuthFormView({
           paddingBottom: Math.max(safeBottom, 20) + 8,
         }}
       >
-        <XStack justifyContent="flex-end" width="100%" marginBottom="$2" zIndex={20}>
+        <XStack
+          width="100%"
+          alignItems="center"
+          justifyContent="flex-start"
+          minHeight={40}
+          marginBottom="$2"
+          zIndex={20}
+        >
           <AuthBackButton showLabel={false} returnTo={returnTo} />
         </XStack>
         <YStack alignItems="center" width="100%" paddingVertical="$4" marginBottom="$3" gap="$2">

@@ -213,11 +213,6 @@
           "data": [
             {
               "scheme": "https",
-              "host": "sheconomy.in",
-              "pathPrefix": "/"
-            },
-            {
-              "scheme": "https",
               "host": "www.sheconomy.in",
               "pathPrefix": "/"
             }
