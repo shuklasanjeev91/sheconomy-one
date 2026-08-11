@@ -1,155 +1,581 @@
-import { Platform } from 'react-native'
-import { useEffect, useMemo, useState } from 'react'
+import { useMemo, useRef, useState } from 'react'
+import { ScrollView } from 'react-native'
+import {
+  addDays,
+  addMonths,
+  eachDayOfInterval,
+  endOfMonth,
+  endOfWeek,
+  format,
+  isBefore,
+  isSameDay,
+  isSameMonth,
+  startOfDay,
+  startOfMonth,
+  startOfWeek,
+  subMonths,
+} from 'date-fns'
 
-import { Button, Field, Text, XStack, YStack } from '~/components/ui'
+import { AppBottomSheet, Button, Field, Icons, Text, XStack, YStack } from '~/components/ui'
 import { useCoWorkTheme } from '~/co-work/lib/theme'
 
 type ScheduleDateTimeFieldProps = {
   value: string
   onChange: (iso: string) => void
   label?: string
+  /** Earliest selectable day. Defaults to today so meetings cannot be booked in the past. */
+  minDate?: Date
 }
 
-function toLocalInputValue(iso: string) {
-  if (!iso) return ''
-  const date = new Date(iso)
-  if (Number.isNaN(date.getTime())) return ''
-  const pad = (n: number) => String(n).padStart(2, '0')
-  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`
+const WEEKDAYS = ['Su', 'Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa']
+const MINUTE_STEP = 5
+const CELL_HEIGHT = 40
+const CELL_GAP = 4
+const WHEEL_HEIGHT = 232
+const ROW_HEIGHT = 44
+const HOURS = Array.from({ length: 24 }, (_, i) => i)
+const MINUTES = Array.from({ length: 60 / MINUTE_STEP }, (_, i) => i * MINUTE_STEP)
+const QUICK_TIMES = [
+  { label: '9:00 AM', hours: 9 },
+  { label: '12:00 PM', hours: 12 },
+  { label: '3:00 PM', hours: 15 },
+  { label: '6:00 PM', hours: 18 },
+]
+
+function parseDate(iso: string) {
+  if (!iso) return null
+  const parsed = new Date(iso)
+  return Number.isNaN(parsed.getTime()) ? null : parsed
 }
 
-function fromLocalInputValue(value: string) {
-  if (!value) return ''
-  const date = new Date(value)
-  if (Number.isNaN(date.getTime())) return ''
-  return date.toISOString()
+function nextFullHour() {
+  const next = new Date()
+  next.setMinutes(0, 0, 0)
+  next.setHours(next.getHours() + 1)
+  return next
 }
 
-function formatDisplayDate(iso: string) {
-  if (!iso) return 'Select date & time'
-  const date = new Date(iso)
-  if (Number.isNaN(date.getTime())) return 'Select date & time'
-  return date.toLocaleString(undefined, {
-    weekday: 'short',
-    month: 'short',
-    day: 'numeric',
-    hour: 'numeric',
-    minute: '2-digit',
-  })
+function snapToStep(date: Date) {
+  const snapped = new Date(date)
+  snapped.setSeconds(0, 0)
+  const minutes = Math.round(snapped.getMinutes() / MINUTE_STEP) * MINUTE_STEP
+  if (minutes >= 60) snapped.setHours(snapped.getHours() + 1, 0)
+  else snapped.setMinutes(minutes)
+  return snapped
 }
 
-/** Cross-platform date/time picker — datetime-local on web, native picker on iOS/Android. */
-export function ScheduleDateTimeField({ value, onChange, label = 'Date & time' }: ScheduleDateTimeFieldProps) {
+function withDay(day: Date, time: Date) {
+  const next = new Date(day)
+  next.setHours(time.getHours(), time.getMinutes(), 0, 0)
+  return next
+}
+
+function withTime(base: Date, hours: number, minutes: number) {
+  const next = new Date(base)
+  next.setHours(hours, minutes, 0, 0)
+  return next
+}
+
+function chunk<T>(items: T[], size: number) {
+  const out: T[][] = []
+  for (let i = 0; i < items.length; i += size) out.push(items.slice(i, i + size))
+  return out
+}
+
+/**
+ * Date/time picker for scheduling — one Tamagui sheet for web, iOS and Android.
+ *
+ * `@react-native-community/datetimepicker` cannot be used here: Metro stubs its
+ * native component and TurboModules (`lib/metro-stubs/datetimepicker-*`) and the
+ * VxRN release bundle aliases the whole package to a no-op (`vite.config.ts`),
+ * so a platform picker renders nothing and never fires `onChange` on device.
+ *
+ * Layout note: the sheet body sizes itself to its content, so nothing in here
+ * may use `flex` for vertical space — a `flex` child would resolve to zero
+ * height and every row would paint on top of the next. Heights are explicit.
+ */
+export function ScheduleDateTimeField({
+  value,
+  onChange,
+  label = 'Date & time',
+  minDate,
+}: ScheduleDateTimeFieldProps) {
   const { ui: coworkUi } = useCoWorkTheme()
-  const localValue = useMemo(() => toLocalInputValue(value), [value])
+  const [open, setOpen] = useState(false)
+  const [step, setStep] = useState<'date' | 'time'>('date')
+  const [draft, setDraft] = useState(() => snapToStep(parseDate(value) ?? nextFullHour()))
 
-  if (Platform.OS === 'web') {
-    return (
-      <Field label={label}>
-        <input
-          type="datetime-local"
-          value={localValue}
-          onChange={(event) => onChange(fromLocalInputValue(event.target.value))}
-          style={{
-            width: '100%',
-            padding: '12px 14px',
-            borderRadius: 14,
-            border: `1px solid ${coworkUi.borderSoft}`,
-            background: 'rgba(255,255,255,0.05)',
-            color: coworkUi.text,
-            fontSize: 15,
-            fontFamily: 'inherit',
-          }}
-        />
-      </Field>
-    )
+  const selected = useMemo(() => parseDate(value), [value])
+  const minDay = useMemo(() => startOfDay(minDate ?? new Date()), [minDate])
+
+  function openSheet() {
+    setDraft(snapToStep(parseDate(value) ?? nextFullHour()))
+    setStep('date')
+    setOpen(true)
   }
 
-  return <NativeScheduleDateTimeField value={value} onChange={onChange} label={label} />
-}
-
-function NativeScheduleDateTimeField({ value, onChange, label }: ScheduleDateTimeFieldProps) {
-  const { ui: coworkUi } = useCoWorkTheme()
-  const [showPicker, setShowPicker] = useState(false)
-  const [mode, setMode] = useState<'date' | 'time'>('date')
-  const [DateTimePicker, setDateTimePicker] = useState<React.ComponentType<any> | null>(null)
-
-  const currentDate = useMemo(() => {
-    const parsed = value ? new Date(value) : new Date()
-    return Number.isNaN(parsed.getTime()) ? new Date() : parsed
-  }, [value])
-
-  useEffect(() => {
-    void import('@react-native-community/datetimepicker').then((module) =>
-      setDateTimePicker(() => module.default),
-    )
-  }, [])
-
-  function openDatePicker() {
-    setMode('date')
-    setShowPicker(true)
-  }
-
-  function openTimePicker() {
-    setMode('time')
-    setShowPicker(true)
+  function confirm() {
+    onChange(draft.toISOString())
+    setOpen(false)
   }
 
   return (
-    <YStack gap="$2">
-      <Field label={label}>
-        <YStack gap="$2">
-          <Button
-            tone="outline"
-            borderRadius={14}
-            borderColor={coworkUi.borderSoft}
-            backgroundColor="rgba(255,255,255,0.05)"
-            onPress={openDatePicker}
-          >
-            <Text color={coworkUi.text}>{formatDisplayDate(value)}</Text>
-          </Button>
-          <XStack gap="$2">
-            <Button flex={1} tone="ghost" size="$3" onPress={openDatePicker}>
-              Change date
+    <Field label={label}>
+      <YStack gap="$2">
+        <XStack
+          onPress={openSheet}
+          alignItems="center"
+          gap="$3"
+          minHeight={56}
+          paddingHorizontal="$4"
+          paddingVertical="$2.5"
+          borderRadius={14}
+          borderWidth={1}
+          borderColor={coworkUi.borderSoft}
+          backgroundColor="rgba(255,255,255,0.05)"
+          cursor="pointer"
+          aria-label="Choose meeting date and time"
+          hoverStyle={{ borderColor: coworkUi.brand }}
+          pressStyle={{ opacity: 0.85 }}
+        >
+          <Icons.CalendarDays size={18} color={coworkUi.brand} />
+          <YStack flex={1} gap={2}>
+            <Text
+              fontSize={15}
+              fontWeight="600"
+              color={selected ? coworkUi.text : coworkUi.textMuted}
+              numberOfLines={1}
+            >
+              {selected ? format(selected, 'EEE, d MMM yyyy') : 'Select date & time'}
+            </Text>
+            {selected ? (
+              <Text fontSize={12} color={coworkUi.textMuted}>
+                {format(selected, 'h:mm a')}
+              </Text>
+            ) : null}
+          </YStack>
+          <Icons.ChevronDown size={18} color={coworkUi.textMuted} />
+        </XStack>
+
+        <Text fontSize={11} color={coworkUi.textMuted}>
+          Uses your device timezone
+        </Text>
+      </YStack>
+
+      <AppBottomSheet
+        open={open}
+        onOpenChange={setOpen}
+        title={label}
+        // The calendar is the tall step and has no inner scroller, so it may use
+        // the sheet's. The time step scrolls inside its own wheels instead.
+        scrollable={step === 'date'}
+        footer={
+          <XStack gap="$3">
+            <Button flex={1} tone="outline" borderRadius={999} onPress={() => setOpen(false)}>
+              Cancel
             </Button>
-            <Button flex={1} tone="ghost" size="$3" onPress={openTimePicker}>
-              Change time
+            <Button flex={1} tone="primary" borderRadius={999} onPress={confirm}>
+              Confirm
             </Button>
           </XStack>
+        }
+      >
+        <YStack gap="$4" width="100%">
+          <YStack gap="$1" alignItems="center" minHeight={56}>
+            <Text fontSize={20} fontWeight="800" color={coworkUi.text} letterSpacing={-0.4}>
+              {format(draft, 'EEE, d MMM yyyy')}
+            </Text>
+            <Text fontSize={16} fontWeight="700" color={coworkUi.brand}>
+              {format(draft, 'h:mm a')}
+            </Text>
+          </YStack>
+
+          <XStack
+            gap="$2"
+            height={48}
+            padding={4}
+            borderRadius={999}
+            borderWidth={1}
+            borderColor={coworkUi.borderSoft}
+            backgroundColor={coworkUi.surfaceMuted}
+          >
+            <StepTab
+              label="Date"
+              icon={Icons.Calendar}
+              active={step === 'date'}
+              onPress={() => setStep('date')}
+            />
+            <StepTab
+              label="Time"
+              icon={Icons.Clock}
+              active={step === 'time'}
+              onPress={() => setStep('time')}
+            />
+          </XStack>
+
+          {step === 'date' ? (
+            <CalendarPanel
+              value={draft}
+              minDay={minDay}
+              onSelect={(day) => {
+                setDraft(withDay(day, draft))
+                setStep('time')
+              }}
+            />
+          ) : (
+            <TimePanel value={draft} onChange={setDraft} />
+          )}
         </YStack>
-      </Field>
+      </AppBottomSheet>
+    </Field>
+  )
+}
 
-      {showPicker && DateTimePicker ? (
-        <DateTimePicker
-          value={currentDate}
-          mode={mode}
-          display={Platform.OS === 'ios' ? 'spinner' : 'default'}
-          onChange={(event: { type: string }, selected?: Date) => {
-            if (Platform.OS === 'android') setShowPicker(false)
-            if (event.type === 'dismissed' || !selected) {
-              if (Platform.OS === 'ios') setShowPicker(false)
-              return
-            }
-            onChange(selected.toISOString())
-            if (Platform.OS === 'ios' && mode === 'date') {
-              setMode('time')
-              return
-            }
-            if (Platform.OS === 'ios') setShowPicker(false)
-          }}
+function StepTab({
+  label,
+  icon: Icon,
+  active,
+  onPress,
+}: {
+  label: string
+  icon: typeof Icons.Calendar
+  active: boolean
+  onPress: () => void
+}) {
+  const { ui: coworkUi } = useCoWorkTheme()
+  return (
+    <XStack
+      flex={1}
+      minHeight={40}
+      alignItems="center"
+      justifyContent="center"
+      gap="$2"
+      borderRadius={999}
+      backgroundColor={active ? coworkUi.brand : 'transparent'}
+      cursor="pointer"
+      pressStyle={{ opacity: 0.85 }}
+      onPress={onPress}
+    >
+      <Icon size={16} color={active ? 'white' : coworkUi.textMuted} />
+      <Text fontSize={14} fontWeight="700" color={active ? 'white' : coworkUi.textMuted}>
+        {label}
+      </Text>
+    </XStack>
+  )
+}
+
+function CalendarPanel({
+  value,
+  minDay,
+  onSelect,
+}: {
+  value: Date
+  minDay: Date
+  onSelect: (day: Date) => void
+}) {
+  const { ui: coworkUi } = useCoWorkTheme()
+  const [month, setMonth] = useState(() => startOfMonth(value))
+
+  const weeks = useMemo(() => {
+    const start = startOfWeek(startOfMonth(month), { weekStartsOn: 0 })
+    const end = endOfWeek(endOfMonth(month), { weekStartsOn: 0 })
+    return chunk(eachDayOfInterval({ start, end }), 7)
+  }, [month])
+
+  const quickDays = useMemo(
+    () => [
+      { label: 'Today', day: startOfDay(new Date()) },
+      { label: 'Tomorrow', day: startOfDay(addDays(new Date(), 1)) },
+      { label: 'Next week', day: startOfDay(addDays(new Date(), 7)) },
+    ],
+    [],
+  )
+
+  const canGoBack = !isBefore(endOfMonth(subMonths(month, 1)), minDay)
+  const today = startOfDay(new Date())
+
+  return (
+    <YStack gap="$3" width="100%">
+      <XStack height={44} alignItems="center" justifyContent="space-between">
+        <NavButton
+          icon={Icons.ChevronLeft}
+          disabled={!canGoBack}
+          onPress={() => setMonth((current) => subMonths(current, 1))}
         />
-      ) : null}
+        <Text fontSize={16} fontWeight="700" color={coworkUi.text}>
+          {format(month, 'MMMM yyyy')}
+        </Text>
+        <NavButton
+          icon={Icons.ChevronRight}
+          onPress={() => setMonth((current) => addMonths(current, 1))}
+        />
+      </XStack>
 
-      <Text fontSize={11} color={coworkUi.textMuted}>
-        Uses your device timezone
+      <XStack height={22} gap={CELL_GAP}>
+        {WEEKDAYS.map((weekday) => (
+          <XStack key={weekday} flex={1} alignItems="center" justifyContent="center">
+            <Text fontSize={12} fontWeight="700" color={coworkUi.textMuted}>
+              {weekday}
+            </Text>
+          </XStack>
+        ))}
+      </XStack>
+
+      <YStack gap={CELL_GAP} height={weeks.length * (CELL_HEIGHT + CELL_GAP)}>
+        {weeks.map((week) => (
+          <XStack key={week[0].toISOString()} height={CELL_HEIGHT} gap={CELL_GAP}>
+            {week.map((day) => {
+              const isSelected = isSameDay(day, value)
+              const isToday = isSameDay(day, today)
+              const outside = !isSameMonth(day, month)
+              const disabled = isBefore(day, minDay)
+              return (
+                <XStack
+                  key={day.toISOString()}
+                  flex={1}
+                  height={CELL_HEIGHT}
+                  alignItems="center"
+                  justifyContent="center"
+                  borderRadius={999}
+                  borderWidth={isToday && !isSelected ? 1 : 0}
+                  borderColor={coworkUi.brand}
+                  backgroundColor={isSelected ? coworkUi.brand : 'transparent'}
+                  opacity={disabled ? 0.28 : 1}
+                  cursor={disabled ? 'default' : 'pointer'}
+                  pressStyle={disabled ? undefined : { opacity: 0.7 }}
+                  onPress={disabled ? undefined : () => onSelect(day)}
+                >
+                  <Text
+                    fontSize={14}
+                    fontWeight={isSelected ? '800' : '500'}
+                    color={isSelected ? 'white' : outside ? coworkUi.textMuted : coworkUi.text}
+                  >
+                    {format(day, 'd')}
+                  </Text>
+                </XStack>
+              )
+            })}
+          </XStack>
+        ))}
+      </YStack>
+
+      <XStack gap="$2" minHeight={36}>
+        {quickDays.map((quick) => {
+          const disabled = isBefore(quick.day, minDay)
+          return (
+            <Chip
+              key={quick.label}
+              label={quick.label}
+              disabled={disabled}
+              active={isSameDay(quick.day, value)}
+              onPress={() => {
+                setMonth(startOfMonth(quick.day))
+                onSelect(quick.day)
+              }}
+            />
+          )
+        })}
+      </XStack>
+    </YStack>
+  )
+}
+
+function TimePanel({ value, onChange }: { value: Date; onChange: (next: Date) => void }) {
+  const { ui: coworkUi } = useCoWorkTheme()
+  const hour = value.getHours()
+  const minute = Math.min(55, Math.round(value.getMinutes() / MINUTE_STEP) * MINUTE_STEP)
+
+  return (
+    <YStack gap="$3" width="100%">
+      <XStack gap="$3" height={WHEEL_HEIGHT}>
+        <WheelColumn
+          label="Hour"
+          items={HOURS}
+          selected={hour}
+          formatItem={(item) => format(withTime(value, item, 0), 'h a')}
+          onSelect={(item) => onChange(withTime(value, item, minute))}
+        />
+        <WheelColumn
+          label="Minute"
+          items={MINUTES}
+          selected={minute}
+          formatItem={(item) => String(item).padStart(2, '0')}
+          onSelect={(item) => onChange(withTime(value, hour, item))}
+        />
+      </XStack>
+
+      <XStack gap="$2" minHeight={36}>
+        {QUICK_TIMES.map((quick) => (
+          <Chip
+            key={quick.label}
+            label={quick.label}
+            active={hour === quick.hours && minute === 0}
+            onPress={() => onChange(withTime(value, quick.hours, 0))}
+          />
+        ))}
+      </XStack>
+
+      <Text fontSize={12} color={coworkUi.textMuted}>
+        Times are saved in your device timezone.
       </Text>
     </YStack>
   )
 }
 
+function WheelColumn({
+  label,
+  items,
+  selected,
+  formatItem,
+  onSelect,
+}: {
+  label: string
+  items: number[]
+  selected: number
+  formatItem: (item: number) => string
+  onSelect: (item: number) => void
+}) {
+  const { ui: coworkUi } = useCoWorkTheme()
+  const scrollRef = useRef<ScrollView | null>(null)
+  const aligned = useRef(false)
+  const index = items.indexOf(selected)
+
+  return (
+    <YStack flex={1} height={WHEEL_HEIGHT} gap="$2">
+      <Text
+        height={18}
+        fontSize={12}
+        fontWeight="700"
+        color={coworkUi.textMuted}
+        alignSelf="center"
+      >
+        {label}
+      </Text>
+      <YStack
+        height={WHEEL_HEIGHT - 26}
+        borderWidth={1}
+        borderColor={coworkUi.borderSoft}
+        borderRadius={14}
+        backgroundColor={coworkUi.surfaceMuted}
+        overflow="hidden"
+      >
+        <ScrollView
+          ref={scrollRef}
+          style={{ flex: 1 }}
+          contentContainerStyle={{ paddingVertical: 6 }}
+          showsVerticalScrollIndicator={false}
+          nestedScrollEnabled
+          // Content lays out after mount on native, so align once it is measurable.
+          onContentSizeChange={() => {
+            if (aligned.current || index < 0) return
+            aligned.current = true
+            scrollRef.current?.scrollTo({
+              y: Math.max(0, index * (ROW_HEIGHT + 4) - ROW_HEIGHT),
+              animated: false,
+            })
+          }}
+        >
+          {items.map((item) => {
+            const active = item === selected
+            return (
+              <XStack
+                key={item}
+                height={ROW_HEIGHT}
+                alignItems="center"
+                justifyContent="center"
+                marginHorizontal={6}
+                marginVertical={2}
+                borderRadius={10}
+                backgroundColor={active ? coworkUi.brand : 'transparent'}
+                cursor="pointer"
+                pressStyle={{ opacity: 0.75 }}
+                onPress={() => onSelect(item)}
+              >
+                <Text
+                  fontSize={16}
+                  fontWeight={active ? '800' : '500'}
+                  color={active ? 'white' : coworkUi.text}
+                >
+                  {formatItem(item)}
+                </Text>
+              </XStack>
+            )
+          })}
+        </ScrollView>
+      </YStack>
+    </YStack>
+  )
+}
+
+function Chip({
+  label,
+  active,
+  disabled,
+  onPress,
+}: {
+  label: string
+  active?: boolean
+  disabled?: boolean
+  onPress: () => void
+}) {
+  const { ui: coworkUi } = useCoWorkTheme()
+  return (
+    <XStack
+      flex={1}
+      height={36}
+      paddingHorizontal="$2"
+      alignItems="center"
+      justifyContent="center"
+      borderRadius={999}
+      borderWidth={1}
+      borderColor={active ? coworkUi.brand : coworkUi.borderSoft}
+      backgroundColor={active ? coworkUi.brandMuted : 'transparent'}
+      opacity={disabled ? 0.4 : 1}
+      cursor={disabled ? 'default' : 'pointer'}
+      pressStyle={disabled ? undefined : { opacity: 0.75 }}
+      onPress={disabled ? undefined : onPress}
+    >
+      <Text
+        fontSize={13}
+        fontWeight="600"
+        numberOfLines={1}
+        color={active ? coworkUi.text : coworkUi.textSecondary}
+      >
+        {label}
+      </Text>
+    </XStack>
+  )
+}
+
+function NavButton({
+  icon: Icon,
+  disabled,
+  onPress,
+}: {
+  icon: typeof Icons.ChevronLeft
+  disabled?: boolean
+  onPress: () => void
+}) {
+  const { ui: coworkUi } = useCoWorkTheme()
+  return (
+    <XStack
+      width={40}
+      height={40}
+      alignItems="center"
+      justifyContent="center"
+      borderRadius={999}
+      borderWidth={1}
+      borderColor={coworkUi.borderSoft}
+      opacity={disabled ? 0.35 : 1}
+      cursor={disabled ? 'default' : 'pointer'}
+      pressStyle={disabled ? undefined : { opacity: 0.7 }}
+      onPress={disabled ? undefined : onPress}
+    >
+      <Icon size={20} color={coworkUi.text} />
+    </XStack>
+  )
+}
+
 export function defaultScheduleDateTime() {
-  const next = new Date()
-  next.setMinutes(0, 0, 0)
-  next.setHours(next.getHours() + 1)
-  return next.toISOString()
+  return nextFullHour().toISOString()
 }
