@@ -1,10 +1,9 @@
-import { useRouter } from 'one'
-
 import { CmsCoverImage } from '~/app/admin/components/CmsCoverImage'
 import { Badge, Button, Icons, Text, XStack, YStack } from '~/components/ui'
 import { getShadowStyle, radius } from '~/config/tokens'
 import { useAppLayout } from '~/hooks/useAppLayout'
 import { getContentCoverUrl, getContentTeaser, type CmsContentDetail } from '~/lib/cms'
+import { navigateApp } from '~/lib/platform/navigate'
 import { blogRoutes } from '~/lib/routes'
 import { useAppUi } from '~/lib/theme/useAppUi'
 
@@ -12,7 +11,6 @@ import { estimateReadTime, formatBlogDate } from '~/blog/lib/blog-utils'
 
 export function BlogFeaturedCard({ post }: { post: CmsContentDetail }) {
   const ui = useAppUi()
-  const router = useRouter()
   const { isDesktop } = useAppLayout()
   const cover = getContentCoverUrl(post)
   const teaser = getContentTeaser(post, 250)
@@ -32,7 +30,7 @@ export function BlogFeaturedCard({ post }: { post: CmsContentDetail }) {
       style={getShadowStyle('md')}
       hoverStyle={{ borderColor: ui.brand }}
       pressStyle={{ opacity: 0.97 }}
-      onPress={() => router.push(blogRoutes.post(post.slug))}
+      onPress={() => navigateApp(blogRoutes.post(post.slug))}
       role="link"
     >
       <YStack

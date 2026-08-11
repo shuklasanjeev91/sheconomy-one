@@ -3,21 +3,18 @@ import { radius } from '~/config/tokens'
 import { useAppLayout } from '~/hooks/useAppLayout'
 import { useAppUi } from '~/lib/theme/useAppUi'
 
-import { blogCardColumnWidth } from '~/blog/components/BlogCard'
+import { BlogPostsGrid } from '~/blog/components/BlogPostsGrid'
 
 export function BlogListSkeleton({ count = 6 }: { count?: number }) {
   const ui = useAppUi()
-  const { isDesktop, isTablet } = useAppLayout()
-  const cardWidth = blogCardColumnWidth(isDesktop, isTablet)
 
   return (
-    <XStack gap="$4" flexWrap="wrap" width="100%">
+    <BlogPostsGrid>
       {Array.from({ length: count }).map((_, i) => (
         <YStack
           key={i}
-          width={cardWidth as any}
-          flexShrink={0}
-          maxWidth="100%"
+          width="100%"
+          minWidth={0}
           borderRadius={radius.card}
           borderWidth={1}
           borderColor={ui.borderSubtle}
@@ -33,7 +30,7 @@ export function BlogListSkeleton({ count = 6 }: { count?: number }) {
           </YStack>
         </YStack>
       ))}
-    </XStack>
+    </BlogPostsGrid>
   )
 }
 

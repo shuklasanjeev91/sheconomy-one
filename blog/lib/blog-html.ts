@@ -98,14 +98,74 @@ export function markdownToHtml(md: string): string {
   return html
 }
 
-/** Lightweight sanitizer (no DOMPurify dependency) for blog HTML. */
-export function sanitizeBlogHtml(html: string): string {
+function stripHtmlToText(html: string): string {
   return html
+    .replace(/<\/(p|div|h[1-6]|li|br|tr)>/gi, '\n')
+    .replace(/<br\s*\/?>/gi, '\n')
+    .replace(/<[^>]*>/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+}
+
+/**
+ * True when CMS HTML is a marketing poster (full-viewport image / clip-path)
+ * rather than a readable article body.
+ */
+export function isPosterHeavyHtml(html: string): boolean {
+  if (!html) return false
+  const text = stripHtmlToText(html)
+  const imgCount = (html.match(/<img[\s>]/gi) || []).length
+  const hasPosterCss =
+    /100vh|100dvh|clip-path|background-clip\s*:\s*text|position\s*:\s*fixed|position\s*:\s*absolute|mix-blend-mode|mask-image/i.test(
+      html,
+    )
+  if (hasPosterCss) return true
+  // Almost no text but a big visual = poster
+  if (imgCount >= 1 && text.length < 120) return true
+  if (text.length < 40 && html.length > 800) return true
+  return false
+}
+
+/** Convert poster-heavy HTML into simple readable paragraphs. */
+export function htmlToReadableParagraphs(html: string): string {
+  const text = html
+    .replace(/<\/(p|div|h[1-6]|li|tr)>/gi, '\n\n')
+    .replace(/<br\s*\/?>/gi, '\n')
+    .replace(/<[^>]*>/g, '')
+    .replace(/&nbsp;/g, ' ')
+    .replace(/&amp;/g, '&')
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/&quot;/g, '"')
+    .replace(/\n{3,}/g, '\n\n')
+    .trim()
+
+  if (!text) return '<p></p>'
+  return text
+    .split(/\n\n+/)
+    .map((p) => p.trim())
+    .filter(Boolean)
+    .map((p) => `<p>${p.replace(/\n/g, '<br />')}</p>`)
+    .join('\n')
+}
+
+/** Lightweight sanitizer for public blog HTML — kills fullscreen poster CSS. */
+export function sanitizeBlogHtml(html: string): string {
+  let out = html
     .replace(/<script[\s\S]*?>[\s\S]*?<\/script>/gi, '')
     .replace(/<style[\s\S]*?>[\s\S]*?<\/style>/gi, '')
+    .replace(/<svg[\s\S]*?<\/svg>/gi, '')
     .replace(/\son\w+\s*=\s*("[^"]*"|'[^']*'|[^\s>]+)/gi, '')
     .replace(/javascript:/gi, '')
     .replace(/<iframe(?![^>]*\bsrc=["']https?:)/gi, '<iframe data-blocked="1"')
+
+  // Strip ALL inline styles — CMS posters use style= for 100vh / absolute / clip-path.
+  out = out.replace(/\sstyle\s*=\s*("[^"]*"|'[^']*')/gi, '')
+
+  // Drop width/height attrs that force huge images
+  out = out.replace(/\s(width|height)\s*=\s*("\d+"|'\d+'|\d+)/gi, '')
+
+  return out
 }
 
 export function bodyToHtml(body: string, format: string | null | undefined): string {
@@ -117,8 +177,16 @@ export function bodyToHtml(body: string, format: string | null | undefined): str
       .replace(/>/g, '&gt;')
       .replace(/\n/g, '<br />')
   }
+
   if (format === 'markdown') {
     return sanitizeBlogHtml(markdownToHtml(body))
   }
-  return sanitizeBlogHtml(processCustomBlocks(body))
+
+  // HTML from CMS: neutralize poster layouts before rendering.
+  const raw = processCustomBlocks(body)
+  if (isPosterHeavyHtml(raw)) {
+    const readable = htmlToReadableParagraphs(raw)
+    return sanitizeBlogHtml(readable)
+  }
+  return sanitizeBlogHtml(raw)
 }
