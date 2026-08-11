@@ -117,6 +117,7 @@ function GenderVerificationModalShell({
           onClose={onClose}
           onVerified={onVerified}
           footerPad={isDesktop ? 20 : Math.max(safeBottom, 12)}
+          fillHeight={!isDesktop}
         />
       </YStack>
     </YStack>
@@ -186,14 +187,21 @@ function ModalHeader({
   )
 }
 
+/**
+ * @param fillHeight Stretch to a definite-height parent (mobile sheet). Desktop
+ * centers a content-sized dialog, where `flex: 1` (basis 0) would collapse the
+ * body to zero height and leave only the header visible.
+ */
 function VerificationFlow({
   onClose,
   onVerified,
   footerPad,
+  fillHeight,
 }: {
   onClose: () => void
   onVerified: () => void
   footerPad: number
+  fillHeight: boolean
 }) {
   const ui = useAppUi()
   const verification = useGenderVerification({ onVerified })
@@ -209,7 +217,14 @@ function VerificationFlow({
   if (verification.phase === 'success') {
     return (
       <GenderVerificationErrorBoundary scope="Modal" onReset={verification.reset}>
-        <YStack flex={1} alignItems="center" justifyContent="center" gap="$3" padding="$5">
+        <YStack
+          flexGrow={fillHeight ? 1 : 0}
+          minHeight={fillHeight ? 0 : 240}
+          alignItems="center"
+          justifyContent="center"
+          gap="$3"
+          padding="$5"
+        >
           <YStack
             width={64}
             height={64}
@@ -236,9 +251,17 @@ function VerificationFlow({
 
   return (
     <GenderVerificationErrorBoundary scope="Modal" onReset={verification.reset}>
-      <YStack flex={1} minHeight={0} width="100%">
+      <YStack
+        flexGrow={fillHeight ? 1 : 0}
+        flexShrink={1}
+        flexBasis={fillHeight ? 0 : 'auto'}
+        minHeight={0}
+        width="100%"
+      >
         <ScrollView
-          flex={1}
+          flexGrow={fillHeight ? 1 : 0}
+          flexShrink={1}
+          flexBasis={fillHeight ? 0 : 'auto'}
           width="100%"
           minHeight={0}
           showsVerticalScrollIndicator={false}
