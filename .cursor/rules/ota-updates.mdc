@@ -1,0 +1,37 @@
+---
+description: Always ship JS/asset changes to users via an EAS OTA update
+alwaysApply: true
+---
+
+# Always push an OTA update after shipping changes
+
+After committing any change that affects the native app's JS bundle or assets,
+push an OTA update to the `production` channel without being asked.
+
+```bash
+NODE_OPTIONS="--max-old-space-size=8192" yarn eas update \
+  --channel production \
+  --message "<short summary of the change>" \
+  --non-interactive
+```
+
+`NODE_OPTIONS` is required — the default ~2 GB Node heap makes `expo export`
+die with "JavaScript heap out of memory" partway through serializing this
+bundle.
+
+Report the update group ID and the EAS dashboard URL when it completes.
+
+## What OTA cannot ship
+
+OTA only replaces the JS bundle and assets. These need a full `eas build` and
+store submission instead, so call it out rather than pushing an OTA:
+
+- `app.json` native config: plugins, permissions, `scheme`, icons, splash
+- Added/removed/upgraded native modules in `package.json`
+- Any change to `runtimeVersion` (currently `6.0`) — updates only reach builds
+  whose runtime version matches exactly
+
+## Channels
+
+`production` is the live channel used by store builds. Use `preview` or
+`development` only when the change is explicitly for internal testing.
