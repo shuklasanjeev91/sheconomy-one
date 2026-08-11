@@ -111,7 +111,23 @@ export async function createAtomicMarketplaceCheckout(input: {
       total_amount: number
     }
   >
+  /**
+   * Platform PayU (and similar) charge outside SHEPay — skip bundle finalize.
+   * Calling finalize without SHEPay shop steps fails and leaves the cart emptied.
+   */
+  skipShepayFinalize?: boolean
 }): Promise<{ data: AtomicCheckoutResult | null; error: string | null }> {
+  if (!input.cartId?.trim()) return { data: null, error: 'Cart is missing. Refresh and try again.' }
+  if (!input.shippingAddressId?.trim()) {
+    return { data: null, error: 'Select a delivery address before paying.' }
+  }
+  if (!input.cartItemIds.length) {
+    return { data: null, error: 'Select at least one item to checkout.' }
+  }
+  if (!input.idempotencyKey || input.idempotencyKey.trim().length < 8) {
+    return { data: null, error: 'Checkout session expired. Refresh and try again.' }
+  }
+
   const { data, error } = await supabase.rpc('atomic_marketplace_checkout' as never, {
     p_cart_id: input.cartId,
     p_cart_item_ids: input.cartItemIds,
@@ -125,12 +141,29 @@ export async function createAtomicMarketplaceCheckout(input: {
     p_customer_amounts_by_shop: input.customerAmountsByShop ?? {},
   } as never)
 
-  if (error) return { data: null, error: error.message }
+  if (error) {
+    const details =
+      typeof (error as { details?: string }).details === 'string'
+        ? (error as { details: string }).details
+        : ''
+    const hint =
+      typeof (error as { hint?: string }).hint === 'string' ? (error as { hint: string }).hint : ''
+    const message = [error.message, details, hint].filter(Boolean).join(' — ')
+    return { data: null, error: message || 'Checkout failed' }
+  }
   const parsed = parseAtomicCheckoutPayload(data as Record<string, unknown> | null)
   if (parsed.error || !parsed.data) return parsed
 
-  // Online: collapse per-shop SHEPay steps into one cart-level charge step.
-  if (input.paymentMode === 'online') {
+  if (parsed.data.status === 'cancelled') {
+    return {
+      data: null,
+      error: 'Previous checkout was cancelled. Try paying again.',
+    }
+  }
+
+  // Online SHEPay: collapse per-shop steps into one cart-level charge step.
+  // Platform PayU skips this — it charges via order_payments + platform-payu-charge.
+  if (input.paymentMode === 'online' && !input.skipShepayFinalize) {
     const { data: bundle, error: bundleError } = await supabase.rpc(
       'finalize_shepay_bundle_charge' as never,
       { p_checkout_group_id: parsed.data.checkoutGroupId } as never,

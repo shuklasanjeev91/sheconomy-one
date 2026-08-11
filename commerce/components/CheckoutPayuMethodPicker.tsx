@@ -187,8 +187,9 @@ export function CheckoutPayuMethodPicker({
       borderWidth={1}
       borderColor={borderColor}
       borderRadius={12}
-      overflow="hidden"
+      overflow="visible"
       backgroundColor="transparent"
+      flexShrink={0}
     >
       {SECTIONS.map((section, sectionIndex) => {
         const disabled = disabledSections.has(section.id)

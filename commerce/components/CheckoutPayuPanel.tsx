@@ -81,6 +81,15 @@ type CheckoutPayuPanelProps = {
   onPaid: () => void
   onFailed: (message: string) => void
   onCancel: () => void
+  /** Nest inside checkout accordion — no outer card chrome. */
+  embedded?: boolean
+  /** Fired when bank OTP / UPI QR auth UI opens or closes. */
+  onAuthActiveChange?: (active: boolean) => void
+  /**
+   * When set, called before the first charge if the session has no order payment yet.
+   * Used to place the order + initiate PayU when the shopper taps Pay.
+   */
+  onEnsureSession?: () => Promise<CheckoutPayuSession | null>
 }
 
 export function CheckoutPayuPanel({
@@ -100,6 +109,9 @@ export function CheckoutPayuPanel({
   onPaid,
   onFailed,
   onCancel,
+  embedded = false,
+  onAuthActiveChange,
+  onEnsureSession,
 }: CheckoutPayuPanelProps) {
   const [mode, setMode] = useState<PayuPaymentModeId>(
     initialMode === 'all' ? 'upi_gpay' : initialMode,
@@ -125,10 +137,18 @@ export function CheckoutPayuPanel({
   const [nativeLaunchHint, setNativeLaunchHint] = useState<string | null>(null)
   const autoStartedRef = useRef(false)
   const acsIframeRef = useRef<HTMLIFrameElement | null>(null)
+  const sessionRef = useRef(session)
   const { isDesktop } = useAppLayout()
 
+  useEffect(() => {
+    sessionRef.current = session
+  }, [session])
+
   const modeMeta = useMemo(() => resolvePayuPaymentMode(mode), [mode])
-  const isPlatform = session.provider === 'platform_payu' || Boolean(session.orderPaymentId)
+  const isPlatform =
+    session.provider === 'platform_payu' ||
+    Boolean(session.orderPaymentId) ||
+    Boolean(onEnsureSession)
   const isCards = mode === 'cards'
   const isUpiAppMode =
     mode === 'upi_gpay' ||
@@ -140,6 +160,7 @@ export function CheckoutPayuPanel({
   const showPicker = !hideMethodPicker && !autoStart
   const authActive = Boolean(acsHtml || intentUri)
   const controlsLocked = authActive || busy || awaitingVerify
+  const paidOnceRef = useRef(false)
   const disabledSections = useMemo(
     () => new Set(disabledMethodSections),
     [disabledMethodSections],
@@ -259,17 +280,23 @@ export function CheckoutPayuPanel({
     }
   }, [acsHtml])
 
-  /** 3DS / bank OTP completes inside iframe — break out to order success (SHEPay + Platform PayU). */
+  useEffect(() => {
+    onAuthActiveChange?.(authActive)
+  }, [authActive, onAuthActiveChange])
+
+  function finishPaid() {
+    if (paidOnceRef.current) return
+    paidOnceRef.current = true
+    setAcsHtml(null)
+    setIntentUri(null)
+    setBusy(false)
+    setError(null)
+    onPaid()
+  }
+
+  /** 3DS / bank OTP completes inside iframe — only then finish the order. */
   useEffect(() => {
     if (Platform.OS !== 'web' || typeof window === 'undefined') return
-
-    function finishEmbedSuccess() {
-      setAcsHtml(null)
-      setIntentUri(null)
-      setBusy(false)
-      setError(null)
-      onPaid()
-    }
 
     function onEmbedReturn(event: MessageEvent) {
       const data = event.data as {
@@ -282,18 +309,19 @@ export function CheckoutPayuPanel({
       if (event.origin !== window.location.origin) return
 
       if (data.status === 'success') {
-        finishEmbedSuccess()
+        finishPaid()
         return
       }
 
       setAcsHtml(null)
       setBusy(false)
-      onFailed('Payment was not completed')
+      onFailed('Payment was not completed — OTP / bank authentication failed or was cancelled.')
     }
 
     window.addEventListener('message', onEmbedReturn)
     return () => window.removeEventListener('message', onEmbedReturn)
-  }, [onFailed, onPaid])
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- stable finishPaid via ref
+  }, [onFailed])
 
   function isPayuEmbedReturnHref(href: string): boolean {
     return (
@@ -312,15 +340,12 @@ export function CheckoutPayuPanel({
       if (!href || href === 'about:blank') return
       if (!isPayuEmbedReturnHref(href)) return
       const parsed = new URL(href)
-      const ok = parsed.searchParams.get('status')?.toLowerCase() === 'success'
-      if (ok) {
+      const status = parsed.searchParams.get('status')?.toLowerCase()
+      if (status === 'success') {
+        finishPaid()
+      } else if (status) {
         setAcsHtml(null)
-        setBusy(false)
-        setError(null)
-        onPaid()
-      } else if (parsed.searchParams.get('status')) {
-        setAcsHtml(null)
-        onFailed('Payment was not completed')
+        onFailed('Payment was not completed — OTP / bank authentication failed or was cancelled.')
       }
     } catch {
       // cross-origin while on bank page — expected
@@ -378,15 +403,15 @@ export function CheckoutPayuPanel({
     const verified = isPlatform
       ? await platformPayuService.verifyPayment({
           txnid: nextTxnid,
-          orderPaymentId: session.orderPaymentId,
+          orderPaymentId: sessionRef.current.orderPaymentId,
         })
       : await verifyShepayPayuPayment({
           txnid: nextTxnid,
-          paymentStepId: session.paymentStepId,
+          paymentStepId: sessionRef.current.paymentStepId,
         })
     setAwaitingVerify(false)
     if (verified.data?.success) {
-      onPaid()
+      finishPaid()
       return true
     }
     return false
@@ -426,6 +451,19 @@ export function CheckoutPayuPanel({
     setAcsHtml(null)
     setNativeLaunchHint(null)
     try {
+      let activeSession = sessionRef.current
+      if (isPlatform && !activeSession.orderPaymentId && onEnsureSession) {
+        const ensured = await onEnsureSession()
+        if (!ensured?.orderPaymentId) {
+          setError('Could not start checkout. Check your address and try again.')
+          setBusy(false)
+          return
+        }
+        activeSession = ensured
+        sessionRef.current = ensured
+        setTxnid(ensured.txnid || '')
+      }
+
       const extras: Record<string, string> = {}
       if (vpa.trim()) extras.vpa = vpa.trim()
 
@@ -451,7 +489,7 @@ export function CheckoutPayuPanel({
             : null
 
       const chargeResult = isPlatform
-        ? await platformPayuService.chargePayment(session.orderPaymentId ?? '', {
+        ? await platformPayuService.chargePayment(activeSession.orderPaymentId ?? '', {
             payuMode: chargeMode,
             extraFields: Object.keys(extras).length ? extras : null,
             card: isCards ? cardPayload : null,
@@ -465,7 +503,7 @@ export function CheckoutPayuPanel({
                 ? navigator.userAgent
                 : null,
           })
-        : await createShepayPayuSession(session.paymentStepId ?? '', {
+        : await createShepayPayuSession(activeSession.paymentStepId ?? '', {
             payuMode: chargeMode,
             extraFields: Object.keys(extras).length ? extras : null,
             checkoutStyle: 's2s',
@@ -502,7 +540,9 @@ export function CheckoutPayuPanel({
       if (data.outcome === 'success') {
         const ok = await runVerifyAndFinish(data.txnid)
         setBusy(false)
-        if (!ok) onPaid()
+        if (!ok) {
+          setError('Payment not confirmed yet. Complete OTP if prompted, then try again.')
+        }
         return
       }
 
@@ -667,7 +707,8 @@ export function CheckoutPayuPanel({
   const paymentForm = (
     <YStack
       gap="$3"
-      flex={1}
+      width="100%"
+      flexShrink={0}
       minWidth={0}
       opacity={authActive ? 0.45 : 1}
       pointerEvents={authActive ? 'none' : 'auto'}
@@ -889,19 +930,21 @@ export function CheckoutPayuPanel({
   return (
     <YStack
       gap="$3"
-      padding="$4"
-      borderRadius={14}
-      borderWidth={1}
-      borderColor={borderColor}
-      backgroundColor={ui.surface}
+      padding={embedded ? 0 : '$4'}
+      borderRadius={embedded ? 0 : 14}
+      borderWidth={embedded ? 0 : 1}
+      borderColor={embedded ? 'transparent' : borderColor}
+      backgroundColor={embedded ? 'transparent' : ui.surface}
       width="100%"
       flexShrink={0}
       alignSelf="stretch"
     >
       {isDesktop && authActive && Platform.OS === 'web' ? (
-        <XStack gap="$4" width="100%" alignItems="flex-start">
-          {paymentForm}
-          <YStack flex={1} minWidth={380} maxWidth={520} width="100%">
+        <XStack gap="$4" width="100%" alignItems="flex-start" flexWrap="wrap">
+          <YStack flex={1} minWidth={260} width="100%">
+            {paymentForm}
+          </YStack>
+          <YStack flex={1} minWidth={280} maxWidth={520} width="100%">
             {acsWebFrame}
           </YStack>
         </XStack>
