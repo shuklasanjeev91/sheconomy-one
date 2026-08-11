@@ -1,11 +1,9 @@
+// Keep first: LiveKit's WebRTC layer extends DOMException while it evaluates.
+import '~/lib/polyfills/install-dom-exception'
+
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { findNodeHandle, NativeModules, Platform, View } from 'react-native'
 import Constants from 'expo-constants'
-
-import { ensureLiveKitNativeGlobals } from '~/lib/livekit/register-native-globals'
-
-ensureLiveKitNativeGlobals()
-
 import { useLocalParticipant, useRoomContext } from '@livekit/react-native'
 import { ScreenCapturePickerView } from '@livekit/react-native-webrtc'
 

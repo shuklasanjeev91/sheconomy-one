@@ -1,3 +1,6 @@
+// Keep first: `@livekit/react-native` pulls WebRTC code that extends DOMException.
+import '~/lib/polyfills/install-dom-exception'
+
 let registered = false
 
 /**
@@ -11,6 +14,13 @@ let registered = false
 export function ensureLiveKitGlobals() {
   if (registered) return
   registered = true
+
+  // `debug` (via WebRTC) probes process on load; prefer its browser build over
+  // the Node entry, which does require('tty') and throws under Hermes.
+  if (typeof process !== 'undefined') {
+    ;(process as NodeJS.Process & { browser?: boolean }).browser = true
+  }
+
   // eslint-disable-next-line @typescript-eslint/no-require-imports
   const { registerGlobals } = require('@livekit/react-native') as typeof import('@livekit/react-native')
   registerGlobals()

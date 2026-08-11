@@ -1,10 +1,10 @@
 import { useState } from 'react'
-import { Platform } from 'react-native'
 
 import { Button, Icons, Popover, Text, useAppToast, XStack, YStack } from '~/components/ui'
 import { radius } from '~/config/tokens'
 import { buildAppUrl } from '~/config/app-origin'
 import { blogRoutes } from '~/lib/routes'
+import { buildAbsoluteUrl } from '~/lib/platform/url'
 import { copyShareLink, openShareTarget, shareViaSystem } from '~/lib/share/actions'
 import { useAppUi } from '~/lib/theme/useAppUi'
 

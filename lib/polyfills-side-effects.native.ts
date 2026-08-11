@@ -1,3 +1,7 @@
+// Hermes has no DOMException. `livekit-client` subclasses it at module scope, so a
+// cold start straight into /co-work/meeting/:code/live (universal link) evaluated it
+// before any meeting-side guard could run. Keep this the first import in the bundle.
+import '~/lib/polyfills/install-dom-exception'
 // TextDecoder/TextEncoder must exist before Supabase, LiveKit, or other deps load on Hermes.
 // Deep LiveKit package subpaths are blocked by "exports"; load via absolute path helper.
 import '~/lib/livekit-encoder-polyfill.cjs'
@@ -30,11 +34,7 @@ function installAbortSignalHelpers() {
     AbortSignalImpl.timeout = (ms: number) => {
       const controller = new AbortController()
       const id = setTimeout(() => {
-        controller.abort(
-          typeof DOMException === 'function'
-            ? new DOMException('The operation was aborted due to timeout', 'TimeoutError')
-            : undefined,
-        )
+        controller.abort(new DOMException('The operation was aborted due to timeout', 'TimeoutError'))
       }, ms)
       controller.signal.addEventListener(
         'abort',

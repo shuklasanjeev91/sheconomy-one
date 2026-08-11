@@ -4,13 +4,18 @@
     "details": [
       {
         "appID": "52H73QK4CL.com.sheconomy.ecommerce",
-        "paths": ["*"]
+        "paths": ["*"],
+        "appIDs": ["52H73QK4CL.com.sheconomy.ecommerce"],
+        "components": [
+          {
+            "/": "/*",
+            "comment": "Every SHEconomy path opens the app when it is installed."
+          }
+        ]
       }
     ]
   },
   "webcredentials": {
-    "apps": [
-      "52H73QK4CL.com.sheconomy.ecommerce"
-    ]
+    "apps": ["52H73QK4CL.com.sheconomy.ecommerce"]
   }
 }

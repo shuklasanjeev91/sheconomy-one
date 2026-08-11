@@ -38,17 +38,12 @@ export function InstantMeetingHost() {
     setLoadError(null)
 
     try {
-      // Ensure Hermes globals before LiveKit/WebRTC evaluate.
+      // Register WebRTC globals before the body pulls LiveKit in.
       // eslint-disable-next-line @typescript-eslint/no-require-imports
-      const { installDOMExceptionPolyfill } = require('~/lib/polyfills/dom-exception') as {
-        installDOMExceptionPolyfill: () => void
+      const { ensureLiveKitGlobals } = require('~/lib/livekit/ensure-globals') as {
+        ensureLiveKitGlobals: () => void
       }
-      installDOMExceptionPolyfill()
-      // eslint-disable-next-line @typescript-eslint/no-require-imports
-      const { ensureLiveKitNativeGlobals } = require('~/lib/livekit/register-native-globals') as {
-        ensureLiveKitNativeGlobals: () => void
-      }
-      ensureLiveKitNativeGlobals()
+      ensureLiveKitGlobals()
 
       // Sync require keeps LiveKit out of the AppShell module graph until open.
       // eslint-disable-next-line @typescript-eslint/no-require-imports

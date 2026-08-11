@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 
 import {
   ANDROID_PACKAGE_ID,
+  buildAndroidAutoIntentUrl,
   buildAndroidIntentUrl,
   buildOpenInAppSchemeUrl,
   buildSmartAppBannerContent,
@@ -18,6 +19,13 @@ describe('open-in-app helpers', () => {
     expect(url).toContain('intent://shop/foo#Intent;')
     expect(url).toContain(`scheme=sheconomy`)
     expect(url).toContain(`package=${ANDROID_PACKAGE_ID}`)
+  })
+
+  it('keeps the automatic Android intent free of Play Store fallback', () => {
+    const url = buildAndroidAutoIntentUrl('/co-work/meeting/961-O0F-8NS/live')
+    expect(url).toBe('intent://co-work/meeting/961-O0F-8NS/live#Intent;scheme=sheconomy;end')
+    expect(url).not.toContain('package=')
+    expect(url).not.toContain('browser_fallback_url')
   })
 
   it('builds Smart App Banner content', () => {

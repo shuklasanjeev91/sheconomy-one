@@ -1,8 +1,9 @@
 import { useEffect, useState } from 'react'
 
 import { BRAND_NAME } from '~/config/brand'
-import { detectMobileDevice } from '~/lib/utils/mobile-detection'
+import { detectMobileDevice, isInAppBrowser } from '~/lib/utils/mobile-detection'
 import {
+  buildAndroidAutoIntentUrl,
   buildAndroidIntentUrl,
   buildOpenInAppSchemeUrl,
   getWebPathForApp,
@@ -12,10 +13,17 @@ const DISMISS_KEY = 'sheconomy.openInApp.dismissed'
 const ATTEMPTED_KEY = 'sheconomy.openInApp.attempted'
 
 /**
- * Mobile-web handoff: Universal Links often do not fire when the user types
- * sheconomy.in in the browser address bar. This host offers an explicit
- * "Open in app" control and one auto-attempt via the sheconomy:// scheme
- * (already registered on installed binaries).
+ * Mobile-web handoff for links the OS did not route into the app.
+ *
+ * Universal Links / App Links cover most taps, but they are skipped when the
+ * URL is typed in the address bar, reached through a redirect, or opened inside
+ * a messaging app's embedded browser. This host shows an explicit "Open in app"
+ * control and makes one silent attempt where that attempt cannot backfire:
+ *
+ * - Android: a scheme-only `intent://` that no-ops when the app is missing.
+ * - iOS: only inside a known in-app browser, where Universal Links never fire.
+ *   In real Safari the scheme would raise "address is invalid" for visitors
+ *   without the app, so the banner button stays the only trigger there.
  */
 export function OpenInAppHost() {
   const [visible, setVisible] = useState(false)
@@ -33,6 +41,9 @@ export function OpenInAppHost() {
 
     setVisible(true)
 
+    const canAutoAttempt = device.isAndroid || isInAppBrowser()
+    if (!canAutoAttempt) return
+
     try {
       if (window.sessionStorage.getItem(ATTEMPTED_KEY) === '1') return
       window.sessionStorage.setItem(ATTEMPTED_KEY, '1')
@@ -41,7 +52,10 @@ export function OpenInAppHost() {
     }
 
     const timer = window.setTimeout(() => {
-      openNativeApp(device.isAndroid)
+      const path = getWebPathForApp()
+      window.location.href = device.isAndroid
+        ? buildAndroidAutoIntentUrl(path)
+        : buildOpenInAppSchemeUrl(path)
     }, 400)
 
     return () => window.clearTimeout(timer)

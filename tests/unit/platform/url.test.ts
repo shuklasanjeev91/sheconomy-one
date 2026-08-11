@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import {
+  DEEP_LINK_ORIGIN,
   DEFAULT_APP_ORIGIN,
   canonicalizePublicUrl,
   normalizeAppOrigin,
@@ -14,14 +15,14 @@ describe('buildAbsoluteUrl', () => {
     vi.unstubAllGlobals()
   })
 
-  it('uses the canonical origin, not window.location', () => {
+  it('uses the deep-link origin, not window.location', () => {
     vi.stubEnv('EXPO_PUBLIC_WEB_APP_URL', 'https://sheconomy.in')
     vi.stubGlobal('window', {
       location: { origin: 'https://sheconomy-one-sanjeev-shuklas-projects.vercel.app' },
     })
 
     expect(buildAbsoluteUrl('/co-work/meeting/EJB-GHW-FJY')).toBe(
-      'https://sheconomy.in/co-work/meeting/EJB-GHW-FJY',
+      `${DEEP_LINK_ORIGIN}/co-work/meeting/EJB-GHW-FJY`,
     )
   })
 
@@ -29,7 +30,7 @@ describe('buildAbsoluteUrl', () => {
     vi.stubEnv('EXPO_PUBLIC_WEB_APP_URL', 'https://preview.vercel.app')
     vi.stubEnv('ONE_SERVER_URL', 'http://localhost:8081')
 
-    expect(buildAbsoluteUrl('listings/foo')).toBe(`${DEFAULT_APP_ORIGIN}/listings/foo`)
+    expect(buildAbsoluteUrl('listings/foo')).toBe(`${DEEP_LINK_ORIGIN}/listings/foo`)
   })
 
   it('maps brand aliases (.com / www) to sheconomy.in', () => {
@@ -45,13 +46,13 @@ describe('buildAbsoluteUrl', () => {
     ).toBe('https://sheconomy.in/co-work/meeting/ABC')
   })
 
-  it('builds meeting, listing, and post share URLs on sheconomy.in', () => {
+  it('builds meeting, listing, and post share URLs on the App-Link verified host', () => {
     vi.stubEnv('EXPO_PUBLIC_WEB_APP_URL', 'https://sheconomy.in')
 
     expect(getMeetingShareUrl('EJB-GHW-FJY')).toBe(
-      'https://sheconomy.in/co-work/meeting/EJB-GHW-FJY',
+      `${DEEP_LINK_ORIGIN}/co-work/meeting/EJB-GHW-FJY`,
     )
-    expect(getListingShareUrl('handmade-bag')).toMatch(/^https:\/\/sheconomy\.in\//)
-    expect(getPostShareUrl('abc')).toMatch(/^https:\/\/sheconomy\.in\//)
+    expect(getListingShareUrl('handmade-bag')).toMatch(/^https:\/\/www\.sheconomy\.in\//)
+    expect(getPostShareUrl('abc')).toMatch(/^https:\/\/www\.sheconomy\.in\//)
   })
 })
