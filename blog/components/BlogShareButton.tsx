@@ -12,7 +12,6 @@ export function BlogShareButton({ title, slug }: { title: string; slug: string }
   const toast = useAppToast()
   const [open, setOpen] = useState(false)
   const url = buildAbsoluteUrl(String(blogRoutes.post(slug)))
-
   const payload = { url, title, text: title }
 
   async function copy() {
