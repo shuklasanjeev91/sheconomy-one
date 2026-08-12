@@ -1,6 +1,8 @@
 import { useCallback, useState } from 'react'
 
+import { listingImageDraftToDataUrl } from '~/commerce/lib/listing-image-data-url'
 import { Button, Icons, Image, Spinner, Text, XStack, YStack, useAppToast } from '~/components/ui'
+import { draftListingFromImage, type ListingDraftFromImageResult } from '~/lib/ai/client'
 import { type PickedImage } from '~/lib/media/pick-image'
 import { pickImagesWithCrop } from '~/lib/media/pick-and-crop'
 import type { ListingFormData, ListingImageDraft } from '~/lib/listing/listing.type'
@@ -17,11 +19,19 @@ type ImagesStepProps = {
   formData: ListingFormData
   errors: Record<string, string>
   onChangeImages: (images: ListingImageDraft[]) => void
+  onApplyAiDraft?: (draft: ListingDraftFromImageResult) => void
 }
 
-export function ImagesStep({ ui, formData, errors, onChangeImages }: ImagesStepProps) {
+export function ImagesStep({
+  ui,
+  formData,
+  errors,
+  onChangeImages,
+  onApplyAiDraft,
+}: ImagesStepProps) {
   const toast = useAppToast()
   const [isPicking, setIsPicking] = useState(false)
+  const [isDrafting, setIsDrafting] = useState(false)
   const images = formData.images ?? []
   const showBanner = images.length < LISTING_PUBLISH_IMAGE_HINTS.MIN_RECOMMENDED
 
@@ -62,6 +72,35 @@ export function ImagesStep({ ui, formData, errors, onChangeImages }: ImagesStepP
     const next = images.map((img, i) => ({ ...img, is_primary: i === index }))
     onChangeImages(next)
   }
+
+  const handleAiDraft = useCallback(async () => {
+    if (!onApplyAiDraft) return
+    const primary = images.find((img) => img.is_primary) ?? images[0]
+    if (!primary) {
+      toast.show('Add a photo first', {
+        tone: 'info',
+        message: 'AI drafts title and description from your primary listing photo.',
+      })
+      return
+    }
+    setIsDrafting(true)
+    try {
+      const dataUrl = await listingImageDraftToDataUrl(primary)
+      const draft = await draftListingFromImage({ dataUrl })
+      onApplyAiDraft(draft)
+      toast.show('Listing draft ready', {
+        tone: 'success',
+        message: 'Title, description, and tags filled from your photo. Review before publishing.',
+      })
+    } catch (error) {
+      toast.show('Could not draft listing', {
+        tone: 'danger',
+        message: error instanceof Error ? error.message : 'Try again with a clearer product photo.',
+      })
+    } finally {
+      setIsDrafting(false)
+    }
+  }, [images, onApplyAiDraft, toast])
 
   return (
     <XStack gap="$4" alignItems="flex-start" flexWrap="wrap">
@@ -116,6 +155,26 @@ export function ImagesStep({ ui, formData, errors, onChangeImages }: ImagesStepP
           </YStack>
 
           <ListingPublishFieldError ui={ui} message={errors.images} />
+
+          {onApplyAiDraft && images.length > 0 ? (
+            <XStack paddingHorizontal="$5" paddingBottom="$3">
+              <Button
+                tone="outline"
+                borderRadius={999}
+                disabled={isDrafting}
+                icon={
+                  isDrafting ? (
+                    <Spinner size="small" color={ui.brand} />
+                  ) : (
+                    <Icons.Sparkles size={15} color={ui.brand} />
+                  )
+                }
+                onPress={() => void handleAiDraft()}
+              >
+                {isDrafting ? 'Drafting with AI…' : 'Draft listing from photo'}
+              </Button>
+            </XStack>
+          ) : null}
 
           <XStack gap="$3" flexWrap="wrap" paddingHorizontal="$5" paddingBottom="$5">
             {images.map((image, index) => (

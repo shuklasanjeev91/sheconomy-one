@@ -138,6 +138,20 @@ export type DescribeSearchImageResult = {
   usedFallback: boolean
 }
 
+export type ListingDraftFromImageParams = {
+  /** data:image/...;base64,... */
+  dataUrl: string
+}
+
+export type ListingDraftFromImageResult = {
+  title: string
+  description: string
+  tags: string[]
+  suggestedPriceInr: number | null
+  categoryHint: string | null
+  usedFallback: boolean
+}
+
 export type AiSearchParams = {
   message: string
 }

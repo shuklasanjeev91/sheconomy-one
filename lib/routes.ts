@@ -68,6 +68,7 @@ export const commerceRoutes = {
   checkout: appRoutes.checkout,
   favorites: '/favorites' as Href,
   wishlist: '/favorites' as Href,
+  sharedWishlist: (token: string) => `/w/${encodeURIComponent(token)}` as Href,
   orders: '/orders' as Href,
   order: (id: string) => `/orders/${encodeURIComponent(id)}` as Href,
   orderSuccess: (orderIds?: string[]) => {

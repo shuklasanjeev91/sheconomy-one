@@ -7,6 +7,7 @@ import { ListingBrowseView, RecentlyViewedRail } from '~/commerce/components'
 import { useFavorites } from '~/commerce/hooks/useFavorites'
 import {
   createWishlistCollection,
+  ensureWishlistShareLink,
   fetchWishlistCollections,
   fetchWishlistListingIdsInCollection,
   type WishlistCollection,
@@ -41,6 +42,39 @@ export function FavoritesScreen() {
       toast.show('Save items before sharing', { tone: 'info' })
       return
     }
+
+    if (user?.id) {
+      const result = await ensureWishlistShareLink({
+        userId: user.id,
+        collectionId: activeCollectionId,
+        listingIds: items.map((item) => item.id),
+      })
+      if (result.error || !result.shareUrl) {
+        toast.show('Could not create share link', {
+          tone: 'danger',
+          message: result.error ?? 'Try again',
+        })
+        return
+      }
+      if (result.collectionId && result.collectionId !== activeCollectionId) {
+        setActiveCollectionId(result.collectionId)
+        await loadCollections()
+      }
+      try {
+        await Share.share({
+          title: 'Wishlist',
+          message: `Wishlist on ${BRAND_NAME}\n${result.shareUrl}`,
+          url: result.shareUrl,
+        })
+      } catch {
+        const copied = await copyToClipboard(result.shareUrl)
+        toast.show(copied ? 'Wishlist link copied' : 'Could not share wishlist', {
+          tone: copied ? 'success' : 'danger',
+        })
+      }
+      return
+    }
+
     const lines = items.slice(0, 12).map((item) => {
       const price =
         typeof item.price === 'number'

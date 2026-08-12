@@ -5,6 +5,7 @@ import { useLocalSearchParams, useRouter } from 'one'
 import { ListingPublishErrorBoundary } from '~/commerce/components/ListingPublishErrorBoundary'
 import { PageCenter } from '~/components/layout'
 import { ScrollView, Spinner, YStack, useAppToast } from '~/components/ui'
+import type { ListingDraftFromImageResult } from '~/lib/ai/client'
 import { useAppLayout } from '~/hooks/useAppLayout'
 import { loadAttributes } from '~/lib/listing/listing-attributes.store'
 import { loadImages } from '~/lib/listing/listing-images.store'
@@ -261,6 +262,32 @@ function VendorListingPublishContent() {
     [updateField],
   )
 
+  const handleApplyAiDraft = useCallback(
+    (draft: ListingDraftFromImageResult) => {
+      updateField('title', draft.title)
+      updateField('description', draft.description)
+      if (draft.tags.length) {
+        const existing = new Set((formData.tags ?? []).map((tag) => tag.toLowerCase()))
+        const merged = [...(formData.tags ?? [])]
+        for (const tag of draft.tags) {
+          const normalized = tag.trim()
+          if (!normalized || existing.has(normalized.toLowerCase())) continue
+          existing.add(normalized.toLowerCase())
+          merged.push(normalized)
+        }
+        updateField('tags', merged.slice(0, 12))
+      }
+      if (draft.suggestedPriceInr != null && draft.suggestedPriceInr > 0) {
+        const currentPrice = Number(formData.price ?? 0)
+        if (!currentPrice) {
+          updateField('price', draft.suggestedPriceInr)
+        }
+      }
+      setActiveStep(LISTING_PUBLISH_STEP_IDS.BASIC)
+    },
+    [formData.price, formData.tags, updateField],
+  )
+
   const runStepValidation = useCallback(
     (stepId: ListingPublishStepId) => {
       const result = validatePublishStep(stepId, formData)
@@ -497,6 +524,7 @@ function VendorListingPublishContent() {
               formData={formData}
               errors={displayErrors}
               onChangeImages={handleChangeImages}
+              onApplyAiDraft={handleApplyAiDraft}
             />
           ) : null}
 

@@ -1,9 +1,30 @@
 import { supabase } from '~/lib/supabase/client'
+import { buildAbsoluteUrl } from '~/lib/platform/url'
 
 export type WishlistCollection = {
   id: string
   name: string
   createdAt: string
+  shareToken?: string | null
+}
+
+export type SharedWishlistPayload = {
+  ok: true
+  collectionId: string
+  name: string
+  ownerName: string
+  listingIds: string[]
+  sharedAt: string | null
+}
+
+function randomShareToken(): string {
+  const bytes = new Uint8Array(18)
+  if (typeof crypto !== 'undefined' && typeof crypto.getRandomValues === 'function') {
+    crypto.getRandomValues(bytes)
+  } else {
+    for (let i = 0; i < bytes.length; i += 1) bytes[i] = Math.floor(Math.random() * 256)
+  }
+  return Array.from(bytes, (b) => b.toString(16).padStart(2, '0')).join('')
 }
 
 export async function fetchWishlistCollections(userId: string): Promise<{
@@ -12,7 +33,7 @@ export async function fetchWishlistCollections(userId: string): Promise<{
 }> {
   const { data, error } = await supabase
     .from('wishlist_collections')
-    .select('id, name, created_at')
+    .select('id, name, created_at, share_token')
     .eq('user_id', userId)
     .order('created_at', { ascending: true })
 
@@ -22,6 +43,7 @@ export async function fetchWishlistCollections(userId: string): Promise<{
       id: row.id,
       name: row.name,
       createdAt: row.created_at,
+      shareToken: (row as { share_token?: string | null }).share_token ?? null,
     })),
     error: null,
   }
@@ -37,12 +59,17 @@ export async function createWishlistCollection(
   const { data, error } = await supabase
     .from('wishlist_collections')
     .insert({ user_id: userId, name: trimmed })
-    .select('id, name, created_at')
+    .select('id, name, created_at, share_token')
     .single()
 
   if (error) return { collection: null, error: error.message }
   return {
-    collection: { id: data.id, name: data.name, createdAt: data.created_at },
+    collection: {
+      id: data.id,
+      name: data.name,
+      createdAt: data.created_at,
+      shareToken: (data as { share_token?: string | null }).share_token ?? null,
+    },
     error: null,
   }
 }
@@ -163,4 +190,111 @@ export async function syncLocalFavoritesToWishlist(
   }
 
   return { error: null }
+}
+
+/**
+ * Ensure a collection has a public share token and return the absolute share URL.
+ * When collectionId is null, creates/reuses "My wishlist" and moves current listing ids into it.
+ */
+export async function ensureWishlistShareLink(input: {
+  userId: string
+  collectionId: string | null
+  listingIds: string[]
+}): Promise<{ shareUrl: string | null; collectionId: string | null; error: string | null }> {
+  let collectionId = input.collectionId
+
+  if (!collectionId) {
+    const existing = await fetchWishlistCollections(input.userId)
+    if (existing.error) return { shareUrl: null, collectionId: null, error: existing.error }
+    const named =
+      existing.collections.find((c) => c.name.toLowerCase() === 'my wishlist') ??
+      existing.collections[0] ??
+      null
+    if (named) {
+      collectionId = named.id
+    } else {
+      const created = await createWishlistCollection(input.userId, 'My wishlist')
+      if (created.error || !created.collection) {
+        return {
+          shareUrl: null,
+          collectionId: null,
+          error: created.error ?? 'Could not create collection',
+        }
+      }
+      collectionId = created.collection.id
+    }
+
+    for (const listingId of input.listingIds) {
+      const moved = await addWishlistItem(input.userId, listingId, collectionId)
+      if (moved.error) return { shareUrl: null, collectionId, error: moved.error }
+    }
+  }
+
+  const { data: row, error: readError } = await supabase
+    .from('wishlist_collections')
+    .select('id, share_token')
+    .eq('id', collectionId)
+    .eq('user_id', input.userId)
+    .maybeSingle()
+
+  if (readError) return { shareUrl: null, collectionId, error: readError.message }
+  if (!row) return { shareUrl: null, collectionId, error: 'Collection not found' }
+
+  let token = (row as { share_token?: string | null }).share_token ?? null
+  if (!token) {
+    token = randomShareToken()
+    const { error: updateError } = await supabase
+      .from('wishlist_collections')
+      .update({
+        share_token: token,
+        share_enabled_at: new Date().toISOString(),
+      } as never)
+      .eq('id', collectionId)
+      .eq('user_id', input.userId)
+
+    if (updateError) return { shareUrl: null, collectionId, error: updateError.message }
+  }
+
+  return {
+    shareUrl: buildAbsoluteUrl(`/w/${encodeURIComponent(token)}`),
+    collectionId,
+    error: null,
+  }
+}
+
+export async function resolveSharedWishlist(
+  token: string,
+): Promise<{ payload: SharedWishlistPayload | null; error: string | null }> {
+  const trimmed = token.trim()
+  if (!trimmed) return { payload: null, error: 'Missing share link' }
+
+  const { data, error } = await supabase.rpc('resolve_wishlist_share' as never, {
+    p_token: trimmed,
+  } as never)
+
+  if (error) return { payload: null, error: error.message }
+
+  const row = data as Record<string, unknown> | null
+  if (!row || row.ok !== true) {
+    return {
+      payload: null,
+      error: typeof row?.error === 'string' ? row.error : 'Wishlist not found',
+    }
+  }
+
+  const listingIds = Array.isArray(row.listingIds)
+    ? row.listingIds.map((id) => String(id)).filter(Boolean)
+    : []
+
+  return {
+    payload: {
+      ok: true,
+      collectionId: String(row.collectionId ?? ''),
+      name: String(row.name ?? 'Wishlist'),
+      ownerName: String(row.ownerName ?? 'A member'),
+      listingIds,
+      sharedAt: typeof row.sharedAt === 'string' ? row.sharedAt : null,
+    },
+    error: null,
+  }
 }
