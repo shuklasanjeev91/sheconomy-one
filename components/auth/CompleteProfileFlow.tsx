@@ -52,7 +52,7 @@ import { useAuth } from '~/hooks/useAuth'
 import { getAllGeoCountries, getCountryName } from '~/lib/geo/data'
 import { appRoutes, commerceRoutes } from '~/lib/routes'
 import { DEFAULT_COUNTRY, findCountryByIso2 } from '~/lib/phone/countries'
-import { isValidPhone } from '~/lib/phone/phone'
+import { isValidPhone, normalizePhoneNumber } from '~/lib/phone/phone'
 import { supabase } from '~/lib/supabase/client'
 import { useAppUi } from '~/lib/theme/useAppUi'
 import { navigateApp, replaceApp } from '~/lib/platform/navigate'
@@ -361,9 +361,7 @@ export function CompleteProfileFlow({ returnTo, isNewUser }: CompleteProfileFlow
     if (!pendingSuggest) return
     if (pendingSuggest.fullName) setFullName(pendingSuggest.fullName)
     if (pendingSuggest.phone) {
-      const digits = pendingSuggest.phone.replace(/\D/g, '')
-      const national = digits.length > 10 ? digits.slice(-10) : digits
-      setPhoneNational(national)
+      setPhoneE164(normalizePhoneNumber(pendingSuggest.phone, phoneDefaultCountry))
     }
     setSuggestOpen(false)
     setPendingSuggest(null)

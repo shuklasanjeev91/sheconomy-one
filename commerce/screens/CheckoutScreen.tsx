@@ -644,6 +644,7 @@ export function CheckoutScreen() {
       let paymentSetupError: string | null = null
       const shepayStep = result.data.paymentSteps.find((step) => step.collection === 'shepay')
       const hasShepaySteps = Boolean(shepayStep)
+      const hasDirectSteps = result.data.paymentSteps.some((step) => step.collection === 'direct')
 
       /** PayU Hosted: create session then POST immediately (no intermediate checkout screen). */
       if (mode === 'online' && shepayStep) {
