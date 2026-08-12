@@ -49,6 +49,7 @@ export function CategoryChip({ category }: CategoryChipProps) {
         >
           <CategoryImage
             src={category.category_image_url}
+            icon={category.category_icon}
             size={CIRCLE_SIZE}
             alt={category.category}
           />
