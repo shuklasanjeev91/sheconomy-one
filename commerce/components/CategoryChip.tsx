@@ -8,13 +8,14 @@ import { useAppUi } from '~/lib/theme/useAppUi'
 
 import { CategoryImage } from '~/commerce/components/CategoryImage'
 
-const CIRCLE_SIZE = 88
+const TILE_WIDTH = 116
+const TILE_HEIGHT = 92
 
 type CategoryChipProps = {
   category: CategorySummary
 }
 
-/** Category discovery tile — elevated circle, brand fallback, crisp label stack. */
+/** Category discovery tile — rounded rectangle card, brand fallback, label stack. */
 export function CategoryChip({ category }: CategoryChipProps) {
   const ui = useAppUi()
   const label =
@@ -25,7 +26,7 @@ export function CategoryChip({ category }: CategoryChipProps) {
   return (
     <AppLink href={commerceRoutes.category(getCategorySlug(category))} asChild>
       <YStack
-        width={108}
+        width={TILE_WIDTH}
         alignItems="center"
         gap="$2"
         cursor="pointer"
@@ -34,14 +35,14 @@ export function CategoryChip({ category }: CategoryChipProps) {
         pressStyle={{ scale: 0.97, y: 0 }}
       >
         <YStack
-          width={CIRCLE_SIZE}
-          height={CIRCLE_SIZE}
-          borderRadius={radius.pill}
+          width={TILE_WIDTH}
+          height={TILE_HEIGHT}
+          borderRadius={radius.card}
           overflow="hidden"
           backgroundColor={ui.imagePlaceholder}
           alignItems="center"
           justifyContent="center"
-          borderWidth={2}
+          borderWidth={1}
           borderColor={ui.borderSubtle}
           style={getShadowStyle('sm')}
           animation="quick"
@@ -50,7 +51,8 @@ export function CategoryChip({ category }: CategoryChipProps) {
           <CategoryImage
             src={category.category_image_url}
             icon={category.category_icon}
-            size={CIRCLE_SIZE}
+            width={TILE_WIDTH}
+            height={TILE_HEIGHT}
             alt={category.category}
           />
         </YStack>
