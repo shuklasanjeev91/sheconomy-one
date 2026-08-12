@@ -5,6 +5,7 @@
 
 import { ORDER_STATUS, type OrderStatus } from '~/lib/orders/order.constants'
 import type {
+  OrderAddressSummary,
   OrderDeliverySummary,
   OrderListingSummary,
   VendorOrderItem,
@@ -40,10 +41,54 @@ function firstDelivery(
   return Array.isArray(delivery) ? delivery[0] ?? null : delivery
 }
 
+/** Coerce delivery JSON / address rows into a consistent address summary. */
+export function normalizeOrderAddress(value: unknown): OrderAddressSummary | null {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return null
+  const raw = value as Record<string, unknown>
+  const pick = (key: string): string | null => {
+    const v = raw[key]
+    if (typeof v !== 'string') return null
+    const trimmed = v.trim()
+    return trimmed.length > 0 ? trimmed : null
+  }
+  const address: OrderAddressSummary = {
+    address_line_1: pick('address_line_1'),
+    address_line_2: pick('address_line_2'),
+    city: pick('city'),
+    state: pick('state'),
+    country: pick('country'),
+    postal_code: pick('postal_code'),
+    address_label: pick('address_label'),
+  }
+  const hasContent = Object.values(address).some(Boolean)
+  return hasContent ? address : null
+}
+
+/**
+ * Prefer the delivery snapshot, then the order shipping address row, then billing.
+ * Vendors need the ship-to address even when payment is still pending.
+ */
+export function resolveVendorShippingAddress(item: VendorOrderItem): OrderAddressSummary | null {
+  const delivery = firstDelivery(item.order_delivery)
+  return (
+    normalizeOrderAddress(delivery?.delivery_address) ??
+    normalizeOrderAddress(item.shipping_address) ??
+    normalizeOrderAddress(item.orders?.shipping_address) ??
+    normalizeOrderAddress(item.billing_address) ??
+    normalizeOrderAddress(item.orders?.billing_address)
+  )
+}
+
+export function resolveVendorOrderDelivery(
+  item: VendorOrderItem,
+): OrderDeliverySummary | null {
+  return firstDelivery(item.order_delivery)
+}
+
 /**
  * Normalise a raw joined order item: attach the primary image, and surface
- * `shipping_address` (from delivery) and `billing_address` (from the order) as
- * top-level convenience fields. Mirrors the legacy transform 1:1.
+ * `shipping_address` (from delivery / order) and `billing_address` (from the order) as
+ * top-level convenience fields.
  */
 export function transformVendorOrderItem(item: VendorOrderItem): VendorOrderItem {
   const listing = item.listings ?? item.listing ?? null
@@ -53,13 +98,17 @@ export function transformVendorOrderItem(item: VendorOrderItem): VendorOrderItem
     : null
 
   const delivery = firstDelivery(item.order_delivery)
+  const shippingAddress =
+    normalizeOrderAddress(delivery?.delivery_address) ??
+    normalizeOrderAddress(item.orders?.shipping_address) ??
+    null
 
   return {
     ...item,
     listings: enrichedListing,
     listing: enrichedListing,
-    shipping_address: delivery?.delivery_address ?? null,
-    billing_address: item.orders?.billing_address ?? null,
+    shipping_address: shippingAddress,
+    billing_address: normalizeOrderAddress(item.orders?.billing_address),
   }
 }
 

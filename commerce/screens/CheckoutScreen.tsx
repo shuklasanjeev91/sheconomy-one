@@ -383,48 +383,19 @@ export function CheckoutScreen() {
 
   const multiShop = orderShops.length > 1
 
-  const paymentGroups = useMemo(() => {
-    const shepay = orderShops.map((shop) => ({ shopId: shop.shopId, shopName: shop.shopName }))
-    return { shepay, direct: [] as { shopId: string; shopName: string; gateway: string }[] }
-  }, [orderShops])
-
   /** Platform PayU initiates one order payment — single-shop checkout only. */
   const platformPayuAvailable = !multiShop && orderShops.length > 0
-  const shepayAvailable = paymentGroups.shepay.length > 0
-
-  const shopsUsePlatformPayuDefault = useMemo(() => {
-    if (!orderShops.length) return false
-    return orderShops.every((shop) => !shopPartners.get(shop.shopId)?.paymentConnected)
-  }, [orderShops, shopPartners])
-
-  const defaultOnlineProvider = useMemo((): CheckoutOnlineProvider => {
-    if (platformPayuAvailable && shopsUsePlatformPayuDefault) return 'platform_payu'
-    return 'shepay'
-  }, [platformPayuAvailable, shopsUsePlatformPayuDefault])
 
   useEffect(() => {
-    setOnlineProvider(defaultOnlineProvider)
-  }, [shopIdsKey, defaultOnlineProvider])
-
-  const shepayOnlineCopy = useMemo(
-    () => ({
-      title: 'Online (SHEPay)',
-      subtitle:
-        orderShops.length > 1
-          ? `One secure payment · split automatically to ${orderShops.length} shops`
-          : 'Marketplace checkout · UPI, cards, net banking & wallets',
-    }),
-    [orderShops.length],
-  )
+    if (platformPayuAvailable) setOnlineProvider('platform_payu')
+  }, [shopIdsKey, platformPayuAvailable])
 
   const platformPayuOnlineCopy = useMemo(
     () => ({
       title: 'Online (PayU)',
-      subtitle: shopsUsePlatformPayuDefault
-        ? 'Default checkout · Pay securely with UPI, cards, net banking or wallets'
-        : 'Pay securely with UPI, cards, net banking or wallets via PayU',
+      subtitle: 'Pay securely with UPI, cards, net banking or wallets via PayU',
     }),
-    [shopsUsePlatformPayuDefault],
+    [],
   )
 
   useEffect(() => {
@@ -1579,64 +1550,9 @@ export function CheckoutScreen() {
                 step={needsShipping ? 3 : 2}
                 title={usesInlinePlatformPayu ? 'Complete payment' : 'Payment method'}
               >
-                {usesInlinePlatformPayu ? (
-                  <YStack gap="$3" width="100%" flexShrink={0}>
-                    <PaymentOption
-                      selected
-                      title={platformPayuOnlineCopy.title}
-                      subtitle={platformPayuOnlineCopy.subtitle}
-                      onPress={() => {
-                        setPaymentMethod('online')
-                        setOnlineProvider('platform_payu')
-                      }}
-                    />
-                    {shepayAvailable ? (
-                      <PaymentOption
-                        selected={false}
-                        disabled={payuAuthActive}
-                        title={shepayOnlineCopy.title}
-                        subtitle={shepayOnlineCopy.subtitle}
-                        onPress={() => {
-                          void (async () => {
-                            if (platformCheckoutMeta?.checkoutGroupId) {
-                              await cancelCheckoutPayment(platformCheckoutMeta.checkoutGroupId)
-                            }
-                            clearPlatformPayuCheckoutState()
-                            setPaymentMethod('online')
-                            setOnlineProvider('shepay')
-                          })()
-                        }}
-                      />
-                    ) : null}
-                    {needsShipping ? (
-                      <PaymentOption
-                        selected={false}
-                        disabled={payuAuthActive}
-                        title="Cash on delivery / Pay on delivery"
-                        subtitle="Pay with cash, UPI or card when your order arrives"
-                        onPress={() => {
-                          void (async () => {
-                            if (platformCheckoutMeta?.checkoutGroupId) {
-                              await cancelCheckoutPayment(platformCheckoutMeta.checkoutGroupId)
-                            }
-                            clearPlatformPayuCheckoutState()
-                            setPaymentMethod('cod')
-                          })()
-                        }}
-                      />
-                    ) : null}
-                    <YStack
-                      gap="$2"
-                      width="100%"
-                      flexShrink={0}
-                      paddingTop="$2"
-                      borderTopWidth={1}
-                      borderTopColor={c.divider}
-                    >
-                      <Text fontSize={13} color={c.secondary} lineHeight={18}>
-                        Pay with UPI or card — you stay on SHEconomy until your bank step. Your order
-                        is placed when payment succeeds.
-                      </Text>
+                <YStack gap="$3" width="100%" flexShrink={0}>
+                  {platformPayuAvailable ? (
+                    <YStack gap="$2" width="100%" flexShrink={0}>
                       <CheckoutPayuPanel
                         embedded
                         ui={ui}
@@ -1650,6 +1566,11 @@ export function CheckoutScreen() {
                         session={platformPayuPanelSession}
                         onEnsureSession={ensurePlatformPayuSession}
                         onAuthActiveChange={setPayuAuthActive}
+                        collapsed={paymentMethod === 'cod'}
+                        onSelectOnline={() => {
+                          setPaymentMethod('online')
+                          setOnlineProvider('platform_payu')
+                        }}
                         onPaid={() => {
                           const meta = platformCheckoutMetaRef.current
                           trackCommerceEvent('purchase', {
@@ -1694,72 +1615,30 @@ export function CheckoutScreen() {
                         }}
                       />
                     </YStack>
-                  </YStack>
-                ) : (
-                  <>
-                    {paymentMethod === 'online' && multiShop && onlineProvider === 'shepay' ? (
-                      <XStack
-                        gap="$2"
-                        alignItems="center"
-                        padding="$2.5"
-                        borderRadius={10}
-                        backgroundColor={c.chip}
-                        marginBottom="$2"
-                      >
-                        <Icons.ShieldCheck size={15} color={c.brand} />
-                        <Text fontSize={12} color={c.secondary} flex={1}>
-                          One secure SHEPay payment — each shop receives their share after
-                          confirmation.
-                        </Text>
-                      </XStack>
-                    ) : null}
-                    {platformPayuAvailable || shepayAvailable ? (
-                      <YStack gap="$2">
-                        {platformPayuAvailable ? (
-                          <PaymentOption
-                            selected={paymentMethod === 'online' && onlineProvider === 'platform_payu'}
-                            title={platformPayuOnlineCopy.title}
-                            subtitle={platformPayuOnlineCopy.subtitle}
-                            onPress={() => {
-                              setPaymentMethod('online')
-                              setOnlineProvider('platform_payu')
-                            }}
-                          />
-                        ) : null}
-                        {shepayAvailable ? (
-                          <PaymentOption
-                            selected={paymentMethod === 'online' && onlineProvider === 'shepay'}
-                            title={shepayOnlineCopy.title}
-                            subtitle={shepayOnlineCopy.subtitle}
-                            onPress={() => {
-                              setPaymentMethod('online')
-                              setOnlineProvider('shepay')
-                            }}
-                          />
-                        ) : null}
-                        {needsShipping ? (
-                          <PaymentOption
-                            selected={paymentMethod === 'cod'}
-                            title="Cash on delivery / Pay on delivery"
-                            subtitle="Pay with cash, UPI or card when your order arrives"
-                            onPress={() => setPaymentMethod('cod')}
-                          />
-                        ) : null}
-                      </YStack>
-                    ) : needsShipping ? (
-                      <PaymentOption
-                        selected={paymentMethod === 'cod'}
-                        title="Cash on delivery / Pay on delivery"
-                        subtitle="Pay with cash, UPI or card when your order arrives"
-                        onPress={() => setPaymentMethod('cod')}
-                      />
-                    ) : (
-                      <Text fontSize={13} color={c.secondary}>
-                        {platformPayuOnlineCopy.subtitle}
-                      </Text>
-                    )}
-                  </>
-                )}
+                  ) : !needsShipping ? (
+                    <Text fontSize={13} color={c.secondary}>
+                      {platformPayuOnlineCopy.subtitle}
+                    </Text>
+                  ) : null}
+
+                  {needsShipping ? (
+                    <PaymentOption
+                      selected={paymentMethod === 'cod'}
+                      disabled={payuAuthActive}
+                      title="Cash on delivery / Pay on delivery"
+                      subtitle="Pay with cash, UPI or card when your order arrives"
+                      onPress={() => {
+                        void (async () => {
+                          if (platformCheckoutMeta?.checkoutGroupId) {
+                            await cancelCheckoutPayment(platformCheckoutMeta.checkoutGroupId)
+                          }
+                          clearPlatformPayuCheckoutState()
+                          setPaymentMethod('cod')
+                        })()
+                      }}
+                    />
+                  ) : null}
+                </YStack>
               </SectionCard>
 
               <SectionCard step={needsShipping ? 4 : 3} title="Review your order">

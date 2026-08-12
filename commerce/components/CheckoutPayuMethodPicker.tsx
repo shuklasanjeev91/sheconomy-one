@@ -33,6 +33,8 @@ type CheckoutPayuMethodPickerProps = {
   cardFields?: ReactNode
   /** Shown but not expandable / selectable (e.g. net banking coming later). */
   disabledSectionIds?: SectionId[]
+  /** Collapse accordion and clear selection (e.g. COD is selected). */
+  collapsed?: boolean
   /** When set, COD appears in the same Amazon-style list */
   cod?: {
     selected: boolean
@@ -151,17 +153,18 @@ export function CheckoutPayuMethodPicker({
   onVpaChange,
   cardFields,
   disabledSectionIds = [],
+  collapsed = false,
   cod = null,
 }: CheckoutPayuMethodPickerProps) {
   const disabledSections = useMemo(() => new Set(disabledSectionIds), [disabledSectionIds])
 
-  const [openId, setOpenId] = useState<Section['id'] | 'cod'>(() =>
-    cod?.selected ? 'cod' : sectionIdForMode(mode),
+  const [openId, setOpenId] = useState<Section['id'] | 'cod' | null>(() =>
+    cod?.selected || collapsed ? null : sectionIdForMode(mode),
   )
 
   useEffect(() => {
-    if (cod?.selected) {
-      setOpenId('cod')
+    if (collapsed || cod?.selected) {
+      setOpenId(null)
       return
     }
     const nextOpen = sectionIdForMode(mode)
@@ -171,14 +174,17 @@ export function CheckoutPayuMethodPicker({
       return
     }
     setOpenId(nextOpen)
-  }, [cod?.selected, disabledSections, mode])
+  }, [collapsed, cod?.selected, disabledSections, mode])
 
   function selectSection(section: Section) {
     if (disabledSections.has(section.id)) return
     setOpenId(section.id)
     if (!sectionContainsMode(section, mode)) {
       onModeChange(section.options[0]?.id ?? 'upi_gpay')
+      return
     }
+    // Re-select same mode so parent can clear COD / reopen online.
+    if (collapsed) onModeChange(mode)
   }
 
   return (
@@ -193,8 +199,9 @@ export function CheckoutPayuMethodPicker({
     >
       {SECTIONS.map((section, sectionIndex) => {
         const disabled = disabledSections.has(section.id)
-        const open = !disabled && openId === section.id && !cod?.selected
-        const hasSelection = !disabled && sectionContainsMode(section, mode) && !cod?.selected
+        const open = !collapsed && !disabled && openId === section.id && !cod?.selected
+        const hasSelection =
+          !collapsed && !disabled && sectionContainsMode(section, mode) && !cod?.selected
         const isLastOnline = sectionIndex === SECTIONS.length - 1 && !cod
 
         return (
@@ -227,7 +234,11 @@ export function CheckoutPayuMethodPicker({
                       {section.title}
                     </Text>
                     {!open ? (
-                      <Text fontSize={12} color={hasSelection ? brandColor : secondaryColor} numberOfLines={1}>
+                      <Text
+                        fontSize={12}
+                        color={hasSelection ? brandColor : secondaryColor}
+                        numberOfLines={1}
+                      >
                         {disabled
                           ? 'Currently unavailable'
                           : hasSelection

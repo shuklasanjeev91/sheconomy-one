@@ -34,6 +34,7 @@ import {
   updateOrderItemStatus,
 } from '~/lib/orders/vendor-orders.store'
 import type { VendorOrderItem } from '~/lib/orders/vendor-orders.type'
+import { resolveVendorShippingAddress } from '~/lib/orders/vendor-orders.utils'
 import { useAppDispatch, useAppSelector } from '~/lib/store/hooks'
 import type { AppUiTokens } from '~/lib/theme/app-ui'
 
@@ -241,7 +242,7 @@ export function VendorOrderListPanel({
 
   const handleSubmitTracking = async (values: TrackingFormValues) => {
     if (!trackingItem) return
-    const address = trackingItem.billing_address ?? trackingItem.orders?.billing_address ?? {}
+    const address = resolveVendorShippingAddress(trackingItem) ?? {}
     try {
       await dispatch(
         createTracking({
