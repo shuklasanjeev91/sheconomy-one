@@ -11,6 +11,10 @@ export function getProfileShareUrl(handle: string) {
   return buildAbsoluteUrl(appRoutes.userProfile(handle))
 }
 
+export function getCreatorHubShareUrl(handle: string) {
+  return buildAbsoluteUrl(commerceRoutes.creatorHub(handle))
+}
+
 export function getPostShareUrl(postId: string) {
   return buildAbsoluteUrl(communityRoutes.post(postId))
 }

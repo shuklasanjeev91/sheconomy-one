@@ -16,6 +16,7 @@ import type { ListingFormData, ListingType } from '~/lib/listing/listing.type'
 import type { AppUiTokens } from '~/lib/theme/app-ui'
 
 import { ListingPublishCard, ListingPublishFieldError } from '~/commerce/components/vendor/listing-publish/ListingPublishCard'
+import { LISTING_METADATA_KEYS } from '~/commerce/components/vendor/listing-publish/listing-publish.constants'
 import { countWords } from '~/commerce/components/vendor/listing-publish/listing-publish.utils'
 
 type BasicInfoStepProps = {
@@ -25,6 +26,7 @@ type BasicInfoStepProps = {
   featuredCredits?: number
   onChangeType: (type: ListingType) => void
   onUpdate: <K extends keyof ListingFormData>(field: K, value: ListingFormData[K]) => void
+  onUpdateMetadata?: (key: string, value: unknown) => void
   onAddTag: (tag: string) => void
   onRemoveTag: (tag: string) => void
 }
@@ -49,11 +51,17 @@ export function BasicInfoStep({
   featuredCredits = 3,
   onChangeType,
   onUpdate,
+  onUpdateMetadata,
   onAddTag,
   onRemoveTag,
 }: BasicInfoStepProps) {
   const titleLength = formData.title?.length ?? 0
   const wordCount = useMemo(() => countWords(formData.description ?? ''), [formData.description])
+  const meta =
+    formData.listing_metadata && typeof formData.listing_metadata === 'object'
+      ? (formData.listing_metadata as Record<string, unknown>)
+      : {}
+  const followersOnly = Boolean(meta[LISTING_METADATA_KEYS.FOLLOWERS_ONLY])
 
   return (
     <YStack gap="$4">
@@ -198,6 +206,27 @@ export function BasicInfoStep({
           </ListingPublishCard>
         </YStack>
       </XStack>
+
+      {onUpdateMetadata ? (
+        <ListingPublishCard ui={ui} title="Follower perk">
+          <XStack alignItems="flex-start" gap="$3">
+            <Switch
+              checked={followersOnly}
+              onCheckedChange={(checked) =>
+                onUpdateMetadata(LISTING_METADATA_KEYS.FOLLOWERS_ONLY, !!checked)
+              }
+            />
+            <YStack flex={1} gap="$1">
+              <Text fontSize={13} fontWeight="700" color={ui.text}>
+                Followers only
+              </Text>
+              <Text fontSize={12} color={ui.textSecondary} lineHeight={18}>
+                Shoppers must follow your shop before they can buy this listing.
+              </Text>
+            </YStack>
+          </XStack>
+        </ListingPublishCard>
+      ) : null}
     </YStack>
   )
 }

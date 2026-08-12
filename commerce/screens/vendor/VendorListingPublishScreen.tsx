@@ -482,6 +482,7 @@ function VendorListingPublishContent() {
               errors={displayErrors}
               onChangeType={handleChangeType}
               onUpdate={updateField}
+              onUpdateMetadata={updateMetadata}
               onAddTag={handleAddTag}
               onRemoveTag={handleRemoveTag}
             />

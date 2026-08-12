@@ -40,12 +40,15 @@ import {
   ReviewsSection,
   StockNotifyButton,
   ListingVisualPreviewButtons,
+  ShopActionButtons,
 } from '~/commerce/components'
 import { fetchListingReturnPolicy, type ListingReturnPolicy } from '~/commerce/lib/return-policies'
 import { listingMediaKind } from '~/commerce/lib/listing-media'
 import { findCartItemForListing } from '~/commerce/lib/cart-listing'
 import { useCart } from '~/commerce/hooks/useCart'
+import { useShopFollow } from '~/commerce/hooks/useShopFollow'
 import { recordListingView } from '~/commerce/lib/recently-viewed'
+import { LISTING_METADATA_KEYS } from '~/commerce/components/vendor/listing-publish/listing-publish.constants'
 import { useListingReviews } from '~/commerce/hooks/useListingReviews'
 import { useCanonicalListingSlug } from '~/commerce/hooks/useCanonicalSlug'
 import { PageCenter, PageScroll, StickyRail } from '~/components/layout'
@@ -161,6 +164,7 @@ export function ListingScreen({
   const { user } = useSupabase()
   const toast = useAppToast()
   const { isDesktop } = useAppLayout()
+  const shopFollow = useShopFollow(listing?.shop_id)
 
   usePageSeo(
     useMemo(() => {
@@ -292,8 +296,23 @@ export function ListingScreen({
   const outOfStock = displayStock === 0
   const cartItem = findCartItemForListing(cartItems, listing.id, selectedVariantId)
   const showInCart = Boolean(cartItem) || optimisticInCart
+  const listingMeta =
+    listing.listing_metadata && typeof listing.listing_metadata === 'object'
+      ? (listing.listing_metadata as Record<string, unknown>)
+      : {}
+  const followersOnly = Boolean(listingMeta[LISTING_METADATA_KEYS.FOLLOWERS_ONLY])
+  const isShopOwner = Boolean(user?.id && listing.shops?.user_id === user.id)
+  const purchaseLocked =
+    followersOnly && !isShopOwner && (!shopFollow.isFollowing || !user)
 
   function handleAddToCart(goToCheckout = false) {
+    if (purchaseLocked) {
+      toast.show('Followers only', {
+        tone: 'info',
+        message: 'Follow this shop to unlock purchase on this listing.',
+      })
+      return
+    }
     if (addingRef.current || outOfStock) return
     addingRef.current = true
 
@@ -574,6 +593,36 @@ export function ListingScreen({
                 </Text>
               ) : null}
 
+              {followersOnly ? (
+                <XStack
+                  gap="$2"
+                  alignItems="flex-start"
+                  padding="$3"
+                  borderRadius={12}
+                  backgroundColor={ui.roseSurface}
+                  borderWidth={1}
+                  borderColor={ui.borderSubtle}
+                >
+                  <Icons.Users size={16} color={ui.brand} marginTop={2} />
+                  <YStack flex={1} gap="$2">
+                    <Text fontSize={13} fontWeight="700" color={ui.text}>
+                      Followers-only listing
+                    </Text>
+                    <Text fontSize={12} color={ui.textSecondary} lineHeight={18}>
+                      {purchaseLocked
+                        ? 'Follow this shop to unlock Add to cart and Buy now.'
+                        : 'Thanks for following — you can purchase this perk listing.'}
+                    </Text>
+                    {purchaseLocked && listing.shops?.id ? (
+                      <ShopActionButtons
+                        shopId={listing.shops.id}
+                        ownerUserId={listing.shops.user_id}
+                      />
+                    ) : null}
+                  </YStack>
+                </XStack>
+              ) : null}
+
               {fulfillmentInfo ? <ListingFulfillmentPanel info={fulfillmentInfo} compact /> : null}
 
               {fulfillmentInfo?.kind === 'physical' ? (
@@ -674,7 +723,7 @@ export function ListingScreen({
           priceIncludesTax={listing.price_includes_tax}
           taxPercent={listing.tax_percent}
           currency={currency}
-          disabled={outOfStock && !showInCart}
+          disabled={(outOfStock && !showInCart) || purchaseLocked}
           isLoading={isAddingToCart}
           inCart={showInCart}
           quantity={cartItem?.quantity ?? 1}
@@ -882,10 +931,10 @@ export function ListingScreen({
               flex={1}
               minWidth={200}
               borderRadius={999}
-              disabled={addingRef.current || outOfStock}
+              disabled={addingRef.current || outOfStock || purchaseLocked}
               onPress={() => handleAddToCart(false)}
             >
-              {outOfStock ? 'Out of stock' : 'Add to cart'}
+              {purchaseLocked ? 'Follow to unlock' : outOfStock ? 'Out of stock' : 'Add to cart'}
             </Button>
           </Theme>
           <Button
@@ -894,10 +943,10 @@ export function ListingScreen({
             borderRadius={999}
             flex={1}
             minWidth={200}
-            disabled={addingRef.current || outOfStock}
+            disabled={addingRef.current || outOfStock || purchaseLocked}
             onPress={() => handleAddToCart(true)}
           >
-            {buyNowLabel}
+            {purchaseLocked ? 'Followers only' : buyNowLabel}
           </Button>
         </XStack>
       )}
