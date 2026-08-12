@@ -2,6 +2,8 @@ import { useLocalSearchParams, useParams, useRouter } from 'one'
 import { AppLink } from '~/components/navigation/AppLink'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
+import { ensureCohortGroupMembership } from '~/class/lib/cohort-group'
+import { enrollInCourse } from '~/class/lib/enrollment'
 import { ClassShell } from '~/class/components/ClassShell'
 import { ProgramAuthorProfile } from '~/class/components/ProgramAuthorProfile'
 import { ProgramMediaPlayer } from '~/class/components/ProgramMediaPlayer'
@@ -29,6 +31,8 @@ import { classRoutes } from '~/lib/routes'
 import { getProgramShareUrl } from '~/lib/share'
 import { useAppUi } from '~/lib/theme/useAppUi'
 import { usePageSeo } from '~/components/seo/RouteSeo'
+import { useSupabase } from '~/providers/SupabaseProvider'
+import { navigateApp } from '~/lib/platform/navigate'
 
 const NEXT_COUNTDOWN_SECONDS = 5
 
@@ -42,6 +46,7 @@ export function ProgramScreen() {
   const playlistId = typeof params.playlist === 'string' ? params.playlist : null
   const savedIds = useSavedPrograms()
   const autoplay = useClassAutoplay()
+  const { user } = useSupabase()
 
   const [program, setProgram] = useState<Program | null>(null)
   const [isLoading, setIsLoading] = useState(true)
@@ -51,6 +56,7 @@ export function ProgramScreen() {
   const [playlistTitle, setPlaylistTitle] = useState<string | null>(null)
   const [saveSheetOpen, setSaveSheetOpen] = useState(false)
   const [countdown, setCountdown] = useState<number | null>(null)
+  const [joiningCohort, setJoiningCohort] = useState(false)
   const countdownRef = useRef<ReturnType<typeof setInterval> | null>(null)
   const nextProgramRef = useRef<Program | null>(null)
 
@@ -326,6 +332,55 @@ export function ProgramScreen() {
                   {statsLine}
                 </Text>
               ) : null}
+
+              <Button
+                tone="primary"
+                size="$3"
+                borderRadius={999}
+                alignSelf="flex-start"
+                disabled={joiningCohort}
+                icon={
+                  joiningCohort ? (
+                    <Spinner size="small" color="white" />
+                  ) : (
+                    <Icons.Users size={15} color="white" />
+                  )
+                }
+                onPress={() => {
+                  void (async () => {
+                    if (!user?.id) {
+                      toast.show('Sign in to join the cohort', { tone: 'default' })
+                      return
+                    }
+                    setJoiningCohort(true)
+                    try {
+                      // Best-effort course enrollment when program id maps to class_course.
+                      await enrollInCourse({ courseId: program.id, userId: user.id })
+                      const result = await ensureCohortGroupMembership({
+                        userId: user.id,
+                        programTitle: program.title,
+                        programSlug: getProgramSlug(program),
+                      })
+                      if (result.error || !result.path) {
+                        toast.show('Could not join cohort', {
+                          tone: 'danger',
+                          message: result.error ?? 'Try again',
+                        })
+                        return
+                      }
+                      toast.show(result.created ? 'Cohort created' : 'Joined cohort', {
+                        tone: 'success',
+                        message: 'Opening your learning group…',
+                      })
+                      navigateApp(result.path)
+                    } finally {
+                      setJoiningCohort(false)
+                    }
+                  })()
+                }}
+              >
+                {joiningCohort ? 'Joining…' : 'Join learning cohort'}
+              </Button>
 
               {hasProgramAuthor(program) ? (
                 <YStack
