@@ -8,8 +8,10 @@ import { useAppUi } from '~/lib/theme/useAppUi'
 
 import { CategoryImage } from '~/commerce/components/CategoryImage'
 
+// Curated category artwork is authored at 300x450, so the tile keeps that 2:3
+// ratio — a landscape tile would crop the covers to a thin horizontal slice.
 const TILE_WIDTH = 116
-const TILE_HEIGHT = 92
+const TILE_HEIGHT = 174
 
 type CategoryChipProps = {
   category: CategorySummary
