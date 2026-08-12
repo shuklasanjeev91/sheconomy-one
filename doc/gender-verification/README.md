@@ -105,6 +105,7 @@ All user-facing copy flows through `toFriendlyGenderError(error)`:
 | No camera / in use | `CAMERA_UNAVAILABLE` | Free the camera and retry |
 | Face not clearly seen | `FACE_NOT_DETECTED` | Lighting + centering guidance |
 | Liveness incomplete | `LIVENESS_FAILED` | Hold still and blink again |
+| Face read too unsteady to judge | `LOW_CONFIDENCE_RETRY` | Lighting / glasses guidance, worth retrying |
 | Confidence too low / not eligible | `NOT_ELIGIBLE` | Women-first explanation |
 | Rate limited / network / timeout | `RATE_LIMITED` / `NETWORK` / `TIMEOUT` | Retry guidance |
 
@@ -122,13 +123,50 @@ friendly message + retry:
 
 ---
 
+## 4b. How the gender decision is made
+
+The on-device model returns a label plus the confidence of *that* label, and the
+label flips between frames as lighting, head angle, and blinks change. Judging a
+single frame therefore rejected real women at random, so the verdict is now an
+aggregate (`lib/gender-verification/gender-aggregate.ts`):
+
+1. Every frame that carries a gender read is collected during the session. On web
+   `detectHumanLivenessFrame` samples every 6th frame; on native every
+   `nativeGenderSampleEvery`-th frame uses the analyzer's `both` mode, which
+   returns gender *and* anti-spoof from one pass so the liveness averages keep
+   filling.
+2. Each read becomes a female probability — a male label at 0.8 counts as 0.2
+   female.
+3. The single lowest and highest probabilities are dropped once there are 5+
+   reads, so one bad frame cannot decide the run, and the remaining mean is
+   compared against `minGenderConfidence`. The labels must also be female-majority,
+   so a couple of very confident frames cannot outvote a mostly-male read.
+4. A mean within `genderBorderlineBand` of the bar (or fewer than
+   `minGenderSamples` reads) buys **one** extra sampling round rather than a
+   rejection. If it is still unclear after that, the user gets the retryable
+   `LOW_CONFIDENCE_RETRY` guidance instead of the women-first rejection.
+
+The aggregated mean is what gets sent to `complete_gender_verification_session`,
+and the RPC gates on the same number. `minGenderConfidence` in `constants.ts` and
+`v_min_gender_confidence` in
+`supabase/migrations/20260812150000_align_gender_verification_confidence.sql`
+must be changed together — a mismatch means the app accepts a run the server then
+rejects with different wording.
+
+---
+
 ## 5. Tuning
 
 Change behavior by editing **`lib/gender-verification/constants.ts`** only:
 
 - `GENDER_VERIFICATION.requiredBlinks` — number of blinks (default **3**).
 - `GENDER_VERIFICATION.earBlinkThreshold` / `earOpenThreshold` — blink sensitivity.
-- `GENDER_VERIFICATION.minLivenessScore` / `minGenderConfidence` — pass bars.
+- `GENDER_VERIFICATION.minLivenessScore` / `minGenderConfidence` — pass bars
+  (`minGenderConfidence` is mirrored in SQL — see section 4b).
+- `GENDER_VERIFICATION.minGenderSamples` / `extraGenderSamples` /
+  `genderBorderlineBand` / `extraGenderSamplingMs` — how many reads the verdict
+  needs and how long the follow-up round may run.
+- `GENDER_VERIFICATION.nativeGenderSampleEvery` — native gender sampling cadence.
 - `GENDER_VERIFICATION_PROMPT.dismissCooldownMs` — quiet window (default **10 min**).
 - Gender-restricted routes live in `config/route-protection.config.ts`
   (`GENDER_RESTRICTED_ROUTES`).

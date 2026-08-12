@@ -17,7 +17,22 @@ export const GENDER_VERIFICATION = {
   /** Human anti-spoof / liveness model floors (photo rejection). */
   minLiveScore: 0.4,
   minRealScore: 0.4,
-  minGenderConfidence: 0.55,
+  /**
+   * Mean female probability required to pass, judged across many frames rather
+   * than one. Mirrored by `complete_gender_verification_session` — keep this in
+   * sync with `supabase/migrations/20260812150000_align_gender_verification_confidence.sql`.
+   */
+  minGenderConfidence: 0.6,
+  /** Usable gender samples needed before we judge the run at all. */
+  minGenderSamples: 4,
+  /** Extra samples gathered in the one follow-up round after a borderline read. */
+  extraGenderSamples: 5,
+  /** A mean this far under the threshold earns another round instead of a rejection. */
+  genderBorderlineBand: 0.08,
+  /** Cap on the follow-up round so an unreadable face still fails promptly. */
+  extraGenderSamplingMs: 4000,
+  /** Every Nth native frame also runs the gender model (see the analyzer `both` mode). */
+  nativeGenderSampleEvery: 4,
   sessionMinutes: 15,
   /**
    * Native capture cadence. takePictureAsync is slow; a short interval only

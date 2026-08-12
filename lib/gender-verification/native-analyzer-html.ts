@@ -74,10 +74,13 @@ export function getNativeAnalyzerHtml() {
 
   function applyMode(mode) {
     if (!human || !human.config || !human.config.face) return;
-    var isGender = mode === 'gender';
-    human.config.face.description.enabled = isGender;
-    human.config.face.antispoof.enabled = !isGender;
-    human.config.face.liveness.enabled = !isGender;
+    // 'both' keeps the anti-spoof samples flowing while we also collect gender,
+    // so periodic gender frames do not create gaps in the liveness averages.
+    var wantGender = mode === 'gender' || mode === 'both';
+    var wantLiveness = mode !== 'gender';
+    human.config.face.description.enabled = wantGender;
+    human.config.face.antispoof.enabled = wantLiveness;
+    human.config.face.liveness.enabled = wantLiveness;
     human.config.face.mesh.enabled = true;
     human.config.face.iris.enabled = false;
     human.config.face.emotion.enabled = false;

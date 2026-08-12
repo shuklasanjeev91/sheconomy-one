@@ -1,23 +1,25 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 
 import {
+  GENDER_ERROR_CODES,
   GENDER_VERIFICATION,
   type FaceTrackingStatus,
+  type GenderSample,
   type VerificationPhase,
   completeGenderVerificationSession,
   computeLivenessScore,
   createBlinkTracker,
   createEarCalibrator,
+  createGenderVerificationError,
   createGenderVerificationSession,
   detectHumanLivenessFrame,
   passesAntiSpoof,
   preloadHumanModels,
+  summarizeGenderSamples,
   thresholdsFromBaseline,
   updateBlinkTracker,
   updateEarCalibrator,
 } from '~/lib/gender-verification'
-
-import { BRAND_NAME } from '~/config/brand'
 
 type UseGenderVerificationOptions = {
   onVerified?: () => void
@@ -52,7 +54,25 @@ export function useGenderVerification({ onVerified }: UseGenderVerificationOptio
   const analyzingRef = useRef(false)
   const sessionIdRef = useRef<string | null>(null)
   const loopGenerationRef = useRef(0)
-  const lastGenderRef = useRef<{ isFemale: boolean; confidence: number } | null>(null)
+  const genderSamplesRef = useRef<GenderSample[]>([])
+  /** 'gender' is the follow-up round: blinks are done, we only need more reads. */
+  const samplingModeRef = useRef<'blink' | 'gender'>('blink')
+  const extraRoundUsedRef = useRef(false)
+  const extraRoundDeadlineRef = useRef(0)
+
+  /** Keep a bounded window of reads — a long session should not grow unbounded. */
+  const pushGenderSample = useCallback((sample: GenderSample) => {
+    genderSamplesRef.current = [...genderSamplesRef.current.slice(-39), sample]
+  }, [])
+
+  /** In the follow-up round, wait for the extra reads (or the time cap) before judging. */
+  const readyToJudgeGender = useCallback(() => {
+    if (samplingModeRef.current !== 'gender') return true
+    const target = GENDER_VERIFICATION.minGenderSamples + GENDER_VERIFICATION.extraGenderSamples
+    return (
+      genderSamplesRef.current.length >= target || Date.now() >= extraRoundDeadlineRef.current
+    )
+  }, [])
 
   const stopCamera = useCallback(() => {
     loopGenerationRef.current += 1
@@ -95,11 +115,10 @@ export function useGenderVerification({ onVerified }: UseGenderVerificationOptio
   }, [])
 
   const analyzeAndSubmit = useCallback(
-    async (detectedBlinks: number, livenessScore: number) => {
+    async (detectedBlinks: number, livenessScore: number): Promise<'resume' | 'done'> => {
       const activeSessionId = sessionIdRef.current
-      if (!activeSessionId || analyzingRef.current) return
+      if (!activeSessionId || analyzingRef.current) return 'done'
       analyzingRef.current = true
-      loopActiveRef.current = false
       setPhase('analyze')
       setInstruction('Confirming you are a live person…')
 
@@ -117,29 +136,42 @@ export function useGenderVerification({ onVerified }: UseGenderVerificationOptio
           )
         }
 
-        let gender = lastGenderRef.current
-        if (!gender) {
-          const video = videoRef.current
-          if (video) {
-            const frame = await detectHumanLivenessFrame(video, { forceGender: true })
-            gender = frame.gender
-          }
+        // One last dedicated read of the live frame, added to the session samples.
+        const video = videoRef.current
+        if (video) {
+          const frame = await detectHumanLivenessFrame(video, { forceGender: true })
+          if (frame.gender) pushGenderSample(frame.gender)
         }
-        if (!gender) {
-          throw new Error('Could not analyze your face. Try again in good lighting.')
+
+        const verdict = summarizeGenderSamples(genderSamplesRef.current, {
+          minSamples: GENDER_VERIFICATION.minGenderSamples,
+          threshold: GENDER_VERIFICATION.minGenderConfidence,
+          borderlineBand: GENDER_VERIFICATION.genderBorderlineBand,
+        })
+
+        if (verdict.status === 'insufficient' && !extraRoundUsedRef.current) {
+          extraRoundUsedRef.current = true
+          samplingModeRef.current = 'gender'
+          extraRoundDeadlineRef.current = Date.now() + GENDER_VERIFICATION.extraGenderSamplingMs
+          setPhase('blink')
+          setInstruction('Almost there — hold still and look at the camera')
+          return 'resume'
         }
-        if (!gender.isFemale || gender.confidence < GENDER_VERIFICATION.minGenderConfidence) {
-          throw new Error(
-            `${BRAND_NAME} could not confirm Human verification with the required confidence.`,
-          )
+
+        if (verdict.status === 'insufficient' || verdict.femaleScore == null) {
+          throw createGenderVerificationError(GENDER_ERROR_CODES.LOW_CONFIDENCE_RETRY)
+        }
+
+        if (verdict.status === 'fail') {
+          throw createGenderVerificationError(GENDER_ERROR_CODES.NOT_ELIGIBLE)
         }
 
         const { result, error: submitError } = await completeGenderVerificationSession({
           sessionId: activeSessionId,
           detectedBlinks,
           livenessScore: Math.max(livenessScore, avgLive),
-          genderDetected: gender.isFemale,
-          genderConfidence: gender.confidence,
+          genderDetected: true,
+          genderConfidence: verdict.femaleScore,
         })
 
         if (submitError) throw new Error(submitError)
@@ -149,6 +181,7 @@ export function useGenderVerification({ onVerified }: UseGenderVerificationOptio
         setPhase('success')
         setInstruction('Verified successfully')
         onVerified?.()
+        return 'done'
       } catch (submitFailure) {
         const message =
           submitFailure instanceof Error ? submitFailure.message : 'Verification failed.'
@@ -156,11 +189,12 @@ export function useGenderVerification({ onVerified }: UseGenderVerificationOptio
         setPhase('error')
         setInstruction(message)
         stopCamera()
+        return 'done'
       } finally {
         analyzingRef.current = false
       }
     },
-    [onVerified, stopCamera],
+    [onVerified, pushGenderSample, stopCamera],
   )
 
   const runDetectionLoop = useCallback(async () => {
@@ -174,7 +208,9 @@ export function useGenderVerification({ onVerified }: UseGenderVerificationOptio
       }
 
       try {
-        const frame = await detectHumanLivenessFrame(video)
+        const frame = await detectHumanLivenessFrame(video, {
+          forceGender: samplingModeRef.current === 'gender',
+        })
         if (!loopActiveRef.current || generation !== loopGenerationRef.current) return
 
         updateEarCalibrator(earCalibratorRef.current, frame.avgEar, 10)
@@ -212,7 +248,7 @@ export function useGenderVerification({ onVerified }: UseGenderVerificationOptio
           continue
         }
 
-        if (frame.gender) lastGenderRef.current = frame.gender
+        if (frame.gender) pushGenderSample(frame.gender)
         if (frame.liveScore > 0) {
           liveSamplesRef.current = [...liveSamplesRef.current.slice(-24), frame.liveScore]
         }
@@ -243,6 +279,12 @@ export function useGenderVerification({ onVerified }: UseGenderVerificationOptio
           continue
         }
 
+        if (!readyToJudgeGender()) {
+          setInstruction('Almost there — hold still and look at the camera')
+          await new Promise((r) => setTimeout(r, 16))
+          continue
+        }
+
         const livenessScore = computeLivenessScore({
           detectedBlinks: tracker.count,
           requiredBlinks: GENDER_VERIFICATION.requiredBlinks,
@@ -251,7 +293,8 @@ export function useGenderVerification({ onVerified }: UseGenderVerificationOptio
           minStableFrames: 8,
         })
 
-        await analyzeAndSubmit(tracker.count, livenessScore)
+        const outcome = await analyzeAndSubmit(tracker.count, livenessScore)
+        if (outcome === 'resume') continue
         return
       } catch {
         if (generation !== loopGenerationRef.current) return
@@ -261,7 +304,7 @@ export function useGenderVerification({ onVerified }: UseGenderVerificationOptio
         return
       }
     }
-  }, [analyzeAndSubmit, stopCamera])
+  }, [analyzeAndSubmit, pushGenderSample, readyToJudgeGender, stopCamera])
 
   const start = useCallback(async () => {
     if (!supported) {
@@ -278,7 +321,10 @@ export function useGenderVerification({ onVerified }: UseGenderVerificationOptio
     stableFramesRef.current = 0
     liveSamplesRef.current = []
     realSamplesRef.current = []
-    lastGenderRef.current = null
+    genderSamplesRef.current = []
+    samplingModeRef.current = 'blink'
+    extraRoundUsedRef.current = false
+    extraRoundDeadlineRef.current = 0
     setBlinkCount(0)
     analyzingRef.current = false
     sessionIdRef.current = null
@@ -341,6 +387,12 @@ export function useGenderVerification({ onVerified }: UseGenderVerificationOptio
     blinkTrackerRef.current = createBlinkTracker()
     earCalibratorRef.current = createEarCalibrator()
     stableFramesRef.current = 0
+    liveSamplesRef.current = []
+    realSamplesRef.current = []
+    genderSamplesRef.current = []
+    samplingModeRef.current = 'blink'
+    extraRoundUsedRef.current = false
+    extraRoundDeadlineRef.current = 0
     analyzingRef.current = false
     setTracking({
       faceDetected: false,

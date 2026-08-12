@@ -20,6 +20,8 @@ export const GENDER_ERROR_CODES = {
   CAMERA_UNAVAILABLE: 'gender/camera-unavailable',
   FACE_NOT_DETECTED: 'gender/face-not-detected',
   LIVENESS_FAILED: 'gender/liveness-failed',
+  /** Face read too unstable to judge — worth another attempt, unlike NOT_ELIGIBLE. */
+  LOW_CONFIDENCE_RETRY: 'gender/low-confidence-retry',
   NOT_ELIGIBLE: 'gender/not-eligible',
   SESSION_FAILED: 'gender/session-failed',
   RATE_LIMITED: 'gender/rate-limited',
@@ -43,6 +45,8 @@ export const GENDER_ERROR_MESSAGES: Record<GenderErrorCode, string> = {
     'We couldn’t see your face clearly. Find good lighting, hold the camera steady, and center your face in the oval.',
   [GENDER_ERROR_CODES.LIVENESS_FAILED]:
     'The liveness check didn’t complete. Hold still, then blink naturally when prompted and try again.',
+  [GENDER_ERROR_CODES.LOW_CONFIDENCE_RETRY]:
+    'We couldn’t get a steady read of your face. Move somewhere brighter with even light, take off glasses or anything covering your face, hold the phone at eye level, then try again.',
   [GENDER_ERROR_CODES.NOT_ELIGIBLE]:
     'This community is built for women. Verification didn’t meet the required confidence, so full access can’t be unlocked.',
   [GENDER_ERROR_CODES.SESSION_FAILED]:
@@ -116,6 +120,10 @@ export function classifyGenderError(error: unknown): GenderErrorCode {
     message.includes('face_image_too_large')
   ) {
     return GENDER_ERROR_CODES.IMAGE_TOO_LARGE
+  }
+  // Must precede the face / confidence rules below — this copy mentions both.
+  if (message.includes('steady read')) {
+    return GENDER_ERROR_CODES.LOW_CONFIDENCE_RETRY
   }
   if (
     message.includes('permission') ||
