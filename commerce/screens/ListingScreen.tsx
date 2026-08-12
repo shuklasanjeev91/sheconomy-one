@@ -51,6 +51,7 @@ import { useCanonicalListingSlug } from '~/commerce/hooks/useCanonicalSlug'
 import { PageCenter, PageScroll, StickyRail } from '~/components/layout'
 import { DeliveryPinCheck } from '~/components/location'
 import { ShareButton } from '~/components/share'
+import { openComposer } from '~/community/lib/composer-store'
 import { BRAND_THEME, getShadowStyle, radius } from '~/config/tokens'
 import { useListing } from '~/hooks/useListing'
 import { useAppLayout } from '~/hooks/useAppLayout'
@@ -443,19 +444,43 @@ export function ListingScreen({
   const buyNowLabel = isDigital ? 'Buy & download' : 'Buy it now'
   const mobileBottomInset = LISTING_MOBILE_STICKY_BAR_HEIGHT + 16
   const listingShareSlug = slug ?? listing.id
+  const handleShareToCommunity = () => {
+    if (!user) {
+      toast.show('Sign in to share', {
+        tone: 'default',
+        message: 'Sign in to share this listing with your community.',
+      })
+      return
+    }
+    openComposer({
+      mode: 'product',
+      listingId: listing.id,
+      content: `Check out ${listing.title} on SHEconomy`,
+    })
+  }
   const listingShareButton = (
-    <ShareButton
-      variant="icon"
-      label="Share listing"
-      sheetTitle="Share listing"
-      copyLabel="Copy listing link"
-      copyToastMessage="Listing link copied to clipboard."
-      payload={{
-        url: getListingShareUrl(listingShareSlug),
-        title: listing.title,
-        text: listing.shops?.shop_name ? `From ${listing.shops.shop_name}` : undefined,
-      }}
-    />
+    <XStack gap="$1.5" alignItems="center">
+      <Button
+        tone="ghost"
+        size="$3"
+        borderRadius={999}
+        icon={<Icons.Users size={16} />}
+        onPress={handleShareToCommunity}
+        accessibilityLabel="Share to Community"
+      />
+      <ShareButton
+        variant="icon"
+        label="Share listing"
+        sheetTitle="Share listing"
+        copyLabel="Copy listing link"
+        copyToastMessage="Listing link copied to clipboard."
+        payload={{
+          url: getListingShareUrl(listingShareSlug),
+          title: listing.title,
+          text: listing.shops?.shop_name ? `From ${listing.shops.shop_name}` : undefined,
+        }}
+      />
+    </XStack>
   )
 
   const visualPreviewButtons = (

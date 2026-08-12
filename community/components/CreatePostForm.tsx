@@ -107,6 +107,8 @@ type CreatePostFormProps = {
   initialCelebrationTitle?: string
   /** Pre-fill post body. */
   initialContent?: string
+  /** Prefill product mode with this listing. */
+  initialListingId?: string
   /**
    * When true the form is rendered inside an overlay (sheet/dialog): it drops
    * its own card chrome and closes via onSuccess instead of navigating away.
@@ -125,6 +127,7 @@ export function CreatePostForm({
   initialOccasion,
   initialCelebrationTitle,
   initialContent,
+  initialListingId,
   embedded,
 }: CreatePostFormProps) {
   const communityUi = useCommunityUi()
@@ -470,7 +473,13 @@ export function CreatePostForm({
     setLoadingListings(true)
     fetchSellerListings(activeShopId, { status: 'active', limit: 50 })
       .then((rows) => {
-        if (!cancelled) setListings(rows)
+        if (!cancelled) {
+          setListings(rows)
+          if (initialListingId) {
+            const match = rows.find((row) => row.id === initialListingId)
+            if (match) setSelectedListing(match)
+          }
+        }
       })
       .finally(() => {
         if (!cancelled) setLoadingListings(false)
@@ -478,7 +487,15 @@ export function CreatePostForm({
     return () => {
       cancelled = true
     }
-  }, [activeShopId, composeMode])
+  }, [activeShopId, composeMode, initialListingId])
+
+  // When sharing a specific listing from PDP, pin its shop if present in shops.
+  useEffect(() => {
+    if (!initialListingId || composeMode !== 'product' || !shops.length) return
+    // Prefer already-selected listing's shop once loaded.
+    if (selectedListing) return
+    // Soft: if only one shop, activeShopId default handles it.
+  }, [composeMode, initialListingId, selectedListing, shops.length])
 
   if (!isAuthenticated || !user) {
     return (

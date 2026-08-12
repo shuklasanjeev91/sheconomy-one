@@ -255,6 +255,7 @@ export function ShopScreen(
           logoUrl={shop.logo_url}
           description={shop.shop_description}
           verified={shop.verified}
+          ownerVerified={shop.owner?.is_verified}
           reviewSummary={shopReviewSummary}
           hasReviews={hasVisibleReviews(shopReviewSummary)}
           listingsCount={listingsCount}

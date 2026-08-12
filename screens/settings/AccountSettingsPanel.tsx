@@ -1,13 +1,17 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { AppLink } from '~/components/navigation/AppLink'
+import { Share } from 'react-native'
 
-import { Button, ConfirmDialog, Icons, Text, XStack, YStack, useAppToast } from '~/components/ui'
+import { Button, ConfirmDialog, Icons, Spinner, Text, XStack, YStack, useAppToast } from '~/components/ui'
 import { SurfaceCard } from '~/components/layout'
 import { radius } from '~/config/tokens'
 import { SettingsPanel } from '~/components/settings/SettingsPanel'
 import { confirmSensitiveAction } from '~/features/auth/services/confirm-sensitive-action'
 import { useAuth } from '~/hooks/useAuth'
+import { BRAND_NAME } from '~/config/brand'
+import { ensureReferralCode, getInviteShareUrl } from '~/lib/referral/invite'
 import { softDeleteProfile } from '~/lib/profile/profile.service'
+import { copyToClipboard } from '~/lib/platform/clipboard'
 import { appRoutes, routes } from '~/lib/routes'
 import { useAppUi } from '~/lib/theme/useAppUi'
 import { useSupabase } from '~/providers/SupabaseProvider'
@@ -21,6 +25,48 @@ export function AccountSettingsPanel() {
   const [isDeleting, setIsDeleting] = useState(false)
   const [confirmGlobal, setConfirmGlobal] = useState(false)
   const [confirmDelete, setConfirmDelete] = useState(false)
+  const [inviteCode, setInviteCode] = useState<string | null>(null)
+  const [inviteLoading, setInviteLoading] = useState(false)
+
+  useEffect(() => {
+    if (!user?.id) {
+      setInviteCode(null)
+      return
+    }
+    let cancelled = false
+    setInviteLoading(true)
+    void ensureReferralCode(user.id).then((result) => {
+      if (cancelled) return
+      setInviteLoading(false)
+      if (result.code) setInviteCode(result.code)
+    })
+    return () => {
+      cancelled = true
+    }
+  }, [user?.id])
+
+  async function handleShareInvite() {
+    if (!inviteCode) return
+    const url = getInviteShareUrl(inviteCode)
+    const message = `Join me on ${BRAND_NAME} with my invite code ${inviteCode}\n${url}`
+    try {
+      await Share.share({ title: `${BRAND_NAME} invite`, message, url })
+    } catch {
+      const copied = await copyToClipboard(url)
+      toast.show(copied ? 'Invite link copied' : 'Could not share invite', {
+        tone: copied ? 'success' : 'danger',
+      })
+    }
+  }
+
+  async function handleCopyInvite() {
+    if (!inviteCode) return
+    const url = getInviteShareUrl(inviteCode)
+    const copied = await copyToClipboard(url)
+    toast.show(copied ? 'Invite link copied' : 'Could not copy', {
+      tone: copied ? 'success' : 'danger',
+    })
+  }
 
   async function handleSignOut() {
     setIsSigningOut(true)
@@ -89,6 +135,49 @@ export function AccountSettingsPanel() {
 
   return (
     <SettingsPanel title="Account" description="Sign out, delete your account, and manage your profile">
+      <SurfaceCard padding="$4" borderRadius={radius.card} gap="$3">
+        <XStack alignItems="center" gap="$2">
+          <Icons.Gift size={18} color={ui.brand} />
+          <Text fontWeight="700" color={ui.text}>
+            Invite friends
+          </Text>
+        </XStack>
+        <Text fontSize={13} color={ui.textSecondary} lineHeight={19}>
+          Share your personal invite link. Friends who join via your code are linked to your
+          network on {BRAND_NAME}.
+        </Text>
+        {inviteLoading ? (
+          <Spinner size="small" color={ui.brand} />
+        ) : inviteCode ? (
+          <YStack gap="$2">
+            <Text fontSize={12} fontWeight="700" color={ui.textMuted} letterSpacing={0.4}>
+              YOUR CODE
+            </Text>
+            <Text fontSize={20} fontWeight="800" color={ui.text} letterSpacing={1}>
+              {inviteCode}
+            </Text>
+            <XStack gap="$2" flexWrap="wrap">
+              <Button
+                size="$3"
+                tone="primary"
+                borderRadius={999}
+                icon={<Icons.Share2 size={14} />}
+                onPress={() => void handleShareInvite()}
+              >
+                Share invite
+              </Button>
+              <Button size="$3" tone="outline" borderRadius={999} onPress={() => void handleCopyInvite()}>
+                Copy link
+              </Button>
+            </XStack>
+          </YStack>
+        ) : (
+          <Text fontSize={13} color={ui.textMuted}>
+            Sign in to get your invite code.
+          </Text>
+        )}
+      </SurfaceCard>
+
       <SurfaceCard padding="$0" borderRadius={radius.card} overflow="hidden">
         <XStack
           alignItems="center"

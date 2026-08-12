@@ -2,6 +2,7 @@ import { Platform } from 'react-native'
 
 import { Avatar, Button, Icons, Image, Text, XStack, YStack } from '~/components/ui'
 import { ShopActionButtons } from '~/commerce/components/ShopActionButtons'
+import { SellerTrustStrip } from '~/commerce/components/SellerTrustStrip'
 import { StarRating } from '~/commerce/components/StarRating'
 import type { ReviewSummary } from '~/commerce/lib/reviews'
 import { AppLink } from '~/components/navigation/AppLink'
@@ -17,6 +18,7 @@ type ShopHeroProps = {
   logoUrl?: string | null
   description?: string | null
   verified?: boolean
+  ownerVerified?: boolean | null
   reviewSummary?: ReviewSummary
   hasReviews: boolean
   listingsCount: number
@@ -37,6 +39,7 @@ export function ShopHero({
   logoUrl,
   description,
   verified,
+  ownerVerified,
   reviewSummary,
   hasReviews,
   listingsCount,
@@ -207,6 +210,16 @@ export function ShopHero({
               </>
             ) : null}
           </XStack>
+
+          <SellerTrustStrip
+            ui={ui}
+            shopId={shopId}
+            ownerUserId={ownerUserId}
+            shopVerified={verified}
+            ownerVerified={ownerVerified}
+            averageRating={reviewSummary?.averageRating}
+            totalReviews={reviewSummary?.totalReviews}
+          />
 
           {description ? (
             <Text color={ui.textSecondary} fontSize={14} lineHeight={21} numberOfLines={2}>

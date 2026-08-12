@@ -3,6 +3,7 @@ import { useRouter } from 'one'
 
 import { AppLink } from '~/components/navigation/AppLink'
 import { ShopActionButtons } from '~/commerce/components/ShopActionButtons'
+import { SellerTrustStrip } from '~/commerce/components/SellerTrustStrip'
 import { RatingSummary } from '~/commerce/components/RatingSummary'
 import { hasVisibleReviews, type ReviewSummary } from '~/commerce/lib/reviews'
 import { Avatar, Button, Icons, Spinner, Text, XStack, YStack, useAppToast } from '~/components/ui'
@@ -18,6 +19,7 @@ type ListingSellerCardProps = {
   shopSlug: string
   logoUrl?: string | null
   verified?: boolean
+  ownerVerified?: boolean | null
   reviewSummary?: ReviewSummary | null
   ownerUserId?: string | null
   listingsCountHint?: string | null
@@ -30,6 +32,7 @@ export function ListingSellerCard({
   shopSlug,
   logoUrl,
   verified,
+  ownerVerified,
   reviewSummary,
   ownerUserId,
   listingsCountHint,
@@ -107,6 +110,16 @@ export function ListingSellerCard({
           <Icons.ChevronRight size={18} color={ui.textSecondary} />
         </XStack>
       </AppLink>
+
+      <SellerTrustStrip
+        ui={ui}
+        shopId={shopId}
+        ownerUserId={ownerUserId}
+        shopVerified={verified}
+        ownerVerified={ownerVerified}
+        averageRating={reviewSummary?.averageRating}
+        totalReviews={reviewSummary?.totalReviews}
+      />
 
       <XStack gap="$2" flexWrap="wrap" alignItems="center">
         <ShopActionButtons shopId={shopId} ownerUserId={ownerUserId} />
