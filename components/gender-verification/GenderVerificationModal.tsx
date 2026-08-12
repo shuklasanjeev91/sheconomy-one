@@ -10,7 +10,7 @@ import { getShadowStyle, radius } from '~/config/tokens'
 import { BRAND_NAME } from '~/config/brand'
 import { useAppLayout } from '~/hooks/useAppLayout'
 import { useGenderVerification } from '~/hooks/useGenderVerification'
-import { toFriendlyGenderError, HUMAN_VERIFICATION_DISCLAIMER } from '~/lib/gender-verification'
+import { toFriendlyGenderError, HUMAN_VERIFICATION_DISCLAIMER, GENDER_ERROR_CODES, classifyGenderError } from '~/lib/gender-verification'
 import { useAppUi } from '~/lib/theme/useAppUi'
 
 type GenderVerificationModalProps = {
@@ -211,8 +211,25 @@ function VerificationFlow({
     verification.phase !== 'error' &&
     verification.phase !== 'success'
 
+  const softRetrying = 'softRetrying' in verification && verification.softRetrying
   const friendlyError = verification.error ? toFriendlyGenderError(verification.error) : null
+  const errorCode = verification.error ? classifyGenderError(verification.error) : null
+  const errorTitle =
+    errorCode === GENDER_ERROR_CODES.NOT_ELIGIBLE
+      ? 'Access not unlocked'
+      : softRetrying
+        ? 'Retrying…'
+        : 'Let’s try that again'
   const cameraBlocked = 'cameraBlocked' in verification && verification.cameraBlocked
+
+  const primaryLabel =
+    softRetrying || (isRunning && verification.phase === 'loading')
+      ? 'Starting…'
+      : verification.phase === 'idle'
+        ? 'Start verification'
+        : verification.phase === 'error'
+          ? 'Try again'
+          : 'Verification in progress…'
 
   if (verification.phase === 'success') {
     return (
@@ -352,7 +369,7 @@ function VerificationFlow({
               <XStack alignItems="center" gap="$2">
                 <Icons.AlertTriangle size={16} color="#b45309" />
                 <Text fontSize={13} fontWeight="700" color="#b45309">
-                  Let’s try that again
+                  {errorTitle}
                 </Text>
               </XStack>
               <Text color={ui.textSecondary} fontSize={13} lineHeight={19}>
@@ -389,7 +406,7 @@ function VerificationFlow({
               tone="primary"
               size="$4"
               borderRadius={radius.pill}
-              disabled={isRunning || !verification.supported}
+              disabled={isRunning || softRetrying || !verification.supported}
               onPress={() => {
                 void verification.start()
               }}
@@ -399,15 +416,11 @@ function VerificationFlow({
                 ) : undefined
               }
             >
-              {verification.phase === 'idle'
-                ? 'Start verification'
-                : verification.phase === 'error'
-                  ? 'Try again'
-                  : 'Verification in progress…'}
+              {primaryLabel}
             </Button>
           )}
 
-          {verification.phase === 'error' && !cameraBlocked ? (
+          {verification.phase === 'error' && !cameraBlocked && !softRetrying ? (
             <Button tone="outline" size="$4" borderRadius={radius.pill} onPress={verification.reset}>
               Reset
             </Button>

@@ -6,7 +6,7 @@ lives under **`lib/gender-verification/`** (logic) and
 **`components/gender-verification/`** (UI), and the app-wide prompt is mounted
 once in the global shell.
 
-> **TL;DR** — The check runs entirely on the device: a **3-blink MediaPipe**
+> **TL;DR** — The check runs entirely on the device: a **2-blink MediaPipe**
 > liveness test plus a bundled face model for the gender estimate. Only the
 > resulting *scores* are sent to Supabase (never the video). The UI is titled
 > **Human verification** and opens **only on intent** (Community / Chat /
@@ -64,15 +64,16 @@ routes are never interrupted.
 
 ---
 
-## 3. The flow itself (3 blinks, MediaPipe)
+## 3. The flow itself (2 blinks, MediaPipe)
 
 Driven by `useGenderVerification`. The `phase` moves through:
 
 `idle → loading → camera → position → blink → analyze → success | error`
 
-- **`blink`** requires `GENDER_VERIFICATION.requiredBlinks` (**3**) natural blinks,
+- **`blink`** requires `GENDER_VERIFICATION.requiredBlinks` (**2**) natural blinks,
   detected from the eye-aspect-ratio via MediaPipe Face Mesh landmarks.
-- **`analyze`** estimates gender on-device and submits **only scores** to Supabase.
+- **`analyze`** estimates gender on-device across many frames and submits **only scores** to Supabase.
+- Soft failures (lighting / face / liveness) auto-retry once; eligibility failures never loop.
 - The video stream is stopped automatically when the hook unmounts, so closing
   the modal releases the camera.
 

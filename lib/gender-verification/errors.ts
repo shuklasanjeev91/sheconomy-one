@@ -62,6 +62,40 @@ export const GENDER_ERROR_MESSAGES: Record<GenderErrorCode, string> = {
     'Something went wrong during verification. Please try again in a moment.',
 }
 
+/** Short on-camera coaching line — the callout holds the full explanation. */
+export const GENDER_ERROR_INSTRUCTIONS: Record<GenderErrorCode, string> = {
+  [GENDER_ERROR_CODES.IMAGE_TOO_LARGE]: 'Move a little farther from the camera',
+  [GENDER_ERROR_CODES.CAMERA_DENIED]: 'Camera access is needed to continue',
+  [GENDER_ERROR_CODES.CAMERA_UNAVAILABLE]: 'No camera available right now',
+  [GENDER_ERROR_CODES.FACE_NOT_DETECTED]: 'We couldn’t see your face clearly',
+  [GENDER_ERROR_CODES.LIVENESS_FAILED]: 'Liveness check didn’t finish — try again',
+  [GENDER_ERROR_CODES.LOW_CONFIDENCE_RETRY]: 'Need a clearer read — brighter light helps',
+  [GENDER_ERROR_CODES.NOT_ELIGIBLE]: 'Verification didn’t meet the required confidence',
+  [GENDER_ERROR_CODES.SESSION_FAILED]: 'Couldn’t start a secure session',
+  [GENDER_ERROR_CODES.RATE_LIMITED]: 'Too many attempts — wait a moment',
+  [GENDER_ERROR_CODES.NETWORK]: 'Network issue — check your connection',
+  [GENDER_ERROR_CODES.TIMEOUT]: 'That took too long — try again',
+  [GENDER_ERROR_CODES.MODEL_LOAD_FAILED]: 'Couldn’t load verification models',
+  [GENDER_ERROR_CODES.UNKNOWN]: 'Something went wrong — try again',
+}
+
+/** Soft failures that deserve one automatic retry; eligibility failures never auto-loop. */
+export const GENDER_SOFT_RETRY_CODES: ReadonlySet<GenderErrorCode> = new Set([
+  GENDER_ERROR_CODES.LOW_CONFIDENCE_RETRY,
+  GENDER_ERROR_CODES.LIVENESS_FAILED,
+  GENDER_ERROR_CODES.FACE_NOT_DETECTED,
+  GENDER_ERROR_CODES.TIMEOUT,
+  GENDER_ERROR_CODES.NETWORK,
+])
+
+export function isSoftRetryableGenderError(error: unknown): boolean {
+  return GENDER_SOFT_RETRY_CODES.has(classifyGenderError(error))
+}
+
+export function getGenderErrorInstruction(error: unknown): string {
+  return GENDER_ERROR_INSTRUCTIONS[classifyGenderError(error)]
+}
+
 /** A gender-verification error that carries a stable code alongside its message. */
 export class GenderVerificationError extends Error {
   readonly code: GenderErrorCode

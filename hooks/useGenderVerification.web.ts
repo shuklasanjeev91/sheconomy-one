@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 
 import {
   GENDER_ERROR_CODES,
+  GENDER_ERROR_INSTRUCTIONS,
   GENDER_VERIFICATION,
   type FaceTrackingStatus,
   type GenderSample,
@@ -13,6 +14,8 @@ import {
   createGenderVerificationError,
   createGenderVerificationSession,
   detectHumanLivenessFrame,
+  getGenderErrorInstruction,
+  isSoftRetryableGenderError,
   passesAntiSpoof,
   preloadHumanModels,
   summarizeGenderSamples,
@@ -59,6 +62,9 @@ export function useGenderVerification({ onVerified }: UseGenderVerificationOptio
   const samplingModeRef = useRef<'blink' | 'gender'>('blink')
   const extraRoundUsedRef = useRef(false)
   const extraRoundDeadlineRef = useRef(0)
+  const softRetryTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const softRetryUsedRef = useRef(false)
+  const [softRetrying, setSoftRetrying] = useState(false)
 
   /** Keep a bounded window of reads — a long session should not grow unbounded. */
   const pushGenderSample = useCallback((sample: GenderSample) => {
@@ -187,7 +193,7 @@ export function useGenderVerification({ onVerified }: UseGenderVerificationOptio
           submitFailure instanceof Error ? submitFailure.message : 'Verification failed.'
         setError(message)
         setPhase('error')
-        setInstruction(message)
+        setInstruction(getGenderErrorInstruction(submitFailure))
         stopCamera()
         return 'done'
       } finally {
@@ -213,7 +219,7 @@ export function useGenderVerification({ onVerified }: UseGenderVerificationOptio
         })
         if (!loopActiveRef.current || generation !== loopGenerationRef.current) return
 
-        updateEarCalibrator(earCalibratorRef.current, frame.avgEar, 10)
+        updateEarCalibrator(earCalibratorRef.current, frame.avgEar, GENDER_VERIFICATION.earCalibrationSamples)
         const thresholds = thresholdsFromBaseline(
           earCalibratorRef.current.baseline,
           GENDER_VERIFICATION.earBlinkThreshold,
@@ -300,11 +306,19 @@ export function useGenderVerification({ onVerified }: UseGenderVerificationOptio
         if (generation !== loopGenerationRef.current) return
         setError('Face tracking interrupted. Please try again.')
         setPhase('error')
+        setInstruction(GENDER_ERROR_INSTRUCTIONS[GENDER_ERROR_CODES.LIVENESS_FAILED])
         stopCamera()
         return
       }
     }
   }, [analyzeAndSubmit, pushGenderSample, readyToJudgeGender, stopCamera])
+
+  const clearSoftRetryTimer = useCallback(() => {
+    if (softRetryTimerRef.current) {
+      clearTimeout(softRetryTimerRef.current)
+      softRetryTimerRef.current = null
+    }
+  }, [])
 
   const start = useCallback(async () => {
     if (!supported) {
@@ -314,6 +328,8 @@ export function useGenderVerification({ onVerified }: UseGenderVerificationOptio
     }
 
     setError(null)
+    setSoftRetrying(false)
+    clearSoftRetryTimer()
     setPhase('loading')
     setInstruction('Loading secure face models…')
     blinkTrackerRef.current = createBlinkTracker()
@@ -333,6 +349,7 @@ export function useGenderVerification({ onVerified }: UseGenderVerificationOptio
       await preloadHumanModels()
     } catch {
       setError('Could not load face models. Check your connection and retry.')
+      setInstruction(GENDER_ERROR_INSTRUCTIONS[GENDER_ERROR_CODES.MODEL_LOAD_FAILED])
       setPhase('error')
       return
     }
@@ -341,6 +358,7 @@ export function useGenderVerification({ onVerified }: UseGenderVerificationOptio
       await createGenderVerificationSession()
     if (sessionError || !createdSessionId) {
       setError(sessionError ?? 'Could not start verification session.')
+      setInstruction(GENDER_ERROR_INSTRUCTIONS[GENDER_ERROR_CODES.SESSION_FAILED])
       setPhase('error')
       return
     }
@@ -368,18 +386,42 @@ export function useGenderVerification({ onVerified }: UseGenderVerificationOptio
           ? cameraError.message
           : 'Camera permission is required for liveness verification.'
       setError(message)
+      setInstruction(getGenderErrorInstruction(cameraError))
       setPhase('error')
       stopCamera()
     }
-  }, [mountVideo, runDetectionLoop, stopCamera, supported])
+  }, [clearSoftRetryTimer, mountVideo, runDetectionLoop, stopCamera, supported])
+
+  useEffect(() => {
+    if (phase !== 'error' || !error) return
+    if (softRetryUsedRef.current || !isSoftRetryableGenderError(error)) return
+    softRetryUsedRef.current = true
+    setSoftRetrying(true)
+    setInstruction('Trying again with a clearer read…')
+    softRetryTimerRef.current = setTimeout(() => {
+      softRetryTimerRef.current = null
+      void start()
+    }, GENDER_VERIFICATION.softRetryDelayMs)
+    return clearSoftRetryTimer
+  }, [clearSoftRetryTimer, error, phase, start])
+
+  useEffect(
+    () => () => {
+      clearSoftRetryTimer()
+    },
+    [clearSoftRetryTimer],
+  )
 
   const reset = useCallback(() => {
+    clearSoftRetryTimer()
     stopCamera()
     if (videoRef.current) {
       videoRef.current.remove()
       videoRef.current = null
     }
     sessionIdRef.current = null
+    softRetryUsedRef.current = false
+    setSoftRetrying(false)
     setBlinkCount(0)
     setError(null)
     setPhase('idle')
@@ -404,7 +446,7 @@ export function useGenderVerification({ onVerified }: UseGenderVerificationOptio
       realScore: 0,
       facingCamera: false,
     })
-  }, [stopCamera])
+  }, [clearSoftRetryTimer, stopCamera])
 
   return {
     supported,
@@ -414,6 +456,7 @@ export function useGenderVerification({ onVerified }: UseGenderVerificationOptio
     blinkCount,
     requiredBlinks: GENDER_VERIFICATION.requiredBlinks,
     tracking,
+    softRetrying,
     containerRef,
     start,
     reset,

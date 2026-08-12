@@ -55,6 +55,15 @@ export function GenderVerificationScreen() {
     verification.phase !== 'idle' &&
     verification.phase !== 'error' &&
     verification.phase !== 'success'
+  const softRetrying = 'softRetrying' in verification && verification.softRetrying
+
+  const primaryLabel = softRetrying
+    ? 'Starting…'
+    : verification.phase === 'idle'
+      ? 'Start verification'
+      : verification.phase === 'error'
+        ? 'Try again'
+        : 'Verifying…'
 
   return (
     <ScreenFill backgroundColor={ui.background} flex={1} minHeight={0} width="100%">
@@ -183,18 +192,14 @@ export function GenderVerificationScreen() {
                   size="$4"
                   borderRadius={radius.pill}
                   width="100%"
-                  disabled={isRunning || !verification.supported}
+                  disabled={isRunning || softRetrying || !verification.supported}
                   onPress={() => {
                     void verification.start()
                   }}
                 >
-                  {verification.phase === 'idle'
-                    ? 'Start verification'
-                    : verification.phase === 'error'
-                      ? 'Try again'
-                      : 'Verifying…'}
+                  {primaryLabel}
                 </Button>
-                {verification.phase === 'error' ? (
+                {verification.phase === 'error' && !softRetrying ? (
                   <Button tone="outline" size="$4" borderRadius={radius.pill} onPress={verification.reset}>
                     Reset
                   </Button>
