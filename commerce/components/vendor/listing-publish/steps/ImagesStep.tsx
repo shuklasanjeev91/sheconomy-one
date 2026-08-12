@@ -18,6 +18,7 @@ type ImagesStepProps = {
   ui: AppUiTokens
   formData: ListingFormData
   errors: Record<string, string>
+  isDesktop: boolean
   onChangeImages: (images: ListingImageDraft[]) => void
   onApplyAiDraft?: (draft: ListingDraftFromImageResult) => void
 }
@@ -26,6 +27,7 @@ export function ImagesStep({
   ui,
   formData,
   errors,
+  isDesktop,
   onChangeImages,
   onApplyAiDraft,
 }: ImagesStepProps) {
@@ -132,7 +134,7 @@ export function ImagesStep({
             borderStyle="dashed"
             borderColor={ui.borderSubtle}
             borderRadius={16}
-            margin="$5"
+            margin={isDesktop ? '$5' : '$4'}
             minHeight={180}
             cursor="pointer"
             hoverStyle={{ borderColor: ui.brand, backgroundColor: ui.roseSurface }}
@@ -176,7 +178,13 @@ export function ImagesStep({
             </XStack>
           ) : null}
 
-          <XStack gap="$3" flexWrap="wrap" paddingHorizontal="$5" paddingBottom="$5">
+          <XStack
+            gap="$3"
+            flexWrap="wrap"
+            justifyContent={isDesktop ? 'flex-start' : 'space-between'}
+            paddingHorizontal={isDesktop ? '$5' : '$4'}
+            paddingBottom="$5"
+          >
             {images.map((image, index) => (
               <YStack key={`${image.id ?? image.image_url}-${index}`} width={140} gap="$1.5" position="relative">
                 <Image
@@ -236,7 +244,7 @@ export function ImagesStep({
         </ListingPublishCard>
       </YStack>
 
-      <YStack width={280} maxWidth="100%" gap="$3">
+      <YStack width={isDesktop ? 280 : '100%'} maxWidth="100%" gap="$3">
         <ListingPublishCard ui={ui} title="Image Guidelines">
           <YStack gap="$2">
             {LISTING_PUBLISH_COPY.IMAGE_GUIDELINES.map((line) => (

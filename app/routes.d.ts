@@ -206,6 +206,7 @@ declare module 'one' {
         | `/community/people/${OneRouter.SingleRoutePart<T>}`
         | `/community/post/${OneRouter.SingleRoutePart<T>}`
         | `/community/stories/${OneRouter.SingleRoutePart<T>}`
+        | `/invite/${OneRouter.SingleRoutePart<T>}`
         | `/listing/${OneRouter.SingleRoutePart<T>}`
         | `/orders/${OneRouter.SingleRoutePart<T>}`
         | `/profile/${OneRouter.SingleRoutePart<T>}`
@@ -218,6 +219,8 @@ declare module 'one' {
         | `/shop/${OneRouter.SingleRoutePart<T>}/returns`
         | `/shop/${OneRouter.SingleRoutePart<T>}/shipping`
         | `/shop/${OneRouter.SingleRoutePart<T>}/terms`
+        | `/u/${OneRouter.SingleRoutePart<T>}`
+        | `/w/${OneRouter.SingleRoutePart<T>}`
       DynamicRouteTemplate:
         | `/(store)/browse/[kind]`
         | `/(store)/category/[slug]`
@@ -249,6 +252,7 @@ declare module 'one' {
         | `/community/people/[tab]`
         | `/community/post/[id]`
         | `/community/stories/[userId]`
+        | `/invite/[code]`
         | `/listing/[slug]`
         | `/orders/[id]`
         | `/profile/[username]`
@@ -261,6 +265,8 @@ declare module 'one' {
         | `/shop/[slug]/returns`
         | `/shop/[slug]/shipping`
         | `/shop/[slug]/terms`
+        | `/u/[username]`
+        | `/w/[token]`
       IsTyped: true
       RouteTypes: {
         '/(store)/browse/[kind]': RouteInfo<{ kind: string }>
@@ -293,6 +299,7 @@ declare module 'one' {
         '/community/people/[tab]': RouteInfo<{ tab: string }>
         '/community/post/[id]': RouteInfo<{ id: string }>
         '/community/stories/[userId]': RouteInfo<{ userId: string }>
+        '/invite/[code]': RouteInfo<{ code: string }>
         '/listing/[slug]': RouteInfo<{ slug: string }>
         '/orders/[id]': RouteInfo<{ id: string }>
         '/profile/[username]': RouteInfo<{ username: string }>
@@ -305,6 +312,8 @@ declare module 'one' {
         '/shop/[slug]/returns': RouteInfo<{ slug: string }>
         '/shop/[slug]/shipping': RouteInfo<{ slug: string }>
         '/shop/[slug]/terms': RouteInfo<{ slug: string }>
+        '/u/[username]': RouteInfo<{ username: string }>
+        '/w/[token]': RouteInfo<{ token: string }>
       }
     }
   }

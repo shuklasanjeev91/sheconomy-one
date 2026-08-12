@@ -20,12 +20,12 @@ import {
 import {
   getDefaultListingFormData,
   LISTING_STATUS,
+  LISTING_TYPES,
   type ListingFormData,
   type ListingType,
 } from '~/lib/listing/listing.type'
 import { validateListingField } from '~/lib/listing/listing.validation'
 import {
-  initFormForType,
   loadFormFromListing,
   loadListingDetails,
   resetListingFormData,
@@ -45,6 +45,7 @@ import {
   ListingPublishPageHeader,
   ListingPublishStepNav,
 } from '~/commerce/components/vendor/listing-publish/ListingPublishStepNav'
+import { ListingTypeChooser } from '~/commerce/components/vendor/listing-publish/ListingTypeChooser'
 import {
   LISTING_PUBLISH_COPY,
   LISTING_PUBLISH_STEP_IDS,
@@ -54,9 +55,11 @@ import {
 import {
   buildFormFromListingDetails,
   ensureImageBlobsForPublish,
+  findStepForErrors,
   formDataToPublishPayload,
   mergeListingMetadata,
   updateListingMetadataField,
+  validateDraftForm,
   validateFullPublishForm,
   validatePublishStep,
 } from '~/commerce/components/vendor/listing-publish/listing-publish.utils'
@@ -66,6 +69,21 @@ import { DetailsStep } from '~/commerce/components/vendor/listing-publish/steps/
 import { ImagesStep } from '~/commerce/components/vendor/listing-publish/steps/ImagesStep'
 import { PricingStep } from '~/commerce/components/vendor/listing-publish/steps/PricingStep'
 import { SeoStep } from '~/commerce/components/vendor/listing-publish/steps/SeoStep'
+
+/** Empty buffer for a listing type, with the one-row seeds the physical form expects. */
+function seedFormForType(listingType: ListingType, shopId?: string): ListingFormData {
+  const base: ListingFormData = {
+    ...getDefaultListingFormData(listingType),
+    shop_id: shopId,
+    listing_metadata: mergeListingMetadata(undefined),
+  }
+  if (listingType !== LISTING_TYPES.PHYSICAL) return base
+  return {
+    ...base,
+    materials: [{ material_name: '', percentage: null, certification: '' }],
+    variations: [{ variation_name: 'Color', variation_value: '', price_adjustment: 0, stock: 0 }],
+  }
+}
 
 export function VendorListingPublishScreen() {
   return (
@@ -101,14 +119,24 @@ function VendorListingPublishContent() {
   const { currency, currencySymbol } = useVendorCurrency()
 
   const [activeStep, setActiveStep] = useState<ListingPublishStepId>(LISTING_PUBLISH_STEP_IDS.BASIC)
+  // Editing an existing listing unlocks every step; a new listing is walked in order.
+  const [furthestStepIndex, setFurthestStepIndex] = useState(
+    isEditMode ? LISTING_PUBLISH_STEPS.length - 1 : 0,
+  )
   const [stepErrors, setStepErrors] = useState<Record<string, string>>({})
   const [lastSavedAt, setLastSavedAt] = useState<string | null>(null)
   const [hydrated, setHydrated] = useState(!isEditMode)
+  // New listings start on the type chooser; the form is built around that answer.
+  const [typeConfirmed, setTypeConfirmed] = useState(isEditMode)
+  // The form seeds a physical listing, but nothing is "chosen" until the vendor says so.
+  const [typePicked, setTypePicked] = useState(isEditMode)
 
-  const stepConfig = useMemo(
-    () => LISTING_PUBLISH_STEPS.find((step) => step.id === activeStep) ?? LISTING_PUBLISH_STEPS[0],
+  const stepIndex = useMemo(
+    () => Math.max(0, LISTING_PUBLISH_STEPS.findIndex((step) => step.id === activeStep)),
     [activeStep],
   )
+  const stepConfig = LISTING_PUBLISH_STEPS[stepIndex]
+  const isLastStep = stepIndex === LISTING_PUBLISH_STEPS.length - 1
 
   const shopSlug =
     shop?.slug || shop?.shop_name?.toLowerCase().replace(/\s+/g, '-') || 'shop'
@@ -116,17 +144,7 @@ function VendorListingPublishContent() {
   useEffect(() => {
     if (!isEditMode) {
       dispatch(resetListingFormData())
-      dispatch(
-        loadFormFromListing({
-          ...getDefaultListingFormData(),
-          shop_id: shop?.id,
-          listing_metadata: mergeListingMetadata(undefined),
-          materials: [{ material_name: '', percentage: null, certification: '' }],
-          variations: [
-            { variation_name: 'Color', variation_value: '', price_adjustment: 0, stock: 0 },
-          ],
-        }),
-      )
+      dispatch(loadFormFromListing(seedFormForType(LISTING_TYPES.PHYSICAL, shop?.id)))
       setHydrated(true)
       return
     }
@@ -210,11 +228,38 @@ function VendorListingPublishContent() {
 
   const handleChangeType = useCallback(
     (type: ListingType) => {
-      dispatch(initFormForType(type))
-      dispatch(updateListingField({ field: 'shop_id', value: shop?.id }))
+      if (type === formData.listing_type) return
+      // Swap only the type-specific fields — everything the vendor already typed carries over.
+      dispatch(
+        loadFormFromListing({
+          ...seedFormForType(type, shop?.id),
+          title: formData.title,
+          description: formData.description,
+          tags: formData.tags,
+          categories: formData.categories,
+          images: formData.images,
+          price: formData.price,
+          quantity: formData.quantity,
+          is_featured: formData.is_featured,
+          slug: formData.slug,
+          meta_title: formData.meta_title,
+          meta_description: formData.meta_description,
+          listing_metadata: formData.listing_metadata,
+        }),
+      )
       setLastSavedAt(new Date().toISOString())
     },
-    [dispatch, shop?.id],
+    [dispatch, formData, shop?.id],
+  )
+
+  const handleConfirmType = useCallback(
+    (type: ListingType) => {
+      handleChangeType(type)
+      setTypePicked(true)
+      setTypeConfirmed(true)
+      setActiveStep(LISTING_PUBLISH_STEP_IDS.BASIC)
+    },
+    [handleChangeType],
   )
 
   const handleAddTag = useCallback(
@@ -298,18 +343,55 @@ function VendorListingPublishContent() {
     [dispatch, formData],
   )
 
+  const goToStep = useCallback(
+    (step: ListingPublishStepId) => {
+      const target = LISTING_PUBLISH_STEPS.findIndex((entry) => entry.id === step)
+      if (target < 0 || target === stepIndex) return
+      if (target > furthestStepIndex) {
+        toast.show(LISTING_PUBLISH_COPY.STEP_LOCKED, {
+          tone: 'warning',
+          message: `Complete ${stepConfig.label} to continue.`,
+        })
+        return
+      }
+      runStepValidation(activeStep)
+      setActiveStep(step)
+    },
+    [activeStep, furthestStepIndex, runStepValidation, stepConfig.label, stepIndex, toast],
+  )
+
+  const goNext = useCallback(() => {
+    if (isLastStep) return
+    if (!runStepValidation(activeStep)) {
+      toast.show('Fix this step to continue', {
+        tone: 'danger',
+        message: `Complete the required fields in ${stepConfig.label}.`,
+      })
+      return
+    }
+    const next = stepIndex + 1
+    setFurthestStepIndex((current) => Math.max(current, next))
+    setActiveStep(LISTING_PUBLISH_STEPS[next].id)
+  }, [activeStep, isLastStep, runStepValidation, stepConfig.label, stepIndex, toast])
+
+  const goBack = useCallback(() => {
+    if (stepIndex === 0) return
+    setActiveStep(LISTING_PUBLISH_STEPS[stepIndex - 1].id)
+  }, [stepIndex])
+
   const saveDraft = useCallback(async () => {
     if (!shop?.id) {
       toast.show('No shop selected', { tone: 'danger', message: 'Create a shop before adding products.' })
       return
     }
 
-    const full = validateFullPublishForm(formData)
-    if (!full.isValid) {
-      setStepErrors(full.errors)
-      toast.show('Fix validation errors', {
+    const draft = validateDraftForm(formData)
+    if (!draft.isValid) {
+      setStepErrors(draft.errors)
+      setActiveStep(LISTING_PUBLISH_STEP_IDS.BASIC)
+      toast.show('Add a title first', {
         tone: 'danger',
-        message: Object.values(full.errors)[0] ?? 'Please complete required fields.',
+        message: Object.values(draft.errors)[0] ?? 'Please complete required fields.',
       })
       return
     }
@@ -361,6 +443,8 @@ function VendorListingPublishContent() {
     const full = validateFullPublishForm(formData)
     if (!full.isValid) {
       setStepErrors(full.errors)
+      const failingStep = findStepForErrors(full.errors)
+      if (failingStep) setActiveStep(failingStep)
       toast.show('Fix validation errors', {
         tone: 'danger',
         message: Object.values(full.errors)[0] ?? 'Please complete required fields.',
@@ -421,7 +505,26 @@ function VendorListingPublishContent() {
   }
 
   const displayErrors = { ...validation.errors, ...stepErrors }
-  const showPublish = activeStep === LISTING_PUBLISH_STEP_IDS.SEO
+
+  if (!typeConfirmed) {
+    return (
+      <YStack flex={1} minHeight={0} width="100%" backgroundColor={ui.background}>
+        <YStack
+          width="100%"
+          paddingHorizontal={isDesktop ? '$6' : '$3'}
+          paddingTop={isDesktop ? '$5' : '$3'}
+          gap="$4"
+        >
+          <ListingTypeChooser
+            ui={ui}
+            isDesktop={isDesktop}
+            selected={typePicked ? formData.listing_type : undefined}
+            onSelect={handleConfirmType}
+          />
+        </YStack>
+      </YStack>
+    )
+  }
 
   return (
     <YStack
@@ -440,13 +543,15 @@ function VendorListingPublishContent() {
         width="100%"
         minHeight={0}
         showsVerticalScrollIndicator={false}
+        keyboardShouldPersistTaps="handled"
+        keyboardDismissMode={Platform.OS === 'ios' ? 'interactive' : 'on-drag'}
         style={Platform.OS === 'web' ? ({ overflowY: 'auto', minHeight: 0 } as const) : undefined}
       >
         <YStack
           width="100%"
-          maxWidth={1200}
-          alignSelf="center"
-          paddingHorizontal={isDesktop ? '$6' : '$4'}
+          maxWidth="100%"
+          alignSelf="stretch"
+          paddingHorizontal={isDesktop ? '$6' : '$3'}
           paddingTop={isDesktop ? '$5' : '$3'}
           paddingBottom="$6"
           gap="$4"
@@ -461,6 +566,7 @@ function VendorListingPublishContent() {
 
           <ListingPublishPageHeader
             ui={ui}
+            isDesktop={isDesktop}
             headline={stepConfig.headline}
             subtitle={stepConfig.subtitle}
           />
@@ -468,11 +574,9 @@ function VendorListingPublishContent() {
           <ListingPublishStepNav
             ui={ui}
             activeStep={activeStep}
+            furthestStepIndex={furthestStepIndex}
             isDesktop={isDesktop}
-            onSelect={(step) => {
-              runStepValidation(activeStep)
-              setActiveStep(step)
-            }}
+            onSelect={goToStep}
           />
 
           {activeStep === LISTING_PUBLISH_STEP_IDS.BASIC ? (
@@ -480,7 +584,8 @@ function VendorListingPublishContent() {
               ui={ui}
               formData={formData}
               errors={displayErrors}
-              onChangeType={handleChangeType}
+              isDesktop={isDesktop}
+              onEditType={() => setTypeConfirmed(false)}
               onUpdate={updateField}
               onUpdateMetadata={updateMetadata}
               onAddTag={handleAddTag}
@@ -504,6 +609,7 @@ function VendorListingPublishContent() {
               formData={formData}
               errors={displayErrors}
               currencySymbol={currencySymbol}
+              isDesktop={isDesktop}
               onUpdate={updateField}
               onUpdateMetadata={updateMetadata}
             />
@@ -524,6 +630,7 @@ function VendorListingPublishContent() {
               ui={ui}
               formData={formData}
               errors={displayErrors}
+              isDesktop={isDesktop}
               onChangeImages={handleChangeImages}
               onApplyAiDraft={handleApplyAiDraft}
             />
@@ -535,6 +642,7 @@ function VendorListingPublishContent() {
               formData={formData}
               errors={displayErrors}
               shopSlug={shopSlug}
+              isDesktop={isDesktop}
               onUpdate={updateField}
               onUpdateMetadata={updateMetadata}
             />
@@ -549,7 +657,10 @@ function VendorListingPublishContent() {
         lastSavedAt={lastSavedAt}
         isSaving={isSaving}
         isPublishing={publishProgress.isPublishing}
-        showPublish={showPublish}
+        showPublish={isLastStep}
+        isFirstStep={stepIndex === 0}
+        onBack={goBack}
+        onNext={goNext}
         onSaveDraft={() => void saveDraft()}
         onPublish={() => void publishListingNow()}
       />

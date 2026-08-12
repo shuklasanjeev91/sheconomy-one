@@ -33,13 +33,17 @@ export const BULK_IMPORT_CSV_SAMPLE =
 
 export const BULK_IMPORT_ACCEPTED_EXTENSIONS = ['.csv', '.xlsx', '.xls'] as const
 
+/**
+ * Vendor-facing import rules. Service listings are hidden from the vendor UI, so
+ * they are left out of this copy even though the parser still accepts the type
+ * for legacy files.
+ */
 export const BULK_IMPORT_REQUIRED_FIELD_HINTS = [
   'Title must be between 3 and 200 characters',
   'Description is required',
-  'listing_type must be physical, digital, or service',
+  'listing_type must be physical or digital',
   'At least one image_url is required (HTTPS direct link)',
   'At least one material is required for physical products',
   'At least one product variation is required for physical products',
   'digital_file_url is required for digital listings',
-  'booking_duration_minutes is required for service listings',
 ] as const

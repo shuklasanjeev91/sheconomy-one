@@ -192,32 +192,37 @@ async function executeBatch(
 
 // ============= STEP: VALIDATION =============
 
-async function validatePublishingRequirements(publishData: PublishListingData): Promise<StepResult> {
+async function validatePublishingRequirements(
+  publishData: PublishListingData,
+  publishImmediately: boolean,
+): Promise<StepResult> {
   try {
     const userId = await resolveUserId()
     if (!userId) return { success: false, error: 'User not authenticated' }
 
-    // Required base fields.
-    const requiredFields: (keyof PublishListingData)[] = [
-      'shop_id',
-      'title',
-      'description',
-      'listing_type',
-      'price',
-    ]
+    // A draft only needs enough to identify the row; everything else can be
+    // filled in later. Going live requires the full payload.
+    const requiredFields: (keyof PublishListingData)[] = publishImmediately
+      ? ['shop_id', 'title', 'description', 'listing_type', 'price']
+      : ['shop_id', 'title', 'listing_type']
     const missingFields = requiredFields.filter((field) => !publishData[field])
     if (missingFields.length > 0) {
       return { success: false, error: `Missing required fields: ${missingFields.join(', ')}` }
     }
 
-    // At least one image is required to publish.
+    // Shop ownership / admin access.
+    const access = await verifyShopManageAccess(publishData.shop_id as string, userId)
+    if (!access.success) {
+      return { success: false, error: access.error ?? 'Shop not found or access denied' }
+    }
+
     const images = publishData.images
-    if (!Array.isArray(images) || images.length === 0) {
+    if (publishImmediately && (!Array.isArray(images) || images.length === 0)) {
       return { success: false, error: 'At least one image is required to publish a listing' }
     }
 
     // Each image must have either an upload payload (blob) or an existing URL.
-    const invalidImages = images.filter((img) => {
+    const invalidImages = (images ?? []).filter((img) => {
       const hasBlob = Boolean(img.blob) && Boolean(img.mimeType)
       const hasUrl = typeof img.image_url === 'string' && img.image_url.length > 0
       return !(hasBlob || hasUrl)
@@ -229,14 +234,10 @@ async function validatePublishingRequirements(publishData: PublishListingData): 
       }
     }
 
-    // Shop ownership / admin access.
-    const access = await verifyShopManageAccess(publishData.shop_id as string, userId)
-    if (!access.success) {
-      return { success: false, error: access.error ?? 'Shop not found or access denied' }
+    if (publishImmediately) {
+      const typeValidation = validateListingTypeRequirements(publishData)
+      if (!typeValidation.success) return typeValidation
     }
-
-    const typeValidation = validateListingTypeRequirements(publishData)
-    if (!typeValidation.success) return typeValidation
 
     return { success: true, user_id: userId, validation_passed: true }
   } catch (error) {
@@ -634,7 +635,7 @@ export const listingPublishOrchestrator = {
         {
           step: PUBLISH_STEPS.VALIDATION,
           run: async () => {
-            const result = await validatePublishingRequirements(publishData)
+            const result = await validatePublishingRequirements(publishData, publishImmediately)
             if (result.success) userId = (result.user_id as string) ?? null
             return result
           },
@@ -647,7 +648,17 @@ export const listingPublishOrchestrator = {
         {
           step: PUBLISH_STEPS.IMAGES,
           critical: true,
-          run: () => processListingImages(publishResult.listing_id as string, publishData.images, userId),
+          run: async () => {
+            // An image-less draft is legitimate — only publishing demands one.
+            if (!publishData.images?.length) {
+              return { success: true, images_processed: 0 }
+            }
+            return processListingImages(
+              publishResult.listing_id as string,
+              publishData.images,
+              userId,
+            )
+          },
         },
         {
           step: PUBLISH_STEPS.CATEGORIES,

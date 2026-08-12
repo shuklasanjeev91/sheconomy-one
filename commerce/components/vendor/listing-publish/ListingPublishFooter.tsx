@@ -15,6 +15,9 @@ type ListingPublishFooterProps = {
   isSaving: boolean
   isPublishing: boolean
   showPublish: boolean
+  isFirstStep: boolean
+  onBack: () => void
+  onNext: () => void
   onSaveDraft: () => void
   onPublish?: () => void
 }
@@ -27,6 +30,9 @@ export function ListingPublishFooter({
   isSaving,
   isPublishing,
   showPublish,
+  isFirstStep,
+  onBack,
+  onNext,
   onSaveDraft,
   onPublish,
 }: ListingPublishFooterProps) {
@@ -52,11 +58,24 @@ export function ListingPublishFooter({
       flexShrink={0}
       style={getShadowStyle('md')}
     >
-      <AppLink href={vendorRoutes.products} asChild>
-        <Button tone="ghost" size="$3" borderRadius={999} disabled={busy}>
-          {LISTING_PUBLISH_COPY.CANCEL_CHANGES}
+      {isFirstStep ? (
+        <AppLink href={vendorRoutes.products} asChild>
+          <Button tone="ghost" size="$3" borderRadius={999} disabled={busy}>
+            {LISTING_PUBLISH_COPY.CANCEL_CHANGES}
+          </Button>
+        </AppLink>
+      ) : (
+        <Button
+          tone="ghost"
+          size="$3"
+          borderRadius={999}
+          disabled={busy}
+          onPress={onBack}
+          icon={<Icons.ArrowLeft size={16} color={ui.text} />}
+        >
+          {LISTING_PUBLISH_COPY.BACK}
         </Button>
-      </AppLink>
+      )}
 
       <Text
         fontSize={12}
@@ -71,29 +90,41 @@ export function ListingPublishFooter({
       </Text>
 
       <XStack gap="$2" alignItems="center" flexShrink={0}>
-        {showPublish ? (
-          <Button
-            tone="outline"
-            size="$4"
-            borderRadius={999}
-            disabled={busy}
-            onPress={onSaveDraft}
-            icon={isSaving ? <Spinner size="small" /> : undefined}
-          >
-            {LISTING_PUBLISH_COPY.SAVE_DRAFT}
-          </Button>
-        ) : null}
         <Button
-          tone="primary"
+          tone="outline"
           size="$4"
           borderRadius={999}
           disabled={busy}
-          onPress={showPublish && onPublish ? onPublish : onSaveDraft}
-          icon={busy ? <Spinner size="small" color="white" /> : undefined}
-          minWidth={showPublish ? 120 : 160}
+          onPress={onSaveDraft}
+          icon={isSaving ? <Spinner size="small" /> : undefined}
         >
-          {showPublish ? LISTING_PUBLISH_COPY.PUBLISH : LISTING_PUBLISH_COPY.SAVE_DRAFT}
+          {LISTING_PUBLISH_COPY.SAVE_DRAFT}
         </Button>
+        {showPublish ? (
+          <Button
+            tone="primary"
+            size="$4"
+            borderRadius={999}
+            disabled={busy}
+            onPress={onPublish}
+            icon={busy ? <Spinner size="small" color="white" /> : undefined}
+            minWidth={120}
+          >
+            {LISTING_PUBLISH_COPY.PUBLISH}
+          </Button>
+        ) : (
+          <Button
+            tone="primary"
+            size="$4"
+            borderRadius={999}
+            disabled={busy}
+            onPress={onNext}
+            iconAfter={<Icons.ArrowRight size={16} color="white" />}
+            minWidth={120}
+          >
+            {LISTING_PUBLISH_COPY.NEXT}
+          </Button>
+        )}
       </XStack>
     </XStack>
   )
