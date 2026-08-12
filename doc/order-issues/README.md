@@ -153,14 +153,13 @@ import { OrderIssueErrorBoundary } from '~/commerce/components/OrderIssueErrorBo
 
 ---
 
-## 7. Deferred: issue comments
+## 7. Issue comments
 
-The legacy `addIssueComment` stored a JSON array in `order_issues.admin_notes`.
-The modern schema has **no** `admin_notes` column and there is no
-`order_issue_comments` table, so the comment thread has no home yet. It's
-intentionally **deferred** (same approach we used for `shopSectionsService`).
-When a comments table lands, add `getIssueComments` / `addIssueComment` to the
-service + a thunk here — everything else is ready.
+Comment threads live in `order_issue_comments` (buyer / vendor / admin participants).
 
-Also note: the legacy `logger`/`console` noise and `error-codes.js` map were not
-migrated (we reuse the shared `toFriendlyOrderError`).
+Use `getIssueComments` / `addIssueComment` from the service, or the Redux thunks
+`fetchIssueComments` / `postIssueComment`. UI: `OrderIssueCommentsThread` on buyer
+order detail and the vendor issue drawer.
+
+Resolution notes on status changes remain for formal accept/reject messaging;
+ongoing discussion should use the comment thread.

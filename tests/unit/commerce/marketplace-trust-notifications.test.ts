@@ -57,4 +57,33 @@ describe('marketplace trust notification deep links', () => {
       }),
     ).toBeNull()
   })
+
+  it('routes customer shipment updates to order detail', () => {
+    const orderId = '66666666-6666-6666-6666-666666666666'
+    expect(
+      resolveMarketplaceTrustNotificationPath({
+        type: 'order_shipped_customer',
+        contextType: 'order',
+        contextId: orderId,
+      }),
+    ).toBe(commerceRoutes.order(orderId))
+    expect(
+      resolveMarketplaceTrustNotificationPath({
+        type: 'delivery_failed_customer',
+        contextType: 'order',
+        contextId: orderId,
+        actionUrl: `/orders/${orderId}`,
+      }),
+    ).toBe(`/orders/${orderId}`)
+  })
+
+  it('routes seller delivery updates to vendor orders', () => {
+    expect(
+      resolveMarketplaceTrustNotificationPath({
+        type: 'order_delivered_seller',
+        contextType: 'order_delivery',
+        contextId: '77777777-7777-7777-7777-777777777777',
+      }),
+    ).toBe(vendorRoutes.orders)
+  })
 })

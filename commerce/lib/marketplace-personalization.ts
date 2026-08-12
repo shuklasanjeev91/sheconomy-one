@@ -34,6 +34,8 @@ export type MarketplaceSignals = {
   trendingIds: ReadonlySet<string>
   bestsellerRank: ReadonlyMap<string, number>
   orderCounts: ReadonlyMap<string, number>
+  interests: readonly string[]
+  memberIntents: readonly string[]
 }
 
 export type ListingBadgeKind =
@@ -150,6 +152,31 @@ function getNearYouLabel(listing: EnrichedListingSummary, geo: UserGeo): string 
   return null
 }
 
+function listingInterestHaystack(listing: EnrichedListingSummary) {
+  return [
+    listing.title,
+    listing.card_title,
+    listing.category,
+    listing.shop_name,
+  ]
+    .filter(Boolean)
+    .join(' ')
+    .toLowerCase()
+}
+
+function interestScore(listing: EnrichedListingSummary, interests: readonly string[]) {
+  if (!interests.length) return 0
+  const haystack = listingInterestHaystack(listing)
+  if (!haystack) return 0
+  let hits = 0
+  for (const interest of interests) {
+    const token = interest.trim().toLowerCase()
+    if (token.length >= 3 && haystack.includes(token)) hits += 1
+  }
+  if (hits === 0) return 0
+  return Math.min(35, 18 + hits * 6)
+}
+
 export function scoreListing(
   listing: EnrichedListingSummary,
   signals: MarketplaceSignals,
@@ -159,6 +186,11 @@ export function scoreListing(
   if (signals.cartListingIds.has(listing.id)) score += 60
   if (signals.favoriteListingIds.has(listing.id)) score += 45
   if (signals.searchQuery && listingMatchesSearch(listing, signals.searchQuery)) score += 40
+
+  score += interestScore(listing, signals.interests ?? [])
+  if ((signals.memberIntents ?? []).includes('shopping') && listing.listing_type !== 'digital') {
+    score += 6
+  }
 
   const bestsellerRank = signals.bestsellerRank.get(listing.id)
   if (bestsellerRank != null) {
@@ -218,6 +250,11 @@ export function resolveListingBadge(
     candidates.push({
       badge: { kind: 'picked_for_you', label: 'Saved for you', tone: 'accent' },
       priority: 94,
+    })
+  } else if (interestScore(listing, signals.interests ?? []) > 0) {
+    candidates.push({
+      badge: { kind: 'picked_for_you', label: 'Matches your interests', tone: 'accent' },
+      priority: 90,
     })
   }
 

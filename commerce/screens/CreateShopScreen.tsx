@@ -44,6 +44,7 @@ import {
 } from '~/lib/shop/shop.validation'
 import { persistStorage } from '~/lib/store/storage'
 import { useAppDispatch, useAppSelector } from '~/lib/store/hooks'
+import { supabase } from '~/lib/supabase/client'
 import { useAppUi } from '~/lib/theme/useAppUi'
 import { useUnsavedChangesGuard } from '~/hooks/useUnsavedChangesGuard'
 
@@ -409,18 +410,41 @@ export function CreateShopScreen() {
     try {
       await dispatch(createShop({ formData, userId: user.id })).unwrap()
 
-      // Promote the account to a vendor, mirroring the legacy create-shop flow.
-      // Admins keep their elevated role — opening a shop shouldn't demote them.
+      // DB trigger promotes owner to V; client update remains an idempotent fallback.
       if (profile?.role !== USER_ROLES.ADMIN) {
         try {
           await dispatch(
             updateProfile({ userId: user.id, updates: { role: USER_ROLES.VENDOR } }),
           ).unwrap()
         } catch {
-          // Non-fatal: the create RPC may already set the role server-side.
+          // Non-fatal when the insert trigger already set the role.
         }
       }
+
+      // Ensure profile cache reflects V before navigating into RequireVendorRole.
       refreshProfiles()
+      const { data: roleRow } = await supabase
+        .from('profiles')
+        .select('role')
+        .eq('id', user.id)
+        .maybeSingle()
+      const role = (roleRow as { role?: string | null } | null)?.role
+      if (profile?.role !== USER_ROLES.ADMIN && role !== USER_ROLES.VENDOR && role !== USER_ROLES.ADMIN) {
+        try {
+          await dispatch(
+            updateProfile({ userId: user.id, updates: { role: USER_ROLES.VENDOR } }),
+          ).unwrap()
+          refreshProfiles()
+        } catch {
+          hasSubmittedRef.current = false
+          toast.show('Shop created, but vendor access is not ready yet', {
+            tone: 'warning',
+            message: 'Open Manage shop from the menu in a moment, or refresh and try again.',
+          })
+          setIsSubmitting(false)
+          return
+        }
+      }
 
       await persistStorage.removeItem(DRAFT_STORAGE_KEY)
       toast.show('Shop created', { tone: 'success', message: 'Your storefront is live.' })

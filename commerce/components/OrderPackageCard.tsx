@@ -5,7 +5,7 @@ import {
   deliveryNoteFromMetadata,
   formatEstimatedDelivery,
 } from '~/commerce/lib/customer-order-lifecycle'
-import { DELIVERY_STATUS_DISPLAY, type DeliveryStatus } from '~/lib/orders/order.constants'
+import { DELIVERY_STATUS_DISPLAY, DELIVERY_STATUS_PROGRESS, type DeliveryStatus } from '~/lib/orders/order.constants'
 import { openExternalUrl } from '~/lib/platform/openUrl'
 import { useAppUi } from '~/lib/theme/useAppUi'
 
@@ -21,6 +21,8 @@ export function OrderPackageCard({ shipment, index = 0, embedded = false }: Orde
   const toast = useAppToast()
   const statusDisplay =
     DELIVERY_STATUS_DISPLAY[shipment.delivery_status as DeliveryStatus] ?? null
+  const progress =
+    DELIVERY_STATUS_PROGRESS[shipment.delivery_status as DeliveryStatus] ?? 0
   const note = deliveryNoteFromMetadata(shipment.delivery_metadata)
   const eta = formatEstimatedDelivery(shipment.estimated_delivery_date)
 
@@ -65,6 +67,28 @@ export function OrderPackageCard({ shipment, index = 0, embedded = false }: Orde
           Tracking number pending
         </Text>
       )}
+
+      {progress > 0 ? (
+        <YStack gap={6}>
+          <XStack
+            height={6}
+            borderRadius={999}
+            backgroundColor={ui.surfaceMuted}
+            overflow="hidden"
+            width="100%"
+          >
+            <YStack
+              height="100%"
+              width={`${Math.max(4, Math.min(100, progress))}%`}
+              backgroundColor={ui.brand}
+              borderRadius={999}
+            />
+          </XStack>
+          <Text fontSize={11} color={ui.textMuted}>
+            {progress}% · {statusDisplay?.description ?? 'Shipment update'}
+          </Text>
+        </YStack>
+      ) : null}
 
       {eta ? (
         <Text fontSize={12} color={ui.textSecondary}>

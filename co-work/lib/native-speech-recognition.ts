@@ -1,4 +1,5 @@
-import { isNativeRuntime } from '~/lib/platform/capabilities'
+import { hasSpeechRecognition, isNativeRuntime } from '~/lib/platform/capabilities'
+import { createWebSpeechSession } from '~/co-work/lib/web-speech-recognition'
 
 export type NativeSpeechHandlers = {
   onPartial?: (text: string) => void
@@ -13,14 +14,15 @@ export type NativeSpeechSession = {
   destroy: () => Promise<void>
 }
 
-/** Web: native Voice module is unavailable. */
+/** Web: SpeechRecognition when available; native Voice lives in `.native.ts`. */
 export function isNativeSpeechRecognitionAvailable() {
-  return false
+  if (isNativeRuntime()) return false
+  return hasSpeechRecognition()
 }
 
 export async function createNativeSpeechSession(
-  _handlers: NativeSpeechHandlers,
+  handlers: NativeSpeechHandlers,
 ): Promise<NativeSpeechSession | null> {
-  if (!isNativeRuntime()) return null
-  return null
+  if (isNativeRuntime()) return null
+  return createWebSpeechSession(handlers)
 }

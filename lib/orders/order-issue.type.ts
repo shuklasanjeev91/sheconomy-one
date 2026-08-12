@@ -5,7 +5,7 @@
  * is leaner than the legacy one: `subject`→`issue_title`, `priority`→
  * `issue_priority`, `attachments`→`evidence_urls`; there is no
  * `contact_information` or `admin_notes`/comments storage (see the service +
- * doc for the deferred comment feature).
+ * doc). Comment threads live in `order_issue_comments`.
  */
 
 import type { Tables, TablesInsert, TablesUpdate } from '~/lib/supabase'
@@ -20,6 +20,21 @@ export type { OrderServiceResponse }
 export type OrderIssue = Tables<'order_issues'>
 export type OrderIssueInsert = TablesInsert<'order_issues'>
 export type OrderIssueUpdate = TablesUpdate<'order_issues'>
+
+/** Flat comment on an order issue (pending full database.types regen). */
+export type OrderIssueComment = {
+  id: string
+  issue_id: string
+  author_id: string
+  body: string
+  created_at: string
+  updated_at: string
+  author?: {
+    id: string
+    full_name?: string | null
+    avatar_url?: string | null
+  } | null
+}
 
 // ============= JOINED / ENRICHED =============
 

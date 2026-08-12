@@ -300,14 +300,18 @@ export function ShepayEasyConnect({
     <YStack gap="$4" width="100%">
       <YStack gap="$1">
         <Text fontSize={17} fontWeight="800" color={ui.text} letterSpacing={-0.2}>
-          {connected ? 'Update your PayU details' : 'Enter your PayU details'}
+          {connected
+            ? PAYMENT_UI_COPY.finishSetupCta
+            : PAYMENT_UI_COPY.shepayExistingTitle}
         </Text>
         <Text fontSize={13} color={ui.textSecondary} lineHeight={20}>
-          Just two fields from your PayU account. Everything else is handled for you.
+          {connected
+            ? PAYMENT_UI_COPY.statusIncompleteBody
+            : 'Enter your PayU child merchant key and Child MID for SHEPay split payouts.'}
         </Text>
       </YStack>
 
-      <Field label="Merchant key" error={fieldErrors.merchant_key}>
+      <Field label="Child merchant key" error={fieldErrors.merchant_key}>
         <XStack alignItems="center" position="relative">
           <Input
             flex={1}
@@ -322,7 +326,7 @@ export function ShepayEasyConnect({
                 })
               }
             }}
-            placeholder="Paste merchant key"
+            placeholder="PayU child merchant key"
             autoCapitalize="none"
             autoCorrect={false}
             secureTextEntry={!revealKey}
@@ -340,9 +344,12 @@ export function ShepayEasyConnect({
             )}
           </YStack>
         </XStack>
+        <Text fontSize={11} color={ui.textMuted} marginTop="$1">
+          From your PayU Sub-Account for SHEPay split payouts.
+        </Text>
       </Field>
 
-      <Field label="MID" error={fieldErrors.child_mid}>
+      <Field label="Child MID" error={fieldErrors.child_mid}>
         <Input
           value={childMid}
           onChangeText={(value) => {
@@ -355,11 +362,14 @@ export function ShepayEasyConnect({
               })
             }
           }}
-          placeholder="Paste MID number"
+          placeholder="PayU Child MID"
           autoCapitalize="none"
           autoCorrect={false}
           keyboardType="number-pad"
         />
+        <Text fontSize={11} color={ui.textMuted} marginTop="$1">
+          Required to release holds and settle new orders to your bank.
+        </Text>
       </Field>
 
       <Button

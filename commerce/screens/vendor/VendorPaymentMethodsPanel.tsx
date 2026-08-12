@@ -162,18 +162,31 @@ export function VendorPaymentMethodsPanel({
             <YStack flex={1} gap="$0.5" minWidth={0}>
               <Text fontSize={18} fontWeight="800" color={ui.text} letterSpacing={-0.3}>
                 {isReady
-                  ? 'You’re all set to get paid'
+                  ? PAYMENT_UI_COPY.statusReadyTitle
                   : status === 'incomplete'
-                    ? 'Almost done'
-                    : 'Get paid for your orders'}
+                    ? PAYMENT_UI_COPY.statusIncompleteTitle
+                    : PAYMENT_UI_COPY.statusNeededTitle}
               </Text>
               <Text fontSize={13} color={ui.textSecondary} lineHeight={19}>
                 {isReady
-                  ? 'Money from online orders goes to your PayU account after each sale.'
-                  : 'Add your PayU merchant key and MID below. Buyers can already shop — payouts wait safely until you’re connected.'}
+                  ? PAYMENT_UI_COPY.statusReadyBody
+                  : status === 'incomplete'
+                    ? PAYMENT_UI_COPY.statusIncompleteBody
+                    : PAYMENT_UI_COPY.statusNeededBody}
               </Text>
             </YStack>
           </XStack>
+
+          <YStack gap="$1.5" marginTop="$2">
+            <Text fontSize={12} fontWeight="700" color={ui.textMuted}>
+              {PAYMENT_UI_COPY.howItWorksTitle}
+            </Text>
+            {PAYMENT_UI_COPY.howItWorksSteps.map((step) => (
+              <Text key={step} fontSize={12} color={ui.textSecondary} lineHeight={17}>
+                · {step}
+              </Text>
+            ))}
+          </YStack>
 
           {heldTotal > 0 ? (
             <YStack
@@ -184,7 +197,7 @@ export function VendorPaymentMethodsPanel({
               backgroundColor={isReady ? '#FFFBEB' : ui.roseSurface}
             >
               <Text fontSize={12} fontWeight="700" color={ui.text}>
-                Waiting for you
+                {PAYMENT_UI_COPY.heldTitle}
               </Text>
               <Text fontSize={22} fontWeight="800" color={ui.text} letterSpacing={-0.4}>
                 ₹
@@ -194,9 +207,7 @@ export function VendorPaymentMethodsPanel({
                 })}
               </Text>
               <Text fontSize={12} color={ui.textMuted} lineHeight={17}>
-                {isReady
-                  ? 'We’re sending this to your PayU account now.'
-                  : 'This transfers automatically once you save your PayU details.'}
+                {isReady ? PAYMENT_UI_COPY.settlementsHint : PAYMENT_UI_COPY.heldHint}
               </Text>
             </YStack>
           ) : null}
@@ -216,7 +227,7 @@ export function VendorPaymentMethodsPanel({
             <ShepayEasyConnect
               ui={ui}
               shopId={shopId}
-              connected={isReady}
+              connected={status !== 'needed'}
               embedded
               onConnected={() => {
                 setShowUpdateForm(false)

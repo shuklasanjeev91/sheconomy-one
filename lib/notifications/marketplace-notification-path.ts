@@ -57,5 +57,39 @@ export function resolveMarketplaceTrustNotificationPath(
     if (contextId) return commerceRoutes.listing(contextId)
   }
 
+  // Delivery / courier auto-tracking (customer + vendor)
+  if (
+    type === 'order_shipped_customer' ||
+    type === 'order_item_shipped_customer' ||
+    type === 'order_out_for_delivery_customer' ||
+    type === 'order_in_transit_customer' ||
+    type === 'order_delivered_customer' ||
+    type === 'delivery_failed_customer' ||
+    type === 'order_review_prompt_customer' ||
+    (type.includes('delivery') && type.includes('customer')) ||
+    (type.includes('shipped') && type.includes('customer')) ||
+    (type.includes('out_for_delivery') && type.includes('customer')) ||
+    (type.includes('review_prompt') && type.includes('customer'))
+  ) {
+    if (fromUrl && fromUrl.startsWith('/orders')) return fromUrl
+    if (contextId && (contextType === 'order' || contextType === 'order_delivery' || type.includes('order'))) {
+      return commerceRoutes.order(contextId)
+    }
+    return commerceRoutes.orders
+  }
+
+  if (
+    type === 'order_shipped_seller' ||
+    type === 'order_item_shipped_seller' ||
+    type === 'order_out_for_delivery_seller' ||
+    type === 'order_in_transit_seller' ||
+    type === 'order_delivered_seller' ||
+    type === 'delivery_failed_seller' ||
+    (type.includes('delivery') && type.includes('seller')) ||
+    (type.includes('shipped') && type.includes('seller'))
+  ) {
+    return fromUrl && fromUrl.startsWith('/vendor') ? fromUrl : vendorRoutes.orders
+  }
+
   return null
 }

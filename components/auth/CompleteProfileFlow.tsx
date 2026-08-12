@@ -31,6 +31,8 @@ import {
   markOnboardingCompleted,
   refreshCompletionPercentage,
   resolveOnboardingSteps,
+  resolvePostOnboardingHref,
+  shouldOfferContactsAfterOnboarding,
   updateOnboardingBasics,
   updateOnboardingIntents,
   updateOnboardingInterests,
@@ -85,6 +87,7 @@ export function CompleteProfileFlow({ returnTo, isNewUser }: CompleteProfileFlow
   const [suggestOpen, setSuggestOpen] = useState(false)
   const [pendingSuggest, setPendingSuggest] = useState<ContactProfileSuggestion | null>(null)
   const [showNetworkContacts, setShowNetworkContacts] = useState(false)
+  const [postOnboardingHref, setPostOnboardingHref] = useState<string | null>(null)
 
   const [fullName, setFullName] = useState('')
   const [avatarUrl, setAvatarUrl] = useState<string | null>(null)
@@ -165,20 +168,33 @@ export function CompleteProfileFlow({ returnTo, isNewUser }: CompleteProfileFlow
     setStepIndex((i) => Math.max(0, Math.min(steps.length - 1, i + delta)))
   }
 
-  async function finishOnboarding(options?: { goToShop?: boolean; offerContacts?: boolean }) {
+  async function finishOnboarding(options?: {
+    goToShop?: boolean
+    intents?: string[]
+  }) {
     if (!user?.id) return
     await markOnboardingCompleted(user.id)
     if (options?.goToShop) {
       replaceApp(commerceRoutes.createShop)
       return
     }
-    if (options?.offerContacts && isContactProfileSuggestSupported()) {
+
+    const savedIntents = options?.intents ?? intents
+    const destination = resolvePostOnboardingHref(savedIntents, returnTo)
+    setPostOnboardingHref(destination)
+
+    if (
+      shouldOfferContactsAfterOnboarding(savedIntents, returnTo) &&
+      isContactProfileSuggestSupported()
+    ) {
       setShowNetworkContacts(true)
       return
     }
-    await completeSignIn(returnTo, {
+
+    // Intent hubs (class/community/jobs/shop) skip the new-user contacts interrupt.
+    await completeSignIn(destination, {
       skipOnboardingGate: true,
-      isNewUser: Boolean(isNewUser),
+      isNewUser: false,
     })
   }
 
@@ -243,7 +259,7 @@ export function CompleteProfileFlow({ returnTo, isNewUser }: CompleteProfileFlow
         return
       }
       setBusy(false)
-      await finishOnboarding({ offerContacts: true })
+      await finishOnboarding({ intents })
       return
     }
 
@@ -377,7 +393,13 @@ export function CompleteProfileFlow({ returnTo, isNewUser }: CompleteProfileFlow
           tone="primary"
           size="$4"
           borderRadius={999}
-          onPress={() => navigateApp(appRoutes.importContacts)}
+          onPress={() => {
+            const dest = postOnboardingHref ?? returnTo ?? ''
+            const href = dest
+              ? `${String(appRoutes.importContacts)}?returnTo=${encodeURIComponent(dest)}`
+              : String(appRoutes.importContacts)
+            navigateApp(href)
+          }}
         >
           Select contacts
         </Button>
@@ -386,7 +408,7 @@ export function CompleteProfileFlow({ returnTo, isNewUser }: CompleteProfileFlow
           size="$4"
           borderRadius={999}
           onPress={() =>
-            void completeSignIn(returnTo, {
+            void completeSignIn(postOnboardingHref ?? returnTo, {
               skipOnboardingGate: true,
               isNewUser: Boolean(isNewUser),
             })

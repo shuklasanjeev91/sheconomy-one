@@ -81,6 +81,9 @@ Providers (auto status for any courier the vendor picks):
 3. **TrackingMore** (`TRACKINGMORE_API_KEY`) — fallback aggregator
 4. Always stores a **public courier track URL** for the buyer
 
+Status changes notify **customer and vendor** via `notify_delivery_status_change`
+(templates seeded in `20260812122000_delivery_notify_customer_and_vendor.sql`).
+
 **Model:** vendors book and dispatch themselves (no managed SHEDelivery). SHEPay uses PayU split — **0% SHEconomy commission**.
 
 Optional direct secrets: `DELHIVERY_API_TOKEN`, `DTDC_API_KEY`, `XPRESSBEES_TOKEN`, BlueDart / Ecom Express keys, `SHIPROCKET_*` (for tracking Shiprocket AWBs only).

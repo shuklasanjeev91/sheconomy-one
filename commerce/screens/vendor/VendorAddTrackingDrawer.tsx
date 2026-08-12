@@ -391,7 +391,7 @@ function TrackingForm({ ui, item, submitting, onClose, onSubmit }: TrackingFormP
               Notify customer
             </Text>
             <Text fontSize={12} color={ui.textMuted} lineHeight={17}>
-              Send updates when shipped and as the courier advances the package.
+              Customer and you both get notified when the courier advances this package.
             </Text>
           </YStack>
           <Switch checked={notifyCustomer} onCheckedChange={setNotifyCustomer} />

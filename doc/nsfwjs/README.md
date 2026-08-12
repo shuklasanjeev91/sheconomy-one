@@ -1,13 +1,15 @@
 # NSFW Image Classifier
 
-Browser-only NSFW (Not-Safe-For-Work) image classifier, migrated 1:1 from the
-legacy `lib/nsfwjs/nsfw-classifier.js`. It runs a pre-trained TensorFlow.js
-model **entirely in the browser** to screen listing images before they are
-uploaded. Nothing is sent to a server for analysis.
+Listing image moderation before upload.
+
+- **Web:** on-device TensorFlow.js (`nsfw-classifier` + `public/nsfwjs-model/`).
+- **Native (iOS/Android):** server-side via `ai-assist` `moderate_image`
+  (`listing-image-moderator.native.ts` / `nsfw-classifier.native.ts`). Fail-closed
+  when the edge moderator is unavailable.
 
 This module is wired into the listing image pipeline
 (`~/lib/listing/listing-images.service`) so every image upload is checked
-automatically on web. On native it is a no-op (fail-open).
+automatically on web and native.
 
 ---
 

@@ -14,6 +14,7 @@ import { openExternalUrl, safeHttpUrl } from '~/lib/platform/openUrl'
 import type { AppUiTokens } from '~/lib/theme/app-ui'
 
 import { IssuePriorityBadge, IssueStatusBadge } from '~/commerce/components/vendor/IssueStatusBadge'
+import { OrderIssueCommentsThread } from '~/commerce/components/OrderIssueCommentsThread'
 import { VendorActionButton } from '~/commerce/components/vendor/VendorActionButton'
 import {
   VendorDrawerRow,
@@ -196,6 +197,14 @@ export function VendorOrderIssueDetailDrawer({
             {formatOrderDate(issue.created_at, true)}
           </Text>
         </XStack>
+      </VendorDrawerSection>
+
+      <VendorDrawerSection ui={ui} label="Conversation">
+        <OrderIssueCommentsThread
+          ui={ui}
+          issueId={issue.id}
+          resolutionNote={issue.resolution_note}
+        />
       </VendorDrawerSection>
 
       {evidence.length > 0 ? (
