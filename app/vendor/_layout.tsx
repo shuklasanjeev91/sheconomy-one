@@ -28,7 +28,8 @@ const TOPBAR_HEIGHT = 60
 
 export function VendorLayout() {
   const ui = useAppUi()
-  const { isDesktop, safeTop, safeBottom, desktopHeaderHeight } = useAppLayout()
+  // No `safeTop` here — AppShell already wraps routes in a top SafeAreaView.
+  const { isDesktop, safeBottom, desktopHeaderHeight } = useAppLayout()
   const router = useRouter()
   const pathname = usePathname()
   const dispatch = useAppDispatch()
@@ -113,7 +114,6 @@ export function VendorLayout() {
             {!isDesktop ? (
               <XStack
                 minHeight={TOPBAR_HEIGHT}
-                paddingTop={Platform.OS !== 'web' ? safeTop : 0}
                 paddingHorizontal="$4"
                 alignItems="center"
                 gap="$3"
@@ -201,7 +201,7 @@ export function VendorLayout() {
               animation="quick"
               enterStyle={{ x: Platform.OS === 'web' ? -DRAWER_WIDTH : -40 }}
             >
-              <YStack paddingTop={Platform.OS !== 'web' ? safeTop : 0} flex={1} minHeight={0}>
+              <YStack flex={1} minHeight={0}>
                 <VendorSidebar
                   ui={ui}
                   collapsed={false}

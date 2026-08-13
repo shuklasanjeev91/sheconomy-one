@@ -5,7 +5,7 @@ import { Dialog as TDialog, styled, XStack } from 'tamagui'
 import * as Icons from '~/components/ui/icons'
 import { getShadowStyle, radius } from '~/config/tokens'
 import { isNativeFullscreenOverlay } from '~/lib/platform/native-fullscreen'
-import { useAppLayout } from '~/hooks/useAppLayout'
+import { useFullscreenOverlayInsets } from '~/hooks/useFullscreenOverlayInsets'
 
 /**
  * Restyled Tamagui Dialog — same compound API (`Dialog.Trigger`,
@@ -87,7 +87,7 @@ export function DialogContent({
   closeLabel?: string
   children?: ReactNode
 }) {
-  const { safeTop } = useAppLayout()
+  const overlayInsets = useFullscreenOverlayInsets()
   const paddingRight =
     props.padding === 0 || props.padding === '$0'
       ? props.paddingRight
@@ -104,8 +104,9 @@ export function DialogContent({
           maxHeight: '100%' as const,
           borderRadius: 0,
           borderWidth: 0,
-          paddingTop: Math.max(safeTop, 16),
-          paddingBottom: 0,
+          paddingTop: Math.max(overlayInsets.top, 16),
+          // Bottom-anchored on an edge-to-edge screen — clear the nav bar.
+          paddingBottom: overlayInsets.bottom,
           marginBottom: 0,
           ...(Platform.OS !== 'web' ? { flex: 1 } : null),
         }

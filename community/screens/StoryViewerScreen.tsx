@@ -1,6 +1,7 @@
 import { useParams, useRouter } from 'one'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Platform, Pressable } from 'react-native'
+import { useSafeAreaInsets } from 'react-native-safe-area-context'
 
 import {
   deleteStory,
@@ -54,6 +55,7 @@ export function StoryViewerScreen() {
   const router = useRouter()
   const toast = useAppToast()
   const { user } = useSupabase()
+  const insets = useSafeAreaInsets()
 
   const [slides, setSlides] = useState<StorySlide[]>([])
   const [rings, setRings] = useState<StoryRing[]>([])
@@ -474,7 +476,8 @@ export function StoryViewerScreen() {
           position="absolute"
           left={12}
           right={12}
-          bottom={16}
+          // Absolute inside a full-bleed viewer — clear the nav bar itself.
+          bottom={Math.max(insets.bottom, 16)}
           zIndex={6}
           gap={8}
           alignItems="center"

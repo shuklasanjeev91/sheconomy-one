@@ -51,7 +51,7 @@ export function BlogDetailScreen({ slug: slugProp }: { slug?: string }) {
   const dispatch = useAppDispatch()
   const router = useRouter()
   const ui = useAppUi()
-  const { isDesktop, isTablet, safeBottom, gutter, mobileTabBarOffset } = useAppLayout()
+  const { isDesktop, isTablet, safeBottom, gutter } = useAppLayout()
   const { isAuthenticated } = useAuth()
   const slug = (slugProp || '').trim()
   const coverSize = useBlogCoverSize(760)
@@ -145,7 +145,9 @@ export function BlogDetailScreen({ slug: slugProp }: { slug?: string }) {
     }, [content, cover, teaser]),
   )
 
-  const bottomPad = safeBottom + (isDesktop ? 48 : mobileTabBarOffset + 24)
+  // On mobile PageScroll already reserves the tab bar and home indicator via
+  // marginBottom, so this only adds breathing room under the last block.
+  const bottomPad = isDesktop ? safeBottom + 48 : 24
 
   const isPhone = !isDesktop && !isTablet
 
