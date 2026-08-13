@@ -57,7 +57,7 @@ export function CategoryChip({ category }: CategoryChipProps) {
             alt={category.category}
           />
         </YStack>
-        <Text
+        {/* <Text
           fontSize={12}
           fontWeight="600"
           textAlign="center"
@@ -67,13 +67,13 @@ export function CategoryChip({ category }: CategoryChipProps) {
           width="100%"
           letterSpacing={-0.1}
         >
-          {/* {label} */}
+          {label}
         </Text>
         {category.product_count ? (
           <Text fontSize={11} color={ui.textMuted} textAlign="center" fontWeight="500">
             {category.product_count} {category.product_count === 1 ? 'item' : 'items'}
           </Text>
-        ) : null}
+        ) : null} */}
       </YStack>
     </AppLink>
   )

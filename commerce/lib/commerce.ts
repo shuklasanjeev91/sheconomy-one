@@ -5,6 +5,7 @@ import {
   normalizeListingImageUrl,
 } from '~/commerce/lib/listing-images'
 import { resolveCategoryListingIdConstraint } from '~/commerce/lib/category-facets'
+import { categoryTreeFilter, fetchCategoryTreeIds } from '~/commerce/lib/category-tree'
 import {
   getListingOrderColumn,
   sortListings,
@@ -848,76 +849,103 @@ export async function fetchShopsPage(
   }
 }
 
+/**
+ * Only curated artwork from the `categories_media` bucket is a category image.
+ * A backfill seeded `categories.category_image_url` from listing photos whose
+ * title matched the category name, so every other host is a product photo and
+ * has to fall back to the category icon.
+ */
+function categoryArtworkUrl(url: string | null | undefined): string | null {
+  if (!url) return null
+  return url.includes('/categories_media/') ? url : null
+}
+
+/**
+ * Storefront-visible listings anywhere in a category's tree. Assignments land
+ * on leaf categories, so a root only has a count once its children are rolled
+ * up. Mirrors the fetchCategoryListingsPage filters so the tile count matches
+ * what the category page renders.
+ */
+async function countCategoryTreeListings(categoryId: string): Promise<number> {
+  const { count, error } = await supabase
+    .from('listings')
+    .select(
+      'id, listing_images!inner(id), shops!inner(id), category_assignments!inner(categories!inner(id_path))',
+      { count: 'exact', head: true },
+    )
+    .or(categoryTreeFilter(categoryId), { referencedTable: 'category_assignments.categories' })
+    .eq('is_active', ACTIVE_LISTING_FILTER.is_active)
+    .eq('listing_status', ACTIVE_LISTING_FILTER.listing_status)
+    .eq('shops.is_active', true)
+    .eq('shops.verified', true)
+
+  if (error) return 0
+  return count ?? 0
+}
+
+const ROOT_CATEGORY_TTL_MS = 5 * 60 * 1000
+let rootCategoryCache: { items: CategorySummary[]; expiresAt: number } | null = null
+
+/**
+ * The 25 root categories, ranked by how much of the catalogue sits under them.
+ * Ranking needs every count, and the set is small and near-static, so the whole
+ * list is loaded once and paginated in memory.
+ */
+async function loadRootCategories(): Promise<{ items: CategorySummary[]; error: string | null }> {
+  if (rootCategoryCache && rootCategoryCache.expiresAt > Date.now()) {
+    return { items: rootCategoryCache.items, error: null }
+  }
+
+  const { data, error } = await supabase
+    .from('categories')
+    .select('category_id, category, category_image_url, category_icon, seo_name')
+    .is('parent_id', null)
+    .eq('status', 'A')
+    .order('position', { ascending: true })
+    .order('category', { ascending: true })
+
+  if (error) {
+    return { items: [], error: error.message }
+  }
+
+  const roots = (data ?? []).filter(isStorefrontCategoryVisible)
+  const counts = await Promise.all(roots.map((row) => countCategoryTreeListings(row.category_id)))
+
+  const items = roots
+    .map((row, index) => ({
+      category_id: row.category_id,
+      category: row.category,
+      category_image_url: categoryArtworkUrl(row.category_image_url),
+      category_icon: row.category_icon,
+      product_count: counts[index],
+      seo_name: row.seo_name,
+    }))
+    .filter((row) => row.product_count > 0)
+    .sort((a, b) => b.product_count - a.product_count || a.category.localeCompare(b.category))
+
+  rootCategoryCache = { items, expiresAt: Date.now() + ROOT_CATEGORY_TTL_MS }
+  return { items, error: null }
+}
+
+/** Category rail — roots only; subcategories are browsed from the category page. */
 export async function fetchCategoriesPage(
   page: number,
   pageSize = COMMERCE_HORIZONTAL_PAGE_SIZE,
 ): Promise<PaginatedResult<CategorySummary>> {
-  const from = page * pageSize
-  const to = from + pageSize - 1
-
-  // Counts are tied at 0 until listings get category assignments, so level +
-  // position break the tie: curated roots first, in their admin-set order.
-  const { data, error } = await supabase
-    .from('categories_with_counts')
-    .select('category_id, category, category_image_url, category_icon, product_count, seo_name')
-    .order('product_count', { ascending: false, nullsFirst: false })
-    .order('level', { ascending: true })
-    .order('position', { ascending: true })
-    .order('category', { ascending: true })
-    .range(from, to)
+  const { items: roots, error } = await loadRootCategories()
 
   if (error) {
-    // View may not be migrated yet — fall back to active categories table scan.
-    const legacy = await supabase
-      .from('categories')
-      .select('category_id, category, category_image_url, category_icon, product_count, seo_name')
-      .eq('status', 'A')
-      .not('category', 'ilike', '%without category%')
-      .order('product_count', { ascending: false, nullsFirst: false })
-      .order('level', { ascending: true })
-      .order('position', { ascending: true })
-      .order('category', { ascending: true })
-      .range(from, to)
-
-    if (legacy.error) {
-      return { items: [], page, pageSize, hasMore: false, error: legacy.error.message }
-    }
-
-    const legacyItems = (legacy.data ?? [])
-      .filter(isStorefrontCategoryVisible)
-      .map((row) => ({
-        category_id: row.category_id,
-        category: row.category,
-        category_image_url: row.category_image_url,
-        category_icon: row.category_icon,
-        product_count: row.product_count,
-        seo_name: row.seo_name,
-      }))
-    return {
-      items: legacyItems,
-      page,
-      pageSize,
-      hasMore: (legacy.data?.length ?? 0) === pageSize,
-      error: null,
-    }
+    return { items: [], page, pageSize, hasMore: false, error }
   }
 
-  const items = (data ?? [])
-    .filter(isStorefrontCategoryVisible)
-    .map((row) => ({
-      category_id: row.category_id,
-      category: row.category,
-      category_image_url: row.category_image_url,
-      category_icon: row.category_icon,
-      product_count: row.product_count,
-      seo_name: row.seo_name,
-    }))
+  const from = page * pageSize
+  const items = roots.slice(from, from + pageSize)
 
   return {
     items,
     page,
     pageSize,
-    hasMore: (data?.length ?? 0) === pageSize,
+    hasMore: from + items.length < roots.length,
     error: null,
   }
 }
@@ -1048,7 +1076,7 @@ export async function fetchCategoryBySlug(slug: string): Promise<{
     if (!isStorefrontCategoryVisible(bySeo)) {
       return { data: null, error: null }
     }
-    return { data: bySeo, error: null }
+    return { data: await mapCategorySummaryRow(bySeo), error: null }
   }
 
   const { data: byId, error: idError } = await supabase
@@ -1066,7 +1094,20 @@ export async function fetchCategoryBySlug(slug: string): Promise<{
     return { data: null, error: null }
   }
 
-  return { data: byId, error: null }
+  return { data: byId ? await mapCategorySummaryRow(byId) : null, error: null }
+}
+
+/**
+ * `categories.product_count` only counts assignments on that exact category, so
+ * a root reads as near-empty while its subcategories hold the catalogue. The
+ * page browses the whole tree, so it counts the whole tree.
+ */
+async function mapCategorySummaryRow(row: CategorySummary): Promise<CategorySummary> {
+  return {
+    ...row,
+    category_image_url: categoryArtworkUrl(row.category_image_url),
+    product_count: await countCategoryTreeListings(row.category_id),
+  }
 }
 
 export async function fetchCategoryListingsPage(
@@ -1080,10 +1121,17 @@ export async function fetchCategoryListingsPage(
 
   const categoryIds = filters?.categoryIds?.length ? filters.categoryIds : [categoryId]
 
-  const listingIdConstraint = await resolveCategoryListingIdConstraint(categoryIds, {
-    onSale: filters?.onSale,
-    variants: filters?.variants,
-  })
+  // Browsing one category means its whole tree; picking several subcategories
+  // from the facet list means exactly those.
+  const treeCategoryId = categoryIds.length === 1 ? categoryIds[0] : null
+
+  const listingIdConstraint = await resolveCategoryListingIdConstraint(
+    treeCategoryId ? await fetchCategoryTreeIds(treeCategoryId) : categoryIds,
+    {
+      onSale: filters?.onSale,
+      variants: filters?.variants,
+    },
+  )
 
   if (listingIdConstraint && !listingIdConstraint.length) {
     return { items: [], page, pageSize, hasMore: false, error: null }
@@ -1091,12 +1139,21 @@ export async function fetchCategoryListingsPage(
 
   let baseQuery = supabase
     .from('listings')
-    .select(`${LISTING_CARD_SELECT}, category_assignments!inner(category_id)`)
-    .in('category_assignments.category_id', categoryIds)
+    .select(
+      treeCategoryId
+        ? `${LISTING_CARD_SELECT}, category_assignments!inner(categories!inner(id_path))`
+        : `${LISTING_CARD_SELECT}, category_assignments!inner(category_id)`,
+    )
     .eq('is_active', ACTIVE_LISTING_FILTER.is_active)
     .eq('listing_status', ACTIVE_LISTING_FILTER.listing_status)
     .eq('shops.is_active', true)
     .eq('shops.verified', true)
+
+  baseQuery = treeCategoryId
+    ? baseQuery.or(categoryTreeFilter(treeCategoryId), {
+        referencedTable: 'category_assignments.categories',
+      })
+    : baseQuery.in('category_assignments.category_id', categoryIds)
 
   if (listingIdConstraint) {
     baseQuery = baseQuery.in('id', listingIdConstraint)
