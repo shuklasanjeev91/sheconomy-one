@@ -67,6 +67,25 @@ function buildEngagementSeries(
 }
 
 // A rich select shared by list + detail reads.
+const ORDER_DELIVERY_SELECT = `
+  tracking_number,
+  delivery_address,
+  delivery_status,
+  estimated_delivery_date,
+  actual_delivery_date,
+  delivery_mode,
+  carrier_name,
+  carrier_tracking_url,
+  courier_service_name,
+  awb_code,
+  label_url,
+  invoice_url,
+  manifest_url,
+  shipped_at,
+  delivered_at,
+  delivery_instructions
+`
+
 const VENDOR_ORDER_SELECT = `
   *,
   orders!inner (
@@ -87,6 +106,9 @@ const VENDOR_ORDER_SELECT = `
     billing_address:addresses!billing_address_id (
       address_line_1, address_line_2, city, state, country, postal_code, address_label
     ),
+    shipping_address:addresses!shipping_address_id (
+      address_line_1, address_line_2, city, state, country, postal_code, address_label
+    ),
     profiles!user_id ( full_name, phone, email )
   ),
   listings (
@@ -94,9 +116,7 @@ const VENDOR_ORDER_SELECT = `
     title,
     listing_images ( id, image_url, is_primary, display_order, image_metadata )
   ),
-  order_delivery (
-    tracking_number, delivery_address, delivery_status, estimated_delivery_date
-  )
+  order_delivery ( ${ORDER_DELIVERY_SELECT} )
 `
 
 function paginationMeta(page: number, limit: number, total: number) {
@@ -169,7 +189,10 @@ export async function getVendorOrderItem(
         `
         *,
         orders!inner (
-          id, order_number, order_status, total_amount, currency, created_at, updated_at,
+          id, order_number, order_status,
+          subtotal_amount, shipping_amount, tax_amount, discount_amount,
+          total_amount, currency, customer_currency, customer_country,
+          created_at, updated_at,
           customer_notes, special_instructions,
           billing_address:addresses!billing_address_id (*),
           shipping_address:addresses!shipping_address_id (*),
@@ -177,7 +200,8 @@ export async function getVendorOrderItem(
           order_status_logs ( * )
         ),
         listings ( id, title, description, listing_images ( id, image_url, is_primary, display_order, image_metadata ) ),
-        shops!vendor_id ( id, shop_name, user_id )
+        shops!vendor_id ( id, shop_name, user_id ),
+        order_delivery ( ${ORDER_DELIVERY_SELECT} )
       `,
       )
       .eq('id', orderItemId)

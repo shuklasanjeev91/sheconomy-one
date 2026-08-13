@@ -143,7 +143,13 @@ export function CommerceCheckbox({
 }
 
 /** Radio dot in the brand accent. */
-export function CommerceRadio({ selected, size = 20 }: { selected: boolean; size?: number }) {
+export function CommerceRadio({
+  selected,
+  size = 20,
+}: {
+  selected: boolean
+  size?: number
+}) {
   const ui = useAppUi()
   return (
     <XStack

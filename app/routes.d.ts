@@ -24,6 +24,8 @@ declare module 'one' {
         | `/(store)/orders/razorpay-return`
         | `/(store)/orders/success`
         | `/(store)/payment-methods`
+        | `/(store)/payment/failure`
+        | `/(store)/payment/success`
         | `/(store)/search`
         | `/(store)/shop`
         | `/(store)/shops`
@@ -138,6 +140,9 @@ declare module 'one' {
         | `/orders/razorpay-return`
         | `/orders/success`
         | `/payment-methods`
+        | `/payment/failure`
+        | `/payment/success`
+        | `/payu-embed-return`
         | `/profile`
         | `/search`
         | `/seller/dashboard`

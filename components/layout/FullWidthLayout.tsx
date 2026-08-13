@@ -43,7 +43,13 @@ export function FullWidthLayout({
   if (scroll) {
     return (
       <PageScroll onRefresh={onRefresh} refreshing={refreshing}>
-        <YStack width="100%" maxWidth="100%" alignSelf="stretch" backgroundColor={bg}>
+        <YStack
+          width="100%"
+          maxWidth="100%"
+          alignSelf="stretch"
+          flexShrink={0}
+          backgroundColor={bg}
+        >
           {children}
         </YStack>
       </PageScroll>

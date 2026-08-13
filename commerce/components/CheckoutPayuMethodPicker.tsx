@@ -1,4 +1,4 @@
-import { useEffect, useState, type ReactNode } from 'react'
+import { useEffect, useMemo, useState, type ReactNode } from 'react'
 
 import { CommerceRadio } from '~/commerce/components/commerce-ui'
 import {
@@ -17,6 +17,8 @@ import {
   type PayuPaymentModeId,
 } from '~/commerce/lib/payu-payment-modes'
 
+type SectionId = Section['id']
+
 type CheckoutPayuMethodPickerProps = {
   brandColor: string
   borderColor: string
@@ -29,6 +31,10 @@ type CheckoutPayuMethodPickerProps = {
   onVpaChange: (value: string) => void
   /** Optional card form rendered under Cards when selected */
   cardFields?: ReactNode
+  /** Shown but not expandable / selectable (e.g. net banking coming later). */
+  disabledSectionIds?: SectionId[]
+  /** Collapse accordion and clear selection (e.g. COD is selected). */
+  collapsed?: boolean
   /** When set, COD appears in the same Amazon-style list */
   cod?: {
     selected: boolean
@@ -146,25 +152,39 @@ export function CheckoutPayuMethodPicker({
   vpa,
   onVpaChange,
   cardFields,
+  disabledSectionIds = [],
+  collapsed = false,
   cod = null,
 }: CheckoutPayuMethodPickerProps) {
-  const [openId, setOpenId] = useState<Section['id'] | 'cod'>(() =>
-    cod?.selected ? 'cod' : sectionIdForMode(mode),
+  const disabledSections = useMemo(() => new Set(disabledSectionIds), [disabledSectionIds])
+
+  const [openId, setOpenId] = useState<Section['id'] | 'cod' | null>(() =>
+    cod?.selected || collapsed ? null : sectionIdForMode(mode),
   )
 
   useEffect(() => {
-    if (cod?.selected) {
-      setOpenId('cod')
+    if (collapsed || cod?.selected) {
+      setOpenId(null)
       return
     }
-    setOpenId(sectionIdForMode(mode))
-  }, [mode, cod?.selected])
+    const nextOpen = sectionIdForMode(mode)
+    if (disabledSections.has(nextOpen)) {
+      setOpenId('upi')
+      if (mode !== 'upi_gpay' && mode !== 'upi_intent') onModeChange('upi_gpay')
+      return
+    }
+    setOpenId(nextOpen)
+  }, [collapsed, cod?.selected, disabledSections, mode])
 
   function selectSection(section: Section) {
+    if (disabledSections.has(section.id)) return
     setOpenId(section.id)
     if (!sectionContainsMode(section, mode)) {
       onModeChange(section.options[0]?.id ?? 'upi_gpay')
+      return
     }
+    // Re-select same mode so parent can clear COD / reopen online.
+    if (collapsed) onModeChange(mode)
   }
 
   return (
@@ -173,12 +193,15 @@ export function CheckoutPayuMethodPicker({
       borderWidth={1}
       borderColor={borderColor}
       borderRadius={12}
-      overflow="hidden"
+      overflow="visible"
       backgroundColor="transparent"
+      flexShrink={0}
     >
       {SECTIONS.map((section, sectionIndex) => {
-        const open = openId === section.id && !cod?.selected
-        const hasSelection = sectionContainsMode(section, mode) && !cod?.selected
+        const disabled = disabledSections.has(section.id)
+        const open = !collapsed && !disabled && openId === section.id && !cod?.selected
+        const hasSelection =
+          !collapsed && !disabled && sectionContainsMode(section, mode) && !cod?.selected
         const isLastOnline = sectionIndex === SECTIONS.length - 1 && !cod
 
         return (
@@ -186,6 +209,7 @@ export function CheckoutPayuMethodPicker({
             key={section.id}
             borderBottomWidth={isLastOnline ? 0 : 1}
             borderBottomColor={borderColor}
+            opacity={disabled ? 0.48 : 1}
           >
             <XStack
               alignItems="flex-start"
@@ -193,11 +217,11 @@ export function CheckoutPayuMethodPicker({
               paddingHorizontal="$3.5"
               paddingVertical="$3.5"
               backgroundColor={open || hasSelection ? chipColor : 'transparent'}
-              onPress={() => selectSection(section)}
-              cursor="pointer"
-              pressStyle={{ opacity: 0.92 }}
+              onPress={disabled ? undefined : () => selectSection(section)}
+              cursor={disabled ? 'not-allowed' : 'pointer'}
+              pressStyle={disabled ? undefined : { opacity: 0.92 }}
               accessibilityRole="radio"
-              accessibilityState={{ selected: open || hasSelection }}
+              accessibilityState={{ selected: open || hasSelection, disabled }}
             >
               <YStack paddingTop={2}>
                 <CommerceRadio selected={open || hasSelection} />
@@ -210,8 +234,16 @@ export function CheckoutPayuMethodPicker({
                       {section.title}
                     </Text>
                     {!open ? (
-                      <Text fontSize={12} color={hasSelection ? brandColor : secondaryColor} numberOfLines={1}>
-                        {hasSelection ? selectedLabel(mode) : section.hint}
+                      <Text
+                        fontSize={12}
+                        color={hasSelection ? brandColor : secondaryColor}
+                        numberOfLines={1}
+                      >
+                        {disabled
+                          ? 'Currently unavailable'
+                          : hasSelection
+                            ? selectedLabel(mode)
+                            : section.hint}
                       </Text>
                     ) : (
                       <Text fontSize={12} color={secondaryColor} numberOfLines={1}>

@@ -19,6 +19,7 @@ import {
 } from '~/commerce/lib/payu-card'
 import {
   normalizePayuIntentUri,
+  payuGroupIdForMode,
   resolvePayuPaymentMode,
   type PayuPaymentModeId,
 } from '~/commerce/lib/payu-payment-modes'
@@ -28,14 +29,29 @@ import {
   fetchPayuBinInfo,
   verifyShepayPayuPayment,
 } from '~/commerce/lib/shepay'
+import { platformPayuService } from '~/lib/platform-payu'
 import { Button, Input, Spinner, Text, XStack, YStack } from '~/components/ui'
+import { useAppLayout } from '~/hooks/useAppLayout'
 import type { AppUiTokens } from '~/lib/theme/app-ui'
 
 export type CheckoutPayuSession = {
   actionUrl: string
   fields: Record<string, string>
   txnid: string
-  paymentStepId: string
+  paymentStepId?: string
+  orderPaymentId?: string
+  provider?: 'shepay' | 'platform_payu'
+}
+
+type PayuPickerSectionId = 'upi' | 'cards' | 'netbanking' | 'wallets' | 'more'
+
+function pickerSectionForMode(mode: PayuPaymentModeId): PayuPickerSectionId {
+  if (['emi', 'bnpl', 'paypal', 'pluxee', 'neft'].includes(mode)) return 'more'
+  const group = payuGroupIdForMode(mode)
+  if (group === 'cards' || group === 'upi' || group === 'netbanking' || group === 'wallets') {
+    return group
+  }
+  return 'upi'
 }
 
 type CheckoutPayuPanelProps = {
@@ -59,10 +75,25 @@ type CheckoutPayuPanelProps = {
     cvv: string
     bankcode?: string
   } | null
+  /** Visible in the list but not selectable (net banking, wallets, EMI, etc.). */
+  disabledMethodSections?: PayuPickerSectionId[]
   session: CheckoutPayuSession
   onPaid: () => void
   onFailed: (message: string) => void
   onCancel: () => void
+  /** Nest inside checkout accordion — no outer card chrome. */
+  embedded?: boolean
+  /** Collapse online methods (e.g. COD selected) — no selection, accordion closed. */
+  collapsed?: boolean
+  /** Fired when bank OTP / UPI QR auth UI opens or closes. */
+  onAuthActiveChange?: (active: boolean) => void
+  /** Fired when the shopper interacts with online methods (switch back from COD). */
+  onSelectOnline?: () => void
+  /**
+   * When set, called before the first charge if the session has no order payment yet.
+   * Used to place the order + initiate PayU when the shopper taps Pay.
+   */
+  onEnsureSession?: () => Promise<CheckoutPayuSession | null>
 }
 
 export function CheckoutPayuPanel({
@@ -77,10 +108,16 @@ export function CheckoutPayuPanel({
   autoStart = false,
   hideMethodPicker = false,
   card: lockedCard = null,
+  disabledMethodSections = [],
   session,
   onPaid,
   onFailed,
   onCancel,
+  embedded = false,
+  collapsed = false,
+  onAuthActiveChange,
+  onSelectOnline,
+  onEnsureSession,
 }: CheckoutPayuPanelProps) {
   const [mode, setMode] = useState<PayuPaymentModeId>(
     initialMode === 'all' ? 'upi_gpay' : initialMode,
@@ -105,8 +142,19 @@ export function CheckoutPayuPanel({
   const [binBusy, setBinBusy] = useState(false)
   const [nativeLaunchHint, setNativeLaunchHint] = useState<string | null>(null)
   const autoStartedRef = useRef(false)
+  const acsIframeRef = useRef<HTMLIFrameElement | null>(null)
+  const sessionRef = useRef(session)
+  const { isDesktop } = useAppLayout()
+
+  useEffect(() => {
+    sessionRef.current = session
+  }, [session])
 
   const modeMeta = useMemo(() => resolvePayuPaymentMode(mode), [mode])
+  const isPlatform =
+    session.provider === 'platform_payu' ||
+    Boolean(session.orderPaymentId) ||
+    Boolean(onEnsureSession)
   const isCards = mode === 'cards'
   const isUpiAppMode =
     mode === 'upi_gpay' ||
@@ -116,6 +164,105 @@ export function CheckoutPayuPanel({
     mode === 'upi_qr'
   const showQrForMode = payuUpiShouldShowQr(mode)
   const showPicker = !hideMethodPicker && !autoStart
+  const authActive = Boolean(acsHtml || intentUri)
+  const controlsLocked = authActive || busy || awaitingVerify
+  const paidOnceRef = useRef(false)
+  const disabledSections = useMemo(
+    () => new Set(disabledMethodSections),
+    [disabledMethodSections],
+  )
+
+  const cardFieldsNode = useMemo(() => {
+    if (lockedCard) return null
+    return (
+      <YStack gap="$2.5">
+        <YStack gap="$1">
+          <Text fontSize={12} fontWeight="600" color={ui.text}>
+            Card number
+          </Text>
+          <Input
+            value={formatCardNumberDisplay(cardNumber)}
+            onChangeText={(value) => setCardNumber(digitsOnly(value).slice(0, 19))}
+            placeholder="1234 5678 9012 3456"
+            keyboardType="number-pad"
+            autoComplete="cc-number"
+          />
+          {binBusy ? (
+            <Text fontSize={11} color={secondaryColor}>
+              Checking card…
+            </Text>
+          ) : null}
+          {binLabel ? (
+            <Text fontSize={11} color={secondaryColor}>
+              {binLabel}
+            </Text>
+          ) : null}
+        </YStack>
+        <YStack gap="$1">
+          <Text fontSize={12} fontWeight="600" color={ui.text}>
+            Name on card
+          </Text>
+          <Input
+            value={cardName}
+            onChangeText={setCardName}
+            placeholder="As printed on card"
+            autoCapitalize="words"
+            autoComplete="cc-name"
+          />
+        </YStack>
+        <XStack gap="$2" flexWrap="wrap">
+          <YStack flex={1} minWidth={72} gap="$1">
+            <Text fontSize={12} fontWeight="600" color={ui.text}>
+              MM
+            </Text>
+            <Input
+              value={cardExpMon}
+              onChangeText={(value) => setCardExpMon(normalizeExpiryMonth(value))}
+              placeholder="MM"
+              keyboardType="number-pad"
+              maxLength={2}
+            />
+          </YStack>
+          <YStack flex={1} minWidth={88} gap="$1">
+            <Text fontSize={12} fontWeight="600" color={ui.text}>
+              YYYY
+            </Text>
+            <Input
+              value={cardExpYr}
+              onChangeText={(value) => setCardExpYr(digitsOnly(value).slice(0, 4))}
+              placeholder="YYYY"
+              keyboardType="number-pad"
+              maxLength={4}
+            />
+          </YStack>
+          <YStack flex={1} minWidth={72} gap="$1">
+            <Text fontSize={12} fontWeight="600" color={ui.text}>
+              CVV
+            </Text>
+            <Input
+              value={cardCvv}
+              onChangeText={(value) => setCardCvv(digitsOnly(value).slice(0, 4))}
+              placeholder="CVV"
+              keyboardType="number-pad"
+              secureTextEntry
+              maxLength={4}
+            />
+          </YStack>
+        </XStack>
+      </YStack>
+    )
+  }, [
+    binBusy,
+    binLabel,
+    cardCvv,
+    cardExpMon,
+    cardExpYr,
+    cardName,
+    cardNumber,
+    lockedCard,
+    secondaryColor,
+    ui.text,
+  ])
 
   /** Web cannot open GPay/PhonePe — charge generic INTENT so PayU returns a scannable QR. */
   const chargeMode: PayuPaymentModeId =
@@ -140,6 +287,86 @@ export function CheckoutPayuPanel({
   }, [acsHtml])
 
   useEffect(() => {
+    onAuthActiveChange?.(authActive)
+  }, [authActive, onAuthActiveChange])
+
+  function finishPaid() {
+    if (paidOnceRef.current) return
+    paidOnceRef.current = true
+    setAcsHtml(null)
+    setIntentUri(null)
+    setBusy(false)
+    setError(null)
+    onPaid()
+  }
+
+  /** 3DS / bank OTP completes inside iframe — only then finish the order. */
+  useEffect(() => {
+    if (Platform.OS !== 'web' || typeof window === 'undefined') return
+
+    function onEmbedReturn(event: MessageEvent) {
+      const data = event.data as {
+        type?: string
+        status?: string
+        txn?: string
+        orderIds?: string[]
+      } | null
+      if (!data || data.type !== 'payu-embed-return') return
+      if (event.origin !== window.location.origin) return
+
+      if (data.status === 'success') {
+        finishPaid()
+        return
+      }
+
+      setAcsHtml(null)
+      setBusy(false)
+      onFailed('Payment was not completed — OTP / bank authentication failed or was cancelled.')
+    }
+
+    window.addEventListener('message', onEmbedReturn)
+    return () => window.removeEventListener('message', onEmbedReturn)
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- stable finishPaid via ref
+  }, [onFailed])
+
+  function isPayuEmbedReturnHref(href: string): boolean {
+    return (
+      href.includes('/payu-embed-return.html') ||
+      href.includes('/payu-embed-return') ||
+      href.includes('/orders/payu-return')
+    )
+  }
+
+  function handleAcsIframeLoad() {
+    if (Platform.OS !== 'web') return
+    const frame = acsIframeRef.current
+    if (!frame) return
+    try {
+      const href = frame.contentWindow?.location?.href ?? ''
+      if (!href || href === 'about:blank') return
+      if (!isPayuEmbedReturnHref(href)) return
+      const parsed = new URL(href)
+      const status = parsed.searchParams.get('status')?.toLowerCase()
+      if (status === 'success') {
+        finishPaid()
+      } else if (status) {
+        setAcsHtml(null)
+        onFailed('Payment was not completed — OTP / bank authentication failed or was cancelled.')
+      }
+    } catch {
+      // cross-origin while on bank page — expected
+    }
+  }
+
+  /** Poll iframe when bank redirects back to our embed return (same-origin). */
+  useEffect(() => {
+    if (Platform.OS !== 'web' || !acsHtml) return
+    const timer = window.setInterval(() => handleAcsIframeLoad(), 700)
+    return () => window.clearInterval(timer)
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- poll while ACS iframe is open
+  }, [acsHtml])
+
+  useEffect(() => {
     if (!isCards || hideMethodPicker) return
     const bin = digitsOnly(cardNumber).slice(0, 6)
     if (bin.length < 6) {
@@ -150,7 +377,10 @@ export function CheckoutPayuPanel({
     let cancelled = false
     const timer = setTimeout(() => {
       setBinBusy(true)
-      void fetchPayuBinInfo(bin).then((result) => {
+      const lookup = isPlatform
+        ? platformPayuService.fetchBinInfo(bin)
+        : fetchPayuBinInfo(bin)
+      void lookup.then((result) => {
         if (cancelled) return
         setBinBusy(false)
         if (result.error || !result.data) {
@@ -172,23 +402,33 @@ export function CheckoutPayuPanel({
       cancelled = true
       clearTimeout(timer)
     }
-  }, [cardNumber, isCards, hideMethodPicker, lockedCard?.bankcode])
+  }, [cardNumber, isCards, hideMethodPicker, isPlatform, lockedCard?.bankcode])
 
   async function runVerifyAndFinish(nextTxnid: string) {
     setAwaitingVerify(true)
-    const verified = await verifyShepayPayuPayment({
-      txnid: nextTxnid,
-      paymentStepId: session.paymentStepId,
-    })
+    const verified = isPlatform
+      ? await platformPayuService.verifyPayment({
+          txnid: nextTxnid,
+          orderPaymentId: sessionRef.current.orderPaymentId,
+        })
+      : await verifyShepayPayuPayment({
+          txnid: nextTxnid,
+          paymentStepId: sessionRef.current.paymentStepId,
+        })
     setAwaitingVerify(false)
     if (verified.data?.success) {
-      onPaid()
+      finishPaid()
       return true
     }
     return false
   }
 
   async function handlePay() {
+    onSelectOnline?.()
+    if (disabledSections.has(pickerSectionForMode(mode))) {
+      setError('This payment method is not available yet. Choose UPI or card.')
+      return
+    }
     if (modeMeta.needsVpa && !vpa.trim()) {
       setError('Enter your UPI ID (e.g. name@oksbi)')
       return
@@ -218,27 +458,78 @@ export function CheckoutPayuPanel({
     setAcsHtml(null)
     setNativeLaunchHint(null)
     try {
+      let activeSession = sessionRef.current
+      if (isPlatform && !activeSession.orderPaymentId && onEnsureSession) {
+        const ensured = await onEnsureSession()
+        if (!ensured?.orderPaymentId) {
+          setError('Could not start checkout. Check your address and try again.')
+          setBusy(false)
+          return
+        }
+        activeSession = ensured
+        sessionRef.current = ensured
+        setTxnid(ensured.txnid || '')
+      }
+
       const extras: Record<string, string> = {}
       if (vpa.trim()) extras.vpa = vpa.trim()
 
-      const result = await createShepayPayuSession(session.paymentStepId, {
-        payuMode: chargeMode,
-        extraFields: Object.keys(extras).length ? extras : null,
-        /** PayU Hosted Checkout — buyer picks UPI / cards / NB on PayU. */
-        checkoutStyle: 'hosted',
-        seamless: false,
-        inline: false,
-        card: null,
-        threeDs2RequestData: null,
-      })
+      const cardPayload =
+        isCards && !lockedCard
+          ? {
+              number: cardNumber,
+              name: cardName,
+              exp_mon: cardExpMon,
+              exp_yr: cardExpYr,
+              cvv: cardCvv,
+              bankcode: binBankcode,
+            }
+          : lockedCard
+            ? {
+                number: lockedCard.number,
+                name: lockedCard.name,
+                exp_mon: lockedCard.expMon,
+                exp_yr: lockedCard.expYr,
+                cvv: lockedCard.cvv,
+                bankcode: lockedCard.bankcode ?? binBankcode,
+              }
+            : null
 
-      if (result.error || !result.data) {
-        setError(result.error ?? 'Could not start SHEPay payment')
+      const chargeResult = isPlatform
+        ? await platformPayuService.chargePayment(activeSession.orderPaymentId ?? '', {
+            payuMode: chargeMode,
+            extraFields: Object.keys(extras).length ? extras : null,
+            card: isCards ? cardPayload : null,
+            threeDs2RequestData: isCards ? buildPayuThreeDS2RequestData() : null,
+            appOrigin:
+              Platform.OS === 'web' && typeof window !== 'undefined'
+                ? window.location.origin
+                : null,
+            deviceInfo:
+              Platform.OS === 'web' && typeof navigator !== 'undefined'
+                ? navigator.userAgent
+                : null,
+          })
+        : await createShepayPayuSession(activeSession.paymentStepId ?? '', {
+            payuMode: chargeMode,
+            extraFields: Object.keys(extras).length ? extras : null,
+            checkoutStyle: 's2s',
+            seamless: true,
+            inline: true,
+            card: isCards ? cardPayload : null,
+            threeDs2RequestData: isCards ? buildPayuThreeDS2RequestData() : null,
+          })
+
+      if (chargeResult.error || !chargeResult.data) {
+        setError(
+          chargeResult.error ??
+            (isPlatform ? 'Could not start PayU payment' : 'Could not start SHEPay payment'),
+        )
         setBusy(false)
         return
       }
 
-      const data = result.data
+      const data = chargeResult.data
       setTxnid(data.txnid)
 
       if (data.flow === 'form_post' && data.action_url && data.fields) {
@@ -247,7 +538,6 @@ export function CheckoutPayuPanel({
           submitPayuFormPost(data.action_url, data.fields)
           return
         }
-        // Native: auto-submit HTML in embedded WebView (same as ACS).
         setAcsTitle('Continue to your bank / wallet')
         setAcsHtml(buildPayuAutoSubmitHtml(data.action_url, data.fields))
         setBusy(false)
@@ -257,21 +547,25 @@ export function CheckoutPayuPanel({
       if (data.outcome === 'success') {
         const ok = await runVerifyAndFinish(data.txnid)
         setBusy(false)
-        if (!ok) onPaid()
+        if (!ok) {
+          setError('Payment not confirmed yet. Complete OTP if prompted, then try again.')
+        }
         return
       }
 
       if (data.outcome === 'upi_intent' || data.intent_uri) {
         const uri = normalizePayuIntentUri(data.intent_uri)
         if (!uri) {
-          setError('SHEPay did not return a UPI payment link. Tap Retry or try Scan QR.')
+          setError(
+            isPlatform
+              ? 'PayU did not return a UPI payment link. Tap Retry or try Scan QR.'
+              : 'SHEPay did not return a UPI payment link. Tap Retry or try Scan QR.',
+          )
           setBusy(false)
           return
         }
         setIntentUri(uri)
 
-        // Web: always show QR — never navigate to upi:// (browsers block it).
-        // Native: open GPay / PhonePe / Paytm, keep QR as fallback.
         if (!showQrForMode && Platform.OS !== 'web') {
           const opened = await launchPayuUpiIntent(uri, mode)
           setNativeLaunchHint(
@@ -311,7 +605,7 @@ export function CheckoutPayuPanel({
         return
       }
 
-      setError(data.message ?? 'Unexpected SHEPay response')
+      setError(data.message ?? (isPlatform ? 'Unexpected PayU response' : 'Unexpected SHEPay response'))
       setBusy(false)
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Payment failed to start')
@@ -340,36 +634,112 @@ export function CheckoutPayuPanel({
     }
   }
 
-  return (
+  const acsFrameHeight = isDesktop && authActive ? 520 : 480
+
+  const acsWebFrame =
+    acsHtml && Platform.OS === 'web' ? (
+      <YStack
+        width="100%"
+        height={acsFrameHeight}
+        borderRadius={12}
+        overflow="hidden"
+        borderWidth={1}
+        borderColor={borderColor}
+        backgroundColor="#fff"
+      >
+        <YStack padding="$2" gap="$1" backgroundColor={ui.surfaceMuted}>
+          <Text fontSize={13} fontWeight="700" color={ui.text}>
+            {acsTitle}
+          </Text>
+          <Text fontSize={11} color={secondaryColor} lineHeight={16}>
+            Complete OTP or 3-D Secure in this window. We&apos;ll take you to order confirmation
+            automatically.
+          </Text>
+        </YStack>
+        {/* @ts-expect-error web-only iframe for ACS / bank OTP */}
+        <iframe
+          ref={acsIframeRef}
+          name="payu_acs_frame"
+          title="Bank authentication"
+          srcDoc={acsHtml}
+          onLoad={handleAcsIframeLoad}
+          style={{ width: '100%', flex: 1, minHeight: 360, border: 'none' }}
+          sandbox="allow-forms allow-scripts allow-same-origin allow-top-navigation allow-top-navigation-by-user-activation allow-popups allow-popups-to-escape-sandbox"
+        />
+        <XStack padding="$2" justifyContent="center">
+          <Button tone="outline" borderRadius={999} size="$2" onPress={() => void handleIvePaid()}>
+            Payment stuck? Tap here
+          </Button>
+        </XStack>
+      </YStack>
+    ) : null
+
+  const acsNativeFrame =
+    acsHtml && Platform.OS !== 'web' ? (
+      <YStack
+        width="100%"
+        height={acsFrameHeight}
+        borderRadius={12}
+        overflow="hidden"
+        borderWidth={1}
+        borderColor={borderColor}
+        backgroundColor="#fff"
+      >
+        <Text fontSize={12} color={secondaryColor} padding="$2">
+          {acsTitle}
+        </Text>
+        {WebView ? (
+          <WebView
+            originWhitelist={['*']}
+            source={{ html: acsHtml, baseUrl: 'https://sheconomy.in' }}
+            style={{ flex: 1, width: '100%', minHeight: 400 }}
+            javaScriptEnabled
+            domStorageEnabled
+            sharedCookiesEnabled
+            startInLoadingState
+          />
+        ) : (
+          <YStack flex={1} alignItems="center" justifyContent="center" padding="$4">
+            <Spinner size="large" />
+          </YStack>
+        )}
+        <XStack padding="$2" justifyContent="center">
+          <Button tone="outline" borderRadius={999} onPress={() => void handleIvePaid()}>
+            Payment stuck? Tap here
+          </Button>
+        </XStack>
+      </YStack>
+    ) : null
+
+  const paymentForm = (
     <YStack
       gap="$3"
-      padding="$4"
-      borderRadius={14}
-      borderWidth={1}
-      borderColor={borderColor}
-      backgroundColor={ui.surface}
       width="100%"
+      flexShrink={0}
+      minWidth={0}
+      opacity={authActive ? 0.45 : 1}
+      pointerEvents={authActive ? 'none' : 'auto'}
     >
-      <YStack gap="$1">
-        <Text fontSize={18} fontWeight="800" color={ui.text}>
-          {intentUri && showQrForMode
-            ? 'Scan QR to pay'
-            : intentUri
-              ? `Pay with ${modeMeta.label}`
-              : showPicker
-                ? 'Choose payment method'
-                : `Pay with ${modeMeta.label}`}
-        </Text>
-        <Text fontSize={13} color={secondaryColor} lineHeight={18}>
-          {intentUri && showQrForMode
-            ? amountLabel
-              ? `Open ${modeMeta.shortLabel} or any UPI app and scan to pay ${amountLabel}.`
-              : `Open ${modeMeta.shortLabel} or any UPI app and scan this QR to complete payment.`
-            : showPicker
-              ? 'Select UPI, card, net banking or wallet — then place your order.'
-              : 'Complete payment securely via SHEPay.'}
-        </Text>
-      </YStack>
+      {(intentUri || authActive) && !collapsed ? (
+        <YStack gap="$1">
+          <Text fontSize={18} fontWeight="800" color={ui.text}>
+            {intentUri && showQrForMode
+              ? 'Scan QR to pay'
+              : intentUri
+                ? `Pay with ${modeMeta.label}`
+                : 'Complete bank authentication →'}
+          </Text>
+          <Text fontSize={13} color={secondaryColor} lineHeight={18}>
+            {authActive
+              ? isDesktop
+                ? 'Your card details are locked while you finish OTP on the right.'
+                : 'Your card details are locked while you finish OTP below.'
+              : amountLabel
+                ? `Open ${modeMeta.shortLabel} or any UPI app and scan to pay ${amountLabel}.`
+                : `Open ${modeMeta.shortLabel} or any UPI app and scan this QR to complete payment.`}
+          </Text>
+        </YStack>
+      ) : null}
 
       {showPicker ? (
         <CheckoutPayuMethodPicker
@@ -379,7 +749,10 @@ export function CheckoutPayuPanel({
           secondaryColor={secondaryColor}
           textColor={ui.text}
           mode={mode}
+          collapsed={collapsed}
           onModeChange={(next) => {
+            if (controlsLocked) return
+            onSelectOnline?.()
             setMode(next === 'all' ? 'upi_gpay' : next)
             setIntentUri(null)
             setAcsHtml(null)
@@ -388,6 +761,8 @@ export function CheckoutPayuPanel({
           }}
           vpa={vpa}
           onVpaChange={setVpa}
+          cardFields={cardFieldsNode}
+          disabledSectionIds={disabledMethodSections}
         />
       ) : null}
 
@@ -422,7 +797,7 @@ export function CheckoutPayuPanel({
         </Text>
       ) : null}
 
-      {showPicker ? (
+      {showPicker && !collapsed ? (
         <XStack gap="$2" flexWrap="wrap">
           <Button
             flex={1}
@@ -430,21 +805,21 @@ export function CheckoutPayuPanel({
             backgroundColor={brandColor}
             color={ui.onBrand}
             borderRadius={999}
-            disabled={busy || awaitingVerify}
+            disabled={controlsLocked}
             onPress={() => void handlePay()}
           >
             {busy ? 'Starting…' : `Pay with ${modeMeta.shortLabel}`}
           </Button>
-          <Button tone="outline" borderRadius={999} onPress={onCancel} disabled={busy}>
+          <Button tone="outline" borderRadius={999} onPress={onCancel} disabled={busy || authActive}>
             Cancel
           </Button>
         </XStack>
-      ) : !error ? (
+      ) : !error && !collapsed ? (
         <Button
           tone="outline"
           borderRadius={999}
           onPress={onCancel}
-          disabled={busy}
+          disabled={busy || authActive}
           alignSelf="flex-start"
         >
           Cancel payment
@@ -464,69 +839,8 @@ export function CheckoutPayuPanel({
         </YStack>
       ) : null}
 
-      {acsHtml && Platform.OS === 'web' ? (
-        <YStack
-          width="100%"
-          height={480}
-          borderRadius={12}
-          overflow="hidden"
-          borderWidth={1}
-          borderColor={borderColor}
-          backgroundColor="#fff"
-        >
-          <Text fontSize={12} color={secondaryColor} padding="$2">
-            {acsTitle}
-          </Text>
-          {/* @ts-expect-error web-only iframe for ACS / bank OTP */}
-          <iframe
-            title="SHEPay bank authentication"
-            srcDoc={acsHtml}
-            style={{ width: '100%', height: '100%', border: 'none' }}
-            sandbox="allow-forms allow-scripts allow-same-origin allow-top-navigation allow-top-navigation-by-user-activation allow-popups"
-          />
-          <XStack padding="$2" justifyContent="center">
-            <Button borderRadius={999} onPress={() => void handleIvePaid()}>
-              I’ve completed payment
-            </Button>
-          </XStack>
-        </YStack>
-      ) : null}
-
-      {acsHtml && Platform.OS !== 'web' ? (
-        <YStack
-          width="100%"
-          height={480}
-          borderRadius={12}
-          overflow="hidden"
-          borderWidth={1}
-          borderColor={borderColor}
-          backgroundColor="#fff"
-        >
-          <Text fontSize={12} color={secondaryColor} padding="$2">
-            {acsTitle}
-          </Text>
-          {WebView ? (
-            <WebView
-              originWhitelist={['*']}
-              source={{ html: acsHtml, baseUrl: 'https://sheconomy.in' }}
-              style={{ flex: 1, width: '100%', minHeight: 400 }}
-              javaScriptEnabled
-              domStorageEnabled
-              sharedCookiesEnabled
-              startInLoadingState
-            />
-          ) : (
-            <YStack flex={1} alignItems="center" justifyContent="center" padding="$4">
-              <Spinner size="large" />
-            </YStack>
-          )}
-          <XStack padding="$2" justifyContent="center">
-            <Button borderRadius={999} onPress={() => void handleIvePaid()}>
-              I’ve completed payment
-            </Button>
-          </XStack>
-        </YStack>
-      ) : null}
+      {!isDesktop ? acsWebFrame : null}
+      {!isDesktop ? acsNativeFrame : null}
 
       {intentUri ? (
         <YStack
@@ -613,6 +927,33 @@ export function CheckoutPayuPanel({
           </XStack>
         </YStack>
       ) : null}
+    </YStack>
+  )
+
+  return (
+    <YStack
+      gap="$3"
+      padding={embedded ? 0 : '$4'}
+      borderRadius={embedded ? 0 : 14}
+      borderWidth={embedded ? 0 : 1}
+      borderColor={embedded ? 'transparent' : borderColor}
+      backgroundColor={embedded ? 'transparent' : ui.surface}
+      width="100%"
+      flexShrink={0}
+      alignSelf="stretch"
+    >
+      {isDesktop && authActive && Platform.OS === 'web' ? (
+        <XStack gap="$4" width="100%" alignItems="flex-start" flexWrap="wrap">
+          <YStack flex={1} minWidth={260} width="100%">
+            {paymentForm}
+          </YStack>
+          <YStack flex={1} minWidth={280} maxWidth={520} width="100%">
+            {acsWebFrame}
+          </YStack>
+        </XStack>
+      ) : (
+        paymentForm
+      )}
     </YStack>
   )
 }

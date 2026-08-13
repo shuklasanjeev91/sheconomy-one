@@ -77,6 +77,17 @@ export const commerceRoutes = {
     params.set('ids', orderIds.join(','))
     return `/orders/success?${params.toString()}` as Href
   },
+  paymentSuccess: (txnid?: string) => {
+    if (!txnid?.trim()) return '/payment/success' as Href
+    return `/payment/success?txn=${encodeURIComponent(txnid.trim())}` as Href
+  },
+  paymentFailure: (txnid?: string, reason?: string) => {
+    const params = new URLSearchParams()
+    if (txnid?.trim()) params.set('txn', txnid.trim())
+    if (reason?.trim()) params.set('reason', reason.trim())
+    const search = params.toString()
+    return (search ? `/payment/failure?${search}` : '/payment/failure') as Href
+  },
   paymentMethods: '/payment-methods' as Href,
   addresses: '/addresses' as Href,
   search: (query?: string, scope?: string) => appRoutes.search(query, scope ?? 'listings'),

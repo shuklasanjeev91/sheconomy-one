@@ -280,8 +280,19 @@ function ThemedApp({ children }: { children: React.ReactNode }) {
       <Theme name={userScheme.value}>
         <YStack
           flex={Platform.OS === 'web' ? undefined : 1}
+          flexGrow={Platform.OS === 'web' ? 1 : undefined}
+          flexShrink={0}
           width="100%"
-          style={Platform.OS === 'web' ? screenFillStyle() : undefined}
+          style={
+            Platform.OS === 'web'
+              ? {
+                  ...screenFillStyle(),
+                  display: 'flex',
+                  flexDirection: 'column',
+                  flex: '1 0 auto',
+                }
+              : undefined
+          }
         >
           <ToastProvider swipeDirection="horizontal" duration={4000} native={false}>
             {children}
