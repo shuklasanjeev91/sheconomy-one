@@ -5,18 +5,18 @@ import { useAppLayout } from '~/hooks/useAppLayout'
 import { replaceApp } from '~/lib/platform/navigate'
 import { appRoutes } from '~/lib/routes'
 
-/** Mobile: category list. Desktop: redirect into account panel (sidebar stays visible). */
+/** Narrow: category list. Rail layouts: redirect into account panel (sidebar stays visible). */
 export default function SettingsIndexRoute() {
-  const { isDesktop, isMediaHydrated } = useAppLayout()
+  const { hasSideRails, isMediaHydrated } = useAppLayout()
 
   useEffect(() => {
     if (!isMediaHydrated) return
-    if (isDesktop) {
+    if (hasSideRails) {
       replaceApp(appRoutes.settingsSection('account'))
     }
-  }, [isDesktop, isMediaHydrated])
+  }, [hasSideRails, isMediaHydrated])
 
-  if (!isMediaHydrated || isDesktop) {
+  if (!isMediaHydrated || hasSideRails) {
     return null
   }
 

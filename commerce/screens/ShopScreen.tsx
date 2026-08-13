@@ -80,7 +80,7 @@ export function ShopScreen(
   const { initial, awaitingInitial = false } = props
   const ui = useAppUi()
   const { slug } = useParams<{ slug: string }>()
-  const { isDesktop, isWide, isTablet } = useAppLayout()
+  const { hasSideRails, isWide, isTablet } = useAppLayout()
   const { shop, isLoading, error, refresh } = useShop(slug, initial, { awaitingInitial })
   useCanonicalShopSlug(slug, shop)
   const {
@@ -96,7 +96,7 @@ export function ShopScreen(
   const { user } = useProfile()
   const { updateShop } = useVendorShops()
   const toast = useAppToast()
-  const gridColumns = isWide ? 4 : isDesktop ? 3 : isTablet ? 3 : 2
+  const gridColumns = isWide ? 4 : hasSideRails ? 3 : isTablet ? 3 : 2
 
   const [shopName, setShopName] = useState('')
   const [shopDescription, setShopDescription] = useState('')
@@ -276,7 +276,7 @@ export function ShopScreen(
           backgroundColor={ui.surface}
           borderBottomWidth={1}
           borderBottomColor={ui.borderSubtle}
-          paddingHorizontal={isDesktop ? 24 : 16}
+          paddingHorizontal={hasSideRails ? 24 : 16}
           gap="$1"
           zIndex={2}
           position="relative"
@@ -311,7 +311,7 @@ export function ShopScreen(
           {tab === 'products' ? (
             <XStack gap="$5" alignItems="flex-start" width="100%">
               <YStack flex={1} minWidth={0} gap="$4" width="100%">
-                {isDesktop ? (
+                {hasSideRails ? (
                   <AvailableOffersCard
                     currency={shop.shop_currency ?? 'INR'}
                     shopId={shop.id}
@@ -349,7 +349,7 @@ export function ShopScreen(
                       borderRadius={8}
                       flex={1}
                       minWidth={160}
-                      maxWidth={isDesktop ? 220 : undefined}
+                      maxWidth={hasSideRails ? 220 : undefined}
                       iconAfter={<Icons.ChevronDown size={16} />}
                       aria-label={`Sort by ${sortLabel}`}
                       onPress={() => setSortOpen(true)}
@@ -407,7 +407,7 @@ export function ShopScreen(
                 )}
               </YStack>
 
-              {isDesktop ? (
+              {hasSideRails ? (
                 <StickyRail width={300} flexShrink={0} pin="document">
                   <YStack gap="$3" width="100%">
                     {buyBox}
@@ -480,7 +480,7 @@ export function ShopScreen(
                   ))}
                 </XStack>
               </YStack>
-              <YStack width={isDesktop ? 300 : '100%'} flexShrink={0}>
+              <YStack width={hasSideRails ? 300 : '100%'} flexShrink={0}>
                 {buyBox}
               </YStack>
             </XStack>
@@ -516,7 +516,7 @@ export function ShopScreen(
             </YStack>
           ) : null}
 
-          {!isDesktop && tab === 'products' ? (
+          {!hasSideRails && tab === 'products' ? (
             <YStack gap="$3" width="100%" paddingTop="$2">
               {buyBox}
               {isOwner ? (

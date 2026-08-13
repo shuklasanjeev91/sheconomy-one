@@ -163,7 +163,7 @@ export function ListingScreen({
   const { addToCart, items: cartItems, updateQuantity, removeItem } = useCart()
   const { user } = useSupabase()
   const toast = useAppToast()
-  const { isDesktop } = useAppLayout()
+  const { hasSideRails } = useAppLayout()
   const shopFollow = useShopFollow(listing?.shop_id)
 
   usePageSeo(
@@ -205,7 +205,7 @@ export function ListingScreen({
 
   useEffect(() => {
     setGalleryLightboxOpen(false)
-  }, [isDesktop])
+  }, [hasSideRails])
 
   useEffect(() => {
     setVariantSelection(getDefaultVariantSelection(variationGroups))
@@ -551,7 +551,7 @@ export function ListingScreen({
   }
 
   // ─── Mobile layout ──────────────────────────────────────────────────────────
-  if (!isDesktop) {
+  if (!hasSideRails) {
     return (
       <YStack flex={1} width="100%" backgroundColor={ui.surface} position="relative">
         <PageScroll>

@@ -57,7 +57,7 @@ const SUMMARY_WIDTH = 300
 
 export function CartScreen() {
   const c = useCommercePalette()
-  const { isDesktop } = useAppLayout()
+  const { hasSideRails } = useAppLayout()
   const { user } = useSupabase()
   const {
     cart,
@@ -330,7 +330,7 @@ export function CartScreen() {
     )
   }
 
-  const showMobileBar = !isDesktop && items.length > 0
+  const showMobileBar = !hasSideRails && items.length > 0
 
   const subtotalLine = (
     <Text fontSize={18} color={c.text}>
@@ -474,7 +474,7 @@ export function CartScreen() {
       borderColor={c.border}
       borderWidth={1}
       borderRadius={12}
-      padding={isDesktop ? '$4' : '$3.5'}
+      padding={hasSideRails ? '$4' : '$3.5'}
       gap="$3"
       width="100%"
       position="relative"
@@ -484,7 +484,7 @@ export function CartScreen() {
       <XStack justifyContent="space-between" alignItems="flex-end">
         <YStack gap="$1" flex={1} minWidth={0}>
           <Text
-            fontSize={isDesktop ? 26 : 22}
+            fontSize={hasSideRails ? 26 : 22}
             fontWeight="700"
             color={c.text}
             letterSpacing={-0.4}
@@ -495,7 +495,7 @@ export function CartScreen() {
             {unitCount} {unitCount === 1 ? 'item' : 'items'} selected
           </Text>
         </YStack>
-        {isDesktop ? (
+        {hasSideRails ? (
           <Text fontSize={13} color={c.secondary}>
             Price
           </Text>
@@ -513,7 +513,7 @@ export function CartScreen() {
         ) : null}
       </XStack>
 
-      <YStack height={1} backgroundColor={c.divider} marginHorizontal={isDesktop ? -16 : -14} />
+      <YStack height={1} backgroundColor={c.divider} marginHorizontal={hasSideRails ? -16 : -14} />
 
       {groupedByShop.map(([shopId, shopItems], groupIndex) => {
         const shopSelectedItems = shopItems.filter((item) => isSelected(item.id))
@@ -577,7 +577,7 @@ export function CartScreen() {
                 maxQuantity={stock ?? null}
                 outOfStock={outOfStock}
                 formatPrice={(amount) => formatCartMoney(amount, item.shop_id)}
-                isDesktop={isDesktop}
+                hasSideRails={hasSideRails}
                 onToggle={() => toggleCartItemSelected(item.id)}
                 onQuantityChange={handleQuantityChange}
                 onRemove={handleRemove}
@@ -612,7 +612,7 @@ export function CartScreen() {
         )
       })}
 
-      {isDesktop ? (
+      {hasSideRails ? (
         <XStack justifyContent="flex-end" paddingTop="$2">
           {subtotalLine}
         </XStack>
@@ -627,14 +627,14 @@ export function CartScreen() {
         borderColor={c.border}
         borderWidth={1}
         borderRadius={12}
-        padding={isDesktop ? '$4' : '$3.5'}
+        padding={hasSideRails ? '$4' : '$3.5'}
         gap="$3"
         width="100%"
         position="relative"
         zIndex={1}
       >
         <YStack gap="$1">
-          <Text fontSize={isDesktop ? 22 : 20} fontWeight="700" color={c.text} letterSpacing={-0.3}>
+          <Text fontSize={hasSideRails ? 22 : 20} fontWeight="700" color={c.text} letterSpacing={-0.3}>
             Saved for later ({savedItems.length})
           </Text>
           <Text fontSize={13} color={c.secondary}>
@@ -650,7 +650,7 @@ export function CartScreen() {
             item={item}
             listingHref={listingHref(item.listing_id)}
             formatPrice={(amount) => formatCartMoney(amount, item.shop_id)}
-            isDesktop={isDesktop}
+            hasSideRails={hasSideRails}
             outOfStock={outOfStock}
             onMoveToCart={() => void handleMoveToCart(item.id)}
             onDelete={() => void handleRemove(item.id)}
@@ -688,7 +688,7 @@ export function CartScreen() {
           maxWidth="100%"
           alignSelf="stretch"
           backgroundColor={c.page}
-          padding={isDesktop ? '$4' : '$2'}
+          padding={hasSideRails ? '$4' : '$2'}
           borderRadius={12}
           paddingBottom={showMobileBar ? checkoutBarHeight + 24 : undefined}
         >
@@ -726,7 +726,7 @@ export function CartScreen() {
               {savedForLaterShelf}
               {discoveryRails}
             </YStack>
-          ) : isDesktop ? (
+          ) : hasSideRails ? (
             <YStack gap="$8" width="100%">
               <XStack
                 width="100%"
@@ -806,7 +806,7 @@ function SavedForLaterRow({
   item,
   listingHref,
   formatPrice,
-  isDesktop,
+  hasSideRails,
   outOfStock,
   onMoveToCart,
   onDelete,
@@ -815,14 +815,14 @@ function SavedForLaterRow({
   item: CartItemRow
   listingHref: string
   formatPrice: (amount: number) => string
-  isDesktop: boolean
+  hasSideRails: boolean
   outOfStock: boolean
   onMoveToCart: () => void
   onDelete: () => void
   onMoveToWishlist: () => void
 }) {
   const c = useCommercePalette()
-  const imageSize = isDesktop ? 96 : 80
+  const imageSize = hasSideRails ? 96 : 80
   const lineTotal = item.unit_price * item.quantity
 
   return (
@@ -848,7 +848,7 @@ function SavedForLaterRow({
         <YStack flex={1} minWidth={0} gap="$1.5">
           <AppLink href={listingHref} asChild>
             <Text
-              fontSize={isDesktop ? 16 : 14}
+              fontSize={hasSideRails ? 16 : 14}
               fontWeight="600"
               color={c.link}
               numberOfLines={2}
@@ -899,7 +899,7 @@ function CartRow({
   maxQuantity,
   outOfStock,
   formatPrice,
-  isDesktop,
+  hasSideRails,
   onToggle,
   onQuantityChange,
   onRemove,
@@ -912,14 +912,14 @@ function CartRow({
   maxQuantity?: number | null
   outOfStock: boolean
   formatPrice: (amount: number) => string
-  isDesktop: boolean
+  hasSideRails: boolean
   onToggle: () => void
   onQuantityChange: (itemId: string, nextQuantity: number) => void
   onRemove: (itemId: string) => void
   onSaveForLater: (itemId: string) => void
 }) {
   const c = useCommercePalette()
-  const imageSize = isDesktop ? 120 : 90
+  const imageSize = hasSideRails ? 120 : 90
   const atMax = typeof maxQuantity === 'number' && item.quantity >= maxQuantity
   const overStock = typeof maxQuantity === 'number' && item.quantity > maxQuantity
   const lowStock =
@@ -962,7 +962,7 @@ function CartRow({
         <YStack flex={1} minWidth={0} gap="$1.5">
           <AppLink href={listingHref} asChild>
             <Text
-              fontSize={isDesktop ? 18 : 15}
+              fontSize={hasSideRails ? 18 : 15}
               fontWeight="600"
               color={c.link}
               numberOfLines={2}
@@ -1001,7 +1001,7 @@ function CartRow({
             </Text>
           ) : null}
 
-          {!isDesktop ? (
+          {!hasSideRails ? (
             <YStack gap={2} paddingTop={2}>
               <Text fontSize={17} fontWeight="800" color={c.priceStrong} letterSpacing={-0.3}>
                 {formatPrice(lineTotal)}
@@ -1015,7 +1015,7 @@ function CartRow({
           ) : null}
         </YStack>
 
-        {isDesktop ? (
+        {hasSideRails ? (
           <YStack alignItems="flex-end" flexShrink={0} gap={2}>
             <Text fontSize={18} fontWeight="800" color={c.priceStrong}>
               {formatPrice(lineTotal)}
@@ -1033,7 +1033,7 @@ function CartRow({
         gap="$3"
         alignItems="center"
         flexWrap="wrap"
-        paddingLeft={isDesktop ? imageSize + 40 : 0}
+        paddingLeft={hasSideRails ? imageSize + 40 : 0}
       >
         <ListingQuantityStepper
           size="sm"
@@ -1057,18 +1057,18 @@ function CartRow({
       </XStack>
 
       {overStock ? (
-        <Text fontSize={12} color={c.brand} paddingLeft={isDesktop ? imageSize + 40 : 0}>
+        <Text fontSize={12} color={c.brand} paddingLeft={hasSideRails ? imageSize + 40 : 0}>
           Only {maxQuantity} in stock — reduce quantity to check out.
         </Text>
       ) : outOfStock ? (
-        <YStack gap="$2" paddingLeft={isDesktop ? imageSize + 40 : 0}>
+        <YStack gap="$2" paddingLeft={hasSideRails ? imageSize + 40 : 0}>
           <Text fontSize={12} color="#b45309" fontWeight="600">
             Currently out of stock — remove this item or save it for later.
           </Text>
           <StockNotifyButton listingId={item.listing_id} outOfStock />
         </YStack>
       ) : lowStock ? (
-        <Text fontSize={12} color={c.secondary} paddingLeft={isDesktop ? imageSize + 40 : 0}>
+        <Text fontSize={12} color={c.secondary} paddingLeft={hasSideRails ? imageSize + 40 : 0}>
           Available: {maxQuantity} in stock
         </Text>
       ) : null}

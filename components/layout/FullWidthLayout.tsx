@@ -136,13 +136,13 @@ export function PageColumns({
   alignItems = 'flex-start',
   ...props
 }: PageColumnsProps) {
-  const { isDesktop } = useAppLayout()
+  const { hasSideRails } = useAppLayout()
 
   return (
     <YStack
       width="100%"
       maxWidth="100%"
-      flexDirection={isDesktop ? 'row' : 'column'}
+      flexDirection={hasSideRails ? 'row' : 'column'}
       alignItems={alignItems}
       gap={gap}
       alignSelf="stretch"

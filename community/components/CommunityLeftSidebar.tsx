@@ -20,7 +20,7 @@ import { communityRoutes, routes } from '~/lib/routes'
 type CommunitySidebarPin = 'document' | 'viewport'
 
 export function CommunityLeftSidebar({ pin = 'document' }: { pin?: CommunitySidebarPin }) {
-  const { isDesktop } = useAppLayout()
+  const { hasSideRails } = useAppLayout()
   const pathname = usePathname()
   const { isAuthenticated } = useProfile()
   const communityUi = useCommunityUi()
@@ -34,7 +34,7 @@ export function CommunityLeftSidebar({ pin = 'document' }: { pin?: CommunitySide
   const visibleItems = expanded ? navItems : navItems.slice(0, COMMUNITY_LEFT_NAV_VISIBLE)
   const canExpand = navItems.length > COMMUNITY_LEFT_NAV_VISIBLE
 
-  if (!isDesktop) {
+  if (!hasSideRails) {
     return null
   }
 

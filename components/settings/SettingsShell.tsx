@@ -19,13 +19,13 @@ const SIDEBAR_WIDTH = 260
  */
 export function SettingsShell({ children }: { children?: ReactNode }) {
   const ui = useAppUi()
-  const { isDesktop } = useAppLayout()
+  const { hasSideRails } = useAppLayout()
   const { canManageShops } = useAccess()
   const { shops } = useVendorShops()
   const showShop = canManageShops || shops.length > 0
   const content = children ?? <Slot />
 
-  if (!isDesktop) {
+  if (!hasSideRails) {
     return (
       <FullWidthLayout scroll>
         <PageSection paddingVertical="$3">{content}</PageSection>

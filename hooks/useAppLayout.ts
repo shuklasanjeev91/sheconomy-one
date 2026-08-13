@@ -56,9 +56,25 @@ export function useAppLayout() {
   /** Fixed card width for horizontal listing carousels, same breakpoints. */
   const listingCardWidth = isWide ? 220 : isDesktop ? 200 : media.gtSm ? 168 : 160
 
+  /**
+   * Content sits beside a side rail — community sidebars, settings nav, Manage
+   * shop sidebar, two-column pages.
+   *
+   * Kept separate from `isDesktop` so a large native tablet can take the wide
+   * content layout while keeping touch chrome: the mobile header and bottom tab
+   * bar stay, only the page splits into rail + content.
+   */
+  const hasSideRails = isDesktop || (isNative && width >= APP_LAYOUT.tabletSideRailMinWidth)
+
+  /** Room for a second rail (community right sidebar) beside the content. */
+  const hasDualSideRails =
+    isWide || (isNative && width >= APP_LAYOUT.tabletDualSideRailMinWidth)
+
   return {
     listingGridColumns,
     listingCardWidth,
+    hasSideRails,
+    hasDualSideRails,
     isDesktop,
     isDesktopWeb,
     isWide,

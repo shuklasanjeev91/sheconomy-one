@@ -41,8 +41,12 @@ export function CommunityShell({
 }: CommunityShellProps) {
   const communityUi = useCommunityUi()
   const pathname = usePathname()
-  const { isWide, isDesktopWeb, gutter } = useAppLayout()
+  const { hasSideRails, hasDualSideRails, isDesktopWeb, gutter } = useAppLayout()
   const showSidebars = isCommunityPath(pathname)
+  // When the feed owns scrolling there is no page scroll to carry the rails,
+  // so they fill the column height and scroll themselves.
+  const railPin = scroll ? 'document' : 'viewport'
+  const stretchColumns = !scroll && hasSideRails
 
   // Desktop web sticky rails: always use center ScrollView for document chrome.
   // When scroll=false (FlashList feed), skip the outer page scroller on mobile/native.
@@ -120,7 +124,7 @@ export function CommunityShell({
               </YStack>
             )}
 
-            {isWide ? <CommunityRightSidebar pin="viewport" /> : null}
+            {hasDualSideRails ? <CommunityRightSidebar pin="viewport" /> : null}
           </PageColumns>
         </YStack>
       </YStack>
@@ -136,14 +140,19 @@ export function CommunityShell({
       flex={1}
     >
       <PageSection paddingVertical="$3" flex={scroll ? undefined : 1} minHeight={scroll ? undefined : 0}>
-        <PageColumns gap={COMMUNITY_LAYOUT.columnGap} flex={scroll ? undefined : 1} minHeight={scroll ? undefined : 0}>
-          {showSidebars ? <CommunityLeftSidebar pin="document" /> : null}
+        <PageColumns
+          gap={COMMUNITY_LAYOUT.columnGap}
+          flex={scroll ? undefined : 1}
+          minHeight={scroll ? undefined : 0}
+          alignItems={stretchColumns ? 'stretch' : undefined}
+        >
+          {showSidebars ? <CommunityLeftSidebar pin={railPin} /> : null}
 
           <YStack flex={1} minWidth={0} minHeight={scroll ? undefined : 0} gap="$3" backgroundColor={communityUi.pageBg} {...LAYOUT_STRETCH}>
             {children}
           </YStack>
 
-          {showSidebars && isWide ? <CommunityRightSidebar pin="document" /> : null}
+          {showSidebars && hasDualSideRails ? <CommunityRightSidebar pin={railPin} /> : null}
         </PageColumns>
       </PageSection>
     </FullWidthLayout>

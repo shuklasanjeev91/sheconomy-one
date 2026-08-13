@@ -38,7 +38,7 @@ export function CommunityFeedScreen() {
   const [contentFilter, setContentFilter] = useState<FeedContentFilter | null>(null)
   // Use window-width layout (not Tamagui useMedia) so phones are never treated as
   // desktop — otherwise suggestions are skipped here and the right rail is also hidden.
-  const { isWide } = useAppLayout()
+  const { hasDualSideRails } = useAppLayout()
   const { setScrollY } = useAppBarScroll()
   const { items, isLoading, isLoadingMore, isRefreshing, hasMore, error, loadMore, refresh, removeItem, patchItem } =
     useCommunityFeed(true, sort, contentFilter ?? undefined)
@@ -62,7 +62,7 @@ export function CommunityFeedScreen() {
   }, [setScrollY])
 
   // Only skip in-feed suggestions when the right sidebar actually shows them.
-  const showSuggestionsInFeed = !isWide && sections.length > 0
+  const showSuggestionsInFeed = !hasDualSideRails && sections.length > 0
 
   const feedEntries = useMemo((): FeedEntry[] => {
     if (!showSuggestionsInFeed) {
