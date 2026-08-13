@@ -8,6 +8,7 @@ import { GenderVerificationModal } from '~/components/gender-verification/Gender
 import { requiresGenderVerification } from '~/config/route-protection.config'
 import { useProfile } from '~/hooks/useProfile'
 import { hasVerifiedFemaleAccess } from '~/lib/auth/access'
+import { isSafeReturnPath } from '~/lib/auth/redirect'
 import { GENDER_VERIFICATION_PROMPT } from '~/lib/gender-verification'
 import { buildVerificationDeniedRedirect, isHumanVerificationIntentPath } from '~/lib/gender-verification/denied-redirect'
 import { rememberSafeAppPath } from '~/lib/gender-verification/route-memory'
@@ -27,9 +28,9 @@ import {
   clearPendingHumanVerificationOpen,
   peekPendingHumanVerificationOpen,
 } from '~/lib/gender-verification/open-request'
-import { replaceApp } from '~/lib/platform/navigate'
+import { navigateApp, replaceApp } from '~/lib/platform/navigate'
 import { refreshProfiles } from '~/lib/profile/refresh'
-import { patchCachedProfile } from '~/lib/profile/profile-cache'
+import { patchSessionProfile } from '~/lib/profile/profile-store'
 import { persistStorage } from '~/lib/store/storage'
 
 const {
@@ -98,11 +99,21 @@ export function GenderVerificationHost() {
   const suppressedRoute = isSuppressedRoute(pathname)
   const verificationFlowActive = manualOpen || verificationFlowRef.current
 
-  const openVerificationUi = useCallback(() => {
+  /**
+   * `returnTo` is where the member was heading. When they already have full
+   * access the request came from a gate reading a stale profile, so honour the
+   * destination — dropping it silently would make the tab press do nothing.
+   */
+  const openVerificationUi = useCallback((returnTo?: string | null) => {
+    clearPendingHumanVerificationOpen()
+
     if (hasFullAccessRef.current) {
-      clearPendingHumanVerificationOpen()
+      void clearVerificationFlowOpen()
+      void clearVerificationReturnTo()
+      if (isSafeReturnPath(returnTo)) navigateApp(returnTo as Href)
       return
     }
+
     verificationFlowRef.current = true
     void markVerificationFlowOpen()
     setDenied(false)
@@ -114,13 +125,9 @@ export function GenderVerificationHost() {
   }, [pathname])
 
   useEffect(() => {
-    return subscribeHumanVerificationOpen(() => {
-      if (hasFullAccessRef.current) {
-        clearPendingHumanVerificationOpen()
-        return
-      }
+    return subscribeHumanVerificationOpen((request) => {
       if (!isAuthenticatedRef.current) return
-      openVerificationUi()
+      openVerificationUi(request.returnTo)
     })
   }, [openVerificationUi])
 
@@ -131,7 +138,7 @@ export function GenderVerificationHost() {
       peekVerificationFlowOpen() ||
       peekPendingHumanVerificationOpen()
     ) {
-      openVerificationUi()
+      openVerificationUi(peekPendingHumanVerificationOpen()?.returnTo)
     }
   }, [isAuthenticated, hasFullAccess, openVerificationUi])
 
@@ -274,10 +281,10 @@ export function GenderVerificationHost() {
   }, [closeVerificationFlow, pathname])
 
   const handleVerified = useCallback(() => {
+    // Apply the new access synchronously for every consumer — a tab press that
+    // races the refetch must not be treated as unverified.
     if (profile?.id) {
-      void patchCachedProfile(profile.id, { is_verified: true, gender: true }).then(() =>
-        refreshProfiles(),
-      )
+      patchSessionProfile(profile.id, { is_verified: true, gender: true })
     } else {
       refreshProfiles()
     }
@@ -286,7 +293,7 @@ export function GenderVerificationHost() {
 
     void readVerificationReturnTo().then((returnTo) => {
       void clearVerificationReturnTo()
-      if (returnTo) {
+      if (isSafeReturnPath(returnTo)) {
         replaceApp(returnTo as Href)
       }
     })

@@ -210,12 +210,58 @@ export function getVisibleFeatures(tier: AccessTier): AppFeature[] {
 /**
  * Header nav target — feature route, sign-in (guest), or Human verification open
  * (limited member on Community / Chat). Account stays on the denied modal path.
+ *
+ * `isTierKnown` guards against acting on an unsettled profile: an unknown tier
+ * resolves to `male`, so without it a verified member whose row has not loaded
+ * yet would be sent to verification instead of where she tapped.
  */
-export function resolveFeatureNavHref(tier: AccessTier, href: string, feature: AppFeature): Href {
+export function resolveFeatureNavHref(
+  tier: AccessTier,
+  href: string,
+  feature: AppFeature,
+  isTierKnown = true,
+): Href {
+  if (!isTierKnown) return href as Href
   if (canAccessFeature(tier, feature)) return href as Href
   if (tier === 'guest') return buildSignInUrl(href)
   if (feature === 'community' || feature === 'chat') {
     return buildHumanVerificationOpenRedirect({ returnTo: href }) as Href
   }
   return buildVerificationDeniedRedirect() as Href
+}
+
+/** What a nav / tab press should actually do. */
+export type FeatureNavIntent =
+  | { kind: 'navigate'; href: string }
+  | { kind: 'sign-in'; href: string }
+  | { kind: 'verify'; returnTo: string }
+
+/**
+ * The one place that decides what pressing a feature tab does.
+ *
+ * While the profile is still unsettled (`isTierKnown === false`) the press
+ * navigates and lets `AppAccessGate` rule on the destination once the row
+ * arrives — it renders a spinner and then either paints or redirects. Deciding
+ * here from an unknown tier is what used to turn a verified member's tap into a
+ * verification request that nothing acted on.
+ */
+export function resolveFeatureNavIntent(input: {
+  href: string
+  feature: AppFeature
+  tier: AccessTier
+  isAuthenticated: boolean
+  isTierKnown: boolean
+}): FeatureNavIntent {
+  const { href, feature, tier, isAuthenticated, isTierKnown } = input
+
+  if (!isTierKnown) return { kind: 'navigate', href }
+  if (canAccessFeature(tier, feature)) return { kind: 'navigate', href }
+
+  // Community / Chat — Human verification only when signed in.
+  if (feature === 'community' || feature === 'chat') {
+    return isAuthenticated ? { kind: 'verify', returnTo: href } : { kind: 'sign-in', href }
+  }
+
+  if (tier === 'guest') return { kind: 'sign-in', href }
+  return { kind: 'navigate', href }
 }

@@ -267,8 +267,13 @@ export function getVisibleCenterNav(): AppCenterNavItem[] {
   return APP_CENTER_NAV
 }
 
-export function getAuthMobileTab(tier: AccessTier): AppMobileTabItem {
-  if (tier === 'guest') {
+/**
+ * `isTierKnown === false` means the profile has not settled, which reads as the
+ * limited tier — point at the account surface instead of the verification flow
+ * so a verified member is not sent back to verification.
+ */
+export function getAuthMobileTab(tier: AccessTier, isTierKnown = true): AppMobileTabItem {
+  if (tier === 'guest' && isTierKnown) {
     return {
       href: routes.signIn,
       label: 'You',
@@ -277,7 +282,7 @@ export function getAuthMobileTab(tier: AccessTier): AppMobileTabItem {
     }
   }
 
-  if (tier === 'male') {
+  if (tier === 'male' && isTierKnown) {
     return {
       href: buildHumanVerificationOpenRedirect({ returnTo: String(routes.profile) }) as Href,
       label: 'You',
@@ -443,9 +448,10 @@ export function buildMobileBottomTabs(
   middleTabs: AppMobileTabItem[],
   tier: AccessTier,
   widthTier: BottomTabWidthTier = 'expanded',
+  isTierKnown = true,
 ): AppMobileTabItem[] {
   const home = getHomeMobileTab(section)
-  const auth = getAuthMobileTab(tier)
+  const auth = getAuthMobileTab(tier, isTierKnown)
 
   return [
     { ...home, label: formatBottomTabLabel(home.label, widthTier) },

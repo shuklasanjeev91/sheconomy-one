@@ -21,7 +21,7 @@ import {
   type VerificationDiagnostics,
 } from '~/lib/gender-verification'
 import { refreshProfiles } from '~/lib/profile/refresh'
-import { patchCachedProfile } from '~/lib/profile/profile-cache'
+import { patchSessionProfile } from '~/lib/profile/profile-store'
 import { commerceRoutes, communityRoutes } from '~/lib/routes'
 import { useAppUi } from '~/lib/theme/useAppUi'
 
@@ -35,9 +35,7 @@ export function GenderVerificationScreen() {
   const verification = useGenderVerification({
     onVerified: () => {
       if (profile?.id) {
-        void patchCachedProfile(profile.id, { gender: true, is_verified: true }).then(() =>
-          refreshProfiles(),
-        )
+        patchSessionProfile(profile.id, { gender: true, is_verified: true })
       } else {
         refreshProfiles()
       }

@@ -1,6 +1,5 @@
 import { GENDER_VERIFICATION_PROMPT } from '~/lib/gender-verification/constants'
 import { rememberVerificationReturnTo } from '~/lib/gender-verification/return-to-storage'
-import { markVerificationFlowOpen } from '~/lib/gender-verification/verification-flow-storage'
 
 type HumanVerificationRequest = {
   returnTo?: string | null
@@ -16,11 +15,14 @@ let pendingRequest: HumanVerificationRequest | null = null
 /**
  * Imperatively open Human verification (modal) for signed-in limited members.
  * Survives same-route taps on native where `?human=verify` would be a no-op.
+ *
+ * The "flow open" flag is persisted by the host once it actually shows the
+ * modal, not here — a request the host resolves another way (already verified)
+ * must not leave a sticky flag that reopens the modal on the next launch.
  */
 export function openHumanVerification(request: HumanVerificationRequest = {}): void {
   const returnTo = request.returnTo?.trim() || null
   pendingRequest = { returnTo }
-  void markVerificationFlowOpen()
   if (returnTo) {
     void rememberVerificationReturnTo(returnTo)
   }

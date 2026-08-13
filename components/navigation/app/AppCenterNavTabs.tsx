@@ -21,7 +21,7 @@ type AppCenterNavTabsProps = {
 
 export function AppCenterNavTabs({ variant = 'desktop', compact = false }: AppCenterNavTabsProps) {
   const pathname = usePathname()
-  const { canAccessFeature, isGuest, isAuthenticated } = useAccess()
+  const { resolveFeatureNavIntent } = useAccess()
   const ui = useAppUi()
   const colors = getAppColors(ui)
   const isInline = variant === 'mobile-inline'
@@ -29,27 +29,17 @@ export function AppCenterNavTabs({ variant = 'desktop', compact = false }: AppCe
   const showMobileLabels = isMobile
 
   function pressNavItem(item: (typeof APP_CENTER_NAV)[number]) {
-    const href = String(item.href)
-    if (canAccessFeature(item.feature)) {
-      navigateApp(href)
-      return
-    }
+    const intent = resolveFeatureNavIntent(String(item.href), item.feature)
 
-    // Community / Chat — Human verification only when signed in.
-    if (item.feature === 'community' || item.feature === 'chat') {
-      if (isAuthenticated) {
-        openHumanVerification({ returnTo: href })
-        return
-      }
-      navigateApp(buildSignInUrl(href))
+    if (intent.kind === 'verify') {
+      openHumanVerification({ returnTo: intent.returnTo })
       return
     }
-
-    if (isGuest) {
-      navigateApp(buildSignInUrl(href))
+    if (intent.kind === 'sign-in') {
+      navigateApp(buildSignInUrl(intent.href))
       return
     }
-    navigateApp(href)
+    navigateApp(intent.href)
   }
 
   return (

@@ -63,8 +63,7 @@ import { ShareButton } from '~/components/share'
 import { updateProfileImages } from '~/community/lib/profile-sections'
 import { readPickedImageBytes, type PickedImage } from '~/lib/media/pick-image'
 import { cropIfNeeded, pickImagesWithCrop } from '~/lib/media/pick-and-crop'
-import { refreshProfiles } from '~/lib/profile/refresh'
-import { patchCachedProfile } from '~/lib/profile/profile-cache'
+import { patchSessionProfile } from '~/lib/profile/profile-store'
 import { communityRoutes } from '~/lib/routes'
 import { getCreatorHubShareUrl, getProfileShareUrl } from '~/lib/share'
 import { supabase } from '~/lib/supabase/client'
@@ -502,15 +501,14 @@ function ProfileHero({
       if (kind === 'avatar') setLocal(nextAvatar)
       else setLocal(nextCover ?? publicUrl)
 
-      // Keep the signed-in profile cache in sync so tab bar / composer pick up the photo.
-      await patchCachedProfile(profile.id, {
+      // Keep the shared profile in sync so tab bar / composer pick up the photo.
+      patchSessionProfile(profile.id, {
         avatar_url: nextAvatar ?? null,
         cover_url: nextCover ?? null,
       })
       toast.show(kind === 'avatar' ? 'Profile photo updated' : 'Cover photo updated', {
         tone: 'success',
       })
-      refreshProfiles()
     } catch (err) {
       setLocal(null)
       toast.show('Could not update photo', {
