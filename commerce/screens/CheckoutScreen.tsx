@@ -510,7 +510,7 @@ export function CheckoutScreen() {
     !isLoadingAddresses &&
     contactCheckoutReady &&
     addressReady
-  const showMobileBar = !hasSideRails && !orderPlaced && !usesInlinePlatformPayu && !platformPayuSession
+  const showMobileBar = !isDesktop && !orderPlaced && !usesInlinePlatformPayu && !platformPayuSession
 
   const platformPayuPanelSession: CheckoutPayuSession =
     platformPayuSession ??

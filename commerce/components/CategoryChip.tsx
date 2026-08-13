@@ -1,6 +1,6 @@
 import { Text, YStack } from '~/components/ui'
 import { AppLink } from '~/components/navigation/AppLink'
-import { getShadowStyle, radius } from '~/config/tokens'
+import { getShadowStyle } from '~/config/tokens'
 import type { CategorySummary } from '~/lib/supabase/commerce'
 import { getCategorySlug } from '~/lib/supabase/commerce'
 import { commerceRoutes } from '~/lib/routes'
@@ -17,7 +17,7 @@ type CategoryChipProps = {
   category: CategorySummary
 }
 
-/** Category discovery tile — rounded rectangle card, brand fallback, label stack. */
+/** Category discovery tile — rectangle card, brand fallback, label stack. */
 export function CategoryChip({ category }: CategoryChipProps) {
   const ui = useAppUi()
   const label =
@@ -39,7 +39,6 @@ export function CategoryChip({ category }: CategoryChipProps) {
         <YStack
           width={TILE_WIDTH}
           height={TILE_HEIGHT}
-          borderRadius={radius.card}
           overflow="hidden"
           backgroundColor={ui.imagePlaceholder}
           alignItems="center"
@@ -58,7 +57,7 @@ export function CategoryChip({ category }: CategoryChipProps) {
             alt={category.category}
           />
         </YStack>
-        <Text
+        {/* <Text
           fontSize={12}
           fontWeight="600"
           textAlign="center"
@@ -74,7 +73,7 @@ export function CategoryChip({ category }: CategoryChipProps) {
           <Text fontSize={11} color={ui.textMuted} textAlign="center" fontWeight="500">
             {category.product_count} {category.product_count === 1 ? 'item' : 'items'}
           </Text>
-        ) : null}
+        ) : null} */}
       </YStack>
     </AppLink>
   )

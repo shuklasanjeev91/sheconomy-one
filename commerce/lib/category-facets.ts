@@ -1,3 +1,4 @@
+import { categoryTreeBranch, categoryTreeFilter } from '~/commerce/lib/category-tree'
 import { isStorefrontCategoryVisible } from '~/commerce/lib/category-visibility'
 import { ACTIVE_LISTING_FILTER } from '~/commerce/lib/listing-visibility'
 import { getCategorySlug } from '~/commerce/lib/seo-urls'
@@ -53,7 +54,7 @@ const FACET_LISTING_SELECT = `
   listing_type,
   listing_images!inner(id),
   shops!inner(shop_name, slug, is_active, verified),
-  category_assignments!inner(category_id)
+  category_assignments!inner(category_id, categories!inner(id_path))
 `
 
 type ListingFacetRow = {
@@ -63,6 +64,7 @@ type ListingFacetRow = {
   average_rating: number | null
   listing_type: string
   shops: { shop_name: string; slug: string | null } | null
+  category_assignments?: { category_id: string; categories: { id_path: string | null } | null }[]
 }
 
 function chunk<T>(items: T[], size: number): T[][] {
@@ -92,7 +94,10 @@ function isDiscountActive(profile: {
   return !Number.isNaN(until) && until >= now
 }
 
-async function fetchCategoryListingRows(categoryIds: string[]): Promise<ListingFacetRow[]> {
+/** Exactly the listed categories, or a category with everything under it. */
+type CategoryScope = { ids: string[] } | { treeCategoryId: string }
+
+async function fetchCategoryListingRows(scope: CategoryScope): Promise<ListingFacetRow[]> {
   const rows: ListingFacetRow[] = []
   let page = 0
 
@@ -100,10 +105,15 @@ async function fetchCategoryListingRows(categoryIds: string[]): Promise<ListingF
     const from = page * FACET_LISTING_BATCH
     const to = from + FACET_LISTING_BATCH - 1
 
-    const { data, error } = await supabase
-      .from('listings')
-      .select(FACET_LISTING_SELECT)
-      .in('category_assignments.category_id', categoryIds)
+    const base = supabase.from('listings').select(FACET_LISTING_SELECT)
+    const scoped =
+      'ids' in scope
+        ? base.in('category_assignments.category_id', scope.ids)
+        : base.or(categoryTreeFilter(scope.treeCategoryId), {
+            referencedTable: 'category_assignments.categories',
+          })
+
+    const { data, error } = await scoped
       .eq('is_active', ACTIVE.is_active)
       .eq('listing_status', ACTIVE.listing_status)
       .eq('shops.is_active', true)
@@ -121,7 +131,7 @@ async function fetchCategoryListingRows(categoryIds: string[]): Promise<ListingF
 }
 
 export async function getCategoryListingIds(categoryIds: string[]): Promise<string[]> {
-  const rows = await fetchCategoryListingRows(categoryIds)
+  const rows = await fetchCategoryListingRows({ ids: categoryIds })
   return rows.map((row) => row.id)
 }
 
@@ -245,7 +255,7 @@ export async function fetchCategoryFilterFacets(categoryId: string): Promise<{
         .eq('parent_id', categoryId)
         .eq('status', 'A')
         .order('position', { ascending: true }),
-      fetchCategoryListingRows([categoryId]),
+      fetchCategoryListingRows({ treeCategoryId: categoryId }),
     ])
 
     if (subError) {
@@ -253,21 +263,17 @@ export async function fetchCategoryFilterFacets(categoryId: string): Promise<{
     }
 
     const listingIds = listingRows.map((row) => row.id)
-    const subcategoryIds = (subcats ?? []).map((row) => row.category_id)
 
-    const subcategoryCounts = new Map<string, number>()
-    if (subcategoryIds.length) {
-      for (const ids of chunk(subcategoryIds, ID_CHUNK)) {
-        const { data } = await supabase
-          .from('category_assignments')
-          .select('category_id, listings!inner(id, listing_images!inner(id))')
-          .in('category_id', ids)
-          .eq('listings.is_active', ACTIVE.is_active)
-          .eq('listings.listing_status', ACTIVE.listing_status)
-
-        for (const row of data ?? []) {
-          subcategoryCounts.set(row.category_id, (subcategoryCounts.get(row.category_id) ?? 0) + 1)
-        }
+    // Listings hang off leaf categories, so a subcategory chip counts its own
+    // subtree: every listing whose assignment path runs through it.
+    const subcategoryListings = new Map<string, Set<string>>()
+    for (const row of listingRows) {
+      for (const assignment of row.category_assignments ?? []) {
+        const branch = categoryTreeBranch(categoryId, assignment.categories?.id_path)
+        if (!branch) continue
+        const listings = subcategoryListings.get(branch) ?? new Set<string>()
+        listings.add(row.id)
+        subcategoryListings.set(branch, listings)
       }
     }
 
@@ -378,7 +384,7 @@ export async function fetchCategoryFilterFacets(categoryId: string): Promise<{
             categoryId: row.category_id,
             name: row.category,
             slug: getCategorySlug(row),
-            count: subcategoryCounts.get(row.category_id) ?? 0,
+            count: subcategoryListings.get(row.category_id)?.size ?? 0,
           }))
           .filter((row) => row.count > 0),
         priceRange: { min: minPrice, max: maxPrice },
