@@ -9,8 +9,8 @@ import {
   GENDER_VERIFICATION,
   type FaceTrackingStatus,
   type GenderSample,
+  type VerificationDiagnostics,
   type VerificationPhase,
-  completeGenderVerificationSession,
   computeLivenessScore,
   createBlinkTracker,
   createEarCalibrator,
@@ -21,6 +21,7 @@ import {
   isFaceCentered,
   isSoftRetryableGenderError,
   passesAntiSpoof,
+  submitGenderVerificationSession,
   summarizeGenderSamples,
   thresholdsFromBaseline,
   updateBlinkTracker,
@@ -37,6 +38,7 @@ export function useGenderVerification({ onVerified }: UseGenderVerificationOptio
   const [blinkCount, setBlinkCount] = useState(0)
   const [instruction, setInstruction] = useState('Start when you are ready')
   const [analyzerReady, setAnalyzerReady] = useState(false)
+  const [diagnostics, setDiagnostics] = useState<VerificationDiagnostics | null>(null)
   const [tracking, setTracking] = useState<FaceTrackingStatus>({
     faceDetected: false,
     faceCentered: false,
@@ -68,6 +70,9 @@ export function useGenderVerification({ onVerified }: UseGenderVerificationOptio
   const loopActiveRef = useRef(false)
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null)
   const sessionIdRef = useRef<string | null>(null)
+  /** Bumped by every start so frames and submits from an earlier run go nowhere. */
+  const runIdRef = useRef(0)
+  const startingRef = useRef(false)
   const cameraReadyRef = useRef(false)
   const containerRef = useRef<HTMLDivElement | null>(null)
 
@@ -133,6 +138,7 @@ export function useGenderVerification({ onVerified }: UseGenderVerificationOptio
     ): Promise<'resume' | 'done'> => {
       const activeSessionId = sessionIdRef.current
       if (!activeSessionId || analyzingRef.current) return 'done'
+      const runId = runIdRef.current
       // The capture interval keeps ticking; frames no-op while this flag is set.
       analyzingRef.current = true
       setPhase('analyze')
@@ -157,12 +163,14 @@ export function useGenderVerification({ onVerified }: UseGenderVerificationOptio
 
         // One last dedicated read of the submitted frame, added to the session samples.
         const analysis = await analyzer.analyze(base64, width, height, 'gender')
+        if (runIdRef.current !== runId) return 'done'
         if (analysis.gender) pushGenderSample(analysis.gender)
 
         const verdict = summarizeGenderSamples(genderSamplesRef.current, {
           minSamples: GENDER_VERIFICATION.minGenderSamples,
           threshold: GENDER_VERIFICATION.minGenderConfidence,
           borderlineBand: GENDER_VERIFICATION.genderBorderlineBand,
+          minFacePixels: GENDER_VERIFICATION.minGenderFacePixels,
         })
 
         if (verdict.status === 'insufficient' && !extraRoundUsedRef.current) {
@@ -178,19 +186,44 @@ export function useGenderVerification({ onVerified }: UseGenderVerificationOptio
           throw createGenderVerificationError(GENDER_ERROR_CODES.LOW_CONFIDENCE_RETRY)
         }
 
+        const submittedLivenessScore = Math.max(livenessScore, avgLive)
+        const usableFacePixels = genderSamplesRef.current
+          .map((sample) => sample.facePixels ?? 0)
+          .filter((pixels) => pixels > 0)
+        const maxFacePixels = Math.max(0, ...usableFacePixels)
+        setDiagnostics({
+          femaleScore: verdict.femaleScore,
+          samples: verdict.samples,
+          blinks: detectedBlinks,
+          maxFacePixels,
+        })
+        const {
+          result,
+          error: submitError,
+          sessionId: submittedSessionId,
+        } = await submitGenderVerificationSession({
+          sessionId: activeSessionId,
+          detectedBlinks,
+          livenessScore: submittedLivenessScore,
+          genderDetected: verdict.status === 'pass',
+          genderConfidence: verdict.femaleScore,
+          clientMetrics: {
+            platform: 'native',
+            femaleScore: verdict.femaleScore,
+            femaleRatio: verdict.femaleRatio,
+            samples: verdict.samples,
+            avgLive: Number(avgLive.toFixed(3)),
+            avgReal: Number(avgReal.toFixed(3)),
+            maxFacePixels,
+          },
+        })
+        sessionIdRef.current = submittedSessionId
+        if (runIdRef.current !== runId) return 'done'
+
+        if (submitError) throw new Error(submitError)
         if (verdict.status === 'fail') {
           throw createGenderVerificationError(GENDER_ERROR_CODES.NOT_ELIGIBLE)
         }
-
-        const { result, error: submitError } = await completeGenderVerificationSession({
-          sessionId: activeSessionId,
-          detectedBlinks,
-          livenessScore: Math.max(livenessScore, avgLive),
-          genderDetected: true,
-          genderConfidence: verdict.femaleScore,
-        })
-
-        if (submitError) throw new Error(submitError)
         if (!result?.ok) throw new Error(result?.message ?? 'Verification failed.')
 
         stopCaptureLoop()
@@ -199,6 +232,7 @@ export function useGenderVerification({ onVerified }: UseGenderVerificationOptio
         onVerified?.()
         return 'done'
       } catch (submitFailure) {
+        if (runIdRef.current !== runId) return 'done'
         const message =
           submitFailure instanceof Error ? submitFailure.message : 'Verification failed.'
         stopCaptureLoop()
@@ -220,14 +254,16 @@ export function useGenderVerification({ onVerified }: UseGenderVerificationOptio
     const analyzer = analyzerRef.current
     if (!camera || !analyzer?.isReady) return
 
+    const runId = runIdRef.current
     processingRef.current = true
     try {
       const picture = await camera.takePictureAsync({
         base64: true,
-        quality: 0.35,
+        quality: 0.6,
         shutterSound: false,
       })
       if (!picture.base64 || !loopActiveRef.current) return
+      if (runIdRef.current !== runId) return
 
       const width = picture.width ?? 0
       const height = picture.height ?? 0
@@ -242,6 +278,7 @@ export function useGenderVerification({ onVerified }: UseGenderVerificationOptio
         height,
         wantGender ? 'both' : 'liveness',
       )
+      if (runIdRef.current !== runId || !loopActiveRef.current) return
       const face = analysis.face
       const leftEar = face?.leftEar ?? 0.3
       const rightEar = face?.rightEar ?? 0.3
@@ -329,6 +366,7 @@ export function useGenderVerification({ onVerified }: UseGenderVerificationOptio
 
       await analyzeAndSubmit(tracker.count, livenessScore, picture.base64, frameWidth, frameHeight)
     } catch {
+      if (runIdRef.current !== runId) return
       setError('Face tracking interrupted. Please try again.')
       setPhase('error')
       setInstruction(GENDER_ERROR_INSTRUCTIONS[GENDER_ERROR_CODES.LIVENESS_FAILED])
@@ -368,7 +406,7 @@ export function useGenderVerification({ onVerified }: UseGenderVerificationOptio
   }, [])
 
   const scheduleCaptureLoop = useCallback(
-    (settleMs = GENDER_VERIFICATION.nativeCameraSettleMs) => {
+    (settleMs: number = GENDER_VERIFICATION.nativeCameraSettleMs) => {
       clearSettleTimer()
       // AVCapturePhotoOutput needs a moment after Allow / session start — early
       // takePicture used to SIGABRT the app (maxPhotoDimensions still 0).
@@ -411,6 +449,17 @@ export function useGenderVerification({ onVerified }: UseGenderVerificationOptio
     setAnalyzerReady(true)
   }, [])
 
+  const onAnalyzerError = useCallback(
+    (message: string) => {
+      stopCaptureLoop()
+      setAnalyzerReady(false)
+      setError(message)
+      setInstruction(GENDER_ERROR_INSTRUCTIONS[GENDER_ERROR_CODES.MODEL_LOAD_FAILED])
+      setPhase('error')
+    },
+    [stopCaptureLoop],
+  )
+
   useEffect(() => {
     armCameraPreview()
   }, [armCameraPreview])
@@ -424,7 +473,14 @@ export function useGenderVerification({ onVerified }: UseGenderVerificationOptio
   )
 
   const start = useCallback(async () => {
+    // Two overlapping starts each create a session, and creating one supersedes
+    // the other — the losing run then submits a good read to a dead session.
+    if (startingRef.current) return
+    startingRef.current = true
+    const runId = runIdRef.current + 1
+    runIdRef.current = runId
     setError(null)
+    setDiagnostics(null)
     setSoftRetrying(false)
     clearSoftRetryTimer()
     setPhase('loading')
@@ -449,50 +505,56 @@ export function useGenderVerification({ onVerified }: UseGenderVerificationOptio
     // at a black "Preparing camera…" frame while the button said Restarting.
     const cameraAlreadyReady = cameraReadyRef.current
 
-    // Ask for camera first (user gesture) — iOS only shows the sheet once while
-    // status is undetermined. A previous Deny means canAskAgain=false and no sheet.
-    const permission = await ensureCameraPermission()
-    if (!permission.granted) {
-      const blocked = permission.canAskAgain === false
-      const message = blocked
-        ? 'Camera access is blocked. Open Settings → SHEconomy → Camera, turn it on, then try again.'
-        : 'Camera permission is required for liveness verification. Please allow camera access when prompted.'
-      setError(message)
-      setInstruction(getGenderErrorInstruction(createGenderVerificationError(GENDER_ERROR_CODES.CAMERA_DENIED)))
-      setPhase('error')
-      return
-    }
+    try {
+      // Ask for camera first (user gesture) — iOS only shows the sheet once while
+      // status is undetermined. A previous Deny means canAskAgain=false and no sheet.
+      const permission = await ensureCameraPermission()
+      if (runIdRef.current !== runId) return
+      if (!permission.granted) {
+        const blocked = permission.canAskAgain === false
+        const message = blocked
+          ? 'Camera access is blocked. Open Settings → SHEconomy → Camera, turn it on, then try again.'
+          : 'Camera permission is required for liveness verification. Please allow camera access when prompted.'
+        setError(message)
+        setInstruction(getGenderErrorInstruction(createGenderVerificationError(GENDER_ERROR_CODES.CAMERA_DENIED)))
+        setPhase('error')
+        return
+      }
 
-    setInstruction('Loading secure face models…')
-
-    const { sessionId: createdSessionId, error: sessionError } =
-      await createGenderVerificationSession()
-    if (sessionError || !createdSessionId) {
-      setError(sessionError ?? 'Could not start verification session.')
-      setInstruction(GENDER_ERROR_INSTRUCTIONS[GENDER_ERROR_CODES.SESSION_FAILED])
-      setPhase('error')
-      return
-    }
-    sessionIdRef.current = createdSessionId
-
-    if (!analyzerReady) {
       setInstruction('Loading secure face models…')
-      return
-    }
 
-    setPhase('camera')
-    if (cameraReadyRef.current) {
-      // Camera stayed mounted (or finished warming during session create).
-      setInstruction('Center your face, then blink naturally')
-      scheduleCaptureLoop(
-        cameraAlreadyReady
-          ? GENDER_VERIFICATION.nativeCameraResettleMs
-          : GENDER_VERIFICATION.nativeCameraSettleMs,
-      )
-      return
-    }
+      const { sessionId: createdSessionId, error: sessionError } =
+        await createGenderVerificationSession()
+      if (runIdRef.current !== runId) return
+      if (sessionError || !createdSessionId) {
+        setError(sessionError ?? 'Could not start verification session.')
+        setInstruction(GENDER_ERROR_INSTRUCTIONS[GENDER_ERROR_CODES.SESSION_FAILED])
+        setPhase('error')
+        return
+      }
+      sessionIdRef.current = createdSessionId
 
-    setInstruction('Starting camera…')
+      if (!analyzerReady) {
+        setInstruction('Loading secure face models…')
+        return
+      }
+
+      setPhase('camera')
+      if (cameraReadyRef.current) {
+        // Camera stayed mounted (or finished warming during session create).
+        setInstruction('Center your face, then blink naturally')
+        scheduleCaptureLoop(
+          cameraAlreadyReady
+            ? GENDER_VERIFICATION.nativeCameraResettleMs
+            : GENDER_VERIFICATION.nativeCameraSettleMs,
+        )
+        return
+      }
+
+      setInstruction('Starting camera…')
+    } finally {
+      startingRef.current = false
+    }
   }, [
     analyzerReady,
     clearSettleTimer,
@@ -521,11 +583,14 @@ export function useGenderVerification({ onVerified }: UseGenderVerificationOptio
     clearSettleTimer()
     clearSoftRetryTimer()
     stopCaptureLoop()
+    runIdRef.current += 1
+    startingRef.current = false
     sessionIdRef.current = null
     cameraReadyRef.current = false
     softRetryUsedRef.current = false
     setSoftRetrying(false)
     setBlinkCount(0)
+    setDiagnostics(null)
     setError(null)
     setPhase('idle')
     setInstruction('Start when you are ready')
@@ -566,6 +631,7 @@ export function useGenderVerification({ onVerified }: UseGenderVerificationOptio
     requiredBlinks: GENDER_VERIFICATION.requiredBlinks,
     tracking,
     softRetrying,
+    diagnostics,
     containerRef,
     cameraRef,
     analyzerRef,
@@ -577,6 +643,7 @@ export function useGenderVerification({ onVerified }: UseGenderVerificationOptio
     openCameraSettings,
     onCameraReady,
     onAnalyzerReady,
+    onAnalyzerError,
     start,
     reset,
   }

@@ -25,6 +25,7 @@ export function getNativeAnalyzerHtml() {
   var ready = false;
   var queue = [];
   var canvas = null;
+  var genderCanvas = null;
 
   function post(payload) {
     var json = JSON.stringify(payload);
@@ -74,11 +75,9 @@ export function getNativeAnalyzerHtml() {
 
   function applyMode(mode) {
     if (!human || !human.config || !human.config.face) return;
-    // 'both' keeps the anti-spoof samples flowing while we also collect gender,
-    // so periodic gender frames do not create gaps in the liveness averages.
-    var wantGender = mode === 'gender' || mode === 'both';
-    var wantLiveness = mode !== 'gender';
-    human.config.face.description.enabled = wantGender;
+    var wantDescription = mode === 'description';
+    var wantLiveness = mode === 'liveness';
+    human.config.face.description.enabled = wantDescription;
     human.config.face.antispoof.enabled = wantLiveness;
     human.config.face.liveness.enabled = wantLiveness;
     human.config.face.mesh.enabled = true;
@@ -103,6 +102,54 @@ export function getNativeAnalyzerHtml() {
     if (!ctx) return { input: img, width: w, height: h };
     ctx.drawImage(img, 0, 0, dw, dh);
     return { input: canvas, width: dw, height: dh };
+  }
+
+  function clamp(value, min, max) {
+    return Math.max(min, Math.min(max, value));
+  }
+
+  async function detectGenderFromFace(img, face, preparedWidth, preparedHeight) {
+    if (!face || !face.box || preparedWidth <= 0 || preparedHeight <= 0) return null;
+    var sourceWidth = img.naturalWidth || img.width;
+    var sourceHeight = img.naturalHeight || img.height;
+    if (sourceWidth <= 0 || sourceHeight <= 0) return null;
+
+    var sx = sourceWidth / preparedWidth;
+    var sy = sourceHeight / preparedHeight;
+    var x = face.box[0] * sx;
+    var y = face.box[1] * sy;
+    var w = face.box[2] * sx;
+    var h = face.box[3] * sy;
+    var facePixels = Math.round(w);
+    var padX = w * 0.35;
+    var padY = h * 0.35;
+    var cropX = clamp(x - padX, 0, sourceWidth);
+    var cropY = clamp(y - padY, 0, sourceHeight);
+    var cropRight = clamp(x + w + padX, 0, sourceWidth);
+    var cropBottom = clamp(y + h + padY, 0, sourceHeight);
+    var cropWidth = cropRight - cropX;
+    var cropHeight = cropBottom - cropY;
+    if (cropWidth <= 0 || cropHeight <= 0) return null;
+
+    if (!genderCanvas) genderCanvas = document.createElement('canvas');
+    genderCanvas.width = 256;
+    genderCanvas.height = 256;
+    var ctx = genderCanvas.getContext('2d');
+    if (!ctx) return null;
+    ctx.clearRect(0, 0, 256, 256);
+    ctx.drawImage(img, cropX, cropY, cropWidth, cropHeight, 0, 0, 256, 256);
+
+    applyMode('description');
+    var result = await human.detect(genderCanvas);
+    var genderFace = result.face && result.face[0] ? result.face[0] : null;
+    if (!genderFace || !genderFace.gender || typeof genderFace.genderScore !== 'number') {
+      return null;
+    }
+    return {
+      isFemale: genderFace.gender === 'female',
+      confidence: Number(genderFace.genderScore.toFixed(3)),
+      facePixels: facePixels,
+    };
   }
 
   async function ensureModels() {
@@ -155,7 +202,8 @@ export function getNativeAnalyzerHtml() {
         img.onerror = reject;
       });
 
-      applyMode(job.mode || 'liveness');
+      var wantGender = job.mode === 'gender' || job.mode === 'both';
+      applyMode(job.mode === 'gender' ? 'location' : 'liveness');
       var prepared = downscale(img);
       var result = await human.detect(prepared.input);
       var face = result.face && result.face[0] ? result.face[0] : null;
@@ -193,13 +241,9 @@ export function getNativeAnalyzerHtml() {
         rightEar: ears.rightEar,
       };
 
-      var gender = null;
-      if (face.gender && typeof face.genderScore === 'number') {
-        gender = {
-          isFemale: face.gender === 'female',
-          confidence: Number(face.genderScore.toFixed(3)),
-        };
-      }
+      var gender = wantGender
+        ? await detectGenderFromFace(img, face, prepared.width, prepared.height)
+        : null;
 
       post({
         type: 'result',

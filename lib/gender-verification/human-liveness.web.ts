@@ -18,6 +18,7 @@ type HumanCtor = new (config?: Partial<Config>) => HumanInstance
 
 let humanPromise: Promise<HumanInstance> | null = null
 let detectCanvas: HTMLCanvasElement | null = null
+let genderCanvas: HTMLCanvasElement | null = null
 let frameSeq = 0
 
 const HUMAN_MODEL_BASE =
@@ -202,6 +203,57 @@ function prepareDetectInput(source: HTMLVideoElement | HTMLCanvasElement) {
   return { input: detectCanvas, width: w, height: h }
 }
 
+async function detectGenderFromFace(
+  human: HumanInstance,
+  source: HTMLVideoElement | HTMLCanvasElement,
+  face: FaceResult,
+  preparedWidth: number,
+  preparedHeight: number,
+): Promise<GenderEstimate | null> {
+  const { width: sourceWidth, height: sourceHeight } = sourceSize(source)
+  if (sourceWidth <= 0 || sourceHeight <= 0 || preparedWidth <= 0 || preparedHeight <= 0) {
+    return null
+  }
+
+  const [boxX, boxY, boxWidth, boxHeight] = face.box
+  const scaleX = sourceWidth / preparedWidth
+  const scaleY = sourceHeight / preparedHeight
+  const x = boxX * scaleX
+  const y = boxY * scaleY
+  const width = boxWidth * scaleX
+  const height = boxHeight * scaleY
+  const padX = width * 0.35
+  const padY = height * 0.35
+  const cropX = Math.max(0, x - padX)
+  const cropY = Math.max(0, y - padY)
+  const cropRight = Math.min(sourceWidth, x + width + padX)
+  const cropBottom = Math.min(sourceHeight, y + height + padY)
+  const cropWidth = cropRight - cropX
+  const cropHeight = cropBottom - cropY
+  if (cropWidth <= 0 || cropHeight <= 0) return null
+
+  if (!genderCanvas) genderCanvas = document.createElement('canvas')
+  genderCanvas.width = 256
+  genderCanvas.height = 256
+  const context = genderCanvas.getContext('2d')
+  if (!context) return null
+  context.clearRect(0, 0, 256, 256)
+  context.drawImage(source, cropX, cropY, cropWidth, cropHeight, 0, 0, 256, 256)
+
+  if (human.config.face?.description) human.config.face.description.enabled = true
+  if (human.config.face?.antispoof) human.config.face.antispoof.enabled = false
+  if (human.config.face?.liveness) human.config.face.liveness.enabled = false
+  const result = await human.detect(genderCanvas)
+  const genderFace = result.face?.[0]
+  if (!genderFace?.gender || genderFace.genderScore == null) return null
+
+  return {
+    isFemale: genderFace.gender === 'female',
+    confidence: Number(genderFace.genderScore.toFixed(3)),
+    facePixels: Math.round(width),
+  }
+}
+
 /**
  * Run one Human detection pass for liveness + anti-spoof (+ periodic gender).
  * Blink uses continuous mesh EAR — not momentary Human blink gestures.
@@ -215,8 +267,10 @@ export async function detectHumanLivenessFrame(
   // Gender description is heavy — sample every 6th frame unless forced at submit.
   const needGender = options?.forceGender || frameSeq % 6 === 1
   if (human.config.face?.description) {
-    human.config.face.description.enabled = needGender
+    human.config.face.description.enabled = false
   }
+  if (human.config.face?.antispoof) human.config.face.antispoof.enabled = true
+  if (human.config.face?.liveness) human.config.face.liveness.enabled = true
 
   const { input, width, height } = prepareDetectInput(source)
   const result: Result = await human.detect(input)
@@ -247,13 +301,9 @@ export async function detectHumanLivenessFrame(
   const avgEar = (leftEar + rightEar) / 2
   const eyesClosed = avgEar < GENDER_VERIFICATION.earBlinkThreshold
 
-  const gender: GenderEstimate | null =
-    face.gender && face.genderScore != null
-      ? {
-          isFemale: face.gender === 'female',
-          confidence: Number(face.genderScore.toFixed(3)),
-        }
-      : null
+  const gender = needGender
+    ? await detectGenderFromFace(human, source, face, width, height)
+    : null
 
   return {
     faceDetected: true,

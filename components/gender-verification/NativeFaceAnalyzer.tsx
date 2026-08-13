@@ -42,10 +42,11 @@ const ANALYZE_TIMEOUT_MS = 12_000
 
 type NativeFaceAnalyzerProps = {
   onReady?: () => void
+  onError?: (message: string) => void
 }
 
 export const NativeFaceAnalyzer = forwardRef<NativeFaceAnalyzerHandle, NativeFaceAnalyzerProps>(
-  function NativeFaceAnalyzer({ onReady }, ref) {
+  function NativeFaceAnalyzer({ onReady, onError }, ref) {
     const webViewRef = useRef<import('react-native-webview').WebView | null>(null)
     const [WebViewComponent, setWebViewComponent] = useState<React.ComponentType<any> | null>(null)
     const [ready, setReady] = useState(false)
@@ -129,10 +130,16 @@ export const NativeFaceAnalyzer = forwardRef<NativeFaceAnalyzerHandle, NativeFac
           }
 
           if (message.type === 'error') {
+            const error = new Error(message.message ?? 'Face analysis failed.')
             if (message.id) {
               const pending = pendingRef.current.get(message.id)
               pendingRef.current.delete(message.id)
-              pending?.reject(new Error(message.message ?? 'Face analysis failed.'))
+              pending?.reject(error)
+            } else {
+              setReady(false)
+              for (const pending of pendingRef.current.values()) pending.reject(error)
+              pendingRef.current.clear()
+              onError?.(error.message)
             }
             return
           }
@@ -154,7 +161,7 @@ export const NativeFaceAnalyzer = forwardRef<NativeFaceAnalyzerHandle, NativeFac
           // Ignore malformed analyzer messages.
         }
       },
-      [onReady],
+      [onError, onReady],
     )
 
     if (Platform.OS === 'web' || !WebViewComponent) return null

@@ -47,6 +47,25 @@ describe('access tiers (skip verification / women-first)', () => {
     expect(canAccessPath('guest', '/co-work')).toBe(true)
   })
 
+  it('limits unverified or male members to Commerce, Class, and Co-Work routes', () => {
+    for (const path of ['/', '/listing/example', '/class', '/class/video', '/co-work', '/co-work/join']) {
+      expect(canAccessPath('male', path, false)).toBe(true)
+    }
+
+    for (const path of [
+      '/community',
+      '/chat',
+      '/notifications',
+      '/profile',
+      '/settings',
+      '/create-my-shop',
+      '/vendor',
+    ]) {
+      expect(canAccessPath('male', path, false)).toBe(false)
+      expect(canAccessPath('female', path, true)).toBe(true)
+    }
+  })
+
   it('does not force guests to sign in for class / co-work', () => {
     expect(getGuestSignInReturnTo('guest', '/class')).toBeNull()
     expect(getGuestSignInReturnTo('guest', '/co-work')).toBeNull()

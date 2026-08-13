@@ -16680,6 +16680,7 @@ export type Database = {
       }
       complete_gender_verification_session: {
         Args: {
+          p_client_metrics?: Json
           p_detected_blinks: number
           p_gender_confidence: number
           p_gender_detected: boolean

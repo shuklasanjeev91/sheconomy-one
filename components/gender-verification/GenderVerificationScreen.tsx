@@ -15,7 +15,11 @@ import { useAccess } from '~/hooks/useAccess'
 import { useAppLayout } from '~/hooks/useAppLayout'
 import { useGenderVerification } from '~/hooks/useGenderVerification'
 import { useProfile } from '~/hooks/useProfile'
-import { HUMAN_VERIFICATION_DISCLAIMER } from '~/lib/gender-verification'
+import {
+  formatVerificationDiagnostics,
+  HUMAN_VERIFICATION_DISCLAIMER,
+  type VerificationDiagnostics,
+} from '~/lib/gender-verification'
 import { refreshProfiles } from '~/lib/profile/refresh'
 import { patchCachedProfile } from '~/lib/profile/profile-cache'
 import { commerceRoutes, communityRoutes } from '~/lib/routes'
@@ -31,7 +35,9 @@ export function GenderVerificationScreen() {
   const verification = useGenderVerification({
     onVerified: () => {
       if (profile?.id) {
-        void patchCachedProfile(profile.id, { is_verified: true }).then(() => refreshProfiles())
+        void patchCachedProfile(profile.id, { gender: true, is_verified: true }).then(() =>
+          refreshProfiles(),
+        )
       } else {
         refreshProfiles()
       }
@@ -56,6 +62,8 @@ export function GenderVerificationScreen() {
     verification.phase !== 'error' &&
     verification.phase !== 'success'
   const softRetrying = 'softRetrying' in verification && verification.softRetrying
+  const diagnostics = (verification as { diagnostics?: VerificationDiagnostics | null }).diagnostics
+  const diagnosticsLine = diagnostics ? formatVerificationDiagnostics(diagnostics) : null
 
   const primaryLabel = softRetrying
     ? 'Starting…'
@@ -154,6 +162,9 @@ export function GenderVerificationScreen() {
               onAnalyzerReady={
                 'onAnalyzerReady' in verification ? verification.onAnalyzerReady : undefined
               }
+              onAnalyzerError={
+                (verification as { onAnalyzerError?: (message: string) => void }).onAnalyzerError
+              }
             />
 
             {verification.error ? (
@@ -172,6 +183,11 @@ export function GenderVerificationScreen() {
                 <Text fontSize={13} color={ui.textSecondary} lineHeight={19}>
                   {verification.error}
                 </Text>
+                {diagnosticsLine ? (
+                  <Text fontSize={11} color={ui.textMuted} lineHeight={16}>
+                    {diagnosticsLine}
+                  </Text>
+                ) : null}
               </YStack>
             ) : null}
 

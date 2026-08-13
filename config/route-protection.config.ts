@@ -103,9 +103,12 @@ export const FALLBACK_HOME = '/'
 export const GENDER_RESTRICTED_ROUTES: readonly string[] = [
   '/vendor',
   '/create-listing',
+  '/create-my-shop',
   '/community',
   '/chat',
   '/notifications',
+  '/profile',
+  '/settings',
 ]
 
 /**
