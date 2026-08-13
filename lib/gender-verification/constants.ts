@@ -1,6 +1,6 @@
 export const GENDER_VERIFICATION = {
   /** Natural blinks required for liveness (close → open cycles). */
-  requiredBlinks: 3,
+  requiredBlinks: 2,
   /** Fallback EAR when adaptive baseline is not ready yet. */
   earBlinkThreshold: 0.2,
   earOpenThreshold: 0.26,
@@ -13,19 +13,44 @@ export const GENDER_VERIFICATION = {
   maxClosedMs: 900,
   /** Avoid counting the same blink twice. */
   minBlinkGapMs: 280,
+  /**
+   * Client + server share this floor. Mirrored by
+   * `complete_gender_verification_session` — keep migrations in sync.
+   */
   minLivenessScore: 0.7,
   /** Human anti-spoof / liveness model floors (photo rejection). */
   minLiveScore: 0.4,
   minRealScore: 0.4,
-  minGenderConfidence: 0.55,
+  /**
+   * Mean female probability required to pass, judged across many frames rather
+   * than one. Mirrored by `complete_gender_verification_session` — keep this in
+   * sync with the latest gender-verification migration.
+   */
+  minGenderConfidence: 0.6,
+  /** Usable gender samples needed before we judge the run at all. */
+  minGenderSamples: 4,
+  /** Extra samples gathered in the one follow-up round after a borderline read. */
+  extraGenderSamples: 5,
+  /** A mean this far under the threshold earns another round instead of a rejection. */
+  genderBorderlineBand: 0.08,
+  /** Cap on the follow-up round so an unreadable face still fails promptly. */
+  extraGenderSamplingMs: 4000,
+  /** Every Nth native frame also runs the gender model (see the analyzer `both` mode). */
+  nativeGenderSampleEvery: 2,
   sessionMinutes: 15,
   /**
    * Native capture cadence. takePictureAsync is slow; a short interval only
    * queues work behind processingRef — prefer fewer, lighter frames.
    */
-  nativeFrameIntervalMs: 400,
+  nativeFrameIntervalMs: 350,
   /** Wait after onCameraReady before takePicture — photo output dims need a beat after Allow. */
   nativeCameraSettleMs: 1200,
+  /** Warm restart: camera already running, so settle can be much shorter. */
+  nativeCameraResettleMs: 350,
+  /** Open-eye EAR samples before blink thresholds adapt to this face/camera. */
+  earCalibrationSamples: 6,
+  /** One soft auto-retry for lighting / face / liveness failures (never eligibility). */
+  softRetryDelayMs: 1400,
   /** Downscale side length before Human.detect in the native WebView. */
   nativeDetectMaxSide: 480,
   faceApiModelBaseUrl: 'https://cdn.jsdelivr.net/npm/@vladmandic/face-api@1.7.15/model',

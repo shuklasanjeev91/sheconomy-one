@@ -20,12 +20,15 @@ export type NativeFrameAnalysis = {
   realScore: number
 }
 
+/** `both` returns gender alongside the anti-spoof scores from a single pass. */
+export type NativeAnalyzeMode = 'liveness' | 'gender' | 'both'
+
 export type NativeFaceAnalyzerHandle = {
   analyze: (
     base64: string,
     width: number,
     height: number,
-    mode: 'liveness' | 'gender',
+    mode: NativeAnalyzeMode,
   ) => Promise<NativeFrameAnalysis>
   isReady: boolean
 }
@@ -55,7 +58,7 @@ export const NativeFaceAnalyzer = forwardRef<NativeFaceAnalyzerHandle, NativeFac
     }, [])
 
     const analyze = useCallback(
-      (base64: string, width: number, height: number, mode: 'liveness' | 'gender') => {
+      (base64: string, width: number, height: number, mode: NativeAnalyzeMode) => {
         if (!ready || !webViewRef.current) {
           return Promise.reject(new Error('Face analyzer is not ready yet.'))
         }

@@ -3,6 +3,7 @@ import { AppLink } from '~/components/navigation/AppLink'
 
 import { CommercePageHeader, CommercePanel } from '~/commerce/components'
 import { CancelOrderSheet, OrderSupportSheet } from '~/commerce/components/OrderActionSheets'
+import { OrderIssueCommentsThread } from '~/commerce/components/OrderIssueCommentsThread'
 import { OrderPackageCard } from '~/commerce/components/OrderPackageCard'
 import { OrderTimeline } from '~/commerce/components/OrderTimeline'
 import {
@@ -141,6 +142,11 @@ export function OrderDetailScreen({ orderId }: OrderDetailScreenProps) {
   const packages = useMemo(() => {
     if (!order) return []
     return dedupeOrderPackages(order.deliveries, order.estimated_delivery_date)
+  }, [order])
+
+  const reviewableItems = useMemo(() => {
+    if (!order) return []
+    return order.items.filter((item) => getItemTrustEligibility(order, item).canReview)
   }, [order])
 
   const orderEta = order ? formatEstimatedDelivery(order.estimated_delivery_date) : null
@@ -391,6 +397,36 @@ export function OrderDetailScreen({ orderId }: OrderDetailScreenProps) {
             </YStack>
           </CommercePanel>
 
+          {reviewableItems.length > 0 ? (
+            <CommercePanel gap="$3" borderWidth={1} borderColor={ui.brand}>
+              <XStack gap="$3" alignItems="flex-start">
+                <Icons.Star size={20} color={ui.brand} flexShrink={0} marginTop={2} />
+                <YStack flex={1} gap="$1">
+                  <Text fontWeight="800" fontSize={14} color={ui.text}>
+                    How was your order?
+                  </Text>
+                  <Text fontSize={13} color={ui.textSecondary} lineHeight={20}>
+                    Your package was delivered. A short review helps other members and the seller.
+                  </Text>
+                </YStack>
+              </XStack>
+              <XStack gap="$2" flexWrap="wrap">
+                {reviewableItems.slice(0, 3).map((item) => (
+                  <Button
+                    key={item.id}
+                    tone="primary"
+                    size="$3"
+                    borderRadius={999}
+                    icon={<Icons.Star size={14} />}
+                    onPress={() => setReviewItem(item)}
+                  >
+                    Review {item.product_title?.slice(0, 28) || 'item'}
+                  </Button>
+                ))}
+              </XStack>
+            </CommercePanel>
+          ) : null}
+
           {isAwaitingPayment ? (
             <CommercePanel
               gap="$3"
@@ -594,16 +630,30 @@ export function OrderDetailScreen({ orderId }: OrderDetailScreenProps) {
                 Your requests
               </Text>
               {order.issues.map((issue) => (
-                <YStack key={issue.id} gap={2}>
+                <YStack
+                  key={issue.id}
+                  gap="$2.5"
+                  padding="$3"
+                  borderRadius={12}
+                  borderWidth={1}
+                  borderColor={ui.borderSubtle}
+                  backgroundColor={ui.surface}
+                >
                   <Text fontSize={13} fontWeight="700" color={ui.text}>
                     {issueTypeLabel(issue.issue_type)}
                   </Text>
                   <Text fontSize={12} color={ui.textSecondary}>
                     {issueStatusLabel(issue.status)} · {formatOrderDate(issue.created_at, true)}
                   </Text>
-                  <Text fontSize={12} color={ui.textMuted} numberOfLines={3}>
+                  <Text fontSize={12} color={ui.textMuted}>
                     {issue.description}
                   </Text>
+                  <OrderIssueCommentsThread
+                    ui={ui}
+                    issueId={issue.id}
+                    resolutionNote={issue.resolution_note}
+                    compact
+                  />
                 </YStack>
               ))}
             </CommercePanel>

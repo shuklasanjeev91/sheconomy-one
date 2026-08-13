@@ -225,13 +225,20 @@ export const SERVICE_TYPE = {
 
 export type ServiceTypeValue = (typeof SERVICE_TYPE)[keyof typeof SERVICE_TYPE]
 
-/** UI option lists (icons/colors are string keys resolved by the UI layer). */
+/**
+ * UI option lists (icons/colors are string keys resolved by the UI layer).
+ *
+ * `hidden` options stay in this list so existing rows still resolve a label via
+ * `getListingTypeInfo` / `listingTypeLabel`, but they are kept out of every
+ * picker and filter — see `LISTING_TYPE_OPTIONS_SELECTABLE`.
+ */
 export const LISTING_TYPE_OPTIONS: readonly {
   value: ListingType
   label: string
   description: string
   icon: string
   disabled: boolean
+  hidden?: boolean
 }[] = [
   {
     value: LISTING_TYPES.PHYSICAL,
@@ -245,7 +252,7 @@ export const LISTING_TYPE_OPTIONS: readonly {
     label: 'Digital Product',
     description: 'Digital downloads or online content',
     icon: 'download',
-    disabled: true,
+    disabled: false,
   },
   {
     value: LISTING_TYPES.SERVICE,
@@ -253,8 +260,14 @@ export const LISTING_TYPE_OPTIONS: readonly {
     description: 'Services you provide to customers',
     icon: 'zap',
     disabled: true,
+    hidden: true,
   },
 ]
+
+/** Listing types a vendor may see when creating, editing or filtering listings. */
+export const LISTING_TYPE_OPTIONS_SELECTABLE = LISTING_TYPE_OPTIONS.filter(
+  (option) => !option.hidden,
+)
 
 export const LISTING_STATUS_OPTIONS: readonly {
   value: ListingStatus

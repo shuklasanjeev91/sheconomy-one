@@ -1,6 +1,6 @@
 import { Text, YStack } from '~/components/ui'
 import { AppLink } from '~/components/navigation/AppLink'
-import { getShadowStyle, radius } from '~/config/tokens'
+import { getShadowStyle } from '~/config/tokens'
 import type { CategorySummary } from '~/lib/supabase/commerce'
 import { getCategorySlug } from '~/lib/supabase/commerce'
 import { commerceRoutes } from '~/lib/routes'
@@ -8,13 +8,16 @@ import { useAppUi } from '~/lib/theme/useAppUi'
 
 import { CategoryImage } from '~/commerce/components/CategoryImage'
 
-const CIRCLE_SIZE = 88
+// Curated category artwork is authored at 300x450, so the tile keeps that 2:3
+// ratio — a landscape tile would crop the covers to a thin horizontal slice.
+const TILE_WIDTH = 116
+const TILE_HEIGHT = 174
 
 type CategoryChipProps = {
   category: CategorySummary
 }
 
-/** Category discovery tile — elevated circle, brand fallback, crisp label stack. */
+/** Category discovery tile — rectangle card, brand fallback, label stack. */
 export function CategoryChip({ category }: CategoryChipProps) {
   const ui = useAppUi()
   const label =
@@ -25,7 +28,7 @@ export function CategoryChip({ category }: CategoryChipProps) {
   return (
     <AppLink href={commerceRoutes.category(getCategorySlug(category))} asChild>
       <YStack
-        width={108}
+        width={TILE_WIDTH}
         alignItems="center"
         gap="$2"
         cursor="pointer"
@@ -34,14 +37,13 @@ export function CategoryChip({ category }: CategoryChipProps) {
         pressStyle={{ scale: 0.97, y: 0 }}
       >
         <YStack
-          width={CIRCLE_SIZE}
-          height={CIRCLE_SIZE}
-          borderRadius={radius.pill}
+          width={TILE_WIDTH}
+          height={TILE_HEIGHT}
           overflow="hidden"
           backgroundColor={ui.imagePlaceholder}
           alignItems="center"
           justifyContent="center"
-          borderWidth={2}
+          borderWidth={1}
           borderColor={ui.borderSubtle}
           style={getShadowStyle('sm')}
           animation="quick"
@@ -49,7 +51,9 @@ export function CategoryChip({ category }: CategoryChipProps) {
         >
           <CategoryImage
             src={category.category_image_url}
-            size={CIRCLE_SIZE}
+            icon={category.category_icon}
+            width={TILE_WIDTH}
+            height={TILE_HEIGHT}
             alt={category.category}
           />
         </YStack>
@@ -63,7 +67,7 @@ export function CategoryChip({ category }: CategoryChipProps) {
           width="100%"
           letterSpacing={-0.1}
         >
-          {label}
+          {/* {label} */}
         </Text>
         {category.product_count ? (
           <Text fontSize={11} color={ui.textMuted} textAlign="center" fontWeight="500">

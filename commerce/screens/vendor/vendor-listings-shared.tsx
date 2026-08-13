@@ -4,7 +4,12 @@ import type { ReactNode } from 'react'
 import { Icons, Popover, PopoverContent, Text, XStack, YStack } from '~/components/ui'
 import { getShadowStyle, radius } from '~/config/tokens'
 import type { ListingStatus, ListingType } from '~/lib/listing/listing.type'
-import { LISTING_STATUS, LISTING_STATUS_OPTIONS, LISTING_TYPE_OPTIONS } from '~/lib/listing/listing.type'
+import {
+  LISTING_STATUS,
+  LISTING_STATUS_OPTIONS,
+  LISTING_TYPE_OPTIONS,
+  LISTING_TYPE_OPTIONS_SELECTABLE,
+} from '~/lib/listing/listing.type'
 import type { AppUiTokens } from '~/lib/theme/app-ui'
 
 type IconType = (typeof Icons)[keyof typeof Icons]
@@ -133,7 +138,7 @@ export function ListingsPagerButton({
 
 export const LISTING_TYPE_FILTER_OPTIONS = [
   { value: 'all', label: 'All Types' },
-  ...LISTING_TYPE_OPTIONS.map((option) => ({ value: option.value, label: option.label })),
+  ...LISTING_TYPE_OPTIONS_SELECTABLE.map((option) => ({ value: option.value, label: option.label })),
 ]
 
 export const LISTING_STATUS_FILTER_OPTIONS = [

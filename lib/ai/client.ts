@@ -9,6 +9,8 @@ import type {
   DescribeSearchImageParams,
   DescribeSearchImageResult,
   FetchAiSuggestionsParams,
+  ListingDraftFromImageParams,
+  ListingDraftFromImageResult,
   MeetingDraftParams,
   MeetingDraftResult,
   PostDraftParams,
@@ -19,7 +21,11 @@ import type {
   ShopDraftResult,
 } from '~/lib/ai/types'
 
-export type { AiSearchResult, DescribeSearchImageResult } from '~/lib/ai/types'
+export type {
+  AiSearchResult,
+  DescribeSearchImageResult,
+  ListingDraftFromImageResult,
+} from '~/lib/ai/types'
 
 type InvokeErrorPayload = {
   error?: string
@@ -274,6 +280,43 @@ export async function describeSearchImage(
     attributes: Array.isArray(result.attributes)
       ? result.attributes.map((item) => String(item).trim()).filter(Boolean).slice(0, 8)
       : [],
+    usedFallback: Boolean(result.usedFallback),
+  }
+}
+
+/** Draft listing title, description, tags, and price hint from a product photo. */
+export async function draftListingFromImage(
+  params: ListingDraftFromImageParams,
+): Promise<ListingDraftFromImageResult> {
+  const result = await invokeAiAssist<ListingDraftFromImageResult>({
+    action: 'listing_draft_from_image',
+    product: 'commerce',
+    message: params.dataUrl,
+  })
+
+  const title = String(result.title ?? '').trim()
+  const description = String(result.description ?? '').trim()
+  if (!title || !description) {
+    throw new Error('Could not draft listing copy from this photo. Try another angle.')
+  }
+
+  const priceRaw = result.suggestedPriceInr
+  const suggestedPriceInr =
+    typeof priceRaw === 'number' && Number.isFinite(priceRaw) && priceRaw > 0
+      ? Math.round(priceRaw)
+      : null
+
+  return {
+    title: title.slice(0, 120),
+    description: description.slice(0, 4000),
+    tags: Array.isArray(result.tags)
+      ? result.tags.map((tag) => String(tag).trim()).filter(Boolean).slice(0, 8)
+      : [],
+    suggestedPriceInr,
+    categoryHint:
+      typeof result.categoryHint === 'string' && result.categoryHint.trim()
+        ? result.categoryHint.trim()
+        : null,
     usedFallback: Boolean(result.usedFallback),
   }
 }

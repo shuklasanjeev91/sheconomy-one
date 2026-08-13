@@ -22,11 +22,20 @@ type SeoStepProps = {
   formData: ListingFormData
   errors: Record<string, string>
   shopSlug: string
+  isDesktop: boolean
   onUpdate: <K extends keyof ListingFormData>(field: K, value: ListingFormData[K]) => void
   onUpdateMetadata: (key: string, value: unknown) => void
 }
 
-export function SeoStep({ ui, formData, errors, shopSlug, onUpdate, onUpdateMetadata }: SeoStepProps) {
+export function SeoStep({
+  ui,
+  formData,
+  errors,
+  shopSlug,
+  isDesktop,
+  onUpdate,
+  onUpdateMetadata,
+}: SeoStepProps) {
   const meta = (formData.listing_metadata ?? {}) as Record<string, unknown>
   const slug = formData.slug?.trim() || generateListingSlug(formData.title)
   const seoTitle = formData.meta_title?.trim() || formData.title
@@ -36,7 +45,7 @@ export function SeoStep({ ui, formData, errors, shopSlug, onUpdate, onUpdateMeta
 
   return (
     <XStack gap="$4" alignItems="flex-start" flexWrap="wrap">
-      <YStack flex={1} minWidth={300} gap="$4">
+      <YStack flex={1} minWidth={isDesktop ? 300 : '100%'} gap="$4">
         <ListingPublishCard ui={ui} title="Identity & Reach" titleAccent>
           <Field label="URL Slug" error={errors.slug}>
             <XStack alignItems="center" gap="$1" flexWrap="wrap">
@@ -124,7 +133,7 @@ export function SeoStep({ ui, formData, errors, shopSlug, onUpdate, onUpdateMeta
         </ListingPublishCard>
       </YStack>
 
-      <YStack width={300} maxWidth="100%" gap="$4">
+      <YStack width={isDesktop ? 300 : '100%'} maxWidth="100%" gap="$4">
         <ListingPublishCard ui={ui} title="VISIBILITY SETTINGS" titleAccent>
           <VisibilityRow
             ui={ui}

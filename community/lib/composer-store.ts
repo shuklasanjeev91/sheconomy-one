@@ -26,6 +26,8 @@ export type ComposerOptions = {
   celebrationTitle?: string
   /** Pre-fill post body (e.g. congratulate copy). */
   content?: string
+  /** Prefill product compose with this listing id. */
+  listingId?: string
 }
 
 /** Sheet title for the shared community composer by mode. */

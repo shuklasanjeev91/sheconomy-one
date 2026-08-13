@@ -2,12 +2,14 @@ import { useEffect, useState } from 'react'
 import { Platform } from 'react-native'
 
 import { ScreenCenter, ScreenFill } from '~/components/layout'
-import { Button, Icons, Spinner, Text, YStack } from '~/components/ui'
+import { Button, Icons, Spinner, Text, XStack, YStack, useAppToast } from '~/components/ui'
 import { resolveMeetingRecordingShare } from '~/co-work/lib/livekit-recording-client'
+import { publishRecordingAsClassLesson } from '~/co-work/lib/publish-recording'
 import { useCoWorkTheme } from '~/co-work/lib/theme'
-import { coWorkRoutes } from '~/lib/routes'
+import { classRoutes, coWorkRoutes } from '~/lib/routes'
 import { navigateApp } from '~/lib/platform/navigate'
 import { openExternalUrl } from '~/lib/platform/openUrl'
+import { useSupabase } from '~/providers/SupabaseProvider'
 
 type MeetingRecordingPlaybackScreenProps = {
   token: string
@@ -15,9 +17,13 @@ type MeetingRecordingPlaybackScreenProps = {
 
 export function MeetingRecordingPlaybackScreen({ token }: MeetingRecordingPlaybackScreenProps) {
   const { ui: coworkUi } = useCoWorkTheme()
+  const toast = useAppToast()
+  const { user } = useSupabase()
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [playbackUrl, setPlaybackUrl] = useState<string | null>(null)
+  const [recordingId, setRecordingId] = useState<string | null>(null)
+  const [publishing, setPublishing] = useState(false)
   const [meta, setMeta] = useState<{
     durationSeconds?: number | null
     createdAt?: string | null
@@ -39,11 +45,13 @@ export function MeetingRecordingPlaybackScreen({ token }: MeetingRecordingPlayba
       if (!result.ok || !result.playbackUrl) {
         setError(result.error || 'Recording unavailable')
         setPlaybackUrl(null)
+        setRecordingId(null)
         setLoading(false)
         return
       }
 
       setPlaybackUrl(result.playbackUrl)
+      setRecordingId(result.recordingId ?? null)
       setMeta({
         durationSeconds: result.durationSeconds,
         createdAt: result.createdAt,
@@ -56,6 +64,36 @@ export function MeetingRecordingPlaybackScreen({ token }: MeetingRecordingPlayba
       cancelled = true
     }
   }, [token])
+
+  async function handlePublishAsClass() {
+    if (!user?.id) {
+      toast.show('Sign in to publish', { tone: 'default' })
+      return
+    }
+    if (!recordingId) {
+      toast.show('Recording id missing', { tone: 'warning' })
+      return
+    }
+    setPublishing(true)
+    try {
+      const result = await publishRecordingAsClassLesson({
+        userId: user.id,
+        recordingId,
+        meetingTitle: 'Co-Work meeting recording',
+      })
+      if (result.error) {
+        toast.show('Could not publish lesson', { tone: 'danger', message: result.error })
+        return
+      }
+      toast.show('Published to Class', {
+        tone: 'success',
+        message: 'Lesson created with a durable recording link.',
+      })
+      navigateApp(classRoutes.home)
+    } finally {
+      setPublishing(false)
+    }
+  }
 
   if (loading) {
     return (
@@ -78,18 +116,16 @@ export function MeetingRecordingPlaybackScreen({ token }: MeetingRecordingPlayba
           alignItems="center"
           justifyContent="center"
           backgroundColor={coworkUi.brandMuted}
-          borderWidth={1}
-          borderColor={coworkUi.borderAccent}
         >
-          <Icons.Circle size={24} color={coworkUi.danger} />
+          <Icons.AlertTriangle size={24} color={coworkUi.brand} />
         </YStack>
-        <Text fontSize={22} fontWeight="800" color={coworkUi.text} textAlign="center">
+        <Text fontSize={18} fontWeight="700" color={coworkUi.text} textAlign="center">
           Recording unavailable
         </Text>
-        <Text color={coworkUi.textSecondary} textAlign="center" lineHeight={22}>
-          {error ?? 'This link may have been revoked or the file is still processing.'}
+        <Text color={coworkUi.textSecondary} textAlign="center">
+          {error}
         </Text>
-        <Button tone="primary" borderRadius={999} onPress={() => navigateApp(coWorkRoutes.home)}>
+        <Button tone="outline" borderRadius={999} onPress={() => navigateApp(coWorkRoutes.home)}>
           Back to Co-Work
         </Button>
       </ScreenCenter>
@@ -156,8 +192,8 @@ export function MeetingRecordingPlaybackScreen({ token }: MeetingRecordingPlayba
         )}
       </YStack>
 
-      {Platform.OS === 'web' ? (
-        <YStack maxWidth={960} width="100%" alignSelf="center">
+      <XStack maxWidth={960} width="100%" alignSelf="center" gap="$2" flexWrap="wrap">
+        {Platform.OS === 'web' ? (
           <Button
             tone="outline"
             borderRadius={999}
@@ -168,8 +204,25 @@ export function MeetingRecordingPlaybackScreen({ token }: MeetingRecordingPlayba
           >
             Download MP4
           </Button>
-        </YStack>
-      ) : null}
+        ) : null}
+        {recordingId ? (
+          <Button
+            tone="primary"
+            borderRadius={999}
+            disabled={publishing}
+            icon={
+              publishing ? (
+                <Spinner size="small" color="white" />
+              ) : (
+                <Icons.GraduationCap size={16} color="white" />
+              )
+            }
+            onPress={() => void handlePublishAsClass()}
+          >
+            {publishing ? 'Publishing…' : 'Publish as Class lesson'}
+          </Button>
+        ) : null}
+      </XStack>
     </ScreenFill>
   )
 }

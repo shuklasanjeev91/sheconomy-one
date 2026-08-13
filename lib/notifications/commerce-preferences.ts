@@ -30,8 +30,11 @@ const BUYER_ORDER_TYPES = [
   'order_processing_customer',
   'order_shipped_customer',
   'order_item_shipped_customer',
+  'order_in_transit_customer',
   'order_out_for_delivery_customer',
   'order_delivered_customer',
+  'delivery_failed_customer',
+  'order_review_prompt_customer',
   'order_cancelled_customer',
 ] as const
 

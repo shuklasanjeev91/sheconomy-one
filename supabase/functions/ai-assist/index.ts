@@ -1424,6 +1424,56 @@ function parseDescribeSearchImageJson(
   }
 }
 
+function parseListingDraftFromImageJson(raw: string | null): {
+  title: string
+  description: string
+  tags: string[]
+  suggestedPriceInr: number | null
+  categoryHint: string | null
+} | null {
+  if (!raw) return null
+  const trimmed = raw
+    .trim()
+    .replace(/^```json\s*/i, '')
+    .replace(/^```\s*/i, '')
+    .replace(/```$/i, '')
+  try {
+    const parsed = JSON.parse(trimmed) as Record<string, unknown>
+    const title = typeof parsed.title === 'string' ? parsed.title.trim() : ''
+    const description =
+      typeof parsed.description === 'string' ? parsed.description.trim() : ''
+    if (!title || !description) return null
+    const tags = Array.isArray(parsed.tags)
+      ? parsed.tags
+          .map((item) => String(item).trim().toLowerCase())
+          .filter((tag) => tag.length >= 2 && tag.length <= 32)
+          .slice(0, 8)
+      : []
+    const priceRaw = parsed.suggestedPriceInr ?? parsed.suggested_price_inr
+    const suggestedPriceInr =
+      typeof priceRaw === 'number' && Number.isFinite(priceRaw) && priceRaw > 0
+        ? Math.round(priceRaw)
+        : typeof priceRaw === 'string' && Number.isFinite(Number(priceRaw))
+          ? Math.round(Number(priceRaw))
+          : null
+    const categoryHint =
+      typeof parsed.categoryHint === 'string' && parsed.categoryHint.trim()
+        ? parsed.categoryHint.trim()
+        : typeof parsed.category === 'string' && parsed.category.trim()
+          ? parsed.category.trim()
+          : null
+    return {
+      title: title.slice(0, 120),
+      description: description.slice(0, 4000),
+      tags,
+      suggestedPriceInr,
+      categoryHint,
+    }
+  } catch {
+    return null
+  }
+}
+
 function parseAiSearchJson(
   raw: string | null,
 ): {
@@ -2132,6 +2182,49 @@ Deno.serve(async (req) => {
       return json({ error: failure.error, code: 'image_search_failed' }, failure.status)
     }
 
+    if (action === 'listing_draft_from_image') {
+      const dataUrl = typeof body.message === 'string' ? body.message.trim() : ''
+      if (!dataUrl.startsWith('data:image/')) {
+        return json({ error: 'message must be a data:image URL' }, 400)
+      }
+
+      const systemPrompt = [
+        'You help women entrepreneurs list products on SHEconomy marketplace.',
+        'From the product photo, draft sell-ready listing copy.',
+        'Focus on the product (fashion, home, beauty, craft, food, digital goods). Ignore faces and clutter.',
+        'Title: specific, benefit-led, under 80 characters, no ALL CAPS spam, no trademarked brands.',
+        'Description: warm, concrete materials/fit/use, 60-180 words, no hashtag walls, no markdown.',
+        'Tags: 3-6 short lowercase keywords shoppers search.',
+        'suggestedPriceInr: rough India rupee retail guess as integer, or null if unclear.',
+        'categoryHint: short category label or null.',
+        'Do not mention Gemini, Google, or model names.',
+        'Return ONLY JSON: {"title":"...","description":"...","tags":["..."],"suggestedPriceInr":null,"categoryHint":null}',
+      ].join('\n')
+
+      const completion = await callGeminiVision(
+        systemPrompt,
+        dataUrl,
+        'Draft a marketplace listing from this product photo.',
+        { jsonMode: true },
+      )
+      const parsed = parseListingDraftFromImageJson(completion.answer)
+      if (parsed) {
+        return json({
+          title: parsed.title,
+          description: parsed.description,
+          tags: parsed.tags,
+          suggestedPriceInr: parsed.suggestedPriceInr,
+          categoryHint: parsed.categoryHint,
+          usedFallback: false,
+          product: 'commerce',
+        })
+      }
+
+      console.error('listing_draft_from_image failed:', completion.error)
+      const failure = visionFailureMessage(completion.error)
+      return json({ error: failure.error, code: 'listing_draft_failed' }, failure.status)
+    }
+
     if (action === 'ai_search') {
       const message = typeof body.message === 'string' ? body.message.trim() : ''
       if (!message) return json({ error: 'message is required' }, 400)
@@ -2197,7 +2290,7 @@ Deno.serve(async (req) => {
     return json(
       {
         error:
-          'Unknown action. Use suggestions | chat | feedback | comment_suggestions | meeting_draft | post_draft | shop_draft | translate | moderate_image | describe_search_image | ai_search.',
+          'Unknown action. Use suggestions | chat | feedback | comment_suggestions | meeting_draft | post_draft | shop_draft | translate | moderate_image | describe_search_image | listing_draft_from_image | ai_search.',
       },
       400,
     )

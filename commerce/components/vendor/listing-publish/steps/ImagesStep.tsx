@@ -1,6 +1,8 @@
 import { useCallback, useState } from 'react'
 
+import { listingImageDraftToDataUrl } from '~/commerce/lib/listing-image-data-url'
 import { Button, Icons, Image, Spinner, Text, XStack, YStack, useAppToast } from '~/components/ui'
+import { draftListingFromImage, type ListingDraftFromImageResult } from '~/lib/ai/client'
 import { type PickedImage } from '~/lib/media/pick-image'
 import { pickImagesWithCrop } from '~/lib/media/pick-and-crop'
 import type { ListingFormData, ListingImageDraft } from '~/lib/listing/listing.type'
@@ -16,12 +18,22 @@ type ImagesStepProps = {
   ui: AppUiTokens
   formData: ListingFormData
   errors: Record<string, string>
+  isDesktop: boolean
   onChangeImages: (images: ListingImageDraft[]) => void
+  onApplyAiDraft?: (draft: ListingDraftFromImageResult) => void
 }
 
-export function ImagesStep({ ui, formData, errors, onChangeImages }: ImagesStepProps) {
+export function ImagesStep({
+  ui,
+  formData,
+  errors,
+  isDesktop,
+  onChangeImages,
+  onApplyAiDraft,
+}: ImagesStepProps) {
   const toast = useAppToast()
   const [isPicking, setIsPicking] = useState(false)
+  const [isDrafting, setIsDrafting] = useState(false)
   const images = formData.images ?? []
   const showBanner = images.length < LISTING_PUBLISH_IMAGE_HINTS.MIN_RECOMMENDED
 
@@ -63,6 +75,35 @@ export function ImagesStep({ ui, formData, errors, onChangeImages }: ImagesStepP
     onChangeImages(next)
   }
 
+  const handleAiDraft = useCallback(async () => {
+    if (!onApplyAiDraft) return
+    const primary = images.find((img) => img.is_primary) ?? images[0]
+    if (!primary) {
+      toast.show('Add a photo first', {
+        tone: 'info',
+        message: 'AI drafts title and description from your primary listing photo.',
+      })
+      return
+    }
+    setIsDrafting(true)
+    try {
+      const dataUrl = await listingImageDraftToDataUrl(primary)
+      const draft = await draftListingFromImage({ dataUrl })
+      onApplyAiDraft(draft)
+      toast.show('Listing draft ready', {
+        tone: 'success',
+        message: 'Title, description, and tags filled from your photo. Review before publishing.',
+      })
+    } catch (error) {
+      toast.show('Could not draft listing', {
+        tone: 'danger',
+        message: error instanceof Error ? error.message : 'Try again with a clearer product photo.',
+      })
+    } finally {
+      setIsDrafting(false)
+    }
+  }, [images, onApplyAiDraft, toast])
+
   return (
     <XStack gap="$4" alignItems="flex-start" flexWrap="wrap">
       <YStack flex={1} minWidth={280} gap="$4">
@@ -93,7 +134,7 @@ export function ImagesStep({ ui, formData, errors, onChangeImages }: ImagesStepP
             borderStyle="dashed"
             borderColor={ui.borderSubtle}
             borderRadius={16}
-            margin="$5"
+            margin={isDesktop ? '$5' : '$4'}
             minHeight={180}
             cursor="pointer"
             hoverStyle={{ borderColor: ui.brand, backgroundColor: ui.roseSurface }}
@@ -117,7 +158,33 @@ export function ImagesStep({ ui, formData, errors, onChangeImages }: ImagesStepP
 
           <ListingPublishFieldError ui={ui} message={errors.images} />
 
-          <XStack gap="$3" flexWrap="wrap" paddingHorizontal="$5" paddingBottom="$5">
+          {onApplyAiDraft && images.length > 0 ? (
+            <XStack paddingHorizontal="$5" paddingBottom="$3">
+              <Button
+                tone="outline"
+                borderRadius={999}
+                disabled={isDrafting}
+                icon={
+                  isDrafting ? (
+                    <Spinner size="small" color={ui.brand} />
+                  ) : (
+                    <Icons.Sparkles size={15} color={ui.brand} />
+                  )
+                }
+                onPress={() => void handleAiDraft()}
+              >
+                {isDrafting ? 'Drafting with AI…' : 'Draft listing from photo'}
+              </Button>
+            </XStack>
+          ) : null}
+
+          <XStack
+            gap="$3"
+            flexWrap="wrap"
+            justifyContent={isDesktop ? 'flex-start' : 'space-between'}
+            paddingHorizontal={isDesktop ? '$5' : '$4'}
+            paddingBottom="$5"
+          >
             {images.map((image, index) => (
               <YStack key={`${image.id ?? image.image_url}-${index}`} width={140} gap="$1.5" position="relative">
                 <Image
@@ -177,7 +244,7 @@ export function ImagesStep({ ui, formData, errors, onChangeImages }: ImagesStepP
         </ListingPublishCard>
       </YStack>
 
-      <YStack width={280} maxWidth="100%" gap="$3">
+      <YStack width={isDesktop ? 280 : '100%'} maxWidth="100%" gap="$3">
         <ListingPublishCard ui={ui} title="Image Guidelines">
           <YStack gap="$2">
             {LISTING_PUBLISH_COPY.IMAGE_GUIDELINES.map((line) => (

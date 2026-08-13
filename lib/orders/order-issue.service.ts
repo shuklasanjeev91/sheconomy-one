@@ -9,9 +9,7 @@
  *
  * Schema note: the modern `order_issues` table is leaner — `subject` →
  * `issue_title`, `priority` → `issue_priority`, `attachments` →
- * `evidence_urls`. There is no `contact_information` or comments/`admin_notes`
- * storage, so the legacy `addIssueComment` is **deferred** (see the doc) until a
- * dedicated `order_issue_comments` table exists.
+ * `evidence_urls`. Comment threads live in `order_issue_comments`.
  */
 
 import { supabase } from '~/lib/supabase'
@@ -25,6 +23,7 @@ import type {
   OrderIssue,
   OrderIssueAnalytics,
   OrderIssueAnalyticsFilters,
+  OrderIssueComment,
   OrderIssueInsert,
   OrderIssueQueryOptions,
   OrderIssueUpdate,
@@ -409,5 +408,71 @@ export async function getIssueAnalytics(
     })
   } catch (error) {
     return fail(error, 'An unexpected error occurred while calculating issue analytics')
+  }
+}
+
+// ============= COMMENTS =============
+
+/** Chronological comments for an issue the caller can access. */
+export async function getIssueComments(
+  issueId: string,
+  userId?: string | null,
+): Promise<OrderServiceResponse<OrderIssueComment[]>> {
+  const id = await resolveUserId(userId)
+  if (!id) return fail('User not authenticated')
+  if (!issueId) return fail('Issue ID is required')
+
+  try {
+    const { data, error } = await (supabase as any)
+      .from('order_issue_comments')
+      .select(
+        `
+        id, issue_id, author_id, body, created_at, updated_at,
+        author:profiles!author_id ( id, full_name, avatar_url )
+      `,
+      )
+      .eq('issue_id', issueId)
+      .order('created_at', { ascending: true })
+
+    if (error) return fail(error, 'Failed to load issue comments')
+    return ok((data ?? []) as OrderIssueComment[])
+  } catch (error) {
+    return fail(error, 'An unexpected error occurred while loading issue comments')
+  }
+}
+
+/** Post a comment on an issue (RLS enforces participant access). */
+export async function addIssueComment(
+  issueId: string,
+  body: string,
+  userId?: string | null,
+): Promise<OrderServiceResponse<OrderIssueComment>> {
+  const id = await resolveUserId(userId)
+  if (!id) return fail('User not authenticated')
+  if (!issueId) return fail('Issue ID is required')
+
+  const trimmed = body.trim()
+  if (!trimmed) return fail('Comment cannot be empty')
+
+  try {
+    const { data, error } = await (supabase as any)
+      .from('order_issue_comments')
+      .insert({
+        issue_id: issueId,
+        author_id: id,
+        body: trimmed,
+      })
+      .select(
+        `
+        id, issue_id, author_id, body, created_at, updated_at,
+        author:profiles!author_id ( id, full_name, avatar_url )
+      `,
+      )
+      .single()
+
+    if (error) return fail(error, 'Failed to add comment')
+    return ok(data as OrderIssueComment)
+  } catch (error) {
+    return fail(error, 'An unexpected error occurred while adding a comment')
   }
 }

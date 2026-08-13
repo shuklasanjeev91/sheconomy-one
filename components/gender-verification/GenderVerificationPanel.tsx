@@ -28,6 +28,7 @@ type FaceCaptureOverlayProps = {
 
 function ringColor(phase: VerificationPhase, tracking?: FaceTrackingStatus, brand?: string) {
   if (phase === 'success') return '#16a34a'
+  if (phase === 'error') return '#f59e0b'
   if (phase === 'analyze') return brand ?? '#e11d48'
   if (tracking?.eyesClosed) return '#0ea5e9'
   if (tracking?.faceCentered) return '#22c55e'
@@ -47,6 +48,8 @@ function placeholderCopy(
   }
   if (phase === 'idle') return 'Tap Start when you are ready'
   if (phase === 'loading') return 'Checking permission…'
+  if (phase === 'error') return 'Ready when you are — tap Try again'
+  if (phase === 'success') return 'You’re verified'
   return 'Preparing camera…'
 }
 
@@ -65,8 +68,15 @@ export function FaceCaptureOverlay({
 }: FaceCaptureOverlayProps) {
   const ui = useAppUi()
   const { width: windowWidth } = useWindowDimensions()
+  // Keep the preview mounted through error so Try again doesn't remount the
+  // camera and land on a black "Preparing camera…" frame.
   const showCamera =
-    phase === 'camera' || phase === 'position' || phase === 'blink' || phase === 'analyze'
+    phase === 'camera' ||
+    phase === 'position' ||
+    phase === 'blink' ||
+    phase === 'analyze' ||
+    phase === 'error' ||
+    phase === 'loading'
   const ring = ringColor(phase, tracking, ui.brand)
   const progress = Math.min(1, blinkCount / Math.max(1, requiredBlinks))
 
@@ -117,10 +127,10 @@ export function FaceCaptureOverlay({
                 width: '100%',
                 height: '100%',
                 position: 'relative',
-                opacity: showCamera ? 1 : 0,
+                opacity: showCamera && phase !== 'idle' ? 1 : 0,
               }}
             />
-            {!showCamera ? (
+            {phase === 'idle' || (phase === 'error' && !showCamera) ? (
               <YStack
                 position="absolute"
                 top={0}
@@ -134,7 +144,7 @@ export function FaceCaptureOverlay({
               >
                 <Icons.ScanFace size={40} color="rgba(255,255,255,0.9)" />
                 <Text fontSize={14} color="rgba(255,255,255,0.78)" textAlign="center">
-                  Tap Start when you are ready
+                  {placeholderCopy(phase, cameraPermission)}
                 </Text>
               </YStack>
             ) : null}
@@ -142,7 +152,7 @@ export function FaceCaptureOverlay({
         )}
 
         {/* Soft oval guide so users know where to place their face */}
-        {showCamera && cameraPermission?.granted ? (
+        {showCamera && cameraPermission?.granted && phase !== 'error' && phase !== 'success' ? (
           <YStack
             position="absolute"
             top="12%"
@@ -172,6 +182,27 @@ export function FaceCaptureOverlay({
             <Spinner size="large" color="white" />
             <Text fontSize={13} color="white" fontWeight="600">
               {phase === 'loading' ? 'Getting ready…' : 'Checking liveness…'}
+            </Text>
+          </YStack>
+        ) : null}
+
+        {phase === 'error' ? (
+          <YStack
+            position="absolute"
+            top={0}
+            left={0}
+            right={0}
+            bottom={0}
+            alignItems="center"
+            justifyContent="center"
+            backgroundColor="rgba(0,0,0,0.55)"
+            gap="$2"
+            padding="$5"
+            pointerEvents="none"
+          >
+            <Icons.AlertTriangle size={28} color="#fbbf24" />
+            <Text fontSize={13} color="white" fontWeight="700" textAlign="center">
+              Let’s try again
             </Text>
           </YStack>
         ) : null}
@@ -249,7 +280,13 @@ export function VerificationSteps({ phase }: VerificationStepsProps) {
 
   function stateOf(id: (typeof steps)[number]['id']) {
     if (phase === 'success') return 'done'
-    if (phase === 'idle' || phase === 'error') return 'todo'
+    if (phase === 'idle') return 'todo'
+    if (phase === 'error') {
+      // Keep progress visible after a failed run so the user knows how far they got.
+      if (id === 'position') return 'done'
+      if (id === 'blink') return 'done'
+      return 'active'
+    }
     if (phase === 'loading') return id === 'position' ? 'active' : 'todo'
     if (id === 'position') return phase === 'position' || phase === 'camera' ? 'active' : 'done'
     if (id === 'blink') return phase === 'blink' ? 'active' : phase === 'analyze' ? 'done' : 'todo'

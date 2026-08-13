@@ -192,32 +192,37 @@ async function executeBatch(
 
 // ============= STEP: VALIDATION =============
 
-async function validatePublishingRequirements(publishData: PublishListingData): Promise<StepResult> {
+async function validatePublishingRequirements(
+  publishData: PublishListingData,
+  publishImmediately: boolean,
+): Promise<StepResult> {
   try {
     const userId = await resolveUserId()
     if (!userId) return { success: false, error: 'User not authenticated' }
 
-    // Required base fields.
-    const requiredFields: (keyof PublishListingData)[] = [
-      'shop_id',
-      'title',
-      'description',
-      'listing_type',
-      'price',
-    ]
+    // A draft only needs enough to identify the row; everything else can be
+    // filled in later. Going live requires the full payload.
+    const requiredFields: (keyof PublishListingData)[] = publishImmediately
+      ? ['shop_id', 'title', 'description', 'listing_type', 'price']
+      : ['shop_id', 'title', 'listing_type']
     const missingFields = requiredFields.filter((field) => !publishData[field])
     if (missingFields.length > 0) {
       return { success: false, error: `Missing required fields: ${missingFields.join(', ')}` }
     }
 
-    // At least one image is required to publish.
+    // Shop ownership / admin access.
+    const access = await verifyShopManageAccess(publishData.shop_id as string, userId)
+    if (!access.success) {
+      return { success: false, error: access.error ?? 'Shop not found or access denied' }
+    }
+
     const images = publishData.images
-    if (!Array.isArray(images) || images.length === 0) {
+    if (publishImmediately && (!Array.isArray(images) || images.length === 0)) {
       return { success: false, error: 'At least one image is required to publish a listing' }
     }
 
     // Each image must have either an upload payload (blob) or an existing URL.
-    const invalidImages = images.filter((img) => {
+    const invalidImages = (images ?? []).filter((img) => {
       const hasBlob = Boolean(img.blob) && Boolean(img.mimeType)
       const hasUrl = typeof img.image_url === 'string' && img.image_url.length > 0
       return !(hasBlob || hasUrl)
@@ -229,14 +234,10 @@ async function validatePublishingRequirements(publishData: PublishListingData): 
       }
     }
 
-    // Shop ownership / admin access.
-    const access = await verifyShopManageAccess(publishData.shop_id as string, userId)
-    if (!access.success) {
-      return { success: false, error: access.error ?? 'Shop not found or access denied' }
+    if (publishImmediately) {
+      const typeValidation = validateListingTypeRequirements(publishData)
+      if (!typeValidation.success) return typeValidation
     }
-
-    const typeValidation = validateListingTypeRequirements(publishData)
-    if (!typeValidation.success) return typeValidation
 
     return { success: true, user_id: userId, validation_passed: true }
   } catch (error) {
@@ -523,51 +524,19 @@ async function processListingTags(listingId: string, tags: string[] = []): Promi
 // ============= STEP: SHOP SECTIONS =============
 
 /**
- * Add the listing to the requested shop sections.
- *
- * ⛔ Placeholder — `shop-sections.service` has not been migrated yet. Once it
- * is, import `addListingToSection` at the top of this file and replace the body
- * below with the per-section loop (mirroring the other batch steps). This step
- * is optional, so it currently no-ops without failing the publish.
+ * Add the listing to the requested shop sections (optional publish step).
  */
 async function addToShopSections(listingId: string, shopSections: string[] = []): Promise<StepResult> {
   if (!shopSections || shopSections.length === 0) {
     return { success: true, message: 'No shop sections specified', sections_added: 0 }
   }
 
-  const { saveVendorShopSection } = await import('~/commerce/lib/vendor-operations')
+  const { addListingToSection } = await import('~/lib/shop/shop-sections.service')
   let added = 0
   let skipped = 0
 
   for (const sectionId of shopSections) {
-    const { data: section } = await supabase
-      .from('shop_sections')
-      .select('id, shop_id, section_name, description, is_active, listing_sections(listing_id)')
-      .eq('id', sectionId)
-      .maybeSingle()
-
-    if (!section) {
-      skipped += 1
-      continue
-    }
-
-    const existingIds = (section.listing_sections ?? []).map(
-      (link: { listing_id: string }) => link.listing_id,
-    )
-    if (existingIds.includes(listingId)) {
-      skipped += 1
-      continue
-    }
-
-    const { error } = await saveVendorShopSection({
-      shopId: section.shop_id,
-      sectionId: section.id,
-      name: section.section_name,
-      description: section.description,
-      active: section.is_active ?? true,
-      listingIds: [...existingIds, listingId],
-    })
-
+    const { error } = await addListingToSection(sectionId, listingId)
     if (error) skipped += 1
     else added += 1
   }
@@ -666,7 +635,7 @@ export const listingPublishOrchestrator = {
         {
           step: PUBLISH_STEPS.VALIDATION,
           run: async () => {
-            const result = await validatePublishingRequirements(publishData)
+            const result = await validatePublishingRequirements(publishData, publishImmediately)
             if (result.success) userId = (result.user_id as string) ?? null
             return result
           },
@@ -679,7 +648,17 @@ export const listingPublishOrchestrator = {
         {
           step: PUBLISH_STEPS.IMAGES,
           critical: true,
-          run: () => processListingImages(publishResult.listing_id as string, publishData.images, userId),
+          run: async () => {
+            // An image-less draft is legitimate — only publishing demands one.
+            if (!publishData.images?.length) {
+              return { success: true, images_processed: 0 }
+            }
+            return processListingImages(
+              publishResult.listing_id as string,
+              publishData.images,
+              userId,
+            )
+          },
         },
         {
           step: PUBLISH_STEPS.CATEGORIES,

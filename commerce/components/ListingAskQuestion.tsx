@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { useRouter } from 'one'
 
 import { submitListingInquiry } from '~/commerce/lib/listing-inquiries'
+import { createDirectConversation } from '~/chat/lib/chats'
 import {
   AppBottomSheet,
   Button,
@@ -12,7 +13,7 @@ import {
   YStack,
   useAppToast,
 } from '~/components/ui'
-import { appRoutes } from '~/lib/routes'
+import { appRoutes, chatRoutes } from '~/lib/routes'
 import { useAppUi } from '~/lib/theme/useAppUi'
 import { useSupabase } from '~/providers/SupabaseProvider'
 
@@ -69,8 +70,18 @@ export function ListingAskQuestion({
     setOpen(false)
     toast.show('Question sent', {
       tone: 'success',
-      message: 'The seller will be notified by email, push, and in-app alerts.',
+      message: 'The seller will be notified. You can also continue in Chat.',
     })
+
+    // Best-effort: open / ensure a DM so the buyer can follow up in Chat.
+    try {
+      const { conversationId } = await createDirectConversation(sellerId)
+      if (conversationId) {
+        router.push(chatRoutes.conversation(conversationId))
+      }
+    } catch {
+      // Inquiry already succeeded — chat handoff is optional.
+    }
   }
 
   return (

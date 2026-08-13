@@ -1,16 +1,19 @@
 import { useEffect, useState } from 'react'
 
-import { Icons, Image, YStack } from '~/components/ui'
+import { Icons, Image, Text, YStack } from '~/components/ui'
 import { useAppUi } from '~/lib/theme/useAppUi'
 
 type CategoryImageProps = {
   src?: string | null
-  size: number
+  /** Emoji glyph shown when there is no photo — most categories ship icon-only. */
+  icon?: string | null
+  width: number
+  height: number
   alt: string
 }
 
-/** Category circle photo with graceful fallback when CDN URLs fail on native. */
-export function CategoryImage({ src, size, alt }: CategoryImageProps) {
+/** Category tile artwork with graceful fallback when CDN URLs fail on native. */
+export function CategoryImage({ src, icon, width, height, alt }: CategoryImageProps) {
   const ui = useAppUi()
   const [failed, setFailed] = useState(false)
 
@@ -19,15 +22,23 @@ export function CategoryImage({ src, size, alt }: CategoryImageProps) {
   }, [src])
 
   if (!src || failed) {
+    const glyph = icon?.trim()
+    const scale = Math.min(width, height)
     return (
       <YStack
-        width={size}
-        height={size}
+        width={width}
+        height={height}
         alignItems="center"
         justifyContent="center"
         backgroundColor={ui.roseSurface}
       >
-        <Icons.Sparkles size={Math.round(size * 0.32)} color={ui.brand} />
+        {glyph ? (
+          <Text fontSize={Math.round(scale * 0.44)} lineHeight={Math.round(scale * 0.52)}>
+            {glyph}
+          </Text>
+        ) : (
+          <Icons.Sparkles size={Math.round(scale * 0.34)} color={ui.brand} />
+        )}
       </YStack>
     )
   }
@@ -36,8 +47,8 @@ export function CategoryImage({ src, size, alt }: CategoryImageProps) {
     <Image
       src={src}
       alt={alt}
-      width={size}
-      height={size}
+      width={width}
+      height={height}
       objectFit="cover"
       onError={() => setFailed(true)}
     />

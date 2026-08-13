@@ -45,7 +45,7 @@ Every write delegates to code that was already migrated:
 | Variations / Attributes / Materials | `replaceVariations` / `replaceAttributes` / `replaceMaterials` (child services) |
 | Rollback | `deleteListing` (`listing.service`) |
 | Tags | inline insert into `listing_tags` (no dedicated service exists yet) |
-| **Shop sections** | ⛔ **not migrated yet** — see [§6](#6-not-migrated-yet-shop-sections) |
+| **Shop sections** | `addListingToSection` ([`lib/shop/shop-sections.service.ts`](../../lib/shop/shop-sections.service.ts)) |
 
 > Logging from the legacy orchestrator was intentionally **not** migrated.
 
@@ -158,22 +158,12 @@ must carry either an upload payload (`blob` + `mimeType`) or an existing
 
 ---
 
-## 6. Not migrated yet: shop sections
+## 6. Shop sections
 
-The `shop_sections` step is a **placeholder**. `shop-sections.service` hasn't
-been migrated, so the step currently no-ops (it never fails the publish and
-reports `sections_skipped`).
+The publish step calls `addListingToSection(sectionId, listingId)` for each id in
+`publishData.shop_sections`. Missing/invalid section ids are counted as
+`sections_skipped`; the listing still goes live (optional step).
 
-When that service lands, finish the step in
-`lib/listing/listing-publish.orchestrator.ts`:
-
-1. Uncomment the import at the top of the file:
-   ```ts
-   import { addListingToSection } from '~/lib/shop/shop-sections.service'
-   ```
-2. Replace the body of `addToShopSections` with a per-section loop (mirror the
-   other batch steps: call `addListingToSection(sectionId, listingId)` for each,
-   count successes/failures, return the same `StepResult` shape).
-
-No other file needs to change — the store already renders
-`summary.sections` from whatever this step returns.
+Vendor UI that manages sections continues to use
+`fetchVendorShopSections` / `saveVendorShopSection` in
+`commerce/lib/vendor-operations.ts`.

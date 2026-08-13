@@ -13,7 +13,6 @@ import { LISTING_TYPES } from '~/lib/listing/listing.type'
 import { generateListingSlug } from '~/lib/listing/listing.utils'
 import {
   validateCategoryData,
-  validateListingCore,
   validateListingData,
   validateListingField,
 } from '~/lib/listing/listing.validation'
@@ -180,10 +179,12 @@ export function validatePublishStep(
 
   switch (stepId) {
     case LISTING_PUBLISH_STEP_IDS.BASIC: {
-      const core = validateListingCore(formData)
-      Object.assign(errors, core.errors)
+      // Only the fields this step renders — price lives on the pricing step.
+      const title = validateListingField('title', formData.title ?? '')
+      if (!title.isValid && title.error) errors.title = title.error
       const desc = validateListingField('description', formData.description ?? '')
       if (!desc.isValid && desc.error) errors.description = desc.error
+      if (!formData.listing_type) errors.listing_type = 'Please select a listing type.'
       break
     }
     case LISTING_PUBLISH_STEP_IDS.DETAILS: {
@@ -196,6 +197,14 @@ export function validatePublishStep(
         }
         if (formData.stock === '' || formData.stock === null || formData.stock === undefined) {
           errors.stock = 'Stock quantity is required for physical products.'
+        }
+      }
+      if (formData.listing_type === LISTING_TYPES.DIGITAL) {
+        if (!formData.digital_file_url?.trim()) {
+          errors.digital_file_url = 'A download URL is required for digital products.'
+        }
+        if (!formData.digital_file_type?.trim()) {
+          errors.digital_file_type = 'File type is required for digital products.'
         }
       }
       break
@@ -238,16 +247,66 @@ export function validatePublishStep(
   return { isValid: Object.keys(errors).length === 0, errors, warnings }
 }
 
+/**
+ * Drafts are deliberately permissive: a vendor should be able to park a
+ * half-finished listing. Only what the row needs to exist is required.
+ */
+export function validateDraftForm(formData: ListingFormData): StepValidationResult {
+  const errors: Record<string, string> = {}
+  const title = validateListingField('title', formData.title ?? '')
+  if (!title.isValid && title.error) errors.title = title.error
+  if (!formData.listing_type) errors.listing_type = 'Please select a listing type.'
+  return { isValid: Object.keys(errors).length === 0, errors, warnings: [] }
+}
+
 export function validateFullPublishForm(formData: ListingFormData): StepValidationResult {
   const result = validateListingData(formData)
+  const errors = { ...result.errors }
   const warnings: string[] = []
   const imageCount = formData.images?.length ?? 0
-  if (imageCount < LISTING_PUBLISH_IMAGE_HINTS.MIN_RECOMMENDED) {
+  // The publish pipeline rejects image-less listings server-side; catch it here
+  // so the vendor is pointed at the images step instead of a generic failure.
+  if (imageCount < LISTING_PUBLISH_IMAGE_HINTS.MIN_REQUIRED_PUBLISH) {
+    errors.images = 'At least one image is required to publish.'
+  } else if (imageCount < LISTING_PUBLISH_IMAGE_HINTS.MIN_RECOMMENDED) {
     warnings.push(
       `Upload at least ${LISTING_PUBLISH_IMAGE_HINTS.MIN_RECOMMENDED} images for best conversion.`,
     )
   }
-  return { isValid: result.isValid, errors: result.errors, warnings }
+  return { isValid: Object.keys(errors).length === 0, errors, warnings }
+}
+
+const FIELD_STEP_LOOKUP: Record<string, ListingPublishStepId> = {
+  title: LISTING_PUBLISH_STEP_IDS.BASIC,
+  description: LISTING_PUBLISH_STEP_IDS.BASIC,
+  listing_type: LISTING_PUBLISH_STEP_IDS.BASIC,
+  tags: LISTING_PUBLISH_STEP_IDS.BASIC,
+  materials: LISTING_PUBLISH_STEP_IDS.DETAILS,
+  variations: LISTING_PUBLISH_STEP_IDS.DETAILS,
+  stock: LISTING_PUBLISH_STEP_IDS.DETAILS,
+  quantity: LISTING_PUBLISH_STEP_IDS.DETAILS,
+  weight: LISTING_PUBLISH_STEP_IDS.DETAILS,
+  digital_file_url: LISTING_PUBLISH_STEP_IDS.DETAILS,
+  digital_file_type: LISTING_PUBLISH_STEP_IDS.DETAILS,
+  booking_duration_minutes: LISTING_PUBLISH_STEP_IDS.DETAILS,
+  price: LISTING_PUBLISH_STEP_IDS.PRICING,
+  sku: LISTING_PUBLISH_STEP_IDS.PRICING,
+  categories: LISTING_PUBLISH_STEP_IDS.CATEGORIES,
+  images: LISTING_PUBLISH_STEP_IDS.IMAGES,
+  slug: LISTING_PUBLISH_STEP_IDS.SEO,
+  meta_title: LISTING_PUBLISH_STEP_IDS.SEO,
+  meta_description: LISTING_PUBLISH_STEP_IDS.SEO,
+}
+
+/** Which step owns the first offending field, so we can jump the vendor there. */
+export function findStepForErrors(
+  errors: Record<string, string>,
+): ListingPublishStepId | undefined {
+  for (const field of Object.keys(errors)) {
+    const step = FIELD_STEP_LOOKUP[field]
+    if (step) return step
+  }
+  return undefined
 }
 
 export async function ensureImageBlobsForPublish(

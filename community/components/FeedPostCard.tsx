@@ -30,8 +30,9 @@ import {
   getPostTypeSurface,
   resolveFeedPostType,
 } from '~/community/lib/post-type-surface'
-import { Avatar, Button, Icons, Image, Text, XStack, YStack, useAppToast } from '~/components/ui'
+import { Avatar, Button, Icons, Image, Spinner, Text, XStack, YStack, useAppToast } from '~/components/ui'
 import { radius } from '~/config/tokens'
+import { useCart } from '~/commerce/hooks/useCart'
 import { commerceRoutes, communityRoutes, routes } from '~/lib/routes'
 import { navigateApp } from '~/lib/platform/navigate'
 import { useSupabase } from '~/providers/SupabaseProvider'
@@ -708,56 +709,109 @@ function formatPostPrice(price: number | null, currency: string | null) {
 
 function PostProductCard({ product }: { product: PostProduct }) {
   const communityUi = useCommunityUi()
+  const toast = useAppToast()
+  const { addToCart } = useCart()
+  const [adding, setAdding] = useState(false)
+
+  async function handleAddToCart() {
+    if (!product.listingId) {
+      toast.show('Listing unavailable', { tone: 'default' })
+      return
+    }
+    setAdding(true)
+    try {
+      const { error } = await addToCart(product.listingId)
+      if (error) {
+        toast.show('Could not add to cart', { tone: 'danger', message: error })
+        return
+      }
+      toast.show('Added to cart', { tone: 'success' })
+    } finally {
+      setAdding(false)
+    }
+  }
+
   const card = (
-    <XStack
+    <YStack
       borderRadius={radius.card}
       overflow="hidden"
       borderWidth={1}
       borderColor={communityUi.border}
       backgroundColor={communityUi.cardBg}
-      cursor={product.slug ? 'pointer' : 'default'}
-      hoverStyle={product.slug ? { borderColor: communityUi.brand } : undefined}
-      animation="quick"
     >
-      <YStack
-        width={112}
-        height={112}
-        backgroundColor={communityUi.pageBg}
-        alignItems="center"
-        justifyContent="center"
+      <XStack
+        cursor={product.slug || product.listingId ? 'pointer' : 'default'}
+        hoverStyle={product.slug || product.listingId ? { borderColor: communityUi.brand } : undefined}
+        animation="quick"
       >
-        {product.imageUrl ? (
-          <Image src={product.imageUrl} width={112} height={112} objectFit="cover" alt="" />
-        ) : (
-          <Icons.Package size={26} color={communityUi.textMuted} />
-        )}
-      </YStack>
-      <YStack flex={1} padding={12} gap={4} justifyContent="center" minWidth={0}>
-        <Text fontSize={11} fontWeight="700" color={communityUi.textMuted} letterSpacing={0.4}>
-          PRODUCT
-        </Text>
-        <Text fontSize={15} fontWeight="700" color={communityUi.text} numberOfLines={2}>
-          {product.title}
-        </Text>
-        <Text fontSize={14} fontWeight="700" color={communityUi.brand}>
-          {formatPostPrice(product.price, product.currency)}
-        </Text>
-        {product.shopName ? (
-          <Text fontSize={12} color={communityUi.textMuted} numberOfLines={1}>
-            {product.shopName}
+        <YStack
+          width={112}
+          height={112}
+          backgroundColor={communityUi.pageBg}
+          alignItems="center"
+          justifyContent="center"
+        >
+          {product.imageUrl ? (
+            <Image src={product.imageUrl} width={112} height={112} objectFit="cover" alt="" />
+          ) : (
+            <Icons.Package size={26} color={communityUi.textMuted} />
+          )}
+        </YStack>
+        <YStack flex={1} padding={12} gap={4} justifyContent="center" minWidth={0}>
+          <Text fontSize={11} fontWeight="700" color={communityUi.textMuted} letterSpacing={0.4}>
+            PRODUCT
           </Text>
-        ) : null}
-      </YStack>
-    </XStack>
+          <Text fontSize={15} fontWeight="700" color={communityUi.text} numberOfLines={2}>
+            {product.title}
+          </Text>
+          <Text fontSize={14} fontWeight="700" color={communityUi.brand}>
+            {formatPostPrice(product.price, product.currency)}
+          </Text>
+          {product.shopName ? (
+            <Text fontSize={12} color={communityUi.textMuted} numberOfLines={1}>
+              {product.shopName}
+            </Text>
+          ) : null}
+        </YStack>
+      </XStack>
+      {product.listingId ? (
+        <XStack padding={10} paddingTop={0} gap="$2">
+          <Button
+            size="$2"
+            tone="primary"
+            borderRadius={999}
+            flex={1}
+            disabled={adding}
+            icon={adding ? <Spinner size="small" color="white" /> : <Icons.ShoppingBag size={14} />}
+            onPress={(e) => {
+              e?.stopPropagation?.()
+              void handleAddToCart()
+            }}
+          >
+            {adding ? 'Adding…' : 'Add to cart'}
+          </Button>
+          {product.slug || product.listingId ? (
+            <AppLink
+              href={
+                Platform.OS !== 'web' && product.listingId
+                  ? commerceRoutes.listing(product.listingId)
+                  : commerceRoutes.listing(product.slug ?? product.listingId!)
+              }
+              asChild
+            >
+              <Button size="$2" tone="outline" borderRadius={999}>
+                View
+              </Button>
+            </AppLink>
+          ) : null}
+        </XStack>
+      ) : null}
+    </YStack>
   )
 
-  if (product.listingId || product.slug) {
-    const href =
-      Platform.OS !== 'web' && product.listingId
-        ? commerceRoutes.listing(product.listingId)
-        : commerceRoutes.listing(product.slug ?? product.listingId!)
+  if (!product.listingId && product.slug) {
     return (
-      <AppLink href={href} asChild>
+      <AppLink href={commerceRoutes.listing(product.slug)} asChild>
         {card}
       </AppLink>
     )

@@ -27,6 +27,7 @@ import type {
   OrderIssue,
   OrderIssueAnalytics,
   OrderIssueAnalyticsFilters,
+  OrderIssueComment,
   OrderIssueFilters,
   OrderIssueQueryOptions,
   OrderIssueStats,
@@ -58,6 +59,9 @@ type OrderIssueState = {
 
   loading: IssueLoadingState
   error: string | null
+  commentsByIssueId: Record<string, OrderIssueComment[]>
+  commentsLoading: Record<string, boolean>
+  commentsPosting: Record<string, boolean>
 }
 
 const emptyPagination = (): PaginationMeta => ({ page: 1, limit: 20, total: 0, total_pages: 0 })
@@ -79,6 +83,9 @@ const initialState: OrderIssueState = {
     admin: false,
   },
   error: null,
+  commentsByIssueId: {},
+  commentsLoading: {},
+  commentsPosting: {},
 }
 
 type ThunkConfig = { state: RootState; dispatch: AppDispatch; rejectValue: string }
@@ -170,6 +177,30 @@ export const fetchAllIssues = createAsyncThunk<
     return rejectWithValue(response.error ?? 'Failed to fetch issues.')
   }
   return response.data
+})
+
+export const fetchIssueComments = createAsyncThunk<
+  { issueId: string; comments: OrderIssueComment[] },
+  { issueId: string; userId?: string },
+  ThunkConfig
+>('orderIssues/fetchComments', async (arg, { rejectWithValue }) => {
+  const response = await orderIssueService.getIssueComments(arg.issueId, arg.userId)
+  if (!response.success || !response.data) {
+    return rejectWithValue(response.error ?? 'Failed to load comments.')
+  }
+  return { issueId: arg.issueId, comments: response.data }
+})
+
+export const postIssueComment = createAsyncThunk<
+  { issueId: string; comment: OrderIssueComment },
+  { issueId: string; body: string; userId?: string },
+  ThunkConfig
+>('orderIssues/postComment', async (arg, { rejectWithValue }) => {
+  const response = await orderIssueService.addIssueComment(arg.issueId, arg.body, arg.userId)
+  if (!response.success || !response.data) {
+    return rejectWithValue(response.error ?? 'Failed to post comment.')
+  }
+  return { issueId: arg.issueId, comment: response.data }
 })
 
 // ============= HELPERS =============
@@ -319,6 +350,32 @@ const orderIssueSlice = createSlice({
         state.loading.admin = false
         state.error = action.payload ?? 'Failed to fetch issues.'
       })
+
+      // ---- comments ----
+      .addCase(fetchIssueComments.pending, (state, action) => {
+        state.commentsLoading[action.meta.arg.issueId] = true
+      })
+      .addCase(fetchIssueComments.fulfilled, (state, action) => {
+        state.commentsLoading[action.payload.issueId] = false
+        state.commentsByIssueId[action.payload.issueId] = action.payload.comments
+      })
+      .addCase(fetchIssueComments.rejected, (state, action) => {
+        state.commentsLoading[action.meta.arg.issueId] = false
+        state.error = action.payload ?? 'Failed to load comments.'
+      })
+      .addCase(postIssueComment.pending, (state, action) => {
+        state.commentsPosting[action.meta.arg.issueId] = true
+        state.error = null
+      })
+      .addCase(postIssueComment.fulfilled, (state, action) => {
+        state.commentsPosting[action.payload.issueId] = false
+        const existing = state.commentsByIssueId[action.payload.issueId] ?? []
+        state.commentsByIssueId[action.payload.issueId] = [...existing, action.payload.comment]
+      })
+      .addCase(postIssueComment.rejected, (state, action) => {
+        state.commentsPosting[action.meta.arg.issueId] = false
+        state.error = action.payload ?? 'Failed to post comment.'
+      })
   },
 })
 
@@ -335,6 +392,12 @@ export const selectOrderIssuesError = (state: RootState) => state.orderIssues.er
 export const selectOrderIssuesPagination = (state: RootState) => state.orderIssues.issuesPagination
 export const selectIssueAnalytics = (state: RootState) => state.orderIssues.issueAnalytics
 export const selectAdminIssues = (state: RootState) => state.orderIssues.adminIssues
+export const selectIssueComments = (issueId: string) => (state: RootState) =>
+  state.orderIssues.commentsByIssueId[issueId] ?? []
+export const selectIssueCommentsLoading = (issueId: string) => (state: RootState) =>
+  Boolean(state.orderIssues.commentsLoading[issueId])
+export const selectIssueCommentsPosting = (issueId: string) => (state: RootState) =>
+  Boolean(state.orderIssues.commentsPosting[issueId])
 
 export const selectIssuesByStatus = (status: IssueStatus) => (state: RootState) =>
   state.orderIssues.issues.filter((issue) => issue.status === status)

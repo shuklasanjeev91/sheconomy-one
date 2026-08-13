@@ -4,6 +4,7 @@ import type { Session, User } from '@supabase/supabase-js'
 
 import { heartbeatLoginSession, recordLoginSession } from '~/features/auth/services/login-sessions'
 import { enrichProfileFromAuth } from '~/features/auth/services/profile-enrichment'
+import { applyPendingReferralForUser } from '~/lib/referral/invite'
 import { supabase } from '~/lib/supabase'
 
 type SupabaseContextValue = {
@@ -55,6 +56,7 @@ export function SupabaseProvider({ children }: { children: React.ReactNode }) {
           (nextSession.user.app_metadata?.provider as string | undefined) ?? null
         void recordLoginSession({ provider })
         void enrichProfileFromAuth(nextSession.user)
+        void applyPendingReferralForUser(nextSession.user.id)
       }
     })
 
@@ -64,6 +66,11 @@ export function SupabaseProvider({ children }: { children: React.ReactNode }) {
       subscription.unsubscribe()
     }
   }, [])
+
+  useEffect(() => {
+    if (!session?.user?.id) return
+    void applyPendingReferralForUser(session.user.id)
+  }, [session?.user?.id])
 
   useEffect(() => {
     if (!session?.user) return

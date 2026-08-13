@@ -181,14 +181,14 @@ export function isFaceCentered(
   const faceHeight = box.yMax - box.yMin
 
   const centered =
-    Math.abs(centerX - width / 2) < width * 0.28 &&
-    Math.abs(centerY - height / 2) < height * 0.3
+    Math.abs(centerX - width / 2) < width * 0.32 &&
+    Math.abs(centerY - height / 2) < height * 0.34
 
   const sized =
-    faceWidth > width * 0.16 &&
-    faceWidth < width * 0.92 &&
-    faceHeight > height * 0.14 &&
-    faceHeight < height * 0.92
+    faceWidth > width * 0.14 &&
+    faceWidth < width * 0.94 &&
+    faceHeight > height * 0.12 &&
+    faceHeight < height * 0.94
 
   return centered && sized
 }

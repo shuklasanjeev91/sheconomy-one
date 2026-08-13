@@ -19,12 +19,7 @@ export type ShopCommerceForm = {
 export type CommerceOption = { value: string; label: string; hint?: string }
 
 export const PAYMENT_GATEWAY_OPTIONS: CommerceOption[] = [
-  { value: 'razorpay', label: 'Razorpay' },
-  { value: 'stripe', label: 'Stripe' },
-  { value: 'payu', label: 'SHEPay' },
-  { value: 'cashfree', label: 'Cashfree' },
-  { value: 'paytm', label: 'Paytm' },
-  { value: 'phonepe', label: 'PhonePe' },
+  { value: 'payu', label: 'PayU (SHEPay split)' },
 ]
 
 export const SHIPPING_PARTNER_OPTIONS: CommerceOption[] = [
@@ -39,7 +34,7 @@ export const SHIPPING_PARTNER_OPTIONS: CommerceOption[] = [
 
 export const DEFAULT_COMMERCE_FORM: ShopCommerceForm = {
   paymentManaged: true,
-  paymentGateway: 'razorpay',
+  paymentGateway: 'payu',
   paymentAccountLabel: '',
   paymentKeyId: '',
   shippingPartner: 'self',

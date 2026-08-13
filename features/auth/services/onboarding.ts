@@ -1,4 +1,6 @@
 import type { OnboardingProfile } from '~/features/auth/services/profile-enrichment'
+import { isSafeReturnPath } from '~/lib/auth/redirect'
+import { classRoutes, commerceRoutes, communityRoutes } from '~/lib/routes'
 import { supabase } from '~/lib/supabase/client'
 
 export const MEMBER_INTENTS = [
@@ -10,6 +12,42 @@ export const MEMBER_INTENTS = [
 ] as const
 
 export type MemberIntentId = (typeof MEMBER_INTENTS)[number]['id']
+
+const INTENT_ROUTE_PRIORITY: Array<{ id: MemberIntentId; href: string }> = [
+  { id: 'selling', href: String(commerceRoutes.createShop) },
+  { id: 'hiring', href: String(communityRoutes.jobs) },
+  { id: 'networking', href: String(communityRoutes.home) },
+  { id: 'learning', href: String(classRoutes.home) },
+]
+
+/**
+ * Where to land after complete-profile Finish.
+ * Explicit safe `returnTo` wins; otherwise first matching intent by priority.
+ */
+export function resolvePostOnboardingHref(
+  intents: readonly string[],
+  returnTo?: string | null,
+): string {
+  const trimmed = typeof returnTo === 'string' ? returnTo.trim() : ''
+  if (trimmed && isSafeReturnPath(trimmed) && trimmed !== '/') {
+    return trimmed
+  }
+
+  const selected = new Set(intents)
+  for (const entry of INTENT_ROUTE_PRIORITY) {
+    if (selected.has(entry.id)) return entry.href
+  }
+
+  return String(commerceRoutes.home)
+}
+
+/** Contact import only when the intent destination is shopping/commerce home. */
+export function shouldOfferContactsAfterOnboarding(
+  intents: readonly string[],
+  returnTo?: string | null,
+): boolean {
+  return resolvePostOnboardingHref(intents, returnTo) === String(commerceRoutes.home)
+}
 
 export const ONBOARDING_INTEREST_OPTIONS = [
   'Entrepreneurship',

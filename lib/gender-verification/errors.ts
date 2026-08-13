@@ -20,6 +20,8 @@ export const GENDER_ERROR_CODES = {
   CAMERA_UNAVAILABLE: 'gender/camera-unavailable',
   FACE_NOT_DETECTED: 'gender/face-not-detected',
   LIVENESS_FAILED: 'gender/liveness-failed',
+  /** Face read too unstable to judge — worth another attempt, unlike NOT_ELIGIBLE. */
+  LOW_CONFIDENCE_RETRY: 'gender/low-confidence-retry',
   NOT_ELIGIBLE: 'gender/not-eligible',
   SESSION_FAILED: 'gender/session-failed',
   RATE_LIMITED: 'gender/rate-limited',
@@ -43,6 +45,8 @@ export const GENDER_ERROR_MESSAGES: Record<GenderErrorCode, string> = {
     'We couldn’t see your face clearly. Find good lighting, hold the camera steady, and center your face in the oval.',
   [GENDER_ERROR_CODES.LIVENESS_FAILED]:
     'The liveness check didn’t complete. Hold still, then blink naturally when prompted and try again.',
+  [GENDER_ERROR_CODES.LOW_CONFIDENCE_RETRY]:
+    'We couldn’t get a steady read of your face. Move somewhere brighter with even light, take off glasses or anything covering your face, hold the phone at eye level, then try again.',
   [GENDER_ERROR_CODES.NOT_ELIGIBLE]:
     'This community is built for women. Verification didn’t meet the required confidence, so full access can’t be unlocked.',
   [GENDER_ERROR_CODES.SESSION_FAILED]:
@@ -56,6 +60,40 @@ export const GENDER_ERROR_MESSAGES: Record<GenderErrorCode, string> = {
     'We couldn’t load the verification model. Please check your connection and try again.',
   [GENDER_ERROR_CODES.UNKNOWN]:
     'Something went wrong during verification. Please try again in a moment.',
+}
+
+/** Short on-camera coaching line — the callout holds the full explanation. */
+export const GENDER_ERROR_INSTRUCTIONS: Record<GenderErrorCode, string> = {
+  [GENDER_ERROR_CODES.IMAGE_TOO_LARGE]: 'Move a little farther from the camera',
+  [GENDER_ERROR_CODES.CAMERA_DENIED]: 'Camera access is needed to continue',
+  [GENDER_ERROR_CODES.CAMERA_UNAVAILABLE]: 'No camera available right now',
+  [GENDER_ERROR_CODES.FACE_NOT_DETECTED]: 'We couldn’t see your face clearly',
+  [GENDER_ERROR_CODES.LIVENESS_FAILED]: 'Liveness check didn’t finish — try again',
+  [GENDER_ERROR_CODES.LOW_CONFIDENCE_RETRY]: 'Need a clearer read — brighter light helps',
+  [GENDER_ERROR_CODES.NOT_ELIGIBLE]: 'Verification didn’t meet the required confidence',
+  [GENDER_ERROR_CODES.SESSION_FAILED]: 'Couldn’t start a secure session',
+  [GENDER_ERROR_CODES.RATE_LIMITED]: 'Too many attempts — wait a moment',
+  [GENDER_ERROR_CODES.NETWORK]: 'Network issue — check your connection',
+  [GENDER_ERROR_CODES.TIMEOUT]: 'That took too long — try again',
+  [GENDER_ERROR_CODES.MODEL_LOAD_FAILED]: 'Couldn’t load verification models',
+  [GENDER_ERROR_CODES.UNKNOWN]: 'Something went wrong — try again',
+}
+
+/** Soft failures that deserve one automatic retry; eligibility failures never auto-loop. */
+export const GENDER_SOFT_RETRY_CODES: ReadonlySet<GenderErrorCode> = new Set([
+  GENDER_ERROR_CODES.LOW_CONFIDENCE_RETRY,
+  GENDER_ERROR_CODES.LIVENESS_FAILED,
+  GENDER_ERROR_CODES.FACE_NOT_DETECTED,
+  GENDER_ERROR_CODES.TIMEOUT,
+  GENDER_ERROR_CODES.NETWORK,
+])
+
+export function isSoftRetryableGenderError(error: unknown): boolean {
+  return GENDER_SOFT_RETRY_CODES.has(classifyGenderError(error))
+}
+
+export function getGenderErrorInstruction(error: unknown): string {
+  return GENDER_ERROR_INSTRUCTIONS[classifyGenderError(error)]
 }
 
 /** A gender-verification error that carries a stable code alongside its message. */
@@ -116,6 +154,10 @@ export function classifyGenderError(error: unknown): GenderErrorCode {
     message.includes('face_image_too_large')
   ) {
     return GENDER_ERROR_CODES.IMAGE_TOO_LARGE
+  }
+  // Must precede the face / confidence rules below — this copy mentions both.
+  if (message.includes('steady read')) {
+    return GENDER_ERROR_CODES.LOW_CONFIDENCE_RETRY
   }
   if (
     message.includes('permission') ||

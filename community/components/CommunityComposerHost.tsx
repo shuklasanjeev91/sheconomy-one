@@ -40,6 +40,7 @@ export function CommunityComposerHost() {
           initialOccasion={options.occasion}
           initialCelebrationTitle={options.celebrationTitle}
           initialContent={options.content}
+          initialListingId={options.listingId}
         />
       ) : null}
     </CommunityAdaptiveSheet>

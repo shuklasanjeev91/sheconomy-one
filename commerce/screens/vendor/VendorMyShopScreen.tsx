@@ -31,6 +31,8 @@ import { deleteShop, loadMyShops, loadShopStats, updateShop } from '~/lib/shop/s
 import { getShopFollowerCount } from '~/lib/shop/shop.service'
 import type { Shop, ShopStats } from '~/lib/shop/shop.type'
 import { formatShopHours, getShopCompletionPercentage } from '~/lib/shop/shop.utils'
+import { sendAiMessage } from '~/lib/ai/client'
+import { fetchLowStockListings, type LowStockListing } from '~/commerce/lib/low-stock'
 import { useVendorCurrency } from '~/hooks/useVendorCurrency'
 import { useAppDispatch, useAppSelector } from '~/lib/store/hooks'
 import type { AppUiTokens } from '~/lib/theme/app-ui'
@@ -77,6 +79,9 @@ export function VendorMyShopScreen() {
 
   const [address, setAddress] = useState<ShopAddressDetails | null>(null)
   const [followerCount, setFollowerCount] = useState<number | null>(null)
+  const [lowStock, setLowStock] = useState<LowStockListing[]>([])
+  const [lowStockAdvice, setLowStockAdvice] = useState<string | null>(null)
+  const [adviceLoading, setAdviceLoading] = useState(false)
 
   useEffect(() => {
     if (!shop && !myShopsLoaded) void dispatch(loadMyShops(undefined))
@@ -90,6 +95,9 @@ export function VendorMyShopScreen() {
     let active = true
     void getShopFollowerCount(shop.id).then((result) => {
       if (active && result.success) setFollowerCount(result.data ?? 0)
+    })
+    void fetchLowStockListings(shop.id).then((result) => {
+      if (active && !result.error) setLowStock(result.listings)
     })
     return () => {
       active = false
@@ -202,6 +210,29 @@ export function VendorMyShopScreen() {
     }
   }
 
+  function handleAskLowStockAdvice() {
+    if (adviceLoading || lowStock.length === 0) return
+    setAdviceLoading(true)
+    void sendAiMessage({
+      product: 'shop',
+      message: `I have ${lowStock.length} low-stock listings: ${lowStock
+        .slice(0, 6)
+        .map((item) => `${item.title} (${item.stock} left)`)
+        .join(', ')}. Give concise restock, pause, or promote advice.`,
+      contextPage: 'vendor_myshop',
+    })
+      .then((result) => {
+        setLowStockAdvice(result.answer)
+      })
+      .catch((error) => {
+        toast.show('Could not get AI advice', {
+          tone: 'danger',
+          message: error instanceof Error ? error.message : undefined,
+        })
+      })
+      .finally(() => setAdviceLoading(false))
+  }
+
   async function handleDelete() {
     if (!shop) return
     try {
@@ -246,6 +277,10 @@ export function VendorMyShopScreen() {
               followerCount={followerCount}
               engagementSeries={engagementSeries}
               isDesktop={isDesktop}
+              lowStock={lowStock}
+              lowStockAdvice={lowStockAdvice}
+              adviceLoading={adviceLoading}
+              onAskLowStockAdvice={handleAskLowStockAdvice}
             />
             <DangerZone
               ui={ui}
@@ -277,6 +312,10 @@ export function VendorMyShopScreen() {
             followerCount={followerCount}
             engagementSeries={engagementSeries}
             isDesktop={isDesktop}
+            lowStock={lowStock}
+            lowStockAdvice={lowStockAdvice}
+            adviceLoading={adviceLoading}
+            onAskLowStockAdvice={handleAskLowStockAdvice}
           />
           <RightRail
             ui={ui}
@@ -371,6 +410,10 @@ type MainColumnProps = {
   followerCount: number | null
   engagementSeries: number[]
   isDesktop: boolean
+  lowStock: LowStockListing[]
+  lowStockAdvice: string | null
+  adviceLoading: boolean
+  onAskLowStockAdvice: () => void
 }
 
 function MainColumn({
@@ -382,6 +425,10 @@ function MainColumn({
   followerCount,
   engagementSeries,
   isDesktop,
+  lowStock,
+  lowStockAdvice,
+  adviceLoading,
+  onAskLowStockAdvice,
 }: MainColumnProps) {
   const { currency } = useVendorCurrency()
   const categories = Array.isArray(shop.shop_categories) ? (shop.shop_categories as string[]) : []
@@ -500,6 +547,65 @@ function MainColumn({
           )}
         </YStack>
       </Card>
+
+      {lowStock.length > 0 ? (
+        <YStack
+          width="100%"
+          gap="$3"
+          padding="$4"
+          borderRadius={radius.card}
+          borderWidth={1}
+          borderColor="#F5C26B"
+          backgroundColor="#FFF8EC"
+        >
+          <XStack alignItems="center" gap="$2">
+            <Icons.AlertTriangle size={18} color="#C27803" />
+            <Text fontSize={15} fontWeight="800" color={ui.text}>
+              {lowStock.length} listing{lowStock.length === 1 ? '' : 's'} low on stock
+            </Text>
+          </XStack>
+          <YStack gap="$1.5">
+            {lowStock.slice(0, 4).map((item) => (
+              <XStack key={item.id} justifyContent="space-between" gap="$2" alignItems="center">
+                <Text flex={1} fontSize={13} color={ui.textSecondary} numberOfLines={1}>
+                  {item.title}
+                </Text>
+                <Text fontSize={12} fontWeight="700" color="#C27803">
+                  {item.stock} left
+                </Text>
+              </XStack>
+            ))}
+          </YStack>
+          {lowStockAdvice ? (
+            <Text fontSize={13} color={ui.text} lineHeight={19}>
+              {lowStockAdvice}
+            </Text>
+          ) : null}
+          <XStack gap="$2" flexWrap="wrap">
+            <Button
+              size="$3"
+              tone="outline"
+              borderRadius={999}
+              disabled={adviceLoading}
+              icon={
+                adviceLoading ? (
+                  <Spinner size="small" />
+                ) : (
+                  <Icons.Sparkles size={14} color={ui.brand} />
+                )
+              }
+              onPress={onAskLowStockAdvice}
+            >
+              {adviceLoading ? 'Asking AI…' : 'Ask AI what to do'}
+            </Button>
+            <AppLink href={vendorRoutes.products as Href} asChild>
+              <Button size="$3" tone="primary" borderRadius={999}>
+                Manage listings
+              </Button>
+            </AppLink>
+          </XStack>
+        </YStack>
+      ) : null}
 
       {/* Stat row */}
       <XStack width="100%" flexWrap="wrap" gap="$3">

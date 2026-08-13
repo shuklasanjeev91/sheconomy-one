@@ -88,6 +88,8 @@ export function MarketplacePersonalizationProvider({ children }: { children: Rea
       trendingIds,
       bestsellerRank,
       orderCounts,
+      interests: profile?.interests ?? [],
+      memberIntents: profile?.member_intents ?? [],
     }),
     [
       userGeo,
@@ -99,6 +101,8 @@ export function MarketplacePersonalizationProvider({ children }: { children: Rea
       trendingIds,
       bestsellerRank,
       orderCounts,
+      profile?.interests,
+      profile?.member_intents,
     ],
   )
 

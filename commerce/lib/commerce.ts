@@ -855,10 +855,15 @@ export async function fetchCategoriesPage(
   const from = page * pageSize
   const to = from + pageSize - 1
 
+  // Counts are tied at 0 until listings get category assignments, so level +
+  // position break the tie: curated roots first, in their admin-set order.
   const { data, error } = await supabase
     .from('categories_with_counts')
     .select('category_id, category, category_image_url, category_icon, product_count, seo_name')
     .order('product_count', { ascending: false, nullsFirst: false })
+    .order('level', { ascending: true })
+    .order('position', { ascending: true })
+    .order('category', { ascending: true })
     .range(from, to)
 
   if (error) {
@@ -869,6 +874,9 @@ export async function fetchCategoriesPage(
       .eq('status', 'A')
       .not('category', 'ilike', '%without category%')
       .order('product_count', { ascending: false, nullsFirst: false })
+      .order('level', { ascending: true })
+      .order('position', { ascending: true })
+      .order('category', { ascending: true })
       .range(from, to)
 
     if (legacy.error) {

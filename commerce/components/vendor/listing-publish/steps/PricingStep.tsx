@@ -20,6 +20,7 @@ type PricingStepProps = {
   formData: ListingFormData
   errors: Record<string, string>
   currencySymbol: string
+  isDesktop: boolean
   onUpdate: <K extends keyof ListingFormData>(field: K, value: ListingFormData[K]) => void
   onUpdateMetadata: (key: string, value: unknown) => void
 }
@@ -29,6 +30,7 @@ export function PricingStep({
   formData,
   errors,
   currencySymbol,
+  isDesktop,
   onUpdate,
   onUpdateMetadata,
 }: PricingStepProps) {
@@ -102,7 +104,7 @@ export function PricingStep({
         </ListingPublishCard>
       </YStack>
 
-      <YStack width={300} maxWidth="100%" gap="$4">
+      <YStack width={isDesktop ? 300 : '100%'} maxWidth="100%" gap="$4">
         <ListingPublishCard ui={ui} title="Sales Options">
           <XStack alignItems="flex-start" gap="$3">
             <Checkbox

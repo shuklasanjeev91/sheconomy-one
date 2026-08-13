@@ -68,6 +68,7 @@ export const commerceRoutes = {
   checkout: appRoutes.checkout,
   favorites: '/favorites' as Href,
   wishlist: '/favorites' as Href,
+  sharedWishlist: (token: string) => `/w/${encodeURIComponent(token)}` as Href,
   orders: '/orders' as Href,
   order: (id: string) => `/orders/${encodeURIComponent(id)}` as Href,
   orderSuccess: (orderIds?: string[]) => {
@@ -100,6 +101,8 @@ export const commerceRoutes = {
   shopRefunds: (slug: string) => `/shop/${encodeURIComponent(slug)}/refunds` as Href,
   shopShipping: (slug: string) => `/shop/${encodeURIComponent(slug)}/shipping` as Href,
   following: '/following' as Href,
+  invite: (code: string) => `/invite/${encodeURIComponent(code)}` as Href,
+  creatorHub: (username: string) => `/u/${encodeURIComponent(username)}` as Href,
 } as const
 
 /** Vendor console — a seller's own storefront management section. */

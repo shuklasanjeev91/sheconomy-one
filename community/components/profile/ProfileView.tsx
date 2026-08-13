@@ -66,7 +66,7 @@ import { cropIfNeeded, pickImagesWithCrop } from '~/lib/media/pick-and-crop'
 import { refreshProfiles } from '~/lib/profile/refresh'
 import { patchCachedProfile } from '~/lib/profile/profile-cache'
 import { communityRoutes } from '~/lib/routes'
-import { getProfileShareUrl } from '~/lib/share'
+import { getCreatorHubShareUrl, getProfileShareUrl } from '~/lib/share'
 import { supabase } from '~/lib/supabase/client'
 import { uploadProfileAvatarImage, uploadProfileCoverImage } from '~/lib/supabase/storage-upload'
 import { MediaDropZone } from '~/components/media/MediaDropZone'
@@ -655,18 +655,32 @@ function ProfileHero({
           >
             {headerActions}
             {isOwnProfile ? (
-              <ShareButton
-                variant="outline"
-                label="Share"
-                sheetTitle="Share profile"
-                copyLabel="Copy profile link"
-                copyToastMessage="Profile link copied to clipboard."
-                payload={{
-                  url: getProfileShareUrl(profile.username),
-                  title: displayName,
-                  text: profile.headline ?? undefined,
-                }}
-              />
+              <XStack gap="$2" flexWrap="wrap">
+                <ShareButton
+                  variant="outline"
+                  label="Share"
+                  sheetTitle="Share profile"
+                  copyLabel="Copy profile link"
+                  copyToastMessage="Profile link copied to clipboard."
+                  payload={{
+                    url: getProfileShareUrl(profile.username),
+                    title: displayName,
+                    text: profile.headline ?? undefined,
+                  }}
+                />
+                <ShareButton
+                  variant="outline"
+                  label="Link in bio"
+                  sheetTitle="Share your hub"
+                  copyLabel="Copy hub link"
+                  copyToastMessage="Creator hub link copied."
+                  payload={{
+                    url: getCreatorHubShareUrl(profile.username),
+                    title: `${displayName} on SHEconomy`,
+                    text: 'Shop, community, Class, and Co-Work in one link.',
+                  }}
+                />
+              </XStack>
             ) : null}
           </XStack>
         ) : null}
