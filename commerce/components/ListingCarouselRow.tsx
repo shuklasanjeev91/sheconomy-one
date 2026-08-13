@@ -1,5 +1,6 @@
-import { ScrollView, XStack, YStack, useMedia } from '~/components/ui'
+import { ScrollView, XStack, YStack } from '~/components/ui'
 import type { ListingSummary } from '~/lib/supabase/commerce'
+import { useAppLayout } from '~/hooks/useAppLayout'
 import { hasListingImages } from '~/lib/listing-images'
 
 import { ListingCard } from '~/commerce/components/ListingCard'
@@ -11,8 +12,7 @@ type ListingCarouselRowProps = {
 
 /** Horizontal listing row for product detail recommendations. */
 export function ListingCarouselRow({ listings, compact = true }: ListingCarouselRowProps) {
-  const media = useMedia()
-  const cardWidth = media.gtLg ? 220 : media.gtMd ? 200 : media.gtSm ? 168 : 160
+  const { listingCardWidth: cardWidth } = useAppLayout()
   const visible = listings.filter((listing) =>
     hasListingImages(listing.image_urls, listing.image_url),
   )

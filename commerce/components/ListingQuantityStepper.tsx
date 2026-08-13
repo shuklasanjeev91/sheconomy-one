@@ -1,5 +1,5 @@
 import { Text, XStack, YStack } from '~/components/ui'
-import { radius } from '~/config/tokens'
+import { radius, touchSlop } from '~/config/tokens'
 import { useAppUi } from '~/lib/theme/useAppUi'
 
 type ListingQuantityStepperProps = {
@@ -101,7 +101,10 @@ function StepperButton({
       cursor={disabled ? 'not-allowed' : 'pointer'}
       opacity={disabled ? 0.45 : 1}
       onPress={disabled ? undefined : onPress}
+      // Drawn at 34/40px to stay compact on the buy bar and cart rows.
+      hitSlop={touchSlop(height)}
       hoverStyle={disabled ? undefined : { backgroundColor: ui.surfaceHover }}
+      pressStyle={disabled ? undefined : { backgroundColor: ui.surfaceHover, opacity: 0.6 }}
       accessibilityRole="button"
       accessibilityLabel={accessibilityLabel}
     >

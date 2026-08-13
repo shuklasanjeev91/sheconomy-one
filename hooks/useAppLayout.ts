@@ -4,6 +4,9 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useStableMedia } from '~/hooks/useStableMedia'
 import { APP_LAYOUT } from '~/lib/layout/constants'
 
+/** Kept in sync with `ListingGrid`'s `columns` prop. */
+type ListingGridColumns = 2 | 3 | 4 | 5 | 6
+
 export function useAppLayout() {
   const media = useStableMedia()
   const insets = useSafeAreaInsets()
@@ -31,7 +34,47 @@ export function useAppLayout() {
 
   const mobileTabBarOffset = APP_LAYOUT.mobileTabBarHeight + insets.bottom
 
+  /**
+   * Columns for product grids.
+   *
+   * Grids used to read Tamagui's `useMedia()` directly, which reports `gtMd` /
+   * `gtLg` on an iPad Pro and handed a device with mobile chrome a 5–6 column
+   * desktop grid. Going through `useStableMedia` (which pins those off on
+   * native) caps native at tablet density. Web keeps its original ladder:
+   * 1121 → 6, 861 → 5, 661 → 4, 461 → 3, else 2.
+   */
+  const listingGridColumns: ListingGridColumns = isWide
+    ? 6
+    : isDesktop
+      ? 5
+      : media.gtSm
+        ? 4
+        : width >= 461
+          ? 3
+          : 2
+
+  /** Fixed card width for horizontal listing carousels, same breakpoints. */
+  const listingCardWidth = isWide ? 220 : isDesktop ? 200 : media.gtSm ? 168 : 160
+
+  /**
+   * Content sits beside a side rail — community sidebars, settings nav, Manage
+   * shop sidebar, two-column pages.
+   *
+   * Kept separate from `isDesktop` so a large native tablet can take the wide
+   * content layout while keeping touch chrome: the mobile header and bottom tab
+   * bar stay, only the page splits into rail + content.
+   */
+  const hasSideRails = isDesktop || (isNative && width >= APP_LAYOUT.tabletSideRailMinWidth)
+
+  /** Room for a second rail (community right sidebar) beside the content. */
+  const hasDualSideRails =
+    isWide || (isNative && width >= APP_LAYOUT.tabletDualSideRailMinWidth)
+
   return {
+    listingGridColumns,
+    listingCardWidth,
+    hasSideRails,
+    hasDualSideRails,
     isDesktop,
     isDesktopWeb,
     isWide,

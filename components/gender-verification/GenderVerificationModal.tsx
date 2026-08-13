@@ -10,7 +10,14 @@ import { getShadowStyle, radius } from '~/config/tokens'
 import { BRAND_NAME } from '~/config/brand'
 import { useAppLayout } from '~/hooks/useAppLayout'
 import { useGenderVerification } from '~/hooks/useGenderVerification'
-import { toFriendlyGenderError, HUMAN_VERIFICATION_DISCLAIMER, GENDER_ERROR_CODES, classifyGenderError } from '~/lib/gender-verification'
+import {
+  toFriendlyGenderError,
+  formatVerificationDiagnostics,
+  HUMAN_VERIFICATION_DISCLAIMER,
+  GENDER_ERROR_CODES,
+  classifyGenderError,
+  type VerificationDiagnostics,
+} from '~/lib/gender-verification'
 import { useAppUi } from '~/lib/theme/useAppUi'
 
 type GenderVerificationModalProps = {
@@ -213,6 +220,8 @@ function VerificationFlow({
 
   const softRetrying = 'softRetrying' in verification && verification.softRetrying
   const friendlyError = verification.error ? toFriendlyGenderError(verification.error) : null
+  const diagnostics = (verification as { diagnostics?: VerificationDiagnostics | null }).diagnostics
+  const diagnosticsLine = diagnostics ? formatVerificationDiagnostics(diagnostics) : null
   const errorCode = verification.error ? classifyGenderError(verification.error) : null
   const errorTitle =
     errorCode === GENDER_ERROR_CODES.NOT_ELIGIBLE
@@ -355,6 +364,9 @@ function VerificationFlow({
             onAnalyzerReady={
               'onAnalyzerReady' in verification ? verification.onAnalyzerReady : undefined
             }
+            onAnalyzerError={
+              (verification as { onAnalyzerError?: (message: string) => void }).onAnalyzerError
+            }
           />
 
           {friendlyError ? (
@@ -375,6 +387,11 @@ function VerificationFlow({
               <Text color={ui.textSecondary} fontSize={13} lineHeight={19}>
                 {friendlyError}
               </Text>
+              {diagnosticsLine ? (
+                <Text color={ui.textMuted} fontSize={11} lineHeight={16}>
+                  {diagnosticsLine}
+                </Text>
+              ) : null}
             </YStack>
           ) : null}
         </ScrollView>

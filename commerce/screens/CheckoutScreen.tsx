@@ -105,13 +105,14 @@ type CheckoutOnlineProvider = 'shepay' | 'platform_payu'
 export function CheckoutScreen() {
   const c = useCommercePalette()
   const ui = useAppUi()
-  const { isDesktop } = useAppLayout()
+  const { hasSideRails } = useAppLayout()
   const { user, isAuthenticated } = useProfile()
   const { formatMoney, convertMoney, preferredCurrency } = useFormatCurrency()
   const { cart, items: cartItems, isLoading, refresh, error: cartError } = useCart()
   const { items, hasChecked } = useStorefrontCartItems(cartItems)
   const toast = useAppToast()
 
+  const [checkoutBarHeight, setCheckoutBarHeight] = useState(COMMERCE_MOBILE_CHECKOUT_BAR_HEIGHT)
   const [addresses, setAddresses] = useState<UserAddress[]>([])
   const [recentAddresses, setRecentAddresses] = useState<RecentAddressSnapshot[]>([])
   const [selectedAddressId, setSelectedAddressId] = useState<string | null>(null)
@@ -1199,8 +1200,8 @@ export function CheckoutScreen() {
       gap="$3"
       width="100%"
     >
-      {!isDesktop ? null : placeButton}
-      {isDesktop ? (
+      {!hasSideRails ? null : placeButton}
+      {hasSideRails ? (
         <Text fontSize={11} color={c.secondary} textAlign="center" lineHeight={15}>
           By placing your order, you agree to SHEconomy&apos;s privacy notice and conditions of use.
         </Text>
@@ -1252,7 +1253,7 @@ export function CheckoutScreen() {
           One SHEPay payment · funds released to each of {orderShops.length} shops after confirmation
         </Text>
       ) : null}
-      {isDesktop ? null : (
+      {hasSideRails ? null : (
         <>
           {placeButton}
           <Text fontSize={11} color={c.secondary} textAlign="center" lineHeight={15}>
@@ -1272,11 +1273,9 @@ export function CheckoutScreen() {
           maxWidth="100%"
           alignSelf="stretch"
           backgroundColor={c.page}
-          padding={isDesktop ? '$4' : '$2'}
+          padding={hasSideRails ? '$4' : '$2'}
           borderRadius={12}
-          paddingBottom={
-            showMobileBar ? COMMERCE_MOBILE_CHECKOUT_BAR_HEIGHT + 24 : undefined
-          }
+          paddingBottom={showMobileBar ? checkoutBarHeight + 24 : undefined}
         >
           <XStack alignItems="center" gap="$2" paddingHorizontal="$1">
             <Icons.Lock size={16} color={c.brand} />
@@ -1288,7 +1287,7 @@ export function CheckoutScreen() {
           <XStack
             width="100%"
             alignSelf="stretch"
-            flexDirection={isDesktop ? 'row' : 'column'}
+            flexDirection={hasSideRails ? 'row' : 'column'}
             alignItems="flex-start"
             gap="$4"
           >
@@ -1757,10 +1756,10 @@ export function CheckoutScreen() {
                 })}
               </SectionCard>
 
-              {!isDesktop ? orderSummary : null}
+              {!hasSideRails ? orderSummary : null}
             </YStack>
 
-            {isDesktop ? (
+            {hasSideRails ? (
               <StickyRail width={SUMMARY_WIDTH} maxWidth="100%">
                 {orderSummary}
               </StickyRail>
@@ -1787,6 +1786,7 @@ export function CheckoutScreen() {
         disabled={!canPlace}
         isLoading={isSubmitting || isRedirectingToPayment}
         onPress={handlePlaceOrderPress}
+        onHeightChange={setCheckoutBarHeight}
       />
     </YStack>
   )

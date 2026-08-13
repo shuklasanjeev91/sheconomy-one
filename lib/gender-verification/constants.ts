@@ -29,14 +29,16 @@ export const GENDER_VERIFICATION = {
   minGenderConfidence: 0.6,
   /** Usable gender samples needed before we judge the run at all. */
   minGenderSamples: 4,
+  /** Ignore description reads when the source face contains too little detail. */
+  minGenderFacePixels: 96,
   /** Extra samples gathered in the one follow-up round after a borderline read. */
   extraGenderSamples: 5,
   /** A mean this far under the threshold earns another round instead of a rejection. */
   genderBorderlineBand: 0.08,
   /** Cap on the follow-up round so an unreadable face still fails promptly. */
   extraGenderSamplingMs: 4000,
-  /** Every Nth native frame also runs the gender model (see the analyzer `both` mode). */
-  nativeGenderSampleEvery: 2,
+  /** Every Nth native frame also runs the heavier cropped gender pass. */
+  nativeGenderSampleEvery: 3,
   sessionMinutes: 15,
   /**
    * Native capture cadence. takePictureAsync is slow; a short interval only
@@ -51,8 +53,8 @@ export const GENDER_VERIFICATION = {
   earCalibrationSamples: 6,
   /** One soft auto-retry for lighting / face / liveness failures (never eligibility). */
   softRetryDelayMs: 1400,
-  /** Downscale side length before Human.detect in the native WebView. */
-  nativeDetectMaxSide: 480,
+  /** Downscale side length for face location, mesh, and anti-spoof detection. */
+  nativeDetectMaxSide: 640,
   faceApiModelBaseUrl: 'https://cdn.jsdelivr.net/npm/@vladmandic/face-api@1.7.15/model',
   humanModelBaseUrl: 'https://cdn.jsdelivr.net/npm/@vladmandic/human@3.3.6/models/',
 } as const
@@ -106,12 +108,33 @@ export type VerificationPhase =
 export type GenderEstimate = {
   isFemale: boolean
   confidence: number
+  /** Face width in source-image pixels before the dedicated 256px crop. */
+  facePixels?: number
 }
 
 export type LivenessMetrics = {
   detectedBlinks: number
   livenessScore: number
   faceCentered: boolean
+}
+
+/** What the last submitted read measured — shown on failure so it is diagnosable. */
+export type VerificationDiagnostics = {
+  femaleScore: number
+  samples: number
+  blinks: number
+  maxFacePixels: number
+}
+
+/** One-line summary of the last read: numbers only, no imagery or identity. */
+export function formatVerificationDiagnostics(diagnostics: VerificationDiagnostics): string {
+  const score = Math.round(diagnostics.femaleScore * 100)
+  return [
+    `Read ${score}% female`,
+    `${diagnostics.samples} samples`,
+    `${diagnostics.blinks} blinks`,
+    `${diagnostics.maxFacePixels}px face`,
+  ].join(' · ')
 }
 
 /** Live camera tracking feedback for the verify-gender UI. */

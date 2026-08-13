@@ -32,6 +32,30 @@ describe('gender verification blink tracking', () => {
     expect(tracker.count).toBe(1)
   })
 
+  it('requires two separate natural blinks and rejects eyes held closed', () => {
+    const tracker = createBlinkTracker()
+    const opts = {
+      blinkThreshold: 0.2,
+      openThreshold: 0.26,
+      minClosedMs: 50,
+      maxClosedMs: 900,
+      minBlinkGapMs: 280,
+      now: 1000,
+    }
+
+    updateBlinkTracker(tracker, 0.12, 0.12, opts)
+    updateBlinkTracker(tracker, 0.3, 0.3, { ...opts, now: 1150 })
+    expect(tracker.count).toBe(1)
+
+    updateBlinkTracker(tracker, 0.1, 0.1, { ...opts, now: 1500 })
+    updateBlinkTracker(tracker, 0.3, 0.3, { ...opts, now: 1650 })
+    expect(tracker.count).toBe(2)
+
+    updateBlinkTracker(tracker, 0.1, 0.1, { ...opts, now: 2000 })
+    updateBlinkTracker(tracker, 0.3, 0.3, { ...opts, now: 3001 })
+    expect(tracker.count).toBe(2)
+  })
+
   it('does not count a one-frame gesture flash under minClosedMs', () => {
     const tracker = createGestureBlinkTracker()
     updateGestureBlinkTracker(tracker, true, 1000)

@@ -1,11 +1,27 @@
 import { supabase } from '~/lib/supabase'
+import type { Json } from '~/lib/supabase/database.types'
 
 import { GENDER_VERIFICATION } from '~/lib/gender-verification/constants'
+import { isStaleGenderSessionError } from '~/lib/gender-verification/errors'
 
 export type CompleteVerificationResult = {
   ok: boolean
   message: string
   verified?: boolean
+}
+
+export type CompleteVerificationInput = {
+  sessionId: string
+  detectedBlinks: number
+  livenessScore: number
+  genderDetected: boolean
+  genderConfidence: number
+  clientMetrics?: Json
+}
+
+type CompleteVerificationOutcome = {
+  result: CompleteVerificationResult | null
+  error: string | null
 }
 
 export async function createGenderVerificationSession(requiredBlinks = GENDER_VERIFICATION.requiredBlinks) {
@@ -20,57 +36,14 @@ export async function createGenderVerificationSession(requiredBlinks = GENDER_VE
   return { sessionId: data as string, error: null as string | null }
 }
 
-/** Gender liveness RPC sets `gender=true` on pass — mirror that with `is_verified`. */
-export async function markProfileVerifiedAfterGenderCheck() {
-  const {
-    data: { user },
-    error: authError,
-  } = await supabase.auth.getUser()
-
-  if (authError || !user) {
-    return { ok: false as const, error: authError?.message ?? 'Not authenticated' }
-  }
-
-  // Only mark verified when the RPC already recorded female gender.
-  const { data: row, error: readError } = await supabase
-    .from('profiles')
-    .select('gender')
-    .eq('id', user.id)
-    .maybeSingle()
-
-  if (readError) {
-    return { ok: false as const, error: readError.message }
-  }
-
-  if (row?.gender !== true) {
-    return {
-      ok: false as const,
-      error: 'Human verification did not confirm the required profile gender.',
-    }
-  }
-
-  const { error } = await supabase.from('profiles').update({ is_verified: true }).eq('id', user.id)
-
-  if (error) {
-    return { ok: false as const, error: error.message }
-  }
-
-  return { ok: true as const, error: null as string | null }
-}
-
-export async function completeGenderVerificationSession(input: {
-  sessionId: string
-  detectedBlinks: number
-  livenessScore: number
-  genderDetected: boolean
-  genderConfidence: number
-}) {
+export async function completeGenderVerificationSession(input: CompleteVerificationInput) {
   const { data, error } = await supabase.rpc('complete_gender_verification_session', {
     p_session_id: input.sessionId,
     p_detected_blinks: input.detectedBlinks,
     p_liveness_score: input.livenessScore,
     p_gender_detected: input.genderDetected,
     p_gender_confidence: input.genderConfidence,
+    p_client_metrics: input.clientMetrics,
   })
 
   if (error) {
@@ -81,20 +54,6 @@ export async function completeGenderVerificationSession(input: {
   // RPC returns `{ ok: true }` on success; keep legacy keys for older backends.
   const ok =
     payload?.ok === true || payload?.success === true || payload?.verified === true
-
-  if (ok) {
-    const { ok: profileUpdated, error: profileError } = await markProfileVerifiedAfterGenderCheck()
-    if (!profileUpdated) {
-      return {
-        result: {
-          ok: false,
-          message: profileError ?? 'Could not update verification status on your profile.',
-          verified: false,
-        } satisfies CompleteVerificationResult,
-        error: null as string | null,
-      }
-    }
-  }
 
   return {
     result: {
@@ -108,4 +67,30 @@ export async function completeGenderVerificationSession(input: {
     } satisfies CompleteVerificationResult,
     error: null as string | null,
   }
+}
+
+function isStaleOutcome(outcome: CompleteVerificationOutcome): boolean {
+  if (outcome.error) return isStaleGenderSessionError(outcome.error)
+  if (outcome.result && !outcome.result.ok) return isStaleGenderSessionError(outcome.result.message)
+  return false
+}
+
+/**
+ * Submit the scores, retrying once on a fresh session when the server says ours
+ * is stale. A parallel `start()` supersedes pending sessions, so a good read
+ * used to surface as a failure the user could not act on.
+ */
+export async function submitGenderVerificationSession(
+  input: CompleteVerificationInput,
+): Promise<CompleteVerificationOutcome & { sessionId: string }> {
+  const first = await completeGenderVerificationSession(input)
+  if (!isStaleOutcome(first)) return { ...first, sessionId: input.sessionId }
+
+  const { sessionId: freshSessionId, error: createError } = await createGenderVerificationSession()
+  if (!freshSessionId) {
+    return { result: first.result, error: createError ?? first.error, sessionId: input.sessionId }
+  }
+
+  const retried = await completeGenderVerificationSession({ ...input, sessionId: freshSessionId })
+  return { ...retried, sessionId: freshSessionId }
 }

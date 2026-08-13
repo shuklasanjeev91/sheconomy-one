@@ -23,6 +23,12 @@ type CommerceMobileCheckoutBarProps = {
   caption?: string
   /** When set, shows a "You save …" hint. */
   savings?: number | null
+  /**
+   * Reports the bar's rendered height. `BAR_HEIGHT` is only a minimum — the bar
+   * grows past it once the caption or savings lines wrap, so hosts that pad
+   * content by the constant alone hide their last row behind it.
+   */
+  onHeightChange?: (height: number) => void
 }
 
 const BAR_HEIGHT = 72
@@ -39,6 +45,7 @@ export function CommerceMobileCheckoutBar({
   formattedSavings,
   caption,
   savings,
+  onHeightChange,
 }: CommerceMobileCheckoutBarProps) {
   const ui = useAppUi()
   const { mobileTabBarOffset } = useAppLayout()
@@ -46,6 +53,7 @@ export function CommerceMobileCheckoutBar({
   return (
     <XStack
       minHeight={BAR_HEIGHT}
+      onLayout={(event) => onHeightChange?.(event.nativeEvent.layout.height)}
       paddingHorizontal="$4"
       paddingVertical="$3"
       backgroundColor={ui.surface}

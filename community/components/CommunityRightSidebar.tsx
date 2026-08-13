@@ -24,7 +24,7 @@ type CommunitySidebarPin = 'document' | 'viewport'
 
 export function CommunityRightSidebar({ pin = 'document' }: { pin?: CommunitySidebarPin }) {
   const communityUi = useCommunityUi()
-  const { isWide } = useAppLayout()
+  const { hasDualSideRails } = useAppLayout()
   const { user } = useSupabase()
   const network = useNetwork()
   const [upcomingEvents, setUpcomingEvents] = useState<CommunityEvent[]>([])
@@ -42,7 +42,7 @@ export function CommunityRightSidebar({ pin = 'document' }: { pin?: CommunitySid
   const contacts = user ? network.connections.slice(0, 8) : []
   const invitations = user ? network.pendingReceived.slice(0, 3) : []
 
-  if (!isWide) {
+  if (!hasDualSideRails) {
     return null
   }
 

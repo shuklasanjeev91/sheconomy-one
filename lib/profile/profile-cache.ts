@@ -1,7 +1,7 @@
 import AsyncStorage from '@react-native-async-storage/async-storage'
 import { Platform } from 'react-native'
 
-import type { Profile } from '~/hooks/useProfile'
+import type { SessionProfile as Profile } from '~/lib/profile/session-profile'
 
 /** Bumped when avatar_url caching semantics change (invalidate stale empty avatars). */
 const PROFILE_CACHE_KEY = 'sheconomy:profile-cache-v2'

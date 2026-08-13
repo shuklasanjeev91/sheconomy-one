@@ -133,6 +133,9 @@ export function ListingMobileGallery({
               backgroundColor={index === activeIndex ? ui.brand : ui.borderSubtle}
               animation="quick"
               cursor="pointer"
+              // 6px dots — grow the tap area into the row's own padding without
+              // reaching the image above, which opens the lightbox.
+              hitSlop={{ top: 12, bottom: 12, left: 3, right: 3 }}
               onPress={() => onIndexChange(index)}
             />
           ))}

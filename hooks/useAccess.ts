@@ -12,6 +12,7 @@ import {
   getPathFeature,
   getVisibleFeatures,
   resolveFeatureNavHref,
+  resolveFeatureNavIntent,
   sanitizeReturnPath,
 } from '~/lib/auth/access'
 import { useProfile } from '~/hooks/useProfile'
@@ -32,6 +33,11 @@ export function useAccess() {
       isRefreshing,
       isAuthenticated,
       isVerified,
+      /**
+       * The profile has settled, so `tier` reflects reality. An unknown profile
+       * resolves to the limited tier, so press handlers must not gate on it.
+       */
+      isTierKnown: !isLoading,
       /** Verified female with full women-first access. */
       isFemale: tier === 'female',
       /** Signed-in limited access (male or skipped / unverified). */
@@ -47,7 +53,15 @@ export function useAccess() {
       sanitizeReturnPath: (path: string | null | undefined) =>
         sanitizeReturnPath(path, tier, isVerified),
       resolveFeatureNavHref: (href: string, feature: AppFeature) =>
-        resolveFeatureNavHref(tier, href, feature),
+        resolveFeatureNavHref(tier, href, feature, !isLoading),
+      resolveFeatureNavIntent: (href: string, feature: AppFeature) =>
+        resolveFeatureNavIntent({
+          href,
+          feature,
+          tier,
+          isAuthenticated,
+          isTierKnown: !isLoading,
+        }),
       visibleFeatures: getVisibleFeatures(tier),
     }),
     [tier, isLoading, isRefreshing, isAuthenticated, isVerified],

@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import type { TextInput } from 'react-native'
+import { useSafeAreaInsets } from 'react-native-safe-area-context'
 
 import { useChatTheme } from '~/chat/lib/chat-theme'
 import { mediaPreviewLabel } from '~/chat/lib/emoji'
@@ -20,6 +21,7 @@ import {
   startRecording,
   stopRecording,
 } from '~/lib/media/audio-recorder'
+import { useKeyboardVisible } from '~/hooks/useKeyboardVisible'
 import { captureImage, pickDocument, pickImages, pickMedia, pickVideos } from '~/lib/media/pick-image'
 import { sendPickedItemAsChatAttachment } from '~/lib/media/route-chat-attachment'
 
@@ -96,6 +98,8 @@ export function MessageComposer({
 }: MessageComposerProps) {
   const theme = useChatTheme()
   const toast = useAppToast()
+  const insets = useSafeAreaInsets()
+  const keyboardVisible = useKeyboardVisible()
   const [text, setText] = useState('')
   const [draftReady, setDraftReady] = useState(!conversationId)
   const [attaching, setAttaching] = useState(false)
@@ -372,7 +376,12 @@ export function MessageComposer({
         sendPickedItemAsChatAttachment(first, { onSendImage, onSendFile })
       }}
     >
-    <YStack backgroundColor={theme.composerBg} paddingBottom={2}>
+    {/* Open conversations hide the bottom tabs, so the composer owns the
+        nav-bar / home-indicator inset — except while the keyboard covers it. */}
+    <YStack
+      backgroundColor={theme.composerBg}
+      paddingBottom={keyboardVisible ? 2 : Math.max(insets.bottom, 2)}
+    >
       {quickReplies.length > 0 ? (
         <YStack paddingHorizontal={8} paddingTop={8} gap={6}>
           <HorizontalScrollRow gap={8}>

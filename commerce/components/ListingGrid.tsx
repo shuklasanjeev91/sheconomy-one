@@ -15,29 +15,38 @@ type ListingGridProps = {
   showQuickAdd?: boolean
 }
 
-type ColumnLayout = {
-  basis: `${number}%`
-  maxWidth: `${number}%` | number
-  minWidth: number
+const GRID_GAP = 12
+
+/**
+ * Slot width as a share of the row.
+ *
+ * Floored so `columns` slots can never add up past 100% once Yoga rounds to
+ * device pixels — a fraction over and the last card of every row wraps.
+ */
+function slotWidthForColumns(columns: 2 | 3 | 4 | 5 | 6) {
+  return `${Math.floor((100 / columns) * 1000) / 1000}%` as const
 }
 
-function layoutForColumns(columns: 2 | 3 | 4 | 5 | 6): ColumnLayout {
-  switch (columns) {
-    case 2:
-      return { basis: '44%', maxWidth: '48.5%', minWidth: 0 }
-    case 3:
-      return { basis: '29%', maxWidth: '32%', minWidth: 0 }
-    case 4:
-      return { basis: '22%', maxWidth: '24.5%', minWidth: 180 }
-    case 5:
-      return { basis: '17.5%', maxWidth: '19.5%', minWidth: 160 }
-    case 6:
-      return { basis: '14.5%', maxWidth: '16.5%', minWidth: 140 }
+/**
+ * Gutter carried inside each slot, so the row stays flush with the page gutters
+ * while every card keeps the same width: the shares add up to one `GRID_GAP`
+ * between neighbours and none at the row edges.
+ */
+function slotInsets(indexInRow: number, columns: number) {
+  return {
+    paddingLeft: (indexInRow * GRID_GAP) / columns,
+    paddingRight: ((columns - 1 - indexInRow) * GRID_GAP) / columns,
   }
 }
 
 /**
  * Responsive listing grid for page-scroll hosts (Home, browse, shop).
+ *
+ * Rows are percentage slots with the gutter as slot padding, not `flexBasis`
+ * plus a pixel `minWidth` and a percentage `maxWidth`: that combination wraps a
+ * card early whenever the row cannot fit `columns` cards at the minimum, while
+ * the cap stops the survivors from growing, so every row keeps a card-sized
+ * hole at its end (an iPad-width grid asked for 4 and drew 3 plus a gap).
  *
  * Do not nest a non-scrolling FlashList here — FlashList under-measures inside
  * parent ScrollViews and leaves large blank regions under the first row.
@@ -60,18 +69,16 @@ export function ListingGrid({
     return marketplace.personalizeListings(filtered, { sort: true })
   }, [listings, marketplace, personalize])
 
-  const { basis, maxWidth, minWidth } = layoutForColumns(columns)
+  const slotWidth = slotWidthForColumns(columns)
 
   return (
-    <XStack gap="$3" flexWrap="wrap" width="100%">
-      {visibleListings.map((listing) => (
+    <XStack flexWrap="wrap" width="100%" rowGap={GRID_GAP}>
+      {visibleListings.map((listing, index) => (
         <XStack
           key={listing.id}
-          flexBasis={basis}
-          flexGrow={1}
-          flexShrink={1}
-          minWidth={minWidth}
-          maxWidth={maxWidth}
+          width={slotWidth}
+          minWidth={0}
+          {...slotInsets(index % columns, columns)}
         >
           <ListingCard listing={listing} compact={compact} showQuickAdd={showQuickAdd} />
         </XStack>

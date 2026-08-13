@@ -4,7 +4,7 @@ import { AlertDialog as TAlertDialog, styled, XStack } from 'tamagui'
 
 import * as Icons from '~/components/ui/icons'
 import { getShadowStyle, radius } from '~/config/tokens'
-import { useAppLayout } from '~/hooks/useAppLayout'
+import { useFullscreenOverlayInsets } from '~/hooks/useFullscreenOverlayInsets'
 import { isNativeFullscreenOverlay } from '~/lib/platform/native-fullscreen'
 
 /** For destructive/confirmation flows — cannot be dismissed by outside click. */
@@ -80,7 +80,7 @@ export function AlertDialogContent({
   closeLabel?: string
   children?: ReactNode
 }) {
-  const { safeTop } = useAppLayout()
+  const overlayInsets = useFullscreenOverlayInsets()
 
   const nativeFullscreenProps =
     isNativeFullscreenOverlay
@@ -90,8 +90,9 @@ export function AlertDialogContent({
           maxWidth: '100%' as const,
           maxHeight: '100%' as const,
           borderRadius: 0,
-          paddingTop: Math.max(safeTop, 16),
-          paddingBottom: 0,
+          paddingTop: Math.max(overlayInsets.top, 16),
+          // Bottom-anchored on an edge-to-edge screen — clear the nav bar.
+          paddingBottom: overlayInsets.bottom,
           marginBottom: 0,
           ...(Platform.OS !== 'web' ? { flex: 1 } : null),
         }

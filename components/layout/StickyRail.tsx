@@ -1,7 +1,7 @@
 import type { ReactNode } from 'react'
 import { Platform } from 'react-native'
 
-import { YStack } from '~/components/ui'
+import { ScrollView, YStack } from '~/components/ui'
 import type { GetProps } from 'tamagui'
 import { useAppLayout } from '~/hooks/useAppLayout'
 import { STICKY_RAIL_TOP, stickyRailStyle } from '~/components/layout/sticky'
@@ -29,6 +29,35 @@ export function StickyRail({
 }: StickyRailProps) {
   const { isDesktopWeb, isDesktop } = useAppLayout()
 
+  if (pin === 'viewport' && Platform.OS !== 'web') {
+    // Native tablets: the page doesn't scroll around the rail, so the rail
+    // scrolls itself — otherwise its lower nav items are unreachable in landscape.
+    // Stretch to the row height instead of `height: '100%'`, which collapses to
+    // zero when an ancestor height is not definite.
+    const { gap, ...rest } = props
+
+    return (
+      <YStack
+        flexShrink={0}
+        alignSelf="stretch"
+        minHeight={0}
+        style={style as object}
+        {...rest}
+      >
+        <ScrollView
+          flex={1}
+          minHeight={0}
+          showsVerticalScrollIndicator={false}
+          contentContainerStyle={{ paddingBottom: 24 }}
+        >
+          <YStack width="100%" gap={gap}>
+            {children}
+          </YStack>
+        </ScrollView>
+      </YStack>
+    )
+  }
+
   if (pin === 'viewport') {
     return (
       <YStack
@@ -39,18 +68,16 @@ export function StickyRail({
         minHeight={0}
         overflow="hidden"
         style={
-          Platform.OS === 'web'
-            ? ({
-                height: '100%',
-                maxHeight: '100%',
-                minHeight: 0,
-                overflowY: 'auto',
-                overflowX: 'hidden',
-                overscrollBehavior: 'contain',
-                WebkitOverflowScrolling: 'touch',
-                ...(style as object),
-              } as const)
-            : (style as object)
+          {
+            height: '100%',
+            maxHeight: '100%',
+            minHeight: 0,
+            overflowY: 'auto',
+            overflowX: 'hidden',
+            overscrollBehavior: 'contain',
+            WebkitOverflowScrolling: 'touch',
+            ...(style as object),
+          } as const
         }
         {...props}
       >

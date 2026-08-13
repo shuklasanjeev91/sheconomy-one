@@ -1,6 +1,7 @@
 import type { ReactNode } from 'react'
 
 import { Icons, Text, XStack } from '~/components/ui'
+import { touchSlop } from '~/config/tokens'
 import { useAppUi } from '~/lib/theme/useAppUi'
 
 /**
@@ -135,7 +136,10 @@ export function CommerceCheckbox({
       justifyContent="center"
       cursor="pointer"
       flexShrink={0}
+      // Drawn at 18px, so most of the 44px target comes from slop.
+      hitSlop={onPress ? touchSlop(size) : undefined}
       hoverStyle={{ borderColor: ui.brand }}
+      pressStyle={onPress ? { borderColor: ui.brand, opacity: 0.7 } : undefined}
     >
       {checked ? <Icons.Check size={size - 5} color={ui.onBrand} strokeWidth={3} /> : null}
     </XStack>

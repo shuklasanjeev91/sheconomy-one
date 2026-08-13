@@ -4,8 +4,7 @@ import { Platform, useWindowDimensions, type NativeScrollEvent, type NativeSynth
 
 import { Icons, Sheet, SheetFrame, SheetHandle, SheetOverlay, Text, XStack, YStack } from '~/components/ui'
 import { radius } from '~/config/tokens'
-import { useAppLayout } from '~/hooks/useAppLayout'
-import { isNativeFullscreenOverlay } from '~/lib/platform/native-fullscreen'
+import { useFullscreenOverlayInsets } from '~/hooks/useFullscreenOverlayInsets'
 import { useAppUi } from '~/lib/theme/useAppUi'
 
 // Approximate non-scrolling chrome heights so the scroll body can extend as
@@ -91,9 +90,8 @@ export function AppBottomSheet({
   onScroll,
 }: AppBottomSheetProps) {
   const ui = useAppUi()
-  const { safeTop } = useAppLayout()
+  const overlayInsets = useFullscreenOverlayInsets()
   const { height: windowHeight } = useWindowDimensions()
-  const nativeFullscreen = isNativeFullscreenOverlay
 
   const maxSheetHeight = useMemo(() => windowHeight, [windowHeight])
 
@@ -102,7 +100,8 @@ export function AppBottomSheet({
     (showHandle ? HANDLE_CHROME : 0) +
     HEADER_CHROME +
     (footer ? FOOTER_CHROME : 0) +
-    (nativeFullscreen ? safeTop : 0)
+    overlayInsets.top +
+    overlayInsets.bottom
 
   function close() {
     onOpenChange(false)
@@ -154,7 +153,7 @@ export function AppBottomSheet({
             flex={1}
             height="100%"
             maxHeight={maxSheetHeight}
-            paddingTop={nativeFullscreen ? safeTop : 0}
+            paddingTop={overlayInsets.top}
             paddingBottom={0}
             marginBottom={0}
           >
@@ -174,7 +173,11 @@ export function AppBottomSheet({
                 keyboardShouldPersistTaps="handled"
                 onScroll={onScroll}
                 scrollEventThrottle={16}
-                contentContainerStyle={{ paddingBottom: 0, flexGrow: 1 }}
+                // Without a footer the body itself has to clear the nav bar.
+                contentContainerStyle={{
+                  paddingBottom: footer ? 0 : overlayInsets.bottom,
+                  flexGrow: 1,
+                }}
                 {...(Platform.OS === 'web'
                   ? {
                       maxHeight: `calc(100vh - ${chromeHeight}px)` as unknown as number,
@@ -184,7 +187,7 @@ export function AppBottomSheet({
                 {body}
               </Sheet.ScrollView>
             ) : (
-              <YStack flex={1} width="100%" paddingBottom={0}>
+              <YStack flex={1} width="100%" paddingBottom={footer ? 0 : overlayInsets.bottom}>
                 {body}
               </YStack>
             )}
@@ -194,7 +197,8 @@ export function AppBottomSheet({
                 width="100%"
                 paddingHorizontal="$4"
                 paddingTop="$3"
-                paddingBottom="$3"
+                // 13 matches the `$3` space token, so no-inset platforms are unchanged.
+                paddingBottom={13 + overlayInsets.bottom}
                 marginBottom={0}
                 borderTopWidth={1}
                 borderTopColor={ui.borderSubtle}

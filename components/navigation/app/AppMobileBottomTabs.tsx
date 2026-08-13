@@ -35,7 +35,7 @@ const TAB_ICON = { active: 24, inactive: 22 } as const
 /** Native-style full-width bottom tab bar — frosted dock, pill active states. */
 export function AppMobileBottomTabs() {
   const pathname = usePathname()
-  const { tier, isGuest, isFemale, isAuthenticated } = useAccess()
+  const { tier, isFemale, isAuthenticated, isTierKnown } = useAccess()
   const { safeBottom } = useAppLayout()
   const { shops, primaryShopId } = useVendorShops()
   const hasShops = shops.length > 0
@@ -71,8 +71,9 @@ export function AppMobileBottomTabs() {
       ),
       tier,
       widthTier,
+      isTierKnown,
     )
-  }, [hasShops, pathname, primaryShopId, tier, widthTier])
+  }, [hasShops, isTierKnown, pathname, primaryShopId, tier, widthTier])
 
   const section = getMobileBottomTabSection(pathname)
 
@@ -97,8 +98,10 @@ export function AppMobileBottomTabs() {
   function pressTab(tab: AppMobileTabItem) {
     const href = focusPathForTab(tab)
 
-    // Create shop requires Human verification for limited members.
-    if (isCreateShopPath(href) && !hasShops) {
+    // Create shop requires Human verification for limited members. An unsettled
+    // profile reads as limited, so navigate and let AppAccessGate rule on it
+    // rather than sending a verified member back to verification.
+    if (isCreateShopPath(href) && !hasShops && isTierKnown) {
       if (isFemale) {
         // fall through to navigate
       } else if (isAuthenticated) {

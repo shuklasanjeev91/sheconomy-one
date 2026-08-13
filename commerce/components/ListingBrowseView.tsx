@@ -1,8 +1,9 @@
 import type { ReactNode } from 'react'
 
-import { Button, CardSkeleton, Spinner, Text, XStack, YStack, useMedia, Icons } from '~/components/ui'
+import { Button, CardSkeleton, Spinner, Text, XStack, YStack, Icons } from '~/components/ui'
 import type { ListingSummary } from '~/lib/supabase/commerce'
 import { getShadowStyle, radius } from '~/config/tokens'
+import { useAppLayout } from '~/hooks/useAppLayout'
 import { useAppUi } from '~/lib/theme/useAppUi'
 
 import { CommercePageHeader } from '~/commerce/components/CommercePageHeader'
@@ -42,8 +43,7 @@ export function ListingBrowseView({
   showQuickAdd = false,
 }: ListingBrowseViewProps) {
   const ui = useAppUi()
-  const media = useMedia()
-  const gridColumns = media.gtLg ? 6 : media.gtMd ? 5 : media.gtSm ? 4 : media.gtXs ? 3 : 2
+  const { listingGridColumns: gridColumns } = useAppLayout()
   const hasItems = items.length > 0
 
   return (

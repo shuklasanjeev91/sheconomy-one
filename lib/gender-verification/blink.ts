@@ -138,11 +138,12 @@ export function updateBlinkTracker(
     }
 
     if (avgEar > options.openThreshold) {
-      const longEnough = closedFor >= options.minClosedMs
+      const naturalDuration =
+        closedFor >= options.minClosedMs && closedFor <= options.maxClosedMs
       const gapOk =
         tracker.lastBlinkAt == null || now - tracker.lastBlinkAt >= options.minBlinkGapMs
 
-      if (longEnough && gapOk) {
+      if (naturalDuration && gapOk) {
         tracker.count += 1
         tracker.lastBlinkAt = now
       }

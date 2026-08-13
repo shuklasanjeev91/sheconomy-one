@@ -107,6 +107,23 @@ describe('summarizeGenderSamples', () => {
     expect(verdict.femaleScore).toBeNull()
     expect(verdict.samples).toBe(0)
   })
+
+  it('ignores gender reads whose source face is too small to judge', () => {
+    const verdict = summarizeGenderSamples(
+      [
+        { ...female(0.95), facePixels: 54 },
+        { ...female(0.92), facePixels: 72 },
+        { ...female(0.84), facePixels: 130 },
+        { ...female(0.82), facePixels: 142 },
+        { ...female(0.8), facePixels: 150 },
+        { ...female(0.79), facePixels: 128 },
+      ],
+      { ...OPTIONS, minFacePixels: 96 },
+    )
+
+    expect(verdict.status).toBe('pass')
+    expect(verdict.samples).toBe(4)
+  })
 })
 
 describe('unclear-read failure copy', () => {

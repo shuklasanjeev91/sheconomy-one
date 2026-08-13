@@ -24,6 +24,7 @@ type FaceCaptureOverlayProps = {
   cameraPermission?: PermissionResponse | null
   onCameraReady?: () => void
   onAnalyzerReady?: () => void
+  onAnalyzerError?: (message: string) => void
 }
 
 function ringColor(phase: VerificationPhase, tracking?: FaceTrackingStatus, brand?: string) {
@@ -65,6 +66,7 @@ export function FaceCaptureOverlay({
   cameraPermission,
   onCameraReady,
   onAnalyzerReady,
+  onAnalyzerError,
 }: FaceCaptureOverlayProps) {
   const ui = useAppUi()
   const { width: windowWidth } = useWindowDimensions()
@@ -257,7 +259,7 @@ export function FaceCaptureOverlay({
   if (Platform.OS !== 'web') {
     return (
       <YStack width="100%" alignItems="center">
-        <NativeFaceAnalyzer ref={analyzerRef} onReady={onAnalyzerReady} />
+        <NativeFaceAnalyzer ref={analyzerRef} onReady={onAnalyzerReady} onError={onAnalyzerError} />
         {body}
       </YStack>
     )

@@ -29,6 +29,8 @@ export type GenderVerdictOptions = {
   threshold: number
   /** How far under the threshold still counts as worth another sampling round. */
   borderlineBand: number
+  /** Source face width required for a reliable description-model read. */
+  minFacePixels?: number
 }
 
 /** Confidence is for the predicted label, so a male sample inverts to female. */
@@ -37,8 +39,15 @@ export function femaleProbability(sample: GenderSample): number {
   return sample.isFemale ? confidence : 1 - confidence
 }
 
-function isUsable(sample: GenderSample | null | undefined): sample is GenderSample {
-  return !!sample && Number.isFinite(sample.confidence)
+function isUsable(
+  sample: GenderSample | null | undefined,
+  minFacePixels: number,
+): sample is GenderSample {
+  return (
+    !!sample &&
+    Number.isFinite(sample.confidence) &&
+    (sample.facePixels == null || sample.facePixels >= minFacePixels)
+  )
 }
 
 /** Drop the single lowest and highest probability once there are enough samples. */
@@ -52,7 +61,7 @@ export function summarizeGenderSamples(
   samples: readonly (GenderSample | null | undefined)[],
   options: GenderVerdictOptions,
 ): GenderVerdict {
-  const usable = samples.filter(isUsable)
+  const usable = samples.filter((sample) => isUsable(sample, options.minFacePixels ?? 0))
 
   if (usable.length === 0) {
     return { status: 'insufficient', femaleScore: null, femaleRatio: 0, samples: 0 }

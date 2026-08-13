@@ -1,7 +1,8 @@
 import type { ReactNode } from 'react'
 import type { Href } from 'one'
 
-import { Spinner, Text, YStack, useMedia } from '~/components/ui'
+import { Spinner, Text, YStack } from '~/components/ui'
+import { useAppLayout } from '~/hooks/useAppLayout'
 import { PageSection } from '~/components/layout'
 import type { ListingFeedKind } from '~/lib/supabase/commerce'
 import { useListingFeed } from '~/commerce/hooks/useListingFeed'
@@ -34,8 +35,7 @@ export function InfiniteListingSection({
   inset = false,
 }: InfiniteListingSectionProps) {
   const ui = useAppUi()
-  const media = useMedia()
-  const gridColumns = media.gtLg ? 6 : media.gtMd ? 5 : media.gtSm ? 4 : media.gtXs ? 3 : 2
+  const { listingGridColumns: gridColumns } = useAppLayout()
   const { items, isLoading, isLoadingMore, hasMore, error, loadMore } = useListingFeed({
     kind,
     shopId,

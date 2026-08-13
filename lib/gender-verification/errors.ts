@@ -24,6 +24,8 @@ export const GENDER_ERROR_CODES = {
   LOW_CONFIDENCE_RETRY: 'gender/low-confidence-retry',
   NOT_ELIGIBLE: 'gender/not-eligible',
   SESSION_FAILED: 'gender/session-failed',
+  /** The attempt outlived its server session — a fresh run fixes it. */
+  SESSION_STALE: 'gender/session-stale',
   RATE_LIMITED: 'gender/rate-limited',
   NETWORK: 'gender/network',
   TIMEOUT: 'gender/timeout',
@@ -51,6 +53,8 @@ export const GENDER_ERROR_MESSAGES: Record<GenderErrorCode, string> = {
     'This community is built for women. Verification didn’t meet the required confidence, so full access can’t be unlocked.',
   [GENDER_ERROR_CODES.SESSION_FAILED]:
     'We couldn’t start a secure verification session. Please check your connection and try again.',
+  [GENDER_ERROR_CODES.SESSION_STALE]:
+    'That check took too long and expired. Tap Try again to run a fresh verification.',
   [GENDER_ERROR_CODES.RATE_LIMITED]:
     'Too many attempts in a short time. Please wait a moment and try again.',
   [GENDER_ERROR_CODES.NETWORK]:
@@ -72,6 +76,7 @@ export const GENDER_ERROR_INSTRUCTIONS: Record<GenderErrorCode, string> = {
   [GENDER_ERROR_CODES.LOW_CONFIDENCE_RETRY]: 'Need a clearer read — brighter light helps',
   [GENDER_ERROR_CODES.NOT_ELIGIBLE]: 'Verification didn’t meet the required confidence',
   [GENDER_ERROR_CODES.SESSION_FAILED]: 'Couldn’t start a secure session',
+  [GENDER_ERROR_CODES.SESSION_STALE]: 'That attempt expired — tap Try again',
   [GENDER_ERROR_CODES.RATE_LIMITED]: 'Too many attempts — wait a moment',
   [GENDER_ERROR_CODES.NETWORK]: 'Network issue — check your connection',
   [GENDER_ERROR_CODES.TIMEOUT]: 'That took too long — try again',
@@ -86,6 +91,7 @@ export const GENDER_SOFT_RETRY_CODES: ReadonlySet<GenderErrorCode> = new Set([
   GENDER_ERROR_CODES.FACE_NOT_DETECTED,
   GENDER_ERROR_CODES.TIMEOUT,
   GENDER_ERROR_CODES.NETWORK,
+  GENDER_ERROR_CODES.SESSION_STALE,
 ])
 
 export function isSoftRetryableGenderError(error: unknown): boolean {
@@ -134,6 +140,33 @@ function getStatus(error: unknown): number | null {
   return null
 }
 
+/** Postgres / PostgREST faults, which name our own tables and functions. */
+function isDatabaseFailure(message: string): boolean {
+  return (
+    message.includes('violates') ||
+    message.includes('constraint') ||
+    message.includes('relation ') ||
+    message.includes('schema cache') ||
+    message.includes('sqlstate')
+  )
+}
+
+function isStaleSessionMessage(message: string): boolean {
+  return (
+    message.includes('session is no longer active') ||
+    message.includes('session not found') ||
+    message.includes('session expired')
+  )
+}
+
+/**
+ * True when the server rejected a submission because its session was superseded,
+ * missing, or expired — the caller can recover by starting a fresh session.
+ */
+export function isStaleGenderSessionError(error: unknown): boolean {
+  return classifyGenderError(error) === GENDER_ERROR_CODES.SESSION_STALE
+}
+
 /**
  * Map a thrown value to a stable gender-verification error code using the HTTP
  * status (when available) and well-known message fragments.
@@ -159,6 +192,12 @@ export function classifyGenderError(error: unknown): GenderErrorCode {
   if (message.includes('steady read')) {
     return GENDER_ERROR_CODES.LOW_CONFIDENCE_RETRY
   }
+  // Raw Postgres / PostgREST failures must surface verbatim. Their text carries
+  // our table and function names, which used to be swallowed by the "session"
+  // rule below and shown as a connection problem.
+  if (isDatabaseFailure(message)) {
+    return GENDER_ERROR_CODES.UNKNOWN
+  }
   if (
     message.includes('permission') ||
     message.includes('denied') ||
@@ -173,6 +212,13 @@ export function classifyGenderError(error: unknown): GenderErrorCode {
     message.includes('overconstrained')
   ) {
     return GENDER_ERROR_CODES.CAMERA_UNAVAILABLE
+  }
+  if (
+    message.includes('could not confirm a live face') ||
+    message.includes('photo or screen') ||
+    message.includes('anti-spoof')
+  ) {
+    return GENDER_ERROR_CODES.LIVENESS_FAILED
   }
   if (
     message.includes('could not analyze') ||
@@ -198,7 +244,15 @@ export function classifyGenderError(error: unknown): GenderErrorCode {
   if (message.includes('model') && (message.includes('load') || message.includes('download'))) {
     return GENDER_ERROR_CODES.MODEL_LOAD_FAILED
   }
-  if (message.includes('session')) {
+  if (isStaleSessionMessage(message)) {
+    return GENDER_ERROR_CODES.SESSION_STALE
+  }
+  // Only the session-start copy — anything else mentioning a session is either
+  // stale (above) or a server fault we would rather show as-is.
+  if (
+    message.includes('start verification session') ||
+    message.includes('secure verification session')
+  ) {
     return GENDER_ERROR_CODES.SESSION_FAILED
   }
 

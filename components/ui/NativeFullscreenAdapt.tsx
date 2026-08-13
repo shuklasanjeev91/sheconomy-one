@@ -3,12 +3,15 @@ import type { ReactNode } from 'react'
 import { Adapt } from 'tamagui'
 
 import { Sheet, SheetFrame, SheetHandle, SheetOverlay } from '~/components/ui/Sheet'
+import { useFullscreenOverlayInsets } from '~/hooks/useFullscreenOverlayInsets'
 
 /**
  * Tamagui Adapt → full-screen Sheet for Select / Popover / Menu on web, iOS,
  * and Android. No bottom gap — frame covers the entire viewport.
  */
 export function NativeFullscreenAdapt({ children }: { children?: ReactNode }) {
+  const overlayInsets = useFullscreenOverlayInsets()
+
   return (
     <Adapt when>
       <Sheet
@@ -28,6 +31,8 @@ export function NativeFullscreenAdapt({ children }: { children?: ReactNode }) {
           width="100%"
           borderRadius={0}
           padding={0}
+          // Adapted content is bottom-anchored — keep it off the nav bar.
+          paddingBottom={overlayInsets.bottom}
           margin={0}
           backgroundColor="$background"
           position="absolute"

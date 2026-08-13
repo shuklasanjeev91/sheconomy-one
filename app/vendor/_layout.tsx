@@ -28,7 +28,8 @@ const TOPBAR_HEIGHT = 60
 
 export function VendorLayout() {
   const ui = useAppUi()
-  const { isDesktop, safeTop, safeBottom, desktopHeaderHeight } = useAppLayout()
+  // No `safeTop` here — AppShell already wraps routes in a top SafeAreaView.
+  const { isDesktop, hasSideRails, safeBottom, desktopHeaderHeight } = useAppLayout()
   const router = useRouter()
   const pathname = usePathname()
   const dispatch = useAppDispatch()
@@ -79,8 +80,8 @@ export function VendorLayout() {
               : undefined
           }
         >
-          {/* Desktop persistent sidebar */}
-          {isDesktop ? (
+          {/* Persistent sidebar wherever the page is wide enough for a rail */}
+          {hasSideRails ? (
             <YStack
               width={collapsed ? COLLAPSED_WIDTH : EXPANDED_WIDTH}
               animation="quick"
@@ -109,11 +110,10 @@ export function VendorLayout() {
 
           {/* Main column */}
           <YStack flex={1} minWidth={0} minHeight={0}>
-            {/* Mobile top bar */}
-            {!isDesktop ? (
+            {/* Compact top bar — the sidebar replaces its menu button when shown */}
+            {!hasSideRails ? (
               <XStack
                 minHeight={TOPBAR_HEIGHT}
-                paddingTop={Platform.OS !== 'web' ? safeTop : 0}
                 paddingHorizontal="$4"
                 alignItems="center"
                 gap="$3"
@@ -177,8 +177,8 @@ export function VendorLayout() {
           </YStack>
         </XStack>
 
-        {/* Mobile slide-in drawer */}
-        {!isDesktop && drawerOpen ? (
+        {/* Slide-in drawer — only when there is no persistent sidebar */}
+        {!hasSideRails && drawerOpen ? (
           <YStack key="vendor-drawer-layer" style={overlayBackdropStyle()} zIndex={300}>
             <YStack
               key="vendor-backdrop"
@@ -201,7 +201,7 @@ export function VendorLayout() {
               animation="quick"
               enterStyle={{ x: Platform.OS === 'web' ? -DRAWER_WIDTH : -40 }}
             >
-              <YStack paddingTop={Platform.OS !== 'web' ? safeTop : 0} flex={1} minHeight={0}>
+              <YStack flex={1} minHeight={0}>
                 <VendorSidebar
                   ui={ui}
                   collapsed={false}

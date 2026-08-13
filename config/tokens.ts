@@ -33,6 +33,20 @@ export const radius = {
   chip: 12,
 } as const
 
+/**
+ * Minimum comfortable touch target (Apple HIG 44pt, Material 48dp).
+ *
+ * Plenty of controls are deliberately drawn smaller than this — steppers,
+ * checkboxes, pager dots. Rather than inflate the design, keep the visual size
+ * and pass `touchSlop(size)` as `hitSlop` so the *tappable* area reaches 44.
+ */
+export const MIN_TOUCH_TARGET = 44
+
+/** Per-edge `hitSlop` that grows a `size`px control out to `MIN_TOUCH_TARGET`. */
+export function touchSlop(size: number): number {
+  return Math.max(0, Math.round((MIN_TOUCH_TARGET - size) / 2))
+}
+
 type ShadowPreset = {
   shadowColor: string
   shadowOffset: { width: number; height: number }

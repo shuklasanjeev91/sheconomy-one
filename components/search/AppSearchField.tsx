@@ -59,6 +59,10 @@ function SearchIconButton({
       cursor={disabled ? 'default' : 'pointer'}
       opacity={disabled ? 0.45 : 1}
       backgroundColor={active ? ui.surfaceMuted : 'transparent'}
+      // 28px icons sit 6px apart inside the pill, so the touch area can only
+      // grow to the full 44 vertically — horizontally it stops at half the gap
+      // so neighbouring icons never steal each other's taps.
+      hitSlop={{ top: 8, bottom: 8, left: 3, right: 3 }}
       hoverStyle={disabled ? undefined : { backgroundColor: ui.surfaceHover }}
       pressStyle={disabled ? undefined : { opacity: 0.8 }}
       onPress={disabled ? undefined : onPress}

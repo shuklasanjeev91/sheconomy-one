@@ -67,16 +67,20 @@ export const ListingCard = memo(function ListingCard({ listing, compact, showQui
     : listing.image_url
       ? [listing.image_url]
       : []
-  const [hoverImageIndex, setHoverImageIndex] = useState(0)
+  const [previewImageIndex, setPreviewImageIndex] = useState(0)
   const cardTitle = listing.card_title || listing.title
+
+  // Hover previews the next image on web. Touch has no hover and the card body
+  // is a link to the product, so there the dots themselves do the switching.
+  const dotsAreTouchControl = Platform.OS !== 'web'
 
   // ─── FIX: Memoize displayUrls to prevent new array on every render ────
   const displayUrls = useMemo(() => {
-    if (hoverImageIndex > 0 && imageUrls[hoverImageIndex]) {
-      return [imageUrls[hoverImageIndex], ...imageUrls.filter((_, i) => i !== hoverImageIndex)]
+    if (previewImageIndex > 0 && imageUrls[previewImageIndex]) {
+      return [imageUrls[previewImageIndex], ...imageUrls.filter((_, i) => i !== previewImageIndex)]
     }
     return imageUrls
-  }, [imageUrls, hoverImageIndex])
+  }, [imageUrls, previewImageIndex])
 
   const listingSlug = getListingSlug(listing)
   const listingHref = routes.listing(Platform.OS === 'web' ? listingSlug : listing.id)
@@ -94,10 +98,10 @@ export const ListingCard = memo(function ListingCard({ listing, compact, showQui
         position="relative"
         aspectRatio={1}
         onMouseEnter={() => {
-          if (imageUrls.length > 1) setHoverImageIndex(1)
+          if (imageUrls.length > 1) setPreviewImageIndex(1)
           warmListing()
         }}
-        onMouseLeave={() => setHoverImageIndex(0)}
+        onMouseLeave={() => setPreviewImageIndex(0)}
       >
         <AppLink href={listingHref} asChild>
           <YStack
@@ -132,7 +136,7 @@ export const ListingCard = memo(function ListingCard({ listing, compact, showQui
             right={0}
             justifyContent="center"
             gap={4}
-            pointerEvents="none"
+            pointerEvents={dotsAreTouchControl ? 'box-none' : 'none'}
           >
             {imageUrls.slice(0, 5).map((_, index) => (
               <YStack
@@ -140,7 +144,15 @@ export const ListingCard = memo(function ListingCard({ listing, compact, showQui
                 width={6}
                 height={6}
                 borderRadius={999}
-                backgroundColor={index === hoverImageIndex ? ui.overlayDotActive : ui.overlayDot}
+                backgroundColor={index === previewImageIndex ? ui.overlayDotActive : ui.overlayDot}
+                {...(dotsAreTouchControl
+                  ? {
+                      hitSlop: { top: 10, bottom: 10, left: 2, right: 2 },
+                      onPress: () => setPreviewImageIndex(index),
+                      accessibilityRole: 'button' as const,
+                      accessibilityLabel: `Preview image ${index + 1}`,
+                    }
+                  : null)}
               />
             ))}
           </XStack>
