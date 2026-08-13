@@ -83,11 +83,69 @@ function mergeMetadata(
   return { ...base, ...cleaned } as unknown as Json
 }
 
+function isEmptyDeliveryAddress(address: unknown): boolean {
+  return (
+    address == null ||
+    address === '' ||
+    (typeof address === 'object' && !Array.isArray(address) && Object.keys(address as object).length === 0)
+  )
+}
+
+function pickAddressJson(value: unknown): Json | null {
+  if (isEmptyDeliveryAddress(value)) return null
+  return value as Json
+}
+
+/** Load shipping (then billing) address from the parent order when callers omit one. */
+async function fetchOrderAddressJson(orderId: string): Promise<Json | null> {
+  const { data } = await supabase
+    .from('orders')
+    .select(
+      `
+      shipping_address:addresses!shipping_address_id (
+        address_line_1, address_line_2, city, state, country, postal_code, address_label
+      ),
+      billing_address:addresses!billing_address_id (
+        address_line_1, address_line_2, city, state, country, postal_code, address_label
+      )
+    `,
+    )
+    .eq('id', orderId)
+    .maybeSingle()
+
+  return (
+    pickAddressJson(data?.shipping_address) ?? pickAddressJson(data?.billing_address) ?? null
+  )
+}
+
+async function findExistingDeliveryForItem(
+  orderItemId: string,
+): Promise<Pick<OrderDelivery, 'id' | 'delivery_address' | 'delivery_metadata'> | null> {
+  const { data } = await supabase
+    .from('order_delivery')
+    .select('id, delivery_address, delivery_metadata')
+    .eq('order_item_id', orderItemId)
+    .order('created_at', { ascending: false })
+    .limit(1)
+    .maybeSingle()
+  return (data as Pick<OrderDelivery, 'id' | 'delivery_address' | 'delivery_metadata'> | null) ?? null
+}
+
+function kickCourierTrackSync(deliveryId: string | null | undefined, trackingNumber: string | null | undefined) {
+  if (!deliveryId || !trackingNumber) return
+  void supabase.functions
+    .invoke('courier-track-sync', { body: { delivery_id: deliveryId } })
+    .catch(() => undefined)
+}
+
 // ============= MUTATIONS =============
 
 /**
  * Create a delivery record for an order item. Defaults the status to `shipped`
  * (as the legacy service did); the DB trigger then advances the order item.
+ *
+ * Checkout already inserts a pending `order_delivery` row — when one exists for
+ * the item we update it instead of inserting a duplicate.
  */
 export async function createDelivery(
   input: CreateDeliveryInput,
@@ -96,9 +154,6 @@ export async function createDelivery(
   const id = await resolveUserId(userId)
   if (!id) return fail('User not authenticated')
 
-  const validation = validateDeliveryData(input)
-  if (!validation.isValid) return fail(validation.errors.join(', '))
-
   try {
     // Prefer item-level access when we have the item id; RLS is the real gate.
     if (input.order_item_id) {
@@ -106,15 +161,68 @@ export async function createDelivery(
       if (!access.success) return fail(access.error ?? 'Access denied to this order item')
     }
 
+    const existing = input.order_item_id
+      ? await findExistingDeliveryForItem(input.order_item_id)
+      : null
+
+    const resolvedAddress =
+      pickAddressJson(input.delivery_address) ??
+      pickAddressJson(existing?.delivery_address) ??
+      (await fetchOrderAddressJson(input.order_id))
+
+    const validation = validateDeliveryData({
+      ...input,
+      delivery_address: resolvedAddress ?? {},
+    })
+    if (!validation.isValid) return fail(validation.errors.join(', '))
+
+    const now = new Date().toISOString()
+    const status = input.delivery_status ?? DELIVERY_STATUS.SHIPPED
+
+    if (existing?.id) {
+      const updates: OrderDeliveryUpdate = {
+        delivery_status: status,
+        delivery_mode: input.delivery_mode ?? DEFAULT_DELIVERY_MODE,
+        delivery_address: resolvedAddress as Json,
+        delivery_instructions: input.delivery_instructions ?? null,
+        estimated_delivery_date: input.estimated_delivery_date ?? null,
+        shipped_at: input.shipped_at ?? now,
+        carrier_name: input.carrier_name ?? null,
+        courier_service_name: input.courier_service_name ?? null,
+        carrier_tracking_url: input.carrier_tracking_url ?? null,
+        tracking_number: input.tracking_number ?? null,
+        awb_code: input.awb_code ?? null,
+        delivery_metadata: mergeMetadata(existing.delivery_metadata, {
+          ...((input.delivery_metadata &&
+          typeof input.delivery_metadata === 'object' &&
+          !Array.isArray(input.delivery_metadata)
+            ? (input.delivery_metadata as Record<string, unknown>)
+            : {}) as Record<string, unknown>),
+        }),
+        updated_at: now,
+      }
+
+      const { data, error } = await supabase
+        .from('order_delivery')
+        .update(updates)
+        .eq('id', existing.id)
+        .select('*')
+        .single()
+      if (error) return fail(error, 'Failed to update delivery record')
+
+      kickCourierTrackSync(data?.id, data?.tracking_number)
+      return ok(data as OrderDelivery)
+    }
+
     const payload: OrderDeliveryInsert = {
       order_id: input.order_id,
       order_item_id: input.order_item_id ?? null,
-      delivery_status: input.delivery_status ?? DELIVERY_STATUS.SHIPPED,
+      delivery_status: status,
       delivery_mode: input.delivery_mode ?? DEFAULT_DELIVERY_MODE,
-      delivery_address: input.delivery_address,
+      delivery_address: resolvedAddress as Json,
       delivery_instructions: input.delivery_instructions ?? null,
       estimated_delivery_date: input.estimated_delivery_date ?? null,
-      shipped_at: input.shipped_at ?? new Date().toISOString(),
+      shipped_at: input.shipped_at ?? now,
       carrier_name: input.carrier_name ?? null,
       courier_service_name: input.courier_service_name ?? null,
       carrier_tracking_url: input.carrier_tracking_url ?? null,
@@ -126,13 +234,7 @@ export async function createDelivery(
     const { data, error } = await supabase.from('order_delivery').insert(payload).select('*').single()
     if (error) return fail(error, 'Failed to create delivery record')
 
-    // Kick an immediate track sync (cron continues for later milestones).
-    if (data?.id && data.tracking_number) {
-      void supabase.functions
-        .invoke('courier-track-sync', { body: { delivery_id: data.id } })
-        .catch(() => undefined)
-    }
-
+    kickCourierTrackSync(data?.id, data?.tracking_number)
     return ok(data as OrderDelivery)
   } catch (error) {
     return fail(error, 'An unexpected error occurred while creating delivery record')
@@ -140,8 +242,8 @@ export async function createDelivery(
 }
 
 /**
- * Validate a tracking number against its courier and create the delivery record
- * (mirrors the legacy client `createTracking`, minus the AfterShip call).
+ * Validate a tracking number against its courier and create/update the delivery
+ * record (mirrors the legacy client `createTracking`, minus the AfterShip call).
  */
 export async function createTracking(
   input: CreateTrackingInput,
@@ -161,7 +263,8 @@ export async function createTracking(
     order_id: input.order_id,
     order_item_id: input.order_item_id ?? null,
     delivery_mode: input.delivery_mode ?? DEFAULT_DELIVERY_MODE,
-    delivery_address: input.delivery_address ?? {},
+    // May be empty — createDelivery resolves from existing delivery / order addresses.
+    delivery_address: (input.delivery_address ?? {}) as Json,
     delivery_instructions: input.note ?? null,
     estimated_delivery_date: input.estimated_delivery_date ?? null,
     shipped_at: input.shipping_date ?? new Date().toISOString(),

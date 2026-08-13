@@ -22,9 +22,15 @@ import { shareOrderInvoice } from '~/lib/orders/order-invoice'
 import { formatCustomerContactPhone } from '~/features/auth/services/account-contact'
 import type { EnrichedOrderIssue } from '~/lib/orders/order-issue.type'
 import { openMailtoLink } from '~/lib/platform/openMailto'
+import { openExternalUrl, safeHttpUrl } from '~/lib/platform/openUrl'
+import { DELIVERY_STATUS_DISPLAY } from '~/lib/orders/order.constants'
 import { formatOrderAmount, formatOrderDate } from '~/lib/orders/order.utils'
 import type { OrderPayment } from '~/lib/orders/payment.type'
 import type { OrderAddressSummary, VendorOrderItem } from '~/lib/orders/vendor-orders.type'
+import {
+  resolveVendorOrderDelivery,
+  resolveVendorShippingAddress,
+} from '~/lib/orders/vendor-orders.utils'
 import type { AppUiTokens } from '~/lib/theme/app-ui'
 import {
   issueStatusLabel,
@@ -210,10 +216,32 @@ function DrawerBody({
     () => formatCustomerContactPhone({ profilePhone: customer?.phone }),
     [customer?.phone],
   )
-  const address = item.billing_address ?? order?.billing_address ?? null
+  const address = resolveVendorShippingAddress(item)
   const lines = addressLines(address)
+  const delivery = resolveVendorOrderDelivery(item)
+  const deliveryStatusLabel = delivery?.delivery_status
+    ? DELIVERY_STATUS_DISPLAY[delivery.delivery_status]?.label ??
+      delivery.delivery_status.replace(/_/g, ' ')
+    : null
+  const trackingCode = delivery?.tracking_number || delivery?.awb_code || null
+  const carrierLabel =
+    delivery?.courier_service_name || delivery?.carrier_name || null
+  const trackingUrl = safeHttpUrl(delivery?.carrier_tracking_url)
+  const labelUrl = safeHttpUrl(delivery?.label_url)
+  const invoiceUrl = safeHttpUrl(delivery?.invoice_url)
+  const manifestUrl = safeHttpUrl(delivery?.manifest_url)
   const actions = useMemo(() => getVendorOrderActions(item.item_status, role), [item.item_status, role])
   const payment = payments[0] ?? null
+
+  async function openDoc(url: string, label: string) {
+    const opened = await openExternalUrl(url)
+    if (!opened) {
+      toast.show(`Could not open ${label}`, {
+        tone: 'danger',
+        message: 'Allow pop-ups for this site, or try again.',
+      })
+    }
+  }
   const openIssues = useMemo(
     () => issues.filter((issue) => isOpenIssueStatus(issue.status)),
     [issues],
@@ -354,29 +382,124 @@ function DrawerBody({
               ) : null}
             </YStack>
           </XStack>
-
-          {lines.length > 0 ? (
-            <XStack
-              gap="$2"
-              marginTop="$3"
-              padding="$3"
-              borderRadius={radius.chip}
-              backgroundColor={ui.roseSurface}
-            >
-              <Icons.MapPin size={16} color={ui.brand} />
-              <YStack flex={1} minWidth={0} gap={1}>
-                <Text fontSize={11} fontWeight="700" color={ui.textMuted} letterSpacing={0.2}>
-                  Shipping Address
-                </Text>
-                {lines.map((line, index) => (
-                  <Text key={`${line}-${index}`} fontSize={12.5} color={ui.textSecondary} lineHeight={18}>
-                    {line}
-                  </Text>
-                ))}
-              </YStack>
-            </XStack>
-          ) : null}
         </Section>
+
+        {/* Delivery */}
+        {delivery || lines.length > 0 ? (
+          <Section ui={ui} label="Delivery Details">
+            <YStack gap="$2.5">
+              {deliveryStatusLabel ? (
+                <SummaryRow ui={ui} label="Status" value={deliveryStatusLabel} />
+              ) : null}
+              {delivery?.delivery_mode ? (
+                <SummaryRow
+                  ui={ui}
+                  label="Mode"
+                  value={String(delivery.delivery_mode).replace(/_/g, ' ')}
+                />
+              ) : null}
+              {delivery?.estimated_delivery_date ? (
+                <SummaryRow
+                  ui={ui}
+                  label="Estimated"
+                  value={formatOrderDate(delivery.estimated_delivery_date)}
+                />
+              ) : null}
+              {carrierLabel ? <SummaryRow ui={ui} label="Carrier" value={carrierLabel} /> : null}
+              {trackingCode ? <SummaryRow ui={ui} label="Tracking" value={trackingCode} /> : null}
+              {delivery?.delivery_instructions ? (
+                <YStack gap={2}>
+                  <Text fontSize={12} color={ui.textMuted} fontWeight="700">
+                    Instructions
+                  </Text>
+                  <Text fontSize={12.5} color={ui.textSecondary}>
+                    {delivery.delivery_instructions}
+                  </Text>
+                </YStack>
+              ) : null}
+
+              {lines.length > 0 ? (
+                <XStack
+                  gap="$2"
+                  padding="$3"
+                  borderRadius={radius.chip}
+                  backgroundColor={ui.roseSurface}
+                >
+                  <Icons.MapPin size={16} color={ui.brand} />
+                  <YStack flex={1} minWidth={0} gap={1}>
+                    <Text fontSize={11} fontWeight="700" color={ui.textMuted} letterSpacing={0.2}>
+                      Ship to
+                      {address?.address_label ? ` · ${address.address_label}` : ''}
+                    </Text>
+                    {lines.map((line, index) => (
+                      <Text
+                        key={`${line}-${index}`}
+                        fontSize={12.5}
+                        color={ui.textSecondary}
+                        lineHeight={18}
+                      >
+                        {line}
+                      </Text>
+                    ))}
+                  </YStack>
+                </XStack>
+              ) : (
+                <Text fontSize={12.5} color={ui.textMuted}>
+                  Shipping address not available yet.
+                </Text>
+              )}
+
+              {trackingUrl || labelUrl || invoiceUrl || manifestUrl ? (
+                <XStack gap="$2" flexWrap="wrap">
+                  {trackingUrl ? (
+                    <Button
+                      tone="outline"
+                      size="$2"
+                      borderRadius={999}
+                      icon={<Icons.ExternalLink size={13} />}
+                      onPress={() => void openDoc(trackingUrl, 'tracking')}
+                    >
+                      Track shipment
+                    </Button>
+                  ) : null}
+                  {labelUrl ? (
+                    <Button
+                      tone="outline"
+                      size="$2"
+                      borderRadius={999}
+                      icon={<Icons.FileText size={13} />}
+                      onPress={() => void openDoc(labelUrl, 'shipping label')}
+                    >
+                      Label PDF
+                    </Button>
+                  ) : null}
+                  {invoiceUrl ? (
+                    <Button
+                      tone="outline"
+                      size="$2"
+                      borderRadius={999}
+                      icon={<Icons.FileText size={13} />}
+                      onPress={() => void openDoc(invoiceUrl, 'invoice')}
+                    >
+                      Carrier invoice
+                    </Button>
+                  ) : null}
+                  {manifestUrl ? (
+                    <Button
+                      tone="outline"
+                      size="$2"
+                      borderRadius={999}
+                      icon={<Icons.FileText size={13} />}
+                      onPress={() => void openDoc(manifestUrl, 'manifest')}
+                    >
+                      Manifest
+                    </Button>
+                  ) : null}
+                </XStack>
+              ) : null}
+            </YStack>
+          </Section>
+        ) : null}
 
         {/* Ordered item */}
         <Section ui={ui} label="Ordered Item">

@@ -71,6 +71,18 @@ export type OrderDeliverySummary = {
   delivery_address?: unknown
   delivery_status?: DeliveryStatus | null
   estimated_delivery_date?: string | null
+  actual_delivery_date?: string | null
+  delivery_mode?: string | null
+  carrier_name?: string | null
+  carrier_tracking_url?: string | null
+  courier_service_name?: string | null
+  awb_code?: string | null
+  label_url?: string | null
+  invoice_url?: string | null
+  manifest_url?: string | null
+  shipped_at?: string | null
+  delivered_at?: string | null
+  delivery_instructions?: string | null
 }
 
 /** The parent order fields joined onto an order item. */
@@ -110,8 +122,8 @@ export type VendorOrderItem = OrderItem & {
   /** Owning shop (joined via `shops!vendor_id`) — used for invoice headers. */
   shops?: OrderShopSummary | null
   order_delivery?: OrderDeliverySummary[] | OrderDeliverySummary | null
-  /** Derived: from `order_delivery[].delivery_address`. */
-  shipping_address?: unknown
+  /** Derived: delivery snapshot, else order.shipping_address. */
+  shipping_address?: OrderAddressSummary | null
   /** Derived: from `orders.billing_address`. */
   billing_address?: OrderAddressSummary | null
 }

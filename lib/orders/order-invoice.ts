@@ -16,6 +16,7 @@
 import { ORDER_DEFAULTS } from '~/lib/orders/order.constants'
 import { formatOrderAmount, formatOrderDate } from '~/lib/orders/order.utils'
 import type { OrderAddressSummary, VendorOrderItem } from '~/lib/orders/vendor-orders.type'
+import { resolveVendorShippingAddress } from '~/lib/orders/vendor-orders.utils'
 import {
   formatCustomerContactPhone,
 } from '~/features/auth/services/account-contact'
@@ -266,7 +267,7 @@ export function buildOrderInvoiceHtml(item: VendorOrderItem, options: OrderInvoi
   const orderNumber = order?.order_number ?? item.order_id ?? 'N/A'
   const orderDate = formatOrderDate(order?.created_at ?? item.created_at, true)
 
-  const address = item.billing_address ?? order?.billing_address ?? null
+  const address = resolveVendorShippingAddress(item)
   const shippingLines = addressLines(address)
 
   const subtotal = Number(order?.subtotal_amount ?? 0)
@@ -367,6 +368,39 @@ export function buildCustomerOrderInvoiceHtml(
 
 async function printOrShareHtml(html: string, dialogTitle: string): Promise<InvoiceResult> {
   if (typeof document !== 'undefined' && typeof window !== 'undefined') {
+    // Prefer a real tab: zero-size iframes behind high z-index drawers often fail
+    // to open the print dialog (especially Safari / popup blockers).
+    try {
+      const blob = new Blob([html], { type: 'text/html;charset=utf-8' })
+      const url = URL.createObjectURL(blob)
+      const win = window.open(url, '_blank', 'noopener,noreferrer')
+      if (win) {
+        const revoke = () => {
+          try {
+            URL.revokeObjectURL(url)
+          } catch {
+            /* ignore */
+          }
+        }
+        const triggerPrint = () => {
+          try {
+            win.focus()
+            win.print()
+          } catch {
+            /* user can still Save as PDF from the open tab */
+          } finally {
+            window.setTimeout(revoke, 60_000)
+          }
+        }
+        // Some browsers fire load before we attach; always schedule a print attempt.
+        window.setTimeout(triggerPrint, 400)
+        return { ok: true }
+      }
+      URL.revokeObjectURL(url)
+    } catch {
+      /* fall through to iframe path */
+    }
+
     const iframe = document.createElement('iframe')
     iframe.setAttribute('aria-hidden', 'true')
     Object.assign(iframe.style, {

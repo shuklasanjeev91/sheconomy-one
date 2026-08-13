@@ -83,8 +83,12 @@ type CheckoutPayuPanelProps = {
   onCancel: () => void
   /** Nest inside checkout accordion — no outer card chrome. */
   embedded?: boolean
+  /** Collapse online methods (e.g. COD selected) — no selection, accordion closed. */
+  collapsed?: boolean
   /** Fired when bank OTP / UPI QR auth UI opens or closes. */
   onAuthActiveChange?: (active: boolean) => void
+  /** Fired when the shopper interacts with online methods (switch back from COD). */
+  onSelectOnline?: () => void
   /**
    * When set, called before the first charge if the session has no order payment yet.
    * Used to place the order + initiate PayU when the shopper taps Pay.
@@ -110,7 +114,9 @@ export function CheckoutPayuPanel({
   onFailed,
   onCancel,
   embedded = false,
+  collapsed = false,
   onAuthActiveChange,
+  onSelectOnline,
   onEnsureSession,
 }: CheckoutPayuPanelProps) {
   const [mode, setMode] = useState<PayuPaymentModeId>(
@@ -418,6 +424,7 @@ export function CheckoutPayuPanel({
   }
 
   async function handlePay() {
+    onSelectOnline?.()
     if (disabledSections.has(pickerSectionForMode(mode))) {
       setError('This payment method is not available yet. Choose UPI or card.')
       return
@@ -713,32 +720,26 @@ export function CheckoutPayuPanel({
       opacity={authActive ? 0.45 : 1}
       pointerEvents={authActive ? 'none' : 'auto'}
     >
-      <YStack gap="$1">
-        <Text fontSize={18} fontWeight="800" color={ui.text}>
-          {intentUri && showQrForMode
-            ? 'Scan QR to pay'
-            : intentUri
-              ? `Pay with ${modeMeta.label}`
-              : authActive
-                ? 'Complete bank authentication →'
-                : showPicker
-                  ? 'Choose payment method'
-                  : `Pay with ${modeMeta.label}`}
-        </Text>
-        <Text fontSize={13} color={secondaryColor} lineHeight={18}>
-          {authActive
-            ? isDesktop
-              ? 'Your card details are locked while you finish OTP on the right.'
-              : 'Your card details are locked while you finish OTP below.'
-            : intentUri && showQrForMode
-              ? amountLabel
+      {(intentUri || authActive) && !collapsed ? (
+        <YStack gap="$1">
+          <Text fontSize={18} fontWeight="800" color={ui.text}>
+            {intentUri && showQrForMode
+              ? 'Scan QR to pay'
+              : intentUri
+                ? `Pay with ${modeMeta.label}`
+                : 'Complete bank authentication →'}
+          </Text>
+          <Text fontSize={13} color={secondaryColor} lineHeight={18}>
+            {authActive
+              ? isDesktop
+                ? 'Your card details are locked while you finish OTP on the right.'
+                : 'Your card details are locked while you finish OTP below.'
+              : amountLabel
                 ? `Open ${modeMeta.shortLabel} or any UPI app and scan to pay ${amountLabel}.`
-                : `Open ${modeMeta.shortLabel} or any UPI app and scan this QR to complete payment.`
-              : showPicker
-                ? 'Select UPI or enter card details — net banking and wallets are coming soon.'
-                : 'Complete payment securely via SHEPay.'}
-        </Text>
-      </YStack>
+                : `Open ${modeMeta.shortLabel} or any UPI app and scan this QR to complete payment.`}
+          </Text>
+        </YStack>
+      ) : null}
 
       {showPicker ? (
         <CheckoutPayuMethodPicker
@@ -748,8 +749,10 @@ export function CheckoutPayuPanel({
           secondaryColor={secondaryColor}
           textColor={ui.text}
           mode={mode}
+          collapsed={collapsed}
           onModeChange={(next) => {
             if (controlsLocked) return
+            onSelectOnline?.()
             setMode(next === 'all' ? 'upi_gpay' : next)
             setIntentUri(null)
             setAcsHtml(null)
@@ -794,7 +797,7 @@ export function CheckoutPayuPanel({
         </Text>
       ) : null}
 
-      {showPicker ? (
+      {showPicker && !collapsed ? (
         <XStack gap="$2" flexWrap="wrap">
           <Button
             flex={1}
@@ -811,7 +814,7 @@ export function CheckoutPayuPanel({
             Cancel
           </Button>
         </XStack>
-      ) : !error ? (
+      ) : !error && !collapsed ? (
         <Button
           tone="outline"
           borderRadius={999}
