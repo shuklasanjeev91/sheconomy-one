@@ -3,7 +3,8 @@ import type { NativeScrollEvent, NativeSyntheticEvent } from 'react-native'
 
 import type { Href } from 'one'
 import { AppLink } from '~/components/navigation/AppLink'
-import { Platform } from 'react-native'
+import { Animated, Platform, StyleSheet, useWindowDimensions } from 'react-native'
+import { LinearGradient } from 'expo-linear-gradient'
 
 import { BrandGradient, Button, Icons, Image, ScrollView, Text, XStack, YStack } from '~/components/ui'
 import { BRAND_NAME } from '~/config/brand'
@@ -12,9 +13,12 @@ import { commerceRoutes } from '~/lib/routes'
 import { useAppLayout } from '~/hooks/useAppLayout'
 import { useAppUi } from '~/lib/theme/useAppUi'
 import { motion } from '~/lib/theme/motion'
+import { feedback } from '~/lib/platform/feedback'
 import { useThemedShadowStyle } from '~/lib/theme/useThemedShadowStyle'
 import { radius } from '~/config/tokens'
 import type { gradients } from '~/config/tokens'
+
+const isWeb = Platform.OS === 'web'
 
 export type HomeHeroSlide = {
   id: keyof HomeHeroImageSet | 'sell'
@@ -32,6 +36,8 @@ type HomeHeroSliderProps = {
 }
 
 const AUTO_ADVANCE_MS = 7000
+/** After a swipe, let the slide the user landed on settle before auto-advance takes over again. */
+const RESUME_AFTER_TOUCH_MS = 4000
 const EMPTY_HERO_IMAGES: HomeHeroImageSet = {
   shops: [],
   physical: [],
@@ -108,16 +114,21 @@ export function buildHomeHeroSlides(
 export function HomeHeroSlider({ slides }: HomeHeroSliderProps) {
   const ui = useAppUi()
   const { isDesktop, isTablet, gutter } = useAppLayout()
+  const { width: windowWidth } = useWindowDimensions()
   const heroShadow = useThemedShadowStyle('lg')
   const [activeIndex, setActiveIndex] = useState(0)
   const [viewportWidth, setViewportWidth] = useState(0)
   const [paused, setPaused] = useState(false)
   const scrollRef = useRef<ScrollView>(null)
+  const resumeTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   // Phone: compact so hero doesn't eat half the viewport; tablet keeps former mobile size.
   const slideHeight = isDesktop ? 428 : isTablet ? 356 : 260
   const density: HeroDensity = isDesktop ? 'desktop' : isTablet ? 'tablet' : 'phone'
   const showNav = slides.length > 1
+  // Native runs the hero full-bleed, so the window is the correct width before
+  // onLayout lands. A percentage here would leave every slide mis-sized on first paint.
+  const slideWidth = viewportWidth || (isWeb ? '100%' : windowWidth)
 
   const goTo = useCallback(
     (index: number) => {
@@ -137,8 +148,37 @@ export function HomeHeroSlider({ slides }: HomeHeroSliderProps) {
     return () => clearInterval(timer)
   }, [activeIndex, goTo, paused, showNav, viewportWidth])
 
-  const pause = useCallback(() => setPaused(true), [])
-  const resume = useCallback(() => setPaused(false), [])
+  const clearResumeTimer = useCallback(() => {
+    if (resumeTimer.current) {
+      clearTimeout(resumeTimer.current)
+      resumeTimer.current = null
+    }
+  }, [])
+
+  const pause = useCallback(() => {
+    clearResumeTimer()
+    setPaused(true)
+  }, [clearResumeTimer])
+
+  const resume = useCallback(() => {
+    clearResumeTimer()
+    setPaused(false)
+  }, [clearResumeTimer])
+
+  const resumeAfterTouch = useCallback(() => {
+    clearResumeTimer()
+    resumeTimer.current = setTimeout(() => setPaused(false), RESUME_AFTER_TOUCH_MS)
+  }, [clearResumeTimer])
+
+  useEffect(() => clearResumeTimer, [clearResumeTimer])
+
+  const selectSlide = useCallback(
+    (index: number) => {
+      void feedback('selection')
+      goTo(index)
+    },
+    [goTo],
+  )
 
   if (slides.length === 0) return null
 
@@ -150,13 +190,22 @@ export function HomeHeroSlider({ slides }: HomeHeroSliderProps) {
     }
   }
 
+  function handleMomentumEnd(event: NativeSyntheticEvent<NativeScrollEvent>) {
+    if (!viewportWidth) return
+    const index = Math.round(event.nativeEvent.contentOffset.x / viewportWidth)
+    if (index !== activeIndex && index >= 0 && index < slides.length) {
+      void feedback('selection')
+      setActiveIndex(index)
+    }
+  }
+
   return (
     <YStack
       width="100%"
       paddingHorizontal={isDesktop ? gutter : 0}
-      onMouseEnter={Platform.OS === 'web' ? pause : undefined}
-      onMouseLeave={Platform.OS === 'web' ? resume : undefined}
-      {...(Platform.OS === 'web'
+      onMouseEnter={isWeb ? pause : undefined}
+      onMouseLeave={isWeb ? resume : undefined}
+      {...(isWeb
         ? {
             onKeyDown: (event: { key: string }) => {
               if (event.key === 'ArrowLeft') goTo(activeIndex - 1)
@@ -179,8 +228,8 @@ export function HomeHeroSlider({ slides }: HomeHeroSliderProps) {
         style={isDesktop ? heroShadow : undefined}
         onLayout={(event) => setViewportWidth(event.nativeEvent.layout.width)}
         onTouchStart={pause}
-        onTouchEnd={resume}
-        onTouchCancel={resume}
+        onTouchEnd={resumeAfterTouch}
+        onTouchCancel={resumeAfterTouch}
       >
         <ScrollView
           ref={scrollRef}
@@ -188,6 +237,9 @@ export function HomeHeroSlider({ slides }: HomeHeroSliderProps) {
           pagingEnabled
           showsHorizontalScrollIndicator={false}
           onScroll={handleScroll}
+          onMomentumScrollEnd={isWeb ? undefined : handleMomentumEnd}
+          decelerationRate="fast"
+          overScrollMode="never"
           scrollEventThrottle={16}
           width="100%"
           height={slideHeight}
@@ -196,7 +248,7 @@ export function HomeHeroSlider({ slides }: HomeHeroSliderProps) {
             <HeroSlidePanel
               key={slide.id}
               slide={slide}
-              width={viewportWidth || '100%'}
+              width={slideWidth}
               height={slideHeight}
               density={density}
               isActive={index === activeIndex}
@@ -217,7 +269,7 @@ export function HomeHeroSlider({ slides }: HomeHeroSliderProps) {
             <HeroPagination
               slides={slides}
               activeIndex={activeIndex}
-              onSelect={goTo}
+              onSelect={selectSlide}
               paused={paused}
               autoAdvanceMs={AUTO_ADVANCE_MS}
             />
@@ -247,24 +299,7 @@ function HeroSlidePanel({ slide, width, height, density, isActive, ui }: HeroSli
     <YStack width={width} height={height} position="relative" overflow="hidden">
       <HeroBackdrop slide={slide} isDesktop={isDesktop} />
 
-      <YStack
-        position="absolute"
-        top={0}
-        left={0}
-        right={0}
-        bottom={0}
-        zIndex={1}
-        pointerEvents="none"
-        {...(Platform.OS === 'web'
-          ? {
-              style: {
-                background: isDesktop
-                  ? 'linear-gradient(100deg, rgba(12, 6, 10, 0.88) 0%, rgba(12, 6, 10, 0.52) 42%, rgba(216, 27, 96, 0.22) 100%)'
-                  : 'linear-gradient(180deg, rgba(12, 6, 10, 0.55) 0%, rgba(12, 6, 10, 0.82) 55%, rgba(12, 6, 10, 0.92) 100%)',
-              },
-            }
-          : { backgroundColor: 'rgba(12, 6, 10, 0.72)' })}
-      />
+      <HeroScrim isDesktop={isDesktop} />
 
       <XStack
         flex={1}
@@ -351,6 +386,43 @@ function HeroSlidePanel({ slide, width, height, density, isActive, ui }: HeroSli
         {isDesktop ? <HeroThumbStrip images={slide.images} /> : null}
       </XStack>
     </YStack>
+  )
+}
+
+/**
+ * Darkens the photo enough for white text to stay legible. Native used to flat-fill
+ * a single dark wash here, which read as a grey blanket over the image; it now gets
+ * the same top-to-bottom falloff the web build has.
+ */
+function HeroScrim({ isDesktop }: { isDesktop: boolean }) {
+  if (isWeb) {
+    return (
+      <YStack
+        position="absolute"
+        top={0}
+        left={0}
+        right={0}
+        bottom={0}
+        zIndex={1}
+        pointerEvents="none"
+        style={{
+          background: isDesktop
+            ? 'linear-gradient(100deg, rgba(12, 6, 10, 0.88) 0%, rgba(12, 6, 10, 0.52) 42%, rgba(216, 27, 96, 0.22) 100%)'
+            : 'linear-gradient(180deg, rgba(12, 6, 10, 0.55) 0%, rgba(12, 6, 10, 0.82) 55%, rgba(12, 6, 10, 0.92) 100%)',
+        }}
+      />
+    )
+  }
+
+  return (
+    <LinearGradient
+      colors={['rgba(12, 6, 10, 0.30)', 'rgba(12, 6, 10, 0.72)', 'rgba(12, 6, 10, 0.94)']}
+      locations={[0, 0.52, 1]}
+      start={{ x: 0, y: 0 }}
+      end={{ x: 0, y: 1 }}
+      pointerEvents="none"
+      style={[StyleSheet.absoluteFillObject, styles.scrim]}
+    />
   )
 }
 
@@ -497,14 +569,24 @@ function HeroPagination({
       gap={12}
       pointerEvents="box-none"
       zIndex={3}
-      {...(Platform.OS === 'web'
+      {...(isWeb
         ? {
             style: {
               background: 'linear-gradient(180deg, transparent 0%, rgba(12, 6, 10, 0.55) 100%)',
             },
           }
-        : { backgroundColor: 'rgba(12, 6, 10, 0.35)' })}
+        : {})}
     >
+      {isWeb ? null : (
+        <LinearGradient
+          colors={['rgba(12, 6, 10, 0)', 'rgba(12, 6, 10, 0.55)']}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 0, y: 1 }}
+          pointerEvents="none"
+          style={StyleSheet.absoluteFillObject}
+        />
+      )}
+
       <XStack gap={8} alignItems="center" pointerEvents="auto">
         {slides.map((slide, index) => {
           const isActive = index === activeIndex
@@ -514,7 +596,9 @@ function HeroPagination({
               height={6}
               width={isActive ? 28 : 8}
               borderRadius={999}
-              backgroundColor={isActive ? 'white' : 'rgba(255,255,255,0.38)'}
+              // The active pill is a translucent track so the progress fill inside
+              // it is actually visible; it used to be white-on-white.
+              backgroundColor="rgba(255,255,255,0.38)"
               cursor="pointer"
               animation="quick"
               // 6px dots — grow the tap area into the bar's own padding.
@@ -524,19 +608,10 @@ function HeroPagination({
               aria-label={`Go to slide ${index + 1}`}
             >
               {isActive ? (
-                <YStack
-                  height="100%"
-                  width="100%"
-                  backgroundColor="white"
-                  {...(Platform.OS === 'web' && !paused
-                    ? {
-                        animation: 'none',
-                        style: {
-                          animation: `heroProgress ${autoAdvanceMs}ms linear forwards`,
-                          transformOrigin: 'left center',
-                        },
-                      }
-                    : {})}
+                <HeroDotProgress
+                  restartKey={activeIndex}
+                  paused={paused}
+                  autoAdvanceMs={autoAdvanceMs}
                 />
               ) : null}
             </YStack>
@@ -550,6 +625,88 @@ function HeroPagination({
     </XStack>
   )
 }
+
+function HeroDotProgress({
+  restartKey,
+  paused,
+  autoAdvanceMs,
+}: {
+  restartKey: number
+  paused: boolean
+  autoAdvanceMs: number
+}) {
+  if (isWeb) {
+    return (
+      <YStack
+        height="100%"
+        width="100%"
+        backgroundColor="white"
+        {...(paused
+          ? {}
+          : {
+              animation: 'none',
+              style: {
+                animation: `heroProgress ${autoAdvanceMs}ms linear forwards`,
+                transformOrigin: 'left center',
+              },
+            })}
+      />
+    )
+  }
+
+  return (
+    <HeroDotProgressNative
+      restartKey={restartKey}
+      paused={paused}
+      autoAdvanceMs={autoAdvanceMs}
+    />
+  )
+}
+
+function HeroDotProgressNative({
+  restartKey,
+  paused,
+  autoAdvanceMs,
+}: {
+  restartKey: number
+  paused: boolean
+  autoAdvanceMs: number
+}) {
+  const progress = useRef(new Animated.Value(0)).current
+
+  useEffect(() => {
+    // The auto-advance interval restarts from zero whenever it unpauses, so the
+    // fill has to restart with it rather than resume from where it stopped.
+    if (paused) {
+      progress.setValue(1)
+      return
+    }
+
+    progress.setValue(0)
+    const animation = Animated.timing(progress, {
+      toValue: 1,
+      duration: autoAdvanceMs,
+      useNativeDriver: false,
+    })
+    animation.start()
+
+    return () => animation.stop()
+  }, [autoAdvanceMs, paused, progress, restartKey])
+
+  return (
+    <Animated.View
+      style={[
+        styles.dotFill,
+        { width: progress.interpolate({ inputRange: [0, 1], outputRange: ['0%', '100%'] }) },
+      ]}
+    />
+  )
+}
+
+const styles = StyleSheet.create({
+  scrim: { zIndex: 1 },
+  dotFill: { height: '100%', backgroundColor: 'white' },
+})
 
 function formatCount(value: number) {
   return new Intl.NumberFormat('en-IN').format(value)
