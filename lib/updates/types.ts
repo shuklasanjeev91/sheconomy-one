@@ -29,6 +29,15 @@ export type UpdateMetadata = {
   reloadGuardCount: number
 }
 
+/** Which JS bundle is actually running — the store binary's or an OTA. */
+export type BundleInfo = {
+  source: 'embedded' | 'ota' | 'unknown'
+  updateId: string | null
+  createdAt: Date | null
+  channel: string | null
+  runtimeVersion: string | null
+}
+
 export type UpdateCheckResult =
   | { kind: 'skipped'; reason: string }
   | { kind: 'upToDate' }

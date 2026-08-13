@@ -1,4 +1,4 @@
-import { Platform } from 'react-native'
+import { Platform, useWindowDimensions } from 'react-native'
 
 import { BRAND_BLUE } from '~/community/lib/constants'
 import { AppLink } from '~/components/navigation/AppLink'
@@ -7,9 +7,11 @@ import { Icons, ListItem, Separator, Text, XStack, YStack, useAppToast } from '~
 import { SurfaceCard } from '~/components/layout'
 import { SettingsPanel } from '~/components/settings/SettingsPanel'
 import { radius } from '~/config/tokens'
+import { useAppLayout } from '~/hooks/useAppLayout'
 import { resetAppOnboardingSeen } from '~/lib/onboarding/first-launch'
 import { routes } from '~/lib/routes'
 import { useAppUi } from '~/lib/theme/useAppUi'
+import { getBundleInfo } from '~/lib/updates/bundle-info'
 import {
   getAppDisplayName,
   getNativeAppVersion,
@@ -17,11 +19,33 @@ import {
 } from '~/lib/updates/native-app-version'
 import { useAiAssistOptional } from '~/providers/AiAssistProvider'
 
+/** Short id — full update ids are unreadable on a settings row. */
+function shortId(id: string | null) {
+  return id ? id.slice(0, 8) : null
+}
+
+function bundleSubtitle() {
+  const { source, updateId, createdAt, channel, runtimeVersion } = getBundleInfo()
+  const runtime = runtimeVersion ? `runtime ${runtimeVersion}` : null
+  const parts = [channel, runtime].filter(Boolean).join(' · ')
+
+  if (source === 'embedded') {
+    return `Store build bundle — no update applied yet${parts ? ` · ${parts}` : ''}`
+  }
+  if (source === 'ota') {
+    const published = createdAt ? createdAt.toLocaleString() : 'unknown date'
+    return `Update ${shortId(updateId)} · ${published}${parts ? ` · ${parts}` : ''}`
+  }
+  return parts || 'Unavailable'
+}
+
 export function AboutSettingsPanel() {
   const ui = useAppUi()
   const toast = useAppToast()
   const ai = useAiAssistOptional()
   const { canInstall, isInstalled, promptInstall } = usePwaInstall()
+  const { width, height } = useWindowDimensions()
+  const { hasSideRails, hasDualSideRails } = useAppLayout()
   const appName = getAppDisplayName()
   const version = getNativeAppVersion()
   const build = getNativeBuildNumber()
@@ -29,6 +53,11 @@ export function AboutSettingsPanel() {
     Platform.OS === 'android'
       ? `${appName} · versionName ${version} · versionCode ${build}`
       : `${appName} · Version ${version} · Build ${build}`
+  const layoutTier = hasDualSideRails
+    ? 'wide layout — both side rails'
+    : hasSideRails
+      ? 'rail layout — one side rail'
+      : 'compact layout — no side rails'
 
   return (
     <SettingsPanel title="About" description="Help, AI assist, and app version">
@@ -154,6 +183,22 @@ export function AboutSettingsPanel() {
           title="Version"
           subTitle={versionSubtitle}
         />
+        {Platform.OS !== 'web' ? (
+          <>
+            <Separator />
+            <ListItem
+              icon={<Icons.Download size={18} color={BRAND_BLUE} />}
+              title="Running bundle"
+              subTitle={bundleSubtitle()}
+            />
+            <Separator />
+            <ListItem
+              icon={<Icons.Monitor size={18} color={BRAND_BLUE} />}
+              title="Screen"
+              subTitle={`${Math.round(width)} × ${Math.round(height)} pt · ${layoutTier}`}
+            />
+          </>
+        ) : null}
       </SurfaceCard>
     </SettingsPanel>
   )

@@ -32,14 +32,14 @@ export function StickyRail({
   if (pin === 'viewport' && Platform.OS !== 'web') {
     // Native tablets: the page doesn't scroll around the rail, so the rail
     // scrolls itself — otherwise its lower nav items are unreachable in landscape.
+    // Stretch to the row height instead of `height: '100%'`, which collapses to
+    // zero when an ancestor height is not definite.
     const { gap, ...rest } = props
 
     return (
       <YStack
         flexShrink={0}
         alignSelf="stretch"
-        height="100%"
-        maxHeight="100%"
         minHeight={0}
         style={style as object}
         {...rest}

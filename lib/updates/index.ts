@@ -5,6 +5,7 @@ export {
   UPDATE_CHECK_STARTUP_DELAY_MS,
   UPDATE_METADATA_STORAGE_KEY,
 } from '~/lib/updates/constants'
+export { getBundleInfo } from '~/lib/updates/bundle-info'
 export { logUpdate } from '~/lib/updates/logging'
 export {
   EMPTY_UPDATE_METADATA,
@@ -25,6 +26,7 @@ export {
   getUpdateConfigUrl,
 } from '~/lib/updates/remote-config'
 export type {
+  BundleInfo,
   ExpoUpdatesLike,
   RemoteUpdateConfig,
   UpdateCheckResult,
