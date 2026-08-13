@@ -122,8 +122,9 @@ export function HomeHeroSlider({ slides }: HomeHeroSliderProps) {
   const scrollRef = useRef<ScrollView>(null)
   const resumeTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
 
-  // Phone: compact so hero doesn't eat half the viewport; tablet keeps former mobile size.
-  const slideHeight = isDesktop ? 428 : isTablet ? 356 : 260
+  // Phone gets extra height so the copy can bottom-align over the dark part of the
+  // gradient (the native treatment) without colliding with the pagination bar.
+  const slideHeight = isDesktop ? 428 : isTablet ? 380 : 340
   const density: HeroDensity = isDesktop ? 'desktop' : isTablet ? 'tablet' : 'phone'
   const showNav = slides.length > 1
   // Native runs the hero full-bleed, so the window is the correct width before
@@ -305,11 +306,13 @@ function HeroSlidePanel({ slide, width, height, density, isActive, ui }: HeroSli
         flex={1}
         width="100%"
         height="100%"
-        alignItems="center"
+        // Desktop keeps the copy centered next to the thumb strip; phone/tablet
+        // sit it at the bottom over the darkest band of the scrim.
+        alignItems={isDesktop ? 'center' : 'flex-end'}
         justifyContent="space-between"
-        paddingHorizontal={isDesktop ? 48 : isPhone ? 16 : 22}
+        paddingHorizontal={isDesktop ? 48 : isPhone ? 20 : 26}
         paddingVertical={isDesktop ? 40 : isPhone ? 18 : 28}
-        paddingBottom={isDesktop ? 52 : isPhone ? 36 : 44}
+        paddingBottom={isDesktop ? 52 : isPhone ? 48 : 52}
         gap={isDesktop ? 32 : 0}
         zIndex={2}
       >
@@ -317,7 +320,7 @@ function HeroSlidePanel({ slide, width, height, density, isActive, ui }: HeroSli
           flex={1}
           gap={isDesktop ? '$4' : isPhone ? '$2' : '$3'}
           maxWidth={isDesktop ? 520 : 720}
-          justifyContent="center"
+          justifyContent={isDesktop ? 'center' : 'flex-end'}
           {...motion.fadeUp}
           opacity={isActive ? 1 : 0.92}
         >
