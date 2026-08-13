@@ -91,18 +91,22 @@ export function AppBottomSheet({
   onScroll,
 }: AppBottomSheetProps) {
   const ui = useAppUi()
-  const { safeTop } = useAppLayout()
+  const { safeTop, safeBottom } = useAppLayout()
   const { height: windowHeight } = useWindowDimensions()
   const nativeFullscreen = isNativeFullscreenOverlay
 
   const maxSheetHeight = useMemo(() => windowHeight, [windowHeight])
+
+  // Android draws edge-to-edge, so the sheet paints behind the navigation bar.
+  const bottomInset = nativeFullscreen ? safeBottom : 0
 
   // Space taken by the handle/header/footer that sits outside the scroll body.
   const chromeHeight =
     (showHandle ? HANDLE_CHROME : 0) +
     HEADER_CHROME +
     (footer ? FOOTER_CHROME : 0) +
-    (nativeFullscreen ? safeTop : 0)
+    (nativeFullscreen ? safeTop : 0) +
+    bottomInset
 
   function close() {
     onOpenChange(false)
@@ -174,7 +178,8 @@ export function AppBottomSheet({
                 keyboardShouldPersistTaps="handled"
                 onScroll={onScroll}
                 scrollEventThrottle={16}
-                contentContainerStyle={{ paddingBottom: 0, flexGrow: 1 }}
+                // Without a footer the body itself has to clear the nav bar.
+                contentContainerStyle={{ paddingBottom: footer ? 0 : bottomInset, flexGrow: 1 }}
                 {...(Platform.OS === 'web'
                   ? {
                       maxHeight: `calc(100vh - ${chromeHeight}px)` as unknown as number,
@@ -184,7 +189,7 @@ export function AppBottomSheet({
                 {body}
               </Sheet.ScrollView>
             ) : (
-              <YStack flex={1} width="100%" paddingBottom={0}>
+              <YStack flex={1} width="100%" paddingBottom={footer ? 0 : bottomInset}>
                 {body}
               </YStack>
             )}
@@ -194,7 +199,8 @@ export function AppBottomSheet({
                 width="100%"
                 paddingHorizontal="$4"
                 paddingTop="$3"
-                paddingBottom="$3"
+                // 13 matches the `$3` space token, so no-inset platforms are unchanged.
+                paddingBottom={13 + bottomInset}
                 marginBottom={0}
                 borderTopWidth={1}
                 borderTopColor={ui.borderSubtle}
