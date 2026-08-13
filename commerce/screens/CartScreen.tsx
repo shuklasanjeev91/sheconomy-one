@@ -76,6 +76,7 @@ export function CartScreen() {
   const { favoriteIds, isFavorite, toggleFavorite } = useFavorites()
   const toast = useAppToast()
   const { formatMoney, convertMoney, preferredCurrency } = useFormatCurrency()
+  const [checkoutBarHeight, setCheckoutBarHeight] = useState(COMMERCE_MOBILE_CHECKOUT_BAR_HEIGHT)
   const [listingSlugs, setListingSlugs] = useState<Map<string, string>>(new Map())
   const [listingTypes, setListingTypes] = useState<Map<string, string>>(new Map())
   const [listingStock, setListingStock] = useState<Map<string, number | null>>(new Map())
@@ -689,7 +690,7 @@ export function CartScreen() {
           backgroundColor={c.page}
           padding={isDesktop ? '$4' : '$2'}
           borderRadius={12}
-          paddingBottom={showMobileBar ? COMMERCE_MOBILE_CHECKOUT_BAR_HEIGHT + 24 : undefined}
+          paddingBottom={showMobileBar ? checkoutBarHeight + 24 : undefined}
         >
           {items.length === 0 ? (
             <YStack gap="$4" width="100%">
@@ -795,6 +796,7 @@ export function CartScreen() {
         label="Proceed to buy"
         disabled={checkoutBlocked}
         onPress={goToCheckout}
+        onHeightChange={setCheckoutBarHeight}
       />
     </YStack>
   )

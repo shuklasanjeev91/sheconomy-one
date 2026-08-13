@@ -112,6 +112,7 @@ export function CheckoutScreen() {
   const { items, hasChecked } = useStorefrontCartItems(cartItems)
   const toast = useAppToast()
 
+  const [checkoutBarHeight, setCheckoutBarHeight] = useState(COMMERCE_MOBILE_CHECKOUT_BAR_HEIGHT)
   const [addresses, setAddresses] = useState<UserAddress[]>([])
   const [recentAddresses, setRecentAddresses] = useState<RecentAddressSnapshot[]>([])
   const [selectedAddressId, setSelectedAddressId] = useState<string | null>(null)
@@ -1274,9 +1275,7 @@ export function CheckoutScreen() {
           backgroundColor={c.page}
           padding={isDesktop ? '$4' : '$2'}
           borderRadius={12}
-          paddingBottom={
-            showMobileBar ? COMMERCE_MOBILE_CHECKOUT_BAR_HEIGHT + 24 : undefined
-          }
+          paddingBottom={showMobileBar ? checkoutBarHeight + 24 : undefined}
         >
           <XStack alignItems="center" gap="$2" paddingHorizontal="$1">
             <Icons.Lock size={16} color={c.brand} />
@@ -1787,6 +1786,7 @@ export function CheckoutScreen() {
         disabled={!canPlace}
         isLoading={isSubmitting || isRedirectingToPayment}
         onPress={handlePlaceOrderPress}
+        onHeightChange={setCheckoutBarHeight}
       />
     </YStack>
   )
