@@ -93,6 +93,7 @@ export function ShopFiltersBar({ filters, countries, resultCount, onChange }: Sh
             backgroundColor={ui.surface}
             cursor="pointer"
             hoverStyle={{ backgroundColor: ui.surfaceMuted }}
+            pressStyle={{ backgroundColor: ui.surfaceMuted, opacity: 0.85 }}
             onPress={() => setSortOpen(true)}
           >
             <Text flex={1} fontSize={14} color={ui.text} numberOfLines={1}>
@@ -124,6 +125,7 @@ export function ShopFiltersBar({ filters, countries, resultCount, onChange }: Sh
             backgroundColor={ui.surface}
             cursor="pointer"
             hoverStyle={{ backgroundColor: ui.surfaceMuted }}
+            pressStyle={{ backgroundColor: ui.surfaceMuted, opacity: 0.85 }}
             onPress={() => setCountryOpen(true)}
           >
             <Text flex={1} fontSize={14} color={ui.text} numberOfLines={1}>

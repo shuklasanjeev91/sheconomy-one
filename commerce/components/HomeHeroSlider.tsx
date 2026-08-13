@@ -517,6 +517,8 @@ function HeroPagination({
               backgroundColor={isActive ? 'white' : 'rgba(255,255,255,0.38)'}
               cursor="pointer"
               animation="quick"
+              // 6px dots — grow the tap area into the bar's own padding.
+              hitSlop={{ top: 12, bottom: 12, left: 4, right: 4 }}
               onPress={() => onSelect(index)}
               overflow="hidden"
               aria-label={`Go to slide ${index + 1}`}
