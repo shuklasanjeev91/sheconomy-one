@@ -184,7 +184,8 @@ export class AppErrorBoundary extends Component<Props, State> {
       return
     }
 
-    const supportRef = this.state.supportRef ?? buildSupportRef(this.props.scope)
+    // Prefer the boundary scope over the generic APP stamp from getDerivedStateFromError.
+    const supportRef = buildSupportRef(this.props.scope)
     if (supportRef !== this.state.supportRef) {
       this.setState({ supportRef })
     }

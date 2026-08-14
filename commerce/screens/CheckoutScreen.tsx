@@ -1227,7 +1227,7 @@ export function CheckoutScreen() {
       />
       {discount > 0 ? (
         <SummaryRow
-          label={`Promotion${cart.applied_discount_name ? ` (${cart.applied_discount_name})` : ''}`}
+          label={`Promotion${cart?.applied_discount_name ? ` (${cart.applied_discount_name})` : ''}`}
           value={`−${formatCheckoutMoney(displayTotals.promotion)}`}
           valueColor={c.inStock}
         />
