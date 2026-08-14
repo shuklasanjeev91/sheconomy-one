@@ -6,6 +6,7 @@ import type { ReactNode } from 'react'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
 import {
+  Button,
   Field,
   Icons,
   Image,
@@ -27,7 +28,6 @@ import {
   CartCoupon,
   CheckoutContactSection,
   CommerceButton,
-  CommerceLink,
   CommerceMobileCheckoutBar,
   COMMERCE_MOBILE_CHECKOUT_BAR_HEIGHT,
   CommerceRadio,
@@ -39,12 +39,19 @@ import {
   checkCartStock,
   cancelCheckoutPayment,
   createAtomicMarketplaceCheckout,
-  fetchUserAddresses,
-  saveUserAddress,
-  type CheckoutAddressInput,
   type CheckoutPaymentMode,
-  type UserAddress,
 } from '~/commerce/lib/checkout'
+import { AddressFormDrawer } from '~/commerce/components/address/AddressFormDrawer'
+import {
+  createAddress,
+  loadAddresses,
+  selectAddress as setSelectedAddress,
+  selectAddresses,
+  selectAddressSaving,
+  selectSelectedAddressId,
+} from '~/lib/address/address.store'
+import type { AddressFormData } from '~/lib/address/address.type'
+import { useAppDispatch, useAppSelector } from '~/lib/store/hooks'
 import { createShepayPayuSession } from '~/commerce/lib/shepay'
 import { platformPayuService } from '~/lib/platform-payu'
 import {
@@ -70,27 +77,16 @@ import {
   shopCurrencyFor,
 } from '~/commerce/lib/checkout-display-pricing'
 import { useFormatCurrency } from '~/hooks/useFormatCurrency'
-import { useFormValidation } from '~/hooks/useFormValidation'
 import { useProfile } from '~/hooks/useProfile'
 import { openExternalUrl } from '~/lib/platform/openUrl'
 import { commerceRoutes } from '~/lib/routes'
 import { buildSignInUrl } from '~/lib/auth/redirect'
-import { createEmptyAddressInput } from '~/commerce/components/AddressForm'
-import { validateAddressInput } from '~/commerce/lib/addresses'
-import { LocationFields, addressGeoFromInput, patchAddressFromGeo } from '~/components/geo'
-import {
-  AddressAutocompleteField,
-  DeliveryPinCheck,
-  LocationAssistActions,
-} from '~/components/location'
+import { DeliveryPinCheck } from '~/components/location'
 import {
   readRecentAddresses,
   rememberRecentAddress,
-  resolvedAddressToFormPatch,
   type RecentAddressSnapshot,
-  type ResolvedAddress,
 } from '~/lib/location'
-import { maxLength, minLength, required } from '~/lib/validation'
 import { useAppLayout } from '~/hooks/useAppLayout'
 import { useAppUi } from '~/lib/theme/useAppUi'
 import { resolveAuthContact } from '~/features/auth/services/account-contact'
@@ -105,28 +101,21 @@ type CheckoutOnlineProvider = 'shepay' | 'platform_payu'
 export function CheckoutScreen() {
   const c = useCommercePalette()
   const ui = useAppUi()
-  const { hasSideRails } = useAppLayout()
+  const { hasSideRails, isDesktop } = useAppLayout()
   const { user, isAuthenticated } = useProfile()
   const { formatMoney, convertMoney, preferredCurrency } = useFormatCurrency()
   const { cart, items: cartItems, isLoading, refresh, error: cartError } = useCart()
   const { items, hasChecked } = useStorefrontCartItems(cartItems)
   const toast = useAppToast()
+  const dispatch = useAppDispatch()
+
+  const addresses = useAppSelector(selectAddresses)
+  const selectedAddressId = useAppSelector(selectSelectedAddressId)
+  const addressSaving = useAppSelector(selectAddressSaving)
 
   const [checkoutBarHeight, setCheckoutBarHeight] = useState(COMMERCE_MOBILE_CHECKOUT_BAR_HEIGHT)
-  const [addresses, setAddresses] = useState<UserAddress[]>([])
   const [recentAddresses, setRecentAddresses] = useState<RecentAddressSnapshot[]>([])
-  const [selectedAddressId, setSelectedAddressId] = useState<string | null>(null)
-  const [useNewAddress, setUseNewAddress] = useState(false)
-  const [newAddress, setNewAddress] = useState<CheckoutAddressInput>(() => createEmptyAddressInput())
-  const addressForm = useFormValidation(
-    useMemo(
-      () => ({
-        address_line_1: { validators: [required('Address line 1 is required.'), minLength(3)] },
-        address_line_2: { validators: [maxLength(120)] },
-      }),
-      [],
-    ),
-  )
+  const [addressFormOpen, setAddressFormOpen] = useState(false)
   const [notesByShop, setNotesByShop] = useState<Record<string, string>>({})
   const [giftByShop, setGiftByShop] = useState<Record<string, boolean>>({})
   const [paymentMethod, setPaymentMethod] = useState<CheckoutPaymentMode>('online')
@@ -247,41 +236,21 @@ export function CheckoutScreen() {
     selectedItems.map((item) => item.listing_id),
   )
 
-  const checkoutAddressDraft = useMemo(
-    (): CheckoutAddressInput => ({
-      ...newAddress,
-      address_line_1: addressForm.fields.address_line_1.value.trim(),
-      address_line_2: addressForm.fields.address_line_2.value.trim(),
-    }),
-    [
-      addressForm.fields.address_line_1.value,
-      addressForm.fields.address_line_2.value,
-      newAddress,
-    ],
-  )
-
   const addressReady = useMemo(() => {
     if (!needsShipping) return true
-    if (useNewAddress) return !validateAddressInput(checkoutAddressDraft)
-    return Boolean(selectedAddressId)
-  }, [checkoutAddressDraft, needsShipping, selectedAddressId, useNewAddress])
+    if (!selectedAddressId || selectedAddressId.startsWith('temp-')) return false
+    return true
+  }, [needsShipping, selectedAddressId])
 
   const addressRequirementMessage = useMemo(() => {
     if (!needsShipping || addressReady) return null
-    if (!useNewAddress) {
-      return addresses.length > 0
-        ? 'Select a delivery address to continue.'
-        : 'Add a delivery address to continue.'
+    if (selectedAddressId?.startsWith('temp-') || addressSaving) {
+      return 'Saving your address…'
     }
-    if (
-      addresses.length === 0 &&
-      !checkoutAddressDraft.address_line_1.trim() &&
-      !checkoutAddressDraft.city.trim()
-    ) {
-      return 'Add a delivery address to continue.'
-    }
-    return validateAddressInput(checkoutAddressDraft) ?? 'Add a delivery address to continue.'
-  }, [addressReady, addresses.length, checkoutAddressDraft, needsShipping, useNewAddress])
+    return addresses.length > 0
+      ? 'Select a delivery address to continue.'
+      : 'Add a delivery address to continue.'
+  }, [addressReady, addressSaving, addresses.length, needsShipping, selectedAddressId])
 
   const deliveryAddressNotice = addressError ?? addressRequirementMessage
 
@@ -291,16 +260,12 @@ export function CheckoutScreen() {
 
   useEffect(() => {
     setAddressError(null)
-  }, [
-    checkoutAddressDraft.address_line_1,
-    checkoutAddressDraft.address_line_2,
-    checkoutAddressDraft.city,
-    checkoutAddressDraft.state,
-    checkoutAddressDraft.postal_code,
-    checkoutAddressDraft.country,
-    selectedAddressId,
-    useNewAddress,
-  ])
+  }, [selectedAddressId])
+
+  const selectedDeliveryAddress = useMemo(
+    () => addresses.find((row) => row.id === selectedAddressId) ?? null,
+    [addresses, selectedAddressId],
+  )
 
   const shippingQuote = useMemo(
     () =>
@@ -420,7 +385,6 @@ export function CheckoutScreen() {
       return
     }
     if (!userId) {
-      // Profile still hydrating — keep the gate until we have an id, but never forever.
       setIsLoadingAddresses(true)
       const hydrateTimeout = setTimeout(() => setIsLoadingAddresses(false), 8_000)
       return () => clearTimeout(hydrateTimeout)
@@ -433,18 +397,16 @@ export function CheckoutScreen() {
       setIsLoadingAddresses(false)
       toast.show('Could not load addresses', {
         tone: 'danger',
-        message: 'Taking too long. You can still enter a new address.',
+        message: 'Taking too long. You can still add a delivery address.',
       })
     }, 12_000)
 
-    fetchUserAddresses(userId)
-      .then(({ addresses: rows, error }) => {
+    void dispatch(loadAddresses({ forceRefresh: true }))
+      .unwrap()
+      .then((rows) => {
         if (cancelled) return
-        setAddresses(rows)
-        const defaultAddress = rows.find((row) => row.is_default) ?? rows[0]
-        setSelectedAddressId(defaultAddress?.id ?? null)
-        setUseNewAddress(rows.length === 0)
-        if (error) toast.show('Could not load addresses', { tone: 'danger', message: error })
+        const preferred = rows.find((row) => row.is_default) ?? rows[0]
+        dispatch(setSelectedAddress(preferred?.id ?? null))
       })
       .catch(() => {
         if (cancelled) return
@@ -459,7 +421,36 @@ export function CheckoutScreen() {
       cancelled = true
       clearTimeout(fetchTimeout)
     }
-  }, [isAuthenticated, toast, userId])
+  }, [dispatch, isAuthenticated, toast, userId])
+
+  async function handleSaveCheckoutAddress(formData: AddressFormData) {
+    setAddressError(null)
+    const input: AddressFormData = {
+      ...formData,
+      // First checkout address becomes the selected default automatically.
+      is_default: addresses.length === 0 ? true : formData.is_default,
+      address_type: formData.address_type || 'shipping',
+    }
+    // Dispatch first so createAddress.pending inserts the optimistic row and
+    // selects it before the drawer closes — the list updates immediately.
+    const save = dispatch(createAddress({ input, userId: userId ?? undefined }))
+    setAddressFormOpen(false)
+    try {
+      const address = await save.unwrap()
+      dispatch(setSelectedAddress(address.id))
+      toast.show('Address added', {
+        tone: 'success',
+        message: 'Your delivery address is ready.',
+      })
+      void rememberRecentAddress(address as never).then(setRecentAddresses)
+    } catch (message) {
+      setAddressFormOpen(true)
+      toast.show('Could not add address', {
+        tone: 'danger',
+        message: String(message),
+      })
+    }
+  }
 
   if (!isAuthenticated) {
     return <SpaRedirect href={buildSignInUrl(String(commerceRoutes.checkout))} />
@@ -600,26 +591,7 @@ export function CheckoutScreen() {
       }
 
       if (needsShipping) {
-        if (useNewAddress) {
-          if (!addressForm.validateAll()) return null
-          const draftAddress: CheckoutAddressInput = {
-            ...newAddress,
-            address_line_1: addressForm.fields.address_line_1.value.trim(),
-            address_line_2: addressForm.fields.address_line_2.value.trim(),
-          }
-          const addressValidationError = validateAddressInput(draftAddress)
-          if (addressValidationError) {
-            toast.show('Check your address', { tone: 'danger', message: addressValidationError })
-            return null
-          }
-          const { address, error } = await saveUserAddress(user.id, draftAddress)
-          if (error || !address) {
-            toast.show('Could not save address', { tone: 'danger', message: error ?? undefined })
-            return null
-          }
-          shippingAddressId = address.id
-        }
-        if (!shippingAddressId) {
+        if (!shippingAddressId || shippingAddressId.startsWith('temp-')) {
           toast.show('Select a delivery address', { tone: 'danger' })
           return null
         }
@@ -627,7 +599,7 @@ export function CheckoutScreen() {
         shippingAddressId = addresses[0].id
       }
 
-      if (!shippingAddressId) {
+      if (!shippingAddressId || shippingAddressId.startsWith('temp-')) {
         toast.show('Add an address for your order records', { tone: 'danger' })
         return null
       }
@@ -728,19 +700,7 @@ export function CheckoutScreen() {
         return null
       }
 
-      const usedAddressEarly =
-        addresses.find((row) => row.id === shippingAddressId) ??
-        (useNewAddress
-          ? ({
-              address_line_1: newAddress.address_line_1,
-              address_line_2: newAddress.address_line_2,
-              city: newAddress.city,
-              state: newAddress.state,
-              postal_code: newAddress.postal_code,
-              country: newAddress.country,
-              address_label: newAddress.address_label,
-            } as RecentAddressSnapshot)
-          : null)
+      const usedAddressEarly = addresses.find((row) => row.id === shippingAddressId) ?? null
       if (usedAddressEarly) {
         void rememberRecentAddress(usedAddressEarly as never).then(setRecentAddresses)
       }
@@ -830,28 +790,7 @@ export function CheckoutScreen() {
       }
 
       if (needsShipping) {
-        if (useNewAddress) {
-          if (!addressForm.validateAll()) {
-            return
-          }
-          const draftAddress: CheckoutAddressInput = {
-            ...newAddress,
-            address_line_1: addressForm.fields.address_line_1.value.trim(),
-            address_line_2: addressForm.fields.address_line_2.value.trim(),
-          }
-          const addressValidationError = validateAddressInput(draftAddress)
-          if (addressValidationError) {
-            toast.show('Check your address', { tone: 'danger', message: addressValidationError })
-            return
-          }
-          const { address, error } = await saveUserAddress(user.id, draftAddress)
-          if (error || !address) {
-            toast.show('Could not save address', { tone: 'danger', message: error ?? undefined })
-            return
-          }
-          shippingAddressId = address.id
-        }
-        if (!shippingAddressId) {
+        if (!shippingAddressId || shippingAddressId.startsWith('temp-')) {
           toast.show('Select a delivery address', { tone: 'danger' })
           return
         }
@@ -859,7 +798,7 @@ export function CheckoutScreen() {
         shippingAddressId = addresses[0].id
       }
 
-      if (!shippingAddressId) {
+      if (!shippingAddressId || shippingAddressId.startsWith('temp-')) {
         toast.show('Add an address for your order records', { tone: 'danger' })
         return
       }
@@ -948,19 +887,7 @@ export function CheckoutScreen() {
           return
         }
 
-        const usedAddressEarly =
-          addresses.find((row) => row.id === shippingAddressId) ??
-          (useNewAddress
-            ? ({
-                address_line_1: newAddress.address_line_1,
-                address_line_2: newAddress.address_line_2,
-                city: newAddress.city,
-                state: newAddress.state,
-                postal_code: newAddress.postal_code,
-                country: newAddress.country,
-                address_label: newAddress.address_label,
-              } as RecentAddressSnapshot)
-            : null)
+        const usedAddressEarly = addresses.find((row) => row.id === shippingAddressId) ?? null
         if (usedAddressEarly) {
           void rememberRecentAddress(usedAddressEarly as never).then(setRecentAddresses)
         }
@@ -989,19 +916,7 @@ export function CheckoutScreen() {
         return
       }
 
-      const usedAddress =
-        addresses.find((row) => row.id === shippingAddressId) ??
-        (useNewAddress
-          ? ({
-              address_line_1: newAddress.address_line_1,
-              address_line_2: newAddress.address_line_2,
-              city: newAddress.city,
-              state: newAddress.state,
-              postal_code: newAddress.postal_code,
-              country: newAddress.country,
-              address_label: newAddress.address_label,
-            } as RecentAddressSnapshot)
-          : null)
+      const usedAddress = addresses.find((row) => row.id === shippingAddressId) ?? null
       if (usedAddress) {
         void rememberRecentAddress(usedAddress as never).then(setRecentAddresses)
       }
@@ -1304,229 +1219,133 @@ export function CheckoutScreen() {
               {needsShipping ? (
                 <SectionCard step={2} title="Delivery address">
                   {addresses.length === 0 ? (
-                    <XStack alignItems="center" gap="$2">
-                      <Icons.Info size={14} color={ui.badgeAccentText} />
-                      <Text fontSize={13} color={ui.badgeAccentText} fontWeight="600" flex={1}>
-                        Add a delivery address to ship this order.
-                      </Text>
-                    </XStack>
-                  ) : null}
-                  {recentAddresses.length > 0 ? (
-                    <YStack gap="$2">
-                      <Text fontSize={12} fontWeight="600" color={c.secondary}>
-                        Recently used
-                      </Text>
-                      <XStack gap="$2" flexWrap="wrap">
-                        {recentAddresses.map((recent) => (
-                          <XStack
-                            key={`${recent.id ?? recent.address_line_1}-${recent.postal_code}`}
-                            paddingHorizontal={12}
-                            paddingVertical={8}
-                            borderRadius={999}
-                            borderWidth={1}
-                            borderColor={c.border}
-                            backgroundColor={c.chip}
-                            cursor="pointer"
-                            onPress={() => {
-                              const match = addresses.find((row) => row.id && row.id === recent.id)
-                              if (match) {
-                                setUseNewAddress(false)
-                                setSelectedAddressId(match.id)
-                                setAddressError(null)
-                                return
-                              }
-                              setUseNewAddress(true)
-                              setAddressError(null)
-                              setNewAddress({
-                                address_line_1: recent.address_line_1,
-                                address_line_2: recent.address_line_2 ?? '',
-                                city: recent.city,
-                                state: recent.state,
-                                postal_code: recent.postal_code,
-                                country: recent.country,
-                                address_label: recent.address_label ?? 'Home',
-                              })
-                              addressForm.fields.address_line_1.onChange(recent.address_line_1)
-                              addressForm.fields.address_line_2.onChange(
-                                recent.address_line_2 ?? '',
-                              )
-                            }}
-                          >
-                            <Text fontSize={12} fontWeight="600" color={c.text}>
-                              {recent.address_label || recent.city || recent.postal_code}
-                            </Text>
-                          </XStack>
-                        ))}
+                    <YStack gap="$3" alignItems="flex-start" width="100%">
+                      <XStack alignItems="center" gap="$2">
+                        <Icons.MapPin size={16} color={ui.badgeAccentText} />
+                        <Text fontSize={13} color={ui.badgeAccentText} fontWeight="600" flex={1}>
+                          Add a delivery address to ship this order.
+                        </Text>
                       </XStack>
-                    </YStack>
-                  ) : null}
-
-                  {addresses.length > 0 ? (
-                    <YStack gap="$2">
-                      {addresses.map((address) => {
-                        const selected = !useNewAddress && selectedAddressId === address.id
-                        return (
-                          <XStack
-                            key={address.id}
-                            gap="$3"
-                            padding="$3"
-                            borderRadius={10}
-                            borderWidth={1}
-                            borderColor={selected ? c.brand : c.border}
-                            backgroundColor={selected ? c.chip : c.panel}
-                            cursor="pointer"
-                            onPress={() => {
-                              setUseNewAddress(false)
-                              setSelectedAddressId(address.id)
-                              setAddressError(null)
-                            }}
-                          >
-                            <YStack paddingTop="$1">
-                              <CommerceRadio selected={selected} />
-                            </YStack>
-                            <YStack flex={1} gap={2}>
-                              <Text fontWeight="700" fontSize={14} color={c.text}>
-                                {address.address_label}
-                              </Text>
-                              <Paragraph fontSize={13} color={c.secondary}>
-                                {address.address_line_1}
-                                {address.address_line_2 ? `, ${address.address_line_2}` : ''}
-                                {'\n'}
-                                {address.city}, {address.state} {address.postal_code}
-                              </Paragraph>
-                            </YStack>
-                          </XStack>
-                        )
-                      })}
-                    </YStack>
-                  ) : null}
-
-                  <XStack gap="$3" alignItems="center" flexWrap="wrap">
-                    <CommerceLink
-                      onPress={() => {
-                        setUseNewAddress(true)
-                        setAddressError(null)
-                      }}
-                    >
-                      {addresses.length ? '+ Add a new delivery address' : '+ Add a delivery address'}
-                    </CommerceLink>
-                    {addresses.length > 0 && useNewAddress ? (
-                      <CommerceLink
+                      <Button
+                        tone="primary"
+                        size="$4"
+                        borderRadius={999}
+                        icon={<Icons.Plus size={16} />}
                         onPress={() => {
-                          setUseNewAddress(false)
-                          setSelectedAddressId(
-                            addresses.find((row) => row.is_default)?.id ?? addresses[0]?.id ?? null,
-                          )
                           setAddressError(null)
+                          setAddressFormOpen(true)
                         }}
                       >
-                        Choose a saved address
-                      </CommerceLink>
-                    ) : null}
-                    <AppLink href={commerceRoutes.addresses} asChild>
-                      <Text fontSize={13} color={c.link} cursor="pointer">
-                        Manage addresses
-                      </Text>
-                    </AppLink>
-                  </XStack>
-
-                  {useNewAddress ? (
-                    <YStack
-                      gap="$3"
-                      padding="$3"
-                      borderRadius={10}
-                      borderWidth={1}
-                      borderColor={c.border}
-                    >
-                      <AddressAutocompleteField
-                        country={newAddress.country}
-                        onResolved={(resolved: ResolvedAddress) => {
-                          const patch = resolvedAddressToFormPatch(resolved, {
-                            ...newAddress,
-                            address_line_2: newAddress.address_line_2 ?? '',
-                            address_type: 'shipping',
-                            is_default: false,
-                            address_label: newAddress.address_label ?? 'Home',
-                          })
-                          setNewAddress((current) => ({
-                            ...current,
-                            address_line_1: patch.address_line_1 ?? current.address_line_1,
-                            address_line_2: patch.address_line_2 ?? current.address_line_2 ?? '',
-                            city: patch.city ?? current.city,
-                            state: patch.state ?? current.state,
-                            postal_code: patch.postal_code ?? current.postal_code,
-                            country: patch.country ?? current.country,
-                          }))
-                          addressForm.fields.address_line_1.onChange(patch.address_line_1 ?? '')
-                          addressForm.fields.address_line_2.onChange(patch.address_line_2 ?? '')
-                        }}
-                      />
-                      <LocationAssistActions
-                        onResolved={(resolved: ResolvedAddress) => {
-                          const patch = resolvedAddressToFormPatch(resolved, {
-                            ...newAddress,
-                            address_line_2: newAddress.address_line_2 ?? '',
-                            address_type: 'shipping',
-                            is_default: false,
-                            address_label: newAddress.address_label ?? 'Home',
-                          })
-                          setNewAddress((current) => ({
-                            ...current,
-                            address_line_1: patch.address_line_1 || current.address_line_1,
-                            address_line_2: patch.address_line_2 || current.address_line_2 || '',
-                            city: patch.city || current.city,
-                            state: patch.state || current.state,
-                            postal_code: patch.postal_code || current.postal_code,
-                            country: patch.country || current.country,
-                          }))
-                          if (patch.address_line_1) {
-                            addressForm.fields.address_line_1.onChange(patch.address_line_1)
-                          }
-                          addressForm.fields.address_line_2.onChange(patch.address_line_2 ?? '')
-                        }}
-                      />
-                      <Field label="Address line 1">
-                        <Input
-                          value={addressForm.fields.address_line_1.value}
-                          onChangeText={addressForm.fields.address_line_1.onChange}
-                          autoComplete="street-address"
-                        />
-                      </Field>
-                      <Field label="Address line 2">
-                        <Input
-                          value={addressForm.fields.address_line_2.value}
-                          onChangeText={addressForm.fields.address_line_2.onChange}
-                          autoComplete="address-line2"
-                        />
-                      </Field>
-                      <LocationFields
-                        value={addressGeoFromInput(newAddress)}
-                        onChange={(geo) =>
-                          setNewAddress((current) => patchAddressFromGeo(current, geo))
-                        }
-                      />
+                        Add address
+                      </Button>
                     </YStack>
-                  ) : null}
+                  ) : (
+                    <YStack gap="$3" width="100%">
+                      {recentAddresses.length > 0 ? (
+                        <YStack gap="$2">
+                          <Text fontSize={12} fontWeight="600" color={c.secondary}>
+                            Recently used
+                          </Text>
+                          <XStack gap="$2" flexWrap="wrap">
+                            {recentAddresses.map((recent) => {
+                              const match = addresses.find(
+                                (row) => row.id && row.id === recent.id,
+                              )
+                              if (!match) return null
+                              const selected = selectedAddressId === match.id
+                              return (
+                                <XStack
+                                  key={`${recent.id ?? recent.address_line_1}-${recent.postal_code}`}
+                                  paddingHorizontal={12}
+                                  paddingVertical={8}
+                                  borderRadius={999}
+                                  borderWidth={1}
+                                  borderColor={selected ? c.brand : c.border}
+                                  backgroundColor={selected ? c.chip : c.panel}
+                                  cursor="pointer"
+                                  onPress={() => {
+                                    dispatch(setSelectedAddress(match.id))
+                                    setAddressError(null)
+                                  }}
+                                >
+                                  <Text fontSize={12} fontWeight="600" color={c.text}>
+                                    {recent.address_label || recent.city || recent.postal_code}
+                                  </Text>
+                                </XStack>
+                              )
+                            })}
+                          </XStack>
+                        </YStack>
+                      ) : null}
 
-                  <DeliveryPinCheck
-                    country={
-                      useNewAddress
-                        ? newAddress.country
-                        : addresses.find((row) => row.id === selectedAddressId)?.country ?? 'IN'
-                    }
-                    state={
-                      useNewAddress
-                        ? newAddress.state
-                        : addresses.find((row) => row.id === selectedAddressId)?.state
-                    }
-                    initialPostal={
-                      useNewAddress
-                        ? newAddress.postal_code
-                        : addresses.find((row) => row.id === selectedAddressId)?.postal_code ?? ''
-                    }
-                    listingType={needsShipping ? 'physical' : 'digital'}
-                    compact
-                  />
+                      <YStack gap="$2">
+                        {addresses.map((address) => {
+                          const selected = selectedAddressId === address.id
+                          return (
+                            <XStack
+                              key={address.id}
+                              gap="$3"
+                              padding="$3"
+                              borderRadius={10}
+                              borderWidth={1}
+                              borderColor={selected ? c.brand : c.border}
+                              backgroundColor={selected ? c.chip : c.panel}
+                              cursor="pointer"
+                              onPress={() => {
+                                dispatch(setSelectedAddress(address.id))
+                                setAddressError(null)
+                              }}
+                            >
+                              <YStack paddingTop="$1">
+                                <CommerceRadio selected={selected} />
+                              </YStack>
+                              <YStack flex={1} gap={2}>
+                                <Text fontWeight="700" fontSize={14} color={c.text}>
+                                  {address.address_label || 'Address'}
+                                </Text>
+                                <Paragraph fontSize={13} color={c.secondary}>
+                                  {address.address_line_1}
+                                  {address.address_line_2 ? `, ${address.address_line_2}` : ''}
+                                  {'\n'}
+                                  {address.city}, {address.state} {address.postal_code}
+                                </Paragraph>
+                              </YStack>
+                            </XStack>
+                          )
+                        })}
+                      </YStack>
+
+                      <XStack gap="$3" alignItems="center" flexWrap="wrap">
+                        <Button
+                          tone="outline"
+                          size="$3"
+                          borderRadius={999}
+                          icon={<Icons.Plus size={14} />}
+                          onPress={() => {
+                            setAddressError(null)
+                            setAddressFormOpen(true)
+                          }}
+                        >
+                          Add another address
+                        </Button>
+                        <AppLink href={commerceRoutes.addresses} asChild>
+                          <Button tone="outline" size="$3" borderRadius={999} icon={<Icons.MapPin size={14} />}>
+                            Manage addresses
+                          </Button>
+                        </AppLink>
+                      </XStack>
+                    </YStack>
+                  )}
+
+                  {addresses.length > 0 ? (
+                    <DeliveryPinCheck
+                      country={selectedDeliveryAddress?.country ?? 'IN'}
+                      state={selectedDeliveryAddress?.state}
+                      initialPostal={selectedDeliveryAddress?.postal_code ?? ''}
+                      listingType={needsShipping ? 'physical' : 'digital'}
+                      compact
+                    />
+                  ) : null}
                   {deliveryAddressNotice ? (
                     <XStack alignItems="center" gap="$2" paddingTop="$1">
                       <Icons.Info size={14} color={ui.error} />
@@ -1535,6 +1354,16 @@ export function CheckoutScreen() {
                       </Text>
                     </XStack>
                   ) : null}
+
+                  <AddressFormDrawer
+                    ui={ui}
+                    open={addressFormOpen}
+                    isDesktop={isDesktop}
+                    editingAddress={null}
+                    submitting={addressSaving}
+                    onClose={() => setAddressFormOpen(false)}
+                    onSubmit={(formData) => void handleSaveCheckoutAddress(formData)}
+                  />
                 </SectionCard>
               ) : (
                 <SectionCard step={2} title="Digital delivery">
