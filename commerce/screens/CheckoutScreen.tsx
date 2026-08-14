@@ -28,6 +28,7 @@ import {
   CartCoupon,
   CheckoutContactSection,
   CommerceButton,
+  CommerceLink,
   CommerceMobileCheckoutBar,
   COMMERCE_MOBILE_CHECKOUT_BAR_HEIGHT,
   CommerceRadio,
@@ -41,17 +42,6 @@ import {
   createAtomicMarketplaceCheckout,
   type CheckoutPaymentMode,
 } from '~/commerce/lib/checkout'
-import { AddressFormDrawer } from '~/commerce/components/address/AddressFormDrawer'
-import {
-  createAddress,
-  loadAddresses,
-  selectAddress as setSelectedAddress,
-  selectAddresses,
-  selectAddressSaving,
-  selectSelectedAddressId,
-} from '~/lib/address/address.store'
-import type { AddressFormData } from '~/lib/address/address.type'
-import { useAppDispatch, useAppSelector } from '~/lib/store/hooks'
 import { createShepayPayuSession } from '~/commerce/lib/shepay'
 import { platformPayuService } from '~/lib/platform-payu'
 import {
@@ -81,6 +71,18 @@ import { useProfile } from '~/hooks/useProfile'
 import { openExternalUrl } from '~/lib/platform/openUrl'
 import { commerceRoutes } from '~/lib/routes'
 import { buildSignInUrl } from '~/lib/auth/redirect'
+import { AddressDeleteDrawer } from '~/commerce/components/address/AddressDeleteDrawer'
+import { AddressFormDrawer } from '~/commerce/components/address/AddressFormDrawer'
+import {
+  createUserAddress,
+  deleteUserAddress,
+  fetchUserAddressRows,
+  setDefaultUserAddress,
+  updateUserAddress,
+} from '~/commerce/lib/addresses'
+import type { Address, AddressFormData } from '~/lib/address/address.type'
+import { ADDRESS_TYPE } from '~/lib/address/address.type'
+import { createEmptyAddressFormData } from '~/lib/address/address.utils'
 import { DeliveryPinCheck } from '~/components/location'
 import {
   readRecentAddresses,
@@ -101,21 +103,23 @@ type CheckoutOnlineProvider = 'shepay' | 'platform_payu'
 export function CheckoutScreen() {
   const c = useCommercePalette()
   const ui = useAppUi()
-  const { hasSideRails, isDesktop } = useAppLayout()
+  const { hasSideRails } = useAppLayout()
   const { user, isAuthenticated } = useProfile()
   const { formatMoney, convertMoney, preferredCurrency } = useFormatCurrency()
   const { cart, items: cartItems, isLoading, refresh, error: cartError } = useCart()
   const { items, hasChecked } = useStorefrontCartItems(cartItems)
   const toast = useAppToast()
-  const dispatch = useAppDispatch()
-
-  const addresses = useAppSelector(selectAddresses)
-  const selectedAddressId = useAppSelector(selectSelectedAddressId)
-  const addressSaving = useAppSelector(selectAddressSaving)
 
   const [checkoutBarHeight, setCheckoutBarHeight] = useState(COMMERCE_MOBILE_CHECKOUT_BAR_HEIGHT)
+  const [addresses, setAddresses] = useState<Address[]>([])
   const [recentAddresses, setRecentAddresses] = useState<RecentAddressSnapshot[]>([])
+  const [selectedAddressId, setSelectedAddressId] = useState<string | null>(null)
   const [addressFormOpen, setAddressFormOpen] = useState(false)
+  const [editingAddress, setEditingAddress] = useState<Address | null>(null)
+  const [addressPrefill, setAddressPrefill] = useState<AddressFormData | null>(null)
+  const [addressDeleteTarget, setAddressDeleteTarget] = useState<Address | null>(null)
+  const [isSavingAddress, setIsSavingAddress] = useState(false)
+  const [isDeletingAddress, setIsDeletingAddress] = useState(false)
   const [notesByShop, setNotesByShop] = useState<Record<string, string>>({})
   const [giftByShop, setGiftByShop] = useState<Record<string, boolean>>({})
   const [paymentMethod, setPaymentMethod] = useState<CheckoutPaymentMode>('online')
@@ -236,21 +240,20 @@ export function CheckoutScreen() {
     selectedItems.map((item) => item.listing_id),
   )
 
-  const addressReady = useMemo(() => {
-    if (!needsShipping) return true
-    if (!selectedAddressId || selectedAddressId.startsWith('temp-')) return false
-    return true
-  }, [needsShipping, selectedAddressId])
+  const selectedAddress = useMemo(
+    () => addresses.find((row) => row.id === selectedAddressId) ?? null,
+    [addresses, selectedAddressId],
+  )
+
+  // Addresses are always persisted before placing an order, so selection is the only gate.
+  const addressReady = needsShipping ? Boolean(selectedAddressId) : true
 
   const addressRequirementMessage = useMemo(() => {
     if (!needsShipping || addressReady) return null
-    if (selectedAddressId?.startsWith('temp-') || addressSaving) {
-      return 'Saving your address…'
-    }
     return addresses.length > 0
       ? 'Select a delivery address to continue.'
       : 'Add a delivery address to continue.'
-  }, [addressReady, addressSaving, addresses.length, needsShipping, selectedAddressId])
+  }, [addressReady, addresses.length, needsShipping])
 
   const deliveryAddressNotice = addressError ?? addressRequirementMessage
 
@@ -261,11 +264,6 @@ export function CheckoutScreen() {
   useEffect(() => {
     setAddressError(null)
   }, [selectedAddressId])
-
-  const selectedDeliveryAddress = useMemo(
-    () => addresses.find((row) => row.id === selectedAddressId) ?? null,
-    [addresses, selectedAddressId],
-  )
 
   const shippingQuote = useMemo(
     () =>
@@ -385,6 +383,7 @@ export function CheckoutScreen() {
       return
     }
     if (!userId) {
+      // Profile still hydrating — keep the gate until we have an id, but never forever.
       setIsLoadingAddresses(true)
       const hydrateTimeout = setTimeout(() => setIsLoadingAddresses(false), 8_000)
       return () => clearTimeout(hydrateTimeout)
@@ -397,16 +396,17 @@ export function CheckoutScreen() {
       setIsLoadingAddresses(false)
       toast.show('Could not load addresses', {
         tone: 'danger',
-        message: 'Taking too long. You can still add a delivery address.',
+        message: 'Taking too long. You can still enter a new address.',
       })
     }, 12_000)
 
-    void dispatch(loadAddresses({ forceRefresh: true }))
-      .unwrap()
-      .then((rows) => {
+    fetchUserAddressRows(userId)
+      .then(({ addresses: rows, error }) => {
         if (cancelled) return
-        const preferred = rows.find((row) => row.is_default) ?? rows[0]
-        dispatch(setSelectedAddress(preferred?.id ?? null))
+        setAddresses(rows)
+        const defaultAddress = rows.find((row) => row.is_default) ?? rows[0]
+        setSelectedAddressId(defaultAddress?.id ?? null)
+        if (error) toast.show('Could not load addresses', { tone: 'danger', message: error })
       })
       .catch(() => {
         if (cancelled) return
@@ -421,34 +421,109 @@ export function CheckoutScreen() {
       cancelled = true
       clearTimeout(fetchTimeout)
     }
-  }, [dispatch, isAuthenticated, toast, userId])
+  }, [isAuthenticated, toast, userId])
 
-  async function handleSaveCheckoutAddress(formData: AddressFormData) {
-    setAddressError(null)
-    const input: AddressFormData = {
-      ...formData,
-      // First checkout address becomes the selected default automatically.
-      is_default: addresses.length === 0 ? true : formData.is_default,
-      address_type: formData.address_type || 'shipping',
-    }
-    // Dispatch first so createAddress.pending inserts the optimistic row and
-    // selects it before the drawer closes — the list updates immediately.
-    const save = dispatch(createAddress({ input, userId: userId ?? undefined }))
+  const reloadAddresses = useCallback(
+    async (preferAddressId?: string | null) => {
+      if (!userId) return
+      const { addresses: rows, error } = await fetchUserAddressRows(userId)
+      setAddresses(rows)
+      setSelectedAddressId((current) => {
+        if (preferAddressId && rows.some((row) => row.id === preferAddressId)) {
+          return preferAddressId
+        }
+        if (current && rows.some((row) => row.id === current)) return current
+        return (rows.find((row) => row.is_default) ?? rows[0])?.id ?? null
+      })
+      if (error) toast.show('Could not load addresses', { tone: 'danger', message: error })
+    },
+    [toast, userId],
+  )
+
+  function openAddressCreate(seed?: AddressFormData | null) {
+    setEditingAddress(null)
+    setAddressPrefill(
+      seed ?? { ...createEmptyAddressFormData(), address_type: ADDRESS_TYPE.SHIPPING },
+    )
+    setAddressFormOpen(true)
+  }
+
+  function openAddressEdit(address: Address) {
+    setEditingAddress(address)
+    setAddressPrefill(null)
+    setAddressFormOpen(true)
+  }
+
+  function closeAddressForm() {
     setAddressFormOpen(false)
+    setEditingAddress(null)
+    setAddressPrefill(null)
+  }
+
+  async function handleSaveAddress(formData: AddressFormData) {
+    if (!userId) return
+    setIsSavingAddress(true)
     try {
-      const address = await save.unwrap()
-      dispatch(setSelectedAddress(address.id))
-      toast.show('Address added', {
-        tone: 'success',
-        message: 'Your delivery address is ready.',
-      })
-      void rememberRecentAddress(address as never).then(setRecentAddresses)
-    } catch (message) {
-      setAddressFormOpen(true)
-      toast.show('Could not add address', {
-        tone: 'danger',
-        message: String(message),
-      })
+      if (editingAddress) {
+        const { address, error } = await updateUserAddress(userId, editingAddress.id, formData)
+        if (error || !address) {
+          toast.show('Could not update address', { tone: 'danger', message: error ?? undefined })
+          return
+        }
+        // `updateUserAddress` leaves the default flag alone — it has its own RPC.
+        if (formData.is_default && !editingAddress.is_default) {
+          const { error: defaultError } = await setDefaultUserAddress(userId, editingAddress.id)
+          if (defaultError) {
+            toast.show('Could not set default', { tone: 'danger', message: defaultError })
+          }
+        }
+        await reloadAddresses(address.id)
+        toast.show('Address updated', { tone: 'success' })
+      } else {
+        const { address, error } = await createUserAddress(userId, formData, {
+          isDefault: formData.is_default || addresses.length === 0,
+        })
+        if (error || !address) {
+          toast.show('Could not save address', { tone: 'danger', message: error ?? undefined })
+          return
+        }
+        await reloadAddresses(address.id)
+        toast.show('Address saved', { tone: 'success', message: 'Selected for this delivery.' })
+      }
+      setAddressError(null)
+      closeAddressForm()
+    } finally {
+      setIsSavingAddress(false)
+    }
+  }
+
+  async function handleSetDefaultAddress(address: Address) {
+    if (!userId) return
+    const { error } = await setDefaultUserAddress(userId, address.id)
+    if (error) {
+      toast.show('Could not set default', { tone: 'danger', message: error })
+      return
+    }
+    await reloadAddresses(address.id)
+    toast.show('Default address updated', { tone: 'success' })
+  }
+
+  async function handleDeleteAddress() {
+    if (!userId || !addressDeleteTarget) return
+    setIsDeletingAddress(true)
+    try {
+      const { error } = await deleteUserAddress(userId, addressDeleteTarget.id)
+      if (error) {
+        toast.show('Could not delete address', { tone: 'danger', message: error })
+        return
+      }
+      const removedId = addressDeleteTarget.id
+      setAddressDeleteTarget(null)
+      if (selectedAddressId === removedId) setSelectedAddressId(null)
+      await reloadAddresses()
+      toast.show('Address deleted', { tone: 'success' })
+    } finally {
+      setIsDeletingAddress(false)
     }
   }
 
@@ -591,7 +666,7 @@ export function CheckoutScreen() {
       }
 
       if (needsShipping) {
-        if (!shippingAddressId || shippingAddressId.startsWith('temp-')) {
+        if (!shippingAddressId) {
           toast.show('Select a delivery address', { tone: 'danger' })
           return null
         }
@@ -599,7 +674,7 @@ export function CheckoutScreen() {
         shippingAddressId = addresses[0].id
       }
 
-      if (!shippingAddressId || shippingAddressId.startsWith('temp-')) {
+      if (!shippingAddressId) {
         toast.show('Add an address for your order records', { tone: 'danger' })
         return null
       }
@@ -700,9 +775,9 @@ export function CheckoutScreen() {
         return null
       }
 
-      const usedAddressEarly = addresses.find((row) => row.id === shippingAddressId) ?? null
+      const usedAddressEarly = addresses.find((row) => row.id === shippingAddressId)
       if (usedAddressEarly) {
-        void rememberRecentAddress(usedAddressEarly as never).then(setRecentAddresses)
+        void rememberRecentAddress(usedAddressEarly).then(setRecentAddresses)
       }
 
       await savePendingOrderSuccess({
@@ -790,7 +865,7 @@ export function CheckoutScreen() {
       }
 
       if (needsShipping) {
-        if (!shippingAddressId || shippingAddressId.startsWith('temp-')) {
+        if (!shippingAddressId) {
           toast.show('Select a delivery address', { tone: 'danger' })
           return
         }
@@ -798,7 +873,7 @@ export function CheckoutScreen() {
         shippingAddressId = addresses[0].id
       }
 
-      if (!shippingAddressId || shippingAddressId.startsWith('temp-')) {
+      if (!shippingAddressId) {
         toast.show('Add an address for your order records', { tone: 'danger' })
         return
       }
@@ -887,9 +962,9 @@ export function CheckoutScreen() {
           return
         }
 
-        const usedAddressEarly = addresses.find((row) => row.id === shippingAddressId) ?? null
+        const usedAddressEarly = addresses.find((row) => row.id === shippingAddressId)
         if (usedAddressEarly) {
-          void rememberRecentAddress(usedAddressEarly as never).then(setRecentAddresses)
+          void rememberRecentAddress(usedAddressEarly).then(setRecentAddresses)
         }
 
         const bridgeHref = payu.data.checkout_url
@@ -916,9 +991,9 @@ export function CheckoutScreen() {
         return
       }
 
-      const usedAddress = addresses.find((row) => row.id === shippingAddressId) ?? null
+      const usedAddress = addresses.find((row) => row.id === shippingAddressId)
       if (usedAddress) {
-        void rememberRecentAddress(usedAddress as never).then(setRecentAddresses)
+        void rememberRecentAddress(usedAddress).then(setRecentAddresses)
       }
 
       const next = resolvePostCheckoutNext({
@@ -1219,80 +1294,78 @@ export function CheckoutScreen() {
               {needsShipping ? (
                 <SectionCard step={2} title="Delivery address">
                   {addresses.length === 0 ? (
-                    <YStack gap="$3" alignItems="flex-start" width="100%">
-                      <XStack alignItems="center" gap="$2">
-                        <Icons.MapPin size={16} color={ui.badgeAccentText} />
-                        <Text fontSize={13} color={ui.badgeAccentText} fontWeight="600" flex={1}>
-                          Add a delivery address to ship this order.
-                        </Text>
-                      </XStack>
-                      <Button
-                        tone="primary"
-                        size="$4"
-                        borderRadius={999}
-                        icon={<Icons.Plus size={16} />}
-                        onPress={() => {
-                          setAddressError(null)
-                          setAddressFormOpen(true)
-                        }}
-                      >
-                        Add address
-                      </Button>
-                    </YStack>
-                  ) : (
-                    <YStack gap="$3" width="100%">
-                      {recentAddresses.length > 0 ? (
-                        <YStack gap="$2">
-                          <Text fontSize={12} fontWeight="600" color={c.secondary}>
-                            Recently used
-                          </Text>
-                          <XStack gap="$2" flexWrap="wrap">
-                            {recentAddresses.map((recent) => {
-                              const match = addresses.find(
-                                (row) => row.id && row.id === recent.id,
-                              )
-                              if (!match) return null
-                              const selected = selectedAddressId === match.id
-                              return (
-                                <XStack
-                                  key={`${recent.id ?? recent.address_line_1}-${recent.postal_code}`}
-                                  paddingHorizontal={12}
-                                  paddingVertical={8}
-                                  borderRadius={999}
-                                  borderWidth={1}
-                                  borderColor={selected ? c.brand : c.border}
-                                  backgroundColor={selected ? c.chip : c.panel}
-                                  cursor="pointer"
-                                  onPress={() => {
-                                    dispatch(setSelectedAddress(match.id))
-                                    setAddressError(null)
-                                  }}
-                                >
-                                  <Text fontSize={12} fontWeight="600" color={c.text}>
-                                    {recent.address_label || recent.city || recent.postal_code}
-                                  </Text>
-                                </XStack>
-                              )
-                            })}
+                    <XStack alignItems="center" gap="$2">
+                      <Icons.Info size={14} color={ui.badgeAccentText} />
+                      <Text fontSize={13} color={ui.badgeAccentText} fontWeight="600" flex={1}>
+                        Add a delivery address to ship this order.
+                      </Text>
+                    </XStack>
+                  ) : null}
+                  {recentAddresses.length > 0 ? (
+                    <YStack gap="$2">
+                      <Text fontSize={12} fontWeight="600" color={c.secondary}>
+                        Recently used
+                      </Text>
+                      <XStack gap="$2" flexWrap="wrap">
+                        {recentAddresses.map((recent) => (
+                          <XStack
+                            key={`${recent.id ?? recent.address_line_1}-${recent.postal_code}`}
+                            paddingHorizontal={12}
+                            paddingVertical={8}
+                            borderRadius={999}
+                            borderWidth={1}
+                            borderColor={c.border}
+                            backgroundColor={c.chip}
+                            cursor="pointer"
+                            onPress={() => {
+                              const match = addresses.find((row) => row.id && row.id === recent.id)
+                              if (match) {
+                                setSelectedAddressId(match.id)
+                                setAddressError(null)
+                                return
+                              }
+                              setAddressError(null)
+                              openAddressCreate({
+                                ...createEmptyAddressFormData(),
+                                address_line_1: recent.address_line_1,
+                                address_line_2: recent.address_line_2 ?? '',
+                                city: recent.city,
+                                state: recent.state,
+                                postal_code: recent.postal_code,
+                                country: recent.country,
+                                address_label: recent.address_label ?? '',
+                                address_type: ADDRESS_TYPE.SHIPPING,
+                              })
+                            }}
+                          >
+                            <Text fontSize={12} fontWeight="600" color={c.text}>
+                              {recent.address_label || recent.city || recent.postal_code}
+                            </Text>
                           </XStack>
-                        </YStack>
-                      ) : null}
+                        ))}
+                      </XStack>
+                    </YStack>
+                  ) : null}
 
-                      <YStack gap="$2">
-                        {addresses.map((address) => {
-                          const selected = selectedAddressId === address.id
-                          return (
+                  {addresses.length > 0 ? (
+                    <YStack gap="$2">
+                      {addresses.map((address) => {
+                        const selected = selectedAddressId === address.id
+                        return (
+                          <YStack
+                            key={address.id}
+                            gap="$2"
+                            padding="$3"
+                            borderRadius={10}
+                            borderWidth={1}
+                            borderColor={selected ? c.brand : c.border}
+                            backgroundColor={selected ? c.chip : c.panel}
+                          >
                             <XStack
-                              key={address.id}
                               gap="$3"
-                              padding="$3"
-                              borderRadius={10}
-                              borderWidth={1}
-                              borderColor={selected ? c.brand : c.border}
-                              backgroundColor={selected ? c.chip : c.panel}
                               cursor="pointer"
                               onPress={() => {
-                                dispatch(setSelectedAddress(address.id))
+                                setSelectedAddressId(address.id)
                                 setAddressError(null)
                               }}
                             >
@@ -1300,9 +1373,23 @@ export function CheckoutScreen() {
                                 <CommerceRadio selected={selected} />
                               </YStack>
                               <YStack flex={1} gap={2}>
-                                <Text fontWeight="700" fontSize={14} color={c.text}>
-                                  {address.address_label || 'Address'}
-                                </Text>
+                                <XStack gap="$2" alignItems="center" flexWrap="wrap">
+                                  <Text fontWeight="700" fontSize={14} color={c.text}>
+                                    {address.address_label || 'Delivery address'}
+                                  </Text>
+                                  {address.is_default ? (
+                                    <XStack
+                                      paddingHorizontal="$2"
+                                      paddingVertical={2}
+                                      borderRadius={999}
+                                      backgroundColor={ui.roseSurface}
+                                    >
+                                      <Text fontSize={10} fontWeight="700" color={c.brand}>
+                                        Default
+                                      </Text>
+                                    </XStack>
+                                  ) : null}
+                                </XStack>
                                 <Paragraph fontSize={13} color={c.secondary}>
                                   {address.address_line_1}
                                   {address.address_line_2 ? `, ${address.address_line_2}` : ''}
@@ -1311,41 +1398,66 @@ export function CheckoutScreen() {
                                 </Paragraph>
                               </YStack>
                             </XStack>
-                          )
-                        })}
-                      </YStack>
-
-                      <XStack gap="$3" alignItems="center" flexWrap="wrap">
-                        <Button
-                          tone="outline"
-                          size="$3"
-                          borderRadius={999}
-                          icon={<Icons.Plus size={14} />}
-                          onPress={() => {
-                            setAddressError(null)
-                            setAddressFormOpen(true)
-                          }}
-                        >
-                          Add another address
-                        </Button>
-                        <AppLink href={commerceRoutes.addresses} asChild>
-                          <Button tone="outline" size="$3" borderRadius={999} icon={<Icons.MapPin size={14} />}>
-                            Manage addresses
-                          </Button>
-                        </AppLink>
-                      </XStack>
+                            <XStack gap="$2" flexWrap="wrap" paddingLeft={32}>
+                              <Button
+                                tone="outline"
+                                size="$2"
+                                borderRadius={999}
+                                disabled={isSavingAddress || isDeletingAddress}
+                                onPress={() => openAddressEdit(address)}
+                              >
+                                Edit
+                              </Button>
+                              {!address.is_default ? (
+                                <Button
+                                  tone="outline"
+                                  size="$2"
+                                  borderRadius={999}
+                                  disabled={isSavingAddress || isDeletingAddress}
+                                  onPress={() => void handleSetDefaultAddress(address)}
+                                >
+                                  Set default
+                                </Button>
+                              ) : null}
+                              <Button
+                                tone="outline"
+                                size="$2"
+                                borderRadius={999}
+                                disabled={isSavingAddress || isDeletingAddress}
+                                onPress={() => setAddressDeleteTarget(address)}
+                              >
+                                Delete
+                              </Button>
+                            </XStack>
+                          </YStack>
+                        )
+                      })}
                     </YStack>
-                  )}
-
-                  {addresses.length > 0 ? (
-                    <DeliveryPinCheck
-                      country={selectedDeliveryAddress?.country ?? 'IN'}
-                      state={selectedDeliveryAddress?.state}
-                      initialPostal={selectedDeliveryAddress?.postal_code ?? ''}
-                      listingType={needsShipping ? 'physical' : 'digital'}
-                      compact
-                    />
                   ) : null}
+
+                  <XStack gap="$3" alignItems="center" flexWrap="wrap">
+                    <CommerceLink
+                      onPress={() => {
+                        setAddressError(null)
+                        openAddressCreate()
+                      }}
+                    >
+                      {addresses.length ? '+ Add a new delivery address' : '+ Add a delivery address'}
+                    </CommerceLink>
+                    <AppLink href={commerceRoutes.addresses} asChild>
+                      <Text fontSize={13} color={c.link} cursor="pointer">
+                        Manage addresses
+                      </Text>
+                    </AppLink>
+                  </XStack>
+
+                  <DeliveryPinCheck
+                    country={selectedAddress?.country ?? 'IN'}
+                    state={selectedAddress?.state}
+                    initialPostal={selectedAddress?.postal_code ?? ''}
+                    listingType={needsShipping ? 'physical' : 'digital'}
+                    compact
+                  />
                   {deliveryAddressNotice ? (
                     <XStack alignItems="center" gap="$2" paddingTop="$1">
                       <Icons.Info size={14} color={ui.error} />
@@ -1354,16 +1466,6 @@ export function CheckoutScreen() {
                       </Text>
                     </XStack>
                   ) : null}
-
-                  <AddressFormDrawer
-                    ui={ui}
-                    open={addressFormOpen}
-                    isDesktop={isDesktop}
-                    editingAddress={null}
-                    submitting={addressSaving}
-                    onClose={() => setAddressFormOpen(false)}
-                    onSubmit={(formData) => void handleSaveCheckoutAddress(formData)}
-                  />
                 </SectionCard>
               ) : (
                 <SectionCard step={2} title="Digital delivery">
@@ -1599,11 +1701,43 @@ export function CheckoutScreen() {
     </FullWidthLayout>
   )
 
-  if (!showMobileBar) return checkoutLayout
+  const addressDrawers = (
+    <>
+      <AddressFormDrawer
+        ui={ui}
+        open={addressFormOpen}
+        isDesktop={hasSideRails}
+        editingAddress={editingAddress}
+        initialFormData={addressPrefill}
+        submitting={isSavingAddress}
+        onClose={closeAddressForm}
+        onSubmit={(formData) => void handleSaveAddress(formData)}
+      />
+      <AddressDeleteDrawer
+        ui={ui}
+        open={Boolean(addressDeleteTarget)}
+        isDesktop={hasSideRails}
+        address={addressDeleteTarget}
+        submitting={isDeletingAddress}
+        onClose={() => setAddressDeleteTarget(null)}
+        onConfirm={() => void handleDeleteAddress()}
+      />
+    </>
+  )
+
+  if (!showMobileBar) {
+    return (
+      <>
+        {checkoutLayout}
+        {addressDrawers}
+      </>
+    )
+  }
 
   return (
     <YStack flex={1} width="100%" position="relative">
       {checkoutLayout}
+      {addressDrawers}
       <CommerceMobileCheckoutBar
         total={displayTotals.orderTotal}
         currency={preferredCurrency}

@@ -51,7 +51,7 @@ import { isCompleteOtp, normalizeOtpDigits } from '~/features/auth/validation'
 import { useAuth } from '~/hooks/useAuth'
 import { getAllGeoCountries, getCountryName } from '~/lib/geo/data'
 import { appRoutes, commerceRoutes } from '~/lib/routes'
-import { DEFAULT_COUNTRY, findCountryByIso2 } from '~/lib/phone/countries'
+import { DEFAULT_COUNTRY } from '~/lib/phone/countries'
 import { isValidPhone, normalizePhoneNumber } from '~/lib/phone/phone'
 import { supabase } from '~/lib/supabase/client'
 import { useAppUi } from '~/lib/theme/useAppUi'
@@ -92,7 +92,6 @@ export function CompleteProfileFlow({ returnTo, isNewUser }: CompleteProfileFlow
   const [fullName, setFullName] = useState('')
   const [avatarUrl, setAvatarUrl] = useState<string | null>(null)
   const [phoneE164, setPhoneE164] = useState('')
-  const [phoneDefaultCountry, setPhoneDefaultCountry] = useState(DEFAULT_COUNTRY)
   const [otpSent, setOtpSent] = useState(false)
   const [otpCode, setOtpCode] = useState('')
   const [timezone, setTimezone] = useState(detectDeviceTimezone())
@@ -137,8 +136,6 @@ export function CompleteProfileFlow({ returnTo, isNewUser }: CompleteProfileFlow
       if (row.timezone) setTimezone(row.timezone)
       if (row.country_code) {
         setCountryCode(row.country_code)
-        const phoneCountry = findCountryByIso2(row.country_code)
-        if (phoneCountry) setPhoneDefaultCountry(phoneCountry)
       }
       if (row.preferred_language) setLanguage(row.preferred_language)
       else setLanguage(await detectPreferredLanguage())
@@ -333,8 +330,6 @@ export function CompleteProfileFlow({ returnTo, isNewUser }: CompleteProfileFlow
     setLocating(false)
     if (result.countryCode) {
       setCountryCode(result.countryCode)
-      const phoneCountry = findCountryByIso2(result.countryCode)
-      if (phoneCountry) setPhoneDefaultCountry(phoneCountry)
     }
     if (result.locationLabel) setLocationLabel(result.locationLabel)
     if (result.error && !result.latitude) {
@@ -361,7 +356,7 @@ export function CompleteProfileFlow({ returnTo, isNewUser }: CompleteProfileFlow
     if (!pendingSuggest) return
     if (pendingSuggest.fullName) setFullName(pendingSuggest.fullName)
     if (pendingSuggest.phone) {
-      setPhoneE164(normalizePhoneNumber(pendingSuggest.phone, phoneDefaultCountry))
+      setPhoneE164(normalizePhoneNumber(pendingSuggest.phone, DEFAULT_COUNTRY))
     }
     setSuggestOpen(false)
     setPendingSuggest(null)
@@ -509,7 +504,7 @@ export function CompleteProfileFlow({ returnTo, isNewUser }: CompleteProfileFlow
               <PhoneInput
                 value={phoneE164}
                 onChange={setPhoneE164}
-                defaultCountry={phoneDefaultCountry}
+                defaultCountry={DEFAULT_COUNTRY}
                 compact
               />
               <XStack gap="$2">
