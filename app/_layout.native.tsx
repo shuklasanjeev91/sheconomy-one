@@ -98,8 +98,9 @@ function ThemedApp({ children }: { children: ReactNode }) {
         <YStack flex={1} width="100%" backgroundColor="$background">
           <ToastProvider swipeDirection="horizontal" duration={4000} native={false}>
             {children}
+            {/* Viewport hosts the portal the toast renders into — mount it first. */}
+            <ToastViewport top={insets.top + 8} left={0} right={0} />
             <AppToasts />
-            <ToastViewport top={Math.max(insets.top, 8)} left={0} right={0} />
           </ToastProvider>
         </YStack>
       </Theme>
