@@ -41,6 +41,8 @@ type AddressFormDrawerProps = {
   open: boolean
   isDesktop: boolean
   editingAddress: Address | null
+  /** Seed values for create mode (reusing a recent address, checkout defaults). */
+  initialFormData?: AddressFormData | null
   submitting: boolean
   onClose: () => void
   onSubmit: (formData: AddressFormData) => void
@@ -50,16 +52,20 @@ export function AddressFormDrawer({
   ui,
   open,
   editingAddress,
+  initialFormData,
   submitting,
   onClose,
   onSubmit,
 }: AddressFormDrawerProps) {
-  const [formData, setFormData] = useState<AddressFormData>(() => createInitialForm(editingAddress))
+  const [formData, setFormData] = useState<AddressFormData>(() =>
+    createInitialForm(editingAddress, initialFormData),
+  )
   const [errors, setErrors] = useState<Partial<Record<keyof AddressFormData, string>>>({})
 
+  // Seeded only on open — re-reading `initialFormData` while open would wipe typing.
   useEffect(() => {
     if (open) {
-      setFormData(createInitialForm(editingAddress))
+      setFormData(createInitialForm(editingAddress, initialFormData))
       setErrors({})
     }
   }, [open, editingAddress?.id])
@@ -249,7 +255,10 @@ export function AddressFormDrawer({
   )
 }
 
-function createInitialForm(address: Address | null): AddressFormData {
-  if (!address) return createEmptyAddressFormData()
-  return addressToFormData(address)
+function createInitialForm(
+  address: Address | null,
+  seed?: AddressFormData | null,
+): AddressFormData {
+  if (address) return addressToFormData(address)
+  return seed ?? createEmptyAddressFormData()
 }

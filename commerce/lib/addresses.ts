@@ -68,6 +68,18 @@ export async function fetchUserAddresses(userId?: string): Promise<{
   }
 }
 
+/** Full rows — screens that edit an address in place need every column. */
+export async function fetchUserAddressRows(userId?: string): Promise<{
+  addresses: Address[]
+  error: string | null
+}> {
+  const response = await addressService.getUserAddresses(userId)
+  return {
+    addresses: response.data ?? [],
+    error: response.error,
+  }
+}
+
 export async function createUserAddress(
   userId: string,
   input: AddressInput,

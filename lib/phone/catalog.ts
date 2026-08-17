@@ -1,4 +1,4 @@
-import { getAllGeoCountries, getCountryByCode, getDefaultCountryCode } from '~/lib/geo'
+import { getAllGeoCountries, getCountryByCode } from '~/lib/geo'
 
 import type { Country } from '~/lib/phone/types'
 
@@ -92,9 +92,9 @@ export function getAllPhoneCountries(): Country[] {
   return phoneCountriesCache
 }
 
+/** Always India (+91) for empty phone fields — product default across SHEconomy. */
 export function getDefaultPhoneCountry(): Country {
-  const iso = getDefaultCountryCode()
-  return findPhoneCountryByIso2(iso)
+  return findPhoneCountryByIso2('IN')
 }
 
 export function findPhoneCountryByIso2(iso2: string): Country {

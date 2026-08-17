@@ -1,7 +1,5 @@
 import { City, Country, State, type ICity, type ICountry, type IState } from 'country-state-city'
 
-import { inferCountryFromLocale } from '~/commerce/lib/infer-country-from-locale'
-
 import type { GeoOption } from '~/lib/geo/types'
 
 let countriesCache: ICountry[] | null = null
@@ -45,11 +43,8 @@ export function resolveCountryCode(value: string | null | undefined): string {
   return byName?.isoCode ?? raw.toUpperCase()
 }
 
+/** India is the pre-selected country across SHEconomy (home market). */
 export function getDefaultCountryCode(): string {
-  const fromLocale = inferCountryFromLocale()
-  if (fromLocale && getCountryByCode(fromLocale)) {
-    return fromLocale.toUpperCase()
-  }
   return 'IN'
 }
 
