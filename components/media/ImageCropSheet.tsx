@@ -12,6 +12,7 @@ import Svg, { Circle, Defs, Mask, Rect as SvgRect } from 'react-native-svg'
 import { CropStage } from '~/components/media/CropStage'
 import {
   Button,
+  Icons,
   Sheet,
   SheetFrame,
   SheetOverlay,
@@ -284,7 +285,9 @@ export function ImageCropSheet({
         height={windowHeight}
         maxHeight={windowHeight}
         minHeight={windowHeight}
-        width="100%"
+        width={windowWidth}
+        maxWidth={windowWidth}
+        minWidth={windowWidth}
         flex={1}
         position="absolute"
         top={0}
@@ -314,11 +317,10 @@ export function ImageCropSheet({
                 disabled={busy}
                 hitSlop={10}
                 accessibilityRole="button"
-                accessibilityLabel="Cancel"
+                accessibilityLabel="Close"
+                style={styles.closeButton}
               >
-                <Text fontSize={16} fontWeight="600" color="rgba(255,255,255,0.92)">
-                  Cancel
-                </Text>
+                <Icons.X size={22} color="rgba(255,255,255,0.92)" />
               </Pressable>
 
               <Text
@@ -332,8 +334,8 @@ export function ImageCropSheet({
                 {headerTitle}
               </Text>
 
-              {/* Balance Cancel width so title stays centered */}
-              <View style={{ minWidth: 56 }} />
+              {/* Balance the close button so the title stays centered */}
+              <View style={{ minWidth: 40 }} />
             </XStack>
 
             {/* Full-bleed stage */}
@@ -516,6 +518,14 @@ export function ImageCropSheet({
 }
 
 const styles = StyleSheet.create({
+  closeButton: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(255,255,255,0.1)',
+  },
   zoomChip: {
     width: 40,
     height: 40,

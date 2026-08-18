@@ -11,7 +11,6 @@ import {
 import {
   BackHandler,
   Platform,
-  useWindowDimensions,
   type NativeScrollEvent,
   type NativeSyntheticEvent,
 } from 'react-native'
@@ -29,6 +28,7 @@ import {
 } from '~/components/ui'
 import { radius } from '~/config/tokens'
 import { useFullscreenOverlayInsets } from '~/hooks/useFullscreenOverlayInsets'
+import { useFullscreenOverlaySize } from '~/hooks/useFullscreenOverlaySize'
 import { useAppUi } from '~/lib/theme/useAppUi'
 
 // Approximate non-scrolling chrome heights so the scroll body can extend as
@@ -322,8 +322,9 @@ type AppBottomSheetProps = {
 }
 
 /**
- * Cross-platform bottom sheet — always covers the full device / viewport
- * (web, iOS, Android) with no bottom padding or margin gap.
+ * Cross-platform bottom sheet — measures the device screen and covers it
+ * exactly (web, iOS, Android) with no bottom padding or margin gap, and always
+ * shows a close control in the header.
  *
  * Nesting is supported: open one from inside another and native stacks it as a
  * layer over the parent frame instead of a second (invisible) modal.
@@ -340,14 +341,12 @@ export function AppBottomSheet({
 }: AppBottomSheetProps) {
   const ui = useAppUi()
   const overlayInsets = useFullscreenOverlayInsets()
-  const { height: windowHeight } = useWindowDimensions()
+  const screen = useFullscreenOverlaySize()
 
   const parentLayers = useContext(SheetLayerContext)
   const asLayer = !isWeb && parentLayers != null
 
   const layerStore = useMemo(() => (isWeb ? null : createSheetLayerStore()), [])
-
-  const maxSheetHeight = useMemo(() => windowHeight, [windowHeight])
 
   // Space taken by the handle/header/footer that sits outside the scroll body.
   const chromeHeight =
@@ -370,7 +369,7 @@ export function AppBottomSheet({
       onScroll={onScroll}
       footer={footer}
       overlayInsets={overlayInsets}
-      maxHeight={maxSheetHeight}
+      maxHeight={screen.height}
       staticHandle={asLayer}
       scrollComponent={asLayer ? ScrollView : Sheet.ScrollView}
       scrollMaxHeight={
@@ -410,10 +409,12 @@ export function AppBottomSheet({
         borderBottomLeftRadius={0}
         borderBottomRightRadius={0}
         overflow="hidden"
-        height={windowHeight}
-        maxHeight={windowHeight}
-        minHeight={windowHeight}
-        width="100%"
+        height={screen.height}
+        maxHeight={screen.height}
+        minHeight={screen.height}
+        width={screen.width}
+        maxWidth={screen.width}
+        minWidth={screen.width}
         flex={1}
         position="absolute"
         top={0}

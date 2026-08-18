@@ -2,12 +2,12 @@ import { useState } from 'react'
 import { Linking } from 'react-native'
 
 import {
+  AppBottomSheet,
   Badge,
   Button,
   Field,
   Icons,
   Input,
-  Sheet,
   Spinner,
   Text,
   XStack,
@@ -220,117 +220,11 @@ export function CustomShippingPartnerPanel({
         )}
       </YStack>
 
-      <Sheet open={sheetOpen} onOpenChange={setSheetOpen} snapPoints={[92]} modal dismissOnSnapToBottom>
-        <Sheet.Overlay />
-        <Sheet.Handle />
-        <Sheet.Frame padding="$4" gap="$4">
-          <YStack gap="$1">
-            <Text fontSize={18} fontWeight="800" color={ui.text}>
-              {copy.dialogTitle}
-            </Text>
-            <Text fontSize={13} color={ui.textSecondary}>
-              {copy.dialogSubtitle}
-            </Text>
-          </YStack>
-
-          <YStack gap="$3">
-            <Text fontSize={14} fontWeight="800" color={ui.text}>
-              {copy.basicInfo}
-            </Text>
-            <Field label={`${copy.partnerName} *`}>
-              <Input
-                value={form.partner_name}
-                onChangeText={(partner_name) => patchForm({ partner_name })}
-                placeholder="Local Courier Service"
-              />
-            </Field>
-            <XStack gap="$3" flexWrap="wrap">
-              <Field label={copy.contactPerson} flex={1} minWidth={160}>
-                <Input
-                  value={form.contact_person}
-                  onChangeText={(contact_person) => patchForm({ contact_person })}
-                />
-              </Field>
-              <Field label={copy.phone} flex={1} minWidth={160}>
-                <Input value={form.phone} onChangeText={(phone) => patchForm({ phone })} keyboardType="phone-pad" />
-              </Field>
-            </XStack>
-            <XStack gap="$3" flexWrap="wrap">
-              <Field label={copy.email} flex={1} minWidth={160}>
-                <Input
-                  value={form.email}
-                  onChangeText={(email) => patchForm({ email })}
-                  keyboardType="email-address"
-                  autoCapitalize="none"
-                />
-              </Field>
-              <Field label={copy.website} flex={1} minWidth={160}>
-                <Input
-                  value={form.website}
-                  onChangeText={(website) => patchForm({ website })}
-                  autoCapitalize="none"
-                />
-              </Field>
-            </XStack>
-            <Field label={copy.trackingTemplate} hint={copy.trackingHint}>
-              <Input
-                value={form.tracking_url_template}
-                onChangeText={(tracking_url_template) => patchForm({ tracking_url_template })}
-                placeholder="https://track.courier.com/?awb={TRACKING_NUMBER}"
-              />
-            </Field>
-          </YStack>
-
-          <YStack gap="$3">
-            <Text fontSize={14} fontWeight="800" color={ui.text}>
-              {copy.pickupAddress}
-            </Text>
-            <Field label={copy.addressLine1}>
-              <Input
-                value={form.pickup_address.address_line1}
-                onChangeText={(address_line1) =>
-                  patchForm({ pickup_address: { ...form.pickup_address, address_line1 } })
-                }
-              />
-            </Field>
-            <Field label={copy.addressLine2}>
-              <Input
-                value={form.pickup_address.address_line2}
-                onChangeText={(address_line2) =>
-                  patchForm({ pickup_address: { ...form.pickup_address, address_line2 } })
-                }
-              />
-            </Field>
-            <XStack gap="$3" flexWrap="wrap">
-              <Field label={copy.city} flex={1} minWidth={120}>
-                <Input
-                  value={form.pickup_address.city}
-                  onChangeText={(city) => patchForm({ pickup_address: { ...form.pickup_address, city } })}
-                />
-              </Field>
-              <Field label={copy.state} flex={1} minWidth={120}>
-                <Input
-                  value={form.pickup_address.state}
-                  onChangeText={(state) => patchForm({ pickup_address: { ...form.pickup_address, state } })}
-                />
-              </Field>
-            </XStack>
-            <XStack gap="$3" flexWrap="wrap">
-              <Field label={copy.pincode} flex={1} minWidth={120}>
-                <Input
-                  value={form.pickup_address.pincode}
-                  onChangeText={(pincode) => patchForm({ pickup_address: { ...form.pickup_address, pincode } })}
-                />
-              </Field>
-              <Field label={copy.country} flex={1} minWidth={120}>
-                <Input
-                  value={form.pickup_address.country}
-                  onChangeText={(country) => patchForm({ pickup_address: { ...form.pickup_address, country } })}
-                />
-              </Field>
-            </XStack>
-          </YStack>
-
+      <AppBottomSheet
+        open={sheetOpen}
+        onOpenChange={setSheetOpen}
+        title={copy.dialogTitle}
+        footer={
           <XStack gap="$2">
             <Button
               tone="outline"
@@ -346,8 +240,110 @@ export function CustomShippingPartnerPanel({
               {creating ? copy.adding : copy.addAction}
             </Button>
           </XStack>
-        </Sheet.Frame>
-      </Sheet>
+        }
+      >
+        <Text fontSize={13} color={ui.textSecondary}>
+          {copy.dialogSubtitle}
+        </Text>
+
+        <YStack gap="$3">
+          <Text fontSize={14} fontWeight="800" color={ui.text}>
+            {copy.basicInfo}
+          </Text>
+          <Field label={`${copy.partnerName} *`}>
+            <Input
+              value={form.partner_name}
+              onChangeText={(partner_name) => patchForm({ partner_name })}
+              placeholder="Local Courier Service"
+            />
+          </Field>
+          <XStack gap="$3" flexWrap="wrap">
+            <Field label={copy.contactPerson} flex={1} minWidth={160}>
+              <Input
+                value={form.contact_person}
+                onChangeText={(contact_person) => patchForm({ contact_person })}
+              />
+            </Field>
+            <Field label={copy.phone} flex={1} minWidth={160}>
+              <Input value={form.phone} onChangeText={(phone) => patchForm({ phone })} keyboardType="phone-pad" />
+            </Field>
+          </XStack>
+          <XStack gap="$3" flexWrap="wrap">
+            <Field label={copy.email} flex={1} minWidth={160}>
+              <Input
+                value={form.email}
+                onChangeText={(email) => patchForm({ email })}
+                keyboardType="email-address"
+                autoCapitalize="none"
+              />
+            </Field>
+            <Field label={copy.website} flex={1} minWidth={160}>
+              <Input
+                value={form.website}
+                onChangeText={(website) => patchForm({ website })}
+                autoCapitalize="none"
+              />
+            </Field>
+          </XStack>
+          <Field label={copy.trackingTemplate} hint={copy.trackingHint}>
+            <Input
+              value={form.tracking_url_template}
+              onChangeText={(tracking_url_template) => patchForm({ tracking_url_template })}
+              placeholder="https://track.courier.com/?awb={TRACKING_NUMBER}"
+            />
+          </Field>
+        </YStack>
+
+        <YStack gap="$3">
+          <Text fontSize={14} fontWeight="800" color={ui.text}>
+            {copy.pickupAddress}
+          </Text>
+          <Field label={copy.addressLine1}>
+            <Input
+              value={form.pickup_address.address_line1}
+              onChangeText={(address_line1) =>
+                patchForm({ pickup_address: { ...form.pickup_address, address_line1 } })
+              }
+            />
+          </Field>
+          <Field label={copy.addressLine2}>
+            <Input
+              value={form.pickup_address.address_line2}
+              onChangeText={(address_line2) =>
+                patchForm({ pickup_address: { ...form.pickup_address, address_line2 } })
+              }
+            />
+          </Field>
+          <XStack gap="$3" flexWrap="wrap">
+            <Field label={copy.city} flex={1} minWidth={120}>
+              <Input
+                value={form.pickup_address.city}
+                onChangeText={(city) => patchForm({ pickup_address: { ...form.pickup_address, city } })}
+              />
+            </Field>
+            <Field label={copy.state} flex={1} minWidth={120}>
+              <Input
+                value={form.pickup_address.state}
+                onChangeText={(state) => patchForm({ pickup_address: { ...form.pickup_address, state } })}
+              />
+            </Field>
+          </XStack>
+          <XStack gap="$3" flexWrap="wrap">
+            <Field label={copy.pincode} flex={1} minWidth={120}>
+              <Input
+                value={form.pickup_address.pincode}
+                onChangeText={(pincode) => patchForm({ pickup_address: { ...form.pickup_address, pincode } })}
+              />
+            </Field>
+            <Field label={copy.country} flex={1} minWidth={120}>
+              <Input
+                value={form.pickup_address.country}
+                onChangeText={(country) => patchForm({ pickup_address: { ...form.pickup_address, country } })}
+              />
+            </Field>
+          </XStack>
+        </YStack>
+      </AppBottomSheet>
     </>
   )
 }

@@ -3,13 +3,10 @@ import { Platform, TextInput } from 'react-native'
 import { useRouter } from 'one'
 
 import {
+  AppBottomSheet,
   Button,
   Icons,
   Input,
-  Sheet,
-  SheetFrame,
-  SheetHandle,
-  SheetOverlay,
   Spinner,
   Text,
   XStack,
@@ -1401,96 +1398,43 @@ export function SellerApplicationForm() {
                     </XStack>
                   ) : null}
 
-                  {/* Half-screen category sheet */}
-                  <Sheet
+                  <AppBottomSheet
                     open={isCategorySheetOpen}
                     onOpenChange={setIsCategorySheetOpen}
-                    modal
-                    dismissOnSnapToBottom
-                    snapPoints={[50]}
-                    snapPointsMode="percent"
-                    zIndex={200_000}
+                    title="Shop Category"
                   >
-                    <SheetOverlay />
-                    <SheetFrame
-                      backgroundColor={ui.surface}
-                      borderTopLeftRadius={20}
-                      borderTopRightRadius={20}
-                      overflow="hidden"
-                    >
-                      {/* Handle */}
-                      <YStack paddingTop="$2" paddingBottom="$1" alignItems="center">
-                        <SheetHandle backgroundColor={ui.borderSubtle} />
-                      </YStack>
-
-                      {/* Header */}
-                      <XStack
-                        paddingHorizontal="$4"
-                        paddingVertical="$2.5"
-                        alignItems="center"
-                        justifyContent="space-between"
-                        borderBottomWidth={1}
-                        borderBottomColor={ui.borderSubtle}
-                      >
-                        <Text fontSize={17} fontWeight="800" color={ui.text}>
-                          Shop Category
-                        </Text>
+                    {COMMON_SHOP_CATEGORIES.map((cat) => {
+                      const isSelected = formData.category === cat
+                      return (
                         <XStack
-                          width={36}
-                          height={36}
+                          key={cat}
+                          paddingHorizontal="$3"
+                          paddingVertical="$3"
+                          borderRadius={radius.card}
                           alignItems="center"
-                          justifyContent="center"
-                          borderRadius={999}
+                          justifyContent="space-between"
                           cursor="pointer"
-                          onPress={() => setIsCategorySheetOpen(false)}
-                          pressStyle={{ opacity: 0.7, backgroundColor: ui.surfaceHover }}
+                          onPress={() => {
+                            handleInput('category', cat)
+                            setIsCategorySheetOpen(false)
+                          }}
+                          pressStyle={{ backgroundColor: ui.surfaceHover }}
                           hoverStyle={{ backgroundColor: ui.surfaceHover }}
+                          backgroundColor={isSelected ? ui.roseSurface : 'transparent'}
                         >
-                          <Icons.X size={20} color={ui.textSecondary} />
+                          <Text
+                            fontSize={15}
+                            color={isSelected ? ui.brand : ui.text}
+                            fontWeight={isSelected ? '700' : '400'}
+                            flex={1}
+                          >
+                            {cat}
+                          </Text>
+                          {isSelected ? <Icons.CheckCircle2 size={18} color={ui.brand} /> : null}
                         </XStack>
-                      </XStack>
-
-                      {/* Category list */}
-                      <Sheet.ScrollView
-                        showsVerticalScrollIndicator={false}
-                        keyboardShouldPersistTaps="handled"
-                        contentContainerStyle={{ paddingTop: 8, paddingBottom: 8 }}
-                      >
-                        {COMMON_SHOP_CATEGORIES.map((cat) => {
-                          const isSelected = formData.category === cat
-                          return (
-                            <XStack
-                              key={cat}
-                              paddingHorizontal="$4"
-                              paddingVertical="$3"
-                              alignItems="center"
-                              justifyContent="space-between"
-                              cursor="pointer"
-                              onPress={() => {
-                                handleInput('category', cat)
-                                setIsCategorySheetOpen(false)
-                              }}
-                              pressStyle={{ backgroundColor: ui.surfaceHover }}
-                              hoverStyle={{ backgroundColor: ui.surfaceHover }}
-                              backgroundColor={isSelected ? ui.roseSurface : 'transparent'}
-                            >
-                              <Text
-                                fontSize={15}
-                                color={isSelected ? ui.brand : ui.text}
-                                fontWeight={isSelected ? '700' : '400'}
-                                flex={1}
-                              >
-                                {cat}
-                              </Text>
-                              {isSelected ? (
-                                <Icons.CheckCircle2 size={18} color={ui.brand} />
-                              ) : null}
-                            </XStack>
-                          )
-                        })}
-                      </Sheet.ScrollView>
-                    </SheetFrame>
-                  </Sheet>
+                      )
+                    })}
+                  </AppBottomSheet>
                 </YStack>
 
                 {/* Business name */}
