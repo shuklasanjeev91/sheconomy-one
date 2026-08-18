@@ -247,7 +247,7 @@ describe('runUpdateCheck', () => {
     })
     await expect(runUpdateCheck(deps)).resolves.toEqual({
       kind: 'storeRequired',
-      minimumSupportedVersion: '1.20.0',
+      minimumSupportedVersion: '5.0.14',
     })
   })
 })

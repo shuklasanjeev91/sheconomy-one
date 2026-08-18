@@ -173,6 +173,8 @@ export function VendorLayout() {
               flex={1}
               width="100%"
               showsVerticalScrollIndicator={false}
+              keyboardShouldPersistTaps="handled"
+              keyboardDismissMode={Platform.OS === 'ios' ? 'interactive' : 'on-drag'}
               style={
                 Platform.OS === 'web'
                   ? ({
