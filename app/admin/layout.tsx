@@ -9,7 +9,11 @@ import { CMS_NAV_ITEMS } from '~/app/admin/components/cms/cmsNav'
 import { Icons, ScrollView, Text, XStack, YStack } from '~/components/ui'
 import { getShadowStyle, radius } from '~/config/tokens'
 import { useAppLayout } from '~/hooks/useAppLayout'
-import { edgePanelPositionStyle, overlayBackdropStyle } from '~/lib/layout/styles'
+import {
+  edgePanelPositionStyle,
+  overlayBackdropStyle,
+  scrollHostTransformReset,
+} from '~/lib/layout/styles'
 import { useAppUi } from '~/lib/theme/useAppUi'
 import type { AppUiTokens } from '~/lib/theme/app-ui'
 
@@ -311,7 +315,11 @@ export function AdminLayout() {
             flex={1}
             width="100%"
             showsVerticalScrollIndicator={false}
-            style={Platform.OS === 'web' ? ({ overflowY: 'auto', minHeight: 0 } as const) : undefined}
+            style={
+              Platform.OS === 'web'
+                ? ({ overflowY: 'auto', minHeight: 0, ...scrollHostTransformReset() } as const)
+                : undefined
+            }
             contentContainerStyle={{ flexGrow: 1 }}
           >
             <Slot />

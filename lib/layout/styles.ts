@@ -48,6 +48,20 @@ export function bottomBarPositionStyle(bottomOffset = 0) {
   })
 }
 
+/**
+ * Clears the compositing hint react-native-web puts on every ScrollView
+ * (`transform: translateZ(0)`).
+ *
+ * A transform makes an element the containing block for its `position: fixed`
+ * descendants, so a drawer rendered inside a page scroller anchors to the
+ * scroll box instead of the viewport — and the scroller's `overflow` then clips
+ * it. That is what cut the vendor drawers off mid-page. Spread this into the
+ * style of any scroller that hosts route content.
+ */
+export function scrollHostTransformReset() {
+  return Platform.OS === 'web' ? ({ transform: 'none' } as const) : null
+}
+
 /** Full-screen overlay backdrop (filters, modals). */
 export function overlayBackdropStyle() {
   return Platform.select({

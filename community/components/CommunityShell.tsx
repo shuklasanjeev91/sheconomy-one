@@ -9,7 +9,7 @@ import { FullWidthLayout, PageColumns, PageSection } from '~/components/layout'
 import { ScrollView, YStack } from '~/components/ui'
 import { useAppLayout } from '~/hooks/useAppLayout'
 import { APP_LAYOUT } from '~/lib/layout/constants'
-import { LAYOUT_STRETCH } from '~/lib/layout/styles'
+import { LAYOUT_STRETCH, scrollHostTransformReset } from '~/lib/layout/styles'
 import { isCommunityPath } from '~/lib/routes'
 
 import type { ReactNode } from 'react'
@@ -96,6 +96,7 @@ export function CommunityShell({
                     height: '100%',
                     overflowY: 'auto',
                     WebkitOverflowScrolling: 'touch',
+                    ...scrollHostTransformReset(),
                   } as const
                 }
                 contentContainerStyle={{

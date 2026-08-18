@@ -3,6 +3,7 @@ import { Platform } from 'react-native'
 import type { NativeSyntheticEvent, NativeScrollEvent } from 'react-native'
 
 import { ScrollView, YStack } from '~/components/ui'
+import { scrollHostTransformReset } from '~/lib/layout/styles'
 import { useAppBarScroll } from '~/components/navigation/AppBarScrollContext'
 import { usePullToRefresh } from '~/hooks/usePullToRefresh'
 import { useAppLayout } from '~/hooks/useAppLayout'
@@ -97,6 +98,7 @@ export function PageScroll({ children, onRefresh, refreshing }: PageScrollProps)
               overflowY: 'auto',
               WebkitOverflowScrolling: 'touch',
               marginBottom: bottomInset,
+              ...scrollHostTransformReset(),
             } as const)
           : ({ flex: 1, marginBottom: bottomInset } as const)
       }
