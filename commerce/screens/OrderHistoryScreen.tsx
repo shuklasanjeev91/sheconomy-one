@@ -9,6 +9,7 @@ import {
 } from '~/commerce/lib/buyer-account'
 import { resumeOrderOnlinePayment } from '~/commerce/lib/resume-order-payment'
 import { cancelCustomerOrder } from '~/commerce/lib/customer-orders'
+import { getCustomerOrderActionEligibility } from '~/commerce/lib/customer-order-lifecycle'
 import { Button, Icons, Spinner, Text, XStack, YStack, useAppToast } from '~/components/ui'
 import { FullWidthLayout, HorizontalScrollRow, PageSection } from '~/components/layout'
 import { formatCurrency } from '~/lib/format'
@@ -43,6 +44,13 @@ function matchesStatusFilter(status: string | null, filter: OrderStatusFilter) {
     )
   }
   return normalized.includes(filter)
+}
+
+function cancelEligibility(order: CustomerOrderHistoryRow) {
+  return getCustomerOrderActionEligibility({
+    orderStatus: order.order_status,
+    paymentStatus: order.payment_status,
+  })
 }
 
 function formatOrderDate(value: string | null) {
@@ -226,32 +234,18 @@ export function OrderHistoryScreen() {
                   </XStack>
                   <XStack gap="$2" flexWrap="wrap">
                     {order.order_status === 'awaiting_payment' ? (
-                      <>
-                        <Button
-                          tone="primary"
-                          size="$3"
-                          borderRadius={999}
-                          disabled={
-                            payingOrderId === order.order_id ||
-                            cancellingOrderId === order.order_id
-                          }
-                          onPress={() => void handlePayNow(order.order_id)}
-                        >
-                          {payingOrderId === order.order_id ? 'Opening…' : 'Pay now'}
-                        </Button>
-                        <Button
-                          tone="outline"
-                          size="$3"
-                          borderRadius={999}
-                          disabled={
-                            payingOrderId === order.order_id ||
-                            cancellingOrderId === order.order_id
-                          }
-                          onPress={() => void handleCancelUnpaid(order.order_id)}
-                        >
-                          {cancellingOrderId === order.order_id ? 'Cancelling…' : 'Cancel'}
-                        </Button>
-                      </>
+                      <Button
+                        tone="primary"
+                        size="$3"
+                        borderRadius={999}
+                        disabled={
+                          payingOrderId === order.order_id ||
+                          cancellingOrderId === order.order_id
+                        }
+                        onPress={() => void handlePayNow(order.order_id)}
+                      >
+                        {payingOrderId === order.order_id ? 'Opening…' : 'Pay now'}
+                      </Button>
                     ) : (
                       <Button
                         tone="primary"
@@ -262,6 +256,30 @@ export function OrderHistoryScreen() {
                         View order
                       </Button>
                     )}
+                    {cancelEligibility(order).canInstantCancel ? (
+                      <Button
+                        tone="outline"
+                        size="$3"
+                        borderRadius={999}
+                        disabled={
+                          payingOrderId === order.order_id ||
+                          cancellingOrderId === order.order_id
+                        }
+                        onPress={() => void handleCancelUnpaid(order.order_id)}
+                      >
+                        {cancellingOrderId === order.order_id ? 'Cancelling…' : 'Cancel'}
+                      </Button>
+                    ) : cancelEligibility(order).canRequestCancel ? (
+                      // Requests need a reason — the detail screen owns that sheet.
+                      <Button
+                        tone="outline"
+                        size="$3"
+                        borderRadius={999}
+                        onPress={() => navigateApp(commerceRoutes.order(order.order_id))}
+                      >
+                        Request cancellation
+                      </Button>
+                    ) : null}
                     <Button
                       tone="outline"
                       size="$3"
