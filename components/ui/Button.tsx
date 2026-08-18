@@ -76,6 +76,7 @@ export const Button = forwardRef<any, ButtonProps>(function Button(
       fontWeight="700"
       letterSpacing={0.15}
       animation="quick"
+      disabledStyle={{ opacity: 0.5 }}
       {...TONE_STYLE[tone]}
       {...props}
     />

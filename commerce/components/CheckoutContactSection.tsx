@@ -1,8 +1,9 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { User } from '@supabase/supabase-js'
 
-import { PhoneInput } from '~/components/forms/PhoneInput'
+import { PhoneInput, type PhoneInputHandle } from '~/components/forms/PhoneInput'
 import { OtpCodeInput } from '~/features/auth/components/OtpCodeInput'
+import { useOtpAutofill } from '~/features/auth/hooks/useOtpAutofill'
 import {
   confirmCheckoutEmailVerification,
   confirmCheckoutPhoneVerification,
@@ -13,8 +14,18 @@ import {
 } from '~/features/auth/services/account-contact'
 import { isCompleteOtp, normalizeOtpDigits } from '~/features/auth/validation'
 import { Button, Field, Icons, Input, Text, XStack, YStack, useAppToast } from '~/components/ui'
+import {
+  CHECKOUT_OTP_AUTO_SEND_DEBOUNCE_MS,
+  EMPTY_CHECKOUT_OTP_SESSION,
+  checkoutOtpExpiresIn,
+  checkoutOtpResendIn,
+  checkoutOtpSessionFor,
+  formatCheckoutOtpCountdown,
+  shouldAutoSendCheckoutOtp,
+  type CheckoutOtpSession,
+} from '~/commerce/lib/checkout-otp'
 import { DEFAULT_COUNTRY } from '~/lib/phone/countries'
-import { canonicalE164Phone, phonesEquivalent } from '~/lib/phone/phone'
+import { canonicalE164Phone, isValidPhone, phonesEquivalent } from '~/lib/phone/phone'
 import { useCommercePalette } from '~/commerce/components/commerce-ui'
 import { useAppUi } from '~/lib/theme/useAppUi'
 
@@ -22,85 +33,39 @@ function checkoutPhoneOtpStorageKey(userId: string) {
   return `checkout:phone-otp:${userId}`
 }
 
-function checkoutPhoneOtpSentAtKey(userId: string) {
-  return `checkout:phone-otp-sent-at:${userId}`
-}
-
-const CHECKOUT_OTP_RESEND_COOLDOWN_SECONDS = 30
-const CHECKOUT_OTP_EXPIRY_SECONDS = 300
-
-function formatOtpCountdown(totalSeconds: number): string {
-  const minutes = Math.floor(totalSeconds / 60)
-  const seconds = totalSeconds % 60
-  return `${minutes}:${String(seconds).padStart(2, '0')}`
-}
-
-function readCheckoutPhoneOtpSentAt(userId: string): number | null {
-  if (typeof sessionStorage === 'undefined') return null
+/**
+ * Web-only mirror of the in-flight code so a page reload does not strand the
+ * shopper. React state is the source of truth — native has no `sessionStorage`,
+ * and reading the flag from it used to leave the code panel permanently hidden
+ * on iOS and Android.
+ */
+function readMirroredOtpSession(userId: string): CheckoutOtpSession {
+  if (typeof sessionStorage === 'undefined') return EMPTY_CHECKOUT_OTP_SESSION
   try {
-    const raw = sessionStorage.getItem(checkoutPhoneOtpSentAtKey(userId))
-    if (!raw) return null
-    const sentAt = Number(raw)
-    return Number.isFinite(sentAt) ? sentAt : null
+    const raw = sessionStorage.getItem(checkoutPhoneOtpStorageKey(userId))
+    if (!raw) return EMPTY_CHECKOUT_OTP_SESSION
+    const parsed = JSON.parse(raw) as { phone?: unknown; sentAt?: unknown }
+    const phone = typeof parsed.phone === 'string' ? canonicalE164Phone(parsed.phone) : ''
+    const sentAt =
+      typeof parsed.sentAt === 'number' && Number.isFinite(parsed.sentAt) ? parsed.sentAt : null
+    return phone && sentAt != null ? { phone, sentAt } : EMPTY_CHECKOUT_OTP_SESSION
   } catch {
-    return null
+    return EMPTY_CHECKOUT_OTP_SESSION
   }
 }
 
-function writeCheckoutPhoneOtpSentAt(userId: string, sentAt: number | null) {
-  if (typeof sessionStorage === 'undefined') return
-  try {
-    const key = checkoutPhoneOtpSentAtKey(userId)
-    if (sentAt != null) sessionStorage.setItem(key, String(sentAt))
-    else sessionStorage.removeItem(key)
-  } catch {
-    // sessionStorage may be unavailable (private mode / SSR)
-  }
-}
-
-function readCheckoutPhoneOtpPending(userId: string): string | null {
-  if (typeof sessionStorage === 'undefined') return null
-  try {
-    return sessionStorage.getItem(checkoutPhoneOtpStorageKey(userId))
-  } catch {
-    return null
-  }
-}
-
-function writeCheckoutPhoneOtpPending(userId: string, phoneE164: string | null) {
+function writeMirroredOtpSession(userId: string, session: CheckoutOtpSession) {
   if (typeof sessionStorage === 'undefined') return
   try {
     const key = checkoutPhoneOtpStorageKey(userId)
-    if (phoneE164?.trim()) sessionStorage.setItem(key, phoneE164.trim())
-    else sessionStorage.removeItem(key)
+    if (session.phone && session.sentAt != null) {
+      sessionStorage.setItem(key, JSON.stringify(session))
+    } else {
+      sessionStorage.removeItem(key)
+    }
   } catch {
     // sessionStorage may be unavailable (private mode / SSR)
   }
-}
-
-function readPendingCheckoutPhone(userId: string): string | null {
-  const raw = readCheckoutPhoneOtpPending(userId)
-  if (!raw?.trim()) return null
-  const normalized = canonicalE164Phone(raw.trim())
-  return normalized || null
-}
-
-function writePendingCheckoutPhone(userId: string, phoneE164: string | null) {
-  if (!phoneE164?.trim()) {
-    writeCheckoutPhoneOtpPending(userId, null)
-    writeCheckoutPhoneOtpSentAt(userId, null)
-    return
-  }
-  writeCheckoutPhoneOtpPending(userId, canonicalE164Phone(phoneE164.trim()))
-}
-
-function writeCheckoutPhoneOtpSession(
-  userId: string,
-  phoneE164: string | null,
-  sentAt: number | null,
-) {
-  writePendingCheckoutPhone(userId, phoneE164)
-  writeCheckoutPhoneOtpSentAt(userId, sentAt)
 }
 
 type CheckoutContactSectionProps = {
@@ -148,28 +113,40 @@ export function CheckoutContactSection({ user, onCheckoutReadyChange }: Checkout
   const toast = useAppToast()
   const contact = useMemo(() => resolveAuthContact(user), [user])
 
-  const [otpFlowTick, setOtpFlowTick] = useState(0)
-  const pendingVerificationPhone = useMemo(() => {
-    void otpFlowTick
-    return readPendingCheckoutPhone(user.id)
-  }, [otpFlowTick, user.id])
+  const phoneInputRef = useRef<PhoneInputHandle | null>(null)
+  const verifyingRef = useRef(false)
+  const lastAutoSentPhoneRef = useRef<string | null>(null)
+  const lastAutoSubmitRef = useRef<string | null>(null)
 
-  const [phoneE164, setPhoneE164] = useState(() => {
-    const pending = readPendingCheckoutPhone(user.id)
-    if (pending) return pending
-    return contact.phone ?? ''
-  })
-  const [email, setEmail] = useState(contact.email ?? '')
-  const phoneOtpSent = Boolean(
-    pendingVerificationPhone && phonesEquivalent(pendingVerificationPhone, phoneE164),
+  const [otpSession, setOtpSessionState] = useState<CheckoutOtpSession>(() =>
+    readMirroredOtpSession(user.id),
   )
+  const [phoneE164, setPhoneE164] = useState(() => otpSession.phone ?? contact.phone ?? '')
+  const [email, setEmail] = useState(contact.email ?? '')
   const [phoneOtp, setPhoneOtp] = useState('')
   const [phoneSendError, setPhoneSendError] = useState<string | null>(null)
   const [phoneVerifyError, setPhoneVerifyError] = useState<string | null>(null)
-  const [otpClockTick, setOtpClockTick] = useState(0)
   const [emailOtpSent, setEmailOtpSent] = useState(false)
   const [emailOtp, setEmailOtp] = useState('')
   const [busy, setBusy] = useState(false)
+  const [now, setNow] = useState(() => Date.now())
+
+  const setOtpSession = useCallback(
+    (next: CheckoutOtpSession) => {
+      setOtpSessionState(next)
+      writeMirroredOtpSession(user.id, next)
+    },
+    [user.id],
+  )
+
+  const phoneOtpSent = Boolean(otpSession.phone && phonesEquivalent(otpSession.phone, phoneE164))
+  const phoneResendIn = checkoutOtpResendIn(otpSession, now)
+  const phoneOtpExpiresIn = checkoutOtpExpiresIn(otpSession, now)
+  const phoneOtpExpired = phoneOtpSent && otpSession.sentAt != null && phoneOtpExpiresIn <= 0
+
+  const phoneLocked = contact.phoneVerified
+  const emailLocked = contact.emailVerified && Boolean(contact.email)
+  const showEmailVerify = !emailLocked && email.trim().length > 0
 
   useEffect(() => {
     onCheckoutReadyChange(contact.checkoutReady)
@@ -180,15 +157,8 @@ export function CheckoutContactSection({ user, onCheckoutReadyChange }: Checkout
   }, [contact.email])
 
   useEffect(() => {
-    if (contact.phoneVerified && contact.phone) {
-      setPhoneE164(contact.phone)
-      return
-    }
-    const pending = readPendingCheckoutPhone(user.id)
-    if (pending) {
-      setPhoneE164(pending)
-    }
-  }, [contact.phone, contact.phoneVerified, user.id])
+    if (contact.phoneVerified && contact.phone) setPhoneE164(contact.phone)
+  }, [contact.phone, contact.phoneVerified])
 
   useEffect(() => {
     setPhoneSendError(null)
@@ -196,100 +166,142 @@ export function CheckoutContactSection({ user, onCheckoutReadyChange }: Checkout
 
   useEffect(() => {
     if (!phoneOtpSent) return
-    const timer = setInterval(() => setOtpClockTick((value) => value + 1), 1000)
+    const timer = setInterval(() => setNow(Date.now()), 1000)
     return () => clearInterval(timer)
   }, [phoneOtpSent])
 
-  const phoneOtpSentAt = useMemo(() => {
-    void otpFlowTick
-    void otpClockTick
-    return readCheckoutPhoneOtpSentAt(user.id)
-  }, [otpClockTick, otpFlowTick, user.id])
+  const handleSendPhoneCode = useCallback(
+    async (options?: { isResend?: boolean; auto?: boolean }) => {
+      // Read straight from the field: on native the typed digits do not always
+      // reach the parent before the tap lands, which used to disable the button
+      // and swallow the press with no feedback at all.
+      const typed = phoneInputRef.current?.flush() || phoneE164
+      const canonicalPhone = canonicalE164Phone(typed.trim())
 
-  const phoneResendIn = useMemo(() => {
-    if (!phoneOtpSentAt) return 0
-    const remainingMs = phoneOtpSentAt + CHECKOUT_OTP_RESEND_COOLDOWN_SECONDS * 1000 - Date.now()
-    return Math.max(0, Math.ceil(remainingMs / 1000))
-  }, [phoneOtpSentAt, otpClockTick])
+      setPhoneSendError(null)
+      if (!canonicalPhone || !isValidPhone(canonicalPhone)) {
+        const message = 'Enter a valid mobile number.'
+        setPhoneSendError(message)
+        if (!options?.auto) toast.show('Check your mobile number', { tone: 'warning', message })
+        return
+      }
 
-  const phoneOtpExpiresIn = useMemo(() => {
-    if (!phoneOtpSentAt) return 0
-    const remainingMs = phoneOtpSentAt + CHECKOUT_OTP_EXPIRY_SECONDS * 1000 - Date.now()
-    return Math.max(0, Math.ceil(remainingMs / 1000))
-  }, [phoneOtpSentAt, otpClockTick])
+      if (options?.isResend) {
+        setPhoneVerifyError(null)
+        setPhoneOtp('')
+      }
 
-  const phoneOtpExpired = phoneOtpSent && phoneOtpSentAt != null && phoneOtpExpiresIn <= 0
+      setBusy(true)
+      const result = await sendCheckoutPhoneVerification(canonicalPhone)
+      setBusy(false)
 
-  const phoneLocked = contact.phoneVerified
-  const emailLocked = contact.emailVerified && Boolean(contact.email)
-  const showEmailVerify = !emailLocked && email.trim().length > 0
+      if (!result.success) {
+        const message = result.error ?? 'Could not send verification code.'
+        setPhoneSendError(message)
+        toast.show('Could not send code', { tone: 'danger', message })
+        return
+      }
+
+      lastAutoSubmitRef.current = null
+      setPhoneE164(canonicalPhone)
+      setOtpSession(checkoutOtpSessionFor(canonicalPhone, Date.now()))
+      setNow(Date.now())
+      toast.show(options?.isResend ? 'New code sent' : 'Code sent', {
+        tone: 'success',
+        message: `We sent a verification code to ${formatAuthContactPhone(canonicalPhone)}.`,
+      })
+    },
+    [phoneE164, setOtpSession, toast],
+  )
+
+  const handleVerifyPhone = useCallback(
+    async (codeOverride?: string) => {
+      if (verifyingRef.current) return
+
+      const code = normalizeOtpDigits(codeOverride ?? phoneOtp)
+      if (!isCompleteOtp(code)) {
+        toast.show('Enter the 6-digit code', { tone: 'warning' })
+        return
+      }
+      if (phoneOtpExpired) {
+        setPhoneVerifyError('This code has expired. Send a new code to continue.')
+        return
+      }
+
+      verifyingRef.current = true
+      setPhoneVerifyError(null)
+      setBusy(true)
+      const result = await confirmCheckoutPhoneVerification(phoneE164, code)
+      setBusy(false)
+      verifyingRef.current = false
+
+      if (!result.success) {
+        const message = result.error ?? 'Verification failed.'
+        const expired = message.toLowerCase().includes('expired')
+        setPhoneVerifyError(message)
+        toast.show('Verification failed', { tone: 'danger', message })
+        if (expired) setPhoneOtp('')
+        return
+      }
+
+      setPhoneOtp('')
+      setPhoneVerifyError(null)
+      setOtpSession(EMPTY_CHECKOUT_OTP_SESSION)
+      toast.show('Mobile verified', {
+        tone: 'success',
+        message: 'You can place your order now.',
+      })
+    },
+    [phoneE164, phoneOtp, phoneOtpExpired, setOtpSession, toast],
+  )
+
+  // Send the code as soon as a complete number has been sitting still, so the
+  // shopper never has to find a button to start verification.
+  useEffect(() => {
+    if (phoneLocked) return
+    const timer = setTimeout(() => {
+      const eligible = shouldAutoSendCheckoutOtp({
+        phoneE164,
+        phoneVerified: contact.phoneVerified,
+        busy,
+        session: otpSession,
+        lastAutoSentPhone: lastAutoSentPhoneRef.current,
+        now: Date.now(),
+      })
+      if (!eligible) return
+      lastAutoSentPhoneRef.current = canonicalE164Phone(phoneE164.trim())
+      void handleSendPhoneCode({ auto: true })
+    }, CHECKOUT_OTP_AUTO_SEND_DEBOUNCE_MS)
+    return () => clearTimeout(timer)
+  }, [busy, contact.phoneVerified, handleSendPhoneCode, otpSession, phoneE164, phoneLocked])
+
+  const handleAutofillCode = useCallback((code: string) => {
+    setPhoneVerifyError(null)
+    setPhoneOtp(code)
+  }, [])
+
+  useOtpAutofill({
+    enabled: phoneOtpSent && !phoneOtpExpired && !busy,
+    onCode: handleAutofillCode,
+  })
+
+  // Verify the moment six digits land, whether they were autofilled or typed.
+  useEffect(() => {
+    if (!phoneOtpSent || phoneOtpExpired || busy || verifyingRef.current) return
+    const code = normalizeOtpDigits(phoneOtp)
+    if (!isCompleteOtp(code) || lastAutoSubmitRef.current === code) return
+    lastAutoSubmitRef.current = code
+    void handleVerifyPhone(code)
+  }, [busy, handleVerifyPhone, phoneOtp, phoneOtpExpired, phoneOtpSent])
 
   function handlePhoneChange(next: string) {
     setPhoneE164(next)
     setPhoneVerifyError(null)
-    if (pendingVerificationPhone && !phonesEquivalent(pendingVerificationPhone, next)) {
-      writeCheckoutPhoneOtpSession(user.id, null, null)
-      setOtpFlowTick((value) => value + 1)
-    }
-  }
-
-  async function handleSendPhoneCode(options?: { isResend?: boolean }) {
-    setPhoneSendError(null)
-    if (options?.isResend) {
-      setPhoneVerifyError(null)
+    if (otpSession.phone && !phonesEquivalent(otpSession.phone, next)) {
+      setOtpSession(EMPTY_CHECKOUT_OTP_SESSION)
       setPhoneOtp('')
+      lastAutoSubmitRef.current = null
     }
-    setBusy(true)
-    const result = await sendCheckoutPhoneVerification(phoneE164)
-    setBusy(false)
-    if (!result.success) {
-      const message = result.error ?? 'Could not send verification code.'
-      setPhoneSendError(message)
-      toast.show('Could not send code', { tone: 'danger', message })
-      return
-    }
-    const normalizedPhone = canonicalE164Phone(phoneE164.trim())
-    if (normalizedPhone && normalizedPhone !== phoneE164) {
-      setPhoneE164(normalizedPhone)
-    }
-    writeCheckoutPhoneOtpSession(user.id, normalizedPhone || phoneE164, Date.now())
-    setOtpFlowTick((value) => value + 1)
-    toast.show(options?.isResend ? 'New code sent' : 'Code sent', {
-      tone: 'success',
-      message: `We sent a verification code to ${formatAuthContactPhone(normalizedPhone || phoneE164)}.`,
-    })
-  }
-
-  async function handleVerifyPhone() {
-    const code = normalizeOtpDigits(phoneOtp)
-    if (!isCompleteOtp(code)) {
-      toast.show('Enter the 6-digit code', { tone: 'warning' })
-      return
-    }
-    if (phoneOtpExpired) {
-      setPhoneVerifyError('This code has expired. Send a new code to continue.')
-      return
-    }
-    setPhoneVerifyError(null)
-    setBusy(true)
-    const result = await confirmCheckoutPhoneVerification(phoneE164, code)
-    setBusy(false)
-    if (!result.success) {
-      const message = result.error ?? 'Verification failed.'
-      const expired = message.toLowerCase().includes('expired')
-      setPhoneVerifyError(message)
-      toast.show('Verification failed', { tone: 'danger', message })
-      if (expired) setPhoneOtp('')
-      return
-    }
-    setPhoneOtp('')
-    setPhoneVerifyError(null)
-    writeCheckoutPhoneOtpSession(user.id, null, null)
-    setOtpFlowTick((value) => value + 1)
-    toast.show('Mobile verified', {
-      tone: 'success',
-      message: 'You can place your order now.',
-    })
   }
 
   async function handleSendEmailCode() {
@@ -387,16 +399,16 @@ export function CheckoutContactSection({ user, onCheckoutReadyChange }: Checkout
   return (
     <YStack gap="$3">
       <Text fontSize={13} color={c.secondary} lineHeight={19}>
-        Add and verify your mobile number to place this order. We&apos;ll send a one-time code — your
-        sign-in session stays active.
+        Add your mobile number to place this order. We&apos;ll send a one-time code as soon as the
+        number is complete and verify it automatically — your sign-in session stays active.
       </Text>
 
       <Field label="Mobile number" required error={phoneSendError ?? undefined}>
         <PhoneInput
+          ref={phoneInputRef}
           value={phoneE164}
           onChange={handlePhoneChange}
           defaultCountry={DEFAULT_COUNTRY}
-          disabled={busy}
         />
       </Field>
 
@@ -405,10 +417,10 @@ export function CheckoutContactSection({ user, onCheckoutReadyChange }: Checkout
           tone="outline"
           size="$3"
           borderRadius={999}
-          disabled={busy || !phoneE164.trim() || phoneOtpSent}
+          disabled={busy || phoneOtpSent}
           onPress={() => void handleSendPhoneCode()}
         >
-          {phoneOtpSent ? 'Code sent' : 'Send verification code'}
+          {phoneOtpSent ? 'Code sent' : busy ? 'Sending…' : 'Send verification code'}
         </Button>
       </XStack>
 
@@ -418,7 +430,8 @@ export function CheckoutContactSection({ user, onCheckoutReadyChange }: Checkout
             Verification code
           </Text>
           <Text fontSize={12} color={c.secondary}>
-            Enter the 6-digit code sent to {formatAuthContactPhone(phoneE164)}.
+            We sent a 6-digit code to {formatAuthContactPhone(phoneE164)}. It verifies itself once it
+            arrives.
           </Text>
           {phoneOtpExpired ? (
             <XStack alignItems="center" gap="$2" flexWrap="wrap">
@@ -427,9 +440,9 @@ export function CheckoutContactSection({ user, onCheckoutReadyChange }: Checkout
                 This code has expired. Send a new code to continue.
               </Text>
             </XStack>
-          ) : phoneOtpSentAt ? (
+          ) : otpSession.sentAt ? (
             <Text fontSize={12} color={c.secondary}>
-              Code expires in {formatOtpCountdown(phoneOtpExpiresIn)}
+              Code expires in {formatCheckoutOtpCountdown(phoneOtpExpiresIn)}
             </Text>
           ) : null}
           <OtpCodeInput
@@ -450,10 +463,10 @@ export function CheckoutContactSection({ user, onCheckoutReadyChange }: Checkout
             tone="primary"
             size="$3"
             borderRadius={999}
-            disabled={busy || phoneOtpExpired}
+            disabled={busy || phoneOtpExpired || !isCompleteOtp(normalizeOtpDigits(phoneOtp))}
             onPress={() => void handleVerifyPhone()}
           >
-            Verify mobile
+            {busy ? 'Verifying…' : 'Verify mobile'}
           </Button>
           <XStack gap="$2" flexWrap="wrap" alignItems="center">
             <Button

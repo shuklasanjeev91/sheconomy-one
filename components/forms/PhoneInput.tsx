@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { forwardRef, useCallback, useEffect, useImperativeHandle, useMemo, useRef, useState } from 'react'
 import { View } from 'react-native'
 
 import { CountryCodeSheet } from '~/components/forms/CountryCodeSheet'
@@ -33,11 +33,20 @@ export type PhoneInputProps = {
   autoFocus?: boolean
 }
 
+export type PhoneInputHandle = {
+  /**
+   * Current E.164 straight from the field, pushed to `onChange` if the parent
+   * is behind. Submit handlers should prefer this: on native the typed digits
+   * do not always reach the parent before a button press lands.
+   */
+  flush: () => string
+}
+
 /**
  * App-wide phone field: flat country dial-code sheet + national digits.
  * Always emits E.164 so shop/profile storage stays a single string.
  */
-export function PhoneInput({
+export const PhoneInput = forwardRef<PhoneInputHandle, PhoneInputProps>(function PhoneInput({
   value,
   onChange,
   onBlur,
@@ -48,12 +57,25 @@ export function PhoneInput({
   placeholder,
   accessibilityLabel = 'Mobile number',
   autoFocus = false,
-}: PhoneInputProps) {
+}: PhoneInputProps, ref) {
   const ui = useAppUi()
   const parsed = useMemo(() => (value.trim() ? parseE164Phone(value.trim()) : null), [value])
   const [country, setCountry] = useState<Country>(parsed?.country ?? defaultCountry)
   const [national, setNational] = useState(parsed?.nationalNumber ?? '')
   const [sheetOpen, setSheetOpen] = useState(false)
+
+  const latest = useRef({ country, national, value, onChange })
+  latest.current = { country, national, value, onChange }
+
+  const flush = useCallback(() => {
+    const current = latest.current
+    const digits = nationalDigits(current.national)
+    const next = digits ? toE164Phone(current.country, digits) : ''
+    if (next !== current.value.trim()) current.onChange(next)
+    return next
+  }, [])
+
+  useImperativeHandle(ref, () => ({ flush }), [flush])
 
   useEffect(() => {
     if (!value.trim()) {
@@ -107,9 +129,7 @@ export function PhoneInput({
 
   function flushToParent() {
     // Recover when native buffer updated without a reliable onChangeText stream.
-    if (!value.trim() && nationalDigits(national).length > 0) {
-      emit(country, national)
-    }
+    flush()
   }
 
   const inputHeight = compact ? 44 : 52
@@ -197,6 +217,8 @@ export function PhoneInput({
       />
     </>
   )
-}
+})
+
+PhoneInput.displayName = 'PhoneInput'
 
 export { DEFAULT_COUNTRY }
