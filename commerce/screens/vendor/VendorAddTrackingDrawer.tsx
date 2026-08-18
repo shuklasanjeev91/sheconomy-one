@@ -21,11 +21,14 @@ import { useLockBodyScroll } from '~/hooks/useLockBodyScroll'
 import { useVendorCurrency } from '~/hooks/useVendorCurrency'
 import { overlayBackdropStyle } from '~/lib/layout/styles'
 import { formatOrderAmount } from '~/lib/orders/order.utils'
+import { getPublicTrackingUrl } from '~/lib/orders/courier-tracking-urls'
 import {
   COURIER_OPTIONS,
+  COURIER_OPTIONS_GROUPED,
   getTrackingFormat,
   validateTrackingNumber,
 } from '~/lib/orders/tracking.validation'
+import { openExternalUrl } from '~/lib/platform/openUrl'
 import type { VendorOrderItem } from '~/lib/orders/vendor-orders.type'
 import type { AppUiTokens } from '~/lib/theme/app-ui'
 
@@ -157,6 +160,13 @@ function TrackingForm({ ui, item, submitting, onClose, onSubmit }: TrackingFormP
     return `${format.formats.join(' or ')}${example}`
   }, [courierSlug])
 
+  const publicTrackUrl = useMemo(() => {
+    if (!courierSlug || !trackingNumber.trim()) return null
+    const check = validateTrackingNumber(trackingNumber, courierSlug)
+    if (!check.isValid) return null
+    return getPublicTrackingUrl(courierSlug, trackingNumber.trim())
+  }, [courierSlug, trackingNumber])
+
   const courierError = touched && !courierSlug ? 'Select a courier' : null
   const trackingCheck =
     trackingNumber.trim().length > 0 && courierSlug
@@ -191,7 +201,7 @@ function TrackingForm({ ui, item, submitting, onClose, onSubmit }: TrackingFormP
     onSubmit({
       courier_slug: courierSlug,
       tracking_number: trackingNumber.trim(),
-      custom_tracking_url: null,
+      custom_tracking_url: getPublicTrackingUrl(courierSlug, trackingNumber.trim()),
       notify_customer: notifyCustomer,
     })
   }
@@ -338,6 +348,23 @@ function TrackingForm({ ui, item, submitting, onClose, onSubmit }: TrackingFormP
               Delivery date and status sync from the courier — no need to enter them here.
             </Text>
           )}
+          {publicTrackUrl ? (
+            <XStack
+              alignItems="center"
+              gap="$2"
+              paddingVertical="$1"
+              cursor="pointer"
+              hoverStyle={{ opacity: 0.85 }}
+              onPress={() => {
+                void openExternalUrl(publicTrackUrl)
+              }}
+            >
+              <Icons.ExternalLink size={13} color={ui.brand} />
+              <Text fontSize={12} fontWeight="700" color={ui.brand} flex={1} numberOfLines={1}>
+                Open {courierLabel} tracking page
+              </Text>
+            </XStack>
+          ) : null}
           {trackingError ? <FieldError text={trackingError} /> : null}
 
           {scanning && Platform.OS !== 'web' ? (
@@ -499,34 +526,54 @@ function CourierPicker({
         </XStack>
       </Popover.Trigger>
       <PopoverContent>
-        <ScrollView style={{ maxHeight: 280 }} showsVerticalScrollIndicator={false}>
-          <YStack minWidth={220} gap={2}>
-            {COURIER_OPTIONS.map((option) => {
-              const selected = option.value === value
-              return (
-                <XStack
-                  key={option.value}
-                  alignItems="center"
-                  justifyContent="space-between"
-                  gap="$2"
+        <ScrollView style={{ maxHeight: 320 }} showsVerticalScrollIndicator={false}>
+          <YStack minWidth={260} gap={2} paddingVertical={4}>
+            {COURIER_OPTIONS_GROUPED.map((group) => (
+              <YStack key={group.region} gap={2} paddingBottom={group.region === 'other' ? 0 : 6}>
+                <Text
+                  fontSize={11}
+                  fontWeight="800"
+                  color={ui.textMuted}
+                  letterSpacing={0.4}
+                  textTransform="uppercase"
                   paddingHorizontal="$3"
-                  paddingVertical="$2.5"
-                  borderRadius={radius.chip}
-                  cursor="pointer"
-                  backgroundColor={selected ? ui.roseSurface : 'transparent'}
-                  hoverStyle={{ backgroundColor: ui.surfaceMuted }}
-                  onPress={() => {
-                    onChange(option.value)
-                    setOpen(false)
-                  }}
+                  paddingTop={group.region === 'domestic' ? 2 : 8}
+                  paddingBottom={2}
                 >
-                  <Text fontSize={13} fontWeight={selected ? '800' : '600'} color={selected ? ui.brand : ui.text}>
-                    {option.label}
-                  </Text>
-                  {selected ? <Icons.Check size={15} color={ui.brand} /> : null}
-                </XStack>
-              )
-            })}
+                  {group.title}
+                </Text>
+                {group.options.map((option) => {
+                  const selected = option.value === value
+                  return (
+                    <XStack
+                      key={option.value}
+                      alignItems="center"
+                      justifyContent="space-between"
+                      gap="$2"
+                      paddingHorizontal="$3"
+                      paddingVertical="$2.5"
+                      borderRadius={radius.chip}
+                      cursor="pointer"
+                      backgroundColor={selected ? ui.roseSurface : 'transparent'}
+                      hoverStyle={{ backgroundColor: ui.surfaceMuted }}
+                      onPress={() => {
+                        onChange(option.value)
+                        setOpen(false)
+                      }}
+                    >
+                      <Text
+                        fontSize={13}
+                        fontWeight={selected ? '800' : '600'}
+                        color={selected ? ui.brand : ui.text}
+                      >
+                        {option.label}
+                      </Text>
+                      {selected ? <Icons.Check size={15} color={ui.brand} /> : null}
+                    </XStack>
+                  )
+                })}
+              </YStack>
+            ))}
           </YStack>
         </ScrollView>
       </PopoverContent>

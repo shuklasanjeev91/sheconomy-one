@@ -52,12 +52,61 @@ export const COURIER_SLUGS = {
 
 export type CourierSlug = (typeof COURIER_SLUGS)[keyof typeof COURIER_SLUGS]
 
+export type CourierRegion = 'domestic' | 'international' | 'other' | 'legacy'
+
 type CourierRule = {
   name: string
   patterns: RegExp[]
   hint: string
   formats: string[]
   examples: string[]
+}
+
+export type CourierOption = { value: CourierSlug; label: string; region: CourierRegion }
+
+/** India-first picker regions. Legacy slugs stay in COURIER_RULES for existing AWBs. */
+export const COURIER_REGION: Record<string, CourierRegion> = {
+  [COURIER_SLUGS.BLUE_DART]: 'domestic',
+  [COURIER_SLUGS.DELHIVERY]: 'domestic',
+  [COURIER_SLUGS.DTDC]: 'domestic',
+  [COURIER_SLUGS.ECOM_EXPRESS]: 'domestic',
+  [COURIER_SLUGS.INDIA_POST]: 'domestic',
+  [COURIER_SLUGS.XPRESSBEES]: 'domestic',
+  [COURIER_SLUGS.PROFESSIONAL_COURIERS]: 'domestic',
+  [COURIER_SLUGS.EKART]: 'domestic',
+  [COURIER_SLUGS.SHADOWFAX]: 'domestic',
+  [COURIER_SLUGS.GATI]: 'domestic',
+  [COURIER_SLUGS.SAFEEXPRESS]: 'domestic',
+  [COURIER_SLUGS.TRACKON]: 'domestic',
+  [COURIER_SLUGS.DOTZOT]: 'domestic',
+  [COURIER_SLUGS.LOADSHARE]: 'domestic',
+  [COURIER_SLUGS.BORZO]: 'domestic',
+  [COURIER_SLUGS.DUNZO]: 'domestic',
+  [COURIER_SLUGS.SHREE_MARUTI]: 'domestic',
+  [COURIER_SLUGS.CRITICALOG]: 'domestic',
+  [COURIER_SLUGS.RIVIGO]: 'domestic',
+  [COURIER_SLUGS.WOW_EXPRESS]: 'domestic',
+  [COURIER_SLUGS.JTEXPRESS]: 'domestic',
+  [COURIER_SLUGS.AMAZON_SHIPPING]: 'domestic',
+  [COURIER_SLUGS.SHIPROCKET]: 'domestic',
+  [COURIER_SLUGS.PICKRR]: 'domestic',
+
+  [COURIER_SLUGS.FEDEX]: 'international',
+  [COURIER_SLUGS.UPS]: 'international',
+  [COURIER_SLUGS.DHL]: 'international',
+  [COURIER_SLUGS.DHL_ECOMMERCE]: 'international',
+  [COURIER_SLUGS.ARAMEX]: 'international',
+  [COURIER_SLUGS.TNT]: 'international',
+  [COURIER_SLUGS.DPD]: 'international',
+  [COURIER_SLUGS.EVRI]: 'international',
+  [COURIER_SLUGS.SF_EXPRESS]: 'international',
+
+  [COURIER_SLUGS.OTHER]: 'other',
+
+  // Kept for legacy deliveries — not shown in picker
+  [COURIER_SLUGS.USPS]: 'legacy',
+  [COURIER_SLUGS.CANADA_POST]: 'legacy',
+  [COURIER_SLUGS.AUSTRALIA_POST]: 'legacy',
 }
 
 const DIGITS_OR_ALNUM: CourierRule = {
@@ -107,17 +156,17 @@ export const COURIER_RULES: Record<string, CourierRule> = {
   [COURIER_SLUGS.PROFESSIONAL_COURIERS]: rule('Professional Couriers', [/^\d{10,14}$/, /^[A-Z]{2}\d{8,12}$/], ['10–14 digits'], ['1234567890']),
   [COURIER_SLUGS.EKART]: rule('Ekart (Flipkart)', [/^[A-Z0-9]{10,30}$/, /^FMPC[A-Z0-9]+$/], ['FMPC… or alphanumeric'], ['FMPC1234567890']),
   [COURIER_SLUGS.SHADOWFAX]: rule('Shadowfax', [/^[A-Z0-9]{8,30}$/], ['8–30 alphanumeric'], ['SF123456789']),
-  [COURIER_SLUGS.GATI]: { ...DIGITS_OR_ALNUM, name: 'Gati' },
-  [COURIER_SLUGS.SAFEEXPRESS]: { ...DIGITS_OR_ALNUM, name: 'Safexpress' },
-  [COURIER_SLUGS.TRACKON]: { ...DIGITS_OR_ALNUM, name: 'Trackon' },
-  [COURIER_SLUGS.DOTZOT]: { ...DIGITS_OR_ALNUM, name: 'DotZot' },
-  [COURIER_SLUGS.LOADSHARE]: { ...DIGITS_OR_ALNUM, name: 'Loadshare' },
-  [COURIER_SLUGS.BORZO]: { ...DIGITS_OR_ALNUM, name: 'Borzo' },
-  [COURIER_SLUGS.DUNZO]: { ...DIGITS_OR_ALNUM, name: 'Dunzo' },
-  [COURIER_SLUGS.SHREE_MARUTI]: { ...DIGITS_OR_ALNUM, name: 'Shree Maruti Courier' },
-  [COURIER_SLUGS.CRITICALOG]: { ...DIGITS_OR_ALNUM, name: 'Criticalog' },
-  [COURIER_SLUGS.RIVIGO]: { ...DIGITS_OR_ALNUM, name: 'Rivigo' },
-  [COURIER_SLUGS.WOW_EXPRESS]: { ...DIGITS_OR_ALNUM, name: 'Wow Express' },
+  [COURIER_SLUGS.GATI]: rule('Gati', [/^\d{9,14}$/, /^[A-Z0-9]{8,20}$/], ['9–14 digits'], ['123456789012']),
+  [COURIER_SLUGS.SAFEEXPRESS]: rule('Safexpress', [/^\d{9,14}$/, /^[A-Z0-9]{8,20}$/], ['9–14 digits'], ['123456789012']),
+  [COURIER_SLUGS.TRACKON]: rule('Trackon', [/^\d{9,14}$/, /^[A-Z0-9]{8,20}$/], ['9–14 digits'], ['123456789012']),
+  [COURIER_SLUGS.DOTZOT]: rule('DotZot', [/^[A-Z0-9]{8,30}$/], ['8–30 alphanumeric'], ['DZ123456789']),
+  [COURIER_SLUGS.LOADSHARE]: rule('Loadshare', [/^[A-Z0-9]{8,30}$/], ['8–30 alphanumeric'], ['LS123456789']),
+  [COURIER_SLUGS.BORZO]: rule('Borzo', [/^[A-Z0-9]{6,30}$/], ['6–30 alphanumeric'], ['BRZ123456789']),
+  [COURIER_SLUGS.DUNZO]: rule('Dunzo', [/^[A-Z0-9]{6,30}$/], ['6–30 alphanumeric'], ['DNZ123456789']),
+  [COURIER_SLUGS.SHREE_MARUTI]: rule('Shree Maruti Courier', [/^\d{9,14}$/, /^[A-Z0-9]{8,20}$/], ['9–14 digits'], ['1234567890']),
+  [COURIER_SLUGS.CRITICALOG]: rule('Criticalog', [/^[A-Z0-9]{8,30}$/], ['8–30 alphanumeric'], ['CL123456789']),
+  [COURIER_SLUGS.RIVIGO]: rule('Rivigo', [/^[A-Z0-9]{8,30}$/], ['8–30 alphanumeric'], ['RV123456789']),
+  [COURIER_SLUGS.WOW_EXPRESS]: rule('Wow Express', [/^[A-Z0-9]{8,30}$/], ['8–30 alphanumeric'], ['WE123456789']),
   [COURIER_SLUGS.JTEXPRESS]: rule('J&T Express', [/^JT\d{10,15}$/, /^[A-Z0-9]{10,25}$/], ['JT + digits'], ['JT123456789012']),
   [COURIER_SLUGS.AMAZON_SHIPPING]: rule('Amazon Shipping', [/^[A-Z0-9]{10,30}$/], ['10–30 alphanumeric'], ['AMA123456789IN']),
 
@@ -128,14 +177,56 @@ export const COURIER_RULES: Record<string, CourierRule> = {
 
 const GENERIC_RULE: CourierRule = DIGITS_OR_ALNUM
 
-/** Dropdown options for the courier picker (A–Z; Other last). */
-export const COURIER_OPTIONS: { value: CourierSlug; label: string }[] = Object.entries(COURIER_RULES)
-  .map(([value, r]) => ({ value: value as CourierSlug, label: r.name }))
-  .sort((a, b) => {
-    if (a.value === 'other') return 1
-    if (b.value === 'other') return -1
-    return a.label.localeCompare(b.label)
-  })
+function sortByLabel(a: CourierOption, b: CourierOption): number {
+  return a.label.localeCompare(b.label)
+}
+
+function optionsForRegion(region: CourierRegion): CourierOption[] {
+  return Object.entries(COURIER_RULES)
+    .filter(([slug]) => COURIER_REGION[slug] === region)
+    .map(([value, r]) => ({
+      value: value as CourierSlug,
+      label: r.name,
+      region,
+    }))
+    .sort(sortByLabel)
+}
+
+/** India domestic partners for the vendor picker. */
+export const DOMESTIC_COURIER_OPTIONS: CourierOption[] = optionsForRegion('domestic')
+
+/** International partners for the vendor picker. */
+export const INTERNATIONAL_COURIER_OPTIONS: CourierOption[] = optionsForRegion('international')
+
+/** Other / unknown courier (always last in the picker). */
+export const OTHER_COURIER_OPTION: CourierOption = {
+  value: COURIER_SLUGS.OTHER,
+  label: COURIER_RULES[COURIER_SLUGS.OTHER].name,
+  region: 'other',
+}
+
+/** Grouped sections for the Add Tracking picker (excludes legacy foreign posts). */
+export const COURIER_OPTIONS_GROUPED: {
+  region: Exclude<CourierRegion, 'legacy'>
+  title: string
+  options: CourierOption[]
+}[] = [
+  { region: 'domestic', title: 'Domestic (India)', options: DOMESTIC_COURIER_OPTIONS },
+  { region: 'international', title: 'International', options: INTERNATIONAL_COURIER_OPTIONS },
+  { region: 'other', title: 'Other', options: [OTHER_COURIER_OPTION] },
+]
+
+/** Flat picker list (Domestic → International → Other). Prefer COURIER_OPTIONS_GROUPED for UI. */
+export const COURIER_OPTIONS: CourierOption[] = [
+  ...DOMESTIC_COURIER_OPTIONS,
+  ...INTERNATIONAL_COURIER_OPTIONS,
+  OTHER_COURIER_OPTION,
+]
+
+export function getCourierRegion(courierSlug: string | null | undefined): CourierRegion | null {
+  if (!courierSlug) return null
+  return COURIER_REGION[courierSlug.toLowerCase()] ?? null
+}
 
 export function getCourierName(courierSlug: string | null | undefined): string {
   if (!courierSlug) return ''
