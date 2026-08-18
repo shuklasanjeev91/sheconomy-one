@@ -9,8 +9,8 @@ export const PLATFORM_PAYU_EDGE_FUNCTIONS = {
   WEBHOOK: 'platform-payu-webhook',
 } as const
 
-/** Server secret: PLATFORM_PAYU_ENV = test | live (independent of PAYU_ENV / SHEPay). */
-export const PLATFORM_PAYU_ENV_MODES = ['test', 'live'] as const
+/** Server secret: PLATFORM_PAYU_ENV = live | test (independent of PAYU_ENV / SHEPay). Default live. */
+export const PLATFORM_PAYU_ENV_MODES = ['live', 'test'] as const
 
 export type PlatformPayuEnvMode = (typeof PLATFORM_PAYU_ENV_MODES)[number]
 

@@ -7,8 +7,7 @@ import {
   fetchCustomerOrderHistory,
   type CustomerOrderHistoryRow,
 } from '~/commerce/lib/buyer-account'
-import { fetchOrderCheckoutUrl } from '~/commerce/lib/checkout'
-import { openExternalUrl } from '~/lib/platform/openUrl'
+import { resumeOrderOnlinePayment } from '~/commerce/lib/resume-order-payment'
 import { Button, Icons, Spinner, Text, XStack, YStack, useAppToast } from '~/components/ui'
 import { FullWidthLayout, HorizontalScrollRow, PageSection } from '~/components/layout'
 import { formatCurrency } from '~/lib/format'
@@ -84,20 +83,16 @@ export function OrderHistoryScreen() {
 
   async function handlePayNow(orderId: string) {
     setPayingOrderId(orderId)
-    const checkoutUrl = await fetchOrderCheckoutUrl(orderId)
+    const result = await resumeOrderOnlinePayment(orderId)
     setPayingOrderId(null)
-    if (!checkoutUrl) {
-      toast.show('Payment link unavailable', {
+    if (!result.ok) {
+      toast.show('Could not open payment', {
         tone: 'danger',
-        message: 'The session may have expired. Open the order and try again.',
+        message: result.error,
       })
       return
     }
-    if (typeof window !== 'undefined') {
-      window.location.href = checkoutUrl
-    } else {
-      await openExternalUrl(checkoutUrl)
-    }
+    navigateApp(result.href as never)
   }
 
   const load = useCallback(async () => {

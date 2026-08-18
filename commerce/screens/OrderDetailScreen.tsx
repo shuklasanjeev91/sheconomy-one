@@ -44,7 +44,7 @@ import { PageContent } from '~/components/layout'
 import { shareCustomerOrderInvoice } from '~/lib/orders/order-invoice'
 import { formatOrderAmount, formatOrderDate } from '~/lib/orders/order.utils'
 import type { OrderAddressSummary } from '~/lib/orders/vendor-orders.type'
-import { fetchOrderCheckoutUrl } from '~/commerce/lib/checkout'
+import { resumeOrderOnlinePayment } from '~/commerce/lib/resume-order-payment'
 import { openExternalUrl } from '~/lib/platform/openUrl'
 import { commerceRoutes } from '~/lib/routes'
 import {
@@ -264,20 +264,16 @@ export function OrderDetailScreen({ orderId }: OrderDetailScreenProps) {
   async function handleCompletePayment() {
     if (!order) return
     setCompletingPayment(true)
-    const checkoutUrl = await fetchOrderCheckoutUrl(order.id)
+    const result = await resumeOrderOnlinePayment(order.id)
     setCompletingPayment(false)
-    if (!checkoutUrl) {
-      toast.show('Payment link unavailable', {
+    if (!result.ok) {
+      toast.show('Could not open payment', {
         tone: 'danger',
-        message: 'The payment session may have expired. Please place a new order.',
+        message: result.error,
       })
       return
     }
-    if (typeof window !== 'undefined') {
-      window.location.href = checkoutUrl
-    } else {
-      await openExternalUrl(checkoutUrl)
-    }
+    replaceApp(result.href as never)
   }
 
   const isAwaitingPayment = order?.order_status === 'awaiting_payment'

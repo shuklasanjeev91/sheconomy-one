@@ -22,12 +22,12 @@ function normalizePayuBaseUrl(isTest: boolean): string {
 
 /**
  * Platform PayU env — PLATFORM_PAYU_ENV only (never reads PAYU_ENV).
- * Default: test until you explicitly set live in Supabase secrets.
+ * Default: live. Set PLATFORM_PAYU_ENV=test only for sandbox.
  */
 export function resolvePlatformPayuEnvMode(): PlatformPayuEnvMode {
-  const raw = (Deno.env.get('PLATFORM_PAYU_ENV') ?? 'test').trim().toLowerCase()
-  if (raw === 'live' || raw === 'production' || raw === 'prod') return 'live'
-  return 'test'
+  const raw = (Deno.env.get('PLATFORM_PAYU_ENV') ?? 'live').trim().toLowerCase()
+  if (raw === 'test' || raw === 'sandbox') return 'test'
+  return 'live'
 }
 
 function credentialsForMode(mode: PlatformPayuEnvMode): PayuCredentials | null {
