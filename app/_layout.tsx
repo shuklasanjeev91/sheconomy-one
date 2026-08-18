@@ -194,9 +194,12 @@ img {
         </head>
 
         <body>
-          <SafeAreaProvider>
-            <AppProviders>{routes}</AppProviders>
-          </SafeAreaProvider>
+          {/* Above every provider: a throw in one of them unmounts the whole root and paints a blank page. */}
+          <AppErrorBoundary scope="Root">
+            <SafeAreaProvider>
+              <AppProviders>{routes}</AppProviders>
+            </SafeAreaProvider>
+          </AppErrorBoundary>
         </body>
       </html>
     )
@@ -204,9 +207,11 @@ img {
 
   return (
     <NativeRootShell>
-      <SafeAreaProvider>
-        <AppProviders>{routes}</AppProviders>
-      </SafeAreaProvider>
+      <AppErrorBoundary scope="Root">
+        <SafeAreaProvider>
+          <AppProviders>{routes}</AppProviders>
+        </SafeAreaProvider>
+      </AppErrorBoundary>
     </NativeRootShell>
   )
 }
