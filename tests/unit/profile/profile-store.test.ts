@@ -149,6 +149,57 @@ describe('session profile store', () => {
 
     expect(getSessionProfileSnapshot().error).toBe('boom')
     expect(getSessionProfileSnapshot().isSettled).toBe(true)
-    expect(getSessionProfileSnapshot().isFetching).toBe(false)
+  })
+
+  it('retries a failed read and reports the row once it lands', async () => {
+    vi.useFakeTimers()
+    try {
+      maybeSingle.mockResolvedValueOnce({ data: null, error: { message: 'network down' } })
+      ensureSessionProfile(USER)
+      await vi.advanceTimersByTimeAsync(0)
+
+      // Nothing is known yet, so gates must not judge the member as unverified.
+      expect(getSessionProfileSnapshot().profile).toBeNull()
+      expect(getSessionProfileSnapshot().isServerSettled).toBe(false)
+
+      maybeSingle.mockResolvedValue({ data: row({ gender: true, is_verified: true }), error: null })
+      await vi.advanceTimersByTimeAsync(2_000)
+
+      expect(getSessionProfileSnapshot().profile?.is_verified).toBe(true)
+      expect(getSessionProfileSnapshot().isServerSettled).toBe(true)
+      expect(getSessionProfileSnapshot().error).toBeNull()
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('does not call a slow read authoritative when the fetch times out', async () => {
+    vi.useFakeTimers()
+    try {
+      let resolveRead: (value: unknown) => void = () => {}
+      maybeSingle.mockReturnValue(
+        new Promise((resolve) => {
+          resolveRead = resolve
+        }),
+      )
+
+      ensureSessionProfile(USER)
+      // Past the settle timeout, with the request still in flight.
+      await vi.advanceTimersByTimeAsync(3_000)
+
+      expect(getSessionProfileSnapshot().isSettled).toBe(true)
+      expect(getSessionProfileSnapshot().profile).toBeNull()
+      // The empty profile is unknown, not "unverified" — this is what kept
+      // redirecting verified members to ?gender=restricted.
+      expect(getSessionProfileSnapshot().isServerSettled).toBe(false)
+
+      resolveRead({ data: row({ gender: true, is_verified: true }), error: null })
+      await vi.advanceTimersByTimeAsync(0)
+
+      expect(getSessionProfileSnapshot().isServerSettled).toBe(true)
+      expect(getSessionProfileSnapshot().profile?.is_verified).toBe(true)
+    } finally {
+      vi.useRealTimers()
+    }
   })
 })

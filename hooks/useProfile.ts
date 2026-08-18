@@ -66,10 +66,17 @@ export function useProfile() {
   // (that felt like 5–10s hangs on every tab press).
   const isLoading = authLoading || (!!userId && (!matchesUser || !snapshot.isSettled))
 
+  // A signed-in member whose row has not come back yet is *unknown*, not
+  // limited. Access gates must wait for this instead of reading the empty
+  // profile as "unverified" and redirecting.
+  const isProfileKnown =
+    !authLoading && (!userId || (matchesUser && (!!snapshot.profile || snapshot.isServerSettled)))
+
   return {
     profile,
     user,
     isLoading,
+    isProfileKnown,
     error: matchesUser ? snapshot.error : null,
     isAuthenticated: !!user,
     isRefreshing: matchesUser && snapshot.isFetching,

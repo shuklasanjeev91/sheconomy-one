@@ -22,6 +22,8 @@ import { supabase } from '~/lib/supabase/client'
 
 /** Matches the old per-component timeout so a slow network still settles the UI. */
 const PROFILE_FETCH_TIMEOUT_MS = 2_500
+const PROFILE_FETCH_MAX_ATTEMPTS = 3
+const PROFILE_RETRY_DELAY_MS = 1_200
 
 export type SessionProfileSnapshot = {
   /** The user this snapshot describes (`null` when signed out). */
@@ -32,6 +34,12 @@ export type SessionProfileSnapshot = {
    * Gates must wait for this instead of treating "unknown" as "unverified".
    */
   isSettled: boolean
+  /**
+   * The server answered for `userId`, so a missing row means the row really is
+   * absent rather than still in flight. A timeout does not set this: access
+   * gates must not downgrade a member whose row simply has not arrived yet.
+   */
+  isServerSettled: boolean
   isFetching: boolean
   error: string | null
 }
@@ -40,6 +48,7 @@ const EMPTY_SNAPSHOT: SessionProfileSnapshot = {
   userId: null,
   profile: null,
   isSettled: false,
+  isServerSettled: false,
   isFetching: false,
   error: null,
 }
@@ -74,6 +83,7 @@ function setSnapshot(patch: Partial<SessionProfileSnapshot>): void {
     next.userId === snapshot.userId &&
     next.profile === snapshot.profile &&
     next.isSettled === snapshot.isSettled &&
+    next.isServerSettled === snapshot.isServerSettled &&
     next.isFetching === snapshot.isFetching &&
     next.error === snapshot.error
   ) {
@@ -142,7 +152,25 @@ function confirmPendingPatch(userId: string, row: SessionProfile | null): Sessio
   return { ...row, ...pendingPatch.patch }
 }
 
-async function fetchProfile(userId: string, gen: number): Promise<void> {
+/**
+ * Give up on a failed read only after a few tries. Retrying matters because a
+ * signed-in member with no row reads as unverified, and gates wait on
+ * `isServerSettled` rather than acting on that unknown state.
+ */
+function retryOrGiveUp(userId: string, gen: number, attempt: number, error: string): void {
+  if (attempt + 1 >= PROFILE_FETCH_MAX_ATTEMPTS) {
+    setSnapshot({ isSettled: true, isServerSettled: true, isFetching: false, error })
+    return
+  }
+
+  setSnapshot({ isSettled: true, isFetching: true, error })
+  setTimeout(() => {
+    if (generation !== gen) return
+    void fetchProfile(userId, gen, attempt + 1)
+  }, PROFILE_RETRY_DELAY_MS * (attempt + 1))
+}
+
+async function fetchProfile(userId: string, gen: number, attempt = 0): Promise<void> {
   const timeout = setTimeout(() => {
     if (generation !== gen) return
     setSnapshot({
@@ -163,7 +191,7 @@ async function fetchProfile(userId: string, gen: number): Promise<void> {
     networkSettledFor = gen
 
     if (error) {
-      setSnapshot({ isSettled: true, isFetching: false, error: error.message })
+      retryOrGiveUp(userId, gen, attempt, error.message)
       return
     }
 
@@ -176,16 +204,23 @@ async function fetchProfile(userId: string, gen: number): Promise<void> {
       row && keepAvatar ? { ...row, avatar_url: keepAvatar } : row,
     )
 
-    setSnapshot({ profile, isSettled: true, isFetching: false, error: null })
+    setSnapshot({
+      profile,
+      isSettled: true,
+      isServerSettled: true,
+      isFetching: false,
+      error: null,
+    })
     if (profile) void writeCachedProfile(userId, profile)
   } catch (err) {
     if (generation !== gen) return
     networkSettledFor = gen
-    setSnapshot({
-      isSettled: true,
-      isFetching: false,
-      error: err instanceof Error ? err.message : 'Could not load profile',
-    })
+    retryOrGiveUp(
+      userId,
+      gen,
+      attempt,
+      err instanceof Error ? err.message : 'Could not load profile',
+    )
   } finally {
     clearTimeout(timeout)
     if (generation === gen && queuedRefetch) {
@@ -203,6 +238,7 @@ function load(userId: string): void {
     userId,
     profile: switching ? null : snapshot.profile,
     isSettled: switching ? false : snapshot.isSettled,
+    isServerSettled: switching ? false : snapshot.isServerSettled,
     isFetching: true,
     error: null,
   })

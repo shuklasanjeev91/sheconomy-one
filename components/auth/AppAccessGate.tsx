@@ -30,6 +30,14 @@ function Shell({ children, documentScroll }: { children: ReactNode; documentScro
   )
 }
 
+function Loading() {
+  return (
+    <PageCenter>
+      <Spinner size="large" />
+    </PageCenter>
+  )
+}
+
 function pathNeedsAuthOrVerify(pathname: string): boolean {
   return (
     getGuestSignInReturnTo('guest', pathname) != null ||
@@ -43,7 +51,8 @@ function pathNeedsAuthOrVerify(pathname: string): boolean {
 /** Redirects users away from routes their access tier cannot use. */
 export function AppAccessGate({ children }: AppAccessGateProps) {
   const pathname = usePathname()
-  const { tier, isLoading, isAuthenticated, canAccessPath, getDeniedRedirect } = useAccess()
+  const { tier, isLoading, isAuthenticated, isProfileKnown, canAccessPath, getDeniedRedirect } =
+    useAccess()
   const { isDesktopWeb } = useAppLayout()
   const useDocumentScroll = Platform.OS === 'web' && isDesktopWeb
 
@@ -55,20 +64,22 @@ export function AppAccessGate({ children }: AppAccessGateProps) {
   if (isLoading) {
     // Authenticated but profile still loading — don't paint women-first / create-shop trees.
     if (isAuthenticated && pathNeedsAuthOrVerify(pathname)) {
-      return (
-        <PageCenter>
-          <Spinner size="large" />
-        </PageCenter>
-      )
+      return <Loading />
     }
     if (isAuthenticated || guestCanBrowseWhileAuthLoads || guestCanBrowsePath) {
       return <Shell documentScroll={useDocumentScroll}>{children}</Shell>
     }
-    return (
-      <PageCenter>
-        <Spinner size="large" />
-      </PageCenter>
-    )
+    return <Loading />
+  }
+
+  // The fetch timeout settles the store with an empty profile, which reads as the
+  // limited tier. Redirecting on that sent verified members to ?gender=restricted
+  // while their own row was still in flight, so wait for a real answer instead.
+  if (isAuthenticated && !isProfileKnown) {
+    if (pathNeedsAuthOrVerify(pathname)) {
+      return <Loading />
+    }
+    return <Shell documentScroll={useDocumentScroll}>{children}</Shell>
   }
 
   if (guestSignInReturnTo) {
