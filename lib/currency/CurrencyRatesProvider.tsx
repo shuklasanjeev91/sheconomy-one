@@ -26,11 +26,12 @@ export function CurrencyRatesProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     void ensureExchangeRatesLoaded()
+    // Match server + client TTL (12h). Free-tier upstream rate-limits hard.
     const timer = setInterval(
       () => {
         void ensureExchangeRatesLoaded()
       },
-      1000 * 60 * 60 * 6,
+      1000 * 60 * 60 * 12,
     )
     return () => clearInterval(timer)
   }, [])

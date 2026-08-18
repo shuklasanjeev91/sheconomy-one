@@ -53,10 +53,9 @@ export function AppUsageTracker() {
       if (!active) return
 
       const now = new Date().toISOString()
+      // actor_id and is_guest are GENERATED ALWAYS — do not send them.
       const payload = {
-        actor_id: user?.id ?? null,
         device_id: deviceId,
-        is_guest: !user,
         joined_at: createNewRow ? now : undefined,
         last_seen: now,
         page,
@@ -78,9 +77,7 @@ export function AppUsageTracker() {
       await supabase
         .from('page_presence')
         .update({
-          actor_id: payload.actor_id,
           device_id: payload.device_id,
-          is_guest: payload.is_guest,
           last_seen: payload.last_seen,
           page: payload.page,
           path: payload.path,
