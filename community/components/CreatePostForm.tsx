@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { Platform } from 'react-native'
+import { Platform, useWindowDimensions } from 'react-native'
 import { useRouter } from 'one'
 
 import { CommunityAdaptiveSheet } from '~/community/components/CommunityAdaptiveSheet'
@@ -31,6 +31,7 @@ import {
   Icons,
   Image,
   Input,
+  ScrollView,
   Spinner,
   Switch,
   Text,
@@ -133,6 +134,7 @@ export function CreatePostForm({
   const communityUi = useCommunityUi()
   const router = useRouter()
   const toast = useAppToast()
+  const { width: windowWidth } = useWindowDimensions()
   const { profile, user, isAuthenticated } = useProfile()
   const form = useFormValidation(
     useMemo(
@@ -821,6 +823,12 @@ export function CreatePostForm({
   const audience = AUDIENCE[visibility]
   const Container = embedded ? YStack : CommunityCard
 
+  // The six toolbar icons plus the Post button are wider than a narrow phone
+  // row. On iOS/Android anything pushed past the row's edge is invisible and
+  // never receives touches, so the trailing "More" button went dead there.
+  const toolbarIconSize = windowWidth < 340 ? 32 : windowWidth < 400 ? 36 : 40
+  const toolbarGap = windowWidth < 400 ? 2 : 4
+
   return (
     <>
       <Container gap={0}>
@@ -1448,11 +1456,20 @@ export function CreatePostForm({
           justifyContent="space-between"
           gap={8}
         >
-          <XStack gap={4} alignItems="center" flex={1}>
+          {/* Horizontal scroll keeps every action reachable when the row runs
+              out of width (long "Publish" label, upload bar, small screens). */}
+          <ScrollView
+            horizontal
+            flex={1}
+            showsHorizontalScrollIndicator={false}
+            keyboardShouldPersistTaps="handled"
+            contentContainerStyle={{ alignItems: 'center', gap: toolbarGap, paddingRight: 4 }}
+          >
             <ToolbarButton
               icon={Icons.Image}
               color="#70b5f9"
               label="Photo"
+              size={toolbarIconSize}
               active={photos.length > 0}
               onPress={() => {
                 setComposeMode('text')
@@ -1463,6 +1480,7 @@ export function CreatePostForm({
               icon={Icons.Video}
               color="#e74c3c"
               label="Video"
+              size={toolbarIconSize}
               active={videos.length > 0}
               onPress={() => {
                 setComposeMode('text')
@@ -1473,6 +1491,7 @@ export function CreatePostForm({
               icon={Icons.Calendar}
               color="#e7a33e"
               label="Event"
+              size={toolbarIconSize}
               active={composeMode === 'event'}
               onPress={() => setComposeMode(composeMode === 'event' ? 'text' : 'event')}
             />
@@ -1480,6 +1499,7 @@ export function CreatePostForm({
               icon={Icons.PartyPopper}
               color="#c37dda"
               label="Celebrate"
+              size={toolbarIconSize}
               active={composeMode === 'celebration'}
               onPress={() => setComposeMode(composeMode === 'celebration' ? 'text' : 'celebration')}
             />
@@ -1487,6 +1507,7 @@ export function CreatePostForm({
               icon={Icons.BarChart2}
               color="#7fc15e"
               label="Poll"
+              size={toolbarIconSize}
               active={composeMode === 'poll'}
               onPress={() => setComposeMode(composeMode === 'poll' ? 'text' : 'poll')}
             />
@@ -1494,6 +1515,7 @@ export function CreatePostForm({
               icon={Icons.MoreHorizontal}
               color={communityUi.textMuted}
               label="More"
+              size={toolbarIconSize}
               active={
                 composeMode === 'product' ||
                 composeMode === 'shop' ||
@@ -1503,7 +1525,7 @@ export function CreatePostForm({
               }
               onPress={() => setMoreOpen(true)}
             />
-          </XStack>
+          </ScrollView>
 
           {uploadProgress != null && uploadProgress > 0 ? (
             <UploadProgressBar progress={uploadProgress} label="Uploading media…" compact />
@@ -1606,6 +1628,9 @@ export function CreatePostForm({
                 borderRadius={12}
                 cursor="pointer"
                 hoverStyle={{ backgroundColor: communityUi.hoverBg }}
+                pressStyle={{ backgroundColor: communityUi.hoverBg, opacity: 0.9 }}
+                accessibilityRole="button"
+                accessibilityLabel={item.label}
                 onPress={() => {
                   setVisibility(key)
                   setAudienceOpen(false)
@@ -1644,19 +1669,22 @@ function ToolbarButton({
   color,
   label,
   active,
+  size = 40,
   onPress,
 }: {
   icon: typeof Icons.Image
   color: string
   label: string
   active?: boolean
+  size?: number
   onPress: () => void
 }) {
   const communityUi = useCommunityUi()
   return (
     <YStack
-      width={40}
-      height={40}
+      width={size}
+      height={size}
+      flexShrink={0}
       borderRadius={999}
       alignItems="center"
       justifyContent="center"
@@ -1666,10 +1694,12 @@ function ToolbarButton({
       pressStyle={{ opacity: 0.75 }}
       animation="quick"
       onPress={onPress}
+      hitSlop={6}
+      accessibilityRole="button"
       accessibilityLabel={label}
       aria-label={label}
     >
-      <Icon size={22} color={color} />
+      <Icon size={size >= 40 ? 22 : 20} color={color} />
     </YStack>
   )
 }
@@ -1738,6 +1768,9 @@ function MoreOptionRow({
       borderRadius={12}
       cursor="pointer"
       hoverStyle={{ backgroundColor: communityUi.hoverBg }}
+      pressStyle={{ backgroundColor: communityUi.hoverBg, opacity: 0.9 }}
+      accessibilityRole="button"
+      accessibilityLabel={title}
       onPress={onPress}
     >
       <XStack

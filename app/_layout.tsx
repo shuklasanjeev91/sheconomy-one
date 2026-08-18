@@ -296,12 +296,13 @@ function ThemedApp({ children }: { children: React.ReactNode }) {
         >
           <ToastProvider swipeDirection="horizontal" duration={4000} native={false}>
             {children}
-            <AppToasts />
+            {/* Viewport hosts the portal the toast renders into — mount it first. */}
             <ToastViewport
-              top={Platform.OS === 'web' ? '$8' : Math.max(insets.top, 8)}
+              top={Platform.OS === 'web' ? '$8' : insets.top + 8}
               left={0}
               right={0}
             />
+            <AppToasts />
           </ToastProvider>
         </YStack>
       </Theme>

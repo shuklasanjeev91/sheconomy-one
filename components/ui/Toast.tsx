@@ -1,12 +1,14 @@
 import type { ComponentType } from 'react'
 import { useMemo, useRef } from 'react'
-import { Pressable } from 'react-native'
-import type { ThemeName } from 'tamagui'
+import { Platform, Pressable, useWindowDimensions } from 'react-native'
+import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { XStack, YStack } from 'tamagui'
 import { Text } from '~/components/ui/Text'
 import { Toast as TToast, useToastController, useToastState } from '@tamagui/toast'
-import { getShadowStyle } from '~/config/tokens'
-import { useAppUi } from '~/lib/theme/useAppUi'
+import { getShadowStyle, radius } from '~/config/tokens'
+import type { AppUiTokens } from '~/lib/theme/app-ui'
+import { useAppUi, useIsDarkTheme } from '~/lib/theme/useAppUi'
+import { resolveToastText } from '~/lib/ux/toast-text'
 
 const AnyToast = TToast as unknown as ComponentType<any> & {
   Title: typeof TToast.Title
@@ -24,12 +26,18 @@ declare module '@tamagui/toast' {
   }
 }
 
-const TONE_THEME: Partial<Record<ToastTone, ThemeName>> = {
-  default: undefined,
-  success: 'green',
-  warning: 'yellow',
-  danger: 'red',
-  info: 'blue',
+/** Inset from the screen edge on both sides. */
+const TOAST_GUTTER = 12
+/** Cap on wide screens so a desktop toast doesn't span the whole viewport. */
+const TOAST_MAX_WIDTH = 480
+const TOAST_MIN_WIDTH = 220
+
+function toneAccent(ui: AppUiTokens, tone: ToastTone) {
+  if (tone === 'success') return ui.success
+  if (tone === 'warning') return ui.starFill
+  if (tone === 'danger') return ui.error
+  if (tone === 'info') return ui.link
+  return ui.brand
 }
 
 /**
@@ -37,6 +45,10 @@ const TONE_THEME: Partial<Record<ToastTone, ThemeName>> = {
  *
  * Returns a stable reference so it's safe to include in effect/callback
  * dependency arrays without triggering re-run loops.
+ *
+ * A toast with no readable text is dropped instead of shown — plenty of call
+ * sites pass a server string straight through (`toast.show(result.error)`),
+ * and an undefined title used to surface as an empty card.
  */
 export function useAppToast() {
   const controller = useToastController()
@@ -56,8 +68,11 @@ export function useAppToast() {
           onAction?: () => void
         },
       ) => {
-        controllerRef.current.show(title, {
-          message: opts?.message,
+        const text = resolveToastText(title, opts?.message)
+        if (!text) return
+
+        controllerRef.current.show(text.title, {
+          message: text.message,
           tone: opts?.tone ?? 'default',
           duration: opts?.duration,
           onPress: opts?.onPress,
@@ -76,25 +91,75 @@ export function useAppToast() {
 export function AppToasts() {
   const toast = useToastState()
   const ui = useAppUi()
+  const isDark = useIsDarkTheme()
+  const insets = useSafeAreaInsets()
+  const { width: windowWidth } = useWindowDimensions()
 
-  if (!toast || toast.isHandledNatively) {
+  /**
+   * The toast frame is a shrink-to-fit child of Tamagui's toast viewport. Web
+   * can size that from the text's intrinsic width, but Yoga (iOS/Android) has
+   * no intrinsic sizing: `flex: 1` inside an auto-width row resolves to 0pt, so
+   * the label collapsed to nothing and the card painted as an empty rounded box
+   * over the header. A resolved pixel width keeps the text laid out everywhere.
+   */
+  const available = windowWidth - TOAST_GUTTER * 2 - insets.left - insets.right
+  const frameWidth = Math.round(
+    Math.max(TOAST_MIN_WIDTH, Math.min(TOAST_MAX_WIDTH, available || TOAST_MAX_WIDTH)),
+  )
+  // Web centers the card with the frame's own `marginHorizontal: auto`. Yoga
+  // resolves an auto cross-axis margin to flex-start, so native gets a measured
+  // left offset instead.
+  const horizontalMargin =
+    Platform.OS === 'web'
+      ? { marginHorizontal: 'auto' as const }
+      : {
+          marginLeft: Math.round(
+            TOAST_GUTTER + insets.left + Math.max(0, (available - frameWidth) / 2),
+          ),
+          marginRight: TOAST_GUTTER,
+        }
+
+  const text = resolveToastText(toast?.title, toast?.message)
+
+  // No toast, handled by the OS, or nothing readable — never paint a blank card.
+  if (!toast || toast.isHandledNatively || !text) {
     return null
   }
 
+  const { title, message } = text
   const tone = (toast.tone as ToastTone) ?? 'default'
+  const accent = toneAccent(ui, tone)
   const onPress = toast.onPress as (() => void) | undefined
   const actionLabel = toast.actionLabel as string | undefined
   const onAction = toast.onAction as (() => void) | undefined
 
   const content = (
-    <XStack alignItems="center" gap="$3" justifyContent="space-between" width="100%">
-      <YStack flex={1} gap="$1" minWidth={0}>
-        <AnyToast.Title fontWeight="700" fontSize="$4" color="$color12">
-          {toast.title}
+    <XStack alignSelf="stretch" alignItems="center" gap={10}>
+      <YStack
+        width={4}
+        alignSelf="stretch"
+        minHeight={24}
+        borderRadius={radius.pill}
+        backgroundColor={accent}
+      />
+      <YStack flex={1} minWidth={0} gap={2}>
+        <AnyToast.Title
+          fontSize={15}
+          lineHeight={20}
+          fontWeight="700"
+          color={ui.text}
+          numberOfLines={2}
+        >
+          {title}
         </AnyToast.Title>
-        {toast.message ? (
-          <AnyToast.Description color="$color11" fontSize="$3">
-            {toast.message}
+        {message ? (
+          <AnyToast.Description
+            fontSize={13}
+            lineHeight={18}
+            color={ui.textSecondary}
+            numberOfLines={3}
+          >
+            {message}
           </AnyToast.Description>
         ) : null}
       </YStack>
@@ -103,16 +168,15 @@ export function AppToasts() {
           accessibilityRole="button"
           accessibilityLabel={actionLabel}
           onPress={onAction}
-          hitSlop={8}
+          hitSlop={12}
           style={{
-            minHeight: 44,
-            minWidth: 44,
-            alignItems: 'center',
+            flexShrink: 0,
+            minHeight: 32,
             justifyContent: 'center',
-            paddingHorizontal: 4,
+            paddingHorizontal: 6,
           }}
         >
-          <Text fontSize={14} fontWeight="700" color={ui.brand}>
+          <Text fontSize={14} fontWeight="700" color={ui.brand} numberOfLines={1}>
             {actionLabel}
           </Text>
         </Pressable>
@@ -124,23 +188,27 @@ export function AppToasts() {
     <AnyToast
       key={toast.id}
       duration={toast.duration}
-      viewportName={toast.viewport}
-      theme={TONE_THEME[tone]}
-      backgroundColor="$background"
-      borderRadius="$6"
+      viewportName={toast.viewportName ?? 'default'}
+      width={frameWidth}
+      maxWidth={frameWidth}
+      {...horizontalMargin}
+      backgroundColor={ui.elevatedSurface}
+      borderRadius={radius.card}
       borderWidth={1}
-      borderColor="$borderColor"
-      paddingHorizontal="$4"
-      paddingVertical="$3.5"
-      marginHorizontal="$3"
-      gap="$1"
+      borderColor={ui.border}
+      paddingHorizontal={14}
+      paddingVertical={12}
       animation="quick"
       enterStyle={{ opacity: 0, y: -12, scale: 0.98 }}
       exitStyle={{ opacity: 0, y: -12, scale: 0.98 }}
-      {...getShadowStyle('md')}
+      {...getShadowStyle('md', isDark ? 'dark' : 'light')}
     >
       {onPress && !actionLabel ? (
-        <Pressable accessibilityRole="button" onPress={onPress}>
+        <Pressable
+          accessibilityRole="button"
+          onPress={onPress}
+          style={{ alignSelf: 'stretch' }}
+        >
           {content}
         </Pressable>
       ) : (
