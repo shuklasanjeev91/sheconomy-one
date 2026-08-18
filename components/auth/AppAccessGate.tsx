@@ -51,8 +51,15 @@ function pathNeedsAuthOrVerify(pathname: string): boolean {
 /** Redirects users away from routes their access tier cannot use. */
 export function AppAccessGate({ children }: AppAccessGateProps) {
   const pathname = usePathname()
-  const { tier, isLoading, isAuthenticated, isProfileKnown, canAccessPath, getDeniedRedirect } =
-    useAccess()
+  const {
+    tier,
+    isLoading,
+    isAuthenticated,
+    isProfileKnown,
+    isProfileConfirmed,
+    canAccessPath,
+    getDeniedRedirect,
+  } = useAccess()
   const { isDesktopWeb } = useAppLayout()
   const useDocumentScroll = Platform.OS === 'web' && isDesktopWeb
 
@@ -87,6 +94,16 @@ export function AppAccessGate({ children }: AppAccessGateProps) {
   }
 
   if (!canAccessPath(pathname)) {
+    // A warm cache settles the store before the server answers, so denying here
+    // would bounce verified members to `?gender=restricted` on every reload.
+    // Wait for the real row before taking access away.
+    if (isAuthenticated && !isProfileConfirmed) {
+      return pathNeedsAuthOrVerify(pathname) ? (
+        <Loading />
+      ) : (
+        <Shell documentScroll={useDocumentScroll}>{children}</Shell>
+      )
+    }
     return <SpaRedirect href={getDeniedRedirect(pathname)} />
   }
 

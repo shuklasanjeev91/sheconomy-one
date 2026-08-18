@@ -79,7 +79,7 @@ function stripQueryParams(keys: string[]) {
  * vendors (e.g. My Shop) to `?gender=restricted` while the row was still loading.
  */
 export function GenderVerificationHost() {
-  const { profile, isAuthenticated, isLoading } = useProfile()
+  const { profile, isAuthenticated, isLoading, isProfileConfirmed } = useProfile()
   const pathname = usePathname()
   const params = useLocalSearchParams()
 
@@ -95,7 +95,10 @@ export function GenderVerificationHost() {
   isAuthenticatedRef.current = isAuthenticated
   hasFullAccessRef.current = hasVerifiedFemaleAccess(profile?.gender, profile?.is_verified)
 
-  const profileReady = isAuthenticated && !isLoading && !!profile
+  // `isProfileConfirmed` keeps a warm-cache row from denying access: the store
+  // settles synchronously from cache, and a row cached before verification would
+  // otherwise redirect a full-access member to `?gender=restricted`.
+  const profileReady = isAuthenticated && !isLoading && !!profile && isProfileConfirmed
   const hasFullAccess = hasVerifiedFemaleAccess(profile?.gender, profile?.is_verified)
   const needsVerification = profileReady && !hasFullAccess
   const onProtectedRoute = requiresGenderVerification(pathname)

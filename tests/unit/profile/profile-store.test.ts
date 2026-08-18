@@ -202,4 +202,36 @@ describe('session profile store', () => {
       vi.useRealTimers()
     }
   })
+
+  it('does not mark a warm cached row as server-confirmed', async () => {
+    // Seed the cache with a row captured before the member verified.
+    serveRow({ gender: false, is_verified: false })
+    ensureSessionProfile(USER)
+    await settle()
+    expect(getSessionProfileSnapshot().isServerSettled).toBe(true)
+
+    resetSessionProfileStore()
+
+    // Reload with the (now stale) cache warm and the network still in flight.
+    let resolveRead: (value: unknown) => void = () => {}
+    maybeSingle.mockReturnValue(
+      new Promise((resolve) => {
+        resolveRead = resolve
+      }),
+    )
+
+    ensureSessionProfile(USER)
+    await settle()
+
+    // The cached row may paint, but it must not be treated as a confirmed
+    // answer — denying on it is what bounced verified members to
+    // ?gender=restricted on every reload.
+    expect(getSessionProfileSnapshot().isServerSettled).toBe(false)
+
+    resolveRead({ data: row({ gender: true, is_verified: true }), error: null })
+    await settle()
+
+    expect(getSessionProfileSnapshot().isServerSettled).toBe(true)
+    expect(tierNow()).toBe('female')
+  })
 })

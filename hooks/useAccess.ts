@@ -18,7 +18,8 @@ import {
 import { useProfile } from '~/hooks/useProfile'
 
 export function useAccess() {
-  const { profile, isAuthenticated, isLoading, isRefreshing, isProfileKnown } = useProfile()
+  const { profile, isAuthenticated, isLoading, isRefreshing, isProfileKnown, isProfileConfirmed } =
+    useProfile()
   const isVerified = profile?.is_verified === true
   const isTierKnown = !isLoading && isProfileKnown
 
@@ -41,6 +42,11 @@ export function useAccess() {
       isTierKnown,
       /** The signed-in member's row is available (or they are a guest). */
       isProfileKnown,
+      /**
+       * The server answered for this member, so `tier` is safe to deny on.
+       * A cached row may grant access early but must never revoke it.
+       */
+      isProfileConfirmed,
       /** Verified female with full women-first access. */
       isFemale: tier === 'female',
       /** Signed-in limited access (male or skipped / unverified). */
@@ -67,7 +73,16 @@ export function useAccess() {
         }),
       visibleFeatures: getVisibleFeatures(tier),
     }),
-    [tier, isLoading, isRefreshing, isAuthenticated, isVerified, isProfileKnown, isTierKnown],
+    [
+      tier,
+      isLoading,
+      isRefreshing,
+      isAuthenticated,
+      isVerified,
+      isProfileKnown,
+      isProfileConfirmed,
+      isTierKnown,
+    ],
   )
 }
 
