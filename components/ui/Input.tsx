@@ -89,6 +89,7 @@ export const Input = forwardRef<any, InputProps>(function Input({ invalid, ...pr
       onChangeText,
       onBlur,
       onFocus,
+      onSubmitEditing,
       placeholder,
       placeholderTextColor,
       editable,
@@ -116,6 +117,7 @@ export const Input = forwardRef<any, InputProps>(function Input({ invalid, ...pr
       color,
     } = props as InputProps & {
       onChangeText?: (text: string) => void
+      onSubmitEditing?: (event: unknown) => void
       disabled?: boolean
       autoComplete?: string
       textContentType?: string
@@ -149,6 +151,7 @@ export const Input = forwardRef<any, InputProps>(function Input({ invalid, ...pr
         onChangeText={onChangeText}
         onBlur={onBlur as never}
         onFocus={onFocus as never}
+        onSubmitEditing={onSubmitEditing as never}
         placeholder={placeholder != null ? String(placeholder) : undefined}
         placeholderTextColor={
           typeof placeholderTextColor === 'string' ? placeholderTextColor : undefined
