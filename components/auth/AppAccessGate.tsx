@@ -5,8 +5,9 @@ import { usePathname } from 'one'
 import { SpaRedirect } from '~/components/navigation/SpaRedirect'
 import { AuthSignInFlow } from '~/components/auth/AuthSignInFlow'
 import { PageCenter } from '~/components/layout'
-import { Spinner, YStack } from '~/components/ui'
+import { Button, Spinner, Text, YStack } from '~/components/ui'
 import { canAccessPath as checkAccessPath, getGuestSignInReturnTo } from '~/lib/auth/access'
+import { retryFailedProfileFetch } from '~/lib/profile/profile-store'
 import { isChatPath, isCommunityPath, isCreateShopPath } from '~/lib/routes'
 import { useAccess } from '~/hooks/useAccess'
 import { useAppLayout } from '~/hooks/useAppLayout'
@@ -38,6 +39,27 @@ function Loading() {
   )
 }
 
+/**
+ * Shown when the member's row could not be read. Their access is unknown, so we
+ * ask rather than assume — sending them to `?gender=restricted` here would
+ * lock a verified member out over a dropped request.
+ */
+function ProfileUnavailable() {
+  return (
+    <PageCenter>
+      <YStack gap="$3" alignItems="center" maxWidth={340} paddingHorizontal="$4">
+        <Text fontSize="$5" fontWeight="600" textAlign="center">
+          Couldn't load your account
+        </Text>
+        <Text fontSize="$3" opacity={0.7} textAlign="center">
+          Check your connection and try again.
+        </Text>
+        <Button onPress={() => retryFailedProfileFetch()}>Try again</Button>
+      </YStack>
+    </PageCenter>
+  )
+}
+
 function pathNeedsAuthOrVerify(pathname: string): boolean {
   return (
     getGuestSignInReturnTo('guest', pathname) != null ||
@@ -57,6 +79,7 @@ export function AppAccessGate({ children }: AppAccessGateProps) {
     isAuthenticated,
     isProfileKnown,
     isProfileConfirmed,
+    isProfileUnavailable,
     canAccessPath,
     getDeniedRedirect,
   } = useAccess()
@@ -84,7 +107,7 @@ export function AppAccessGate({ children }: AppAccessGateProps) {
   // while their own row was still in flight, so wait for a real answer instead.
   if (isAuthenticated && !isProfileKnown) {
     if (pathNeedsAuthOrVerify(pathname)) {
-      return <Loading />
+      return isProfileUnavailable ? <ProfileUnavailable /> : <Loading />
     }
     return <Shell documentScroll={useDocumentScroll}>{children}</Shell>
   }
@@ -98,11 +121,10 @@ export function AppAccessGate({ children }: AppAccessGateProps) {
     // would bounce verified members to `?gender=restricted` on every reload.
     // Wait for the real row before taking access away.
     if (isAuthenticated && !isProfileConfirmed) {
-      return pathNeedsAuthOrVerify(pathname) ? (
-        <Loading />
-      ) : (
-        <Shell documentScroll={useDocumentScroll}>{children}</Shell>
-      )
+      if (!pathNeedsAuthOrVerify(pathname)) {
+        return <Shell documentScroll={useDocumentScroll}>{children}</Shell>
+      }
+      return isProfileUnavailable ? <ProfileUnavailable /> : <Loading />
     }
     return <SpaRedirect href={getDeniedRedirect(pathname)} />
   }

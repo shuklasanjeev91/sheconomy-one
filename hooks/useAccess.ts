@@ -18,8 +18,15 @@ import {
 import { useProfile } from '~/hooks/useProfile'
 
 export function useAccess() {
-  const { profile, isAuthenticated, isLoading, isRefreshing, isProfileKnown, isProfileConfirmed } =
-    useProfile()
+  const {
+    profile,
+    isAuthenticated,
+    isLoading,
+    isRefreshing,
+    isProfileKnown,
+    isProfileConfirmed,
+    isProfileUnavailable,
+  } = useProfile()
   const isVerified = profile?.is_verified === true
   const isTierKnown = !isLoading && isProfileKnown
 
@@ -47,6 +54,8 @@ export function useAccess() {
        * A cached row may grant access early but must never revoke it.
        */
       isProfileConfirmed,
+      /** The row could not be read at all — access is unknown, not limited. */
+      isProfileUnavailable,
       /** Verified female with full women-first access. */
       isFemale: tier === 'female',
       /** Signed-in limited access (male or skipped / unverified). */
@@ -81,6 +90,7 @@ export function useAccess() {
       isVerified,
       isProfileKnown,
       isProfileConfirmed,
+      isProfileUnavailable,
       isTierKnown,
     ],
   )

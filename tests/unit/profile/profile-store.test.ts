@@ -203,6 +203,33 @@ describe('session profile store', () => {
     }
   })
 
+  it('never calls an exhausted retry an answer from the server', async () => {
+    vi.useFakeTimers()
+    try {
+      maybeSingle.mockResolvedValue({ data: null, error: { message: 'network down' } })
+
+      ensureSessionProfile(USER)
+      // Long enough for every attempt in the burst to fail.
+      await vi.advanceTimersByTimeAsync(10_000)
+
+      // Giving up tells us nothing about the member. Reporting this as a server
+      // answer read as "unverified" and bounced her to ?gender=restricted.
+      expect(getSessionProfileSnapshot().isServerSettled).toBe(false)
+      expect(getSessionProfileSnapshot().hasFailed).toBe(true)
+      expect(getSessionProfileSnapshot().isFetching).toBe(false)
+
+      // The background recovery pass picks the row up once the network returns.
+      maybeSingle.mockResolvedValue({ data: row({ gender: true, is_verified: true }), error: null })
+      await vi.advanceTimersByTimeAsync(21_000)
+
+      expect(getSessionProfileSnapshot().hasFailed).toBe(false)
+      expect(getSessionProfileSnapshot().isServerSettled).toBe(true)
+      expect(tierNow()).toBe('female')
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
   it('does not mark a warm cached row as server-confirmed', async () => {
     // Seed the cache with a row captured before the member verified.
     serveRow({ gender: false, is_verified: false })
