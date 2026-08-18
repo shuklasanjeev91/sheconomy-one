@@ -32,9 +32,12 @@ describe('getCustomerOrderActionEligibility', () => {
   it('allows cancel only pre-shipment without open request', () => {
     const eligible = getCustomerOrderActionEligibility({
       orderStatus: ORDER_STATUS.PROCESSING,
+      paymentStatus: 'completed',
       issues: [],
     })
     expect(eligible.canCancel).toBe(true)
+    expect(eligible.canRequestCancel).toBe(true)
+    expect(eligible.canInstantCancel).toBe(false)
 
     const blocked = getCustomerOrderActionEligibility({
       orderStatus: ORDER_STATUS.SHIPPED,
@@ -44,10 +47,32 @@ describe('getCustomerOrderActionEligibility', () => {
 
     const duplicate = getCustomerOrderActionEligibility({
       orderStatus: ORDER_STATUS.CONFIRMED,
+      paymentStatus: 'completed',
       issues: [{ issue_type: ORDER_ISSUE_TYPE.CANCELLATION_REQUEST, status: 'open' }],
     })
     expect(duplicate.canCancel).toBe(false)
     expect(duplicate.hasOpenCancellationRequest).toBe(true)
+  })
+
+  it('offers instant cancel for unpaid awaiting_payment orders', () => {
+    const unpaid = getCustomerOrderActionEligibility({
+      orderStatus: ORDER_STATUS.AWAITING_PAYMENT,
+      paymentStatus: 'pending',
+      issues: [],
+    })
+    expect(unpaid.canInstantCancel).toBe(true)
+    expect(unpaid.canRequestCancel).toBe(false)
+    expect(unpaid.canCancel).toBe(true)
+  })
+
+  it('offers request cancel for paid pre-shipment orders', () => {
+    const paid = getCustomerOrderActionEligibility({
+      orderStatus: ORDER_STATUS.CONFIRMED,
+      paymentStatus: 'completed',
+      issues: [],
+    })
+    expect(paid.canInstantCancel).toBe(false)
+    expect(paid.canRequestCancel).toBe(true)
   })
 })
 

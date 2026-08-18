@@ -8,6 +8,7 @@ import {
   type CustomerOrderHistoryRow,
 } from '~/commerce/lib/buyer-account'
 import { resumeOrderOnlinePayment } from '~/commerce/lib/resume-order-payment'
+import { cancelCustomerOrder } from '~/commerce/lib/customer-orders'
 import { Button, Icons, Spinner, Text, XStack, YStack, useAppToast } from '~/components/ui'
 import { FullWidthLayout, HorizontalScrollRow, PageSection } from '~/components/layout'
 import { formatCurrency } from '~/lib/format'
@@ -61,6 +62,7 @@ export function OrderHistoryScreen() {
   const [statusFilter, setStatusFilter] = useState<OrderStatusFilter>('all')
   const visibleOrders = orders.filter((order) => matchesStatusFilter(order.order_status, statusFilter))
   const [payingOrderId, setPayingOrderId] = useState<string | null>(null)
+  const [cancellingOrderId, setCancellingOrderId] = useState<string | null>(null)
 
   async function handleCopyOrder(order: CustomerOrderHistoryRow) {
     const label = order.order_number ? `Order #${order.order_number}` : 'Order'
@@ -93,6 +95,21 @@ export function OrderHistoryScreen() {
       return
     }
     navigateApp(result.href as never)
+  }
+
+  async function handleCancelUnpaid(orderId: string) {
+    setCancellingOrderId(orderId)
+    const result = await cancelCustomerOrder(orderId)
+    setCancellingOrderId(null)
+    if (result.error) {
+      toast.show('Could not cancel order', { tone: 'danger', message: result.error })
+      return
+    }
+    toast.show('Order cancelled', {
+      tone: 'success',
+      message: 'Reserved stock has been released.',
+    })
+    await load()
   }
 
   const load = useCallback(async () => {
@@ -209,15 +226,32 @@ export function OrderHistoryScreen() {
                   </XStack>
                   <XStack gap="$2" flexWrap="wrap">
                     {order.order_status === 'awaiting_payment' ? (
-                      <Button
-                        tone="primary"
-                        size="$3"
-                        borderRadius={999}
-                        disabled={payingOrderId === order.order_id}
-                        onPress={() => void handlePayNow(order.order_id)}
-                      >
-                        {payingOrderId === order.order_id ? 'Opening…' : 'Pay now'}
-                      </Button>
+                      <>
+                        <Button
+                          tone="primary"
+                          size="$3"
+                          borderRadius={999}
+                          disabled={
+                            payingOrderId === order.order_id ||
+                            cancellingOrderId === order.order_id
+                          }
+                          onPress={() => void handlePayNow(order.order_id)}
+                        >
+                          {payingOrderId === order.order_id ? 'Opening…' : 'Pay now'}
+                        </Button>
+                        <Button
+                          tone="outline"
+                          size="$3"
+                          borderRadius={999}
+                          disabled={
+                            payingOrderId === order.order_id ||
+                            cancellingOrderId === order.order_id
+                          }
+                          onPress={() => void handleCancelUnpaid(order.order_id)}
+                        >
+                          {cancellingOrderId === order.order_id ? 'Cancelling…' : 'Cancel'}
+                        </Button>
+                      </>
                     ) : (
                       <Button
                         tone="primary"

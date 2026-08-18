@@ -692,7 +692,7 @@ export function OrderDetailScreen({ orderId }: OrderDetailScreenProps) {
                   icon={<Icons.XCircle size={14} />}
                   onPress={() => setCancelOpen(true)}
                 >
-                  Request cancellation
+                  {eligibility.canInstantCancel ? 'Cancel order' : 'Request cancellation'}
                 </Button>
               ) : eligibility?.hasOpenCancellationRequest ? (
                 <Text fontSize={12} color={ui.textMuted}>
@@ -725,6 +725,7 @@ export function OrderDetailScreen({ orderId }: OrderDetailScreenProps) {
                 onOpenChange={setCancelOpen}
                 orderId={order.id}
                 userId={user.id}
+                mode={eligibility?.canInstantCancel ? 'instant' : 'request'}
                 onSubmitted={() => void load({ soft: true })}
               />
               <OrderSupportSheet

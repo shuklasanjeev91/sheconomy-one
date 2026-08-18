@@ -60,6 +60,8 @@ export type CustomerTimelineEvent = {
 
 export type CustomerOrderActionEligibility = {
   canCancel: boolean
+  canInstantCancel: boolean
+  canRequestCancel: boolean
   cancelBlockedReason: string | null
   canReorder: boolean
   canShareInvoice: boolean
@@ -255,6 +257,13 @@ export function getCustomerOrderActionEligibility(input: {
     input.orderStatus === ORDER_STATUS.REFUNDED ||
     input.orderStatus === ORDER_STATUS.COMPLETED
 
+  const payment = (input.paymentStatus ?? '').toLowerCase()
+  const paymentCaptured = payment === 'completed' || payment === 'paid' || payment === 'refunded'
+  const unpaidStatus =
+    input.orderStatus === ORDER_STATUS.AWAITING_PAYMENT ||
+    input.orderStatus === ORDER_STATUS.PAYMENT_FAILED ||
+    (input.orderStatus === ORDER_STATUS.PENDING && !paymentCaptured)
+
   let cancelBlockedReason: string | null = null
   if (final) cancelBlockedReason = 'This order can no longer be cancelled.'
   else if (openCancellation) cancelBlockedReason = 'A cancellation request is already open.'
@@ -262,8 +271,14 @@ export function getCustomerOrderActionEligibility(input: {
     cancelBlockedReason = 'Cancellation is only available before the shop ships your order.'
   }
 
+  const canInstantCancel = !cancelBlockedReason && unpaidStatus
+  const canRequestCancel =
+    !cancelBlockedReason && !canInstantCancel && isPreShipmentStatus(input.orderStatus)
+
   return {
-    canCancel: !cancelBlockedReason,
+    canCancel: canInstantCancel || canRequestCancel,
+    canInstantCancel,
+    canRequestCancel,
     cancelBlockedReason,
     canReorder: Boolean(input.orderStatus) && input.orderStatus !== ORDER_STATUS.CANCELLED,
     canShareInvoice: Boolean(input.orderStatus) && input.orderStatus !== ORDER_STATUS.CANCELLED,
