@@ -2,6 +2,7 @@ import 'jsr:@supabase/functions-js/edge-runtime.d.ts'
 import { createClient } from 'jsr:@supabase/supabase-js@2'
 
 import { resolvePublicAppOrigin, toCanonicalPublicUrl } from '../_shared/app-url.ts'
+import { sendTwilioMessage } from '../_shared/twilio.ts'
 
 const BRAND_NAME = 'SHEconomy'
 const corsHeaders = {
@@ -227,42 +228,6 @@ async function sendOneSignalPush(options: {
     }
   }
   if (lastError) throw lastError
-}
-
-async function sendTwilioMessage(options: {
-  accountSid: string
-  authToken: string
-  from: string
-  to: string
-  body: string
-  channel: 'whatsapp' | 'sms'
-}) {
-  const endpoint = `https://api.twilio.com/2010-04-01/Accounts/${options.accountSid}/Messages.json`
-  const isWhatsApp = options.channel === 'whatsapp'
-  const params = new URLSearchParams({
-    From: isWhatsApp
-      ? options.from.startsWith('whatsapp:')
-        ? options.from
-        : `whatsapp:${options.from}`
-      : options.from.replace(/^whatsapp:/, ''),
-    To: isWhatsApp
-      ? options.to.startsWith('whatsapp:')
-        ? options.to
-        : `whatsapp:${options.to}`
-      : options.to.replace(/^whatsapp:/, ''),
-    Body: options.body,
-  })
-  const response = await fetch(endpoint, {
-    method: 'POST',
-    headers: {
-      Authorization: `Basic ${btoa(`${options.accountSid}:${options.authToken}`)}`,
-      'Content-Type': 'application/x-www-form-urlencoded',
-    },
-    body: params,
-  })
-  if (!response.ok) {
-    throw new Error((await response.text()) || `Twilio ${options.channel} error`)
-  }
 }
 
 function markChannel(

@@ -7,11 +7,10 @@ import {
   isValidEmail,
   isValidPhone,
   sendAuthenticatedEmailChangeOtp,
-  sendAuthenticatedPhoneChangeOtp,
   verifyAuthenticatedEmailChange,
-  verifyAuthenticatedPhoneChange,
 } from '~/lib/supabase/auth'
 import { supabase } from '~/lib/supabase/client'
+import type { SessionProfile } from '~/lib/profile/session-profile'
 import { refreshProfiles } from '~/lib/profile/refresh'
 
 export type AuthContactSnapshot = {
@@ -39,6 +38,37 @@ export function resolveAuthContact(user: User | null | undefined): AuthContactSn
     emailVerified,
     checkoutReady: phoneVerified,
     needsContactForm: !phoneVerified || !email,
+  }
+}
+
+/**
+ * Checkout contact readiness that trusts either signal:
+ * - a phone confirmed on the auth user (legacy path, ~1.5k users), or
+ * - a phone we verified over our own OTP and stored on the profile.
+ *
+ * Needed because Supabase blocks binding a number that already exists on
+ * another account, so those shoppers can only ever be profile-verified.
+ */
+export function resolveCheckoutContact(input: {
+  user: User | null | undefined
+  profile?: Pick<SessionProfile, 'phone' | 'phone_verified'> | null
+}): AuthContactSnapshot {
+  const auth = resolveAuthContact(input.user)
+
+  const profilePhoneRaw = input.profile?.phone?.trim() || null
+  const profilePhone = profilePhoneRaw ? canonicalE164Phone(profilePhoneRaw) : null
+  const profileVerified = Boolean(input.profile?.phone_verified && profilePhone)
+
+  const phoneVerified = auth.phoneVerified || profileVerified
+  const phone = auth.phone ?? (profileVerified ? profilePhone : null)
+
+  return {
+    email: auth.email,
+    phone,
+    phoneVerified,
+    emailVerified: auth.emailVerified,
+    checkoutReady: phoneVerified,
+    needsContactForm: !phoneVerified || !auth.email,
   }
 }
 
@@ -83,6 +113,39 @@ async function syncProfileContact(userId: string, patch: { phone?: string; email
   return error?.message ?? null
 }
 
+type CheckoutOtpPayload =
+  | { action: 'send'; phone: string }
+  | { action: 'confirm'; phone: string; code: string }
+
+/**
+ * Call the checkout-phone-otp edge function. Verification is decoupled from
+ * Supabase Auth: the function sends its own SMS and marks profiles.phone_verified,
+ * so a number already registered on another account no longer dead-ends checkout.
+ */
+async function invokeCheckoutOtp(
+  payload: CheckoutOtpPayload,
+): Promise<{ success: boolean; error?: string }> {
+  const { data, error } = await supabase.functions.invoke('checkout-phone-otp', { body: payload })
+
+  if (error) {
+    let message = 'Something went wrong. Please try again.'
+    try {
+      const context = (error as { context?: Response }).context
+      if (context && typeof context.json === 'function') {
+        const parsed = (await context.json()) as { error?: string }
+        if (parsed?.error) message = String(parsed.error)
+      }
+    } catch {
+      // Non-JSON error body — keep the generic message.
+    }
+    return { success: false, error: message }
+  }
+
+  const result = data as { success?: boolean; error?: string } | null
+  if (result?.success) return { success: true }
+  return { success: false, error: result?.error ?? 'Something went wrong. Please try again.' }
+}
+
 export async function sendCheckoutPhoneVerification(phoneE164: string): Promise<{
   success: boolean
   error?: string
@@ -91,15 +154,7 @@ export async function sendCheckoutPhoneVerification(phoneE164: string): Promise<
   if (!isValidPhone(canonicalPhone)) {
     return { success: false, error: 'Enter a valid mobile number.' }
   }
-
-  const { error } = await sendAuthenticatedPhoneChangeOtp(canonicalPhone)
-  if (error) {
-    return {
-      success: false,
-      error: mapAuthErrorMessage(error.message, { code: error.code }).text,
-    }
-  }
-  return { success: true }
+  return invokeCheckoutOtp({ action: 'send', phone: canonicalPhone })
 }
 
 export async function confirmCheckoutPhoneVerification(
@@ -111,25 +166,17 @@ export async function confirmCheckoutPhoneVerification(
     return { success: false, error: 'Enter a valid mobile number.' }
   }
 
-  const { data, error } = await verifyAuthenticatedPhoneChange(canonicalPhone, otp)
-  if (error) {
-    return {
-      success: false,
-      error: mapAuthErrorMessage(error.message, { code: error.code }).text,
-    }
+  const result = await invokeCheckoutOtp({
+    action: 'confirm',
+    phone: canonicalPhone,
+    code: otp.trim(),
+  })
+  if (result.success) {
+    // The profile row now carries the verified number; re-read so checkout gates
+    // flip without an auth session change.
+    refreshProfiles()
   }
-
-  const userId = data.user?.id
-  if (userId) {
-    const profileError = await syncProfileContact(userId, { phone: canonicalPhone })
-    if (profileError) {
-      return { success: false, error: profileError }
-    }
-  }
-
-  await supabase.auth.refreshSession()
-  refreshProfiles()
-  return { success: true }
+  return result
 }
 
 export async function sendCheckoutEmailVerification(email: string): Promise<{

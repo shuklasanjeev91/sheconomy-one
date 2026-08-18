@@ -8,10 +8,11 @@ import {
   confirmCheckoutEmailVerification,
   confirmCheckoutPhoneVerification,
   formatAuthContactPhone,
-  resolveAuthContact,
+  resolveCheckoutContact,
   sendCheckoutEmailVerification,
   sendCheckoutPhoneVerification,
 } from '~/features/auth/services/account-contact'
+import { useProfile } from '~/hooks/useProfile'
 import { isCompleteOtp, normalizeOtpDigits } from '~/features/auth/validation'
 import { Button, Field, Icons, Input, Text, XStack, YStack, useAppToast } from '~/components/ui'
 import {
@@ -111,7 +112,11 @@ export function CheckoutContactSection({ user, onCheckoutReadyChange }: Checkout
   const c = useCommercePalette()
   const ui = useAppUi()
   const toast = useAppToast()
-  const contact = useMemo(() => resolveAuthContact(user), [user])
+  const { profile } = useProfile()
+  const contact = useMemo(
+    () => resolveCheckoutContact({ user, profile }),
+    [user, profile],
+  )
 
   const phoneInputRef = useRef<PhoneInputHandle | null>(null)
   const verifyingRef = useRef(false)

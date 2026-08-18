@@ -99,7 +99,7 @@ import {
 } from '~/lib/location'
 import { useAppLayout } from '~/hooks/useAppLayout'
 import { useAppUi } from '~/lib/theme/useAppUi'
-import { resolveAuthContact } from '~/features/auth/services/account-contact'
+import { resolveCheckoutContact } from '~/features/auth/services/account-contact'
 import { trackCommerceEvent } from '~/lib/analytics'
 import { navigateApp, replaceApp } from '~/lib/platform/navigate'
 
@@ -109,7 +109,7 @@ export function CheckoutScreen() {
   const c = useCommercePalette()
   const ui = useAppUi()
   const { hasSideRails } = useAppLayout()
-  const { user, isAuthenticated } = useProfile()
+  const { user, isAuthenticated, profile } = useProfile()
   const { formatMoney, convertMoney, preferredCurrency } = useFormatCurrency()
   const { cart, items: cartItems, isLoading, refresh, error: cartError, updateQuantity, removeItem } =
     useCart()
@@ -153,11 +153,14 @@ export function CheckoutScreen() {
   const platformCheckoutMetaRef = useRef(platformCheckoutMeta)
   platformCheckoutMetaRef.current = platformCheckoutMeta
 
-  const authContact = useMemo(() => resolveAuthContact(user), [user])
+  const checkoutContact = useMemo(
+    () => resolveCheckoutContact({ user, profile }),
+    [user, profile],
+  )
 
   useEffect(() => {
-    setContactCheckoutReady(authContact.checkoutReady)
-  }, [authContact.checkoutReady])
+    setContactCheckoutReady(checkoutContact.checkoutReady)
+  }, [checkoutContact.checkoutReady])
 
   const availableIds = useMemo(() => items.map((item) => item.id), [items])
   const { isSelected, noneSelected, selectedIds } = useCartSelection(availableIds)
