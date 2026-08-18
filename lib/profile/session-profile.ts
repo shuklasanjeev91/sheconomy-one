@@ -33,8 +33,10 @@ export type SessionProfile = Pick<
   | 'gender'
   | 'phone'
   | 'phone_verified'
+  | 'checkout_phone'
+  | 'checkout_phone_verified_at'
 >
 
 /** Columns fetched for the session profile — keep in sync with `SessionProfile`. */
 export const SESSION_PROFILE_COLUMNS =
-  'id, role, full_name, username, email, phone, phone_verified, avatar_url, cover_url, headline, bio, is_verified, follower_count, following_count, connections_count, location, industry, occupation, business_name, website_url, portfolio_url, interests, member_intents, profile_completion_percentage, gender, date_of_birth, marriage_anniversary'
+  'id, role, full_name, username, email, phone, phone_verified, checkout_phone, checkout_phone_verified_at, avatar_url, cover_url, headline, bio, is_verified, follower_count, following_count, connections_count, location, industry, occupation, business_name, website_url, portfolio_url, interests, member_intents, profile_completion_percentage, gender, date_of_birth, marriage_anniversary'

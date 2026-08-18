@@ -184,15 +184,26 @@ Deno.serve(async (request) => {
       return jsonResponse({ error: 'That code is incorrect. Try again.' }, 400)
     }
 
+    const verifiedAt = new Date(now).toISOString()
+
+    // Source of truth for checkout readiness. These columns are exempt from the
+    // one-account-per-phone rule, so a number shared with another account still
+    // verifies here.
     const { error: profileError } = await admin
       .from('profiles')
-      .update({ phone, phone_verified: true })
+      .update({ checkout_phone: phone, checkout_phone_verified_at: verifiedAt })
       .eq('id', user.id)
     if (profileError) return jsonResponse({ error: 'Could not save your verified number.' }, 500)
 
+    // Mirror onto profiles.phone so receipts, vendor views and order
+    // notifications pick the number up. check_unique_profile_contact() rejects
+    // this when another profile already holds the number, which must not fail a
+    // verification that has already succeeded.
+    await admin.from('profiles').update({ phone, phone_verified: true }).eq('id', user.id)
+
     await admin
       .from('checkout_phone_verifications')
-      .update({ verified_at: new Date(now).toISOString() })
+      .update({ verified_at: verifiedAt })
       .eq('user_id', user.id)
 
     return jsonResponse({ success: true })

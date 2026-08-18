@@ -42,25 +42,38 @@ export function resolveAuthContact(user: User | null | undefined): AuthContactSn
 }
 
 /**
- * Checkout contact readiness that trusts either signal:
- * - a phone confirmed on the auth user (legacy path, ~1.5k users), or
- * - a phone we verified over our own OTP and stored on the profile.
+ * Checkout contact readiness that trusts any of three signals:
+ * - `profiles.checkout_phone`, verified over our own OTP (the current path),
+ * - a phone confirmed on the auth user (legacy, ~1.5k users), or
+ * - `profiles.phone_verified` (legacy, set before checkout_phone existed).
  *
- * Needed because Supabase blocks binding a number that already exists on
- * another account, so those shoppers can only ever be profile-verified.
+ * Both uniqueness rules — Supabase Auth's and check_unique_profile_contact() on
+ * `profiles.phone` — reject a number that already exists on another account, so
+ * shoppers sharing a mobile can only ever be checkout_phone-verified.
  */
 export function resolveCheckoutContact(input: {
   user: User | null | undefined
-  profile?: Pick<SessionProfile, 'phone' | 'phone_verified'> | null
+  profile?: Pick<
+    SessionProfile,
+    'phone' | 'phone_verified' | 'checkout_phone' | 'checkout_phone_verified_at'
+  > | null
 }): AuthContactSnapshot {
   const auth = resolveAuthContact(input.user)
+
+  const checkoutPhoneRaw = input.profile?.checkout_phone?.trim() || null
+  const checkoutPhone = checkoutPhoneRaw ? canonicalE164Phone(checkoutPhoneRaw) : null
+  const checkoutVerified = Boolean(checkoutPhone && input.profile?.checkout_phone_verified_at)
 
   const profilePhoneRaw = input.profile?.phone?.trim() || null
   const profilePhone = profilePhoneRaw ? canonicalE164Phone(profilePhoneRaw) : null
   const profileVerified = Boolean(input.profile?.phone_verified && profilePhone)
 
-  const phoneVerified = auth.phoneVerified || profileVerified
-  const phone = auth.phone ?? (profileVerified ? profilePhone : null)
+  const phoneVerified = checkoutVerified || auth.phoneVerified || profileVerified
+  // A number just verified at checkout beats a stale auth phone: the shopper
+  // typed it in for this order.
+  const phone = checkoutVerified
+    ? checkoutPhone
+    : (auth.phone ?? (profileVerified ? profilePhone : null))
 
   return {
     email: auth.email,
@@ -119,8 +132,9 @@ type CheckoutOtpPayload =
 
 /**
  * Call the checkout-phone-otp edge function. Verification is decoupled from
- * Supabase Auth: the function sends its own SMS and marks profiles.phone_verified,
- * so a number already registered on another account no longer dead-ends checkout.
+ * Supabase Auth: the function sends its own SMS and stamps
+ * profiles.checkout_phone_verified_at, so a number already registered on
+ * another account no longer dead-ends checkout.
  */
 async function invokeCheckoutOtp(
   payload: CheckoutOtpPayload,

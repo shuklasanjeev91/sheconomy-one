@@ -12,6 +12,31 @@ export type Database = {
   __InternalSupabase: {
     PostgrestVersion: "12.2.3 (519615d)"
   }
+  graphql_public: {
+    Tables: {
+      [_ in never]: never
+    }
+    Views: {
+      [_ in never]: never
+    }
+    Functions: {
+      graphql: {
+        Args: {
+          extensions?: Json
+          operationName?: string
+          query?: string
+          variables?: Json
+        }
+        Returns: Json
+      }
+    }
+    Enums: {
+      [_ in never]: never
+    }
+    CompositeTypes: {
+      [_ in never]: never
+    }
+  }
   public: {
     Tables: {
       activities: {
@@ -1206,8 +1231,8 @@ export type Database = {
           image_url?: string | null
           item_metadata?: Json
           listing_id?: string
-          saved_for_later?: boolean
           quantity?: number
+          saved_for_later?: boolean
           shop_id?: string
           shop_name?: string
           title?: string
@@ -1492,6 +1517,13 @@ export type Database = {
             referencedRelation: "categories"
             referencedColumns: ["category_id"]
           },
+          {
+            foreignKeyName: "categories_parent_id_fkey"
+            columns: ["parent_id"]
+            isOneToOne: false
+            referencedRelation: "categories_with_counts"
+            referencedColumns: ["category_id"]
+          },
         ]
       }
       category_assignments: {
@@ -1525,6 +1557,13 @@ export type Database = {
             columns: ["category_id"]
             isOneToOne: false
             referencedRelation: "categories"
+            referencedColumns: ["category_id"]
+          },
+          {
+            foreignKeyName: "category_assignments_category_id_fkey"
+            columns: ["category_id"]
+            isOneToOne: false
+            referencedRelation: "categories_with_counts"
             referencedColumns: ["category_id"]
           },
           {
@@ -1600,6 +1639,13 @@ export type Database = {
             columns: ["category_id"]
             isOneToOne: false
             referencedRelation: "categories"
+            referencedColumns: ["category_id"]
+          },
+          {
+            foreignKeyName: "category_translations_category_id_fkey"
+            columns: ["category_id"]
+            isOneToOne: false
+            referencedRelation: "categories_with_counts"
             referencedColumns: ["category_id"]
           },
         ]
@@ -1690,6 +1736,45 @@ export type Database = {
           last_message_at?: string | null
           user_a_id?: string
           user_b_id?: string
+        }
+        Relationships: []
+      }
+      checkout_phone_verifications: {
+        Row: {
+          attempts: number
+          code_hash: string
+          created_at: string
+          expires_at: string
+          last_sent_at: string
+          phone: string
+          send_count: number
+          send_window_started_at: string | null
+          user_id: string
+          verified_at: string | null
+        }
+        Insert: {
+          attempts?: number
+          code_hash: string
+          created_at?: string
+          expires_at: string
+          last_sent_at?: string
+          phone: string
+          send_count?: number
+          send_window_started_at?: string | null
+          user_id: string
+          verified_at?: string | null
+        }
+        Update: {
+          attempts?: number
+          code_hash?: string
+          created_at?: string
+          expires_at?: string
+          last_sent_at?: string
+          phone?: string
+          send_count?: number
+          send_window_started_at?: string | null
+          user_id?: string
+          verified_at?: string | null
         }
         Relationships: []
       }
@@ -2726,13 +2811,14 @@ export type Database = {
           currency: string
           id: string
           idempotency_key: string
+          kind: string
           last_error: string | null
           metadata: Json
           order_id: string | null
           processed_at: string | null
           provider: string | null
           provider_reference: string | null
-          shop_id: string
+          shop_id: string | null
           status: string
           updated_at: string
         }
@@ -2746,13 +2832,14 @@ export type Database = {
           currency?: string
           id?: string
           idempotency_key: string
+          kind?: string
           last_error?: string | null
           metadata?: Json
           order_id?: string | null
           processed_at?: string | null
           provider?: string | null
           provider_reference?: string | null
-          shop_id: string
+          shop_id?: string | null
           status?: string
           updated_at?: string
         }
@@ -2766,13 +2853,14 @@ export type Database = {
           currency?: string
           id?: string
           idempotency_key?: string
+          kind?: string
           last_error?: string | null
           metadata?: Json
           order_id?: string | null
           processed_at?: string | null
           provider?: string | null
           provider_reference?: string | null
-          shop_id?: string
+          shop_id?: string | null
           status?: string
           updated_at?: string
         }
@@ -4604,6 +4692,7 @@ export type Database = {
       gender_verification_sessions: {
         Row: {
           challenge_types: string[]
+          client_metrics: Json | null
           created_at: string
           detected_blinks: number
           expires_at: string
@@ -4619,6 +4708,7 @@ export type Database = {
         }
         Insert: {
           challenge_types?: string[]
+          client_metrics?: Json | null
           created_at?: string
           detected_blinks?: number
           expires_at: string
@@ -4634,6 +4724,7 @@ export type Database = {
         }
         Update: {
           challenge_types?: string[]
+          client_metrics?: Json | null
           created_at?: string
           detected_blinks?: number
           expires_at?: string
@@ -8492,6 +8583,48 @@ export type Database = {
           },
         ]
       }
+      order_issue_comments: {
+        Row: {
+          author_id: string
+          body: string
+          created_at: string
+          id: string
+          issue_id: string
+          updated_at: string
+        }
+        Insert: {
+          author_id: string
+          body: string
+          created_at?: string
+          id?: string
+          issue_id: string
+          updated_at?: string
+        }
+        Update: {
+          author_id?: string
+          body?: string
+          created_at?: string
+          id?: string
+          issue_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "order_issue_comments_author_id_fkey"
+            columns: ["author_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "order_issue_comments_issue_id_fkey"
+            columns: ["issue_id"]
+            isOneToOne: false
+            referencedRelation: "order_issues"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       order_issue_events: {
         Row: {
           actor_id: string | null
@@ -8543,7 +8676,7 @@ export type Database = {
           issue_type: string
           order_id: string
           order_item_id: string | null
-          reported_by: string
+          reported_by: string | null
           resolution_action: string | null
           resolution_note: string | null
           resolved_at: string | null
@@ -8562,7 +8695,7 @@ export type Database = {
           issue_type: string
           order_id: string
           order_item_id?: string | null
-          reported_by: string
+          reported_by?: string | null
           resolution_action?: string | null
           resolution_note?: string | null
           resolved_at?: string | null
@@ -8581,7 +8714,7 @@ export type Database = {
           issue_type?: string
           order_id?: string
           order_item_id?: string | null
-          reported_by?: string
+          reported_by?: string | null
           resolution_action?: string | null
           resolution_note?: string | null
           resolved_at?: string | null
@@ -8589,6 +8722,13 @@ export type Database = {
           updated_at?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "fk_reported_by"
+            columns: ["reported_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "order_issues_order_id_fkey"
             columns: ["order_id"]
@@ -10375,12 +10515,13 @@ export type Database = {
           ban_reason: string | null
           bio: string | null
           business_name: string | null
+          checkout_phone: string | null
+          checkout_phone_verified_at: string | null
           connections_count: number | null
           country_code: string | null
           cover_url: string | null
           created_at: string
           date_of_birth: string | null
-          marriage_anniversary: string | null
           deleted_at: string | null
           device_info: Json
           email: string | null
@@ -10413,6 +10554,7 @@ export type Database = {
           linkedin_url: string | null
           location: string | null
           login_count: number
+          marriage_anniversary: string | null
           member_intents: string[]
           notification_preferences: Json
           occupation: string | null
@@ -10452,12 +10594,13 @@ export type Database = {
           ban_reason?: string | null
           bio?: string | null
           business_name?: string | null
+          checkout_phone?: string | null
+          checkout_phone_verified_at?: string | null
           connections_count?: number | null
           country_code?: string | null
           cover_url?: string | null
           created_at?: string
           date_of_birth?: string | null
-          marriage_anniversary?: string | null
           deleted_at?: string | null
           device_info?: Json
           email?: string | null
@@ -10490,6 +10633,7 @@ export type Database = {
           linkedin_url?: string | null
           location?: string | null
           login_count?: number
+          marriage_anniversary?: string | null
           member_intents?: string[]
           notification_preferences?: Json
           occupation?: string | null
@@ -10529,12 +10673,13 @@ export type Database = {
           ban_reason?: string | null
           bio?: string | null
           business_name?: string | null
+          checkout_phone?: string | null
+          checkout_phone_verified_at?: string | null
           connections_count?: number | null
           country_code?: string | null
           cover_url?: string | null
           created_at?: string
           date_of_birth?: string | null
-          marriage_anniversary?: string | null
           deleted_at?: string | null
           device_info?: Json
           email?: string | null
@@ -10567,6 +10712,7 @@ export type Database = {
           linkedin_url?: string | null
           location?: string | null
           login_count?: number
+          marriage_anniversary?: string | null
           member_intents?: string[]
           notification_preferences?: Json
           occupation?: string | null
@@ -12091,6 +12237,106 @@ export type Database = {
           },
         ]
       }
+      shepay_pending_settlements: {
+        Row: {
+          amount: number
+          checkout_group_id: string | null
+          child_merchant_key: string | null
+          child_mid: string | null
+          created_at: string
+          currency: string
+          error_message: string | null
+          id: string
+          payment_step_id: string | null
+          payu_id: string
+          release_payload: Json | null
+          released_at: string | null
+          shop_id: string
+          status: string
+          txnid: string | null
+          updated_at: string
+        }
+        Insert: {
+          amount: number
+          checkout_group_id?: string | null
+          child_merchant_key?: string | null
+          child_mid?: string | null
+          created_at?: string
+          currency?: string
+          error_message?: string | null
+          id?: string
+          payment_step_id?: string | null
+          payu_id: string
+          release_payload?: Json | null
+          released_at?: string | null
+          shop_id: string
+          status?: string
+          txnid?: string | null
+          updated_at?: string
+        }
+        Update: {
+          amount?: number
+          checkout_group_id?: string | null
+          child_merchant_key?: string | null
+          child_mid?: string | null
+          created_at?: string
+          currency?: string
+          error_message?: string | null
+          id?: string
+          payment_step_id?: string | null
+          payu_id?: string
+          release_payload?: Json | null
+          released_at?: string | null
+          shop_id?: string
+          status?: string
+          txnid?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "shepay_pending_settlements_checkout_group_id_fkey"
+            columns: ["checkout_group_id"]
+            isOneToOne: false
+            referencedRelation: "commerce_checkout_groups"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "shepay_pending_settlements_payment_step_id_fkey"
+            columns: ["payment_step_id"]
+            isOneToOne: false
+            referencedRelation: "commerce_checkout_payment_steps"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "shepay_pending_settlements_shop_id_fkey"
+            columns: ["shop_id"]
+            isOneToOne: false
+            referencedRelation: "active_listings_view"
+            referencedColumns: ["shop_id"]
+          },
+          {
+            foreignKeyName: "shepay_pending_settlements_shop_id_fkey"
+            columns: ["shop_id"]
+            isOneToOne: false
+            referencedRelation: "payment_analytics"
+            referencedColumns: ["shop_id"]
+          },
+          {
+            foreignKeyName: "shepay_pending_settlements_shop_id_fkey"
+            columns: ["shop_id"]
+            isOneToOne: false
+            referencedRelation: "shop_listings_summary"
+            referencedColumns: ["shop_id"]
+          },
+          {
+            foreignKeyName: "shepay_pending_settlements_shop_id_fkey"
+            columns: ["shop_id"]
+            isOneToOne: false
+            referencedRelation: "shops"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       shipping_providers: {
         Row: {
           configuration: Json | null
@@ -12557,106 +12803,68 @@ export type Database = {
           },
         ]
       }
-      shepay_pending_settlements: {
+      shop_legal_documents: {
         Row: {
-          amount: number
-          checkout_group_id: string | null
-          child_merchant_key: string | null
-          child_mid: string | null
+          body_markdown: string
           created_at: string
-          currency: string
-          error_message: string | null
+          doc_type: string
           id: string
-          payment_step_id: string | null
-          payu_id: string
-          release_payload: Json | null
-          released_at: string | null
+          is_published: boolean
           shop_id: string
-          status: string
-          txnid: string | null
+          title: string
           updated_at: string
         }
         Insert: {
-          amount: number
-          checkout_group_id?: string | null
-          child_merchant_key?: string | null
-          child_mid?: string | null
+          body_markdown?: string
           created_at?: string
-          currency?: string
-          error_message?: string | null
+          doc_type: string
           id?: string
-          payment_step_id?: string | null
-          payu_id: string
-          release_payload?: Json | null
-          released_at?: string | null
+          is_published?: boolean
           shop_id: string
-          status?: string
-          txnid?: string | null
+          title?: string
           updated_at?: string
         }
         Update: {
-          amount?: number
-          checkout_group_id?: string | null
-          child_merchant_key?: string | null
-          child_mid?: string | null
+          body_markdown?: string
           created_at?: string
-          currency?: string
-          error_message?: string | null
+          doc_type?: string
           id?: string
-          payment_step_id?: string | null
-          payu_id?: string
-          release_payload?: Json | null
-          released_at?: string | null
+          is_published?: boolean
           shop_id?: string
-          status?: string
-          txnid?: string | null
+          title?: string
           updated_at?: string
         }
         Relationships: [
           {
-            foreignKeyName: "shepay_pending_settlements_checkout_group_id_fkey"
-            columns: ["checkout_group_id"]
-            isOneToOne: false
-            referencedRelation: "commerce_checkout_groups"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "shepay_pending_settlements_payment_step_id_fkey"
-            columns: ["payment_step_id"]
-            isOneToOne: false
-            referencedRelation: "commerce_checkout_payment_steps"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "shepay_pending_settlements_shop_id_fkey"
+            foreignKeyName: "shop_legal_documents_shop_id_fkey"
             columns: ["shop_id"]
             isOneToOne: false
             referencedRelation: "active_listings_view"
             referencedColumns: ["shop_id"]
           },
           {
-            foreignKeyName: "shepay_pending_settlements_shop_id_fkey"
+            foreignKeyName: "shop_legal_documents_shop_id_fkey"
             columns: ["shop_id"]
             isOneToOne: false
             referencedRelation: "payment_analytics"
             referencedColumns: ["shop_id"]
           },
           {
-            foreignKeyName: "shepay_pending_settlements_shop_id_fkey"
+            foreignKeyName: "shop_legal_documents_shop_id_fkey"
             columns: ["shop_id"]
             isOneToOne: false
             referencedRelation: "shop_listings_summary"
             referencedColumns: ["shop_id"]
           },
           {
-            foreignKeyName: "shepay_pending_settlements_shop_id_fkey"
+            foreignKeyName: "shop_legal_documents_shop_id_fkey"
             columns: ["shop_id"]
             isOneToOne: false
             referencedRelation: "shops"
             referencedColumns: ["id"]
           },
         ]
-      },
+      }
       shop_payment_accounts: {
         Row: {
           access_token: string | null
@@ -15333,18 +15541,24 @@ export type Database = {
           created_at: string
           id: string
           name: string
+          share_enabled_at: string | null
+          share_token: string | null
           user_id: string
         }
         Insert: {
           created_at?: string
           id?: string
           name: string
+          share_enabled_at?: string | null
+          share_token?: string | null
           user_id: string
         }
         Update: {
           created_at?: string
           id?: string
           name?: string
+          share_enabled_at?: string | null
+          share_token?: string | null
           user_id?: string
         }
         Relationships: [
@@ -15419,17 +15633,6 @@ export type Database = {
       }
     }
     Views: {
-      categories_with_counts: {
-        Row: {
-          category: string | null
-          category_icon: string | null
-          category_id: string | null
-          category_image_url: string | null
-          product_count: number | null
-          seo_name: string | null
-        }
-        Relationships: []
-      }
       active_listings_view: {
         Row: {
           booking_duration_minutes: number | null
@@ -15514,6 +15717,19 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      categories_with_counts: {
+        Row: {
+          category: string | null
+          category_icon: string | null
+          category_id: string | null
+          category_image_url: string | null
+          level: number | null
+          position: number | null
+          product_count: number | null
+          seo_name: string | null
+        }
+        Relationships: []
       }
       cms_sitemap_feed: {
         Row: {
@@ -16435,6 +16651,10 @@ export type Database = {
         Returns: undefined
       }
       _marketplace_is_admin: { Args: { p_user_id: string }; Returns: boolean }
+      _restore_checkout_cart: {
+        Args: { p_cart_id: string; p_group_id: string; p_order_ids: string[] }
+        Returns: undefined
+      }
       add_group_participants: {
         Args: { p_conversation_id: string; p_user_ids: string[] }
         Returns: undefined
@@ -16454,6 +16674,7 @@ export type Database = {
           item_metadata: Json
           listing_id: string
           quantity: number
+          saved_for_later: boolean
           shop_id: string
           shop_name: string
           title: string
@@ -16507,13 +16728,7 @@ export type Database = {
           updated_at: string
         }[]
       }
-      admin_update_shop: {
-        Args: {
-          p_shop_id: string
-          p_updates: Json
-        }
-        Returns: Database["public"]["Tables"]["shops"]["Row"]
-      }
+      app_public_base_url: { Args: never; Returns: string }
       apply_discount_to_cart: {
         Args: {
           p_cart_id: string
@@ -16602,6 +16817,14 @@ export type Database = {
         Args: { profile_id: string }
         Returns: number
       }
+      calculate_shop_shipping_from_profiles: {
+        Args: {
+          p_requires_shipping?: boolean
+          p_shop_id: string
+          p_subtotal_after_discount: number
+        }
+        Returns: Json
+      }
       call_edge_function_async:
         | { Args: { function_name: string; payload: Json }; Returns: undefined }
         | { Args: { function_name: string; payload: Json }; Returns: undefined }
@@ -16613,6 +16836,7 @@ export type Database = {
         Args: { function_name: string; payload: Json }
         Returns: undefined
       }
+      can_access_order_issue: { Args: { p_issue_id: string }; Returns: boolean }
       can_access_shop: { Args: { shop_uuid: string }; Returns: boolean }
       can_moderate_meeting: { Args: { p_meeting_id: string }; Returns: boolean }
       can_users_message: {
@@ -16697,14 +16921,14 @@ export type Database = {
       connection_occasions_today: {
         Args: { p_user_id?: string }
         Returns: {
-          avatar_url: string | null
-          company_name: string | null
-          full_name: string | null
+          avatar_url: string
+          company_name: string
+          full_name: string
           label: string
           occasion: string
           user_id: string
-          username: string | null
-          years: number | null
+          username: string
+          years: number
         }[]
       }
       create_customer_order: { Args: { order_data: Json }; Returns: Json }
@@ -16902,6 +17126,10 @@ export type Database = {
         }[]
       }
       disable_notification_triggers: { Args: never; Returns: string }
+      dispatch_marketplace_order_notifications: {
+        Args: { p_order_id: string }
+        Returns: undefined
+      }
       dmetaphone: { Args: { "": string }; Returns: string }
       dmetaphone_alt: { Args: { "": string }; Returns: string }
       enable_notification_triggers: { Args: never; Returns: string }
@@ -16917,6 +17145,10 @@ export type Database = {
       extract_file_name: { Args: { url: string }; Returns: string }
       extract_video_format: { Args: { url: string }; Returns: string }
       extract_video_source: { Args: { url: string }; Returns: string }
+      finalize_shepay_bundle_charge: {
+        Args: { p_checkout_group_id: string }
+        Returns: Json
+      }
       find_nearest_warehouse: {
         Args: { p_pin_code: string; p_product_id?: string; p_shop_id?: string }
         Returns: {
@@ -18119,17 +18351,50 @@ export type Database = {
         }
         Returns: string
       }
+      normalize_iso_country_code: { Args: { p_value: string }; Returns: string }
       poll_qr_login_challenge: { Args: { p_id: string }; Returns: Json }
       process_abandoned_carts: { Args: { p_limit?: number }; Returns: number }
+      process_checkout_payment_webhook:
+        | {
+            Args: {
+              p_amount?: number
+              p_checkout_group_id: string
+              p_currency?: string
+              p_metadata?: Json
+              p_provider: string
+              p_provider_reference: string
+              p_status: string
+            }
+            Returns: Json
+          }
+        | {
+            Args: {
+              p_event_type: string
+              p_payload?: Json
+              p_payment_step_id: string
+              p_provider: Database["public"]["Enums"]["payment_provider_enum"]
+              p_provider_reference?: string
+              p_shop_id: string
+              p_status: string
+              p_webhook_id: string
+            }
+            Returns: Json
+          }
       process_community_weekly_digest: {
         Args: { p_limit?: number }
         Returns: number
       }
+      process_event_reminders: { Args: never; Returns: number }
       process_network_suggestions_digest: {
         Args: { p_limit?: number }
         Returns: number
       }
       process_notification_queue: { Args: never; Returns: number }
+      process_order_confirmation_reminders: {
+        Args: { p_limit?: number }
+        Returns: number
+      }
+      process_product_reminders: { Args: { p_limit?: number }; Returns: Json }
       process_scheduled_notifications_now: { Args: never; Returns: Json }
       profiles_generate_unique_username: {
         Args: { p_base: string }
@@ -18150,6 +18415,7 @@ export type Database = {
       }
       refresh_active_listings_view: { Args: never; Returns: undefined }
       refresh_review_summary: { Args: never; Returns: undefined }
+      release_expired_checkout_reservations: { Args: never; Returns: number }
       remove_discount_from_cart: {
         Args: { p_cart_id: string }
         Returns: {
@@ -18224,6 +18490,7 @@ export type Database = {
         Args: { p_conversation_id: string; p_rating?: number }
         Returns: undefined
       }
+      resolve_wishlist_share: { Args: { p_token: string }; Returns: Json }
       resume_checkout_payment: {
         Args: { p_checkout_group_id: string }
         Returns: Json
@@ -18964,6 +19231,9 @@ export type CompositeTypes<
     : never
 
 export const Constants = {
+  graphql_public: {
+    Enums: {},
+  },
   public: {
     Enums: {
       app_role: ["admin", "moderator", "user"],
