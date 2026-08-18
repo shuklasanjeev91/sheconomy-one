@@ -199,6 +199,32 @@ export function VendorOrderIssueDetailDrawer({
         </XStack>
       </VendorDrawerSection>
 
+      {(issue as { return_tracking_number?: string | null }).return_tracking_number ? (
+        <VendorDrawerSection ui={ui} label="Return shipment">
+          <VendorDrawerRow
+            ui={ui}
+            label="AWB"
+            value={String((issue as { return_tracking_number?: string | null }).return_tracking_number)}
+          />
+          {(issue as { return_shipped_at?: string | null }).return_shipped_at ? (
+            <VendorDrawerRow
+              ui={ui}
+              label="Shipped"
+              value={formatOrderDate(
+                String((issue as { return_shipped_at?: string | null }).return_shipped_at),
+              )}
+            />
+          ) : null}
+          {(issue as { return_courier_slug?: string | null }).return_courier_slug ? (
+            <VendorDrawerRow
+              ui={ui}
+              label="Courier"
+              value={String((issue as { return_courier_slug?: string | null }).return_courier_slug)}
+            />
+          ) : null}
+        </VendorDrawerSection>
+      ) : null}
+
       <VendorDrawerSection ui={ui} label="Conversation">
         <OrderIssueCommentsThread
           ui={ui}

@@ -289,10 +289,17 @@ function DrawerBody({
       toast.show('Could not confirm return', { tone: 'danger', message: result.error })
       return
     }
-    toast.show('Return received — refund pending', {
-      tone: 'success',
-      message: 'Gateway disbursement remains admin-controlled.',
-    })
+    toast.show(
+      result.data?.replacementItemId
+        ? 'Exchange received — replacement ready to ship'
+        : 'Return received — refund sent to payment gateway',
+      {
+        tone: 'success',
+        message: result.data?.replacementItemId
+          ? 'Add tracking on the new replacement line when you ship it.'
+          : 'PayU will process the refund to the original payment method.',
+      },
+    )
     setNote('')
     onIssuesChanged?.()
   }

@@ -67,6 +67,7 @@ const TYPE_OPTIONS: { value: TypeFilter; label: string }[] = [
   ...[
     ORDER_ISSUE_TYPE.CANCELLATION_REQUEST,
     ORDER_ISSUE_TYPE.RETURN_REQUEST,
+    ORDER_ISSUE_TYPE.EXCHANGE_REQUEST,
     ORDER_ISSUE_TYPE.REFUND_REQUEST,
     ORDER_ISSUE_TYPE.DAMAGED_ITEM,
     ORDER_ISSUE_TYPE.WRONG_ITEM,
@@ -218,10 +219,18 @@ export function VendorOrderIssuesPanel({
         if (!issue.order_item_id) throw new Error('This request is not linked to an item.')
         const result = await confirmOrderReturnReceived({ orderItemId: issue.order_item_id, note })
         if (result.error) throw new Error(result.error)
-        toast.show('Return received — refund pending', {
-          tone: 'success',
-          message: 'Gateway disbursement remains admin-controlled.',
-        })
+        const isExchange = Boolean(result.data?.replacementItemId)
+        toast.show(
+          isExchange
+            ? 'Exchange received — replacement ready to ship'
+            : 'Return received — refund sent to payment gateway',
+          {
+            tone: 'success',
+            message: isExchange
+              ? 'Add tracking on the new replacement line when you ship it.'
+              : 'PayU will process the refund to the original payment method.',
+          },
+        )
       } else {
         await dispatch(
           updateIssueStatus({

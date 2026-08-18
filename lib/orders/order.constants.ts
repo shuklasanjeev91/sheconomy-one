@@ -330,6 +330,7 @@ export const ORDER_ISSUE_TYPE = {
   BILLING_ISSUE: 'billing_issue',
   RETURN_REQUEST: 'return_request',
   REFUND_REQUEST: 'refund_request',
+  EXCHANGE_REQUEST: 'exchange_request',
   CANCELLATION_REQUEST: 'cancellation_request',
   CUSTOMER_COMPLAINT: 'customer_complaint',
   SHIPPING_ISSUE: 'shipping_issue',

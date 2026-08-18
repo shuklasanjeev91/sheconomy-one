@@ -15,6 +15,7 @@ import {
 } from '~/lib/orders/order.constants'
 import {
   isCancellationIssueType,
+  isExchangeIssueType,
   isOpenIssueStatus,
   isReturnIssueType,
   issueStatusLabel,
@@ -24,7 +25,14 @@ import { formatOrderDate, getOrderStatusDisplay } from '~/lib/orders/order.utils
 import { safeHttpUrl } from '~/lib/platform/openUrl'
 
 // Issue presentation/classification is shared with the vendor + admin surfaces.
-export { isCancellationIssueType, isOpenIssueStatus, isReturnIssueType, issueStatusLabel, issueTypeLabel }
+export {
+  isCancellationIssueType,
+  isExchangeIssueType,
+  isOpenIssueStatus,
+  isReturnIssueType,
+  issueStatusLabel,
+  issueTypeLabel,
+}
 
 /** Statuses where the customer may still request cancellation (pre-shipment). */
 export const PRE_SHIPMENT_ORDER_STATUSES: OrderStatus[] = [
@@ -74,9 +82,14 @@ export type CustomerItemTrustEligibility = {
   reviewBlockedReason: string | null
   canReturn: boolean
   returnBlockedReason: string | null
+  canExchange: boolean
+  exchangeBlockedReason: string | null
+  canSubmitReturnTracking: boolean
+  returnTrackingBlockedReason: string | null
   canDownload: boolean
   downloadBlockedReason: string | null
   hasOpenReturnRequest: boolean
+  hasOpenExchangeRequest: boolean
   hasReview: boolean
 }
 
@@ -129,6 +142,53 @@ export function findOpenReturnRequest<T extends { issue_type?: string | null; st
   )
 }
 
+export function findOpenExchangeRequest<T extends { issue_type?: string | null; status?: string | null; order_item_id?: string | null; resolution_action?: string | null }>(
+  issues: T[] | null | undefined,
+  orderItemId?: string | null,
+): T | null {
+  if (!issues?.length) return null
+  return (
+    issues.find((issue) => {
+      if (!isExchangeIssueType(issue.issue_type)) return false
+      if (orderItemId && issue.order_item_id !== orderItemId) return false
+      if (issue.resolution_action === 'exchange_ready_to_ship') return false
+      if (issue.resolution_action === 'rejected') return false
+      return (
+        isOpenIssueStatus(issue.status) ||
+        (issue.status === 'resolved' && issue.resolution_action === 'accepted') ||
+        issue.status === 'waiting_customer'
+      )
+    }) ?? null
+  )
+}
+
+/** Accepted return/exchange still waiting for the buyer to add an AWB. */
+export function findAcceptedReturnAwaitingTracking<
+  T extends {
+    issue_type?: string | null
+    status?: string | null
+    resolution_action?: string | null
+    order_item_id?: string | null
+    return_tracking_number?: string | null
+  },
+>(issues: T[] | null | undefined, orderItemId?: string | null): T | null {
+  if (!issues?.length) return null
+  return (
+    issues.find((issue) => {
+      if (orderItemId && issue.order_item_id !== orderItemId) return false
+      if (issue.return_tracking_number) return false
+      const isReturnOrExchange =
+        isReturnIssueType(issue.issue_type) || isExchangeIssueType(issue.issue_type)
+      if (!isReturnOrExchange) return false
+      return (
+        issue.resolution_action === 'accepted' ||
+        issue.status === 'waiting_customer' ||
+        (issue.status === 'resolved' && issue.resolution_action === 'accepted')
+      )
+    }) ?? null
+  )
+}
+
 export function isDeliveredOrCompletedStatus(status: string | null | undefined): boolean {
   return status === ORDER_STATUS.DELIVERED || status === ORDER_STATUS.COMPLETED
 }
@@ -165,31 +225,42 @@ export function getCustomerItemTrustEligibility(input: {
   downloadExpiresAt?: string | null
   hasReview?: boolean | null
   deliveredAt?: string | null
+  returnWindowDays?: number | null
+  acceptsReturns?: boolean | null
+  acceptsExchanges?: boolean | null
   issues?: Array<{
     issue_type?: string | null
     status?: string | null
     order_item_id?: string | null
+    resolution_action?: string | null
+    return_tracking_number?: string | null
   }> | null
   refunds?: Array<{
     order_item_id?: string | null
     refund_status?: string | null
+    return_tracking_number?: string | null
   }> | null
   orderItemId: string
   now?: number
 }): CustomerItemTrustEligibility {
   const now = input.now ?? Date.now()
+  const windowDays = input.returnWindowDays ?? RETURN_WINDOW_DAYS
   const delivered =
     isDeliveredOrCompletedStatus(input.itemStatus) ||
     isDeliveredOrCompletedStatus(input.orderStatus)
   const digital =
     isDigitalListingType(input.listingType) || Boolean(input.digitalDownloadUrl?.trim())
   const openReturn = findOpenReturnRequest(input.issues, input.orderItemId)
+  const openExchange = findOpenExchangeRequest(input.issues, input.orderItemId)
+  const awaitingTracking = findAcceptedReturnAwaitingTracking(input.issues, input.orderItemId)
   const activeRefund = (input.refunds ?? []).find(
     (refund) =>
       refund.order_item_id === input.orderItemId &&
       ['requested', 'processing', 'approved', 'completed'].includes(String(refund.refund_status)),
   )
   const hasReview = Boolean(input.hasReview)
+  const acceptsReturns = input.acceptsReturns !== false
+  const acceptsExchanges = input.acceptsExchanges !== false
 
   let reviewBlockedReason: string | null = null
   if (hasReview) reviewBlockedReason = 'You already reviewed this item.'
@@ -197,11 +268,30 @@ export function getCustomerItemTrustEligibility(input: {
 
   let returnBlockedReason: string | null = null
   if (digital) returnBlockedReason = 'Digital purchases cannot be returned here.'
+  else if (!acceptsReturns) returnBlockedReason = 'This shop does not accept returns for this item.'
   else if (!delivered) returnBlockedReason = 'Returns are available after delivery.'
   else if (openReturn) returnBlockedReason = 'A return request is already open for this item.'
+  else if (openExchange) returnBlockedReason = 'An exchange request is already open for this item.'
   else if (activeRefund) returnBlockedReason = 'A refund is already in progress for this item.'
-  else if (!isWithinReturnWindow(input.deliveredAt ?? null, now)) {
-    returnBlockedReason = `Returns are available for ${RETURN_WINDOW_DAYS} days after delivery.`
+  else if (!isWithinReturnWindow(input.deliveredAt ?? null, now, windowDays)) {
+    returnBlockedReason = `Returns are available for ${windowDays} days after delivery.`
+  }
+
+  let exchangeBlockedReason: string | null = null
+  if (digital) exchangeBlockedReason = 'Digital purchases cannot be exchanged here.'
+  else if (!acceptsExchanges) {
+    exchangeBlockedReason = 'This shop does not accept exchanges for this item.'
+  } else if (!delivered) exchangeBlockedReason = 'Exchanges are available after delivery.'
+  else if (openExchange) exchangeBlockedReason = 'An exchange request is already open for this item.'
+  else if (openReturn) exchangeBlockedReason = 'A return request is already open for this item.'
+  else if (activeRefund) exchangeBlockedReason = 'A refund is already in progress for this item.'
+  else if (!isWithinReturnWindow(input.deliveredAt ?? null, now, windowDays)) {
+    exchangeBlockedReason = `Exchanges are available for ${windowDays} days after delivery.`
+  }
+
+  let returnTrackingBlockedReason: string | null = null
+  if (!awaitingTracking) {
+    returnTrackingBlockedReason = 'No approved return or exchange is waiting for tracking.'
   }
 
   let downloadBlockedReason: string | null = null
@@ -228,9 +318,14 @@ export function getCustomerItemTrustEligibility(input: {
     reviewBlockedReason,
     canReturn: !returnBlockedReason,
     returnBlockedReason,
+    canExchange: !exchangeBlockedReason,
+    exchangeBlockedReason,
+    canSubmitReturnTracking: !returnTrackingBlockedReason,
+    returnTrackingBlockedReason,
     canDownload: !downloadBlockedReason,
     downloadBlockedReason,
     hasOpenReturnRequest: Boolean(openReturn),
+    hasOpenExchangeRequest: Boolean(openExchange),
     hasReview,
   }
 }

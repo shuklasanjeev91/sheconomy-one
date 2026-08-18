@@ -7,7 +7,9 @@ import { OrderIssueCommentsThread } from '~/commerce/components/OrderIssueCommen
 import { OrderPackageCard } from '~/commerce/components/OrderPackageCard'
 import { OrderTimeline } from '~/commerce/components/OrderTimeline'
 import {
+  ExchangeOrderItemSheet,
   ReturnOrderItemSheet,
+  SubmitReturnTrackingSheet,
   WriteReviewSheet,
 } from '~/commerce/components/OrderTrustSheets'
 import { OrderStatusBadge } from '~/commerce/components/vendor/OrderStatusBadge'
@@ -91,6 +93,8 @@ export function OrderDetailScreen({ orderId }: OrderDetailScreenProps) {
   const [cancelOpen, setCancelOpen] = useState(false)
   const [supportOpen, setSupportOpen] = useState(false)
   const [returnItem, setReturnItem] = useState<CustomerOrderItem | null>(null)
+  const [exchangeItem, setExchangeItem] = useState<CustomerOrderItem | null>(null)
+  const [trackingItem, setTrackingItem] = useState<CustomerOrderItem | null>(null)
   const [reviewItem, setReviewItem] = useState<CustomerOrderItem | null>(null)
   const [downloadingItemId, setDownloadingItemId] = useState<string | null>(null)
   const [reordering, setReordering] = useState(false)
@@ -566,6 +570,32 @@ export function OrderDetailScreen({ orderId }: OrderDetailScreenProps) {
                           Return request pending
                         </Text>
                       ) : null}
+                      {trust.canExchange ? (
+                        <Button
+                          tone="outline"
+                          size="$3"
+                          borderRadius={999}
+                          icon={<Icons.RefreshCw size={14} />}
+                          onPress={() => setExchangeItem(item)}
+                        >
+                          Exchange
+                        </Button>
+                      ) : trust.hasOpenExchangeRequest ? (
+                        <Text fontSize={12} color={ui.textMuted}>
+                          Exchange pending
+                        </Text>
+                      ) : null}
+                      {trust.canSubmitReturnTracking ? (
+                        <Button
+                          tone="primary"
+                          size="$3"
+                          borderRadius={999}
+                          icon={<Icons.Truck size={14} />}
+                          onPress={() => setTrackingItem(item)}
+                        >
+                          Add return tracking
+                        </Button>
+                      ) : null}
                     </XStack>
                   </YStack>
                 )
@@ -744,6 +774,24 @@ export function OrderDetailScreen({ orderId }: OrderDetailScreenProps) {
                 orderId={order.id}
                 userId={user.id}
                 item={returnItem}
+                onSubmitted={() => void load({ soft: true })}
+              />
+              <ExchangeOrderItemSheet
+                open={Boolean(exchangeItem)}
+                onOpenChange={(next) => {
+                  if (!next) setExchangeItem(null)
+                }}
+                orderId={order.id}
+                userId={user.id}
+                item={exchangeItem}
+                onSubmitted={() => void load({ soft: true })}
+              />
+              <SubmitReturnTrackingSheet
+                open={Boolean(trackingItem)}
+                onOpenChange={(next) => {
+                  if (!next) setTrackingItem(null)
+                }}
+                item={trackingItem}
                 onSubmitted={() => void load({ soft: true })}
               />
               <WriteReviewSheet

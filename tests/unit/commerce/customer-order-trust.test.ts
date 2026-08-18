@@ -124,6 +124,46 @@ describe('getCustomerItemTrustEligibility', () => {
     })
     expect(stale.canReturn).toBe(false)
   })
+
+  it('allows exchange for delivered physical items and blocks when a return is open', () => {
+    const eligibility = getCustomerItemTrustEligibility({
+      ...base,
+      listingType: 'physical',
+      acceptsExchanges: true,
+    })
+    expect(eligibility.canExchange).toBe(true)
+
+    const blocked = getCustomerItemTrustEligibility({
+      ...base,
+      listingType: 'physical',
+      issues: [
+        {
+          issue_type: ORDER_ISSUE_TYPE.RETURN_REQUEST,
+          status: 'open',
+          order_item_id: 'item-1',
+        },
+      ],
+    })
+    expect(blocked.canExchange).toBe(false)
+  })
+
+  it('allows return tracking after an accepted return without an AWB', () => {
+    const eligibility = getCustomerItemTrustEligibility({
+      ...base,
+      listingType: 'physical',
+      issues: [
+        {
+          issue_type: ORDER_ISSUE_TYPE.RETURN_REQUEST,
+          status: 'waiting_customer',
+          resolution_action: 'accepted',
+          order_item_id: 'item-1',
+          return_tracking_number: null,
+        },
+      ],
+    })
+    expect(eligibility.canSubmitReturnTracking).toBe(true)
+    expect(eligibility.canReturn).toBe(false)
+  })
 })
 
 describe('helpers', () => {

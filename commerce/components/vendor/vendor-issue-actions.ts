@@ -19,6 +19,7 @@ import {
   getNextIssueStatuses,
   isCancellationIssueType,
   isDecisionIssueType,
+  isExchangeIssueType,
   isOpenIssueStatus,
   isReturnIssueType,
 } from '~/lib/orders/order-issue.utils'
@@ -63,6 +64,12 @@ const DECISION_COPY: Record<
     reject: 'Decline return',
     acceptHint: 'Starts the refund and asks the customer to ship the item back.',
     rejectHint: 'Rejects the return — a reason is strongly recommended.',
+  },
+  [ORDER_ISSUE_TYPE.EXCHANGE_REQUEST]: {
+    accept: 'Approve exchange',
+    reject: 'Decline exchange',
+    acceptHint: 'Asks the customer to ship the item back, then you ship a replacement.',
+    rejectHint: 'Rejects the exchange — a reason is strongly recommended.',
   },
   [ORDER_ISSUE_TYPE.REFUND_REQUEST]: {
     accept: 'Approve refund',
@@ -113,13 +120,19 @@ const STATUS_COPY: Partial<
 }
 
 /**
- * An approved return where the goods have not been checked in yet — the vendor
- * still owes a "return received" confirmation to release the refund.
+ * An approved return/exchange where the goods have not been checked in yet — the
+ * vendor still owes a "return received" confirmation to release the refund or
+ * ship the replacement.
  */
 export function isReturnAwaitingGoods(issue: VendorIssueLike): boolean {
-  if (!isReturnIssueType(issue.issue_type)) return false
+  if (!isReturnIssueType(issue.issue_type) && !isExchangeIssueType(issue.issue_type)) return false
   if (issue.resolution_action === 'return_received') return false
-  return issue.status === ISSUE_STATUS.RESOLVED || issue.resolution_action === 'accepted'
+  if (issue.resolution_action === 'exchange_ready_to_ship') return false
+  return (
+    issue.status === ISSUE_STATUS.RESOLVED ||
+    issue.status === ISSUE_STATUS.WAITING_CUSTOMER ||
+    issue.resolution_action === 'accepted'
+  )
 }
 
 /** Whether this issue still needs the vendor to do something. */
@@ -129,7 +142,11 @@ export function issueNeedsVendorAction(issue: VendorIssueLike): boolean {
 
 export function getVendorIssueActions(issue: VendorIssueLike): VendorIssueAction[] {
   // An unanswered accept/reject request blocks everything else.
-  if (isDecisionIssueType(issue.issue_type) && isOpenIssueStatus(issue.status)) {
+  if (
+    isDecisionIssueType(issue.issue_type) &&
+    isOpenIssueStatus(issue.status) &&
+    issue.resolution_action !== 'accepted'
+  ) {
     const copy =
       DECISION_COPY[issue.issue_type as string] ??
       DECISION_COPY[ORDER_ISSUE_TYPE.CANCELLATION_REQUEST]
@@ -156,14 +173,17 @@ export function getVendorIssueActions(issue: VendorIssueLike): VendorIssueAction
   }
 
   if (isReturnAwaitingGoods(issue) && issue.order_item_id) {
+    const isExchange = isExchangeIssueType(issue.issue_type)
     return [
       {
         kind: 'return-received',
         key: 'return-received',
-        label: 'Confirm return received',
+        label: isExchange ? 'Confirm exchange received' : 'Confirm return received',
         tone: 'primary',
         icon: 'PackageCheck',
-        hint: 'Checks the item back in and approves the refund for payout.',
+        hint: isExchange
+          ? 'Checks the item in and creates a replacement line ready to ship.'
+          : 'Checks the item back in and sends the refund to the payment gateway.',
       },
     ]
   }
@@ -190,14 +210,19 @@ export function getVendorIssueActions(issue: VendorIssueLike): VendorIssueAction
 
 /** Short banner copy for the issue queue, or null when nothing is urgent. */
 export function issueAttentionMessage(issue: VendorIssueLike): string | null {
-  if (isCancellationIssueType(issue.issue_type) && isOpenIssueStatus(issue.status)) {
+  if (isCancellationIssueType(issue.issue_type) && isOpenIssueStatus(issue.status) && issue.resolution_action !== 'accepted') {
     return 'Cancellation request — answer this before you ship.'
   }
-  if (isReturnIssueType(issue.issue_type) && isOpenIssueStatus(issue.status)) {
+  if (isReturnIssueType(issue.issue_type) && isOpenIssueStatus(issue.status) && issue.resolution_action !== 'accepted') {
     return 'Return request — approve or decline to unblock the customer.'
   }
+  if (isExchangeIssueType(issue.issue_type) && isOpenIssueStatus(issue.status) && issue.resolution_action !== 'accepted') {
+    return 'Exchange request — approve or decline to unblock the customer.'
+  }
   if (isReturnAwaitingGoods(issue)) {
-    return 'Return approved — confirm the goods arrived to release the refund.'
+    return isExchangeIssueType(issue.issue_type)
+      ? 'Exchange approved — confirm the goods arrived to prepare the replacement.'
+      : 'Return approved — confirm the goods arrived to release the refund.'
   }
   return null
 }

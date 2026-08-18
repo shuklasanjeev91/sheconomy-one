@@ -57,6 +57,70 @@ export async function requestOrderItemReturn(input: {
   }
 }
 
+export type RequestExchangeResult = {
+  issueId: string
+  status: string
+}
+
+export async function requestOrderItemExchange(input: {
+  orderItemId: string
+  reason: string
+  evidenceUrls?: string[]
+  detailedReason?: string | null
+}): Promise<TrustRpcResult<RequestExchangeResult>> {
+  const { data, error } = await supabase.rpc('request_order_exchange' as never, {
+    p_order_item_id: input.orderItemId,
+    p_reason: input.reason.trim(),
+    p_evidence_urls: input.evidenceUrls ?? [],
+    p_detailed_reason: input.detailedReason?.trim() || null,
+  } as never)
+
+  if (error) return { data: null, error: rpcErrorMessage(error, 'Could not submit exchange request') }
+  const record = asRecord(data)
+  if (!record?.issue_id) {
+    return { data: null, error: 'Could not submit exchange request' }
+  }
+  return {
+    data: {
+      issueId: String(record.issue_id),
+      status: String(record.status ?? 'open'),
+    },
+    error: null,
+  }
+}
+
+export type SubmitReturnTrackingResult = {
+  issueId: string
+  trackingNumber: string
+  refundId: string | null
+}
+
+export async function submitReturnTracking(input: {
+  orderItemId: string
+  trackingNumber: string
+  courierSlug?: string | null
+}): Promise<TrustRpcResult<SubmitReturnTrackingResult>> {
+  const { data, error } = await supabase.rpc('submit_return_tracking' as never, {
+    p_order_item_id: input.orderItemId,
+    p_tracking_number: input.trackingNumber.trim(),
+    p_courier_slug: input.courierSlug?.trim() || null,
+  } as never)
+
+  if (error) return { data: null, error: rpcErrorMessage(error, 'Could not save return tracking') }
+  const record = asRecord(data)
+  if (!record?.issue_id || !record?.tracking_number) {
+    return { data: null, error: 'Could not save return tracking' }
+  }
+  return {
+    data: {
+      issueId: String(record.issue_id),
+      trackingNumber: String(record.tracking_number),
+      refundId: record.refund_id ? String(record.refund_id) : null,
+    },
+    error: null,
+  }
+}
+
 export type ResolveIssueResult = {
   issueId: string
   status: string
@@ -89,9 +153,11 @@ export async function resolveOrderIssueRequest(input: {
 }
 
 export type ConfirmReturnResult = {
-  refundId: string
-  refundStatus: string
-  refundAmount: number
+  refundId: string | null
+  refundStatus: string | null
+  refundAmount: number | null
+  replacementItemId: string | null
+  resolutionAction: string | null
 }
 
 export async function confirmOrderReturnReceived(input: {
@@ -105,12 +171,17 @@ export async function confirmOrderReturnReceived(input: {
 
   if (error) return { data: null, error: rpcErrorMessage(error, 'Could not confirm return') }
   const record = asRecord(data)
-  if (!record?.refund_id) return { data: null, error: 'Could not confirm return' }
+  if (!record) return { data: null, error: 'Could not confirm return' }
   return {
     data: {
-      refundId: String(record.refund_id),
-      refundStatus: String(record.refund_status ?? 'approved'),
-      refundAmount: Number(record.refund_amount ?? 0),
+      refundId: record.refund_id ? String(record.refund_id) : null,
+      refundStatus: record.refund_status ? String(record.refund_status) : null,
+      refundAmount: record.refund_amount != null ? Number(record.refund_amount) : null,
+      replacementItemId: record.replacement_item_id
+        ? String(record.replacement_item_id)
+        : null,
+      resolutionAction:
+        typeof record.resolution_action === 'string' ? record.resolution_action : null,
     },
     error: null,
   }

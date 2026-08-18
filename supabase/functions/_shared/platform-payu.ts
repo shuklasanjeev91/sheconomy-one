@@ -8,6 +8,7 @@ import { resolvePaymentAppOrigin } from './app-url.ts'
 import {
   payURequestHash,
   payUResponseHash,
+  sha512Hex,
   type PayuCredentials,
 } from './payu.ts'
 
@@ -274,3 +275,79 @@ export async function parsePayuFormBody(request: Request): Promise<Record<string
   for (const [k, v] of params.entries()) out[k] = v
   return out
 }
+
+/** PayU cancel_refund_transaction — full or partial refund of a captured payment. */
+export type CancelRefundResult = {
+  ok: boolean
+  requestId: string | null
+  status: string | null
+  message: string
+  raw: unknown
+}
+
+function infoApiUrl(creds: PayuCredentials): string {
+  const isTest = creds.mode === 'test' || creds.baseUrl.includes('test.payu.in')
+  return isTest
+    ? 'https://test.payu.in/merchant/postservice.php?form=2'
+    : 'https://info.payu.in/merchant/postservice.php?form=2'
+}
+
+/**
+ * Initiate a PayU refund.
+ * Hash: sha512(key|command|var1|salt) where var1 = mihpayid.
+ */
+export async function cancelRefundTransaction(input: {
+  creds: PayuCredentials
+  mihpayid: string
+  tokenId: string
+  amount: number
+}): Promise<CancelRefundResult> {
+  const { creds, mihpayid, tokenId } = input
+  const amount = formatPlatformPayuAmount(input.amount)
+  const command = 'cancel_refund_transaction'
+  const hash = await sha512Hex(`${creds.key}|${command}|${mihpayid}|${creds.salt}`)
+
+  const body = new URLSearchParams({
+    key: creds.key,
+    command,
+    var1: mihpayid,
+    var2: tokenId,
+    var3: amount,
+    hash,
+  })
+
+  const response = await fetch(infoApiUrl(creds), {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    body,
+  })
+  const text = await response.text()
+  let json: Record<string, unknown> | null = null
+  try {
+    json = JSON.parse(text) as Record<string, unknown>
+  } catch {
+    json = null
+  }
+
+  const statusNum = Number(json?.status ?? 0)
+  const requestId =
+    json?.request_id != null
+      ? String(json.request_id)
+      : json?.mihpayid != null
+        ? String(json.mihpayid)
+        : null
+  const msg =
+    (typeof json?.msg === 'string' && json.msg) ||
+    (typeof json?.message === 'string' && json.message) ||
+    text.slice(0, 280) ||
+    (response.ok ? 'Refund submitted' : 'PayU refund failed')
+
+  return {
+    ok: response.ok && statusNum === 1,
+    requestId,
+    status: statusNum === 1 ? 'success' : statusNum === 0 ? 'failed' : String(json?.status ?? 'unknown'),
+    message: msg,
+    raw: json ?? text,
+  }
+}
+
