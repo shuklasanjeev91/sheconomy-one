@@ -3,8 +3,10 @@ import { useWindowDimensions } from 'react-native'
 import { useRouter } from 'one'
 
 import { DeliveryErrorBoundary } from '~/commerce/components/DeliveryErrorBoundary'
+import { VendorNoShopState } from '~/commerce/components/vendor/VendorShopGate'
 import { CustomShippingPartnerPanel } from '~/commerce/components/vendor/delivery/CustomShippingPartnerPanel'
 import { ShiprocketConnectionPanel } from '~/commerce/components/vendor/delivery/ShiprocketConnectionPanel'
+import { PageCenter } from '~/components/layout'
 import { Button, Icons, Spinner, Text, XStack, YStack, useAppToast } from '~/components/ui'
 import { getShadowStyle, radius } from '~/config/tokens'
 import { useAppLayout } from '~/hooks/useAppLayout'
@@ -31,6 +33,8 @@ export function VendorDeliveryScreen() {
   const compact = width < 380
 
   const shop = useAppSelector((state) => state.shop.currentShop)
+  const isLoadingMyShops = useAppSelector((state) => state.shop.isLoadingMyShops)
+  const myShopsLoaded = useAppSelector((state) => state.shop.myShopsLoaded)
   const profile = useAppSelector((state) => state.profile.profile)
   const shiprocketStatus = useAppSelector((state) => state.vendorShipping.shiprocketStatus)
   const customPartners = useAppSelector((state) => state.vendorShipping.customPartners)
@@ -68,17 +72,21 @@ export function VendorDeliveryScreen() {
     }
   }, [dispatch, refreshAll, shop?.id, toast])
 
+  if (!shop && (isLoadingMyShops || !myShopsLoaded)) {
+    return (
+      <PageCenter>
+        <Spinner size="large" />
+      </PageCenter>
+    )
+  }
+
   if (!shop) {
     return (
-      <YStack padding="$6" alignItems="center" gap="$2">
-        <Icons.Store size={30} color={ui.textMuted} />
-        <Text fontSize={18} fontWeight="800" color={ui.text}>
-          {VENDOR_SHIPPING_UI_COPY.noShopTitle}
-        </Text>
-        <Text color={ui.textSecondary} textAlign="center">
-          {VENDOR_SHIPPING_UI_COPY.noShopBody}
-        </Text>
-      </YStack>
+      <VendorNoShopState
+        ui={ui}
+        title={VENDOR_SHIPPING_UI_COPY.noShopTitle}
+        body={VENDOR_SHIPPING_UI_COPY.noShopBody}
+      />
     )
   }
 

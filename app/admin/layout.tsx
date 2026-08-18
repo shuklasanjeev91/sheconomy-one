@@ -320,7 +320,10 @@ export function AdminLayout() {
                 ? ({ overflowY: 'auto', minHeight: 0, ...scrollHostTransformReset() } as const)
                 : undefined
             }
-            contentContainerStyle={{ flexGrow: 1 }}
+            contentContainerStyle={{
+              flexGrow: 1,
+              ...(Platform.OS === 'web' ? { minHeight: '100%' as const } : null),
+            }}
           >
             <Slot />
           </ScrollView>

@@ -489,7 +489,10 @@ export function CreateShopScreen() {
         Platform.OS === 'web'
           ? isDesktop
             ? ({ height: webShellHeight, minHeight: webShellHeight, overflow: 'hidden' } as const)
-            : ({ height: '100%', maxHeight: '100%', overflow: 'hidden' } as const)
+            : // Mobile web: fill the AppShell column via flex — never clamp with
+              // height/maxHeight 100% (parent content height can be indefinite and
+              // the form collapses to a blank pane).
+              ({ flex: 1, minHeight: 0, overflow: 'hidden' } as const)
           : undefined
       }
     >
@@ -516,7 +519,6 @@ export function CreateShopScreen() {
                 ? ({
                     overflowY: 'auto',
                     minHeight: 0,
-                    height: '100%',
                     WebkitOverflowScrolling: 'touch',
                   } as const)
                 : undefined

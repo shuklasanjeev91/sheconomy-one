@@ -184,7 +184,13 @@ export function VendorLayout() {
                     } as const)
                   : undefined
               }
-              contentContainerStyle={{ flexGrow: 1, paddingBottom: mobileTabPad }}
+              contentContainerStyle={{
+                flexGrow: 1,
+                // Give nested screens a definite block height on web so flex /
+                // sticky footers don't collapse to a blank pane.
+                ...(Platform.OS === 'web' ? { minHeight: '100%' as const } : null),
+                paddingBottom: mobileTabPad,
+              }}
             >
               <Slot />
             </ScrollView>

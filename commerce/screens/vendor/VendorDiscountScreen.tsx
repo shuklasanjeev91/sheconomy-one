@@ -3,6 +3,7 @@ import { Share } from 'react-native'
 import { useRouter } from 'one'
 
 import { DiscountErrorBoundary } from '~/commerce/components/DiscountErrorBoundary'
+import { VendorNoShopState } from '~/commerce/components/vendor/VendorShopGate'
 import { DiscountFilterTabs } from '~/commerce/components/vendor/discount/DiscountFilterTabs'
 import {
   DiscountListEmpty,
@@ -11,6 +12,7 @@ import {
 } from '~/commerce/components/vendor/discount/DiscountListItem'
 import { DiscountSummaryCards } from '~/commerce/components/vendor/discount/DiscountSummaryCards'
 import { rowsToCsv } from '~/commerce/lib/vendor-operations'
+import { PageCenter } from '~/components/layout'
 import { Button, Icons, Input, Spinner, Text, XStack, YStack, useAppToast } from '~/components/ui'
 import { useAppLayout } from '~/hooks/useAppLayout'
 import { DISCOUNT_FETCH_SCOPE } from '~/lib/discount/discount.constants'
@@ -47,6 +49,8 @@ export function VendorDiscountScreen() {
   const { isDesktop, safeBottom } = useAppLayout()
 
   const shop = useAppSelector((state) => state.shop.currentShop)
+  const isLoadingMyShops = useAppSelector((state) => state.shop.isLoadingMyShops)
+  const myShopsLoaded = useAppSelector((state) => state.shop.myShopsLoaded)
   const profile = useAppSelector((state) => state.profile.profile)
   const discounts = useAppSelector((state) => state.discount.discounts)
   const loading = useAppSelector((state) => state.discount.loading)
@@ -185,17 +189,21 @@ export function VendorDiscountScreen() {
     dispatch(setDiscountFilters({ search: value || null }))
   }
 
+  if (!shop && (isLoadingMyShops || !myShopsLoaded)) {
+    return (
+      <PageCenter>
+        <Spinner size="large" />
+      </PageCenter>
+    )
+  }
+
   if (!shop) {
     return (
-      <YStack padding="$6" alignItems="center" gap="$2">
-        <Icons.Store size={30} color={ui.textMuted} />
-        <Text fontSize={18} fontWeight="800" color={ui.text}>
-          {DISCOUNT_UI_COPY.noShopTitle}
-        </Text>
-        <Text color={ui.textSecondary} textAlign="center">
-          {DISCOUNT_UI_COPY.noShopBody}
-        </Text>
-      </YStack>
+      <VendorNoShopState
+        ui={ui}
+        title={DISCOUNT_UI_COPY.noShopTitle}
+        body={DISCOUNT_UI_COPY.noShopBody}
+      />
     )
   }
 
