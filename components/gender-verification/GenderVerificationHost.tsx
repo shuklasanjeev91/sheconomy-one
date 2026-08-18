@@ -74,9 +74,12 @@ function stripQueryParams(keys: string[]) {
  * Full women-first access requires verified female (`gender === true` AND
  * `is_verified`). `is_verified` alone must NOT suppress the modal — phone OTP
  * / legacy rows can set that flag without female access.
+ *
+ * Never treat an unsettled profile as limited — that falsely bounced verified
+ * vendors (e.g. My Shop) to `?gender=restricted` while the row was still loading.
  */
 export function GenderVerificationHost() {
-  const { profile, isAuthenticated } = useProfile()
+  const { profile, isAuthenticated, isLoading } = useProfile()
   const pathname = usePathname()
   const params = useLocalSearchParams()
 
@@ -92,8 +95,9 @@ export function GenderVerificationHost() {
   isAuthenticatedRef.current = isAuthenticated
   hasFullAccessRef.current = hasVerifiedFemaleAccess(profile?.gender, profile?.is_verified)
 
+  const profileReady = isAuthenticated && !isLoading && !!profile
   const hasFullAccess = hasVerifiedFemaleAccess(profile?.gender, profile?.is_verified)
-  const needsVerification = isAuthenticated && !!profile && !hasFullAccess
+  const needsVerification = profileReady && !hasFullAccess
   const onProtectedRoute = requiresGenderVerification(pathname)
   const onIntentRoute = isHumanVerificationIntentPath(pathname)
   const suppressedRoute = isSuppressedRoute(pathname)
@@ -132,7 +136,7 @@ export function GenderVerificationHost() {
   }, [openVerificationUi])
 
   useEffect(() => {
-    if (!isAuthenticated || hasFullAccess) return
+    if (!profileReady || hasFullAccess) return
     if (
       verificationFlowRef.current ||
       peekVerificationFlowOpen() ||
@@ -140,10 +144,10 @@ export function GenderVerificationHost() {
     ) {
       openVerificationUi(peekPendingHumanVerificationOpen()?.returnTo)
     }
-  }, [isAuthenticated, hasFullAccess, openVerificationUi])
+  }, [profileReady, hasFullAccess, openVerificationUi])
 
   useEffect(() => {
-    if (!hydrated || !isAuthenticated || hasFullAccess) return
+    if (!hydrated || !profileReady || hasFullAccess) return
     let cancelled = false
     void readVerificationFlowOpen().then((open) => {
       if (cancelled || !open) return
@@ -152,11 +156,11 @@ export function GenderVerificationHost() {
     return () => {
       cancelled = true
     }
-  }, [hydrated, isAuthenticated, hasFullAccess, openVerificationUi])
+  }, [hydrated, profileReady, hasFullAccess, openVerificationUi])
 
-  // Blocked on a protected / intent route — treat missing profile as limited.
+  // Blocked on a protected / intent route — only after the profile row is known.
   useEffect(() => {
-    if (!isAuthenticated || hasFullAccess) return
+    if (!profileReady || hasFullAccess) return
     if (!onProtectedRoute && !onIntentRoute) return
     if (verificationFlowActive || peekVerificationFlowOpen()) return
     if (didRedirectRef.current) return
@@ -179,7 +183,7 @@ export function GenderVerificationHost() {
     didRedirectRef.current = true
     replaceApp(redirectHref as Href)
   }, [
-    isAuthenticated,
+    profileReady,
     hasFullAccess,
     onProtectedRoute,
     onIntentRoute,
@@ -219,7 +223,7 @@ export function GenderVerificationHost() {
   }, [hasFullAccess])
 
   useEffect(() => {
-    if (!isAuthenticated || hasFullAccess || suppressedRoute) return
+    if (!profileReady || hasFullAccess || suppressedRoute) return
     if (verificationFlowActive || peekVerificationFlowOpen()) {
       if (readParam(params, VERIFY_PARAM) === VERIFY_VALUE) {
         stripQueryParams([VERIFY_PARAM, RETURN_TO_PARAM])
@@ -243,7 +247,7 @@ export function GenderVerificationHost() {
     stripQueryParams([VERIFY_PARAM, RETURN_TO_PARAM])
   }, [
     params,
-    isAuthenticated,
+    profileReady,
     hasFullAccess,
     suppressedRoute,
     verificationFlowActive,
@@ -316,7 +320,7 @@ export function GenderVerificationHost() {
     !suppressedRoute
 
   const showVerify =
-    isAuthenticated &&
+    profileReady &&
     !hasFullAccess &&
     !suppressedRoute &&
     (manualOpen || verificationFlowRef.current)
