@@ -32,6 +32,7 @@ import {
   CommerceMobileCheckoutBar,
   COMMERCE_MOBILE_CHECKOUT_BAR_HEIGHT,
   CommerceRadio,
+  ListingQuantityStepper,
   ShopPartnerChips,
   ShopRatingBadge,
   useCommercePalette,
@@ -46,8 +47,11 @@ import { createShepayPayuSession } from '~/commerce/lib/shepay'
 import { platformPayuService } from '~/lib/platform-payu'
 import {
   checkoutShippingLabel,
+  onlinePaymentOptionCopy,
+  resolveCheckoutOnlineProvider,
   resolvePostCheckoutNext,
   toInAppPayUHref,
+  type CheckoutOnlineProvider,
 } from '~/commerce/lib/checkout-payment-route'
 import { parsePayuBridgeParams, savePayuBridgeSession, submitPayuFormPost } from '~/commerce/lib/payu-bridge'
 import { savePendingOrderSuccess } from '~/commerce/lib/customer-orders'
@@ -58,7 +62,11 @@ import {
 import type { ShippingPolicy } from '~/lib/shipping-policy/shipping-policy.type'
 import { computeSelectedTotals, useCartSelection } from '~/commerce/lib/cart-selection'
 import { ensureCartDiscountValidForCheckout, toCartOfferItems } from '~/commerce/lib/discounts'
-import { cartRequiresShipping, fetchListingTypesByIds } from '~/commerce/lib/listing-fulfillment'
+import {
+  cartRequiresShipping,
+  fetchListingStockByIds,
+  fetchListingTypesByIds,
+} from '~/commerce/lib/listing-fulfillment'
 import { deliveryEstimateLabel } from '~/commerce/lib/delivery-estimate'
 import {
   buildCustomerAmountsByShop,
@@ -97,16 +105,14 @@ import { navigateApp, replaceApp } from '~/lib/platform/navigate'
 
 const SUMMARY_WIDTH = 320
 
-/** Who processes an online charge after checkout is created. */
-type CheckoutOnlineProvider = 'shepay' | 'platform_payu'
-
 export function CheckoutScreen() {
   const c = useCommercePalette()
   const ui = useAppUi()
   const { hasSideRails } = useAppLayout()
   const { user, isAuthenticated } = useProfile()
   const { formatMoney, convertMoney, preferredCurrency } = useFormatCurrency()
-  const { cart, items: cartItems, isLoading, refresh, error: cartError } = useCart()
+  const { cart, items: cartItems, isLoading, refresh, error: cartError, updateQuantity, removeItem } =
+    useCart()
   const { items, hasChecked } = useStorefrontCartItems(cartItems)
   const toast = useAppToast()
 
@@ -129,6 +135,7 @@ export function CheckoutScreen() {
   const [orderPlaced, setOrderPlaced] = useState(false)
   const [isLoadingAddresses, setIsLoadingAddresses] = useState(true)
   const [listingTypes, setListingTypes] = useState<Map<string, string>>(new Map())
+  const [listingStock, setListingStock] = useState<Map<string, number | null>>(new Map())
   const [deliveryProfilesByShop, setDeliveryProfilesByShop] = useState(
     () => new Map<string, ShippingPolicy[]>(),
   )
@@ -351,8 +358,8 @@ export function CheckoutScreen() {
   const platformPayuAvailable = !multiShop && orderShops.length > 0
 
   useEffect(() => {
-    if (platformPayuAvailable) setOnlineProvider('platform_payu')
-  }, [shopIdsKey, platformPayuAvailable])
+    setOnlineProvider(resolveCheckoutOnlineProvider(multiShop))
+  }, [shopIdsKey, multiShop])
 
   const platformPayuOnlineCopy = useMemo(
     () => ({
@@ -362,13 +369,24 @@ export function CheckoutScreen() {
     [],
   )
 
+  const shepayOnlineCopy = useMemo(
+    () =>
+      onlinePaymentOptionCopy({
+        shepayShops: orderShops.map((shop) => ({ shopName: shop.shopName })),
+        directShops: [],
+      }),
+    [orderShops],
+  )
+
   useEffect(() => {
     const ids = items.map((item) => item.listing_id)
     if (!ids.length) {
       setListingTypes(new Map())
+      setListingStock(new Map())
       return
     }
     void fetchListingTypesByIds(ids).then(setListingTypes)
+    void fetchListingStockByIds(ids).then(setListingStock)
   }, [items])
 
   useEffect(() => {
@@ -593,6 +611,32 @@ export function CheckoutScreen() {
     setPayuAuthActive(false)
     setPlatformPayuSession(null)
     setPlatformCheckoutMeta(null)
+  }
+
+  async function handleCheckoutQuantityChange(itemId: string, nextQuantity: number) {
+    const { error } = await updateQuantity(itemId, nextQuantity)
+    if (error) {
+      toast.show('Could not update quantity', { tone: 'danger', message: error })
+      return
+    }
+    await refresh()
+  }
+
+  async function handleCheckoutRemoveItem(itemId: string) {
+    const remaining = selectedItems.filter((item) => item.id !== itemId).length
+    const { error } = await removeItem(itemId)
+    if (error) {
+      toast.show('Could not remove item', { tone: 'danger', message: error })
+      return
+    }
+    await refresh()
+    if (remaining === 0) {
+      toast.show('Cart is empty', {
+        tone: 'default',
+        message: 'Add items to continue checkout.',
+      })
+      navigateApp(commerceRoutes.cart)
+    }
   }
 
   function handlePlaceOrderPress() {
@@ -1244,12 +1288,9 @@ export function CheckoutScreen() {
         </Text>
       ) : null}
       {hasSideRails ? null : (
-        <>
-          {placeButton}
-          <Text fontSize={11} color={c.secondary} textAlign="center" lineHeight={15}>
-            By placing your order, you agree to SHEconomy&apos;s privacy notice and conditions of use.
-          </Text>
-        </>
+        <Text fontSize={11} color={c.secondary} textAlign="center" lineHeight={15}>
+          By placing your order, you agree to SHEconomy&apos;s privacy notice and conditions of use.
+        </Text>
       )}
     </YStack>
   )
@@ -1545,6 +1586,21 @@ export function CheckoutScreen() {
                         }}
                       />
                     </YStack>
+                  ) : multiShop ? (
+                    <PaymentOption
+                      selected={paymentMethod === 'online'}
+                      disabled={payuAuthActive}
+                      title={shepayOnlineCopy.title}
+                      subtitle={
+                        multiShop
+                          ? `${shepayOnlineCopy.subtitle} · one payment split across ${orderShops.length} shops`
+                          : shepayOnlineCopy.subtitle
+                      }
+                      onPress={() => {
+                        setPaymentMethod('online')
+                        setOnlineProvider('shepay')
+                      }}
+                    />
                   ) : !needsShipping ? (
                     <Text fontSize={13} color={c.secondary}>
                       {platformPayuOnlineCopy.subtitle}
@@ -1611,41 +1667,71 @@ export function CheckoutScreen() {
                         </Text>
                       </XStack>
                       <ShopPartnerChips info={shopPartners.get(shop.shopId)} />
-                      {shopItems.map((item) => (
-                        <XStack key={item.id} gap="$3" alignItems="center">
-                          <YStack
-                            width={54}
-                            height={54}
-                            borderRadius={8}
-                            overflow="hidden"
-                            backgroundColor={c.imagePlaceholder}
-                            flexShrink={0}
-                          >
-                            {item.image_url ? (
-                              <Image
-                                src={item.image_url}
+                      {shopItems.map((item) => {
+                        const stock = listingStock.get(item.listing_id)
+                        const maxQuantity = typeof stock === 'number' ? stock : null
+                        const atMax =
+                          typeof maxQuantity === 'number' && item.quantity >= maxQuantity
+                        return (
+                          <YStack key={item.id} gap="$2">
+                            <XStack gap="$3" alignItems="center">
+                              <YStack
                                 width={54}
                                 height={54}
-                                objectFit="contain"
+                                borderRadius={8}
+                                overflow="hidden"
+                                backgroundColor={c.imagePlaceholder}
+                                flexShrink={0}
+                              >
+                                {item.image_url ? (
+                                  <Image
+                                    src={item.image_url}
+                                    width={54}
+                                    height={54}
+                                    objectFit="contain"
+                                  />
+                                ) : null}
+                              </YStack>
+                              <YStack flex={1} minWidth={0}>
+                                <Text fontSize={13} color={c.text} numberOfLines={2}>
+                                  {item.title}
+                                </Text>
+                                <Text fontSize={12} color={c.secondary}>
+                                  Qty: {item.quantity}
+                                </Text>
+                              </YStack>
+                              <Text fontSize={14} fontWeight="700" color={c.priceStrong}>
+                                {formatMoney(
+                                  item.unit_price * item.quantity,
+                                  shopCurrencyFor(item.shop_id, shopCurrencies, settlementCurrency),
+                                )}
+                              </Text>
+                            </XStack>
+                            <XStack gap="$3" alignItems="center" flexWrap="wrap">
+                              <ListingQuantityStepper
+                                size="sm"
+                                quantity={item.quantity}
+                                maxQuantity={maxQuantity}
+                                onDecrease={() => {
+                                  if (item.quantity <= 1) {
+                                    void handleCheckoutRemoveItem(item.id)
+                                    return
+                                  }
+                                  void handleCheckoutQuantityChange(item.id, item.quantity - 1)
+                                }}
+                                onIncrease={() => {
+                                  if (atMax) return
+                                  void handleCheckoutQuantityChange(item.id, item.quantity + 1)
+                                }}
                               />
-                            ) : null}
+                              <YStack height={16} width={1} backgroundColor={c.border} />
+                              <CommerceLink onPress={() => void handleCheckoutRemoveItem(item.id)}>
+                                Remove
+                              </CommerceLink>
+                            </XStack>
                           </YStack>
-                          <YStack flex={1} minWidth={0}>
-                            <Text fontSize={13} color={c.text} numberOfLines={2}>
-                              {item.title}
-                            </Text>
-                            <Text fontSize={12} color={c.secondary}>
-                              Qty: {item.quantity}
-                            </Text>
-                          </YStack>
-                          <Text fontSize={14} fontWeight="700" color={c.priceStrong}>
-                            {formatMoney(
-                              item.unit_price * item.quantity,
-                              shopCurrencyFor(item.shop_id, shopCurrencies, settlementCurrency),
-                            )}
-                          </Text>
-                        </XStack>
-                      ))}
+                        )
+                      })}
                       <XStack justifyContent="flex-end">
                         <Text fontSize={12} color={c.secondary}>
                           Shop subtotal:{' '}

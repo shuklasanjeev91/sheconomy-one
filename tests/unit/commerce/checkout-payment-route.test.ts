@@ -8,9 +8,17 @@ import {
   orderSuccessHeadline,
   orderSuccessSubtitle,
   ordersAwaitingOnlinePayment,
+  resolveCheckoutOnlineProvider,
   resolvePostCheckoutNext,
   toInAppPayUHref,
 } from '~/commerce/lib/checkout-payment-route'
+
+describe('resolveCheckoutOnlineProvider', () => {
+  it('uses SHEPay for multi-shop carts and Platform PayU for single-shop', () => {
+    expect(resolveCheckoutOnlineProvider(true)).toBe('shepay')
+    expect(resolveCheckoutOnlineProvider(false)).toBe('platform_payu')
+  })
+})
 
 describe('onlinePaymentOptionCopy', () => {
   it('uses seller gateway when only direct shops', () => {
