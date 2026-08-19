@@ -10,7 +10,7 @@ import { searchJobs, type JobListing } from '~/community/lib/jobs'
 import { fetchDiscoverMembers, type NetworkMember } from '~/community/lib/network'
 import { fetchListingFeedPage, fetchShopsPage, type ListingSummary } from '~/commerce/lib/commerce'
 import { getListingSlug } from '~/commerce/lib/seo-urls'
-import { formatCurrency } from '~/lib/format'
+import { formatMoneyLabel } from '~/lib/format'
 import { communityRoutes, commerceRoutes } from '~/lib/routes'
 import { supabase } from '~/lib/supabase/client'
 
@@ -239,7 +239,7 @@ function scoreListing(listing: ListingSummary, ctx: PersonalizationContext): Com
 
   const slug = getListingSlug(listing)
   const imageUrl = listing.image_urls[0] ?? listing.image_url ?? listing.images[0]?.image_url ?? null
-  const priceLabel = formatCurrency(listing.price, listing.currency)
+  const priceLabel = formatMoneyLabel(listing.price, listing.currency)
 
   return {
     id: listing.id,

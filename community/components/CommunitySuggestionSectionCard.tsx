@@ -11,6 +11,7 @@ import { Text, YStack } from '~/components/ui'
 type CommunitySuggestionSectionCardProps = {
   section: SuggestionSection
   limit?: number
+  compactProducts?: boolean
 }
 
 /** Keep FlashList from under-measuring and clipping subtitle / reason lines on native. */
@@ -21,6 +22,7 @@ const SECTION_CHROME_HEIGHT = 88
 export function CommunitySuggestionSectionCard({
   section,
   limit = 3,
+  compactProducts = false,
 }: CommunitySuggestionSectionCardProps) {
   const communityUi = useCommunityUi()
   const items = section.items.slice(0, limit)
@@ -46,7 +48,11 @@ export function CommunitySuggestionSectionCard({
       <YStack gap={0} width="100%">
         {items.map((item) =>
           isProductSection ? (
-            <CommunityProductSuggestionRow key={`${item.kind}-${item.id}`} item={item} />
+            <CommunityProductSuggestionRow
+              key={`${item.kind}-${item.id}`}
+              item={item}
+              compact={compactProducts}
+            />
           ) : (
             <CommunitySuggestionRow
               key={`${item.kind}-${item.id}`}

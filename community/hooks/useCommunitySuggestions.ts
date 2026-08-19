@@ -29,7 +29,10 @@ const emptyByKind = (): Record<SuggestionKind, CommunitySuggestion[]> => ({
 })
 
 const SUGGESTIONS_FRESH_MS = 60_000
+/** Bump when suggestion item shape or formatting changes so clients refetch. */
+const SUGGESTIONS_CACHE_VERSION = 2
 let suggestionsFetchedAt = 0
+let suggestionsCacheVersion = 0
 let suggestionsCache: Record<SuggestionKind, CommunitySuggestion[]> | null = null
 
 export function useCommunitySuggestions(perKindLimit = 4, options?: { deferUntilIdle?: boolean }) {
@@ -58,6 +61,7 @@ export function useCommunitySuggestions(perKindLimit = 4, options?: { deferUntil
       if (
         !force &&
         suggestionsCache &&
+        suggestionsCacheVersion === SUGGESTIONS_CACHE_VERSION &&
         Date.now() - suggestionsFetchedAt < SUGGESTIONS_FRESH_MS
       ) {
         setByKind(suggestionsCache)
@@ -90,6 +94,7 @@ export function useCommunitySuggestions(perKindLimit = 4, options?: { deferUntil
       )
 
       suggestionsCache = result.byKind
+      suggestionsCacheVersion = SUGGESTIONS_CACHE_VERSION
       suggestionsFetchedAt = Date.now()
       setByKind(result.byKind)
       setError(result.error)

@@ -6,6 +6,7 @@ import {
   roundConvertedAmount,
 } from '~/lib/currency/exchange-rate-math'
 import { getExchangeRateTable } from '~/lib/currency/rates-store'
+import { CURRENCY_SYMBOLS, DEFAULT_SHOP_CURRENCY } from '~/lib/shop/shop.type'
 
 function stripHtml(value: string): string {
   return value
@@ -135,6 +136,22 @@ export function formatCurrency(
     return formatCurrencyValue(amount, source, resolvedLocale)
   }
   return formatCurrencyValue(roundConvertedAmount(converted, display), display, resolvedLocale)
+}
+
+/** Shopper-facing price — always shows the currency symbol, never the ISO code. */
+export function formatMoneyLabel(
+  amount: number,
+  currency = DEFAULT_SHOP_CURRENCY,
+  locale?: string,
+  options?: FormatCurrencyOptions,
+) {
+  const formatted = formatCurrency(amount, currency, locale, options)
+  const code = (currency || DEFAULT_SHOP_CURRENCY).trim().toUpperCase()
+  if (formatted.includes(code)) {
+    const symbol = CURRENCY_SYMBOLS[code] ?? code
+    return formatted.replace(code, symbol).replace(/\s{2,}/g, ' ').trim()
+  }
+  return formatted
 }
 
 export function formatRating(rating: number | string | null | undefined) {
