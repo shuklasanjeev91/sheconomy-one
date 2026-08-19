@@ -177,7 +177,17 @@ export function PlaylistsScreen() {
                         </Button>
                       </XStack>
                     ) : (
-                      <XStack alignItems="center" justifyContent="space-between" gap="$3">
+                      <XStack
+                        alignItems="center"
+                        justifyContent="space-between"
+                        gap="$3"
+                        onPress={() => router.push(classRoutes.playlist(playlist.id) as never)}
+                        pressStyle={{ opacity: 0.7 }}
+                        cursor="pointer"
+                        accessible
+                        accessibilityRole="button"
+                        accessibilityLabel={`Open playlist ${playlist.title}`}
+                      >
                         <YStack flex={1} gap={2} minWidth={0}>
                           <Text fontSize={16} fontWeight="700" color={ui.text} numberOfLines={1}>
                             {playlist.title}
