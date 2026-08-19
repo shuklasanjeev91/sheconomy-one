@@ -54,4 +54,5 @@ export const INVALIDATION_TOPICS = {
   commerceWishlist: 'commerce-wishlist',
   commerceInquiries: 'commerce-inquiries',
   coWorkMeetings: 'co-work-meetings',
+  classEnrollments: 'class-enrollments',
 } as const

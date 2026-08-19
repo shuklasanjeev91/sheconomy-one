@@ -1,4 +1,5 @@
 import { fetchNetworkSummary } from '~/community/lib/network'
+import { INVALIDATION_TOPICS, invalidateCache } from '~/lib/cache/invalidation'
 import { supabase } from '~/lib/supabase/client'
 
 import { getMeetingShareUrl } from '~/co-work/lib/meetings'
@@ -149,6 +150,7 @@ export async function updateMeetingInvitees(meetingId: string, invitees: Meeting
 
   const { error } = await supabase.from('meetings').update({ invitees: stamped }).eq('id', meetingId)
   if (error) throw new Error(error.message)
+  invalidateCache(INVALIDATION_TOPICS.coWorkMeetings)
   return stamped
 }
 
@@ -184,6 +186,8 @@ export async function sendMeetingInvites(input: {
 
   const payload = data as InviteResponse
   if (payload.error) throw new Error(payload.error)
+
+  invalidateCache(INVALIDATION_TOPICS.coWorkMeetings)
 
   return payload
 }

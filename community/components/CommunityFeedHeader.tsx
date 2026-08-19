@@ -1,5 +1,6 @@
 import { useMemo } from 'react'
 
+import { CompaniesRevisitStrip } from '~/community/components/CompaniesRevisitStrip'
 import { CommunityForYouHub } from '~/community/components/CommunityForYouHub'
 import { CommunityRecentlyViewedStrip } from '~/community/components/CommunityRecentlyViewedStrip'
 import { CreatorSpotlightStrip } from '~/community/components/CreatorSpotlightStrip'
@@ -10,11 +11,13 @@ import { HashtagRevisitStrip } from '~/community/components/HashtagRevisitStrip'
 import { IntroductionInboxStrip } from '~/community/components/IntroductionInboxStrip'
 import { JobApplicationsRevisitStrip } from '~/community/components/JobApplicationsRevisitStrip'
 import { JobRevisitStrip } from '~/community/components/JobRevisitStrip'
+import { MeetingInvitesRevisitStrip } from '~/community/components/MeetingInvitesRevisitStrip'
 import { MeetingRevisitStrip } from '~/community/components/MeetingRevisitStrip'
 import { NetworkInvitationsStrip } from '~/community/components/NetworkInvitationsStrip'
 import { NetworkSuggestionsStrip } from '~/community/components/NetworkSuggestionsStrip'
 import { PickUpAgainStrip } from '~/community/components/PickUpAgainStrip'
 import { ProfessionalSpotlightStrip } from '~/community/components/ProfessionalSpotlightStrip'
+import { ProgramsRevisitStrip } from '~/community/components/ProgramsRevisitStrip'
 import { ProfileViewersStrip } from '~/community/components/ProfileViewersStrip'
 import { RecommendationInboxStrip } from '~/community/components/RecommendationInboxStrip'
 import { StoriesStrip } from '~/community/components/StoriesStrip'
@@ -48,8 +51,11 @@ export function CommunityFeedHeader({
         <IntroductionInboxStrip />
         <RecommendationInboxStrip />
         <ProfileViewersStrip />
+        <MeetingInvitesRevisitStrip />
         <MeetingRevisitStrip />
         <GroupsRevisitStrip />
+        <CompaniesRevisitStrip />
+        <ProgramsRevisitStrip />
         <PickUpAgainStrip />
         <EventRevisitStrip />
         <JobRevisitStrip />

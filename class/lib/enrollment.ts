@@ -1,3 +1,4 @@
+import { INVALIDATION_TOPICS, invalidateCache } from '~/lib/cache/invalidation'
 import { supabase } from '~/lib/supabase/client'
 
 /**
@@ -22,6 +23,7 @@ export async function enrollInCourse(input: {
     .maybeSingle()
 
   if (error) return { enrollmentId: null, error: error.message }
+  invalidateCache(INVALIDATION_TOPICS.classEnrollments)
   return { enrollmentId: data?.id ?? null, error: null }
 }
 

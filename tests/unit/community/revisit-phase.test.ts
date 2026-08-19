@@ -11,8 +11,12 @@ import { buildGroupsRevisitCards } from '~/community/lib/groups-revisit'
 import { mergeBuyerOrderAttentionItems } from '~/commerce/lib/buyer-order-attention'
 import { buildBuyerListingInquiryCards } from '~/commerce/lib/buyer-listing-inquiries-home'
 import { buildWishlistPriceDropCards } from '~/commerce/lib/wishlist-price-drops-home'
+import { buildProgramRevisitCards } from '~/class/lib/programs-revisit'
+import type { Program } from '~/class/lib/programs'
+import { buildMeetingInviteRevisitCards } from '~/co-work/lib/meeting-invites-revisit'
 import { buildMeetingRevisitCards } from '~/co-work/lib/meeting-revisit'
 import type { Meeting } from '~/co-work/lib/types'
+import { buildCompaniesRevisitCards } from '~/community/lib/companies-revisit'
 import { selectBuyerReturnHomeCards } from '~/commerce/lib/buyer-return-home'
 import { buildBuyerRtoHomeCards } from '~/commerce/lib/buyer-rto-home'
 import type { WishlistReactivationSection } from '~/commerce/lib/wishlist-reactivation'
@@ -597,5 +601,141 @@ describe('buildBuyerListingInquiryCards', () => {
     expect(cards.map((card) => card.inquiryId)).toEqual(['open', 'replied'])
     expect(cards[1]?.badge).toBe('Seller replied')
     expect(cards[1]?.preview).toBe('Size M is in stock.')
+  })
+})
+
+describe('buildCompaniesRevisitCards', () => {
+  it('sorts managed companies by follower count', () => {
+    const cards = buildCompaniesRevisitCards(
+      [
+        {
+          id: 'small',
+          name: 'Small Co',
+          page_slug: 'small-co',
+          tagline: null,
+          industry: 'Retail',
+          location: null,
+          headquarters: null,
+          website: null,
+          logo_url: null,
+          cover_url: null,
+          size: '1-10',
+          type: 'private',
+          page_category: 'business',
+          founded_year: null,
+          community_members: 20,
+          created_by: 'user',
+          created_at: '2026-01-01T00:00:00.000Z',
+        },
+        {
+          id: 'large',
+          name: 'Large Co',
+          page_slug: 'large-co',
+          tagline: 'We build things',
+          industry: 'Tech',
+          location: 'Bengaluru',
+          headquarters: null,
+          website: null,
+          logo_url: null,
+          cover_url: null,
+          size: '100+',
+          type: 'public',
+          page_category: 'business',
+          founded_year: 2010,
+          community_members: 900,
+          created_by: 'user',
+          created_at: '2026-01-01T00:00:00.000Z',
+        },
+      ],
+      2,
+    )
+
+    expect(cards.map((card) => card.companyId)).toEqual(['large', 'small'])
+    expect(cards[0]?.memberCount).toBe(900)
+  })
+})
+
+describe('buildMeetingInviteRevisitCards', () => {
+  it('shows only pending invites for non-host meetings', () => {
+    const meetings: Meeting[] = [
+      {
+        id: 'hosted',
+        title: 'My meeting',
+        description: null,
+        meeting_code: 'HOSTED',
+        host_id: 'guest',
+        status: 'scheduled',
+        scheduled_at: '2026-08-20T12:00:00.000Z',
+        started_at: null,
+        ended_at: null,
+        time_zone: 'UTC',
+        max_participants: null,
+        room_id: null,
+        security_settings: null,
+        meeting_options: null,
+        created_at: '2026-08-19T12:00:00.000Z',
+        is_recurring: false,
+        repeat: null,
+        invitees: [],
+        host: null,
+      },
+      {
+        id: 'invited',
+        title: 'Team sync',
+        description: null,
+        meeting_code: 'INVITE',
+        host_id: 'host',
+        status: 'scheduled',
+        scheduled_at: '2026-08-19T14:00:00.000Z',
+        started_at: null,
+        ended_at: null,
+        time_zone: 'UTC',
+        max_participants: null,
+        room_id: null,
+        security_settings: null,
+        meeting_options: null,
+        created_at: '2026-08-19T10:00:00.000Z',
+        is_recurring: false,
+        repeat: null,
+        invitees: [{ id: 'guest', type: 'user', name: 'Guest', status: 'sent' }],
+        host: { full_name: 'Host User', username: 'host', avatar_url: null },
+      },
+    ]
+
+    const cards = buildMeetingInviteRevisitCards(meetings, 'guest', 'guest@example.com', 3)
+    expect(cards.map((card) => card.meetingId)).toEqual(['invited'])
+    expect(cards[0]?.hostName).toBe('Host User')
+  })
+})
+
+describe('buildProgramRevisitCards', () => {
+  it('maps enrolled programs to class routes', () => {
+    const programs: Program[] = [
+      {
+        id: 'program-1',
+        title: 'Mindful leadership',
+        description: 'A short course',
+        category: 'Leadership',
+        duration: '45 min',
+        image_url: null,
+        video_url: null,
+        audio_url: null,
+        media_type: 'video',
+        language: 'English',
+        view_count: 10,
+        like_count: 2,
+        listen_count: 0,
+        featured: false,
+        published_at: '2026-01-01T00:00:00.000Z',
+        seo_slug: 'mindful-leadership',
+        author_id: null,
+        external_author_id: null,
+        author: { full_name: 'Coach A', username: 'coach-a', avatar_url: null },
+      },
+    ]
+
+    const cards = buildProgramRevisitCards(programs, 1)
+    expect(cards[0]?.badge).toBe('Video')
+    expect(String(cards[0]?.href)).toContain('mindful-leadership')
   })
 })
