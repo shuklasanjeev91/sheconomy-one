@@ -14,6 +14,7 @@ import { JobRevisitStrip } from '~/community/components/JobRevisitStrip'
 import { MeetingInvitesRevisitStrip } from '~/community/components/MeetingInvitesRevisitStrip'
 import { MeetingRevisitStrip } from '~/community/components/MeetingRevisitStrip'
 import { NetworkInvitationsStrip } from '~/community/components/NetworkInvitationsStrip'
+import { NetworkSentRevisitStrip } from '~/community/components/NetworkSentRevisitStrip'
 import { NetworkSuggestionsStrip } from '~/community/components/NetworkSuggestionsStrip'
 import { PickUpAgainStrip } from '~/community/components/PickUpAgainStrip'
 import { ProfessionalSpotlightStrip } from '~/community/components/ProfessionalSpotlightStrip'
@@ -48,6 +49,7 @@ export function CommunityFeedHeader({
       <CommunityForYouHub>
         <TodayCelebrationsCard />
         <NetworkInvitationsStrip />
+        <NetworkSentRevisitStrip />
         <UnreadChatRevisitStrip />
         <NetworkSuggestionsStrip />
         <IntroductionInboxStrip />

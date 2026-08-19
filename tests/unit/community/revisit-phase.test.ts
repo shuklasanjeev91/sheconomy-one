@@ -11,10 +11,15 @@ import { buildGroupsRevisitCards } from '~/community/lib/groups-revisit'
 import { mergeBuyerOrderAttentionItems } from '~/commerce/lib/buyer-order-attention'
 import { buildBuyerListingInquiryCards } from '~/commerce/lib/buyer-listing-inquiries-home'
 import { buildWishlistPriceDropCards } from '~/commerce/lib/wishlist-price-drops-home'
-import { buildProgramRevisitCards } from '~/class/lib/programs-revisit'
-import type { Program } from '~/class/lib/programs'
 import { buildUnreadChatRevisitCards } from '~/chat/lib/unread-chats-revisit'
 import type { ChatSummary } from '~/chat/lib/types'
+import { buildProgramRevisitCards } from '~/class/lib/programs-revisit'
+import type { Program } from '~/class/lib/programs'
+import { buildNetworkSentRevisitCards } from '~/community/lib/network-sent-revisit'
+import { buildVendorDraftHomeCards } from '~/commerce/lib/vendor-drafts-home'
+import type { SellerListingRow } from '~/commerce/lib/seller-dashboard'
+import { buildVendorLowStockHomeCards } from '~/commerce/lib/vendor-low-stock-home'
+import type { LowStockListing } from '~/commerce/lib/low-stock'
 import { buildPendingReviewHomeCards } from '~/commerce/lib/pending-reviews-home'
 import type { PostPurchaseNudgeItem } from '~/commerce/lib/post-purchase-nudges'
 import { buildVendorSaleEventHomeCards } from '~/commerce/lib/vendor-sale-events-home'
@@ -910,5 +915,79 @@ describe('buildUnreadChatRevisitCards', () => {
     const cards = buildUnreadChatRevisitCards(chats, 2)
     expect(cards.map((card) => card.chatId)).toEqual(['new', 'old'])
     expect(cards[0]?.unreadCount).toBe(5)
+  })
+})
+
+describe('buildVendorLowStockHomeCards', () => {
+  it('maps low-stock listings to edit routes', () => {
+    const listings: LowStockListing[] = [
+      { id: 'listing-1', title: 'Silk saree', stock: 2, slug: 'silk-saree' },
+    ]
+    const cards = buildVendorLowStockHomeCards(listings, 3)
+    expect(cards[0]?.stock).toBe(2)
+    expect(String(cards[0]?.href)).toContain('listing-1')
+  })
+})
+
+describe('buildVendorDraftHomeCards', () => {
+  it('sorts drafts by updated date descending', () => {
+    const rows: SellerListingRow[] = [
+      {
+        id: 'old',
+        title: 'Old draft',
+        slug: null,
+        price: 100,
+        quantity: null,
+        listingType: 'physical',
+        listingStatus: 'draft',
+        isActive: false,
+        isFeatured: false,
+        primaryImageUrl: null,
+        updatedAt: '2026-08-10T00:00:00.000Z',
+        createdAt: '2026-08-01T00:00:00.000Z',
+      },
+      {
+        id: 'new',
+        title: 'New draft',
+        slug: null,
+        price: 200,
+        quantity: null,
+        listingType: 'physical',
+        listingStatus: 'draft',
+        isActive: false,
+        isFeatured: false,
+        primaryImageUrl: null,
+        updatedAt: '2026-08-19T00:00:00.000Z',
+        createdAt: '2026-08-15T00:00:00.000Z',
+      },
+    ]
+
+    const cards = buildVendorDraftHomeCards(rows, 2)
+    expect(cards.map((card) => card.listingId)).toEqual(['new', 'old'])
+  })
+})
+
+describe('buildNetworkSentRevisitCards', () => {
+  it('limits pending sent connection cards', () => {
+    const members: NetworkMember[] = [
+      {
+        user_id: 'user-1',
+        username: 'founder',
+        full_name: 'Founder One',
+        headline: 'Builder',
+        avatar_url: null,
+        location: null,
+        industry: null,
+        is_verified: false,
+        mutual_count: 0,
+        connection_id: 'conn-1',
+        connection_status: 'pending',
+        is_sender: true,
+      },
+    ]
+
+    const cards = buildNetworkSentRevisitCards(members, 2)
+    expect(cards).toHaveLength(1)
+    expect(String(cards[0]?.href)).toContain('founder')
   })
 })

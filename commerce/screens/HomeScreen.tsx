@@ -14,6 +14,8 @@ import { BuyerOrderAttentionStrip } from '~/commerce/components/BuyerOrderAttent
 import { PendingReviewsHomeStrip } from '~/commerce/components/PendingReviewsHomeStrip'
 import { PostPurchaseHomeStrip } from '~/commerce/components/PostPurchaseHomeStrip'
 import { SavedForLaterHomeStrip } from '~/commerce/components/SavedForLaterHomeStrip'
+import { VendorDraftListingsHomeStrip } from '~/commerce/components/VendorDraftListingsHomeStrip'
+import { VendorLowStockHomeStrip } from '~/commerce/components/VendorLowStockHomeStrip'
 import { VendorSaleEventsHomeStrip } from '~/commerce/components/VendorSaleEventsHomeStrip'
 import { WishlistPriceDropHomeStrip } from '~/commerce/components/WishlistPriceDropHomeStrip'
 import { RecentlyViewedRail } from '~/commerce/components/RecentlyViewedRail'
@@ -174,6 +176,8 @@ export function HomeScreen({ data, error, loading = false }: HomeScreenProps) {
           <SavedForLaterHomeStrip inset />
           <PendingReviewsHomeStrip inset />
           <VendorSaleEventsHomeStrip inset />
+          <VendorLowStockHomeStrip inset />
+          <VendorDraftListingsHomeStrip inset />
           <BuyerListingInquiryHomeStrip inset />
           <PostPurchaseHomeStrip inset />
           <BuyerOrderAttentionStrip inset />
