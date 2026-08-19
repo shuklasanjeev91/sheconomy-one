@@ -2,6 +2,7 @@ import { INVALIDATION_TOPICS, invalidateCache } from '~/lib/cache/invalidation'
 import { supabase } from '~/lib/supabase/client'
 import type { CommunityPost } from '~/community/lib/community'
 import { fetchPostById } from '~/community/lib/community'
+import { collectPostMedia } from '~/community/lib/post-media'
 
 export type SavedPostRow = {
   id: string
@@ -25,6 +26,27 @@ export type SavedCommunityPostSection = {
   title: string
   subtitle: string
   items: SavedCommunityPostEntry[]
+}
+
+export type PickUpAgainLane = 'shop_now' | 'creator_picks' | 'read_later' | 'events'
+
+export type PickUpAgainCard = {
+  postId: string
+  lane: PickUpAgainLane
+  laneLabel: string
+  title: string
+  subtitle: string | null
+  imageUrl: string | null
+  collectionName: string
+}
+
+const PICK_UP_AGAIN_LANE_ORDER: PickUpAgainLane[] = ['shop_now', 'creator_picks', 'read_later', 'events']
+
+const PICK_UP_AGAIN_LANE_LABELS: Record<PickUpAgainLane, string> = {
+  shop_now: 'Shop now',
+  creator_picks: 'Creator pick',
+  read_later: 'Read later',
+  events: 'Event',
 }
 
 function normalizeCollectionName(value: string | null | undefined) {
@@ -220,4 +242,60 @@ export function buildSavedPostSections(items: SavedCommunityPostEntry[]): SavedC
         }
       : null,
   ].filter((section): section is SavedCommunityPostSection => section !== null)
+}
+
+function savedPostCardTitle(entry: SavedCommunityPostEntry) {
+  const post = entry.post
+  if (post.article_title?.trim()) return post.article_title.trim()
+  if (post.event_title?.trim()) return post.event_title.trim()
+  const productTitle = post.products?.[0]?.title ?? post.product?.title
+  if (productTitle?.trim()) return productTitle.trim()
+  const plain = post.content.replace(/\s+/g, ' ').trim()
+  return plain.slice(0, 88) || 'Saved post'
+}
+
+function savedPostCardImage(entry: SavedCommunityPostEntry) {
+  const post = entry.post
+  const productImage = post.products?.[0]?.imageUrl ?? post.product?.imageUrl
+  if (productImage?.trim()) return productImage.trim()
+  return collectPostMedia(post).find((item) => item.kind === 'image')?.url ?? null
+}
+
+function savedPostCardSubtitle(entry: SavedCommunityPostEntry) {
+  const author = entry.post.author?.full_name || entry.post.author?.username
+  if (author && entry.notes?.trim()) return `${author} · ${entry.notes.trim()}`
+  if (entry.notes?.trim()) return entry.notes.trim()
+  if (author) return author
+  return entry.collectionName !== 'Saved' ? entry.collectionName : null
+}
+
+/** Flatten revisit lanes into feed-ready cards, prioritizing commerce-rich saves first. */
+export function buildPickUpAgainCards(
+  items: SavedCommunityPostEntry[],
+  limit = 8,
+): PickUpAgainCard[] {
+  const sections = buildSavedPostSections(items)
+  const cards: PickUpAgainCard[] = []
+  const seen = new Set<string>()
+
+  for (const lane of PICK_UP_AGAIN_LANE_ORDER) {
+    const section = sections.find((candidate) => candidate.key === lane)
+    if (!section) continue
+    for (const entry of section.items) {
+      if (seen.has(entry.postId)) continue
+      seen.add(entry.postId)
+      cards.push({
+        postId: entry.postId,
+        lane,
+        laneLabel: PICK_UP_AGAIN_LANE_LABELS[lane],
+        title: savedPostCardTitle(entry),
+        subtitle: savedPostCardSubtitle(entry),
+        imageUrl: savedPostCardImage(entry),
+        collectionName: entry.collectionName,
+      })
+      if (cards.length >= limit) return cards
+    }
+  }
+
+  return cards
 }

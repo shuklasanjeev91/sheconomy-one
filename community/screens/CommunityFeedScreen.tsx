@@ -7,6 +7,7 @@ import { CommunitySuggestionSectionCard } from '~/community/components/Community
 import { StoriesStrip } from '~/community/components/StoriesStrip'
 import { CommunityShell } from '~/community/components/CommunityShell'
 import { FeedComposer } from '~/community/components/FeedComposer'
+import { PickUpAgainStrip } from '~/community/components/PickUpAgainStrip'
 import { TodayCelebrationsCard } from '~/community/components/TodayCelebrationsCard'
 import { FeedFilterChips } from '~/community/components/FeedFilterChips'
 import { FeedPostCard } from '~/community/components/FeedPostCard'
@@ -151,6 +152,7 @@ export function CommunityFeedScreen() {
       <YStack gap="$3" width="100%" paddingBottom="$2">
         <StoriesStrip />
         <TodayCelebrationsCard />
+        <PickUpAgainStrip />
         <FeedComposer />
         <FeedFilterChips value={contentFilter} onChange={setContentFilter} />
         <FeedSortBar value={sort} onChange={setSort} />

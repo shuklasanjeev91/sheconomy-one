@@ -35,6 +35,7 @@ vi.mock('~/community/lib/community', () => ({
 }))
 
 import {
+  buildPickUpAgainCards,
   buildSavedPostSections,
   saveCommunityPost,
   updateSavedCommunityPost,
@@ -176,6 +177,66 @@ describe('saved posts', () => {
       notes: 'Strong opening',
     })
     expect(invalidateCacheMock).toHaveBeenCalledWith('saved-posts')
+  })
+
+  it('prioritizes commerce-rich saved posts for the feed revisit strip', () => {
+    const shopPost = makeEntry(
+      makePost({
+        id: 'shop-post',
+        content: 'Drop',
+        products: [
+          {
+            listingId: 'l1',
+            title: 'Serum',
+            price: 900,
+            currency: 'INR',
+            imageUrl: 'https://img/serum.jpg',
+            slug: null,
+            shopName: 'Glow',
+          },
+        ],
+      }),
+      { notes: 'Payday buy' },
+    )
+    const article = makeEntry(
+      makePost({ id: 'article-post', post_type: 'article', article_title: 'Founder notes' }),
+    )
+    const event = makeEntry(
+      makePost({ id: 'event-post', post_type: 'event', event_title: 'Pitch night' }),
+    )
+
+    const cards = buildPickUpAgainCards([article, event, shopPost], 4)
+
+    expect(cards.map((card) => card.postId)).toEqual(['shop-post', 'article-post', 'event-post'])
+    expect(cards[0]?.lane).toBe('shop_now')
+    expect(cards[0]?.title).toBe('Serum')
+    expect(cards[0]?.imageUrl).toBe('https://img/serum.jpg')
+    expect(cards[0]?.subtitle).toContain('Payday buy')
+  })
+
+  it('deduplicates revisit cards when the same post appears in multiple lanes', () => {
+    const shopPost = makeEntry(
+      makePost({
+        id: 'dup-post',
+        author_verified: true,
+        products: [
+          {
+            listingId: 'l1',
+            title: 'Cream',
+            price: 500,
+            currency: 'INR',
+            imageUrl: null,
+            slug: null,
+            shopName: 'Glow',
+          },
+        ],
+      }),
+    )
+
+    const cards = buildPickUpAgainCards([shopPost, shopPost], 8)
+
+    expect(cards).toHaveLength(1)
+    expect(cards[0]?.lane).toBe('shop_now')
   })
 
   it('normalizes fallback collections and trims notes when updating saved post details', async () => {
