@@ -12,6 +12,26 @@ export type SavedPostRow = {
   created_at: string | null
 }
 
+export type SavedCommunityPostEntry = {
+  postId: string
+  collectionName: string
+  notes: string | null
+  createdAt: string | null
+  post: CommunityPost
+}
+
+export type SavedCommunityPostSection = {
+  key: 'creator_picks' | 'shop_now' | 'read_later' | 'events' | 'more_saved'
+  title: string
+  subtitle: string
+  items: SavedCommunityPostEntry[]
+}
+
+function normalizeCollectionName(value: string | null | undefined) {
+  const trimmed = value?.trim()
+  return trimmed?.length ? trimmed : 'Saved'
+}
+
 /** Check whether the current user has saved a post. */
 export async function isPostSaved(
   userId: string,
@@ -28,29 +48,70 @@ export async function isPostSaved(
   return !!data
 }
 
-/** Save a post (professional bookmark). */
-export async function saveCommunityPost(
+export async function getSavedCommunityPost(
   userId: string,
   postId: string,
-): Promise<{ error: string | null }> {
-  const { data: existing } = await supabase
+): Promise<{ item: SavedPostRow | null; error: string | null }> {
+  const { data, error } = await supabase
     .from('saved_posts')
-    .select('id')
+    .select('id, post_id, user_id, collection_name, notes, created_at')
     .eq('user_id', userId)
     .eq('post_id', postId)
     .limit(1)
     .maybeSingle()
 
-  if (existing) return { error: null }
+  if (error) return { item: null, error: error.message }
+  return { item: (data as SavedPostRow | null) ?? null, error: null }
+}
+
+/** Save a post (professional bookmark). */
+export async function saveCommunityPost(
+  userId: string,
+  postId: string,
+  input?: { collectionName?: string | null; notes?: string | null },
+): Promise<{ error: string | null }> {
+  const { data: existing } = await supabase
+    .from('saved_posts')
+    .select('id, collection_name, notes')
+    .eq('user_id', userId)
+    .eq('post_id', postId)
+    .limit(1)
+    .maybeSingle()
+
+  if (existing) {
+    if (input?.collectionName || input?.notes) {
+      return updateSavedCommunityPost(userId, postId, input)
+    }
+    return { error: null }
+  }
 
   const { error } = await supabase.from('saved_posts').insert({
     user_id: userId,
     post_id: postId,
-    collection_name: 'Saved',
+    collection_name: normalizeCollectionName(input?.collectionName),
+    notes: input?.notes?.trim() || null,
   })
 
   if (!error) invalidateCache(INVALIDATION_TOPICS.savedPosts)
 
+  return { error: error?.message ?? null }
+}
+
+export async function updateSavedCommunityPost(
+  userId: string,
+  postId: string,
+  input: { collectionName?: string | null; notes?: string | null },
+): Promise<{ error: string | null }> {
+  const payload: Record<string, unknown> = {}
+  if (input.collectionName !== undefined) payload.collection_name = normalizeCollectionName(input.collectionName)
+  if (input.notes !== undefined) payload.notes = input.notes?.trim() || null
+  const { error } = await supabase
+    .from('saved_posts')
+    .update(payload)
+    .eq('user_id', userId)
+    .eq('post_id', postId)
+
+  if (!error) invalidateCache(INVALIDATION_TOPICS.savedPosts)
   return { error: error?.message ?? null }
 }
 
@@ -73,21 +134,90 @@ export async function unsaveCommunityPost(
 /** List saved posts with post content for the Saved items screen. */
 export async function fetchSavedCommunityPosts(
   userId: string,
-): Promise<{ items: CommunityPost[]; error: string | null }> {
+): Promise<{ items: SavedCommunityPostEntry[]; error: string | null }> {
   const { data, error } = await supabase
     .from('saved_posts')
-    .select('post_id, created_at')
+    .select('post_id, created_at, collection_name, notes')
     .eq('user_id', userId)
     .order('created_at', { ascending: false })
     .limit(50)
 
   if (error) return { items: [], error: error.message }
 
-  const posts: CommunityPost[] = []
+  const posts: SavedCommunityPostEntry[] = []
   for (const row of data ?? []) {
     const result = await fetchPostById(row.post_id)
-    if (result.data) posts.push(result.data)
+    if (result.data) {
+      posts.push({
+        postId: row.post_id,
+        collectionName: normalizeCollectionName((row as SavedPostRow).collection_name),
+        notes: (row as SavedPostRow).notes ?? null,
+        createdAt: (row as SavedPostRow).created_at,
+        post: result.data,
+      })
+    }
   }
 
   return { items: posts, error: null }
+}
+
+export function buildSavedPostSections(items: SavedCommunityPostEntry[]): SavedCommunityPostSection[] {
+  const shopNow = items.filter((entry) => Boolean(entry.post.products?.length || entry.post.product))
+  const creatorPicks = items.filter(
+    (entry) =>
+      !shopNow.some((candidate) => candidate.postId === entry.postId) &&
+      Boolean(entry.post.shop || entry.post.author_verified || entry.post.originalPost),
+  )
+  const readLater = items.filter((entry) => entry.post.post_type === 'article' || Boolean(entry.post.article_title))
+  const events = items.filter((entry) => entry.post.post_type === 'event' || Boolean(entry.post.event_title))
+  const claimedIds = new Set([
+    ...shopNow.map((entry) => entry.postId),
+    ...creatorPicks.map((entry) => entry.postId),
+    ...readLater.map((entry) => entry.postId),
+    ...events.map((entry) => entry.postId),
+  ])
+  const moreSaved = items.filter((entry) => !claimedIds.has(entry.postId))
+
+  return [
+    shopNow.length
+      ? {
+          key: 'shop_now',
+          title: 'Shop now',
+          subtitle: `${shopNow.length} product-rich post${shopNow.length === 1 ? '' : 's'} worth revisiting`,
+          items: shopNow.slice(0, 6),
+        }
+      : null,
+    creatorPicks.length
+      ? {
+          key: 'creator_picks',
+          title: 'Creator picks',
+          subtitle: `${creatorPicks.length} creator-led post${creatorPicks.length === 1 ? '' : 's'} saved for inspiration`,
+          items: creatorPicks.slice(0, 6),
+        }
+      : null,
+    readLater.length
+      ? {
+          key: 'read_later',
+          title: 'Read later',
+          subtitle: `${readLater.length} article${readLater.length === 1 ? '' : 's'} saved for a deeper read`,
+          items: readLater.slice(0, 6),
+        }
+      : null,
+    events.length
+      ? {
+          key: 'events',
+          title: 'Events to revisit',
+          subtitle: `${events.length} saved event post${events.length === 1 ? '' : 's'}`,
+          items: events.slice(0, 6),
+        }
+      : null,
+    moreSaved.length
+      ? {
+          key: 'more_saved',
+          title: 'More saved posts',
+          subtitle: `${moreSaved.length} additional post${moreSaved.length === 1 ? '' : 's'}`,
+          items: moreSaved,
+        }
+      : null,
+  ].filter((section): section is SavedCommunityPostSection => section !== null)
 }

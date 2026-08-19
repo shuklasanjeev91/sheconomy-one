@@ -21,7 +21,13 @@ import {
 } from '~/community/lib/moderation'
 import { feedback } from '~/lib/platform/feedback'
 import { unfollowProfile } from '~/community/lib/profile-follows'
-import { isPostSaved, saveCommunityPost, unsaveCommunityPost } from '~/community/lib/saved-posts'
+import {
+  getSavedCommunityPost,
+  isPostSaved,
+  saveCommunityPost,
+  unsaveCommunityPost,
+  updateSavedCommunityPost,
+} from '~/community/lib/saved-posts'
 import { getPostShareUrl } from '~/community/lib/post-engagement'
 import {
   deleteCommunityPost,
@@ -34,8 +40,10 @@ import {
   Avatar,
   Button,
   Icons,
+  Input,
   Spinner,
   Text,
+  TextArea,
   XStack,
   YStack,
   useAppToast,
@@ -75,6 +83,9 @@ export function PostActionSheets({
   const [isFeaturing, setIsFeaturing] = useState(false)
   const [saved, setSaved] = useState(false)
   const [savingAction, setSavingAction] = useState(false)
+  const [organizeOpen, setOrganizeOpen] = useState(false)
+  const [collectionName, setCollectionName] = useState('Saved')
+  const [saveNotes, setSaveNotes] = useState('')
   const [editDraft, setEditDraft] = useState(post.content)
   const [isEditing, setIsEditing] = useState(false)
   const [isDeleting, setIsDeleting] = useState(false)
@@ -91,6 +102,11 @@ export function PostActionSheets({
     let active = true
     void isPostSaved(user.id, post.id).then((value) => {
       if (active) setSaved(value)
+    })
+    void getSavedCommunityPost(user.id, post.id).then((result) => {
+      if (!active || !result.item) return
+      setCollectionName(result.item.collection_name?.trim() || 'Saved')
+      setSaveNotes(result.item.notes ?? '')
     })
     return () => {
       active = false
@@ -113,12 +129,73 @@ export function PostActionSheets({
     thumbUrl: collectPostMedia(post)[0]?.url ?? null,
   }
 
+  function openSaveOrganizer() {
+    setCollectionName((current) => current.trim() || 'Saved')
+    setOrganizeOpen(true)
+  }
+
   function requireAuth(action: string) {
     toast.show('Sign in required', {
       tone: 'default',
       message: `Sign in to ${action}.`,
     })
     navigateApp(routes.signIn)
+  }
+
+  function handleSaveToggle() {
+    if (!user?.id) {
+      requireAuth('save posts')
+      return
+    }
+    if (savingAction) return
+    setSavingAction(true)
+    const action = saved
+      ? unsaveCommunityPost(user.id, post.id)
+      : saveCommunityPost(user.id, post.id)
+    void action.then((result) => {
+      setSavingAction(false)
+      if (result.error) {
+        toast.show('Could not update saved posts', {
+          tone: 'danger',
+          message: result.error,
+        })
+        return
+      }
+      const nextSaved = !saved
+      setSaved(nextSaved)
+      toast.show(saved ? 'Removed from Saved' : 'Saved', {
+        tone: 'success',
+        message: saved ? 'Post removed from your saved items.' : 'Post saved to your bookmarks.',
+        actionLabel: nextSaved ? 'Organize' : undefined,
+        onAction: nextSaved ? openSaveOrganizer : undefined,
+      })
+      engagement.closeSheet()
+    })
+  }
+
+  function handleSaveDetails() {
+    if (!user?.id || savingAction) return
+    setSavingAction(true)
+    void updateSavedCommunityPost(user.id, post.id, {
+      collectionName,
+      notes: saveNotes,
+    }).then((result) => {
+      setSavingAction(false)
+      if (result.error) {
+        toast.show('Could not organize saved post', {
+          tone: 'danger',
+          message: result.error,
+        })
+        return
+      }
+      setSaved(true)
+      setOrganizeOpen(false)
+      engagement.closeSheet()
+      toast.show('Saved post updated', {
+        tone: 'success',
+        message: 'Your collection and private note were updated.',
+      })
+    })
   }
 
   useEffect(() => {
@@ -486,36 +563,22 @@ export function PostActionSheets({
           <SheetAction
             icon={Icons.Bookmark}
             label={saved ? 'Unsave post' : 'Save post'}
-            onPress={() => {
-              if (!user?.id) {
-                requireAuth('save posts')
-                return
-              }
-              if (savingAction) return
-              setSavingAction(true)
-              const action = saved
-                ? unsaveCommunityPost(user.id, post.id)
-                : saveCommunityPost(user.id, post.id)
-              void action.then((result) => {
-                setSavingAction(false)
-                if (result.error) {
-                  toast.show('Could not update saved posts', {
-                    tone: 'danger',
-                    message: result.error,
-                  })
+            onPress={handleSaveToggle}
+          />
+          {saved ? (
+            <SheetAction
+              icon={Icons.FolderOpen}
+              label="Add collection or note"
+              description="Keep this save organized for later"
+              onPress={() => {
+                if (!user?.id) {
+                  requireAuth('organize saved posts')
                   return
                 }
-                setSaved(!saved)
-                toast.show(saved ? 'Removed from Saved' : 'Saved', {
-                  tone: 'success',
-                  message: saved
-                    ? 'Post removed from your saved items.'
-                    : 'Post saved to your bookmarks.',
-                })
-                engagement.closeSheet()
-              })
-            }}
-          />
+                openSaveOrganizer()
+              }}
+            />
+          ) : null}
           <SheetAction icon={Icons.Link} label="Copy link to post" onPress={copyLink} />
           <SheetAction
             icon={Icons.Flag}
@@ -628,6 +691,53 @@ export function PostActionSheets({
               }}
             />
           ) : null}
+        </YStack>
+      </CommunityAdaptiveSheet>
+
+      <CommunityAdaptiveSheet
+        open={organizeOpen}
+        onOpenChange={setOrganizeOpen}
+        title="Organize saved post"
+        maxWidth={520}
+      >
+        <YStack gap="$4">
+          <YStack gap="$2">
+            <Text fontSize={13} fontWeight="700" color={ui.textMuted}>
+              Collection
+            </Text>
+            <Input
+              value={collectionName}
+              onChangeText={setCollectionName}
+              placeholder="Saved, Shop inspo, Founder notes"
+              autoCapitalize="words"
+              maxLength={32}
+            />
+          </YStack>
+          <YStack gap="$2">
+            <Text fontSize={13} fontWeight="700" color={ui.textMuted}>
+              Private note
+            </Text>
+            <TextArea
+              value={saveNotes}
+              onChangeText={setSaveNotes}
+              placeholder="Why did you save this post?"
+              minHeight={108}
+              maxLength={180}
+            />
+          </YStack>
+          <XStack gap="$2" justifyContent="flex-end" flexWrap="wrap">
+            <Button tone="ghost" borderRadius={999} onPress={() => setOrganizeOpen(false)}>
+              Cancel
+            </Button>
+            <Button
+              tone="primary"
+              borderRadius={999}
+              disabled={savingAction}
+              onPress={handleSaveDetails}
+            >
+              {savingAction ? 'Saving...' : 'Update save'}
+            </Button>
+          </XStack>
         </YStack>
       </CommunityAdaptiveSheet>
 

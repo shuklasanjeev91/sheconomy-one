@@ -37,4 +37,19 @@ describe('seller console access', () => {
     })
     expect(decision.status).toBe('allow')
   })
+
+  it('does not auto-open human verification on direct create-shop routes', () => {
+    const decision = resolveRouteAccess({
+      pathname: '/create-my-shop',
+      isAuthenticated: true,
+      role: USER_ROLES.USER,
+      gender: false,
+      isVerified: false,
+    })
+
+    expect(decision.status).toBe('denied')
+    if (decision.status !== 'denied') throw new Error('Expected denied for /create-my-shop')
+    expect(String(decision.href)).not.toMatch(/human=verify/)
+    expect(String(decision.href)).not.toMatch(/gender=restricted/)
+  })
 })
