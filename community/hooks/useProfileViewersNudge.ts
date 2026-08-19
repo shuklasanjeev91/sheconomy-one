@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 
 import { fetchRecentProfileViewers, type ProfileViewer } from '~/community/lib/profile-views'
+import { INVALIDATION_TOPICS } from '~/lib/cache/invalidation'
+import { useAutoRefresh } from '~/lib/cache/useAutoRefresh'
 import { useSupabase } from '~/providers/SupabaseProvider'
 
 export function useProfileViewersNudge(limit = 4) {
@@ -24,6 +26,11 @@ export function useProfileViewersNudge(limit = 4) {
     if (authLoading) return
     void reload()
   }, [authLoading, reload])
+
+  useAutoRefresh([INVALIDATION_TOPICS.communityProfileViews], () => {
+    if (authLoading) return
+    void reload()
+  })
 
   return useMemo(
     () => ({

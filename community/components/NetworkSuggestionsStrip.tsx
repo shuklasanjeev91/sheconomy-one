@@ -1,3 +1,5 @@
+import { useMemo } from 'react'
+
 import { AppLink } from '~/components/navigation/AppLink'
 
 import { CommunityCard } from '~/community/components/CommunityCard'
@@ -5,7 +7,8 @@ import { ProfileConnectButton } from '~/community/components/ProfileConnectButto
 import { ProfileLink } from '~/community/components/ProfileLink'
 import { useCommunityFeedHeader } from '~/community/hooks/useCommunityFeedHeader'
 import { useNetwork } from '~/community/hooks/useNetwork'
-import { filterNetworkSuggestions } from '~/community/lib/network-suggestions'
+import { useProfessionalSpotlight } from '~/community/hooks/useProfessionalSpotlight'
+import { rankNetworkSuggestions } from '~/community/lib/network-suggestions'
 import { useCommunityUi } from '~/community/lib/community-theme'
 import {
   dismissNetworkSuggestion,
@@ -21,8 +24,14 @@ export function NetworkSuggestionsStrip() {
   const communityUi = useCommunityUi()
   const { hideSidebarRedundantStrips, isAuthenticated } = useCommunityFeedHeader()
   const network = useNetwork()
+  const { cards: spotlightCards } = useProfessionalSpotlight(12)
   const dismissedIds = useDismissedNetworkSuggestions()
-  const suggestions = filterNetworkSuggestions(network.suggestions, dismissedIds, SUGGESTION_LIMIT)
+  const boostUserIds = useMemo(() => spotlightCards.map((card) => card.userId), [spotlightCards])
+  const suggestions = rankNetworkSuggestions(network.suggestions, {
+    dismissedIds,
+    boostUserIds,
+    limit: SUGGESTION_LIMIT,
+  })
 
   if (hideSidebarRedundantStrips) return null
   if (!isAuthenticated) return null

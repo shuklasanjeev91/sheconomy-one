@@ -43,7 +43,14 @@ export function resolveMarketplaceTrustNotificationPath(
 
   if (
     type === 'order_issue_resolved_buyer' ||
-    type === 'order_refund_pending_buyer'
+    type === 'order_refund_pending_buyer' ||
+    type === 'order_return_pickup_assigned_buyer' ||
+    type === 'order_return_rejected_buyer' ||
+    type === 'order_rto_completed_buyer' ||
+    type === 'order_refund_completed_buyer' ||
+    (type.includes('return') && type.includes('buyer')) ||
+    (type.includes('refund') && type.includes('buyer') && !type.includes('seller')) ||
+    (type.includes('rto') && type.includes('buyer'))
   ) {
     if (fromUrl && fromUrl.startsWith('/orders')) return fromUrl
     if (contextId && (contextType === 'order' || type.includes('order'))) {

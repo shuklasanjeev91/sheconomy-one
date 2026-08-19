@@ -2,6 +2,7 @@ import { useEffect, useRef } from 'react'
 
 import { pathFromNotificationUrl } from '~/lib/notifications/push-config'
 import { resolveMarketplaceTrustNotificationPath } from '~/lib/notifications/marketplace-notification-path'
+import { INVALIDATION_TOPICS, invalidateCache } from '~/lib/cache/invalidation'
 import { navigateApp } from '~/lib/platform/navigate'
 import { supabase } from '~/lib/supabase/client'
 import { useAppToast } from '~/components/ui'
@@ -55,6 +56,22 @@ export function InAppNotificationHost() {
 
           const channels = (row.channels ?? []).map((c) => c.toLowerCase())
           if (channels.length > 0 && !channels.includes('in_app')) return
+
+          const type = (row.type ?? '').toLowerCase()
+          if (type === 'profile_viewed') {
+            invalidateCache(INVALIDATION_TOPICS.communityProfileViews)
+          }
+          if (type === 'hashtag_post') {
+            invalidateCache(INVALIDATION_TOPICS.communityHashtagFollows)
+          }
+          if (
+            type.includes('return') ||
+            type.includes('refund') ||
+            type.includes('rto') ||
+            type.includes('exchange')
+          ) {
+            invalidateCache(INVALIDATION_TOPICS.commerceOrders)
+          }
 
           const title = row.title?.trim() || 'New notification'
           const message = row.message?.trim() || undefined

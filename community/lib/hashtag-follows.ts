@@ -1,4 +1,5 @@
 import { supabase } from '~/lib/supabase/client'
+import { INVALIDATION_TOPICS, invalidateCache } from '~/lib/cache/invalidation'
 import { notifyFromTemplate } from '~/lib/notifications/notify'
 
 function normalizeTag(tag: string): string {
@@ -35,6 +36,7 @@ export async function followHashtag(
   })
 
   if (error?.code === '23505') return { error: null }
+  if (!error) invalidateCache(INVALIDATION_TOPICS.communityHashtagFollows)
   return { error: error?.message ?? null }
 }
 
@@ -51,6 +53,7 @@ export async function unfollowHashtag(
     .eq('user_id', userId)
     .eq('hashtag', tag)
 
+  if (!error) invalidateCache(INVALIDATION_TOPICS.communityHashtagFollows)
   return { error: error?.message ?? null }
 }
 

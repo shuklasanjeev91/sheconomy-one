@@ -86,4 +86,27 @@ describe('marketplace trust notification deep links', () => {
       }),
     ).toBe(vendorRoutes.orders)
   })
+
+  it('routes buyer return pickup notices to order detail', () => {
+    const orderId = '88888888-8888-8888-8888-888888888888'
+    expect(
+      resolveMarketplaceTrustNotificationPath({
+        type: 'order_return_pickup_assigned_buyer',
+        contextType: 'order',
+        contextId: orderId,
+      }),
+    ).toBe(commerceRoutes.order(orderId))
+  })
+
+  it('routes buyer RTO completion to order detail', () => {
+    const orderId = '99999999-9999-9999-9999-999999999999'
+    expect(
+      resolveMarketplaceTrustNotificationPath({
+        type: 'order_rto_completed_buyer',
+        contextType: 'order',
+        contextId: orderId,
+        actionUrl: `https://sheconomy.in/orders/${orderId}`,
+      }),
+    ).toBe(`/orders/${orderId}`)
+  })
 })

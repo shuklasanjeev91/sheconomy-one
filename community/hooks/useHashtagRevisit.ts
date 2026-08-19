@@ -4,6 +4,8 @@ import {
   fetchHashtagRevisitCards,
   type HashtagRevisitCard,
 } from '~/community/lib/hashtag-revisit'
+import { INVALIDATION_TOPICS } from '~/lib/cache/invalidation'
+import { useAutoRefresh } from '~/lib/cache/useAutoRefresh'
 import { useSupabase } from '~/providers/SupabaseProvider'
 
 export function useHashtagRevisit(limit = 8) {
@@ -27,6 +29,11 @@ export function useHashtagRevisit(limit = 8) {
     if (authLoading) return
     void reload()
   }, [authLoading, reload])
+
+  useAutoRefresh([INVALIDATION_TOPICS.communityHashtagFollows], () => {
+    if (authLoading) return
+    void reload()
+  })
 
   return useMemo(
     () => ({

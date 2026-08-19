@@ -44,6 +44,8 @@ export const INVALIDATION_TOPICS = {
   communityGroups: 'community-groups',
   communityCompanies: 'community-companies',
   communityNetwork: 'community-network',
+  communityHashtagFollows: 'community-hashtag-follows',
+  communityProfileViews: 'community-profile-views',
   savedPosts: 'saved-posts',
   userActivity: 'user-activity',
   commerceListings: 'commerce-listings',

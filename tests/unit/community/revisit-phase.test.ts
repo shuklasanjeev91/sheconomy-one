@@ -2,11 +2,12 @@ import { describe, expect, it } from 'vitest'
 
 import { buildJobRevisitCards } from '~/community/lib/job-revisit'
 import type { JobListing } from '~/community/lib/jobs'
-import { filterNetworkSuggestions } from '~/community/lib/network-suggestions'
+import { filterNetworkSuggestions, rankNetworkSuggestions } from '~/community/lib/network-suggestions'
 import type { NetworkMember } from '~/community/lib/network'
 import { orderProfessionalSpotlightCards } from '~/community/lib/professional-spotlight'
 import { buildWishlistActivityCards } from '~/community/lib/wishlist-activity'
 import { selectBuyerReturnHomeCards } from '~/commerce/lib/buyer-return-home'
+import { buildBuyerRtoHomeCards } from '~/commerce/lib/buyer-rto-home'
 import type { WishlistReactivationSection } from '~/commerce/lib/wishlist-reactivation'
 
 describe('filterNetworkSuggestions', () => {
@@ -43,6 +44,49 @@ describe('filterNetworkSuggestions', () => {
     ]
 
     expect(filterNetworkSuggestions(members, ['a'], 1).map((item) => item.user_id)).toEqual(['b'])
+  })
+})
+
+describe('rankNetworkSuggestions', () => {
+  it('boosts open-to-work members ahead of others', () => {
+    const members: NetworkMember[] = [
+      {
+        user_id: 'plain',
+        username: 'plain',
+        full_name: 'Plain',
+        headline: null,
+        avatar_url: null,
+        location: null,
+        industry: null,
+        is_verified: false,
+        mutual_count: 0,
+        connection_id: null,
+        connection_status: null,
+        is_sender: false,
+      },
+      {
+        user_id: 'hire',
+        username: 'hire',
+        full_name: 'Hire',
+        headline: 'Designer',
+        avatar_url: null,
+        location: null,
+        industry: null,
+        is_verified: false,
+        mutual_count: 0,
+        connection_id: null,
+        connection_status: null,
+        is_sender: false,
+      },
+    ]
+
+    expect(
+      rankNetworkSuggestions(members, {
+        dismissedIds: [],
+        boostUserIds: ['hire'],
+        limit: 2,
+      }).map((item) => item.user_id),
+    ).toEqual(['hire', 'plain'])
   })
 })
 
@@ -255,5 +299,37 @@ describe('selectBuyerReturnHomeCards', () => {
 
     expect(cards).toHaveLength(1)
     expect(cards[0]?.issueId).toBe('issue-1')
+  })
+})
+
+describe('buildBuyerRtoHomeCards', () => {
+  it('includes reverse pickup and forward RTO legs', () => {
+    const cards = buildBuyerRtoHomeCards(
+      [
+        {
+          id: 'delivery-return',
+          delivery_status: 'in_transit',
+          delivery_mode: 'return',
+          tracking_number: 'RET123',
+          carrier_tracking_url: 'https://track.example/ret',
+          updated_at: '2026-08-19T10:00:00.000Z',
+          orders: { id: 'order-1', order_number: '1001' },
+          order_items: { product_title: 'Dress' },
+        },
+        {
+          id: 'delivery-rto',
+          delivery_status: 'returned_to_sender',
+          delivery_mode: 'forward',
+          tracking_number: 'RTO456',
+          carrier_tracking_url: null,
+          updated_at: '2026-08-19T09:00:00.000Z',
+          orders: { id: 'order-2', order_number: '1002' },
+          order_items: { product_title: 'Shoes' },
+        },
+      ],
+      4,
+    )
+
+    expect(cards.map((card) => card.kind)).toEqual(['return_shipment', 'rto'])
   })
 })
