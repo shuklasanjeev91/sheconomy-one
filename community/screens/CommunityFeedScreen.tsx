@@ -8,6 +8,7 @@ import { StoriesStrip } from '~/community/components/StoriesStrip'
 import { CommunityShell } from '~/community/components/CommunityShell'
 import { FeedComposer } from '~/community/components/FeedComposer'
 import { EventRevisitStrip } from '~/community/components/EventRevisitStrip'
+import { FollowedShopActivityStrip } from '~/community/components/FollowedShopActivityStrip'
 import { PickUpAgainStrip } from '~/community/components/PickUpAgainStrip'
 import { TodayCelebrationsCard } from '~/community/components/TodayCelebrationsCard'
 import { FeedFilterChips } from '~/community/components/FeedFilterChips'
@@ -155,6 +156,7 @@ export function CommunityFeedScreen() {
         <TodayCelebrationsCard />
         <PickUpAgainStrip />
         <EventRevisitStrip />
+        <FollowedShopActivityStrip />
         <FeedComposer />
         <FeedFilterChips value={contentFilter} onChange={setContentFilter} />
         <FeedSortBar value={sort} onChange={setSort} />
