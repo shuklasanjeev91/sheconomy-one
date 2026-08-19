@@ -115,19 +115,37 @@ export type ProfileValidationResult = {
 
 // ============= CONSTANTS =============
 
-/** Role codes stored in `profiles.role` (A=Admin, V=Vendor, U=User). */
+/**
+ * Role codes stored in `profiles.role`
+ * (`profiles_role_check`: A / V / U / S / L / F).
+ */
 export const USER_ROLES = {
   ADMIN: 'A',
   VENDOR: 'V',
   USER: 'U',
+  SELLER: 'S',
+  LOGISTICS: 'L',
+  FINANCE: 'F',
 } as const
 
 export type UserRole = (typeof USER_ROLES)[keyof typeof USER_ROLES]
+
+export const USER_ROLE_LABELS: Record<UserRole, string> = {
+  [USER_ROLES.ADMIN]: 'Admin',
+  [USER_ROLES.VENDOR]: 'Vendor',
+  [USER_ROLES.USER]: 'Member',
+  [USER_ROLES.SELLER]: 'Seller',
+  [USER_ROLES.LOGISTICS]: 'Logistics',
+  [USER_ROLES.FINANCE]: 'Finance',
+}
 
 export const PROFILE_ROLES: readonly UserRole[] = [
   USER_ROLES.ADMIN,
   USER_ROLES.VENDOR,
   USER_ROLES.USER,
+  USER_ROLES.SELLER,
+  USER_ROLES.LOGISTICS,
+  USER_ROLES.FINANCE,
 ]
 
 export const PROFILE_COMPLETION = {

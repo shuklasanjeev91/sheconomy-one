@@ -46,6 +46,7 @@ export function AuthUserMenuContent({ onClose }: AuthUserMenuContentProps) {
     : routes.profile
 
   const isAdmin = isAdminRole(normalizeRole(profile?.role))
+  const role = profile?.role ?? null
 
   const quickActions = useMemo(
     () =>
@@ -65,9 +66,10 @@ export function AuthUserMenuContent({ onClose }: AuthUserMenuContentProps) {
         hasShops: shops.length > 0,
         primaryShopId: shops[0]?.id ?? null,
         isAdmin,
+        role,
         omitChromeDuplicates: !isDesktop,
       }),
-    [tier, shops, isAdmin, isDesktop],
+    [tier, shops, isAdmin, role, isDesktop],
   )
 
   function go(href: Href) {

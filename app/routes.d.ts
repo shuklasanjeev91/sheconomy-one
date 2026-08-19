@@ -33,6 +33,7 @@ declare module 'one' {
         | `/addresses`
         | `/admin`
         | `/admin/`
+        | `/admin/StaffGuard`
         | `/admin/analytics`
         | `/admin/cart`
         | `/admin/categories`
@@ -73,6 +74,7 @@ declare module 'one' {
         | `/admin/sale-events`
         | `/admin/settings`
         | `/admin/shops`
+        | `/admin/staff-console`
         | `/admin/users`
         | `/auth`
         | `/auth/callback`

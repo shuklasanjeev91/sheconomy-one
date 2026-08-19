@@ -4,11 +4,21 @@ import { Slot, usePathname, useRouter } from 'one'
 import { SpaRedirect } from '~/components/navigation/SpaRedirect'
 import type { Href } from 'one'
 
-import { RequireAdmin } from '~/components/auth/RouteGuard'
+import { StaffGuard } from '~/app/admin/StaffGuard'
 import { CMS_NAV_ITEMS } from '~/app/admin/components/cms/cmsNav'
 import { Icons, ScrollView, Text, XStack, YStack } from '~/components/ui'
 import { getShadowStyle, radius } from '~/config/tokens'
 import { useAppLayout } from '~/hooks/useAppLayout'
+import { useProfile } from '~/hooks/useProfile'
+import {
+  canAccessStaffNav,
+  canAccessStaffPath,
+  getStaffRoleLabel,
+  getStaffWorkspace,
+  readStaffRole,
+  type StaffNavId,
+  type StaffWorkspace,
+} from '~/app/admin/staff-console'
 import { edgePanelPositionStyle, overlayBackdropStyle } from '~/lib/layout/styles'
 import { useAppUi } from '~/lib/theme/useAppUi'
 import type { AppUiTokens } from '~/lib/theme/app-ui'
@@ -164,19 +174,27 @@ const COLLAPSED_WIDTH = 80
 const DRAWER_WIDTH = 300
 const TOPBAR_HEIGHT = 60
 
-function getActiveNavItem(pathname: string) {
+function getActiveNavItem(pathname: string, items: AdminNavItem[]) {
   const normalizedPath = pathname.replace(/\/+$/, '') || '/admin'
+  const pool = items.length ? items : NAV_ITEMS
 
   if (normalizedPath === '/admin') {
-    return NAV_ITEMS[0]
+    return pool.find((item) => item.id === 'dashboard') ?? pool[0]
   }
 
   return (
-    NAV_ITEMS.find((item) => {
+    pool.find((item) => {
       const href = String(item.href).replace(/\/+$/, '')
       return href === '/admin' ? normalizedPath === href : normalizedPath === href || normalizedPath.startsWith(`${href}/`)
-    }) ?? NAV_ITEMS[0]
+    }) ?? pool.find((item) => item.id === 'dashboard') ?? pool[0]
   )
+}
+
+function filterNavGroups(role: ReturnType<typeof readStaffRole>): AdminNavGroup[] {
+  return NAV_GROUPS.map((group) => ({
+    ...group,
+    items: group.items.filter((item) => canAccessStaffNav(role, item.id as StaffNavId)),
+  })).filter((group) => group.items.length > 0)
 }
 
 export function getAdminNavItem(id: string) {
@@ -186,14 +204,20 @@ export function getAdminNavItem(id: string) {
 export function AdminLayout() {
   const ui = useAppUi()
   // No `safeTop` here — AppShell already wraps routes in a top SafeAreaView.
-  const { isDesktop, safeBottom, desktopHeaderHeight } = useAppLayout()
+  const { isDesktop, desktopHeaderHeight } = useAppLayout()
   const router = useRouter()
   const pathname = usePathname()
+  const { profile } = useProfile()
   const [collapsed, setCollapsed] = useState(false)
   const [drawerOpen, setDrawerOpen] = useState(false)
   const [cmsOpen, setCmsOpen] = useState(() => pathname.startsWith('/admin/cms'))
 
-  const active = getActiveNavItem(pathname)
+  const role = readStaffRole(profile?.role)
+  const workspace = getStaffWorkspace(role)
+  const navGroups = filterNavGroups(role)
+  const navItems = navGroups.flatMap((group) => group.items)
+  const active = getActiveNavItem(pathname, navItems)
+  const pathAllowed = canAccessStaffPath(role, pathname)
 
   useEffect(() => {
     if (pathname.startsWith('/admin/cms')) setCmsOpen(true)
@@ -208,7 +232,8 @@ export function AdminLayout() {
     Platform.OS === 'web' ? (`calc(100dvh - ${desktopHeaderHeight}px)` as const) : undefined
 
   return (
-    <RequireAdmin>
+    <StaffGuard>
+    {!pathAllowed ? <SpaRedirect href={workspace.homeHref} /> : (
     <YStack
       width="100%"
       maxWidth="100%"
@@ -245,9 +270,13 @@ export function AdminLayout() {
             <AdminSidebar
               ui={ui}
               collapsed={collapsed}
-              activeId={active.id}
+              activeId={active?.id ?? 'dashboard'}
               pathname={pathname}
               cmsOpen={cmsOpen}
+              groups={navGroups}
+              workspace={workspace}
+              signedInName={profile?.full_name || profile?.username || getStaffRoleLabel(role)}
+              roleLabel={getStaffRoleLabel(role)}
               onToggleCms={() => setCmsOpen((value) => !value)}
               onSelect={handleSelect}
               onToggleCollapse={() => setCollapsed((value) => !value)}
@@ -285,10 +314,10 @@ export function AdminLayout() {
               </YStack>
               <YStack flex={1} minWidth={0}>
                 <Text fontSize={16} fontWeight="800" color={ui.text} letterSpacing={-0.2} numberOfLines={1}>
-                  {active.label}
+                  {active?.label ?? workspace.title}
                 </Text>
                 <Text fontSize={11} color={ui.textMuted} fontWeight="500" numberOfLines={1}>
-                  Admin console
+                  {workspace.subtitle}
                 </Text>
               </YStack>
               <YStack
@@ -347,9 +376,13 @@ export function AdminLayout() {
               <AdminSidebar
                 ui={ui}
                 collapsed={false}
-                activeId={active.id}
+                activeId={active?.id ?? 'dashboard'}
                 pathname={pathname}
                 cmsOpen={cmsOpen}
+                groups={navGroups}
+                workspace={workspace}
+                signedInName={profile?.full_name || profile?.username || getStaffRoleLabel(role)}
+                roleLabel={getStaffRoleLabel(role)}
                 onToggleCms={() => setCmsOpen((value) => !value)}
                 onSelect={handleSelect}
                 onClose={() => setDrawerOpen(false)}
@@ -359,7 +392,8 @@ export function AdminLayout() {
         </YStack>
       ) : null}
     </YStack>
-    </RequireAdmin>
+    )}
+    </StaffGuard>
   )
 }
 
@@ -373,6 +407,10 @@ type AdminSidebarProps = {
   activeId: string
   pathname: string
   cmsOpen: boolean
+  groups: AdminNavGroup[]
+  workspace: StaffWorkspace
+  signedInName: string
+  roleLabel: string
   onToggleCms: () => void
   onSelect: (item: AdminNavItem) => void
   onToggleCollapse?: () => void
@@ -385,6 +423,10 @@ function AdminSidebar({
   activeId,
   pathname,
   cmsOpen,
+  groups,
+  workspace,
+  signedInName,
+  roleLabel,
   onToggleCms,
   onSelect,
   onToggleCollapse,
@@ -417,10 +459,10 @@ function AdminSidebar({
           {!collapsed ? (
             <YStack minWidth={0}>
               <Text fontSize={15} fontWeight="800" color={ui.text} letterSpacing={-0.3} numberOfLines={1}>
-                Admin
+                {workspace.title}
               </Text>
               <Text fontSize={11} color={ui.textMuted} fontWeight="600" numberOfLines={1}>
-                SHEconomy console
+                {workspace.subtitle}
               </Text>
             </YStack>
           ) : null}
@@ -451,7 +493,7 @@ function AdminSidebar({
         contentContainerStyle={{ paddingVertical: 12 }}
       >
         <YStack gap="$4" paddingHorizontal={collapsed ? '$2' : '$3'}>
-          {NAV_GROUPS.map((group) => (
+          {groups.map((group) => (
             <YStack key={group.title} gap="$1">
               {!collapsed ? (
                 <Text
@@ -547,10 +589,10 @@ function AdminSidebar({
           {!collapsed ? (
             <YStack flex={1} minWidth={0}>
               <Text fontSize={13} fontWeight="700" color={ui.text} numberOfLines={1}>
-                Administrator
+                {signedInName}
               </Text>
               <Text fontSize={11} color={ui.textMuted} numberOfLines={1}>
-                Signed in
+                {roleLabel}
               </Text>
             </YStack>
           ) : null}

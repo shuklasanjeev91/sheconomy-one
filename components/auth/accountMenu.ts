@@ -8,6 +8,7 @@ import {
   resolveFeatureNavHref,
 } from '~/lib/auth/access'
 import { buildSignInUrl } from '~/lib/auth/redirect'
+import { USER_ROLES } from '~/lib/profile/profile.type'
 import {
   chatRoutes,
   classRoutes,
@@ -52,6 +53,8 @@ type AccountMenuOptions = {
   wishlistCount?: number
   /** Show Admin console link when the signed-in user has admin role. */
   isAdmin?: boolean
+  /** `profiles.role` — used to offer the matching staff dashboard. */
+  role?: string | null
   /**
    * Mobile / compact chrome already shows center + bottom tabs.
    * When true, omit destinations that those tabs already cover.
@@ -60,6 +63,53 @@ type AccountMenuOptions = {
 }
 
 const ADMIN_HOME = '/admin' as Href
+
+type StaffDashboardLink = {
+  id: string
+  icon: typeof Icons.User
+  label: string
+  description: string
+  href: Href
+}
+
+function getStaffDashboardLink(role: string | null | undefined): StaffDashboardLink | null {
+  switch (role?.trim()) {
+    case USER_ROLES.ADMIN:
+      return {
+        id: 'admin-dashboard',
+        icon: Icons.ShieldCheck,
+        label: 'Admin dashboard',
+        description: 'Users, shops, orders, and platform tools',
+        href: ADMIN_HOME,
+      }
+    case USER_ROLES.FINANCE:
+      return {
+        id: 'finance-dashboard',
+        icon: Icons.CreditCard,
+        label: 'Finance dashboard',
+        description: 'Payments, payouts, and revenue',
+        href: ADMIN_HOME,
+      }
+    case USER_ROLES.SELLER:
+      return {
+        id: 'sales-dashboard',
+        icon: Icons.Store,
+        label: 'Sales dashboard',
+        description: 'Shops, listings, and seller orders',
+        href: ADMIN_HOME,
+      }
+    case USER_ROLES.LOGISTICS:
+      return {
+        id: 'logistics-dashboard',
+        icon: Icons.Package,
+        label: 'Logistics dashboard',
+        description: 'Orders, shops, and fulfilment',
+        href: ADMIN_HOME,
+      }
+    default:
+      return null
+  }
+}
 
 function item(
   tier: AccessTier,
@@ -130,10 +180,11 @@ export function getAccountMenuSections({
   tier,
   hasShops,
   isAdmin = false,
+  role = null,
   omitChromeDuplicates = false,
 }: Pick<
   AccountMenuOptions,
-  'tier' | 'hasShops' | 'primaryShopId' | 'isAdmin' | 'omitChromeDuplicates'
+  'tier' | 'hasShops' | 'primaryShopId' | 'isAdmin' | 'role' | 'omitChromeDuplicates'
 >): AccountMenuSection[] {
   const sections: AccountMenuSection[] = []
 
@@ -161,20 +212,22 @@ export function getAccountMenuSections({
     ],
   })
 
-  if (isAdmin) {
+  const dashboard = getStaffDashboardLink(role) ?? (isAdmin
+    ? {
+        id: 'admin-dashboard',
+        icon: Icons.ShieldCheck,
+        label: 'Admin dashboard',
+        description: 'Users, shops, orders, and platform tools',
+        href: ADMIN_HOME,
+      }
+    : null)
+
+  if (dashboard) {
     sections.push({
-      id: 'admin',
-      title: 'Admin',
-      subtitle: 'Platform console',
-      items: [
-        {
-          id: 'admin-console',
-          icon: Icons.ShieldCheck,
-          label: 'Admin',
-          description: 'Users, shops, orders, and platform tools',
-          href: ADMIN_HOME,
-        },
-      ],
+      id: 'workspace',
+      title: 'Workspace',
+      subtitle: 'Your console',
+      items: [dashboard],
     })
   }
 

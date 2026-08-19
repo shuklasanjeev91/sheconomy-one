@@ -5,6 +5,13 @@ import type { Href } from 'one'
 import { Badge, Button, Icons, ScrollView, Spinner, Text, XStack, YStack } from '~/components/ui'
 import { getShadowStyle, radius } from '~/config/tokens'
 import { useAppLayout } from '~/hooks/useAppLayout'
+import { useProfile } from '~/hooks/useProfile'
+import {
+  canAccessStaffNav,
+  getStaffWorkspace,
+  readStaffRole,
+  type StaffNavId,
+} from '~/app/admin/staff-console'
 import { supabase, type Tables } from '~/lib/supabase'
 
 type ProfileRow = Tables<'profiles'>
@@ -149,6 +156,10 @@ export default function AdminPage() {
 function AdminDashboard() {
   const router = useRouter()
   const { isDesktop, safeBottom } = useAppLayout()
+  const { profile } = useProfile()
+  const role = readStaffRole(profile?.role)
+  const workspace = getStaffWorkspace(role)
+  const can = (navId: StaffNavId) => canAccessStaffNav(role, navId)
   const [snapshot, setSnapshot] = useState<DashboardSnapshot>(EMPTY_DASHBOARD)
   const [loading, setLoading] = useState(true)
   const [refreshing, setRefreshing] = useState(false)
@@ -313,64 +324,91 @@ function AdminDashboard() {
   }
 
   const healthCards = useMemo(
-    () => [
-      {
-        title: 'Users',
-        value: snapshot.users.total,
-        subtitle: `${snapshot.users.active} active, ${snapshot.users.online} online`,
-        icon: Icons.Users,
-        href: '/admin/users' as Href,
-        tone: 'info' as const,
-      },
-      {
-        title: 'Vendors & Shops',
-        value: snapshot.shops.total,
-        subtitle: `${snapshot.shops.active} active shops, ${snapshot.users.vendors} vendor profiles`,
-        icon: Icons.Store,
-        href: '/admin/shops' as Href,
-        tone: 'success' as const,
-      },
-      {
-        title: 'Products',
-        value: snapshot.products.total,
-        subtitle: `${snapshot.products.active} active, ${snapshot.products.draft} drafts`,
-        icon: Icons.Package,
-        href: '/admin/products' as Href,
-        tone: 'brand' as const,
-      },
-      {
-        title: 'Orders',
-        value: snapshot.commerce.orders,
-        subtitle: `${snapshot.commerce.openOrders} need attention`,
-        icon: Icons.ShoppingCart,
-        href: '/admin/orders' as Href,
-        tone: 'warning' as const,
-      },
-      {
-        title: 'Revenue',
-        value: formatMoney(snapshot.commerce.revenue),
-        subtitle: `${snapshot.commerce.completedPayments} completed payments`,
-        icon: Icons.CreditCard,
-        href: '/admin/payments' as Href,
-        tone: 'success' as const,
-      },
-      {
-        title: 'Live Visitors',
-        value: snapshot.traffic.activeSessions,
-        subtitle: `${snapshot.traffic.loggedInSessions} logged in, ${snapshot.traffic.guestSessions} guests`,
-        icon: Icons.Activity,
-        href: '/admin' as Href,
-        tone: 'info' as const,
-      },
-    ],
-    [snapshot],
+    () =>
+      [
+        can('users')
+          ? {
+              title: 'Users',
+              value: snapshot.users.total,
+              subtitle: `${snapshot.users.active} active, ${snapshot.users.online} online`,
+              icon: Icons.Users,
+              href: '/admin/users' as Href,
+              tone: 'info' as const,
+            }
+          : null,
+        can('shops')
+          ? {
+              title: 'Vendors & Shops',
+              value: snapshot.shops.total,
+              subtitle: `${snapshot.shops.active} active shops, ${snapshot.users.vendors} vendor profiles`,
+              icon: Icons.Store,
+              href: '/admin/shops' as Href,
+              tone: 'success' as const,
+            }
+          : null,
+        can('products')
+          ? {
+              title: 'Products',
+              value: snapshot.products.total,
+              subtitle: `${snapshot.products.active} active, ${snapshot.products.draft} drafts`,
+              icon: Icons.Package,
+              href: '/admin/products' as Href,
+              tone: 'brand' as const,
+            }
+          : null,
+        can('orders')
+          ? {
+              title: 'Orders',
+              value: snapshot.commerce.orders,
+              subtitle: `${snapshot.commerce.openOrders} need attention`,
+              icon: Icons.ShoppingCart,
+              href: '/admin/orders' as Href,
+              tone: 'warning' as const,
+            }
+          : null,
+        can('payments')
+          ? {
+              title: 'Revenue',
+              value: formatMoney(snapshot.commerce.revenue),
+              subtitle: `${snapshot.commerce.completedPayments} completed payments`,
+              icon: Icons.CreditCard,
+              href: '/admin/payments' as Href,
+              tone: 'success' as const,
+            }
+          : null,
+        can('analytics') && can('users')
+          ? {
+              title: 'Live Visitors',
+              value: snapshot.traffic.activeSessions,
+              subtitle: `${snapshot.traffic.loggedInSessions} logged in, ${snapshot.traffic.guestSessions} guests`,
+              icon: Icons.Activity,
+              href: '/admin' as Href,
+              tone: 'info' as const,
+            }
+          : null,
+      ].filter((card): card is NonNullable<typeof card> => card !== null),
+    [snapshot, role],
+  )
+
+  const quickActions = useMemo(
+    () =>
+      [
+        { label: 'Manage Users', href: '/admin/users' as Href, icon: Icons.Users, navId: 'users' as const },
+        { label: 'Review Shops', href: '/admin/shops' as Href, icon: Icons.Store, navId: 'shops' as const },
+        { label: 'Products', href: '/admin/products' as Href, icon: Icons.Package, navId: 'products' as const },
+        { label: 'Orders', href: '/admin/orders' as Href, icon: Icons.ShoppingCart, navId: 'orders' as const },
+        { label: 'Payments', href: '/admin/payments' as Href, icon: Icons.CreditCard, navId: 'payments' as const },
+        { label: 'Categories', href: '/admin/categories' as Href, icon: Icons.Package, navId: 'categories' as const },
+        { label: 'CMS', href: '/admin/cms' as Href, icon: Icons.Settings, navId: 'cms' as const },
+      ].filter((action) => can(action.navId)),
+    [role],
   )
 
   if (loading) {
     return (
       <YStack minHeight={420} alignItems="center" justifyContent="center" gap="$3">
         <Spinner size="large" />
-        <Text color="$color10">Loading admin dashboard...</Text>
+        <Text color="$color10">Loading dashboard...</Text>
       </YStack>
     )
   }
@@ -379,8 +417,8 @@ function AdminDashboard() {
     <YStack width="100%" gap="$5" paddingHorizontal={isDesktop ? '$6' : '$4'} paddingTop="$5" paddingBottom={safeBottom + 28}>
       <XStack alignItems="center" justifyContent="space-between" gap="$3" flexWrap="wrap">
         <YStack gap="$1">
-          <Text fontSize={28} fontWeight="800" color="$color12">Admin Dashboard</Text>
-          <Text color="$color10">Platform command center for users, vendors, products, orders, carts, traffic, and operational alerts.</Text>
+          <Text fontSize={28} fontWeight="800" color="$color12">{workspace.dashboardTitle}</Text>
+          <Text color="$color10">{workspace.dashboardDescription}</Text>
           {lastUpdated ? <Text color="$color10" fontSize={12}>Last updated {lastUpdated}</Text> : null}
         </YStack>
         <XStack gap="$2" flexWrap="wrap">
@@ -403,136 +441,150 @@ function AdminDashboard() {
       </XStack>
 
       <XStack gap="$4" flexWrap="wrap" alignItems="stretch">
-        <DashboardPanel title="What Needs Attention" icon={Icons.ShieldCheck}>
-          <AlertRow label="Open order issues" value={snapshot.operations.openIssues} href="/admin/orders" onNavigate={(href) => router.push(href)} danger={snapshot.operations.openIssues > 0} />
-          <AlertRow label="High priority issues" value={snapshot.operations.urgentIssues} href="/admin/orders" onNavigate={(href) => router.push(href)} danger={snapshot.operations.urgentIssues > 0} />
-          <AlertRow label="Pending fulfillments" value={snapshot.operations.pendingFulfillments} href="/admin/orders" onNavigate={(href) => router.push(href)} danger={snapshot.operations.pendingFulfillments > 0} />
-          <AlertRow label="Active carts not checked out" value={snapshot.carts.active} href="/admin/cart" onNavigate={(href) => router.push(href)} danger={snapshot.carts.active > 0} />
-        </DashboardPanel>
+        {can('orders') ? (
+          <DashboardPanel title="What Needs Attention" icon={Icons.ShieldCheck}>
+            <AlertRow label="Open order issues" value={snapshot.operations.openIssues} href="/admin/orders" onNavigate={(href) => router.push(href)} danger={snapshot.operations.openIssues > 0} />
+            <AlertRow label="High priority issues" value={snapshot.operations.urgentIssues} href="/admin/orders" onNavigate={(href) => router.push(href)} danger={snapshot.operations.urgentIssues > 0} />
+            <AlertRow label="Pending fulfillments" value={snapshot.operations.pendingFulfillments} href="/admin/orders" onNavigate={(href) => router.push(href)} danger={snapshot.operations.pendingFulfillments > 0} />
+            {can('cart') ? (
+              <AlertRow label="Active carts not checked out" value={snapshot.carts.active} href="/admin/cart" onNavigate={(href) => router.push(href)} danger={snapshot.carts.active > 0} />
+            ) : null}
+          </DashboardPanel>
+        ) : null}
 
-        <DashboardPanel title="Growth Snapshot" icon={Icons.TrendingUp}>
-          <ProgressRow label="New users today" value={snapshot.users.registeredToday} total={Math.max(snapshot.users.total, 1)} />
-          <ProgressRow label="Active users" value={snapshot.users.active} total={Math.max(snapshot.users.total, 1)} />
-          <ProgressRow label="Verified shops" value={snapshot.shops.verified} total={Math.max(snapshot.shops.total, 1)} />
-          <ProgressRow label="Active listings" value={snapshot.products.active} total={Math.max(snapshot.products.total, 1)} />
-        </DashboardPanel>
+        {can('shops') || can('products') || can('users') ? (
+          <DashboardPanel title="Growth Snapshot" icon={Icons.TrendingUp}>
+            {can('users') ? <ProgressRow label="New users today" value={snapshot.users.registeredToday} total={Math.max(snapshot.users.total, 1)} /> : null}
+            {can('users') ? <ProgressRow label="Active users" value={snapshot.users.active} total={Math.max(snapshot.users.total, 1)} /> : null}
+            {can('shops') ? <ProgressRow label="Verified shops" value={snapshot.shops.verified} total={Math.max(snapshot.shops.total, 1)} /> : null}
+            {can('products') ? <ProgressRow label="Active listings" value={snapshot.products.active} total={Math.max(snapshot.products.total, 1)} /> : null}
+          </DashboardPanel>
+        ) : null}
 
-        <DashboardPanel title="Cart Funnel" icon={Icons.ShoppingCart}>
-          <ProgressRow label="Logged-in carts" value={snapshot.carts.loggedIn} total={Math.max(snapshot.carts.total, 1)} />
-          <ProgressRow label="Guest carts" value={snapshot.carts.guest} total={Math.max(snapshot.carts.total, 1)} />
-          <ProgressRow label="Active carts" value={snapshot.carts.active} total={Math.max(snapshot.carts.total, 1)} />
-          <ProgressRow label="Saved cart quantity" value={snapshot.carts.savedQuantity} total={Math.max(snapshot.carts.savedQuantity, 1)} />
-          <XStack justifyContent="space-between" gap="$3" paddingTop="$1">
-            <Text color="$color10">Add-to-cart events</Text>
-            <Text color="$color12" fontWeight="800">{snapshot.carts.addEvents}</Text>
-          </XStack>
-          <XStack justifyContent="space-between" gap="$3">
-            <Text color="$color10">Saved cart value</Text>
-            <Text color="$color12" fontWeight="800">{formatMoney(snapshot.carts.value)}</Text>
-          </XStack>
-        </DashboardPanel>
+        {can('cart') ? (
+          <DashboardPanel title="Cart Funnel" icon={Icons.ShoppingCart}>
+            <ProgressRow label="Logged-in carts" value={snapshot.carts.loggedIn} total={Math.max(snapshot.carts.total, 1)} />
+            <ProgressRow label="Guest carts" value={snapshot.carts.guest} total={Math.max(snapshot.carts.total, 1)} />
+            <ProgressRow label="Active carts" value={snapshot.carts.active} total={Math.max(snapshot.carts.total, 1)} />
+            <ProgressRow label="Saved cart quantity" value={snapshot.carts.savedQuantity} total={Math.max(snapshot.carts.savedQuantity, 1)} />
+            <XStack justifyContent="space-between" gap="$3" paddingTop="$1">
+              <Text color="$color10">Add-to-cart events</Text>
+              <Text color="$color12" fontWeight="800">{snapshot.carts.addEvents}</Text>
+            </XStack>
+            <XStack justifyContent="space-between" gap="$3">
+              <Text color="$color10">Saved cart value</Text>
+              <Text color="$color12" fontWeight="800">{formatMoney(snapshot.carts.value)}</Text>
+            </XStack>
+          </DashboardPanel>
+        ) : null}
       </XStack>
 
-      <XStack gap="$4" flexWrap="wrap" alignItems="stretch">
-        <PageActivityPanel title="Logged-In Page Activity" rows={snapshot.traffic.loggedInPages} empty="No logged-in visitor presence in the last 5 minutes." />
-        <PageActivityPanel title="Guest Page Activity" rows={snapshot.traffic.guestPages} empty="No guest visitor presence in the last 5 minutes." />
-      </XStack>
-
-      <XStack gap="$4" flexWrap="wrap" alignItems="stretch">
-        <DashboardPanel title="Recent Orders" icon={Icons.ShoppingCart} action={{ label: 'Open Orders', href: '/admin/orders' as Href }} onNavigate={(href) => router.push(href)}>
-          {snapshot.commerce.recentOrders.length ? snapshot.commerce.recentOrders.map((order) => (
-            <XStack key={order.id} gap="$3" alignItems="center" justifyContent="space-between" paddingVertical="$2.5" borderBottomWidth={1} borderBottomColor="$borderColor">
-              <YStack flex={1} minWidth={0}>
-                <Text fontWeight="800" color="$color12" numberOfLines={1}>{order.order_number}</Text>
-                <Text color="$color10" fontSize={12}>{formatDate(order.created_at)}</Text>
-              </YStack>
-              <YStack alignItems="flex-end" gap="$1">
-                <Badge tone={statusTone(order.order_status)} size="sm">{formatLabel(order.order_status)}</Badge>
-                <Text color="$color12" fontWeight="800">{formatMoney(order.total_amount)}</Text>
-              </YStack>
-            </XStack>
-          )) : <Text color="$color10">No orders found.</Text>}
-        </DashboardPanel>
-
-        <DashboardPanel title="Recent Carts" icon={Icons.ShoppingCart} action={{ label: 'Open Cart', href: '/admin/cart' as Href }} onNavigate={(href) => router.push(href)}>
-          {snapshot.carts.recent.length ? snapshot.carts.recent.map((cart) => (
-            <XStack key={cart.id} gap="$3" alignItems="center" justifyContent="space-between" paddingVertical="$2.5" borderBottomWidth={1} borderBottomColor="$borderColor">
-              <YStack flex={1} minWidth={0}>
-                <Text fontWeight="800" color="$color12" numberOfLines={1}>{cart.user_id ? 'Logged-in cart' : 'Guest cart'}</Text>
-                <Text color="$color10" fontSize={12}>{formatDate(cart.last_activity_at)} • {cart.session_id ?? cart.user_id ?? cart.id}</Text>
-              </YStack>
-              <YStack alignItems="flex-end" gap="$1">
-                <Badge tone={cart.user_id ? 'success' : 'warning'} size="sm">{formatLabel(cart.status)}</Badge>
-                <Text color="$color12" fontWeight="800">{formatMoney(cart.total_amount)}</Text>
-              </YStack>
-            </XStack>
-          )) : <Text color="$color10">No carts found.</Text>}
-        </DashboardPanel>
-
-        <DashboardPanel title="Top Saved Cart Products" icon={Icons.Package} action={{ label: 'Open Products', href: '/admin/products' as Href }} onNavigate={(href) => router.push(href)}>
-          {snapshot.carts.topItems.length ? snapshot.carts.topItems.map((item) => (
-            <XStack key={item.title} justifyContent="space-between" gap="$3" paddingVertical="$2" borderBottomWidth={1} borderBottomColor="$borderColor">
-              <YStack flex={1} minWidth={0}>
-                <Text fontWeight="800" color="$color12" numberOfLines={1}>{item.title}</Text>
-                <Text color="$color10" fontSize={12}>Saved quantity {item.quantity}</Text>
-              </YStack>
-              <Text color="$color12" fontWeight="800">{formatMoney(item.amount)}</Text>
-            </XStack>
-          )) : <Text color="$color10">No saved cart products found.</Text>}
-        </DashboardPanel>
-
-        <DashboardPanel title="Live Pages" icon={Icons.Eye}>
-          <ScrollView maxHeight={320}>
-            <YStack gap="$2">
-              {snapshot.traffic.topPages.length ? snapshot.traffic.topPages.map((page) => (
-                <YStack key={page.key} padding="$2.5" borderRadius={radius.chip} backgroundColor="$color2" gap="$1">
-                  <XStack justifyContent="space-between" gap="$3">
-                    <Text flex={1} fontWeight="800" color="$color12" numberOfLines={1}>{page.path}</Text>
-                    <Badge tone="info" size="sm">{page.sessions} sessions</Badge>
-                  </XStack>
-                  <Text color="$color10" fontSize={12}>{page.loggedIn} logged in • {page.guest} guest • last {formatDate(page.lastSeen)}</Text>
-                </YStack>
-              )) : <Text color="$color10">No live page presence in the last 5 minutes.</Text>}
-            </YStack>
-          </ScrollView>
-        </DashboardPanel>
-
-        <DashboardPanel title="Recent Live Presence" icon={Icons.Activity}>
-          <ScrollView maxHeight={320}>
-            <YStack gap="$2">
-              {snapshot.traffic.recentPresence.length ? snapshot.traffic.recentPresence.map((row) => (
-                <YStack key={row.id} padding="$2.5" borderRadius={radius.chip} backgroundColor="$color2" gap="$1">
-                  <XStack justifyContent="space-between" gap="$2">
-                    <Text flex={1} fontWeight="800" color="$color12" numberOfLines={1}>{row.path || row.page}</Text>
-                    <Badge tone={row.user_id && !row.is_guest ? 'success' : 'warning'} size="sm">
-                      {row.user_id && !row.is_guest ? 'Logged in' : 'Guest'}
-                    </Badge>
-                  </XStack>
-                  <Text color="$color10" fontSize={12}>{formatDate(row.last_seen)} • {row.session_id ?? row.device_id ?? 'No session'}</Text>
-                </YStack>
-              )) : <Text color="$color10">No recent live presence found.</Text>}
-            </YStack>
-          </ScrollView>
-        </DashboardPanel>
-      </XStack>
-
-      <DashboardPanel title="Quick Admin Actions" icon={Icons.LayoutDashboard}>
-        <XStack gap="$2" flexWrap="wrap">
-          {[
-            { label: 'Manage Users', href: '/admin/users' as Href, icon: Icons.Users },
-            { label: 'Review Shops', href: '/admin/shops' as Href, icon: Icons.Store },
-            { label: 'Products', href: '/admin/products' as Href, icon: Icons.Package },
-            { label: 'Orders', href: '/admin/orders' as Href, icon: Icons.ShoppingCart },
-            { label: 'Payments', href: '/admin/payments' as Href, icon: Icons.CreditCard },
-            { label: 'Categories', href: '/admin/categories' as Href, icon: Icons.Package },
-            { label: 'CMS', href: '/admin/cms' as Href, icon: Icons.Settings },
-          ].map((action) => (
-            <Button key={action.label} tone="outline" icon={action.icon} onPress={() => router.push(action.href)}>
-              {action.label}
-            </Button>
-          ))}
+      {can('users') ? (
+        <XStack gap="$4" flexWrap="wrap" alignItems="stretch">
+          <PageActivityPanel title="Logged-In Page Activity" rows={snapshot.traffic.loggedInPages} empty="No logged-in visitor presence in the last 5 minutes." />
+          <PageActivityPanel title="Guest Page Activity" rows={snapshot.traffic.guestPages} empty="No guest visitor presence in the last 5 minutes." />
         </XStack>
-      </DashboardPanel>
+      ) : null}
+
+      <XStack gap="$4" flexWrap="wrap" alignItems="stretch">
+        {can('orders') ? (
+          <DashboardPanel title="Recent Orders" icon={Icons.ShoppingCart} action={{ label: 'Open Orders', href: '/admin/orders' as Href }} onNavigate={(href) => router.push(href)}>
+            {snapshot.commerce.recentOrders.length ? snapshot.commerce.recentOrders.map((order) => (
+              <XStack key={order.id} gap="$3" alignItems="center" justifyContent="space-between" paddingVertical="$2.5" borderBottomWidth={1} borderBottomColor="$borderColor">
+                <YStack flex={1} minWidth={0}>
+                  <Text fontWeight="800" color="$color12" numberOfLines={1}>{order.order_number}</Text>
+                  <Text color="$color10" fontSize={12}>{formatDate(order.created_at)}</Text>
+                </YStack>
+                <YStack alignItems="flex-end" gap="$1">
+                  <Badge tone={statusTone(order.order_status)} size="sm">{formatLabel(order.order_status)}</Badge>
+                  <Text color="$color12" fontWeight="800">{formatMoney(order.total_amount)}</Text>
+                </YStack>
+              </XStack>
+            )) : <Text color="$color10">No orders found.</Text>}
+          </DashboardPanel>
+        ) : null}
+
+        {can('cart') ? (
+          <DashboardPanel title="Recent Carts" icon={Icons.ShoppingCart} action={{ label: 'Open Cart', href: '/admin/cart' as Href }} onNavigate={(href) => router.push(href)}>
+            {snapshot.carts.recent.length ? snapshot.carts.recent.map((cart) => (
+              <XStack key={cart.id} gap="$3" alignItems="center" justifyContent="space-between" paddingVertical="$2.5" borderBottomWidth={1} borderBottomColor="$borderColor">
+                <YStack flex={1} minWidth={0}>
+                  <Text fontWeight="800" color="$color12" numberOfLines={1}>{cart.user_id ? 'Logged-in cart' : 'Guest cart'}</Text>
+                  <Text color="$color10" fontSize={12}>{formatDate(cart.last_activity_at)} • {cart.session_id ?? cart.user_id ?? cart.id}</Text>
+                </YStack>
+                <YStack alignItems="flex-end" gap="$1">
+                  <Badge tone={cart.user_id ? 'success' : 'warning'} size="sm">{formatLabel(cart.status)}</Badge>
+                  <Text color="$color12" fontWeight="800">{formatMoney(cart.total_amount)}</Text>
+                </YStack>
+              </XStack>
+            )) : <Text color="$color10">No carts found.</Text>}
+          </DashboardPanel>
+        ) : null}
+
+        {can('products') && can('cart') ? (
+          <DashboardPanel title="Top Saved Cart Products" icon={Icons.Package} action={{ label: 'Open Products', href: '/admin/products' as Href }} onNavigate={(href) => router.push(href)}>
+            {snapshot.carts.topItems.length ? snapshot.carts.topItems.map((item) => (
+              <XStack key={item.title} justifyContent="space-between" gap="$3" paddingVertical="$2" borderBottomWidth={1} borderBottomColor="$borderColor">
+                <YStack flex={1} minWidth={0}>
+                  <Text fontWeight="800" color="$color12" numberOfLines={1}>{item.title}</Text>
+                  <Text color="$color10" fontSize={12}>Saved quantity {item.quantity}</Text>
+                </YStack>
+                <Text color="$color12" fontWeight="800">{formatMoney(item.amount)}</Text>
+              </XStack>
+            )) : <Text color="$color10">No saved cart products found.</Text>}
+          </DashboardPanel>
+        ) : null}
+
+        {can('users') ? (
+          <DashboardPanel title="Live Pages" icon={Icons.Eye}>
+            <ScrollView maxHeight={320}>
+              <YStack gap="$2">
+                {snapshot.traffic.topPages.length ? snapshot.traffic.topPages.map((page) => (
+                  <YStack key={page.key} padding="$2.5" borderRadius={radius.chip} backgroundColor="$color2" gap="$1">
+                    <XStack justifyContent="space-between" gap="$3">
+                      <Text flex={1} fontWeight="800" color="$color12" numberOfLines={1}>{page.path}</Text>
+                      <Badge tone="info" size="sm">{page.sessions} sessions</Badge>
+                    </XStack>
+                    <Text color="$color10" fontSize={12}>{page.loggedIn} logged in • {page.guest} guest • last {formatDate(page.lastSeen)}</Text>
+                  </YStack>
+                )) : <Text color="$color10">No live page presence in the last 5 minutes.</Text>}
+              </YStack>
+            </ScrollView>
+          </DashboardPanel>
+        ) : null}
+
+        {can('users') ? (
+          <DashboardPanel title="Recent Live Presence" icon={Icons.Activity}>
+            <ScrollView maxHeight={320}>
+              <YStack gap="$2">
+                {snapshot.traffic.recentPresence.length ? snapshot.traffic.recentPresence.map((row) => (
+                  <YStack key={row.id} padding="$2.5" borderRadius={radius.chip} backgroundColor="$color2" gap="$1">
+                    <XStack justifyContent="space-between" gap="$2">
+                      <Text flex={1} fontWeight="800" color="$color12" numberOfLines={1}>{row.path || row.page}</Text>
+                      <Badge tone={row.user_id && !row.is_guest ? 'success' : 'warning'} size="sm">
+                        {row.user_id && !row.is_guest ? 'Logged in' : 'Guest'}
+                      </Badge>
+                    </XStack>
+                    <Text color="$color10" fontSize={12}>{formatDate(row.last_seen)} • {row.session_id ?? row.device_id ?? 'No session'}</Text>
+                  </YStack>
+                )) : <Text color="$color10">No recent live presence found.</Text>}
+              </YStack>
+            </ScrollView>
+          </DashboardPanel>
+        ) : null}
+      </XStack>
+
+      {quickActions.length ? (
+        <DashboardPanel title="Quick actions" icon={Icons.LayoutDashboard}>
+          <XStack gap="$2" flexWrap="wrap">
+            {quickActions.map((action) => (
+              <Button key={action.label} tone="outline" icon={action.icon} onPress={() => router.push(action.href)}>
+                {action.label}
+              </Button>
+            ))}
+          </XStack>
+        </DashboardPanel>
+      ) : null}
     </YStack>
   )
 }
