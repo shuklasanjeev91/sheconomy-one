@@ -1,4 +1,5 @@
 import { ISSUE_PRIORITY, ISSUE_STATUS, ORDER_STATUS } from '~/lib/orders/order.constants'
+import { mergeVendorInboxContext, type VendorInboxContextEntry } from '~/commerce/lib/vendor-inbox-notes'
 import type { EnrichedOrderIssue } from '~/lib/orders/order-issue.type'
 import {
   getIssuePriorityDisplay,
@@ -46,6 +47,9 @@ export type VendorSlaInboxRow = {
   customerName: string | null
   productTitle: string | null
   tags: string[]
+  internalNote: string | null
+  internalTags: string[]
+  updatedAt: number | null
   orderItem: VendorOrderItem | null
   issue: EnrichedOrderIssue | null
 }
@@ -151,6 +155,9 @@ function shipmentRiskRow(item: VendorOrderItem, now: number): VendorSlaInboxRow 
     customerName: item.orders?.profiles?.full_name ?? null,
     productTitle: item.product_title ?? item.listings?.title ?? null,
     tags: ['Ship now', severity === 'critical' ? 'Overdue' : 'Fulfillment'],
+    internalNote: null,
+    internalTags: [],
+    updatedAt: null,
     orderItem: item,
     issue: null,
   }
@@ -191,6 +198,9 @@ function buildIssueRow(
       customerName,
       productTitle,
       tags: ['Exchange', 'Blocked', 'Replacement'],
+      internalNote: null,
+      internalTags: [],
+      updatedAt: null,
       orderItem,
       issue,
     }
@@ -215,6 +225,9 @@ function buildIssueRow(
       customerName,
       productTitle,
       tags: ['Returns', 'Decision', issueStatusLabel(issue.status)],
+      internalNote: null,
+      internalTags: [],
+      updatedAt: null,
       orderItem,
       issue,
     }
@@ -241,6 +254,9 @@ function buildIssueRow(
       customerName,
       productTitle,
       tags: ['Pickup', 'Reverse logistics', issueStatusLabel(issue.status)],
+      internalNote: null,
+      internalTags: [],
+      updatedAt: null,
       orderItem,
       issue,
     }
@@ -285,6 +301,9 @@ function buildIssueRow(
     customerName,
     productTitle,
     tags: [priority.label, issueStatusLabel(issue.status), issueTypeLabel(issue.issue_type)],
+    internalNote: null,
+    internalTags: [],
+    updatedAt: null,
     orderItem,
     issue,
   }
@@ -358,6 +377,13 @@ export function filterVendorSlaRows(rows: VendorSlaInboxRow[], filter: VendorSla
     default:
       return rows
   }
+}
+
+export function hydrateVendorSlaInboxRowsWithContext(
+  rows: VendorSlaInboxRow[],
+  entries: VendorInboxContextEntry[],
+): VendorSlaInboxRow[] {
+  return mergeVendorInboxContext(rows, entries)
 }
 
 export function canBulkAcknowledgeInboxRows(rows: VendorSlaInboxRow[]): boolean {

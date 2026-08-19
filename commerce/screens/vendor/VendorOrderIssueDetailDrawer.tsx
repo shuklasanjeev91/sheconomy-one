@@ -25,6 +25,7 @@ import { COURIER_OPTIONS } from '~/lib/orders/tracking.validation'
 import { getPublicTrackingUrl } from '~/lib/orders/courier-tracking-urls'
 import { openExternalUrl, safeHttpUrl } from '~/lib/platform/openUrl'
 import type { AppUiTokens } from '~/lib/theme/app-ui'
+import type { VendorInboxCoordination } from '~/commerce/lib/vendor-inbox-notes'
 
 import { IssuePriorityBadge, IssueStatusBadge } from '~/commerce/components/vendor/IssueStatusBadge'
 import { OrderIssueCommentsThread } from '~/commerce/components/OrderIssueCommentsThread'
@@ -47,6 +48,7 @@ type VendorOrderIssueDetailDrawerProps = {
   open: boolean
   isDesktop: boolean
   issue: EnrichedOrderIssue | null
+  coordination?: VendorInboxCoordination | null
   /** Disables actions while a mutation is in flight. */
   submitting: boolean
   /** Shared note applied to whichever action the vendor picks. */
@@ -82,6 +84,7 @@ export function VendorOrderIssueDetailDrawer({
   open,
   isDesktop,
   issue,
+  coordination,
   submitting,
   note,
   onNoteChange,
@@ -339,6 +342,35 @@ export function VendorOrderIssueDetailDrawer({
           </Text>
         </XStack>
       </VendorDrawerSection>
+
+      {coordination?.note || coordination?.tags.length ? (
+        <VendorDrawerSection ui={ui} label="Internal coordination">
+          {coordination.note ? (
+            <Text fontSize={12.5} color={ui.textSecondary} lineHeight={18}>
+              {coordination.note}
+            </Text>
+          ) : null}
+          {coordination.tags.length ? (
+            <XStack gap="$1.5" flexWrap="wrap">
+              {coordination.tags.map((tag) => (
+                <XStack
+                  key={tag}
+                  paddingHorizontal="$2.5"
+                  paddingVertical="$1.5"
+                  borderRadius={999}
+                  borderWidth={1}
+                  borderColor={ui.borderSubtle}
+                  backgroundColor={ui.surfaceMuted}
+                >
+                  <Text fontSize={11.5} fontWeight="700" color={ui.textSecondary}>
+                    {tag.replace(/_/g, ' ')}
+                  </Text>
+                </XStack>
+              ))}
+            </XStack>
+          ) : null}
+        </VendorDrawerSection>
+      ) : null}
 
       {returnTrackingNumber || returnShippingMode ? (
         <VendorDrawerSection ui={ui} label="Return shipment">
