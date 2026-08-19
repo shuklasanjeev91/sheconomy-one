@@ -16,6 +16,7 @@
 import { supabase } from '~/lib/supabase'
 import type { Database } from '~/lib/supabase'
 import { getStoragePublicUrl, uploadStorageObject } from '~/lib/supabase/storage-upload'
+import { INVALIDATION_TOPICS, invalidateCache } from '~/lib/cache/invalidation'
 
 import { toFriendlySaleError } from '~/lib/sale-event/sale-event.errors'
 import {
@@ -440,6 +441,7 @@ export async function updateEnrollmentStatus(
       .single()
 
     if (error) return fail(error)
+    invalidateCache(INVALIDATION_TOPICS.commerceSaleEvents)
     return ok(data)
   } catch (error) {
     return fail(error)
@@ -481,6 +483,7 @@ export async function joinEvent(
       .single()
 
     if (error) return fail(error)
+    invalidateCache(INVALIDATION_TOPICS.commerceSaleEvents)
     return ok(data)
   } catch (error) {
     return fail(error)
@@ -498,6 +501,7 @@ export async function withdrawEnrollment(
       .eq('id', enrollmentId)
 
     if (error) return fail(error)
+    invalidateCache(INVALIDATION_TOPICS.commerceSaleEvents)
     return ok({ id: enrollmentId })
   } catch (error) {
     return fail(error)

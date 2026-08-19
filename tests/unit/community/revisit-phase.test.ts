@@ -13,6 +13,12 @@ import { buildBuyerListingInquiryCards } from '~/commerce/lib/buyer-listing-inqu
 import { buildWishlistPriceDropCards } from '~/commerce/lib/wishlist-price-drops-home'
 import { buildProgramRevisitCards } from '~/class/lib/programs-revisit'
 import type { Program } from '~/class/lib/programs'
+import { buildUnreadChatRevisitCards } from '~/chat/lib/unread-chats-revisit'
+import type { ChatSummary } from '~/chat/lib/types'
+import { buildPendingReviewHomeCards } from '~/commerce/lib/pending-reviews-home'
+import type { PostPurchaseNudgeItem } from '~/commerce/lib/post-purchase-nudges'
+import { buildVendorSaleEventHomeCards } from '~/commerce/lib/vendor-sale-events-home'
+import type { EnrollmentWithEvent, SaleEventForVendor } from '~/lib/sale-event/sale-event.type'
 import { buildMeetingInviteRevisitCards } from '~/co-work/lib/meeting-invites-revisit'
 import { buildMeetingRevisitCards } from '~/co-work/lib/meeting-revisit'
 import type { Meeting } from '~/co-work/lib/types'
@@ -737,5 +743,172 @@ describe('buildProgramRevisitCards', () => {
     const cards = buildProgramRevisitCards(programs, 1)
     expect(cards[0]?.badge).toBe('Video')
     expect(String(cards[0]?.href)).toContain('mindful-leadership')
+  })
+})
+
+describe('buildPendingReviewHomeCards', () => {
+  it('keeps only review nudges from post-purchase items', () => {
+    const items: PostPurchaseNudgeItem[] = [
+      {
+        itemId: 'item-1',
+        listingId: 'listing-1',
+        listingSlug: 'dress',
+        title: 'Dress',
+        imageUrl: null,
+        quantity: 1,
+        listingType: 'physical',
+        source: 'review',
+        label: 'Review then buy again',
+        detail: 'Share feedback while it is fresh.',
+      },
+      {
+        itemId: 'item-2',
+        listingId: 'listing-2',
+        listingSlug: 'shoes',
+        title: 'Shoes',
+        imageUrl: null,
+        quantity: 1,
+        listingType: 'physical',
+        source: 'reorder',
+        label: 'Ready to reorder',
+        detail: 'Buy again quickly.',
+      },
+    ]
+
+    const cards = buildPendingReviewHomeCards(items, 3)
+    expect(cards.map((card) => card.itemId)).toEqual(['item-1'])
+    expect(String(cards[0]?.href)).toContain('dress')
+  })
+})
+
+describe('buildVendorSaleEventHomeCards', () => {
+  it('prioritizes pending enrollments and open registration events', () => {
+    const enrollments: EnrollmentWithEvent[] = [
+      {
+        id: 'enroll-1',
+        event_id: 'event-1',
+        shop_id: 'shop-1',
+        enrollment_status: 'accepted',
+        enrolled_at: '2026-08-01T00:00:00.000Z',
+        updated_at: '2026-08-01T00:00:00.000Z',
+        sale_events: {
+          id: 'event-1',
+          event_name: 'Monsoon Sale',
+          event_slug: 'monsoon-sale',
+          description: null,
+          start_date: '2026-08-20T00:00:00.000Z',
+          end_date: '2026-08-25T00:00:00.000Z',
+          banner_image: null,
+          status: 'active',
+        },
+      },
+      {
+        id: 'enroll-2',
+        event_id: 'event-2',
+        shop_id: 'shop-1',
+        enrollment_status: 'pending',
+        enrolled_at: '2026-08-18T00:00:00.000Z',
+        updated_at: '2026-08-18T00:00:00.000Z',
+        sale_events: {
+          id: 'event-2',
+          event_name: 'Festive Sale',
+          event_slug: 'festive-sale',
+          description: null,
+          start_date: '2026-08-22T00:00:00.000Z',
+          end_date: '2026-08-30T00:00:00.000Z',
+          banner_image: null,
+          status: 'active',
+        },
+      },
+    ]
+
+    const activeEvents: SaleEventForVendor[] = [
+      {
+        id: 'event-3',
+        event_name: 'New Event',
+        event_slug: 'new-event',
+        description: null,
+        start_date: '2026-08-24T00:00:00.000Z',
+        end_date: '2026-08-28T00:00:00.000Z',
+        banner_image: null,
+        status: 'active',
+        registration_start_date: null,
+        registration_end_date: null,
+      } as SaleEventForVendor,
+    ]
+
+    const cards = buildVendorSaleEventHomeCards(enrollments, activeEvents, 3)
+    expect(cards.map((card) => card.id)).toEqual(['enroll-2', 'open-event-3', 'enroll-1'])
+  })
+})
+
+describe('buildUnreadChatRevisitCards', () => {
+  it('sorts unread chats by latest message and skips archived rows', () => {
+    const chats: ChatSummary[] = [
+      {
+        id: 'old',
+        name: 'Old chat',
+        type: 'direct',
+        lastMessage: 'Earlier',
+        lastMessageType: 'text',
+        lastMessageTime: '2026-08-18T10:00:00.000Z',
+        lastMessageSenderName: null,
+        unreadCount: 2,
+        avatarUrl: null,
+        otherUserId: 'user-1',
+        otherUserName: 'Old chat',
+        otherUserAvatar: null,
+        isOnline: false,
+        lastSeen: null,
+        currentUserRole: 'member',
+        isPinned: false,
+        isMuted: false,
+        isArchived: false,
+      },
+      {
+        id: 'new',
+        name: 'New chat',
+        type: 'direct',
+        lastMessage: 'Hey there',
+        lastMessageType: 'text',
+        lastMessageTime: '2026-08-19T12:00:00.000Z',
+        lastMessageSenderName: null,
+        unreadCount: 5,
+        avatarUrl: null,
+        otherUserId: 'user-2',
+        otherUserName: 'New chat',
+        otherUserAvatar: null,
+        isOnline: true,
+        lastSeen: null,
+        currentUserRole: 'member',
+        isPinned: false,
+        isMuted: false,
+        isArchived: false,
+      },
+      {
+        id: 'archived',
+        name: 'Archived',
+        type: 'group',
+        lastMessage: 'Ignore me',
+        lastMessageType: 'text',
+        lastMessageTime: '2026-08-19T13:00:00.000Z',
+        lastMessageSenderName: null,
+        unreadCount: 9,
+        avatarUrl: null,
+        otherUserId: null,
+        otherUserName: null,
+        otherUserAvatar: null,
+        isOnline: false,
+        lastSeen: null,
+        currentUserRole: 'member',
+        isPinned: false,
+        isMuted: false,
+        isArchived: true,
+      },
+    ]
+
+    const cards = buildUnreadChatRevisitCards(chats, 2)
+    expect(cards.map((card) => card.chatId)).toEqual(['new', 'old'])
+    expect(cards[0]?.unreadCount).toBe(5)
   })
 })

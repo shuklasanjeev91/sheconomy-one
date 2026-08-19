@@ -55,4 +55,6 @@ export const INVALIDATION_TOPICS = {
   commerceInquiries: 'commerce-inquiries',
   coWorkMeetings: 'co-work-meetings',
   classEnrollments: 'class-enrollments',
+  commerceSaleEvents: 'commerce-sale-events',
+  chatConversations: 'chat-conversations',
 } as const

@@ -22,6 +22,7 @@ import { ProfileViewersStrip } from '~/community/components/ProfileViewersStrip'
 import { RecommendationInboxStrip } from '~/community/components/RecommendationInboxStrip'
 import { StoriesStrip } from '~/community/components/StoriesStrip'
 import { TodayCelebrationsCard } from '~/community/components/TodayCelebrationsCard'
+import { UnreadChatRevisitStrip } from '~/community/components/UnreadChatRevisitStrip'
 import { WishlistActivityStrip } from '~/community/components/WishlistActivityStrip'
 import { FeedComposer } from '~/community/components/FeedComposer'
 import { FeedFilterChips } from '~/community/components/FeedFilterChips'
@@ -47,6 +48,7 @@ export function CommunityFeedHeader({
       <CommunityForYouHub>
         <TodayCelebrationsCard />
         <NetworkInvitationsStrip />
+        <UnreadChatRevisitStrip />
         <NetworkSuggestionsStrip />
         <IntroductionInboxStrip />
         <RecommendationInboxStrip />
