@@ -13,6 +13,7 @@ import {
   YStack,
   useAppToast,
 } from '~/components/ui'
+import { ViewportOverlay } from '~/components/layout/ViewportOverlay'
 import { getShadowStyle, radius } from '~/config/tokens'
 import { useLockBodyScroll } from '~/hooks/useLockBodyScroll'
 import { useVendorCurrency } from '~/hooks/useVendorCurrency'
@@ -21,7 +22,7 @@ import { loadListingDetails } from '~/lib/listing/listing.store'
 import type { ListingDetails } from '~/lib/listing/listing.service'
 import { getPrimaryListingImage } from '~/lib/listing/listing.utils'
 import { getCurrencyName } from '~/lib/shop/current-shop-utils'
-import { overlayBackdropStyle } from '~/lib/layout/styles'
+import { overlayBackdropStyle, overlayPanelStyle } from '~/lib/layout/styles'
 import { commerceRoutes, vendorRoutes } from '~/lib/routes'
 import { useAppDispatch, useAppSelector } from '~/lib/store/hooks'
 import type { AppUiTokens } from '~/lib/theme/app-ui'
@@ -121,26 +122,23 @@ export function VendorListingDetailDrawer({
       : null
 
   return (
-    <>
+    <ViewportOverlay>
       <YStack
         key="listing-detail-backdrop"
+        backgroundColor="rgba(0,0,0,0.5)"
         style={overlayBackdropStyle()}
         zIndex={100000}
         onPress={onClose}
       />
       <YStack
         key="listing-detail-panel"
-        position="fixed"
-        top={0}
-        right={0}
-        bottom={0}
         width={isDesktop ? PANEL_WIDTH : '100%'}
         maxWidth="100%"
         zIndex={100001}
         backgroundColor={ui.background}
         borderLeftWidth={isDesktop ? 1 : 0}
         borderLeftColor={ui.borderSubtle}
-        style={getShadowStyle('lg')}
+        style={overlayPanelStyle()}
       >
         <XStack
           alignItems="center"
@@ -289,7 +287,7 @@ export function VendorListingDetailDrawer({
           </YStack>
         )}
       </YStack>
-    </>
+    </ViewportOverlay>
   )
 }
 

@@ -17,9 +17,10 @@ import {
   useAppToast,
 } from '~/components/ui'
 import { getShadowStyle, radius } from '~/config/tokens'
+import { ViewportOverlay } from '~/components/layout/ViewportOverlay'
 import { useLockBodyScroll } from '~/hooks/useLockBodyScroll'
 import { useVendorCurrency } from '~/hooks/useVendorCurrency'
-import { overlayBackdropStyle } from '~/lib/layout/styles'
+import { overlayBackdropStyle, overlayPanelStyle } from '~/lib/layout/styles'
 import { formatOrderAmount } from '~/lib/orders/order.utils'
 import { getPublicTrackingUrl } from '~/lib/orders/courier-tracking-urls'
 import {
@@ -68,20 +69,15 @@ export function VendorAddTrackingDrawer({
 
   if (!open || !item) return null
 
-  const panelPositionStyle =
-    Platform.OS === 'web'
-      ? ({ position: 'fixed' as const, top: 0, right: 0, bottom: 0, boxShadow: '-4px 0 24px rgba(0,0,0,0.18)' } as const)
-      : ({ position: 'absolute' as const, top: 0, right: 0, bottom: 0 } as const)
+  const panelPositionStyle = overlayPanelStyle()
 
   return (
-    <>
+    <ViewportOverlay>
       <YStack
         backgroundColor="rgba(0,0,0,0.5)"
         zIndex={100000}
         cursor="pointer"
         style={overlayBackdropStyle()}
-        animation="quick"
-        enterStyle={{ opacity: 0 }}
         onPress={submitting ? undefined : onClose}
       />
       <YStack
@@ -92,8 +88,6 @@ export function VendorAddTrackingDrawer({
         borderLeftColor={ui.borderSubtle}
         zIndex={100001}
         style={panelPositionStyle}
-        animation="quick"
-        enterStyle={{ x: PANEL_WIDTH }}
       >
         <TrackingForm
           ui={ui}
@@ -104,7 +98,7 @@ export function VendorAddTrackingDrawer({
           onSubmit={onSubmit}
         />
       </YStack>
-    </>
+    </ViewportOverlay>
   )
 }
 

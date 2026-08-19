@@ -1,11 +1,12 @@
 import { useEffect, useState } from 'react'
 import { Platform } from 'react-native'
 
+import { ViewportOverlay } from '~/components/layout/ViewportOverlay'
 import { Avatar, Button, Icons, Paragraph, ScrollView, Spinner, Text, TextArea, XStack, YStack } from '~/components/ui'
 import { StarRating } from '~/commerce/components/StarRating'
-import { getShadowStyle, radius } from '~/config/tokens'
+import { radius } from '~/config/tokens'
 import { useLockBodyScroll } from '~/hooks/useLockBodyScroll'
-import { overlayBackdropStyle } from '~/lib/layout/styles'
+import { overlayBackdropStyle, overlayPanelStyle } from '~/lib/layout/styles'
 import { SHOP_REVIEW_STATUS, SHOP_REVIEW_VALIDATION } from '~/lib/shop-review/shop-review.constants'
 import { toFriendlyShopReviewError } from '~/lib/shop-review/shop-review.errors'
 import { SHOP_REVIEW_UI_COPY, SHOP_REVIEW_RESPONSE_GUIDELINES } from '~/lib/shop-review/shop-review-ui.copy'
@@ -79,26 +80,15 @@ export function ShopReviewResponseDrawer({
     }
   }
 
-  const panelPositionStyle =
-    Platform.OS === 'web'
-      ? ({
-          position: 'fixed' as const,
-          top: 0,
-          right: 0,
-          bottom: 0,
-          boxShadow: '-4px 0 24px rgba(0,0,0,0.18)',
-        } as const)
-      : ({ position: 'absolute' as const, top: 0, right: 0, bottom: 0 } as const)
+  const panelPositionStyle = overlayPanelStyle()
 
   return (
-    <>
+    <ViewportOverlay>
       <YStack
         backgroundColor="rgba(0,0,0,0.5)"
         zIndex={100000}
         cursor="pointer"
         style={overlayBackdropStyle()}
-        animation="quick"
-        enterStyle={{ opacity: 0 }}
         onPress={submitting || isModerating ? undefined : onClose}
       />
       <YStack
@@ -108,9 +98,7 @@ export function ShopReviewResponseDrawer({
         borderLeftWidth={isDesktop ? 1 : 0}
         borderLeftColor={ui.borderSubtle}
         zIndex={100001}
-        style={{ ...panelPositionStyle, ...getShadowStyle('lg') }}
-        animation="quick"
-        enterStyle={{ x: isDesktop ? PANEL_WIDTH : 400, opacity: 0.96 }}
+        style={panelPositionStyle}
       >
         <XStack
           alignItems="flex-start"
@@ -320,6 +308,6 @@ export function ShopReviewResponseDrawer({
           )}
         </YStack>
       </YStack>
-    </>
+    </ViewportOverlay>
   )
 }
