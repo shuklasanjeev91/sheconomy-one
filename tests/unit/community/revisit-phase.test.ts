@@ -32,6 +32,11 @@ import type { EnrichedFulfillment } from '~/lib/orders/fulfillment.type'
 import { FULFILLMENT_STATUS } from '~/lib/orders/order.constants'
 import { buildIntroductionSentRevisitCards } from '~/community/lib/introductions'
 import type { IntroductionSentRequest } from '~/community/lib/introductions'
+import { buildVendorIssuesHomeCards } from '~/commerce/lib/vendor-issues-home'
+import type { EnrichedOrderIssue } from '~/lib/orders/order-issue.type'
+import { ISSUE_STATUS, ORDER_ISSUE_TYPE } from '~/lib/orders/order.constants'
+import { buildRecentMeetingRevisitCards } from '~/co-work/lib/recent-meeting-revisit'
+import type { Meeting } from '~/co-work/lib/types'
 import { buildMeetingInviteRevisitCards } from '~/co-work/lib/meeting-invites-revisit'
 import { buildMeetingRevisitCards } from '~/co-work/lib/meeting-revisit'
 import type { Meeting } from '~/co-work/lib/types'
@@ -1107,5 +1112,64 @@ describe('buildIntroductionSentRevisitCards', () => {
     expect(cards).toHaveLength(1)
     expect(cards[0]?.targetName).toBe('Target Person')
     expect(cards[0]?.message).toBe('Would love to connect')
+  })
+})
+
+describe('buildVendorIssuesHomeCards', () => {
+  it('surfaces actionable open issues and links to the issues queue', () => {
+    const pendingReturn: EnrichedOrderIssue = {
+      id: 'issue-1',
+      issue_type: ORDER_ISSUE_TYPE.RETURN_REQUEST,
+      status: ISSUE_STATUS.OPEN,
+      resolution_action: null,
+      issue_priority: 4,
+      order_items: { id: 'item-1', product_title: 'Serum' },
+    } as EnrichedOrderIssue
+    const resolved: EnrichedOrderIssue = {
+      id: 'issue-2',
+      issue_type: ORDER_ISSUE_TYPE.DAMAGED_ITEM,
+      status: ISSUE_STATUS.RESOLVED,
+      resolution_action: null,
+      issue_priority: 2,
+      order_items: { id: 'item-2', product_title: 'Cream' },
+    } as EnrichedOrderIssue
+
+    const cards = buildVendorIssuesHomeCards([resolved, pendingReturn], 3)
+
+    expect(cards).toHaveLength(1)
+    expect(cards[0]?.title).toBe('Serum')
+    expect(cards[0]?.badge).toBe('Needs decision')
+    expect(String(cards[0]?.href)).toContain('issues')
+  })
+})
+
+describe('buildRecentMeetingRevisitCards', () => {
+  it('labels live meetings and formats join links', () => {
+    const meeting: Meeting = {
+      id: 'm-1',
+      title: 'Weekly sync',
+      meeting_code: 'ABCDEFGHI',
+      host_id: 'host-1',
+      status: 'active',
+      scheduled_at: null,
+      started_at: '2026-08-19T12:00:00.000Z',
+      ended_at: null,
+      time_zone: null,
+      max_participants: null,
+      room_id: null,
+      security_settings: null,
+      meeting_options: null,
+      invitees: null,
+      created_at: '2026-08-19T12:00:00.000Z',
+      description: null,
+      host: null,
+    }
+
+    const cards = buildRecentMeetingRevisitCards([{ code: 'ABCDEFGHI', meeting }], 2)
+
+    expect(cards).toHaveLength(1)
+    expect(cards[0]?.title).toBe('Weekly sync')
+    expect(cards[0]?.badge).toBe('Live now')
+    expect(String(cards[0]?.href)).toContain('ABCDEFGHI')
   })
 })

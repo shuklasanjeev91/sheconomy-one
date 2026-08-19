@@ -322,6 +322,14 @@ export type SavedNotesRevisitCard = {
   href: string
 }
 
+export type SavedCollectionRevisitCard = {
+  collectionName: string
+  count: number
+  previewTitle: string
+  previewImageUrl: string | null
+  href: string
+}
+
 /** Article-style saved posts for a dedicated read-later revisit strip. */
 export function buildReadLaterRevisitCards(
   items: SavedCommunityPostEntry[],
@@ -362,4 +370,40 @@ export function buildSavedNotesRevisitCards(
       imageUrl: savedPostCardImage(entry),
       href: savedPostHref(entry),
     }))
+}
+
+/** Named saved-post collections worth revisiting as a group. */
+export function buildSavedCollectionRevisitCards(
+  items: SavedCommunityPostEntry[],
+  limit = 6,
+): SavedCollectionRevisitCard[] {
+  const grouped = new Map<string, SavedCommunityPostEntry[]>()
+
+  for (const entry of items) {
+    const name = normalizeCollectionName(entry.collectionName)
+    if (name === 'Saved') continue
+    const bucket = grouped.get(name) ?? []
+    bucket.push(entry)
+    grouped.set(name, bucket)
+  }
+
+  return [...grouped.entries()]
+    .sort((a, b) => {
+      const countDiff = b[1].length - a[1].length
+      if (countDiff !== 0) return countDiff
+      const aTime = a[1][0]?.createdAt ? Date.parse(a[1][0].createdAt) : 0
+      const bTime = b[1][0]?.createdAt ? Date.parse(b[1][0].createdAt) : 0
+      return bTime - aTime
+    })
+    .slice(0, limit)
+    .map(([collectionName, entries]) => {
+      const preview = entries[0]
+      return {
+        collectionName,
+        count: entries.length,
+        previewTitle: savedPostCardTitle(preview),
+        previewImageUrl: savedPostCardImage(preview),
+        href: String(communityRoutes.saved),
+      }
+    })
 }

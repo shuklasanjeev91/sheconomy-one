@@ -22,6 +22,7 @@ import { ProfessionalSpotlightStrip } from '~/community/components/ProfessionalS
 import { ProgramsRevisitStrip } from '~/community/components/ProgramsRevisitStrip'
 import { ProfileViewersStrip } from '~/community/components/ProfileViewersStrip'
 import { ReadLaterRevisitStrip } from '~/community/components/ReadLaterRevisitStrip'
+import { SavedCollectionRevisitStrip } from '~/community/components/SavedCollectionRevisitStrip'
 import { SavedNotesRevisitStrip } from '~/community/components/SavedNotesRevisitStrip'
 import { RecommendationInboxStrip } from '~/community/components/RecommendationInboxStrip'
 import { StoriesStrip } from '~/community/components/StoriesStrip'
@@ -67,6 +68,7 @@ export function CommunityFeedHeader({
         <PickUpAgainStrip />
         <ReadLaterRevisitStrip />
         <SavedNotesRevisitStrip />
+        <SavedCollectionRevisitStrip />
         <EventRevisitStrip />
         <JobRevisitStrip />
         <JobApplicationsRevisitStrip />

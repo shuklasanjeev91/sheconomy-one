@@ -6,6 +6,7 @@ import { AppLink } from '~/components/navigation/AppLink'
 import { PageContent, LAYOUT_STRETCH } from '~/components/layout'
 import { IdleMount } from '~/components/IdleMount'
 import { DevicePrepCard } from '~/co-work/components/DevicePrepCard'
+import { RecentMeetingRevisitStrip } from '~/co-work/components/RecentMeetingRevisitStrip'
 import { UpcomingMeetingsStrip } from '~/co-work/components/UpcomingMeetingsStrip'
 import {
   recordMeetingCode,
@@ -181,6 +182,7 @@ export function CoWorkScreen() {
         <IdleMount>
           <DevicePrepCard />
           <UpcomingMeetingsStrip refreshKey={meetingsRefreshKey} />
+          <RecentMeetingRevisitStrip />
         </IdleMount>
         <YStack gap="$4" position="relative">
           <CoWorkBrandChip label={BRAND_COWORK_LABEL} />

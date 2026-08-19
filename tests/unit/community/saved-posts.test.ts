@@ -37,6 +37,7 @@ vi.mock('~/community/lib/community', () => ({
 import {
   buildPickUpAgainCards,
   buildReadLaterRevisitCards,
+  buildSavedCollectionRevisitCards,
   buildSavedNotesRevisitCards,
   buildSavedPostSections,
   saveCommunityPost,
@@ -287,6 +288,25 @@ describe('saved posts', () => {
     expect(cards[0]?.postId).toBe('noted-post')
     expect(cards[0]?.note).toBe('follow up in September')
     expect(String(cards[0]?.href)).toContain('noted-post')
+  })
+
+  it('buildSavedCollectionRevisitCards groups named collections and skips the default bucket', () => {
+    const campaign = makeEntry(
+      makePost({ id: 'campaign-1', content: 'Launch teaser' }),
+      { collectionName: 'Q4 campaign' },
+    )
+    const campaignTwo = makeEntry(
+      makePost({ id: 'campaign-2', content: 'Launch recap' }),
+      { collectionName: 'Q4 campaign', createdAt: '2026-08-18T00:00:00.000Z' },
+    )
+    const defaultSaved = makeEntry(makePost({ id: 'plain-post', content: 'Plain save' }))
+
+    const cards = buildSavedCollectionRevisitCards([campaign, campaignTwo, defaultSaved], 4)
+
+    expect(cards).toHaveLength(1)
+    expect(cards[0]?.collectionName).toBe('Q4 campaign')
+    expect(cards[0]?.count).toBe(2)
+    expect(cards[0]?.previewTitle).toBe('Launch teaser')
   })
 
   it('normalizes fallback collections and trims notes when updating saved post details', async () => {
