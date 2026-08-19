@@ -9,6 +9,7 @@ import { FollowedShopActivityStrip } from '~/community/components/FollowedShopAc
 import { GroupsRevisitStrip } from '~/community/components/GroupsRevisitStrip'
 import { HashtagRevisitStrip } from '~/community/components/HashtagRevisitStrip'
 import { IntroductionInboxStrip } from '~/community/components/IntroductionInboxStrip'
+import { IntroductionSentRevisitStrip } from '~/community/components/IntroductionSentRevisitStrip'
 import { JobApplicationsRevisitStrip } from '~/community/components/JobApplicationsRevisitStrip'
 import { JobRevisitStrip } from '~/community/components/JobRevisitStrip'
 import { MeetingInvitesRevisitStrip } from '~/community/components/MeetingInvitesRevisitStrip'
@@ -21,6 +22,7 @@ import { ProfessionalSpotlightStrip } from '~/community/components/ProfessionalS
 import { ProgramsRevisitStrip } from '~/community/components/ProgramsRevisitStrip'
 import { ProfileViewersStrip } from '~/community/components/ProfileViewersStrip'
 import { ReadLaterRevisitStrip } from '~/community/components/ReadLaterRevisitStrip'
+import { SavedNotesRevisitStrip } from '~/community/components/SavedNotesRevisitStrip'
 import { RecommendationInboxStrip } from '~/community/components/RecommendationInboxStrip'
 import { StoriesStrip } from '~/community/components/StoriesStrip'
 import { TodayCelebrationsCard } from '~/community/components/TodayCelebrationsCard'
@@ -54,6 +56,7 @@ export function CommunityFeedHeader({
         <UnreadChatRevisitStrip />
         <NetworkSuggestionsStrip />
         <IntroductionInboxStrip />
+        <IntroductionSentRevisitStrip />
         <RecommendationInboxStrip />
         <ProfileViewersStrip />
         <MeetingInvitesRevisitStrip />
@@ -63,6 +66,7 @@ export function CommunityFeedHeader({
         <ProgramsRevisitStrip />
         <PickUpAgainStrip />
         <ReadLaterRevisitStrip />
+        <SavedNotesRevisitStrip />
         <EventRevisitStrip />
         <JobRevisitStrip />
         <JobApplicationsRevisitStrip />

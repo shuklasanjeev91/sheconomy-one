@@ -1,3 +1,4 @@
+import { communityRoutes } from '~/lib/routes'
 import { supabase } from '~/lib/supabase/client'
 import { INVALIDATION_TOPICS, invalidateCache } from '~/lib/cache/invalidation'
 
@@ -128,6 +129,87 @@ export async function fetchIntroductionInbox(
   })
 
   return { items, error: null }
+}
+
+export type IntroductionSentRequest = {
+  id: string
+  introducer_id: string
+  target_id: string
+  message: string | null
+  status: IntroductionStatus
+  created_at: string
+  introducer_name: string
+  introducer_avatar: string | null
+  target_name: string
+  target_avatar: string | null
+}
+
+export type IntroductionSentRevisitCard = {
+  id: string
+  introducerName: string
+  introducerAvatar: string | null
+  targetName: string
+  message: string | null
+}
+
+/** Pending intros the viewer requested from mutual connections. */
+export async function fetchIntroductionSent(
+  userId: string,
+): Promise<{ items: IntroductionSentRequest[]; error: string | null }> {
+  const { data, error } = await supabase
+    .from('introduction_requests')
+    .select('*')
+    .eq('requester_id', userId)
+    .eq('status', 'pending')
+    .order('created_at', { ascending: false })
+    .limit(40)
+
+  if (error) return { items: [], error: error.message }
+  const rows = data ?? []
+  if (!rows.length) return { items: [], error: null }
+
+  const profileIds = [...new Set(rows.flatMap((row) => [row.introducer_id, row.target_id]))]
+  const { data: profiles } = await supabase
+    .from('profiles')
+    .select('id, full_name, username, avatar_url')
+    .in('id', profileIds)
+  const byId = new Map((profiles ?? []).map((profile) => [profile.id, profile]))
+
+  const items: IntroductionSentRequest[] = rows.map((row) => {
+    const introducer = byId.get(row.introducer_id)
+    const target = byId.get(row.target_id)
+    return {
+      id: row.id,
+      introducer_id: row.introducer_id,
+      target_id: row.target_id,
+      message: row.message,
+      status: row.status as IntroductionStatus,
+      created_at: row.created_at,
+      introducer_name: introducer?.full_name || introducer?.username || 'Member',
+      introducer_avatar: introducer?.avatar_url ?? null,
+      target_name: target?.full_name || target?.username || 'Member',
+      target_avatar: target?.avatar_url ?? null,
+    }
+  })
+
+  return { items, error: null }
+}
+
+export function buildIntroductionSentRevisitCards(
+  items: IntroductionSentRequest[],
+  limit = 4,
+): IntroductionSentRevisitCard[] {
+  return items.slice(0, limit).map((item) => ({
+    id: item.id,
+    introducerName: item.introducer_name,
+    introducerAvatar: item.introducer_avatar,
+    targetName: item.target_name,
+    message: item.message,
+  }))
+}
+
+export function introductionSentRevisitSeeAllHref() {
+  return communityRoutes.network
 }
 
 export async function respondToIntroduction(

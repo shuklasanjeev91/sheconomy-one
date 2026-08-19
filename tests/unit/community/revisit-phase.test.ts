@@ -27,6 +27,11 @@ import { buildPendingReviewHomeCards } from '~/commerce/lib/pending-reviews-home
 import type { PostPurchaseNudgeItem } from '~/commerce/lib/post-purchase-nudges'
 import { buildVendorSaleEventHomeCards } from '~/commerce/lib/vendor-sale-events-home'
 import type { EnrollmentWithEvent, SaleEventForVendor } from '~/lib/sale-event/sale-event.type'
+import { buildVendorFulfillmentHomeCards } from '~/commerce/lib/vendor-fulfillment-home'
+import type { EnrichedFulfillment } from '~/lib/orders/fulfillment.type'
+import { FULFILLMENT_STATUS } from '~/lib/orders/order.constants'
+import { buildIntroductionSentRevisitCards } from '~/community/lib/introductions'
+import type { IntroductionSentRequest } from '~/community/lib/introductions'
 import { buildMeetingInviteRevisitCards } from '~/co-work/lib/meeting-invites-revisit'
 import { buildMeetingRevisitCards } from '~/co-work/lib/meeting-revisit'
 import type { Meeting } from '~/co-work/lib/types'
@@ -1051,5 +1056,56 @@ describe('buildVendorPausedListingHomeCards', () => {
 
     expect(cards[0]?.title).toBe('Paused bag')
     expect(String(cards[0]?.href)).toContain('paused-1')
+  })
+})
+
+describe('buildVendorFulfillmentHomeCards', () => {
+  it('prioritizes actionable fulfilments and links to the fulfilments queue', () => {
+    const pending: EnrichedFulfillment = {
+      id: 'f-pending',
+      fulfillment_status: FULFILLMENT_STATUS.PENDING,
+      fulfillment_number: 'F-100',
+      priority_level: 3,
+      created_at: '2026-08-19T00:00:00.000Z',
+      order_items: { id: 'item-1', product_title: 'Serum', orders: { order_number: '1001' } },
+    } as EnrichedFulfillment
+    const delivered: EnrichedFulfillment = {
+      id: 'f-done',
+      fulfillment_status: FULFILLMENT_STATUS.DELIVERED,
+      fulfillment_number: 'F-200',
+      priority_level: 3,
+      created_at: '2026-08-18T00:00:00.000Z',
+      order_items: { id: 'item-2', product_title: 'Cream' },
+    } as EnrichedFulfillment
+
+    const cards = buildVendorFulfillmentHomeCards([delivered, pending], 3)
+
+    expect(cards).toHaveLength(1)
+    expect(cards[0]?.title).toBe('Serum')
+    expect(String(cards[0]?.href)).toContain('fulfillments')
+  })
+})
+
+describe('buildIntroductionSentRevisitCards', () => {
+  it('limits pending sent introduction cards', () => {
+    const items: IntroductionSentRequest[] = [
+      {
+        id: 'intro-1',
+        introducer_id: 'introducer-1',
+        target_id: 'target-1',
+        message: 'Would love to connect',
+        status: 'pending',
+        created_at: '2026-08-19T00:00:00.000Z',
+        introducer_name: 'Mutual Friend',
+        introducer_avatar: null,
+        target_name: 'Target Person',
+        target_avatar: null,
+      },
+    ]
+
+    const cards = buildIntroductionSentRevisitCards(items, 2)
+    expect(cards).toHaveLength(1)
+    expect(cards[0]?.targetName).toBe('Target Person')
+    expect(cards[0]?.message).toBe('Would love to connect')
   })
 })

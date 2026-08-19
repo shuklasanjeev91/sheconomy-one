@@ -18,6 +18,7 @@ import { VendorDraftListingsHomeStrip } from '~/commerce/components/VendorDraftL
 import { VendorLowStockHomeStrip } from '~/commerce/components/VendorLowStockHomeStrip'
 import { VendorPausedListingsHomeStrip } from '~/commerce/components/VendorPausedListingsHomeStrip'
 import { VendorSaleEventsHomeStrip } from '~/commerce/components/VendorSaleEventsHomeStrip'
+import { VendorFulfillmentHomeStrip } from '~/commerce/components/VendorFulfillmentHomeStrip'
 import { VendorSlaHomeStrip } from '~/commerce/components/VendorSlaHomeStrip'
 import { WishlistPriceDropHomeStrip } from '~/commerce/components/WishlistPriceDropHomeStrip'
 import { RecentlyViewedRail } from '~/commerce/components/RecentlyViewedRail'
@@ -179,6 +180,7 @@ export function HomeScreen({ data, error, loading = false }: HomeScreenProps) {
           <PendingReviewsHomeStrip inset />
           <VendorSaleEventsHomeStrip inset />
           <VendorSlaHomeStrip inset />
+          <VendorFulfillmentHomeStrip inset />
           <VendorLowStockHomeStrip inset />
           <VendorDraftListingsHomeStrip inset />
           <VendorPausedListingsHomeStrip inset />

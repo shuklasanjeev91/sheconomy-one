@@ -313,6 +313,15 @@ export type ReadLaterRevisitCard = {
   href: string
 }
 
+export type SavedNotesRevisitCard = {
+  postId: string
+  title: string
+  note: string
+  collectionName: string
+  imageUrl: string | null
+  href: string
+}
+
 /** Article-style saved posts for a dedicated read-later revisit strip. */
 export function buildReadLaterRevisitCards(
   items: SavedCommunityPostEntry[],
@@ -328,4 +337,29 @@ export function buildReadLaterRevisitCards(
     imageUrl: savedPostCardImage(entry),
     href: String(communityRoutes.article(entry.postId)),
   }))
+}
+
+function savedPostHref(entry: SavedCommunityPostEntry) {
+  if (entry.post.post_type === 'article' || entry.post.article_title) {
+    return String(communityRoutes.article(entry.postId))
+  }
+  return String(communityRoutes.post(entry.postId))
+}
+
+/** Saved posts where the member left a personal note. */
+export function buildSavedNotesRevisitCards(
+  items: SavedCommunityPostEntry[],
+  limit = 6,
+): SavedNotesRevisitCard[] {
+  return items
+    .filter((entry) => Boolean(entry.notes?.trim()))
+    .slice(0, limit)
+    .map((entry) => ({
+      postId: entry.postId,
+      title: savedPostCardTitle(entry),
+      note: entry.notes?.trim() ?? '',
+      collectionName: entry.collectionName,
+      imageUrl: savedPostCardImage(entry),
+      href: savedPostHref(entry),
+    }))
 }

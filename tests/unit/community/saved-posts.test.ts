@@ -37,6 +37,7 @@ vi.mock('~/community/lib/community', () => ({
 import {
   buildPickUpAgainCards,
   buildReadLaterRevisitCards,
+  buildSavedNotesRevisitCards,
   buildSavedPostSections,
   saveCommunityPost,
   updateSavedCommunityPost,
@@ -271,6 +272,21 @@ describe('saved posts', () => {
     expect(cards).toHaveLength(1)
     expect(cards[0]?.title).toBe('How to scale a shop')
     expect(String(cards[0]?.href)).toContain('article-1')
+  })
+
+  it('buildSavedNotesRevisitCards returns only saved posts with personal notes', () => {
+    const withNote = makeEntry(
+      makePost({ id: 'noted-post', content: 'Campaign idea' }),
+      { notes: '  follow up in September  ' },
+    )
+    const plain = makeEntry(makePost({ id: 'plain-post', content: 'No note' }))
+
+    const cards = buildSavedNotesRevisitCards([plain, withNote], 4)
+
+    expect(cards).toHaveLength(1)
+    expect(cards[0]?.postId).toBe('noted-post')
+    expect(cards[0]?.note).toBe('follow up in September')
+    expect(String(cards[0]?.href)).toContain('noted-post')
   })
 
   it('normalizes fallback collections and trims notes when updating saved post details', async () => {
