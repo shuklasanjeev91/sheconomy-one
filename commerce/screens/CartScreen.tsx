@@ -37,6 +37,7 @@ import type { CartItemRow } from '~/commerce/lib/cart'
 import { paymentCollectionFor } from '~/commerce/lib/shop-commerce'
 import { deliveryEstimateLabel } from '~/commerce/lib/delivery-estimate'
 import { useFavorites } from '~/commerce/hooks/useFavorites'
+import { markWishlistItemSavedFromCart } from '~/commerce/lib/wishlist-reactivation'
 import { fetchListingStockByIds } from '~/commerce/lib/listing-fulfillment'
 import { fetchListingSlugMap, fetchListingTypesByIds, isDigitalListing } from '~/lib/supabase/commerce'
 import {
@@ -314,6 +315,7 @@ export function CartScreen() {
       })
       return
     }
+    await markWishlistItemSavedFromCart(listingId)
     toast.show('Moved to wishlist', {
       tone: 'success',
       message: 'Find it anytime under Wishlist.',
