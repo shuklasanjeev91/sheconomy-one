@@ -12,37 +12,48 @@ PLAYWRIGHT_SKIP_WEBSERVER=1 yarn test:smoke
 
 ## Guest (always runs)
 
-- Desktop Chromium + Mobile Chrome (iPhone 13)
+- Desktop Chromium + Mobile Chrome (iPhone 13 viewport on Chromium)
 - Public / semi-public route load without 5xx or `pageerror`
 - Center-tab and mobile bottom-tab interactions
+- Live high-risk guest checklist
 
-## Authenticated tiers (optional)
+## Authenticated tiers (A and/or C)
 
 Auth is OTP-based in the product, so Playwright cannot complete SMS login.
-Inject a Supabase session instead by exporting access + refresh tokens for each
-tier. Setup writes Playwright `storageState` files under `tests/smoke/.auth/`
-(gitignored). **If tokens are missing, those projects skip with a clear message** —
-guest coverage still runs.
+Sessions are injected via storageState under `tests/smoke/.auth/` (gitignored).
+
+### Path A — paste tokens
+
+After OTP sign-in in a real browser:
+
+1. DevTools → Application → Local Storage → `sb-zsaqrrzwygzwrlzgymxk-auth-token`
+2. Copy `access_token` and `refresh_token` into `.env.local` (never commit):
 
 | Tier | Env vars | Profile must satisfy |
 |------|----------|----------------------|
-| Limited | `SMOKE_LIMITED_ACCESS_TOKEN` `SMOKE_LIMITED_REFRESH_TOKEN` | Signed in; not both `gender=true` and `is_verified=true` |
+| Limited | `SMOKE_LIMITED_ACCESS_TOKEN` `SMOKE_LIMITED_REFRESH_TOKEN` | Not both `gender=true` and `is_verified=true` |
 | Verified female | `SMOKE_VERIFIED_ACCESS_TOKEN` `SMOKE_VERIFIED_REFRESH_TOKEN` | `gender=true`, `is_verified=true` |
-| Vendor | `SMOKE_VENDOR_ACCESS_TOKEN` `SMOKE_VENDOR_REFRESH_TOKEN` | Verified female + role `V` + shop |
-| Admin (optional) | `SMOKE_ADMIN_ACCESS_TOKEN` `SMOKE_ADMIN_REFRESH_TOKEN` | Role `A` |
+| Vendor | `SMOKE_VENDOR_ACCESS_TOKEN` `SMOKE_VENDOR_REFRESH_TOKEN` | Verified female + role `V` |
+| Admin | `SMOKE_ADMIN_ACCESS_TOKEN` `SMOKE_ADMIN_REFRESH_TOKEN` | Role `A` |
 
-Obtain tokens from a real browser session after OTP sign-in:
+### Path C — mint with service role
 
-1. Sign in as the test user on the web app.
-2. DevTools → Application → Local Storage → `sb-zsaqrrzwygzwrlzgymxk-auth-token`.
-3. Copy `access_token` and `refresh_token` into your shell / `.env.local` (never commit).
+```bash
+# Dashboard → Project Settings → API → service_role (secret)
+# Put in .env.local as SUPABASE_SERVICE_ROLE_KEY=...  (never commit)
 
-Optional: `SMOKE_SUPABASE_URL` / `SMOKE_SUPABASE_ANON_KEY` override the public defaults
-from `config/supabase-public.ts`.
+yarn smoke:mint
+yarn test:smoke
+```
 
-## What auth projects assert
+`yarn smoke:mint` prefers path A tokens when present; for any missing tier it looks up a matching `profiles` row (or `SMOKE_<TIER>_USER_ID`) and creates a magic-link session via the Admin API, writing `tests/smoke/.auth/<tier>.json`.
 
-- **Limited** on `/community`, `/chat`, `/create-my-shop` → verification UI or safe redirect; body not blank.
-- **Verified** on gender-gated + settings/profile → real surface; URL must **not** contain `gender=restricted`.
-- **Verified** account menu → Settings / Profile land on real routes (guards the account-menu regression).
+Optional: `source tests/smoke/.auth/env.exports` to export minted tokens into the current shell.
+
+### What auth projects assert
+
+- **Limited** on gender-gated routes → verification UI or safe gate; body not blank.
+- **Verified** → real surface; URL must **not** contain `gender=restricted`.
+- **Verified** account menu → Settings / Profile land on real routes.
 - **Vendor** on `/vendor/*` → console chrome, not Access denied / restricted.
+- **Admin** on `/admin` → console chrome.

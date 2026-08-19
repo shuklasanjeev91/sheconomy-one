@@ -1,3 +1,4 @@
+import fs from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 
@@ -13,11 +14,20 @@ export function authStatePath(tier: SmokeTier): string {
   return path.join(SMOKE_DIR, '.auth', `${tier}.json`)
 }
 
-export function hasSmokeTier(tier: SmokeTier): boolean {
+/** True when path A tokens are in the environment. */
+export function hasSmokeTokens(tier: SmokeTier): boolean {
   const prefix = `SMOKE_${tier.toUpperCase()}`
   return Boolean(
     process.env[`${prefix}_ACCESS_TOKEN`]?.trim() && process.env[`${prefix}_REFRESH_TOKEN`]?.trim(),
   )
+}
+
+/**
+ * True when this tier can run: path A tokens, or path C minted storageState
+ * already on disk under tests/smoke/.auth/.
+ */
+export function hasSmokeTier(tier: SmokeTier): boolean {
+  return hasSmokeTokens(tier) || fs.existsSync(authStatePath(tier))
 }
 
 export function smokeAuthAvailable(): boolean {

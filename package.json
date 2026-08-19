@@ -27,6 +27,7 @@
     "test:smoke:ui": "playwright test --ui",
     "test:unit": "vitest run",
     "test:unit:watch": "vitest",
+    "smoke:mint": "node scripts/smoke-mint-sessions.mjs",
     "supabase:types": "supabase gen types typescript --project-id zsaqrrzwygzwrlzgymxk > lib/supabase/database.types.ts",
     "desktop:dev": "electron electron/main.cjs",
     "desktop:build:win": "electron-builder --projectDir electron --win --x64 --config electron-builder.yml",

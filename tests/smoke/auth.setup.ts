@@ -6,7 +6,14 @@ import { test as setup } from '@playwright/test'
 import { createClient } from '@supabase/supabase-js'
 
 import { PUBLIC_SUPABASE_ANON_KEY, PUBLIC_SUPABASE_URL } from '../../config/supabase-public'
-import { AUTH_STORAGE_KEY, SMOKE_TIERS, type SmokeTier, authStatePath, hasSmokeTier } from './auth-env'
+import {
+  AUTH_STORAGE_KEY,
+  SMOKE_TIERS,
+  type SmokeTier,
+  authStatePath,
+  hasSmokeTier,
+  hasSmokeTokens,
+} from './auth-env'
 
 const AUTH_DIR = path.join(path.dirname(fileURLToPath(import.meta.url)), '.auth')
 
@@ -46,15 +53,23 @@ async function writeSessionState(tier: SmokeTier, accessToken: string, refreshTo
 
 setup.describe('smoke auth storageState', () => {
   for (const tier of SMOKE_TIERS) {
-    const access = process.env[`SMOKE_${tier.toUpperCase()}_ACCESS_TOKEN`]?.trim()
-    const refresh = process.env[`SMOKE_${tier.toUpperCase()}_REFRESH_TOKEN`]?.trim()
-
     setup(`prepare ${tier} session`, async () => {
-      if (!access || !refresh) {
-        setup.skip(true, `Missing SMOKE_${tier.toUpperCase()}_ACCESS_TOKEN / _REFRESH_TOKEN — auth project will skip`)
+      if (hasSmokeTokens(tier)) {
+        const access = process.env[`SMOKE_${tier.toUpperCase()}_ACCESS_TOKEN`]!.trim()
+        const refresh = process.env[`SMOKE_${tier.toUpperCase()}_REFRESH_TOKEN`]!.trim()
+        await writeSessionState(tier, access, refresh)
         return
       }
-      await writeSessionState(tier, access, refresh)
+
+      // Path C — yarn smoke:mint already wrote storageState.
+      if (fs.existsSync(authStatePath(tier))) {
+        return
+      }
+
+      setup.skip(
+        true,
+        `Missing SMOKE_${tier.toUpperCase()}_* tokens and no minted ${tier}.json — run yarn smoke:mint or set tokens`,
+      )
     })
   }
 
@@ -64,7 +79,7 @@ setup.describe('smoke auth storageState', () => {
     console.log(
       available.length
         ? `[smoke] auth tiers ready: ${available.join(', ')}`
-        : '[smoke] no SMOKE_* tokens — guest projects only',
+        : '[smoke] no SMOKE_* tokens or minted sessions — guest projects only',
     )
   })
 })
