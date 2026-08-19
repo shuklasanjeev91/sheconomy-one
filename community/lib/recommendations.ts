@@ -1,3 +1,4 @@
+import { appRoutes, communityRoutes } from '~/lib/routes'
 import { supabase } from '~/lib/supabase/client'
 import { INVALIDATION_TOPICS, invalidateCache } from '~/lib/cache/invalidation'
 import { notifyFromTemplate } from '~/lib/notifications/notify'
@@ -157,6 +158,92 @@ export async function fetchIncomingRecommendationRequests(
     }),
     error: null,
   }
+}
+
+export type RecommendationSentRequest = {
+  id: string
+  message: string | null
+  status: string
+  createdAt: string
+  requestedFromId: string
+  requestedFromName: string
+  requestedFromAvatar: string | null
+  requestedFromUsername: string | null
+}
+
+export type RecommendationSentRevisitCard = {
+  id: string
+  requestedFromName: string
+  requestedFromAvatar: string | null
+  message: string | null
+  href: string
+}
+
+/** Pending recommendation asks the viewer sent to connections. */
+export async function fetchOutgoingRecommendationRequests(
+  userId: string,
+): Promise<{ items: RecommendationSentRequest[]; error: string | null }> {
+  const { data, error } = await supabase
+    .from('recommendation_requests')
+    .select('id, message, status, created_at, requested_from_id')
+    .eq('requester_id', userId)
+    .eq('status', 'pending')
+    .order('created_at', { ascending: false })
+    .limit(40)
+
+  if (error) return { items: [], error: error.message }
+
+  const recipientIds = [...new Set((data ?? []).map((row) => row.requested_from_id))]
+  const { data: profiles } = recipientIds.length
+    ? await supabase
+        .from('profiles')
+        .select('id, full_name, username, avatar_url')
+        .in('id', recipientIds)
+    : { data: [] as Array<{
+        id: string
+        full_name: string | null
+        username: string | null
+        avatar_url: string | null
+      }> }
+
+  const byId = new Map((profiles ?? []).map((profile) => [profile.id, profile]))
+
+  return {
+    items: (data ?? []).map((row) => {
+      const profile = byId.get(row.requested_from_id)
+      return {
+        id: row.id,
+        message: row.message,
+        status: row.status ?? 'pending',
+        createdAt: row.created_at ?? new Date().toISOString(),
+        requestedFromId: row.requested_from_id,
+        requestedFromName: profile?.full_name || profile?.username || 'Member',
+        requestedFromAvatar: profile?.avatar_url ?? null,
+        requestedFromUsername: profile?.username ?? null,
+      }
+    }),
+    error: null,
+  }
+}
+
+export function buildRecommendationSentRevisitCards(
+  items: RecommendationSentRequest[],
+  limit = 4,
+): RecommendationSentRevisitCard[] {
+  return items.slice(0, limit).map((item) => {
+    const handle = item.requestedFromUsername?.trim() || item.requestedFromId
+    return {
+      id: item.id,
+      requestedFromName: item.requestedFromName,
+      requestedFromAvatar: item.requestedFromAvatar,
+      message: item.message,
+      href: String(appRoutes.userProfile(handle)),
+    }
+  })
+}
+
+export function recommendationSentRevisitSeeAllHref() {
+  return communityRoutes.network
 }
 
 /** Ask a connection to write a recommendation for you. */

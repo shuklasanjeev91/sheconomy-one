@@ -9,6 +9,7 @@ import { FollowedShopsRail } from '~/commerce/components/FollowedShopsRail'
 import { HomeHeroSlider, buildHomeHeroSlides } from '~/commerce/components/HomeHeroSlider'
 import { InfiniteHorizontalSection } from '~/commerce/components/InfiniteHorizontalSection'
 import { InfiniteListingSection } from '~/commerce/components/InfiniteListingSection'
+import { CartHomeStrip } from '~/commerce/components/CartHomeStrip'
 import { BuyerListingInquiryHomeStrip } from '~/commerce/components/BuyerListingInquiryHomeStrip'
 import { BuyerOrderAttentionStrip } from '~/commerce/components/BuyerOrderAttentionStrip'
 import { PendingReviewsHomeStrip } from '~/commerce/components/PendingReviewsHomeStrip'
@@ -18,6 +19,8 @@ import { VendorDraftListingsHomeStrip } from '~/commerce/components/VendorDraftL
 import { VendorLowStockHomeStrip } from '~/commerce/components/VendorLowStockHomeStrip'
 import { VendorPausedListingsHomeStrip } from '~/commerce/components/VendorPausedListingsHomeStrip'
 import { VendorSaleEventsHomeStrip } from '~/commerce/components/VendorSaleEventsHomeStrip'
+import { VendorInquiriesHomeStrip } from '~/commerce/components/VendorInquiriesHomeStrip'
+import { VendorReviewsHomeStrip } from '~/commerce/components/VendorReviewsHomeStrip'
 import { VendorIssuesHomeStrip } from '~/commerce/components/VendorIssuesHomeStrip'
 import { VendorFulfillmentHomeStrip } from '~/commerce/components/VendorFulfillmentHomeStrip'
 import { VendorSlaHomeStrip } from '~/commerce/components/VendorSlaHomeStrip'
@@ -176,6 +179,7 @@ export function HomeScreen({ data, error, loading = false }: HomeScreenProps) {
             inset
           />
           <RecentlyViewedRail inset />
+          <CartHomeStrip inset />
           <WishlistPriceDropHomeStrip inset />
           <SavedForLaterHomeStrip inset />
           <PendingReviewsHomeStrip inset />
@@ -183,6 +187,8 @@ export function HomeScreen({ data, error, loading = false }: HomeScreenProps) {
           <VendorSlaHomeStrip inset />
           <VendorFulfillmentHomeStrip inset />
           <VendorIssuesHomeStrip inset />
+          <VendorReviewsHomeStrip inset />
+          <VendorInquiriesHomeStrip inset />
           <VendorLowStockHomeStrip inset />
           <VendorDraftListingsHomeStrip inset />
           <VendorPausedListingsHomeStrip inset />

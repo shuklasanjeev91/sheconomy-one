@@ -157,6 +157,7 @@ export async function replyToVendorReview(reviewId: string, reply: string) {
     p_review_id: reviewId,
     p_reply: reply,
   } as never)
+  if (!error) invalidateCache(INVALIDATION_TOPICS.commerceListings)
   return error?.message ?? null
 }
 

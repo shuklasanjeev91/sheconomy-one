@@ -37,9 +37,17 @@ import type { EnrichedOrderIssue } from '~/lib/orders/order-issue.type'
 import { ISSUE_STATUS, ORDER_ISSUE_TYPE } from '~/lib/orders/order.constants'
 import { buildRecentMeetingRevisitCards } from '~/co-work/lib/recent-meeting-revisit'
 import type { Meeting } from '~/co-work/lib/types'
+import { buildRecommendationSentRevisitCards } from '~/community/lib/recommendations'
+import type { RecommendationSentRequest } from '~/community/lib/recommendations'
+import { buildProfileCompletionRevisitCard } from '~/community/lib/profile-completion-revisit'
+import { buildCartHomeCards } from '~/commerce/lib/cart-home'
+import type { CartItemRow } from '~/commerce/lib/cart'
+import { buildVendorReviewsHomeCards } from '~/commerce/lib/vendor-reviews-home'
+import type { VendorReview } from '~/commerce/lib/vendor-operations'
+import { buildVendorInquiriesHomeCards } from '~/commerce/lib/vendor-inquiries-home'
+import type { VendorInquiry } from '~/commerce/lib/vendor-operations'
 import { buildMeetingInviteRevisitCards } from '~/co-work/lib/meeting-invites-revisit'
 import { buildMeetingRevisitCards } from '~/co-work/lib/meeting-revisit'
-import type { Meeting } from '~/co-work/lib/types'
 import { buildCompaniesRevisitCards } from '~/community/lib/companies-revisit'
 import { selectBuyerReturnHomeCards } from '~/commerce/lib/buyer-return-home'
 import { buildBuyerRtoHomeCards } from '~/commerce/lib/buyer-rto-home'
@@ -1171,5 +1179,118 @@ describe('buildRecentMeetingRevisitCards', () => {
     expect(cards[0]?.title).toBe('Weekly sync')
     expect(cards[0]?.badge).toBe('Live now')
     expect(String(cards[0]?.href)).toContain('ABCDEFGHI')
+  })
+})
+
+describe('buildRecommendationSentRevisitCards', () => {
+  it('limits pending sent recommendation cards', () => {
+    const items: RecommendationSentRequest[] = [
+      {
+        id: 'rec-1',
+        message: 'Would love a short endorsement',
+        status: 'pending',
+        createdAt: '2026-08-19T00:00:00.000Z',
+        requestedFromId: 'member-1',
+        requestedFromName: 'Mentor Friend',
+        requestedFromAvatar: null,
+        requestedFromUsername: 'mentor',
+      },
+    ]
+
+    const cards = buildRecommendationSentRevisitCards(items, 2)
+    expect(cards).toHaveLength(1)
+    expect(String(cards[0]?.href)).toContain('mentor')
+  })
+})
+
+describe('buildProfileCompletionRevisitCard', () => {
+  it('returns null for complete profiles and a settings link otherwise', () => {
+    expect(buildProfileCompletionRevisitCard(100)).toBeNull()
+    const card = buildProfileCompletionRevisitCard(72)
+    expect(card?.percent).toBe(72)
+    expect(String(card?.href)).toContain('account')
+  })
+})
+
+describe('buildCartHomeCards', () => {
+  it('maps active cart rows to listing links', () => {
+    const items = [
+      {
+        id: 'cart-item-1',
+        listing_id: 'listing-1',
+        title: 'Serum',
+        shop_name: 'Glow',
+        unit_price: 900,
+        quantity: 2,
+        image_url: 'https://img/serum.jpg',
+      },
+    ] as CartItemRow[]
+
+    const cards = buildCartHomeCards(items, 2)
+    expect(cards[0]?.title).toBe('Serum')
+    expect(cards[0]?.quantity).toBe(2)
+    expect(String(cards[0]?.href)).toContain('listing-1')
+  })
+})
+
+describe('buildVendorReviewsHomeCards', () => {
+  it('includes only reviews without a vendor reply', () => {
+    const reviews: VendorReview[] = [
+      {
+        id: 'review-1',
+        listingTitle: 'Serum',
+        rating: 5,
+        title: 'Love it',
+        text: 'Great texture',
+        verified: true,
+        createdAt: '2026-08-19T00:00:00.000Z',
+        replyCount: 0,
+        vendorReply: null,
+      },
+      {
+        id: 'review-2',
+        listingTitle: 'Cream',
+        rating: 4,
+        title: null,
+        text: 'Nice',
+        verified: false,
+        createdAt: '2026-08-18T00:00:00.000Z',
+        replyCount: 1,
+        vendorReply: 'Thanks!',
+      },
+    ]
+
+    const cards = buildVendorReviewsHomeCards(reviews, 3)
+    expect(cards).toHaveLength(1)
+    expect(cards[0]?.listingTitle).toBe('Serum')
+    expect(String(cards[0]?.href)).toContain('reviews')
+  })
+})
+
+describe('buildVendorInquiriesHomeCards', () => {
+  it('includes open inquiries without seller replies', () => {
+    const inquiries: VendorInquiry[] = [
+      {
+        id: 'inq-1',
+        listingId: 'listing-1',
+        message: 'Do you ship to Pune?',
+        status: 'open',
+        reply: null,
+        createdAt: '2026-08-19T00:00:00.000Z',
+      },
+      {
+        id: 'inq-2',
+        listingId: 'listing-2',
+        message: 'Thanks',
+        status: 'closed',
+        reply: 'Yes we do',
+        createdAt: '2026-08-18T00:00:00.000Z',
+      },
+    ]
+
+    const cards = buildVendorInquiriesHomeCards(inquiries, 3)
+    expect(cards).toHaveLength(1)
+    expect(cards[0]?.preview).toContain('Pune')
+    expect(cards[0]?.badge).toBe('Needs reply')
   })
 })

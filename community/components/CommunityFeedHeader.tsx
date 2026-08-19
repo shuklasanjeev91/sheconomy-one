@@ -24,7 +24,9 @@ import { ProfileViewersStrip } from '~/community/components/ProfileViewersStrip'
 import { ReadLaterRevisitStrip } from '~/community/components/ReadLaterRevisitStrip'
 import { SavedCollectionRevisitStrip } from '~/community/components/SavedCollectionRevisitStrip'
 import { SavedNotesRevisitStrip } from '~/community/components/SavedNotesRevisitStrip'
+import { ProfileCompletionRevisitStrip } from '~/community/components/ProfileCompletionRevisitStrip'
 import { RecommendationInboxStrip } from '~/community/components/RecommendationInboxStrip'
+import { RecommendationSentRevisitStrip } from '~/community/components/RecommendationSentRevisitStrip'
 import { StoriesStrip } from '~/community/components/StoriesStrip'
 import { TodayCelebrationsCard } from '~/community/components/TodayCelebrationsCard'
 import { UnreadChatRevisitStrip } from '~/community/components/UnreadChatRevisitStrip'
@@ -52,6 +54,7 @@ export function CommunityFeedHeader({
     () => (
       <CommunityForYouHub>
         <TodayCelebrationsCard />
+        <ProfileCompletionRevisitStrip />
         <NetworkInvitationsStrip />
         <NetworkSentRevisitStrip />
         <UnreadChatRevisitStrip />
@@ -59,6 +62,7 @@ export function CommunityFeedHeader({
         <IntroductionInboxStrip />
         <IntroductionSentRevisitStrip />
         <RecommendationInboxStrip />
+        <RecommendationSentRevisitStrip />
         <ProfileViewersStrip />
         <MeetingInvitesRevisitStrip />
         <MeetingRevisitStrip />
