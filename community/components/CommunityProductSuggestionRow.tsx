@@ -6,22 +6,22 @@ import { AppLink } from '~/components/navigation/AppLink'
 import { useCommunityUi } from '~/community/lib/community-theme'
 import { buildSignInUrl } from '~/lib/auth/redirect'
 import { navigateApp } from '~/lib/platform/navigate'
+import { formatCurrency } from '~/lib/format'
 import { commerceRoutes } from '~/lib/routes'
+import { getCurrencySymbol } from '~/lib/shop/current-shop-utils'
 import { useSupabase } from '~/providers/SupabaseProvider'
 import { Button, Icons, Image, Spinner, Text, XStack, YStack, useAppToast } from '~/components/ui'
 import { radius } from '~/config/tokens'
 
 function formatPrice(price: number | null | undefined, currency: string | null | undefined) {
   if (price == null || Number.isNaN(price)) return ''
-  try {
-    return new Intl.NumberFormat('en-IN', {
-      style: 'currency',
-      currency: currency || 'INR',
-      maximumFractionDigits: 0,
-    }).format(price)
-  } catch {
-    return `${currency ?? '₹'}${price}`
+  const code = (currency || 'INR').trim().toUpperCase()
+  const formatted = formatCurrency(price, code)
+  // Hermes / some locales emit the ISO code ("INR 898") — prefer the symbol.
+  if (formatted.includes(code)) {
+    return formatted.replace(code, getCurrencySymbol(code)).replace(/\s+/, ' ').trim()
   }
+  return formatted
 }
 
 export function CommunityProductSuggestionRow({ item }: { item: CommunitySuggestion }) {
