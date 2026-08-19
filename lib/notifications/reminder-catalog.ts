@@ -31,9 +31,9 @@ export const REMINDER_FAMILIES: ReminderFamily[] = [
   {
     id: 'stock',
     title: 'Stock & restock',
-    description: 'Back-in-stock for buyers; low-stock for sellers',
+    description: 'Back-in-stock alerts for buyers plus low-stock alerts for sellers',
     settingsSection: 'commerce',
-    examples: ['Notify me when available', 'Low stock alert (sellers)'],
+    examples: ['Notify me when available', 'Back in stock again', 'Low stock alert (sellers)'],
   },
   {
     id: 'followed-shop-updates',

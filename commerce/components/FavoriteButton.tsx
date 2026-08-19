@@ -1,21 +1,28 @@
 import { useState } from 'react'
+import { useRouter } from 'one'
 
 import { WishlistMoveSheet } from '~/commerce/components/WishlistMoveSheet'
+import { subscribeStockAlert } from '~/commerce/lib/stock-alerts'
 import { Icons, XStack, useAppToast } from '~/components/ui'
 import { useFavorites } from '~/commerce/hooks/useFavorites'
 import { feedback } from '~/lib/platform/feedback'
+import { appRoutes } from '~/lib/routes'
 import { useAppUi } from '~/lib/theme/useAppUi'
+import { useSupabase } from '~/providers/SupabaseProvider'
 import { useAsyncAction } from '~/hooks/useAsyncAction'
 
 type FavoriteButtonProps = {
   listingId: string
   size?: number
+  restockEligible?: boolean
 }
 
 /** Heart overlay — top-right of listing image. */
-export function FavoriteButton({ listingId, size = 18 }: FavoriteButtonProps) {
+export function FavoriteButton({ listingId, size = 18, restockEligible = false }: FavoriteButtonProps) {
   const ui = useAppUi()
   const toast = useAppToast()
+  const router = useRouter()
+  const { user } = useSupabase()
   const { isFavorite, toggleFavorite } = useFavorites()
   const { run, pending } = useAsyncAction()
   const saved = isFavorite(listingId)
@@ -71,8 +78,31 @@ export function FavoriteButton({ listingId, size = 18 }: FavoriteButtonProps) {
               toast.show('Saved to wishlist', {
                 tone: 'success',
                 duration: 6000,
-                actionLabel: 'Save to…',
-                onAction: () => setMoveOpen(true),
+                actionLabel: restockEligible ? 'Notify me' : 'Save to…',
+                onAction: () => {
+                  if (!restockEligible) {
+                    setMoveOpen(true)
+                    return
+                  }
+                  if (!user?.id) {
+                    toast.show('Sign in to get alerts', {
+                      tone: 'default',
+                      message: 'We will notify you when this item is back in stock.',
+                    })
+                    router.push(appRoutes.signIn)
+                    return
+                  }
+                  void subscribeStockAlert(listingId, user.id).then(({ error }) => {
+                    if (error) {
+                      toast.show('Could not set alert', { tone: 'danger', message: error })
+                      return
+                    }
+                    toast.show('Restock alert added', {
+                      tone: 'success',
+                      message: 'We will let you know when this item is available again.',
+                    })
+                  })
+                },
               })
             }
           })

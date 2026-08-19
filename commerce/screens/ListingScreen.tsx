@@ -809,7 +809,7 @@ export function ListingScreen({
               <Icons.Image size={48} color={ui.textMuted} />
             </YStack>
           )}
-          <FavoriteButton listingId={listing.id} size={20} />
+          <FavoriteButton listingId={listing.id} size={20} restockEligible={outOfStock} />
         </YStack>
 
         {sortedImages.length > 1 ? (
