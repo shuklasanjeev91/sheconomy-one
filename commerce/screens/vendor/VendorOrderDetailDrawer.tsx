@@ -46,6 +46,7 @@ import {
   resolveOrderIssueRequest,
 } from '~/commerce/lib/customer-order-trust'
 import { autoBookReturnPickup } from '~/commerce/lib/vendor-return-pickup'
+import type { VendorInboxCoordination } from '~/commerce/lib/vendor-inbox-notes'
 import {
   RETURN_REJECT_REASON,
   RETURN_REJECT_REASON_LABELS,
@@ -69,6 +70,7 @@ type VendorOrderDetailDrawerProps = {
   item: VendorOrderItem | null
   loading: boolean
   updating: boolean
+  coordination?: VendorInboxCoordination | null
   payments: OrderPayment[]
   issues?: EnrichedOrderIssue[]
   role: string | null
@@ -97,6 +99,7 @@ export function VendorOrderDetailDrawer({
   item,
   loading,
   updating,
+  coordination,
   payments,
   issues = [],
   role,
@@ -141,6 +144,7 @@ export function VendorOrderDetailDrawer({
             ui={ui}
             item={item}
             updating={updating}
+            coordination={coordination ?? null}
             payments={payments}
             issues={issues}
             role={role}
@@ -185,6 +189,7 @@ type DrawerBodyProps = {
   ui: AppUiTokens
   item: VendorOrderItem
   updating: boolean
+  coordination: VendorInboxCoordination | null
   payments: OrderPayment[]
   issues: EnrichedOrderIssue[]
   role: string | null
@@ -200,6 +205,7 @@ function DrawerBody({
   ui,
   item,
   updating,
+  coordination,
   payments,
   issues,
   role,
@@ -602,6 +608,35 @@ function DrawerBody({
             </Text>
           </XStack>
         </Section>
+
+        {coordination?.note || coordination?.tags.length ? (
+          <Section ui={ui} label="Internal coordination">
+            {coordination.note ? (
+              <Text fontSize={12.5} color={ui.textSecondary} lineHeight={18}>
+                {coordination.note}
+              </Text>
+            ) : null}
+            {coordination.tags.length ? (
+              <XStack gap="$1.5" flexWrap="wrap">
+                {coordination.tags.map((tag) => (
+                  <XStack
+                    key={tag}
+                    paddingHorizontal="$2.5"
+                    paddingVertical="$1.5"
+                    borderRadius={999}
+                    borderWidth={1}
+                    borderColor={ui.borderSubtle}
+                    backgroundColor={ui.surfaceMuted}
+                  >
+                    <Text fontSize={11} fontWeight="700" color={ui.textSecondary}>
+                      {tag.replace(/_/g, ' ')}
+                    </Text>
+                  </XStack>
+                ))}
+              </XStack>
+            ) : null}
+          </Section>
+        ) : null}
 
         {/* Customer requests (cancellation / return / support) */}
         {issues.length > 0 ? (

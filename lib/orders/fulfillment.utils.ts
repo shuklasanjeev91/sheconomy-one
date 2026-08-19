@@ -270,6 +270,8 @@ export function eventTypeForStatus(status: FulfillmentStatus | string): Fulfillm
 // ============= QUEUE / TRIAGE =============
 
 export type FulfillmentLike = {
+  id?: string
+  fulfillment_number?: string | null
   fulfillment_status?: string | null
   priority_level?: number | null
   estimated_ship_date?: string | null
@@ -277,7 +279,46 @@ export type FulfillmentLike = {
   shipped_at?: string | null
   delivered_at?: string | null
   tracking_number?: string | null
+  last_failure_reason?: string | null
+  quantity_to_fulfill?: number | null
+  quantity_fulfilled?: number | null
   created_at?: string | null
+}
+
+export type FulfillmentControlLane =
+  | 'pick_now'
+  | 'pack_now'
+  | 'ready_to_ship'
+  | 'in_transit'
+  | 'exception'
+  | 'done'
+
+export type FulfillmentControlBlockerTone = 'info' | 'warning' | 'danger'
+
+export type FulfillmentControlBlocker = {
+  id: string
+  label: string
+  tone: FulfillmentControlBlockerTone
+}
+
+export type FulfillmentControlRow = {
+  lane: FulfillmentControlLane
+  laneLabel: string
+  readinessLabel: string
+  blockers: FulfillmentControlBlocker[]
+  isBatchEligible: boolean
+  needsAttention: boolean
+}
+
+export type FulfillmentControlSummary = Record<FulfillmentControlLane, number>
+
+export const FULFILLMENT_CONTROL_LANE_LABELS: Record<FulfillmentControlLane, string> = {
+  pick_now: 'Pick now',
+  pack_now: 'Pack now',
+  ready_to_ship: 'Ready to ship',
+  in_transit: 'In transit',
+  exception: 'Exceptions',
+  done: 'Done',
 }
 
 /** Not shipped and past its promised ship date. */
@@ -308,6 +349,169 @@ export function needsVendorAction(fulfillment: FulfillmentLike): boolean {
     isPendingFulfillmentStatus(fulfillment.fulfillment_status) ||
     isFulfillmentException(fulfillment.fulfillment_status)
   )
+}
+
+export function getFulfillmentControlLane(fulfillment: FulfillmentLike): FulfillmentControlLane {
+  const status = fulfillment.fulfillment_status
+  if (status === FULFILLMENT_STATUS.PENDING) return 'pick_now'
+  if (status === FULFILLMENT_STATUS.PROCESSING) return 'pack_now'
+  if (status === FULFILLMENT_STATUS.READY_TO_SHIP) return 'ready_to_ship'
+  if (
+    status === FULFILLMENT_STATUS.SHIPPED ||
+    status === FULFILLMENT_STATUS.OUT_FOR_DELIVERY
+  ) {
+    return 'in_transit'
+  }
+  if (
+    status === FULFILLMENT_STATUS.DELIVERED ||
+    status === FULFILLMENT_STATUS.CANCELLED ||
+    status === FULFILLMENT_STATUS.RETURNED ||
+    status === FULFILLMENT_STATUS.RETURNED_TO_SENDER
+  ) {
+    return 'done'
+  }
+  return 'exception'
+}
+
+export function getFulfillmentControlBlockers(
+  fulfillment: FulfillmentLike,
+  now = Date.now(),
+): FulfillmentControlBlocker[] {
+  const blockers: FulfillmentControlBlocker[] = []
+  const lane = getFulfillmentControlLane(fulfillment)
+  const outstanding = outstandingQuantity(fulfillment)
+
+  if (isOverdueFulfillment(fulfillment, now)) {
+    blockers.push({
+      id: 'overdue',
+      label:
+        lane === 'in_transit' ? 'Past promised delivery date' : 'Past promised ship date',
+      tone: 'danger',
+    })
+  }
+
+  if (
+    (fulfillment.fulfillment_status === FULFILLMENT_STATUS.READY_TO_SHIP ||
+      fulfillment.fulfillment_status === FULFILLMENT_STATUS.SHIPPED) &&
+    !fulfillment.tracking_number
+  ) {
+    blockers.push({
+      id: 'missing_tracking',
+      label: 'Tracking number missing',
+      tone: 'warning',
+    })
+  }
+
+  if (lane === 'exception' && fulfillment.last_failure_reason) {
+    blockers.push({
+      id: 'exception_reason',
+      label: fulfillment.last_failure_reason,
+      tone: 'danger',
+    })
+  }
+
+  if (
+    lane !== 'done' &&
+    lane !== 'in_transit' &&
+    outstanding > 0 &&
+    Number(fulfillment.quantity_fulfilled ?? 0) > 0
+  ) {
+    blockers.push({
+      id: 'partial_pick',
+      label: `${outstanding} unit${outstanding === 1 ? '' : 's'} still outstanding`,
+      tone: 'info',
+    })
+  }
+
+  return blockers
+}
+
+export function getFulfillmentControlRow(
+  fulfillment: FulfillmentLike,
+  now = Date.now(),
+): FulfillmentControlRow {
+  const lane = getFulfillmentControlLane(fulfillment)
+  const blockers = getFulfillmentControlBlockers(fulfillment, now)
+  return {
+    lane,
+    laneLabel: FULFILLMENT_CONTROL_LANE_LABELS[lane],
+    readinessLabel:
+      lane === 'pick_now'
+        ? 'Waiting to be picked'
+        : lane === 'pack_now'
+          ? 'Picking in progress'
+          : lane === 'ready_to_ship'
+            ? 'Packed and ready for carrier handoff'
+            : lane === 'in_transit'
+              ? 'Carrier updates in progress'
+              : lane === 'done'
+                ? 'No further handling required'
+                : 'Needs manual intervention',
+    blockers,
+    isBatchEligible: lane === 'ready_to_ship' && blockers.every((blocker) => blocker.id !== 'missing_tracking'),
+    needsAttention: lane === 'exception' || blockers.some((blocker) => blocker.tone === 'danger'),
+  }
+}
+
+export function summarizeFulfillmentControlLanes(
+  fulfillments: FulfillmentLike[],
+  now = Date.now(),
+): FulfillmentControlSummary {
+  const summary: FulfillmentControlSummary = {
+    pick_now: 0,
+    pack_now: 0,
+    ready_to_ship: 0,
+    in_transit: 0,
+    exception: 0,
+    done: 0,
+  }
+
+  for (const fulfillment of fulfillments) {
+    summary[getFulfillmentControlLane(fulfillment)] += 1
+    if (getFulfillmentControlRow(fulfillment, now).needsAttention && summary.exception >= 0) {
+      // already captured by lane for true exceptions; overdue ship risk stays in its work lane
+    }
+  }
+  return summary
+}
+
+export function filterFulfillmentsByControlLane<T extends FulfillmentLike>(
+  fulfillments: T[],
+  lane: FulfillmentControlLane | 'all',
+  now = Date.now(),
+): T[] {
+  if (lane === 'all') return fulfillments
+  return fulfillments.filter((fulfillment) => getFulfillmentControlRow(fulfillment, now).lane === lane)
+}
+
+export function canExportFulfillmentShipList(fulfillments: FulfillmentLike[], now = Date.now()): boolean {
+  return fulfillments.length > 0 && fulfillments.every((fulfillment) => getFulfillmentControlRow(fulfillment, now).isBatchEligible)
+}
+
+export function fulfillmentsToShipListCsv<T extends FulfillmentLike & {
+  order_items?: { orders?: { order_number?: string | null } | null; product_title?: string | null } | null
+}>(
+  fulfillments: T[],
+): string {
+  if (!fulfillments.length) return ''
+  const rows = [
+    ['Fulfillment', 'Order', 'Product', 'Lane', 'Tracking', 'Est ship date'],
+    ...fulfillments.map((fulfillment) => [
+      fulfillment.fulfillment_number ?? fulfillment.id ?? '—',
+      fulfillment.order_items?.orders?.order_number ?? '—',
+      fulfillment.order_items?.product_title ?? 'Product',
+      getFulfillmentControlLane(fulfillment).replace(/_/g, ' '),
+      fulfillment.tracking_number ?? '—',
+      fulfillment.estimated_ship_date ?? '—',
+    ]),
+  ]
+  return rows
+    .map((row) =>
+      row
+        .map((value) => `"${String(value ?? '').replace(/"/g, '""')}"`)
+        .join(','),
+    )
+    .join('\n')
 }
 
 /** Sort key for the pick-pack queue: exceptions and overdue work first. */

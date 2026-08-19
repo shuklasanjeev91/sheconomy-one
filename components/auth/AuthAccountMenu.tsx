@@ -32,7 +32,7 @@ type AuthUserMenuContentProps = {
 
 export function AuthUserMenuContent({ onClose }: AuthUserMenuContentProps) {
   const { profile } = useProfile()
-  const { tier, isMale, isFemale, isTierKnown } = useAccess()
+  const { tier, isFemale, isTierKnown } = useAccess()
   const { signOut } = useAuth()
   const { shops } = useVendorShops()
   const { itemCount: cartCount } = useCart()
@@ -91,11 +91,6 @@ export function AuthUserMenuContent({ onClose }: AuthUserMenuContentProps) {
   }
 
   function goProfile() {
-    if (isTierKnown && isMale) {
-      openHumanVerification({ returnTo: String(routes.profile) })
-      requestAnimationFrame(() => onClose())
-      return
-    }
     go(profileHref)
   }
 

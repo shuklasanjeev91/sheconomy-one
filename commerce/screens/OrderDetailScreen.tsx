@@ -6,6 +6,7 @@ import { CommercePageHeader, CommercePanel } from '~/commerce/components'
 import { CancelOrderSheet, OrderSupportSheet } from '~/commerce/components/OrderActionSheets'
 import { OrderPackageCard } from '~/commerce/components/OrderPackageCard'
 import { OrderTimeline } from '~/commerce/components/OrderTimeline'
+import { PostPurchaseNudgesSection } from '~/commerce/components/PostPurchaseNudgesSection'
 import {
   CancelReturnRequestSheet,
   ExchangeOrderItemSheet,
@@ -24,6 +25,7 @@ import {
   type CustomerOrderPackage,
 } from '~/commerce/lib/customer-orders'
 import {
+  buildBuyerRefundSummary,
   buildCustomerOrderTimeline,
   formatEstimatedDelivery,
   getBuyerReturnHubEntries,
@@ -32,6 +34,7 @@ import {
   refundStatusLabel,
   rejectReasonLabel,
 } from '~/commerce/lib/customer-order-lifecycle'
+import { buildPostPurchaseNudges, type PostPurchaseNudgeItem, type PostPurchaseNudgeSection } from '~/commerce/lib/post-purchase-nudges'
 import { fetchOrderDigitalDownload } from '~/commerce/lib/customer-order-trust'
 import { useCart } from '~/commerce/hooks/useCart'
 import {
@@ -164,6 +167,17 @@ export function OrderDetailScreen({ orderId }: OrderDetailScreenProps) {
       currency: order.currency,
     })
   }, [order])
+  const refundSummary = useMemo(() => buildBuyerRefundSummary(returnHubEntries), [returnHubEntries])
+  const postPurchaseNudges = useMemo(
+    () =>
+      order
+        ? buildPostPurchaseNudges({
+            orderStatus: order.order_status,
+            items: order.items,
+          })
+        : { sections: [], counts: { buyAgain: 0, reviewThenReorder: 0, careTips: 0 } },
+    [order],
+  )
 
   const orderEta = order ? formatEstimatedDelivery(order.estimated_delivery_date) : null
 
@@ -201,6 +215,56 @@ export function OrderDetailScreen({ orderId }: OrderDetailScreenProps) {
     toast.show('Nothing could be reordered', {
       tone: 'danger',
       message: skipped[0]?.reason ?? 'Those listings are unavailable.',
+    })
+  }
+
+  async function handleReorderItem(item: PostPurchaseNudgeItem) {
+    if (!order) return
+    const orderItem = order.items.find((current) => current.id === item.itemId)
+    if (!orderItem) return
+    const result = await addToCart(orderItem.listing_id, {
+      quantity: orderItem.quantity,
+      variantId: orderItem.variant_id,
+    })
+    if (result.error) {
+      toast.show('Could not reorder item', {
+        tone: 'danger',
+        message: result.error,
+      })
+      return
+    }
+    toast.show('Item added to cart', { tone: 'success' })
+    navigateApp(commerceRoutes.cart)
+  }
+
+  async function handleBulkReorder(section: PostPurchaseNudgeSection) {
+    if (!order) return
+    let added = 0
+    let blocked = 0
+    for (const item of section.items) {
+      const orderItem = order.items.find((current) => current.id === item.itemId)
+      if (!orderItem) {
+        blocked += 1
+        continue
+      }
+      const result = await addToCart(orderItem.listing_id, {
+        quantity: orderItem.quantity,
+        variantId: orderItem.variant_id,
+      })
+      if (result.error) blocked += 1
+      else added += 1
+    }
+    if (added > 0) {
+      toast.show(added === 1 ? 'Item added to cart' : `${added} items added to cart`, {
+        tone: 'success',
+        message: blocked > 0 ? `${blocked} item(s) couldn’t be added.` : undefined,
+      })
+      navigateApp(commerceRoutes.cart)
+      return
+    }
+    toast.show('Nothing could be reordered', {
+      tone: 'danger',
+      message: 'Those listings are unavailable right now.',
     })
   }
 
@@ -408,6 +472,20 @@ export function OrderDetailScreen({ orderId }: OrderDetailScreenProps) {
               <SummaryRow label="Tax" value={formatOrderAmount(order.tax_amount, order.currency)} />
             </YStack>
           </CommercePanel>
+
+          {postPurchaseNudges.sections.map((section) => (
+            <PostPurchaseNudgesSection
+              key={section.key}
+              section={section}
+              onReorder={(item) => void handleReorderItem(item)}
+              onWriteReview={(item) => {
+                const match = order.items.find((current) => current.id === item.itemId) ?? null
+                setReviewItem(match)
+              }}
+              onGetHelp={() => setSupportOpen(true)}
+              onBulkReorder={(current) => void handleBulkReorder(current)}
+            />
+          ))}
 
           {reviewableItems.length > 0 ? (
             <CommercePanel gap="$3" borderWidth={1} borderColor={ui.brand}>
@@ -686,6 +764,7 @@ export function OrderDetailScreen({ orderId }: OrderDetailScreenProps) {
 
           <BuyerReturnHub
             entries={returnHubEntries}
+                refundSummary={refundSummary}
             items={order.items}
             issues={order.issues}
             onCancelRequest={setCancelReturnItem}

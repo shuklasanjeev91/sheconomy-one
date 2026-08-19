@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react'
+import { Share } from 'react-native'
 
-import { Avatar, Button, Icons, Popover, PopoverContent, Spinner, Text, XStack, YStack, useAppToast } from '~/components/ui'
+import { Avatar, Button, Checkbox, Icons, Popover, PopoverContent, Spinner, Text, XStack, YStack, useAppToast } from '~/components/ui'
 import { getShadowStyle, radius } from '~/config/tokens'
 import { useAppLayout } from '~/hooks/useAppLayout'
 import { FULFILLMENT_STATUS, type FulfillmentStatus } from '~/lib/orders/order.constants'
@@ -19,6 +20,12 @@ import {
   updateFulfillmentStatus,
 } from '~/lib/orders/fulfillment.store'
 import {
+  FULFILLMENT_CONTROL_LANE_LABELS,
+  canExportFulfillmentShipList,
+  filterFulfillmentsByControlLane,
+  fulfillmentsToShipListCsv,
+  getFulfillmentControlRow,
+  summarizeFulfillmentControlLanes,
   FULFILLMENT_PRIORITY_OPTIONS,
   fulfillmentStatusLabel,
   getFulfillmentStatusDisplay,
@@ -48,6 +55,7 @@ const PAGE_SIZE = 10
 
 type StatusFilter = FulfillmentStatus | 'all'
 type PriorityFilter = number | 'all'
+type LaneFilter = keyof typeof FULFILLMENT_CONTROL_LANE_LABELS | 'all'
 
 const STATUS_OPTIONS: { value: StatusFilter; label: string }[] = [
   { value: 'all', label: 'All Statuses' },
@@ -101,8 +109,10 @@ export function VendorFulfillmentsPanel({
 
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('all')
   const [priorityFilter, setPriorityFilter] = useState<PriorityFilter>('all')
+  const [laneFilter, setLaneFilter] = useState<LaneFilter>('all')
   const [page, setPage] = useState(1)
   const [selectedId, setSelectedId] = useState<string | null>(null)
+  const [selectedIds, setSelectedIds] = useState<string[]>([])
   const [tracking, setTracking] = useState('')
   const [reason, setReason] = useState('')
   const [submitting, setSubmitting] = useState(false)
@@ -135,6 +145,11 @@ export function VendorFulfillmentsPanel({
 
   const ordered = useMemo(() => sortFulfillmentsByUrgency(fulfillments), [fulfillments])
   const summary = useMemo(() => summarizeFulfillmentQueue(fulfillments), [fulfillments])
+  const laneCounts = useMemo(() => summarizeFulfillmentControlLanes(fulfillments), [fulfillments])
+  const laneFiltered = useMemo(
+    () => filterFulfillmentsByControlLane(ordered, laneFilter),
+    [ordered, laneFilter],
+  )
 
   const statusCounts = useMemo(() => {
     const counts: Record<string, number> = {}
@@ -144,6 +159,11 @@ export function VendorFulfillmentsPanel({
     }
     return counts
   }, [fulfillments])
+  const selectedFulfillments = useMemo(
+    () => laneFiltered.filter((fulfillment) => selectedIds.includes(fulfillment.id)),
+    [laneFiltered, selectedIds],
+  )
+  const canExportSelected = canExportFulfillmentShipList(selectedFulfillments)
 
   const selected = useMemo<EnrichedFulfillment | null>(() => {
     if (!selectedId) return null
@@ -196,11 +216,37 @@ export function VendorFulfillmentsPanel({
     }
   }
 
-  const hasFilters = statusFilter !== 'all' || priorityFilter !== 'all'
+  useEffect(() => {
+    setSelectedIds((current) =>
+      current.filter((id) =>
+        laneFiltered.some((fulfillment) => fulfillment.id === id && getFulfillmentControlRow(fulfillment).isBatchEligible),
+      ),
+    )
+  }, [laneFiltered])
+
+  const hasFilters = statusFilter !== 'all' || priorityFilter !== 'all' || laneFilter !== 'all'
 
   const handleStatus = (value: StatusFilter) => {
     setStatusFilter(value)
     setPage(1)
+  }
+
+  function toggleSelected(id: string) {
+    setSelectedIds((current) =>
+      current.includes(id) ? current.filter((value) => value !== id) : [...current, id],
+    )
+  }
+
+  async function exportSelectedShipList() {
+    const csv = fulfillmentsToShipListCsv(selectedFulfillments)
+    if (!csv) {
+      toast.show('No ready rows selected', { tone: 'info' })
+      return
+    }
+    await Share.share({
+      title: 'Fulfillment ship list',
+      message: csv,
+    })
   }
 
   const total = pagination.total
@@ -256,6 +302,42 @@ export function VendorFulfillmentsPanel({
         </XStack>
 
         {tabs}
+
+        {selectedFulfillments.length > 0 ? (
+          <YStack
+            gap="$2"
+            padding="$4"
+            borderRadius={radius.card}
+            borderWidth={1}
+            borderColor={ui.borderSubtle}
+            backgroundColor={ui.surface}
+            style={getShadowStyle('sm')}
+          >
+            <Text fontSize={13} fontWeight="700" color={ui.text}>
+              {selectedFulfillments.length} ready-to-ship row{selectedFulfillments.length === 1 ? '' : 's'} selected
+            </Text>
+            <XStack gap="$2" flexWrap="wrap">
+              <Button
+                tone="outline"
+                size="$3"
+                borderRadius={999}
+                icon={<Icons.Download size={14} />}
+                disabled={!canExportSelected}
+                onPress={() => void exportSelectedShipList()}
+              >
+                Export ship list
+              </Button>
+              <Button
+                tone="ghost"
+                size="$3"
+                borderRadius={999}
+                onPress={() => setSelectedIds([])}
+              >
+                Clear selection
+              </Button>
+            </XStack>
+          </YStack>
+        ) : null}
 
         {/* Stat strip */}
         {fulfillments.length > 0 ? (
@@ -316,6 +398,25 @@ export function VendorFulfillmentsPanel({
           backgroundColor={ui.surface}
           style={getShadowStyle('sm')}
         >
+          <XStack gap="$2" flexWrap="wrap">
+            <FulfillmentQuickChip
+              ui={ui}
+              label="All lanes"
+              active={laneFilter === 'all'}
+              onPress={() => setLaneFilter('all')}
+            />
+            {(Object.keys(FULFILLMENT_CONTROL_LANE_LABELS) as Array<keyof typeof FULFILLMENT_CONTROL_LANE_LABELS>).map((lane) => (
+              <FulfillmentQuickChip
+                key={lane}
+                ui={ui}
+                label={FULFILLMENT_CONTROL_LANE_LABELS[lane]}
+                count={laneCounts[lane]}
+                active={laneFilter === lane}
+                onPress={() => setLaneFilter(lane)}
+              />
+            ))}
+          </XStack>
+
           <XStack gap="$3" flexWrap="wrap" alignItems="center">
             <FulfillmentFilterDropdown
               ui={ui}
@@ -361,33 +462,37 @@ export function VendorFulfillmentsPanel({
           <YStack alignItems="center" justifyContent="center" paddingVertical={64}>
             <Spinner size="large" />
           </YStack>
-        ) : ordered.length === 0 ? (
+        ) : laneFiltered.length === 0 ? (
           <FulfillmentsEmptyState ui={ui} hasFilters={hasFilters} />
         ) : isDesktop ? (
           <FulfillmentsTable
             ui={ui}
-            fulfillments={ordered}
+            fulfillments={laneFiltered}
             submitting={submitting}
+            selectedIds={selectedIds}
             onOpen={openDetail}
             onAction={runAction}
+            onToggleSelected={toggleSelected}
           />
         ) : (
           <YStack gap="$3">
-            {ordered.map((fulfillment) => (
+            {laneFiltered.map((fulfillment) => (
               <FulfillmentCard
                 key={fulfillment.id}
                 ui={ui}
                 fulfillment={fulfillment}
                 submitting={submitting}
+                selected={selectedIds.includes(fulfillment.id)}
                 onOpen={openDetail}
                 onAction={runAction}
+                onToggleSelected={toggleSelected}
               />
             ))}
           </YStack>
         )}
 
         {/* Pagination */}
-        {ordered.length > 0 ? (
+        {laneFiltered.length > 0 ? (
           <XStack alignItems="center" justifyContent="space-between" flexWrap="wrap" gap="$3" paddingTop="$1">
             <Text fontSize={12.5} color={ui.textMuted} fontWeight="600">
               Showing {rangeStart} to {rangeEnd} of {total} fulfilments
@@ -449,11 +554,13 @@ type TableProps = {
   ui: AppUiTokens
   fulfillments: EnrichedFulfillment[]
   submitting: boolean
+  selectedIds: string[]
   onOpen: (fulfillment: EnrichedFulfillment) => void
   onAction: (fulfillment: EnrichedFulfillment, action: VendorFulfillmentAction) => void
+  onToggleSelected: (id: string) => void
 }
 
-function FulfillmentsTable({ ui, fulfillments, submitting, onOpen, onAction }: TableProps) {
+function FulfillmentsTable({ ui, fulfillments, submitting, selectedIds, onOpen, onAction, onToggleSelected }: TableProps) {
   return (
     <YStack
       borderRadius={radius.card}
@@ -472,8 +579,10 @@ function FulfillmentsTable({ ui, fulfillments, submitting, onOpen, onAction }: T
         borderBottomColor={ui.borderSubtle}
         gap="$3"
       >
-        <FulfillmentHeaderCell flex={2.6} label="Shipment" />
+        <FulfillmentHeaderCell flex={0.6} label="Pick" />
+        <FulfillmentHeaderCell flex={2.2} label="Shipment" />
         <FulfillmentHeaderCell flex={1.6} label="Carrier / Tracking" />
+        <FulfillmentHeaderCell flex={1.2} label="Lane" />
         <FulfillmentHeaderCell flex={0.9} label="Priority" />
         <FulfillmentHeaderCell flex={1.3} label="Status" />
         <FulfillmentHeaderCell flex={1.1} label="Promised" />
@@ -486,9 +595,11 @@ function FulfillmentsTable({ ui, fulfillments, submitting, onOpen, onAction }: T
           ui={ui}
           fulfillment={fulfillment}
           submitting={submitting}
+          selected={selectedIds.includes(fulfillment.id)}
           isLast={index === fulfillments.length - 1}
           onOpen={onOpen}
           onAction={onAction}
+          onToggleSelected={onToggleSelected}
         />
       ))}
     </YStack>
@@ -517,18 +628,21 @@ type RowProps = {
   ui: AppUiTokens
   fulfillment: EnrichedFulfillment
   submitting: boolean
+  selected: boolean
   isLast: boolean
   onOpen: (fulfillment: EnrichedFulfillment) => void
   onAction: (fulfillment: EnrichedFulfillment, action: VendorFulfillmentAction) => void
+  onToggleSelected: (id: string) => void
 }
 
-function FulfillmentRow({ ui, fulfillment, submitting, isLast, onOpen, onAction }: RowProps) {
+function FulfillmentRow({ ui, fulfillment, submitting, selected, isLast, onOpen, onAction, onToggleSelected }: RowProps) {
   const item = fulfillment.order_items
   const actions = inlineActions(fulfillment)
+  const control = getFulfillmentControlRow(fulfillment)
   const overdue = isOverdueFulfillment(fulfillment)
   const exception = isFulfillmentException(fulfillment.fulfillment_status)
   const promised = fulfillment.estimated_ship_date ?? fulfillment.estimated_delivery_date
-  const needsAction = exception || overdue
+  const needsAction = control.needsAttention || exception || overdue
 
   return (
     <XStack
@@ -544,7 +658,17 @@ function FulfillmentRow({ ui, fulfillment, submitting, isLast, onOpen, onAction 
       animation="quick"
     >
       {/* Shipment details */}
-      <YStack flex={2.6} minWidth={0} gap={2} cursor="pointer" onPress={() => onOpen(fulfillment)}>
+      <XStack flex={0.6} justifyContent="center">
+        {control.isBatchEligible ? (
+          <Checkbox checked={selected} onCheckedChange={() => onToggleSelected(fulfillment.id)} />
+        ) : (
+          <Text fontSize={11} color={ui.textMuted}>
+            -
+          </Text>
+        )}
+      </XStack>
+
+      <YStack flex={2.2} minWidth={0} gap={2} cursor="pointer" onPress={() => onOpen(fulfillment)}>
         <Text fontSize={12.5} fontWeight="800" color={ui.brand} numberOfLines={1}>
           #{item?.orders?.order_number ?? fulfillment.fulfillment_number ?? '—'}
         </Text>
@@ -554,6 +678,37 @@ function FulfillmentRow({ ui, fulfillment, submitting, isLast, onOpen, onAction 
         <Text fontSize={11.5} color={ui.textMuted} numberOfLines={1}>
           {outstandingQuantity(fulfillment)} of {fulfillment.quantity_to_fulfill ?? 0} outstanding
         </Text>
+        <XStack gap="$1.5" flexWrap="wrap">
+          {control.blockers.map((blocker) => (
+            <XStack
+              key={`${fulfillment.id}-${blocker.id}`}
+              paddingHorizontal="$2"
+              paddingVertical="$1"
+              borderRadius={999}
+              backgroundColor={
+                blocker.tone === 'danger'
+                  ? toneStyle('red').bg
+                  : blocker.tone === 'warning'
+                    ? toneStyle('yellow').bg
+                    : ui.surfaceMuted
+              }
+            >
+              <Text
+                fontSize={10.5}
+                fontWeight="700"
+                color={
+                  blocker.tone === 'danger'
+                    ? toneStyle('red').fg
+                    : blocker.tone === 'warning'
+                      ? toneStyle('yellow').fg
+                      : ui.textSecondary
+                }
+              >
+                {blocker.label}
+              </Text>
+            </XStack>
+          ))}
+        </XStack>
       </YStack>
 
       {/* Carrier / Tracking */}
@@ -563,6 +718,15 @@ function FulfillmentRow({ ui, fulfillment, submitting, isLast, onOpen, onAction 
         </Text>
         <Text fontSize={11.5} color={ui.textMuted} numberOfLines={1}>
           {fulfillment.tracking_number ?? 'No tracking yet'}
+        </Text>
+      </YStack>
+
+      <YStack flex={1.2} minWidth={0} gap={1}>
+        <Text fontSize={12} fontWeight="700" color={ui.text}>
+          {control.laneLabel}
+        </Text>
+        <Text fontSize={10.5} color={ui.textMuted} numberOfLines={2}>
+          {control.readinessLabel}
         </Text>
       </YStack>
 
@@ -617,13 +781,16 @@ type CardProps = {
   ui: AppUiTokens
   fulfillment: EnrichedFulfillment
   submitting: boolean
+  selected: boolean
   onOpen: (fulfillment: EnrichedFulfillment) => void
   onAction: (fulfillment: EnrichedFulfillment, action: VendorFulfillmentAction) => void
+  onToggleSelected: (id: string) => void
 }
 
-function FulfillmentCard({ ui, fulfillment, submitting, onOpen, onAction }: CardProps) {
+function FulfillmentCard({ ui, fulfillment, submitting, selected, onOpen, onAction, onToggleSelected }: CardProps) {
   const item = fulfillment.order_items
   const actions = inlineActions(fulfillment)
+  const control = getFulfillmentControlRow(fulfillment)
   const overdue = isOverdueFulfillment(fulfillment)
   const exception = isFulfillmentException(fulfillment.fulfillment_status)
   const display = getFulfillmentStatusDisplay(fulfillment.fulfillment_status)
@@ -648,6 +815,9 @@ function FulfillmentCard({ ui, fulfillment, submitting, onOpen, onAction }: Card
           </Text>
           <Text fontSize={11.5} color={ui.textMuted} numberOfLines={2}>
             {display.description}
+          </Text>
+          <Text fontSize={11.5} fontWeight="700" color={ui.textSecondary}>
+            {control.laneLabel} · {control.readinessLabel}
           </Text>
         </YStack>
         <YStack gap="$1.5" alignItems="flex-end">
@@ -681,7 +851,51 @@ function FulfillmentCard({ ui, fulfillment, submitting, onOpen, onAction }: Card
         </Text>
       </XStack>
 
+      {control.blockers.length > 0 ? (
+        <XStack gap="$1.5" flexWrap="wrap">
+          {control.blockers.map((blocker) => (
+            <XStack
+              key={`${fulfillment.id}-${blocker.id}`}
+              paddingHorizontal="$2.5"
+              paddingVertical="$1.5"
+              borderRadius={999}
+              backgroundColor={
+                blocker.tone === 'danger'
+                  ? toneStyle('red').bg
+                  : blocker.tone === 'warning'
+                    ? toneStyle('yellow').bg
+                    : ui.surfaceMuted
+              }
+            >
+              <Text
+                fontSize={11}
+                fontWeight="700"
+                color={
+                  blocker.tone === 'danger'
+                    ? toneStyle('red').fg
+                    : blocker.tone === 'warning'
+                      ? toneStyle('yellow').fg
+                      : ui.textSecondary
+                }
+              >
+                {blocker.label}
+              </Text>
+            </XStack>
+          ))}
+        </XStack>
+      ) : null}
+
       <XStack gap="$2" flexWrap="wrap">
+        {control.isBatchEligible ? (
+          <Button
+            tone={selected ? 'primary' : 'outline'}
+            size="$3"
+            borderRadius={999}
+            onPress={() => onToggleSelected(fulfillment.id)}
+          >
+            {selected ? 'Selected for ship list' : 'Select for ship list'}
+          </Button>
+        ) : null}
         {actions.map((action) => (
           <VendorActionButton
             key={action.key}

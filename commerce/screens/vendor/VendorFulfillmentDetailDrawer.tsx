@@ -4,6 +4,7 @@ import { Icons, Input, Text, TextArea, XStack, YStack } from '~/components/ui'
 import { radius } from '~/config/tokens'
 import type { EnrichedFulfillment } from '~/lib/orders/fulfillment.type'
 import {
+  getFulfillmentControlRow,
   fulfillmentEventLabel,
   getFulfillmentProgress,
   getFulfillmentStatusDisplay,
@@ -97,6 +98,7 @@ export function VendorFulfillmentDetailDrawer({
   const display = getFulfillmentStatusDisplay(fulfillment.fulfillment_status)
   const overdue = isOverdueFulfillment(fulfillment)
   const progress = getFulfillmentProgress(fulfillment.fulfillment_status)
+  const control = getFulfillmentControlRow(fulfillment)
 
   const promptBlocked = (action: VendorFulfillmentAction) =>
     (action.prompt === 'tracking' && tracking.trim().length === 0) ||
@@ -191,6 +193,11 @@ export function VendorFulfillmentDetailDrawer({
         <VendorDrawerTile ui={ui} label="Status">
           <FulfillmentStatusBadge status={fulfillment.fulfillment_status} size="sm" />
         </VendorDrawerTile>
+        <VendorDrawerTile ui={ui} label="Lane">
+          <Text fontSize={13} fontWeight="800" color={ui.text}>
+            {control.laneLabel}
+          </Text>
+        </VendorDrawerTile>
         <VendorDrawerTile ui={ui} label="Priority">
           <FulfillmentPriorityBadge level={fulfillment.priority_level} />
         </VendorDrawerTile>
@@ -220,6 +227,55 @@ export function VendorFulfillmentDetailDrawer({
           />
         </YStack>
       </YStack>
+
+      <VendorDrawerSection ui={ui} label="Readiness checklist">
+        <VendorDrawerRow ui={ui} label="Current lane" value={control.laneLabel} />
+        <VendorDrawerRow ui={ui} label="Readiness" value={control.readinessLabel} />
+        <VendorDrawerRow
+          ui={ui}
+          label="Batch safe"
+          value={control.isBatchEligible ? 'Eligible for ship-list export' : 'Needs individual review'}
+        />
+        {control.blockers.length > 0 ? (
+          <YStack gap="$1.5">
+            <Text fontSize={11} fontWeight="700" color={ui.textMuted}>
+              Blockers
+            </Text>
+            {control.blockers.map((blocker) => (
+              <XStack
+                key={blocker.id}
+                padding="$2.5"
+                borderRadius={radius.chip}
+                backgroundColor={
+                  blocker.tone === 'danger'
+                    ? toneStyle('red').bg
+                    : blocker.tone === 'warning'
+                      ? toneStyle('yellow').bg
+                      : ui.surfaceMuted
+                }
+              >
+                <Text
+                  fontSize={12}
+                  fontWeight="700"
+                  color={
+                    blocker.tone === 'danger'
+                      ? toneStyle('red').fg
+                      : blocker.tone === 'warning'
+                        ? toneStyle('yellow').fg
+                        : ui.textSecondary
+                  }
+                >
+                  {blocker.label}
+                </Text>
+              </XStack>
+            ))}
+          </YStack>
+        ) : (
+          <Text fontSize={12.5} color={ui.textSecondary}>
+            No blockers detected. This shipment is ready for its next step.
+          </Text>
+        )}
+      </VendorDrawerSection>
 
       <VendorDrawerSection ui={ui} label="Item">
         <VendorDrawerRow ui={ui} label="Product" value={item?.product_title ?? 'Product'} />

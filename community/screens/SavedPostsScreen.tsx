@@ -6,9 +6,13 @@ import { Share } from 'react-native'
 import { CommunityPageHeader } from '~/community/components/CommunityPageHeader'
 import { CommunityShell } from '~/community/components/CommunityShell'
 import { FeedPostCard } from '~/community/components/FeedPostCard'
-import type { CommunityPost } from '~/community/lib/community'
 import { postHasMedia } from '~/community/lib/post-media'
-import { fetchSavedCommunityPosts, unsaveCommunityPost } from '~/community/lib/saved-posts'
+import {
+  buildSavedPostSections,
+  fetchSavedCommunityPosts,
+  unsaveCommunityPost,
+  type SavedCommunityPostEntry,
+} from '~/community/lib/saved-posts'
 import { HorizontalScrollRow } from '~/components/layout'
 import { ScreenSearchField } from '~/components/search'
 import { Button, Icons, Spinner, Text, XStack, YStack, useAppToast } from '~/components/ui'
@@ -34,7 +38,7 @@ const TYPE_FILTERS: Array<{ id: SavedTypeFilter; label: string }> = [
   { id: 'poll', label: 'Polls' },
 ]
 
-function matchesType(post: CommunityPost, filter: SavedTypeFilter) {
+function matchesType(post: SavedCommunityPostEntry['post'], filter: SavedTypeFilter) {
   if (filter === 'all') return true
   if (filter === 'media') {
     return postHasMedia(post)
@@ -46,11 +50,12 @@ export function SavedPostsScreen() {
   const ui = useAppUi()
   const toast = useAppToast()
   const { user, isLoading: authLoading } = useSupabase()
-  const [items, setItems] = useState<CommunityPost[]>([])
+  const [items, setItems] = useState<SavedCommunityPostEntry[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [query, setQuery] = useState('')
   const [typeFilter, setTypeFilter] = useState<SavedTypeFilter>('all')
+  const [collectionFilter, setCollectionFilter] = useState('All')
 
   async function reload(silent = false) {
     if (!user?.id) {
@@ -78,18 +83,29 @@ export function SavedPostsScreen() {
   })
 
   const visible = useMemo(() => {
-    const typed = items.filter((post) => matchesType(post, typeFilter))
-    return filterBySearchQuery(typed, query, (post) => [
-      post.content,
-      post.author?.full_name,
-      post.author?.username,
-      post.event_title,
-      post.post_type,
+    const collectionScoped =
+      collectionFilter === 'All'
+        ? items
+        : items.filter((entry) => entry.collectionName === collectionFilter)
+    const typed = collectionScoped.filter((entry) => matchesType(entry.post, typeFilter))
+    return filterBySearchQuery(typed, query, (entry) => [
+      entry.post.content,
+      entry.post.author?.full_name,
+      entry.post.author?.username,
+      entry.post.event_title,
+      entry.post.post_type,
+      entry.collectionName,
+      entry.notes,
     ])
-  }, [items, query, typeFilter])
+  }, [collectionFilter, items, query, typeFilter])
+  const sections = useMemo(() => buildSavedPostSections(visible), [visible])
+  const collectionNames = useMemo(
+    () => ['All', ...new Set(items.map((entry) => entry.collectionName))],
+    [items],
+  )
 
   async function handleShareSaved() {
-    const posts = visible.slice(0, 8)
+    const posts = visible.slice(0, 8).map((entry) => entry.post)
     if (!posts.length) {
       toast.show('Nothing to share yet', { tone: 'info' })
       return
@@ -119,7 +135,7 @@ export function SavedPostsScreen() {
     if (!user?.id) return
     const { error: unsaveError } = await unsaveCommunityPost(user.id, postId)
     if (!unsaveError) {
-      setItems((prev) => prev.filter((post) => post.id !== postId))
+      setItems((prev) => prev.filter((entry) => entry.post.id !== postId))
     }
   }
 
@@ -129,7 +145,7 @@ export function SavedPostsScreen() {
         <YStack flex={1} minWidth={220}>
           <CommunityPageHeader
             title="Saved posts"
-            subtitle="Posts you bookmarked to revisit later"
+            subtitle="Posts you bookmarked, organized into lightweight creator-pick and revisit lanes"
           />
         </YStack>
         <XStack alignItems="center" gap="$2">
@@ -155,6 +171,28 @@ export function SavedPostsScreen() {
             placeholder="Search saved posts"
             unifiedScope="posts"
           />
+          <HorizontalScrollRow gap={8}>
+            {collectionNames.map((collection) => {
+              const active = collectionFilter === collection
+              return (
+                <XStack
+                  key={collection}
+                  paddingHorizontal={12}
+                  paddingVertical={7}
+                  borderRadius={999}
+                  borderWidth={1}
+                  borderColor={active ? ui.brand : ui.borderSubtle}
+                  backgroundColor={active ? ui.surfaceMuted : ui.surface}
+                  cursor="pointer"
+                  onPress={() => setCollectionFilter(collection)}
+                >
+                  <Text fontSize={12} fontWeight="700" color={active ? ui.brand : ui.textMuted}>
+                    {collection}
+                  </Text>
+                </XStack>
+              )
+            })}
+          </HorizontalScrollRow>
           <HorizontalScrollRow gap={8}>
             {TYPE_FILTERS.map((filter) => {
               const active = typeFilter === filter.id
@@ -214,19 +252,48 @@ export function SavedPostsScreen() {
         </YStack>
       ) : (
         <YStack gap="$4">
-          {visible.map((post) => (
-            <YStack key={post.id} gap="$2">
-              <FeedPostCard post={post} />
-              <Button
-                alignSelf="flex-start"
-                tone="ghost"
-                size="$3"
-                borderRadius={999}
-                icon={<Icons.Bookmark size={15} />}
-                onPress={() => void handleUnsave(post.id)}
-              >
-                Remove save
-              </Button>
+          {sections.map((section) => (
+            <YStack key={section.key} gap="$3">
+              <YStack gap={4}>
+                <Text fontSize={18} fontWeight="800" color={ui.text}>
+                  {section.title}
+                </Text>
+                <Text fontSize={13} color={ui.textMuted}>
+                  {section.subtitle}
+                </Text>
+              </YStack>
+              {section.items.map((entry) => (
+                <YStack key={entry.postId} gap="$2">
+                  <FeedPostCard post={entry.post} />
+                  <XStack gap="$2" flexWrap="wrap" alignItems="center">
+                    <XStack
+                      paddingHorizontal={10}
+                      paddingVertical={6}
+                      borderRadius={999}
+                      backgroundColor={ui.surfaceMuted}
+                    >
+                      <Text fontSize={11} fontWeight="700" color={ui.textMuted}>
+                        {entry.collectionName}
+                      </Text>
+                    </XStack>
+                    {entry.notes ? (
+                      <Text fontSize={12.5} color={ui.textSecondary}>
+                        Note: {entry.notes}
+                      </Text>
+                    ) : null}
+                  </XStack>
+                  <Button
+                    alignSelf="flex-start"
+                    tone="ghost"
+                    size="$3"
+                    borderRadius={999}
+                    icon={<Icons.Bookmark size={15} />}
+                    onPress={() => void handleUnsave(entry.post.id)}
+                  >
+                    Remove save
+                  </Button>
+                </YStack>
+              ))}
             </YStack>
           ))}
         </YStack>

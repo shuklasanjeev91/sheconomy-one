@@ -84,6 +84,10 @@ export { ListingVisualPreviewButtons } from '~/commerce/components/visual-previe
 export { VisualPreviewSheet } from '~/commerce/components/visual-preview/VisualPreviewSheet'
 export { ListingPriceBlock } from '~/commerce/components/ListingPriceBlock'
 export { ListingSpecifications } from '~/commerce/components/ListingSpecifications'
+export {
+  ListingTrustSnapshot,
+  VerifiedBuyerHighlight,
+} from '~/commerce/components/ListingTrustSnapshot'
 export { ListingVariantPicker } from '~/commerce/components/ListingVariantPicker'
 export { RatingSummary } from '~/commerce/components/RatingSummary'
 export { ReviewsSection } from '~/commerce/components/ReviewsSection'

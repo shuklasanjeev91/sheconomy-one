@@ -13,6 +13,7 @@ import type { Href } from 'one'
 import { hasVerifiedFemaleAccess } from '~/lib/auth/access'
 import { buildHumanVerificationOpenRedirect } from '~/lib/gender-verification/denied-redirect'
 import { USER_ROLES, type UserRole } from '~/lib/profile/profile.type'
+import { isCreateShopPath } from '~/lib/routes'
 import {
   DEFAULT_ROUTES,
   FALLBACK_HOME,
@@ -34,6 +35,10 @@ const LONG_ROLE_MAP: Record<string, UserRole> = {
 }
 
 const ROLE_CODES = new Set<string>([USER_ROLES.ADMIN, USER_ROLES.VENDOR, USER_ROLES.USER])
+
+function isHumanVerificationTabPath(pathname: string) {
+  return pathname === '/community' || pathname.startsWith('/community/') || pathname === '/chat' || pathname.startsWith('/chat/')
+}
 
 /** Normalise any stored role value to a canonical `A` / `V` / `U`, or `null`. */
 export function normalizeRole(role: string | null | undefined): UserRole | null {
@@ -154,6 +159,14 @@ export function resolveRouteAccess(input: ResolveRouteAccessInput): RouteAccessD
     requiresGenderVerification(pathname) &&
     !hasVerifiedFemaleAccess(gender, isVerified)
   ) {
+    if (isHumanVerificationTabPath(pathname) || isCreateShopPath(pathname)) {
+      return {
+        status: 'denied',
+        href: FALLBACK_HOME as Href,
+        reason: 'gender_required',
+        message: ACCESS_MESSAGES.gender_required,
+      }
+    }
     return {
       status: 'redirect',
       href: buildHumanVerificationOpenRedirect({ returnTo: pathname }) as Href,
@@ -163,6 +176,14 @@ export function resolveRouteAccess(input: ResolveRouteAccessInput): RouteAccessD
   }
 
   if (!adminBypass && requiresVerification(pathname) && !isVerified) {
+    if (isHumanVerificationTabPath(pathname) || isCreateShopPath(pathname)) {
+      return {
+        status: 'denied',
+        href: FALLBACK_HOME as Href,
+        reason: 'verification_required',
+        message: ACCESS_MESSAGES.verification_required,
+      }
+    }
     return {
       status: 'redirect',
       href: buildHumanVerificationOpenRedirect({ returnTo: pathname }) as Href,
@@ -241,6 +262,14 @@ export function resolveRoleAccess(
     options.requireGenderVerification &&
     !hasVerifiedFemaleAccess(gender, isVerified)
   ) {
+    if (isHumanVerificationTabPath(pathname) || isCreateShopPath(pathname)) {
+      return {
+        status: 'denied',
+        href: FALLBACK_HOME as Href,
+        reason: 'gender_required',
+        message: ACCESS_MESSAGES.gender_required,
+      }
+    }
     return {
       status: 'redirect',
       href: buildHumanVerificationOpenRedirect({ returnTo: pathname }) as Href,
@@ -250,6 +279,14 @@ export function resolveRoleAccess(
   }
 
   if (!adminBypass && options.requireVerification && !isVerified) {
+    if (isHumanVerificationTabPath(pathname) || isCreateShopPath(pathname)) {
+      return {
+        status: 'denied',
+        href: FALLBACK_HOME as Href,
+        reason: 'verification_required',
+        message: ACCESS_MESSAGES.verification_required,
+      }
+    }
     return {
       status: 'redirect',
       href: buildHumanVerificationOpenRedirect({ returnTo: pathname }) as Href,

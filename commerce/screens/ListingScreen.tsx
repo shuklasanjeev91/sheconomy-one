@@ -34,11 +34,13 @@ import {
   ListingReturnPolicyCard,
   ListingSellerCard,
   ListingShopPolicies,
+  ListingTrustSnapshot,
   ListingVariantPicker,
   LowStockHint,
   RatingSummary,
   ReviewsSection,
   StockNotifyButton,
+  VerifiedBuyerHighlight,
   ListingVisualPreviewButtons,
   ShopActionButtons,
 } from '~/commerce/components'
@@ -78,6 +80,7 @@ import {
 } from '~/commerce/lib/listing-fulfillment'
 import { buildListingShopPolicies } from '~/commerce/lib/shop-policies'
 import { buildShopShippingSummary } from '~/commerce/lib/shop-shipping'
+import { buildListingTrustSnapshot } from '~/commerce/lib/listing-trust-snapshot'
 import { mergeReviewSummary } from '~/commerce/lib/reviews'
 import { getShopSlug } from '~/lib/supabase/commerce'
 import { commerceRoutes } from '~/lib/routes'
@@ -549,6 +552,20 @@ export function ListingScreen({
     category: listing.category ?? null,
     listingType: listing.listing_type ?? null,
   }
+  const trustSnapshot = buildListingTrustSnapshot({
+    reviewSummary,
+    reviews,
+    returnPolicy,
+    fulfillment: fulfillmentInfo,
+    shopVerified: !!listing.shops?.verified,
+    followersOnly,
+    purchaseLocked,
+    isDigital,
+  })
+  const handleOpenPolicies = () => {
+    if (!listing.shops) return
+    navigateApp(commerceRoutes.shopReturns(getShopSlug(listing.shops)))
+  }
 
   // ─── Mobile layout ──────────────────────────────────────────────────────────
   if (!hasSideRails) {
@@ -622,6 +639,13 @@ export function ListingScreen({
                   </YStack>
                 </XStack>
               ) : null}
+
+              <ListingTrustSnapshot
+                snapshot={trustSnapshot}
+                shopId={listing.shops?.id}
+                ownerUserId={listing.shops?.user_id}
+                onOpenPolicies={handleOpenPolicies}
+              />
 
               {fulfillmentInfo ? <ListingFulfillmentPanel info={fulfillmentInfo} compact /> : null}
 
@@ -702,6 +726,12 @@ export function ListingScreen({
                 </YStack>
               ) : null}
 
+              {trustSnapshot.buyerHighlight ? (
+                <>
+                  <Separator borderColor={ui.panelBorder} />
+                  <VerifiedBuyerHighlight snapshot={trustSnapshot} />
+                </>
+              ) : null}
               <Separator borderColor={ui.panelBorder} />
               <ReviewsSection
                 title="Reviews for this item"
@@ -779,7 +809,7 @@ export function ListingScreen({
               <Icons.Image size={48} color={ui.textMuted} />
             </YStack>
           )}
-          <FavoriteButton listingId={listing.id} size={20} />
+          <FavoriteButton listingId={listing.id} size={20} restockEligible={outOfStock} />
         </YStack>
 
         {sortedImages.length > 1 ? (
@@ -844,6 +874,13 @@ export function ListingScreen({
       ) : null}
 
       {fulfillmentInfo ? <ListingFulfillmentPanel info={fulfillmentInfo} /> : null}
+
+      <ListingTrustSnapshot
+        snapshot={trustSnapshot}
+        shopId={listing.shops?.id}
+        ownerUserId={listing.shops?.user_id}
+        onOpenPolicies={handleOpenPolicies}
+      />
 
       {fulfillmentInfo?.kind === 'physical' ? (
         <DeliveryPinCheck
@@ -982,6 +1019,12 @@ export function ListingScreen({
           </>
         ) : null}
 
+        {trustSnapshot.buyerHighlight ? (
+          <>
+            <Separator borderColor={ui.panelBorder} />
+            <VerifiedBuyerHighlight snapshot={trustSnapshot} />
+          </>
+        ) : null}
         <Separator borderColor={ui.panelBorder} />
         <ReviewsSection
           title="Reviews for this item"

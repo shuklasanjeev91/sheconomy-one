@@ -271,12 +271,100 @@ export type BuyerReturnHubEntry = {
   evidenceUrls: string[]
   evidenceLabel: string | null
   refundLabel: string | null
+  refundProgress: BuyerRefundProgress | null
   returnTrackingNumber: string | null
   returnCourierSlug: string | null
   returnTrackingUrl: string | null
   returnShippingMode: string | null
   rejectReason: string | null
   resolutionNote: string | null
+}
+
+export type BuyerRefundProgress = {
+  status: string
+  statusLabel: string
+  etaLabel: string | null
+  explainer: string
+  nextStep: string
+  delayedWarning: string | null
+}
+
+export type BuyerRefundSummary = {
+  activeCount: number
+  completedCount: number
+  headline: string
+  detail: string
+  delayedCount: number
+}
+
+const BUSINESS_DAY_MS = 24 * 60 * 60 * 1000
+
+function daysBetween(startAt: string | null | undefined, endAt = Date.now()) {
+  if (!startAt) return null
+  const startMs = new Date(startAt).getTime()
+  if (!Number.isFinite(startMs)) return null
+  return Math.max(0, Math.floor((endAt - startMs) / BUSINESS_DAY_MS))
+}
+
+function formatRefundEta(status: string, receivedAt: string | null, approvedAt: string | null) {
+  if (status === 'completed') return 'Refund completed'
+  if (status === 'approved') return 'Expect the refund within 2-3 business days'
+  if (status === 'processing') return 'Most banks reflect this within 3-5 business days'
+  if (status === 'requested' && receivedAt) return 'The refund usually starts within 1-2 business days'
+  if (status === 'requested' && approvedAt) return 'Refund starts after the shop receives your return'
+  return null
+}
+
+export function buildBuyerRefundProgress(input: {
+  refund_status?: string | null
+  return_received_at?: string | null
+  approved_at?: string | null
+  updated_at?: string | null
+}, now = Date.now()): BuyerRefundProgress | null {
+  const status = String(input.refund_status ?? '').trim().toLowerCase()
+  if (!status) return null
+  const statusLabel = refundStatusLabel(status)
+  const receivedAt = input.return_received_at ?? null
+  const approvedAt = input.approved_at ?? null
+  const etaLabel = formatRefundEta(status, receivedAt, approvedAt)
+  const receivedDays = daysBetween(receivedAt, now)
+
+  let explainer = `Refund ${statusLabel}`
+  let nextStep = 'We will keep this order updated as the refund moves forward.'
+  let delayedWarning: string | null = null
+
+  if (status === 'requested') {
+    explainer = receivedAt
+      ? 'The shop marked your return as received and is preparing the refund handoff.'
+      : 'The refund request is approved, but the shop still needs to receive your returned item.'
+    nextStep = receivedAt
+      ? 'Next, the refund is handed to the payment provider.'
+      : 'Next, the shop confirms receipt of your returned item.'
+  } else if (status === 'processing') {
+    explainer = 'The refund has been sent to the payment provider and is moving through bank processing.'
+    nextStep = 'Next, your bank or wallet posts the refund to the original payment method.'
+  } else if (status === 'approved') {
+    explainer = 'The refund has been approved and should appear on the original payment method shortly.'
+    nextStep = 'Next, your bank or wallet reflects the completed payout.'
+  } else if (status === 'completed') {
+    explainer = 'The refund has completed on our side.'
+    nextStep = 'If it is not visible yet, your bank statement may take a short time to refresh.'
+  }
+
+  if ((status === 'requested' || status === 'processing') && receivedDays !== null && receivedDays >= 7) {
+    delayedWarning = 'This refund is taking longer than usual. If you still do not see movement soon, contact support.'
+  } else if (status === 'approved' && receivedDays !== null && receivedDays >= 10) {
+    delayedWarning = 'The refund looks delayed beyond the usual bank window. Please contact support if it has not posted yet.'
+  }
+
+  return {
+    status,
+    statusLabel,
+    etaLabel,
+    explainer,
+    nextStep,
+    delayedWarning,
+  }
 }
 
 export function getReturnExchangeTimeline(input: {
@@ -394,6 +482,9 @@ export function getBuyerReturnHubEntries(input: {
     refund_status?: string | null
     refund_amount?: number | null
     return_received_at?: string | null
+    approved_at?: string | null
+    created_at?: string | null
+    updated_at?: string | null
   }> | null
   currency?: string | null
 }): BuyerReturnHubEntry[] {
@@ -414,6 +505,7 @@ export function getBuyerReturnHubEntries(input: {
         issue.resolution_action === 'exchange_ready_to_ship' ||
         Boolean(refund?.return_received_at)
       const refundStatus = String(refund?.refund_status ?? '')
+      const refundProgress = refund ? buildBuyerRefundProgress(refund) : null
       const refundDone = ['approved', 'completed'].includes(refundStatus)
       const exchangeReady = issue.resolution_action === 'exchange_ready_to_ship'
       const accepted =
@@ -494,6 +586,7 @@ export function getBuyerReturnHubEntries(input: {
         evidenceUrls: Array.isArray(issue.evidence_urls) ? issue.evidence_urls.filter(Boolean) : [],
         evidenceLabel,
         refundLabel: refundStatus ? `Refund ${refundStatusLabel(refundStatus)}` : null,
+        refundProgress,
         returnTrackingNumber: issue.return_tracking_number ?? null,
         returnCourierSlug: issue.return_courier_slug ?? null,
         returnTrackingUrl: safeHttpUrl(issue.return_tracking_url) ?? null,
@@ -509,6 +602,32 @@ export function getBuyerReturnHubEntries(input: {
       >
       return rank[a.category] - rank[b.category]
     })
+}
+
+export function buildBuyerRefundSummary(entries: BuyerReturnHubEntry[]): BuyerRefundSummary | null {
+  const refundEntries = entries.filter((entry) => entry.refundProgress)
+  if (!refundEntries.length) return null
+  const activeCount = refundEntries.filter((entry) => entry.refundProgress?.status !== 'completed').length
+  const completedCount = refundEntries.filter((entry) => entry.refundProgress?.status === 'completed').length
+  const delayedCount = refundEntries.filter((entry) => entry.refundProgress?.delayedWarning).length
+  const primary = refundEntries.find((entry) => entry.refundProgress?.status !== 'completed') ?? refundEntries[0]
+  const eta = primary?.refundProgress?.etaLabel
+
+  return {
+    activeCount,
+    completedCount,
+    delayedCount,
+    headline:
+      activeCount > 1
+        ? `${activeCount} refunds in progress`
+        : activeCount === 1
+          ? '1 refund in progress'
+          : `${completedCount} refund${completedCount === 1 ? '' : 's'} completed`,
+    detail:
+      delayedCount > 0
+        ? `${delayedCount} refund${delayedCount === 1 ? '' : 's'} may need support attention.`
+        : eta ?? 'Track each return below for the next payout step.',
+  }
 }
 
 export function isDeliveredOrCompletedStatus(status: string | null | undefined): boolean {

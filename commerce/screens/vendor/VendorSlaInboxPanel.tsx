@@ -1,15 +1,23 @@
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react'
 import { Share } from 'react-native'
 
-import { Button, Icons, Spinner, Text, TextArea, XStack, YStack, useAppToast } from '~/components/ui'
+import { Button, Icons, Input, Spinner, Text, TextArea, XStack, YStack, useAppToast } from '~/components/ui'
 import {
   canBulkAcknowledgeInboxRows,
   type VendorSlaFilter,
   type VendorSlaInboxRow,
   buildVendorSlaInboxData,
   filterVendorSlaRows,
+  hydrateVendorSlaInboxRowsWithContext,
   vendorSlaRowsToCsv,
 } from '~/commerce/lib/vendor-sla-inbox'
+import {
+  VENDOR_INBOX_PRESET_TAGS,
+  applyVendorInboxContextBatch,
+  readVendorInboxContextEntries,
+  resolveVendorInboxContext,
+  saveVendorInboxContextEntry,
+} from '~/commerce/lib/vendor-inbox-notes'
 import { assignReturnTracking, confirmOrderReturnReceived, resolveOrderIssueRequest } from '~/commerce/lib/customer-order-trust'
 import { autoBookReturnPickup } from '~/commerce/lib/vendor-return-pickup'
 import { OrderStatusBadge } from '~/commerce/components/vendor/OrderStatusBadge'
@@ -105,6 +113,10 @@ export function VendorSlaInboxPanel({
   const [submitting, setSubmitting] = useState(false)
   const [selectedIssueId, setSelectedIssueId] = useState<string | null>(null)
   const [note, setNote] = useState('')
+  const [editingRowId, setEditingRowId] = useState<string | null>(null)
+  const [rowDraftNote, setRowDraftNote] = useState('')
+  const [rowDraftTags, setRowDraftTags] = useState('')
+  const [contextEntries, setContextEntries] = useState<Awaited<ReturnType<typeof readVendorInboxContextEntries>>>([])
   const [rejectReasonCode, setRejectReasonCode] = useState<string | null>(null)
   const [trackingItem, setTrackingItem] = useState<VendorOrderItem | null>(null)
   const [trackingMode, setTrackingMode] = useState<'outbound' | 'return'>('outbound')
@@ -114,19 +126,22 @@ export function VendorSlaInboxPanel({
   const [detailLoading, setDetailLoading] = useState(false)
   const [detailIssues, setDetailIssues] = useState<EnrichedOrderIssue[]>([])
   const [detailUpdating, setDetailUpdating] = useState(false)
+  const [batchTagsInput, setBatchTagsInput] = useState('')
 
   const load = useCallback(async () => {
     if (!shopId) return
     setRefreshing(true)
     try {
-      const [ordersResult, issuesResult] = await Promise.all([
+      const [ordersResult, issuesResult, contextResult] = await Promise.all([
         getVendorOrders(shopId, {}, { page: 1, limit: 100, order_by: 'created_at', order_direction: 'desc' }),
         getVendorIssues(shopId, { page: 1, limit: 100, sort_by: 'created_at', sort_order: 'desc' }),
+        readVendorInboxContextEntries(shopId),
       ])
       if (ordersResult.error) throw new Error(ordersResult.error)
       if (issuesResult.error) throw new Error(issuesResult.error)
       setOrders(ordersResult.data?.items ?? [])
       setIssues(issuesResult.data?.issues ?? [])
+      setContextEntries(contextResult)
     } catch (error) {
       toast.show('Could not load SLA inbox', {
         tone: 'danger',
@@ -143,9 +158,13 @@ export function VendorSlaInboxPanel({
   }, [load])
 
   const inbox = useMemo(() => buildVendorSlaInboxData({ orders, issues }), [orders, issues])
+  const hydratedRows = useMemo(
+    () => hydrateVendorSlaInboxRowsWithContext(inbox.rows, contextEntries),
+    [inbox.rows, contextEntries],
+  )
   const filteredRows = useMemo(
-    () => filterVendorSlaRows(inbox.rows, activeFilter),
-    [inbox.rows, activeFilter],
+    () => filterVendorSlaRows(hydratedRows, activeFilter),
+    [hydratedRows, activeFilter],
   )
   const selectedRows = useMemo(
     () => filteredRows.filter((row) => selectedIds.includes(row.id)),
@@ -160,6 +179,62 @@ export function VendorSlaInboxPanel({
   useEffect(() => {
     setSelectedIds((current) => current.filter((id) => filteredRows.some((row) => row.id === id)))
   }, [filteredRows])
+
+  function parseTagInput(value: string) {
+    return value
+      .split(',')
+      .map((tag) => tag.trim().toLowerCase())
+      .filter(Boolean)
+  }
+
+  async function saveRowContext(row: VendorSlaInboxRow) {
+    await saveVendorInboxContextEntry(
+      shopId,
+      {
+        id: row.id,
+        orderItemId: row.orderItemId,
+        issueId: row.issueId,
+        orderId: row.orderId,
+      },
+      { note: rowDraftNote, tags: parseTagInput(rowDraftTags) },
+    )
+    setContextEntries(await readVendorInboxContextEntries(shopId))
+    setEditingRowId(null)
+    setRowDraftNote('')
+    setRowDraftTags('')
+    toast.show('Internal context saved', { tone: 'success' })
+  }
+
+  async function applyBatchContext() {
+    if (!selectedRows.length) return
+    setSubmitting(true)
+    try {
+      await applyVendorInboxContextBatch(
+        shopId,
+        selectedRows.map((row) => ({
+          id: row.id,
+          orderItemId: row.orderItemId,
+          issueId: row.issueId,
+          orderId: row.orderId,
+        })),
+        { note: batchNote, tags: parseTagInput(batchTagsInput) },
+      )
+      setContextEntries(await readVendorInboxContextEntries(shopId))
+      toast.show('Internal notes applied', {
+        tone: 'success',
+        message: `${selectedRows.length} row${selectedRows.length === 1 ? '' : 's'} updated.`,
+      })
+      setBatchNote('')
+      setBatchTagsInput('')
+    } catch (error) {
+      toast.show('Could not apply notes and tags', {
+        tone: 'danger',
+        message: error instanceof Error ? error.message : String(error),
+      })
+    } finally {
+      setSubmitting(false)
+    }
+  }
 
   async function exportRows(rows: VendorSlaInboxRow[]) {
     const csv = vendorSlaRowsToCsv(rows)
@@ -454,11 +529,11 @@ export function VendorSlaInboxPanel({
 
         {inbox.rows.length > 0 ? <VendorStatStrip ui={ui} stats={statItems} /> : null}
 
-        {canAcknowledgeSelected ? (
+        {selectedRows.length > 0 ? (
           <VendorPanelCard ui={ui}>
             <YStack gap="$2">
               <Text fontSize={12} fontWeight="700" color={ui.textMuted}>
-                Batch note
+                Batch internal note
               </Text>
               <TextArea
                 value={batchNote}
@@ -466,6 +541,55 @@ export function VendorSlaInboxPanel({
                 placeholder="Optional internal note for the selected acknowledgements…"
                 numberOfLines={3}
               />
+              <Text fontSize={12} fontWeight="700" color={ui.textMuted}>
+                Batch tags
+              </Text>
+              <Input
+                value={batchTagsInput}
+                onChangeText={setBatchTagsInput}
+                placeholder="customer_called, awaiting_stock"
+              />
+              <XStack gap="$2" flexWrap="wrap">
+                {VENDOR_INBOX_PRESET_TAGS.map((tag) => (
+                  <Button
+                    key={tag}
+                    tone="outline"
+                    size="$2"
+                    borderRadius={999}
+                    onPress={() =>
+                      setBatchTagsInput((current) =>
+                        parseTagInput(`${current},${tag}`).join(', '),
+                      )
+                    }
+                  >
+                    {tag.replace(/_/g, ' ')}
+                  </Button>
+                ))}
+              </XStack>
+              <XStack gap="$2" flexWrap="wrap">
+                <Button
+                  tone="outline"
+                  size="$3"
+                  borderRadius={999}
+                  disabled={submitting}
+                  icon={<Icons.StickyNote size={14} />}
+                  onPress={() => void applyBatchContext()}
+                >
+                  Apply note / tags
+                </Button>
+                {canAcknowledgeSelected ? (
+                  <Button
+                    tone="primary"
+                    size="$3"
+                    borderRadius={999}
+                    disabled={submitting}
+                    icon={<Icons.CheckCircle size={14} />}
+                    onPress={() => void acknowledgeSelected()}
+                  >
+                    {submitting ? 'Updating…' : `Acknowledge (${selectedRows.length})`}
+                  </Button>
+                ) : null}
+              </XStack>
             </YStack>
           </VendorPanelCard>
         ) : null}
@@ -570,7 +694,98 @@ export function VendorSlaInboxPanel({
                       ))}
                     </XStack>
 
+                    {row.internalNote || row.internalTags.length > 0 ? (
+                      <YStack
+                        gap="$2"
+                        padding="$3"
+                        borderRadius={12}
+                        borderWidth={1}
+                        borderColor={ui.borderSubtle}
+                        backgroundColor={ui.surfaceMuted}
+                      >
+                        {row.internalNote ? (
+                          <Text fontSize={12.5} color={ui.textSecondary}>
+                            {row.internalNote}
+                          </Text>
+                        ) : null}
+                        {row.updatedAt ? (
+                          <Text fontSize={11} color={ui.textMuted}>
+                            Updated {new Date(row.updatedAt).toLocaleDateString('en-IN')}
+                          </Text>
+                        ) : null}
+                      </YStack>
+                    ) : null}
+
+                    {editingRowId === row.id ? (
+                      <YStack gap="$2">
+                        <TextArea
+                          value={rowDraftNote}
+                          onChangeText={setRowDraftNote}
+                          placeholder="Internal note for your team…"
+                          numberOfLines={3}
+                        />
+                        <Input
+                          value={rowDraftTags}
+                          onChangeText={setRowDraftTags}
+                          placeholder="customer_called, awaiting_stock"
+                        />
+                        <XStack gap="$2" flexWrap="wrap">
+                          {VENDOR_INBOX_PRESET_TAGS.map((tag) => (
+                            <Button
+                              key={`${row.id}-${tag}`}
+                              tone="outline"
+                              size="$2"
+                              borderRadius={999}
+                              onPress={() =>
+                                setRowDraftTags((current) =>
+                                  parseTagInput(`${current},${tag}`).join(', '),
+                                )
+                              }
+                            >
+                              {tag.replace(/_/g, ' ')}
+                            </Button>
+                          ))}
+                        </XStack>
+                        <XStack gap="$2">
+                          <Button
+                            tone="primary"
+                            size="$3"
+                            borderRadius={999}
+                            icon={<Icons.Save size={14} />}
+                            onPress={() => void saveRowContext(row)}
+                          >
+                            Save note / tags
+                          </Button>
+                          <Button
+                            tone="outline"
+                            size="$3"
+                            borderRadius={999}
+                            onPress={() => {
+                              setEditingRowId(null)
+                              setRowDraftNote('')
+                              setRowDraftTags('')
+                            }}
+                          >
+                            Cancel
+                          </Button>
+                        </XStack>
+                      </YStack>
+                    ) : null}
+
                     <XStack gap="$2" flexWrap="wrap">
+                      <Button
+                        tone="outline"
+                        size="$3"
+                        borderRadius={999}
+                        icon={<Icons.StickyNote size={14} />}
+                        onPress={() => {
+                          setEditingRowId(row.id)
+                          setRowDraftNote(row.internalNote ?? '')
+                          setRowDraftTags(row.internalTags.join(', '))
+                        }}
+                      >
+                        {row.internalNote || row.internalTags.length > 0 ? 'Edit note / tags' : 'Add note / tags'}
+                      </Button>
                       {row.kind === 'shipment_risk' && row.orderItemId ? (
                         <Button
                           tone="primary"
@@ -633,6 +848,11 @@ export function VendorSlaInboxPanel({
         open={selectedIssueId !== null}
         isDesktop={isDesktop}
         issue={selectedIssue}
+        coordination={resolveVendorInboxContext(contextEntries, {
+          issueId: selectedIssue?.id,
+          orderItemId: selectedIssue?.order_item_id,
+          orderId: selectedIssue?.order_id,
+        })}
         submitting={submitting}
         note={note}
         onNoteChange={setNote}
@@ -664,6 +884,10 @@ export function VendorSlaInboxPanel({
         item={detailItem}
         loading={detailLoading}
         updating={detailUpdating}
+        coordination={resolveVendorInboxContext(contextEntries, {
+          orderItemId: detailItem?.id,
+          orderId: detailItem?.order_id,
+        })}
         payments={payments}
         issues={detailIssues}
         role={null}

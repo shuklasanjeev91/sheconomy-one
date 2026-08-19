@@ -22,6 +22,13 @@ import {
   fetchWishlistListingIdsInCollection,
   type WishlistCollection,
 } from '~/commerce/lib/wishlist'
+import {
+  buildStockAlertSections,
+  fetchStockAlertListings,
+  unsubscribeStockAlert,
+  type StockAlertListing,
+  type StockAlertSection,
+} from '~/commerce/lib/stock-alerts'
 import { WishlistMoveSheet } from '~/commerce/components/WishlistMoveSheet'
 import { Button, Icons, Input, Spinner, Text, XStack, YStack, useAppToast } from '~/components/ui'
 import { FullWidthLayout, PageSection } from '~/components/layout'
@@ -49,10 +56,20 @@ export function FavoritesScreen() {
   const [isCreatingCollection, setIsCreatingCollection] = useState(false)
   const [moveListingId, setMoveListingId] = useState<string | null>(null)
   const [savedFromCartMap, setSavedFromCartMap] = useState<Record<string, number>>({})
+  const [stockAlerts, setStockAlerts] = useState<StockAlertListing[]>([])
 
   async function refreshSavedFromCartMap() {
     setSavedFromCartMap(await readSavedFromCartWishlistMap())
   }
+
+  const loadStockAlerts = useCallback(async () => {
+    if (!user?.id) {
+      setStockAlerts([])
+      return
+    }
+    const result = await fetchStockAlertListings(user.id)
+    if (!result.error) setStockAlerts(result.items)
+  }, [user?.id])
 
   async function handleShareWishlist(targetItems: ListingSummary[] = items) {
     if (!targetItems.length) {
@@ -165,6 +182,10 @@ export function FavoritesScreen() {
   }, [])
 
   useEffect(() => {
+    void loadStockAlerts()
+  }, [loadStockAlerts])
+
+  useEffect(() => {
     if (isFavoritesLoading) return
     void loadFavorites()
   }, [isFavoritesLoading, loadFavorites])
@@ -173,6 +194,7 @@ export function FavoritesScreen() {
     () => buildWishlistReactivation({ items, savedFromCart: savedFromCartMap }),
     [items, savedFromCartMap],
   )
+  const stockAlertSections = useMemo(() => buildStockAlertSections(stockAlerts), [stockAlerts])
 
   async function handleCreateCollection() {
     if (!user?.id || !newCollectionName.trim()) return
@@ -220,6 +242,28 @@ export function FavoritesScreen() {
     await clearWishlistSavedFromCartMarker(item.id)
     await refreshSavedFromCartMap()
     navigateApp(commerceRoutes.checkout)
+  }
+
+  async function handleMoveAlertToCart(item: StockAlertListing) {
+    const result = await addToCart(item.listingId)
+    if (result.error) {
+      toast.show('Open the product page to choose options', { tone: 'info' })
+      navigateApp(commerceRoutes.listing(item.slug ?? item.listingId))
+      return
+    }
+    toast.show('Moved to cart', { tone: 'success' })
+    navigateApp(commerceRoutes.cart)
+  }
+
+  async function handleRemoveAlert(item: StockAlertListing) {
+    if (!user?.id) return
+    const result = await unsubscribeStockAlert(item.listingId, user.id)
+    if (result.error) {
+      toast.show('Could not remove alert', { tone: 'danger', message: result.error })
+      return
+    }
+    await loadStockAlerts()
+    toast.show('Alert removed', { tone: 'default' })
   }
 
   async function handleBulkPrimary(section: WishlistReactivationSectionType) {
@@ -292,6 +336,7 @@ export function FavoritesScreen() {
             <SummaryCard label="Ready to buy" value={reactivation.counts.readyToBuy} />
             <SummaryCard label="Saved from cart" value={reactivation.counts.savedFromCart} />
             <SummaryCard label="Price wins" value={reactivation.counts.priceWins} />
+            <SummaryCard label="Restock alerts" value={stockAlerts.length} />
           </XStack>
         ) : null}
 
@@ -346,6 +391,16 @@ export function FavoritesScreen() {
             onBuyNow={(item) => void handleBuyNow(item)}
             onMoveToCollection={(item) => setMoveListingId(item.id)}
             onBulkPrimary={(current) => void handleBulkPrimary(current)}
+          />
+        ))}
+
+        {stockAlertSections.map((section) => (
+          <RestockAlertSection
+            key={section.key}
+            section={section}
+            onOpenListing={(item) => navigateApp(commerceRoutes.listing(item.slug ?? item.listingId))}
+            onMoveToCart={(item) => void handleMoveAlertToCart(item)}
+            onRemoveAlert={(item) => void handleRemoveAlert(item)}
           />
         ))}
 
@@ -442,6 +497,88 @@ export function FavoritesScreen() {
         ) : null}
       </PageSection>
     </FullWidthLayout>
+  )
+}
+
+function RestockAlertSection({
+  section,
+  onOpenListing,
+  onMoveToCart,
+  onRemoveAlert,
+}: {
+  section: StockAlertSection
+  onOpenListing: (item: StockAlertListing) => void
+  onMoveToCart: (item: StockAlertListing) => void
+  onRemoveAlert: (item: StockAlertListing) => void
+}) {
+  const ui = useAppUi()
+
+  return (
+    <YStack gap="$3">
+      <YStack gap={4}>
+        <Text fontSize={18} fontWeight="800" color={ui.text}>
+          {section.title}
+        </Text>
+        <Text fontSize={13} color={ui.textMuted}>
+          {section.subtitle}
+        </Text>
+      </YStack>
+
+      {section.items.map((item) => (
+        <XStack
+          key={item.listingId}
+          gap="$3"
+          padding="$3.5"
+          borderRadius={14}
+          borderWidth={1}
+          borderColor={ui.borderSubtle}
+          backgroundColor={ui.surface}
+          alignItems="center"
+          justifyContent="space-between"
+          flexWrap="wrap"
+        >
+          <YStack flex={1} minWidth={220} gap="$1.5">
+            <Text fontSize={14} fontWeight="800" color={ui.text}>
+              {item.title}
+            </Text>
+            <Text fontSize={12.5} color={ui.textSecondary}>
+              {item.shopName ?? 'Shop'} ·{' '}
+              {item.state === 'back_in_stock'
+                ? `Back in stock${item.stock ? ` · ${item.stock} available` : ''}`
+                : item.state === 'inactive'
+                  ? 'Listing is still inactive'
+                  : 'We are watching for a restock'}
+            </Text>
+            {item.price ? (
+              <Text fontSize={12.5} fontWeight="700" color={ui.brand}>
+                {formatCurrency(item.price, item.currency ?? 'INR')}
+              </Text>
+            ) : null}
+          </YStack>
+          <XStack gap="$2" flexWrap="wrap">
+            <Button
+              size="$3"
+              tone={item.state === 'back_in_stock' ? 'primary' : 'outline'}
+              borderRadius={999}
+              onPress={() =>
+                item.state === 'back_in_stock' ? onMoveToCart(item) : onOpenListing(item)
+              }
+            >
+              {item.state === 'back_in_stock' ? 'Move to cart' : 'Open listing'}
+            </Button>
+            <Button
+              size="$3"
+              tone="outline"
+              borderRadius={999}
+              icon={<Icons.BellOff size={14} />}
+              onPress={() => onRemoveAlert(item)}
+            >
+              Remove alert
+            </Button>
+          </XStack>
+        </XStack>
+      ))}
+    </YStack>
   )
 }
 

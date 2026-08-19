@@ -5,7 +5,6 @@ import { Icons } from '~/components/ui'
 import { openComposer } from '~/community/lib/composer-store'
 import { openNewChat } from '~/chat/lib/chat-actions-store'
 import type { AccessTier, AppFeature } from '~/lib/auth/access'
-import { buildHumanVerificationOpenRedirect } from '~/lib/gender-verification/denied-redirect'
 import {
   chatRoutes,
   classRoutes,
@@ -269,8 +268,8 @@ export function getVisibleCenterNav(): AppCenterNavItem[] {
 
 /**
  * `isTierKnown === false` means the profile has not settled, which reads as the
- * limited tier — point at the account surface instead of the verification flow
- * so a verified member is not sent back to verification.
+ * limited tier — keep the account surface stable so a verified member is not
+ * sent back to verification.
  */
 export function getAuthMobileTab(tier: AccessTier, isTierKnown = true): AppMobileTabItem {
   if (tier === 'guest' && isTierKnown) {
@@ -281,16 +280,6 @@ export function getAuthMobileTab(tier: AccessTier, isTierKnown = true): AppMobil
       match: (path) => path.startsWith('/auth/sign-in'),
     }
   }
-
-  if (tier === 'male' && isTierKnown) {
-    return {
-      href: buildHumanVerificationOpenRedirect({ returnTo: String(routes.profile) }) as Href,
-      label: 'You',
-      icon: Icons.User,
-      match: (path) => path.includes('human=verify') || path.startsWith('/auth/verify-gender'),
-    }
-  }
-
   return {
     href: routes.profile,
     label: 'You',

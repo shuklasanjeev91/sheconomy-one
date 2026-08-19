@@ -3,6 +3,7 @@ import { Button, Icons, Image, Text, XStack, YStack } from '~/components/ui'
 import { CommercePanel } from '~/commerce/components/CommercePanel'
 import { OrderIssueCommentsThread } from '~/commerce/components/OrderIssueCommentsThread'
 import {
+  type BuyerRefundSummary,
   canCancelReturnOrExchange,
   type BuyerReturnHubEntry,
 } from '~/commerce/lib/customer-order-lifecycle'
@@ -13,6 +14,7 @@ import { useAppUi } from '~/lib/theme/useAppUi'
 
 type BuyerReturnHubProps = {
   entries: BuyerReturnHubEntry[]
+  refundSummary?: BuyerRefundSummary | null
   items: CustomerOrderItem[]
   issues: Array<{
     id: string
@@ -44,6 +46,7 @@ function categoryLabel(category: BuyerReturnHubEntry['category']) {
 
 export function BuyerReturnHub({
   entries,
+  refundSummary,
   items,
   issues,
   onCancelRequest,
@@ -66,6 +69,24 @@ export function BuyerReturnHub({
       </YStack>
 
       <YStack gap="$3">
+        {refundSummary ? (
+          <YStack
+            gap="$1.5"
+            padding="$3.5"
+            borderRadius={14}
+            borderWidth={1}
+            borderColor={ui.borderSubtle}
+            backgroundColor={ui.surfaceMuted}
+          >
+            <Text fontSize={13} fontWeight="800" color={ui.text}>
+              {refundSummary.headline}
+            </Text>
+            <Text fontSize={12.5} color={ui.textSecondary}>
+              {refundSummary.detail}
+            </Text>
+          </YStack>
+        ) : null}
+
         {entries.map((entry) => {
           const item = entry.orderItemId ? itemById.get(entry.orderItemId) ?? null : null
           const issue = issues.find((current) => current.id === entry.issueId) ?? null
@@ -256,6 +277,37 @@ export function BuyerReturnHub({
                   {entry.rejectReason ? (
                     <Text fontSize={12} color={ui.danger}>
                       {entry.rejectReason}
+                    </Text>
+                  ) : null}
+                </YStack>
+              ) : null}
+
+              {entry.refundProgress ? (
+                <YStack
+                  gap="$1.5"
+                  padding="$3"
+                  borderRadius={12}
+                  backgroundColor={ui.surfaceMuted}
+                  borderWidth={1}
+                  borderColor={ui.borderSubtle}
+                >
+                  <Text fontSize={12} fontWeight="800" color={ui.text}>
+                    Refund progress
+                  </Text>
+                  {entry.refundProgress.etaLabel ? (
+                    <Text fontSize={12.5} fontWeight="700" color={ui.brand}>
+                      {entry.refundProgress.etaLabel}
+                    </Text>
+                  ) : null}
+                  <Text fontSize={12.5} color={ui.textSecondary}>
+                    {entry.refundProgress.explainer}
+                  </Text>
+                  <Text fontSize={12} color={ui.textMuted}>
+                    Next: {entry.refundProgress.nextStep}
+                  </Text>
+                  {entry.refundProgress.delayedWarning ? (
+                    <Text fontSize={12} color={ui.danger}>
+                      {entry.refundProgress.delayedWarning}
                     </Text>
                   ) : null}
                 </YStack>
