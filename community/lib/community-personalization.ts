@@ -29,6 +29,7 @@ export type CommunitySuggestionListingMeta = {
   price: number | null
   currency: string | null
   shopName: string | null
+  shopId?: string | null
 }
 
 export type CommunitySuggestion = {
@@ -53,6 +54,7 @@ export type PersonalizationContext = {
   geo: UserGeo
   networkSuggestions?: NetworkMember[]
   excludeUserIds?: Set<string>
+  followedShopIds?: Set<string>
 }
 
 const KIND_LABEL: Record<SuggestionKind, string> = {
@@ -208,6 +210,7 @@ function scoreListing(listing: ListingSummary, ctx: PersonalizationContext): Com
     .filter(Boolean)
     .join(', ')
 
+  const isFollowedShop = !!listing.shop_id && !!ctx.followedShopIds?.has(listing.shop_id)
   const score =
     interestScore(
       ctx.interests,
@@ -222,10 +225,13 @@ function scoreListing(listing: ListingSummary, ctx: PersonalizationContext): Com
     popularityScore(listing.total_reviews) +
     ((listing.average_rating ?? 0) >= 4.5 ? 14 : (listing.average_rating ?? 0) >= 4 ? 8 : 0) +
     (listing.is_featured ? 10 : 0) +
-    (listing.shop_verified ? 6 : 0)
+    (listing.shop_verified ? 6 : 0) +
+    (isFollowedShop ? 28 : 0)
 
   const reasons: string[] = []
-  if (interestScore(ctx.interests, ctx.industry, ctx.occupation, listing.title, listing.category) > 0) {
+  if (isFollowedShop) {
+    reasons.push('From a shop you follow')
+  } else if (interestScore(ctx.interests, ctx.industry, ctx.occupation, listing.title, listing.category) > 0) {
     reasons.push('Matches your interests')
   } else if (locationScore(ctx.geo, ctx.location, locationText) > 0) {
     reasons.push('From a shop near you')
@@ -255,6 +261,7 @@ function scoreListing(listing: ListingSummary, ctx: PersonalizationContext): Com
       price: listing.price ?? null,
       currency: listing.currency ?? null,
       shopName: listing.shop_name ?? null,
+      shopId: listing.shop_id ?? null,
     },
   }
 }
@@ -445,6 +452,7 @@ export async function fetchCommunitySuggestions(
   items: CommunitySuggestion[]
   byKind: Record<SuggestionKind, CommunitySuggestion[]>
   people: CommunitySuggestion[]
+  followedShopListings: CommunitySuggestion[]
   error: string | null
 }> {
   const limit = options.limit ?? 8
@@ -495,11 +503,24 @@ export async function fetchCommunitySuggestions(
       !exclude.has(member.user_id) &&
       list.findIndex((item) => item.user_id === member.user_id) === index,
   )
+  const followedShopIds = ctx.followedShopIds ?? new Set<string>()
+  const scoredListings = (listings.items ?? []).map((listing) => scoreListing(listing, ctx))
+  const followedShopListings = sortByScore(
+    scoredListings.filter((item) => {
+      const shopId = item.listingMeta?.shopId
+      return !!shopId && followedShopIds.has(shopId)
+    }),
+  )
+  const genericListings = scoredListings.filter((item) => {
+    const shopId = item.listingMeta?.shopId
+    return !shopId || !followedShopIds.has(shopId)
+  })
+  const genericShops = (shops.items ?? []).filter((shop) => !followedShopIds.has(shop.id))
 
   const pools: Record<SuggestionKind, CommunitySuggestion[]> = {
     person: sortByScore(peoplePool.map((member) => scorePerson(member, ctx))),
-    listing: sortByScore((listings.items ?? []).map((listing) => scoreListing(listing, ctx))),
-    shop: sortByScore((shops.items ?? []).map((shop) => scoreShop(shop, ctx))),
+    listing: sortByScore(genericListings),
+    shop: sortByScore(genericShops.map((shop) => scoreShop(shop, ctx))),
     company: sortByScore(companies.items.map((company) => scoreCompany(company, ctx))),
     group: sortByScore(groups.items.map((group) => scoreGroup(group, ctx))),
     job: sortByScore(jobs.items.map((job) => scoreJob(job, ctx))),
@@ -514,6 +535,7 @@ export async function fetchCommunitySuggestions(
     items: diversifyByKind(pools, limit),
     byKind,
     people: pools.person.slice(0, 5),
+    followedShopListings: followedShopListings.slice(0, perKindLimit),
     error:
       peopleRpc.error?.message ??
       discoverPeople.error ??

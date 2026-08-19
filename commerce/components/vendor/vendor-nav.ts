@@ -34,6 +34,14 @@ function ordersHref(section: VendorOrdersSectionId): Href {
  */
 const ORDERS_CHILDREN: VendorNavItem[] = [
   {
+    id: 'orders-inbox',
+    label: 'SLA Inbox',
+    description: 'Operational priority queue for shipments, returns, and exceptions.',
+    icon: Icons.Inbox,
+    href: ordersHref('inbox'),
+    ready: true,
+  },
+  {
     id: 'orders-all',
     label: 'All orders',
     description: 'Every line item sold, with status and fulfilment actions.',
@@ -242,7 +250,7 @@ export const VENDOR_SETTINGS_SECTION_IDS = [
 
 export type VendorSettingsSectionId = (typeof VENDOR_SETTINGS_SECTION_IDS)[number]
 
-export const VENDOR_ORDERS_SECTION_IDS = ['all', 'issues', 'fulfillments'] as const
+export const VENDOR_ORDERS_SECTION_IDS = ['inbox', 'all', 'issues', 'fulfillments'] as const
 
 export type VendorOrdersSectionId = (typeof VENDOR_ORDERS_SECTION_IDS)[number]
 
@@ -260,7 +268,7 @@ const VENDOR_SECTION_ROUTES: VendorSectionRoute[] = [
     navItemId: 'orders',
     path: '/vendor/orders',
     sectionIds: VENDOR_ORDERS_SECTION_IDS,
-    defaultSection: 'all',
+    defaultSection: 'inbox',
   },
   {
     navItemId: 'settings',

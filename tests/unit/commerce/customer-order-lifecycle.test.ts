@@ -6,6 +6,7 @@ import {
   canCancelReturnOrExchange,
   evaluateReorderCandidates,
   findOpenCancellationRequest,
+  getBuyerReturnHubEntries,
   getCustomerOrderActionEligibility,
   getReturnExchangeTimeline,
   getReturnWindowLabel,
@@ -272,6 +273,105 @@ describe('return / exchange lifecycle helpers', () => {
       },
     })
     expect(steps.find((s) => s.id === 'decision')?.label).toMatch(/Outside return window/i)
+  })
+
+  it('builds buyer return hub entries with evidence and pickup actions', () => {
+    const entries = getBuyerReturnHubEntries({
+      items: [{ id: 'item-1', product_title: 'Silk Kurta' }],
+      issues: [
+        {
+          id: 'issue-1',
+          order_item_id: 'item-1',
+          issue_type: ORDER_ISSUE_TYPE.RETURN_REQUEST,
+          status: 'open',
+          evidence_urls: [],
+        },
+        {
+          id: 'issue-2',
+          order_item_id: 'item-1',
+          issue_type: ORDER_ISSUE_TYPE.EXCHANGE_REQUEST,
+          status: 'in_progress',
+          resolution_action: 'accepted',
+          evidence_urls: ['https://img.example/1.jpg'],
+        },
+      ],
+    })
+
+    expect(entries[0]).toMatchObject({
+      issueId: 'issue-1',
+      category: 'needs_action',
+      action: 'upload_evidence',
+      actionLabel: 'Add photos if helpful',
+      evidenceLabel: 'No photos attached yet',
+    })
+    expect(entries[1]).toMatchObject({
+      issueId: 'issue-2',
+      category: 'in_progress',
+      action: 'wait_for_pickup',
+      actionLabel: 'Pickup being arranged',
+      evidenceCount: 1,
+    })
+  })
+
+  it('builds buyer return hub entries for tracking, refund completion, and declines', () => {
+    const entries = getBuyerReturnHubEntries({
+      items: [
+        { id: 'item-track', product_title: 'Handbag' },
+        { id: 'item-refund', product_title: 'Handbag' },
+        { id: 'item-declined', product_title: 'Handbag' },
+      ],
+      issues: [
+        {
+          id: 'issue-track',
+          order_item_id: 'item-track',
+          issue_type: ORDER_ISSUE_TYPE.RETURN_REQUEST,
+          status: 'in_progress',
+          resolution_action: 'accepted',
+          return_tracking_number: 'AWB-1',
+          return_tracking_url: 'https://track.example/awb-1',
+        },
+        {
+          id: 'issue-refund',
+          order_item_id: 'item-refund',
+          issue_type: ORDER_ISSUE_TYPE.RETURN_REQUEST,
+          status: 'resolved',
+          resolution_action: 'return_received',
+        },
+        {
+          id: 'issue-declined',
+          order_item_id: 'item-declined',
+          issue_type: ORDER_ISSUE_TYPE.EXCHANGE_REQUEST,
+          status: 'closed',
+          resolution_action: 'rejected',
+          reject_reason_code: 'out_of_window',
+          resolution_note: 'The request was filed too late.',
+        },
+      ],
+      refunds: [
+        {
+          order_item_id: 'item-refund',
+          refund_status: 'completed',
+          return_received_at: '2026-08-19T10:00:00.000Z',
+        },
+      ],
+    })
+
+    expect(entries.find((entry) => entry.issueId === 'issue-track')).toMatchObject({
+      action: 'track_return',
+      actionLabel: 'Track return',
+      returnTrackingUrl: 'https://track.example/awb-1',
+    })
+    expect(entries.find((entry) => entry.issueId === 'issue-refund')).toMatchObject({
+      category: 'resolved',
+      action: 'view_refund_progress',
+      actionLabel: 'Refund completed',
+      refundLabel: 'Refund Completed',
+    })
+    expect(entries.find((entry) => entry.issueId === 'issue-declined')).toMatchObject({
+      category: 'declined',
+      action: 'view_decline_reason',
+      rejectReason: 'Outside return window',
+    })
   })
 
   it('labels the return window countdown', () => {

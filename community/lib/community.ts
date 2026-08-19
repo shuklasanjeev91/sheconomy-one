@@ -72,6 +72,9 @@ export type PostProduct = {
   shopName: string | null
 }
 
+/** One or more listings attached to a normal feed post. */
+export type PostProductAttachment = PostProduct
+
 /** A shop promoted into the feed. */
 export type PostShop = {
   shopId: string | null
@@ -126,6 +129,7 @@ export type CommunityPost = {
   listing_id: string | null
   celebration: PostCelebration | null
   product: PostProduct | null
+  products: PostProductAttachment[] | null
   shop: PostShop | null
   link: PostLinkPreview | null
   /** Present when post_type is article. */
@@ -201,6 +205,15 @@ export type CreatePostInput = {
     slug?: string | null
     shopName?: string | null
   } | null
+  products?: Array<{
+    listingId: string
+    title: string
+    price?: number | null
+    currency?: string | null
+    imageUrl?: string | null
+    slug?: string | null
+    shopName?: string | null
+  }> | null
   shop?: {
     shopId: string
     name: string
@@ -284,6 +297,7 @@ function mapPost(row: PostRow, username?: string | null): CommunityPost {
     listing_id: null,
     celebration: null,
     product: null,
+    products: null,
     shop: null,
     link: null,
     article_title: null,
@@ -342,6 +356,14 @@ function mapProduct(value: unknown, listingId: string | null): PostProduct | nul
     slug: typeof data?.slug === 'string' ? data.slug : null,
     shopName: typeof data?.shopName === 'string' ? data.shopName : null,
   }
+}
+
+function mapProducts(value: unknown): PostProductAttachment[] | null {
+  if (!Array.isArray(value)) return null
+  const items = value
+    .map((entry) => mapProduct(entry, null))
+    .filter((item): item is PostProductAttachment => !!item?.listingId && !!item.title)
+  return items.length ? items : null
 }
 
 function mapLinkPreview(value: unknown): PostLinkPreview | null {
@@ -445,6 +467,7 @@ async function enrichPostsWithPostMeta(posts: CommunityPost[]): Promise<Communit
     const articleTags = Array.isArray(postData?.article_tags)
       ? (postData.article_tags as unknown[]).filter((tag): tag is string => typeof tag === 'string')
       : null
+    const attachedProducts = mapProducts(postData?.attached_products)
     return {
       ...post,
       company_id: meta?.company_id ?? null,
@@ -452,6 +475,7 @@ async function enrichPostsWithPostMeta(posts: CommunityPost[]): Promise<Communit
       listing_id: listingId,
       celebration: mapCelebration(meta?.celebration_data),
       product: mapProduct(meta?.product_data, listingId),
+      products: attachedProducts,
       shop: mapShop(meta?.service_data),
       link: mapLinkPreview(meta?.link_preview_data),
       article_title: articleTitle,
@@ -1041,6 +1065,19 @@ export async function createCommunityPost(
       ? input.celebration
       : null
   const product = input.product?.listingId ? input.product : null
+  const products =
+    (input.products ?? [])
+      .map((item) => ({
+        listingId: item.listingId,
+        title: item.title.trim(),
+        price: typeof item.price === 'number' ? item.price : null,
+        currency: item.currency?.trim() || null,
+        imageUrl: item.imageUrl?.trim() || null,
+        slug: item.slug?.trim() || null,
+        shopName: item.shopName?.trim() || null,
+      }))
+      .filter((item) => item.listingId && item.title)
+      .slice(0, 3) || []
   const shop = input.shop?.shopId ? input.shop : null
   const rawLink = input.linkPreview?.url
     ? input.linkPreview
@@ -1076,7 +1113,17 @@ export async function createCommunityPost(
           videoType: rawLink.videoType ?? (providerFromLink ? 'text/html' : null),
         }
       : null
-  if (!content && !hasImage && !isEvent && !hasPoll && !celebration && !product && !shop && !linkPreview) {
+  if (
+    !content &&
+    !hasImage &&
+    !isEvent &&
+    !hasPoll &&
+    !celebration &&
+    !product &&
+    !products.length &&
+    !shop &&
+    !linkPreview
+  ) {
     return { id: null, error: 'Write something or add media before posting.' }
   }
 
@@ -1118,13 +1165,27 @@ export async function createCommunityPost(
         : mediaUrl
           ? { media_url: mediaUrl }
           : {}
+  const postDataWithProducts = products.length
+    ? {
+        ...postData,
+        attached_products: products.map((item) => ({
+          listingId: item.listingId,
+          title: item.title,
+          price: item.price ?? null,
+          currency: item.currency ?? null,
+          imageUrl: item.imageUrl ?? null,
+          slug: item.slug ?? null,
+          shopName: item.shopName ?? null,
+        })),
+      }
+    : postData
 
   const { data, error } = await supabase
     .from('posts')
     .insert({
       user_id: userId,
       content,
-      post_data: postData,
+      post_data: postDataWithProducts,
       visibility: input.visibility ?? 'public',
       post_type: postType,
       image_url: coverImage,

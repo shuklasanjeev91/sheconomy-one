@@ -53,6 +53,7 @@ import { VendorAddTrackingDrawer, type TrackingFormValues } from '~/commerce/scr
 import { VendorFulfillmentsPanel } from '~/commerce/screens/vendor/VendorFulfillmentsPanel'
 import { VendorOrderIssuesPanel } from '~/commerce/screens/vendor/VendorOrderIssuesPanel'
 import { VendorOrderDetailDrawer } from '~/commerce/screens/vendor/VendorOrderDetailDrawer'
+import { VendorSlaInboxPanel } from '~/commerce/screens/vendor/VendorSlaInboxPanel'
 import { VendorActionButton } from '~/commerce/components/vendor/VendorActionButton'
 import { useVendorSectionId } from '~/commerce/components/vendor/useVendorActiveSubId'
 
@@ -306,6 +307,12 @@ export function VendorOrdersScreen() {
       ui={ui}
       activeId={activeSection}
       tabs={[
+        {
+          id: 'inbox',
+          label: 'SLA Inbox',
+          icon: Icons.Inbox,
+          href: String(vendorRoutes.ordersSection('inbox')),
+        },
         { id: 'all', label: 'All orders', icon: Icons.ClipboardList, href: String(vendorRoutes.orders) },
         {
           id: 'issues',
@@ -338,6 +345,18 @@ export function VendorOrdersScreen() {
   if (activeSection === 'issues') {
     return (
       <VendorOrderIssuesPanel
+        ui={ui}
+        isDesktop={isDesktop}
+        shopId={shop.id}
+        shopName={shop.shop_name ?? 'Orders'}
+        tabs={sectionTabs}
+      />
+    )
+  }
+
+  if (activeSection === 'inbox') {
+    return (
+      <VendorSlaInboxPanel
         ui={ui}
         isDesktop={isDesktop}
         shopId={shop.id}

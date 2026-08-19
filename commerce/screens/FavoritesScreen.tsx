@@ -1,10 +1,20 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { AppLink } from '~/components/navigation/AppLink'
 
 import { Share } from 'react-native'
 
 import { ListingBrowseView, RecentlyViewedRail } from '~/commerce/components'
+import { WishlistReactivationSection } from '~/commerce/components/WishlistReactivationSection'
+import { useCart } from '~/commerce/hooks/useCart'
 import { useFavorites } from '~/commerce/hooks/useFavorites'
+import {
+  buildWishlistReactivation,
+  clearWishlistSavedFromCartMarker,
+  clearWishlistSavedFromCartMarkers,
+  readSavedFromCartWishlistMap,
+  type WishlistReactivationItem,
+  type WishlistReactivationSection as WishlistReactivationSectionType,
+} from '~/commerce/lib/wishlist-reactivation'
 import {
   createWishlistCollection,
   ensureWishlistShareLink,
@@ -20,6 +30,7 @@ import { formatCurrency } from '~/lib/format'
 import { copyToClipboard } from '~/lib/platform/clipboard'
 import { fetchListingsByIds, type ListingSummary } from '~/lib/supabase/commerce'
 import { commerceRoutes } from '~/lib/routes'
+import { navigateApp } from '~/lib/platform/navigate'
 import { useAppUi } from '~/lib/theme/useAppUi'
 import { useSupabase } from '~/providers/SupabaseProvider'
 
@@ -27,7 +38,8 @@ export function FavoritesScreen() {
   const ui = useAppUi()
   const toast = useAppToast()
   const { user } = useSupabase()
-  const { favoriteIds, isLoading: isFavoritesLoading } = useFavorites()
+  const { favoriteIds, isLoading: isFavoritesLoading, toggleFavorite } = useFavorites()
+  const { addToCart } = useCart()
   const [items, setItems] = useState<ListingSummary[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -36,9 +48,14 @@ export function FavoritesScreen() {
   const [newCollectionName, setNewCollectionName] = useState('')
   const [isCreatingCollection, setIsCreatingCollection] = useState(false)
   const [moveListingId, setMoveListingId] = useState<string | null>(null)
+  const [savedFromCartMap, setSavedFromCartMap] = useState<Record<string, number>>({})
 
-  async function handleShareWishlist() {
-    if (!items.length) {
+  async function refreshSavedFromCartMap() {
+    setSavedFromCartMap(await readSavedFromCartWishlistMap())
+  }
+
+  async function handleShareWishlist(targetItems: ListingSummary[] = items) {
+    if (!targetItems.length) {
       toast.show('Save items before sharing', { tone: 'info' })
       return
     }
@@ -47,7 +64,7 @@ export function FavoritesScreen() {
       const result = await ensureWishlistShareLink({
         userId: user.id,
         collectionId: activeCollectionId,
-        listingIds: items.map((item) => item.id),
+        listingIds: targetItems.map((item) => item.id),
       })
       if (result.error || !result.shareUrl) {
         toast.show('Could not create share link', {
@@ -75,7 +92,7 @@ export function FavoritesScreen() {
       return
     }
 
-    const lines = items.slice(0, 12).map((item) => {
+    const lines = targetItems.slice(0, 12).map((item) => {
       const price =
         typeof item.price === 'number'
           ? ` — ${formatCurrency(item.price, item.currency ?? 'INR')}`
@@ -84,10 +101,10 @@ export function FavoritesScreen() {
     })
     const message = [
       `Wishlist on ${BRAND_NAME}`,
-      `${items.length} saved item${items.length === 1 ? '' : 's'}`,
+      `${targetItems.length} saved item${targetItems.length === 1 ? '' : 's'}`,
       '',
       ...lines,
-      items.length > 12 ? `…and ${items.length - 12} more` : null,
+      targetItems.length > 12 ? `…and ${targetItems.length - 12} more` : null,
     ]
       .filter(Boolean)
       .join('\n')
@@ -144,9 +161,18 @@ export function FavoritesScreen() {
   }, [loadCollections])
 
   useEffect(() => {
+    void refreshSavedFromCartMap()
+  }, [])
+
+  useEffect(() => {
     if (isFavoritesLoading) return
     void loadFavorites()
   }, [isFavoritesLoading, loadFavorites])
+
+  const reactivation = useMemo(
+    () => buildWishlistReactivation({ items, savedFromCart: savedFromCartMap }),
+    [items, savedFromCartMap],
+  )
 
   async function handleCreateCollection() {
     if (!user?.id || !newCollectionName.trim()) return
@@ -162,6 +188,64 @@ export function FavoritesScreen() {
     if (result.collection) setActiveCollectionId(result.collection.id)
     toast.show('Collection created', { tone: 'success' })
   }
+
+  async function handleMoveToCart(item: WishlistReactivationItem) {
+    const result = await addToCart(item.id)
+    if (result.error) {
+      toast.show('Choose options first', {
+        tone: 'info',
+        message: 'Open the product page to pick options before adding it to cart.',
+      })
+      navigateApp(commerceRoutes.listing(item.slug ?? item.id))
+      return
+    }
+    await clearWishlistSavedFromCartMarker(item.id)
+    await refreshSavedFromCartMap()
+    toast.show('Moved to cart', {
+      tone: 'success',
+      message: item.source === 'saved_from_cart' ? 'Your saved cart pick is back in checkout.' : undefined,
+    })
+  }
+
+  async function handleBuyNow(item: WishlistReactivationItem) {
+    const result = await addToCart(item.id)
+    if (result.error) {
+      toast.show('Choose options first', {
+        tone: 'info',
+        message: 'Open the product page to pick options before buying now.',
+      })
+      navigateApp(commerceRoutes.listing(item.slug ?? item.id))
+      return
+    }
+    await clearWishlistSavedFromCartMarker(item.id)
+    await refreshSavedFromCartMap()
+    navigateApp(commerceRoutes.checkout)
+  }
+
+  async function handleBulkPrimary(section: WishlistReactivationSectionType) {
+    if (!section.items.length) return
+    const succeeded: string[] = []
+    let failed = 0
+    for (const item of section.items) {
+      const result = await addToCart(item.id)
+      if (result.error) failed += 1
+      else succeeded.push(item.id)
+    }
+    if (succeeded.length) {
+      await clearWishlistSavedFromCartMarkers(succeeded)
+      await refreshSavedFromCartMap()
+    }
+    toast.show(failed > 0 ? 'Moved what we could' : 'Moved to cart', {
+      tone: failed > 0 ? 'info' : 'success',
+      message:
+        failed > 0
+          ? `${succeeded.length} item${succeeded.length === 1 ? '' : 's'} moved. ${failed} need product-page option selection.`
+          : `${succeeded.length} item${succeeded.length === 1 ? '' : 's'} moved to cart.`,
+    })
+  }
+
+  const moreSavedSection = reactivation.sections.find((section) => section.key === 'more_saved') ?? null
+  const topSections = reactivation.sections.filter((section) => section.key !== 'more_saved')
 
   if (isFavoritesLoading) {
     return (
@@ -182,8 +266,8 @@ export function FavoritesScreen() {
               Your wishlist
             </Text>
             <Text fontSize={14} color={ui.textSecondary}>
-              {items.length > 0
-                ? `${items.length} saved ${items.length === 1 ? 'item' : 'items'}`
+              {reactivation.counts.total > 0
+                ? `${reactivation.counts.total} saved ${reactivation.counts.total === 1 ? 'item' : 'items'} · ${reactivation.counts.readyToBuy} ready to revisit`
                 : 'Tap the heart on any listing to save it here'}
             </Text>
           </YStack>
@@ -201,6 +285,15 @@ export function FavoritesScreen() {
             ) : null}
           </XStack>
         </XStack>
+
+        {items.length > 0 ? (
+          <XStack gap="$3" flexWrap="wrap">
+            <SummaryCard label="Saved items" value={reactivation.counts.total} />
+            <SummaryCard label="Ready to buy" value={reactivation.counts.readyToBuy} />
+            <SummaryCard label="Saved from cart" value={reactivation.counts.savedFromCart} />
+            <SummaryCard label="Price wins" value={reactivation.counts.priceWins} />
+          </XStack>
+        ) : null}
 
         {user ? (
           <YStack gap="$2">
@@ -245,23 +338,50 @@ export function FavoritesScreen() {
           </YStack>
         ) : null}
 
-        <ListingBrowseView
-          title="Saved items"
-          subtitle={
-            items.length > 0
-              ? `${items.length} saved ${items.length === 1 ? 'item' : 'items'}`
-              : 'Items you save will appear here'
-          }
-          items={items}
-          isLoading={isLoading}
-          isLoadingMore={false}
-          hasMore={false}
-          error={error}
-          onLoadMore={() => {}}
-          onRetry={() => void loadFavorites()}
-          emptyMessage="Your wishlist is empty. Save items with the heart, or move them here from Saved for later on your cart."
-          showQuickAdd
-        />
+        {topSections.map((section) => (
+          <WishlistReactivationSection
+            key={section.key}
+            section={section}
+            onMoveToCart={(item) => void handleMoveToCart(item)}
+            onBuyNow={(item) => void handleBuyNow(item)}
+            onMoveToCollection={(item) => setMoveListingId(item.id)}
+            onBulkPrimary={(current) => void handleBulkPrimary(current)}
+          />
+        ))}
+
+        {moreSavedSection ? (
+          <ListingBrowseView
+            title={moreSavedSection.title}
+            subtitle={`${moreSavedSection.count} additional saved ${moreSavedSection.count === 1 ? 'item' : 'items'}`}
+            items={moreSavedSection.items}
+            isLoading={isLoading}
+            isLoadingMore={false}
+            hasMore={false}
+            error={error}
+            onLoadMore={() => {}}
+            onRetry={() => void loadFavorites()}
+            emptyMessage="Your wishlist is empty. Save items with the heart, or move them here from Saved for later on your cart."
+            showQuickAdd
+          />
+        ) : (
+          <ListingBrowseView
+            title="Saved items"
+            subtitle={
+              items.length > 0
+                ? `${items.length} saved ${items.length === 1 ? 'item' : 'items'}`
+                : 'Items you save will appear here'
+            }
+            items={items}
+            isLoading={isLoading}
+            isLoadingMore={false}
+            hasMore={false}
+            error={error}
+            onLoadMore={() => {}}
+            onRetry={() => void loadFavorites()}
+            emptyMessage="Your wishlist is empty. Save items with the heart, or move them here from Saved for later on your cart."
+            showQuickAdd
+          />
+        )}
 
         {user && items.length > 0 ? (
           <YStack gap="$2" paddingTop="$2">
@@ -322,5 +442,28 @@ export function FavoritesScreen() {
         ) : null}
       </PageSection>
     </FullWidthLayout>
+  )
+}
+
+function SummaryCard({ label, value }: { label: string; value: number }) {
+  const ui = useAppUi()
+  return (
+    <YStack
+      minWidth={140}
+      flex={1}
+      gap="$1"
+      padding="$3"
+      borderRadius={14}
+      borderWidth={1}
+      borderColor={ui.borderSubtle}
+      backgroundColor={ui.surface}
+    >
+      <Text fontSize={22} fontWeight="800" color={ui.text}>
+        {value}
+      </Text>
+      <Text fontSize={12} color={ui.textSecondary}>
+        {label}
+      </Text>
+    </YStack>
   )
 }

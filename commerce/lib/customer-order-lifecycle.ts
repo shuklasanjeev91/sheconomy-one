@@ -243,6 +243,42 @@ export type ReturnExchangeTimelineStep = {
   detail?: string | null
 }
 
+export type BuyerReturnHubCategory = 'needs_action' | 'in_progress' | 'resolved' | 'declined'
+
+export type BuyerReturnHubAction =
+  | 'upload_evidence'
+  | 'wait_for_decision'
+  | 'wait_for_pickup'
+  | 'track_return'
+  | 'wait_for_receipt'
+  | 'view_refund_progress'
+  | 'replacement_shipping_soon'
+  | 'view_decline_reason'
+  | 'request_cancelled'
+
+export type BuyerReturnHubEntry = {
+  issueId: string
+  orderItemId: string | null
+  itemTitle: string
+  issueLabel: string
+  statusLabel: string
+  category: BuyerReturnHubCategory
+  action: BuyerReturnHubAction
+  actionLabel: string
+  actionDetail: string | null
+  timeline: ReturnExchangeTimelineStep[]
+  evidenceCount: number
+  evidenceUrls: string[]
+  evidenceLabel: string | null
+  refundLabel: string | null
+  returnTrackingNumber: string | null
+  returnCourierSlug: string | null
+  returnTrackingUrl: string | null
+  returnShippingMode: string | null
+  rejectReason: string | null
+  resolutionNote: string | null
+}
+
 export function getReturnExchangeTimeline(input: {
   issue: {
     issue_type?: string | null
@@ -334,6 +370,145 @@ export function getReturnExchangeTimeline(input: {
   }
 
   return steps
+}
+
+export function getBuyerReturnHubEntries(input: {
+  items: Array<{ id: string; product_title?: string | null }>
+  issues: Array<{
+    id: string
+    order_item_id?: string | null
+    issue_type?: string | null
+    status?: string | null
+    resolution_action?: string | null
+    return_tracking_number?: string | null
+    return_courier_slug?: string | null
+    return_tracking_url?: string | null
+    return_shipping_mode?: string | null
+    reject_reason_code?: string | null
+    resolution_note?: string | null
+    evidence_urls?: string[] | null
+    created_at?: string | null
+  }>
+  refunds?: Array<{
+    order_item_id?: string | null
+    refund_status?: string | null
+    refund_amount?: number | null
+    return_received_at?: string | null
+  }> | null
+  currency?: string | null
+}): BuyerReturnHubEntry[] {
+  const itemById = new Map(input.items.map((item) => [item.id, item]))
+
+  return input.issues
+    .filter((issue) => isReturnIssueType(issue.issue_type) || isExchangeIssueType(issue.issue_type))
+    .map((issue) => {
+      const refund =
+        (input.refunds ?? []).find((item) => item.order_item_id === issue.order_item_id) ?? null
+      const timeline = getReturnExchangeTimeline({ issue, refund })
+      const isExchange = isExchangeIssueType(issue.issue_type)
+      const rejected = issue.resolution_action === 'rejected'
+      const cancelled = issue.resolution_action === 'cancelled_by_buyer'
+      const hasAwb = Boolean(issue.return_tracking_number)
+      const received =
+        issue.resolution_action === 'return_received' ||
+        issue.resolution_action === 'exchange_ready_to_ship' ||
+        Boolean(refund?.return_received_at)
+      const refundStatus = String(refund?.refund_status ?? '')
+      const refundDone = ['approved', 'completed'].includes(refundStatus)
+      const exchangeReady = issue.resolution_action === 'exchange_ready_to_ship'
+      const accepted =
+        issue.resolution_action === 'accepted' ||
+        issue.resolution_action === 'return_received' ||
+        issue.resolution_action === 'exchange_ready_to_ship'
+      const evidenceCount = Array.isArray(issue.evidence_urls) ? issue.evidence_urls.length : 0
+      const rejectReason = rejectReasonLabel(issue.reject_reason_code)
+      const itemTitle =
+        itemById.get(issue.order_item_id ?? '')?.product_title?.trim() || issueTypeLabel(issue.issue_type)
+
+      let category: BuyerReturnHubCategory = 'in_progress'
+      let action: BuyerReturnHubAction = 'wait_for_decision'
+      let actionLabel = 'Waiting for shop decision'
+      let actionDetail: string | null = 'The shop will review your request shortly.'
+
+      if (rejected) {
+        category = 'declined'
+        action = 'view_decline_reason'
+        actionLabel = 'Request declined'
+        actionDetail = rejectReason
+          ? `${rejectReason}${issue.resolution_note ? ` · ${issue.resolution_note}` : ''}`
+          : issue.resolution_note ?? 'The shop declined this request.'
+      } else if (cancelled) {
+        category = 'resolved'
+        action = 'request_cancelled'
+        actionLabel = 'Request cancelled'
+        actionDetail = 'You cancelled this request before pickup was arranged.'
+      } else if (!accepted) {
+        category = evidenceCount === 0 ? 'needs_action' : 'in_progress'
+        action = evidenceCount === 0 ? 'upload_evidence' : 'wait_for_decision'
+        actionLabel = evidenceCount === 0 ? 'Add photos if helpful' : 'Waiting for shop decision'
+        actionDetail =
+          evidenceCount === 0
+            ? 'Photos can help the shop approve your request faster.'
+            : `Evidence uploaded · ${evidenceCount} photo${evidenceCount === 1 ? '' : 's'}`
+      } else if (received && isExchange) {
+        category = exchangeReady ? 'in_progress' : 'in_progress'
+        action = 'replacement_shipping_soon'
+        actionLabel = exchangeReady ? 'Replacement ready to ship' : 'Replacement shipping soon'
+        actionDetail = 'The shop has received your item and will ship your replacement next.'
+      } else if (received && refundStatus) {
+        category = refundDone ? 'resolved' : 'in_progress'
+        action = 'view_refund_progress'
+        actionLabel = refundDone ? 'Refund completed' : 'Refund in progress'
+        actionDetail = `Refund ${refundStatusLabel(refundStatus)}`
+      } else if (!hasAwb) {
+        category = 'in_progress'
+        action = 'wait_for_pickup'
+        actionLabel = 'Pickup being arranged'
+        actionDetail = 'The shop has approved your request and is arranging reverse pickup.'
+      } else if (!received) {
+        category = 'in_progress'
+        action = issue.return_tracking_url ? 'track_return' : 'wait_for_receipt'
+        actionLabel = issue.return_tracking_url ? 'Track return' : 'Return in transit'
+        actionDetail = 'Your return is on the way back to the shop.'
+      }
+
+      const evidenceLabel =
+        evidenceCount > 0
+          ? `${evidenceCount} photo${evidenceCount === 1 ? '' : 's'} shared with the shop`
+          : category === 'needs_action'
+            ? 'No photos attached yet'
+            : null
+
+      return {
+        issueId: issue.id,
+        orderItemId: issue.order_item_id ?? null,
+        itemTitle,
+        issueLabel: issueTypeLabel(issue.issue_type),
+        statusLabel: issueStatusLabel(issue.status),
+        category,
+        action,
+        actionLabel,
+        actionDetail,
+        timeline,
+        evidenceCount,
+        evidenceUrls: Array.isArray(issue.evidence_urls) ? issue.evidence_urls.filter(Boolean) : [],
+        evidenceLabel,
+        refundLabel: refundStatus ? `Refund ${refundStatusLabel(refundStatus)}` : null,
+        returnTrackingNumber: issue.return_tracking_number ?? null,
+        returnCourierSlug: issue.return_courier_slug ?? null,
+        returnTrackingUrl: safeHttpUrl(issue.return_tracking_url) ?? null,
+        returnShippingMode: issue.return_shipping_mode ?? null,
+        rejectReason,
+        resolutionNote: issue.resolution_note ?? null,
+      } satisfies BuyerReturnHubEntry
+    })
+    .sort((a, b) => {
+      const rank = { needs_action: 0, in_progress: 1, declined: 2, resolved: 3 } satisfies Record<
+        BuyerReturnHubCategory,
+        number
+      >
+      return rank[a.category] - rank[b.category]
+    })
 }
 
 export function isDeliveredOrCompletedStatus(status: string | null | undefined): boolean {

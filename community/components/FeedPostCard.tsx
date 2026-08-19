@@ -25,6 +25,8 @@ import type {
 import { castPollVote } from '~/community/lib/polls'
 import { collectPostMedia, type PostMediaItem } from '~/community/lib/post-media'
 import { useCommunityUi } from '~/community/lib/community-theme'
+import { buildSignInUrl } from '~/lib/auth/redirect'
+import { formatMoneyLabel } from '~/lib/format'
 import { extractFirstUrl, parseVideoProvider } from '~/lib/link-preview'
 import {
   getPostTypeSurface,
@@ -128,6 +130,7 @@ export const FeedPostCard = memo(function FeedPostCard({
   const articleHref = communityRoutes.article(post.id)
   const isArticle = post.post_type === 'article' || !!post.article_title
   const detailHref = isArticle ? articleHref : communityRoutes.post(post.id)
+  const feedProducts = post.products?.length ? post.products : post.product ? [post.product] : []
 
   const [lightboxOpen, setLightboxOpen] = useState(false)
   const [lightboxIndex, setLightboxIndex] = useState(0)
@@ -417,7 +420,7 @@ export const FeedPostCard = memo(function FeedPostCard({
           {resolvedLink && mediaItems.length === 0 && !isArticle ? (
             <PostLinkPreviewCard preview={resolvedLink} />
           ) : null}
-          {post.product ? <PostProductCard product={post.product} /> : null}
+          {feedProducts.length ? <PostProductStack products={feedProducts} /> : null}
           {post.shop ? <PostShopCard shop={post.shop} /> : null}
         </YStack>
 
@@ -696,38 +699,60 @@ function PostCelebrationCard({ celebration }: { celebration: PostCelebration }) 
 
 function formatPostPrice(price: number | null, currency: string | null) {
   if (price == null) return 'Free'
-  try {
-    return new Intl.NumberFormat('en-IN', {
-      style: 'currency',
-      currency: currency || 'INR',
-      maximumFractionDigits: 0,
-    }).format(price)
-  } catch {
-    return `${currency ?? '₹'}${price}`
-  }
+  return formatMoneyLabel(price, currency ?? 'INR')
 }
 
-function PostProductCard({ product }: { product: PostProduct }) {
+function PostProductStack({ products }: { products: PostProduct[] }) {
+  return (
+    <YStack gap={10}>
+      {products.map((product, index) => (
+        <PostProductCard
+          key={product.listingId ?? product.slug ?? `${product.title}-${index}`}
+          product={product}
+          multi={products.length > 1}
+        />
+      ))}
+    </YStack>
+  )
+}
+
+function PostProductCard({ product, multi = false }: { product: PostProduct; multi?: boolean }) {
   const communityUi = useCommunityUi()
   const toast = useAppToast()
   const { addToCart } = useCart()
+  const { user } = useSupabase()
   const [adding, setAdding] = useState(false)
+  const [buying, setBuying] = useState(false)
 
-  async function handleAddToCart() {
+  async function handleCartAction(goToCheckout: boolean) {
     if (!product.listingId) {
       toast.show('Listing unavailable', { tone: 'default' })
       return
     }
-    setAdding(true)
+    const setBusy = goToCheckout ? setBuying : setAdding
+    setBusy(true)
     try {
       const { error } = await addToCart(product.listingId)
       if (error) {
-        toast.show('Could not add to cart', { tone: 'danger', message: error })
+        toast.show(goToCheckout ? 'Choose options on the product page' : 'Could not add to cart', {
+          tone: 'default',
+          message: error,
+        })
+        if (product.slug || product.listingId) {
+          navigateApp(
+            Platform.OS !== 'web' && product.listingId
+              ? commerceRoutes.listing(product.listingId)
+              : commerceRoutes.listing(product.slug ?? product.listingId),
+          )
+        }
         return
       }
       toast.show('Added to cart', { tone: 'success' })
+      if (goToCheckout) {
+        navigateApp(user ? commerceRoutes.checkout : buildSignInUrl(String(commerceRoutes.checkout)))
+      }
     } finally {
-      setAdding(false)
+      setBusy(false)
     }
   }
 
@@ -759,7 +784,7 @@ function PostProductCard({ product }: { product: PostProduct }) {
         </YStack>
         <YStack flex={1} padding={12} gap={4} justifyContent="center" minWidth={0}>
           <Text fontSize={11} fontWeight="700" color={communityUi.textMuted} letterSpacing={0.4}>
-            PRODUCT
+            {multi ? 'PRODUCT TAG' : 'PRODUCT'}
           </Text>
           <Text fontSize={15} fontWeight="700" color={communityUi.text} numberOfLines={2}>
             {product.title}
@@ -778,32 +803,32 @@ function PostProductCard({ product }: { product: PostProduct }) {
         <XStack padding={10} paddingTop={0} gap="$2">
           <Button
             size="$2"
-            tone="primary"
+            tone="outline"
             borderRadius={999}
             flex={1}
-            disabled={adding}
-            icon={adding ? <Spinner size="small" color="white" /> : <Icons.ShoppingBag size={14} />}
+            disabled={adding || buying}
+            icon={adding ? <Spinner size="small" /> : <Icons.ShoppingBag size={14} color={communityUi.text} />}
             onPress={(e) => {
               e?.stopPropagation?.()
-              void handleAddToCart()
+              void handleCartAction(false)
             }}
           >
             {adding ? 'Adding…' : 'Add to cart'}
           </Button>
-          {product.slug || product.listingId ? (
-            <AppLink
-              href={
-                Platform.OS !== 'web' && product.listingId
-                  ? commerceRoutes.listing(product.listingId)
-                  : commerceRoutes.listing(product.slug ?? product.listingId!)
-              }
-              asChild
-            >
-              <Button size="$2" tone="outline" borderRadius={999}>
-                View
-              </Button>
-            </AppLink>
-          ) : null}
+          <Button
+            size="$2"
+            tone="primary"
+            borderRadius={999}
+            flex={1}
+            disabled={adding || buying}
+            icon={buying ? <Spinner size="small" color="white" /> : <Icons.Zap size={14} color="white" />}
+            onPress={(e) => {
+              e?.stopPropagation?.()
+              void handleCartAction(true)
+            }}
+          >
+            {buying ? 'Loading…' : 'Buy now'}
+          </Button>
         </XStack>
       ) : null}
     </YStack>

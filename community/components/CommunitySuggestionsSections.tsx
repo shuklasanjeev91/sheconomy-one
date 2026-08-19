@@ -52,7 +52,7 @@ export function CommunitySuggestionsSections({
     <YStack gap="$2">
       {sections.map((section) => (
         <CommunitySuggestionSectionCard
-          key={section.kind}
+          key={`${section.kind}-${section.title}`}
           section={section}
           limit={itemLimit}
           compactProducts={compactProducts}

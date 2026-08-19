@@ -9,7 +9,11 @@ import { CommunityCard } from '~/community/components/CommunityCard'
 import { MentionInput } from '~/community/components/MentionInput'
 import { PostComposeAiBar } from '~/community/components/PostComposeAiBar'
 import { PostLinkPreviewCard } from '~/community/components/PostLinkPreviewCard'
-import { createCommunityPost, type PostLinkPreview } from '~/community/lib/community'
+import {
+  createCommunityPost,
+  type PostLinkPreview,
+  type PostProduct,
+} from '~/community/lib/community'
 import { createEventAndFeedPost } from '~/community/lib/events'
 import {
   clearComposeDraft,
@@ -60,6 +64,7 @@ const MAX_ARTICLE_LENGTH = 12000
 const MAX_POLL_OPTIONS = 4
 const MAX_PHOTOS = 9
 const MAX_VIDEOS = 3
+const MAX_ATTACHED_PRODUCTS = 3
 const POLL_DURATIONS = [
   { label: '1 day', days: 1 },
   { label: '3 days', days: 3 },
@@ -203,6 +208,8 @@ export function CreatePostForm({
   const [selectedShop, setSelectedShop] = useState<VendorShop | null>(null)
   const [listingSearchQuery, setListingSearchQuery] = useState('')
   const [shopSearchQuery, setShopSearchQuery] = useState('')
+  const [attachedProducts, setAttachedProducts] = useState<PostProduct[]>([])
+  const [productPickerOpen, setProductPickerOpen] = useState(false)
 
   const filteredListings = useMemo(
     () => filterBySearchQuery(listings, listingSearchQuery, (listing) => [listing.title]),
@@ -280,7 +287,9 @@ export function CreatePostForm({
             ? !!selectedListing
             : composeMode === 'shop'
               ? !!selectedShop
-              : (Boolean(content.trim()) || hasMedia) && !isOverLimit && form.fields.imageUrl.isValid
+              : (Boolean(content.trim()) || hasMedia || attachedProducts.length > 0) &&
+                  !isOverLimit &&
+                  form.fields.imageUrl.isValid
 
   const applyPostMediaItems = useCallback(
     (items: PickedImage[]) => {
@@ -468,9 +477,9 @@ export function CreatePostForm({
     if (!activeShopId && shops.length) setActiveShopId(shops[0].id)
   }, [activeShopId, shops])
 
-  // Load listings for the active shop when composing a product post.
+  // Load listings for product posts and text-post product attachments.
   useEffect(() => {
-    if (composeMode !== 'product' || !activeShopId) return
+    if ((composeMode !== 'product' && !productPickerOpen) || !activeShopId) return
     let cancelled = false
     setLoadingListings(true)
     fetchSellerListings(activeShopId, { status: 'active', limit: 50 })
@@ -489,7 +498,7 @@ export function CreatePostForm({
     return () => {
       cancelled = true
     }
-  }, [activeShopId, composeMode, initialListingId])
+  }, [activeShopId, composeMode, initialListingId, productPickerOpen])
 
   // When sharing a specific listing from PDP, pin its shop if present in shops.
   useEffect(() => {
@@ -539,6 +548,38 @@ export function CreatePostForm({
       if (target) releasePickedImage(target)
       return current.filter((_, i) => i !== index)
     })
+  }
+
+  function toAttachedProduct(listing: SellerListingRow, shop: VendorShop | null): PostProduct {
+    return {
+      listingId: listing.id,
+      title: listing.title,
+      price: listing.price,
+      currency: shop?.shop_currency ?? null,
+      imageUrl: listing.primaryImageUrl,
+      slug: listing.slug,
+      shopName: shop?.shop_name ?? null,
+    }
+  }
+
+  function toggleAttachedListing(listing: SellerListingRow) {
+    const shopForListing = shops.find((shopItem) => shopItem.id === activeShopId) ?? null
+    setAttachedProducts((current) => {
+      const exists = current.some((item) => item.listingId === listing.id)
+      if (exists) {
+        return current.filter((item) => item.listingId !== listing.id)
+      }
+      if (current.length >= MAX_ATTACHED_PRODUCTS) {
+        toast.show(`You can attach up to ${MAX_ATTACHED_PRODUCTS} products`, { tone: 'default' })
+        return current
+      }
+      return [...current, toAttachedProduct(listing, shopForListing)]
+    })
+  }
+
+  function removeAttachedProduct(listingId: string | null) {
+    if (!listingId) return
+    setAttachedProducts((current) => current.filter((item) => item.listingId !== listingId))
   }
 
   function insertEmoji(emoji: string) {
@@ -765,6 +806,7 @@ export function CreatePostForm({
         visibility,
         companyId: targetCompanyId,
         groupId: targetGroupId,
+        products: attachedProducts.length ? attachedProducts : null,
         linkPreview: mediaUrls.length || videoUrls.length || finalImageUrl ? null : linkPreview,
       })
     }
@@ -791,6 +833,8 @@ export function CreatePostForm({
     setArticleTitle('')
     setSelectedListing(null)
     setSelectedShop(null)
+    setAttachedProducts([])
+    setProductPickerOpen(false)
     setComposeMode('text')
     setLinkPreview(null)
     setLinkLoading(false)
@@ -1139,6 +1183,114 @@ export function CreatePostForm({
                 setLinkLoading(false)
               }}
             />
+          ) : null}
+
+          {composeMode === 'text' && (productPickerOpen || attachedProducts.length > 0) ? (
+            <YStack
+              gap={10}
+              padding={12}
+              borderRadius={12}
+              borderWidth={1}
+              borderColor={communityUi.border}
+              backgroundColor={communityUi.pageBg}
+            >
+              <XStack alignItems="center" justifyContent="space-between" gap={8}>
+                <YStack gap={2} flex={1}>
+                  <Text fontSize={14} fontWeight="700" color={communityUi.text}>
+                    Tagged products
+                  </Text>
+                  <Text fontSize={12} color={communityUi.textMuted}>
+                    Attach up to {MAX_ATTACHED_PRODUCTS} listings to this post.
+                  </Text>
+                </YStack>
+                <Button
+                  size="$2"
+                  tone="outline"
+                  borderRadius={999}
+                  onPress={() => setProductPickerOpen((current) => !current)}
+                >
+                  {productPickerOpen ? 'Done' : attachedProducts.length ? 'Edit' : 'Add products'}
+                </Button>
+              </XStack>
+
+              {attachedProducts.length > 0 ? (
+                <YStack gap={8}>
+                  {attachedProducts.map((product) => (
+                    <AttachedProductRow
+                      key={product.listingId ?? product.slug ?? product.title}
+                      product={product}
+                      onRemove={() => removeAttachedProduct(product.listingId)}
+                    />
+                  ))}
+                </YStack>
+              ) : null}
+
+              {productPickerOpen ? (
+                <YStack gap={10}>
+                  {shops.length > 1 ? (
+                    <XStack gap={8} flexWrap="wrap">
+                      {shops.map((shopItem) => (
+                        <ContextChip
+                          key={shopItem.id}
+                          label={shopItem.shop_name}
+                          active={activeShopId === shopItem.id}
+                          onPress={() => {
+                            setActiveShopId(shopItem.id)
+                            setListingSearchQuery('')
+                          }}
+                        />
+                      ))}
+                    </XStack>
+                  ) : null}
+
+                  {shops.length === 0 ? (
+                    <EmptyPickerHint
+                      icon={Icons.ShoppingBag}
+                      message="You don't have a shop yet. Create a shop to tag products in posts."
+                    />
+                  ) : loadingListings ? (
+                    <XStack paddingVertical={16} justifyContent="center">
+                      <Spinner size="small" color={communityUi.brand} />
+                    </XStack>
+                  ) : listings.length === 0 ? (
+                    <EmptyPickerHint icon={Icons.Package} message="No active listings in this shop yet." />
+                  ) : (
+                    <YStack gap={8}>
+                      {listings.length >= SHEET_SEARCH_MIN_ITEMS || listingSearchQuery.length > 0 ? (
+                        <ScreenSearchField
+                          value={listingSearchQuery}
+                          onChangeText={setListingSearchQuery}
+                          placeholder="Search listings"
+                          clearable
+                        />
+                      ) : null}
+                      {filteredListings.length === 0 ? (
+                        <Text fontSize={13} color={communityUi.textMuted}>
+                          No listings match your search.
+                        </Text>
+                      ) : (
+                        <YStack gap={8} maxHeight={320} overflow="scroll">
+                          {filteredListings.map((listing) => (
+                            <PickerRow
+                              key={listing.id}
+                              title={listing.title}
+                              subtitle={formatListingPrice(
+                                listing.price,
+                                shops.find((shopItem) => shopItem.id === activeShopId)?.shop_currency ?? null,
+                              )}
+                              imageUrl={listing.primaryImageUrl}
+                              fallbackIcon={Icons.Package}
+                              selected={attachedProducts.some((product) => product.listingId === listing.id)}
+                              onPress={() => toggleAttachedListing(listing)}
+                            />
+                          ))}
+                        </YStack>
+                      )}
+                    </YStack>
+                  )}
+                </YStack>
+              ) : null}
+            </YStack>
           ) : null}
 
           {/* Poll editor */}
@@ -1520,6 +1672,8 @@ export function CreatePostForm({
                 composeMode === 'product' ||
                 composeMode === 'shop' ||
                 composeMode === 'article' ||
+                productPickerOpen ||
+                attachedProducts.length > 0 ||
                 emojiOpen ||
                 (!!imageUrl && isGifUrl(imageUrl))
               }
@@ -1593,8 +1747,19 @@ export function CreatePostForm({
           <MoreOptionRow
             icon={Icons.Tag}
             tint={communityUi.brand}
+            title="Tag products in post"
+            description="Attach up to 3 listings to a regular post"
+            onPress={() => {
+              setComposeMode('text')
+              setProductPickerOpen(true)
+              setMoreOpen(false)
+            }}
+          />
+          <MoreOptionRow
+            icon={Icons.Package}
+            tint={communityUi.brand}
             title="Share a product"
-            description="Feature a listing from your shop"
+            description="Publish a dedicated single-product post"
             onPress={() => {
               setComposeMode('product')
               setMoreOpen(false)
@@ -1743,6 +1908,63 @@ function formatListingPrice(price: number | null, currency: string | null) {
   } catch {
     return `${currency ?? '₹'}${price}`
   }
+}
+
+function AttachedProductRow({
+  product,
+  onRemove,
+}: {
+  product: PostProduct
+  onRemove: () => void
+}) {
+  const communityUi = useCommunityUi()
+  return (
+    <XStack
+      alignItems="center"
+      gap={10}
+      padding={8}
+      borderRadius={12}
+      borderWidth={1}
+      borderColor={communityUi.border}
+      backgroundColor={communityUi.cardBg}
+    >
+      <YStack
+        width={48}
+        height={48}
+        borderRadius={8}
+        overflow="hidden"
+        backgroundColor={communityUi.pageBg}
+        alignItems="center"
+        justifyContent="center"
+      >
+        {product.imageUrl ? (
+          <Image src={product.imageUrl} width={48} height={48} objectFit="cover" alt="" />
+        ) : (
+          <Icons.Package size={20} color={communityUi.textMuted} />
+        )}
+      </YStack>
+      <YStack flex={1} gap={2} minWidth={0}>
+        <Text fontSize={14} fontWeight="600" color={communityUi.text} numberOfLines={1}>
+          {product.title}
+        </Text>
+        <Text fontSize={12} color={communityUi.textMuted} numberOfLines={1}>
+          {[formatListingPrice(product.price, product.currency), product.shopName].filter(Boolean).join(' · ')}
+        </Text>
+      </YStack>
+      <XStack
+        width={30}
+        height={30}
+        borderRadius={999}
+        alignItems="center"
+        justifyContent="center"
+        cursor="pointer"
+        hoverStyle={{ backgroundColor: communityUi.divider }}
+        onPress={onRemove}
+      >
+        <Icons.X size={16} color={communityUi.textMuted} />
+      </XStack>
+    </XStack>
+  )
 }
 
 function MoreOptionRow({
