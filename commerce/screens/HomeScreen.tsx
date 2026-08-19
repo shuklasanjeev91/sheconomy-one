@@ -12,6 +12,9 @@ import { InfiniteListingSection } from '~/commerce/components/InfiniteListingSec
 import { BuyerInTransitHomeStrip } from '~/commerce/components/BuyerInTransitHomeStrip'
 import { BuyerPendingPaymentHomeStrip } from '~/commerce/components/BuyerPendingPaymentHomeStrip'
 import { CartHomeStrip } from '~/commerce/components/CartHomeStrip'
+import { CreateShopHomeStrip } from '~/commerce/components/CreateShopHomeStrip'
+import { ExpiringOffersHomeStrip } from '~/commerce/components/ExpiringOffersHomeStrip'
+import { SaleEventsHomeStrip } from '~/commerce/components/SaleEventsHomeStrip'
 import { BuyerListingInquiryHomeStrip } from '~/commerce/components/BuyerListingInquiryHomeStrip'
 import { BuyerOrderAttentionStrip } from '~/commerce/components/BuyerOrderAttentionStrip'
 import { PendingReviewsHomeStrip } from '~/commerce/components/PendingReviewsHomeStrip'
@@ -174,6 +177,7 @@ export function HomeScreen({ data, error, loading = false }: HomeScreenProps) {
         {/* These return null when empty — do not wrap in PageSection or empty gaps stack. */}
         <IdleMount>
           <SaleEventBanner inset />
+          <SaleEventsHomeStrip inset />
           <AvailableOffersCard
             title="Offers for you"
             maxItems={8}
@@ -181,11 +185,13 @@ export function HomeScreen({ data, error, loading = false }: HomeScreenProps) {
             bordered={false}
             inset
           />
+          <ExpiringOffersHomeStrip inset />
           <RecentlyViewedRail inset />
           <CartHomeStrip inset />
           <WishlistPriceDropHomeStrip inset />
           <SavedForLaterHomeStrip inset />
           <PendingReviewsHomeStrip inset />
+          <CreateShopHomeStrip inset />
           <VendorSaleEventsHomeStrip inset />
           <VendorSlaHomeStrip inset />
           <VendorFulfillmentHomeStrip inset />

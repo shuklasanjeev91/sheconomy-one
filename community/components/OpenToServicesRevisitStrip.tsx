@@ -1,0 +1,41 @@
+import { AppLink } from '~/components/navigation/AppLink'
+
+import { CommunityCard } from '~/community/components/CommunityCard'
+import { useOpenToServicesRevisit } from '~/community/hooks/useOpenToServicesRevisit'
+import { openToServicesPeopleHref } from '~/community/lib/open-to-services-revisit'
+import { useCommunityUi } from '~/community/lib/community-theme'
+import { Button, Text, XStack, YStack } from '~/components/ui'
+
+export function OpenToServicesRevisitStrip() {
+  const communityUi = useCommunityUi()
+  const { card, hasCard } = useOpenToServicesRevisit()
+
+  if (!hasCard || !card) return null
+
+  return (
+    <CommunityCard padding={16} gap={12}>
+      <YStack gap={10}>
+        <YStack gap={2}>
+          <Text fontSize={16} fontWeight="700" color={communityUi.text}>
+            {card.headline}
+          </Text>
+          <Text fontSize={13} color={communityUi.textMuted}>
+            {card.detail}
+          </Text>
+        </YStack>
+        <XStack gap={8} flexWrap="wrap">
+          <AppLink href={card.href} asChild>
+            <Button tone="primary" size="$2.5" borderRadius={999}>
+              Update profile
+            </Button>
+          </AppLink>
+          <AppLink href={openToServicesPeopleHref()} asChild>
+            <Button tone="outline" size="$2.5" borderRadius={999}>
+              Browse services
+            </Button>
+          </AppLink>
+        </XStack>
+      </YStack>
+    </CommunityCard>
+  )
+}

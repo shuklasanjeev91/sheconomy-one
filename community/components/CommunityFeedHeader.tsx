@@ -17,6 +17,9 @@ import { MeetingRevisitStrip } from '~/community/components/MeetingRevisitStrip'
 import { NetworkInvitationsStrip } from '~/community/components/NetworkInvitationsStrip'
 import { NetworkSentRevisitStrip } from '~/community/components/NetworkSentRevisitStrip'
 import { NetworkSuggestionsStrip } from '~/community/components/NetworkSuggestionsStrip'
+import { ComposeDraftRevisitStrip } from '~/community/components/ComposeDraftRevisitStrip'
+import { CreatorModeRevisitStrip } from '~/community/components/CreatorModeRevisitStrip'
+import { OpenToServicesRevisitStrip } from '~/community/components/OpenToServicesRevisitStrip'
 import { OpenToWorkRevisitStrip } from '~/community/components/OpenToWorkRevisitStrip'
 import { PickUpAgainStrip } from '~/community/components/PickUpAgainStrip'
 import { ProfessionalSpotlightStrip } from '~/community/components/ProfessionalSpotlightStrip'
@@ -56,6 +59,7 @@ export function CommunityFeedHeader({
       <CommunityForYouHub>
         <TodayCelebrationsCard />
         <ProfileCompletionRevisitStrip />
+        <ComposeDraftRevisitStrip />
         <NetworkInvitationsStrip />
         <NetworkSentRevisitStrip />
         <UnreadChatRevisitStrip />
@@ -77,8 +81,10 @@ export function CommunityFeedHeader({
         <EventRevisitStrip />
         <JobRevisitStrip />
         <OpenToWorkRevisitStrip />
+        <OpenToServicesRevisitStrip />
         <JobApplicationsRevisitStrip />
         <ProfessionalSpotlightStrip />
+        <CreatorModeRevisitStrip />
         <CreatorSpotlightStrip />
         <FollowedShopActivityStrip />
         <WishlistActivityStrip />

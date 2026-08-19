@@ -52,6 +52,13 @@ import { buildBuyerPendingPaymentHomeCards } from '~/commerce/lib/buyer-pending-
 import { buildVendorSetupHomeCards, buildVendorSetupHomeTasks } from '~/commerce/lib/vendor-setup-home'
 import type { ShopPartnerInfo } from '~/commerce/lib/shop-commerce'
 import { buildOpenToWorkRevisitCard } from '~/community/lib/open-to-work-revisit'
+import { buildOpenToServicesRevisitCard } from '~/community/lib/open-to-services-revisit'
+import { buildCreatorModeRevisitCard } from '~/community/lib/creator-mode-revisit'
+import { buildComposeDraftRevisitCard } from '~/community/lib/compose-draft-revisit'
+import { buildCreateShopHomeCard } from '~/commerce/lib/create-shop-home'
+import { buildBuyerSaleEventHomeCards } from '~/commerce/lib/sale-events-home'
+import { buildExpiringOfferHomeCards } from '~/commerce/lib/expiring-offers-home'
+import type { AvailableOffer } from '~/commerce/lib/offer-utils'
 import { buildMeetingInviteRevisitCards } from '~/co-work/lib/meeting-invites-revisit'
 import { buildMeetingRevisitCards } from '~/co-work/lib/meeting-revisit'
 import { buildCompaniesRevisitCards } from '~/community/lib/companies-revisit'
@@ -1405,5 +1412,147 @@ describe('buildOpenToWorkRevisitCard', () => {
         profileCompletion: 90,
       }),
     ).toBeNull()
+  })
+})
+
+describe('buildOpenToServicesRevisitCard', () => {
+  it('nudges members with a ready profile to enable open to services', () => {
+    expect(
+      buildOpenToServicesRevisitCard({
+        enabled: false,
+        hasHeadline: true,
+        hasOccupation: false,
+        profileCompletion: 50,
+      })?.headline,
+    ).toContain('services')
+    expect(
+      buildOpenToServicesRevisitCard({
+        enabled: true,
+        hasHeadline: true,
+        hasOccupation: true,
+        profileCompletion: 90,
+      }),
+    ).toBeNull()
+  })
+})
+
+describe('buildCreatorModeRevisitCard', () => {
+  it('nudges members with a ready profile to turn on creator mode', () => {
+    expect(
+      buildCreatorModeRevisitCard({
+        enabled: false,
+        hasOccupation: true,
+        hasHeadline: false,
+        profileCompletion: 30,
+      })?.headline,
+    ).toContain('creator mode')
+    expect(
+      buildCreatorModeRevisitCard({
+        enabled: true,
+        hasOccupation: true,
+        hasHeadline: true,
+        profileCompletion: 80,
+      }),
+    ).toBeNull()
+  })
+})
+
+describe('buildComposeDraftRevisitCard', () => {
+  it('surfaces unfinished compose drafts with a preview', () => {
+    const card = buildComposeDraftRevisitCard({
+      content: 'Drafting my launch announcement for next week',
+      mode: 'post',
+      updatedAt: '2026-08-19T10:00:00.000Z',
+    })
+    expect(card?.preview).toContain('launch announcement')
+    expect(card?.href).toContain('/community/create')
+    expect(buildComposeDraftRevisitCard(null)).toBeNull()
+  })
+})
+
+describe('buildCreateShopHomeCard', () => {
+  it('shows a create-shop nudge for eligible members without shops', () => {
+    expect(
+      buildCreateShopHomeCard({
+        isAuthenticated: true,
+        canManageShops: true,
+        hasShops: false,
+      })?.headline,
+    ).toContain('shop')
+    expect(
+      buildCreateShopHomeCard({
+        isAuthenticated: true,
+        canManageShops: true,
+        hasShops: true,
+      }),
+    ).toBeNull()
+  })
+})
+
+describe('buildBuyerSaleEventHomeCards', () => {
+  it('lists additional live sale events after the primary banner', () => {
+    const cards = buildBuyerSaleEventHomeCards(
+      [
+        {
+          id: '1',
+          eventName: 'Summer Sale',
+          eventSlug: 'summer',
+          description: null,
+          bannerImage: null,
+          endDate: null,
+        },
+        {
+          id: '2',
+          eventName: 'Festive Deals',
+          eventSlug: 'festive',
+          description: 'Extra savings',
+          bannerImage: null,
+          endDate: null,
+        },
+      ],
+      2,
+    )
+    expect(cards).toHaveLength(1)
+    expect(cards[0]?.title).toBe('Festive Deals')
+  })
+})
+
+describe('buildExpiringOfferHomeCards', () => {
+  it('prioritizes platform offers expiring within seven days', () => {
+    const now = Date.parse('2026-08-19T12:00:00.000Z')
+    const offers: AvailableOffer[] = [
+      {
+        id: 'a',
+        code: 'SAVE10',
+        name: 'Ten off',
+        description: null,
+        type: 'percentage',
+        value: 10,
+        minOrderAmount: null,
+        maxDiscountAmount: null,
+        validUntil: '2026-08-21T12:00:00.000Z',
+        shopId: null,
+        appliesTo: 'order',
+        eligibleListingIds: null,
+      },
+      {
+        id: 'b',
+        code: 'LATER',
+        name: 'Later code',
+        description: null,
+        type: 'fixed',
+        value: 100,
+        minOrderAmount: null,
+        maxDiscountAmount: null,
+        validUntil: '2026-09-30T12:00:00.000Z',
+        shopId: null,
+        appliesTo: 'order',
+        eligibleListingIds: null,
+      },
+    ]
+
+    const cards = buildExpiringOfferHomeCards(offers, now, 3)
+    expect(cards).toHaveLength(1)
+    expect(cards[0]?.code).toBe('SAVE10')
   })
 })
