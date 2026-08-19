@@ -16,6 +16,7 @@ import {
   removeWishlistItem,
   syncLocalFavoritesToWishlist,
 } from '~/commerce/lib/wishlist'
+import { INVALIDATION_TOPICS, invalidateCache } from '~/lib/cache/invalidation'
 import { useSupabase } from '~/providers/SupabaseProvider'
 
 const LOCAL_FAVORITES_KEY = 'sheconomy:favorites'
@@ -100,6 +101,7 @@ export function FavoritesProvider({ children }: { children: ReactNode }) {
           if (error) return
           setFavoriteIds((current) => [listingId, ...current.filter((id) => id !== listingId)])
         }
+        invalidateCache(INVALIDATION_TOPICS.commerceWishlist)
         return
       }
 

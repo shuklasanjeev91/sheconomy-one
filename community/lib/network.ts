@@ -1,4 +1,5 @@
 import { isUuid } from '~/commerce/lib/seo-urls'
+import { INVALIDATION_TOPICS, invalidateCache } from '~/lib/cache/invalidation'
 import { supabase } from '~/lib/supabase/client'
 
 export const NETWORK_PAGE_SIZE = 12
@@ -492,7 +493,9 @@ export async function sendConnectionRequest(senderId: string, receiverId: string
     .select('id')
     .maybeSingle()
 
-  return { connectionId: data?.id ?? null, error: error?.message ?? null }
+  if (error) return { connectionId: null, error: error.message ?? null }
+  invalidateCache(INVALIDATION_TOPICS.communityNetwork)
+  return { connectionId: data?.id ?? null, error: null }
 }
 
 export async function respondToConnection(connectionId: string, status: 'accepted' | 'rejected') {
@@ -501,6 +504,7 @@ export async function respondToConnection(connectionId: string, status: 'accepte
     .update({ status, updated_at: new Date().toISOString() })
     .eq('id', connectionId)
 
+  if (!error) invalidateCache(INVALIDATION_TOPICS.communityNetwork)
   return { error: error?.message ?? null }
 }
 
@@ -510,5 +514,6 @@ export async function respondToConnection(connectionId: string, status: 'accepte
  */
 export async function removeConnection(connectionId: string) {
   const { error } = await supabase.from('connections').delete().eq('id', connectionId)
+  if (!error) invalidateCache(INVALIDATION_TOPICS.communityNetwork)
   return { error: error?.message ?? null }
 }

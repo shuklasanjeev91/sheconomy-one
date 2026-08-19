@@ -4,17 +4,10 @@ import { Platform, type NativeScrollEvent, type NativeSyntheticEvent } from 'rea
 
 import { LoadMoreEnd, LoadMoreSentinel } from '~/commerce/components/LoadMoreSentinel'
 import { CommunitySuggestionSectionCard } from '~/community/components/CommunitySuggestionSectionCard'
-import { StoriesStrip } from '~/community/components/StoriesStrip'
+import { CommunityFeedHeader } from '~/community/components/CommunityFeedHeader'
 import { CommunityShell } from '~/community/components/CommunityShell'
-import { FeedComposer } from '~/community/components/FeedComposer'
-import { EventRevisitStrip } from '~/community/components/EventRevisitStrip'
-import { FollowedShopActivityStrip } from '~/community/components/FollowedShopActivityStrip'
-import { NetworkInvitationsStrip } from '~/community/components/NetworkInvitationsStrip'
-import { PickUpAgainStrip } from '~/community/components/PickUpAgainStrip'
-import { TodayCelebrationsCard } from '~/community/components/TodayCelebrationsCard'
-import { FeedFilterChips } from '~/community/components/FeedFilterChips'
 import { FeedPostCard } from '~/community/components/FeedPostCard'
-import { FeedSortBar, type FeedSort } from '~/community/components/FeedSortBar'
+import type { FeedSort } from '~/community/components/FeedSortBar'
 import type { FeedContentFilter } from '~/community/lib/community'
 import { openComposer } from '~/community/lib/composer-store'
 import { useCommunityFeed } from '~/community/hooks/useCommunityFeed'
@@ -152,17 +145,12 @@ export function CommunityFeedScreen() {
 
   const listHeader = useMemo(
     () => (
-      <YStack gap="$3" width="100%" paddingBottom="$2">
-        <StoriesStrip />
-        <TodayCelebrationsCard />
-        <NetworkInvitationsStrip />
-        <PickUpAgainStrip />
-        <EventRevisitStrip />
-        <FollowedShopActivityStrip />
-        <FeedComposer />
-        <FeedFilterChips value={contentFilter} onChange={setContentFilter} />
-        <FeedSortBar value={sort} onChange={setSort} />
-      </YStack>
+      <CommunityFeedHeader
+        contentFilter={contentFilter}
+        sort={sort}
+        onContentFilterChange={setContentFilter}
+        onSortChange={setSort}
+      />
     ),
     [contentFilter, sort],
   )

@@ -1,12 +1,16 @@
+import { useState } from 'react'
+
 import { AppLink } from '~/components/navigation/AppLink'
+import { useCart } from '~/commerce/hooks/useCart'
 
 import { CommunityCard } from '~/community/components/CommunityCard'
 import { useSavedPostRevisit } from '~/community/hooks/useSavedPostRevisit'
 import { useCommunityUi } from '~/community/lib/community-theme'
 import type { PickUpAgainCard } from '~/community/lib/saved-posts'
 import { HorizontalScrollRow } from '~/components/layout'
-import { Button, Icons, Image, Spinner, Text, XStack, YStack } from '~/components/ui'
-import { communityRoutes } from '~/lib/routes'
+import { Button, Icons, Image, Spinner, Text, XStack, YStack, useAppToast } from '~/components/ui'
+import { commerceRoutes, communityRoutes } from '~/lib/routes'
+import { navigateApp } from '~/lib/platform/navigate'
 
 export function PickUpAgainStrip() {
   const communityUi = useCommunityUi()
@@ -48,60 +52,96 @@ export function PickUpAgainStrip() {
 
 function PickUpAgainCardItem({ card }: { card: PickUpAgainCard }) {
   const communityUi = useCommunityUi()
+  const toast = useAppToast()
+  const { addToCart } = useCart()
+  const [adding, setAdding] = useState(false)
   const href = card.lane === 'read_later' ? communityRoutes.article(card.postId) : communityRoutes.post(card.postId)
+  const showAddToCart = card.lane === 'shop_now' && !!card.listingId
+
+  async function handleAddToCart() {
+    if (!card.listingId) return
+    setAdding(true)
+    try {
+      const result = await addToCart(card.listingId)
+      if (result.error) {
+        toast.show('Could not add to cart', { tone: 'default', message: result.error })
+        navigateApp(commerceRoutes.listing(card.listingSlug ?? card.listingId))
+        return
+      }
+      toast.show('Added to cart', { tone: 'success' })
+    } finally {
+      setAdding(false)
+    }
+  }
 
   return (
-    <AppLink href={href} asChild>
-      <YStack
-        width={188}
-        padding={12}
-        gap={10}
-        borderRadius={14}
-        borderWidth={1}
-        borderColor={communityUi.border}
-        backgroundColor={communityUi.pageBg}
-        cursor="pointer"
-        hoverStyle={{ borderColor: communityUi.brand, opacity: 0.96 }}
-        pressStyle={{ opacity: 0.9, scale: 0.98 }}
-      >
+    <YStack
+      width={188}
+      padding={12}
+      gap={10}
+      borderRadius={14}
+      borderWidth={1}
+      borderColor={communityUi.border}
+      backgroundColor={communityUi.pageBg}
+    >
+      <AppLink href={href} asChild>
         <YStack
-          width="100%"
-          height={96}
-          borderRadius={10}
-          overflow="hidden"
-          backgroundColor={communityUi.surfaceMuted}
-          alignItems="center"
-          justifyContent="center"
+          gap={10}
+          cursor="pointer"
+          hoverStyle={{ opacity: 0.96 }}
+          pressStyle={{ opacity: 0.9, scale: 0.98 }}
         >
-          {card.imageUrl ? (
-            <Image src={card.imageUrl} width="100%" height={96} objectFit="cover" />
-          ) : (
-            <Icons.Bookmark size={22} color={communityUi.textMuted} />
-          )}
-        </YStack>
-
-        <YStack gap={6} flex={1}>
-          <XStack
-            alignSelf="flex-start"
-            paddingHorizontal={8}
-            paddingVertical={4}
-            borderRadius={999}
-            backgroundColor={`${communityUi.brand}14`}
+          <YStack
+            width="100%"
+            height={96}
+            borderRadius={10}
+            overflow="hidden"
+            backgroundColor={communityUi.surfaceMuted}
+            alignItems="center"
+            justifyContent="center"
           >
-            <Text fontSize={10} fontWeight="700" color={communityUi.brand}>
-              {card.laneLabel}
+            {card.imageUrl ? (
+              <Image src={card.imageUrl} width="100%" height={96} objectFit="cover" />
+            ) : (
+              <Icons.Bookmark size={22} color={communityUi.textMuted} />
+            )}
+          </YStack>
+
+          <YStack gap={6} flex={1}>
+            <XStack
+              alignSelf="flex-start"
+              paddingHorizontal={8}
+              paddingVertical={4}
+              borderRadius={999}
+              backgroundColor={`${communityUi.brand}14`}
+            >
+              <Text fontSize={10} fontWeight="700" color={communityUi.brand}>
+                {card.laneLabel}
+              </Text>
+            </XStack>
+            <Text fontSize={14} fontWeight="700" color={communityUi.text} numberOfLines={2}>
+              {card.title}
             </Text>
-          </XStack>
-          <Text fontSize={14} fontWeight="700" color={communityUi.text} numberOfLines={2}>
-            {card.title}
-          </Text>
-          {card.subtitle ? (
-            <Text fontSize={12} color={communityUi.textMuted} numberOfLines={2}>
-              {card.subtitle}
-            </Text>
-          ) : null}
+            {card.subtitle ? (
+              <Text fontSize={12} color={communityUi.textMuted} numberOfLines={2}>
+                {card.subtitle}
+              </Text>
+            ) : null}
+          </YStack>
         </YStack>
-      </YStack>
-    </AppLink>
+      </AppLink>
+
+      {showAddToCart ? (
+        <Button
+          tone="primary"
+          size="$2.5"
+          borderRadius={999}
+          disabled={adding}
+          onPress={() => void handleAddToCart()}
+        >
+          {adding ? 'Adding…' : 'Add to cart'}
+        </Button>
+      ) : null}
+    </YStack>
   )
 }

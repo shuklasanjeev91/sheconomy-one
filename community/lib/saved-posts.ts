@@ -38,6 +38,8 @@ export type PickUpAgainCard = {
   subtitle: string | null
   imageUrl: string | null
   collectionName: string
+  listingId: string | null
+  listingSlug: string | null
 }
 
 const PICK_UP_AGAIN_LANE_ORDER: PickUpAgainLane[] = ['shop_now', 'creator_picks', 'read_later', 'events']
@@ -292,6 +294,8 @@ export function buildPickUpAgainCards(
         subtitle: savedPostCardSubtitle(entry),
         imageUrl: savedPostCardImage(entry),
         collectionName: entry.collectionName,
+        listingId: entry.post.products?.[0]?.listingId ?? entry.post.product?.listingId ?? null,
+        listingSlug: entry.post.products?.[0]?.slug ?? entry.post.product?.slug ?? null,
       })
       if (cards.length >= limit) return cards
     }

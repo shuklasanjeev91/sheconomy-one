@@ -43,8 +43,11 @@ export const INVALIDATION_TOPICS = {
   communityJobs: 'community-jobs',
   communityGroups: 'community-groups',
   communityCompanies: 'community-companies',
+  communityNetwork: 'community-network',
   savedPosts: 'saved-posts',
   userActivity: 'user-activity',
   commerceListings: 'commerce-listings',
   commerceShops: 'commerce-shops',
+  commerceOrders: 'commerce-orders',
+  commerceWishlist: 'commerce-wishlist',
 } as const

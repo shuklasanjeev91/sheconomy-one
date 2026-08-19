@@ -5,6 +5,7 @@
  */
 
 import { supabase } from '~/lib/supabase'
+import { INVALIDATION_TOPICS, invalidateCache } from '~/lib/cache/invalidation'
 
 export type TrustRpcResult<T> = { data: T | null; error: string | null }
 
@@ -47,6 +48,7 @@ export async function requestOrderItemReturn(input: {
   if (!record?.issue_id || !record?.refund_id) {
     return { data: null, error: 'Could not submit return request' }
   }
+  invalidateCache(INVALIDATION_TOPICS.commerceOrders)
   return {
     data: {
       issueId: String(record.issue_id),
@@ -80,6 +82,7 @@ export async function requestOrderItemExchange(input: {
   if (!record?.issue_id) {
     return { data: null, error: 'Could not submit exchange request' }
   }
+  invalidateCache(INVALIDATION_TOPICS.commerceOrders)
   return {
     data: {
       issueId: String(record.issue_id),

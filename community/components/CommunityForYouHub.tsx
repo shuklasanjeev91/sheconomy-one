@@ -1,0 +1,46 @@
+import { useState, type ReactNode } from 'react'
+
+import { useCommunityUi } from '~/community/lib/community-theme'
+import { Icons, Text, XStack, YStack } from '~/components/ui'
+
+type CommunityForYouHubProps = {
+  children: ReactNode
+}
+
+export function CommunityForYouHub({ children }: CommunityForYouHubProps) {
+  const communityUi = useCommunityUi()
+  const [expanded, setExpanded] = useState(true)
+
+  return (
+    <YStack gap={12} width="100%">
+      <XStack
+        alignItems="center"
+        justifyContent="space-between"
+        gap={8}
+        cursor="pointer"
+        onPress={() => setExpanded((value) => !value)}
+        paddingHorizontal={4}
+      >
+        <YStack flex={1} minWidth={0} gap={2}>
+          <Text fontSize={16} fontWeight="700" color={communityUi.text}>
+            For you
+          </Text>
+          <Text fontSize={13} color={communityUi.textMuted}>
+            Invitations, revisits, jobs, commerce picks, and tags in one place.
+          </Text>
+        </YStack>
+        <Icons.ChevronDown
+          size={18}
+          color={communityUi.textMuted}
+          style={{ transform: [{ rotate: expanded ? '180deg' : '0deg' }] }}
+        />
+      </XStack>
+
+      {expanded ? (
+        <YStack gap={12} width="100%">
+          {children}
+        </YStack>
+      ) : null}
+    </YStack>
+  )
+}

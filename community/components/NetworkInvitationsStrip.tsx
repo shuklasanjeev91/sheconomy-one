@@ -2,22 +2,22 @@ import { AppLink } from '~/components/navigation/AppLink'
 
 import { CommunityCard } from '~/community/components/CommunityCard'
 import { MemberRow } from '~/community/components/MemberRow'
+import { useCommunityFeedHeader } from '~/community/hooks/useCommunityFeedHeader'
 import { useNetwork } from '~/community/hooks/useNetwork'
 import { selectNetworkInvitations } from '~/community/lib/network-invitations'
 import { useCommunityUi } from '~/community/lib/community-theme'
 import { Button, Text, XStack, YStack } from '~/components/ui'
-import { useAppLayout } from '~/hooks/useAppLayout'
 import { communityRoutes } from '~/lib/routes'
 
 const INVITATION_LIMIT = 4
 
 export function NetworkInvitationsStrip() {
   const communityUi = useCommunityUi()
-  const { hasDualSideRails } = useAppLayout()
+  const { hideSidebarRedundantStrips, isAuthenticated } = useCommunityFeedHeader()
   const network = useNetwork()
 
-  if (hasDualSideRails) return null
-  if (!network.isAuthenticated) return null
+  if (hideSidebarRedundantStrips) return null
+  if (!isAuthenticated) return null
   if (network.pendingReceived.length === 0) return null
 
   const invitations = selectNetworkInvitations(network.pendingReceived, INVITATION_LIMIT)

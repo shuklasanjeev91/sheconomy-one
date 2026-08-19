@@ -1,4 +1,5 @@
 import { supabase } from '~/lib/supabase/client'
+import { INVALIDATION_TOPICS, invalidateCache } from '~/lib/cache/invalidation'
 
 export type MutualIntroducer = {
   user_id: string
@@ -137,5 +138,6 @@ export async function respondToIntroduction(
     .from('introduction_requests')
     .update({ status })
     .eq('id', requestId)
+  if (!error) invalidateCache(INVALIDATION_TOPICS.communityNetwork)
   return { error: error?.message ?? null }
 }
