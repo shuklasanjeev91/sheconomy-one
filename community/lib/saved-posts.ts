@@ -3,6 +3,7 @@ import { supabase } from '~/lib/supabase/client'
 import type { CommunityPost } from '~/community/lib/community'
 import { fetchPostById } from '~/community/lib/community'
 import { collectPostMedia } from '~/community/lib/post-media'
+import { communityRoutes } from '~/lib/routes'
 
 export type SavedPostRow = {
   id: string
@@ -302,4 +303,29 @@ export function buildPickUpAgainCards(
   }
 
   return cards
+}
+
+export type ReadLaterRevisitCard = {
+  postId: string
+  title: string
+  subtitle: string | null
+  imageUrl: string | null
+  href: string
+}
+
+/** Article-style saved posts for a dedicated read-later revisit strip. */
+export function buildReadLaterRevisitCards(
+  items: SavedCommunityPostEntry[],
+  limit = 6,
+): ReadLaterRevisitCard[] {
+  const readLater =
+    buildSavedPostSections(items).find((section) => section.key === 'read_later')?.items ?? []
+
+  return readLater.slice(0, limit).map((entry) => ({
+    postId: entry.postId,
+    title: savedPostCardTitle(entry),
+    subtitle: savedPostCardSubtitle(entry),
+    imageUrl: savedPostCardImage(entry),
+    href: String(communityRoutes.article(entry.postId)),
+  }))
 }

@@ -18,6 +18,9 @@ import type { Program } from '~/class/lib/programs'
 import { buildNetworkSentRevisitCards } from '~/community/lib/network-sent-revisit'
 import { buildVendorDraftHomeCards } from '~/commerce/lib/vendor-drafts-home'
 import type { SellerListingRow } from '~/commerce/lib/seller-dashboard'
+import { buildVendorPausedListingHomeCards } from '~/commerce/lib/vendor-paused-listings-home'
+import { buildVendorSlaHomeCards } from '~/commerce/lib/vendor-sla-home'
+import type { VendorSlaInboxRow } from '~/commerce/lib/vendor-sla-inbox'
 import { buildVendorLowStockHomeCards } from '~/commerce/lib/vendor-low-stock-home'
 import type { LowStockListing } from '~/commerce/lib/low-stock'
 import { buildPendingReviewHomeCards } from '~/commerce/lib/pending-reviews-home'
@@ -989,5 +992,64 @@ describe('buildNetworkSentRevisitCards', () => {
     const cards = buildNetworkSentRevisitCards(members, 2)
     expect(cards).toHaveLength(1)
     expect(String(cards[0]?.href)).toContain('founder')
+  })
+})
+
+describe('buildVendorSlaHomeCards', () => {
+  it('maps SLA inbox rows to vendor orders inbox links', () => {
+    const rows: VendorSlaInboxRow[] = [
+      {
+        id: 'sla-1',
+        kind: 'shipment_risk',
+        severity: 'critical',
+        title: 'Ship order #1001',
+        description: 'Order is waiting to ship.',
+        dueLabel: '48h overdue',
+        nextActionLabel: 'Add tracking',
+        orderItemId: 'item-1',
+        issueId: null,
+        orderId: 'order-1',
+        orderNumber: '1001',
+        customerName: 'Buyer',
+        productTitle: 'Dress',
+        tags: [],
+        internalNote: null,
+        internalTags: [],
+        updatedAt: null,
+        orderItem: null,
+        issue: null,
+      },
+    ]
+
+    const cards = buildVendorSlaHomeCards(rows, 2)
+    expect(cards[0]?.badge).toBe('Add tracking')
+    expect(String(cards[0]?.href)).toContain('inbox')
+  })
+})
+
+describe('buildVendorPausedListingHomeCards', () => {
+  it('maps paused listings to edit routes', () => {
+    const cards = buildVendorPausedListingHomeCards(
+      [
+        {
+          id: 'paused-1',
+          title: 'Paused bag',
+          slug: null,
+          price: 1200,
+          quantity: 1,
+          listingType: 'physical',
+          listingStatus: 'paused',
+          isActive: false,
+          isFeatured: false,
+          primaryImageUrl: null,
+          updatedAt: '2026-08-19T00:00:00.000Z',
+          createdAt: '2026-08-01T00:00:00.000Z',
+        },
+      ],
+      1,
+    )
+
+    expect(cards[0]?.title).toBe('Paused bag')
+    expect(String(cards[0]?.href)).toContain('paused-1')
   })
 })

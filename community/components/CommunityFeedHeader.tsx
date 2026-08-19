@@ -20,6 +20,7 @@ import { PickUpAgainStrip } from '~/community/components/PickUpAgainStrip'
 import { ProfessionalSpotlightStrip } from '~/community/components/ProfessionalSpotlightStrip'
 import { ProgramsRevisitStrip } from '~/community/components/ProgramsRevisitStrip'
 import { ProfileViewersStrip } from '~/community/components/ProfileViewersStrip'
+import { ReadLaterRevisitStrip } from '~/community/components/ReadLaterRevisitStrip'
 import { RecommendationInboxStrip } from '~/community/components/RecommendationInboxStrip'
 import { StoriesStrip } from '~/community/components/StoriesStrip'
 import { TodayCelebrationsCard } from '~/community/components/TodayCelebrationsCard'
@@ -61,6 +62,7 @@ export function CommunityFeedHeader({
         <CompaniesRevisitStrip />
         <ProgramsRevisitStrip />
         <PickUpAgainStrip />
+        <ReadLaterRevisitStrip />
         <EventRevisitStrip />
         <JobRevisitStrip />
         <JobApplicationsRevisitStrip />

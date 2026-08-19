@@ -36,6 +36,7 @@ vi.mock('~/community/lib/community', () => ({
 
 import {
   buildPickUpAgainCards,
+  buildReadLaterRevisitCards,
   buildSavedPostSections,
   saveCommunityPost,
   updateSavedCommunityPost,
@@ -237,6 +238,39 @@ describe('saved posts', () => {
 
     expect(cards).toHaveLength(1)
     expect(cards[0]?.lane).toBe('shop_now')
+  })
+
+  it('buildReadLaterRevisitCards returns only article-style saved posts', () => {
+    const article = makeEntry(
+      makePost({
+        id: 'article-1',
+        post_type: 'article',
+        article_title: 'How to scale a shop',
+        content: 'Long read body',
+      }),
+    )
+    const shopPost = makeEntry(
+      makePost({
+        id: 'shop-1',
+        products: [
+          {
+            listingId: 'l1',
+            title: 'Serum',
+            price: 500,
+            currency: 'INR',
+            imageUrl: null,
+            slug: null,
+            shopName: 'Glow',
+          },
+        ],
+      }),
+    )
+
+    const cards = buildReadLaterRevisitCards([article, shopPost], 4)
+
+    expect(cards).toHaveLength(1)
+    expect(cards[0]?.title).toBe('How to scale a shop')
+    expect(String(cards[0]?.href)).toContain('article-1')
   })
 
   it('normalizes fallback collections and trims notes when updating saved post details', async () => {
