@@ -2,16 +2,19 @@ import { useMemo } from 'react'
 
 import { CommunityForYouHub } from '~/community/components/CommunityForYouHub'
 import { CommunityRecentlyViewedStrip } from '~/community/components/CommunityRecentlyViewedStrip'
+import { CreatorSpotlightStrip } from '~/community/components/CreatorSpotlightStrip'
 import { EventRevisitStrip } from '~/community/components/EventRevisitStrip'
 import { FollowedShopActivityStrip } from '~/community/components/FollowedShopActivityStrip'
 import { HashtagRevisitStrip } from '~/community/components/HashtagRevisitStrip'
 import { IntroductionInboxStrip } from '~/community/components/IntroductionInboxStrip'
+import { JobApplicationsRevisitStrip } from '~/community/components/JobApplicationsRevisitStrip'
 import { JobRevisitStrip } from '~/community/components/JobRevisitStrip'
 import { NetworkInvitationsStrip } from '~/community/components/NetworkInvitationsStrip'
 import { NetworkSuggestionsStrip } from '~/community/components/NetworkSuggestionsStrip'
 import { PickUpAgainStrip } from '~/community/components/PickUpAgainStrip'
 import { ProfessionalSpotlightStrip } from '~/community/components/ProfessionalSpotlightStrip'
 import { ProfileViewersStrip } from '~/community/components/ProfileViewersStrip'
+import { RecommendationInboxStrip } from '~/community/components/RecommendationInboxStrip'
 import { StoriesStrip } from '~/community/components/StoriesStrip'
 import { TodayCelebrationsCard } from '~/community/components/TodayCelebrationsCard'
 import { WishlistActivityStrip } from '~/community/components/WishlistActivityStrip'
@@ -41,11 +44,14 @@ export function CommunityFeedHeader({
         <NetworkInvitationsStrip />
         <NetworkSuggestionsStrip />
         <IntroductionInboxStrip />
+        <RecommendationInboxStrip />
         <ProfileViewersStrip />
         <PickUpAgainStrip />
         <EventRevisitStrip />
         <JobRevisitStrip />
+        <JobApplicationsRevisitStrip />
         <ProfessionalSpotlightStrip />
+        <CreatorSpotlightStrip />
         <FollowedShopActivityStrip />
         <WishlistActivityStrip />
         <CommunityRecentlyViewedStrip />

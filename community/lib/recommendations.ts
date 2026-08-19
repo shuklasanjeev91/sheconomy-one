@@ -1,4 +1,5 @@
 import { supabase } from '~/lib/supabase/client'
+import { INVALIDATION_TOPICS, invalidateCache } from '~/lib/cache/invalidation'
 import { notifyFromTemplate } from '~/lib/notifications/notify'
 
 export type ProfileRecommendation = {
@@ -200,6 +201,7 @@ export async function requestRecommendation(options: {
     channels: ['in_app', 'email', 'push'],
   })
 
+  invalidateCache(INVALIDATION_TOPICS.communityNetwork)
   return { error: null }
 }
 

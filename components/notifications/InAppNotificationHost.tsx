@@ -64,6 +64,9 @@ export function InAppNotificationHost() {
           if (type === 'hashtag_post') {
             invalidateCache(INVALIDATION_TOPICS.communityHashtagFollows)
           }
+          if (type === 'recommendation_requested') {
+            invalidateCache(INVALIDATION_TOPICS.communityNetwork)
+          }
           if (
             type.includes('return') ||
             type.includes('refund') ||

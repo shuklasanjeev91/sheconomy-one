@@ -6,7 +6,9 @@ import { filterNetworkSuggestions, rankNetworkSuggestions } from '~/community/li
 import type { NetworkMember } from '~/community/lib/network'
 import { orderProfessionalSpotlightCards } from '~/community/lib/professional-spotlight'
 import { buildWishlistActivityCards } from '~/community/lib/wishlist-activity'
+import { buildJobApplicationRevisitCards } from '~/community/lib/job-applications-revisit'
 import { mergeBuyerOrderAttentionItems } from '~/commerce/lib/buyer-order-attention'
+import { buildWishlistPriceDropCards } from '~/commerce/lib/wishlist-price-drops-home'
 import { selectBuyerReturnHomeCards } from '~/commerce/lib/buyer-return-home'
 import { buildBuyerRtoHomeCards } from '~/commerce/lib/buyer-rto-home'
 import type { WishlistReactivationSection } from '~/commerce/lib/wishlist-reactivation'
@@ -332,6 +334,67 @@ describe('buildBuyerRtoHomeCards', () => {
     )
 
     expect(cards.map((card) => card.kind)).toEqual(['return_shipment', 'rto'])
+  })
+})
+
+describe('buildJobApplicationRevisitCards', () => {
+  it('maps application status labels', () => {
+    const cards = buildJobApplicationRevisitCards(
+      [
+        {
+          id: 'app-1',
+          status: 'under_review',
+          created_at: '2026-08-19T10:00:00.000Z',
+          cover_letter: null,
+          job: {
+            id: 'job-1',
+            title: 'Product Designer',
+            company_name: 'Acme',
+            location: 'Remote',
+            job_type: 'full-time',
+          },
+        },
+      ],
+      3,
+    )
+
+    expect(cards[0]?.statusLabel).toBe('Under review')
+    expect(cards[0]?.title).toBe('Product Designer')
+  })
+})
+
+describe('buildWishlistPriceDropCards', () => {
+  it('returns only price win items', () => {
+    const cards = buildWishlistPriceDropCards(
+      [
+        {
+          key: 'price_wins',
+          title: 'Price drops',
+          subtitle: 'Cheaper now',
+          items: [
+            {
+              id: 'listing-1',
+              slug: 'listing-1',
+              title: 'Serum',
+              card_title: 'Serum',
+              price: 450,
+              currency: 'INR',
+              score: 50,
+              source: 'discount',
+              discountAmount: 100,
+              savedFromCartAt: null,
+            },
+          ] as WishlistReactivationSection['items'],
+          actionLabel: 'Move',
+          count: 1,
+          canBulkMoveToCart: false,
+        },
+      ],
+      2,
+    )
+
+    expect(cards).toHaveLength(1)
+    expect(cards[0]?.discountAmount).toBe(100)
   })
 })
 

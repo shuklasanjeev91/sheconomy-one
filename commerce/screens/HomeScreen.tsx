@@ -11,6 +11,8 @@ import { InfiniteHorizontalSection } from '~/commerce/components/InfiniteHorizon
 import { InfiniteListingSection } from '~/commerce/components/InfiniteListingSection'
 import { BuyerOrderAttentionStrip } from '~/commerce/components/BuyerOrderAttentionStrip'
 import { PostPurchaseHomeStrip } from '~/commerce/components/PostPurchaseHomeStrip'
+import { SavedForLaterHomeStrip } from '~/commerce/components/SavedForLaterHomeStrip'
+import { WishlistPriceDropHomeStrip } from '~/commerce/components/WishlistPriceDropHomeStrip'
 import { RecentlyViewedRail } from '~/commerce/components/RecentlyViewedRail'
 import { SaleEventBanner } from '~/commerce/components/SaleEventBanner'
 import { ShopSpotlightCard } from '~/commerce/components/ShopSpotlightCard'
@@ -165,6 +167,8 @@ export function HomeScreen({ data, error, loading = false }: HomeScreenProps) {
             inset
           />
           <RecentlyViewedRail inset />
+          <WishlistPriceDropHomeStrip inset />
+          <SavedForLaterHomeStrip inset />
           <PostPurchaseHomeStrip inset />
           <BuyerOrderAttentionStrip inset />
           <FollowedShopDigestEntryCard inset />
