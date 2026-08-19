@@ -32,7 +32,7 @@ type AuthUserMenuContentProps = {
 
 export function AuthUserMenuContent({ onClose }: AuthUserMenuContentProps) {
   const { profile } = useProfile()
-  const { tier, isMale, isFemale } = useAccess()
+  const { tier, isMale, isFemale, isTierKnown } = useAccess()
   const { signOut } = useAuth()
   const { shops } = useVendorShops()
   const { itemCount: cartCount } = useCart()
@@ -51,30 +51,33 @@ export function AuthUserMenuContent({ onClose }: AuthUserMenuContentProps) {
     () =>
       getAccountQuickActions({
         tier,
+        isTierKnown,
         cartCount,
         wishlistCount: favoriteIds.length,
         omitChromeDuplicates: !isDesktop,
       }),
-    [tier, cartCount, favoriteIds.length, isDesktop],
+    [tier, isTierKnown, cartCount, favoriteIds.length, isDesktop],
   )
 
   const sections = useMemo(
     () =>
       getAccountMenuSections({
         tier,
+        isTierKnown,
         hasShops: shops.length > 0,
         primaryShopId: shops[0]?.id ?? null,
         isAdmin,
         omitChromeDuplicates: !isDesktop,
       }),
-    [tier, shops, isAdmin, isDesktop],
+    [tier, isTierKnown, shops, isAdmin, isDesktop],
   )
 
   function go(href: Href) {
     const raw = String(href)
     const pathOnly = (raw.split('?')[0] ?? raw) || '/'
 
-    if (isCreateShopPath(pathOnly) && !isFemale) {
+    // Only divert once the row has settled — an unknown tier reads as limited.
+    if (isCreateShopPath(pathOnly) && isTierKnown && !isFemale) {
       openHumanVerification({ returnTo: pathOnly })
       requestAnimationFrame(() => onClose())
       return
@@ -86,7 +89,7 @@ export function AuthUserMenuContent({ onClose }: AuthUserMenuContentProps) {
   }
 
   function goProfile() {
-    if (isMale) {
+    if (isTierKnown && isMale) {
       openHumanVerification({ returnTo: String(routes.profile) })
       requestAnimationFrame(() => onClose())
       return

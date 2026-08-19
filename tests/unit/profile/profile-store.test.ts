@@ -13,7 +13,7 @@ vi.mock('~/lib/supabase/client', () => ({
 }))
 
 import { getAccessTier } from '~/lib/auth/access'
-import { clearCachedProfile } from '~/lib/profile/profile-cache'
+import { clearCachedProfile, patchCachedProfile } from '~/lib/profile/profile-cache'
 import {
   ensureSessionProfile,
   getSessionProfileSnapshot,
@@ -228,6 +228,26 @@ describe('session profile store', () => {
     } finally {
       vi.useRealTimers()
     }
+  })
+
+  it('does not let a stale cache overwrite a confirmed row on refresh', async () => {
+    serveRow({ gender: true, is_verified: true })
+    ensureSessionProfile(USER)
+    await settle()
+    expect(tierNow()).toBe('female')
+
+    // Something wrote an older shape back to the cache.
+    await patchCachedProfile(USER, { gender: false, is_verified: false })
+
+    // Refresh the same user with the network still in flight. The cache must not
+    // paint over the confirmed row: `isServerSettled` is still true here, so a
+    // stale repaint would hand gates a row they are allowed to deny on.
+    maybeSingle.mockReturnValue(new Promise(() => {}))
+    refreshSessionProfile()
+    await settle()
+
+    expect(getSessionProfileSnapshot().isServerSettled).toBe(true)
+    expect(tierNow()).toBe('female')
   })
 
   it('does not mark a warm cached row as server-confirmed', async () => {

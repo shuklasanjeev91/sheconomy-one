@@ -214,12 +214,15 @@ export function getVisibleFeatures(tier: AccessTier): AppFeature[] {
  * `isTierKnown` guards against acting on an unsettled profile: an unknown tier
  * resolves to `male`, so without it a verified member whose row has not loaded
  * yet would be sent to verification instead of where she tapped.
+ *
+ * It is deliberately required — a default of `true` let callers bake
+ * `?gender=restricted` into a link while the profile was still in flight.
  */
 export function resolveFeatureNavHref(
   tier: AccessTier,
   href: string,
   feature: AppFeature,
-  isTierKnown = true,
+  isTierKnown: boolean,
 ): Href {
   if (!isTierKnown) return href as Href
   if (canAccessFeature(tier, feature)) return href as Href

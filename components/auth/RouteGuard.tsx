@@ -2,6 +2,7 @@ import type { ReactNode } from 'react'
 import type { Href } from 'one'
 
 import { AuthSignInFlow } from '~/components/auth/AuthSignInFlow'
+import { ProfileUnavailable } from '~/components/auth/ProfileUnavailable'
 import { SpaRedirect } from '~/components/navigation/SpaRedirect'
 import { PageCenter } from '~/components/layout'
 import { Button, Icons, Spinner, Text, YStack } from '~/components/ui'
@@ -58,6 +59,13 @@ export function RouteGuard({
     requireGenderVerification,
     requireVerification,
   })
+
+  // The row could not be read, so this member's access is unknown. Offer a
+  // retry rather than denying — assuming "unverified" here bounced verified
+  // vendors off the console.
+  if (protection.isProfileUnavailable) {
+    return <ProfileUnavailable />
+  }
 
   if (protection.isChecking || !protection.decision) {
     return (

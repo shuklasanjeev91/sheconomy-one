@@ -79,10 +79,10 @@ describe('access tiers (skip verification / women-first)', () => {
     expect(redirect).toMatch(/returnTo=/)
     expect(redirect).not.toMatch(/gender=restricted/)
 
-    const chatNav = String(resolveFeatureNavHref('male', '/chat', 'chat'))
+    const chatNav = String(resolveFeatureNavHref('male', '/chat', 'chat', true))
     expect(chatNav).toMatch(/human=verify/)
 
-    const communityNav = String(resolveFeatureNavHref('male', '/community', 'community'))
+    const communityNav = String(resolveFeatureNavHref('male', '/community', 'community', true))
     expect(communityNav).toMatch(/human=verify/)
   })
 

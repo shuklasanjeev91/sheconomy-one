@@ -53,6 +53,13 @@ type AccountMenuOptions = {
   /** Show Admin console link when the signed-in user has admin role. */
   isAdmin?: boolean
   /**
+   * The profile row has settled, so `tier` reflects reality. While it is false
+   * every destination stays as-is: an unsettled profile reads as the limited
+   * tier, which used to bake `?gender=restricted` into these links and send
+   * verified members there the moment they tapped.
+   */
+  isTierKnown: boolean
+  /**
    * Mobile / compact chrome already shows center + bottom tabs.
    * When true, omit destinations that those tabs already cover.
    */
@@ -61,8 +68,10 @@ type AccountMenuOptions = {
 
 const ADMIN_HOME = '/admin' as Href
 
+type ItemContext = { tier: AccessTier; isTierKnown: boolean }
+
 function item(
-  tier: AccessTier,
+  ctx: ItemContext,
   id: string,
   icon: typeof Icons.User,
   label: string,
@@ -75,7 +84,9 @@ function item(
     id,
     icon,
     label,
-    href: feature ? resolveFeatureNavHref(tier, path, feature) : (href as Href),
+    href: feature
+      ? resolveFeatureNavHref(ctx.tier, path, feature, ctx.isTierKnown)
+      : (href as Href),
     ...extra,
   }
 }
@@ -87,19 +98,21 @@ function badge(count?: number) {
 /** Pinned shopping shortcuts — not repeated in sections below. */
 export function getAccountQuickActions({
   tier,
+  isTierKnown,
   cartCount,
   wishlistCount,
   omitChromeDuplicates = false,
 }: Pick<
   AccountMenuOptions,
-  'tier' | 'cartCount' | 'wishlistCount' | 'omitChromeDuplicates'
+  'tier' | 'isTierKnown' | 'cartCount' | 'wishlistCount' | 'omitChromeDuplicates'
 >): AccountQuickAction[] {
+  const ctx: ItemContext = { tier, isTierKnown }
   const actions: AccountQuickAction[] = [
     {
       id: 'orders',
       icon: Icons.Package,
       label: 'Orders',
-      href: item(tier, 'orders', Icons.Package, '', commerceRoutes.orders, 'commerce').href,
+      href: item(ctx, 'orders', Icons.Package, '', commerceRoutes.orders, 'commerce').href,
     },
   ]
 
@@ -109,7 +122,7 @@ export function getAccountQuickActions({
       id: 'cart',
       icon: Icons.ShoppingBag,
       label: 'Cart',
-      href: item(tier, 'cart', Icons.ShoppingBag, '', commerceRoutes.cart, 'commerce').href,
+      href: item(ctx, 'cart', Icons.ShoppingBag, '', commerceRoutes.cart, 'commerce').href,
       ...badge(cartCount),
     })
   }
@@ -118,7 +131,7 @@ export function getAccountQuickActions({
     id: 'wishlist',
     icon: Icons.Heart,
     label: 'Wishlist',
-    href: item(tier, 'wishlist', Icons.Heart, '', commerceRoutes.wishlist, 'commerce').href,
+    href: item(ctx, 'wishlist', Icons.Heart, '', commerceRoutes.wishlist, 'commerce').href,
     ...badge(wishlistCount),
   })
 
@@ -128,13 +141,15 @@ export function getAccountQuickActions({
 /** Account drawer sections — destinations not already covered by chrome. */
 export function getAccountMenuSections({
   tier,
+  isTierKnown,
   hasShops,
   isAdmin = false,
   omitChromeDuplicates = false,
 }: Pick<
   AccountMenuOptions,
-  'tier' | 'hasShops' | 'primaryShopId' | 'isAdmin' | 'omitChromeDuplicates'
+  'tier' | 'isTierKnown' | 'hasShops' | 'primaryShopId' | 'isAdmin' | 'omitChromeDuplicates'
 >): AccountMenuSection[] {
+  const ctx: ItemContext = { tier, isTierKnown }
   const sections: AccountMenuSection[] = []
 
   sections.push({
@@ -142,19 +157,21 @@ export function getAccountMenuSections({
     title: 'Your account',
     subtitle: 'Preferences and security',
     items: [
-      item(tier, 'settings', Icons.Settings, 'Settings & privacy', routes.settings, 'account', {
+      item(ctx, 'settings', Icons.Settings, 'Settings & privacy', routes.settings, 'account', {
         description: 'Account, appearance, and alerts per product',
       }),
-      item(tier, 'profile', Icons.User, 'Your profile', routes.profile, 'account', {
+      item(ctx, 'profile', Icons.User, 'Your profile', routes.profile, 'account', {
         description: 'Photo, headline, and career preferences',
       }),
-      item(tier, 'notifications', Icons.Bell, 'Notifications', routes.notifications, 'account', {
+      item(ctx, 'notifications', Icons.Bell, 'Notifications', routes.notifications, 'account', {
         description: 'Alerts from marketplace, community, and chat',
       }),
-      item(tier, 'help', Icons.HelpCircle, 'Help & Support', routes.help, 'account', {
+      // Help and the assistant are public surfaces — gating them behind the
+      // account feature sent limited members to `?gender=restricted` for support.
+      item(ctx, 'help', Icons.HelpCircle, 'Help & Support', routes.help, undefined, {
         description: 'FAQs and contact for every tab',
       }),
-      item(tier, 'ai-assist', Icons.Sparkles, 'Ask SHEconomy AI', routes.help, 'account', {
+      item(ctx, 'ai-assist', Icons.Sparkles, 'Ask SHEconomy AI', routes.help, undefined, {
         description: 'Contextual help for every product',
         action: 'open-ai',
       }),
@@ -187,12 +204,12 @@ export function getAccountMenuSections({
       ...(omitChromeDuplicates
         ? []
         : [
-            item(tier, 'shops', Icons.Store, 'Browse shops', commerceRoutes.shops, 'commerce', {
+            item(ctx, 'shops', Icons.Store, 'Browse shops', commerceRoutes.shops, 'commerce', {
               description: 'Independent storefronts',
             }),
           ]),
       item(
-        tier,
+        ctx,
         'payments',
         Icons.CreditCard,
         'Payment methods',
@@ -201,7 +218,7 @@ export function getAccountMenuSections({
         { description: 'Cards and wallets for checkout' },
       ),
       item(
-        tier,
+        ctx,
         'addresses',
         Icons.MapPin,
         'Delivery addresses',
@@ -221,7 +238,7 @@ export function getAccountMenuSections({
       subtitle: 'Selling tools',
       items: [
         item(
-          tier,
+          ctx,
           'shop-manager',
           hasShops ? Icons.Store : Icons.PlusCircle,
           hasShops ? 'Manage your shop' : 'Start your shop',
@@ -240,28 +257,28 @@ export function getAccountMenuSections({
   // Community: bottom tabs already cover Network / Create / Jobs on mobile.
   const communityItems: AccountMenuItem[] = omitChromeDuplicates
     ? [
-        item(tier, 'groups', Icons.UsersRound, 'Groups', communityRoutes.groups, 'community', {
+        item(ctx, 'groups', Icons.UsersRound, 'Groups', communityRoutes.groups, 'community', {
           description: 'Communities you follow or manage',
         }),
-        item(tier, 'events', Icons.CalendarDays, 'Events', communityRoutes.events, 'community', {
+        item(ctx, 'events', Icons.CalendarDays, 'Events', communityRoutes.events, 'community', {
           description: 'Meetups and community gatherings',
         }),
-        item(tier, 'pages', Icons.Building2, 'Pages', communityRoutes.companies, 'community', {
+        item(ctx, 'pages', Icons.Building2, 'Pages', communityRoutes.companies, 'community', {
           description: 'Business and creator pages',
         }),
-        item(tier, 'stories', Icons.Film, 'Stories', communityRoutes.stories, 'community', {
+        item(ctx, 'stories', Icons.Film, 'Stories', communityRoutes.stories, 'community', {
           description: 'Short updates from people you follow',
         }),
-        item(tier, 'saved', Icons.Bookmark, 'Saved posts', communityRoutes.saved, 'community', {
+        item(ctx, 'saved', Icons.Bookmark, 'Saved posts', communityRoutes.saved, 'community', {
           description: 'Posts you bookmarked',
         }),
       ]
     : [
-        item(tier, 'network', Icons.Users, 'Friends & network', communityRoutes.network, 'community', {
+        item(ctx, 'network', Icons.Users, 'Friends & network', communityRoutes.network, 'community', {
           description: 'Connections, followers, and requests',
         }),
         item(
-          tier,
+          ctx,
           'create-post',
           Icons.SquarePen,
           'Create post',
@@ -269,19 +286,19 @@ export function getAccountMenuSections({
           'community',
           { description: 'Share photos, updates, and stories' },
         ),
-        item(tier, 'groups', Icons.UsersRound, 'Groups', communityRoutes.groups, 'community', {
+        item(ctx, 'groups', Icons.UsersRound, 'Groups', communityRoutes.groups, 'community', {
           description: 'Communities you follow or manage',
         }),
-        item(tier, 'events', Icons.CalendarDays, 'Events', communityRoutes.events, 'community', {
+        item(ctx, 'events', Icons.CalendarDays, 'Events', communityRoutes.events, 'community', {
           description: 'Meetups and community gatherings',
         }),
-        item(tier, 'pages', Icons.Building2, 'Pages', communityRoutes.companies, 'community', {
+        item(ctx, 'pages', Icons.Building2, 'Pages', communityRoutes.companies, 'community', {
           description: 'Business and creator pages',
         }),
-        item(tier, 'jobs', Icons.Briefcase, 'Jobs', communityRoutes.jobs, 'community', {
+        item(ctx, 'jobs', Icons.Briefcase, 'Jobs', communityRoutes.jobs, 'community', {
           description: 'Opportunities from the network',
         }),
-        item(tier, 'stories', Icons.Film, 'Stories', communityRoutes.stories, 'community', {
+        item(ctx, 'stories', Icons.Film, 'Stories', communityRoutes.stories, 'community', {
           description: 'Short updates from people you follow',
         }),
       ]
@@ -300,10 +317,10 @@ export function getAccountMenuSections({
       title: 'Chat',
       subtitle: 'Conversations',
       items: [
-        item(tier, 'groups-chat', Icons.Users, 'Group chats', chatRoutes.groups, 'chat', {
+        item(ctx, 'groups-chat', Icons.Users, 'Group chats', chatRoutes.groups, 'chat', {
           description: 'Multi-member conversations',
         }),
-        item(tier, 'calls', Icons.Phone, 'Calls', chatRoutes.calls, 'chat', {
+        item(ctx, 'calls', Icons.Phone, 'Calls', chatRoutes.calls, 'chat', {
           description: 'Voice and video call history',
         }),
       ],
@@ -314,10 +331,10 @@ export function getAccountMenuSections({
       title: 'Class',
       subtitle: 'Videos and audio to watch',
       items: [
-        item(tier, 'video', Icons.Play, 'Video', classRoutes.video, 'class', {
+        item(ctx, 'video', Icons.Play, 'Video', classRoutes.video, 'class', {
           description: 'Browse and play recorded videos',
         }),
-        item(tier, 'audio', Icons.Radio, 'Audio', classRoutes.audio, 'class', {
+        item(ctx, 'audio', Icons.Radio, 'Audio', classRoutes.audio, 'class', {
           description: 'Browse and play recorded audio',
         }),
       ],
@@ -328,13 +345,13 @@ export function getAccountMenuSections({
       title: 'Co-Work',
       subtitle: 'Meetings and collaboration',
       items: [
-        item(tier, 'schedule', Icons.Calendar, 'Schedule', coWorkRoutes.schedule, 'co-work', {
+        item(ctx, 'schedule', Icons.Calendar, 'Schedule', coWorkRoutes.schedule, 'co-work', {
           description: 'Upcoming sessions on your calendar',
         }),
-        item(tier, 'meetings', Icons.Monitor, 'Your meetings', coWorkRoutes.meetings, 'co-work', {
+        item(ctx, 'meetings', Icons.Monitor, 'Your meetings', coWorkRoutes.meetings, 'co-work', {
           description: 'Past and active meeting rooms',
         }),
-        item(tier, 'join', Icons.Hash, 'Join with code', coWorkRoutes.join, 'co-work', {
+        item(ctx, 'join', Icons.Hash, 'Join with code', coWorkRoutes.join, 'co-work', {
           description: 'Enter a meeting code',
         }),
       ],

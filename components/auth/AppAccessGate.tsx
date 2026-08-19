@@ -4,10 +4,10 @@ import { usePathname } from 'one'
 
 import { SpaRedirect } from '~/components/navigation/SpaRedirect'
 import { AuthSignInFlow } from '~/components/auth/AuthSignInFlow'
+import { ProfileUnavailable } from '~/components/auth/ProfileUnavailable'
 import { PageCenter } from '~/components/layout'
-import { Button, Spinner, Text, YStack } from '~/components/ui'
+import { Spinner, YStack } from '~/components/ui'
 import { canAccessPath as checkAccessPath, getGuestSignInReturnTo } from '~/lib/auth/access'
-import { retryFailedProfileFetch } from '~/lib/profile/profile-store'
 import { isChatPath, isCommunityPath, isCreateShopPath } from '~/lib/routes'
 import { useAccess } from '~/hooks/useAccess'
 import { useAppLayout } from '~/hooks/useAppLayout'
@@ -35,27 +35,6 @@ function Loading() {
   return (
     <PageCenter>
       <Spinner size="large" />
-    </PageCenter>
-  )
-}
-
-/**
- * Shown when the member's row could not be read. Their access is unknown, so we
- * ask rather than assume — sending them to `?gender=restricted` here would
- * lock a verified member out over a dropped request.
- */
-function ProfileUnavailable() {
-  return (
-    <PageCenter>
-      <YStack gap="$3" alignItems="center" maxWidth={340} paddingHorizontal="$4">
-        <Text fontSize="$5" fontWeight="600" textAlign="center">
-          Couldn't load your account
-        </Text>
-        <Text fontSize="$3" opacity={0.7} textAlign="center">
-          Check your connection and try again.
-        </Text>
-        <Button onPress={() => retryFailedProfileFetch()}>Try again</Button>
-      </YStack>
     </PageCenter>
   )
 }

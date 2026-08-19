@@ -274,11 +274,15 @@ function load(userId: string): void {
     error: null,
   })
 
-  // Warm start — web reads the cache synchronously.
-  const warm = peekCachedProfile(userId)
+  // Warm start — web reads the cache synchronously. Only paint the cache when we
+  // have nothing better: on a same-user refresh the snapshot already holds a
+  // server-confirmed row, and overwriting it with an older cached one would
+  // leave `isServerSettled` true while describing an unconfirmed profile —
+  // exactly the state gates are allowed to deny on.
+  const warm = snapshot.profile ? null : peekCachedProfile(userId)
   if (warm) {
     setSnapshot({ profile: mergePendingPatch(userId, warm), isSettled: true })
-  } else {
+  } else if (!snapshot.profile) {
     // Native has no synchronous cache, so hydrate alongside the request. Without
     // this a warm launch starts with an unknown profile and reads as unverified.
     void readCachedProfile(userId).then((cached) => {
