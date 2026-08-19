@@ -24,9 +24,9 @@ export const REMINDER_FAMILIES: ReminderFamily[] = [
   {
     id: 'orders',
     title: 'Orders',
-    description: 'Status updates from placed to delivered',
+    description: 'Status updates from placed to delivered, including return and refund progress',
     settingsSection: 'commerce',
-    examples: ['Order placed', 'Shipped', 'Out for delivery', 'Delivered'],
+    examples: ['Order placed', 'Shipped', 'Out for delivery', 'Delivered', 'Refund ETA update'],
   },
   {
     id: 'stock',

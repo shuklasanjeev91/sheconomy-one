@@ -25,6 +25,7 @@ import {
   type CustomerOrderPackage,
 } from '~/commerce/lib/customer-orders'
 import {
+  buildBuyerRefundSummary,
   buildCustomerOrderTimeline,
   formatEstimatedDelivery,
   getBuyerReturnHubEntries,
@@ -166,6 +167,7 @@ export function OrderDetailScreen({ orderId }: OrderDetailScreenProps) {
       currency: order.currency,
     })
   }, [order])
+  const refundSummary = useMemo(() => buildBuyerRefundSummary(returnHubEntries), [returnHubEntries])
   const postPurchaseNudges = useMemo(
     () =>
       order
@@ -762,6 +764,7 @@ export function OrderDetailScreen({ orderId }: OrderDetailScreenProps) {
 
           <BuyerReturnHub
             entries={returnHubEntries}
+                refundSummary={refundSummary}
             items={order.items}
             issues={order.issues}
             onCancelRequest={setCancelReturnItem}

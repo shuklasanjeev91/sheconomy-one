@@ -116,7 +116,7 @@ export function CommerceSettingsPanel() {
   return (
     <SettingsPanel
       title="Marketplace"
-      description="Buyer alerts for orders, cart recovery, restock, and post-purchase reorder nudges — plus shortcuts to orders and checkout details"
+      description="Buyer alerts for orders, returns, refund ETA updates, cart recovery, restock, and post-purchase reorder nudges — plus shortcuts to orders and checkout details"
     >
       <ChannelPrefsCard
         loading={loading}
@@ -125,8 +125,8 @@ export function CommerceSettingsPanel() {
         permissionGranted={permissionGranted}
         pushBusy={pushBusy || saving}
         prefs={prefs}
-        emailSubtitle="Orders, cart reminders, restock alerts, and buy-again nudges"
-        whatsappSubtitle="Optional cart recovery and reorder nudges via WhatsApp"
+        emailSubtitle="Orders, return and refund ETA updates, restock alerts, and buy-again nudges"
+        whatsappSubtitle="Optional cart recovery, reorder, and refund ETA nudges via WhatsApp"
         onChange={(key, value) => void updatePref(key, value)}
         extraRows={
           <>
