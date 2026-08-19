@@ -1,5 +1,6 @@
 import { Platform, View } from 'react-native'
 
+import { CommunityProductSuggestionRow } from '~/community/components/CommunityProductSuggestionRow'
 import { CommunitySuggestionRow } from '~/community/components/CommunitySuggestionRow'
 import { AppLink } from '~/components/navigation/AppLink'
 import { CommunityWidget } from '~/community/components/CommunityWidget'
@@ -14,6 +15,7 @@ type CommunitySuggestionSectionCardProps = {
 
 /** Keep FlashList from under-measuring and clipping subtitle / reason lines on native. */
 const ROW_MIN_HEIGHT = 64
+const PRODUCT_CARD_MIN_HEIGHT = 196
 const SECTION_CHROME_HEIGHT = 88
 
 export function CommunitySuggestionSectionCard({
@@ -25,7 +27,9 @@ export function CommunitySuggestionSectionCard({
 
   if (!items.length) return null
 
-  const minHeight = SECTION_CHROME_HEIGHT + items.length * ROW_MIN_HEIGHT
+  const isProductSection = section.kind === 'listing'
+  const rowMinHeight = isProductSection ? PRODUCT_CARD_MIN_HEIGHT : ROW_MIN_HEIGHT
+  const minHeight = SECTION_CHROME_HEIGHT + items.length * rowMinHeight
 
   const card = (
     <CommunityWidget
@@ -40,13 +44,17 @@ export function CommunitySuggestionSectionCard({
       }
     >
       <YStack gap={0} width="100%">
-        {items.map((item) => (
-          <CommunitySuggestionRow
-            key={`${item.kind}-${item.id}`}
-            item={item}
-            showKindLabel={false}
-          />
-        ))}
+        {items.map((item) =>
+          isProductSection ? (
+            <CommunityProductSuggestionRow key={`${item.kind}-${item.id}`} item={item} />
+          ) : (
+            <CommunitySuggestionRow
+              key={`${item.kind}-${item.id}`}
+              item={item}
+              showKindLabel={false}
+            />
+          ),
+        )}
       </YStack>
     </CommunityWidget>
   )

@@ -23,6 +23,13 @@ export type SuggestionSectionMeta = {
   seeAllHref: string
 }
 
+export type CommunitySuggestionListingMeta = {
+  slug: string
+  price: number | null
+  currency: string | null
+  shopName: string | null
+}
+
 export type CommunitySuggestion = {
   id: string
   kind: SuggestionKind
@@ -32,6 +39,8 @@ export type CommunitySuggestion = {
   imageUrl?: string | null
   score: number
   reason: string
+  /** Present on `listing` suggestions — powers Add to cart / Buy now in the feed. */
+  listingMeta?: CommunitySuggestionListingMeta
 }
 
 export type PersonalizationContext = {
@@ -241,6 +250,12 @@ function scoreListing(listing: ListingSummary, ctx: PersonalizationContext): Com
     imageUrl,
     score: score + BASE_SCORE,
     reason: reasons[0],
+    listingMeta: {
+      slug,
+      price: listing.price ?? null,
+      currency: listing.currency ?? null,
+      shopName: listing.shop_name ?? null,
+    },
   }
 }
 
