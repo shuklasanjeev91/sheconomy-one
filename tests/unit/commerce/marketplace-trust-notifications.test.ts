@@ -109,4 +109,25 @@ describe('marketplace trust notification deep links', () => {
       }),
     ).toBe(`/orders/${orderId}`)
   })
+
+  it('routes seller exchange requests to vendor orders', () => {
+    expect(
+      resolveMarketplaceTrustNotificationPath({
+        type: 'order_exchange_requested_seller',
+        contextType: 'order',
+        contextId: 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa',
+      }),
+    ).toBe(vendorRoutes.orders)
+  })
+
+  it('routes buyer exchange updates to order detail', () => {
+    const orderId = 'bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb'
+    expect(
+      resolveMarketplaceTrustNotificationPath({
+        type: 'order_exchange_ready_buyer',
+        contextType: 'order',
+        contextId: orderId,
+      }),
+    ).toBe(commerceRoutes.order(orderId))
+  })
 })

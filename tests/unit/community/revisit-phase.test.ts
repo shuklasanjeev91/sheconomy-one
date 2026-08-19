@@ -6,6 +6,7 @@ import { filterNetworkSuggestions, rankNetworkSuggestions } from '~/community/li
 import type { NetworkMember } from '~/community/lib/network'
 import { orderProfessionalSpotlightCards } from '~/community/lib/professional-spotlight'
 import { buildWishlistActivityCards } from '~/community/lib/wishlist-activity'
+import { mergeBuyerOrderAttentionItems } from '~/commerce/lib/buyer-order-attention'
 import { selectBuyerReturnHomeCards } from '~/commerce/lib/buyer-return-home'
 import { buildBuyerRtoHomeCards } from '~/commerce/lib/buyer-rto-home'
 import type { WishlistReactivationSection } from '~/commerce/lib/wishlist-reactivation'
@@ -331,5 +332,53 @@ describe('buildBuyerRtoHomeCards', () => {
     )
 
     expect(cards.map((card) => card.kind)).toEqual(['return_shipment', 'rto'])
+  })
+})
+
+describe('mergeBuyerOrderAttentionItems', () => {
+  it('prioritizes exchange needs-action and dedupes by order', () => {
+    const items = mergeBuyerOrderAttentionItems(
+      [
+        {
+          orderId: 'order-1',
+          orderNumber: '1001',
+          issueId: 'issue-1',
+          itemTitle: 'Dress',
+          actionLabel: 'Add photos if helpful',
+          actionDetail: 'Photos help approval',
+          category: 'needs_action',
+          issueKind: 'exchange',
+          returnTrackingUrl: null,
+        },
+      ],
+      [
+        {
+          orderId: 'order-1',
+          orderNumber: '1001',
+          deliveryId: 'delivery-1',
+          itemTitle: 'Dress',
+          kind: 'return_shipment',
+          label: 'Return in transit',
+          detail: 'AWB in transit',
+          trackingNumber: 'AWB1',
+          trackingUrl: 'https://track.example',
+        },
+        {
+          orderId: 'order-2',
+          orderNumber: '1002',
+          deliveryId: 'delivery-2',
+          itemTitle: 'Shoes',
+          kind: 'rto',
+          label: 'Package returning to seller',
+          detail: 'RTO started',
+          trackingNumber: null,
+          trackingUrl: null,
+        },
+      ],
+      4,
+    )
+
+    expect(items.map((item) => item.orderId)).toEqual(['order-1', 'order-2'])
+    expect(items[0]?.kind).toBe('exchange')
   })
 })

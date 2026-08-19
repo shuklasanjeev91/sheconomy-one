@@ -36,7 +36,12 @@ export function resolveMarketplaceTrustNotificationPath(
 
   if (
     type === 'order_return_requested_seller' ||
-    (type.includes('return_requested') && type.includes('seller'))
+    type === 'order_return_tracking_seller' ||
+    type === 'order_exchange_requested_seller' ||
+    type === 'order_exchange_ready_seller' ||
+    (type.includes('return_requested') && type.includes('seller')) ||
+    (type.includes('return_tracking') && type.includes('seller')) ||
+    (type.includes('exchange') && type.includes('seller'))
   ) {
     return fromUrl && fromUrl.startsWith('/vendor') ? fromUrl : vendorRoutes.orders
   }
@@ -48,9 +53,14 @@ export function resolveMarketplaceTrustNotificationPath(
     type === 'order_return_rejected_buyer' ||
     type === 'order_rto_completed_buyer' ||
     type === 'order_refund_completed_buyer' ||
+    type === 'order_exchange_pickup_assigned_buyer' ||
+    type === 'order_exchange_ready_buyer' ||
+    type === 'order_exchange_rejected_buyer' ||
+    type === 'order_exchange_shipped_buyer' ||
     (type.includes('return') && type.includes('buyer')) ||
     (type.includes('refund') && type.includes('buyer') && !type.includes('seller')) ||
-    (type.includes('rto') && type.includes('buyer'))
+    (type.includes('rto') && type.includes('buyer')) ||
+    (type.includes('exchange') && type.includes('buyer'))
   ) {
     if (fromUrl && fromUrl.startsWith('/orders')) return fromUrl
     if (contextId && (contextType === 'order' || type.includes('order'))) {

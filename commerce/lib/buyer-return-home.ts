@@ -16,6 +16,7 @@ export type BuyerReturnHomeCard = {
   actionLabel: string
   actionDetail: string | null
   category: BuyerReturnHubCategory
+  issueKind: 'return' | 'exchange'
   returnTrackingUrl: string | null
 }
 
@@ -62,6 +63,7 @@ export function selectBuyerReturnHomeCards(
       actionLabel: entry.actionLabel,
       actionDetail: entry.actionDetail,
       category: entry.category,
+      issueKind: entry.issueLabel.toLowerCase().includes('exchange') ? 'exchange' as const : 'return' as const,
       returnTrackingUrl: entry.returnTrackingUrl,
     }))
 }
