@@ -12,6 +12,8 @@ import {
   YStack,
   useAppToast,
 } from '~/components/ui'
+import { VendorNoShopState } from '~/commerce/components/vendor/VendorShopGate'
+import { PageCenter } from '~/components/layout'
 import { radius } from '~/config/tokens'
 import { useAppLayout } from '~/hooks/useAppLayout'
 import { useAppSelector } from '~/lib/store/hooks'
@@ -33,6 +35,8 @@ export function VendorOperationsScreen({ kind }: { kind: VendorOperationsKind })
   const { isDesktop, safeBottom } = useAppLayout()
   const toast = useAppToast()
   const shop = useAppSelector((state) => state.shop.currentShop)
+  const isLoadingMyShops = useAppSelector((state) => state.shop.isLoadingMyShops)
+  const myShopsLoaded = useAppSelector((state) => state.shop.myShopsLoaded)
   const [loading, setLoading] = useState(true)
   const [reviews, setReviews] = useState<VendorReview[]>([])
   const [inquiries, setInquiries] = useState<VendorInquiry[]>([])
@@ -107,12 +111,21 @@ export function VendorOperationsScreen({ kind }: { kind: VendorOperationsKind })
     await load()
   }
 
+  if (!shop && (isLoadingMyShops || !myShopsLoaded)) {
+    return (
+      <PageCenter>
+        <Spinner size="large" />
+      </PageCenter>
+    )
+  }
+
   if (!shop) {
     return (
-      <YStack minHeight={360} alignItems="center" justifyContent="center" gap="$2">
-        <Icons.Store size={30} color={ui.textMuted} />
-        <Text color={ui.text}>Create a shop to use seller operations.</Text>
-      </YStack>
+      <VendorNoShopState
+        ui={ui}
+        title="Create a shop first"
+        body="Create a shop to use seller operations."
+      />
     )
   }
 

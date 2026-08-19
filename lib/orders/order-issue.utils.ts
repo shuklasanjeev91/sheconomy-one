@@ -97,6 +97,7 @@ const ISSUE_TYPE_LABELS: Partial<Record<OrderIssueType, string>> = {
   [ORDER_ISSUE_TYPE.CANCELLATION_REQUEST]: 'Cancellation request',
   [ORDER_ISSUE_TYPE.RETURN_REQUEST]: 'Return request',
   [ORDER_ISSUE_TYPE.REFUND_REQUEST]: 'Refund request',
+  [ORDER_ISSUE_TYPE.EXCHANGE_REQUEST]: 'Exchange request',
   [ORDER_ISSUE_TYPE.CUSTOMER_COMPLAINT]: 'Customer complaint',
   [ORDER_ISSUE_TYPE.OTHER]: 'Other',
 }
@@ -175,6 +176,10 @@ export function isReturnIssueType(issueType: string | null | undefined): boolean
   )
 }
 
+export function isExchangeIssueType(issueType: string | null | undefined): boolean {
+  return issueType === ORDER_ISSUE_TYPE.EXCHANGE_REQUEST
+}
+
 /**
  * Request types the vendor answers with an accept/reject decision rather than a
  * free-form status change. These go through `resolve_order_issue_request`, which
@@ -182,7 +187,11 @@ export function isReturnIssueType(issueType: string | null | undefined): boolean
  * mirrors the type guard inside that function.
  */
 export function isDecisionIssueType(issueType: string | null | undefined): boolean {
-  return isCancellationIssueType(issueType) || isReturnIssueType(issueType)
+  return (
+    isCancellationIssueType(issueType) ||
+    isReturnIssueType(issueType) ||
+    isExchangeIssueType(issueType)
+  )
 }
 
 // ============= STATUS MACHINE =============

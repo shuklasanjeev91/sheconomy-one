@@ -3,8 +3,13 @@ import { Platform } from 'react-native'
 
 import type { SessionProfile as Profile } from '~/lib/profile/session-profile'
 
-/** Bumped when avatar_url caching semantics change (invalidate stale empty avatars). */
-const PROFILE_CACHE_KEY = 'sheconomy:profile-cache-v2'
+/**
+ * Bump to invalidate every stored profile at once. v3 drops rows cached before
+ * the gender-gate fix so pre-verification caches can no longer paint stale
+ * access; the next load fetches a fresh server row instead.
+ */
+const PROFILE_CACHE_KEY = 'sheconomy:profile-cache-v3'
+const LEGACY_PROFILE_CACHE_KEYS = ['sheconomy:profile-cache-v2', 'sheconomy:profile-cache']
 
 type CachedProfileEntry = {
   userId: string
@@ -13,6 +18,21 @@ type CachedProfileEntry = {
 }
 
 let memoryCache: CachedProfileEntry | null = null
+
+/** One-time cleanup of superseded cache keys so stale rows can't be read back. */
+function purgeLegacyCaches(): void {
+  try {
+    if (Platform.OS === 'web' && typeof window !== 'undefined') {
+      for (const key of LEGACY_PROFILE_CACHE_KEYS) window.localStorage.removeItem(key)
+      return
+    }
+    void AsyncStorage.multiRemove(LEGACY_PROFILE_CACHE_KEYS).catch(() => {})
+  } catch {
+    // Best-effort — the new key is already the only one we read.
+  }
+}
+
+purgeLegacyCaches()
 
 /** Sync peek — lets useProfile skip the access-gate spinner on warm starts. */
 export function peekCachedProfile(userId: string): Profile | null {

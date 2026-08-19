@@ -72,11 +72,24 @@ export function useProfile() {
   const isProfileKnown =
     !authLoading && (!userId || (matchesUser && (!!snapshot.profile || snapshot.isServerSettled)))
 
+  // Only the server can prove a member is *limited*. A warm cache settles the
+  // store synchronously, so a stale row (verified after it was cached) would
+  // otherwise bounce a full-access member to `?gender=restricted` on reload.
+  // Gates may grant access on an unconfirmed row, never revoke it.
+  const isProfileConfirmed = !authLoading && (!userId || (matchesUser && snapshot.isServerSettled))
+
+  // Every read failed, so we know nothing about this member. Gates must offer a
+  // retry here — treating it as "unverified" is what sent full-access members
+  // to `?gender=restricted` after a dropped request or an expired token.
+  const isProfileUnavailable = matchesUser && snapshot.hasFailed
+
   return {
     profile,
     user,
     isLoading,
     isProfileKnown,
+    isProfileConfirmed,
+    isProfileUnavailable,
     error: matchesUser ? snapshot.error : null,
     isAuthenticated: !!user,
     isRefreshing: matchesUser && snapshot.isFetching,

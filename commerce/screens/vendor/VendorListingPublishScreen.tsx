@@ -4,7 +4,7 @@ import { useLocalSearchParams, useRouter } from 'one'
 
 import { ListingPublishErrorBoundary } from '~/commerce/components/ListingPublishErrorBoundary'
 import { PageCenter } from '~/components/layout'
-import { ScrollView, Spinner, YStack, useAppToast } from '~/components/ui'
+import { Button, Spinner, Text, XStack, YStack, useAppToast } from '~/components/ui'
 import type { ListingDraftFromImageResult } from '~/lib/ai/client'
 import { useAppLayout } from '~/hooks/useAppLayout'
 import { loadAttributes } from '~/lib/listing/listing-attributes.store'
@@ -70,6 +70,15 @@ import { ImagesStep } from '~/commerce/components/vendor/listing-publish/steps/I
 import { PricingStep } from '~/commerce/components/vendor/listing-publish/steps/PricingStep'
 import { SeoStep } from '~/commerce/components/vendor/listing-publish/steps/SeoStep'
 
+/** Await a side-load, falling back to an empty result instead of failing the page. */
+async function settleOr<T>(promise: Promise<T>, fallback: T): Promise<T> {
+  try {
+    return await promise
+  } catch {
+    return fallback
+  }
+}
+
 /** Empty buffer for a listing type, with the one-row seeds the physical form expects. */
 function seedFormForType(listingType: ListingType, shopId?: string): ListingFormData {
   const base: ListingFormData = {
@@ -111,6 +120,7 @@ function VendorListingPublishContent() {
   const isEditMode = Boolean(editListingId)
 
   const shop = useAppSelector((s) => s.shop.currentShop)
+  const myShopsLoaded = useAppSelector((s) => s.shop.myShopsLoaded)
   const formData = useAppSelector((s) => s.listing.formData)
   const validation = useAppSelector((s) => s.listing.validation)
   const isLoadingDetails = useAppSelector((s) => s.listing.isLoadingDetails)
@@ -126,6 +136,8 @@ function VendorListingPublishContent() {
   const [stepErrors, setStepErrors] = useState<Record<string, string>>({})
   const [lastSavedAt, setLastSavedAt] = useState<string | null>(null)
   const [hydrated, setHydrated] = useState(!isEditMode)
+  const [loadError, setLoadError] = useState<string | null>(null)
+  const [reloadToken, setReloadToken] = useState(0)
   // New listings start on the type chooser; the form is built around that answer.
   const [typeConfirmed, setTypeConfirmed] = useState(isEditMode)
   // The form seeds a physical listing, but nothing is "chosen" until the vendor says so.
@@ -152,19 +164,29 @@ function VendorListingPublishContent() {
     if (!editListingId) return
 
     const listingId = editListingId
+    let cancelled = false
+
+    setLoadError(null)
 
     async function hydrate() {
       const details = await dispatch(loadListingDetails({ listingId })).unwrap()
-      if (!details) return
+      if (cancelled) return
+      if (!details) {
+        setLoadError(LISTING_PUBLISH_COPY.LOAD_MISSING)
+        return
+      }
 
+      // A missing side-table (or a policy that hides it) must not strand the
+      // whole composer — hydrate what loaded and let the vendor re-enter the rest.
       const [imagesResult, variationsResult, materialsResult, attributesResult, categoriesResult] =
         await Promise.all([
-          dispatch(loadImages(listingId)).unwrap(),
-          dispatch(loadVariations(listingId)).unwrap(),
-          dispatch(loadMaterials(listingId)).unwrap(),
-          dispatch(loadAttributes(listingId)).unwrap(),
-          dispatch(loadListingCategories(listingId)).unwrap(),
+          settleOr(dispatch(loadImages(listingId)).unwrap(), { items: [] }),
+          settleOr(dispatch(loadVariations(listingId)).unwrap(), { items: [] }),
+          settleOr(dispatch(loadMaterials(listingId)).unwrap(), { items: [] }),
+          settleOr(dispatch(loadAttributes(listingId)).unwrap(), { items: [] }),
+          settleOr(dispatch(loadListingCategories(listingId)).unwrap(), { rows: [] }),
         ])
+      if (cancelled) return
 
       const hydratedForm = buildFormFromListingDetails(details, {
         images: imagesResult.items,
@@ -182,12 +204,24 @@ function VendorListingPublishContent() {
     }
 
     void hydrate().catch((error) => {
+      if (cancelled) return
+      setLoadError(toFriendlyListingError(error))
       toast.show('Could not load listing', {
         tone: 'danger',
         message: toFriendlyListingError(error),
       })
     })
-  }, [dispatch, editListingId, isEditMode, shop?.id, toast])
+
+    return () => {
+      cancelled = true
+    }
+  }, [dispatch, editListingId, isEditMode, reloadToken, shop?.id, toast])
+
+  const retryHydrate = useCallback(() => {
+    setLoadError(null)
+    setHydrated(false)
+    setReloadToken((token) => token + 1)
+  }, [])
 
   useEffect(() => {
     return () => {
@@ -496,6 +530,58 @@ function VendorListingPublishContent() {
 
   const isSaving = isUpdating || publishProgress.isPublishing
 
+  if (loadError) {
+    return (
+      <PageCenter>
+        <YStack gap="$4" alignItems="center" maxWidth={420}>
+          <Text fontSize={20} fontWeight="800" color={ui.text} textAlign="center">
+            {LISTING_PUBLISH_COPY.LOAD_FAILED_TITLE}
+          </Text>
+          <Text fontSize={14} color={ui.textSecondary} textAlign="center" lineHeight={20}>
+            {loadError}
+          </Text>
+          <XStack gap="$2" flexWrap="wrap" justifyContent="center">
+            <Button tone="primary" size="$4" borderRadius={999} onPress={retryHydrate}>
+              {LISTING_PUBLISH_COPY.LOAD_RETRY}
+            </Button>
+            <Button
+              tone="outline"
+              size="$4"
+              borderRadius={999}
+              onPress={() => router.push(vendorRoutes.products)}
+            >
+              {LISTING_PUBLISH_COPY.BACK_TO_PRODUCTS}
+            </Button>
+          </XStack>
+        </YStack>
+      </PageCenter>
+    )
+  }
+
+  // A vendor with no shop would otherwise wait on a spinner that never resolves.
+  if (!shop && myShopsLoaded) {
+    return (
+      <PageCenter>
+        <YStack gap="$4" alignItems="center" maxWidth={420}>
+          <Text fontSize={20} fontWeight="800" color={ui.text} textAlign="center">
+            {LISTING_PUBLISH_COPY.NO_SHOP_TITLE}
+          </Text>
+          <Text fontSize={14} color={ui.textSecondary} textAlign="center" lineHeight={20}>
+            {LISTING_PUBLISH_COPY.NO_SHOP_MESSAGE}
+          </Text>
+          <Button
+            tone="primary"
+            size="$4"
+            borderRadius={999}
+            onPress={() => router.push(vendorRoutes.myShop)}
+          >
+            {LISTING_PUBLISH_COPY.NO_SHOP_ACTION}
+          </Button>
+        </YStack>
+      </PageCenter>
+    )
+  }
+
   if (!shop || (isEditMode && (!hydrated || isLoadingDetails))) {
     return (
       <PageCenter>
@@ -527,26 +613,10 @@ function VendorListingPublishContent() {
   }
 
   return (
-    <YStack
-      flex={1}
-      minHeight={0}
-      width="100%"
-      backgroundColor={ui.background}
-      style={
-        Platform.OS === 'web'
-          ? ({ height: '100%', maxHeight: '100%', overflow: 'hidden' } as const)
-          : undefined
-      }
-    >
-      <ScrollView
-        flex={1}
-        width="100%"
-        minHeight={0}
-        showsVerticalScrollIndicator={false}
-        keyboardShouldPersistTaps="handled"
-        keyboardDismissMode={Platform.OS === 'ios' ? 'interactive' : 'on-drag'}
-        style={Platform.OS === 'web' ? ({ overflowY: 'auto', minHeight: 0 } as const) : undefined}
-      >
+    <YStack flex={1} minHeight={0} width="100%" backgroundColor={ui.background}>
+      {/* The vendor layout already owns the page scroller — a nested one here
+          collapses to zero height on web and blanks the composer. */}
+      <YStack flex={1} minWidth={0} minHeight={0}>
         <YStack
           width="100%"
           maxWidth="100%"
@@ -648,22 +718,27 @@ function VendorListingPublishContent() {
             />
           ) : null}
         </YStack>
-      </ScrollView>
+      </YStack>
 
-      <ListingPublishFooter
-        ui={ui}
-        isDesktop={isDesktop}
-        safeBottom={safeBottom}
-        lastSavedAt={lastSavedAt}
-        isSaving={isSaving}
-        isPublishing={publishProgress.isPublishing}
-        showPublish={isLastStep}
-        isFirstStep={stepIndex === 0}
-        onBack={goBack}
-        onNext={goNext}
-        onSaveDraft={() => void saveDraft()}
-        onPublish={() => void publishListingNow()}
-      />
+      <YStack
+        width="100%"
+        style={Platform.OS === 'web' ? ({ position: 'sticky', bottom: 0 } as const) : undefined}
+      >
+        <ListingPublishFooter
+          ui={ui}
+          isDesktop={isDesktop}
+          safeBottom={safeBottom}
+          lastSavedAt={lastSavedAt}
+          isSaving={isSaving}
+          isPublishing={publishProgress.isPublishing}
+          showPublish={isLastStep}
+          isFirstStep={stepIndex === 0}
+          onBack={goBack}
+          onNext={goNext}
+          onSaveDraft={() => void saveDraft()}
+          onPublish={() => void publishListingNow()}
+        />
+      </YStack>
     </YStack>
   )
 }

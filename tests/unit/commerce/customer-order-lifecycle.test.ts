@@ -2,9 +2,13 @@ import { describe, expect, it } from 'vitest'
 
 import {
   buildCustomerOrderTimeline,
+  canAssignReturnTracking,
+  canCancelReturnOrExchange,
   evaluateReorderCandidates,
   findOpenCancellationRequest,
   getCustomerOrderActionEligibility,
+  getReturnExchangeTimeline,
+  getReturnWindowLabel,
   isPendingOrderSuccessExpired,
   parsePendingOrderSuccess,
   PENDING_ORDER_SUCCESS_TTL_MS,
@@ -32,9 +36,12 @@ describe('getCustomerOrderActionEligibility', () => {
   it('allows cancel only pre-shipment without open request', () => {
     const eligible = getCustomerOrderActionEligibility({
       orderStatus: ORDER_STATUS.PROCESSING,
+      paymentStatus: 'completed',
       issues: [],
     })
     expect(eligible.canCancel).toBe(true)
+    expect(eligible.canRequestCancel).toBe(true)
+    expect(eligible.canInstantCancel).toBe(false)
 
     const blocked = getCustomerOrderActionEligibility({
       orderStatus: ORDER_STATUS.SHIPPED,
@@ -44,10 +51,32 @@ describe('getCustomerOrderActionEligibility', () => {
 
     const duplicate = getCustomerOrderActionEligibility({
       orderStatus: ORDER_STATUS.CONFIRMED,
+      paymentStatus: 'completed',
       issues: [{ issue_type: ORDER_ISSUE_TYPE.CANCELLATION_REQUEST, status: 'open' }],
     })
     expect(duplicate.canCancel).toBe(false)
     expect(duplicate.hasOpenCancellationRequest).toBe(true)
+  })
+
+  it('offers instant cancel for unpaid awaiting_payment orders', () => {
+    const unpaid = getCustomerOrderActionEligibility({
+      orderStatus: ORDER_STATUS.AWAITING_PAYMENT,
+      paymentStatus: 'pending',
+      issues: [],
+    })
+    expect(unpaid.canInstantCancel).toBe(true)
+    expect(unpaid.canRequestCancel).toBe(false)
+    expect(unpaid.canCancel).toBe(true)
+  })
+
+  it('offers request cancel for paid pre-shipment orders', () => {
+    const paid = getCustomerOrderActionEligibility({
+      orderStatus: ORDER_STATUS.CONFIRMED,
+      paymentStatus: 'completed',
+      issues: [],
+    })
+    expect(paid.canInstantCancel).toBe(false)
+    expect(paid.canRequestCancel).toBe(true)
   })
 })
 
@@ -160,5 +189,95 @@ describe('evaluateReorderCandidates', () => {
     expect(eligible.find((item) => item.id === 'item-3')?.quantity).toBe(1)
     expect(skipped).toHaveLength(1)
     expect(skipped[0]?.reason).toMatch(/unavailable/i)
+  })
+})
+
+describe('return / exchange lifecycle helpers', () => {
+  it('allows vendor assign only when accepted and no AWB yet', () => {
+    expect(
+      canAssignReturnTracking({
+        issue_type: ORDER_ISSUE_TYPE.RETURN_REQUEST,
+        resolution_action: 'accepted',
+        order_item_id: 'item-1',
+      }),
+    ).toBe(true)
+    expect(
+      canAssignReturnTracking({
+        issue_type: ORDER_ISSUE_TYPE.RETURN_REQUEST,
+        resolution_action: 'accepted',
+        order_item_id: 'item-1',
+        return_tracking_number: 'AWB',
+      }),
+    ).toBe(false)
+  })
+
+  it('allows buyer cancel before AWB and blocks after', () => {
+    expect(
+      canCancelReturnOrExchange({
+        issue_type: ORDER_ISSUE_TYPE.EXCHANGE_REQUEST,
+        status: 'open',
+      }),
+    ).toBe(true)
+    expect(
+      canCancelReturnOrExchange({
+        issue_type: ORDER_ISSUE_TYPE.RETURN_REQUEST,
+        status: 'waiting_customer',
+        resolution_action: 'accepted',
+      }),
+    ).toBe(true)
+    expect(
+      canCancelReturnOrExchange({
+        issue_type: ORDER_ISSUE_TYPE.RETURN_REQUEST,
+        status: 'waiting_customer',
+        resolution_action: 'accepted',
+        return_tracking_number: 'AWB',
+      }),
+    ).toBe(false)
+  })
+
+  it('builds return timeline steps through refund', () => {
+    const steps = getReturnExchangeTimeline({
+      issue: {
+        issue_type: ORDER_ISSUE_TYPE.RETURN_REQUEST,
+        resolution_action: 'accepted',
+        return_tracking_number: 'AWB1',
+        return_shipping_mode: 'vendor_arranged',
+      },
+      refund: { refund_status: 'processing' },
+    })
+    expect(steps.map((s) => s.id)).toEqual(['requested', 'decision', 'shipped', 'received', 'refund'])
+    expect(steps.find((s) => s.id === 'shipped')?.done).toBe(true)
+    expect(steps.find((s) => s.id === 'shipped')?.detail).toMatch(/arranged by the shop/i)
+  })
+
+  it('reads the shipped step as shop-arranged even for auto-booked pickups', () => {
+    const steps = getReturnExchangeTimeline({
+      issue: {
+        issue_type: ORDER_ISSUE_TYPE.RETURN_REQUEST,
+        resolution_action: 'accepted',
+        return_tracking_number: 'AWB-AUTO',
+        return_shipping_mode: 'auto',
+      },
+      refund: { refund_status: 'processing' },
+    })
+    expect(steps.find((s) => s.id === 'shipped')?.detail).toMatch(/arranged by the shop/i)
+  })
+
+  it('shows structured reject reason on decision step', () => {
+    const steps = getReturnExchangeTimeline({
+      issue: {
+        issue_type: ORDER_ISSUE_TYPE.RETURN_REQUEST,
+        resolution_action: 'rejected',
+        reject_reason_code: 'out_of_window',
+      },
+    })
+    expect(steps.find((s) => s.id === 'decision')?.label).toMatch(/Outside return window/i)
+  })
+
+  it('labels the return window countdown', () => {
+    const deliveredAt = new Date(Date.now() - 2 * 24 * 60 * 60 * 1000).toISOString()
+    const label = getReturnWindowLabel(deliveredAt, 30)
+    expect(label).toMatch(/Returns until/i)
+    expect(label).toMatch(/days left/i)
   })
 })

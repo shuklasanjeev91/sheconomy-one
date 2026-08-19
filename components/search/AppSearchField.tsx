@@ -66,9 +66,14 @@ function SearchIconButton({
       hoverStyle={disabled ? undefined : { backgroundColor: ui.surfaceHover }}
       pressStyle={disabled ? undefined : { opacity: 0.8 }}
       onPress={disabled ? undefined : onPress}
-      accessibilityRole="button"
+      {...(Platform.OS === 'web'
+        ? { role: 'button' as const }
+        : { accessibilityRole: 'button' as const })}
       aria-label={label}
-      accessibilityState={{ disabled: Boolean(disabled), selected: Boolean(active) }}
+      {...(Platform.OS === 'web'
+        ? {}
+        : { accessibilityState: { disabled: Boolean(disabled), selected: Boolean(active) } })}
+      {...(Platform.OS === 'web' && disabled ? { 'aria-disabled': true } : {})}
     >
       {children}
     </XStack>

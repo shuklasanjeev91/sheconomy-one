@@ -12,6 +12,7 @@ import {
 } from '~/components/ui'
 import {
   createCustomerOrderSupportIssue,
+  cancelCustomerOrder,
   requestOrderCancellation,
 } from '~/commerce/lib/customer-orders'
 import { supportIssueTypeOptions } from '~/commerce/lib/customer-order-lifecycle'
@@ -23,6 +24,8 @@ type CancelSheetProps = {
   onOpenChange: (open: boolean) => void
   orderId: string
   userId: string
+  /** Instant cancel for unpaid orders; request needs vendor approval. */
+  mode: 'instant' | 'request'
   onSubmitted?: () => void
 }
 
@@ -31,15 +34,17 @@ export function CancelOrderSheet({
   onOpenChange,
   orderId,
   userId,
+  mode,
   onSubmitted,
 }: CancelSheetProps) {
   const ui = useAppUi()
   const toast = useAppToast()
   const [reason, setReason] = useState('')
   const [submitting, setSubmitting] = useState(false)
+  const isInstant = mode === 'instant'
 
   async function handleSubmit() {
-    if (reason.trim().length < 10) {
+    if (!isInstant && reason.trim().length < 10) {
       toast.show('Please add a bit more detail', {
         tone: 'danger',
         message: 'Tell us why you want to cancel (at least 10 characters).',
@@ -47,6 +52,23 @@ export function CancelOrderSheet({
       return
     }
     setSubmitting(true)
+    if (isInstant) {
+      const result = await cancelCustomerOrder(orderId)
+      setSubmitting(false)
+      if (result.error) {
+        toast.show('Could not cancel order', { tone: 'danger', message: result.error })
+        return
+      }
+      toast.show('Order cancelled', {
+        tone: 'success',
+        message: 'Reserved stock has been released. No payment was taken.',
+      })
+      setReason('')
+      onOpenChange(false)
+      onSubmitted?.()
+      return
+    }
+
     const result = await requestOrderCancellation({
       orderId,
       userId,
@@ -70,7 +92,7 @@ export function CancelOrderSheet({
     <AppBottomSheet
       open={open}
       onOpenChange={onOpenChange}
-      title="Request cancellation"
+      title={isInstant ? 'Cancel order' : 'Request cancellation'}
       footer={
         <Button
           tone="primary"
@@ -79,20 +101,30 @@ export function CancelOrderSheet({
           disabled={submitting}
           onPress={() => void handleSubmit()}
         >
-          {submitting ? 'Submitting…' : 'Submit request'}
+          {submitting
+            ? isInstant
+              ? 'Cancelling…'
+              : 'Submitting…'
+            : isInstant
+              ? 'Cancel order'
+              : 'Submit request'}
         </Button>
       }
     >
       <YStack gap="$3" paddingBottom="$2">
         <Text fontSize={13} color={ui.textSecondary}>
-          We’ll notify the shop. Orders that have already shipped usually can’t be cancelled.
+          {isInstant
+            ? 'This cancels the order immediately and releases reserved stock. No charge was taken.'
+            : 'We’ll notify the shop. Orders that have already shipped usually can’t be cancelled.'}
         </Text>
-        <TextArea
-          value={reason}
-          onChangeText={setReason}
-          placeholder="Why do you want to cancel this order?"
-          minHeight={120}
-        />
+        {isInstant ? null : (
+          <TextArea
+            value={reason}
+            onChangeText={setReason}
+            placeholder="Why do you want to cancel this order?"
+            minHeight={120}
+          />
+        )}
       </YStack>
     </AppBottomSheet>
   )

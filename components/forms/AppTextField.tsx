@@ -18,6 +18,7 @@ export type AppTextFieldProps = {
   onBlur?: RNTextInputProps['onBlur']
   onFocus?: RNTextInputProps['onFocus']
   onEndEditing?: RNTextInputProps['onEndEditing']
+  onSubmitEditing?: RNTextInputProps['onSubmitEditing']
   placeholder?: string
   placeholderTextColor?: string
   editable?: boolean
@@ -60,6 +61,7 @@ export const AppTextField = forwardRef<RNTextInputType, AppTextFieldProps>(
       onBlur,
       onFocus,
       onEndEditing,
+      onSubmitEditing,
       placeholder,
       placeholderTextColor,
       editable,
@@ -162,6 +164,13 @@ export const AppTextField = forwardRef<RNTextInputType, AppTextFieldProps>(
               onChangeText?.(nativeText)
             }
             onEndEditing?.(event)
+          }}
+          onSubmitEditing={(event) => {
+            const nativeText = event.nativeEvent.text
+            if (typeof nativeText === 'string' && nativeText !== value) {
+              onChangeText?.(nativeText)
+            }
+            onSubmitEditing?.(event)
           }}
           placeholder={placeholder}
           placeholderTextColor={placeholderTextColor ?? ui.textMuted}

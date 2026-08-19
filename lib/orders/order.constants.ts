@@ -330,6 +330,7 @@ export const ORDER_ISSUE_TYPE = {
   BILLING_ISSUE: 'billing_issue',
   RETURN_REQUEST: 'return_request',
   REFUND_REQUEST: 'refund_request',
+  EXCHANGE_REQUEST: 'exchange_request',
   CANCELLATION_REQUEST: 'cancellation_request',
   CUSTOMER_COMPLAINT: 'customer_complaint',
   SHIPPING_ISSUE: 'shipping_issue',
@@ -338,6 +339,40 @@ export const ORDER_ISSUE_TYPE = {
 } as const
 
 export type OrderIssueType = (typeof ORDER_ISSUE_TYPE)[keyof typeof ORDER_ISSUE_TYPE]
+
+/** Structured vendor reject reasons for return / exchange / refund requests. */
+export const RETURN_REJECT_REASON = {
+  OUT_OF_WINDOW: 'out_of_window',
+  NOT_ELIGIBLE: 'not_eligible',
+  USED_DAMAGED: 'used_damaged',
+  WRONG_ITEM_CLAIMED: 'wrong_item_claimed',
+  POLICY: 'policy',
+  OTHER: 'other',
+} as const
+
+export type ReturnRejectReason =
+  (typeof RETURN_REJECT_REASON)[keyof typeof RETURN_REJECT_REASON]
+
+export const RETURN_REJECT_REASON_LABELS: Record<ReturnRejectReason, string> = {
+  [RETURN_REJECT_REASON.OUT_OF_WINDOW]: 'Outside return window',
+  [RETURN_REJECT_REASON.NOT_ELIGIBLE]: 'Item not eligible',
+  [RETURN_REJECT_REASON.USED_DAMAGED]: 'Item used or damaged',
+  [RETURN_REJECT_REASON.WRONG_ITEM_CLAIMED]: 'Claim does not match item',
+  [RETURN_REJECT_REASON.POLICY]: 'Against shop policy',
+  [RETURN_REJECT_REASON.OTHER]: 'Other',
+}
+
+export const RETURN_SHIPPING_MODE = {
+  /** Legacy — buyer pasted their own AWB. Retained for historical rows only. */
+  BUYER_SELF: 'buyer_self',
+  /** Vendor manually pasted the reverse AWB (fallback when auto-book fails). */
+  VENDOR_ARRANGED: 'vendor_arranged',
+  /** System auto-booked the reverse pickup via the platform courier account. */
+  AUTO: 'auto',
+} as const
+
+export type ReturnShippingMode =
+  (typeof RETURN_SHIPPING_MODE)[keyof typeof RETURN_SHIPPING_MODE]
 
 /** Issue statuses considered "still needing attention". */
 export const OPEN_ISSUE_STATUSES: IssueStatus[] = [

@@ -7,7 +7,11 @@ import { Icons, ScrollView, Text, XStack, YStack } from '~/components/ui'
 import { getShadowStyle, radius } from '~/config/tokens'
 import { useAppLayout } from '~/hooks/useAppLayout'
 import { APP_LAYOUT } from '~/lib/layout/constants'
-import { edgePanelPositionStyle, overlayBackdropStyle } from '~/lib/layout/styles'
+import {
+  edgePanelPositionStyle,
+  overlayBackdropStyle,
+  scrollHostTransformReset,
+} from '~/lib/layout/styles'
 import { loadMyShops } from '~/lib/shop/shop.store'
 import { useAppDispatch, useAppSelector } from '~/lib/store/hooks'
 import { useAppUi } from '~/lib/theme/useAppUi'
@@ -169,8 +173,24 @@ export function VendorLayout() {
               flex={1}
               width="100%"
               showsVerticalScrollIndicator={false}
-              style={Platform.OS === 'web' ? ({ overflowY: 'auto', minHeight: 0 } as const) : undefined}
-              contentContainerStyle={{ flexGrow: 1, paddingBottom: mobileTabPad }}
+              keyboardShouldPersistTaps="handled"
+              keyboardDismissMode={Platform.OS === 'ios' ? 'interactive' : 'on-drag'}
+              style={
+                Platform.OS === 'web'
+                  ? ({
+                      overflowY: 'auto',
+                      minHeight: 0,
+                      ...scrollHostTransformReset(),
+                    } as const)
+                  : undefined
+              }
+              contentContainerStyle={{
+                flexGrow: 1,
+                // Give nested screens a definite block height on web so flex /
+                // sticky footers don't collapse to a blank pane.
+                ...(Platform.OS === 'web' ? { minHeight: '100%' as const } : null),
+                paddingBottom: mobileTabPad,
+              }}
             >
               <Slot />
             </ScrollView>

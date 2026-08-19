@@ -14,6 +14,7 @@ export default defineConfig({
         'tests/mocks/async-storage.ts',
       ),
       'react-native': path.resolve(__dirname, 'tests/mocks/react-native.ts'),
+      one: path.resolve(__dirname, 'tests/mocks/one.ts'),
     },
   },
 })

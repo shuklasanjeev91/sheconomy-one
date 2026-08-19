@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Share } from 'react-native'
 
 import { SalesAnalyticsErrorBoundary } from '~/commerce/components/SalesAnalyticsErrorBoundary'
+import { VendorNoShopState } from '~/commerce/components/vendor/VendorShopGate'
 import { SalesAnalyticsFiltersPanel } from '~/commerce/components/vendor/sales-analytics/SalesAnalyticsFiltersPanel'
 import { SalesAnalyticsHubTabs } from '~/commerce/components/vendor/sales-analytics/SalesAnalyticsHubTabs'
 import { SalesAnalyticsRecordsList } from '~/commerce/components/vendor/sales-analytics/SalesAnalyticsRecordsList'
@@ -10,6 +11,7 @@ import { SalesAnalyticsSummaryCards } from '~/commerce/components/vendor/sales-a
 import { SalesAnalyticsTopProductsPanel } from '~/commerce/components/vendor/sales-analytics/SalesAnalyticsTopProductsPanel'
 import { SalesAnalyticsTrendPanel } from '~/commerce/components/vendor/sales-analytics/SalesAnalyticsTrendPanel'
 import { Button, Icons, Spinner, Text, XStack, YStack, useAppToast } from '~/components/ui'
+import { PageCenter } from '~/components/layout'
 import { useAppLayout } from '~/hooks/useAppLayout'
 import { EXPORT_FORMATS, SALES_ANALYTICS_FETCH_SCOPE } from '~/lib/sales-analytics/sales-analytics.constants'
 import { toFriendlySalesAnalyticsError } from '~/lib/sales-analytics/sales-analytics.errors'
@@ -56,6 +58,8 @@ export function VendorSalesAnalyticsScreen() {
   const { isDesktop, safeBottom } = useAppLayout()
 
   const shop = useAppSelector((state) => state.shop.currentShop)
+  const isLoadingMyShops = useAppSelector((state) => state.shop.isLoadingMyShops)
+  const myShopsLoaded = useAppSelector((state) => state.shop.myShopsLoaded)
   const profile = useAppSelector((state) => state.profile.profile)
 
   const salesAnalytics = useAppSelector(selectSalesAnalytics)
@@ -315,17 +319,21 @@ export function VendorSalesAnalyticsScreen() {
     }
   }
 
+  if (!shop && (isLoadingMyShops || !myShopsLoaded)) {
+    return (
+      <PageCenter>
+        <Spinner size="large" />
+      </PageCenter>
+    )
+  }
+
   if (!shop) {
     return (
-      <YStack minHeight={360} alignItems="center" justifyContent="center" gap="$2" padding="$4">
-        <Icons.Store size={30} color={ui.textMuted} />
-        <Text fontSize={16} fontWeight="800" color={ui.text}>
-          {SALES_ANALYTICS_UI_COPY.noShopTitle}
-        </Text>
-        <Text fontSize={13} color={ui.textSecondary} textAlign="center" maxWidth={360}>
-          {SALES_ANALYTICS_UI_COPY.noShopBody}
-        </Text>
-      </YStack>
+      <VendorNoShopState
+        ui={ui}
+        title={SALES_ANALYTICS_UI_COPY.noShopTitle}
+        body={SALES_ANALYTICS_UI_COPY.noShopBody}
+      />
     )
   }
 

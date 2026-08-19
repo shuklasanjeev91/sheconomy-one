@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useState } from 'react'
 
 import {
+  cancelOrderReturnRequest,
+  requestOrderItemExchange,
   requestOrderItemReturn,
   submitVerifiedListingReview,
 } from '~/commerce/lib/customer-order-trust'
@@ -28,6 +30,8 @@ type ReturnSheetProps = {
   orderId: string
   userId: string
   item: CustomerOrderItem | null
+  /** e.g. "Returns until 12 Sep (5 days left)" */
+  windowLabel?: string | null
   onSubmitted?: () => void
 }
 
@@ -37,6 +41,7 @@ export function ReturnOrderItemSheet({
   orderId,
   userId,
   item,
+  windowLabel,
   onSubmitted,
 }: ReturnSheetProps) {
   const ui = useAppUi()
@@ -135,6 +140,11 @@ export function ReturnOrderItemSheet({
             ? `Request a return for “${item.product_title}”. The shop reviews returns before any refund is processed.`
             : 'Select an item to return.'}
         </Text>
+        {windowLabel ? (
+          <Text fontSize={12.5} fontWeight="600" color={ui.brand}>
+            {windowLabel}
+          </Text>
+        ) : null}
 
         <YStack gap="$2">
           <Text fontSize={12} fontWeight="700" color={ui.textMuted}>
@@ -187,6 +197,252 @@ export function ReturnOrderItemSheet({
             {evidenceUrls.length}/4 photos
           </Text>
         </XStack>
+      </YStack>
+    </AppBottomSheet>
+  )
+}
+
+export function ExchangeOrderItemSheet({
+  open,
+  onOpenChange,
+  orderId,
+  userId,
+  item,
+  windowLabel,
+  onSubmitted,
+}: ReturnSheetProps) {
+  const ui = useAppUi()
+  const toast = useAppToast()
+  const reasons = useMemo(() => returnReasonOptions(), [])
+  const [reasonKey, setReasonKey] = useState(reasons[0]?.value ?? 'other')
+  const [details, setDetails] = useState('')
+  const [evidenceUrls, setEvidenceUrls] = useState<string[]>([])
+  const [uploading, setUploading] = useState(false)
+  const [submitting, setSubmitting] = useState(false)
+
+  useEffect(() => {
+    if (!open) {
+      setReasonKey(reasons[0]?.value ?? 'other')
+      setDetails('')
+      setEvidenceUrls([])
+      setUploading(false)
+      setSubmitting(false)
+    }
+  }, [open, reasons])
+
+  async function handlePickEvidence() {
+    if (!userId || !orderId) return
+    setUploading(true)
+    try {
+      const picked = await pickImages({
+        multiple: true,
+        maxCount: Math.max(1, 4 - evidenceUrls.length),
+      })
+      if (!picked.length) {
+        setUploading(false)
+        return
+      }
+      const files = await preparePickedImagesForUpload(picked)
+      const { data, error } = await uploadOrderEvidenceImages(userId, orderId, files, 'exchange')
+      if (error || !data) {
+        toast.show('Could not upload photos', { tone: 'danger', message: error ?? undefined })
+      } else {
+        setEvidenceUrls((current) => [...current, ...data.map((row) => row.publicUrl)].slice(0, 4))
+      }
+    } finally {
+      setUploading(false)
+    }
+  }
+
+  async function handleSubmit() {
+    if (!item) return
+    if (details.trim().length < 10) {
+      toast.show('Please add more detail', {
+        tone: 'danger',
+        message: 'Tell us what happened (at least 10 characters).',
+      })
+      return
+    }
+    const reasonLabel = reasons.find((row) => row.value === reasonKey)?.label ?? 'Exchange request'
+    setSubmitting(true)
+    const result = await requestOrderItemExchange({
+      orderItemId: item.id,
+      reason: `${reasonLabel}. ${details.trim()}`,
+      detailedReason: details.trim(),
+      evidenceUrls,
+    })
+    setSubmitting(false)
+    if (result.error) {
+      toast.show('Could not request exchange', { tone: 'danger', message: result.error })
+      return
+    }
+    toast.show('Exchange requested', {
+      tone: 'success',
+      message: 'The shop will review your request shortly.',
+    })
+    onOpenChange(false)
+    onSubmitted?.()
+  }
+
+  return (
+    <AppBottomSheet
+      open={open}
+      onOpenChange={onOpenChange}
+      title="Exchange item"
+      footer={
+        <Button
+          tone="primary"
+          size="$4"
+          borderRadius={999}
+          disabled={submitting || !item}
+          onPress={() => void handleSubmit()}
+        >
+          {submitting ? 'Submitting…' : 'Submit exchange request'}
+        </Button>
+      }
+    >
+      <YStack gap="$3" paddingBottom="$2">
+        <Text fontSize={13} color={ui.textSecondary}>
+          {item
+            ? `Request an exchange for “${item.product_title}”. You’ll ship the item back, then the shop sends a replacement.`
+            : 'Select an item to exchange.'}
+        </Text>
+        {windowLabel ? (
+          <Text fontSize={12.5} fontWeight="600" color={ui.brand}>
+            {windowLabel}
+          </Text>
+        ) : null}
+
+        <YStack gap="$2">
+          <Text fontSize={12} fontWeight="700" color={ui.textMuted}>
+            Reason
+          </Text>
+          <YStack gap="$1">
+            {reasons.map((reason) => {
+              const selected = reason.value === reasonKey
+              return (
+                <XStack
+                  key={reason.value}
+                  paddingHorizontal="$3"
+                  paddingVertical="$2.5"
+                  borderRadius={12}
+                  backgroundColor={selected ? ui.roseTint : 'transparent'}
+                  cursor="pointer"
+                  onPress={() => setReasonKey(reason.value)}
+                  alignItems="center"
+                  gap="$2"
+                >
+                  <Text flex={1} fontWeight={selected ? '700' : '500'} color={ui.text}>
+                    {reason.label}
+                  </Text>
+                  {selected ? <Icons.Check size={16} color={ui.brand} /> : null}
+                </XStack>
+              )
+            })}
+          </YStack>
+        </YStack>
+
+        <TextArea
+          value={details}
+          onChangeText={setDetails}
+          placeholder="Describe what you need exchanged…"
+          minHeight={120}
+        />
+
+        <XStack gap="$2" flexWrap="wrap" alignItems="center">
+          <Button
+            tone="outline"
+            size="$3"
+            borderRadius={999}
+            disabled={uploading || evidenceUrls.length >= 4}
+            icon={<Icons.Camera size={14} />}
+            onPress={() => void handlePickEvidence()}
+          >
+            {uploading ? 'Uploading…' : 'Add photos'}
+          </Button>
+          <Text fontSize={12} color={ui.textMuted}>
+            {evidenceUrls.length}/4 photos
+          </Text>
+        </XStack>
+      </YStack>
+    </AppBottomSheet>
+  )
+}
+
+type CancelReturnSheetProps = {
+  open: boolean
+  onOpenChange: (open: boolean) => void
+  item: CustomerOrderItem | null
+  onSubmitted?: () => void
+}
+
+export function CancelReturnRequestSheet({
+  open,
+  onOpenChange,
+  item,
+  onSubmitted,
+}: CancelReturnSheetProps) {
+  const ui = useAppUi()
+  const toast = useAppToast()
+  const [submitting, setSubmitting] = useState(false)
+
+  useEffect(() => {
+    if (!open) setSubmitting(false)
+  }, [open])
+
+  async function handleSubmit() {
+    if (!item) return
+    setSubmitting(true)
+    const result = await cancelOrderReturnRequest({ orderItemId: item.id })
+    setSubmitting(false)
+    if (result.error) {
+      toast.show('Could not cancel request', { tone: 'danger', message: result.error })
+      return
+    }
+    toast.show('Request cancelled', {
+      tone: 'success',
+      message: 'Your return or exchange request was cancelled.',
+    })
+    onOpenChange(false)
+    onSubmitted?.()
+  }
+
+  return (
+    <AppBottomSheet
+      open={open}
+      onOpenChange={onOpenChange}
+      title="Cancel request"
+      footer={
+        <XStack gap="$2">
+          <Button
+            tone="outline"
+            size="$4"
+            borderRadius={999}
+            flex={1}
+            disabled={submitting}
+            onPress={() => onOpenChange(false)}
+          >
+            Keep request
+          </Button>
+          <Button
+            tone="primary"
+            size="$4"
+            borderRadius={999}
+            flex={1}
+            disabled={submitting || !item}
+            onPress={() => void handleSubmit()}
+          >
+            {submitting ? 'Cancelling…' : 'Cancel request'}
+          </Button>
+        </XStack>
+      }
+    >
+      <YStack gap="$3" paddingBottom="$2">
+        <Text fontSize={13} color={ui.textSecondary} lineHeight={20}>
+          {item
+            ? `Cancel the open return or exchange for “${item.product_title}”? You can only cancel before the shop assigns a return AWB or you submit tracking.`
+            : 'Select an item.'}
+        </Text>
       </YStack>
     </AppBottomSheet>
   )

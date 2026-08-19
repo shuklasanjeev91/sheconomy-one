@@ -16,6 +16,12 @@ import { USER_ROLES, type UserRole } from '~/lib/profile/profile.type'
 export type UseRouteProtectionResult = {
   /** Auth/profile still loading — render a spinner, do not act on the result. */
   isChecking: boolean
+  /**
+   * The member's row could not be read at all, so their access is *unknown*.
+   * Callers must offer a retry — treating this as "unverified" is what bounced
+   * verified members off the vendor console to `?gender=restricted`.
+   */
+  isProfileUnavailable: boolean
   /** The user may view the route. */
   isAuthorized: boolean
   /** Full decision (allow / signin / redirect / denied) for advanced handling. */
@@ -42,6 +48,11 @@ export type UseRouteProtectionResult = {
  * This hook is **pure state** — it never calls the router itself, which avoids
  * the redirect race conditions the old imperative version was prone to. Render
  * with `<RouteGuard>` or act on the returned fields yourself.
+ *
+ * Access is only ever *denied* on a row the server confirmed. A cached or
+ * still-loading row may grant access early but must never revoke it: an
+ * unsettled profile resolves to the limited tier, and deciding on that is what
+ * kept bouncing verified vendors off `/vendor` to the restricted redirect.
  */
 export function useRouteProtection(
   allowedRoles?: readonly UserRole[],
@@ -49,18 +60,28 @@ export function useRouteProtection(
 ): UseRouteProtectionResult {
   const pathname = usePathname()
   const { isAuthenticated, isLoading: authLoading } = useAuth()
-  const { profile, isLoading: profileLoading } = useProfile()
+  const {
+    profile,
+    isLoading: profileLoading,
+    isProfileConfirmed,
+    isProfileUnavailable,
+  } = useProfile()
 
-  // Only wait for the profile once we know there is a signed-in user to load one for.
-  const isChecking = authLoading || (isAuthenticated && profileLoading)
+  // Only wait for the profile once we know there is a signed-in user to load one
+  // for. A signed-in member also waits for the server to confirm the row, unless
+  // every read failed — then `isProfileUnavailable` asks instead of assuming.
+  const isChecking =
+    authLoading ||
+    (isAuthenticated && (profileLoading || (!isProfileConfirmed && !isProfileUnavailable)))
 
   return useMemo(() => {
     const userRole = (profile?.role as UserRole | null) ?? null
     const isVerified = profile?.is_verified === true
 
-    if (isChecking) {
+    if (isChecking || (isAuthenticated && isProfileUnavailable)) {
       return {
-        isChecking: true,
+        isChecking: !isProfileUnavailable,
+        isProfileUnavailable: isAuthenticated && isProfileUnavailable,
         isAuthorized: false,
         decision: null,
         errorMessage: null,
@@ -101,6 +122,7 @@ export function useRouteProtection(
 
     return {
       isChecking: false,
+      isProfileUnavailable: false,
       isAuthorized: decision.status === 'allow',
       decision,
       errorMessage: decision.status === 'allow' ? null : decision.message,
@@ -110,7 +132,15 @@ export function useRouteProtection(
       isVerified,
       isAuthenticated,
     }
-  }, [isChecking, isAuthenticated, pathname, profile, allowedRoles, options])
+  }, [
+    isChecking,
+    isAuthenticated,
+    isProfileUnavailable,
+    pathname,
+    profile,
+    allowedRoles,
+    options,
+  ])
 }
 
 // ---------------------------------------------------------------------------

@@ -478,6 +478,31 @@ export function getItemTrustEligibility(
   })
 }
 
+export async function cancelCustomerOrder(orderId: string): Promise<{
+  success: boolean
+  error: string | null
+}> {
+  if (!orderId.trim()) return { success: false, error: 'Order not found' }
+
+  const { data, error } = await supabase.rpc('cancel_customer_order' as never, {
+    p_order_id: orderId,
+  } as never)
+
+  if (error) {
+    return { success: false, error: error.message || 'Could not cancel this order' }
+  }
+
+  const payload = data as { status?: string; error?: string } | null
+  if (payload && typeof payload === 'object' && payload.error) {
+    return { success: false, error: String(payload.error) }
+  }
+  if (payload?.status && payload.status !== 'cancelled') {
+    return { success: false, error: 'Could not cancel this order' }
+  }
+
+  return { success: true, error: null }
+}
+
 export async function requestOrderCancellation(input: {
   orderId: string
   userId: string

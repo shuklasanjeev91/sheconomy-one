@@ -48,6 +48,8 @@ type VendorAddTrackingDrawerProps = {
   isDesktop: boolean
   item: VendorOrderItem | null
   submitting: boolean
+  /** Outbound ship vs reverse return pickup. */
+  mode?: 'outbound' | 'return'
   onClose: () => void
   onSubmit: (values: TrackingFormValues) => void
 }
@@ -58,6 +60,7 @@ export function VendorAddTrackingDrawer({
   isDesktop,
   item,
   submitting,
+  mode = 'outbound',
   onClose,
   onSubmit,
 }: VendorAddTrackingDrawerProps) {
@@ -96,6 +99,7 @@ export function VendorAddTrackingDrawer({
           ui={ui}
           item={item}
           submitting={submitting}
+          mode={mode}
           onClose={onClose}
           onSubmit={onSubmit}
         />
@@ -108,11 +112,12 @@ type TrackingFormProps = {
   ui: AppUiTokens
   item: VendorOrderItem
   submitting: boolean
+  mode: 'outbound' | 'return'
   onClose: () => void
   onSubmit: (values: TrackingFormValues) => void
 }
 
-function TrackingForm({ ui, item, submitting, onClose, onSubmit }: TrackingFormProps) {
+function TrackingForm({ ui, item, submitting, mode, onClose, onSubmit }: TrackingFormProps) {
   const toast = useAppToast()
   const order = item.orders
   const { resolveCurrency } = useVendorCurrency()
@@ -220,10 +225,12 @@ function TrackingForm({ ui, item, submitting, onClose, onSubmit }: TrackingFormP
       >
         <YStack gap={4} flex={1} minWidth={0}>
           <Text fontSize={18} fontWeight="800" color={ui.text}>
-            Add tracking
+            {mode === 'return' ? 'Arrange return pickup' : 'Add tracking'}
           </Text>
           <Text fontSize={12.5} color={ui.textMuted} lineHeight={18}>
-            Order #{order?.order_number ?? '—'} · Book with your courier, then paste the AWB
+            {mode === 'return'
+              ? `Order #${order?.order_number ?? '—'} · Book reverse pickup with your courier, then paste the AWB`
+              : `Order #${order?.order_number ?? '—'} · Book with your courier, then paste the AWB`}
           </Text>
         </YStack>
         <YStack
@@ -403,26 +410,32 @@ function TrackingForm({ ui, item, submitting, onClose, onSubmit }: TrackingFormP
           ) : null}
         </YStack>
 
-        <XStack
-          alignItems="center"
-          justifyContent="space-between"
-          gap="$3"
-          padding="$3.5"
-          borderRadius={radius.card}
-          borderWidth={1}
-          borderColor={ui.borderSubtle}
-          backgroundColor={ui.surface}
-        >
-          <YStack flex={1} minWidth={0} gap={2}>
-            <Text fontSize={13.5} fontWeight="700" color={ui.text}>
-              Notify customer
-            </Text>
-            <Text fontSize={12} color={ui.textMuted} lineHeight={17}>
-              Customer and you both get notified when the courier advances this package.
-            </Text>
-          </YStack>
-          <Switch checked={notifyCustomer} onCheckedChange={setNotifyCustomer} />
-        </XStack>
+        {mode === 'outbound' ? (
+          <XStack
+            alignItems="center"
+            justifyContent="space-between"
+            gap="$3"
+            padding="$3.5"
+            borderRadius={radius.card}
+            borderWidth={1}
+            borderColor={ui.borderSubtle}
+            backgroundColor={ui.surface}
+          >
+            <YStack flex={1} minWidth={0} gap={2}>
+              <Text fontSize={13.5} fontWeight="700" color={ui.text}>
+                Notify customer
+              </Text>
+              <Text fontSize={12} color={ui.textMuted} lineHeight={17}>
+                Customer and you both get notified when the courier advances this package.
+              </Text>
+            </YStack>
+            <Switch checked={notifyCustomer} onCheckedChange={setNotifyCustomer} />
+          </XStack>
+        ) : (
+          <Text fontSize={12.5} color={ui.textMuted} lineHeight={18}>
+            The customer is notified automatically when you assign this return pickup.
+          </Text>
+        )}
       </ScrollView>
 
       <XStack
@@ -445,7 +458,11 @@ function TrackingForm({ ui, item, submitting, onClose, onSubmit }: TrackingFormP
           iconAfter={<Icons.Truck size={16} color={ui.onBrand} />}
           onPress={handleSubmit}
         >
-          {submitting ? 'Saving…' : 'Save tracking'}
+          {submitting
+            ? 'Saving…'
+            : mode === 'return'
+              ? 'Assign return pickup'
+              : 'Save tracking'}
         </Button>
       </XStack>
     </YStack>

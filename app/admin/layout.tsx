@@ -19,7 +19,12 @@ import {
   type StaffNavId,
   type StaffWorkspace,
 } from '~/app/admin/staff-console'
-import { edgePanelPositionStyle, overlayBackdropStyle } from '~/lib/layout/styles'
+import {
+  edgePanelPositionStyle,
+  overlayBackdropStyle,
+  scrollHostTransformReset,
+} from '~/lib/layout/styles'
+
 import { useAppUi } from '~/lib/theme/useAppUi'
 import type { AppUiTokens } from '~/lib/theme/app-ui'
 
@@ -340,8 +345,15 @@ export function AdminLayout() {
             flex={1}
             width="100%"
             showsVerticalScrollIndicator={false}
-            style={Platform.OS === 'web' ? ({ overflowY: 'auto', minHeight: 0 } as const) : undefined}
-            contentContainerStyle={{ flexGrow: 1 }}
+            style={
+              Platform.OS === 'web'
+                ? ({ overflowY: 'auto', minHeight: 0, ...scrollHostTransformReset() } as const)
+                : undefined
+            }
+            contentContainerStyle={{
+              flexGrow: 1,
+              ...(Platform.OS === 'web' ? { minHeight: '100%' as const } : null),
+            }}
           >
             <Slot />
           </ScrollView>

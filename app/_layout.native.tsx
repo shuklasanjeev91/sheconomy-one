@@ -111,12 +111,15 @@ function ThemedApp({ children }: { children: ReactNode }) {
 export default function NativeLayout() {
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
-      <SafeAreaProvider>
-        <LoadProgressBar />
-        <AppProviders>
-          <Slot />
-        </AppProviders>
-      </SafeAreaProvider>
+      {/* Above every provider: a throw in one of them unmounts the whole root and paints a blank screen. */}
+      <AppErrorBoundary scope="Root">
+        <SafeAreaProvider>
+          <LoadProgressBar />
+          <AppProviders>
+            <Slot />
+          </AppProviders>
+        </SafeAreaProvider>
+      </AppErrorBoundary>
     </GestureHandlerRootView>
   )
 }

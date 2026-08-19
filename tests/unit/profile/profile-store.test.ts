@@ -13,7 +13,7 @@ vi.mock('~/lib/supabase/client', () => ({
 }))
 
 import { getAccessTier } from '~/lib/auth/access'
-import { clearCachedProfile } from '~/lib/profile/profile-cache'
+import { clearCachedProfile, patchCachedProfile } from '~/lib/profile/profile-cache'
 import {
   ensureSessionProfile,
   getSessionProfileSnapshot,
@@ -201,5 +201,84 @@ describe('session profile store', () => {
     } finally {
       vi.useRealTimers()
     }
+  })
+
+  it('never calls an exhausted retry an answer from the server', async () => {
+    vi.useFakeTimers()
+    try {
+      maybeSingle.mockResolvedValue({ data: null, error: { message: 'network down' } })
+
+      ensureSessionProfile(USER)
+      // Long enough for every attempt in the burst to fail.
+      await vi.advanceTimersByTimeAsync(10_000)
+
+      // Giving up tells us nothing about the member. Reporting this as a server
+      // answer read as "unverified" and bounced her to ?gender=restricted.
+      expect(getSessionProfileSnapshot().isServerSettled).toBe(false)
+      expect(getSessionProfileSnapshot().hasFailed).toBe(true)
+      expect(getSessionProfileSnapshot().isFetching).toBe(false)
+
+      // The background recovery pass picks the row up once the network returns.
+      maybeSingle.mockResolvedValue({ data: row({ gender: true, is_verified: true }), error: null })
+      await vi.advanceTimersByTimeAsync(21_000)
+
+      expect(getSessionProfileSnapshot().hasFailed).toBe(false)
+      expect(getSessionProfileSnapshot().isServerSettled).toBe(true)
+      expect(tierNow()).toBe('female')
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('does not let a stale cache overwrite a confirmed row on refresh', async () => {
+    serveRow({ gender: true, is_verified: true })
+    ensureSessionProfile(USER)
+    await settle()
+    expect(tierNow()).toBe('female')
+
+    // Something wrote an older shape back to the cache.
+    await patchCachedProfile(USER, { gender: false, is_verified: false })
+
+    // Refresh the same user with the network still in flight. The cache must not
+    // paint over the confirmed row: `isServerSettled` is still true here, so a
+    // stale repaint would hand gates a row they are allowed to deny on.
+    maybeSingle.mockReturnValue(new Promise(() => {}))
+    refreshSessionProfile()
+    await settle()
+
+    expect(getSessionProfileSnapshot().isServerSettled).toBe(true)
+    expect(tierNow()).toBe('female')
+  })
+
+  it('does not mark a warm cached row as server-confirmed', async () => {
+    // Seed the cache with a row captured before the member verified.
+    serveRow({ gender: false, is_verified: false })
+    ensureSessionProfile(USER)
+    await settle()
+    expect(getSessionProfileSnapshot().isServerSettled).toBe(true)
+
+    resetSessionProfileStore()
+
+    // Reload with the (now stale) cache warm and the network still in flight.
+    let resolveRead: (value: unknown) => void = () => {}
+    maybeSingle.mockReturnValue(
+      new Promise((resolve) => {
+        resolveRead = resolve
+      }),
+    )
+
+    ensureSessionProfile(USER)
+    await settle()
+
+    // The cached row may paint, but it must not be treated as a confirmed
+    // answer — denying on it is what bounced verified members to
+    // ?gender=restricted on every reload.
+    expect(getSessionProfileSnapshot().isServerSettled).toBe(false)
+
+    resolveRead({ data: row({ gender: true, is_verified: true }), error: null })
+    await settle()
+
+    expect(getSessionProfileSnapshot().isServerSettled).toBe(true)
+    expect(tierNow()).toBe('female')
   })
 })

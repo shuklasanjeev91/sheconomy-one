@@ -40,6 +40,96 @@ export type TrackingEvent = {
   remark?: string | null
 }
 
+/**
+ * Reverse pickup: the buyer is the pickup point, the seller's return address is
+ * the delivery point. Booked platform-side on vendor approval — buyers never
+ * enter an AWB.
+ */
+export type CreateReturnInput = {
+  orderId: string
+  orderNumber?: string | null
+  partner?: 'shiprocket'
+  /** Pickup = buyer / where the parcel is collected. */
+  pickupCustomerName: string
+  pickupPhone: string
+  pickupEmail?: string
+  pickupAddressLine1: string
+  pickupAddressLine2?: string
+  pickupCity: string
+  pickupState: string
+  pickupCountry?: string
+  pickupPostcode: string
+  /** Delivery = seller / where the parcel is returned to. */
+  sellerName: string
+  sellerPhone: string
+  sellerEmail?: string
+  sellerAddressLine1: string
+  sellerAddressLine2?: string
+  sellerCity: string
+  sellerState: string
+  sellerCountry?: string
+  sellerPostcode: string
+  weightKg: number
+  lengthCm?: number
+  breadthCm?: number
+  heightCm?: number
+  items: Array<{ name: string; sku?: string; units: number; sellingPrice: number }>
+}
+
+export type CreateReturnResult = {
+  partner: SheDeliveryPartner
+  shipmentId: string
+  awb?: string | null
+  trackingUrl?: string | null
+  raw?: unknown
+}
+
+/**
+ * Map our reverse payload → Shiprocket create-return body. Pickup and shipping
+ * fields are swapped versus the forward order: pickup = buyer, shipping = seller.
+ */
+export function toShiprocketReturnBody(input: CreateReturnInput) {
+  const subTotal = input.items.reduce((sum, item) => sum + item.sellingPrice * item.units, 0)
+  return {
+    order_id: `RET-${input.orderNumber || input.orderId}`,
+    order_date: new Date().toISOString().slice(0, 10),
+    // Pickup = buyer address (parcel collected here).
+    pickup_customer_name: input.pickupCustomerName,
+    pickup_last_name: '',
+    pickup_address: input.pickupAddressLine1,
+    pickup_address_2: input.pickupAddressLine2 ?? '',
+    pickup_city: input.pickupCity,
+    pickup_state: input.pickupState,
+    pickup_country: input.pickupCountry ?? 'India',
+    pickup_pincode: input.pickupPostcode,
+    pickup_email: input.pickupEmail ?? '',
+    pickup_phone: input.pickupPhone,
+    // Shipping = seller return address (parcel delivered here).
+    shipping_customer_name: input.sellerName,
+    shipping_last_name: '',
+    shipping_address: input.sellerAddressLine1,
+    shipping_address_2: input.sellerAddressLine2 ?? '',
+    shipping_city: input.sellerCity,
+    shipping_country: input.sellerCountry ?? 'India',
+    shipping_pincode: input.sellerPostcode,
+    shipping_state: input.sellerState,
+    shipping_email: input.sellerEmail ?? '',
+    shipping_phone: input.sellerPhone,
+    order_items: input.items.map((item) => ({
+      name: item.name,
+      sku: item.sku ?? item.name.slice(0, 32),
+      units: item.units,
+      selling_price: item.sellingPrice,
+    })),
+    payment_method: 'PREPAID',
+    sub_total: subTotal,
+    length: input.lengthCm ?? 10,
+    breadth: input.breadthCm ?? 10,
+    height: input.heightCm ?? 10,
+    weight: input.weightKg,
+  }
+}
+
 /** Map our create payload → Shiprocket create-order body shape. */
 export function toShiprocketCreateOrderBody(input: CreateShipmentInput) {
   return {
@@ -155,6 +245,47 @@ export async function createSheDeliveryShipment(
       awb,
       trackingUrl: body.trackingUrl ?? body.tracking_url ?? null,
       raw: body.raw,
+    },
+    error: null,
+  }
+}
+
+/** Invoke edge function to book a Shiprocket reverse pickup. */
+export async function createSheDeliveryReturn(
+  input: CreateReturnInput,
+): Promise<{ data: CreateReturnResult | null; error: string | null }> {
+  const partner = input.partner ?? 'shiprocket'
+  const payload = toShiprocketReturnBody(input)
+
+  const { data, error } = await supabase.functions.invoke('shedelivery-create-return', {
+    body: {
+      order_id: input.orderId,
+      partner,
+      payload,
+    },
+  })
+
+  if (error) return { data: null, error: error.message }
+  const respBody = data as {
+    partner?: SheDeliveryPartner
+    shipmentId?: string
+    shipment_id?: string
+    awb?: string | null
+    trackingUrl?: string | null
+    tracking_url?: string | null
+    raw?: unknown
+    error?: string
+  }
+  if (respBody?.error) return { data: null, error: respBody.error }
+  const awb = respBody.awb ?? null
+  if (!awb) return { data: null, error: 'Shiprocket did not return a return AWB' }
+  return {
+    data: {
+      partner,
+      shipmentId: String(respBody.shipmentId ?? respBody.shipment_id ?? ''),
+      awb,
+      trackingUrl: respBody.trackingUrl ?? respBody.tracking_url ?? null,
+      raw: respBody.raw,
     },
     error: null,
   }

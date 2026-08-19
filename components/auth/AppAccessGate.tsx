@@ -4,6 +4,7 @@ import { usePathname } from 'one'
 
 import { SpaRedirect } from '~/components/navigation/SpaRedirect'
 import { AuthSignInFlow } from '~/components/auth/AuthSignInFlow'
+import { ProfileUnavailable } from '~/components/auth/ProfileUnavailable'
 import { PageCenter } from '~/components/layout'
 import { Spinner, YStack } from '~/components/ui'
 import { canAccessPath as checkAccessPath, getGuestSignInReturnTo } from '~/lib/auth/access'
@@ -51,8 +52,16 @@ function pathNeedsAuthOrVerify(pathname: string): boolean {
 /** Redirects users away from routes their access tier cannot use. */
 export function AppAccessGate({ children }: AppAccessGateProps) {
   const pathname = usePathname()
-  const { tier, isLoading, isAuthenticated, isProfileKnown, canAccessPath, getDeniedRedirect } =
-    useAccess()
+  const {
+    tier,
+    isLoading,
+    isAuthenticated,
+    isProfileKnown,
+    isProfileConfirmed,
+    isProfileUnavailable,
+    canAccessPath,
+    getDeniedRedirect,
+  } = useAccess()
   const { isDesktopWeb } = useAppLayout()
   const useDocumentScroll = Platform.OS === 'web' && isDesktopWeb
 
@@ -77,7 +86,7 @@ export function AppAccessGate({ children }: AppAccessGateProps) {
   // while their own row was still in flight, so wait for a real answer instead.
   if (isAuthenticated && !isProfileKnown) {
     if (pathNeedsAuthOrVerify(pathname)) {
-      return <Loading />
+      return isProfileUnavailable ? <ProfileUnavailable /> : <Loading />
     }
     return <Shell documentScroll={useDocumentScroll}>{children}</Shell>
   }
@@ -87,6 +96,15 @@ export function AppAccessGate({ children }: AppAccessGateProps) {
   }
 
   if (!canAccessPath(pathname)) {
+    // A warm cache settles the store before the server answers, so denying here
+    // would bounce verified members to `?gender=restricted` on every reload.
+    // Wait for the real row before taking access away.
+    if (isAuthenticated && !isProfileConfirmed) {
+      if (!pathNeedsAuthOrVerify(pathname)) {
+        return <Shell documentScroll={useDocumentScroll}>{children}</Shell>
+      }
+      return isProfileUnavailable ? <ProfileUnavailable /> : <Loading />
+    }
     return <SpaRedirect href={getDeniedRedirect(pathname)} />
   }
 

@@ -1,155 +1,13 @@
-import { test, expect, type Page } from '@playwright/test'
+import { test, expect } from '@playwright/test'
 
-/**
- * Static public / semi-public routes across every product tab.
- * Auth-gated pages are included: they must not 500 (redirect / empty shell is ok).
- */
-const smokeRoutes = [
-  // Commerce / storefront
-  '/',
-  '/search',
-  '/shops',
-  '/browse/physical',
-  '/browse/digital',
-  '/browse/featured',
-  '/browse/trending',
-  '/browse/latest',
-  '/cart',
-  '/checkout',
-  '/favorites',
-  '/orders',
-  '/orders/success',
-  '/addresses',
-  '/payment-methods',
-  '/create-my-shop',
-  // Auth
-  '/auth/sign-in',
-  '/auth/complete-profile',
-  '/auth/verify-gender',
-  '/auth/import-contacts',
-  '/auth/qr',
-  // Community
-  '/community',
-  '/community/network',
-  '/community/people',
-  '/community/create',
-  '/community/jobs',
-  '/community/jobs/create',
-  '/community/stories',
-  '/community/stories/create',
-  '/community/companies',
-  '/community/company/create',
-  '/community/groups',
-  '/community/group/create',
-  '/community/events',
-  '/community/events/create',
-  '/community/saved',
-  '/community/analytics',
-  // Chat
-  '/chat',
-  '/chat/groups',
-  '/chat/calls',
-  // Class
-  '/class',
-  '/class/video',
-  '/class/audio',
-  '/class/playlists',
-  // Co-work
-  '/co-work',
-  '/co-work/join',
-  '/co-work/meetings',
-  '/co-work/schedule',
-  // Account / settings / legal / help
-  '/profile',
-  '/notifications',
-  '/settings',
-  '/settings/account',
-  '/settings/appearance',
-  '/settings/privacy',
-  '/settings/security',
-  '/settings/notifications',
-  '/settings/commerce',
-  '/settings/community',
-  '/settings/chat',
-  '/settings/class',
-  '/settings/co-work',
-  '/settings/shop',
-  '/settings/about',
-  '/help',
-  '/legal/terms',
-  '/legal/privacy',
-  '/legal/cookies',
-  '/legal/ads',
-  // Vendor hub (auth-gated — must not 500)
-  '/vendor',
-  '/vendor/myshop',
-  '/vendor/products',
-  '/vendor/orders',
-  '/vendor/settings',
-] as const
-
-type CrashGuards = {
-  pageErrors: string[]
-  serverErrors: string[]
-}
-
-/** Attach listeners before navigation — catch JS crashes and document 5xx. */
-function attachCrashGuards(page: Page): CrashGuards {
-  const guards: CrashGuards = { pageErrors: [], serverErrors: [] }
-
-  page.on('pageerror', (error) => {
-    guards.pageErrors.push(error.message)
-  })
-
-  page.on('response', (response) => {
-    const url = response.url()
-    const status = response.status()
-    // Only flag navigations / HTML documents — ignore flaky third-party pixels.
-    const isDocument =
-      response.request().resourceType() === 'document' ||
-      url.includes(page.url().split('?')[0] || '')
-    if (status >= 500 && isDocument) {
-      guards.serverErrors.push(`${status} ${url}`)
-    }
-  })
-
-  return guards
-}
-
-/** One SPA injects <body> via client JS — wait for hydrated app chrome. */
-async function gotoAndHydrate(page: Page, path: string) {
-  const guards = attachCrashGuards(page)
-  const response = await page.goto(path, { waitUntil: 'domcontentloaded' })
-  await page.waitForFunction(
-    () => {
-      const body = document.body
-      if (!body) return false
-      const style = window.getComputedStyle(body)
-      if (style.visibility === 'hidden' || style.display === 'none') return false
-      return (body.innerText?.trim().length ?? 0) > 0 || body.querySelectorAll('*').length > 2
-    },
-    undefined,
-    { timeout: 45_000 },
-  )
-  return { response, guards }
-}
-
-function assertNoCrashes(path: string, guards: CrashGuards) {
-  expect(guards.pageErrors, `uncaught pageerror on ${path}: ${guards.pageErrors.join(' | ')}`).toEqual(
-    [],
-  )
-  expect(
-    guards.serverErrors,
-    `document 5xx on ${path}: ${guards.serverErrors.join(' | ')}`,
-  ).toEqual([])
-}
+import { assertNoCrashes, assertOkResponse, gotoAndHydrate } from './helpers'
+import { guestPublicRoutes } from './route-matrix'
 
 test.describe('public route smoke', () => {
-  for (const path of smokeRoutes) {
+  for (const path of guestPublicRoutes) {
     test(`loads ${path} without server error`, async ({ page }) => {
       const { response, guards } = await gotoAndHydrate(page, path)
-      expect(response, `no response for ${path}`).not.toBeNull()
-      expect(response!.status(), `unexpected status for ${path}`).toBeLessThan(500)
+      assertOkResponse(path, response)
       assertNoCrashes(path, guards)
       await expect(page.locator('body')).toBeAttached()
     })
@@ -230,4 +88,16 @@ test('offline connectivity helper stays available to the shell', async ({ page }
     window.dispatchEvent(new Event('offline'))
   })
   await expect(page.locator('body')).toBeAttached()
+})
+
+test('seller landing is reachable', async ({ page }) => {
+  const { response, guards } = await gotoAndHydrate(page, '/sellerlanding')
+  assertOkResponse('/sellerlanding', response)
+  assertNoCrashes('/sellerlanding', guards)
+})
+
+test('blog listing is reachable', async ({ page }) => {
+  const { response, guards } = await gotoAndHydrate(page, '/blog')
+  assertOkResponse('/blog', response)
+  assertNoCrashes('/blog', guards)
 })

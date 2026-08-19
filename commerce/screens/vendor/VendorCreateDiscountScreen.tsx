@@ -2,11 +2,13 @@ import { useMemo, useState } from 'react'
 import { useRouter } from 'one'
 
 import { DiscountErrorBoundary } from '~/commerce/components/DiscountErrorBoundary'
+import { VendorNoShopState } from '~/commerce/components/vendor/VendorShopGate'
 import {
   DiscountCreateForm,
   type DiscountCreateFormState,
 } from '~/commerce/components/vendor/discount/DiscountCreateForm'
-import { Button, Icons, Text, XStack, YStack, useAppToast } from '~/components/ui'
+import { PageCenter } from '~/components/layout'
+import { Button, Icons, Spinner, Text, XStack, YStack, useAppToast } from '~/components/ui'
 import { getShadowStyle, radius } from '~/config/tokens'
 import { useAppLayout } from '~/hooks/useAppLayout'
 import { APPLIES_TO, DISCOUNT_FETCH_SCOPE, DISCOUNT_TYPES } from '~/lib/discount/discount.constants'
@@ -38,6 +40,8 @@ export function VendorCreateDiscountScreen() {
   const { isDesktop, safeBottom } = useAppLayout()
 
   const shop = useAppSelector((state) => state.shop.currentShop)
+  const isLoadingMyShops = useAppSelector((state) => state.shop.isLoadingMyShops)
+  const myShopsLoaded = useAppSelector((state) => state.shop.myShopsLoaded)
   const profile = useAppSelector((state) => state.profile.profile)
   const loading = useAppSelector((state) => state.discount.loading)
 
@@ -163,17 +167,21 @@ export function VendorCreateDiscountScreen() {
     }
   }
 
+  if (!shop && (isLoadingMyShops || !myShopsLoaded)) {
+    return (
+      <PageCenter>
+        <Spinner size="large" />
+      </PageCenter>
+    )
+  }
+
   if (!shop) {
     return (
-      <YStack padding="$6" alignItems="center" gap="$2">
-        <Icons.Store size={30} color={ui.textMuted} />
-        <Text fontSize={18} fontWeight="800" color={ui.text}>
-          {DISCOUNT_UI_COPY.noShopTitle}
-        </Text>
-        <Text color={ui.textSecondary} textAlign="center">
-          {DISCOUNT_UI_COPY.noShopBody}
-        </Text>
-      </YStack>
+      <VendorNoShopState
+        ui={ui}
+        title={DISCOUNT_UI_COPY.noShopTitle}
+        body={DISCOUNT_UI_COPY.noShopBody}
+      />
     )
   }
 

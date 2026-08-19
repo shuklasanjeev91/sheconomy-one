@@ -24,6 +24,8 @@ import { supabase } from '~/lib/supabase/client'
 const PROFILE_FETCH_TIMEOUT_MS = 2_500
 const PROFILE_FETCH_MAX_ATTEMPTS = 3
 const PROFILE_RETRY_DELAY_MS = 1_200
+/** How long to wait before trying again once the burst of attempts is spent. */
+const PROFILE_RECOVERY_DELAY_MS = 20_000
 
 export type SessionProfileSnapshot = {
   /** The user this snapshot describes (`null` when signed out). */
@@ -41,6 +43,11 @@ export type SessionProfileSnapshot = {
    */
   isServerSettled: boolean
   isFetching: boolean
+  /**
+   * Every attempt to read the row failed. The member's access is *unknown*, not
+   * limited — gates must offer a retry rather than downgrade them.
+   */
+  hasFailed: boolean
   error: string | null
 }
 
@@ -50,6 +57,7 @@ const EMPTY_SNAPSHOT: SessionProfileSnapshot = {
   isSettled: false,
   isServerSettled: false,
   isFetching: false,
+  hasFailed: false,
   error: null,
 }
 
@@ -60,6 +68,7 @@ const listeners = new Set<() => void>()
 let generation = 0
 let networkSettledFor = 0
 let queuedRefetch = false
+let recoveryTimer: ReturnType<typeof setTimeout> | null = null
 
 /**
  * Locally applied fields the server has not confirmed yet. Re-applied on top of
@@ -85,6 +94,7 @@ function setSnapshot(patch: Partial<SessionProfileSnapshot>): void {
     next.isSettled === snapshot.isSettled &&
     next.isServerSettled === snapshot.isServerSettled &&
     next.isFetching === snapshot.isFetching &&
+    next.hasFailed === snapshot.hasFailed &&
     next.error === snapshot.error
   ) {
     return
@@ -152,14 +162,28 @@ function confirmPendingPatch(userId: string, row: SessionProfile | null): Sessio
   return { ...row, ...pendingPatch.patch }
 }
 
+/** Keep trying in the background so a passing outage heals without a tap. */
+function scheduleRecovery(userId: string, gen: number): void {
+  if (recoveryTimer) clearTimeout(recoveryTimer)
+  recoveryTimer = setTimeout(() => {
+    recoveryTimer = null
+    if (generation !== gen || snapshot.userId !== userId || !snapshot.hasFailed) return
+    load(userId)
+  }, PROFILE_RECOVERY_DELAY_MS)
+}
+
 /**
- * Give up on a failed read only after a few tries. Retrying matters because a
- * signed-in member with no row reads as unverified, and gates wait on
- * `isServerSettled` rather than acting on that unknown state.
+ * Give up on a failed read only after a few tries.
+ *
+ * A failed read must never set `isServerSettled`: the server did not answer, so
+ * the member's tier is unknown. Claiming otherwise turned any transient
+ * network or token error into "unverified" and bounced full-access members to
+ * `?gender=restricted`. `hasFailed` lets gates show a retry instead.
  */
 function retryOrGiveUp(userId: string, gen: number, attempt: number, error: string): void {
   if (attempt + 1 >= PROFILE_FETCH_MAX_ATTEMPTS) {
-    setSnapshot({ isSettled: true, isServerSettled: true, isFetching: false, error })
+    setSnapshot({ isSettled: true, isFetching: false, hasFailed: true, error })
+    scheduleRecovery(userId, gen)
     return
   }
 
@@ -209,6 +233,7 @@ async function fetchProfile(userId: string, gen: number, attempt = 0): Promise<v
       isSettled: true,
       isServerSettled: true,
       isFetching: false,
+      hasFailed: false,
       error: null,
     })
     if (profile) void writeCachedProfile(userId, profile)
@@ -234,20 +259,30 @@ function load(userId: string): void {
   const gen = ++generation
   const switching = snapshot.userId !== userId
 
+  if (recoveryTimer) {
+    clearTimeout(recoveryTimer)
+    recoveryTimer = null
+  }
+
   setSnapshot({
     userId,
     profile: switching ? null : snapshot.profile,
     isSettled: switching ? false : snapshot.isSettled,
     isServerSettled: switching ? false : snapshot.isServerSettled,
     isFetching: true,
+    hasFailed: false,
     error: null,
   })
 
-  // Warm start — web reads the cache synchronously.
-  const warm = peekCachedProfile(userId)
+  // Warm start — web reads the cache synchronously. Only paint the cache when we
+  // have nothing better: on a same-user refresh the snapshot already holds a
+  // server-confirmed row, and overwriting it with an older cached one would
+  // leave `isServerSettled` true while describing an unconfirmed profile —
+  // exactly the state gates are allowed to deny on.
+  const warm = snapshot.profile ? null : peekCachedProfile(userId)
   if (warm) {
     setSnapshot({ profile: mergePendingPatch(userId, warm), isSettled: true })
-  } else {
+  } else if (!snapshot.profile) {
     // Native has no synchronous cache, so hydrate alongside the request. Without
     // this a warm launch starts with an unknown profile and reads as unverified.
     void readCachedProfile(userId).then((cached) => {
@@ -270,6 +305,10 @@ export function ensureSessionProfile(userId: string | null): void {
     generation += 1
     queuedRefetch = false
     pendingPatch = null
+    if (recoveryTimer) {
+      clearTimeout(recoveryTimer)
+      recoveryTimer = null
+    }
     snapshot = EMPTY_SNAPSHOT
     void clearCachedProfile()
     emit()
@@ -277,6 +316,13 @@ export function ensureSessionProfile(userId: string | null): void {
   }
 
   if (snapshot.userId === userId && (snapshot.isSettled || snapshot.isFetching)) return
+  load(userId)
+}
+
+/** Retry after every attempt failed (the retry button on the access gate). */
+export function retryFailedProfileFetch(): void {
+  const userId = snapshot.userId
+  if (!userId || !snapshot.hasFailed) return
   load(userId)
 }
 
@@ -325,6 +371,10 @@ export function resetSessionProfileStore(): void {
   networkSettledFor = 0
   queuedRefetch = false
   pendingPatch = null
+  if (recoveryTimer) {
+    clearTimeout(recoveryTimer)
+    recoveryTimer = null
+  }
   snapshot = EMPTY_SNAPSHOT
   emit()
 }

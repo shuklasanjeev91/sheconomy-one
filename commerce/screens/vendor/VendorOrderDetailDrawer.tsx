@@ -33,16 +33,27 @@ import {
 } from '~/lib/orders/vendor-orders.utils'
 import type { AppUiTokens } from '~/lib/theme/app-ui'
 import {
-  issueStatusLabel,
-  issueTypeLabel,
   isCancellationIssueType,
+  isExchangeIssueType,
   isOpenIssueStatus,
   isReturnIssueType,
+  issueStatusLabel,
+  issueTypeLabel,
 } from '~/commerce/lib/customer-order-lifecycle'
 import {
   confirmOrderReturnReceived,
   resolveOrderIssueRequest,
 } from '~/commerce/lib/customer-order-trust'
+import { autoBookReturnPickup } from '~/commerce/lib/vendor-return-pickup'
+import {
+  RETURN_REJECT_REASON,
+  RETURN_REJECT_REASON_LABELS,
+  type ReturnRejectReason,
+} from '~/lib/orders/order.constants'
+import {
+  getVendorIssueActions,
+  type VendorIssueAction,
+} from '~/commerce/components/vendor/vendor-issue-actions'
 
 import { OrderStatusBadge } from '~/commerce/components/vendor/OrderStatusBadge'
 import { VendorActionButton } from '~/commerce/components/vendor/VendorActionButton'
@@ -64,6 +75,8 @@ type VendorOrderDetailDrawerProps = {
   onAdvance: (item: VendorOrderItem, target: VendorOrderAction['target']) => void
   /** Refresh issues / item after seller resolves a request. */
   onIssuesChanged?: () => void
+  /** Open Add Tracking for outbound ship or return pickup. */
+  onRequestTracking?: (item: VendorOrderItem, mode: 'outbound' | 'return') => void
 }
 
 function addressLines(address: OrderAddressSummary | null | undefined): string[] {
@@ -89,6 +102,7 @@ export function VendorOrderDetailDrawer({
   onClose,
   onAdvance,
   onIssuesChanged,
+  onRequestTracking,
 }: VendorOrderDetailDrawerProps) {
   const toast = useAppToast()
 
@@ -144,6 +158,7 @@ export function VendorOrderDetailDrawer({
             onClose={onClose}
             onAdvance={onAdvance}
             onIssuesChanged={onIssuesChanged}
+            onRequestTracking={onRequestTracking}
             onContact={() => {
               const email = item.orders?.profiles?.email
               if (email) void openMailtoLink(`mailto:${email}`)
@@ -187,6 +202,7 @@ type DrawerBodyProps = {
   onClose: () => void
   onAdvance: (item: VendorOrderItem, target: VendorOrderAction['target']) => void
   onIssuesChanged?: () => void
+  onRequestTracking?: (item: VendorOrderItem, mode: 'outbound' | 'return') => void
   onContact: () => void
   onDownload: () => void
 }
@@ -201,13 +217,15 @@ function DrawerBody({
   onClose,
   onAdvance,
   onIssuesChanged,
+  onRequestTracking,
   onContact,
   onDownload,
 }: DrawerBodyProps) {
   const toast = useAppToast()
   const [note, setNote] = useState('')
-  const [resolvingId, setResolvingId] = useState<string | null>(null)
+  const [rejectReasonCode, setRejectReasonCode] = useState<string | null>(null)
   const [confirmingReturn, setConfirmingReturn] = useState(false)
+  const [actingIssueId, setActingIssueId] = useState<string | null>(null)
   const order = item.orders
   const { resolveCurrency } = useVendorCurrency()
   const currency = resolveCurrency(order?.currency)
@@ -247,54 +265,103 @@ function DrawerBody({
     [issues],
   )
   const hasOpenCancellation = openIssues.some((issue) => isCancellationIssueType(issue.issue_type))
-  const hasOpenReturn = openIssues.some((issue) => isReturnIssueType(issue.issue_type))
-  const acceptedReturn = useMemo(
+  const hasOpenReturn = openIssues.some(
+    (issue) => isReturnIssueType(issue.issue_type) || isExchangeIssueType(issue.issue_type),
+  )
+  const actionableReturnIssue = useMemo(
     () =>
-      issues.find(
-        (issue) =>
-          isReturnIssueType(issue.issue_type) &&
-          (issue.status === 'resolved' || issue.resolution_action === 'accepted') &&
-          issue.resolution_action !== 'return_received',
-      ) ?? null,
+      issues.find((issue) => {
+        const actions = getVendorIssueActions(issue)
+        return actions.some(
+          (action) =>
+            action.kind === 'return-received' ||
+            action.kind === 'assign-return-tracking' ||
+            action.kind === 'ship-replacement',
+        )
+      }) ?? null,
     [issues],
   )
 
-  async function handleResolve(issue: EnrichedOrderIssue, decision: 'accept' | 'reject') {
-    setResolvingId(issue.id)
-    const result = await resolveOrderIssueRequest({
-      issueId: issue.id,
-      decision,
-      resolutionNote: note,
-    })
-    setResolvingId(null)
-    if (result.error) {
-      toast.show('Could not update request', { tone: 'danger', message: result.error })
+  async function handleIssueAction(issue: EnrichedOrderIssue, action: VendorIssueAction) {
+    if (action.kind === 'assign-return-tracking') {
+      onRequestTracking?.(item, 'return')
       return
     }
-    toast.show(decision === 'accept' ? 'Request accepted' : 'Request declined', {
-      tone: 'success',
-    })
-    setNote('')
-    onIssuesChanged?.()
-  }
+    if (action.kind === 'ship-replacement') {
+      onRequestTracking?.(item, 'outbound')
+      return
+    }
 
-  async function handleConfirmReturn() {
-    setConfirmingReturn(true)
-    const result = await confirmOrderReturnReceived({
-      orderItemId: item.id,
-      note,
-    })
-    setConfirmingReturn(false)
-    if (result.error) {
-      toast.show('Could not confirm return', { tone: 'danger', message: result.error })
+    const needsRejectReason =
+      action.kind === 'decision' &&
+      action.decision === 'reject' &&
+      (isReturnIssueType(issue.issue_type) || isExchangeIssueType(issue.issue_type))
+    if (needsRejectReason && !rejectReasonCode) {
+      toast.show('Pick a decline reason', {
+        tone: 'danger',
+        message: 'Choose why you are declining this return or exchange.',
+      })
       return
     }
-    toast.show('Return received — refund pending', {
-      tone: 'success',
-      message: 'Gateway disbursement remains admin-controlled.',
-    })
-    setNote('')
-    onIssuesChanged?.()
+
+    setActingIssueId(issue.id)
+    try {
+      if (action.kind === 'decision') {
+        const result = await resolveOrderIssueRequest({
+          issueId: issue.id,
+          decision: action.decision,
+          resolutionNote: note,
+          rejectReasonCode: action.decision === 'reject' ? rejectReasonCode : null,
+        })
+        if (result.error) throw new Error(result.error)
+
+        const isReturnOrExchange =
+          isReturnIssueType(issue.issue_type) || isExchangeIssueType(issue.issue_type)
+        if (action.decision === 'accept' && isReturnOrExchange && issue.order_item_id) {
+          const pickup = await autoBookReturnPickup(issue.order_item_id)
+          toast.show('Request accepted', {
+            tone: 'success',
+            message:
+              pickup.status === 'booked'
+                ? `Reverse pickup booked automatically — AWB ${pickup.awb}.`
+                : 'Approved. Auto-pickup was unavailable — arrange the return pickup with your courier.',
+          })
+        } else {
+          toast.show(action.decision === 'accept' ? 'Request accepted' : 'Request declined', {
+            tone: 'success',
+          })
+        }
+      } else if (action.kind === 'return-received') {
+        setConfirmingReturn(true)
+        const result = await confirmOrderReturnReceived({
+          orderItemId: item.id,
+          note,
+        })
+        if (result.error) throw new Error(result.error)
+        toast.show(
+          result.data?.replacementItemId
+            ? 'Exchange received — replacement ready to ship'
+            : 'Return received — refund sent to payment gateway',
+          {
+            tone: 'success',
+            message: result.data?.replacementItemId
+              ? 'Add tracking on the new replacement line when you ship it.'
+              : 'PayU will process the refund to the original payment method.',
+          },
+        )
+      }
+      setNote('')
+      setRejectReasonCode(null)
+      onIssuesChanged?.()
+    } catch (err) {
+      toast.show('Could not update request', {
+        tone: 'danger',
+        message: err instanceof Error ? err.message : 'Please try again.',
+      })
+    } finally {
+      setActingIssueId(null)
+      setConfirmingReturn(false)
+    }
   }
 
   const variation = item.variation_details as Record<string, unknown> | null
@@ -581,7 +648,7 @@ function DrawerBody({
                 </Text>
               </XStack>
             ) : null}
-            {(openIssues.length > 0 || acceptedReturn) ? (
+            {(openIssues.length > 0 || actionableReturnIssue) ? (
               <YStack gap="$2" marginBottom="$2">
                 <Text fontSize={11} fontWeight="700" color={ui.textMuted}>
                   Resolution note (optional)
@@ -591,13 +658,41 @@ function DrawerBody({
                   onChangeText={setNote}
                   placeholder="Add a note for the customer…"
                 />
+                <Text fontSize={11} fontWeight="700" color={ui.textMuted} marginTop="$1">
+                  Decline reason (required to reject return/exchange)
+                </Text>
+                <XStack gap="$1.5" flexWrap="wrap">
+                  {(Object.keys(RETURN_REJECT_REASON) as Array<keyof typeof RETURN_REJECT_REASON>).map(
+                    (key) => {
+                      const value = RETURN_REJECT_REASON[key] as ReturnRejectReason
+                      const active = rejectReasonCode === value
+                      return (
+                        <XStack
+                          key={value}
+                          paddingHorizontal="$2.5"
+                          paddingVertical="$1.5"
+                          borderRadius={999}
+                          borderWidth={1}
+                          borderColor={active ? ui.brand : ui.borderSubtle}
+                          backgroundColor={active ? ui.roseSurface : ui.surface}
+                          cursor="pointer"
+                          onPress={() => setRejectReasonCode(active ? null : value)}
+                        >
+                          <Text fontSize={11} fontWeight="700" color={active ? ui.brand : ui.textSecondary}>
+                            {RETURN_REJECT_REASON_LABELS[value]}
+                          </Text>
+                        </XStack>
+                      )
+                    },
+                  )}
+                </XStack>
               </YStack>
             ) : null}
             <YStack gap="$3">
               {issues.map((issue) => {
-                const open =
-                  isOpenIssueStatus(issue.status) &&
-                  (isCancellationIssueType(issue.issue_type) || isReturnIssueType(issue.issue_type))
+                const issueActions = getVendorIssueActions(issue).filter(
+                  (action) => action.kind !== 'status',
+                )
                 return (
                   <YStack
                     key={issue.id}
@@ -630,45 +725,23 @@ function DrawerBody({
                         ? ` · ${issue.reported_by_profile.full_name}`
                         : ''}
                     </Text>
-                    {open ? (
-                      <XStack gap="$2" marginTop="$2" flexWrap="wrap">
-                        <Button
-                          tone="primary"
-                          size="$3"
-                          borderRadius={999}
-                          disabled={resolvingId === issue.id}
-                          onPress={() => void handleResolve(issue, 'accept')}
-                        >
-                          {resolvingId === issue.id ? 'Updating…' : 'Accept'}
-                        </Button>
-                        <Button
-                          tone="outline"
-                          size="$3"
-                          borderRadius={999}
-                          disabled={resolvingId === issue.id}
-                          onPress={() => void handleResolve(issue, 'reject')}
-                        >
-                          Decline
-                        </Button>
-                      </XStack>
+                    {issueActions.length > 0 ? (
+                      <YStack gap="$2" marginTop="$2">
+                        {issueActions.map((action) => (
+                          <VendorActionButton
+                            key={action.key}
+                            ui={ui}
+                            action={action}
+                            disabled={actingIssueId === issue.id || confirmingReturn}
+                            onPress={() => void handleIssueAction(issue, action)}
+                          />
+                        ))}
+                      </YStack>
                     ) : null}
                   </YStack>
                 )
               })}
             </YStack>
-            {acceptedReturn && isReturnIssueType(acceptedReturn.issue_type) ? (
-              <Button
-                tone="primary"
-                size="$3"
-                borderRadius={999}
-                marginTop="$2"
-                disabled={confirmingReturn}
-                icon={<Icons.CheckCircle2 size={15} />}
-                onPress={() => void handleConfirmReturn()}
-              >
-                {confirmingReturn ? 'Confirming…' : 'Confirm return received · pending refund'}
-              </Button>
-            ) : null}
           </Section>
         ) : null}
 

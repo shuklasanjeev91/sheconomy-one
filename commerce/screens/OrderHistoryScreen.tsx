@@ -7,8 +7,9 @@ import {
   fetchCustomerOrderHistory,
   type CustomerOrderHistoryRow,
 } from '~/commerce/lib/buyer-account'
-import { fetchOrderCheckoutUrl } from '~/commerce/lib/checkout'
-import { openExternalUrl } from '~/lib/platform/openUrl'
+import { resumeOrderOnlinePayment } from '~/commerce/lib/resume-order-payment'
+import { cancelCustomerOrder } from '~/commerce/lib/customer-orders'
+import { getCustomerOrderActionEligibility } from '~/commerce/lib/customer-order-lifecycle'
 import { Button, Icons, Spinner, Text, XStack, YStack, useAppToast } from '~/components/ui'
 import { FullWidthLayout, HorizontalScrollRow, PageSection } from '~/components/layout'
 import { formatCurrency } from '~/lib/format'
@@ -45,6 +46,13 @@ function matchesStatusFilter(status: string | null, filter: OrderStatusFilter) {
   return normalized.includes(filter)
 }
 
+function cancelEligibility(order: CustomerOrderHistoryRow) {
+  return getCustomerOrderActionEligibility({
+    orderStatus: order.order_status,
+    paymentStatus: order.payment_status,
+  })
+}
+
 function formatOrderDate(value: string | null) {
   if (!value) return ''
   const date = new Date(value)
@@ -62,6 +70,7 @@ export function OrderHistoryScreen() {
   const [statusFilter, setStatusFilter] = useState<OrderStatusFilter>('all')
   const visibleOrders = orders.filter((order) => matchesStatusFilter(order.order_status, statusFilter))
   const [payingOrderId, setPayingOrderId] = useState<string | null>(null)
+  const [cancellingOrderId, setCancellingOrderId] = useState<string | null>(null)
 
   async function handleCopyOrder(order: CustomerOrderHistoryRow) {
     const label = order.order_number ? `Order #${order.order_number}` : 'Order'
@@ -84,20 +93,31 @@ export function OrderHistoryScreen() {
 
   async function handlePayNow(orderId: string) {
     setPayingOrderId(orderId)
-    const checkoutUrl = await fetchOrderCheckoutUrl(orderId)
+    const result = await resumeOrderOnlinePayment(orderId)
     setPayingOrderId(null)
-    if (!checkoutUrl) {
-      toast.show('Payment link unavailable', {
+    if (!result.ok) {
+      toast.show('Could not open payment', {
         tone: 'danger',
-        message: 'The session may have expired. Open the order and try again.',
+        message: result.error,
       })
       return
     }
-    if (typeof window !== 'undefined') {
-      window.location.href = checkoutUrl
-    } else {
-      await openExternalUrl(checkoutUrl)
+    navigateApp(result.href as never)
+  }
+
+  async function handleCancelUnpaid(orderId: string) {
+    setCancellingOrderId(orderId)
+    const result = await cancelCustomerOrder(orderId)
+    setCancellingOrderId(null)
+    if (result.error) {
+      toast.show('Could not cancel order', { tone: 'danger', message: result.error })
+      return
     }
+    toast.show('Order cancelled', {
+      tone: 'success',
+      message: 'Reserved stock has been released.',
+    })
+    await load()
   }
 
   const load = useCallback(async () => {
@@ -218,7 +238,10 @@ export function OrderHistoryScreen() {
                         tone="primary"
                         size="$3"
                         borderRadius={999}
-                        disabled={payingOrderId === order.order_id}
+                        disabled={
+                          payingOrderId === order.order_id ||
+                          cancellingOrderId === order.order_id
+                        }
                         onPress={() => void handlePayNow(order.order_id)}
                       >
                         {payingOrderId === order.order_id ? 'Opening…' : 'Pay now'}
@@ -233,6 +256,30 @@ export function OrderHistoryScreen() {
                         View order
                       </Button>
                     )}
+                    {cancelEligibility(order).canInstantCancel ? (
+                      <Button
+                        tone="outline"
+                        size="$3"
+                        borderRadius={999}
+                        disabled={
+                          payingOrderId === order.order_id ||
+                          cancellingOrderId === order.order_id
+                        }
+                        onPress={() => void handleCancelUnpaid(order.order_id)}
+                      >
+                        {cancellingOrderId === order.order_id ? 'Cancelling…' : 'Cancel'}
+                      </Button>
+                    ) : cancelEligibility(order).canRequestCancel ? (
+                      // Requests need a reason — the detail screen owns that sheet.
+                      <Button
+                        tone="outline"
+                        size="$3"
+                        borderRadius={999}
+                        onPress={() => navigateApp(commerceRoutes.order(order.order_id))}
+                      >
+                        Request cancellation
+                      </Button>
+                    ) : null}
                     <Button
                       tone="outline"
                       size="$3"
