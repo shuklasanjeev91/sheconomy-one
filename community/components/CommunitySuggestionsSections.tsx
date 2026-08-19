@@ -10,11 +10,13 @@ import { communityRoutes } from '~/lib/routes'
 type CommunitySuggestionsSectionsProps = {
   perKindLimit?: number
   itemLimit?: number
+  compactProducts?: boolean
 }
 
 export function CommunitySuggestionsSections({
   perKindLimit = 4,
   itemLimit = 4,
+  compactProducts = false,
 }: CommunitySuggestionsSectionsProps) {
   const communityUi = useCommunityUi()
   const { sections, isLoading } = useCommunitySuggestions(perKindLimit)
@@ -53,6 +55,7 @@ export function CommunitySuggestionsSections({
           key={section.kind}
           section={section}
           limit={itemLimit}
+          compactProducts={compactProducts}
         />
       ))}
     </YStack>

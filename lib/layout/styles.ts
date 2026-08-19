@@ -65,8 +65,37 @@ export function scrollHostTransformReset() {
 /** Full-screen overlay backdrop (filters, modals). */
 export function overlayBackdropStyle() {
   return Platform.select({
-    web: { position: 'fixed' as const, top: 0, left: 0, right: 0, bottom: 0 },
+    web: {
+      position: 'fixed' as const,
+      top: 0,
+      left: 0,
+      right: 0,
+      bottom: 0,
+      width: '100vw',
+      height: '100dvh',
+      maxWidth: '100vw',
+      maxHeight: '100dvh',
+    },
     default: { position: 'absolute' as const, top: 0, left: 0, right: 0, bottom: 0 },
+  })
+}
+
+/** Right-edge drawer panel pinned to the viewport. */
+export function overlayPanelStyle() {
+  return Platform.select({
+    web: {
+      position: 'fixed' as const,
+      top: 0,
+      right: 0,
+      bottom: 0,
+      height: '100dvh',
+      maxHeight: '100dvh',
+      display: 'flex',
+      flexDirection: 'column' as const,
+      overflow: 'hidden',
+      boxShadow: '-4px 0 24px rgba(0,0,0,0.18)',
+    },
+    default: { position: 'absolute' as const, top: 0, right: 0, bottom: 0 },
   })
 }
 

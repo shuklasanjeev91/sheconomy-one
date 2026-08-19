@@ -14,10 +14,11 @@ import {
   YStack,
   useAppToast,
 } from '~/components/ui'
+import { ViewportOverlay } from '~/components/layout/ViewportOverlay'
 import { getShadowStyle, radius } from '~/config/tokens'
 import { useLockBodyScroll } from '~/hooks/useLockBodyScroll'
 import { useVendorCurrency } from '~/hooks/useVendorCurrency'
-import { overlayBackdropStyle } from '~/lib/layout/styles'
+import { overlayBackdropStyle, overlayPanelStyle } from '~/lib/layout/styles'
 import { shareOrderInvoice } from '~/lib/orders/order-invoice'
 import { formatCustomerContactPhone } from '~/features/auth/services/account-contact'
 import type { EnrichedOrderIssue } from '~/lib/orders/order-issue.type'
@@ -111,25 +112,15 @@ export function VendorOrderDetailDrawer({
 
   if (!open) return null
 
-  // Rendered as two fixed-position siblings (backdrop + panel) with a very high
-  // z-index — mirroring the proven overlay pattern used by the vendor layout and
-  // ListingFiltersShell. No Portal: portaling here detaches the subtree from the
-  // app's renderer/context (the "multiple renderers" warning) and swallows all
-  // pointer events, so the drawer becomes visible but un-clickable.
-  const panelPositionStyle =
-    Platform.OS === 'web'
-      ? ({ position: 'fixed' as const, top: 0, right: 0, bottom: 0, boxShadow: '-4px 0 24px rgba(0,0,0,0.18)' } as const)
-      : ({ position: 'absolute' as const, top: 0, right: 0, bottom: 0 } as const)
+  const panelPositionStyle = overlayPanelStyle()
 
   return (
-    <>
+    <ViewportOverlay>
       <YStack
         backgroundColor="rgba(0,0,0,0.5)"
         zIndex={100000}
         cursor="pointer"
         style={overlayBackdropStyle()}
-        animation="quick"
-        enterStyle={{ opacity: 0 }}
         onPress={onClose}
       />
       <YStack
@@ -140,8 +131,6 @@ export function VendorOrderDetailDrawer({
         borderLeftColor={ui.borderSubtle}
         zIndex={100001}
         style={panelPositionStyle}
-        animation="quick"
-        enterStyle={{ x: PANEL_WIDTH }}
       >
         {loading && !item ? (
           <YStack flex={1} alignItems="center" justifyContent="center">
@@ -188,7 +177,7 @@ export function VendorOrderDetailDrawer({
           </YStack>
         )}
       </YStack>
-    </>
+    </ViewportOverlay>
   )
 }
 

@@ -119,6 +119,7 @@ export function canAccessPath(
   if (area === 'auth' || area === 'public') return true
 
   // Women-first surfaces require the verified-female tier (skip keeps limited access).
+  // `/vendor` is not in that set — role is enforced by `RequireVendorRole`.
   if (requiresGenderVerification(pathname)) {
     return tier === 'female'
   }
@@ -167,6 +168,12 @@ export function getAccessDeniedRedirect(
 
   if (isCreateShopPath(pathname) || isVendorPath(pathname)) {
     if (tier === 'guest') return buildSignInUrl(pathname)
+  }
+
+  // Existing seller console is role-gated (`RequireVendorRole`), not a women-first
+  // deny surface. Mapping it to `?gender=restricted` bounced vendors off My Shop.
+  if (isVendorPath(pathname)) {
+    return getDefaultHomeForTier(tier, isVerified)
   }
 
   if (tier === 'male') {

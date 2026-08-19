@@ -1,20 +1,19 @@
 /**
  * Right-side detail drawer shell shared by the vendor console.
  *
- * Rendered as two fixed-position siblings (backdrop + panel) with a very high
- * z-index — mirroring the proven overlay pattern used by the vendor layout and
- * ListingFiltersShell. No Portal: portaling here detaches the subtree from the
- * app's renderer/context (the "multiple renderers" warning) and swallows all
- * pointer events, so the drawer becomes visible but un-clickable.
+ * Backdrop + panel are portaled to the viewport on web so they are not clipped
+ * by the vendor page scroller (`position: fixed` inside a transformed overflow
+ * host shrinks the dimmer and cuts the drawer off-screen).
  */
 
 import type { ReactNode } from 'react'
 import { Platform } from 'react-native'
 
 import { Icons, ScrollView, Spinner, Text, XStack, YStack } from '~/components/ui'
+import { ViewportOverlay } from '~/components/layout/ViewportOverlay'
 import { getShadowStyle, radius } from '~/config/tokens'
 import { useLockBodyScroll } from '~/hooks/useLockBodyScroll'
-import { overlayBackdropStyle } from '~/lib/layout/styles'
+import { overlayBackdropStyle, overlayPanelStyle } from '~/lib/layout/styles'
 import type { AppUiTokens } from '~/lib/theme/app-ui'
 
 type IconType = (typeof Icons)[keyof typeof Icons]
@@ -55,26 +54,15 @@ export function VendorDrawerShell({
   if (!open) return null
 
   const Icon = icon ?? Icons.Package
-  const panelPositionStyle =
-    Platform.OS === 'web'
-      ? ({
-          position: 'fixed' as const,
-          top: 0,
-          right: 0,
-          bottom: 0,
-          boxShadow: '-4px 0 24px rgba(0,0,0,0.18)',
-        } as const)
-      : ({ position: 'absolute' as const, top: 0, right: 0, bottom: 0 } as const)
+  const panelPositionStyle = overlayPanelStyle()
 
   return (
-    <>
+    <ViewportOverlay>
       <YStack
         backgroundColor="rgba(0,0,0,0.5)"
         zIndex={100000}
         cursor="pointer"
         style={overlayBackdropStyle()}
-        animation="quick"
-        enterStyle={{ opacity: 0 }}
         onPress={onClose}
       />
       <YStack
@@ -85,8 +73,6 @@ export function VendorDrawerShell({
         borderLeftColor={ui.borderSubtle}
         zIndex={100001}
         style={panelPositionStyle}
-        animation="quick"
-        enterStyle={{ x: PANEL_WIDTH }}
       >
         <YStack flex={1} minHeight={0}>
           <XStack
@@ -164,7 +150,7 @@ export function VendorDrawerShell({
           ) : null}
         </YStack>
       </YStack>
-    </>
+    </ViewportOverlay>
   )
 }
 

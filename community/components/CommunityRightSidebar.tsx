@@ -54,7 +54,7 @@ export function CommunityRightSidebar({ pin = 'document' }: { pin?: CommunitySid
       pin={pin}
     >
       <IdleMount>
-        <CommunitySuggestionsSections perKindLimit={4} />
+        <CommunitySuggestionsSections perKindLimit={4} compactProducts />
       </IdleMount>
 
       <CommunityWidget title="Quick links">

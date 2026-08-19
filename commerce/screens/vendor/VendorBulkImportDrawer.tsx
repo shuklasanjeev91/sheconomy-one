@@ -1,10 +1,10 @@
 import { Platform } from 'react-native'
 
 import { Icons, ScrollView, Text, XStack, YStack } from '~/components/ui'
-import { getShadowStyle } from '~/config/tokens'
+import { ViewportOverlay } from '~/components/layout/ViewportOverlay'
 import { BulkImportContent } from '~/commerce/components/vendor/bulk-import/BulkImportContent'
 import { useLockBodyScroll } from '~/hooks/useLockBodyScroll'
-import { overlayBackdropStyle } from '~/lib/layout/styles'
+import { overlayBackdropStyle, overlayPanelStyle } from '~/lib/layout/styles'
 import { resetBulkImport } from '~/lib/listing/listing-bulk-import.store'
 import { useAppDispatch } from '~/lib/store/hooks'
 import type { AppUiTokens } from '~/lib/theme/app-ui'
@@ -35,10 +35,7 @@ export function VendorBulkImportDrawer({
 
   if (!open) return null
 
-  const panelPositionStyle =
-    Platform.OS === 'web'
-      ? ({ position: 'fixed' as const, top: 0, right: 0, bottom: 0, boxShadow: '-4px 0 24px rgba(0,0,0,0.18)' } as const)
-      : ({ position: 'absolute' as const, top: 0, right: 0, bottom: 0 } as const)
+  const panelPositionStyle = overlayPanelStyle()
 
   function handleClose() {
     dispatch(resetBulkImport())
@@ -46,14 +43,12 @@ export function VendorBulkImportDrawer({
   }
 
   return (
-    <>
+    <ViewportOverlay>
       <YStack
         backgroundColor="rgba(0,0,0,0.5)"
         zIndex={100000}
         cursor="pointer"
         style={overlayBackdropStyle()}
-        animation="quick"
-        enterStyle={{ opacity: 0 }}
         onPress={handleClose}
       />
       <YStack
@@ -63,9 +58,7 @@ export function VendorBulkImportDrawer({
         borderLeftWidth={isDesktop ? 1 : 0}
         borderLeftColor={ui.borderSubtle}
         zIndex={100001}
-        style={{ ...panelPositionStyle, ...getShadowStyle('lg') }}
-        animation="quick"
-        enterStyle={{ x: isDesktop ? PANEL_WIDTH : 400, opacity: 0.96 }}
+        style={panelPositionStyle}
       >
         <XStack
           alignItems="center"
@@ -114,6 +107,6 @@ export function VendorBulkImportDrawer({
           />
         </ScrollView>
       </YStack>
-    </>
+    </ViewportOverlay>
   )
 }

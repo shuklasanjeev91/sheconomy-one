@@ -3,10 +3,10 @@ import { Platform } from 'react-native'
 
 import { ReturnPolicyFormFields } from '~/commerce/components/vendor/return-policy/ReturnPolicyFormFields'
 import { ReturnPolicyLivePreview } from '~/commerce/components/vendor/return-policy/ReturnPolicyLivePreview'
+import { ViewportOverlay } from '~/components/layout/ViewportOverlay'
 import { Button, Icons, ScrollView, Spinner, Text, XStack, YStack } from '~/components/ui'
-import { getShadowStyle } from '~/config/tokens'
 import { useLockBodyScroll } from '~/hooks/useLockBodyScroll'
-import { overlayBackdropStyle } from '~/lib/layout/styles'
+import { overlayBackdropStyle, overlayPanelStyle } from '~/lib/layout/styles'
 import { toFriendlyReturnPolicyError } from '~/lib/return-policy/return-policy.errors'
 import { RETURN_POLICY_UI_COPY } from '~/lib/return-policy/return-policy-ui.copy'
 import {
@@ -79,26 +79,15 @@ export function ReturnPolicyFormDrawer({
 
   if (!open) return null
 
-  const panelPositionStyle =
-    Platform.OS === 'web'
-      ? ({
-          position: 'fixed' as const,
-          top: 0,
-          right: 0,
-          bottom: 0,
-          boxShadow: '-4px 0 24px rgba(0,0,0,0.18)',
-        } as const)
-      : ({ position: 'absolute' as const, top: 0, right: 0, bottom: 0 } as const)
+  const panelPositionStyle = overlayPanelStyle()
 
   return (
-    <>
+    <ViewportOverlay>
       <YStack
         backgroundColor="rgba(0,0,0,0.5)"
         zIndex={100000}
         cursor="pointer"
         style={overlayBackdropStyle()}
-        animation="quick"
-        enterStyle={{ opacity: 0 }}
         onPress={submitting ? undefined : onClose}
       />
       <YStack
@@ -108,9 +97,7 @@ export function ReturnPolicyFormDrawer({
         borderLeftWidth={isDesktop ? 1 : 0}
         borderLeftColor={ui.borderSubtle}
         zIndex={100001}
-        style={{ ...panelPositionStyle, ...getShadowStyle('lg') }}
-        animation="quick"
-        enterStyle={{ x: isDesktop ? PANEL_WIDTH : 400, opacity: 0.96 }}
+        style={panelPositionStyle}
       >
         <XStack
           alignItems="center"
@@ -244,7 +231,7 @@ export function ReturnPolicyFormDrawer({
           </XStack>
         </XStack>
       </YStack>
-    </>
+    </ViewportOverlay>
   )
 }
 

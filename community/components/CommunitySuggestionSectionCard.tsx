@@ -1,5 +1,6 @@
 import { Platform, View } from 'react-native'
 
+import { CommunityProductSuggestionRow } from '~/community/components/CommunityProductSuggestionRow'
 import { CommunitySuggestionRow } from '~/community/components/CommunitySuggestionRow'
 import { AppLink } from '~/components/navigation/AppLink'
 import { CommunityWidget } from '~/community/components/CommunityWidget'
@@ -10,22 +11,27 @@ import { Text, YStack } from '~/components/ui'
 type CommunitySuggestionSectionCardProps = {
   section: SuggestionSection
   limit?: number
+  compactProducts?: boolean
 }
 
 /** Keep FlashList from under-measuring and clipping subtitle / reason lines on native. */
 const ROW_MIN_HEIGHT = 64
+const PRODUCT_CARD_MIN_HEIGHT = 196
 const SECTION_CHROME_HEIGHT = 88
 
 export function CommunitySuggestionSectionCard({
   section,
   limit = 3,
+  compactProducts = false,
 }: CommunitySuggestionSectionCardProps) {
   const communityUi = useCommunityUi()
   const items = section.items.slice(0, limit)
 
   if (!items.length) return null
 
-  const minHeight = SECTION_CHROME_HEIGHT + items.length * ROW_MIN_HEIGHT
+  const isProductSection = section.kind === 'listing'
+  const rowMinHeight = isProductSection ? PRODUCT_CARD_MIN_HEIGHT : ROW_MIN_HEIGHT
+  const minHeight = SECTION_CHROME_HEIGHT + items.length * rowMinHeight
 
   const card = (
     <CommunityWidget
@@ -40,13 +46,21 @@ export function CommunitySuggestionSectionCard({
       }
     >
       <YStack gap={0} width="100%">
-        {items.map((item) => (
-          <CommunitySuggestionRow
-            key={`${item.kind}-${item.id}`}
-            item={item}
-            showKindLabel={false}
-          />
-        ))}
+        {items.map((item) =>
+          isProductSection ? (
+            <CommunityProductSuggestionRow
+              key={`${item.kind}-${item.id}`}
+              item={item}
+              compact={compactProducts}
+            />
+          ) : (
+            <CommunitySuggestionRow
+              key={`${item.kind}-${item.id}`}
+              item={item}
+              showKindLabel={false}
+            />
+          ),
+        )}
       </YStack>
     </CommunityWidget>
   )
