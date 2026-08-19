@@ -567,7 +567,7 @@ export function PostActionSheets({
           />
           {saved ? (
             <SheetAction
-              icon={Icons.FolderOpen}
+              icon={Icons.Folder}
               label="Add collection or note"
               description="Keep this save organized for later"
               onPress={() => {
