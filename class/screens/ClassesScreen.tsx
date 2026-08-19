@@ -2,6 +2,7 @@ import { usePathname } from 'one'
 import { useCallback, useEffect, useMemo, useState } from 'react'
 
 import { ClassShell } from '~/class/components/ClassShell'
+import { EnrolledProgramsRevisitRail } from '~/class/components/EnrolledProgramsRevisitRail'
 import { ContinueLearningRail } from '~/class/components/ContinueLearningRail'
 import { SavedProgramsRail } from '~/class/components/SavedProgramsRail'
 import { ProgramCardGrid } from '~/class/components/ProgramCardGrid'
@@ -127,6 +128,7 @@ export function ClassesScreen() {
   return (
     <ClassShell refreshing={feed.isRefreshing} onRefresh={() => feed.refresh()}>
       <ContinueLearningRail mediaType={mediaTab} />
+      <EnrolledProgramsRevisitRail mediaType={mediaTab} />
       <SavedProgramsRail mediaType={mediaTab} />
 
       {showLanguageFilter ? (

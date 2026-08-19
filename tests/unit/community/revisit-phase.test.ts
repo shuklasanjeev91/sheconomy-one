@@ -34,7 +34,7 @@ import { buildIntroductionSentRevisitCards } from '~/community/lib/introductions
 import type { IntroductionSentRequest } from '~/community/lib/introductions'
 import { buildVendorIssuesHomeCards } from '~/commerce/lib/vendor-issues-home'
 import type { EnrichedOrderIssue } from '~/lib/orders/order-issue.type'
-import { ISSUE_STATUS, ORDER_ISSUE_TYPE } from '~/lib/orders/order.constants'
+import { ISSUE_STATUS, ORDER_ISSUE_TYPE, ORDER_STATUS } from '~/lib/orders/order.constants'
 import { buildRecentMeetingRevisitCards } from '~/co-work/lib/recent-meeting-revisit'
 import type { Meeting } from '~/co-work/lib/types'
 import { buildRecommendationSentRevisitCards } from '~/community/lib/recommendations'
@@ -46,6 +46,12 @@ import { buildVendorReviewsHomeCards } from '~/commerce/lib/vendor-reviews-home'
 import type { VendorReview } from '~/commerce/lib/vendor-operations'
 import { buildVendorInquiriesHomeCards } from '~/commerce/lib/vendor-inquiries-home'
 import type { VendorInquiry } from '~/commerce/lib/vendor-operations'
+import { buildBuyerInTransitHomeCards } from '~/commerce/lib/buyer-in-transit-home'
+import type { CustomerOrderHistoryRow } from '~/commerce/lib/buyer-account'
+import { buildBuyerPendingPaymentHomeCards } from '~/commerce/lib/buyer-pending-payment-home'
+import { buildVendorSetupHomeCards, buildVendorSetupHomeTasks } from '~/commerce/lib/vendor-setup-home'
+import type { ShopPartnerInfo } from '~/commerce/lib/shop-commerce'
+import { buildOpenToWorkRevisitCard } from '~/community/lib/open-to-work-revisit'
 import { buildMeetingInviteRevisitCards } from '~/co-work/lib/meeting-invites-revisit'
 import { buildMeetingRevisitCards } from '~/co-work/lib/meeting-revisit'
 import { buildCompaniesRevisitCards } from '~/community/lib/companies-revisit'
@@ -1292,5 +1298,112 @@ describe('buildVendorInquiriesHomeCards', () => {
     expect(cards).toHaveLength(1)
     expect(cards[0]?.preview).toContain('Pune')
     expect(cards[0]?.badge).toBe('Needs reply')
+  })
+})
+
+describe('buildBuyerInTransitHomeCards', () => {
+  it('includes in-flight orders with tracking detail', () => {
+    const orders: CustomerOrderHistoryRow[] = [
+      {
+        order_id: 'order-1',
+        order_number: '1001',
+        order_status: ORDER_STATUS.IN_TRANSIT,
+        payment_status: 'completed',
+        payment_mode: 'online',
+        total_amount: 1200,
+        currency: 'INR',
+        shop_names: 'Glow Shop',
+        item_count: 2,
+        created_at: '2026-08-19T00:00:00.000Z',
+        tracking_numbers: 'AWB123',
+        progress_percentage: 60,
+        delivered_at: null,
+      },
+      {
+        order_id: 'order-2',
+        order_number: '1002',
+        order_status: ORDER_STATUS.DELIVERED,
+        payment_status: 'completed',
+        payment_mode: 'online',
+        total_amount: 500,
+        currency: 'INR',
+        shop_names: 'Other',
+        item_count: 1,
+        created_at: '2026-08-18T00:00:00.000Z',
+        tracking_numbers: null,
+        progress_percentage: 100,
+        delivered_at: '2026-08-18T00:00:00.000Z',
+      },
+    ]
+
+    const cards = buildBuyerInTransitHomeCards(orders, 3)
+    expect(cards).toHaveLength(1)
+    expect(cards[0]?.statusLabel).toBe('In transit')
+    expect(cards[0]?.detail).toContain('AWB123')
+  })
+})
+
+describe('buildBuyerPendingPaymentHomeCards', () => {
+  it('includes awaiting payment orders', () => {
+    const orders: CustomerOrderHistoryRow[] = [
+      {
+        order_id: 'order-1',
+        order_number: '2001',
+        order_status: ORDER_STATUS.AWAITING_PAYMENT,
+        payment_status: 'pending',
+        payment_mode: 'online',
+        total_amount: 2400,
+        currency: 'INR',
+        shop_names: 'Studio Shop',
+        item_count: 1,
+        created_at: '2026-08-19T00:00:00.000Z',
+        tracking_numbers: null,
+        progress_percentage: null,
+        delivered_at: null,
+      },
+    ]
+
+    const cards = buildBuyerPendingPaymentHomeCards(orders, 2)
+    expect(cards).toHaveLength(1)
+    expect(cards[0]?.amountLabel).toContain('2,400')
+    expect(String(cards[0]?.href)).toContain('order-1')
+  })
+})
+
+describe('buildVendorSetupHomeCards', () => {
+  it('nudges vendors to connect missing payment and shipping partners', () => {
+    const info: ShopPartnerInfo = {
+      shopId: 'shop-1',
+      paymentLabel: 'SHEPay',
+      paymentConnected: false,
+      shippingLabel: 'Shiprocket',
+      shippingConnected: false,
+    }
+
+    const cards = buildVendorSetupHomeCards(buildVendorSetupHomeTasks(info), 2)
+    expect(cards).toHaveLength(2)
+    expect(String(cards[0]?.href)).toContain('payments')
+    expect(String(cards[1]?.href)).toContain('shipping')
+  })
+})
+
+describe('buildOpenToWorkRevisitCard', () => {
+  it('shows a nudge when profile is ready but open to work is off', () => {
+    expect(
+      buildOpenToWorkRevisitCard({
+        enabled: false,
+        hasHeadline: true,
+        hasOccupation: false,
+        profileCompletion: 55,
+      })?.headline,
+    ).toContain('open to work')
+    expect(
+      buildOpenToWorkRevisitCard({
+        enabled: true,
+        hasHeadline: true,
+        hasOccupation: true,
+        profileCompletion: 90,
+      }),
+    ).toBeNull()
   })
 })

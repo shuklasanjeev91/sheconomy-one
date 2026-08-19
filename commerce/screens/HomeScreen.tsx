@@ -9,6 +9,8 @@ import { FollowedShopsRail } from '~/commerce/components/FollowedShopsRail'
 import { HomeHeroSlider, buildHomeHeroSlides } from '~/commerce/components/HomeHeroSlider'
 import { InfiniteHorizontalSection } from '~/commerce/components/InfiniteHorizontalSection'
 import { InfiniteListingSection } from '~/commerce/components/InfiniteListingSection'
+import { BuyerInTransitHomeStrip } from '~/commerce/components/BuyerInTransitHomeStrip'
+import { BuyerPendingPaymentHomeStrip } from '~/commerce/components/BuyerPendingPaymentHomeStrip'
 import { CartHomeStrip } from '~/commerce/components/CartHomeStrip'
 import { BuyerListingInquiryHomeStrip } from '~/commerce/components/BuyerListingInquiryHomeStrip'
 import { BuyerOrderAttentionStrip } from '~/commerce/components/BuyerOrderAttentionStrip'
@@ -21,6 +23,7 @@ import { VendorPausedListingsHomeStrip } from '~/commerce/components/VendorPause
 import { VendorSaleEventsHomeStrip } from '~/commerce/components/VendorSaleEventsHomeStrip'
 import { VendorInquiriesHomeStrip } from '~/commerce/components/VendorInquiriesHomeStrip'
 import { VendorReviewsHomeStrip } from '~/commerce/components/VendorReviewsHomeStrip'
+import { VendorSetupHomeStrip } from '~/commerce/components/VendorSetupHomeStrip'
 import { VendorIssuesHomeStrip } from '~/commerce/components/VendorIssuesHomeStrip'
 import { VendorFulfillmentHomeStrip } from '~/commerce/components/VendorFulfillmentHomeStrip'
 import { VendorSlaHomeStrip } from '~/commerce/components/VendorSlaHomeStrip'
@@ -189,12 +192,15 @@ export function HomeScreen({ data, error, loading = false }: HomeScreenProps) {
           <VendorIssuesHomeStrip inset />
           <VendorReviewsHomeStrip inset />
           <VendorInquiriesHomeStrip inset />
+          <VendorSetupHomeStrip inset />
           <VendorLowStockHomeStrip inset />
           <VendorDraftListingsHomeStrip inset />
           <VendorPausedListingsHomeStrip inset />
           <BuyerListingInquiryHomeStrip inset />
           <PostPurchaseHomeStrip inset />
           <BuyerOrderAttentionStrip inset />
+          <BuyerInTransitHomeStrip inset />
+          <BuyerPendingPaymentHomeStrip inset />
           <FollowedShopDigestEntryCard inset />
           <FollowedShopsRail inset />
           <NearYouLocationChip />
