@@ -1,4 +1,5 @@
 import { supabase } from '~/lib/supabase/client'
+import { INVALIDATION_TOPICS, invalidateCache } from '~/lib/cache/invalidation'
 
 import { parseMeetingInvitees } from '~/co-work/lib/invites'
 import type {
@@ -349,6 +350,8 @@ export async function createMeeting(hostId: string, input: CreateMeetingInput): 
     activated_at: input.startNow ? now : null,
     max_participants: input.maxParticipants ?? 100,
   })
+
+  invalidateCache(INVALIDATION_TOPICS.coWorkMeetings)
 
   return meeting
 }

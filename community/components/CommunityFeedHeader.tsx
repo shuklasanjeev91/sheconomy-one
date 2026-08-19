@@ -5,10 +5,12 @@ import { CommunityRecentlyViewedStrip } from '~/community/components/CommunityRe
 import { CreatorSpotlightStrip } from '~/community/components/CreatorSpotlightStrip'
 import { EventRevisitStrip } from '~/community/components/EventRevisitStrip'
 import { FollowedShopActivityStrip } from '~/community/components/FollowedShopActivityStrip'
+import { GroupsRevisitStrip } from '~/community/components/GroupsRevisitStrip'
 import { HashtagRevisitStrip } from '~/community/components/HashtagRevisitStrip'
 import { IntroductionInboxStrip } from '~/community/components/IntroductionInboxStrip'
 import { JobApplicationsRevisitStrip } from '~/community/components/JobApplicationsRevisitStrip'
 import { JobRevisitStrip } from '~/community/components/JobRevisitStrip'
+import { MeetingRevisitStrip } from '~/community/components/MeetingRevisitStrip'
 import { NetworkInvitationsStrip } from '~/community/components/NetworkInvitationsStrip'
 import { NetworkSuggestionsStrip } from '~/community/components/NetworkSuggestionsStrip'
 import { PickUpAgainStrip } from '~/community/components/PickUpAgainStrip'
@@ -46,6 +48,8 @@ export function CommunityFeedHeader({
         <IntroductionInboxStrip />
         <RecommendationInboxStrip />
         <ProfileViewersStrip />
+        <MeetingRevisitStrip />
+        <GroupsRevisitStrip />
         <PickUpAgainStrip />
         <EventRevisitStrip />
         <JobRevisitStrip />

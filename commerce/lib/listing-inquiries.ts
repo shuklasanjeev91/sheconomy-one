@@ -1,3 +1,4 @@
+import { INVALIDATION_TOPICS, invalidateCache } from '~/lib/cache/invalidation'
 import { supabase } from '~/lib/supabase/client'
 
 export type ListingInquiryInput = {
@@ -27,6 +28,10 @@ export async function submitListingInquiry(
     message,
     status: 'open',
   })
+
+  if (!error) {
+    invalidateCache(INVALIDATION_TOPICS.commerceInquiries)
+  }
 
   return { error: error?.message ?? null }
 }

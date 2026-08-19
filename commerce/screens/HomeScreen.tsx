@@ -9,6 +9,7 @@ import { FollowedShopsRail } from '~/commerce/components/FollowedShopsRail'
 import { HomeHeroSlider, buildHomeHeroSlides } from '~/commerce/components/HomeHeroSlider'
 import { InfiniteHorizontalSection } from '~/commerce/components/InfiniteHorizontalSection'
 import { InfiniteListingSection } from '~/commerce/components/InfiniteListingSection'
+import { BuyerListingInquiryHomeStrip } from '~/commerce/components/BuyerListingInquiryHomeStrip'
 import { BuyerOrderAttentionStrip } from '~/commerce/components/BuyerOrderAttentionStrip'
 import { PostPurchaseHomeStrip } from '~/commerce/components/PostPurchaseHomeStrip'
 import { SavedForLaterHomeStrip } from '~/commerce/components/SavedForLaterHomeStrip'
@@ -169,6 +170,7 @@ export function HomeScreen({ data, error, loading = false }: HomeScreenProps) {
           <RecentlyViewedRail inset />
           <WishlistPriceDropHomeStrip inset />
           <SavedForLaterHomeStrip inset />
+          <BuyerListingInquiryHomeStrip inset />
           <PostPurchaseHomeStrip inset />
           <BuyerOrderAttentionStrip inset />
           <FollowedShopDigestEntryCard inset />

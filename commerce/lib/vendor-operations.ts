@@ -1,3 +1,4 @@
+import { INVALIDATION_TOPICS, invalidateCache } from '~/lib/cache/invalidation'
 import { supabase } from '~/lib/supabase/client'
 export { rowsToCsv } from '~/commerce/lib/vendor-operation-utils'
 
@@ -191,6 +192,9 @@ export async function replyToVendorInquiry(inquiryId: string, reply: string, clo
     p_reply: reply,
     p_close: close,
   } as never)
+  if (!error) {
+    invalidateCache(INVALIDATION_TOPICS.commerceInquiries)
+  }
   return error?.message ?? null
 }
 

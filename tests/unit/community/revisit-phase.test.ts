@@ -7,8 +7,12 @@ import type { NetworkMember } from '~/community/lib/network'
 import { orderProfessionalSpotlightCards } from '~/community/lib/professional-spotlight'
 import { buildWishlistActivityCards } from '~/community/lib/wishlist-activity'
 import { buildJobApplicationRevisitCards } from '~/community/lib/job-applications-revisit'
+import { buildGroupsRevisitCards } from '~/community/lib/groups-revisit'
 import { mergeBuyerOrderAttentionItems } from '~/commerce/lib/buyer-order-attention'
+import { buildBuyerListingInquiryCards } from '~/commerce/lib/buyer-listing-inquiries-home'
 import { buildWishlistPriceDropCards } from '~/commerce/lib/wishlist-price-drops-home'
+import { buildMeetingRevisitCards } from '~/co-work/lib/meeting-revisit'
+import type { Meeting } from '~/co-work/lib/types'
 import { selectBuyerReturnHomeCards } from '~/commerce/lib/buyer-return-home'
 import { buildBuyerRtoHomeCards } from '~/commerce/lib/buyer-rto-home'
 import type { WishlistReactivationSection } from '~/commerce/lib/wishlist-reactivation'
@@ -443,5 +447,155 @@ describe('mergeBuyerOrderAttentionItems', () => {
 
     expect(items.map((item) => item.orderId)).toEqual(['order-1', 'order-2'])
     expect(items[0]?.kind).toBe('exchange')
+  })
+})
+
+describe('buildMeetingRevisitCards', () => {
+  it('labels invited meetings and sorts by schedule time', () => {
+    const meetings: Meeting[] = [
+      {
+        id: 'm2',
+        title: 'Later sync',
+        description: null,
+        meeting_code: 'BBBBBB',
+        host_id: 'host',
+        status: 'scheduled',
+        scheduled_at: '2026-08-20T12:00:00.000Z',
+        started_at: null,
+        ended_at: null,
+        time_zone: 'UTC',
+        max_participants: null,
+        room_id: null,
+        security_settings: null,
+        meeting_options: null,
+        created_at: '2026-08-19T12:00:00.000Z',
+        is_recurring: false,
+        repeat: null,
+        invitees: [],
+        host: { full_name: 'Host User', username: 'host', avatar_url: null },
+      },
+      {
+        id: 'm1',
+        title: 'Standup',
+        description: null,
+        meeting_code: 'AAAAAA',
+        host_id: 'host',
+        status: 'scheduled',
+        scheduled_at: '2026-08-19T12:00:00.000Z',
+        started_at: null,
+        ended_at: null,
+        time_zone: 'UTC',
+        max_participants: null,
+        room_id: null,
+        security_settings: null,
+        meeting_options: null,
+        created_at: '2026-08-19T10:00:00.000Z',
+        is_recurring: false,
+        repeat: null,
+        invitees: [],
+        host: null,
+      },
+    ]
+
+    const cards = buildMeetingRevisitCards(meetings, 'guest', 2)
+    expect(cards.map((card) => card.meetingId)).toEqual(['m1', 'm2'])
+    expect(cards.every((card) => card.badge === 'Invited')).toBe(true)
+  })
+})
+
+describe('buildGroupsRevisitCards', () => {
+  it('sorts joined groups by member count', () => {
+    const cards = buildGroupsRevisitCards(
+      [
+        {
+          id: 'small',
+          name: 'small',
+          title: 'Small group',
+          description: null,
+          rules: null,
+          avatar_url: null,
+          cover_url: null,
+          group_type: 'public',
+          location: null,
+          industries: null,
+          members_count: 12,
+          created_by: null,
+          created_at: null,
+          allow_invites: null,
+          require_post_review: null,
+        },
+        {
+          id: 'large',
+          name: 'large',
+          title: 'Large group',
+          description: null,
+          rules: null,
+          avatar_url: null,
+          cover_url: null,
+          group_type: 'private',
+          location: 'Mumbai',
+          industries: null,
+          members_count: 400,
+          created_by: null,
+          created_at: null,
+          allow_invites: null,
+          require_post_review: null,
+        },
+      ],
+      2,
+    )
+
+    expect(cards.map((card) => card.groupId)).toEqual(['large', 'small'])
+    expect(cards[0]?.memberCount).toBe(400)
+  })
+})
+
+describe('buildBuyerListingInquiryCards', () => {
+  it('keeps open and replied inquiries and drops closed rows', () => {
+    const cards = buildBuyerListingInquiryCards(
+      [
+        {
+          id: 'open',
+          message: 'Is this still available?',
+          status: 'open',
+          sellerReply: null,
+          repliedAt: null,
+          createdAt: '2026-08-19T10:00:00.000Z',
+          updatedAt: '2026-08-19T10:00:00.000Z',
+          listingId: 'listing-1',
+          listingTitle: 'Handbag',
+          listingSlug: 'handbag',
+        },
+        {
+          id: 'replied',
+          message: 'What size?',
+          status: 'replied',
+          sellerReply: 'Size M is in stock.',
+          repliedAt: '2026-08-19T11:00:00.000Z',
+          createdAt: '2026-08-19T09:00:00.000Z',
+          updatedAt: '2026-08-19T11:00:00.000Z',
+          listingId: 'listing-2',
+          listingTitle: 'Dress',
+          listingSlug: null,
+        },
+        {
+          id: 'closed',
+          message: 'Old question',
+          status: 'closed',
+          sellerReply: null,
+          repliedAt: null,
+          createdAt: '2026-08-01T10:00:00.000Z',
+          updatedAt: '2026-08-02T10:00:00.000Z',
+          listingId: 'listing-3',
+          listingTitle: 'Shoes',
+          listingSlug: null,
+        },
+      ],
+      5,
+    )
+
+    expect(cards.map((card) => card.inquiryId)).toEqual(['open', 'replied'])
+    expect(cards[1]?.badge).toBe('Seller replied')
+    expect(cards[1]?.preview).toBe('Size M is in stock.')
   })
 })
