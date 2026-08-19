@@ -36,6 +36,20 @@ export const REMINDER_FAMILIES: ReminderFamily[] = [
     examples: ['Notify me when available', 'Low stock alert (sellers)'],
   },
   {
+    id: 'followed-shop-updates',
+    title: 'Followed shop updates',
+    description: 'In-app digests and future alerts from shops you follow',
+    settingsSection: 'commerce',
+    examples: ['New arrivals from followed shops', 'Price drop from followed shop', 'Saved item overlap'],
+  },
+  {
+    id: 'reorder-care',
+    title: 'Reorder & care',
+    description: 'Post-purchase reminders to buy again, review, or revisit care guidance',
+    settingsSection: 'commerce',
+    examples: ['Buy again reminder', 'Review then reorder nudge', 'Care follow-up after delivery'],
+  },
+  {
     id: 'cowork',
     title: 'Co-Work meetings',
     description: 'Invites plus 30- and 5-minute reminders before start',

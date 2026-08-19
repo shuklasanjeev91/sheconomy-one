@@ -4,6 +4,7 @@ import { AppLink } from '~/components/navigation/AppLink'
 import { AvailableOffersCard } from '~/commerce/components/AvailableOffersCard'
 import { CategoryChip } from '~/commerce/components/CategoryChip'
 import { CommerceSection } from '~/commerce/components/CommerceSection'
+import { FollowedShopDigestEntryCard } from '~/commerce/components/FollowedShopDigestEntryCard'
 import { FollowedShopsRail } from '~/commerce/components/FollowedShopsRail'
 import { HomeHeroSlider, buildHomeHeroSlides } from '~/commerce/components/HomeHeroSlider'
 import { InfiniteHorizontalSection } from '~/commerce/components/InfiniteHorizontalSection'
@@ -162,6 +163,7 @@ export function HomeScreen({ data, error, loading = false }: HomeScreenProps) {
             inset
           />
           <RecentlyViewedRail inset />
+          <FollowedShopDigestEntryCard inset />
           <FollowedShopsRail inset />
           <NearYouLocationChip />
           <NearbyShopsSection />
