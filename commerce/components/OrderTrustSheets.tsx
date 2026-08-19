@@ -12,6 +12,7 @@ import {
   AppBottomSheet,
   Button,
   Icons,
+  Image,
   Input,
   Text,
   TextArea,
@@ -182,21 +183,42 @@ export function ReturnOrderItemSheet({
           minHeight={120}
         />
 
-        <XStack gap="$2" flexWrap="wrap" alignItems="center">
-          <Button
-            tone="outline"
-            size="$3"
-            borderRadius={999}
-            disabled={uploading || evidenceUrls.length >= 4}
-            icon={<Icons.Camera size={14} />}
-            onPress={() => void handlePickEvidence()}
-          >
-            {uploading ? 'Uploading…' : 'Add photos'}
-          </Button>
+        <YStack gap="$2">
           <Text fontSize={12} color={ui.textMuted}>
-            {evidenceUrls.length}/4 photos
+            Add photos of damage, fit, packaging, or the delivered item if it helps explain the issue.
           </Text>
-        </XStack>
+          <XStack gap="$2" flexWrap="wrap" alignItems="center">
+            <Button
+              tone="outline"
+              size="$3"
+              borderRadius={999}
+              disabled={uploading || evidenceUrls.length >= 4}
+              icon={<Icons.Camera size={14} />}
+              onPress={() => void handlePickEvidence()}
+            >
+              {uploading ? 'Uploading…' : 'Add photos'}
+            </Button>
+            <Text fontSize={12} color={ui.textMuted}>
+              {evidenceUrls.length}/4 photos
+            </Text>
+          </XStack>
+          {evidenceUrls.length > 0 ? (
+            <XStack gap="$2" flexWrap="wrap">
+              {evidenceUrls.map((url, index) => (
+                <YStack
+                  key={`return-evidence-${index}`}
+                  width={56}
+                  height={56}
+                  borderRadius={10}
+                  overflow="hidden"
+                  backgroundColor={ui.imagePlaceholder}
+                >
+                  <Image src={url} width={56} height={56} objectFit="cover" />
+                </YStack>
+              ))}
+            </XStack>
+          ) : null}
+        </YStack>
       </YStack>
     </AppBottomSheet>
   )
@@ -349,21 +371,42 @@ export function ExchangeOrderItemSheet({
           minHeight={120}
         />
 
-        <XStack gap="$2" flexWrap="wrap" alignItems="center">
-          <Button
-            tone="outline"
-            size="$3"
-            borderRadius={999}
-            disabled={uploading || evidenceUrls.length >= 4}
-            icon={<Icons.Camera size={14} />}
-            onPress={() => void handlePickEvidence()}
-          >
-            {uploading ? 'Uploading…' : 'Add photos'}
-          </Button>
+        <YStack gap="$2">
           <Text fontSize={12} color={ui.textMuted}>
-            {evidenceUrls.length}/4 photos
+            Add photos of the issue, size mismatch, or packaging so the shop can approve the exchange faster.
           </Text>
-        </XStack>
+          <XStack gap="$2" flexWrap="wrap" alignItems="center">
+            <Button
+              tone="outline"
+              size="$3"
+              borderRadius={999}
+              disabled={uploading || evidenceUrls.length >= 4}
+              icon={<Icons.Camera size={14} />}
+              onPress={() => void handlePickEvidence()}
+            >
+              {uploading ? 'Uploading…' : 'Add photos'}
+            </Button>
+            <Text fontSize={12} color={ui.textMuted}>
+              {evidenceUrls.length}/4 photos
+            </Text>
+          </XStack>
+          {evidenceUrls.length > 0 ? (
+            <XStack gap="$2" flexWrap="wrap">
+              {evidenceUrls.map((url, index) => (
+                <YStack
+                  key={`exchange-evidence-${index}`}
+                  width={56}
+                  height={56}
+                  borderRadius={10}
+                  overflow="hidden"
+                  backgroundColor={ui.imagePlaceholder}
+                >
+                  <Image src={url} width={56} height={56} objectFit="cover" />
+                </YStack>
+              ))}
+            </XStack>
+          ) : null}
+        </YStack>
       </YStack>
     </AppBottomSheet>
   )

@@ -1,9 +1,9 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { AppLink } from '~/components/navigation/AppLink'
 
+import { BuyerReturnHub } from '~/commerce/components/BuyerReturnHub'
 import { CommercePageHeader, CommercePanel } from '~/commerce/components'
 import { CancelOrderSheet, OrderSupportSheet } from '~/commerce/components/OrderActionSheets'
-import { OrderIssueCommentsThread } from '~/commerce/components/OrderIssueCommentsThread'
 import { OrderPackageCard } from '~/commerce/components/OrderPackageCard'
 import { OrderTimeline } from '~/commerce/components/OrderTimeline'
 import {
@@ -26,11 +26,9 @@ import {
 import {
   buildCustomerOrderTimeline,
   formatEstimatedDelivery,
-  getReturnExchangeTimeline,
+  getBuyerReturnHubEntries,
   isExchangeIssueType,
   isReturnIssueType,
-  issueStatusLabel,
-  issueTypeLabel,
   refundStatusLabel,
   rejectReasonLabel,
 } from '~/commerce/lib/customer-order-lifecycle'
@@ -51,10 +49,7 @@ import { shareCustomerOrderInvoice } from '~/lib/orders/order-invoice'
 import { formatOrderAmount, formatOrderDate } from '~/lib/orders/order.utils'
 import type { OrderAddressSummary } from '~/lib/orders/vendor-orders.type'
 import { resumeOrderOnlinePayment } from '~/commerce/lib/resume-order-payment'
-import { openExternalUrl, safeHttpUrl } from '~/lib/platform/openUrl'
-import { COURIER_OPTIONS } from '~/lib/orders/tracking.validation'
-import { getPublicTrackingUrl } from '~/lib/orders/courier-tracking-urls'
-import { RETURN_SHIPPING_MODE } from '~/lib/orders/order.constants'
+import { openExternalUrl } from '~/lib/platform/openUrl'
 import { commerceRoutes } from '~/lib/routes'
 import {
   formatCustomerContactPhone,
@@ -158,6 +153,16 @@ export function OrderDetailScreen({ orderId }: OrderDetailScreenProps) {
   const reviewableItems = useMemo(() => {
     if (!order) return []
     return order.items.filter((item) => getItemTrustEligibility(order, item).canReview)
+  }, [order])
+
+  const returnHubEntries = useMemo(() => {
+    if (!order) return []
+    return getBuyerReturnHubEntries({
+      items: order.items,
+      issues: order.issues,
+      refunds: order.refunds,
+      currency: order.currency,
+    })
   }, [order])
 
   const orderEta = order ? formatEstimatedDelivery(order.estimated_delivery_date) : null
@@ -478,28 +483,6 @@ export function OrderDetailScreen({ orderId }: OrderDetailScreenProps) {
                       issue.order_item_id === item.id &&
                       (isReturnIssueType(issue.issue_type) || isExchangeIssueType(issue.issue_type)),
                   ) ?? null
-                const returnTimeline = itemIssue
-                  ? getReturnExchangeTimeline({ issue: itemIssue, refund: itemRefund })
-                  : []
-                const returnTrackingNumber =
-                  (itemIssue as { return_tracking_number?: string | null } | null)
-                    ?.return_tracking_number ?? null
-                const returnCourierSlug =
-                  (itemIssue as { return_courier_slug?: string | null } | null)?.return_courier_slug ??
-                  null
-                const returnShippingMode =
-                  (itemIssue as { return_shipping_mode?: string | null } | null)
-                    ?.return_shipping_mode ?? null
-                const returnTrackingUrl =
-                  (itemIssue as { return_tracking_url?: string | null } | null)?.return_tracking_url ||
-                  (returnCourierSlug && returnTrackingNumber
-                    ? getPublicTrackingUrl(returnCourierSlug, returnTrackingNumber)
-                    : null)
-                const trackUrl = safeHttpUrl(returnTrackingUrl)
-                const courierName = returnCourierSlug
-                  ? COURIER_OPTIONS.find((option) => option.value === returnCourierSlug)?.label ??
-                    returnCourierSlug
-                  : null
                 const rejectLabel = rejectReasonLabel(
                   (itemIssue as { reject_reason_code?: string | null } | null)?.reject_reason_code,
                 )
@@ -581,78 +564,6 @@ export function OrderDetailScreen({ orderId }: OrderDetailScreenProps) {
                         {formatOrderAmount(item.total_price, order.currency)}
                       </Text>
                     </XStack>
-
-                    {returnTimeline.length > 0 ? (
-                      <YStack gap="$1.5" paddingLeft="$1">
-                        <Text fontSize={11} fontWeight="800" color={ui.textMuted} letterSpacing={0.3}>
-                          {isExchangeIssueType(itemIssue?.issue_type) ? 'EXCHANGE' : 'RETURN'} STATUS
-                        </Text>
-                        {returnTimeline.map((step) => (
-                          <XStack key={step.id} gap="$2" alignItems="flex-start">
-                            <YStack
-                              width={8}
-                              height={8}
-                              borderRadius={999}
-                              marginTop={5}
-                              backgroundColor={
-                                step.done ? ui.brand : step.active ? ui.roseTint : ui.borderSubtle
-                              }
-                            />
-                            <YStack flex={1} minWidth={0} gap={1}>
-                              <Text
-                                fontSize={12}
-                                fontWeight={step.active || step.done ? '700' : '500'}
-                                color={step.done || step.active ? ui.text : ui.textMuted}
-                              >
-                                {step.label}
-                              </Text>
-                              {step.detail ? (
-                                <Text fontSize={11} color={ui.textMuted}>
-                                  {step.detail}
-                                </Text>
-                              ) : null}
-                            </YStack>
-                          </XStack>
-                        ))}
-                      </YStack>
-                    ) : null}
-
-                    {returnTrackingNumber ? (
-                      <YStack
-                        gap="$1.5"
-                        padding="$3"
-                        borderRadius={12}
-                        backgroundColor={ui.surfaceMuted}
-                        borderWidth={1}
-                        borderColor={ui.borderSubtle}
-                      >
-                        <Text fontSize={12} fontWeight="700" color={ui.text}>
-                          {returnShippingMode === RETURN_SHIPPING_MODE.AUTO ||
-                          returnShippingMode === RETURN_SHIPPING_MODE.VENDOR_ARRANGED
-                            ? 'Shop arranged return pickup'
-                            : 'Return tracking'}
-                        </Text>
-                        {courierName ? (
-                          <Text fontSize={12} color={ui.textSecondary}>
-                            {courierName}
-                          </Text>
-                        ) : null}
-                        <Text fontSize={12} color={ui.textSecondary}>
-                          AWB {returnTrackingNumber}
-                        </Text>
-                        {trackUrl ? (
-                          <Button
-                            tone="outline"
-                            size="$3"
-                            borderRadius={999}
-                            icon={<Icons.ExternalLink size={14} />}
-                            onPress={() => void openExternalUrl(trackUrl)}
-                          >
-                            Track return
-                          </Button>
-                        ) : null}
-                      </YStack>
-                    ) : null}
 
                     <XStack gap="$2" flexWrap="wrap">
                       {trust.canDownload ? (
@@ -773,40 +684,13 @@ export function OrderDetailScreen({ orderId }: OrderDetailScreenProps) {
             )}
           </CommercePanel>
 
-          {order.issues.length > 0 ? (
-            <CommercePanel gap="$3">
-              <Text fontSize={14} fontWeight="800" color={ui.text}>
-                Your requests
-              </Text>
-              {order.issues.map((issue) => (
-                <YStack
-                  key={issue.id}
-                  gap="$2.5"
-                  padding="$3"
-                  borderRadius={12}
-                  borderWidth={1}
-                  borderColor={ui.borderSubtle}
-                  backgroundColor={ui.surface}
-                >
-                  <Text fontSize={13} fontWeight="700" color={ui.text}>
-                    {issueTypeLabel(issue.issue_type)}
-                  </Text>
-                  <Text fontSize={12} color={ui.textSecondary}>
-                    {issueStatusLabel(issue.status)} · {formatOrderDate(issue.created_at, true)}
-                  </Text>
-                  <Text fontSize={12} color={ui.textMuted}>
-                    {issue.description}
-                  </Text>
-                  <OrderIssueCommentsThread
-                    ui={ui}
-                    issueId={issue.id}
-                    resolutionNote={issue.resolution_note}
-                    compact
-                  />
-                </YStack>
-              ))}
-            </CommercePanel>
-          ) : null}
+          <BuyerReturnHub
+            entries={returnHubEntries}
+            items={order.items}
+            issues={order.issues}
+            onCancelRequest={setCancelReturnItem}
+            onOpenSupport={() => setSupportOpen(true)}
+          />
 
           <CommercePanel gap="$3">
             <Text fontSize={14} fontWeight="800" color={ui.text}>

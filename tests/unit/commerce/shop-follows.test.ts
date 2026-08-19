@@ -10,6 +10,8 @@ vi.mock('~/lib/supabase/client', () => ({
 
 import {
   fetchShopFollowState,
+  fetchFollowedShopIds,
+  fetchFollowedShops,
   followShop,
   unfollowShop,
 } from '~/commerce/lib/shop-follows'
@@ -80,6 +82,75 @@ describe('shop-follows', () => {
 
     const result = await followShop('user-1', 'shop-1')
     expect(result.error).toBe('rls denied')
+  })
+
+  it('fetchFollowedShopIds returns active followed shop ids', async () => {
+    const eqStatus = vi.fn().mockResolvedValue({
+      data: [{ shop_id: 'shop-1' }, { shop_id: 'shop-2' }],
+      error: null,
+    })
+    const eqUser = vi.fn(() => ({ eq: eqStatus }))
+    const select = vi.fn(() => ({ eq: eqUser }))
+    fromMock.mockReturnValue({ select })
+
+    const result = await fetchFollowedShopIds('user-1')
+    expect(result).toEqual({ ids: ['shop-1', 'shop-2'], error: null })
+    expect(eqUser).toHaveBeenCalledWith('user_id', 'user-1')
+    expect(eqStatus).toHaveBeenCalledWith('status', 'active')
+  })
+
+  it('fetchFollowedShops hydrates followed shop summaries in follow order', async () => {
+    const shopsIn = vi.fn().mockResolvedValue({
+      data: [
+        {
+          id: 'shop-1',
+          shop_name: 'Shop One',
+          slug: 'shop-one',
+          logo_url: null,
+          shop_description: 'First shop',
+          average_rating: 4.8,
+          total_reviews: 24,
+          verified: true,
+          shop_currency: 'INR',
+        },
+        {
+          id: 'shop-2',
+          shop_name: 'Shop Two',
+          slug: 'shop-two',
+          logo_url: null,
+          shop_description: 'Second shop',
+          average_rating: 4.4,
+          total_reviews: 12,
+          verified: false,
+          shop_currency: 'INR',
+        },
+      ],
+      error: null,
+    })
+    const shopsSelect = vi.fn(() => ({ in: shopsIn }))
+    const followsLimit = vi.fn().mockResolvedValue({
+      data: [
+        { shop_id: 'shop-2', updated_at: '2026-08-19T08:00:00.000Z' },
+        { shop_id: 'shop-1', updated_at: '2026-08-19T07:00:00.000Z' },
+      ],
+      error: null,
+    })
+    const followsOrder = vi.fn(() => ({ limit: followsLimit }))
+    const followsStatus = vi.fn(() => ({ order: followsOrder }))
+    const followsUser = vi.fn(() => ({ eq: followsStatus }))
+    const followsSelect = vi.fn(() => ({ eq: followsUser }))
+
+    fromMock.mockImplementation((table: string) => {
+      if (table === 'shop_follows') return { select: followsSelect }
+      if (table === 'shops') return { select: shopsSelect }
+      return {}
+    })
+
+    const result = await fetchFollowedShops('user-1', 5)
+    expect(result.error).toBeNull()
+    expect(result.items.map((item) => item.id)).toEqual(['shop-2', 'shop-1'])
+    expect(result.items[0]?.followed_at).toBe('2026-08-19T08:00:00.000Z')
+    expect(shopsIn).toHaveBeenCalledWith('id', ['shop-2', 'shop-1'])
   })
 
   it('unfollowShop deletes the follow row', async () => {

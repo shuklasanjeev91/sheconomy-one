@@ -1,6 +1,7 @@
 import { Platform, View } from 'react-native'
 
 import { CommunityProductSuggestionRow } from '~/community/components/CommunityProductSuggestionRow'
+import { CommunityShopSuggestionRow } from '~/community/components/CommunityShopSuggestionRow'
 import { CommunitySuggestionRow } from '~/community/components/CommunitySuggestionRow'
 import { AppLink } from '~/components/navigation/AppLink'
 import { CommunityWidget } from '~/community/components/CommunityWidget'
@@ -30,6 +31,7 @@ export function CommunitySuggestionSectionCard({
   if (!items.length) return null
 
   const isProductSection = section.kind === 'listing'
+  const isShopSection = section.kind === 'shop'
   const rowMinHeight = isProductSection ? PRODUCT_CARD_MIN_HEIGHT : ROW_MIN_HEIGHT
   const minHeight = SECTION_CHROME_HEIGHT + items.length * rowMinHeight
 
@@ -53,6 +55,8 @@ export function CommunitySuggestionSectionCard({
               item={item}
               compact={compactProducts}
             />
+          ) : isShopSection ? (
+            <CommunityShopSuggestionRow key={`${item.kind}-${item.id}`} item={item} />
           ) : (
             <CommunitySuggestionRow
               key={`${item.kind}-${item.id}`}
