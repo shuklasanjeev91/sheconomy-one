@@ -140,6 +140,7 @@ export async function registerForEvent(
     status: 'registered',
     registration_date: new Date().toISOString(),
   })
+  if (!error) invalidateCache(INVALIDATION_TOPICS.communityEvents)
   return { error: error?.message ?? null }
 }
 
@@ -152,6 +153,7 @@ export async function cancelEventRegistration(
     .update({ status: 'cancelled' })
     .eq('event_id', eventId)
     .eq('user_id', userId)
+  if (!error) invalidateCache(INVALIDATION_TOPICS.communityEvents)
   return { error: error?.message ?? null }
 }
 
@@ -182,6 +184,8 @@ export async function rsvpToPostEvent(
 
   if (communityEventId) {
     await registerForEvent(communityEventId, userId)
+  } else {
+    invalidateCache(INVALIDATION_TOPICS.communityEvents)
   }
   return { error: null }
 }
@@ -200,6 +204,8 @@ export async function cancelPostEventRsvp(
 
   if (communityEventId) {
     await cancelEventRegistration(communityEventId, userId)
+  } else {
+    invalidateCache(INVALIDATION_TOPICS.communityEvents)
   }
   return { error: null }
 }
