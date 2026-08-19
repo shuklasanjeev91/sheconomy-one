@@ -34,9 +34,20 @@ import { useAppDispatch, useAppSelector } from '~/lib/store/hooks'
 import type { AppUiTokens } from '~/lib/theme/app-ui'
 import { useAppUi } from '~/lib/theme/useAppUi'
 import {
+  assignReturnTracking,
   confirmOrderReturnReceived,
   resolveOrderIssueRequest,
 } from '~/commerce/lib/customer-order-trust'
+import { createTracking } from '~/lib/orders/delivery.store'
+import { getVendorOrderItem } from '~/lib/orders/vendor-orders.service'
+import type { VendorOrderItem } from '~/lib/orders/vendor-orders.type'
+import { resolveVendorShippingAddress } from '~/lib/orders/vendor-orders.utils'
+import type { Json } from '~/lib/supabase'
+import { supabase } from '~/lib/supabase'
+import {
+  isExchangeIssueType,
+  isReturnIssueType,
+} from '~/lib/orders/order-issue.utils'
 
 import { IssuePriorityBadge, IssueStatusBadge } from '~/commerce/components/vendor/IssueStatusBadge'
 import { toneStyle } from '~/commerce/components/vendor/StatusPill'
@@ -44,8 +55,13 @@ import { VendorActionButton } from '~/commerce/components/vendor/VendorActionBut
 import {
   getVendorIssueActions,
   issueNeedsVendorAction,
+  vendorIssueBadge,
   type VendorIssueAction,
 } from '~/commerce/components/vendor/vendor-issue-actions'
+import {
+  VendorAddTrackingDrawer,
+  type TrackingFormValues,
+} from '~/commerce/screens/vendor/VendorAddTrackingDrawer'
 import { VendorOrderIssueDetailDrawer } from '~/commerce/screens/vendor/VendorOrderIssueDetailDrawer'
 
 const PAGE_SIZE = 10
@@ -114,9 +130,25 @@ function formatAge(hours: number): string {
 }
 
 function inlineActions(issue: EnrichedOrderIssue): VendorIssueAction[] {
-  return getVendorIssueActions(issue).filter(
-    (action) => action.kind !== 'status' || !action.requiresNote,
-  )
+  return getVendorIssueActions(issue).filter((action) => {
+    if (action.kind === 'status' && action.requiresNote) return false
+    // Structured reject reason + return drawers live in the detail panel.
+    if (action.kind === 'decision' && action.decision === 'reject') return false
+    if (action.kind === 'assign-return-tracking' || action.kind === 'ship-replacement') return false
+    return true
+  })
+}
+
+async function findReplacementItemId(originalItemId: string): Promise<string | null> {
+  const { data, error } = await supabase
+    .from('order_items')
+    .select('id')
+    .eq('exchanged_from_item_id', originalItemId)
+    .order('created_at', { ascending: false })
+    .limit(1)
+    .maybeSingle()
+  if (error || !data?.id) return null
+  return data.id
 }
 
 type VendorOrderIssuesPanelProps = {
@@ -149,7 +181,11 @@ export function VendorOrderIssuesPanel({
   const [page, setPage] = useState(1)
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [note, setNote] = useState('')
+  const [rejectReasonCode, setRejectReasonCode] = useState<string | null>(null)
   const [submitting, setSubmitting] = useState(false)
+  const [trackingItem, setTrackingItem] = useState<VendorOrderItem | null>(null)
+  const [trackingMode, setTrackingMode] = useState<'outbound' | 'return'>('return')
+  const [trackingSubmitting, setTrackingSubmitting] = useState(false)
 
   const loadPage = useCallback(() => {
     if (!shopId) return
@@ -197,24 +233,88 @@ export function VendorOrderIssuesPanel({
   const openDetail = (issue: EnrichedOrderIssue) => {
     setSelectedId(issue.id)
     setNote('')
+    setRejectReasonCode(null)
   }
 
   const closeDetail = () => {
     setSelectedId(null)
     setNote('')
+    setRejectReasonCode(null)
+  }
+
+  const openTrackingForItem = async (
+    orderItemId: string,
+    mode: 'outbound' | 'return',
+  ) => {
+    const result = await getVendorOrderItem(orderItemId)
+    if (result.error || !result.data) {
+      toast.show('Could not open tracking', {
+        tone: 'danger',
+        message: result.error ?? 'Item not found.',
+      })
+      return
+    }
+    setTrackingMode(mode)
+    setTrackingItem(result.data)
   }
 
   const runAction = async (issue: EnrichedOrderIssue, action: VendorIssueAction) => {
+    if (action.kind === 'assign-return-tracking') {
+      if (!issue.order_item_id) {
+        toast.show('Could not arrange pickup', {
+          tone: 'danger',
+          message: 'This request is not linked to an item.',
+        })
+        return
+      }
+      await openTrackingForItem(issue.order_item_id, 'return')
+      return
+    }
+
+    if (action.kind === 'ship-replacement') {
+      if (!issue.order_item_id) {
+        toast.show('Could not ship replacement', {
+          tone: 'danger',
+          message: 'This request is not linked to an item.',
+        })
+        return
+      }
+      const replacementId = await findReplacementItemId(issue.order_item_id)
+      if (!replacementId) {
+        toast.show('Replacement item not found', {
+          tone: 'danger',
+          message: 'Confirm the return was received so a replacement line is created.',
+        })
+        return
+      }
+      await openTrackingForItem(replacementId, 'outbound')
+      return
+    }
+
     setSubmitting(true)
     try {
       if (action.kind === 'decision') {
+        const needsRejectReason =
+          action.decision === 'reject' &&
+          (isReturnIssueType(issue.issue_type) || isExchangeIssueType(issue.issue_type))
+        if (needsRejectReason && !rejectReasonCode) {
+          throw new Error('Pick a decline reason before rejecting this request.')
+        }
         const result = await resolveOrderIssueRequest({
           issueId: issue.id,
           decision: action.decision,
           resolutionNote: note,
+          rejectReasonCode: action.decision === 'reject' ? rejectReasonCode : null,
         })
         if (result.error) throw new Error(result.error)
-        toast.show(action.decision === 'accept' ? 'Request approved' : 'Request declined', { tone: 'success' })
+        toast.show(action.decision === 'accept' ? 'Request approved' : 'Request declined', {
+          tone: 'success',
+          message:
+            action.decision === 'accept' &&
+            (isReturnIssueType(issue.issue_type) || isExchangeIssueType(issue.issue_type))
+              ? 'Next: arrange return pickup with your courier (or wait for the buyer AWB).'
+              : undefined,
+        })
       } else if (action.kind === 'return-received') {
         if (!issue.order_item_id) throw new Error('This request is not linked to an item.')
         const result = await confirmOrderReturnReceived({ orderItemId: issue.order_item_id, note })
@@ -245,6 +345,7 @@ export function VendorOrderIssuesPanel({
         })
       }
       setNote('')
+      setRejectReasonCode(null)
       loadPage()
     } catch (err) {
       toast.show('Could not update request', {
@@ -253,6 +354,57 @@ export function VendorOrderIssuesPanel({
       })
     } finally {
       setSubmitting(false)
+    }
+  }
+
+  const handleTrackingSubmit = async (values: TrackingFormValues) => {
+    if (!trackingItem) return
+    setTrackingSubmitting(true)
+    try {
+      if (trackingMode === 'return') {
+        const result = await assignReturnTracking({
+          orderItemId: trackingItem.id,
+          trackingNumber: values.tracking_number,
+          courierSlug: values.courier_slug,
+          customTrackingUrl: values.custom_tracking_url,
+        })
+        if (result.error) throw new Error(result.error)
+        toast.show('Return pickup assigned', {
+          tone: 'success',
+          message: 'The customer can track the return with this AWB.',
+        })
+      } else {
+        const address = resolveVendorShippingAddress(trackingItem) ?? {}
+        await dispatch(
+          createTracking({
+            input: {
+              order_id: trackingItem.order_id,
+              order_item_id: trackingItem.id,
+              tracking_number: values.tracking_number,
+              courier_slug: values.courier_slug,
+              custom_tracking_url: values.custom_tracking_url,
+              delivery_address: address as unknown as Json,
+              notify_customer: values.notify_customer,
+            },
+          }),
+        ).unwrap()
+        toast.show('Replacement shipped', {
+          tone: 'success',
+          message: 'Tracking saved for the exchange replacement.',
+        })
+      }
+      setTrackingItem(null)
+      loadPage()
+    } catch (err) {
+      toast.show(
+        trackingMode === 'return' ? 'Could not assign return pickup' : 'Could not add tracking',
+        {
+          tone: 'danger',
+          message: err instanceof Error ? err.message : typeof err === 'string' ? err : 'Please try again.',
+        },
+      )
+    } finally {
+      setTrackingSubmitting(false)
     }
   }
 
@@ -498,8 +650,21 @@ export function VendorOrderIssuesPanel({
         submitting={submitting || loading.updating}
         note={note}
         onNoteChange={setNote}
+        rejectReasonCode={rejectReasonCode}
+        onRejectReasonChange={setRejectReasonCode}
         onClose={closeDetail}
         onAction={runAction}
+      />
+
+      <VendorAddTrackingDrawer
+        ui={ui}
+        open={trackingItem !== null}
+        isDesktop={isDesktop}
+        item={trackingItem}
+        submitting={trackingSubmitting}
+        mode={trackingMode}
+        onClose={() => setTrackingItem(null)}
+        onSubmit={(values) => void handleTrackingSubmit(values)}
       />
     </>
   )
@@ -607,9 +772,24 @@ function IssueRow({ ui, issue, submitting, isLast, onOpen, onAction }: RowProps)
     >
       {/* Request details */}
       <YStack flex={2.8} minWidth={0} gap={2} cursor="pointer" onPress={() => onOpen(issue)}>
-        <Text fontSize={12.5} fontWeight="800" color={ui.brand} numberOfLines={1}>
-          #{issue.orders?.order_number ?? '—'}
-        </Text>
+        <XStack alignItems="center" gap="$2" flexWrap="wrap">
+          <Text fontSize={12.5} fontWeight="800" color={ui.brand} numberOfLines={1}>
+            #{issue.orders?.order_number ?? '—'}
+          </Text>
+          {vendorIssueBadge(issue) ? (
+            <Text
+              fontSize={10.5}
+              fontWeight="800"
+              color={toneStyle('yellow').fg}
+              backgroundColor={toneStyle('yellow').bg}
+              paddingHorizontal="$2"
+              paddingVertical={2}
+              borderRadius={999}
+            >
+              {vendorIssueBadge(issue)}
+            </Text>
+          ) : null}
+        </XStack>
         <Text fontSize={13} fontWeight="700" color={ui.text} numberOfLines={1}>
           {issueTypeLabel(issue.issue_type)}
         </Text>
@@ -701,9 +881,24 @@ function IssueCard({ ui, issue, submitting, onOpen, onAction }: CardProps) {
     >
       <XStack alignItems="flex-start" justifyContent="space-between" gap="$2">
         <YStack flex={1} minWidth={0} gap={2} cursor="pointer" onPress={() => onOpen(issue)}>
-          <Text fontSize={12} fontWeight="800" color={ui.brand}>
-            #{issue.orders?.order_number ?? '—'}
-          </Text>
+          <XStack alignItems="center" gap="$2" flexWrap="wrap">
+            <Text fontSize={12} fontWeight="800" color={ui.brand}>
+              #{issue.orders?.order_number ?? '—'}
+            </Text>
+            {vendorIssueBadge(issue) ? (
+              <Text
+                fontSize={10.5}
+                fontWeight="800"
+                color={toneStyle('yellow').fg}
+                backgroundColor={toneStyle('yellow').bg}
+                paddingHorizontal="$2"
+                paddingVertical={2}
+                borderRadius={999}
+              >
+                {vendorIssueBadge(issue)}
+              </Text>
+            ) : null}
+          </XStack>
           <Text fontSize={14} fontWeight="700" color={ui.text} numberOfLines={2}>
             {issueTypeLabel(issue.issue_type)}
           </Text>

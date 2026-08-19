@@ -340,6 +340,36 @@ export const ORDER_ISSUE_TYPE = {
 
 export type OrderIssueType = (typeof ORDER_ISSUE_TYPE)[keyof typeof ORDER_ISSUE_TYPE]
 
+/** Structured vendor reject reasons for return / exchange / refund requests. */
+export const RETURN_REJECT_REASON = {
+  OUT_OF_WINDOW: 'out_of_window',
+  NOT_ELIGIBLE: 'not_eligible',
+  USED_DAMAGED: 'used_damaged',
+  WRONG_ITEM_CLAIMED: 'wrong_item_claimed',
+  POLICY: 'policy',
+  OTHER: 'other',
+} as const
+
+export type ReturnRejectReason =
+  (typeof RETURN_REJECT_REASON)[keyof typeof RETURN_REJECT_REASON]
+
+export const RETURN_REJECT_REASON_LABELS: Record<ReturnRejectReason, string> = {
+  [RETURN_REJECT_REASON.OUT_OF_WINDOW]: 'Outside return window',
+  [RETURN_REJECT_REASON.NOT_ELIGIBLE]: 'Item not eligible',
+  [RETURN_REJECT_REASON.USED_DAMAGED]: 'Item used or damaged',
+  [RETURN_REJECT_REASON.WRONG_ITEM_CLAIMED]: 'Claim does not match item',
+  [RETURN_REJECT_REASON.POLICY]: 'Against shop policy',
+  [RETURN_REJECT_REASON.OTHER]: 'Other',
+}
+
+export const RETURN_SHIPPING_MODE = {
+  BUYER_SELF: 'buyer_self',
+  VENDOR_ARRANGED: 'vendor_arranged',
+} as const
+
+export type ReturnShippingMode =
+  (typeof RETURN_SHIPPING_MODE)[keyof typeof RETURN_SHIPPING_MODE]
+
 /** Issue statuses considered "still needing attention". */
 export const OPEN_ISSUE_STATUSES: IssueStatus[] = [
   ISSUE_STATUS.OPEN,

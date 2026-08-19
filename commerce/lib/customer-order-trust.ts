@@ -121,21 +121,93 @@ export async function submitReturnTracking(input: {
   }
 }
 
+export type AssignReturnTrackingResult = {
+  issueId: string
+  trackingNumber: string
+  courierSlug: string | null
+  trackingUrl: string | null
+  refundId: string | null
+  returnShippingMode: string
+}
+
+export async function assignReturnTracking(input: {
+  orderItemId: string
+  trackingNumber: string
+  courierSlug?: string | null
+  customTrackingUrl?: string | null
+}): Promise<TrustRpcResult<AssignReturnTrackingResult>> {
+  const { data, error } = await supabase.rpc('assign_return_tracking' as never, {
+    p_order_item_id: input.orderItemId,
+    p_tracking_number: input.trackingNumber.trim(),
+    p_courier_slug: input.courierSlug?.trim() || null,
+    p_custom_tracking_url: input.customTrackingUrl?.trim() || null,
+  } as never)
+
+  if (error) return { data: null, error: rpcErrorMessage(error, 'Could not assign return tracking') }
+  const record = asRecord(data)
+  if (!record?.issue_id || !record?.tracking_number) {
+    return { data: null, error: 'Could not assign return tracking' }
+  }
+  return {
+    data: {
+      issueId: String(record.issue_id),
+      trackingNumber: String(record.tracking_number),
+      courierSlug: record.courier_slug ? String(record.courier_slug) : null,
+      trackingUrl: record.tracking_url ? String(record.tracking_url) : null,
+      refundId: record.refund_id ? String(record.refund_id) : null,
+      returnShippingMode: String(record.return_shipping_mode ?? 'vendor_arranged'),
+    },
+    error: null,
+  }
+}
+
+export type CancelReturnRequestResult = {
+  issueId: string
+  status: string
+  resolutionAction: string | null
+}
+
+export async function cancelOrderReturnRequest(input: {
+  orderItemId: string
+  note?: string | null
+}): Promise<TrustRpcResult<CancelReturnRequestResult>> {
+  const { data, error } = await supabase.rpc('cancel_order_return_request' as never, {
+    p_order_item_id: input.orderItemId,
+    p_note: input.note?.trim() || null,
+  } as never)
+
+  if (error) return { data: null, error: rpcErrorMessage(error, 'Could not cancel request') }
+  const record = asRecord(data)
+  if (!record?.issue_id) return { data: null, error: 'Could not cancel request' }
+  return {
+    data: {
+      issueId: String(record.issue_id),
+      status: String(record.status ?? 'closed'),
+      resolutionAction:
+        typeof record.resolution_action === 'string' ? record.resolution_action : null,
+    },
+    error: null,
+  }
+}
+
 export type ResolveIssueResult = {
   issueId: string
   status: string
   resolutionAction: string | null
+  rejectReasonCode: string | null
 }
 
 export async function resolveOrderIssueRequest(input: {
   issueId: string
   decision: 'accept' | 'reject'
   resolutionNote?: string | null
+  rejectReasonCode?: string | null
 }): Promise<TrustRpcResult<ResolveIssueResult>> {
   const { data, error } = await supabase.rpc('resolve_order_issue_request' as never, {
     p_issue_id: input.issueId,
     p_decision: input.decision,
     p_resolution_note: input.resolutionNote?.trim() || null,
+    p_reject_reason_code: input.rejectReasonCode?.trim() || null,
   } as never)
 
   if (error) return { data: null, error: rpcErrorMessage(error, 'Could not update request') }
@@ -147,6 +219,8 @@ export async function resolveOrderIssueRequest(input: {
       status: String(record.status ?? ''),
       resolutionAction:
         typeof record.resolution_action === 'string' ? record.resolution_action : null,
+      rejectReasonCode:
+        typeof record.reject_reason_code === 'string' ? record.reject_reason_code : null,
     },
     error: null,
   }

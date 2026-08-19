@@ -2,9 +2,13 @@ import { describe, expect, it } from 'vitest'
 
 import {
   buildCustomerOrderTimeline,
+  canAssignReturnTracking,
+  canCancelReturnOrExchange,
   evaluateReorderCandidates,
   findOpenCancellationRequest,
   getCustomerOrderActionEligibility,
+  getReturnExchangeTimeline,
+  getReturnWindowLabel,
   isPendingOrderSuccessExpired,
   parsePendingOrderSuccess,
   PENDING_ORDER_SUCCESS_TTL_MS,
@@ -185,5 +189,82 @@ describe('evaluateReorderCandidates', () => {
     expect(eligible.find((item) => item.id === 'item-3')?.quantity).toBe(1)
     expect(skipped).toHaveLength(1)
     expect(skipped[0]?.reason).toMatch(/unavailable/i)
+  })
+})
+
+describe('return / exchange lifecycle helpers', () => {
+  it('allows vendor assign only when accepted and no AWB yet', () => {
+    expect(
+      canAssignReturnTracking({
+        issue_type: ORDER_ISSUE_TYPE.RETURN_REQUEST,
+        resolution_action: 'accepted',
+        order_item_id: 'item-1',
+      }),
+    ).toBe(true)
+    expect(
+      canAssignReturnTracking({
+        issue_type: ORDER_ISSUE_TYPE.RETURN_REQUEST,
+        resolution_action: 'accepted',
+        order_item_id: 'item-1',
+        return_tracking_number: 'AWB',
+      }),
+    ).toBe(false)
+  })
+
+  it('allows buyer cancel before AWB and blocks after', () => {
+    expect(
+      canCancelReturnOrExchange({
+        issue_type: ORDER_ISSUE_TYPE.EXCHANGE_REQUEST,
+        status: 'open',
+      }),
+    ).toBe(true)
+    expect(
+      canCancelReturnOrExchange({
+        issue_type: ORDER_ISSUE_TYPE.RETURN_REQUEST,
+        status: 'waiting_customer',
+        resolution_action: 'accepted',
+      }),
+    ).toBe(true)
+    expect(
+      canCancelReturnOrExchange({
+        issue_type: ORDER_ISSUE_TYPE.RETURN_REQUEST,
+        status: 'waiting_customer',
+        resolution_action: 'accepted',
+        return_tracking_number: 'AWB',
+      }),
+    ).toBe(false)
+  })
+
+  it('builds return timeline steps through refund', () => {
+    const steps = getReturnExchangeTimeline({
+      issue: {
+        issue_type: ORDER_ISSUE_TYPE.RETURN_REQUEST,
+        resolution_action: 'accepted',
+        return_tracking_number: 'AWB1',
+        return_shipping_mode: 'vendor_arranged',
+      },
+      refund: { refund_status: 'processing' },
+    })
+    expect(steps.map((s) => s.id)).toEqual(['requested', 'decision', 'shipped', 'received', 'refund'])
+    expect(steps.find((s) => s.id === 'shipped')?.done).toBe(true)
+    expect(steps.find((s) => s.id === 'shipped')?.detail).toMatch(/Shop arranged/i)
+  })
+
+  it('shows structured reject reason on decision step', () => {
+    const steps = getReturnExchangeTimeline({
+      issue: {
+        issue_type: ORDER_ISSUE_TYPE.RETURN_REQUEST,
+        resolution_action: 'rejected',
+        reject_reason_code: 'out_of_window',
+      },
+    })
+    expect(steps.find((s) => s.id === 'decision')?.label).toMatch(/Outside return window/i)
+  })
+
+  it('labels the return window countdown', () => {
+    const deliveredAt = new Date(Date.now() - 2 * 24 * 60 * 60 * 1000).toISOString()
+    const label = getReturnWindowLabel(deliveredAt, 30)
+    expect(label).toMatch(/Returns until/i)
+    expect(label).toMatch(/days left/i)
   })
 })

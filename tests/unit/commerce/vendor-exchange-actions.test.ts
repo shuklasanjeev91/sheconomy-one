@@ -4,6 +4,7 @@ import {
   getVendorIssueActions,
   isReturnAwaitingGoods,
   issueAttentionMessage,
+  vendorIssueBadge,
 } from '~/commerce/components/vendor/vendor-issue-actions'
 import { ORDER_ISSUE_TYPE } from '~/lib/orders/order.constants'
 
@@ -17,7 +18,7 @@ describe('vendor exchange issue actions', () => {
     expect(actions.map((a) => a.key)).toEqual(['accept', 'reject'])
   })
 
-  it('asks the vendor to confirm goods after an accepted exchange', () => {
+  it('asks the vendor to arrange pickup then confirm after an accepted exchange', () => {
     const issue = {
       issue_type: ORDER_ISSUE_TYPE.EXCHANGE_REQUEST,
       status: 'waiting_customer',
@@ -26,19 +27,35 @@ describe('vendor exchange issue actions', () => {
     }
     expect(isReturnAwaitingGoods(issue)).toBe(true)
     const actions = getVendorIssueActions(issue)
-    expect(actions[0]?.kind).toBe('return-received')
-    expect(actions[0]?.label).toMatch(/exchange/i)
-    expect(issueAttentionMessage(issue)).toMatch(/Exchange approved/i)
+    expect(actions.map((a) => a.kind)).toEqual(['assign-return-tracking', 'return-received'])
+    expect(actions[0]?.label).toMatch(/pickup/i)
+    expect(issueAttentionMessage(issue)).toMatch(/arrange return pickup/i)
+    expect(vendorIssueBadge(issue)).toBe('Needs pickup')
   })
 
-  it('stops asking for goods after exchange_ready_to_ship', () => {
-    expect(
-      isReturnAwaitingGoods({
-        issue_type: ORDER_ISSUE_TYPE.EXCHANGE_REQUEST,
-        status: 'resolved',
-        resolution_action: 'exchange_ready_to_ship',
-        order_item_id: 'item-1',
-      }),
-    ).toBe(false)
+  it('asks to confirm received when AWB is already present', () => {
+    const issue = {
+      issue_type: ORDER_ISSUE_TYPE.RETURN_REQUEST,
+      status: 'waiting_customer',
+      resolution_action: 'accepted',
+      order_item_id: 'item-1',
+      return_tracking_number: 'AWB123',
+    }
+    const actions = getVendorIssueActions(issue)
+    expect(actions.map((a) => a.kind)).toEqual(['return-received'])
+    expect(vendorIssueBadge(issue)).toBe('Confirm received')
+  })
+
+  it('offers ship-replacement after exchange_ready_to_ship', () => {
+    const issue = {
+      issue_type: ORDER_ISSUE_TYPE.EXCHANGE_REQUEST,
+      status: 'resolved',
+      resolution_action: 'exchange_ready_to_ship',
+      order_item_id: 'item-1',
+    }
+    expect(isReturnAwaitingGoods(issue)).toBe(false)
+    const actions = getVendorIssueActions(issue)
+    expect(actions.map((a) => a.kind)).toEqual(['ship-replacement'])
+    expect(vendorIssueBadge(issue)).toBe('Ship replacement')
   })
 })

@@ -20,6 +20,7 @@ import { useProfile } from '~/hooks/useProfile'
 import { useScreenSearch } from '~/hooks/useScreenSearch'
 import { useVendorCurrency } from '~/hooks/useVendorCurrency'
 import { createTracking, selectDeliveryLoading } from '~/lib/orders/delivery.store'
+import { assignReturnTracking } from '~/commerce/lib/customer-order-trust'
 import { getIssuesByOrder } from '~/lib/orders/order-issue.service'
 import type { EnrichedOrderIssue } from '~/lib/orders/order-issue.type'
 import { ORDER_STATUS, ORDER_STATUS_DISPLAY, type OrderStatus } from '~/lib/orders/order.constants'
@@ -122,7 +123,9 @@ export function VendorOrdersScreen() {
   const [page, setPage] = useState(1)
   const [selectedItemId, setSelectedItemId] = useState<string | null>(null)
   const [trackingItem, setTrackingItem] = useState<VendorOrderItem | null>(null)
+  const [trackingMode, setTrackingMode] = useState<'outbound' | 'return'>('outbound')
   const [orderIssues, setOrderIssues] = useState<EnrichedOrderIssue[]>([])
+  const [returnTrackingSubmitting, setReturnTrackingSubmitting] = useState(false)
 
   const isSearchMode = searchTerm.trim().length > 0
   const orders = isSearchMode ? searchResults : listOrders
@@ -215,6 +218,7 @@ export function VendorOrdersScreen() {
     // advancing straight to "shipped". The item is only marked shipped once a
     // delivery record (with a valid tracking number) is created.
     if (target === ORDER_STATUS.SHIPPED) {
+      setTrackingMode('outbound')
       setTrackingItem(item)
       return
     }
@@ -235,6 +239,33 @@ export function VendorOrdersScreen() {
 
   const handleSubmitTracking = async (values: TrackingFormValues) => {
     if (!trackingItem) return
+    if (trackingMode === 'return') {
+      setReturnTrackingSubmitting(true)
+      const result = await assignReturnTracking({
+        orderItemId: trackingItem.id,
+        trackingNumber: values.tracking_number,
+        courierSlug: values.courier_slug,
+        customTrackingUrl: values.custom_tracking_url,
+      })
+      setReturnTrackingSubmitting(false)
+      if (result.error) {
+        toast.show('Could not assign return pickup', { tone: 'danger', message: result.error })
+        return
+      }
+      toast.show('Return pickup assigned', {
+        tone: 'success',
+        message: 'The customer can track the return with this AWB.',
+      })
+      setTrackingItem(null)
+      loadPage()
+      if (selectedItemId) {
+        void dispatch(loadVendorOrderItem({ orderItemId: selectedItemId }))
+        void getIssuesByOrder(trackingItem.order_id).then((response) => {
+          if (response.success && response.data) setOrderIssues(response.data)
+        })
+      }
+      return
+    }
     const address = resolveVendorShippingAddress(trackingItem) ?? {}
     try {
       await dispatch(
@@ -519,6 +550,10 @@ export function VendorOrdersScreen() {
         role={role}
         onClose={closeDetail}
         onAdvance={handleAdvance}
+        onRequestTracking={(item, mode) => {
+          setTrackingMode(mode)
+          setTrackingItem(item)
+        }}
         onIssuesChanged={() => {
           if (drawerItem) openDetail(drawerItem)
           loadPage()
@@ -530,7 +565,8 @@ export function VendorOrdersScreen() {
         open={trackingItem !== null}
         isDesktop={isDesktop}
         item={trackingItem}
-        submitting={deliveryLoading.creating}
+        submitting={deliveryLoading.creating || returnTrackingSubmitting}
+        mode={trackingMode}
         onClose={() => setTrackingItem(null)}
         onSubmit={handleSubmitTracking}
       />

@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 
 import {
+  cancelOrderReturnRequest,
   requestOrderItemExchange,
   requestOrderItemReturn,
   submitReturnTracking,
@@ -30,6 +31,8 @@ type ReturnSheetProps = {
   orderId: string
   userId: string
   item: CustomerOrderItem | null
+  /** e.g. "Returns until 12 Sep (5 days left)" */
+  windowLabel?: string | null
   onSubmitted?: () => void
 }
 
@@ -39,6 +42,7 @@ export function ReturnOrderItemSheet({
   orderId,
   userId,
   item,
+  windowLabel,
   onSubmitted,
 }: ReturnSheetProps) {
   const ui = useAppUi()
@@ -137,6 +141,11 @@ export function ReturnOrderItemSheet({
             ? `Request a return for “${item.product_title}”. The shop reviews returns before any refund is processed.`
             : 'Select an item to return.'}
         </Text>
+        {windowLabel ? (
+          <Text fontSize={12.5} fontWeight="600" color={ui.brand}>
+            {windowLabel}
+          </Text>
+        ) : null}
 
         <YStack gap="$2">
           <Text fontSize={12} fontWeight="700" color={ui.textMuted}>
@@ -200,6 +209,7 @@ export function ExchangeOrderItemSheet({
   orderId,
   userId,
   item,
+  windowLabel,
   onSubmitted,
 }: ReturnSheetProps) {
   const ui = useAppUi()
@@ -298,6 +308,11 @@ export function ExchangeOrderItemSheet({
             ? `Request an exchange for “${item.product_title}”. You’ll ship the item back, then the shop sends a replacement.`
             : 'Select an item to exchange.'}
         </Text>
+        {windowLabel ? (
+          <Text fontSize={12.5} fontWeight="600" color={ui.brand}>
+            {windowLabel}
+          </Text>
+        ) : null}
 
         <YStack gap="$2">
           <Text fontSize={12} fontWeight="700" color={ui.textMuted}>
@@ -427,7 +442,7 @@ export function SubmitReturnTrackingSheet({
       <YStack gap="$3" paddingBottom="$2">
         <Text fontSize={13} color={ui.textSecondary}>
           {item
-            ? `Ship “${item.product_title}” back to the shop, then paste the AWB here.`
+            ? `Ship “${item.product_title}” back to the shop, then paste the AWB here. Use this only if the shop has not arranged pickup yet.`
             : 'Select an item.'}
         </Text>
         <Input
@@ -436,6 +451,85 @@ export function SubmitReturnTrackingSheet({
           placeholder="Paste or type AWB / tracking number"
           autoCapitalize="characters"
         />
+      </YStack>
+    </AppBottomSheet>
+  )
+}
+
+type CancelReturnSheetProps = {
+  open: boolean
+  onOpenChange: (open: boolean) => void
+  item: CustomerOrderItem | null
+  onSubmitted?: () => void
+}
+
+export function CancelReturnRequestSheet({
+  open,
+  onOpenChange,
+  item,
+  onSubmitted,
+}: CancelReturnSheetProps) {
+  const ui = useAppUi()
+  const toast = useAppToast()
+  const [submitting, setSubmitting] = useState(false)
+
+  useEffect(() => {
+    if (!open) setSubmitting(false)
+  }, [open])
+
+  async function handleSubmit() {
+    if (!item) return
+    setSubmitting(true)
+    const result = await cancelOrderReturnRequest({ orderItemId: item.id })
+    setSubmitting(false)
+    if (result.error) {
+      toast.show('Could not cancel request', { tone: 'danger', message: result.error })
+      return
+    }
+    toast.show('Request cancelled', {
+      tone: 'success',
+      message: 'Your return or exchange request was cancelled.',
+    })
+    onOpenChange(false)
+    onSubmitted?.()
+  }
+
+  return (
+    <AppBottomSheet
+      open={open}
+      onOpenChange={onOpenChange}
+      title="Cancel request"
+      footer={
+        <XStack gap="$2">
+          <Button
+            tone="outline"
+            size="$4"
+            borderRadius={999}
+            flex={1}
+            disabled={submitting}
+            onPress={() => onOpenChange(false)}
+          >
+            Keep request
+          </Button>
+          <Button
+            tone="primary"
+            size="$4"
+            borderRadius={999}
+            flex={1}
+            disabled={submitting || !item}
+            onPress={() => void handleSubmit()}
+          >
+            {submitting ? 'Cancelling…' : 'Cancel request'}
+          </Button>
+        </XStack>
+      }
+    >
+      <YStack gap="$3" paddingBottom="$2">
+        <Text fontSize={13} color={ui.textSecondary} lineHeight={20}>
+          {item
+            ? `Cancel the open return or exchange for “${item.product_title}”? You can only cancel before the shop assigns a return AWB or you submit tracking.`
+            : 'Select an item.'}
+        </Text>
       </YStack>
     </AppBottomSheet>
   )

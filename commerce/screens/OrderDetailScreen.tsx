@@ -7,6 +7,7 @@ import { OrderIssueCommentsThread } from '~/commerce/components/OrderIssueCommen
 import { OrderPackageCard } from '~/commerce/components/OrderPackageCard'
 import { OrderTimeline } from '~/commerce/components/OrderTimeline'
 import {
+  CancelReturnRequestSheet,
   ExchangeOrderItemSheet,
   ReturnOrderItemSheet,
   SubmitReturnTrackingSheet,
@@ -26,9 +27,13 @@ import {
 import {
   buildCustomerOrderTimeline,
   formatEstimatedDelivery,
+  getReturnExchangeTimeline,
+  isExchangeIssueType,
+  isReturnIssueType,
   issueStatusLabel,
   issueTypeLabel,
   refundStatusLabel,
+  rejectReasonLabel,
 } from '~/commerce/lib/customer-order-lifecycle'
 import { fetchOrderDigitalDownload } from '~/commerce/lib/customer-order-trust'
 import { useCart } from '~/commerce/hooks/useCart'
@@ -47,7 +52,10 @@ import { shareCustomerOrderInvoice } from '~/lib/orders/order-invoice'
 import { formatOrderAmount, formatOrderDate } from '~/lib/orders/order.utils'
 import type { OrderAddressSummary } from '~/lib/orders/vendor-orders.type'
 import { resumeOrderOnlinePayment } from '~/commerce/lib/resume-order-payment'
-import { openExternalUrl } from '~/lib/platform/openUrl'
+import { openExternalUrl, safeHttpUrl } from '~/lib/platform/openUrl'
+import { COURIER_OPTIONS } from '~/lib/orders/tracking.validation'
+import { getPublicTrackingUrl } from '~/lib/orders/courier-tracking-urls'
+import { RETURN_SHIPPING_MODE } from '~/lib/orders/order.constants'
 import { commerceRoutes } from '~/lib/routes'
 import {
   formatCustomerContactPhone,
@@ -95,6 +103,7 @@ export function OrderDetailScreen({ orderId }: OrderDetailScreenProps) {
   const [returnItem, setReturnItem] = useState<CustomerOrderItem | null>(null)
   const [exchangeItem, setExchangeItem] = useState<CustomerOrderItem | null>(null)
   const [trackingItem, setTrackingItem] = useState<CustomerOrderItem | null>(null)
+  const [cancelReturnItem, setCancelReturnItem] = useState<CustomerOrderItem | null>(null)
   const [reviewItem, setReviewItem] = useState<CustomerOrderItem | null>(null)
   const [downloadingItemId, setDownloadingItemId] = useState<string | null>(null)
   const [reordering, setReordering] = useState(false)
@@ -465,6 +474,37 @@ export function OrderDetailScreen({ orderId }: OrderDetailScreenProps) {
               {order.items.map((item, itemIndex) => {
                 const trust = getItemTrustEligibility(order, item)
                 const itemRefund = order.refunds.find((refund) => refund.order_item_id === item.id)
+                const itemIssue =
+                  order.issues.find(
+                    (issue) =>
+                      issue.order_item_id === item.id &&
+                      (isReturnIssueType(issue.issue_type) || isExchangeIssueType(issue.issue_type)),
+                  ) ?? null
+                const returnTimeline = itemIssue
+                  ? getReturnExchangeTimeline({ issue: itemIssue, refund: itemRefund })
+                  : []
+                const returnTrackingNumber =
+                  (itemIssue as { return_tracking_number?: string | null } | null)
+                    ?.return_tracking_number ?? null
+                const returnCourierSlug =
+                  (itemIssue as { return_courier_slug?: string | null } | null)?.return_courier_slug ??
+                  null
+                const returnShippingMode =
+                  (itemIssue as { return_shipping_mode?: string | null } | null)
+                    ?.return_shipping_mode ?? null
+                const returnTrackingUrl =
+                  (itemIssue as { return_tracking_url?: string | null } | null)?.return_tracking_url ||
+                  (returnCourierSlug && returnTrackingNumber
+                    ? getPublicTrackingUrl(returnCourierSlug, returnTrackingNumber)
+                    : null)
+                const trackUrl = safeHttpUrl(returnTrackingUrl)
+                const courierName = returnCourierSlug
+                  ? COURIER_OPTIONS.find((option) => option.value === returnCourierSlug)?.label ??
+                    returnCourierSlug
+                  : null
+                const rejectLabel = rejectReasonLabel(
+                  (itemIssue as { reject_reason_code?: string | null } | null)?.reject_reason_code,
+                )
                 const isLastItem = itemIndex === order.items.length - 1
                 return (
                   <YStack
@@ -515,10 +555,22 @@ export function OrderDetailScreen({ orderId }: OrderDetailScreenProps) {
                             : ''}
                         </Text>
                         <OrderStatusBadge status={item.item_status} size="sm" />
+                        {trust.returnWindowLabel ? (
+                          <Text fontSize={11} color={ui.textSecondary}>
+                            {trust.returnWindowLabel}
+                          </Text>
+                        ) : null}
                         {itemRefund ? (
                           <Text fontSize={11} color={ui.textSecondary}>
                             Refund {refundStatusLabel(itemRefund.refund_status)} ·{' '}
                             {formatOrderAmount(itemRefund.refund_amount, order.currency)}
+                          </Text>
+                        ) : null}
+                        {itemIssue?.resolution_action === 'rejected' ? (
+                          <Text fontSize={11} color={ui.danger}>
+                            {isExchangeIssueType(itemIssue.issue_type) ? 'Exchange' : 'Return'} declined
+                            {rejectLabel ? ` — ${rejectLabel}` : ''}
+                            {itemIssue.resolution_note ? `: ${itemIssue.resolution_note}` : ''}
                           </Text>
                         ) : null}
                         {trust.hasReview ? (
@@ -531,6 +583,78 @@ export function OrderDetailScreen({ orderId }: OrderDetailScreenProps) {
                         {formatOrderAmount(item.total_price, order.currency)}
                       </Text>
                     </XStack>
+
+                    {returnTimeline.length > 0 ? (
+                      <YStack gap="$1.5" paddingLeft="$1">
+                        <Text fontSize={11} fontWeight="800" color={ui.textMuted} letterSpacing={0.3}>
+                          {isExchangeIssueType(itemIssue?.issue_type) ? 'EXCHANGE' : 'RETURN'} STATUS
+                        </Text>
+                        {returnTimeline.map((step) => (
+                          <XStack key={step.id} gap="$2" alignItems="flex-start">
+                            <YStack
+                              width={8}
+                              height={8}
+                              borderRadius={999}
+                              marginTop={5}
+                              backgroundColor={
+                                step.done ? ui.brand : step.active ? ui.roseTint : ui.borderSubtle
+                              }
+                            />
+                            <YStack flex={1} minWidth={0} gap={1}>
+                              <Text
+                                fontSize={12}
+                                fontWeight={step.active || step.done ? '700' : '500'}
+                                color={step.done || step.active ? ui.text : ui.textMuted}
+                              >
+                                {step.label}
+                              </Text>
+                              {step.detail ? (
+                                <Text fontSize={11} color={ui.textMuted}>
+                                  {step.detail}
+                                </Text>
+                              ) : null}
+                            </YStack>
+                          </XStack>
+                        ))}
+                      </YStack>
+                    ) : null}
+
+                    {returnTrackingNumber ? (
+                      <YStack
+                        gap="$1.5"
+                        padding="$3"
+                        borderRadius={12}
+                        backgroundColor={ui.surfaceMuted}
+                        borderWidth={1}
+                        borderColor={ui.borderSubtle}
+                      >
+                        <Text fontSize={12} fontWeight="700" color={ui.text}>
+                          {returnShippingMode === RETURN_SHIPPING_MODE.VENDOR_ARRANGED
+                            ? 'Shop arranged return pickup'
+                            : 'Return tracking'}
+                        </Text>
+                        {courierName ? (
+                          <Text fontSize={12} color={ui.textSecondary}>
+                            {courierName}
+                          </Text>
+                        ) : null}
+                        <Text fontSize={12} color={ui.textSecondary}>
+                          AWB {returnTrackingNumber}
+                        </Text>
+                        {trackUrl ? (
+                          <Button
+                            tone="outline"
+                            size="$3"
+                            borderRadius={999}
+                            icon={<Icons.ExternalLink size={14} />}
+                            onPress={() => void openExternalUrl(trackUrl)}
+                          >
+                            Track return
+                          </Button>
+                        ) : null}
+                      </YStack>
+                    ) : null}
+
                     <XStack gap="$2" flexWrap="wrap">
                       {trust.canDownload ? (
                         <Button
@@ -584,6 +708,17 @@ export function OrderDetailScreen({ orderId }: OrderDetailScreenProps) {
                         <Text fontSize={12} color={ui.textMuted}>
                           Exchange pending
                         </Text>
+                      ) : null}
+                      {trust.canCancelReturnOrExchange ? (
+                        <Button
+                          tone="outline"
+                          size="$3"
+                          borderRadius={999}
+                          icon={<Icons.X size={14} />}
+                          onPress={() => setCancelReturnItem(item)}
+                        >
+                          Cancel request
+                        </Button>
                       ) : null}
                       {trust.canSubmitReturnTracking ? (
                         <Button
@@ -774,6 +909,9 @@ export function OrderDetailScreen({ orderId }: OrderDetailScreenProps) {
                 orderId={order.id}
                 userId={user.id}
                 item={returnItem}
+                windowLabel={
+                  returnItem ? getItemTrustEligibility(order, returnItem).returnWindowLabel : null
+                }
                 onSubmitted={() => void load({ soft: true })}
               />
               <ExchangeOrderItemSheet
@@ -784,6 +922,9 @@ export function OrderDetailScreen({ orderId }: OrderDetailScreenProps) {
                 orderId={order.id}
                 userId={user.id}
                 item={exchangeItem}
+                windowLabel={
+                  exchangeItem ? getItemTrustEligibility(order, exchangeItem).returnWindowLabel : null
+                }
                 onSubmitted={() => void load({ soft: true })}
               />
               <SubmitReturnTrackingSheet
@@ -792,6 +933,14 @@ export function OrderDetailScreen({ orderId }: OrderDetailScreenProps) {
                   if (!next) setTrackingItem(null)
                 }}
                 item={trackingItem}
+                onSubmitted={() => void load({ soft: true })}
+              />
+              <CancelReturnRequestSheet
+                open={Boolean(cancelReturnItem)}
+                onOpenChange={(next) => {
+                  if (!next) setCancelReturnItem(null)
+                }}
+                item={cancelReturnItem}
                 onSubmitted={() => void load({ soft: true })}
               />
               <WriteReviewSheet

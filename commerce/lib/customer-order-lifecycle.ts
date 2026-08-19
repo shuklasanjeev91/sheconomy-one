@@ -9,9 +9,12 @@ import {
   ORDER_STATUS,
   ORDER_STATUS_DISPLAY,
   ORDER_STATUS_PROGRESS,
+  RETURN_REJECT_REASON_LABELS,
+  RETURN_SHIPPING_MODE,
   type DeliveryStatus,
   type OrderIssueType,
   type OrderStatus,
+  type ReturnRejectReason,
 } from '~/lib/orders/order.constants'
 import {
   isCancellationIssueType,
@@ -86,11 +89,14 @@ export type CustomerItemTrustEligibility = {
   exchangeBlockedReason: string | null
   canSubmitReturnTracking: boolean
   returnTrackingBlockedReason: string | null
+  canCancelReturnOrExchange: boolean
+  cancelReturnBlockedReason: string | null
   canDownload: boolean
   downloadBlockedReason: string | null
   hasOpenReturnRequest: boolean
   hasOpenExchangeRequest: boolean
   hasReview: boolean
+  returnWindowLabel: string | null
 }
 
 export type RefundStatusLike = 'requested' | 'processing' | 'approved' | 'completed' | 'rejected' | string
@@ -162,7 +168,7 @@ export function findOpenExchangeRequest<T extends { issue_type?: string | null; 
   )
 }
 
-/** Accepted return/exchange still waiting for the buyer to add an AWB. */
+/** Accepted return/exchange still waiting for an AWB (buyer fallback or vendor assign). */
 export function findAcceptedReturnAwaitingTracking<
   T extends {
     issue_type?: string | null
@@ -170,6 +176,7 @@ export function findAcceptedReturnAwaitingTracking<
     resolution_action?: string | null
     order_item_id?: string | null
     return_tracking_number?: string | null
+    return_shipping_mode?: string | null
   },
 >(issues: T[] | null | undefined, orderItemId?: string | null): T | null {
   if (!issues?.length) return null
@@ -177,6 +184,7 @@ export function findAcceptedReturnAwaitingTracking<
     issues.find((issue) => {
       if (orderItemId && issue.order_item_id !== orderItemId) return false
       if (issue.return_tracking_number) return false
+      if (issue.return_shipping_mode === RETURN_SHIPPING_MODE.VENDOR_ARRANGED) return false
       const isReturnOrExchange =
         isReturnIssueType(issue.issue_type) || isExchangeIssueType(issue.issue_type)
       if (!isReturnOrExchange) return false
@@ -187,6 +195,182 @@ export function findAcceptedReturnAwaitingTracking<
       )
     }) ?? null
   )
+}
+
+export function canAssignReturnTracking(issue: {
+  issue_type?: string | null
+  status?: string | null
+  resolution_action?: string | null
+  return_tracking_number?: string | null
+  order_item_id?: string | null
+}): boolean {
+  if (!issue.order_item_id) return false
+  if (issue.return_tracking_number) return false
+  if (issue.resolution_action === 'return_received') return false
+  if (issue.resolution_action === 'exchange_ready_to_ship') return false
+  const isReturnOrExchange =
+    isReturnIssueType(issue.issue_type) || isExchangeIssueType(issue.issue_type)
+  if (!isReturnOrExchange) return false
+  return (
+    issue.resolution_action === 'accepted' ||
+    issue.status === 'waiting_customer' ||
+    (issue.status === 'resolved' && issue.resolution_action === 'accepted')
+  )
+}
+
+export function canCancelReturnOrExchange(issue: {
+  issue_type?: string | null
+  status?: string | null
+  resolution_action?: string | null
+  return_tracking_number?: string | null
+} | null | undefined): boolean {
+  if (!issue) return false
+  const isReturnOrExchange =
+    isReturnIssueType(issue.issue_type) || isExchangeIssueType(issue.issue_type)
+  if (!isReturnOrExchange) return false
+  if (issue.return_tracking_number) return false
+  if (
+    issue.resolution_action === 'return_received' ||
+    issue.resolution_action === 'exchange_ready_to_ship' ||
+    issue.resolution_action === 'rejected' ||
+    issue.resolution_action === 'cancelled_by_buyer'
+  ) {
+    return false
+  }
+  if (isOpenIssueStatus(issue.status)) return true
+  return issue.status === 'resolved' && issue.resolution_action === 'accepted'
+}
+
+export function getReturnWindowLabel(
+  deliveredAt: string | null | undefined,
+  windowDays = RETURN_WINDOW_DAYS,
+  now = Date.now(),
+): string | null {
+  if (!deliveredAt) return null
+  const deliveredMs = new Date(deliveredAt).getTime()
+  if (!Number.isFinite(deliveredMs)) return null
+  const endsAt = deliveredMs + windowDays * 24 * 60 * 60 * 1000
+  const ends = new Date(endsAt)
+  const dateLabel = ends.toLocaleDateString(undefined, {
+    day: 'numeric',
+    month: 'short',
+    year: 'numeric',
+  })
+  if (now > endsAt) return `Return window ended ${dateLabel}`
+  const daysLeft = Math.max(0, Math.ceil((endsAt - now) / (24 * 60 * 60 * 1000)))
+  if (daysLeft <= 1) return `Returns until ${dateLabel} (last day)`
+  return `Returns until ${dateLabel} (${daysLeft} days left)`
+}
+
+export function rejectReasonLabel(code: string | null | undefined): string | null {
+  if (!code) return null
+  return RETURN_REJECT_REASON_LABELS[code as ReturnRejectReason] ?? code.replace(/_/g, ' ')
+}
+
+export type ReturnExchangeTimelineStep = {
+  id: string
+  label: string
+  done: boolean
+  active: boolean
+  detail?: string | null
+}
+
+export function getReturnExchangeTimeline(input: {
+  issue: {
+    issue_type?: string | null
+    status?: string | null
+    resolution_action?: string | null
+    return_tracking_number?: string | null
+    return_courier_slug?: string | null
+    return_shipping_mode?: string | null
+    return_shipped_at?: string | null
+    reject_reason_code?: string | null
+    resolution_note?: string | null
+    created_at?: string | null
+  }
+  refund?: {
+    refund_status?: string | null
+    return_received_at?: string | null
+  } | null
+}): ReturnExchangeTimelineStep[] {
+  const issue = input.issue
+  const isExchange = isExchangeIssueType(issue.issue_type)
+  const rejected = issue.resolution_action === 'rejected'
+  const cancelled = issue.resolution_action === 'cancelled_by_buyer'
+  const accepted =
+    issue.resolution_action === 'accepted' ||
+    issue.resolution_action === 'return_received' ||
+    issue.resolution_action === 'exchange_ready_to_ship'
+  const hasAwb = Boolean(issue.return_tracking_number)
+  const received =
+    issue.resolution_action === 'return_received' ||
+    issue.resolution_action === 'exchange_ready_to_ship' ||
+    Boolean(input.refund?.return_received_at)
+  const refundDone = ['approved', 'completed'].includes(String(input.refund?.refund_status ?? ''))
+  const exchangeReady = issue.resolution_action === 'exchange_ready_to_ship'
+
+  const steps: ReturnExchangeTimelineStep[] = [
+    {
+      id: 'requested',
+      label: isExchange ? 'Exchange requested' : 'Return requested',
+      done: true,
+      active: !accepted && !rejected && !cancelled,
+    },
+    {
+      id: 'decision',
+      label: rejected
+        ? `Declined${rejectReasonLabel(issue.reject_reason_code) ? ` — ${rejectReasonLabel(issue.reject_reason_code)}` : ''}`
+        : cancelled
+          ? 'Cancelled by you'
+          : accepted
+            ? 'Approved by shop'
+            : 'Waiting for shop decision',
+      done: accepted || rejected || cancelled,
+      active: !accepted && !rejected && !cancelled,
+      detail: issue.resolution_note,
+    },
+  ]
+
+  if (!rejected && !cancelled) {
+    const mode =
+      issue.return_shipping_mode === RETURN_SHIPPING_MODE.VENDOR_ARRANGED
+        ? 'Shop arranged pickup'
+        : issue.return_shipping_mode === RETURN_SHIPPING_MODE.BUYER_SELF
+          ? 'You shipped the return'
+          : null
+    steps.push({
+      id: 'shipped',
+      label: hasAwb
+        ? `Return shipped${issue.return_tracking_number ? ` · ${issue.return_tracking_number}` : ''}`
+        : 'Return shipment',
+      done: hasAwb,
+      active: accepted && !hasAwb && !received,
+      detail: mode,
+    })
+    steps.push({
+      id: 'received',
+      label: received ? 'Shop received the item' : 'Awaiting shop receipt',
+      done: received,
+      active: hasAwb && !received,
+    })
+    if (isExchange) {
+      steps.push({
+        id: 'replacement',
+        label: exchangeReady ? 'Replacement ready to ship' : 'Replacement shipping',
+        done: exchangeReady,
+        active: received && !exchangeReady,
+      })
+    } else {
+      steps.push({
+        id: 'refund',
+        label: refundDone ? 'Refund completed' : 'Refund',
+        done: refundDone,
+        active: received && !refundDone,
+      })
+    }
+  }
+
+  return steps
 }
 
 export function isDeliveredOrCompletedStatus(status: string | null | undefined): boolean {
@@ -234,6 +418,7 @@ export function getCustomerItemTrustEligibility(input: {
     order_item_id?: string | null
     resolution_action?: string | null
     return_tracking_number?: string | null
+    return_shipping_mode?: string | null
   }> | null
   refunds?: Array<{
     order_item_id?: string | null
@@ -253,6 +438,14 @@ export function getCustomerItemTrustEligibility(input: {
   const openReturn = findOpenReturnRequest(input.issues, input.orderItemId)
   const openExchange = findOpenExchangeRequest(input.issues, input.orderItemId)
   const awaitingTracking = findAcceptedReturnAwaitingTracking(input.issues, input.orderItemId)
+  const cancellableIssue =
+    (openReturn && canCancelReturnOrExchange(openReturn) ? openReturn : null) ??
+    (openExchange && canCancelReturnOrExchange(openExchange) ? openExchange : null) ??
+    (input.issues ?? []).find(
+      (issue) =>
+        issue.order_item_id === input.orderItemId && canCancelReturnOrExchange(issue),
+    ) ??
+    null
   const activeRefund = (input.refunds ?? []).find(
     (refund) =>
       refund.order_item_id === input.orderItemId &&
@@ -261,6 +454,9 @@ export function getCustomerItemTrustEligibility(input: {
   const hasReview = Boolean(input.hasReview)
   const acceptsReturns = input.acceptsReturns !== false
   const acceptsExchanges = input.acceptsExchanges !== false
+  const returnWindowLabel = delivered
+    ? getReturnWindowLabel(input.deliveredAt ?? null, windowDays, now)
+    : null
 
   let reviewBlockedReason: string | null = null
   if (hasReview) reviewBlockedReason = 'You already reviewed this item.'
@@ -294,6 +490,11 @@ export function getCustomerItemTrustEligibility(input: {
     returnTrackingBlockedReason = 'No approved return or exchange is waiting for tracking.'
   }
 
+  let cancelReturnBlockedReason: string | null = null
+  if (!cancellableIssue) {
+    cancelReturnBlockedReason = 'There is no open return or exchange you can cancel.'
+  }
+
   let downloadBlockedReason: string | null = null
   if (!input.digitalDownloadUrl?.trim()) {
     downloadBlockedReason = 'No digital download is available for this item.'
@@ -322,11 +523,14 @@ export function getCustomerItemTrustEligibility(input: {
     exchangeBlockedReason,
     canSubmitReturnTracking: !returnTrackingBlockedReason,
     returnTrackingBlockedReason,
+    canCancelReturnOrExchange: !cancelReturnBlockedReason,
+    cancelReturnBlockedReason,
     canDownload: !downloadBlockedReason,
     downloadBlockedReason,
     hasOpenReturnRequest: Boolean(openReturn),
     hasOpenExchangeRequest: Boolean(openExchange),
     hasReview,
+    returnWindowLabel,
   }
 }
 
