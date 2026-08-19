@@ -9,6 +9,7 @@ import { CommunityShell } from '~/community/components/CommunityShell'
 import { FeedComposer } from '~/community/components/FeedComposer'
 import { EventRevisitStrip } from '~/community/components/EventRevisitStrip'
 import { FollowedShopActivityStrip } from '~/community/components/FollowedShopActivityStrip'
+import { NetworkInvitationsStrip } from '~/community/components/NetworkInvitationsStrip'
 import { PickUpAgainStrip } from '~/community/components/PickUpAgainStrip'
 import { TodayCelebrationsCard } from '~/community/components/TodayCelebrationsCard'
 import { FeedFilterChips } from '~/community/components/FeedFilterChips'
@@ -154,6 +155,7 @@ export function CommunityFeedScreen() {
       <YStack gap="$3" width="100%" paddingBottom="$2">
         <StoriesStrip />
         <TodayCelebrationsCard />
+        <NetworkInvitationsStrip />
         <PickUpAgainStrip />
         <EventRevisitStrip />
         <FollowedShopActivityStrip />
