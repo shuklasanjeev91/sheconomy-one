@@ -15,12 +15,15 @@
  *     and `components/auth/RouteGuard.tsx`) on top of Supabase RLS.
  *
  * Gender note: in SHEconomy `profiles.gender === true` means **female**. The
- * platform is women-first: community / chat / notifications require a **verified
- * female** tier (`lib/auth/access.ts` — `gender` + `is_verified`). Guests, males,
- * and members who **skip** verification keep limited access (Commerce, Classes,
- * Co-Work). The verification modal always offers Skip; camera/face data is optional.
- * Unverified members are redirected off protected routes (see `AppAccessGate`) and
- * shown `GenderDeniedModal` on their last safe route.
+ * platform is women-first: community / chat / notifications / create-shop /
+ * profile / settings require a **verified female** tier (`lib/auth/access.ts` —
+ * `gender` + `is_verified`). The seller console (`/vendor`) is role-gated
+ * (vendor/admin) and is not a gender-deny surface. Guests, males, and members
+ * who **skip** verification keep limited access (Commerce, Classes, Co-Work, and
+ * an existing shop if they already have vendor role). The verification modal
+ * always offers Skip; camera/face data is optional. Unverified members are
+ * redirected off women-first routes (see `AppAccessGate`) and shown
+ * `GenderDeniedModal` on their last safe route.
  */
 
 import { USER_ROLES, type UserRole } from '~/lib/profile/profile.type'
@@ -28,7 +31,6 @@ import {
   isChatPath,
   isCommunityPath,
   isNotificationsPath,
-  isVendorPath,
 } from '~/lib/routes'
 
 /** How a route decides access. */
@@ -101,8 +103,6 @@ export const FALLBACK_HOME = '/'
  * `AppAccessGate` and see `GenderDeniedModal` on their previous safe route.
  */
 export const GENDER_RESTRICTED_ROUTES: readonly string[] = [
-  '/vendor',
-  '/create-listing',
   '/create-my-shop',
   '/community',
   '/chat',
@@ -149,8 +149,7 @@ export function requiresGenderVerification(pathname: string): boolean {
     GENDER_RESTRICTED_ROUTES.some((route) => matchesPrefix(pathname, route)) ||
     isCommunityPath(pathname) ||
     isChatPath(pathname) ||
-    isNotificationsPath(pathname) ||
-    isVendorPath(pathname)
+    isNotificationsPath(pathname)
   )
 }
 

@@ -60,11 +60,15 @@ describe('access tiers (skip verification / women-first)', () => {
       '/profile',
       '/settings',
       '/create-my-shop',
-      '/vendor',
     ]) {
       expect(canAccessPath('male', path, false)).toBe(false)
       expect(canAccessPath('female', path, true)).toBe(true)
     }
+
+    expect(canAccessPath('male', '/vendor', false)).toBe(true)
+    expect(canAccessPath('male', '/vendor/myshop', false)).toBe(true)
+    expect(canAccessPath('guest', '/vendor')).toBe(false)
+    expect(canAccessPath('female', '/vendor', true)).toBe(true)
   })
 
   it('does not force guests to sign in for class / co-work', () => {
@@ -89,6 +93,12 @@ describe('access tiers (skip verification / women-first)', () => {
   it('keeps account gate on the restricted modal path for limited members', () => {
     const redirect = String(getAccessDeniedRedirect('male', '/settings', false))
     expect(redirect).toMatch(/gender=restricted/)
+  })
+
+  it('does not bounce limited members off the seller console to gender=restricted', () => {
+    const redirect = String(getAccessDeniedRedirect('male', '/vendor/myshop', false))
+    expect(redirect).not.toMatch(/gender=restricted/)
+    expect(canAccessPath('male', '/vendor/products', false)).toBe(true)
   })
 
   it('preserves Community intent after auth via Human verification open', () => {

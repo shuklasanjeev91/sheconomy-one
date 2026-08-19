@@ -156,9 +156,9 @@ export function useAdminProtection(options: RoleCheckOptions = {}) {
   return useRouteProtection(ADMIN_ROLES, options)
 }
 
-/** Vendor console — admins + vendors, women-first (gender verified). */
+/** Vendor console — admins + vendors. Opening a new shop still uses `useShopCreationProtection`. */
 export function useVendorProtection(options: RoleCheckOptions = {}) {
-  return useRouteProtection(VENDOR_ROLES, { requireGenderVerification: true, ...options })
+  return useRouteProtection(VENDOR_ROLES, { requireGenderVerification: false, ...options })
 }
 
 /** Any signed-in member. */
@@ -176,9 +176,9 @@ export function useChatProtection(options: RoleCheckOptions = {}) {
   return useRouteProtection(MEMBER_ROLES, { requireGenderVerification: true, ...options })
 }
 
-/** Seller dashboard / shop management — admins + vendors, women-first. */
+/** Seller dashboard / shop management — admins + vendors. */
 export function useShopProtection(options: RoleCheckOptions = {}) {
-  return useRouteProtection(VENDOR_ROLES, { requireGenderVerification: true, ...options })
+  return useRouteProtection(VENDOR_ROLES, { requireGenderVerification: false, ...options })
 }
 
 /** Shop creation — any signed-in woman can open a shop. */

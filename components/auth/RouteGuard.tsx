@@ -106,10 +106,10 @@ export function RequireAdmin({ children, ...rest }: Omit<RouteGuardProps, 'allow
   )
 }
 
-/** Vendor console guard — admins + vendors, women-first by default. */
+/** Vendor console guard — admins + vendors. Gender is not required here. */
 export function RequireVendorRole({
   children,
-  requireGenderVerification = true,
+  requireGenderVerification = false,
   ...rest
 }: Omit<RouteGuardProps, 'allowedRoles'>) {
   return (
