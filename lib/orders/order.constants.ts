@@ -363,8 +363,12 @@ export const RETURN_REJECT_REASON_LABELS: Record<ReturnRejectReason, string> = {
 }
 
 export const RETURN_SHIPPING_MODE = {
+  /** Legacy — buyer pasted their own AWB. Retained for historical rows only. */
   BUYER_SELF: 'buyer_self',
+  /** Vendor manually pasted the reverse AWB (fallback when auto-book fails). */
   VENDOR_ARRANGED: 'vendor_arranged',
+  /** System auto-booked the reverse pickup via the platform courier account. */
+  AUTO: 'auto',
 } as const
 
 export type ReturnShippingMode =

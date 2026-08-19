@@ -67,15 +67,15 @@ const DECISION_COPY: Record<
     rejectHint: 'Keeps the order active — tell the customer why.',
   },
   [ORDER_ISSUE_TYPE.RETURN_REQUEST]: {
-    accept: 'Approve return',
+    accept: 'Approve + book pickup',
     reject: 'Decline return',
-    acceptHint: 'Starts the refund and lets you arrange return pickup.',
+    acceptHint: 'Auto-books the reverse pickup and refunds once it is delivered back.',
     rejectHint: 'Rejects the return — pick a reason so the customer understands.',
   },
   [ORDER_ISSUE_TYPE.EXCHANGE_REQUEST]: {
-    accept: 'Approve exchange',
+    accept: 'Approve + book pickup',
     reject: 'Decline exchange',
-    acceptHint: 'Arrange return pickup, then ship a replacement after you receive the item.',
+    acceptHint: 'Auto-books the reverse pickup; ship the replacement once it is delivered back.',
     rejectHint: 'Rejects the exchange — pick a reason so the customer understands.',
   },
   [ORDER_ISSUE_TYPE.REFUND_REQUEST]: {
@@ -208,10 +208,10 @@ export function getVendorIssueActions(issue: VendorIssueLike): VendorIssueAction
       actions.push({
         kind: 'assign-return-tracking',
         key: 'assign-return-tracking',
-        label: 'Arrange return pickup',
+        label: 'Arrange pickup manually',
         tone: 'primary',
         icon: 'Truck',
-        hint: 'Select a courier partner and add the return AWB for the customer.',
+        hint: 'Auto-booking was unavailable — pick a courier and paste the return AWB.',
       })
     }
 
@@ -297,8 +297,8 @@ export function issueAttentionMessage(issue: VendorIssueLike): string | null {
   }
   if (canAssignReturnTracking(issue)) {
     return isExchangeIssueType(issue.issue_type)
-      ? 'Exchange approved — arrange return pickup with a courier.'
-      : 'Return approved — arrange return pickup with a courier.'
+      ? 'Exchange approved — auto-pickup unavailable, arrange it manually.'
+      : 'Return approved — auto-pickup unavailable, arrange it manually.'
   }
   if (isReturnAwaitingGoods(issue) && issue.return_tracking_number) {
     return isExchangeIssueType(issue.issue_type)

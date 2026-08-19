@@ -89,38 +89,6 @@ export async function requestOrderItemExchange(input: {
   }
 }
 
-export type SubmitReturnTrackingResult = {
-  issueId: string
-  trackingNumber: string
-  refundId: string | null
-}
-
-export async function submitReturnTracking(input: {
-  orderItemId: string
-  trackingNumber: string
-  courierSlug?: string | null
-}): Promise<TrustRpcResult<SubmitReturnTrackingResult>> {
-  const { data, error } = await supabase.rpc('submit_return_tracking' as never, {
-    p_order_item_id: input.orderItemId,
-    p_tracking_number: input.trackingNumber.trim(),
-    p_courier_slug: input.courierSlug?.trim() || null,
-  } as never)
-
-  if (error) return { data: null, error: rpcErrorMessage(error, 'Could not save return tracking') }
-  const record = asRecord(data)
-  if (!record?.issue_id || !record?.tracking_number) {
-    return { data: null, error: 'Could not save return tracking' }
-  }
-  return {
-    data: {
-      issueId: String(record.issue_id),
-      trackingNumber: String(record.tracking_number),
-      refundId: record.refund_id ? String(record.refund_id) : null,
-    },
-    error: null,
-  }
-}
-
 export type AssignReturnTrackingResult = {
   issueId: string
   trackingNumber: string
@@ -135,12 +103,15 @@ export async function assignReturnTracking(input: {
   trackingNumber: string
   courierSlug?: string | null
   customTrackingUrl?: string | null
+  /** 'vendor_arranged' for manual paste, 'auto' when booked via courier API. */
+  shippingMode?: 'vendor_arranged' | 'auto'
 }): Promise<TrustRpcResult<AssignReturnTrackingResult>> {
   const { data, error } = await supabase.rpc('assign_return_tracking' as never, {
     p_order_item_id: input.orderItemId,
     p_tracking_number: input.trackingNumber.trim(),
     p_courier_slug: input.courierSlug?.trim() || null,
     p_custom_tracking_url: input.customTrackingUrl?.trim() || null,
+    p_return_shipping_mode: input.shippingMode ?? 'vendor_arranged',
   } as never)
 
   if (error) return { data: null, error: rpcErrorMessage(error, 'Could not assign return tracking') }

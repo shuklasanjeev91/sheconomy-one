@@ -347,11 +347,13 @@ export function VendorOrderIssueDetailDrawer({
               ui={ui}
               label="Arranged by"
               value={
-                returnShippingMode === RETURN_SHIPPING_MODE.VENDOR_ARRANGED
-                  ? 'Shop (vendor pickup)'
-                  : returnShippingMode === RETURN_SHIPPING_MODE.BUYER_SELF
-                    ? 'Customer self-ship'
-                    : returnShippingMode
+                returnShippingMode === RETURN_SHIPPING_MODE.AUTO
+                  ? 'Auto-booked pickup'
+                  : returnShippingMode === RETURN_SHIPPING_MODE.VENDOR_ARRANGED
+                    ? 'Shop (manual pickup)'
+                    : returnShippingMode === RETURN_SHIPPING_MODE.BUYER_SELF
+                      ? 'Customer self-ship (legacy)'
+                      : returnShippingMode
               }
             />
           ) : null}

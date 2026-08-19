@@ -247,7 +247,20 @@ describe('return / exchange lifecycle helpers', () => {
     })
     expect(steps.map((s) => s.id)).toEqual(['requested', 'decision', 'shipped', 'received', 'refund'])
     expect(steps.find((s) => s.id === 'shipped')?.done).toBe(true)
-    expect(steps.find((s) => s.id === 'shipped')?.detail).toMatch(/Shop arranged/i)
+    expect(steps.find((s) => s.id === 'shipped')?.detail).toMatch(/arranged by the shop/i)
+  })
+
+  it('reads the shipped step as shop-arranged even for auto-booked pickups', () => {
+    const steps = getReturnExchangeTimeline({
+      issue: {
+        issue_type: ORDER_ISSUE_TYPE.RETURN_REQUEST,
+        resolution_action: 'accepted',
+        return_tracking_number: 'AWB-AUTO',
+        return_shipping_mode: 'auto',
+      },
+      refund: { refund_status: 'processing' },
+    })
+    expect(steps.find((s) => s.id === 'shipped')?.detail).toMatch(/arranged by the shop/i)
   })
 
   it('shows structured reject reason on decision step', () => {

@@ -18,6 +18,36 @@ describe('vendor exchange issue actions', () => {
     expect(actions.map((a) => a.key)).toEqual(['accept', 'reject'])
   })
 
+  it('labels approve as "book pickup" for returns and exchanges', () => {
+    const returnAccept = getVendorIssueActions({
+      issue_type: ORDER_ISSUE_TYPE.RETURN_REQUEST,
+      status: 'open',
+      order_item_id: 'item-1',
+    }).find((a) => a.key === 'accept')
+    expect(returnAccept?.label).toMatch(/book pickup/i)
+
+    const exchangeAccept = getVendorIssueActions({
+      issue_type: ORDER_ISSUE_TYPE.EXCHANGE_REQUEST,
+      status: 'open',
+      order_item_id: 'item-1',
+    }).find((a) => a.key === 'accept')
+    expect(exchangeAccept?.label).toMatch(/book pickup/i)
+  })
+
+  it('hides the manual pickup fallback once an AWB exists (auto-booked)', () => {
+    const autoBooked = {
+      issue_type: ORDER_ISSUE_TYPE.RETURN_REQUEST,
+      status: 'waiting_customer',
+      resolution_action: 'accepted',
+      order_item_id: 'item-1',
+      return_tracking_number: 'AWB-AUTO',
+      return_shipping_mode: 'auto',
+    }
+    const kinds = getVendorIssueActions(autoBooked).map((a) => a.kind)
+    expect(kinds).not.toContain('assign-return-tracking')
+    expect(kinds).toContain('return-received')
+  })
+
   it('asks the vendor to arrange pickup then confirm after an accepted exchange', () => {
     const issue = {
       issue_type: ORDER_ISSUE_TYPE.EXCHANGE_REQUEST,
@@ -29,7 +59,7 @@ describe('vendor exchange issue actions', () => {
     const actions = getVendorIssueActions(issue)
     expect(actions.map((a) => a.kind)).toEqual(['assign-return-tracking', 'return-received'])
     expect(actions[0]?.label).toMatch(/pickup/i)
-    expect(issueAttentionMessage(issue)).toMatch(/arrange return pickup/i)
+    expect(issueAttentionMessage(issue)).toMatch(/arrange it manually/i)
     expect(vendorIssueBadge(issue)).toBe('Needs pickup')
   })
 

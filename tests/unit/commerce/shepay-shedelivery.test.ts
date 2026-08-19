@@ -9,6 +9,8 @@ import {
 import {
   toPickrrCreateBody,
   toShiprocketCreateOrderBody,
+  toShiprocketReturnBody,
+  type CreateReturnInput,
   type CreateShipmentInput,
 } from '~/commerce/lib/shedelivery'
 
@@ -78,5 +80,45 @@ describe('shedelivery mappers', () => {
     expect(body.client_order_id).toBe('SO-1')
     expect(body.to_pincode).toBe('400001')
     expect(body.cod_amount).toBe(0)
+  })
+})
+
+describe('shedelivery reverse pickup mapper', () => {
+  const input: CreateReturnInput = {
+    orderId: 'ord-1',
+    orderNumber: 'SO-1',
+    // Pickup = buyer.
+    pickupCustomerName: 'Buyer',
+    pickupPhone: '9999999999',
+    pickupEmail: 'b@example.com',
+    pickupAddressLine1: 'Buyer Line 1',
+    pickupCity: 'Mumbai',
+    pickupState: 'MH',
+    pickupPostcode: '400001',
+    // Delivery = seller return address.
+    sellerName: 'Shop',
+    sellerPhone: '8888888888',
+    sellerAddressLine1: 'Seller Line 1',
+    sellerCity: 'Delhi',
+    sellerState: 'DL',
+    sellerPostcode: '110001',
+    weightKg: 0.5,
+    items: [{ name: 'Item', units: 1, sellingPrice: 100 }],
+  }
+
+  it('swaps pickup (buyer) and shipping (seller) fields', () => {
+    const body = toShiprocketReturnBody(input)
+    // Pickup is the buyer.
+    expect(body.pickup_customer_name).toBe('Buyer')
+    expect(body.pickup_pincode).toBe('400001')
+    expect(body.pickup_address).toBe('Buyer Line 1')
+    // Shipping is the seller return address.
+    expect(body.shipping_customer_name).toBe('Shop')
+    expect(body.shipping_pincode).toBe('110001')
+    expect(body.shipping_address).toBe('Seller Line 1')
+    // Return orders are marked prepaid and carry a RET- prefixed id.
+    expect(body.order_id).toBe('RET-SO-1')
+    expect(body.payment_method).toBe('PREPAID')
+    expect(body.order_items).toHaveLength(1)
   })
 })

@@ -4,7 +4,6 @@ import {
   cancelOrderReturnRequest,
   requestOrderItemExchange,
   requestOrderItemReturn,
-  submitReturnTracking,
   submitVerifiedListingReview,
 } from '~/commerce/lib/customer-order-trust'
 import { returnReasonOptions } from '~/commerce/lib/customer-order-lifecycle'
@@ -365,92 +364,6 @@ export function ExchangeOrderItemSheet({
             {evidenceUrls.length}/4 photos
           </Text>
         </XStack>
-      </YStack>
-    </AppBottomSheet>
-  )
-}
-
-type TrackingSheetProps = {
-  open: boolean
-  onOpenChange: (open: boolean) => void
-  item: CustomerOrderItem | null
-  onSubmitted?: () => void
-}
-
-export function SubmitReturnTrackingSheet({
-  open,
-  onOpenChange,
-  item,
-  onSubmitted,
-}: TrackingSheetProps) {
-  const ui = useAppUi()
-  const toast = useAppToast()
-  const [trackingNumber, setTrackingNumber] = useState('')
-  const [submitting, setSubmitting] = useState(false)
-
-  useEffect(() => {
-    if (!open) {
-      setTrackingNumber('')
-      setSubmitting(false)
-    }
-  }, [open])
-
-  async function handleSubmit() {
-    if (!item) return
-    if (trackingNumber.trim().length < 5) {
-      toast.show('Enter a valid AWB', {
-        tone: 'danger',
-        message: 'Paste the courier tracking number from your return label.',
-      })
-      return
-    }
-    setSubmitting(true)
-    const result = await submitReturnTracking({
-      orderItemId: item.id,
-      trackingNumber: trackingNumber.trim(),
-    })
-    setSubmitting(false)
-    if (result.error) {
-      toast.show('Could not save tracking', { tone: 'danger', message: result.error })
-      return
-    }
-    toast.show('Return tracking saved', {
-      tone: 'success',
-      message: 'The shop can now track your return package.',
-    })
-    onOpenChange(false)
-    onSubmitted?.()
-  }
-
-  return (
-    <AppBottomSheet
-      open={open}
-      onOpenChange={onOpenChange}
-      title="Add return tracking"
-      footer={
-        <Button
-          tone="primary"
-          size="$4"
-          borderRadius={999}
-          disabled={submitting || !item}
-          onPress={() => void handleSubmit()}
-        >
-          {submitting ? 'Saving…' : 'Save tracking'}
-        </Button>
-      }
-    >
-      <YStack gap="$3" paddingBottom="$2">
-        <Text fontSize={13} color={ui.textSecondary}>
-          {item
-            ? `Ship “${item.product_title}” back to the shop, then paste the AWB here. Use this only if the shop has not arranged pickup yet.`
-            : 'Select an item.'}
-        </Text>
-        <Input
-          value={trackingNumber}
-          onChangeText={setTrackingNumber}
-          placeholder="Paste or type AWB / tracking number"
-          autoCapitalize="characters"
-        />
       </YStack>
     </AppBottomSheet>
   )

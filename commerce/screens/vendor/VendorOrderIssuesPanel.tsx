@@ -38,6 +38,7 @@ import {
   confirmOrderReturnReceived,
   resolveOrderIssueRequest,
 } from '~/commerce/lib/customer-order-trust'
+import { autoBookReturnPickup } from '~/commerce/lib/vendor-return-pickup'
 import { createTracking } from '~/lib/orders/delivery.store'
 import { getVendorOrderItem } from '~/lib/orders/vendor-orders.service'
 import type { VendorOrderItem } from '~/lib/orders/vendor-orders.type'
@@ -307,14 +308,23 @@ export function VendorOrderIssuesPanel({
           rejectReasonCode: action.decision === 'reject' ? rejectReasonCode : null,
         })
         if (result.error) throw new Error(result.error)
-        toast.show(action.decision === 'accept' ? 'Request approved' : 'Request declined', {
-          tone: 'success',
-          message:
-            action.decision === 'accept' &&
-            (isReturnIssueType(issue.issue_type) || isExchangeIssueType(issue.issue_type))
-              ? 'Next: arrange return pickup with your courier (or wait for the buyer AWB).'
-              : undefined,
-        })
+
+        const isReturnOrExchange =
+          isReturnIssueType(issue.issue_type) || isExchangeIssueType(issue.issue_type)
+        if (action.decision === 'accept' && isReturnOrExchange && issue.order_item_id) {
+          const pickup = await autoBookReturnPickup(issue.order_item_id)
+          toast.show('Request approved', {
+            tone: 'success',
+            message:
+              pickup.status === 'booked'
+                ? `Reverse pickup booked automatically — AWB ${pickup.awb}. We'll refund/replace once it's delivered back.`
+                : 'Approved. Auto-pickup was unavailable, so arrange the return pickup with your courier.',
+          })
+        } else {
+          toast.show(action.decision === 'accept' ? 'Request approved' : 'Request declined', {
+            tone: 'success',
+          })
+        }
       } else if (action.kind === 'return-received') {
         if (!issue.order_item_id) throw new Error('This request is not linked to an item.')
         const result = await confirmOrderReturnReceived({ orderItemId: issue.order_item_id, note })

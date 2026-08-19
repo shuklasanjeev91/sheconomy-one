@@ -44,6 +44,7 @@ import {
   confirmOrderReturnReceived,
   resolveOrderIssueRequest,
 } from '~/commerce/lib/customer-order-trust'
+import { autoBookReturnPickup } from '~/commerce/lib/vendor-return-pickup'
 import {
   RETURN_REJECT_REASON,
   RETURN_REJECT_REASON_LABELS,
@@ -313,9 +314,23 @@ function DrawerBody({
           rejectReasonCode: action.decision === 'reject' ? rejectReasonCode : null,
         })
         if (result.error) throw new Error(result.error)
-        toast.show(action.decision === 'accept' ? 'Request accepted' : 'Request declined', {
-          tone: 'success',
-        })
+
+        const isReturnOrExchange =
+          isReturnIssueType(issue.issue_type) || isExchangeIssueType(issue.issue_type)
+        if (action.decision === 'accept' && isReturnOrExchange && issue.order_item_id) {
+          const pickup = await autoBookReturnPickup(issue.order_item_id)
+          toast.show('Request accepted', {
+            tone: 'success',
+            message:
+              pickup.status === 'booked'
+                ? `Reverse pickup booked automatically — AWB ${pickup.awb}.`
+                : 'Approved. Auto-pickup was unavailable — arrange the return pickup with your courier.',
+          })
+        } else {
+          toast.show(action.decision === 'accept' ? 'Request accepted' : 'Request declined', {
+            tone: 'success',
+          })
+        }
       } else if (action.kind === 'return-received') {
         setConfirmingReturn(true)
         const result = await confirmOrderReturnReceived({

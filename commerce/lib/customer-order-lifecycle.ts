@@ -10,7 +10,6 @@ import {
   ORDER_STATUS_DISPLAY,
   ORDER_STATUS_PROGRESS,
   RETURN_REJECT_REASON_LABELS,
-  RETURN_SHIPPING_MODE,
   type DeliveryStatus,
   type OrderIssueType,
   type OrderStatus,
@@ -87,8 +86,6 @@ export type CustomerItemTrustEligibility = {
   returnBlockedReason: string | null
   canExchange: boolean
   exchangeBlockedReason: string | null
-  canSubmitReturnTracking: boolean
-  returnTrackingBlockedReason: string | null
   canCancelReturnOrExchange: boolean
   cancelReturnBlockedReason: string | null
   canDownload: boolean
@@ -163,35 +160,6 @@ export function findOpenExchangeRequest<T extends { issue_type?: string | null; 
         isOpenIssueStatus(issue.status) ||
         (issue.status === 'resolved' && issue.resolution_action === 'accepted') ||
         issue.status === 'waiting_customer'
-      )
-    }) ?? null
-  )
-}
-
-/** Accepted return/exchange still waiting for an AWB (buyer fallback or vendor assign). */
-export function findAcceptedReturnAwaitingTracking<
-  T extends {
-    issue_type?: string | null
-    status?: string | null
-    resolution_action?: string | null
-    order_item_id?: string | null
-    return_tracking_number?: string | null
-    return_shipping_mode?: string | null
-  },
->(issues: T[] | null | undefined, orderItemId?: string | null): T | null {
-  if (!issues?.length) return null
-  return (
-    issues.find((issue) => {
-      if (orderItemId && issue.order_item_id !== orderItemId) return false
-      if (issue.return_tracking_number) return false
-      if (issue.return_shipping_mode === RETURN_SHIPPING_MODE.VENDOR_ARRANGED) return false
-      const isReturnOrExchange =
-        isReturnIssueType(issue.issue_type) || isExchangeIssueType(issue.issue_type)
-      if (!isReturnOrExchange) return false
-      return (
-        issue.resolution_action === 'accepted' ||
-        issue.status === 'waiting_customer' ||
-        (issue.status === 'resolved' && issue.resolution_action === 'accepted')
       )
     }) ?? null
   )
@@ -332,12 +300,7 @@ export function getReturnExchangeTimeline(input: {
   ]
 
   if (!rejected && !cancelled) {
-    const mode =
-      issue.return_shipping_mode === RETURN_SHIPPING_MODE.VENDOR_ARRANGED
-        ? 'Shop arranged pickup'
-        : issue.return_shipping_mode === RETURN_SHIPPING_MODE.BUYER_SELF
-          ? 'You shipped the return'
-          : null
+    const mode = hasAwb ? 'Pickup arranged by the shop' : 'Shop is arranging pickup'
     steps.push({
       id: 'shipped',
       label: hasAwb
@@ -437,7 +400,6 @@ export function getCustomerItemTrustEligibility(input: {
     isDigitalListingType(input.listingType) || Boolean(input.digitalDownloadUrl?.trim())
   const openReturn = findOpenReturnRequest(input.issues, input.orderItemId)
   const openExchange = findOpenExchangeRequest(input.issues, input.orderItemId)
-  const awaitingTracking = findAcceptedReturnAwaitingTracking(input.issues, input.orderItemId)
   const cancellableIssue =
     (openReturn && canCancelReturnOrExchange(openReturn) ? openReturn : null) ??
     (openExchange && canCancelReturnOrExchange(openExchange) ? openExchange : null) ??
@@ -485,11 +447,6 @@ export function getCustomerItemTrustEligibility(input: {
     exchangeBlockedReason = `Exchanges are available for ${windowDays} days after delivery.`
   }
 
-  let returnTrackingBlockedReason: string | null = null
-  if (!awaitingTracking) {
-    returnTrackingBlockedReason = 'No approved return or exchange is waiting for tracking.'
-  }
-
   let cancelReturnBlockedReason: string | null = null
   if (!cancellableIssue) {
     cancelReturnBlockedReason = 'There is no open return or exchange you can cancel.'
@@ -521,8 +478,6 @@ export function getCustomerItemTrustEligibility(input: {
     returnBlockedReason,
     canExchange: !exchangeBlockedReason,
     exchangeBlockedReason,
-    canSubmitReturnTracking: !returnTrackingBlockedReason,
-    returnTrackingBlockedReason,
     canCancelReturnOrExchange: !cancelReturnBlockedReason,
     cancelReturnBlockedReason,
     canDownload: !downloadBlockedReason,

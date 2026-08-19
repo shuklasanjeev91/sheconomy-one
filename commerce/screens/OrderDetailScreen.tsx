@@ -10,7 +10,6 @@ import {
   CancelReturnRequestSheet,
   ExchangeOrderItemSheet,
   ReturnOrderItemSheet,
-  SubmitReturnTrackingSheet,
   WriteReviewSheet,
 } from '~/commerce/components/OrderTrustSheets'
 import { OrderStatusBadge } from '~/commerce/components/vendor/OrderStatusBadge'
@@ -102,7 +101,6 @@ export function OrderDetailScreen({ orderId }: OrderDetailScreenProps) {
   const [supportOpen, setSupportOpen] = useState(false)
   const [returnItem, setReturnItem] = useState<CustomerOrderItem | null>(null)
   const [exchangeItem, setExchangeItem] = useState<CustomerOrderItem | null>(null)
-  const [trackingItem, setTrackingItem] = useState<CustomerOrderItem | null>(null)
   const [cancelReturnItem, setCancelReturnItem] = useState<CustomerOrderItem | null>(null)
   const [reviewItem, setReviewItem] = useState<CustomerOrderItem | null>(null)
   const [downloadingItemId, setDownloadingItemId] = useState<string | null>(null)
@@ -629,7 +627,8 @@ export function OrderDetailScreen({ orderId }: OrderDetailScreenProps) {
                         borderColor={ui.borderSubtle}
                       >
                         <Text fontSize={12} fontWeight="700" color={ui.text}>
-                          {returnShippingMode === RETURN_SHIPPING_MODE.VENDOR_ARRANGED
+                          {returnShippingMode === RETURN_SHIPPING_MODE.AUTO ||
+                          returnShippingMode === RETURN_SHIPPING_MODE.VENDOR_ARRANGED
                             ? 'Shop arranged return pickup'
                             : 'Return tracking'}
                         </Text>
@@ -718,17 +717,6 @@ export function OrderDetailScreen({ orderId }: OrderDetailScreenProps) {
                           onPress={() => setCancelReturnItem(item)}
                         >
                           Cancel request
-                        </Button>
-                      ) : null}
-                      {trust.canSubmitReturnTracking ? (
-                        <Button
-                          tone="primary"
-                          size="$3"
-                          borderRadius={999}
-                          icon={<Icons.Truck size={14} />}
-                          onPress={() => setTrackingItem(item)}
-                        >
-                          Add return tracking
                         </Button>
                       ) : null}
                     </XStack>
@@ -925,14 +913,6 @@ export function OrderDetailScreen({ orderId }: OrderDetailScreenProps) {
                 windowLabel={
                   exchangeItem ? getItemTrustEligibility(order, exchangeItem).returnWindowLabel : null
                 }
-                onSubmitted={() => void load({ soft: true })}
-              />
-              <SubmitReturnTrackingSheet
-                open={Boolean(trackingItem)}
-                onOpenChange={(next) => {
-                  if (!next) setTrackingItem(null)
-                }}
-                item={trackingItem}
                 onSubmitted={() => void load({ soft: true })}
               />
               <CancelReturnRequestSheet
