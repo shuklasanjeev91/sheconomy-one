@@ -98,12 +98,17 @@ export type ListingSummary = {
 }
 
 export type CategorySummary = {
+  /** Same as category_id — required by paginated feed merge. */
+  id: string
   category_id: string
   category: string
   category_image_url: string | null
   category_icon: string | null
   product_count: number | null
   seo_name: string | null
+  parent_id?: string | null
+  /** Parent category name when this row is a subcategory. */
+  parent_category?: string | null
 }
 
 export type ListingTypeFilter = 'physical' | 'digital'
@@ -456,6 +461,8 @@ export function isBrowseFeedKind(value: string): value is BrowseFeedKind {
 
 export const COMMERCE_PAGE_SIZE = 24
 export const COMMERCE_HORIZONTAL_PAGE_SIZE = 12
+/** Home category rail page size (categories + subcategories mixed). */
+export const CATEGORY_RAIL_PAGE_SIZE = 20
 
 /** Enough IDs for ~4 feed pages without pulling the entire catalog ranking. */
 const FEED_RANKING_ID_LIMIT = 96
@@ -883,23 +890,50 @@ async function countCategoryTreeListings(categoryId: string): Promise<number> {
   return count ?? 0
 }
 
-const ROOT_CATEGORY_TTL_MS = 5 * 60 * 1000
-let rootCategoryCache: { items: CategorySummary[]; expiresAt: number } | null = null
+const STOREFRONT_CATEGORY_TTL_MS = 5 * 60 * 1000
+let storefrontCategoryCache: { items: CategorySummary[]; expiresAt: number } | null = null
+
+type CategoryRailRow = {
+  category_id: string
+  category: string
+  category_image_url: string | null
+  category_icon: string | null
+  seo_name: string | null
+  parent_id: string | null
+  position: number | null
+  product_count: number | null
+}
+
+function toCategorySummary(
+  row: CategoryRailRow,
+  parentName: string | null,
+): CategorySummary {
+  return {
+    id: row.category_id,
+    category_id: row.category_id,
+    category: row.category,
+    category_image_url: categoryArtworkUrl(row.category_image_url),
+    category_icon: row.category_icon,
+    product_count: row.product_count ?? 0,
+    seo_name: row.seo_name,
+    parent_id: row.parent_id,
+    parent_category: parentName,
+  }
+}
 
 /**
- * The 25 root categories, ranked by how much of the catalogue sits under them.
- * Ranking needs every count, and the set is small and near-static, so the whole
- * list is loaded once and paginated in memory.
+ * Mix root categories with their subcategories for the home rail.
+ * Order: each parent, then its children (by position), so parents and
+ * subs stay grouped while the horizontal list stays flat.
  */
-async function loadRootCategories(): Promise<{ items: CategorySummary[]; error: string | null }> {
-  if (rootCategoryCache && rootCategoryCache.expiresAt > Date.now()) {
-    return { items: rootCategoryCache.items, error: null }
+async function loadStorefrontCategories(): Promise<{ items: CategorySummary[]; error: string | null }> {
+  if (storefrontCategoryCache && storefrontCategoryCache.expiresAt > Date.now()) {
+    return { items: storefrontCategoryCache.items, error: null }
   }
 
   const { data, error } = await supabase
     .from('categories')
-    .select('category_id, category, category_image_url, category_icon, seo_name')
-    .is('parent_id', null)
+    .select('category_id, category, category_image_url, category_icon, seo_name, parent_id, position, product_count')
     .eq('status', 'A')
     .order('position', { ascending: true })
     .order('category', { ascending: true })
@@ -908,44 +942,81 @@ async function loadRootCategories(): Promise<{ items: CategorySummary[]; error: 
     return { items: [], error: error.message }
   }
 
-  const roots = (data ?? []).filter(isStorefrontCategoryVisible)
-  const counts = await Promise.all(roots.map((row) => countCategoryTreeListings(row.category_id)))
+  const rows = (data ?? []).filter((row) =>
+    isStorefrontCategoryVisible({ category_id: row.category_id, category: row.category }),
+  ) as CategoryRailRow[]
 
-  const items = roots
-    .map((row, index) => ({
-      category_id: row.category_id,
-      category: row.category,
-      category_image_url: categoryArtworkUrl(row.category_image_url),
-      category_icon: row.category_icon,
-      product_count: counts[index],
-      seo_name: row.seo_name,
-    }))
-    .filter((row) => row.product_count > 0)
-    .sort((a, b) => b.product_count - a.product_count || a.category.localeCompare(b.category))
+  // Home rail only shows tiles with curated category artwork — never icon-only.
+  const rowsWithImage = rows.filter((row) => Boolean(categoryArtworkUrl(row.category_image_url)))
+  const imageIds = new Set(rowsWithImage.map((row) => row.category_id))
 
-  rootCategoryCache = { items, expiresAt: Date.now() + ROOT_CATEGORY_TTL_MS }
+  const byId = new Map(rows.map((row) => [row.category_id, row]))
+  const childrenByParent = new Map<string, CategoryRailRow[]>()
+  const roots: CategoryRailRow[] = []
+
+  for (const row of rowsWithImage) {
+    const parentId = row.parent_id?.trim() || null
+    // Treat as a rail root when it has no parent, or parent isn't image-backed.
+    if (!parentId || !imageIds.has(parentId)) {
+      roots.push(row)
+      continue
+    }
+    const list = childrenByParent.get(parentId) ?? []
+    list.push(row)
+    childrenByParent.set(parentId, list)
+  }
+
+  const items: CategorySummary[] = []
+  const seen = new Set<string>()
+
+  function pushRow(row: CategoryRailRow) {
+    if (seen.has(row.category_id)) return
+    if (!categoryArtworkUrl(row.category_image_url)) return
+    seen.add(row.category_id)
+    const parentId = row.parent_id?.trim() || null
+    const parentName = parentId ? byId.get(parentId)?.category ?? null : null
+    items.push(toCategorySummary(row, parentName))
+  }
+
+  function walk(row: CategoryRailRow) {
+    pushRow(row)
+    for (const child of childrenByParent.get(row.category_id) ?? []) {
+      walk(child)
+    }
+  }
+
+  // Parent → nested children (any depth), then orphans whose parent is missing/hidden.
+  for (const root of roots) {
+    walk(root)
+  }
+
+  for (const row of rowsWithImage) {
+    if (!seen.has(row.category_id)) pushRow(row)
+  }
+
+  storefrontCategoryCache = { items, expiresAt: Date.now() + STOREFRONT_CATEGORY_TTL_MS }
   return { items, error: null }
 }
 
-/** Category rail — roots only; subcategories are browsed from the category page. */
+/** Home category rail — mixed parents + subcategories, load-more paginated. */
 export async function fetchCategoriesPage(
   page: number,
-  pageSize = COMMERCE_HORIZONTAL_PAGE_SIZE,
+  pageSize = CATEGORY_RAIL_PAGE_SIZE,
 ): Promise<PaginatedResult<CategorySummary>> {
-  const { items: roots, error } = await loadRootCategories()
+  const { items: categories, error } = await loadStorefrontCategories()
 
   if (error) {
     return { items: [], page, pageSize, hasMore: false, error }
   }
 
   const from = page * pageSize
-  const items = roots.slice(from, from + pageSize)
+  const items = categories.slice(from, from + pageSize)
 
   return {
     items,
     page,
     pageSize,
-    hasMore: from + items.length < roots.length,
+    hasMore: from + items.length < categories.length,
     error: null,
   }
 }
@@ -1102,11 +1173,24 @@ export async function fetchCategoryBySlug(slug: string): Promise<{
  * a root reads as near-empty while its subcategories hold the catalogue. The
  * page browses the whole tree, so it counts the whole tree.
  */
-async function mapCategorySummaryRow(row: CategorySummary): Promise<CategorySummary> {
+async function mapCategorySummaryRow(
+  row: {
+    category_id: string
+    category: string
+    category_image_url: string | null
+    category_icon: string | null
+    product_count: number | null
+    seo_name: string | null
+  },
+): Promise<CategorySummary> {
   return {
-    ...row,
+    id: row.category_id,
+    category_id: row.category_id,
+    category: row.category,
     category_image_url: categoryArtworkUrl(row.category_image_url),
+    category_icon: row.category_icon,
     product_count: await countCategoryTreeListings(row.category_id),
+    seo_name: row.seo_name,
   }
 }
 

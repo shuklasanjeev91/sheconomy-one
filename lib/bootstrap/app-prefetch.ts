@@ -10,6 +10,7 @@ import { fetchCommunityFeedPage } from '~/community/lib/community'
 import { fetchNotifications } from '~/community/lib/notifications'
 import { homeLoader } from '~/commerce/lib/home-loader'
 import {
+  CATEGORY_RAIL_PAGE_SIZE,
   COMMERCE_HORIZONTAL_PAGE_SIZE,
   COMMERCE_PAGE_SIZE,
   fetchListingFeedPage,
@@ -41,7 +42,7 @@ export function startCoreTabPrefetch(): void {
 
   prefetchNativeLoader(CACHE_KEYS.home, homeLoader)
   prefetchAppCache(CACHE_KEYS.categories, async () => {
-    const result = await fetchCategoriesPage(0, COMMERCE_HORIZONTAL_PAGE_SIZE)
+    const result = await fetchCategoriesPage(0, CATEGORY_RAIL_PAGE_SIZE)
     return toPageSnapshot(result.items, 0, result.hasMore)
   })
   prefetchAppCache(`${CACHE_KEYS.community}:recent`, async () => {
