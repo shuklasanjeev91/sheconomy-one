@@ -52,6 +52,8 @@ type ImageUploadFieldProps = {
   aspect?: MediaAspectPreset | AspectRatioTuple | null
   /** Skip crop sheet even when aspect is set. */
   skipCrop?: boolean
+  /** How previews fit their container (default cover). */
+  previewObjectFit?: 'cover' | 'contain'
 }
 
 export function ImageUploadField({
@@ -68,6 +70,7 @@ export function ImageUploadField({
   accept = 'image',
   aspect = null,
   skipCrop = false,
+  previewObjectFit = 'cover',
 }: ImageUploadFieldProps) {
   const ui = useAppUi()
   const toast = useAppToast()
@@ -252,12 +255,14 @@ export function ImageUploadField({
       >
         <YStack gap="$3" padding={value.length === 0 && isWeb ? '$3' : 0}>
           {value.length > 0 ? (
-            <XStack gap="$2" flexWrap="wrap">
+            <XStack gap="$2" flexWrap="wrap" width={previewObjectFit === 'contain' && !multiple ? '100%' : undefined}>
               {value.map((image, index) => (
                 <ImagePreviewTile
                   key={`${image.uri}-${index}`}
                   image={image}
-                  isCover={index === 0}
+                  isCover={index === 0 && multiple}
+                  objectFit={previewObjectFit}
+                  responsive={previewObjectFit === 'contain' && !multiple}
                   onRemove={() => removeAt(index)}
                 />
               ))}
@@ -348,30 +353,39 @@ export function ImageUploadField({
 function ImagePreviewTile({
   image,
   isCover,
+  objectFit = 'cover',
+  responsive = false,
   onRemove,
 }: {
   image: PickedImage
   isCover?: boolean
+  objectFit?: 'cover' | 'contain'
+  /** Full-width contain preview that preserves aspect ratio. */
+  responsive?: boolean
   onRemove: () => void
 }) {
   const ui = useAppUi()
   const isVideo = image.mimeType?.startsWith('video/')
+  const tileWidth = responsive ? '100%' : 96
+  const tileHeight = responsive ? 220 : 96
 
   return (
     <YStack
-      width={96}
-      height={96}
+      width={tileWidth}
+      maxWidth={responsive ? '100%' : 96}
+      height={tileHeight}
       borderRadius={12}
       overflow="hidden"
       borderWidth={1}
       borderColor={ui.borderSubtle}
       backgroundColor={ui.surfaceMuted}
       position="relative"
+      alignSelf={responsive ? 'stretch' : undefined}
     >
       {isVideo && Platform.OS === 'web' ? (
         <video
           src={image.uri}
-          style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+          style={{ width: '100%', height: '100%', objectFit }}
           muted
           playsInline
         />
@@ -380,7 +394,14 @@ function ImagePreviewTile({
           <Icons.Video size={28} color="white" />
         </YStack>
       ) : (
-        <Image src={image.uri} width="100%" height="100%" objectFit="cover" alt="" />
+        <Image
+          src={image.uri}
+          width="100%"
+          height="100%"
+          objectFit={objectFit}
+          alt=""
+          {...(Platform.OS === 'web' ? { loading: 'lazy' as const } : null)}
+        />
       )}
       {isCover ? (
         <YStack

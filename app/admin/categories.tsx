@@ -2,6 +2,10 @@ import { useEffect, useMemo, useState, type ReactNode } from 'react'
 import { useRouter } from 'one'
 
 import {
+  ImageUploadField,
+  preparePickedImagesForUpload,
+} from '~/components/media/ImageUploadField'
+import {
   Badge,
   Button,
   ConfirmDialog,
@@ -28,8 +32,12 @@ import {
 } from '~/components/ui'
 import { getShadowStyle, radius } from '~/config/tokens'
 import { useAppLayout } from '~/hooks/useAppLayout'
+import { useUploadProgress } from '~/hooks/useUploadProgress'
+import { optimizeCategoryImages } from '~/lib/media/optimize-category-image'
+import type { PickedImage } from '~/lib/media/pick-image'
 import { commerceRoutes } from '~/lib/routes'
 import { supabase, type Json, type Tables, type TablesInsert, type TablesUpdate } from '~/lib/supabase'
+import { uploadCategoryImage } from '~/lib/supabase/storage-upload'
 
 type CategoryRow = Tables<'categories'>
 type CategoryInsert = TablesInsert<'categories'>
@@ -112,10 +120,35 @@ function AdminCategoriesManager() {
   const [loading, setLoading] = useState(true)
   const [productsLoading, setProductsLoading] = useState(false)
   const [saving, setSaving] = useState(false)
+  const [isUploadingImage, setIsUploadingImage] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [formOpen, setFormOpen] = useState(false)
   const [formMode, setFormMode] = useState<'create' | 'edit'>('create')
   const [form, setForm] = useState<CategoryForm>(EMPTY_FORM)
+  const [imageImages, setImageImages] = useState<PickedImage[]>([])
+  const [isOptimizingImage, setIsOptimizingImage] = useState(false)
+  const { progress: uploadProgress, track: trackUpload, reset: resetUpload } = useUploadProgress()
+  const formBusy = saving || isUploadingImage || isOptimizingImage
+
+  async function handleImageImagesChange(images: PickedImage[]) {
+    if (!images.length) {
+      setImageImages([])
+      return
+    }
+    setIsOptimizingImage(true)
+    try {
+      const optimized = await optimizeCategoryImages(images.slice(0, 1))
+      setImageImages(optimized)
+    } catch {
+      setImageImages(images.slice(0, 1))
+      toast.show('Image optimization skipped', {
+        tone: 'warning',
+        message: 'The original image will be used.',
+      })
+    } finally {
+      setIsOptimizingImage(false)
+    }
+  }
 
   const selected = categories.find((category) => category.category_id === selectedId) ?? categories[0] ?? null
   const nodes = useMemo(() => flattenCategoryTree(categories), [categories])
@@ -244,13 +277,35 @@ function AdminCategoriesManager() {
     setFormMode('create')
     if (parent) setSelectedId(parent.category_id)
     setForm({ ...EMPTY_FORM, parent_id: parentId ?? '', position: String(getNextPosition(categories, parentId ?? null)) })
+    setImageImages([])
+    resetUpload()
     setFormOpen(true)
   }
 
   function openEdit(category: CategoryRow) {
     setFormMode('edit')
     setForm(categoryToForm(category))
+    setImageImages([])
+    resetUpload()
     setFormOpen(true)
+  }
+
+  async function resolveCategoryImageUrl() {
+    if (!imageImages.length) return form.category_image_url
+
+    const [file] = await preparePickedImagesForUpload(imageImages.slice(0, 1))
+    if (!file) throw new Error('Please select a valid image.')
+
+    setIsUploadingImage(true)
+    trackUpload(1)
+    const { data, error: uploadError } = await uploadCategoryImage(file, {
+      categoryId: formMode === 'edit' ? selected?.category_id : null,
+      onProgress: trackUpload,
+    })
+    if (uploadError || !data) {
+      throw new Error(uploadError ?? 'Category image upload failed.')
+    }
+    return data.publicUrl
   }
 
   async function submitForm() {
@@ -261,32 +316,40 @@ function AdminCategoriesManager() {
     }
 
     setSaving(true)
-    const payload = formToPayload(form)
-    const result =
-      formMode === 'create'
-        ? await supabase.from('categories').insert(payload as CategoryInsert).select('*').single()
-        : selected
-          ? await supabase.from('categories').update(payload as CategoryUpdate).eq('category_id', selected.category_id).select('*').single()
-          : null
+    try {
+      const categoryImageUrl = await resolveCategoryImageUrl()
+      const payload = formToPayload({ ...form, category_image_url: categoryImageUrl })
+      const result =
+        formMode === 'create'
+          ? await supabase.from('categories').insert(payload as CategoryInsert).select('*').single()
+          : selected
+            ? await supabase.from('categories').update(payload as CategoryUpdate).eq('category_id', selected.category_id).select('*').single()
+            : null
 
-    if (!result) {
+      if (!result) return
+
+      if (result.error) {
+        setError(result.error.message)
+        toast.show('Unable to save category', { tone: 'danger', message: result.error.message })
+        return
+      }
+
+      const saved = result.data as CategoryRow
+      setCategories((current) => (formMode === 'create' ? [...current, saved] : current.map((row) => (row.category_id === saved.category_id ? saved : row))))
+      setSelectedId(saved.category_id)
+      setImageImages([])
+      resetUpload()
+      setFormOpen(false)
+      toast.show(formMode === 'create' ? 'Category created' : 'Category updated', { tone: 'success' })
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Try again.'
+      setError(message)
+      toast.show('Unable to save category', { tone: 'danger', message })
+    } finally {
+      setIsUploadingImage(false)
       setSaving(false)
-      return
+      resetUpload()
     }
-
-    if (result.error) {
-      setError(result.error.message)
-      toast.show('Unable to save category', { tone: 'danger', message: result.error.message })
-      setSaving(false)
-      return
-    }
-
-    const saved = result.data as CategoryRow
-    setCategories((current) => (formMode === 'create' ? [...current, saved] : current.map((row) => (row.category_id === saved.category_id ? saved : row))))
-    setSelectedId(saved.category_id)
-    setFormOpen(false)
-    setSaving(false)
-    toast.show(formMode === 'create' ? 'Category created' : 'Category updated', { tone: 'success' })
   }
 
   async function updateStatus(category: CategoryRow, status: CategoryStatus) {
@@ -420,8 +483,17 @@ function AdminCategoriesManager() {
         categories={categories}
         selectedId={formMode === 'edit' ? selected?.category_id ?? null : null}
         createUnderCategory={formMode === 'create' && form.parent_id ? categories.find((category) => category.category_id === form.parent_id) ?? null : null}
-        busy={saving}
-        onOpenChange={setFormOpen}
+        busy={formBusy}
+        imageImages={imageImages}
+        uploadProgress={uploadProgress}
+        onImageImagesChange={handleImageImagesChange}
+        onOpenChange={(open) => {
+          setFormOpen(open)
+          if (!open) {
+            setImageImages([])
+            resetUpload()
+          }
+        }}
         onChange={(patch) => setForm((current) => ({ ...current, ...patch }))}
         onSubmit={submitForm}
       />
@@ -702,6 +774,9 @@ function CategoryEditorDialog({
   selectedId,
   createUnderCategory,
   busy,
+  imageImages,
+  uploadProgress,
+  onImageImagesChange,
   onOpenChange,
   onChange,
   onSubmit,
@@ -713,26 +788,40 @@ function CategoryEditorDialog({
   selectedId: string | null
   createUnderCategory: CategoryRow | null
   busy: boolean
+  imageImages: PickedImage[]
+  uploadProgress: number | null
+  onImageImagesChange: (images: PickedImage[]) => void
   onOpenChange: (open: boolean) => void
   onChange: (patch: Partial<CategoryForm>) => void
   onSubmit: () => void
 }) {
   const mainCategoryOptions = getParentOptions(categories, selectedId)
   const isCreatingSubcategory = mode === 'create' && !!createUnderCategory
+  const currentImageUrl = form.category_image_url.trim()
+  const showCurrentImage = !!currentImageUrl && imageImages.length === 0
 
   return (
     <Dialog modal open={open} onOpenChange={onOpenChange}>
       <Dialog.Portal>
         <DialogOverlay />
-        <DialogContent maxWidth={880} maxHeight="92vh" width="94%">
-          <DialogTitle>{mode === 'create' ? (isCreatingSubcategory ? 'Create subcategory' : 'Create main category') : 'Edit category'}</DialogTitle>
-          <DialogDescription>
-            {isCreatingSubcategory
-              ? `This new category will be placed under ${createUnderCategory.category}.`
-              : 'Manage category hierarchy, SEO metadata, image fields, and visibility.'}
-          </DialogDescription>
-          <ScrollView maxHeight="70vh" showsVerticalScrollIndicator={false}>
-            <YStack gap="$3" paddingRight="$1">
+        <DialogContent maxWidth={880} maxHeight="92vh" width="94%" overflow="hidden">
+          <YStack gap="$3" maxHeight="100%" width="100%">
+            <YStack gap="$2" flexShrink={0} paddingRight="$6">
+              <DialogTitle>{mode === 'create' ? (isCreatingSubcategory ? 'Create subcategory' : 'Create main category') : 'Edit category'}</DialogTitle>
+              <DialogDescription>
+                {isCreatingSubcategory
+                  ? `This new category will be placed under ${createUnderCategory.category}.`
+                  : 'Manage category hierarchy, SEO metadata, image fields, and visibility.'}
+              </DialogDescription>
+            </YStack>
+
+            <ScrollView
+              flex={1}
+              maxHeight="58vh"
+              minHeight={180}
+              showsVerticalScrollIndicator
+            >
+              <YStack gap="$3" paddingRight="$1" paddingBottom="$2">
               <Field label="Category name" required>
                 <Input value={form.category} onChangeText={(category) => onChange({ category, seo_name: form.seo_name || generateSeoName(category) })} />
               </Field>
@@ -773,9 +862,47 @@ function CategoryEditorDialog({
                   </Field>
                 </YStack>
               </XStack>
-              <Field label="Category image URL">
-                <Input value={form.category_image_url} onChangeText={(category_image_url) => onChange({ category_image_url })} />
-              </Field>
+              <YStack gap="$2">
+                {showCurrentImage ? (
+                  <YStack
+                    width="100%"
+                    height={180}
+                    borderRadius={radius.card}
+                    borderWidth={1}
+                    borderColor="$borderColor"
+                    backgroundColor="$color3"
+                    overflow="hidden"
+                    alignItems="center"
+                    justifyContent="center"
+                    position="relative"
+                  >
+                    <Image
+                      src={currentImageUrl}
+                      alt={form.category || 'Category image'}
+                      width="100%"
+                      height="100%"
+                      objectFit="contain"
+                      {...({ loading: 'lazy' } as object)}
+                    />
+                  </YStack>
+                ) : null}
+                {showCurrentImage ? (
+                  <Text fontSize={12} color="$color10">
+                    Current image shown above. Select a new image to replace it, or leave empty to keep this one.
+                  </Text>
+                ) : null}
+                <ImageUploadField
+                  label={showCurrentImage ? 'Replace category image' : 'Category image'}
+                  value={imageImages}
+                  onChange={onImageImagesChange}
+                  disabled={busy}
+                  skipCrop
+                  previewObjectFit="contain"
+                  hint="Drag and drop or browse. PNG, JPG, WebP, or GIF up to 8 MB. Oversized images are resized automatically (aspect ratio kept). Uploads when you save."
+                  uploadProgress={uploadProgress}
+                  uploadLabel="Uploading to categories_media…"
+                />
+              </YStack>
               <XStack gap="$3" flexWrap="wrap">
                 <YStack flex={1} minWidth={220}>
                   <Field label="Category icon">
@@ -806,12 +933,25 @@ function CategoryEditorDialog({
               <Field label="category_meta JSON">
                 <TextArea value={form.categoryMetaText} onChangeText={(categoryMetaText) => onChange({ categoryMetaText })} />
               </Field>
-            </YStack>
-          </ScrollView>
-          <XStack gap="$2" justifyContent="flex-end" flexWrap="wrap">
-            <Button tone="outline" onPress={() => onOpenChange(false)} disabled={busy}>Cancel</Button>
-            <Button onPress={onSubmit} disabled={busy || !form.category.trim()}>{busy ? 'Saving...' : 'Save category'}</Button>
-          </XStack>
+              </YStack>
+            </ScrollView>
+
+            <XStack
+              gap="$2"
+              justifyContent="flex-end"
+              flexWrap="wrap"
+              flexShrink={0}
+              paddingTop="$2"
+              paddingBottom="$2"
+              borderTopWidth={1}
+              borderTopColor="$borderColor"
+            >
+              <Button tone="outline" onPress={() => onOpenChange(false)} disabled={busy}>Cancel</Button>
+              <Button onPress={onSubmit} disabled={busy || !form.category.trim()}>
+                {busy ? (uploadProgress != null ? 'Uploading…' : 'Saving...') : 'Save category'}
+              </Button>
+            </XStack>
+          </YStack>
         </DialogContent>
       </Dialog.Portal>
     </Dialog>
@@ -870,7 +1010,27 @@ function FilterSelect({ value, options, onValueChange }: { value: string; option
 function CategoryAvatar({ category, size }: { category: Pick<CategoryRow, 'category' | 'category_image_url' | 'category_icon' | 'main_pair'>; size: number }) {
   const imageUrl = getCategoryImage(category)
   if (imageUrl) {
-    return <Image src={imageUrl} alt={category.category} width={size} height={size} objectFit="cover" borderRadius={radius.card} backgroundColor="$color3" />
+    return (
+      <YStack
+        width={size}
+        height={size}
+        borderRadius={radius.card}
+        backgroundColor="$color3"
+        overflow="hidden"
+        alignItems="center"
+        justifyContent="center"
+        position="relative"
+      >
+        <Image
+          src={imageUrl}
+          alt={category.category}
+          width="100%"
+          height="100%"
+          objectFit="contain"
+          {...({ loading: 'lazy' } as object)}
+        />
+      </YStack>
+    )
   }
 
   return (

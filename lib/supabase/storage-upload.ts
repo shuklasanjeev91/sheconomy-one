@@ -13,10 +13,19 @@ export const STORAGE_BUCKETS = {
   shopImages: 'shop-images',
   postImages: 'post-images',
   visualPreviews: 'visual-previews',
+  categoriesMedia: 'categories_media',
 } as const
 
 const MAX_IMAGE_BYTES = 8 * 1024 * 1024
 const MAX_VIDEO_BYTES = 100 * 1024 * 1024
+const CATEGORY_IMAGE_MAX_BYTES = 8 * 1024 * 1024
+const CATEGORY_IMAGE_ACCEPTED_MIME = [
+  'image/jpeg',
+  'image/jpg',
+  'image/png',
+  'image/webp',
+  'image/gif',
+] as const
 
 export type UploadResult = {
   path: string
@@ -369,6 +378,40 @@ export async function uploadShopLogoImage(
   const path = `${userId}/shops/${shopId}/logo/${Date.now()}-${randomSuffix()}.${ext}`
 
   return uploadStorageObject(STORAGE_BUCKETS.shopImages, path, file.blob, file.mimeType, options)
+}
+
+/**
+ * Upload curated category / subcategory artwork to the public `categories_media`
+ * bucket. Returns the public URL to store on `categories.category_image_url`.
+ */
+export async function uploadCategoryImage(
+  file: { blob: Blob; mimeType: string; fileName?: string },
+  options?: { categoryId?: string | null; onProgress?: UploadProgressHandler },
+) {
+  const mimeType = file.mimeType || 'image/jpeg'
+  if (!(CATEGORY_IMAGE_ACCEPTED_MIME as readonly string[]).includes(mimeType)) {
+    return {
+      data: null,
+      error: 'Only JPEG, PNG, WebP, or GIF images are accepted.',
+    }
+  }
+
+  const size = file.blob.size
+  if (size <= 0) {
+    return { data: null, error: 'Image data is empty.' }
+  }
+  if (size > CATEGORY_IMAGE_MAX_BYTES) {
+    return { data: null, error: 'Image must be 8 MB or smaller.' }
+  }
+
+  const ext = file.fileName?.split('.').pop() ?? extensionForMime(mimeType)
+  const folder = options?.categoryId?.trim() || 'unsaved'
+  const path = `category_images/uploads/${folder}/${Date.now()}-${randomSuffix()}.${ext}`
+
+  return uploadStorageObject(STORAGE_BUCKETS.categoriesMedia, path, file.blob, mimeType, {
+    onProgress: options?.onProgress,
+    maxBytes: CATEGORY_IMAGE_MAX_BYTES,
+  })
 }
 
 /** Upload a user selfie / room photo for visual preview (private bucket). */
