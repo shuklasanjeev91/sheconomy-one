@@ -1,4 +1,4 @@
-import { Text, YStack } from '~/components/ui'
+import { Text, Skeleton, XStack, YStack } from '~/components/ui'
 import { AppLink } from '~/components/navigation/AppLink'
 import { getShadowStyle } from '~/config/tokens'
 import type { CategorySummary } from '~/lib/supabase/commerce'
@@ -17,9 +17,10 @@ type CategoryChipProps = {
   category: CategorySummary
 }
 
-/** Category discovery tile — rectangle card, brand fallback, label stack. */
+/** Category discovery tile — rectangle card, parent label for subcategories. */
 export function CategoryChip({ category }: CategoryChipProps) {
   const ui = useAppUi()
+  const parentLabel = category.parent_category?.trim() || null
   const label =
     category.category.length > 18
       ? `${category.category.slice(0, 16)}…`
@@ -30,7 +31,7 @@ export function CategoryChip({ category }: CategoryChipProps) {
       <YStack
         width={TILE_WIDTH}
         alignItems="center"
-        gap="$2"
+        gap="$1.5"
         cursor="pointer"
         animation="quick"
         hoverStyle={{ y: -3, borderColor: ui.brand, opacity: 0.95 }}
@@ -57,7 +58,19 @@ export function CategoryChip({ category }: CategoryChipProps) {
             alt={category.category}
           />
         </YStack>
-        {/* <Text
+        {parentLabel ? (
+          <Text
+            fontSize={10}
+            fontWeight="500"
+            textAlign="center"
+            numberOfLines={1}
+            color={ui.textMuted}
+            width="100%"
+          >
+            {/* {parentLabel} */}
+          </Text>
+        ) : null}
+        <Text
           fontSize={12}
           fontWeight="600"
           textAlign="center"
@@ -67,14 +80,30 @@ export function CategoryChip({ category }: CategoryChipProps) {
           width="100%"
           letterSpacing={-0.1}
         >
-          {label}
+          {/* {label} */}
         </Text>
-        {category.product_count ? (
-          <Text fontSize={11} color={ui.textMuted} textAlign="center" fontWeight="500">
-            {category.product_count} {category.product_count === 1 ? 'item' : 'items'}
-          </Text>
-        ) : null} */}
       </YStack>
     </AppLink>
+  )
+}
+
+/** Placeholder tile matching CategoryChip dimensions for horizontal load states. */
+export function CategoryChipSkeleton() {
+  return (
+    <YStack width={TILE_WIDTH} alignItems="center" gap="$1.5">
+      <Skeleton width={TILE_WIDTH} height={TILE_HEIGHT} borderRadius={8} />
+      <Skeleton width="70%" height={10} borderRadius={4} />
+      <Skeleton width="90%" height={12} borderRadius={4} />
+    </YStack>
+  )
+}
+
+export function CategoryRailSkeleton({ count = 6 }: { count?: number }) {
+  return (
+    <XStack gap="$3" paddingRight="$5">
+      {Array.from({ length: count }).map((_, index) => (
+        <CategoryChipSkeleton key={index} />
+      ))}
+    </XStack>
   )
 }

@@ -2,7 +2,7 @@ import { Platform } from 'react-native'
 import { AppLink } from '~/components/navigation/AppLink'
 
 import { AvailableOffersCard } from '~/commerce/components/AvailableOffersCard'
-import { CategoryChip } from '~/commerce/components/CategoryChip'
+import { CategoryChip, CategoryChipSkeleton, CategoryRailSkeleton } from '~/commerce/components/CategoryChip'
 import { CommerceSection } from '~/commerce/components/CommerceSection'
 import { FollowedShopsRail } from '~/commerce/components/FollowedShopsRail'
 import { HomeHeroSlider, buildHomeHeroSlides } from '~/commerce/components/HomeHeroSlider'
@@ -139,6 +139,14 @@ export function HomeScreen({ data, error, loading = false }: HomeScreenProps) {
               hasMore={categoriesFeed.hasMore}
               isLoadingMore={categoriesFeed.isLoadingMore}
               onLoadMore={categoriesFeed.loadMore}
+              loadMorePlaceholder={
+                <>
+                  <CategoryChipSkeleton />
+                  <CategoryChipSkeleton />
+                  <CategoryChipSkeleton />
+                  <CategoryChipSkeleton />
+                </>
+              }
             >
               {categoriesFeed.items.map((category) => (
                 <CategoryChip key={category.category_id} category={category} />
@@ -147,7 +155,7 @@ export function HomeScreen({ data, error, loading = false }: HomeScreenProps) {
           </PageSection>
         ) : categoriesFeed.isLoading && categoriesFeed.items.length === 0 ? (
           <PageSection paddingTop="$2">
-            <Spinner size="small" />
+            <CategoryRailSkeleton count={6} />
           </PageSection>
         ) : null}
 
