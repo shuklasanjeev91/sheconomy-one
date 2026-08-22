@@ -11,6 +11,11 @@ import {
   type ProfileAnalytics,
   type ProfileViewer,
 } from '~/community/lib/profile-views'
+import {
+  fetchShoppablePostInsights,
+  type ShoppablePostInsights,
+} from '~/community/lib/shoppable-post-insights'
+import { trackCreatorCommerceInsightsView } from '~/community/lib/community-commerce-analytics'
 import { Avatar, Button, Icons, Spinner, Text, XStack, YStack } from '~/components/ui'
 import { SurfaceCard } from '~/components/layout'
 import { communityRoutes, routes } from '~/lib/routes'
@@ -36,6 +41,7 @@ export function ProfileAnalyticsScreen() {
   const { profile } = useProfile()
   const [analytics, setAnalytics] = useState<ProfileAnalytics | null>(null)
   const [viewers, setViewers] = useState<ProfileViewer[]>([])
+  const [shoppable, setShoppable] = useState<ShoppablePostInsights | null>(null)
   const [loading, setLoading] = useState(true)
 
   const userId = profile?.id ?? user?.id
@@ -47,14 +53,21 @@ export function ProfileAnalyticsScreen() {
     }
     let active = true
     setLoading(true)
-    void Promise.all([fetchProfileAnalytics(userId), fetchRecentProfileViewers(userId, 40)]).then(
-      ([stats, viewersResult]) => {
-        if (!active) return
-        setAnalytics(stats)
-        setViewers(viewersResult.items)
-        setLoading(false)
-      },
-    )
+    void Promise.all([
+      fetchProfileAnalytics(userId),
+      fetchRecentProfileViewers(userId, 40),
+      fetchShoppablePostInsights(userId),
+    ]).then(([stats, viewersResult, shoppableInsights]) => {
+      if (!active) return
+      setAnalytics(stats)
+      setViewers(viewersResult.items)
+      setShoppable(shoppableInsights)
+      trackCreatorCommerceInsightsView({
+        postsWithProducts: shoppableInsights.postsWithProducts,
+        uniqueListings: shoppableInsights.uniqueListingIds.length,
+      })
+      setLoading(false)
+    })
     return () => {
       active = false
     }
@@ -155,6 +168,50 @@ export function ProfileAnalyticsScreen() {
               </YStack>
             )}
           </SurfaceCard>
+
+          {shoppable && shoppable.postsWithProducts > 0 ? (
+            <SurfaceCard padding="$4" gap="$3">
+              <XStack alignItems="center" gap="$2">
+                <Icons.ShoppingBag size={18} color={communityUi.brand} />
+                <Text fontSize={17} fontWeight="700" color={communityUi.text}>
+                  Shoppable posts
+                </Text>
+              </XStack>
+              <Text fontSize={13} color={communityUi.textMuted} lineHeight={19}>
+                Products you have attached across recent community posts.
+              </Text>
+              <XStack flexWrap="wrap" gap="$3">
+                <StatChip
+                  label="Posts with products"
+                  value={shoppable.postsWithProducts}
+                  color={communityUi.brand}
+                />
+                <StatChip
+                  label="Unique listings"
+                  value={shoppable.uniqueListingIds.length}
+                  color="#059669"
+                />
+              </XStack>
+              {profile?.username ? (
+                <AppLink href={communityRoutes.profileShop(profile.username)} asChild>
+                  <Button tone="outline" size="$3" borderRadius={999}>
+                    Open shop from posts
+                  </Button>
+                </AppLink>
+              ) : null}
+              {shoppable.topPosts.length ? (
+                <YStack gap="$2">
+                  {shoppable.topPosts.map((row) => (
+                    <AppLink key={row.postId} href={communityRoutes.post(row.postId)} asChild>
+                      <Button tone="ghost" size="$3" justifyContent="flex-start">
+                        {row.productCount} product{row.productCount === 1 ? '' : 's'} attached
+                      </Button>
+                    </AppLink>
+                  ))}
+                </YStack>
+              ) : null}
+            </SurfaceCard>
+          ) : null}
 
           <AppLink href={communityRoutes.peopleTab('suggestions')} asChild>
             <Button tone="outline" size="$4" borderRadius={999} icon={<Icons.Users size={16} />}>

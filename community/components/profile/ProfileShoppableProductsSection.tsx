@@ -6,7 +6,7 @@ import type { PostProduct } from '~/community/lib/community'
 import { fetchProfileShoppableProducts } from '~/community/lib/profile-shoppable-products'
 import { Button, Icons, Spinner, Text, XStack, YStack } from '~/components/ui'
 import { useAppUi } from '~/lib/theme/useAppUi'
-import { communityRoutes } from '~/lib/routes'
+import { commerceRoutes, communityRoutes } from '~/lib/routes'
 import { radius } from '~/config/tokens'
 
 export function ProfileShoppableProductsSection({
@@ -50,23 +50,33 @@ export function ProfileShoppableProductsSection({
     profileHandle && profileHandle.trim().length > 0
       ? communityRoutes.profileShop(profileHandle)
       : null
+  const storefrontSlug = products.find((product) => product.shopSlug)?.shopSlug ?? null
 
   return (
     <SectionShell>
-      <XStack alignItems="center" justifyContent="space-between" gap={12}>
+      <XStack alignItems="center" justifyContent="space-between" gap={12} flexWrap="wrap">
         <XStack alignItems="center" gap={8} flex={1} minWidth={0}>
           <Icons.ShoppingBag size={18} color={ui.brand} />
           <Text fontSize={16} fontWeight="700" color={ui.text}>
             Shop from posts
           </Text>
         </XStack>
-        {shopHref && products.length > 3 ? (
-          <AppLink href={shopHref}>
-            <Button tone="ghost" size="$2">
-              View all
-            </Button>
-          </AppLink>
-        ) : null}
+        <XStack gap={8} flexWrap="wrap">
+          {storefrontSlug ? (
+            <AppLink href={commerceRoutes.shop(storefrontSlug)}>
+              <Button tone="outline" size="$2" icon={<Icons.Store size={14} />}>
+                Visit storefront
+              </Button>
+            </AppLink>
+          ) : null}
+          {shopHref && products.length > 3 ? (
+            <AppLink href={shopHref}>
+              <Button tone="ghost" size="$2">
+                View all
+              </Button>
+            </AppLink>
+          ) : null}
+        </XStack>
       </XStack>
       <Text fontSize={13} color={ui.textSecondary}>
         Products this member has shared in their community posts.

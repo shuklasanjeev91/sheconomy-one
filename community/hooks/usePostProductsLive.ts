@@ -16,6 +16,7 @@ function snapshotAsAvailable(snapshot: PostProduct): EnrichedPostProduct {
     averageRating: null,
     totalReviews: null,
     soldOut: false,
+    soldOutVariantGated: false,
   }
 }
 

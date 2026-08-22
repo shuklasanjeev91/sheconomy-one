@@ -9,7 +9,7 @@ import { fetchProfileShoppableProducts } from '~/community/lib/profile-shoppable
 import type { PostProduct } from '~/community/lib/community'
 import { Button, Icons, Spinner, Text, XStack, YStack } from '~/components/ui'
 import { FullWidthLayout, PageSection } from '~/components/layout'
-import { communityRoutes } from '~/lib/routes'
+import { communityRoutes, commerceRoutes } from '~/lib/routes'
 import { useAppUi } from '~/lib/theme/useAppUi'
 import { usePageSeo } from '~/components/seo/RouteSeo'
 
@@ -99,11 +99,24 @@ export function ProfileShopScreen() {
                 </Text>
               </YStack>
               {handle ? (
-                <AppLink href={communityRoutes.userProfile(handle)}>
-                  <Button tone="ghost" size="$3" icon={<Icons.ArrowLeft size={16} />}>
-                    Profile
-                  </Button>
-                </AppLink>
+                <XStack gap={8} flexWrap="wrap">
+                  {products.find((product) => product.shopSlug)?.shopSlug ? (
+                    <AppLink
+                      href={commerceRoutes.shop(
+                        products.find((product) => product.shopSlug)!.shopSlug!,
+                      )}
+                    >
+                      <Button tone="outline" size="$3" icon={<Icons.Store size={16} />}>
+                        Visit shop
+                      </Button>
+                    </AppLink>
+                  ) : null}
+                  <AppLink href={communityRoutes.userProfile(handle)}>
+                    <Button tone="ghost" size="$3" icon={<Icons.ArrowLeft size={16} />}>
+                      Profile
+                    </Button>
+                  </AppLink>
+                </XStack>
               ) : null}
             </XStack>
 

@@ -89,6 +89,68 @@ describe('mergePostProductWithLive', () => {
       }),
     ).toBe(false)
   })
+
+  it('marks variant listings sold out when no variation has stock', () => {
+    expect(
+      isListingSoldOut({
+        listing_type: 'physical',
+        has_variations: true,
+        variation_in_stock_count: 0,
+      }),
+    ).toBe(true)
+  })
+
+  it('keeps variant listings available when at least one variation has stock', () => {
+    const merged = mergePostProductWithLive(snapshot, {
+      id: 'listing-1',
+      slug: 'silk-scarf',
+      title: 'Silk scarf',
+      card_title: 'Silk scarf',
+      price: 1200,
+      currency: 'INR',
+      image_url: 'https://cdn.example/scarf.jpg',
+      image_urls: [],
+      images: [],
+      shop_name: 'Atelier',
+      shop_id: 'shop-1',
+      listing_type: 'physical',
+      has_variations: true,
+      variation_in_stock_count: 2,
+      average_rating: null,
+      total_reviews: null,
+      shop_slug: null,
+      shop_owner_user_id: 'shop-1',
+    })
+
+    expect(merged.soldOut).toBe(false)
+    expect(merged.soldOutVariantGated).toBe(false)
+  })
+
+  it('flags variant-gated sold out when all variations are out of stock', () => {
+    const merged = mergePostProductWithLive(snapshot, {
+      id: 'listing-1',
+      slug: 'silk-scarf',
+      title: 'Silk scarf',
+      card_title: 'Silk scarf',
+      price: 1200,
+      currency: 'INR',
+      image_url: 'https://cdn.example/scarf.jpg',
+      image_urls: [],
+      images: [],
+      shop_name: 'Atelier',
+      shop_id: 'shop-1',
+      listing_type: 'physical',
+      has_variations: true,
+      variation_in_stock_count: 0,
+      average_rating: null,
+      total_reviews: null,
+      shop_slug: null,
+      shop_owner_user_id: 'shop-1',
+    })
+
+    expect(merged.soldOut).toBe(true)
+    expect(merged.soldOutVariantGated).toBe(true)
+  })
 })
 
 describe('community listing attribution', () => {
@@ -98,8 +160,17 @@ describe('community listing attribution', () => {
     )
   })
 
+  it('appends source when provided', () => {
+    expect(
+      appendCommunityAttribution('/listing/silk-scarf', 'post-9', { source: 'profile_shop' }),
+    ).toBe('/listing/silk-scarf?ref=community&postId=post-9&source=profile_shop')
+  })
+
   it('builds attributed href from product snapshot', () => {
     expect(buildCommunityListingHref(snapshot, 'post-9')).toContain('ref=community')
     expect(buildCommunityListingHref(snapshot, 'post-9')).toContain('postId=post-9')
+    expect(buildCommunityListingHref(snapshot, 'post-9', { source: 'chat' })).toContain(
+      'source=chat',
+    )
   })
 })

@@ -6,6 +6,8 @@ import {
   postProductToChatListing,
   listingDetailToChatListing,
 } from '~/chat/lib/listing-message'
+import { chatListingPayloadFromEnriched } from '~/chat/hooks/useChatListingLive'
+import { mergePostProductWithLive } from '~/community/lib/post-product-live'
 import type { PostProduct } from '~/community/lib/community'
 
 const product: PostProduct = {
@@ -80,6 +82,59 @@ describe('listingDetailToChatListing', () => {
       price: 1200,
       currency: 'INR',
       imageUrl: 'https://cdn.example/scarf.jpg',
+      slug: 'silk-scarf',
+      shopName: 'Atelier',
+    })
+  })
+})
+
+describe('chatListingPayloadFromEnriched', () => {
+  it('updates chat listing payload from enriched live merge', () => {
+    const listing = {
+      listingId: 'listing-1',
+      title: 'Silk scarf',
+      price: 1200,
+      currency: 'INR',
+      imageUrl: 'https://cdn.example/scarf.jpg',
+      slug: 'silk-scarf',
+      shopName: 'Atelier',
+    }
+    const enriched = mergePostProductWithLive(
+      {
+        listingId: 'listing-1',
+        title: 'Silk scarf',
+        price: 1200,
+        currency: 'INR',
+        imageUrl: 'https://cdn.example/scarf.jpg',
+        slug: 'silk-scarf',
+        shopName: 'Atelier',
+      },
+      {
+        id: 'listing-1',
+        slug: 'silk-scarf',
+        title: 'Silk scarf (live)',
+        card_title: 'Silk scarf (live)',
+        price: 1400,
+        currency: 'INR',
+        image_url: 'https://cdn.example/scarf-new.jpg',
+        image_urls: [],
+        images: [],
+        shop_name: 'Atelier',
+        shop_id: 'shop-1',
+        listing_type: 'physical',
+        average_rating: null,
+        total_reviews: null,
+        shop_slug: null,
+        shop_owner_user_id: 'shop-1',
+      },
+    )
+
+    expect(chatListingPayloadFromEnriched(listing, enriched)).toEqual({
+      listingId: 'listing-1',
+      title: 'Silk scarf (live)',
+      price: 1400,
+      currency: 'INR',
+      imageUrl: 'https://cdn.example/scarf-new.jpg',
       slug: 'silk-scarf',
       shopName: 'Atelier',
     })

@@ -72,6 +72,8 @@ export type ListingSummary = {
   listing_type: string
   quantity?: number | null
   listing_status?: string | null
+  has_variations?: boolean
+  variation_in_stock_count?: number | null
   average_rating: number | null
   total_reviews: number | null
   image_url: string | null
@@ -148,6 +150,7 @@ type ListingRow = {
   is_featured?: boolean
   shipping_required?: boolean | null
   listing_metadata?: unknown
+  listing_variations?: Array<{ stock: number | null }> | null
   listing_delivery_profiles?: Array<{ delivery_profiles: DeliveryProfile | null }> | null
   listing_images: Array<{
     id: string
@@ -236,6 +239,7 @@ const LISTING_CARD_SELECT = `
   is_featured,
   shipping_required,
   listing_metadata,
+  listing_variations(stock),
   listing_images!inner(id, image_url, is_primary, display_order, alt_text, image_metadata),
   shops!inner(
     shop_name,
@@ -311,6 +315,11 @@ export function mapListingImages(
 
 export function mapListingRow(listing: ListingRow): ListingSummary {
   const images = mapListingImages(listing.listing_images)
+  const variations = listing.listing_variations ?? []
+  const hasVariations = variations.length > 0
+  const variationInStockCount = hasVariations
+    ? variations.filter((row) => (row.stock ?? 0) > 0).length
+    : null
   const imageUrls = getListingImageUrls(
     images.map((image) => image.image_url),
     images[0]?.image_url,
@@ -343,6 +352,8 @@ export function mapListingRow(listing: ListingRow): ListingSummary {
     listing_type: listing.listing_type,
     quantity: listing.quantity ?? null,
     listing_status: listing.listing_status ?? null,
+    has_variations: hasVariations,
+    variation_in_stock_count: variationInStockCount,
     average_rating: listing.average_rating,
     total_reviews: listing.total_reviews,
     image_url: imageUrls[0] ?? null,

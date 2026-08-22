@@ -1,13 +1,18 @@
+import { useState } from 'react'
+import { useCart } from '~/commerce/hooks/useCart'
 import { AppLink } from '~/components/navigation/AppLink'
-
 import { CommunityCard } from '~/community/components/CommunityCard'
 import { useReportForYouContent } from '~/community/components/ForYouSlot'
 import { useFollowedShopActivity } from '~/community/hooks/useFollowedShopActivity'
 import { useCommunityUi } from '~/community/lib/community-theme'
 import type { FollowedShopActivityCard } from '~/community/lib/followed-shop-activity'
-import { HorizontalScrollRow } from '~/components/layout'
-import { Button, Icons, Image, Spinner, Text, XStack, YStack } from '~/components/ui'
+import { buildSignInUrl } from '~/lib/auth/redirect'
+import { feedback } from '~/lib/platform/feedback'
+import { navigateApp } from '~/lib/platform/navigate'
 import { commerceRoutes } from '~/lib/routes'
+import { HorizontalScrollRow } from '~/components/layout'
+import { Button, Icons, Image, Spinner, Text, XStack, YStack, useAppToast } from '~/components/ui'
+import { useSupabase } from '~/providers/SupabaseProvider'
 
 export function FollowedShopActivityStrip() {
   const communityUi = useCommunityUi()
@@ -51,69 +56,116 @@ export function FollowedShopActivityStrip() {
 
 function FollowedShopActivityCardItem({ card }: { card: FollowedShopActivityCard }) {
   const communityUi = useCommunityUi()
+  const toast = useAppToast()
+  const { user } = useSupabase()
+  const { addToCart } = useCart()
+  const [adding, setAdding] = useState(false)
+  const showQuickCart = card.source === 'new_arrival' || card.source === 'price_drop'
+
+  async function handleAddToCart() {
+    if (!user) {
+      navigateApp(buildSignInUrl(String(card.href)))
+      return
+    }
+    setAdding(true)
+    try {
+      const { error } = await addToCart(card.listingId)
+      if (error) {
+        toast.show('Choose options on the product page', { tone: 'default', message: error })
+        navigateApp(card.href as never)
+        return
+      }
+      toast.show('Added to cart', { tone: 'success' })
+      void feedback('success')
+    } finally {
+      setAdding(false)
+    }
+  }
 
   return (
-    <AppLink href={card.href} asChild>
-      <YStack
-        width={196}
-        padding={12}
-        gap={10}
-        borderRadius={14}
-        borderWidth={1}
-        borderColor={communityUi.border}
-        backgroundColor={communityUi.pageBg}
-        cursor="pointer"
-        hoverStyle={{ borderColor: communityUi.brand, opacity: 0.96 }}
-        pressStyle={{ opacity: 0.9, scale: 0.98 }}
-      >
-        <YStack
-          width="100%"
-          height={96}
-          borderRadius={10}
-          overflow="hidden"
-          backgroundColor={communityUi.surfaceMuted}
-          alignItems="center"
-          justifyContent="center"
-        >
-          {card.imageUrl ? (
-            <Image src={card.imageUrl} width="100%" height={96} objectFit="cover" />
-          ) : (
-            <Icons.Store size={22} color={communityUi.textMuted} />
-          )}
-        </YStack>
-
-        <YStack gap={6} flex={1}>
-          <XStack
-            alignSelf="flex-start"
-            paddingHorizontal={8}
-            paddingVertical={4}
-            borderRadius={999}
-            backgroundColor={`${communityUi.brand}14`}
+    <YStack
+      width={196}
+      padding={12}
+      gap={10}
+      borderRadius={14}
+      borderWidth={1}
+      borderColor={communityUi.border}
+      backgroundColor={communityUi.pageBg}
+    >
+      <AppLink href={card.href} asChild>
+        <YStack gap={10} cursor="pointer">
+          <YStack
+            width="100%"
+            height={96}
+            borderRadius={10}
+            overflow="hidden"
+            backgroundColor={communityUi.surfaceMuted}
+            alignItems="center"
+            justifyContent="center"
           >
-            <Text fontSize={10} fontWeight="700" color={communityUi.brand}>
-              {card.sourceLabel}
+            {card.imageUrl ? (
+              <Image src={card.imageUrl} width="100%" height={96} objectFit="cover" />
+            ) : (
+              <Icons.Store size={22} color={communityUi.textMuted} />
+            )}
+          </YStack>
+
+          <YStack gap={6} flex={1}>
+            <XStack
+              alignSelf="flex-start"
+              paddingHorizontal={8}
+              paddingVertical={4}
+              borderRadius={999}
+              backgroundColor={`${communityUi.brand}14`}
+            >
+              <Text fontSize={10} fontWeight="700" color={communityUi.brand}>
+                {card.sourceLabel}
+              </Text>
+            </XStack>
+            <Text fontSize={14} fontWeight="700" color={communityUi.text} numberOfLines={2}>
+              {card.title}
             </Text>
-          </XStack>
-          <Text fontSize={14} fontWeight="700" color={communityUi.text} numberOfLines={2}>
-            {card.title}
-          </Text>
-          <XStack gap={6} alignItems="center" flexWrap="wrap">
-            <Text fontSize={12} fontWeight="700" color={communityUi.text}>
-              {card.priceLabel}
-            </Text>
-            {card.previousPriceLabel ? (
-              <Text fontSize={11} color={communityUi.textMuted} textDecorationLine="line-through">
-                {card.previousPriceLabel}
+            <XStack gap={6} alignItems="center" flexWrap="wrap">
+              <Text fontSize={12} fontWeight="700" color={communityUi.text}>
+                {card.priceLabel}
+              </Text>
+              {card.previousPriceLabel ? (
+                <Text fontSize={11} color={communityUi.textMuted} textDecorationLine="line-through">
+                  {card.previousPriceLabel}
+                </Text>
+              ) : null}
+            </XStack>
+            {card.subtitle ? (
+              <Text fontSize={12} color={communityUi.textMuted} numberOfLines={1}>
+                {card.subtitle}
               </Text>
             ) : null}
-          </XStack>
-          {card.subtitle ? (
-            <Text fontSize={12} color={communityUi.textMuted} numberOfLines={1}>
-              {card.subtitle}
-            </Text>
-          ) : null}
+          </YStack>
         </YStack>
-      </YStack>
-    </AppLink>
+      </AppLink>
+
+      {showQuickCart ? (
+        <Button
+          size="$2"
+          tone="outline"
+          borderRadius={999}
+          width="100%"
+          disabled={adding}
+          icon={
+            adding ? (
+              <Spinner size="small" />
+            ) : (
+              <Icons.ShoppingBag size={14} color={communityUi.text} />
+            )
+          }
+          onPress={(e) => {
+            e?.stopPropagation?.()
+            void handleAddToCart()
+          }}
+        >
+          {adding ? 'Adding…' : 'Add to cart'}
+        </Button>
+      ) : null}
+    </YStack>
   )
 }

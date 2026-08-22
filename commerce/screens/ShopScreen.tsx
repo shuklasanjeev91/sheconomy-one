@@ -15,6 +15,7 @@ import {
 } from '~/components/ui'
 import { OptionSearchSheet } from '~/components/search/OptionSearchSheet'
 import { useAppLayout } from '~/hooks/useAppLayout'
+import { ShopCommunityProductsSection } from '~/commerce/components/ShopCommunityProductsSection'
 import {
   AvailableOffersCard,
   ListingGrid,
@@ -316,6 +317,15 @@ export function ShopScreen(
                     currency={shop.shop_currency ?? 'INR'}
                     shopId={shop.id}
                     title="Offers from this shop"
+                  />
+                ) : null}
+
+                {shop.owner?.id ? (
+                  <ShopCommunityProductsSection
+                    shopId={shop.id}
+                    ownerUserId={shop.owner.id}
+                    ownerHandle={shop.owner?.username ?? shopSlug}
+                    shopName={shop.shop_name}
                   />
                 ) : null}
 

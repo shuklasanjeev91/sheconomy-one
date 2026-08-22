@@ -14,12 +14,27 @@ export type EnrichedPostProduct = PostProduct & {
   averageRating: number | null
   totalReviews: number | null
   soldOut: boolean
+  /** True when sold out because all variants are out of stock. */
+  soldOutVariantGated: boolean
 }
 
-export function isListingSoldOut(live: Pick<ListingSummary, 'listing_type' | 'quantity'>): boolean {
+type SoldOutInput = Pick<
+  ListingSummary,
+  'listing_type' | 'quantity' | 'has_variations' | 'variation_in_stock_count'
+>
+
+export function isListingSoldOut(live: SoldOutInput): boolean {
   if (live.listing_type !== LISTING_TYPES.PHYSICAL) return false
+  if (live.has_variations) {
+    return (live.variation_in_stock_count ?? 0) <= 0
+  }
   const quantity = live.quantity ?? null
   return quantity !== null && quantity <= 0
+}
+
+export function isListingSoldOutVariantGated(live: SoldOutInput): boolean {
+  if (live.listing_type !== LISTING_TYPES.PHYSICAL) return false
+  return !!live.has_variations && isListingSoldOut(live)
 }
 
 /** Merge stored post snapshot with a live listing row (if fetched). */
@@ -37,12 +52,14 @@ export function mergePostProductWithLive(
       averageRating: null,
       totalReviews: null,
       soldOut: false,
+      soldOutVariantGated: false,
     }
   }
 
   const livePrice = typeof live.price === 'number' ? live.price : null
   const priceUpdated =
     snapshotPrice != null && livePrice != null && snapshotPrice !== livePrice
+  const soldOut = isListingSoldOut(live)
 
   return {
     listingId: snapshot.listingId ?? live.id,
@@ -60,7 +77,8 @@ export function mergePostProductWithLive(
     snapshotPrice,
     averageRating: live.average_rating ?? null,
     totalReviews: live.total_reviews ?? null,
-    soldOut: isListingSoldOut(live),
+    soldOut,
+    soldOutVariantGated: soldOut && isListingSoldOutVariantGated(live),
   }
 }
 
@@ -76,13 +94,25 @@ export function listingPathForProduct(product: PostProduct): string | null {
 }
 
 /** Append community attribution query params for PDP opens from posts. */
-export function appendCommunityAttribution(path: string, postId: string): string {
+export function appendCommunityAttribution(
+  path: string,
+  postId?: string,
+  options?: { source?: string },
+): string {
   const sep = path.includes('?') ? '&' : '?'
-  return `${path}${sep}ref=community&postId=${encodeURIComponent(postId)}`
+  const params = new URLSearchParams()
+  params.set('ref', 'community')
+  if (postId) params.set('postId', postId)
+  if (options?.source) params.set('source', options.source)
+  return `${path}${sep}${params.toString()}`
 }
 
-export function buildCommunityListingHref(product: PostProduct, postId: string): string | null {
+export function buildCommunityListingHref(
+  product: PostProduct,
+  postId: string,
+  options?: { source?: string },
+): string | null {
   const path = listingPathForProduct(product)
   if (!path) return null
-  return appendCommunityAttribution(path, postId)
+  return appendCommunityAttribution(path, postId, options)
 }

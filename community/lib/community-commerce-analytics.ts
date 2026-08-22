@@ -9,6 +9,7 @@ export type CommunityCommerceSource =
   | 'pdp'
   | 'pdp_share'
   | 'chat'
+  | 'followed_shop'
 
 type BaseProps = {
   postId?: string | null
@@ -106,5 +107,21 @@ export function trackChatListingMessageSent(props: {
   trackAnalyticsEvent('chat_listing_message_sent', {
     listing_id: props.listingId,
     conversation_id: props.conversationId,
+  })
+}
+
+export function trackCommunityFeedShoppableFilter(props: { enabled: boolean }) {
+  trackAnalyticsEvent('community_feed_shoppable_filter', {
+    enabled: props.enabled,
+  })
+}
+
+export function trackCreatorCommerceInsightsView(props: {
+  postsWithProducts: number
+  uniqueListings: number
+}) {
+  trackAnalyticsEvent('creator_commerce_insights_view', {
+    posts_with_products: props.postsWithProducts,
+    unique_listings: props.uniqueListings,
   })
 }

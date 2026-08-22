@@ -9,6 +9,7 @@ import { CommunityShell } from '~/community/components/CommunityShell'
 import { FeedPostCard } from '~/community/components/FeedPostCard'
 import type { FeedSort } from '~/community/components/FeedSortBar'
 import type { FeedContentFilter } from '~/community/lib/community'
+import { trackCommunityFeedShoppableFilter } from '~/community/lib/community-commerce-analytics'
 import { openComposer } from '~/community/lib/composer-store'
 import { useCommunityFeed } from '~/community/hooks/useCommunityFeed'
 import { useCommunitySuggestions } from '~/community/hooks/useCommunitySuggestions'
@@ -17,6 +18,7 @@ import { refreshStories } from '~/community/lib/story-refresh'
 import { useAppBarScroll } from '~/components/navigation/AppBarScrollContext'
 import { ScreenState, YStack } from '~/components/ui'
 import { useAppLayout } from '~/hooks/useAppLayout'
+import { useQueryParam } from '~/hooks/useQueryParams'
 import { APP_LAYOUT } from '~/lib/layout/constants'
 import { isWebRuntime } from '~/lib/platform/capabilities'
 
@@ -32,7 +34,21 @@ const USE_FLASH_LIST = !isWebRuntime()
 
 export function CommunityFeedScreen() {
   const [sort, setSort] = useState<FeedSort>('recent')
+  const shoppableParam = useQueryParam('shoppable')
   const [contentFilter, setContentFilter] = useState<FeedContentFilter | null>(null)
+
+  useEffect(() => {
+    if (shoppableParam === '1') {
+      setContentFilter('shoppable')
+    }
+  }, [shoppableParam])
+
+  const handleContentFilterChange = useCallback((value: FeedContentFilter | null) => {
+    setContentFilter(value)
+    if (value === 'shoppable') {
+      trackCommunityFeedShoppableFilter({ enabled: true })
+    }
+  }, [])
   // Use window-width layout (not Tamagui useMedia) so phones are never treated as
   // desktop — otherwise suggestions are skipped here and the right rail is also hidden.
   const { hasDualSideRails } = useAppLayout()
@@ -148,7 +164,7 @@ export function CommunityFeedScreen() {
       <CommunityFeedHeader
         contentFilter={contentFilter}
         sort={sort}
-        onContentFilterChange={setContentFilter}
+        onContentFilterChange={handleContentFilterChange}
         onSortChange={setSort}
       />
     ),

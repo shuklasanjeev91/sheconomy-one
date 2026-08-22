@@ -330,7 +330,7 @@ function PostProductCard({
             </Text>
           ) : soldOut ? (
             <Text fontSize={12} fontWeight="600" color={communityUi.textMuted}>
-              Sold out
+              {product.soldOutVariantGated ? 'All options sold out' : 'Sold out'}
             </Text>
           ) : (
             <>

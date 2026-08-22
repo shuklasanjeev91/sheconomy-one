@@ -3,6 +3,7 @@ import type {
   FollowedShopDigestSection,
 } from '~/commerce/lib/followed-shop-digest'
 import { formatMoneyLabel } from '~/lib/format'
+import { appendCommunityAttribution } from '~/community/lib/post-product-live'
 import { commerceRoutes } from '~/lib/routes'
 
 export type FollowedShopActivityCard = {
@@ -35,7 +36,8 @@ function listingTitle(item: FollowedShopDigestItem) {
 }
 
 function listingHref(item: FollowedShopDigestItem) {
-  return commerceRoutes.listing(item.slug ?? item.id)
+  const path = String(commerceRoutes.listing(item.slug ?? item.id))
+  return appendCommunityAttribution(path, undefined, { source: 'followed_shop' })
 }
 
 export function buildFollowedShopActivityCards(

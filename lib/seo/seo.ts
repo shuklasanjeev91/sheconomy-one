@@ -227,6 +227,14 @@ export function resolveRouteSeo(pathname: string | null | undefined): PageSeo {
 
   if (path === '/') return HOME_SEO
 
+  if (/^\/profile\/[^/]+\/shop$/.test(path)) {
+    return {
+      title: 'Shop from posts',
+      description: 'Products shared in community posts on SHEconomy.',
+      type: 'website',
+    }
+  }
+
   for (const rule of SORTED_RULES) {
     if (path === rule.path || path.startsWith(`${rule.path}/`)) {
       return rule.seo

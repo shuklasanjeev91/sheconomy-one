@@ -756,6 +756,7 @@ export type FeedContentFilter =
   | 'text'
   | 'articles'
   | 'celebrations'
+  | 'shoppable'
 
 type PostFilter = {
   companyId?: string
@@ -832,7 +833,11 @@ async function fetchPostsPage(
 
   const mapped = ((data ?? []) as PostRow[]).map((row) => mapPost(row))
   const enriched = await enrichPosts(mapped)
-  const items = await applyFeedExclusions(enriched)
+  let items = await applyFeedExclusions(enriched)
+
+  if (filter?.feed === 'shoppable') {
+    items = items.filter((post) => (post.products?.length ?? 0) > 0)
+  }
 
   return {
     items,

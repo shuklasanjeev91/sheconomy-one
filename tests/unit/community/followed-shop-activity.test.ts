@@ -130,7 +130,7 @@ describe('buildFollowedShopActivityCards', () => {
       8,
     )
 
-    expect(cards[0]?.href).toBe('/listing/listing-abc')
+    expect(cards[0]?.href).toBe('/listing/listing-abc?ref=community&source=followed_shop')
     expect(cards[0]?.priceLabel).toContain('900')
   })
 })

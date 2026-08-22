@@ -16,6 +16,7 @@ const FILTERS: Array<{ id: FeedContentFilter | null; label: string }> = [
   { id: 'events', label: 'Events' },
   { id: 'celebrations', label: 'Celebrations' },
   { id: 'polls', label: 'Polls' },
+  { id: 'shoppable', label: 'Shoppable' },
 ]
 
 /** Content-type filters for the community feed — same UI on web and native. */

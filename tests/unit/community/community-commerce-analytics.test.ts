@@ -14,6 +14,8 @@ import {
   trackCommunityPostWishlistToggle,
   trackCommunityPostShareListingToChat,
   trackChatListingMessageSent,
+  trackCommunityFeedShoppableFilter,
+  trackCreatorCommerceInsightsView,
 } from '~/community/lib/community-commerce-analytics'
 
 describe('community commerce analytics', () => {
@@ -99,6 +101,24 @@ describe('community commerce analytics', () => {
     expect(trackAnalyticsEvent).toHaveBeenCalledWith('chat_listing_message_sent', {
       listing_id: 'l1',
       conversation_id: 'chat-3',
+    })
+  })
+
+  it('emits shoppable feed filter events', () => {
+    trackCommunityFeedShoppableFilter({ enabled: true })
+    expect(trackAnalyticsEvent).toHaveBeenCalledWith('community_feed_shoppable_filter', {
+      enabled: true,
+    })
+  })
+
+  it('emits creator commerce insights view events', () => {
+    trackCreatorCommerceInsightsView({
+      postsWithProducts: 4,
+      uniqueListings: 7,
+    })
+    expect(trackAnalyticsEvent).toHaveBeenCalledWith('creator_commerce_insights_view', {
+      posts_with_products: 4,
+      unique_listings: 7,
     })
   })
 })
