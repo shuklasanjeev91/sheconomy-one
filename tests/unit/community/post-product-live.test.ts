@@ -151,6 +151,31 @@ describe('mergePostProductWithLive', () => {
     expect(merged.soldOut).toBe(true)
     expect(merged.soldOutVariantGated).toBe(true)
   })
+
+  it('detects price drops when live price is lower than snapshot', () => {
+    const merged = mergePostProductWithLive(snapshot, {
+      id: 'listing-1',
+      slug: 'silk-scarf',
+      title: 'Silk scarf',
+      card_title: 'Silk scarf',
+      price: 900,
+      currency: 'INR',
+      image_url: 'https://cdn.example/scarf.jpg',
+      image_urls: [],
+      images: [],
+      shop_name: 'Atelier',
+      shop_id: 'shop-1',
+      listing_type: 'physical',
+      average_rating: null,
+      total_reviews: null,
+      shop_slug: null,
+      shop_owner_user_id: 'shop-1',
+    })
+
+    expect(merged.price).toBe(900)
+    expect(merged.priceUpdated).toBe(true)
+    expect(merged.priceDropped).toBe(true)
+  })
 })
 
 describe('community listing attribution', () => {

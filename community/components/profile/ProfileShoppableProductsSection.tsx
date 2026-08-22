@@ -6,6 +6,10 @@ import type { PostProduct } from '~/community/lib/community'
 import { fetchProfileShoppableProducts } from '~/community/lib/profile-shoppable-products'
 import { Button, Icons, Spinner, Text, XStack, YStack } from '~/components/ui'
 import { useAppUi } from '~/lib/theme/useAppUi'
+import { ShareButton } from '~/components/share/ShareButton'
+import { BRAND_NAME } from '~/config/brand'
+import { trackCommunityCommerceShare } from '~/community/lib/community-commerce-analytics'
+import { getProfileShopShareUrl } from '~/lib/share/urls'
 import { commerceRoutes, communityRoutes } from '~/lib/routes'
 import { radius } from '~/config/tokens'
 
@@ -62,6 +66,24 @@ export function ProfileShoppableProductsSection({
           </Text>
         </XStack>
         <XStack gap={8} flexWrap="wrap">
+          {profileHandle ? (
+            <ShareButton
+              variant="ghost"
+              size="$2"
+              label="Share shop"
+              sheetTitle="Share shop from posts"
+              copyLabel="Copy shop link"
+              copyToastMessage="Shop link copied."
+              onOpen={() =>
+                trackCommunityCommerceShare({ surface: 'profile_shop', postId: profileUserId })
+              }
+              payload={{
+                url: getProfileShopShareUrl(profileHandle),
+                title: `Shop from posts on ${BRAND_NAME}`,
+                text: 'Products shared in community posts.',
+              }}
+            />
+          ) : null}
           {storefrontSlug ? (
             <AppLink href={commerceRoutes.shop(storefrontSlug)}>
               <Button tone="outline" size="$2" icon={<Icons.Store size={14} />}>

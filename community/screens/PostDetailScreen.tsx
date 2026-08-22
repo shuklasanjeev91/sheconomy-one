@@ -5,6 +5,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { SendPostSheet } from '~/chat/components/SendPostSheet'
 import { CommunityCard } from '~/community/components/CommunityCard'
 import { CommunityShell } from '~/community/components/CommunityShell'
+import { PostDetailShopBanner } from '~/community/components/PostDetailShopBanner'
 import { FeedPostCard } from '~/community/components/FeedPostCard'
 import { fetchPostById, type CommunityPost } from '~/community/lib/community'
 import { useCommunityUi } from '~/community/lib/community-theme'
@@ -139,6 +140,7 @@ export function PostDetailScreen() {
             Share
           </Button>
         </XStack>
+        <PostDetailShopBanner post={post} />
         <FeedPostCard
           post={post}
           linkToDetail={false}

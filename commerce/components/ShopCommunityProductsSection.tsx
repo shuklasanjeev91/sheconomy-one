@@ -5,7 +5,10 @@ import type { PostProduct } from '~/community/lib/community'
 import { fetchShopShoppableProducts } from '~/community/lib/shop-shoppable-products'
 import { AppLink } from '~/components/navigation/AppLink'
 import { Button, Icons, Spinner, Text, XStack, YStack } from '~/components/ui'
-import { communityRoutes } from '~/lib/routes'
+import { ShareButton } from '~/components/share/ShareButton'
+import { BRAND_NAME } from '~/config/brand'
+import { trackCommunityCommerceShare } from '~/community/lib/community-commerce-analytics'
+import { getProfileShopShareUrl } from '~/lib/share/urls'
 import { useAppUi } from '~/lib/theme/useAppUi'
 import { radius } from '~/config/tokens'
 
@@ -64,11 +67,28 @@ export function ShopCommunityProductsSection({
           </Text>
         </XStack>
         {profileShopHref ? (
-          <AppLink href={profileShopHref}>
-            <Button tone="ghost" size="$2">
-              View all
-            </Button>
-          </AppLink>
+          <XStack gap={6} alignItems="center">
+            <ShareButton
+              variant="icon"
+              label="Share shop from posts"
+              sheetTitle="Share shop from posts"
+              copyLabel="Copy shop link"
+              copyToastMessage="Shop link copied."
+              onOpen={() =>
+                trackCommunityCommerceShare({ surface: 'shop_community', postId: `shop-${shopId}` })
+              }
+              payload={{
+                url: getProfileShopShareUrl(ownerHandle!),
+                title: shopName ? `Shop ${shopName} on ${BRAND_NAME}` : `Shop on ${BRAND_NAME}`,
+                text: 'Products featured in community posts.',
+              }}
+            />
+            <AppLink href={profileShopHref}>
+              <Button tone="ghost" size="$2">
+                View all
+              </Button>
+            </AppLink>
+          </XStack>
         ) : null}
       </XStack>
       <Text fontSize={13} color={ui.textSecondary}>

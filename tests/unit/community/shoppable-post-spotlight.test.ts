@@ -1,0 +1,120 @@
+import { describe, expect, it } from 'vitest'
+
+import type { CommunityPost } from '~/community/lib/community'
+import { buildShoppableSpotlightCards } from '~/community/lib/shoppable-post-spotlight'
+
+describe('buildShoppableSpotlightCards', () => {
+  it('maps posts with products into spotlight cards', () => {
+    const posts = [
+      {
+        id: 'post-1',
+        content: 'Check these out',
+        image_url: null,
+        image_urls: null,
+        media_url: null,
+        media_urls: null,
+        video_url: null,
+        video_urls: null,
+        created_at: '2026-08-22T00:00:00.000Z',
+        post_type: null,
+        user_id: 'user-1',
+        company_id: null,
+        group_id: null,
+        like_count: 0,
+        comment_count: 0,
+        engagement_score: 0,
+        total_reactions: 0,
+        author_verified: false,
+        author: {
+          id: 'user-1',
+          username: 'jane',
+          full_name: 'Jane Doe',
+          avatar_url: null,
+          headline: null,
+        },
+        company: null,
+        group: null,
+        event_title: null,
+        event_description: null,
+        event_start_time: null,
+        event_end_time: null,
+        event_location: null,
+        event_rsvp_enabled: null,
+        community_event_id: null,
+        poll: null,
+        listing_id: null,
+        celebration: null,
+        product: null,
+        products: [
+          {
+            listingId: 'l1',
+            title: 'Silk scarf',
+            price: 1200,
+            currency: 'INR',
+            imageUrl: 'https://cdn.example/scarf.jpg',
+            slug: 'silk-scarf',
+            shopName: 'Atelier',
+          },
+        ],
+        shop: null,
+        link: null,
+        article_title: null,
+        article_tags: null,
+        original_post_id: null,
+        repost_comment: null,
+        originalPost: null,
+        is_pinned: false,
+      },
+      {
+        id: 'post-2',
+        content: 'No products',
+        image_url: null,
+        image_urls: null,
+        media_url: null,
+        media_urls: null,
+        video_url: null,
+        video_urls: null,
+        created_at: '2026-08-21T00:00:00.000Z',
+        post_type: null,
+        user_id: 'user-2',
+        company_id: null,
+        group_id: null,
+        like_count: 0,
+        comment_count: 0,
+        engagement_score: 0,
+        total_reactions: 0,
+        author_verified: false,
+        author: null,
+        company: null,
+        group: null,
+        event_title: null,
+        event_description: null,
+        event_start_time: null,
+        event_end_time: null,
+        event_location: null,
+        event_rsvp_enabled: null,
+        community_event_id: null,
+        poll: null,
+        listing_id: null,
+        celebration: null,
+        product: null,
+        products: null,
+        shop: null,
+        link: null,
+        article_title: null,
+        article_tags: null,
+        original_post_id: null,
+        repost_comment: null,
+        originalPost: null,
+        is_pinned: false,
+      },
+    ] as CommunityPost[]
+
+    const cards = buildShoppableSpotlightCards(posts, 4)
+    expect(cards).toHaveLength(1)
+    expect(cards[0]?.postId).toBe('post-1')
+    expect(cards[0]?.authorHandle).toBe('jane')
+    expect(cards[0]?.productCount).toBe(1)
+    expect(cards[0]?.previewTitle).toBe('Silk scarf')
+  })
+})

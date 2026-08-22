@@ -7,7 +7,7 @@ import {
   normalizeAppOrigin,
 } from '~/config/app-origin'
 import { buildAbsoluteUrl } from '~/lib/platform/url'
-import { getListingShareUrl, getMeetingShareUrl, getPostShareUrl } from '~/lib/share/urls'
+import { getListingShareUrl, getMeetingShareUrl, getPostShareUrl, getProfileShopShareUrl, getShoppableFeedShareUrl, getCommunityListingShareUrl } from '~/lib/share/urls'
 
 describe('buildAbsoluteUrl', () => {
   afterEach(() => {
@@ -54,5 +54,8 @@ describe('buildAbsoluteUrl', () => {
     )
     expect(getListingShareUrl('handmade-bag')).toMatch(/^https:\/\/www\.sheconomy\.in\//)
     expect(getPostShareUrl('abc')).toMatch(/^https:\/\/www\.sheconomy\.in\//)
+    expect(getProfileShopShareUrl('jane')).toMatch(/\/profile\/jane\/shop$/)
+    expect(getShoppableFeedShareUrl()).toContain('shoppable=1')
+    expect(getCommunityListingShareUrl('/listing/scarf', 'post-1', 'feed')).toContain('source=feed')
   })
 })

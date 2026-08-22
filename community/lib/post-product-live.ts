@@ -10,6 +10,8 @@ export type LivePostProductStatus = 'available' | 'unavailable'
 export type EnrichedPostProduct = PostProduct & {
   liveStatus: LivePostProductStatus
   priceUpdated: boolean
+  /** Live price is lower than the snapshot attached to the post. */
+  priceDropped: boolean
   snapshotPrice: number | null
   averageRating: number | null
   totalReviews: number | null
@@ -48,6 +50,7 @@ export function mergePostProductWithLive(
       ...snapshot,
       liveStatus: 'unavailable',
       priceUpdated: false,
+      priceDropped: false,
       snapshotPrice,
       averageRating: null,
       totalReviews: null,
@@ -59,6 +62,8 @@ export function mergePostProductWithLive(
   const livePrice = typeof live.price === 'number' ? live.price : null
   const priceUpdated =
     snapshotPrice != null && livePrice != null && snapshotPrice !== livePrice
+  const priceDropped =
+    snapshotPrice != null && livePrice != null && livePrice < snapshotPrice
   const soldOut = isListingSoldOut(live)
 
   return {
@@ -74,6 +79,7 @@ export function mergePostProductWithLive(
     shopOwnerUserId: live.shop_owner_user_id ?? snapshot.shopOwnerUserId ?? null,
     liveStatus: 'available',
     priceUpdated,
+    priceDropped,
     snapshotPrice,
     averageRating: live.average_rating ?? null,
     totalReviews: live.total_reviews ?? null,

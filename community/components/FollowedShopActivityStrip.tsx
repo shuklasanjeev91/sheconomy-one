@@ -1,10 +1,12 @@
 import { useState } from 'react'
 import { useCart } from '~/commerce/hooks/useCart'
+import { useFavorites } from '~/commerce/hooks/useFavorites'
 import { AppLink } from '~/components/navigation/AppLink'
 import { CommunityCard } from '~/community/components/CommunityCard'
 import { useReportForYouContent } from '~/community/components/ForYouSlot'
 import { useFollowedShopActivity } from '~/community/hooks/useFollowedShopActivity'
 import { useCommunityUi } from '~/community/lib/community-theme'
+import { trackCommunityPostWishlistToggle } from '~/community/lib/community-commerce-analytics'
 import type { FollowedShopActivityCard } from '~/community/lib/followed-shop-activity'
 import { buildSignInUrl } from '~/lib/auth/redirect'
 import { feedback } from '~/lib/platform/feedback'
@@ -59,8 +61,11 @@ function FollowedShopActivityCardItem({ card }: { card: FollowedShopActivityCard
   const toast = useAppToast()
   const { user } = useSupabase()
   const { addToCart } = useCart()
+  const { isFavorite, toggleFavorite } = useFavorites()
   const [adding, setAdding] = useState(false)
+  const [wishlistBusy, setWishlistBusy] = useState(false)
   const showQuickCart = card.source === 'new_arrival' || card.source === 'price_drop'
+  const saved = isFavorite(card.listingId)
 
   async function handleAddToCart() {
     if (!user) {
@@ -79,6 +84,25 @@ function FollowedShopActivityCardItem({ card }: { card: FollowedShopActivityCard
       void feedback('success')
     } finally {
       setAdding(false)
+    }
+  }
+
+  async function handleWishlistToggle() {
+    if (!user) {
+      navigateApp(buildSignInUrl(String(card.href)))
+      return
+    }
+    setWishlistBusy(true)
+    try {
+      await toggleFavorite(card.listingId)
+      void feedback('selection')
+      trackCommunityPostWishlistToggle({
+        listingId: card.listingId,
+        source: 'followed_shop',
+        saved: !saved,
+      })
+    } finally {
+      setWishlistBusy(false)
     }
   }
 
@@ -145,26 +169,46 @@ function FollowedShopActivityCardItem({ card }: { card: FollowedShopActivityCard
       </AppLink>
 
       {showQuickCart ? (
-        <Button
-          size="$2"
-          tone="outline"
-          borderRadius={999}
-          width="100%"
-          disabled={adding}
-          icon={
-            adding ? (
-              <Spinner size="small" />
-            ) : (
-              <Icons.ShoppingBag size={14} color={communityUi.text} />
-            )
-          }
-          onPress={(e) => {
-            e?.stopPropagation?.()
-            void handleAddToCart()
-          }}
-        >
-          {adding ? 'Adding…' : 'Add to cart'}
-        </Button>
+        <XStack gap={8}>
+          <Button
+            size="$2"
+            tone="outline"
+            borderRadius={999}
+            flex={1}
+            disabled={adding}
+            icon={
+              adding ? (
+                <Spinner size="small" />
+              ) : (
+                <Icons.ShoppingBag size={14} color={communityUi.text} />
+              )
+            }
+            onPress={(e) => {
+              e?.stopPropagation?.()
+              void handleAddToCart()
+            }}
+          >
+            {adding ? 'Adding…' : 'Add to cart'}
+          </Button>
+          <Button
+            size="$2"
+            tone="ghost"
+            borderRadius={999}
+            disabled={wishlistBusy}
+            icon={
+              wishlistBusy ? (
+                <Spinner size="small" />
+              ) : (
+                <Icons.Heart size={14} color={saved ? communityUi.brand : communityUi.textMuted} />
+              )
+            }
+            onPress={(e) => {
+              e?.stopPropagation?.()
+              void handleWishlistToggle()
+            }}
+            accessibilityLabel={saved ? 'Remove from wishlist' : 'Save to wishlist'}
+          />
+        </XStack>
       ) : null}
     </YStack>
   )

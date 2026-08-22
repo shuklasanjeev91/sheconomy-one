@@ -12,6 +12,7 @@ function snapshotAsAvailable(snapshot: PostProduct): EnrichedPostProduct {
     ...snapshot,
     liveStatus: 'available',
     priceUpdated: false,
+    priceDropped: false,
     snapshotPrice: snapshot.price,
     averageRating: null,
     totalReviews: null,

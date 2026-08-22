@@ -9,7 +9,11 @@ import { fetchProfileShoppableProducts } from '~/community/lib/profile-shoppable
 import type { PostProduct } from '~/community/lib/community'
 import { Button, Icons, Spinner, Text, XStack, YStack } from '~/components/ui'
 import { FullWidthLayout, PageSection } from '~/components/layout'
+import { ShareButton } from '~/components/share/ShareButton'
+import { BRAND_NAME } from '~/config/brand'
+import { getProfileShopShareUrl } from '~/lib/share/urls'
 import { communityRoutes, commerceRoutes } from '~/lib/routes'
+import { trackCommunityCommerceShare } from '~/community/lib/community-commerce-analytics'
 import { useAppUi } from '~/lib/theme/useAppUi'
 import { usePageSeo } from '~/components/seo/RouteSeo'
 
@@ -100,6 +104,22 @@ export function ProfileShopScreen() {
               </YStack>
               {handle ? (
                 <XStack gap={8} flexWrap="wrap">
+                  <ShareButton
+                    variant="outline"
+                    size="$3"
+                    label="Share shop"
+                    sheetTitle="Share shop from posts"
+                    copyLabel="Copy shop link"
+                    copyToastMessage="Shop link copied."
+                    onOpen={() =>
+                      trackCommunityCommerceShare({ surface: 'profile_shop', postId: profileUserId })
+                    }
+                    payload={{
+                      url: getProfileShopShareUrl(handle),
+                      title: `Shop from ${displayName}'s posts`,
+                      text: `Browse products ${displayName} has shared on ${BRAND_NAME}.`,
+                    }}
+                  />
                   {products.find((product) => product.shopSlug)?.shopSlug ? (
                     <AppLink
                       href={commerceRoutes.shop(

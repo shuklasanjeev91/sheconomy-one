@@ -9,11 +9,12 @@ type ShareButtonProps = {
   payload: SharePayload
   label?: string
   variant?: 'icon' | 'outline' | 'ghost'
-  size?: '$3' | '$4'
+  size?: '$2' | '$3' | '$4'
   sheetTitle?: string
   copyLabel?: string
   copyToastMessage?: string
   extraActions?: ReactNode
+  onOpen?: () => void
 }
 
 export function ShareButton({
@@ -25,8 +26,14 @@ export function ShareButton({
   copyLabel,
   copyToastMessage,
   extraActions,
+  onOpen,
 }: ShareButtonProps) {
   const [open, setOpen] = useState(false)
+
+  function handleOpen() {
+    onOpen?.()
+    setOpen(true)
+  }
 
   const sheet = open ? (
     <ShareSheet
@@ -49,7 +56,7 @@ export function ShareButton({
           borderRadius={999}
           icon={<Icons.Share2 size={18} />}
           aria-label={label}
-          onPress={() => setOpen(true)}
+          onPress={handleOpen}
         />
         {sheet}
       </>
@@ -63,7 +70,7 @@ export function ShareButton({
         size={size}
         borderRadius={999}
         icon={<Icons.Share2 size={15} />}
-        onPress={() => setOpen(true)}
+        onPress={handleOpen}
       >
         {label}
       </Button>

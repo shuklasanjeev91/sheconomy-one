@@ -125,3 +125,23 @@ export function trackCreatorCommerceInsightsView(props: {
     unique_listings: props.uniqueListings,
   })
 }
+
+export type CommunityCommerceShareSurface =
+  | 'profile_shop'
+  | 'shop_community'
+  | 'product_card'
+  | 'shoppable_feed'
+  | 'post_detail'
+  | 'chat_listing'
+
+export function trackCommunityCommerceShare(props: {
+  surface: CommunityCommerceShareSurface
+  postId?: string | null
+  listingId?: string | null
+}) {
+  trackAnalyticsEvent('community_commerce_share', {
+    surface: props.surface,
+    post_id: props.postId ?? undefined,
+    listing_id: props.listingId ?? undefined,
+  })
+}

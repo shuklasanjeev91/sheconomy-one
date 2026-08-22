@@ -28,7 +28,7 @@ import { ProgramsRevisitStrip } from '~/community/components/ProgramsRevisitStri
 import { ProfileViewersStrip } from '~/community/components/ProfileViewersStrip'
 import { ReadLaterRevisitStrip } from '~/community/components/ReadLaterRevisitStrip'
 import { SavedCollectionRevisitStrip } from '~/community/components/SavedCollectionRevisitStrip'
-import { SavedNotesRevisitStrip } from '~/community/components/SavedNotesRevisitStrip'
+import { ShoppablePostsSpotlightStrip } from '~/community/components/ShoppablePostsSpotlightStrip'
 import { ProfileCompletionRevisitStrip } from '~/community/components/ProfileCompletionRevisitStrip'
 import { RecommendationInboxStrip } from '~/community/components/RecommendationInboxStrip'
 import { RecommendationSentRevisitStrip } from '~/community/components/RecommendationSentRevisitStrip'
@@ -148,6 +148,9 @@ export function CommunityFeedHeader({
         </ForYouSlot>
         <ForYouSlot id={FOR_YOU_SLOT.followedShopActivity}>
           <FollowedShopActivityStrip />
+        </ForYouSlot>
+        <ForYouSlot id={FOR_YOU_SLOT.shoppablePostsSpotlight}>
+          <ShoppablePostsSpotlightStrip />
         </ForYouSlot>
         <ForYouSlot id={FOR_YOU_SLOT.wishlistActivity}>
           <WishlistActivityStrip />

@@ -16,6 +16,7 @@ import {
   trackChatListingMessageSent,
   trackCommunityFeedShoppableFilter,
   trackCreatorCommerceInsightsView,
+  trackCommunityCommerceShare,
 } from '~/community/lib/community-commerce-analytics'
 
 describe('community commerce analytics', () => {
@@ -119,6 +120,18 @@ describe('community commerce analytics', () => {
     expect(trackAnalyticsEvent).toHaveBeenCalledWith('creator_commerce_insights_view', {
       posts_with_products: 4,
       unique_listings: 7,
+    })
+  })
+
+  it('emits commerce share events', () => {
+    trackCommunityCommerceShare({
+      surface: 'profile_shop',
+      postId: 'user-1',
+    })
+    expect(trackAnalyticsEvent).toHaveBeenCalledWith('community_commerce_share', {
+      surface: 'profile_shop',
+      post_id: 'user-1',
+      listing_id: undefined,
     })
   })
 })

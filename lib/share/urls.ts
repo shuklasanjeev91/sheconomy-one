@@ -1,3 +1,4 @@
+import { appendCommunityAttribution } from '~/community/lib/post-product-live'
 import {
   appRoutes,
   classRoutes,
@@ -17,6 +18,23 @@ export function getCreatorHubShareUrl(handle: string) {
 
 export function getPostShareUrl(postId: string) {
   return buildAbsoluteUrl(communityRoutes.post(postId))
+}
+
+export function getProfileShopShareUrl(handle: string) {
+  return buildAbsoluteUrl(communityRoutes.profileShop(handle))
+}
+
+export function getShoppableFeedShareUrl() {
+  return buildAbsoluteUrl(`${communityRoutes.home}?shoppable=1`)
+}
+
+/** Attributed listing URL for sharing products from community posts. */
+export function getCommunityListingShareUrl(
+  listingPath: string,
+  postId?: string,
+  source?: string,
+) {
+  return buildAbsoluteUrl(appendCommunityAttribution(listingPath, postId, source ? { source } : undefined))
 }
 
 export function getListingShareUrl(slug: string) {

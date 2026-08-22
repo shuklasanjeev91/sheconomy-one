@@ -2,16 +2,23 @@ import { useState } from 'react'
 import { Platform } from 'react-native'
 
 import { useCart } from '~/commerce/hooks/useCart'
+import { useFavorites } from '~/commerce/hooks/useFavorites'
 import { useChatListingLive, chatListingPayloadFromEnriched } from '~/chat/hooks/useChatListingLive'
 import { useChatTheme } from '~/chat/lib/chat-theme'
 import type { ChatListingPayload } from '~/chat/lib/types'
-import { trackCommunityPostPdpOpen } from '~/community/lib/community-commerce-analytics'
+import {
+  trackCommunityCommerceShare,
+  trackCommunityPostPdpOpen,
+  trackCommunityPostWishlistToggle,
+} from '~/community/lib/community-commerce-analytics'
 import { appendCommunityAttribution } from '~/community/lib/post-product-live'
+import { ShareButton } from '~/components/share/ShareButton'
 import { buildSignInUrl } from '~/lib/auth/redirect'
 import { formatMoneyLabel } from '~/lib/format'
 import { feedback } from '~/lib/platform/feedback'
 import { navigateApp } from '~/lib/platform/navigate'
 import { commerceRoutes } from '~/lib/routes'
+import { getCommunityListingShareUrl } from '~/lib/share/urls'
 import { useSupabase } from '~/providers/SupabaseProvider'
 import { Button, Icons, Image, Spinner, Text, XStack, YStack, useAppToast } from '~/components/ui'
 
@@ -20,7 +27,7 @@ type ListingMessageProps = {
   isOwn: boolean
 }
 
-function listingHref(listing: ChatListingPayload, enrichedPrice?: number | null) {
+function listingHref(listing: ChatListingPayload) {
   if (Platform.OS !== 'web' && listing.listingId) {
     return commerceRoutes.listing(listing.listingId)
   }
@@ -36,9 +43,11 @@ export function ListingMessage({ listing, isOwn }: ListingMessageProps) {
   const toast = useAppToast()
   const { addToCart } = useCart()
   const { user } = useSupabase()
+  const { isFavorite, toggleFavorite } = useFavorites()
   const live = useChatListingLive(listing)
   const display = chatListingPayloadFromEnriched(listing, live)
   const [adding, setAdding] = useState(false)
+  const [wishlistBusy, setWishlistBusy] = useState(false)
   const titleColor = isOwn ? chat.bubbleOutText : chat.bubbleInText
   const metaColor = isOwn ? chat.bubbleMetaOut : chat.bubbleMetaIn
   const unavailable = live.liveStatus === 'unavailable'
@@ -46,6 +55,11 @@ export function ListingMessage({ listing, isOwn }: ListingMessageProps) {
   const href = listingHref(display)
   const priceLabel =
     display.price != null ? formatMoneyLabel(display.price, display.currency ?? 'INR') : null
+  const saved = display.listingId ? isFavorite(display.listingId) : false
+  const shareUrl =
+    href && display.listingId
+      ? getCommunityListingShareUrl(String(href), undefined, 'chat')
+      : null
 
   function openPdp() {
     if (!href) return
@@ -83,6 +97,26 @@ export function ListingMessage({ listing, isOwn }: ListingMessageProps) {
       void feedback('success')
     } finally {
       setAdding(false)
+    }
+  }
+
+  async function handleWishlistToggle() {
+    if (!display.listingId) return
+    if (!user) {
+      navigateApp(buildSignInUrl(String(commerceRoutes.listing(display.slug ?? display.listingId))))
+      return
+    }
+    setWishlistBusy(true)
+    try {
+      await toggleFavorite(display.listingId)
+      void feedback('selection')
+      trackCommunityPostWishlistToggle({
+        listingId: display.listingId,
+        source: 'chat',
+        saved: !saved,
+      })
+    } finally {
+      setWishlistBusy(false)
     }
   }
 
@@ -124,7 +158,11 @@ export function ListingMessage({ listing, isOwn }: ListingMessageProps) {
                     {priceLabel}
                   </Text>
                 ) : null}
-                {live.priceUpdated ? (
+                {live.priceDropped ? (
+                  <Text fontSize={11} fontWeight="700" color="#059669">
+                    Price dropped
+                  </Text>
+                ) : live.priceUpdated ? (
                   <Text fontSize={11} fontWeight="600" color={metaColor}>
                     Price updated
                   </Text>
@@ -138,6 +176,46 @@ export function ListingMessage({ listing, isOwn }: ListingMessageProps) {
             </>
           )}
         </YStack>
+        {!unavailable && display.listingId ? (
+          <XStack gap={2}>
+            {shareUrl ? (
+              <ShareButton
+                variant="icon"
+                size="$2"
+                label="Share product"
+                sheetTitle="Share product"
+                copyLabel="Copy product link"
+                copyToastMessage="Product link copied."
+                onOpen={() =>
+                  trackCommunityCommerceShare({
+                    surface: 'chat_listing',
+                    listingId: display.listingId,
+                  })
+                }
+                payload={{
+                  url: shareUrl,
+                  title: display.title,
+                  text: display.shopName ? `${display.title} · ${display.shopName}` : display.title,
+                }}
+              />
+            ) : null}
+            <XStack
+              width={30}
+              height={30}
+              borderRadius={999}
+              alignItems="center"
+              justifyContent="center"
+              cursor={wishlistBusy ? 'default' : 'pointer'}
+              onPress={() => void handleWishlistToggle()}
+            >
+              {wishlistBusy ? (
+                <Spinner size="small" />
+              ) : (
+                <Icons.Heart size={15} color={saved ? chat.brand : metaColor} />
+              )}
+            </XStack>
+          </XStack>
+        ) : null}
       </XStack>
       <XStack gap={8}>
         {href && !unavailable ? (

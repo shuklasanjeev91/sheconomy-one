@@ -8,6 +8,8 @@ import { ShareListingSheet } from '~/chat/components/ShareListingSheet'
 import { postProductToChatListing } from '~/chat/lib/listing-message'
 import { usePostProductsLive } from '~/community/hooks/usePostProductsLive'
 import type { PostProduct } from '~/community/lib/community'
+import { ShareButton } from '~/components/share/ShareButton'
+import { BRAND_NAME } from '~/config/brand'
 import {
   trackCommunityPostAddToCart,
   trackCommunityPostCheckoutStart,
@@ -15,6 +17,7 @@ import {
   trackCommunityPostPdpOpen,
   trackCommunityPostProductImpression,
   trackCommunityPostWishlistToggle,
+  trackCommunityCommerceShare,
   type CommunityCommerceSource,
 } from '~/community/lib/community-commerce-analytics'
 import { useCommunityUi } from '~/community/lib/community-theme'
@@ -28,6 +31,7 @@ import { formatMoneyLabel } from '~/lib/format'
 import { feedback } from '~/lib/platform/feedback'
 import { navigateApp } from '~/lib/platform/navigate'
 import { commerceRoutes, communityRoutes, chatRoutes } from '~/lib/routes'
+import { getCommunityListingShareUrl } from '~/lib/share/urls'
 import { useSupabase } from '~/providers/SupabaseProvider'
 import { Button, Icons, Image, ScrollView, Spinner, Text, XStack, YStack, useAppToast } from '~/components/ui'
 import { radius } from '~/config/tokens'
@@ -127,6 +131,11 @@ function PostProductCard({
     !!product.shopOwnerUserId && user?.id !== product.shopOwnerUserId
   const chatListing = postProductToChatListing(product)
   const canShareToChat = !!chatListing && !unavailable
+  const productSharePath = listingHref
+  const productShareUrl =
+    productSharePath && product.listingId
+      ? getCommunityListingShareUrl(productSharePath, postId, source)
+      : null
 
   useEffect(() => {
     trackCommunityPostProductImpression({
@@ -338,7 +347,11 @@ function PostProductCard({
                 <Text fontSize={multi ? 13 : 14} fontWeight="700" color={communityUi.brand}>
                   {formatPostPrice(product.price, product.currency)}
                 </Text>
-                {product.priceUpdated ? (
+                {product.priceDropped ? (
+                  <Text fontSize={11} fontWeight="700" color="#059669">
+                    Price dropped
+                  </Text>
+                ) : product.priceUpdated ? (
                   <Text fontSize={11} fontWeight="600" color={communityUi.textMuted}>
                     Price updated
                   </Text>
@@ -359,27 +372,51 @@ function PostProductCard({
         </YStack>
         {!unavailable && !soldOut && product.listingId ? (
           <YStack paddingRight={multi ? 8 : 10} flexShrink={0}>
-            <XStack
-              width={32}
-              height={32}
-              borderRadius={999}
-              alignItems="center"
-              justifyContent="center"
-              cursor={wishlistBusy ? 'default' : 'pointer'}
-              hoverStyle={{ backgroundColor: communityUi.divider }}
-              onPress={(e) => {
-                e?.stopPropagation?.()
-                void handleWishlistToggle()
-              }}
-            >
-              {wishlistBusy ? (
-                <Spinner size="small" />
-              ) : (
-                <Icons.Heart
-                  size={16}
-                  color={saved ? communityUi.brand : communityUi.textMuted}
+            <XStack gap={2} alignItems="center">
+              {productShareUrl ? (
+                <ShareButton
+                  variant="icon"
+                  size="$2"
+                  label="Share product"
+                  sheetTitle="Share product"
+                  copyLabel="Copy product link"
+                  copyToastMessage="Product link copied."
+                  onOpen={() =>
+                    trackCommunityCommerceShare({
+                      surface: 'product_card',
+                      postId,
+                      listingId: product.listingId,
+                    })
+                  }
+                  payload={{
+                    url: productShareUrl,
+                    title: product.title,
+                    text: product.shopName ? `${product.title} · ${product.shopName}` : product.title,
+                  }}
                 />
-              )}
+              ) : null}
+              <XStack
+                width={32}
+                height={32}
+                borderRadius={999}
+                alignItems="center"
+                justifyContent="center"
+                cursor={wishlistBusy ? 'default' : 'pointer'}
+                hoverStyle={{ backgroundColor: communityUi.divider }}
+                onPress={(e) => {
+                  e?.stopPropagation?.()
+                  void handleWishlistToggle()
+                }}
+              >
+                {wishlistBusy ? (
+                  <Spinner size="small" />
+                ) : (
+                  <Icons.Heart
+                    size={16}
+                    color={saved ? communityUi.brand : communityUi.textMuted}
+                  />
+                )}
+              </XStack>
             </XStack>
           </YStack>
         ) : null}
