@@ -124,12 +124,13 @@ export function HomeHeroSlider({ slides }: HomeHeroSliderProps) {
 
   // Phone gets extra height so the copy can bottom-align over the dark part of the
   // gradient (the native treatment) without colliding with the pagination bar.
-  const slideHeight = isDesktop ? 428 : isTablet ? 380 : 340
+  const slideHeight = isDesktop ? 428 : isTablet ? 320 : 260
   const density: HeroDensity = isDesktop ? 'desktop' : isTablet ? 'tablet' : 'phone'
   const showNav = slides.length > 1
-  // Native runs the hero full-bleed, so the window is the correct width before
-  // onLayout lands. A percentage here would leave every slide mis-sized on first paint.
-  const slideWidth = viewportWidth || (isWeb ? '100%' : windowWidth)
+  // On mobile/tablet, the hero is an inset card with horizontal padding so we
+  // subtract those gutters from the window width for correct per-slide sizing.
+  const mobileInset = isDesktop ? 0 : isTablet ? 12 : 12
+  const slideWidth = viewportWidth || (isWeb ? '100%' : windowWidth - mobileInset * 2)
 
   const goTo = useCallback(
     (index: number) => {
@@ -203,7 +204,8 @@ export function HomeHeroSlider({ slides }: HomeHeroSliderProps) {
   return (
     <YStack
       width="100%"
-      paddingHorizontal={isDesktop ? gutter : 0}
+      paddingHorizontal={isDesktop ? gutter : isTablet ? 12 : 12}
+      paddingTop={isDesktop ? 0 : 8}
       onMouseEnter={isWeb ? pause : undefined}
       onMouseLeave={isWeb ? resume : undefined}
       {...(isWeb
@@ -222,7 +224,7 @@ export function HomeHeroSlider({ slides }: HomeHeroSliderProps) {
       <YStack
         width="100%"
         position="relative"
-        borderRadius={isDesktop ? radius.surface : 0}
+        borderRadius={isDesktop ? radius.surface : radius.card}
         overflow="hidden"
         borderWidth={isDesktop ? 1 : 0}
         borderColor={ui.borderSubtle}
@@ -310,15 +312,15 @@ function HeroSlidePanel({ slide, width, height, density, isActive, ui }: HeroSli
         // sit it at the bottom over the darkest band of the scrim.
         alignItems={isDesktop ? 'center' : 'flex-end'}
         justifyContent="space-between"
-        paddingHorizontal={isDesktop ? 48 : isPhone ? 20 : 26}
-        paddingVertical={isDesktop ? 40 : isPhone ? 18 : 28}
-        paddingBottom={isDesktop ? 52 : isPhone ? 48 : 52}
+        paddingHorizontal={isDesktop ? 48 : isPhone ? 16 : 26}
+        paddingVertical={isDesktop ? 40 : isPhone ? 14 : 28}
+        paddingBottom={isDesktop ? 52 : isPhone ? 38 : 52}
         gap={isDesktop ? 32 : 0}
         zIndex={2}
       >
         <YStack
           flex={1}
-          gap={isDesktop ? '$4' : isPhone ? '$2' : '$3'}
+          gap={isDesktop ? '$4' : isPhone ? '$1.5' : '$3'}
           maxWidth={isDesktop ? 520 : 720}
           justifyContent={isDesktop ? 'center' : 'flex-end'}
           {...motion.fadeUp}
@@ -326,8 +328,8 @@ function HeroSlidePanel({ slide, width, height, density, isActive, ui }: HeroSli
         >
           <XStack
             alignSelf="flex-start"
-            paddingHorizontal={isPhone ? 10 : 12}
-            paddingVertical={isPhone ? 4 : 6}
+            paddingHorizontal={isPhone ? 9 : 12}
+            paddingVertical={isPhone ? 3 : 6}
             borderRadius={radius.pill}
             backgroundColor="rgba(255,255,255,0.14)"
             borderWidth={1}
@@ -337,7 +339,7 @@ function HeroSlidePanel({ slide, width, height, density, isActive, ui }: HeroSli
               : {})}
           >
             <Text
-              fontSize={isPhone ? 10 : 11}
+              fontSize={isPhone ? 9 : 11}
               fontWeight="700"
               color="rgba(255,255,255,0.95)"
               letterSpacing={1.2}
@@ -347,20 +349,20 @@ function HeroSlidePanel({ slide, width, height, density, isActive, ui }: HeroSli
             </Text>
           </XStack>
 
-          <YStack gap={isPhone ? '$1.5' : '$2'}>
+          <YStack gap={isPhone ? '$1' : '$2'}>
             <Text
-              fontSize={isDesktop ? 42 : isPhone ? 23 : 30}
+              fontSize={isDesktop ? 42 : isPhone ? 20 : 30}
               fontWeight="800"
               color="white"
-              letterSpacing={isDesktop ? -1.2 : isPhone ? -0.5 : -0.8}
-              lineHeight={isDesktop ? 46 : isPhone ? 28 : 34}
+              letterSpacing={isDesktop ? -1.2 : isPhone ? -0.4 : -0.8}
+              lineHeight={isDesktop ? 46 : isPhone ? 24 : 34}
             >
               {slide.title}
             </Text>
             <Text
-              fontSize={isDesktop ? 17 : isPhone ? 13 : 15}
+              fontSize={isDesktop ? 17 : isPhone ? 12 : 15}
               color="rgba(255,255,255,0.88)"
-              lineHeight={isDesktop ? 26 : isPhone ? 18 : 22}
+              lineHeight={isDesktop ? 26 : isPhone ? 16 : 22}
               maxWidth={480}
               numberOfLines={isPhone ? 2 : undefined}
             >
@@ -376,10 +378,10 @@ function HeroSlidePanel({ slide, width, height, density, isActive, ui }: HeroSli
               alignSelf="flex-start"
               backgroundColor="white"
               color={ui.brand}
-              paddingHorizontal={isDesktop ? 24 : isPhone ? 16 : 20}
+              paddingHorizontal={isDesktop ? 24 : isPhone ? 14 : 20}
               hoverStyle={{ opacity: 0.94, scale: 1.02 }}
               pressStyle={{ opacity: 0.88, scale: 0.98 }}
-              iconAfter={<Icons.ArrowRight size={isPhone ? 16 : 18} color={ui.brand} strokeWidth={2.4} />}
+              iconAfter={<Icons.ArrowRight size={isPhone ? 14 : 18} color={ui.brand} strokeWidth={2.4} />}
             >
               {slide.cta}
             </Button>
@@ -445,7 +447,10 @@ function HeroBackdrop({ slide, isDesktop }: { slide: HomeHeroSlide; isDesktop: b
         height="100%"
         objectFit="cover"
         position="absolute"
-        opacity={isDesktop ? 0.72 : 0.58}
+        // Mobile gets a higher opacity so the hero photo is vivid and clearly
+        // readable behind the gradient scrim. Desktop keeps a subtle wash so
+        // the heavy left-to-right gradient can carry the brand colour.
+        opacity={isDesktop ? 0.72 : 0.82}
         {...(Platform.OS === 'web'
           ? {
               style: {
@@ -460,7 +465,8 @@ function HeroBackdrop({ slide, isDesktop }: { slide: HomeHeroSlide; isDesktop: b
         width="100%"
         height="100%"
         position="absolute"
-        opacity={0.35}
+        // Lighter brand overlay on mobile so the photo shows through clearly.
+        opacity={isDesktop ? 0.35 : 0.20}
       />
     </YStack>
   )
