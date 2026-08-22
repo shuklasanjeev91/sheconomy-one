@@ -15,6 +15,7 @@ import {
   trackCommunityPostPdpOpen,
   trackCommunityPostProductImpression,
   trackCommunityPostWishlistToggle,
+  type CommunityCommerceSource,
 } from '~/community/lib/community-commerce-analytics'
 import { useCommunityUi } from '~/community/lib/community-theme'
 import {
@@ -28,7 +29,7 @@ import { feedback } from '~/lib/platform/feedback'
 import { navigateApp } from '~/lib/platform/navigate'
 import { commerceRoutes, communityRoutes, chatRoutes } from '~/lib/routes'
 import { useSupabase } from '~/providers/SupabaseProvider'
-import { Button, Icons, Image, Spinner, Text, XStack, YStack, useAppToast } from '~/components/ui'
+import { Button, Icons, Image, ScrollView, Spinner, Text, XStack, YStack, useAppToast } from '~/components/ui'
 import { radius } from '~/config/tokens'
 
 function formatPostPrice(price: number | null, currency: string | null) {
@@ -44,12 +45,35 @@ function formatRatingLine(averageRating: number | null, totalReviews: number | n
 export function PostProductStack({
   products,
   postId,
+  source = 'feed',
+  layout = 'stack',
 }: {
   products: PostProduct[]
   postId: string
+  source?: CommunityCommerceSource
+  layout?: 'stack' | 'carousel'
 }) {
   const enriched = usePostProductsLive(products)
   const multi = enriched.length > 1
+
+  if (layout === 'carousel' && enriched.length > 1) {
+    return (
+      <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+        <XStack gap={12} paddingVertical={4}>
+          {enriched.map((product, index) => (
+            <YStack key={product.listingId ?? product.slug ?? `${product.title}-${index}`} width={300} maxWidth="85vw">
+              <PostProductCard
+                product={product}
+                postId={postId}
+                source={source}
+                multi={false}
+              />
+            </YStack>
+          ))}
+        </XStack>
+      </ScrollView>
+    )
+  }
 
   return (
     <YStack gap={multi ? 6 : 10}>
@@ -58,6 +82,7 @@ export function PostProductStack({
           key={product.listingId ?? product.slug ?? `${product.title}-${index}`}
           product={product}
           postId={postId}
+          source={source}
           multi={multi}
         />
       ))}
@@ -68,10 +93,12 @@ export function PostProductStack({
 function PostProductCard({
   product,
   postId,
+  source,
   multi = false,
 }: {
   product: EnrichedPostProduct
   postId: string
+  source: CommunityCommerceSource
   multi?: boolean
 }) {
   const communityUi = useCommunityUi()
@@ -105,9 +132,9 @@ function PostProductCard({
     trackCommunityPostProductImpression({
       postId,
       listingId: product.listingId,
-      source: 'feed',
+      source,
     })
-  }, [postId, product.listingId])
+  }, [postId, product.listingId, source])
 
   function requireSignIn(fallbackHref?: string | null) {
     navigateApp(buildSignInUrl(fallbackHref ?? signInReturnPath))
@@ -122,7 +149,7 @@ function PostProductCard({
     trackCommunityPostPdpOpen({
       postId,
       listingId: product.listingId,
-      source: 'feed',
+      source,
       ref: 'community',
     })
     navigateApp(listingHref as never)
@@ -141,7 +168,7 @@ function PostProductCard({
       trackCommunityPostWishlistToggle({
         postId,
         listingId: product.listingId,
-        source: 'feed',
+        source,
         saved: !saved,
       })
     } finally {
@@ -168,7 +195,7 @@ function PostProductCard({
       trackCommunityPostMessageSeller({
         postId,
         listingId: product.listingId,
-        source: 'feed',
+        source,
       })
       void feedback('selection')
       navigateApp(chatRoutes.conversation(conversationId))
@@ -226,14 +253,14 @@ function PostProductCard({
         trackCommunityPostCheckoutStart({
           postId,
           listingId: product.listingId,
-          source: 'feed',
+          source,
         })
         navigateApp(commerceRoutes.checkout)
       } else {
         trackCommunityPostAddToCart({
           postId,
           listingId: product.listingId,
-          source: 'feed',
+          source,
         })
       }
     } finally {
@@ -442,7 +469,7 @@ function PostProductCard({
         currentUserId={user?.id ?? null}
         listing={chatListing}
         postId={postId}
-        source="feed"
+        source={source}
       />
 
       {!unavailable && !soldOut && product.listingId ? (

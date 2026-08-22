@@ -1,11 +1,16 @@
+import { useState } from 'react'
 import { Platform } from 'react-native'
 
+import { useCart } from '~/commerce/hooks/useCart'
 import { useChatTheme } from '~/chat/lib/chat-theme'
 import type { ChatListingPayload } from '~/chat/lib/types'
+import { buildSignInUrl } from '~/lib/auth/redirect'
 import { formatMoneyLabel } from '~/lib/format'
+import { feedback } from '~/lib/platform/feedback'
 import { navigateApp } from '~/lib/platform/navigate'
 import { commerceRoutes } from '~/lib/routes'
-import { Button, Icons, Image, Text, XStack, YStack } from '~/components/ui'
+import { useSupabase } from '~/providers/SupabaseProvider'
+import { Button, Icons, Image, Spinner, Text, XStack, YStack, useAppToast } from '~/components/ui'
 
 type ListingMessageProps = {
   listing: ChatListingPayload
@@ -25,11 +30,39 @@ function listingHref(listing: ChatListingPayload) {
 /** Compact product card shared inside a chat thread. */
 export function ListingMessage({ listing, isOwn }: ListingMessageProps) {
   const chat = useChatTheme()
+  const toast = useAppToast()
+  const { addToCart } = useCart()
+  const { user } = useSupabase()
+  const [adding, setAdding] = useState(false)
   const titleColor = isOwn ? chat.bubbleOutText : chat.bubbleInText
   const metaColor = isOwn ? chat.bubbleMetaOut : chat.bubbleMetaIn
   const href = listingHref(listing)
   const priceLabel =
     listing.price != null ? formatMoneyLabel(listing.price, listing.currency ?? 'INR') : null
+
+  async function handleAddToCart() {
+    if (!listing.listingId) return
+    if (!user) {
+      navigateApp(buildSignInUrl(String(commerceRoutes.listing(listing.slug ?? listing.listingId))))
+      return
+    }
+    setAdding(true)
+    try {
+      const { error } = await addToCart(listing.listingId)
+      if (error) {
+        toast.show('Choose options on the product page', {
+          tone: 'default',
+          message: error,
+        })
+        if (href) navigateApp(href)
+        return
+      }
+      toast.show('Added to cart', { tone: 'success' })
+      void feedback('success')
+    } finally {
+      setAdding(false)
+    }
+  }
 
   return (
     <YStack gap={8} minWidth={220} maxWidth={280} paddingVertical={2}>
@@ -65,17 +98,32 @@ export function ListingMessage({ listing, isOwn }: ListingMessageProps) {
           ) : null}
         </YStack>
       </XStack>
-      {href ? (
-        <Button
-          size="$2"
-          tone="primary"
-          borderRadius={999}
-          width="100%"
-          onPress={() => navigateApp(href)}
-        >
-          View product
-        </Button>
-      ) : null}
+      <XStack gap={8}>
+        {href ? (
+          <Button
+            size="$2"
+            tone="outline"
+            borderRadius={999}
+            flex={1}
+            onPress={() => navigateApp(href)}
+          >
+            View
+          </Button>
+        ) : null}
+        {listing.listingId ? (
+          <Button
+            size="$2"
+            tone="primary"
+            borderRadius={999}
+            flex={1}
+            disabled={adding}
+            icon={adding ? <Spinner size="small" color="white" /> : <Icons.ShoppingBag size={14} color="white" />}
+            onPress={() => void handleAddToCart()}
+          >
+            {adding ? 'Adding…' : 'Add to cart'}
+          </Button>
+        ) : null}
+      </XStack>
     </YStack>
   )
 }

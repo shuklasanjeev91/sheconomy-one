@@ -13,6 +13,7 @@ import {
   trackCommunityPostProductImpression,
   trackCommunityPostWishlistToggle,
   trackCommunityPostShareListingToChat,
+  trackChatListingMessageSent,
 } from '~/community/lib/community-commerce-analytics'
 
 describe('community commerce analytics', () => {
@@ -87,6 +88,17 @@ describe('community commerce analytics', () => {
       listing_id: 'l1',
       source: 'feed',
       conversation_id: 'chat-9',
+    })
+  })
+
+  it('emits chat listing message sent events', () => {
+    trackChatListingMessageSent({
+      listingId: 'l1',
+      conversationId: 'chat-3',
+    })
+    expect(trackAnalyticsEvent).toHaveBeenCalledWith('chat_listing_message_sent', {
+      listing_id: 'l1',
+      conversation_id: 'chat-3',
     })
   })
 })

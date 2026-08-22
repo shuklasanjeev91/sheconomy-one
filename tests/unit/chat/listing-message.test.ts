@@ -4,6 +4,7 @@ import { mapMessage } from '~/chat/lib/chats'
 import {
   parseChatListingPayload,
   postProductToChatListing,
+  listingDetailToChatListing,
 } from '~/chat/lib/listing-message'
 import type { PostProduct } from '~/community/lib/community'
 
@@ -47,6 +48,30 @@ describe('parseChatListingPayload', () => {
         currency: 'INR',
         imageUrl: 'https://cdn.example/scarf.jpg',
         slug: 'silk-scarf',
+        shopName: 'Atelier',
+      }),
+    ).toEqual({
+      listingId: 'listing-1',
+      title: 'Silk scarf',
+      price: 1200,
+      currency: 'INR',
+      imageUrl: 'https://cdn.example/scarf.jpg',
+      slug: 'silk-scarf',
+      shopName: 'Atelier',
+    })
+  })
+})
+
+describe('listingDetailToChatListing', () => {
+  it('maps listing detail rows into chat payloads', () => {
+    expect(
+      listingDetailToChatListing({
+        id: 'listing-1',
+        title: 'Silk scarf',
+        price: 1200,
+        currency: 'INR',
+        slug: 'silk-scarf',
+        imageUrl: 'https://cdn.example/scarf.jpg',
         shopName: 'Atelier',
       }),
     ).toEqual({

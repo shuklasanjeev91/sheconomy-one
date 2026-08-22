@@ -5,6 +5,7 @@ import { useChatTheme } from '~/chat/lib/chat-theme'
 import { sendListingMessage } from '~/chat/lib/chats'
 import type { ChatListingPayload, ChatSummary } from '~/chat/lib/types'
 import { trackCommunityPostShareListingToChat } from '~/community/lib/community-commerce-analytics'
+import type { CommunityCommerceSource } from '~/community/lib/community-commerce-analytics'
 import { ScreenSearchField } from '~/components/search'
 import {
   AppBottomSheet,
@@ -28,7 +29,7 @@ type ShareListingSheetProps = {
   currentUserId: string | null
   listing: ChatListingPayload | null
   postId?: string | null
-  source?: 'feed' | 'composer' | 'pdp_share'
+  source?: CommunityCommerceSource
 }
 
 /** Pick a chat and send a compact listing card message. */

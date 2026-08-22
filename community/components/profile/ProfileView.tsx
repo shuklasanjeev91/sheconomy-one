@@ -332,7 +332,7 @@ export function ProfileView({
       )}
 
       <FeaturedPostsSection profileUserId={profile.id} isOwnProfile={isOwnProfile} />
-      <ProfileShoppableProductsSection profileUserId={profile.id} />
+      <ProfileShoppableProductsSection profileUserId={profile.id} profileHandle={profile.username} />
 
       <RecommendationsSection
         profileUserId={profile.id}

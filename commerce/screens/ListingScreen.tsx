@@ -57,7 +57,8 @@ import { PageCenter, PageScroll, StickyRail } from '~/components/layout'
 import { DeliveryPinCheck } from '~/components/location'
 import { ShareButton } from '~/components/share'
 import { openComposer } from '~/community/lib/composer-store'
-import { CommunityAttributionStrip } from '~/community/components/CommunityAttributionStrip'
+import { ShareListingSheet } from '~/chat/components/ShareListingSheet'
+import { listingDetailToChatListing } from '~/chat/lib/listing-message'
 import { useCommunityListingAttribution } from '~/community/hooks/useCommunityListingAttribution'
 import { BRAND_THEME, getShadowStyle, radius } from '~/config/tokens'
 import { useListing } from '~/hooks/useListing'
@@ -200,6 +201,7 @@ export function ListingScreen({
   const [isUpdatingQuantity, setIsUpdatingQuantity] = useState(false)
   const [personalizationNote, setPersonalizationNote] = useState('')
   const [returnPolicy, setReturnPolicy] = useState<ListingReturnPolicy | null>(null)
+  const [shareChatOpen, setShareChatOpen] = useState(false)
   const variationGroups = useMemo(() => groupListingVariations(variations), [variations])
   const [variantSelection, setVariantSelection] = useState<Record<string, string>>({})
 
@@ -469,6 +471,19 @@ export function ListingScreen({
   const buyNowLabel = isDigital ? 'Buy & download' : 'Buy it now'
   const mobileBottomInset = LISTING_MOBILE_STICKY_BAR_HEIGHT + 16
   const listingShareSlug = slug ?? listing.id
+  const chatListing = useMemo(
+    () =>
+      listingDetailToChatListing({
+        id: listing.id,
+        title: listing.title,
+        price: listing.price,
+        currency: listing.currency,
+        slug: listing.slug,
+        imageUrl: sortedImages[0]?.image_url ?? null,
+        shopName: listing.shops?.shop_name ?? null,
+      }),
+    [listing, sortedImages],
+  )
   const handleShareToCommunity = () => {
     if (!user) {
       toast.show('Sign in to share', {
@@ -483,6 +498,16 @@ export function ListingScreen({
       content: `Check out ${listing.title} on SHEconomy`,
     })
   }
+  const handleShareToChat = () => {
+    if (!user) {
+      toast.show('Sign in to share', {
+        tone: 'default',
+        message: 'Sign in to share this listing in chat.',
+      })
+      return
+    }
+    setShareChatOpen(true)
+  }
   const listingShareButton = (
     <XStack gap="$1.5" alignItems="center">
       <Button
@@ -492,6 +517,14 @@ export function ListingScreen({
         icon={<Icons.Users size={16} />}
         onPress={handleShareToCommunity}
         accessibilityLabel="Share to Community"
+      />
+      <Button
+        tone="ghost"
+        size="$3"
+        borderRadius={999}
+        icon={<Icons.MessageCircle size={16} />}
+        onPress={handleShareToChat}
+        accessibilityLabel="Share to chat"
       />
       <ShareButton
         variant="icon"
@@ -506,6 +539,15 @@ export function ListingScreen({
         }}
       />
     </XStack>
+  )
+  const shareListingSheet = (
+    <ShareListingSheet
+      open={shareChatOpen}
+      onOpenChange={setShareChatOpen}
+      currentUserId={user?.id ?? null}
+      listing={chatListing}
+      source="pdp"
+    />
   )
 
   const visualPreviewButtons = (
@@ -773,6 +815,7 @@ export function ListingScreen({
           onDecreaseQuantity={() => handleQuantityChange((cartItem?.quantity ?? 1) - 1)}
           onCheckout={goToCheckout}
         />
+        {shareListingSheet}
       </YStack>
     )
   }
@@ -1002,7 +1045,8 @@ export function ListingScreen({
   )
 
   return (
-    <PageScroll>
+    <>
+      <PageScroll>
       <YStack
         padding="$4"
         paddingBottom="$2"
@@ -1047,5 +1091,7 @@ export function ListingScreen({
         <ListingRecommendationsSections {...recommendationProps} />
       </YStack>
     </PageScroll>
+    {shareListingSheet}
+    </>
   )
 }

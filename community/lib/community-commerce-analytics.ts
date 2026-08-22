@@ -1,6 +1,14 @@
 import { trackAnalyticsEvent } from '~/lib/analytics'
 
-export type CommunityCommerceSource = 'composer' | 'feed' | 'pdp_share'
+export type CommunityCommerceSource =
+  | 'composer'
+  | 'feed'
+  | 'post_detail'
+  | 'profile'
+  | 'profile_shop'
+  | 'pdp'
+  | 'pdp_share'
+  | 'chat'
 
 type BaseProps = {
   postId?: string | null
@@ -87,6 +95,16 @@ export function trackCommunityPostShareListingToChat(
     post_id: props.postId ?? undefined,
     listing_id: props.listingId ?? undefined,
     source: props.source,
+    conversation_id: props.conversationId,
+  })
+}
+
+export function trackChatListingMessageSent(props: {
+  listingId: string
+  conversationId: string
+}) {
+  trackAnalyticsEvent('chat_listing_message_sent', {
+    listing_id: props.listingId,
     conversation_id: props.conversationId,
   })
 }

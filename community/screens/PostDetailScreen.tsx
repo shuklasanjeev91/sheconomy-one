@@ -142,6 +142,7 @@ export function PostDetailScreen() {
         <FeedPostCard
           post={post}
           linkToDetail={false}
+          commerceSource="post_detail"
           onPostUpdated={(_postId, patch) => setPost((current) => (current ? { ...current, ...patch } : current))}
           onPostDeleted={() => router.push(communityRoutes.home)}
         />

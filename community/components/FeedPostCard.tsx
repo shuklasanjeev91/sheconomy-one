@@ -11,7 +11,7 @@ import { PostLikeButton } from '~/community/components/PostLikeButton'
 import { PostLinkPreviewCard } from '~/community/components/PostLinkPreviewCard'
 import { PostMediaCarousel } from '~/community/components/PostMediaCarousel'
 import { PostMediaSlide } from '~/community/components/PostMediaSlide'
-import { PostProductStack } from '~/community/components/PostProductStack'
+import type { CommunityCommerceSource } from '~/community/lib/community-commerce-analytics'
 import { ProfileLink } from '~/community/components/ProfileLink'
 import { usePostEngagement } from '~/community/hooks/usePostEngagement'
 import { REACTION_TYPES } from '~/community/lib/constants'
@@ -60,6 +60,7 @@ type FeedPostCardProps = {
   linkToDetail?: boolean
   /** On the article reader, hide the article body (already shown above) and keep engagement. */
   compactArticle?: boolean
+  commerceSource?: CommunityCommerceSource
   onPostUpdated?: (postId: string, patch: Partial<CommunityPost>) => void
   onPostDeleted?: (postId: string) => void
 }
@@ -68,6 +69,7 @@ export const FeedPostCard = memo(function FeedPostCard({
   post,
   linkToDetail = true,
   compactArticle = false,
+  commerceSource = 'feed',
   onPostUpdated,
   onPostDeleted,
 }: FeedPostCardProps) {
@@ -384,7 +386,7 @@ export const FeedPostCard = memo(function FeedPostCard({
           ) : null}
 
           {post.originalPost ? (
-            <OriginalPostEmbed original={post.originalPost} />
+            <OriginalPostEmbed original={post.originalPost} commerceSource={commerceSource} />
           ) : null}
           {post.celebration ? (
             <YStack gap={10}>
@@ -419,7 +421,7 @@ export const FeedPostCard = memo(function FeedPostCard({
             <PostLinkPreviewCard preview={resolvedLink} />
           ) : null}
           {feedProducts.length ? (
-            <PostProductStack products={feedProducts} postId={post.id} />
+            <PostProductStack products={feedProducts} postId={post.id} source={commerceSource} />
           ) : null}
           {post.shop ? <PostShopCard shop={post.shop} /> : null}
         </YStack>
@@ -1043,7 +1045,13 @@ function PostEventCard({
   )
 }
 
-function OriginalPostEmbed({ original }: { original: OriginalPostPreview }) {
+function OriginalPostEmbed({
+  original,
+  commerceSource,
+}: {
+  original: OriginalPostPreview
+  commerceSource: CommunityCommerceSource
+}) {
   const communityUi = useCommunityUi()
   const originalHref = communityRoutes.post(original.id)
 
@@ -1128,7 +1136,7 @@ function OriginalPostEmbed({ original }: { original: OriginalPostPreview }) {
         if (!originalProducts.length) return null
         return (
           <YStack paddingHorizontal={12} paddingBottom={12}>
-            <PostProductStack products={originalProducts} postId={original.id} />
+            <PostProductStack products={originalProducts} postId={original.id} source={commerceSource} />
           </YStack>
         )
       })()}

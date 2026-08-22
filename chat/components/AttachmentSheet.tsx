@@ -13,6 +13,7 @@ type AttachmentSheetProps = {
   onPickVideo?: () => void
   onPickPoll?: () => void
   onPickEvent?: () => void
+  onPickListing?: () => void
 }
 
 function AttachTile({
@@ -59,6 +60,7 @@ export function AttachmentSheet({
   onPickVideo,
   onPickPoll,
   onPickEvent,
+  onPickListing,
 }: AttachmentSheetProps) {
   function pick(action: () => void) {
     if (Platform.OS === 'web') {
@@ -125,6 +127,14 @@ export function AttachmentSheet({
             label="Event"
             color="#e7a33e"
             onPress={() => pick(onPickEvent)}
+          />
+        ) : null}
+        {onPickListing ? (
+          <AttachTile
+            icon={<Icons.Package size={26} color="#ffffff" />}
+            label="Product"
+            color="#2d9cdb"
+            onPress={() => pick(onPickListing)}
           />
         ) : null}
       </XStack>

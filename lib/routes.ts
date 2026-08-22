@@ -141,6 +141,7 @@ export const communityRoutes = {
     `/profile/${encodeURIComponent(handle)}/following` as Href,
   userConnections: (handle: string) =>
     `/profile/${encodeURIComponent(handle)}/connections` as Href,
+  profileShop: (handle: string) => `/profile/${encodeURIComponent(handle)}/shop` as Href,
   settings: appRoutes.settings,
   createPost: '/community/create' as Href,
   post: (id: string) => `/community/post/${encodeURIComponent(id)}` as Href,

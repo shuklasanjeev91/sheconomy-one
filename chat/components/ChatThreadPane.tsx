@@ -45,6 +45,7 @@ import { ChatThreadHeader } from '~/chat/components/ChatThreadHeader'
 import { ConversationInfoSheet } from '~/chat/components/ConversationInfoSheet'
 import { DateSeparator } from '~/chat/components/DateSeparator'
 import { EventPickerSheet } from '~/chat/components/EventPickerSheet'
+import { ListingPickerSheet } from '~/chat/components/ListingPickerSheet'
 import { ForwardSheet } from '~/chat/components/ForwardSheet'
 import { StarredMessagesSheet } from '~/chat/components/StarredMessagesSheet'
 import { MessageActionsSheet } from '~/chat/components/MessageActionsSheet'
@@ -158,6 +159,7 @@ export function ChatThreadPane({
   // Poll / event composers.
   const [pollComposerOpen, setPollComposerOpen] = useState(false)
   const [eventPickerOpen, setEventPickerOpen] = useState(false)
+  const [listingPickerOpen, setListingPickerOpen] = useState(false)
 
   const toast = useAppToast()
 
@@ -190,6 +192,7 @@ export function ChatThreadPane({
     sendFile,
     sendPoll,
     sendEvent,
+    sendListing,
     votePoll,
     edit,
     remove,
@@ -877,6 +880,7 @@ export function ChatThreadPane({
           }}
           onCreatePoll={() => setPollComposerOpen(true)}
           onCreateEvent={() => setEventPickerOpen(true)}
+          onCreateListing={() => setListingPickerOpen(true)}
           onTyping={handleTyping}
           sending={sending}
           uploadProgress={uploadProgress}
@@ -942,6 +946,13 @@ export function ChatThreadPane({
         onOpenChange={setEventPickerOpen}
         currentUserId={currentUserId}
         onPick={(event) => void sendEvent(event)}
+      />
+
+      <ListingPickerSheet
+        open={listingPickerOpen}
+        onOpenChange={setListingPickerOpen}
+        currentUserId={currentUserId}
+        onPick={(listing) => void sendListing(listing)}
       />
 
       <AppBottomSheet open={menuOpen} onOpenChange={setMenuOpen} scrollable={false}>

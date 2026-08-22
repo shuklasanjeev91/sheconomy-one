@@ -36,6 +36,7 @@ type MessageComposerProps = {
   onSendAudio: (attachment: ChatComposerAttachment) => void
   onCreatePoll?: () => void
   onCreateEvent?: () => void
+  onCreateListing?: () => void
   onTyping: (text: string) => void
   sending?: boolean
   uploadProgress?: number | null
@@ -86,6 +87,7 @@ export function MessageComposer({
   onSendAudio,
   onCreatePoll,
   onCreateEvent,
+  onCreateListing,
   onTyping,
   sending,
   uploadProgress,
@@ -598,6 +600,7 @@ export function MessageComposer({
         onPickDocument={() => void attachDocument()}
         onPickPoll={onCreatePoll}
         onPickEvent={onCreateEvent}
+        onPickListing={onCreateListing}
       />
     </YStack>
     </MediaDropZone>

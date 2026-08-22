@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
+import { trackChatListingMessageSent } from '~/community/lib/community-commerce-analytics'
+
 import {
   MESSAGES_PAGE_SIZE,
   deleteMessageForEveryone as deleteMessageApi,
@@ -12,6 +14,7 @@ import {
   markConversationRead,
   mediaCategory,
   sendEventMessage,
+  sendListingMessage,
   sendMessage,
   sendPollMessage,
   setTypingIndicator,
@@ -26,6 +29,7 @@ import {
 import type {
   ChatComposerAttachment,
   ChatEventPayload,
+  ChatListingPayload,
   ChatMessage,
   ChatPollPayload,
   MessagePollVote,
@@ -445,7 +449,7 @@ export function useConversation({ conversationId, currentUserId }: UseConversati
       if (message.status !== 'failed') return
       // In-place retry for messages whose payload we still hold. Media retries
       // need the original file, which optimistic failures don't retain.
-      if (message.type !== 'text' && message.type !== 'poll' && message.type !== 'event') return
+      if (message.type !== 'text' && message.type !== 'poll' && message.type !== 'event' && message.type !== 'listing') return
 
       setMessagesTracked((prev) =>
         prev.map((m) => (m.id === message.id ? { ...m, status: 'sending' } : m)),
@@ -460,6 +464,10 @@ export function useConversation({ conversationId, currentUserId }: UseConversati
         sendError = res.error
       } else if (message.type === 'event' && message.event) {
         const res = await sendEventMessage(conversationId, currentUserId, message.event)
+        messageId = res.messageId
+        sendError = res.error
+      } else if (message.type === 'listing' && message.listing) {
+        const res = await sendListingMessage(conversationId, currentUserId, message.listing)
         messageId = res.messageId
         sendError = res.error
       } else {
@@ -775,6 +783,59 @@ export function useConversation({ conversationId, currentUserId }: UseConversati
     [conversationId, currentUserId, setMessagesTracked],
   )
 
+  const sendListing = useCallback(
+    async (listing: ChatListingPayload) => {
+      if (!conversationId || !currentUserId) return
+      const optimistic: ChatMessage = {
+        id: nextTempId(),
+        conversationId,
+        senderId: currentUserId,
+        content: `[Product] ${listing.title}`,
+        type: 'listing',
+        mediaUrl: null,
+        mediaType: null,
+        fileName: null,
+        fileSize: null,
+        status: 'sending',
+        createdAt: new Date().toISOString(),
+        replyToId: null,
+        replyPreview: null,
+        deletedAt: null,
+        editedAt: null,
+        poll: null,
+        event: null,
+        listing,
+        storyReply: null,
+        optimistic: true,
+      }
+      setMessagesTracked((prev) => [...prev, optimistic])
+      setSending(true)
+      const { messageId, error: sendError } = await sendListingMessage(
+        conversationId,
+        currentUserId,
+        listing,
+      )
+      setSending(false)
+      if (sendError || !messageId) {
+        toast.show('Could not send product', { tone: 'danger', message: sendError ?? undefined })
+        setMessagesTracked((prev) =>
+          prev.map((m) => (m.id === optimistic.id ? { ...m, status: 'failed' } : m)),
+        )
+        return
+      }
+      trackChatListingMessageSent({
+        listingId: listing.listingId,
+        conversationId,
+      })
+      setMessagesTracked((prev) =>
+        prev.map((m) =>
+          m.id === optimistic.id ? { ...m, id: messageId, status: 'sent', optimistic: false } : m,
+        ),
+      )
+    },
+    [conversationId, currentUserId, setMessagesTracked, toast],
+  )
+
   const votePoll = useCallback(
     async (messageId: string, optionIndex: number) => {
       if (!currentUserId) return
@@ -855,6 +916,7 @@ export function useConversation({ conversationId, currentUserId }: UseConversati
     sendFile,
     sendPoll,
     sendEvent,
+    sendListing,
     votePoll,
     edit,
     remove,
