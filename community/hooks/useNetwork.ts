@@ -1,12 +1,12 @@
 import { useCallback, useEffect, useState } from 'react'
 
 import {
-  fetchNetworkSummary,
   removeConnection,
   respondToConnection,
   sendConnectionRequest,
   type NetworkMember,
 } from '~/community/lib/network'
+import { fetchNetworkSummaryCached, invalidateNetworkSummary } from '~/community/lib/network-summary-cache'
 import { useSupabase } from '~/providers/SupabaseProvider'
 
 export function useNetwork() {
@@ -32,7 +32,7 @@ export function useNetwork() {
     setIsLoading(true)
     setError(null)
 
-    const summary = await fetchNetworkSummary(user.id)
+    const summary = await fetchNetworkSummaryCached(user.id)
     setConnections(summary.connections)
     setPendingReceived(summary.pendingReceived)
     setPendingSent(summary.pendingSent)
@@ -55,6 +55,7 @@ export function useNetwork() {
       setActionUserId(null)
 
       if (!result.error) {
+        invalidateNetworkSummary(user.id)
         setSuggestions((items) => items.filter((item) => item.user_id !== member.user_id))
         setPendingSent((items) => [
           ...items,
@@ -80,6 +81,7 @@ export function useNetwork() {
     setActionUserId(null)
 
     if (!result.error) {
+      if (user?.id) invalidateNetworkSummary(user.id)
       setPendingReceived((items) => items.filter((item) => item.user_id !== member.user_id))
       setConnections((items) => [
         ...items,
@@ -88,7 +90,7 @@ export function useNetwork() {
     }
 
     return result
-  }, [])
+  }, [user?.id])
 
   const ignoreInvitation = useCallback(async (member: NetworkMember) => {
     if (!member.connection_id) return { error: 'Missing connection' }

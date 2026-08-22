@@ -50,18 +50,25 @@ export function chatListingPayloadFromEnriched(
   listing: ChatListingPayload,
   enriched: EnrichedPostProduct,
 ): ChatListingPayload {
-  return (
-    postProductToChatListing({
-      listingId: listing.listingId,
-      title: enriched.title || listing.title,
-      price: enriched.price,
-      currency: enriched.currency,
-      imageUrl: enriched.imageUrl,
-      slug: enriched.slug ?? listing.slug,
-      shopName: enriched.shopName ?? listing.shopName,
-      shopId: enriched.shopId,
-      shopSlug: enriched.shopSlug,
-      shopOwnerUserId: enriched.shopOwnerUserId,
-    }) ?? listing
-  )
+  const mapped =
+    postProductToChatListing(
+      {
+        listingId: listing.listingId,
+        title: enriched.title || listing.title,
+        price: enriched.price,
+        currency: enriched.currency,
+        imageUrl: enriched.imageUrl,
+        slug: enriched.slug ?? listing.slug,
+        shopName: enriched.shopName ?? listing.shopName,
+        shopId: enriched.shopId,
+        shopSlug: enriched.shopSlug,
+        shopOwnerUserId: enriched.shopOwnerUserId,
+      },
+      {
+        postId: listing.postId,
+        source: listing.source,
+        shopOwnerUserId: enriched.shopOwnerUserId ?? listing.shopOwnerUserId,
+      },
+    ) ?? listing
+  return mapped
 }

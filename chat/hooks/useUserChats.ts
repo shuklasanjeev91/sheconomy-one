@@ -1,15 +1,14 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
-import { fetchUserChats, markConversationDelivered } from '~/chat/lib/chats'
+import {
+  loadChatListCached,
+  retainChatListRealtime,
+  type ChatListCache,
+} from '~/chat/lib/chat-list-cache'
 import type { ChatSummary } from '~/chat/lib/types'
 import { CACHE_KEYS } from '~/lib/bootstrap/app-prefetch'
-import { peekAppCache, readAppCache, writeAppCache } from '~/lib/cache/app-cache'
-import { supabase } from '~/lib/supabase/client'
-
-type ChatListCache = {
-  items: ChatSummary[]
-  error: string | null
-}
+import { peekAppCache } from '~/lib/cache/app-cache'
+import { isFeedFresh, FEED_FRESH_MS } from '~/lib/cache/feed-freshness'
 
 /**
  * Loads the signed-in user's conversation list and keeps it fresh via realtime.
@@ -22,12 +21,17 @@ export function useUserChats(userId: string | null | undefined) {
   const [isLoading, setIsLoading] = useState(!!userId && !initial)
   const [isRefreshing, setIsRefreshing] = useState(false)
   const [error, setError] = useState<string | null>(initial?.error ?? null)
-  const reloadTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const hasChatsRef = useRef((initial?.items?.length ?? 0) > 0)
   hasChatsRef.current = chats.length > 0
 
+  const applyCache = useCallback((cached: ChatListCache) => {
+    setChats(cached.items)
+    setError(cached.error)
+    hasChatsRef.current = cached.items.length > 0
+  }, [])
+
   const load = useCallback(
-    async (mode: 'initial' | 'refresh' = 'initial') => {
+    async (mode: 'initial' | 'refresh' = 'initial', force = false) => {
       if (!userId || !cacheKey) {
         setChats([])
         setError(null)
@@ -37,26 +41,18 @@ export function useUserChats(userId: string | null | undefined) {
         return
       }
 
-      if (mode === 'initial' && !hasChatsRef.current) setIsLoading(true)
-      else setIsRefreshing(true)
+      if (mode === 'refresh' && !force && isFeedFresh(cacheKey, FEED_FRESH_MS)) return
 
-      const { items, error: loadError } = await fetchUserChats(userId)
-      setChats(items)
-      setError(loadError)
-      hasChatsRef.current = items.length > 0
+      if (mode === 'initial' && !hasChatsRef.current) setIsLoading(true)
+      else if (mode === 'refresh') setIsRefreshing(true)
+
+      const result = await loadChatListCached(userId, { force: force || mode === 'initial' })
+      applyCache(result)
       setIsLoading(false)
       setIsRefreshing(false)
-      await writeAppCache(cacheKey, { items, error: loadError })
     },
-    [cacheKey, userId],
+    [applyCache, cacheKey, userId],
   )
-
-  const scheduleReload = useCallback(() => {
-    if (reloadTimer.current) clearTimeout(reloadTimer.current)
-    reloadTimer.current = setTimeout(() => {
-      void load('refresh')
-    }, 350)
-  }, [load])
 
   useEffect(() => {
     if (!userId || !cacheKey) {
@@ -69,75 +65,27 @@ export function useUserChats(userId: string | null | undefined) {
 
     let cancelled = false
     void (async () => {
-      const cached =
-        peekAppCache<ChatListCache>(cacheKey) ?? (await readAppCache<ChatListCache>(cacheKey))
+      const cached = peekAppCache<ChatListCache>(cacheKey)
       if (cancelled) return
       if (cached) {
-        setChats(cached.items)
-        setError(cached.error)
-        hasChatsRef.current = cached.items.length > 0
+        applyCache(cached)
         setIsLoading(false)
+        if (isFeedFresh(cacheKey, FEED_FRESH_MS)) return
       }
       await load(cached ? 'refresh' : 'initial')
     })()
 
     return () => {
       cancelled = true
-      if (reloadTimer.current) clearTimeout(reloadTimer.current)
     }
-  }, [cacheKey, load, userId])
+  }, [applyCache, cacheKey, load, userId])
 
   useEffect(() => {
     if (!userId) return
-
-    const channel = supabase
-      .channel(`chat-list:${userId}`)
-      .on(
-        'postgres_changes',
-        { event: 'INSERT', schema: 'public', table: 'messages' },
-        (payload) => {
-          const row = payload.new as
-            | { conversation_id?: string; sender_id?: string }
-            | undefined
-          // Peer received the message on-device while browsing the inbox → gray ✓✓.
-          if (
-            row?.conversation_id &&
-            row.sender_id &&
-            row.sender_id !== userId
-          ) {
-            void markConversationDelivered(row.conversation_id, userId)
-          }
-          scheduleReload()
-        },
-      )
-      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'conversations' }, () =>
-        scheduleReload(),
-      )
-      .on(
-        'postgres_changes',
-        { event: '*', schema: 'public', table: 'message_reads', filter: `user_id=eq.${userId}` },
-        () => scheduleReload(),
-      )
-      .on(
-        'postgres_changes',
-        {
-          event: 'UPDATE',
-          schema: 'public',
-          table: 'conversation_participants',
-          filter: `user_id=eq.${userId}`,
-        },
-        () => scheduleReload(),
-      )
-      // Sender sees ✓ → ✓✓ → blue ✓✓ as peer delivery/read updates arrive.
-      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'messages' }, () =>
-        scheduleReload(),
-      )
-      .subscribe()
-
-    return () => {
-      void supabase.removeChannel(channel)
-    }
-  }, [userId, scheduleReload])
+    return retainChatListRealtime(userId, () => {
+      void load('refresh', true)
+    })
+  }, [load, userId])
 
   const totalUnread = useMemo(
     () => chats.reduce((sum, chat) => sum + chat.unreadCount, 0),

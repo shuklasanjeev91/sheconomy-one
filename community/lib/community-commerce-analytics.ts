@@ -145,3 +145,53 @@ export function trackCommunityCommerceShare(props: {
     listing_id: props.listingId ?? undefined,
   })
 }
+
+export function trackChatListingPostOpen(props: {
+  postId: string
+  listingId?: string | null
+}) {
+  trackAnalyticsEvent('chat_listing_post_open', {
+    post_id: props.postId,
+    listing_id: props.listingId ?? undefined,
+  })
+}
+
+export function trackCommunityPostSiblingImpression(props: BaseProps) {
+  trackAnalyticsEvent('community_post_sibling_impression', {
+    post_id: props.postId ?? undefined,
+    listing_id: props.listingId ?? undefined,
+    source: props.source,
+  })
+}
+
+export function trackCommunityRestockAlertSubscribe(props: BaseProps) {
+  trackAnalyticsEvent('community_restock_alert_subscribe', {
+    post_id: props.postId ?? undefined,
+    listing_id: props.listingId ?? undefined,
+    source: props.source,
+  })
+}
+
+export function trackCommunityPostShopAll(props: {
+  postId: string
+  source: CommunityCommerceSource
+  addedCount: number
+  skippedCount: number
+}) {
+  trackAnalyticsEvent('community_post_shop_all', {
+    post_id: props.postId,
+    source: props.source,
+    added_count: props.addedCount,
+    skipped_count: props.skippedCount,
+  })
+}
+
+export function trackCommunityHashtagShoppableFilter(props: {
+  hashtag: string
+  enabled: boolean
+}) {
+  trackAnalyticsEvent('community_hashtag_shoppable_filter', {
+    hashtag: props.hashtag,
+    enabled: props.enabled,
+  })
+}

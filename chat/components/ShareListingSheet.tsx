@@ -61,7 +61,16 @@ export function ShareListingSheet({
     if (!currentUserId || !listing || sendingTo) return
     setSendingTo(chat.id)
     try {
-      const { messageId, error } = await sendListingMessage(chat.id, currentUserId, listing)
+      const listingWithAttribution = {
+        ...listing,
+        postId: postId ?? listing.postId ?? null,
+        source: source ?? listing.source ?? null,
+      }
+      const { messageId, error } = await sendListingMessage(
+        chat.id,
+        currentUserId,
+        listingWithAttribution,
+      )
       if (error || !messageId) {
         toast.show('Could not share product', { tone: 'danger', message: error ?? undefined })
         return

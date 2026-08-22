@@ -30,6 +30,7 @@ describe('postProductToChatListing', () => {
       imageUrl: 'https://cdn.example/scarf.jpg',
       slug: 'silk-scarf',
       shopName: 'Atelier',
+      shopOwnerUserId: null,
     })
   })
 
@@ -51,6 +52,8 @@ describe('parseChatListingPayload', () => {
         imageUrl: 'https://cdn.example/scarf.jpg',
         slug: 'silk-scarf',
         shopName: 'Atelier',
+        postId: 'post-9',
+        source: 'feed',
       }),
     ).toEqual({
       listingId: 'listing-1',
@@ -60,6 +63,9 @@ describe('parseChatListingPayload', () => {
       imageUrl: 'https://cdn.example/scarf.jpg',
       slug: 'silk-scarf',
       shopName: 'Atelier',
+      postId: 'post-9',
+      source: 'feed',
+      shopOwnerUserId: null,
     })
   })
 })
@@ -137,6 +143,9 @@ describe('chatListingPayloadFromEnriched', () => {
       imageUrl: 'https://cdn.example/scarf-new.jpg',
       slug: 'silk-scarf',
       shopName: 'Atelier',
+      postId: null,
+      source: null,
+      shopOwnerUserId: 'shop-1',
     })
   })
 })

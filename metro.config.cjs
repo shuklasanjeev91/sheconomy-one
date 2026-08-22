@@ -116,6 +116,13 @@ function withTamaguiDedupe(config) {
         ...(config.resolver?.nodeModulesPaths ?? []).filter((p) => p !== nodeModules),
       ],
       resolveRequest(context, moduleName, platform) {
+        if (moduleName === 'zod') {
+          return {
+            type: 'sourceFile',
+            filePath: path.join(projectRoot, 'lib/zod.ts'),
+          }
+        }
+
         const datetimepickerStub = datetimepickerSpecStub(
           moduleName,
           context.originModulePath,

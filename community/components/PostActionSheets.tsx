@@ -22,6 +22,7 @@ import {
 import { feedback } from '~/lib/platform/feedback'
 import { unfollowProfile } from '~/community/lib/profile-follows'
 import {
+  defaultSavedCollectionForPost,
   getSavedCommunityPost,
   isPostSaved,
   saveCommunityPost,
@@ -151,7 +152,9 @@ export function PostActionSheets({
     setSavingAction(true)
     const action = saved
       ? unsaveCommunityPost(user.id, post.id)
-      : saveCommunityPost(user.id, post.id)
+      : saveCommunityPost(user.id, post.id, {
+          collectionName: defaultSavedCollectionForPost(post),
+        })
     void action.then((result) => {
       setSavingAction(false)
       if (result.error) {

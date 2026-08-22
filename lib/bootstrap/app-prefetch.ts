@@ -1,11 +1,9 @@
 import { Platform } from 'react-native'
 
 import { fetchClassesBootstrap } from '~/class/lib/classes-loader'
-import {
-  fetchPublishedProgramsPage,
-  PROGRAM_PAGE_SIZE,
-} from '~/class/lib/programs'
+import { seedClassesPaginatedFromBootstrap } from '~/class/lib/classes-bootstrap-cache'
 import { fetchUserChats } from '~/chat/lib/chats'
+import { fetchMyMeetings } from '~/co-work/lib/meetings'
 import { fetchCommunityFeedPage } from '~/community/lib/community'
 import { fetchNotifications } from '~/community/lib/notifications'
 import { homeLoader } from '~/commerce/lib/home-loader'
@@ -16,10 +14,10 @@ import {
   fetchListingFeedPage,
   fetchShopsBrowsePage,
 } from '~/commerce/lib/commerce'
-import { prefetchAppCache } from '~/lib/cache/app-cache'
+import { peekAppCache, prefetchAppCache, hydrateAppCache } from '~/lib/cache/app-cache'
 import { CACHE_KEYS } from '~/lib/bootstrap/cache-keys'
 import { prefetchNativeLoader, readNativeLoaderCache } from '~/lib/bootstrap/native-loader-cache'
-import { warmCriticalAppCaches } from '~/lib/bootstrap/warm-app-cache'
+import { CRITICAL_APP_CACHE_KEYS, warmCriticalAppCaches } from '~/lib/bootstrap/warm-app-cache'
 import { fetchCategoriesPage, fetchShopsPage } from '~/lib/supabase/commerce'
 import { scheduleIdle } from '~/lib/schedule-idle'
 
@@ -50,15 +48,27 @@ export function startCoreTabPrefetch(): void {
     return toPageSnapshot(result.items, 0, result.hasMore)
   })
 
-  // Shops + listing feeds after home/community — less contention on cold start.
+  // Shops + core listing feeds are seeded by homeLoader — only prefetch gaps.
   scheduleIdle(() => {
     if (deferredStarted) return
-    prefetchAppCache(CACHE_KEYS.shops, async () => {
-      const result = await fetchShopsPage(0, COMMERCE_HORIZONTAL_PAGE_SIZE)
-      return toPageSnapshot(result.items, 0, result.hasMore)
-    })
-    for (const kind of ['physical', 'digital', 'trending', 'featured', 'latest'] as const) {
-      prefetchAppCache(CACHE_KEYS.listingFeed(kind), async () => {
+    if (!peekAppCache(CACHE_KEYS.shops)) {
+      prefetchAppCache(CACHE_KEYS.shops, async () => {
+        const result = await fetchShopsPage(0, COMMERCE_HORIZONTAL_PAGE_SIZE)
+        return toPageSnapshot(result.items, 0, result.hasMore)
+      })
+    }
+    for (const kind of ['physical', 'digital', 'trending'] as const) {
+      const key = CACHE_KEYS.listingFeed(kind)
+      if (peekAppCache(key)) continue
+      prefetchAppCache(key, async () => {
+        const result = await fetchListingFeedPage(kind, 0)
+        return toPageSnapshot(result.items, 0, result.hasMore)
+      })
+    }
+    for (const kind of ['featured', 'latest'] as const) {
+      const key = CACHE_KEYS.listingFeed(kind)
+      if (peekAppCache(key)) continue
+      prefetchAppCache(key, async () => {
         const result = await fetchListingFeedPage(kind, 0)
         return toPageSnapshot(result.items, 0, result.hasMore)
       })
@@ -76,25 +86,24 @@ export function startDeferredTabPrefetch(): void {
     const result = await fetchShopsBrowsePage(0, COMMERCE_PAGE_SIZE, { sort: 'rating_high' })
     return toPageSnapshot(result.items, 0, result.hasMore)
   })
-  prefetchAppCache(CACHE_KEYS.classesVideo, () => fetchClassesBootstrap('video'))
-  prefetchAppCache(CACHE_KEYS.classesAudio, () => fetchClassesBootstrap('audio'))
-  prefetchAppCache(`${CACHE_KEYS.classesVideo}:all:all`, async () => {
-    const result = await fetchPublishedProgramsPage(0, PROGRAM_PAGE_SIZE, { mediaType: 'video' })
-    return toPageSnapshot(result.programs, 0, result.hasMore)
+  prefetchAppCache(CACHE_KEYS.classesVideo, async () => {
+    const bootstrap = await fetchClassesBootstrap('video')
+    await seedClassesPaginatedFromBootstrap('video', bootstrap)
+    return bootstrap
   })
-  prefetchAppCache(`${CACHE_KEYS.classesAudio}:all:all`, async () => {
-    const result = await fetchPublishedProgramsPage(0, PROGRAM_PAGE_SIZE, { mediaType: 'audio' })
-    return toPageSnapshot(result.programs, 0, result.hasMore)
+  prefetchAppCache(CACHE_KEYS.classesAudio, async () => {
+    const bootstrap = await fetchClassesBootstrap('audio')
+    await seedClassesPaginatedFromBootstrap('audio', bootstrap)
+    return bootstrap
   })
 }
 
-/** Native cold start — begin fetching after a short delay so home paint wins. */
+/** Native cold start — prefetch after disk hydrate completes. */
 export function startNativeBootstrapPrefetch(): void {
   if (Platform.OS === 'web') return
-  // Avoid flooding the network during the first frames of a cold start.
-  setTimeout(() => {
+  void hydrateAppCache([...CRITICAL_APP_CACHE_KEYS]).finally(() => {
     startCoreTabPrefetch()
-  }, 1200)
+  })
 }
 
 /** After first paint, warm remaining tab caches and user-scoped data. */
@@ -110,6 +119,7 @@ export function scheduleAppBootstrapPrefetch(userId?: string | null): () => void
         const { items, error } = await fetchUserChats(userId)
         return { items, error }
       })
+      prefetchAppCache(CACHE_KEYS.coWorkMyMeetings(userId), () => fetchMyMeetings(userId))
       prefetchAppCache(CACHE_KEYS.notifications(userId), async () => {
         const result = await fetchNotifications(userId, 0)
         return {

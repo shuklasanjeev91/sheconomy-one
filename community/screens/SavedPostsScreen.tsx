@@ -10,9 +10,14 @@ import { postHasMedia } from '~/community/lib/post-media'
 import {
   buildSavedPostSections,
   fetchSavedCommunityPosts,
+  postHasShoppableProducts,
   unsaveCommunityPost,
   type SavedCommunityPostEntry,
 } from '~/community/lib/saved-posts'
+import {
+  buildSavedShoppablePriceDropRows,
+  countSavedShoppablePriceDrops,
+} from '~/community/lib/saved-shoppable-nudges'
 import { HorizontalScrollRow } from '~/components/layout'
 import { ScreenSearchField } from '~/components/search'
 import { Button, Icons, Spinner, Text, XStack, YStack, useAppToast } from '~/components/ui'
@@ -26,10 +31,11 @@ import { getPostShareUrl } from '~/lib/share'
 import { useAppUi } from '~/lib/theme/useAppUi'
 import { useSupabase } from '~/providers/SupabaseProvider'
 
-type SavedTypeFilter = 'all' | 'text' | 'media' | 'poll' | 'event' | 'article' | 'celebration'
+type SavedTypeFilter = 'all' | 'text' | 'media' | 'poll' | 'event' | 'article' | 'celebration' | 'shoppable'
 
 const TYPE_FILTERS: Array<{ id: SavedTypeFilter; label: string }> = [
   { id: 'all', label: 'All' },
+  { id: 'shoppable', label: 'Shoppable' },
   { id: 'text', label: 'Updates' },
   { id: 'media', label: 'Media' },
   { id: 'article', label: 'Articles' },
@@ -40,6 +46,7 @@ const TYPE_FILTERS: Array<{ id: SavedTypeFilter; label: string }> = [
 
 function matchesType(post: SavedCommunityPostEntry['post'], filter: SavedTypeFilter) {
   if (filter === 'all') return true
+  if (filter === 'shoppable') return postHasShoppableProducts(post)
   if (filter === 'media') {
     return postHasMedia(post)
   }
@@ -56,6 +63,7 @@ export function SavedPostsScreen() {
   const [query, setQuery] = useState('')
   const [typeFilter, setTypeFilter] = useState<SavedTypeFilter>('all')
   const [collectionFilter, setCollectionFilter] = useState('All')
+  const [priceDropCount, setPriceDropCount] = useState(0)
 
   async function reload(silent = false) {
     if (!user?.id) {
@@ -81,6 +89,27 @@ export function SavedPostsScreen() {
     if (authLoading) return
     void reload(true)
   })
+
+  useEffect(() => {
+    if (!items.length) {
+      setPriceDropCount(0)
+      return
+    }
+    let cancelled = false
+    const shoppableEntries = items
+      .filter((entry) => postHasShoppableProducts(entry.post))
+      .map((entry) => ({
+        postId: entry.postId,
+        products: entry.post.products?.length ? entry.post.products : entry.post.product ? [entry.post.product] : [],
+      }))
+    void buildSavedShoppablePriceDropRows(shoppableEntries).then((rows) => {
+      if (cancelled) return
+      setPriceDropCount(countSavedShoppablePriceDrops(rows))
+    })
+    return () => {
+      cancelled = true
+    }
+  }, [items])
 
   const visible = useMemo(() => {
     const collectionScoped =
@@ -165,6 +194,23 @@ export function SavedPostsScreen() {
 
       {user ? (
         <YStack gap="$3" width="100%">
+          {priceDropCount > 0 ? (
+            <XStack
+              paddingHorizontal={14}
+              paddingVertical={10}
+              borderRadius={12}
+              borderWidth={1}
+              borderColor={ui.borderSubtle}
+              backgroundColor={ui.surfaceMuted}
+              alignItems="center"
+              gap={8}
+            >
+              <Icons.BadgePercent size={16} color="#059669" />
+              <Text fontSize={13} fontWeight="600" color={ui.text}>
+                {priceDropCount} saved shoppable post{priceDropCount === 1 ? '' : 's'} dropped in price
+              </Text>
+            </XStack>
+          ) : null}
           <ScreenSearchField
             value={query}
             onChangeText={setQuery}

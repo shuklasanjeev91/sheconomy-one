@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 
 import { peekAppCache, readAppCache, writeAppCache } from '~/lib/cache/app-cache'
+import { FEED_FRESH_MS, isFeedFresh } from '~/lib/cache/feed-freshness'
 import { useAutoRefresh } from '~/lib/cache/useAutoRefresh'
 import { useOnReconnect } from '~/providers/ConnectivityProvider'
 
@@ -97,6 +98,7 @@ export function useCachedQuery<T>({
         setData(cached)
         hasDataRef.current = true
         setIsLoading(false)
+        if (isFeedFresh(cacheKey, FEED_FRESH_MS)) return
       }
       await run(cached === null ? 'initial' : 'refresh')
     })()

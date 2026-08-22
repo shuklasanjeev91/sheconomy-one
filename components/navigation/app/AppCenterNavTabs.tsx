@@ -1,3 +1,4 @@
+import { useEffect, useState } from 'react'
 import { usePathname } from 'one'
 import { Platform } from 'react-native'
 
@@ -9,6 +10,7 @@ import { navigateApp } from '~/lib/platform/navigate'
 import { useAppUi } from '~/lib/theme/useAppUi'
 
 import { APP_CENTER_NAV, getAppColors } from '~/components/navigation/app/config'
+import { warmProductTabRoute } from '~/components/navigation/app/warm-product-tab-route'
 
 /** Tamagui layout animation is costly on Hermes during rapid tab switches. */
 const tabAnim = Platform.OS === 'web' ? ('quick' as const) : undefined
@@ -27,9 +29,24 @@ export function AppCenterNavTabs({ variant = 'desktop', compact = false }: AppCe
   const isInline = variant === 'mobile-inline'
   const isMobile = variant === 'mobile' || isInline
   const showMobileLabels = isMobile
+  // Optimistic highlight so tab presses feel instant while the route settles.
+  const [pendingPath, setPendingPath] = useState<string | null>(null)
+
+  useEffect(() => {
+    setPendingPath(null)
+  }, [pathname])
+
+  const activePath = pendingPath ?? pathname
 
   function pressNavItem(item: (typeof APP_CENTER_NAV)[number]) {
-    const intent = resolveFeatureNavIntent(String(item.href), item.feature)
+    const href = String(item.href)
+
+    if (item.match(pathname)) {
+      setPendingPath(null)
+      return
+    }
+
+    const intent = resolveFeatureNavIntent(href, item.feature)
 
     if (intent.kind === 'verify') {
       openHumanVerification({ returnTo: intent.returnTo })
@@ -39,6 +56,8 @@ export function AppCenterNavTabs({ variant = 'desktop', compact = false }: AppCe
       navigateApp(buildSignInUrl(intent.href))
       return
     }
+
+    setPendingPath(href)
     navigateApp(intent.href)
   }
 
@@ -58,7 +77,7 @@ export function AppCenterNavTabs({ variant = 'desktop', compact = false }: AppCe
       animation={tabAnim}
     >
       {APP_CENTER_NAV.map((item) => {
-        const isActive = item.match(pathname)
+        const isActive = item.match(activePath)
         const Icon = item.icon
 
         return (
@@ -95,6 +114,7 @@ export function AppCenterNavTabs({ variant = 'desktop', compact = false }: AppCe
             title={item.label}
             role="link"
             accessibilityRole="link"
+            onPressIn={() => warmProductTabRoute(String(item.href))}
             onPress={() => pressNavItem(item)}
           >
             <Icon

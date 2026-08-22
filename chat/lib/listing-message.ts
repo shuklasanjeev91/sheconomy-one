@@ -11,29 +11,61 @@ type ListingDetailLike = {
   shopName?: string | null
 }
 
-export function listingDetailToChatListing(listing: ListingDetailLike): ChatListingPayload {
+type ChatListingOptions = {
+  postId?: string | null
+  source?: string | null
+  shopOwnerUserId?: string | null
+}
+
+function withChatListingOptions(
+  payload: ChatListingPayload,
+  options?: ChatListingOptions,
+): ChatListingPayload {
+  if (!options) return payload
   return {
-    listingId: listing.id,
-    title: listing.title,
-    price: listing.price ?? null,
-    currency: listing.currency ?? null,
-    imageUrl: listing.imageUrl ?? null,
-    slug: listing.slug ?? null,
-    shopName: listing.shopName ?? null,
+    ...payload,
+    postId: options.postId ?? payload.postId ?? null,
+    source: options.source ?? payload.source ?? null,
+    shopOwnerUserId: options.shopOwnerUserId ?? payload.shopOwnerUserId ?? null,
   }
 }
 
-export function postProductToChatListing(product: PostProduct): ChatListingPayload | null {
+export function listingDetailToChatListing(
+  listing: ListingDetailLike,
+  options?: ChatListingOptions,
+): ChatListingPayload {
+  return withChatListingOptions(
+    {
+      listingId: listing.id,
+      title: listing.title,
+      price: listing.price ?? null,
+      currency: listing.currency ?? null,
+      imageUrl: listing.imageUrl ?? null,
+      slug: listing.slug ?? null,
+      shopName: listing.shopName ?? null,
+    },
+    options,
+  )
+}
+
+export function postProductToChatListing(
+  product: PostProduct,
+  options?: ChatListingOptions,
+): ChatListingPayload | null {
   if (!product.listingId || !product.title) return null
-  return {
-    listingId: product.listingId,
-    title: product.title,
-    price: product.price,
-    currency: product.currency,
-    imageUrl: product.imageUrl,
-    slug: product.slug,
-    shopName: product.shopName,
-  }
+  return withChatListingOptions(
+    {
+      listingId: product.listingId,
+      title: product.title,
+      price: product.price,
+      currency: product.currency,
+      imageUrl: product.imageUrl,
+      slug: product.slug,
+      shopName: product.shopName,
+      shopOwnerUserId: product.shopOwnerUserId ?? null,
+    },
+    options,
+  )
 }
 
 export function parseChatListingPayload(metadata: unknown): ChatListingPayload | null {
@@ -50,5 +82,8 @@ export function parseChatListingPayload(metadata: unknown): ChatListingPayload |
     imageUrl: typeof raw.imageUrl === 'string' ? raw.imageUrl : null,
     slug: typeof raw.slug === 'string' ? raw.slug : null,
     shopName: typeof raw.shopName === 'string' ? raw.shopName : null,
+    postId: typeof raw.postId === 'string' ? raw.postId : null,
+    source: typeof raw.source === 'string' ? raw.source : null,
+    shopOwnerUserId: typeof raw.shopOwnerUserId === 'string' ? raw.shopOwnerUserId : null,
   }
 }

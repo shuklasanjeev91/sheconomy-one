@@ -56,7 +56,7 @@ export default defineConfig(({ mode }) => {
         path: '/__vxrnhmr',
       },
       watch: {
-        ignored: ['**/.vercel/**', '**/dist/**'],
+        ignored: ['**/.vercel/**', '**/dist/**', '**/.tamagui/**', '**/.expo/**'],
       },
       // OneSignal web push SW must be allowed to control the whole origin.
       headers: {
@@ -117,6 +117,7 @@ export default defineConfig(({ mode }) => {
         tamagui: fromProjectRoot('./node_modules/tamagui'),
         '@tamagui/web': fromProjectRoot('./node_modules/@tamagui/web'),
         '@tamagui/core': fromProjectRoot('./node_modules/@tamagui/core'),
+        zod: fromProjectRoot('./lib/zod.ts'),
       },
     },
 
@@ -595,11 +596,6 @@ if (typeof g.Response !== 'function') {
         '@tamagui/config',
         'tamagui',
         'date-fns',
-        '@tensorflow/tfjs',
-        '@tensorflow/tfjs-backend-webgl',
-        '@tensorflow-models/face-landmarks-detection',
-        '@vladmandic/face-api',
-        '@vladmandic/human',
       ],
     },
 

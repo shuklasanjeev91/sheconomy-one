@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { Platform } from 'react-native'
 
 import { peekAppCache, readAppCache, writeAppCache } from '~/lib/cache/app-cache'
+import { FEED_FRESH_MS, isFeedFresh, markFeedFresh } from '~/lib/cache/feed-freshness'
 import { useAutoRefresh } from '~/lib/cache/useAutoRefresh'
 import { scheduleIdle } from '~/lib/schedule-idle'
 import type { PaginatedResult } from '~/lib/supabase/commerce'
@@ -18,9 +18,7 @@ type PrefetchBuffer<T> = {
   result: PaginatedResult<T>
 }
 
-/** Skip network revalidation when the same feed was fetched this recently. */
-const FEED_FRESH_MS = Platform.OS === 'web' ? 45_000 : 60_000
-const feedFetchedAt = new Map<string, number>()
+export { markFeedFresh } from '~/lib/cache/feed-freshness'
 
 function mergeUnique<T extends { id: string }>(existing: T[], next: T[]): T[] {
   const seen = new Set(existing.map((item) => item.id))
@@ -84,7 +82,7 @@ export function usePaginatedFeed<T extends { id: string }>({
   )
 
   const markFetched = useCallback(() => {
-    if (cacheKey) feedFetchedAt.set(cacheKey, Date.now())
+    if (cacheKey) markFeedFresh(cacheKey)
   }, [cacheKey])
 
   const schedulePrefetch = useCallback(
@@ -275,8 +273,7 @@ export function usePaginatedFeed<T extends { id: string }>({
           setHasMore(cached.hasMore)
           hasMoreRef.current = cached.hasMore
           setIsLoading(false)
-          const fetchedAt = feedFetchedAt.get(cacheKey) ?? 0
-          if (fetchedAt > 0 && Date.now() - fetchedAt < FEED_FRESH_MS) {
+          if (isFeedFresh(cacheKey, FEED_FRESH_MS)) {
             // Fresh enough — skip another network round-trip on tab revisit.
             if (cached.hasMore) {
               schedulePrefetch(cached.page, fetchGenerationRef.current)

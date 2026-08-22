@@ -55,10 +55,7 @@ export function CommunityFeedScreen() {
   const { setScrollY } = useAppBarScroll()
   const { items, isLoading, isLoadingMore, isRefreshing, hasMore, error, loadMore, refresh, removeItem, patchItem } =
     useCommunityFeed(true, sort, contentFilter ?? undefined)
-  // Load suggestions immediately so FlashList can interleave them with the first paint.
-  const { sections, refresh: refreshSuggestions } = useCommunitySuggestions(4, {
-    deferUntilIdle: false,
-  })
+  const { sections, refresh: refreshSuggestions } = useCommunitySuggestions(4)
   const showingCached = items.length > 0 && !!error
   // Avoid FlashList firing onEndReached during the first layout pass.
   const endReachedReadyRef = useRef(false)

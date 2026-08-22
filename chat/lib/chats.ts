@@ -596,6 +596,9 @@ export async function sendListingMessage(
       imageUrl: listing.imageUrl,
       slug: listing.slug,
       shopName: listing.shopName,
+      ...(listing.postId ? { postId: listing.postId } : {}),
+      ...(listing.source ? { source: listing.source } : {}),
+      ...(listing.shopOwnerUserId ? { shopOwnerUserId: listing.shopOwnerUserId } : {}),
     },
   })
 }

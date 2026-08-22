@@ -1,6 +1,6 @@
 import { INVALIDATION_TOPICS, invalidateCache } from '~/lib/cache/invalidation'
 import { supabase } from '~/lib/supabase/client'
-import type { CommunityPost } from '~/community/lib/community'
+import type { CommunityPost, PostProduct } from '~/community/lib/community'
 import { fetchPostById } from '~/community/lib/community'
 import { collectPostMedia } from '~/community/lib/post-media'
 import { communityRoutes } from '~/lib/routes'
@@ -41,6 +41,18 @@ export type PickUpAgainCard = {
   collectionName: string
   listingId: string | null
   listingSlug: string | null
+  product: PostProduct | null
+}
+
+export function postHasShoppableProducts(post: CommunityPost) {
+  return Boolean(post.products?.length || post.product)
+}
+
+export function defaultSavedCollectionForPost(post: CommunityPost) {
+  if (postHasShoppableProducts(post)) return 'Shop now'
+  if (post.post_type === 'article' || post.article_title) return 'Read later'
+  if (post.post_type === 'event' || post.event_title) return 'Events'
+  return 'Saved'
 }
 
 const PICK_UP_AGAIN_LANE_ORDER: PickUpAgainLane[] = ['shop_now', 'creator_picks', 'read_later', 'events']
@@ -297,6 +309,7 @@ export function buildPickUpAgainCards(
         collectionName: entry.collectionName,
         listingId: entry.post.products?.[0]?.listingId ?? entry.post.product?.listingId ?? null,
         listingSlug: entry.post.products?.[0]?.slug ?? entry.post.product?.slug ?? null,
+        product: entry.post.products?.[0] ?? entry.post.product ?? null,
       })
       if (cards.length >= limit) return cards
     }

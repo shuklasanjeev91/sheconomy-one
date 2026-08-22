@@ -7,10 +7,13 @@ import { ContinueLearningRail } from '~/class/components/ContinueLearningRail'
 import { SavedProgramsRail } from '~/class/components/SavedProgramsRail'
 import { ProgramCardGrid } from '~/class/components/ProgramCardGrid'
 import { ProgramCategoryRow } from '~/class/components/ProgramCategoryRow'
+import { collectProgramLanguages, formatProgramLanguage } from '~/class/lib/languages'
 import {
-  collectProgramLanguages,
-  formatProgramLanguage,
-} from '~/class/lib/languages'
+  isClassesBootstrapFresh,
+  readClassesBootstrap,
+  seedClassesPaginatedFromBootstrap,
+} from '~/class/lib/classes-bootstrap-cache'
+import type { ClassesBootstrapData } from '~/class/lib/classes-loader'
 import {
   fetchProgramCategories,
   fetchPublishedProgramLanguages,
@@ -48,7 +51,23 @@ export function ClassesScreen() {
 
   useEffect(() => {
     let cancelled = false
+
+    function applyBootstrap(bootstrap: ClassesBootstrapData) {
+      setCategories(bootstrap.categories)
+      setFeatured(bootstrap.featured)
+      setAvailableLanguages(collectProgramLanguages(bootstrap.programs))
+      setMetaError(bootstrap.error)
+      void seedClassesPaginatedFromBootstrap(mediaTab, bootstrap)
+    }
+
     void (async () => {
+      const bootstrap = await readClassesBootstrap(mediaTab)
+      if (cancelled) return
+      if (bootstrap) {
+        applyBootstrap(bootstrap)
+      }
+      if (bootstrap && isClassesBootstrapFresh(mediaTab)) return
+
       const [categoryResult, featuredResult, languageResult] = await Promise.all([
         fetchProgramCategories(),
         fetchPublishedPrograms({ featuredOnly: true, mediaType: mediaTab, limit: 12 }),
@@ -60,6 +79,7 @@ export function ClassesScreen() {
       setAvailableLanguages(languageResult.languages)
       setMetaError(categoryResult.error ?? featuredResult.error ?? languageResult.error)
     })()
+
     return () => {
       cancelled = true
     }
@@ -87,8 +107,6 @@ export function ClassesScreen() {
     fetchPage,
     cacheKey: `${mediaTab === 'audio' ? CACHE_KEYS.classesAudio : CACHE_KEYS.classesVideo}:${selectedCategory ?? 'all'}:${selectedLanguage ?? 'all'}`,
   })
-
-  // Defense: only show programs that match the active Video/Audio tab.
   const programs = useMemo(
     () => feed.items.filter((program) => program.media_type === mediaTab),
     [feed.items, mediaTab],

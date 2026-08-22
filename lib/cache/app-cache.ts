@@ -1,6 +1,8 @@
 import AsyncStorage from '@react-native-async-storage/async-storage'
 import { Platform } from 'react-native'
 
+import { markFeedFresh } from '~/lib/cache/feed-freshness'
+
 const STORAGE_PREFIX = 'sheconomy:cache:v1:'
 
 type CacheEnvelope<T> = {
@@ -118,6 +120,7 @@ export async function hydrateAppCache(keys: string[]): Promise<number> {
 export async function writeAppCache<T>(key: string, value: T): Promise<void> {
   const cachedAtMs = nowMs()
   rememberMemory(key, value, cachedAtMs)
+  markFeedFresh(key)
   try {
     const payload = JSON.stringify({
       value,

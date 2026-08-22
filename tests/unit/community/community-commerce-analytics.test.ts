@@ -17,6 +17,10 @@ import {
   trackCommunityFeedShoppableFilter,
   trackCreatorCommerceInsightsView,
   trackCommunityCommerceShare,
+  trackChatListingPostOpen,
+  trackCommunityHashtagShoppableFilter,
+  trackCommunityPostShopAll,
+  trackCommunityRestockAlertSubscribe,
 } from '~/community/lib/community-commerce-analytics'
 
 describe('community commerce analytics', () => {
@@ -132,6 +136,33 @@ describe('community commerce analytics', () => {
       surface: 'profile_shop',
       post_id: 'user-1',
       listing_id: undefined,
+    })
+  })
+
+  it('emits slice 3 commerce loop events', () => {
+    trackChatListingPostOpen({ postId: 'post-1', listingId: 'l1' })
+    trackCommunityHashtagShoppableFilter({ hashtag: 'handmade', enabled: true })
+    trackCommunityPostShopAll({ postId: 'post-1', addedCount: 2, skippedCount: 1, source: 'feed' })
+    trackCommunityRestockAlertSubscribe({ postId: 'post-1', listingId: 'l1', source: 'feed' })
+
+    expect(trackAnalyticsEvent).toHaveBeenCalledWith('chat_listing_post_open', {
+      post_id: 'post-1',
+      listing_id: 'l1',
+    })
+    expect(trackAnalyticsEvent).toHaveBeenCalledWith('community_hashtag_shoppable_filter', {
+      hashtag: 'handmade',
+      enabled: true,
+    })
+    expect(trackAnalyticsEvent).toHaveBeenCalledWith('community_post_shop_all', {
+      post_id: 'post-1',
+      added_count: 2,
+      skipped_count: 1,
+      source: 'feed',
+    })
+    expect(trackAnalyticsEvent).toHaveBeenCalledWith('community_restock_alert_subscribe', {
+      post_id: 'post-1',
+      listing_id: 'l1',
+      source: 'feed',
     })
   })
 })

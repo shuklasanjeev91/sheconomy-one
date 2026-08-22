@@ -1,6 +1,9 @@
 import { useEffect } from 'react'
 import { InteractionManager, Platform } from 'react-native'
 
+import { warmAllProductTabRoutes } from '~/components/navigation/app/warm-product-tab-route'
+import { scheduleIdle } from '~/lib/schedule-idle'
+
 /**
  * After first paint, warm the five product-root route modules so tab switches
  * don't flash a blank frame while the JS chunk evaluates.
@@ -8,37 +11,26 @@ import { InteractionManager, Platform } from 'react-native'
 export function WarmTopTabRoutes() {
   useEffect(() => {
     let cancelled = false
-    let timer: ReturnType<typeof setTimeout> | null = null
+    let cancelIdle: (() => void) | undefined
 
     const warm = () => {
       if (cancelled) return
-      void Promise.allSettled([
-        import('~/app/community/index'),
-        import('~/app/chat/index'),
-        import('~/app/class/index'),
-        import('~/app/co-work/index'),
-        import('~/community/screens/CommunityFeedScreen'),
-        import('~/chat/screens/ChatScreen'),
-        import('~/class/screens/ClassesScreen'),
-        import('~/co-work/screens/CoWorkScreen'),
-      ])
+      warmAllProductTabRoutes()
     }
 
     if (Platform.OS === 'web') {
-      timer = setTimeout(warm, 2500)
+      cancelIdle = scheduleIdle(warm, 300)
       return () => {
         cancelled = true
-        if (timer) clearTimeout(timer)
+        cancelIdle?.()
       }
     }
 
-    const handle = InteractionManager.runAfterInteractions(() => {
-      timer = setTimeout(warm, 2000)
-    })
+    const handle = InteractionManager.runAfterInteractions(warm)
     return () => {
       cancelled = true
       handle.cancel?.()
-      if (timer) clearTimeout(timer)
+      cancelIdle?.()
     }
   }, [])
 

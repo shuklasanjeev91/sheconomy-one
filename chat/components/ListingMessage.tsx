@@ -3,21 +3,28 @@ import { Platform } from 'react-native'
 
 import { useCart } from '~/commerce/hooks/useCart'
 import { useFavorites } from '~/commerce/hooks/useFavorites'
+import { createDirectConversation } from '~/chat/lib/chats'
 import { useChatListingLive, chatListingPayloadFromEnriched } from '~/chat/hooks/useChatListingLive'
 import { useChatTheme } from '~/chat/lib/chat-theme'
+import { saveMessageDraft } from '~/chat/lib/message-drafts'
 import type { ChatListingPayload } from '~/chat/lib/types'
+import { AppLink } from '~/components/navigation/AppLink'
 import {
+  trackChatListingPostOpen,
   trackCommunityCommerceShare,
+  trackCommunityPostMessageSeller,
   trackCommunityPostPdpOpen,
   trackCommunityPostWishlistToggle,
+  trackCommunityRestockAlertSubscribe,
 } from '~/community/lib/community-commerce-analytics'
+import { subscribeCommunityRestockAlert } from '~/community/lib/community-restock-alert'
 import { appendCommunityAttribution } from '~/community/lib/post-product-live'
 import { ShareButton } from '~/components/share/ShareButton'
 import { buildSignInUrl } from '~/lib/auth/redirect'
 import { formatMoneyLabel } from '~/lib/format'
 import { feedback } from '~/lib/platform/feedback'
 import { navigateApp } from '~/lib/platform/navigate'
-import { commerceRoutes } from '~/lib/routes'
+import { chatRoutes, commerceRoutes, communityRoutes } from '~/lib/routes'
 import { getCommunityListingShareUrl } from '~/lib/share/urls'
 import { useSupabase } from '~/providers/SupabaseProvider'
 import { Button, Icons, Image, Spinner, Text, XStack, YStack, useAppToast } from '~/components/ui'
@@ -48,28 +55,49 @@ export function ListingMessage({ listing, isOwn }: ListingMessageProps) {
   const display = chatListingPayloadFromEnriched(listing, live)
   const [adding, setAdding] = useState(false)
   const [wishlistBusy, setWishlistBusy] = useState(false)
+  const [messaging, setMessaging] = useState(false)
+  const [restockBusy, setRestockBusy] = useState(false)
   const titleColor = isOwn ? chat.bubbleOutText : chat.bubbleInText
   const metaColor = isOwn ? chat.bubbleMetaOut : chat.bubbleMetaIn
   const unavailable = live.liveStatus === 'unavailable'
   const soldOut = live.soldOut && !unavailable
   const href = listingHref(display)
+  const attributionSource = listing.source ?? 'chat'
   const priceLabel =
     display.price != null ? formatMoneyLabel(display.price, display.currency ?? 'INR') : null
   const saved = display.listingId ? isFavorite(display.listingId) : false
   const shareUrl =
     href && display.listingId
-      ? getCommunityListingShareUrl(String(href), undefined, 'chat')
+      ? getCommunityListingShareUrl(
+          String(href),
+          listing.postId ?? undefined,
+          attributionSource,
+        )
       : null
+  const shopOwnerUserId = live.shopOwnerUserId ?? listing.shopOwnerUserId ?? null
+  const canAskSeller = !!shopOwnerUserId && user?.id !== shopOwnerUserId
 
   function openPdp() {
     if (!href) return
-    const path = appendCommunityAttribution(String(href), undefined, { source: 'chat' })
+    const path = appendCommunityAttribution(String(href), listing.postId ?? undefined, {
+      source: attributionSource,
+    })
     trackCommunityPostPdpOpen({
+      postId: listing.postId,
       listingId: display.listingId,
       source: 'chat',
       ref: 'community',
     })
     navigateApp(path as never)
+  }
+
+  function openOriginalPost() {
+    if (!listing.postId) return
+    trackChatListingPostOpen({
+      postId: listing.postId,
+      listingId: display.listingId,
+    })
+    navigateApp(communityRoutes.post(listing.postId))
   }
 
   async function handleAddToCart() {
@@ -120,12 +148,75 @@ export function ListingMessage({ listing, isOwn }: ListingMessageProps) {
     }
   }
 
+  async function handleAskSeller() {
+    if (!shopOwnerUserId) return
+    if (!user) {
+      navigateApp(buildSignInUrl(String(commerceRoutes.listing(display.slug ?? display.listingId))))
+      return
+    }
+    setMessaging(true)
+    try {
+      const { conversationId, error } = await createDirectConversation(shopOwnerUserId)
+      if (error || !conversationId) {
+        toast.show('Could not open chat', { tone: 'danger', message: error ?? undefined })
+        return
+      }
+      await saveMessageDraft(
+        conversationId,
+        `Hi! I'm interested in ${display.title} you shared. Is it still available?`,
+      )
+      trackCommunityPostMessageSeller({
+        postId: listing.postId,
+        listingId: display.listingId,
+        source: 'chat',
+      })
+      void feedback('selection')
+      navigateApp(chatRoutes.conversation(conversationId))
+    } finally {
+      setMessaging(false)
+    }
+  }
+
+  async function handleRestockAlert() {
+    if (!display.listingId) return
+    if (!user) {
+      navigateApp(buildSignInUrl(String(commerceRoutes.listing(display.slug ?? display.listingId))))
+      return
+    }
+    setRestockBusy(true)
+    try {
+      const result = await subscribeCommunityRestockAlert(display.listingId, user.id)
+      if (result.error) {
+        toast.show('Could not set alert', { tone: 'danger', message: result.error })
+        return
+      }
+      trackCommunityRestockAlertSubscribe({
+        postId: listing.postId,
+        listingId: display.listingId,
+        source: 'chat',
+      })
+      void feedback('success')
+      toast.show(result.alreadySubscribed ? 'Already on the list' : 'Restock alert added', {
+        tone: 'success',
+      })
+    } finally {
+      setRestockBusy(false)
+    }
+  }
+
   return (
     <YStack gap={8} minWidth={220} maxWidth={280} paddingVertical={2}>
       {display.imageUrl ? (
         <YStack borderRadius={10} overflow="hidden">
           <Image src={display.imageUrl} width="100%" height={120} objectFit="cover" alt="" />
         </YStack>
+      ) : null}
+      {listing.postId ? (
+        <AppLink href={communityRoutes.post(listing.postId)} asChild>
+          <Text fontSize={11} fontWeight="600" color={chat.brand} onPress={openOriginalPost}>
+            View original post
+          </Text>
+        </AppLink>
       ) : null}
       <XStack gap={9} alignItems="center">
         <YStack
@@ -190,6 +281,7 @@ export function ListingMessage({ listing, isOwn }: ListingMessageProps) {
                   trackCommunityCommerceShare({
                     surface: 'chat_listing',
                     listingId: display.listingId,
+                    postId: listing.postId,
                   })
                 }
                 payload={{
@@ -217,7 +309,7 @@ export function ListingMessage({ listing, isOwn }: ListingMessageProps) {
           </XStack>
         ) : null}
       </XStack>
-      <XStack gap={8}>
+      <XStack gap={8} flexWrap="wrap">
         {href && !unavailable ? (
           <Button size="$2" tone="outline" borderRadius={999} flex={1} onPress={openPdp}>
             View
@@ -242,7 +334,38 @@ export function ListingMessage({ listing, isOwn }: ListingMessageProps) {
             {adding ? 'Adding…' : 'Add to cart'}
           </Button>
         ) : null}
+        {soldOut && display.listingId ? (
+          <Button
+            size="$2"
+            tone="outline"
+            borderRadius={999}
+            flex={1}
+            disabled={restockBusy}
+            onPress={() => void handleRestockAlert()}
+          >
+            {restockBusy ? 'Saving…' : 'Notify me'}
+          </Button>
+        ) : null}
       </XStack>
+      {canAskSeller && !unavailable ? (
+        <Button
+          size="$2"
+          tone="ghost"
+          borderRadius={999}
+          width="100%"
+          disabled={messaging}
+          icon={
+            messaging ? (
+              <Spinner size="small" />
+            ) : (
+              <Icons.MessageCircle size={14} color={chat.brand} />
+            )
+          }
+          onPress={() => void handleAskSeller()}
+        >
+          Ask seller
+        </Button>
+      ) : null}
     </YStack>
   )
 }

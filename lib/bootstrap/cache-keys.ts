@@ -10,5 +10,7 @@ export const CACHE_KEYS = {
   classesVideo: 'route:classes:video',
   classesAudio: 'route:classes:audio',
   chatList: (userId: string) => `chat:list:${userId}`,
+  coWorkMyMeetings: (userId: string) => `route:cowork:my-meetings:${userId}`,
+  coWorkUpcoming: 'route:cowork:upcoming',
   notifications: (userId: string) => `route:notifications:${userId}`,
 } as const

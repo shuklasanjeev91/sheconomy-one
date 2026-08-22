@@ -18,8 +18,15 @@ import {
   trackCommunityPostProductImpression,
   trackCommunityPostWishlistToggle,
   trackCommunityCommerceShare,
+  trackCommunityPostShopAll,
+  trackCommunityRestockAlertSubscribe,
   type CommunityCommerceSource,
 } from '~/community/lib/community-commerce-analytics'
+import { subscribeCommunityRestockAlert } from '~/community/lib/community-restock-alert'
+import {
+  shopAllEligibleProducts,
+  summarizeShopAllResults,
+} from '~/community/lib/post-product-shop-all'
 import { useCommunityUi } from '~/community/lib/community-theme'
 import {
   buildCommunityListingHref,
@@ -59,9 +66,10 @@ export function PostProductStack({
 }) {
   const enriched = usePostProductsLive(products)
   const multi = enriched.length > 1
+  const showShopAll = multi && shopAllEligibleProducts(enriched).length >= 2
 
-  if (layout === 'carousel' && enriched.length > 1) {
-    return (
+  const cards =
+    layout === 'carousel' && enriched.length > 1 ? (
       <ScrollView horizontal showsHorizontalScrollIndicator={false}>
         <XStack gap={12} paddingVertical={4}>
           {enriched.map((product, index) => (
@@ -76,21 +84,111 @@ export function PostProductStack({
           ))}
         </XStack>
       </ScrollView>
+    ) : (
+      <YStack gap={multi ? 6 : 10}>
+        {enriched.map((product, index) => (
+          <PostProductCard
+            key={product.listingId ?? product.slug ?? `${product.title}-${index}`}
+            product={product}
+            postId={postId}
+            source={source}
+            multi={multi}
+          />
+        ))}
+      </YStack>
     )
+
+  return (
+    <YStack gap={showShopAll ? 8 : 0}>
+      {showShopAll ? (
+        <ShopAllBar products={enriched} postId={postId} source={source} />
+      ) : null}
+      {cards}
+    </YStack>
+  )
+}
+
+function ShopAllBar({
+  products,
+  postId,
+  source,
+}: {
+  products: EnrichedPostProduct[]
+  postId: string
+  source: CommunityCommerceSource
+}) {
+  const communityUi = useCommunityUi()
+  const toast = useAppToast()
+  const { addToCart } = useCart()
+  const { user } = useSupabase()
+  const [busy, setBusy] = useState(false)
+  const eligible = shopAllEligibleProducts(products)
+
+  async function handleShopAll() {
+    if (!user) {
+      navigateApp(buildSignInUrl(String(communityRoutes.post(postId))))
+      return
+    }
+    setBusy(true)
+    try {
+      const results = await Promise.all(
+        eligible.map(async (product) => {
+          if (!product.listingId) {
+            return {
+              listingId: '',
+              error: 'missing',
+              eligible: false,
+              reason: 'missing_id' as const,
+            }
+          }
+          const { error } = await addToCart(product.listingId)
+          return {
+            listingId: product.listingId,
+            error,
+            eligible: true,
+            reason: error ? ('variant_required' as const) : undefined,
+          }
+        }),
+      )
+      const summary = summarizeShopAllResults(results)
+      trackCommunityPostShopAll({
+        postId,
+        source,
+        addedCount: summary.addedListingIds.length,
+        skippedCount: summary.skipped.length,
+      })
+      if (summary.addedListingIds.length === 0) {
+        toast.show('Choose options on product pages', { tone: 'default' })
+        return
+      }
+      void feedback('success')
+      const skipped = summary.skipped.length
+      toast.show(
+        skipped
+          ? `Added ${summary.addedListingIds.length} of ${eligible.length}`
+          : `Added ${summary.addedListingIds.length} to cart`,
+        {
+          tone: 'success',
+          message: skipped ? 'Tap remaining items to choose options.' : undefined,
+        },
+      )
+    } finally {
+      setBusy(false)
+    }
   }
 
   return (
-    <YStack gap={multi ? 6 : 10}>
-      {enriched.map((product, index) => (
-        <PostProductCard
-          key={product.listingId ?? product.slug ?? `${product.title}-${index}`}
-          product={product}
-          postId={postId}
-          source={source}
-          multi={multi}
-        />
-      ))}
-    </YStack>
+    <Button
+      size="$2"
+      tone="outline"
+      borderRadius={999}
+      alignSelf="flex-start"
+      disabled={busy}
+      icon={busy ? <Spinner size="small" /> : <Icons.ShoppingBag size={14} color={communityUi.text} />}
+      onPress={() => void handleShopAll()}
+    >
+      {busy ? 'Adding…' : `Shop all (${eligible.length})`}
+    </Button>
   )
 }
 
@@ -117,9 +215,12 @@ function PostProductCard({
   const [wishlistBusy, setWishlistBusy] = useState(false)
   const [messaging, setMessaging] = useState(false)
   const [shareOpen, setShareOpen] = useState(false)
+  const [restockBusy, setRestockBusy] = useState(false)
   const imageSize = multi ? 72 : 112
   const listingHref =
-    product.liveStatus === 'available' ? buildCommunityListingHref(product, postId) : null
+    product.liveStatus === 'available'
+      ? buildCommunityListingHref(product, postId, { source })
+      : null
   const signInReturnPath = String(communityRoutes.post(postId))
   const unavailable = product.liveStatus === 'unavailable'
   const soldOut = product.soldOut && !unavailable
@@ -129,7 +230,7 @@ function PostProductCard({
     !!product.shopId && shops.some((shop) => shop.id === product.shopId)
   const canMessageSeller =
     !!product.shopOwnerUserId && user?.id !== product.shopOwnerUserId
-  const chatListing = postProductToChatListing(product)
+  const chatListing = postProductToChatListing(product, { postId, source })
   const canShareToChat = !!chatListing && !unavailable
   const productSharePath = listingHref
   const productShareUrl =
@@ -225,6 +326,34 @@ function PostProductCard({
     }
     await shopFollow.toggleFollow()
     void feedback('selection')
+  }
+
+  async function handleRestockAlert() {
+    if (!product.listingId) return
+    if (!user) {
+      requireSignIn(signInReturnPath)
+      return
+    }
+    setRestockBusy(true)
+    try {
+      const result = await subscribeCommunityRestockAlert(product.listingId, user.id)
+      if (result.error) {
+        toast.show('Could not set alert', { tone: 'danger', message: result.error })
+        return
+      }
+      trackCommunityRestockAlertSubscribe({
+        postId,
+        listingId: product.listingId,
+        source,
+      })
+      void feedback('success')
+      toast.show(result.alreadySubscribed ? 'Already on the list' : 'Restock alert added', {
+        tone: 'success',
+        message: 'We will let you know when this item is back.',
+      })
+    } finally {
+      setRestockBusy(false)
+    }
   }
 
   async function handleCartAction(goToCheckout: boolean) {
@@ -508,6 +637,21 @@ function PostProductCard({
         postId={postId}
         source={source}
       />
+
+      {soldOut && product.listingId ? (
+        <YStack padding={10} paddingTop={0}>
+          <Button
+            size="$2"
+            tone="outline"
+            borderRadius={999}
+            width="100%"
+            disabled={restockBusy}
+            onPress={() => void handleRestockAlert()}
+          >
+            {restockBusy ? 'Saving…' : 'Notify me when back'}
+          </Button>
+        </YStack>
+      ) : null}
 
       {!unavailable && !soldOut && product.listingId ? (
         multi ? (

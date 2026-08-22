@@ -71,6 +71,11 @@ export type ChatListingPayload = {
   imageUrl: string | null
   slug: string | null
   shopName: string | null
+  /** Originating community post when shared from a shoppable post. */
+  postId?: string | null
+  /** Commerce attribution source (feed, chat, profile_shop, …). */
+  source?: string | null
+  shopOwnerUserId?: string | null
 }
 
 /** A single message within a conversation thread. */

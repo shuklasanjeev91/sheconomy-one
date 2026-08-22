@@ -28,6 +28,7 @@ import { ProgramsRevisitStrip } from '~/community/components/ProgramsRevisitStri
 import { ProfileViewersStrip } from '~/community/components/ProfileViewersStrip'
 import { ReadLaterRevisitStrip } from '~/community/components/ReadLaterRevisitStrip'
 import { SavedCollectionRevisitStrip } from '~/community/components/SavedCollectionRevisitStrip'
+import { SavedNotesRevisitStrip } from '~/community/components/SavedNotesRevisitStrip'
 import { ShoppablePostsSpotlightStrip } from '~/community/components/ShoppablePostsSpotlightStrip'
 import { ProfileCompletionRevisitStrip } from '~/community/components/ProfileCompletionRevisitStrip'
 import { RecommendationInboxStrip } from '~/community/components/RecommendationInboxStrip'
@@ -41,6 +42,7 @@ import { FeedFilterChips } from '~/community/components/FeedFilterChips'
 import { FeedSortBar, type FeedSort } from '~/community/components/FeedSortBar'
 import { FOR_YOU_SLOT } from '~/community/lib/for-you-density'
 import type { FeedContentFilter } from '~/community/lib/community'
+import { IdleMount } from '~/components/IdleMount'
 import { YStack } from '~/components/ui'
 
 type CommunityFeedHeaderProps = {
@@ -59,108 +61,114 @@ export function CommunityFeedHeader({
   const forYou = useMemo(
     () => (
       <CommunityForYouHub>
-        <ForYouSlot id={FOR_YOU_SLOT.celebrations}>
-          <TodayCelebrationsCard />
-        </ForYouSlot>
-        <ForYouSlot id={FOR_YOU_SLOT.profileCompletion}>
-          <ProfileCompletionRevisitStrip />
-        </ForYouSlot>
-        <ForYouSlot id={FOR_YOU_SLOT.composeDraft}>
-          <ComposeDraftRevisitStrip />
-        </ForYouSlot>
-        <ForYouSlot id={FOR_YOU_SLOT.networkInvitations}>
-          <NetworkInvitationsStrip />
-        </ForYouSlot>
-        <ForYouSlot id={FOR_YOU_SLOT.networkSent}>
-          <NetworkSentRevisitStrip />
-        </ForYouSlot>
-        <ForYouSlot id={FOR_YOU_SLOT.unreadChat}>
-          <UnreadChatRevisitStrip />
-        </ForYouSlot>
-        <ForYouSlot id={FOR_YOU_SLOT.networkSuggestions}>
-          <NetworkSuggestionsStrip />
-        </ForYouSlot>
-        <ForYouSlot id={FOR_YOU_SLOT.introductionInbox}>
-          <IntroductionInboxStrip />
-        </ForYouSlot>
-        <ForYouSlot id={FOR_YOU_SLOT.introductionSent}>
-          <IntroductionSentRevisitStrip />
-        </ForYouSlot>
-        <ForYouSlot id={FOR_YOU_SLOT.recommendationInbox}>
-          <RecommendationInboxStrip />
-        </ForYouSlot>
-        <ForYouSlot id={FOR_YOU_SLOT.recommendationSent}>
-          <RecommendationSentRevisitStrip />
-        </ForYouSlot>
-        <ForYouSlot id={FOR_YOU_SLOT.profileViewers}>
-          <ProfileViewersStrip />
-        </ForYouSlot>
-        <ForYouSlot id={FOR_YOU_SLOT.meetingInvites}>
-          <MeetingInvitesRevisitStrip />
-        </ForYouSlot>
-        <ForYouSlot id={FOR_YOU_SLOT.meetingRevisit}>
-          <MeetingRevisitStrip />
-        </ForYouSlot>
-        <ForYouSlot id={FOR_YOU_SLOT.groups}>
-          <GroupsRevisitStrip />
-        </ForYouSlot>
-        <ForYouSlot id={FOR_YOU_SLOT.companies}>
-          <CompaniesRevisitStrip />
-        </ForYouSlot>
-        <ForYouSlot id={FOR_YOU_SLOT.programs}>
-          <ProgramsRevisitStrip />
-        </ForYouSlot>
-        <ForYouSlot id={FOR_YOU_SLOT.pickUpAgain}>
-          <PickUpAgainStrip />
-        </ForYouSlot>
-        <ForYouSlot id={FOR_YOU_SLOT.readLater}>
-          <ReadLaterRevisitStrip />
-        </ForYouSlot>
-        <ForYouSlot id={FOR_YOU_SLOT.savedNotes}>
-          <SavedNotesRevisitStrip />
-        </ForYouSlot>
-        <ForYouSlot id={FOR_YOU_SLOT.savedCollection}>
-          <SavedCollectionRevisitStrip />
-        </ForYouSlot>
-        <ForYouSlot id={FOR_YOU_SLOT.events}>
-          <EventRevisitStrip />
-        </ForYouSlot>
-        <ForYouSlot id={FOR_YOU_SLOT.jobs}>
-          <JobRevisitStrip />
-        </ForYouSlot>
-        <ForYouSlot id={FOR_YOU_SLOT.openToWork}>
-          <OpenToWorkRevisitStrip />
-        </ForYouSlot>
-        <ForYouSlot id={FOR_YOU_SLOT.openToServices}>
-          <OpenToServicesRevisitStrip />
-        </ForYouSlot>
-        <ForYouSlot id={FOR_YOU_SLOT.jobApplications}>
-          <JobApplicationsRevisitStrip />
-        </ForYouSlot>
-        <ForYouSlot id={FOR_YOU_SLOT.professionalSpotlight}>
-          <ProfessionalSpotlightStrip />
-        </ForYouSlot>
-        <ForYouSlot id={FOR_YOU_SLOT.creatorMode}>
-          <CreatorModeRevisitStrip />
-        </ForYouSlot>
-        <ForYouSlot id={FOR_YOU_SLOT.creatorSpotlight}>
-          <CreatorSpotlightStrip />
-        </ForYouSlot>
-        <ForYouSlot id={FOR_YOU_SLOT.followedShopActivity}>
-          <FollowedShopActivityStrip />
-        </ForYouSlot>
-        <ForYouSlot id={FOR_YOU_SLOT.shoppablePostsSpotlight}>
-          <ShoppablePostsSpotlightStrip />
-        </ForYouSlot>
-        <ForYouSlot id={FOR_YOU_SLOT.wishlistActivity}>
-          <WishlistActivityStrip />
-        </ForYouSlot>
-        <ForYouSlot id={FOR_YOU_SLOT.recentlyViewed}>
-          <CommunityRecentlyViewedStrip />
-        </ForYouSlot>
-        <ForYouSlot id={FOR_YOU_SLOT.hashtags}>
-          <HashtagRevisitStrip />
-        </ForYouSlot>
+        <IdleMount timeoutMs={0}>
+          <ForYouSlot id={FOR_YOU_SLOT.celebrations}>
+            <TodayCelebrationsCard />
+          </ForYouSlot>
+          <ForYouSlot id={FOR_YOU_SLOT.profileCompletion}>
+            <ProfileCompletionRevisitStrip />
+          </ForYouSlot>
+          <ForYouSlot id={FOR_YOU_SLOT.networkInvitations}>
+            <NetworkInvitationsStrip />
+          </ForYouSlot>
+          <ForYouSlot id={FOR_YOU_SLOT.unreadChat}>
+            <UnreadChatRevisitStrip />
+          </ForYouSlot>
+        </IdleMount>
+        <IdleMount timeoutMs={300}>
+          <ForYouSlot id={FOR_YOU_SLOT.composeDraft}>
+            <ComposeDraftRevisitStrip />
+          </ForYouSlot>
+          <ForYouSlot id={FOR_YOU_SLOT.networkSent}>
+            <NetworkSentRevisitStrip />
+          </ForYouSlot>
+          <ForYouSlot id={FOR_YOU_SLOT.networkSuggestions}>
+            <NetworkSuggestionsStrip />
+          </ForYouSlot>
+          <ForYouSlot id={FOR_YOU_SLOT.introductionInbox}>
+            <IntroductionInboxStrip />
+          </ForYouSlot>
+          <ForYouSlot id={FOR_YOU_SLOT.introductionSent}>
+            <IntroductionSentRevisitStrip />
+          </ForYouSlot>
+          <ForYouSlot id={FOR_YOU_SLOT.recommendationInbox}>
+            <RecommendationInboxStrip />
+          </ForYouSlot>
+          <ForYouSlot id={FOR_YOU_SLOT.recommendationSent}>
+            <RecommendationSentRevisitStrip />
+          </ForYouSlot>
+          <ForYouSlot id={FOR_YOU_SLOT.profileViewers}>
+            <ProfileViewersStrip />
+          </ForYouSlot>
+          <ForYouSlot id={FOR_YOU_SLOT.meetingInvites}>
+            <MeetingInvitesRevisitStrip />
+          </ForYouSlot>
+          <ForYouSlot id={FOR_YOU_SLOT.meetingRevisit}>
+            <MeetingRevisitStrip />
+          </ForYouSlot>
+          <ForYouSlot id={FOR_YOU_SLOT.groups}>
+            <GroupsRevisitStrip />
+          </ForYouSlot>
+          <ForYouSlot id={FOR_YOU_SLOT.companies}>
+            <CompaniesRevisitStrip />
+          </ForYouSlot>
+          <ForYouSlot id={FOR_YOU_SLOT.programs}>
+            <ProgramsRevisitStrip />
+          </ForYouSlot>
+          <ForYouSlot id={FOR_YOU_SLOT.pickUpAgain}>
+            <PickUpAgainStrip />
+          </ForYouSlot>
+          <ForYouSlot id={FOR_YOU_SLOT.readLater}>
+            <ReadLaterRevisitStrip />
+          </ForYouSlot>
+          <ForYouSlot id={FOR_YOU_SLOT.savedNotes}>
+            <SavedNotesRevisitStrip />
+          </ForYouSlot>
+          <ForYouSlot id={FOR_YOU_SLOT.savedCollection}>
+            <SavedCollectionRevisitStrip />
+          </ForYouSlot>
+        </IdleMount>
+        <IdleMount timeoutMs={800}>
+          <ForYouSlot id={FOR_YOU_SLOT.events}>
+            <EventRevisitStrip />
+          </ForYouSlot>
+          <ForYouSlot id={FOR_YOU_SLOT.jobs}>
+            <JobRevisitStrip />
+          </ForYouSlot>
+          <ForYouSlot id={FOR_YOU_SLOT.openToWork}>
+            <OpenToWorkRevisitStrip />
+          </ForYouSlot>
+          <ForYouSlot id={FOR_YOU_SLOT.openToServices}>
+            <OpenToServicesRevisitStrip />
+          </ForYouSlot>
+          <ForYouSlot id={FOR_YOU_SLOT.jobApplications}>
+            <JobApplicationsRevisitStrip />
+          </ForYouSlot>
+          <ForYouSlot id={FOR_YOU_SLOT.professionalSpotlight}>
+            <ProfessionalSpotlightStrip />
+          </ForYouSlot>
+          <ForYouSlot id={FOR_YOU_SLOT.creatorMode}>
+            <CreatorModeRevisitStrip />
+          </ForYouSlot>
+          <ForYouSlot id={FOR_YOU_SLOT.creatorSpotlight}>
+            <CreatorSpotlightStrip />
+          </ForYouSlot>
+          <ForYouSlot id={FOR_YOU_SLOT.followedShopActivity}>
+            <FollowedShopActivityStrip />
+          </ForYouSlot>
+          <ForYouSlot id={FOR_YOU_SLOT.shoppablePostsSpotlight}>
+            <ShoppablePostsSpotlightStrip />
+          </ForYouSlot>
+          <ForYouSlot id={FOR_YOU_SLOT.wishlistActivity}>
+            <WishlistActivityStrip />
+          </ForYouSlot>
+          <ForYouSlot id={FOR_YOU_SLOT.recentlyViewed}>
+            <CommunityRecentlyViewedStrip />
+          </ForYouSlot>
+          <ForYouSlot id={FOR_YOU_SLOT.hashtags}>
+            <HashtagRevisitStrip />
+          </ForYouSlot>
+        </IdleMount>
       </CommunityForYouHub>
     ),
     [],

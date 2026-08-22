@@ -987,6 +987,7 @@ export async function fetchHashtagFeedPage(
   tag: string,
   page: number,
   pageSize = COMMUNITY_PAGE_SIZE,
+  options?: { shoppableOnly?: boolean },
 ): Promise<PaginatedPostsResult> {
   const normalized = tag.toLowerCase().replace(/^#/, '')
   const from = page * pageSize
@@ -1021,7 +1022,11 @@ export async function fetchHashtagFeedPage(
   }
 
   const mapped = ((data ?? []) as PostRow[]).map((row) => mapPost(row))
-  const items = await enrichPosts(mapped)
+  let items = await enrichPosts(mapped)
+
+  if (options?.shoppableOnly) {
+    items = items.filter((post) => (post.products?.length ?? 0) > 0 || Boolean(post.product))
+  }
 
   return {
     items,

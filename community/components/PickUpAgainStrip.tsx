@@ -1,15 +1,18 @@
-import { useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 
 import { AppLink } from '~/components/navigation/AppLink'
 import { useCart } from '~/commerce/hooks/useCart'
 
 import { CommunityCard } from '~/community/components/CommunityCard'
 import { useReportForYouContent } from '~/community/components/ForYouSlot'
+import { usePostProductsLive } from '~/community/hooks/usePostProductsLive'
 import { useSavedPostRevisit } from '~/community/hooks/useSavedPostRevisit'
 import { useCommunityUi } from '~/community/lib/community-theme'
 import type { PickUpAgainCard } from '~/community/lib/saved-posts'
+import { buildCommunityListingHref } from '~/community/lib/post-product-live'
 import { HorizontalScrollRow } from '~/components/layout'
 import { Button, Icons, Image, Spinner, Text, XStack, YStack, useAppToast } from '~/components/ui'
+import { formatMoneyLabel } from '~/lib/format'
 import { commerceRoutes, communityRoutes } from '~/lib/routes'
 import { navigateApp } from '~/lib/platform/navigate'
 
@@ -58,8 +61,19 @@ function PickUpAgainCardItem({ card }: { card: PickUpAgainCard }) {
   const toast = useAppToast()
   const { addToCart } = useCart()
   const [adding, setAdding] = useState(false)
+  const products = useMemo(() => (card.product ? [card.product] : []), [card.product])
+  const liveProducts = usePostProductsLive(products)
+  const liveProduct = liveProducts[0]
   const href = card.lane === 'read_later' ? communityRoutes.article(card.postId) : communityRoutes.post(card.postId)
   const showAddToCart = card.lane === 'shop_now' && !!card.listingId
+  const listingHref =
+    card.listingId && card.lane === 'shop_now'
+      ? buildCommunityListingHref(
+          commerceRoutes.listing(card.listingSlug ?? card.listingId),
+          card.postId,
+          { source: 'saved_revisit' },
+        )
+      : null
 
   async function handleAddToCart() {
     if (!card.listingId) return
@@ -68,7 +82,11 @@ function PickUpAgainCardItem({ card }: { card: PickUpAgainCard }) {
       const result = await addToCart(card.listingId)
       if (result.error) {
         toast.show('Could not add to cart', { tone: 'default', message: result.error })
-        navigateApp(commerceRoutes.listing(card.listingSlug ?? card.listingId))
+        if (listingHref) {
+          navigateApp(listingHref as never)
+        } else {
+          navigateApp(commerceRoutes.listing(card.listingSlug ?? card.listingId))
+        }
         return
       }
       toast.show('Added to cart', { tone: 'success' })
@@ -130,6 +148,9 @@ function PickUpAgainCardItem({ card }: { card: PickUpAgainCard }) {
                 {card.subtitle}
               </Text>
             ) : null}
+            {liveProduct && card.lane === 'shop_now' ? (
+              <PickUpAgainLiveBadges product={liveProduct} />
+            ) : null}
           </YStack>
         </YStack>
       </AppLink>
@@ -139,12 +160,52 @@ function PickUpAgainCardItem({ card }: { card: PickUpAgainCard }) {
           tone="primary"
           size="$2.5"
           borderRadius={999}
-          disabled={adding}
+          disabled={adding || liveProduct?.soldOut || liveProduct?.liveStatus === 'unavailable'}
           onPress={() => void handleAddToCart()}
         >
-          {adding ? 'Adding…' : 'Add to cart'}
+          {adding
+            ? 'Adding…'
+            : liveProduct?.soldOut
+              ? 'Sold out'
+              : liveProduct?.liveStatus === 'unavailable'
+                ? 'Unavailable'
+                : 'Add to cart'}
         </Button>
       ) : null}
     </YStack>
+  )
+}
+
+function PickUpAgainLiveBadges({
+  product,
+}: {
+  product: NonNullable<ReturnType<typeof usePostProductsLive>[number]>
+}) {
+  const communityUi = useCommunityUi()
+  const priceLabel =
+    product.price != null ? formatMoneyLabel(product.price, product.currency ?? 'INR') : null
+
+  return (
+    <XStack gap={6} alignItems="center" flexWrap="wrap">
+      {priceLabel ? (
+        <Text fontSize={12} fontWeight="700" color={communityUi.brand}>
+          {priceLabel}
+        </Text>
+      ) : null}
+      {product.priceDropped ? (
+        <Text fontSize={11} fontWeight="700" color="#059669">
+          Price dropped
+        </Text>
+      ) : product.priceUpdated ? (
+        <Text fontSize={11} fontWeight="600" color={communityUi.textMuted}>
+          Price updated
+        </Text>
+      ) : null}
+      {product.soldOut ? (
+        <Text fontSize={11} fontWeight="600" color={communityUi.textMuted}>
+          Sold out
+        </Text>
+      ) : null}
+    </XStack>
   )
 }

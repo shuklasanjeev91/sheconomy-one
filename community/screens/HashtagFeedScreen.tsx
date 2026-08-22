@@ -1,4 +1,4 @@
-import { useCallback, useMemo } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Platform } from 'react-native'
 import { FlashList } from '@shopify/flash-list'
 import { useParams, useRouter } from 'one'
@@ -8,6 +8,7 @@ import { CommunityShell } from '~/community/components/CommunityShell'
 import { FeedPostCard } from '~/community/components/FeedPostCard'
 import { useHashtagFollow } from '~/community/hooks/useHashtagFollow'
 import { BRAND_BLUE } from '~/community/lib/constants'
+import { trackCommunityHashtagShoppableFilter } from '~/community/lib/community-commerce-analytics'
 import { fetchHashtagFeedPage, type CommunityPost } from '~/community/lib/community'
 import { usePaginatedFeed } from '~/commerce/hooks/usePaginatedFeed'
 import { Button, Spinner, Text, XStack, YStack, useAppToast } from '~/components/ui'
@@ -18,6 +19,8 @@ import { communityRoutes } from '~/lib/routes'
 import { getHashtagShareUrl } from '~/lib/share'
 import { useAppUi } from '~/lib/theme/useAppUi'
 import { usePageSeo } from '~/components/seo/RouteSeo'
+import { useQueryParam } from '~/hooks/useQueryParams'
+import { HorizontalScrollRow } from '~/components/layout'
 
 export function HashtagFeedScreen() {
   const ui = useAppUi()
@@ -25,7 +28,15 @@ export function HashtagFeedScreen() {
   const toast = useAppToast()
   const { tag } = useParams<{ tag: string }>()
   const normalizedTag = decodeURIComponent(tag ?? '').replace(/^#/, '')
+  const shoppableParam = useQueryParam('shoppable')
+  const [shoppableOnly, setShoppableOnly] = useState(false)
   const follow = useHashtagFollow(normalizedTag)
+
+  useEffect(() => {
+    if (shoppableParam === '1') {
+      setShoppableOnly(true)
+    }
+  }, [shoppableParam])
 
   usePageSeo(
     useMemo(() => {
@@ -38,8 +49,8 @@ export function HashtagFeedScreen() {
   )
 
   const fetchPage = useCallback(
-    (page: number) => fetchHashtagFeedPage(normalizedTag, page),
-    [normalizedTag],
+    (page: number) => fetchHashtagFeedPage(normalizedTag, page, undefined, { shoppableOnly }),
+    [normalizedTag, shoppableOnly],
   )
 
   const { items, isLoading, isLoadingMore, hasMore, error, loadMore } =
@@ -104,12 +115,44 @@ export function HashtagFeedScreen() {
               copyLabel="Copy hashtag link"
               copyToastMessage="Hashtag link copied to clipboard."
               payload={{
-                url: getHashtagShareUrl(normalizedTag),
+                url: shoppableOnly
+                  ? `${getHashtagShareUrl(normalizedTag)}?shoppable=1`
+                  : getHashtagShareUrl(normalizedTag),
                 title: `#${normalizedTag}`,
               }}
             />
           </XStack>
         </XStack>
+        <HorizontalScrollRow gap={8}>
+          {[
+            { id: false, label: 'All posts' },
+            { id: true, label: 'Shoppable' },
+          ].map((filter) => {
+            const active = shoppableOnly === filter.id
+            return (
+              <XStack
+                key={filter.label}
+                paddingHorizontal={14}
+                paddingVertical={8}
+                borderRadius={999}
+                borderWidth={1}
+                borderColor={active ? BRAND_BLUE : ui.borderSubtle}
+                backgroundColor={active ? `${BRAND_BLUE}14` : ui.surface}
+                cursor="pointer"
+                onPress={() => {
+                  setShoppableOnly(filter.id)
+                  if (filter.id) {
+                    trackCommunityHashtagShoppableFilter({ hashtag: normalizedTag, enabled: true })
+                  }
+                }}
+              >
+                <Text fontSize={13} fontWeight="700" color={active ? BRAND_BLUE : ui.textMuted}>
+                  {filter.label}
+                </Text>
+              </XStack>
+            )
+          })}
+        </HorizontalScrollRow>
       </YStack>
     ),
     [
@@ -117,10 +160,12 @@ export function HashtagFeedScreen() {
       follow.isLoading,
       follow.isToggling,
       normalizedTag,
+      shoppableOnly,
       ui.borderSubtle,
       ui.shadowSoft,
       ui.surface,
       ui.text,
+      ui.textMuted,
       ui.textSecondary,
     ],
   )
@@ -160,7 +205,11 @@ export function HashtagFeedScreen() {
               borderColor={ui.borderSubtle}
               alignItems="center"
             >
-              <Text color={ui.textMuted}>No posts with #{normalizedTag} yet.</Text>
+              <Text color={ui.textMuted}>
+                {shoppableOnly
+                  ? `No shoppable posts with #${normalizedTag} yet.`
+                  : `No posts with #${normalizedTag} yet.`}
+              </Text>
             </YStack>
           </YStack>
         ) : (

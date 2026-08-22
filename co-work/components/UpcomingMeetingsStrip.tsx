@@ -1,6 +1,6 @@
 import { useRouter } from 'one'
 import { AppLink } from '~/components/navigation/AppLink'
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo } from 'react'
 
 import { CoWorkStatusPill } from '~/co-work/components/CoWorkUi'
 import { fetchUpcomingMeetings, formatMeetingCode } from '~/co-work/lib/meetings'
@@ -16,6 +16,8 @@ import { coworkBoxShadow } from '~/lib/platform/crossStyles'
 import { coWorkRoutes } from '~/lib/routes'
 import { getMeetingShareUrl } from '~/lib/share'
 import { useSupabase } from '~/providers/SupabaseProvider'
+import { CACHE_KEYS } from '~/lib/bootstrap/cache-keys'
+import { useCachedQuery } from '~/hooks/useCachedQuery'
 
 function formatWhen(meeting: Meeting) {
   const raw = meeting.scheduled_at ?? meeting.started_at ?? meeting.created_at
@@ -41,8 +43,21 @@ export function UpcomingMeetingsStrip({
   const { user } = useSupabase()
   const router = useRouter()
   const toast = useAppToast()
-  const [meetings, setMeetings] = useState<Meeting[]>([])
-  const [loading, setLoading] = useState(false)
+  const { data, isLoading: loading, refresh } = useCachedQuery<Meeting[]>({
+    cacheKey: user ? CACHE_KEYS.coWorkUpcoming : null,
+    enabled: !!user,
+    fetcher: async () => {
+      const rows = await fetchUpcomingMeetings()
+      return rows
+        .filter((m) => m.status === 'scheduled' || m.status === 'instant' || m.status === 'active')
+        .slice(0, 6)
+    },
+  })
+  const meetings = useMemo(() => data ?? [], [data])
+
+  useEffect(() => {
+    if (refreshKey > 0) void refresh()
+  }, [refreshKey, refresh])
 
   async function copyCode(code: string) {
     const ok = await copyToClipboard(formatMeetingCode(code))
@@ -68,29 +83,6 @@ export function UpcomingMeetingsStrip({
     })
   }
 
-  useEffect(() => {
-    let active = true
-    setLoading(true)
-    void fetchUpcomingMeetings()
-      .then((rows) => {
-        if (!active) return
-        // The fetchUpcomingMeetings already filters for upcoming meetings
-        // Only show meetings with status: scheduled, instant, or active
-        const upcoming = rows
-          .filter((m) => m.status === 'scheduled' || m.status === 'instant' || m.status === 'active')
-          .slice(0, 6)
-        setMeetings(upcoming)
-      })
-      .catch(() => {
-        if (active) setMeetings([])
-      })
-      .finally(() => {
-        if (active) setLoading(false)
-      })
-    return () => {
-      active = false
-    }
-  }, [refreshKey])
 
   if (!user) return null
 

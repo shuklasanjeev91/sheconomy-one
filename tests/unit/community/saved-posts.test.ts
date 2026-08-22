@@ -40,6 +40,7 @@ import {
   buildSavedCollectionRevisitCards,
   buildSavedNotesRevisitCards,
   buildSavedPostSections,
+  defaultSavedCollectionForPost,
   saveCommunityPost,
   updateSavedCommunityPost,
   type SavedCommunityPostEntry,
@@ -215,6 +216,33 @@ describe('saved posts', () => {
     expect(cards[0]?.title).toBe('Serum')
     expect(cards[0]?.imageUrl).toBe('https://img/serum.jpg')
     expect(cards[0]?.subtitle).toContain('Payday buy')
+    expect(cards[0]?.product?.listingId).toBe('l1')
+  })
+
+  it('picks smart default collections for saves', () => {
+    expect(
+      defaultSavedCollectionForPost(
+        makePost({
+          products: [
+            {
+              listingId: 'l1',
+              title: 'Serum',
+              price: 900,
+              currency: 'INR',
+              imageUrl: null,
+              slug: null,
+              shopName: 'Glow',
+            },
+          ],
+        }),
+      ),
+    ).toBe('Shop now')
+    expect(
+      defaultSavedCollectionForPost(
+        makePost({ post_type: 'article', article_title: 'Founder notes' }),
+      ),
+    ).toBe('Read later')
+    expect(defaultSavedCollectionForPost(makePost({ content: 'Plain update' }))).toBe('Saved')
   })
 
   it('deduplicates revisit cards when the same post appears in multiple lanes', () => {

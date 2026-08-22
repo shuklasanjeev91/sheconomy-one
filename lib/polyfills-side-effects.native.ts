@@ -88,7 +88,7 @@ import '@tamagui/native/setup-teleport'
 import '@tamagui/native/setup-worklets'
 
 // Register Tamagui config on the single @tamagui/web instance before any UI mounts.
-import '~/config/tamagui.config'
+import '~/config/tamagui.config.native'
 import { warmCriticalAppCaches } from '~/lib/bootstrap/warm-app-cache'
 import { startNativeBootstrapPrefetch } from '~/lib/bootstrap/app-prefetch'
 import '~/lib/brand/register-suspense-fallback'

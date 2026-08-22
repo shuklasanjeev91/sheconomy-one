@@ -59,6 +59,9 @@ import { ShareButton } from '~/components/share'
 import { openComposer } from '~/community/lib/composer-store'
 import { ShareListingSheet } from '~/chat/components/ShareListingSheet'
 import { listingDetailToChatListing } from '~/chat/lib/listing-message'
+import { CommunityAttributionStrip } from '~/community/components/CommunityAttributionStrip'
+import { PostedAtPriceChip } from '~/community/components/PostedAtPriceChip'
+import { PostSiblingProductsRail } from '~/community/components/PostSiblingProductsRail'
 import { useCommunityListingAttribution } from '~/community/hooks/useCommunityListingAttribution'
 import { BRAND_THEME, getShadowStyle, radius } from '~/config/tokens'
 import { useListing } from '~/hooks/useListing'
@@ -630,6 +633,9 @@ export function ListingScreen({
               {fromCommunityPost && communityPostId ? (
                 <CommunityAttributionStrip postId={communityPostId} />
               ) : null}
+              {fromCommunityPost && communityPostId && listing?.id ? (
+                <PostSiblingProductsRail postId={communityPostId} listingId={listing.id} />
+              ) : null}
               <YStack gap="$2.5">
                 <ListingPriceBlock
                   price={displayPrice}
@@ -639,6 +645,14 @@ export function ListingScreen({
                   taxPercent={listing.tax_percent}
                   size="lg"
                 />
+                {fromCommunityPost && communityPostId && listing?.id ? (
+                  <PostedAtPriceChip
+                    listingId={listing.id}
+                    postId={communityPostId}
+                    livePrice={displayPrice}
+                    liveCurrency={currency}
+                  />
+                ) : null}
                 {fulfillmentInfo?.kind === 'physical' && fulfillmentInfo.estimatedDeliveryLabel ? (
                   <GetItByChip label={fulfillmentInfo.estimatedDeliveryLabel} />
                 ) : null}
@@ -898,6 +912,9 @@ export function ListingScreen({
       {fromCommunityPost && communityPostId ? (
         <CommunityAttributionStrip postId={communityPostId} />
       ) : null}
+      {fromCommunityPost && communityPostId && listing?.id ? (
+        <PostSiblingProductsRail postId={communityPostId} listingId={listing.id} />
+      ) : null}
       <YStack gap="$2">
         <Text fontSize={13} color={ui.textMuted} fontWeight="600" letterSpacing={0.2} textTransform="uppercase">
           {listing.shops?.shop_name ?? BRAND_SHOP_LABEL}
@@ -920,6 +937,14 @@ export function ListingScreen({
         taxPercent={listing.tax_percent}
         size="lg"
       />
+      {fromCommunityPost && communityPostId && listing?.id ? (
+        <PostedAtPriceChip
+          listingId={listing.id}
+          postId={communityPostId}
+          livePrice={displayPrice}
+          liveCurrency={currency}
+        />
+      ) : null}
 
       {fulfillmentInfo?.kind === 'physical' && fulfillmentInfo.estimatedDeliveryLabel ? (
         <GetItByChip label={fulfillmentInfo.estimatedDeliveryLabel} />
