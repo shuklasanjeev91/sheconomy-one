@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 
 import { CommunityCard } from '~/community/components/CommunityCard'
+import { useReportForYouContent } from '~/community/components/ForYouSlot'
 import {
   fetchConnectionOccasionsToday,
   occasionCongratsCopy,
@@ -42,8 +43,10 @@ export function TodayCelebrationsCard() {
     load()
   }, [load])
 
-  // Not authenticated — nothing to show
-  if (!isAuthenticated) return null
+  // Authenticated users always see the card (loading, empty, or items).
+  const hasContent = isAuthenticated
+  useReportForYouContent(hasContent)
+  if (!hasContent) return null
 
   function congratulate(item: ConnectionOccasion) {
     if (!isAuthenticated) {

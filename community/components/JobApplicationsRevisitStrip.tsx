@@ -1,6 +1,7 @@
 import { AppLink } from '~/components/navigation/AppLink'
 
 import { CommunityCard } from '~/community/components/CommunityCard'
+import { useReportForYouContent } from '~/community/components/ForYouSlot'
 import { useJobApplicationsRevisit } from '~/community/hooks/useJobApplicationsRevisit'
 import type { JobApplicationRevisitCard } from '~/community/lib/job-applications-revisit'
 import { useCommunityUi } from '~/community/lib/community-theme'
@@ -12,7 +13,9 @@ export function JobApplicationsRevisitStrip() {
   const communityUi = useCommunityUi()
   const { cards, hasCards } = useJobApplicationsRevisit()
 
-  if (!hasCards) return null
+  const hasContent = hasCards
+  useReportForYouContent(hasContent)
+  if (!hasContent) return null
 
   return (
     <CommunityCard padding={16} gap={12}>

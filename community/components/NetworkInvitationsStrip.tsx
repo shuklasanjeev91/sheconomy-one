@@ -1,6 +1,7 @@
 import { AppLink } from '~/components/navigation/AppLink'
 
 import { CommunityCard } from '~/community/components/CommunityCard'
+import { useReportForYouContent } from '~/community/components/ForYouSlot'
 import { MemberRow } from '~/community/components/MemberRow'
 import { useCommunityFeedHeader } from '~/community/hooks/useCommunityFeedHeader'
 import { useNetwork } from '~/community/hooks/useNetwork'
@@ -16,9 +17,12 @@ export function NetworkInvitationsStrip() {
   const { hideSidebarRedundantStrips, isAuthenticated } = useCommunityFeedHeader()
   const network = useNetwork()
 
-  if (hideSidebarRedundantStrips) return null
-  if (!isAuthenticated) return null
-  if (network.pendingReceived.length === 0) return null
+  const hasContent =
+    !hideSidebarRedundantStrips &&
+    isAuthenticated &&
+    network.pendingReceived.length > 0
+  useReportForYouContent(hasContent)
+  if (!hasContent) return null
 
   const invitations = selectNetworkInvitations(network.pendingReceived, INVITATION_LIMIT)
 

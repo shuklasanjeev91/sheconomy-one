@@ -57,6 +57,8 @@ import { PageCenter, PageScroll, StickyRail } from '~/components/layout'
 import { DeliveryPinCheck } from '~/components/location'
 import { ShareButton } from '~/components/share'
 import { openComposer } from '~/community/lib/composer-store'
+import { CommunityAttributionStrip } from '~/community/components/CommunityAttributionStrip'
+import { useCommunityListingAttribution } from '~/community/hooks/useCommunityListingAttribution'
 import { BRAND_THEME, getShadowStyle, radius } from '~/config/tokens'
 import { useListing } from '~/hooks/useListing'
 import { useAppLayout } from '~/hooks/useAppLayout'
@@ -168,6 +170,7 @@ export function ListingScreen({
   const toast = useAppToast()
   const { hasSideRails } = useAppLayout()
   const shopFollow = useShopFollow(listing?.shop_id)
+  const { fromCommunityPost, communityPostId } = useCommunityListingAttribution(listing?.id)
 
   usePageSeo(
     useMemo(() => {
@@ -475,7 +478,7 @@ export function ListingScreen({
       return
     }
     openComposer({
-      mode: 'product',
+      mode: 'text',
       listingId: listing.id,
       content: `Check out ${listing.title} on SHEconomy`,
     })
@@ -582,6 +585,9 @@ export function ListingScreen({
             />
 
             <YStack paddingHorizontal="$4" gap="$5" paddingTop="$5">
+              {fromCommunityPost && communityPostId ? (
+                <CommunityAttributionStrip postId={communityPostId} />
+              ) : null}
               <YStack gap="$2.5">
                 <ListingPriceBlock
                   price={displayPrice}
@@ -846,6 +852,9 @@ export function ListingScreen({
 
   const buyPanel = (
     <CommercePanel flex={1} gap="$4" minWidth={0} padding="$5">
+      {fromCommunityPost && communityPostId ? (
+        <CommunityAttributionStrip postId={communityPostId} />
+      ) : null}
       <YStack gap="$2">
         <Text fontSize={13} color={ui.textMuted} fontWeight="600" letterSpacing={0.2} textTransform="uppercase">
           {listing.shops?.shop_name ?? BRAND_SHOP_LABEL}

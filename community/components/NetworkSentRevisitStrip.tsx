@@ -1,6 +1,7 @@
 import { AppLink } from '~/components/navigation/AppLink'
 
 import { CommunityCard } from '~/community/components/CommunityCard'
+import { useReportForYouContent } from '~/community/components/ForYouSlot'
 import { useCommunityFeedHeader } from '~/community/hooks/useCommunityFeedHeader'
 import { useNetworkSentRevisit } from '~/community/hooks/useNetworkSentRevisit'
 import type { NetworkSentRevisitCard } from '~/community/lib/network-sent-revisit'
@@ -14,9 +15,9 @@ export function NetworkSentRevisitStrip() {
   const { hideSidebarRedundantStrips, isAuthenticated } = useCommunityFeedHeader()
   const { cards, hasCards } = useNetworkSentRevisit()
 
-  if (hideSidebarRedundantStrips) return null
-  if (!isAuthenticated) return null
-  if (!hasCards) return null
+  const hasContent = !hideSidebarRedundantStrips && isAuthenticated && hasCards
+  useReportForYouContent(hasContent)
+  if (!hasContent) return null
 
   return (
     <CommunityCard padding={16} gap={12}>

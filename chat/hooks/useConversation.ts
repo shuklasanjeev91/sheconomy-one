@@ -413,6 +413,7 @@ export function useConversation({ conversationId, currentUserId }: UseConversati
         editedAt: null,
         poll: null,
         event: null,
+        listing: null,
         storyReply: null,
         optimistic: true,
       }
@@ -505,6 +506,7 @@ export function useConversation({ conversationId, currentUserId }: UseConversati
         editedAt: null,
         poll: null,
         event: null,
+        listing: null,
         storyReply: null,
         optimistic: true,
       }
@@ -580,6 +582,7 @@ export function useConversation({ conversationId, currentUserId }: UseConversati
         editedAt: null,
         poll: null,
         event: null,
+        listing: null,
         storyReply: null,
         optimistic: true,
       }
@@ -699,6 +702,7 @@ export function useConversation({ conversationId, currentUserId }: UseConversati
         editedAt: null,
         poll,
         event: null,
+        listing: null,
         storyReply: null,
         optimistic: true,
       }
@@ -748,6 +752,7 @@ export function useConversation({ conversationId, currentUserId }: UseConversati
         editedAt: null,
         poll: null,
         event,
+        listing: null,
         storyReply: null,
         optimistic: true,
       }

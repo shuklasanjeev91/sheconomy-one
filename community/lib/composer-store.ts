@@ -26,7 +26,10 @@ export type ComposerOptions = {
   celebrationTitle?: string
   /** Pre-fill post body (e.g. congratulate copy). */
   content?: string
-  /** Prefill product compose with this listing id. */
+  /**
+   * Prefill listing attach: with `mode: 'product'` selects the seller listing;
+   * with `mode: 'text'` (e.g. PDP Share to Community) attaches into `attachedProducts`.
+   */
   listingId?: string
 }
 

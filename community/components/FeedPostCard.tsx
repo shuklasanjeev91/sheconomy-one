@@ -11,6 +11,7 @@ import { PostLikeButton } from '~/community/components/PostLikeButton'
 import { PostLinkPreviewCard } from '~/community/components/PostLinkPreviewCard'
 import { PostMediaCarousel } from '~/community/components/PostMediaCarousel'
 import { PostMediaSlide } from '~/community/components/PostMediaSlide'
+import { PostProductStack } from '~/community/components/PostProductStack'
 import { ProfileLink } from '~/community/components/ProfileLink'
 import { usePostEngagement } from '~/community/hooks/usePostEngagement'
 import { REACTION_TYPES } from '~/community/lib/constants'
@@ -25,8 +26,6 @@ import type {
 import { castPollVote } from '~/community/lib/polls'
 import { collectPostMedia, type PostMediaItem } from '~/community/lib/post-media'
 import { useCommunityUi } from '~/community/lib/community-theme'
-import { buildSignInUrl } from '~/lib/auth/redirect'
-import { formatMoneyLabel } from '~/lib/format'
 import { extractFirstUrl, parseVideoProvider } from '~/lib/link-preview'
 import {
   getPostTypeSurface,
@@ -34,7 +33,6 @@ import {
 } from '~/community/lib/post-type-surface'
 import { Avatar, Button, Icons, Image, Spinner, Text, XStack, YStack, useAppToast } from '~/components/ui'
 import { radius } from '~/config/tokens'
-import { useCart } from '~/commerce/hooks/useCart'
 import { commerceRoutes, communityRoutes, routes } from '~/lib/routes'
 import { navigateApp } from '~/lib/platform/navigate'
 import { useSupabase } from '~/providers/SupabaseProvider'
@@ -420,7 +418,9 @@ export const FeedPostCard = memo(function FeedPostCard({
           {resolvedLink && mediaItems.length === 0 && !isArticle ? (
             <PostLinkPreviewCard preview={resolvedLink} />
           ) : null}
-          {feedProducts.length ? <PostProductStack products={feedProducts} /> : null}
+          {feedProducts.length ? (
+            <PostProductStack products={feedProducts} postId={post.id} />
+          ) : null}
           {post.shop ? <PostShopCard shop={post.shop} /> : null}
         </YStack>
 
@@ -695,153 +695,6 @@ function PostCelebrationCard({ celebration }: { celebration: PostCelebration }) 
       )}
     </YStack>
   )
-}
-
-function formatPostPrice(price: number | null, currency: string | null) {
-  if (price == null) return 'Free'
-  return formatMoneyLabel(price, currency ?? 'INR')
-}
-
-function PostProductStack({ products }: { products: PostProduct[] }) {
-  return (
-    <YStack gap={10}>
-      {products.map((product, index) => (
-        <PostProductCard
-          key={product.listingId ?? product.slug ?? `${product.title}-${index}`}
-          product={product}
-          multi={products.length > 1}
-        />
-      ))}
-    </YStack>
-  )
-}
-
-function PostProductCard({ product, multi = false }: { product: PostProduct; multi?: boolean }) {
-  const communityUi = useCommunityUi()
-  const toast = useAppToast()
-  const { addToCart } = useCart()
-  const { user } = useSupabase()
-  const [adding, setAdding] = useState(false)
-  const [buying, setBuying] = useState(false)
-
-  async function handleCartAction(goToCheckout: boolean) {
-    if (!product.listingId) {
-      toast.show('Listing unavailable', { tone: 'default' })
-      return
-    }
-    const setBusy = goToCheckout ? setBuying : setAdding
-    setBusy(true)
-    try {
-      const { error } = await addToCart(product.listingId)
-      if (error) {
-        toast.show(goToCheckout ? 'Choose options on the product page' : 'Could not add to cart', {
-          tone: 'default',
-          message: error,
-        })
-        if (product.slug || product.listingId) {
-          navigateApp(
-            Platform.OS !== 'web' && product.listingId
-              ? commerceRoutes.listing(product.listingId)
-              : commerceRoutes.listing(product.slug ?? product.listingId),
-          )
-        }
-        return
-      }
-      toast.show('Added to cart', { tone: 'success' })
-      if (goToCheckout) {
-        navigateApp(user ? commerceRoutes.checkout : buildSignInUrl(String(commerceRoutes.checkout)))
-      }
-    } finally {
-      setBusy(false)
-    }
-  }
-
-  const card = (
-    <YStack
-      borderRadius={radius.card}
-      overflow="hidden"
-      borderWidth={1}
-      borderColor={communityUi.border}
-      backgroundColor={communityUi.cardBg}
-    >
-      <XStack
-        cursor={product.slug || product.listingId ? 'pointer' : 'default'}
-        hoverStyle={product.slug || product.listingId ? { borderColor: communityUi.brand } : undefined}
-        animation="quick"
-      >
-        <YStack
-          width={112}
-          height={112}
-          backgroundColor={communityUi.pageBg}
-          alignItems="center"
-          justifyContent="center"
-        >
-          {product.imageUrl ? (
-            <Image src={product.imageUrl} width={112} height={112} objectFit="cover" alt="" />
-          ) : (
-            <Icons.Package size={26} color={communityUi.textMuted} />
-          )}
-        </YStack>
-        <YStack flex={1} padding={12} gap={4} justifyContent="center" minWidth={0}>
-          <Text fontSize={11} fontWeight="700" color={communityUi.textMuted} letterSpacing={0.4}>
-            {multi ? 'PRODUCT TAG' : 'PRODUCT'}
-          </Text>
-          <Text fontSize={15} fontWeight="700" color={communityUi.text} numberOfLines={2}>
-            {product.title}
-          </Text>
-          <Text fontSize={14} fontWeight="700" color={communityUi.brand}>
-            {formatPostPrice(product.price, product.currency)}
-          </Text>
-          {product.shopName ? (
-            <Text fontSize={12} color={communityUi.textMuted} numberOfLines={1}>
-              {product.shopName}
-            </Text>
-          ) : null}
-        </YStack>
-      </XStack>
-      {product.listingId ? (
-        <XStack padding={10} paddingTop={0} gap="$2">
-          <Button
-            size="$2"
-            tone="outline"
-            borderRadius={999}
-            flex={1}
-            disabled={adding || buying}
-            icon={adding ? <Spinner size="small" /> : <Icons.ShoppingBag size={14} color={communityUi.text} />}
-            onPress={(e) => {
-              e?.stopPropagation?.()
-              void handleCartAction(false)
-            }}
-          >
-            {adding ? 'Adding…' : 'Add to cart'}
-          </Button>
-          <Button
-            size="$2"
-            tone="primary"
-            borderRadius={999}
-            flex={1}
-            disabled={adding || buying}
-            icon={buying ? <Spinner size="small" color="white" /> : <Icons.Zap size={14} color="white" />}
-            onPress={(e) => {
-              e?.stopPropagation?.()
-              void handleCartAction(true)
-            }}
-          >
-            {buying ? 'Loading…' : 'Buy now'}
-          </Button>
-        </XStack>
-      ) : null}
-    </YStack>
-  )
-
-  if (!product.listingId && product.slug) {
-    return (
-      <AppLink href={commerceRoutes.listing(product.slug)} asChild>
-        {card}
-      </AppLink>
-    )
-  }
-  return card
 }
 
 function PostShopCard({ shop }: { shop: PostShop }) {
@@ -1264,6 +1117,19 @@ function OriginalPostEmbed({ original }: { original: OriginalPostPreview }) {
               )}
             </YStack>
           </AppLink>
+        )
+      })()}
+      {(() => {
+        const originalProducts = original.products?.length
+          ? original.products
+          : original.product
+            ? [original.product]
+            : []
+        if (!originalProducts.length) return null
+        return (
+          <YStack paddingHorizontal={12} paddingBottom={12}>
+            <PostProductStack products={originalProducts} postId={original.id} />
+          </YStack>
         )
       })()}
     </YStack>

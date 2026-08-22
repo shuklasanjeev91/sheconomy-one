@@ -1,6 +1,7 @@
 import { AppLink } from '~/components/navigation/AppLink'
 
 import { CommunityCard } from '~/community/components/CommunityCard'
+import { useReportForYouContent } from '~/community/components/ForYouSlot'
 import { useCreatorModeRevisit } from '~/community/hooks/useCreatorModeRevisit'
 import { creatorModeComposeHref } from '~/community/lib/creator-mode-revisit'
 import { useCommunityUi } from '~/community/lib/community-theme'
@@ -10,7 +11,9 @@ export function CreatorModeRevisitStrip() {
   const communityUi = useCommunityUi()
   const { card, hasCard } = useCreatorModeRevisit()
 
-  if (!hasCard || !card) return null
+  const hasContent = Boolean(hasCard && card)
+  useReportForYouContent(hasContent)
+  if (!hasContent) return null
 
   return (
     <CommunityCard padding={16} gap={12}>

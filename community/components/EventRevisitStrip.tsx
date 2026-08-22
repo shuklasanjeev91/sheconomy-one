@@ -1,6 +1,7 @@
 import { AppLink } from '~/components/navigation/AppLink'
 
 import { CommunityCard } from '~/community/components/CommunityCard'
+import { useReportForYouContent } from '~/community/components/ForYouSlot'
 import { useEventRevisitHub } from '~/community/hooks/useEventRevisitHub'
 import { useCommunityUi } from '~/community/lib/community-theme'
 import type { EventRevisitCard } from '~/community/lib/event-revisit-hub'
@@ -12,7 +13,9 @@ export function EventRevisitStrip() {
   const communityUi = useCommunityUi()
   const { cards, loading, hasCards } = useEventRevisitHub()
 
-  if (!loading && !hasCards) return null
+  const hasContent = loading || hasCards
+  useReportForYouContent(hasContent)
+  if (!hasContent) return null
 
   return (
     <CommunityCard padding={16} gap={12}>

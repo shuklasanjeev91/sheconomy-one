@@ -7,6 +7,7 @@ import { FeedPostCard } from '~/community/components/FeedPostCard'
 import { UserListBottomSheet } from '~/community/components/UserListBottomSheet'
 import { ProfileBackgroundSections } from '~/community/components/profile/ProfileBackgroundSections'
 import { FeaturedPostsSection } from '~/community/components/profile/FeaturedPostsSection'
+import { ProfileShoppableProductsSection } from '~/community/components/profile/ProfileShoppableProductsSection'
 import { RecommendationsSection } from '~/community/components/profile/RecommendationsSection'
 import { WhoViewedYourProfileCard } from '~/community/components/profile/WhoViewedYourProfileCard'
 import type { ProfileDisplay } from '~/community/components/profile/types'
@@ -331,6 +332,7 @@ export function ProfileView({
       )}
 
       <FeaturedPostsSection profileUserId={profile.id} isOwnProfile={isOwnProfile} />
+      <ProfileShoppableProductsSection profileUserId={profile.id} />
 
       <RecommendationsSection
         profileUserId={profile.id}

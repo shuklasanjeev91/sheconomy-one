@@ -1,6 +1,7 @@
 import { AppLink } from '~/components/navigation/AppLink'
 
 import { CommunityCard } from '~/community/components/CommunityCard'
+import { useReportForYouContent } from '~/community/components/ForYouSlot'
 import { useComposeDraftRevisit } from '~/community/hooks/useComposeDraftRevisit'
 import { composeDraftRevisitHref } from '~/community/lib/compose-draft-revisit'
 import { useCommunityUi } from '~/community/lib/community-theme'
@@ -10,7 +11,9 @@ export function ComposeDraftRevisitStrip() {
   const communityUi = useCommunityUi()
   const { card, hasCard } = useComposeDraftRevisit()
 
-  if (!hasCard || !card) return null
+  const hasContent = Boolean(hasCard && card)
+  useReportForYouContent(hasContent)
+  if (!hasContent) return null
 
   return (
     <CommunityCard padding={16} gap={12}>

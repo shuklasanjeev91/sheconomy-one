@@ -1,6 +1,7 @@
 import { AppLink } from '~/components/navigation/AppLink'
 
 import { CommunityCard } from '~/community/components/CommunityCard'
+import { useReportForYouContent } from '~/community/components/ForYouSlot'
 import { useSavedCollectionRevisit } from '~/community/hooks/useSavedCollectionRevisit'
 import type { SavedCollectionRevisitCard } from '~/community/lib/saved-posts'
 import { useCommunityUi } from '~/community/lib/community-theme'
@@ -12,7 +13,9 @@ export function SavedCollectionRevisitStrip() {
   const communityUi = useCommunityUi()
   const { cards, hasCards } = useSavedCollectionRevisit()
 
-  if (!hasCards) return null
+  const hasContent = hasCards
+  useReportForYouContent(hasContent)
+  if (!hasContent) return null
 
   return (
     <CommunityCard padding={16} gap={12}>

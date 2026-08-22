@@ -1,6 +1,7 @@
 import { AppLink } from '~/components/navigation/AppLink'
 
 import { CommunityCard } from '~/community/components/CommunityCard'
+import { useReportForYouContent } from '~/community/components/ForYouSlot'
 import { useWishlistActivity } from '~/community/hooks/useWishlistActivity'
 import type { WishlistActivityCard } from '~/community/lib/wishlist-activity'
 import { useCommunityUi } from '~/community/lib/community-theme'
@@ -12,7 +13,9 @@ export function WishlistActivityStrip() {
   const communityUi = useCommunityUi()
   const { cards, hasCards } = useWishlistActivity()
 
-  if (!hasCards) return null
+  const hasContent = hasCards
+  useReportForYouContent(hasContent)
+  if (!hasContent) return null
 
   return (
     <CommunityCard padding={16} gap={12}>

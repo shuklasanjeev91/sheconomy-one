@@ -1,6 +1,7 @@
 import { AppLink } from '~/components/navigation/AppLink'
 
 import { CommunityCard } from '~/community/components/CommunityCard'
+import { useReportForYouContent } from '~/community/components/ForYouSlot'
 import { useMeetingRevisit } from '~/community/hooks/useMeetingRevisit'
 import type { MeetingRevisitCard } from '~/co-work/lib/meeting-revisit'
 import { useCommunityUi } from '~/community/lib/community-theme'
@@ -12,7 +13,9 @@ export function MeetingRevisitStrip() {
   const communityUi = useCommunityUi()
   const { cards, hasCards } = useMeetingRevisit()
 
-  if (!hasCards) return null
+  const hasContent = hasCards
+  useReportForYouContent(hasContent)
+  if (!hasContent) return null
 
   return (
     <CommunityCard padding={16} gap={12}>

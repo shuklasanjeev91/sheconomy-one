@@ -2,7 +2,7 @@ export type ChatType = 'direct' | 'group'
 
 export type MessageDeliveryStatus = 'sending' | 'sent' | 'delivered' | 'read' | 'failed'
 
-export type ChatMessageType = 'text' | 'image' | 'file' | 'call' | 'system' | 'poll' | 'event'
+export type ChatMessageType = 'text' | 'image' | 'file' | 'call' | 'system' | 'poll' | 'event' | 'listing'
 
 /** Poll payload carried in `messages.metadata` for `poll` messages. */
 export type ChatPollPayload = {
@@ -62,6 +62,17 @@ export type ReplyPreview = {
   mediaUrl: string | null
 }
 
+/** Listing/product payload carried in `messages.metadata` for `listing` messages. */
+export type ChatListingPayload = {
+  listingId: string
+  title: string
+  price: number | null
+  currency: string | null
+  imageUrl: string | null
+  slug: string | null
+  shopName: string | null
+}
+
 /** A single message within a conversation thread. */
 export type ChatMessage = {
   id: string
@@ -88,6 +99,8 @@ export type ChatMessage = {
   poll: ChatPollPayload | null
   /** Event reference for `event` messages (parsed from metadata). */
   event: ChatEventPayload | null
+  /** Product/listing card for `listing` messages. */
+  listing: ChatListingPayload | null
   /** Story reply reference for DMs sent from the story viewer. */
   storyReply: ChatStoryReplyPayload | null
   /** Client-only optimistic marker until the server row is confirmed. */

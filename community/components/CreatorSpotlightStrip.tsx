@@ -1,6 +1,7 @@
 import { AppLink } from '~/components/navigation/AppLink'
 
 import { CommunityCard } from '~/community/components/CommunityCard'
+import { useReportForYouContent } from '~/community/components/ForYouSlot'
 import { ProfileLink } from '~/community/components/ProfileLink'
 import { useCommunityFeedHeader } from '~/community/hooks/useCommunityFeedHeader'
 import { useCreatorSpotlight } from '~/community/hooks/useCreatorSpotlight'
@@ -14,9 +15,9 @@ export function CreatorSpotlightStrip() {
   const { hideSidebarRedundantStrips, isAuthenticated } = useCommunityFeedHeader()
   const { cards, hasCards } = useCreatorSpotlight()
 
-  if (hideSidebarRedundantStrips) return null
-  if (!isAuthenticated) return null
-  if (!hasCards) return null
+  const hasContent = !hideSidebarRedundantStrips && isAuthenticated && hasCards
+  useReportForYouContent(hasContent)
+  if (!hasContent) return null
 
   return (
     <CommunityCard padding={16} gap={12}>

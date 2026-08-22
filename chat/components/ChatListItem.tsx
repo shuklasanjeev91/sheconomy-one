@@ -13,7 +13,7 @@ type ChatListItemProps = {
   onRequestActions?: () => void
 }
 
-type PreviewKind = 'camera' | 'file' | 'call' | 'poll' | 'event' | null
+type PreviewKind = 'camera' | 'file' | 'call' | 'poll' | 'event' | 'listing' | null
 
 /**
  * Legacy messages from the old app are stored as `text` with a bracketed label
@@ -29,6 +29,10 @@ function legacyPreview(content: string | null): { kind: PreviewKind; text: strin
   if (value.startsWith('[Event]')) {
     const t = value.slice('[Event]'.length).trim()
     return { kind: 'event', text: t ? `Event: ${t}` : 'Event' }
+  }
+  if (value.startsWith('[Product]') || value.startsWith('[Listing]')) {
+    const title = value.replace(/^\[(Product|Listing)\]\s*/, '').trim()
+    return { kind: 'listing', text: title ? `Product: ${title}` : 'Product' }
   }
   if (value.startsWith('[Document]')) {
     const name = value.slice('[Document]'.length).trim()
@@ -50,6 +54,10 @@ function previewText(chat: ChatSummary): string {
     return chat.lastMessage && chat.lastMessage.trim().length > 0
       ? `Event: ${chat.lastMessage}`
       : 'Event'
+  }
+  if (chat.lastMessageType === 'listing') {
+    const title = (chat.lastMessage ?? '').replace(/^\[(Product|Listing)\]\s*/, '').trim()
+    return title ? `Product: ${title}` : 'Product'
   }
   if (chat.lastMessageType === 'file') {
     return chat.lastMessage && chat.lastMessage.trim().length > 0 ? chat.lastMessage : 'Document'
@@ -79,7 +87,9 @@ export const ChatListItem = memo(function ChatListItem({ chat, active, onPress, 
             ? 'poll'
             : chat.lastMessageType === 'event'
               ? 'event'
-              : null
+              : chat.lastMessageType === 'listing'
+                ? 'listing'
+                : null
   const showSenderPrefix = chat.type === 'group' && !!chat.lastMessageSenderName
 
   const longPressProps =
@@ -140,6 +150,7 @@ export const ChatListItem = memo(function ChatListItem({ chat, active, onPress, 
           {previewIcon === 'call' ? <Icons.Phone size={14} color={theme.textMuted} /> : null}
           {previewIcon === 'poll' ? <Icons.BarChart2 size={14} color={theme.textMuted} /> : null}
           {previewIcon === 'event' ? <Icons.Calendar size={14} color={theme.textMuted} /> : null}
+          {previewIcon === 'listing' ? <Icons.Package size={14} color={theme.textMuted} /> : null}
           <Text
             flex={1}
             numberOfLines={1}

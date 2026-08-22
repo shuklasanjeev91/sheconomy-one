@@ -1,6 +1,7 @@
 import { AppLink } from '~/components/navigation/AppLink'
 
 import { CommunityCard } from '~/community/components/CommunityCard'
+import { useReportForYouContent } from '~/community/components/ForYouSlot'
 import { useUnreadChatRevisit } from '~/community/hooks/useUnreadChatRevisit'
 import type { UnreadChatRevisitCard } from '~/chat/lib/unread-chats-revisit'
 import { useCommunityUi } from '~/community/lib/community-theme'
@@ -12,7 +13,9 @@ export function UnreadChatRevisitStrip() {
   const communityUi = useCommunityUi()
   const { cards, hasCards } = useUnreadChatRevisit()
 
-  if (!hasCards) return null
+  const hasContent = hasCards
+  useReportForYouContent(hasContent)
+  if (!hasContent) return null
 
   return (
     <CommunityCard padding={16} gap={12}>

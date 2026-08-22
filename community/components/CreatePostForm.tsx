@@ -3,6 +3,7 @@ import { Platform, useWindowDimensions } from 'react-native'
 import { useRouter } from 'one'
 
 import { CommunityAdaptiveSheet } from '~/community/components/CommunityAdaptiveSheet'
+import { ProductAttachPickerPanel } from '~/community/components/ProductAttachPickerPanel'
 import { GifPicker } from '~/community/components/GifPicker'
 import { EmojiPickerSheet } from '~/components/emoji/EmojiPickerSheet'
 import { CommunityCard } from '~/community/components/CommunityCard'
@@ -24,7 +25,20 @@ import { extractFirstUrl, fetchLinkPreview } from '~/lib/link-preview'
 import { fetchMyCompanies } from '~/community/lib/companies'
 import { fetchMyGroups } from '~/community/lib/groups'
 import { fetchSellerListings, type SellerListingRow } from '~/commerce/lib/seller-dashboard'
+import {
+  MAX_ATTACHED_PRODUCTS,
+  type ProductPickerTab,
+  fetchAttachProductById,
+  fetchRecentlyViewedAttachProducts,
+  fetchWishlistAttachProducts,
+  searchAttachProducts,
+  sellerListingToPostProduct,
+  togglePostProductAttachment,
+} from '~/community/lib/attach-listing-products'
+import { trackCommunityPostListingsAttached } from '~/community/lib/community-commerce-analytics'
 import { useVendorShops, type VendorShop } from '~/hooks/useVendorShops'
+import { useRecentlyViewed } from '~/commerce/lib/recently-viewed'
+import { feedback } from '~/lib/platform/feedback'
 import { isGifUrl } from '~/community/lib/giphy'
 import { useCommunityUi } from '~/community/lib/community-theme'
 import {
@@ -64,7 +78,6 @@ const MAX_ARTICLE_LENGTH = 12000
 const MAX_POLL_OPTIONS = 4
 const MAX_PHOTOS = 9
 const MAX_VIDEOS = 3
-const MAX_ATTACHED_PRODUCTS = 3
 const POLL_DURATIONS = [
   { label: '1 day', days: 1 },
   { label: '3 days', days: 3 },
@@ -210,6 +223,16 @@ export function CreatePostForm({
   const [shopSearchQuery, setShopSearchQuery] = useState('')
   const [attachedProducts, setAttachedProducts] = useState<PostProduct[]>([])
   const [productPickerOpen, setProductPickerOpen] = useState(false)
+  const [productPickerTab, setProductPickerTab] = useState<ProductPickerTab>('yours')
+  const [savedProducts, setSavedProducts] = useState<PostProduct[]>([])
+  const [loadingSavedProducts, setLoadingSavedProducts] = useState(false)
+  const [recentProducts, setRecentProducts] = useState<PostProduct[]>([])
+  const [loadingRecentProducts, setLoadingRecentProducts] = useState(false)
+  const recentIds = useRecentlyViewed()
+  const [searchProducts, setSearchProducts] = useState<PostProduct[]>([])
+  const [loadingSearchProducts, setLoadingSearchProducts] = useState(false)
+  const [catalogSearchQuery, setCatalogSearchQuery] = useState('')
+  const prefilledListingRef = useRef<string | null>(null)
 
   const filteredListings = useMemo(
     () => filterBySearchQuery(listings, listingSearchQuery, (listing) => [listing.title]),
@@ -223,6 +246,12 @@ export function CreatePostForm({
       ]),
     [shops, shopSearchQuery],
   )
+  const productPickerTabs = useMemo(() => {
+    const tabs: Array<[ProductPickerTab, string]> = []
+    if (shops.length) tabs.push(['yours', 'Yours'])
+    tabs.push(['recent', 'Recent'], ['saved', 'Saved'], ['search', 'Search'])
+    return tabs
+  }, [shops.length])
 
   const displayName = profile?.full_name || profile?.username || 'You'
   const content = form.fields.content.value
@@ -477,9 +506,11 @@ export function CreatePostForm({
     if (!activeShopId && shops.length) setActiveShopId(shops[0].id)
   }, [activeShopId, shops])
 
-  // Load listings for product posts and text-post product attachments.
+  // Load seller listings for product posts and the "Yours" attach tab.
   useEffect(() => {
-    if ((composeMode !== 'product' && !productPickerOpen) || !activeShopId) return
+    if ((composeMode !== 'product' && !(productPickerOpen && productPickerTab === 'yours')) || !activeShopId) {
+      return
+    }
     let cancelled = false
     setLoadingListings(true)
     fetchSellerListings(activeShopId, { status: 'active', limit: 50 })
@@ -498,7 +529,67 @@ export function CreatePostForm({
     return () => {
       cancelled = true
     }
-  }, [activeShopId, composeMode, initialListingId, productPickerOpen])
+  }, [activeShopId, composeMode, initialListingId, productPickerOpen, productPickerTab])
+
+  // Load wishlist when the Saved tab is open.
+  useEffect(() => {
+    if (!productPickerOpen || productPickerTab !== 'saved' || !user?.id) return
+    let cancelled = false
+    setLoadingSavedProducts(true)
+    void fetchWishlistAttachProducts(user.id)
+      .then((rows) => {
+        if (!cancelled) setSavedProducts(rows)
+      })
+      .finally(() => {
+        if (!cancelled) setLoadingSavedProducts(false)
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [productPickerOpen, productPickerTab, user?.id])
+
+  // Load recently viewed when the Recent tab is open.
+  useEffect(() => {
+    if (!productPickerOpen || productPickerTab !== 'recent') return
+    let cancelled = false
+    setLoadingRecentProducts(true)
+    void fetchRecentlyViewedAttachProducts(recentIds)
+      .then((rows) => {
+        if (!cancelled) setRecentProducts(rows)
+      })
+      .finally(() => {
+        if (!cancelled) setLoadingRecentProducts(false)
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [productPickerOpen, productPickerTab, recentIds])
+
+  // Debounced catalog search for the Search tab.
+  useEffect(() => {
+    if (!productPickerOpen || productPickerTab !== 'search') return
+    const query = catalogSearchQuery.trim()
+    if (!query) {
+      setSearchProducts([])
+      setLoadingSearchProducts(false)
+      return
+    }
+    let cancelled = false
+    setLoadingSearchProducts(true)
+    const timer = setTimeout(() => {
+      void searchAttachProducts(query)
+        .then((rows) => {
+          if (!cancelled) setSearchProducts(rows)
+        })
+        .finally(() => {
+          if (!cancelled) setLoadingSearchProducts(false)
+        })
+    }, 280)
+    return () => {
+      cancelled = true
+      clearTimeout(timer)
+    }
+  }, [catalogSearchQuery, productPickerOpen, productPickerTab])
 
   // When sharing a specific listing from PDP, pin its shop if present in shops.
   useEffect(() => {
@@ -507,6 +598,38 @@ export function CreatePostForm({
     if (selectedListing) return
     // Soft: if only one shop, activeShopId default handles it.
   }, [composeMode, initialListingId, selectedListing, shops.length])
+
+  // Prefill text-mode attach from PDP share (works without owning a shop).
+  useEffect(() => {
+    if (!initialListingId) return
+    if (composeMode === 'product') return
+    if (prefilledListingRef.current === initialListingId) return
+    if (attachedProducts.some((item) => item.listingId === initialListingId)) {
+      prefilledListingRef.current = initialListingId
+      return
+    }
+    let cancelled = false
+    void fetchAttachProductById(initialListingId).then((product) => {
+      if (cancelled || !product) return
+      prefilledListingRef.current = initialListingId
+      setAttachedProducts((current) => {
+        if (current.some((item) => item.listingId === product.listingId)) return current
+        return [...current, product].slice(0, MAX_ATTACHED_PRODUCTS)
+      })
+      setProductPickerOpen(true)
+      setProductPickerTab(shops.length ? 'yours' : 'recent')
+    })
+    return () => {
+      cancelled = true
+    }
+  }, [attachedProducts, composeMode, initialListingId, shops.length])
+
+  // Prefer Saved/Search when the member has no shop.
+  useEffect(() => {
+    if (shops.length === 0 && productPickerTab === 'yours') {
+      setProductPickerTab('recent')
+    }
+  }, [productPickerTab, shops.length])
 
   if (!isAuthenticated || !user) {
     return (
@@ -550,36 +673,55 @@ export function CreatePostForm({
     })
   }
 
-  function toAttachedProduct(listing: SellerListingRow, shop: VendorShop | null): PostProduct {
-    return {
-      listingId: listing.id,
-      title: listing.title,
-      price: listing.price,
-      currency: shop?.shop_currency ?? null,
-      imageUrl: listing.primaryImageUrl,
-      slug: listing.slug,
-      shopName: shop?.shop_name ?? null,
-    }
-  }
-
   function toggleAttachedListing(listing: SellerListingRow) {
     const shopForListing = shops.find((shopItem) => shopItem.id === activeShopId) ?? null
+    const next = sellerListingToPostProduct(
+      listing,
+      shopForListing?.shop_name ?? null,
+      shopForListing?.shop_currency ?? null,
+      activeShopId,
+      shopForListing?.slug ?? null,
+      user?.id ?? null,
+    )
     setAttachedProducts((current) => {
-      const exists = current.some((item) => item.listingId === listing.id)
-      if (exists) {
-        return current.filter((item) => item.listingId !== listing.id)
-      }
-      if (current.length >= MAX_ATTACHED_PRODUCTS) {
+      const { products, capped } = togglePostProductAttachment(current, next)
+      if (capped) {
         toast.show(`You can attach up to ${MAX_ATTACHED_PRODUCTS} products`, { tone: 'default' })
-        return current
+      } else {
+        void feedback('selection')
       }
-      return [...current, toAttachedProduct(listing, shopForListing)]
+      return products
+    })
+  }
+
+  function toggleAttachedProduct(product: PostProduct) {
+    setAttachedProducts((current) => {
+      const { products, capped } = togglePostProductAttachment(current, product)
+      if (capped) {
+        toast.show(`You can attach up to ${MAX_ATTACHED_PRODUCTS} products`, { tone: 'default' })
+      } else {
+        void feedback('selection')
+      }
+      return products
+    })
+  }
+
+  function moveAttachedProduct(index: number, delta: number) {
+    setAttachedProducts((current) => {
+      const nextIndex = index + delta
+      if (nextIndex < 0 || nextIndex >= current.length) return current
+      const next = [...current]
+      const [item] = next.splice(index, 1)
+      next.splice(nextIndex, 0, item)
+      void feedback('selection')
+      return next
     })
   }
 
   function removeAttachedProduct(listingId: string | null) {
     if (!listingId) return
     setAttachedProducts((current) => current.filter((item) => item.listingId !== listingId))
+    void feedback('selection')
   }
 
   function insertEmoji(emoji: string) {
@@ -819,6 +961,15 @@ export function CreatePostForm({
     }
 
     toast.show('Posted', { tone: 'success', message: 'Your update is live.' })
+    if (attachedProducts.length && result.id) {
+      trackCommunityPostListingsAttached({
+        postId: result.id,
+        listingIds: attachedProducts
+          .map((product) => product.listingId)
+          .filter((id): id is string => Boolean(id)),
+        source: initialListingId ? 'pdp_share' : 'composer',
+      })
+    }
     void clearComposeDraft()
     form.resetAll()
     setPollOptions(['', ''])
@@ -1215,80 +1366,46 @@ export function CreatePostForm({
 
               {attachedProducts.length > 0 ? (
                 <YStack gap={8}>
-                  {attachedProducts.map((product) => (
+                  {attachedProducts.map((product, index) => (
                     <AttachedProductRow
                       key={product.listingId ?? product.slug ?? product.title}
                       product={product}
                       onRemove={() => removeAttachedProduct(product.listingId)}
+                      onMoveUp={() => moveAttachedProduct(index, -1)}
+                      onMoveDown={() => moveAttachedProduct(index, 1)}
+                      canMoveUp={index > 0}
+                      canMoveDown={index < attachedProducts.length - 1}
                     />
                   ))}
                 </YStack>
               ) : null}
 
-              {productPickerOpen ? (
-                <YStack gap={10}>
-                  {shops.length > 1 ? (
-                    <XStack gap={8} flexWrap="wrap">
-                      {shops.map((shopItem) => (
-                        <ContextChip
-                          key={shopItem.id}
-                          label={shopItem.shop_name}
-                          active={activeShopId === shopItem.id}
-                          onPress={() => {
-                            setActiveShopId(shopItem.id)
-                            setListingSearchQuery('')
-                          }}
-                        />
-                      ))}
-                    </XStack>
-                  ) : null}
-
-                  {shops.length === 0 ? (
-                    <EmptyPickerHint
-                      icon={Icons.ShoppingBag}
-                      message="You don't have a shop yet. Create a shop to tag products in posts."
-                    />
-                  ) : loadingListings ? (
-                    <XStack paddingVertical={16} justifyContent="center">
-                      <Spinner size="small" color={communityUi.brand} />
-                    </XStack>
-                  ) : listings.length === 0 ? (
-                    <EmptyPickerHint icon={Icons.Package} message="No active listings in this shop yet." />
-                  ) : (
-                    <YStack gap={8}>
-                      {listings.length >= SHEET_SEARCH_MIN_ITEMS || listingSearchQuery.length > 0 ? (
-                        <ScreenSearchField
-                          value={listingSearchQuery}
-                          onChangeText={setListingSearchQuery}
-                          placeholder="Search listings"
-                          clearable
-                        />
-                      ) : null}
-                      {filteredListings.length === 0 ? (
-                        <Text fontSize={13} color={communityUi.textMuted}>
-                          No listings match your search.
-                        </Text>
-                      ) : (
-                        <YStack gap={8} maxHeight={320} overflow="scroll">
-                          {filteredListings.map((listing) => (
-                            <PickerRow
-                              key={listing.id}
-                              title={listing.title}
-                              subtitle={formatListingPrice(
-                                listing.price,
-                                shops.find((shopItem) => shopItem.id === activeShopId)?.shop_currency ?? null,
-                              )}
-                              imageUrl={listing.primaryImageUrl}
-                              fallbackIcon={Icons.Package}
-                              selected={attachedProducts.some((product) => product.listingId === listing.id)}
-                              onPress={() => toggleAttachedListing(listing)}
-                            />
-                          ))}
-                        </YStack>
-                      )}
-                    </YStack>
-                  )}
-                </YStack>
+              {Platform.OS === 'web' && productPickerOpen ? (
+                <ProductAttachPickerPanel
+                  tabs={productPickerTabs}
+                  productPickerTab={productPickerTab}
+                  onTabChange={setProductPickerTab}
+                  shops={shops}
+                  activeShopId={activeShopId}
+                  onActiveShopChange={setActiveShopId}
+                  listings={listings}
+                  loadingListings={loadingListings}
+                  listingSearchQuery={listingSearchQuery}
+                  onListingSearchQueryChange={setListingSearchQuery}
+                  filteredListings={filteredListings}
+                  onToggleListing={toggleAttachedListing}
+                  recentProducts={recentProducts}
+                  loadingRecentProducts={loadingRecentProducts}
+                  savedProducts={savedProducts}
+                  loadingSavedProducts={loadingSavedProducts}
+                  searchProducts={searchProducts}
+                  loadingSearchProducts={loadingSearchProducts}
+                  catalogSearchQuery={catalogSearchQuery}
+                  onCatalogSearchQueryChange={setCatalogSearchQuery}
+                  attachedProducts={attachedProducts}
+                  onToggleProduct={toggleAttachedProduct}
+                  formatPrice={formatListingPrice}
+                />
               ) : null}
             </YStack>
           ) : null}
@@ -1522,8 +1639,13 @@ export function CreatePostForm({
                       No listings match your search.
                     </Text>
                   ) : (
-                    <YStack gap={8} maxHeight={320} overflow="scroll">
-                      {filteredListings.map((listing) => (
+                    <ScrollView
+                      style={{ maxHeight: 320 }}
+                      nestedScrollEnabled={Platform.OS === 'android'}
+                      keyboardShouldPersistTaps="handled"
+                    >
+                      <YStack gap={8}>
+                        {filteredListings.map((listing) => (
                     <PickerRow
                       key={listing.id}
                       title={listing.title}
@@ -1539,7 +1661,8 @@ export function CreatePostForm({
                       }
                     />
                   ))}
-                    </YStack>
+                      </YStack>
+                    </ScrollView>
                   )}
                 </YStack>
               )}
@@ -1709,6 +1832,40 @@ export function CreatePostForm({
           setEmojiOpen(false)
         }}
       />
+
+      {Platform.OS !== 'web' ? (
+        <CommunityAdaptiveSheet
+          open={productPickerOpen}
+          onOpenChange={setProductPickerOpen}
+          title="Tag products"
+        >
+          <ProductAttachPickerPanel
+            tabs={productPickerTabs}
+            productPickerTab={productPickerTab}
+            onTabChange={setProductPickerTab}
+            shops={shops}
+            activeShopId={activeShopId}
+            onActiveShopChange={setActiveShopId}
+            listings={listings}
+            loadingListings={loadingListings}
+            listingSearchQuery={listingSearchQuery}
+            onListingSearchQueryChange={setListingSearchQuery}
+            filteredListings={filteredListings}
+            onToggleListing={toggleAttachedListing}
+            recentProducts={recentProducts}
+            loadingRecentProducts={loadingRecentProducts}
+            savedProducts={savedProducts}
+            loadingSavedProducts={loadingSavedProducts}
+            searchProducts={searchProducts}
+            loadingSearchProducts={loadingSearchProducts}
+            catalogSearchQuery={catalogSearchQuery}
+            onCatalogSearchQueryChange={setCatalogSearchQuery}
+            attachedProducts={attachedProducts}
+            onToggleProduct={toggleAttachedProduct}
+            formatPrice={formatListingPrice}
+          />
+        </CommunityAdaptiveSheet>
+      ) : null}
 
       <CommunityAdaptiveSheet open={moreOpen} onOpenChange={setMoreOpen} title="Add to your post">
         <YStack gap={4}>
@@ -1913,9 +2070,17 @@ function formatListingPrice(price: number | null, currency: string | null) {
 function AttachedProductRow({
   product,
   onRemove,
+  onMoveUp,
+  onMoveDown,
+  canMoveUp,
+  canMoveDown,
 }: {
   product: PostProduct
   onRemove: () => void
+  onMoveUp: () => void
+  onMoveDown: () => void
+  canMoveUp: boolean
+  canMoveDown: boolean
 }) {
   const communityUi = useCommunityUi()
   return (
@@ -1928,6 +2093,34 @@ function AttachedProductRow({
       borderColor={communityUi.border}
       backgroundColor={communityUi.cardBg}
     >
+      <YStack gap={4} flexShrink={0}>
+        <XStack
+          width={28}
+          height={28}
+          borderRadius={999}
+          alignItems="center"
+          justifyContent="center"
+          opacity={canMoveUp ? 1 : 0.35}
+          cursor={canMoveUp ? 'pointer' : 'default'}
+          hoverStyle={canMoveUp ? { backgroundColor: communityUi.divider } : undefined}
+          onPress={canMoveUp ? onMoveUp : undefined}
+        >
+          <Icons.ChevronUp size={16} color={communityUi.textMuted} />
+        </XStack>
+        <XStack
+          width={28}
+          height={28}
+          borderRadius={999}
+          alignItems="center"
+          justifyContent="center"
+          opacity={canMoveDown ? 1 : 0.35}
+          cursor={canMoveDown ? 'pointer' : 'default'}
+          hoverStyle={canMoveDown ? { backgroundColor: communityUi.divider } : undefined}
+          onPress={canMoveDown ? onMoveDown : undefined}
+        >
+          <Icons.ChevronDown size={16} color={communityUi.textMuted} />
+        </XStack>
+      </YStack>
       <YStack
         width={48}
         height={48}

@@ -12,6 +12,7 @@ import { ChatAudioMessage } from '~/chat/components/ChatAudioMessage'
 import { ChatMediaImage } from '~/chat/components/ChatMediaImage'
 import { ChatMediaVideo } from '~/chat/components/ChatMediaVideo'
 import { EventMessage } from '~/chat/components/EventMessage'
+import { ListingMessage } from '~/chat/components/ListingMessage'
 import { LinkPreviewCard } from '~/chat/components/LinkPreviewCard'
 import { PollMessage } from '~/chat/components/PollMessage'
 import { openExternalUrl } from '~/lib/platform/openUrl'
@@ -215,6 +216,7 @@ export const MessageBubble = memo(function MessageBubble({
   const isCall = message.type === 'call'
   const isPoll = !isDeleted && message.type === 'poll' && !!message.poll
   const isEvent = !isDeleted && message.type === 'event' && !!message.event
+  const isListing = !isDeleted && message.type === 'listing' && !!message.listing
   const isImage = !isDeleted && message.type === 'image' && !!message.mediaUrl
   const isAudio =
     !isDeleted && message.type === 'file' && message.mediaType === 'audio' && !!message.mediaUrl
@@ -225,7 +227,7 @@ export const MessageBubble = memo(function MessageBubble({
       (message.type === 'file' && !!message.mediaType?.startsWith('video')))
   const isFile = !isDeleted && !isAudio && !isVideo && message.type === 'file' && !!message.mediaUrl
   const hasText =
-    !isDeleted && !isCall && !isPoll && !isEvent && message.content.trim().length > 0
+    !isDeleted && !isCall && !isPoll && !isEvent && !isListing && message.content.trim().length > 0
   const quote = !isDeleted ? message.replyPreview : null
   const bigEmoji = hasText && message.type === 'text' && !quote && isEmojiOnly(message.content)
   const previewUrl =
@@ -246,7 +248,7 @@ export const MessageBubble = memo(function MessageBubble({
       ? {}
       : isCall
         ? { onPress: onCallBack }
-        : isPoll || isEvent
+        : isPoll || isEvent || isListing
           ? // Interactive controls live inside; only long-press opens actions (native).
             Platform.OS === 'web'
             ? {}
@@ -444,6 +446,10 @@ export const MessageBubble = memo(function MessageBubble({
 
           {isEvent && message.event ? (
             <EventMessage event={message.event} isOwn={isOwn} currentUserId={currentUserId ?? null} />
+          ) : null}
+
+          {isListing && message.listing ? (
+            <ListingMessage listing={message.listing} isOwn={isOwn} />
           ) : null}
 
           {message.storyReply ? (

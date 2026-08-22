@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { AppLink } from '~/components/navigation/AppLink'
 
 import { CommunityCard } from '~/community/components/CommunityCard'
+import { useReportForYouContent } from '~/community/components/ForYouSlot'
 import { useCommunityUi } from '~/community/lib/community-theme'
 import { HorizontalScrollRow } from '~/components/layout'
 import { Button, Icons, Image, Text, XStack, YStack } from '~/components/ui'
@@ -31,7 +32,9 @@ export function CommunityRecentlyViewedStrip() {
     }
   }, [recentIds.join(',')])
 
-  if (!items.length) return null
+  const hasContent = items.length > 0
+  useReportForYouContent(hasContent)
+  if (!hasContent) return null
 
   return (
     <CommunityCard padding={16} gap={12}>

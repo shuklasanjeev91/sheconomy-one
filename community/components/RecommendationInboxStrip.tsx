@@ -1,6 +1,7 @@
 import { AppLink } from '~/components/navigation/AppLink'
 
 import { CommunityCard } from '~/community/components/CommunityCard'
+import { useReportForYouContent } from '~/community/components/ForYouSlot'
 import { ProfileLink } from '~/community/components/ProfileLink'
 import { useCommunityFeedHeader } from '~/community/hooks/useCommunityFeedHeader'
 import { useRecommendationInbox } from '~/community/hooks/useRecommendationInbox'
@@ -12,8 +13,9 @@ export function RecommendationInboxStrip() {
   const { hideSidebarRedundantStrips } = useCommunityFeedHeader()
   const { items, hasItems } = useRecommendationInbox()
 
-  if (hideSidebarRedundantStrips) return null
-  if (!hasItems) return null
+  const hasContent = !hideSidebarRedundantStrips && hasItems
+  useReportForYouContent(hasContent)
+  if (!hasContent) return null
 
   return (
     <CommunityCard padding={16} gap={12}>

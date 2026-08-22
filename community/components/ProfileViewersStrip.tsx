@@ -1,6 +1,7 @@
 import { AppLink } from '~/components/navigation/AppLink'
 
 import { CommunityCard } from '~/community/components/CommunityCard'
+import { useReportForYouContent } from '~/community/components/ForYouSlot'
 import { ProfileLink } from '~/community/components/ProfileLink'
 import { useProfileViewersNudge } from '~/community/hooks/useProfileViewersNudge'
 import { useCommunityUi } from '~/community/lib/community-theme'
@@ -22,7 +23,9 @@ export function ProfileViewersStrip() {
   const communityUi = useCommunityUi()
   const { viewers, hasViewers } = useProfileViewersNudge()
 
-  if (!hasViewers) return null
+  const hasContent = hasViewers
+  useReportForYouContent(hasContent)
+  if (!hasContent) return null
 
   return (
     <CommunityCard padding={16} gap={12}>

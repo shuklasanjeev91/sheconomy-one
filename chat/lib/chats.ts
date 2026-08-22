@@ -1,8 +1,10 @@
 import { supabase } from '~/lib/supabase/client'
 import { uploadBlobWithProgress, type UploadProgressHandler } from '~/lib/supabase/storage-upload-progress'
 
+import { parseChatListingPayload } from '~/chat/lib/listing-message'
 import type {
   ChatEventPayload,
+  ChatListingPayload,
   ChatMessage,
   ChatMessageType,
   ChatPollPayload,
@@ -35,7 +37,8 @@ function toMessageType(value: unknown): ChatMessageType {
     value === 'call' ||
     value === 'system' ||
     value === 'poll' ||
-    value === 'event'
+    value === 'event' ||
+    value === 'listing'
   ) {
     return value
   }
@@ -126,6 +129,7 @@ type LegacyOverrides = {
   deletedAt: string | null
   poll: ChatPollPayload | null
   event: ChatEventPayload | null
+  listing: ChatListingPayload | null
 } | null
 
 function resolveLegacyMessage(row: MessageRow): LegacyOverrides {
@@ -144,6 +148,7 @@ function resolveLegacyMessage(row: MessageRow): LegacyOverrides {
       deletedAt: row.deleted_at ?? row.created_at ?? new Date().toISOString(),
       poll: null,
       event: null,
+      listing: null,
     }
   }
 
@@ -159,6 +164,7 @@ function resolveLegacyMessage(row: MessageRow): LegacyOverrides {
         deletedAt: null,
         poll,
         event: null,
+        listing: null,
       }
     }
   }
@@ -175,6 +181,24 @@ function resolveLegacyMessage(row: MessageRow): LegacyOverrides {
         deletedAt: null,
         poll: null,
         event,
+        listing: null,
+      }
+    }
+  }
+
+  if (raw.type === 'listing' || content.startsWith('[Product]') || content.startsWith('[Listing]')) {
+    const listing = parseChatListingPayload(metadata)
+    if (listing) {
+      return {
+        type: 'listing',
+        content,
+        mediaUrl: null,
+        mediaType: null,
+        fileName: null,
+        deletedAt: null,
+        poll: null,
+        event: null,
+        listing,
       }
     }
   }
@@ -192,6 +216,7 @@ function resolveLegacyMessage(row: MessageRow): LegacyOverrides {
         deletedAt: null,
         poll: null,
         event: null,
+        listing: null,
       }
     }
   }
@@ -209,6 +234,7 @@ function resolveLegacyMessage(row: MessageRow): LegacyOverrides {
       deletedAt: null,
       poll: null,
       event: null,
+      listing: null,
     }
   }
 
@@ -320,6 +346,7 @@ export function mapMessage(row: MessageRow): ChatMessage {
       editedAt: row.edited_at,
       poll: legacy.poll,
       event: legacy.event,
+      listing: legacy.listing,
       storyReply: null,
     }
   }
@@ -342,6 +369,7 @@ export function mapMessage(row: MessageRow): ChatMessage {
     editedAt: row.edited_at,
     poll: type === 'poll' ? parsePollPayload(row.metadata) : null,
     event: type === 'event' ? parseEventPayload(row.metadata) : null,
+    listing: type === 'listing' ? parseChatListingPayload(row.metadata) : null,
     storyReply: type === 'text' ? parseStoryReplyPayload(row.metadata) : null,
   }
 }
@@ -544,6 +572,30 @@ export async function sendEventMessage(
       startTime: event.startTime,
       location: event.location,
       imageUrl: event.imageUrl,
+    },
+  })
+}
+
+/** Send a product/listing card message inside a chat thread. */
+export async function sendListingMessage(
+  conversationId: string,
+  senderId: string,
+  listing: ChatListingPayload,
+): Promise<{ messageId: string | null; error: string | null }> {
+  return sendMessage({
+    conversationId,
+    senderId,
+    content: `[Product] ${listing.title}`,
+    type: 'listing',
+    metadata: {
+      type: 'listing',
+      listingId: listing.listingId,
+      title: listing.title,
+      price: listing.price,
+      currency: listing.currency,
+      imageUrl: listing.imageUrl,
+      slug: listing.slug,
+      shopName: listing.shopName,
     },
   })
 }

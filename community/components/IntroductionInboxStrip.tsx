@@ -1,6 +1,7 @@
 import { useState } from 'react'
 
 import { CommunityCard } from '~/community/components/CommunityCard'
+import { useReportForYouContent } from '~/community/components/ForYouSlot'
 import { ProfileLink } from '~/community/components/ProfileLink'
 import { useCommunityFeedHeader } from '~/community/hooks/useCommunityFeedHeader'
 import { useIntroductionInbox } from '~/community/hooks/useIntroductionInbox'
@@ -15,8 +16,9 @@ export function IntroductionInboxStrip() {
   const toast = useAppToast()
   const [actingId, setActingId] = useState<string | null>(null)
 
-  if (hideSidebarRedundantStrips) return null
-  if (!hasItems) return null
+  const hasContent = !hideSidebarRedundantStrips && hasItems
+  useReportForYouContent(hasContent)
+  if (!hasContent) return null
 
   async function respond(request: IntroductionRequest, status: 'accepted' | 'declined') {
     setActingId(request.id)

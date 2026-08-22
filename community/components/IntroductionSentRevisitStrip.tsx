@@ -1,6 +1,7 @@
 import { AppLink } from '~/components/navigation/AppLink'
 
 import { CommunityCard } from '~/community/components/CommunityCard'
+import { useReportForYouContent } from '~/community/components/ForYouSlot'
 import { useCommunityFeedHeader } from '~/community/hooks/useCommunityFeedHeader'
 import { useIntroductionSentRevisit } from '~/community/hooks/useIntroductionSentRevisit'
 import type { IntroductionSentRevisitCard } from '~/community/lib/introductions'
@@ -14,8 +15,9 @@ export function IntroductionSentRevisitStrip() {
   const { hideSidebarRedundantStrips } = useCommunityFeedHeader()
   const { cards, hasCards } = useIntroductionSentRevisit()
 
-  if (hideSidebarRedundantStrips) return null
-  if (!hasCards) return null
+  const hasContent = !hideSidebarRedundantStrips && hasCards
+  useReportForYouContent(hasContent)
+  if (!hasContent) return null
 
   return (
     <CommunityCard padding={16} gap={12}>

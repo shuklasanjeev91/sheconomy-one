@@ -4,6 +4,7 @@ import { AppLink } from '~/components/navigation/AppLink'
 import { useCart } from '~/commerce/hooks/useCart'
 
 import { CommunityCard } from '~/community/components/CommunityCard'
+import { useReportForYouContent } from '~/community/components/ForYouSlot'
 import { useSavedPostRevisit } from '~/community/hooks/useSavedPostRevisit'
 import { useCommunityUi } from '~/community/lib/community-theme'
 import type { PickUpAgainCard } from '~/community/lib/saved-posts'
@@ -16,7 +17,9 @@ export function PickUpAgainStrip() {
   const communityUi = useCommunityUi()
   const { cards, loading, hasCards } = useSavedPostRevisit()
 
-  if (!loading && !hasCards) return null
+  const hasContent = loading || hasCards
+  useReportForYouContent(hasContent)
+  if (!hasContent) return null
 
   return (
     <CommunityCard padding={16} gap={12}>

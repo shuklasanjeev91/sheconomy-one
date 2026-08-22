@@ -70,6 +70,9 @@ export type PostProduct = {
   imageUrl: string | null
   slug: string | null
   shopName: string | null
+  shopId?: string | null
+  shopSlug?: string | null
+  shopOwnerUserId?: string | null
 }
 
 /** One or more listings attached to a normal feed post. */
@@ -155,6 +158,8 @@ export type OriginalPostPreview = {
   authorAvatar: string | null
   authorUsername: string | null
   createdAt: string | null
+  product?: PostProduct | null
+  products?: PostProduct[] | null
 }
 
 export type PaginatedPostsResult = {
@@ -355,6 +360,10 @@ function mapProduct(value: unknown, listingId: string | null): PostProduct | nul
     imageUrl: typeof data?.imageUrl === 'string' ? data.imageUrl : null,
     slug: typeof data?.slug === 'string' ? data.slug : null,
     shopName: typeof data?.shopName === 'string' ? data.shopName : null,
+    shopId: typeof data?.shopId === 'string' ? data.shopId : null,
+    shopSlug: typeof data?.shopSlug === 'string' ? data.shopSlug : null,
+    shopOwnerUserId:
+      typeof data?.shopOwnerUserId === 'string' ? data.shopOwnerUserId : null,
   }
 }
 
@@ -702,6 +711,8 @@ async function enrichPostsWithOriginals(posts: CommunityPost[]): Promise<Communi
           video_urls: normalizeUrlList(media?.video_urls).length
             ? normalizeUrlList(media?.video_urls)
             : null,
+          product: mapProduct(postData?.product_data, null),
+          products: mapProducts(postData?.attached_products),
         } satisfies OriginalPostPreview,
       ]
     }),
@@ -1075,6 +1086,9 @@ export async function createCommunityPost(
         imageUrl: item.imageUrl?.trim() || null,
         slug: item.slug?.trim() || null,
         shopName: item.shopName?.trim() || null,
+        shopId: item.shopId?.trim() || null,
+        shopSlug: item.shopSlug?.trim() || null,
+        shopOwnerUserId: item.shopOwnerUserId?.trim() || null,
       }))
       .filter((item) => item.listingId && item.title)
       .slice(0, 3) || []

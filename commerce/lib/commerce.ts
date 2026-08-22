@@ -70,6 +70,8 @@ export type ListingSummary = {
   tax_percent?: number | null
   product_info?: unknown
   listing_type: string
+  quantity?: number | null
+  listing_status?: string | null
   average_rating: number | null
   total_reviews: number | null
   image_url: string | null
@@ -77,6 +79,8 @@ export type ListingSummary = {
   images: ListingImageSummary[]
   shop_name: string | null
   shop_id?: string | null
+  shop_slug?: string | null
+  shop_owner_user_id?: string | null
   category?: string | null
   created_at?: string | null
   currency: string
@@ -134,6 +138,8 @@ type ListingRow = {
   tax_percent?: number | null
   product_info?: unknown
   listing_type: string
+  quantity?: number | null
+  listing_status?: string | null
   average_rating: number | null
   total_reviews: number | null
   shop_id?: string | null
@@ -154,6 +160,8 @@ type ListingRow = {
   shops: {
     shop_name: string
     shop_currency: string
+    slug?: string | null
+    user_id?: string | null
     average_rating?: number | null
     total_reviews?: number | null
     verified?: boolean
@@ -218,6 +226,8 @@ const LISTING_CARD_SELECT = `
   price_includes_tax,
   tax_percent,
   listing_type,
+  quantity,
+  listing_status,
   average_rating,
   total_reviews,
   shop_id,
@@ -230,6 +240,8 @@ const LISTING_CARD_SELECT = `
   shops!inner(
     shop_name,
     shop_currency,
+    slug,
+    user_id,
     average_rating,
     total_reviews,
     verified,
@@ -329,6 +341,8 @@ export function mapListingRow(listing: ListingRow): ListingSummary {
     tax_percent: listing.tax_percent ?? null,
     product_info: listing.product_info ?? null,
     listing_type: listing.listing_type,
+    quantity: listing.quantity ?? null,
+    listing_status: listing.listing_status ?? null,
     average_rating: listing.average_rating,
     total_reviews: listing.total_reviews,
     image_url: imageUrls[0] ?? null,
@@ -336,6 +350,8 @@ export function mapListingRow(listing: ListingRow): ListingSummary {
     images,
     shop_name: listing.shops?.shop_name ?? null,
     shop_id: listing.shop_id ?? null,
+    shop_slug: listing.shops?.slug ?? null,
+    shop_owner_user_id: listing.shops?.user_id ?? null,
     category: listing.category ?? null,
     created_at: listing.created_at ?? null,
     currency: listing.shops?.shop_currency ?? 'INR',

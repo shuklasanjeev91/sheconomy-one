@@ -1,6 +1,7 @@
 import { AppLink } from '~/components/navigation/AppLink'
 
 import { CommunityCard } from '~/community/components/CommunityCard'
+import { useReportForYouContent } from '~/community/components/ForYouSlot'
 import { useFollowedShopActivity } from '~/community/hooks/useFollowedShopActivity'
 import { useCommunityUi } from '~/community/lib/community-theme'
 import type { FollowedShopActivityCard } from '~/community/lib/followed-shop-activity'
@@ -12,7 +13,9 @@ export function FollowedShopActivityStrip() {
   const communityUi = useCommunityUi()
   const { cards, loading, hasCards } = useFollowedShopActivity()
 
-  if (!loading && !hasCards) return null
+  const hasContent = loading || hasCards
+  useReportForYouContent(hasContent)
+  if (!hasContent) return null
 
   return (
     <CommunityCard padding={16} gap={12}>
