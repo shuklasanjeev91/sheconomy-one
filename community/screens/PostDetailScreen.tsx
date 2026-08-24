@@ -1,4 +1,4 @@
-import { useParams, useRouter } from 'one'
+import { useLocalSearchParams, useParams, usePathname, useRouter } from 'one'
 import { AppLink } from '~/components/navigation/AppLink'
 import { useEffect, useMemo, useState } from 'react'
 
@@ -21,9 +21,38 @@ import { getPostShareUrl } from '~/lib/share'
 import { useSupabase } from '~/providers/SupabaseProvider'
 import { usePageSeo } from '~/components/seo/RouteSeo'
 
+function readRouteParam(value: string | string[] | undefined): string {
+  if (Array.isArray(value)) return value[0] ?? ''
+  return value ?? ''
+}
+
+/** SPA deep links can leave `useParams` empty — fall back to local params / pathname. */
+function usePostDetailId(): string {
+  const routeParams = useParams<{ id?: string | string[] }>()
+  const localParams = useLocalSearchParams<{ id?: string | string[] }>()
+  const pathname = usePathname() ?? ''
+
+  const fromParams = readRouteParam(routeParams.id) || readRouteParam(localParams.id)
+  if (fromParams) {
+    try {
+      return decodeURIComponent(fromParams)
+    } catch {
+      return fromParams
+    }
+  }
+
+  const match = pathname.match(/\/community\/post\/([^/?#]+)/i)
+  if (!match?.[1] || match[1] === ':id') return ''
+  try {
+    return decodeURIComponent(match[1])
+  } catch {
+    return match[1]
+  }
+}
+
 export function PostDetailScreen() {
   const communityUi = useCommunityUi()
-  const { id } = useParams<{ id: string }>()
+  const id = usePostDetailId()
   const router = useRouter()
   const { user } = useSupabase()
   const [post, setPost] = useState<CommunityPost | null>(null)
@@ -33,9 +62,16 @@ export function PostDetailScreen() {
   const [sendOpen, setSendOpen] = useState(false)
 
   useEffect(() => {
-    if (!id) return
+    if (!id) {
+      setPost(null)
+      setError('Missing post id.')
+      setIsLoading(false)
+      return
+    }
+    let cancelled = false
     setIsLoading(true)
-    fetchPostById(id).then((result) => {
+    void fetchPostById(id).then((result) => {
+      if (cancelled) return
       if (result.ok) {
         setPost(result.data)
         setError(null)
@@ -45,6 +81,9 @@ export function PostDetailScreen() {
       }
       setIsLoading(false)
     })
+    return () => {
+      cancelled = true
+    }
   }, [id])
 
   usePageSeo(
