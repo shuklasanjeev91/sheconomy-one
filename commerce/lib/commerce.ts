@@ -950,31 +950,56 @@ function toCategorySummary(
 
 /**
  * Mix root categories with their subcategories for the home rail.
- * Order: each parent, then its children (by position), so parents and
- * subs stay grouped while the horizontal list stays flat.
+ * Roots need curated artwork; subcategories also need at least one product.
  */
 async function loadStorefrontCategories(): Promise<{ items: CategorySummary[]; error: string | null }> {
   if (storefrontCategoryCache && storefrontCategoryCache.expiresAt > Date.now()) {
     return { items: storefrontCategoryCache.items, error: null }
   }
 
-  const { data, error } = await supabase
-    .from('categories')
-    .select('category_id, category, category_image_url, category_icon, seo_name, parent_id, position, product_count')
-    .eq('status', 'A')
-    .order('position', { ascending: true })
-    .order('category', { ascending: true })
+  const [{ data: categoryRows, error: categoryError }, { data: countRows, error: countError }] =
+    await Promise.all([
+      supabase
+        .from('categories')
+        .select('category_id, category, category_image_url, category_icon, seo_name, parent_id, position')
+        .eq('status', 'A')
+        .order('position', { ascending: true })
+        .order('category', { ascending: true }),
+      supabase.from('categories_with_counts').select('category_id, product_count'),
+    ])
 
+  const error = categoryError ?? countError
   if (error) {
     return { items: [], error: error.message }
   }
 
-  const rows = (data ?? []).filter((row) =>
-    isStorefrontCategoryVisible({ category_id: row.category_id, category: row.category }),
-  ) as CategoryRailRow[]
+  const countById = new Map(
+    (countRows ?? []).map((row) => [row.category_id ?? '', row.product_count ?? 0]),
+  )
 
-  // Home rail only shows tiles with curated category artwork — never icon-only.
-  const rowsWithImage = rows.filter((row) => Boolean(categoryArtworkUrl(row.category_image_url)))
+  const rows = (categoryRows ?? [])
+    .filter((row) =>
+      isStorefrontCategoryVisible({ category_id: row.category_id, category: row.category }),
+    )
+    .map(
+      (row): CategoryRailRow => ({
+        category_id: row.category_id,
+        category: row.category,
+        category_image_url: row.category_image_url,
+        category_icon: row.category_icon,
+        seo_name: row.seo_name,
+        parent_id: row.parent_id,
+        position: row.position,
+        product_count: countById.get(row.category_id) ?? 0,
+      }),
+    )
+
+  const rowsWithImage = rows.filter((row) => {
+    if (!categoryArtworkUrl(row.category_image_url)) return false
+    const isSubcategory = Boolean(row.parent_id?.trim())
+    if (isSubcategory && (row.product_count ?? 0) <= 0) return false
+    return true
+  })
   const imageIds = new Set(rowsWithImage.map((row) => row.category_id))
 
   const byId = new Map(rows.map((row) => [row.category_id, row]))
@@ -999,6 +1024,7 @@ async function loadStorefrontCategories(): Promise<{ items: CategorySummary[]; e
   function pushRow(row: CategoryRailRow) {
     if (seen.has(row.category_id)) return
     if (!categoryArtworkUrl(row.category_image_url)) return
+    if (row.parent_id?.trim() && (row.product_count ?? 0) <= 0) return
     seen.add(row.category_id)
     const parentId = row.parent_id?.trim() || null
     const parentName = parentId ? byId.get(parentId)?.category ?? null : null
