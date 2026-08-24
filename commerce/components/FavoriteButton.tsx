@@ -8,6 +8,7 @@ import { useFavorites } from '~/commerce/hooks/useFavorites'
 import { feedback } from '~/lib/platform/feedback'
 import { appRoutes } from '~/lib/routes'
 import { useAppUi } from '~/lib/theme/useAppUi'
+import { QA } from '~/lib/qa/test-ids'
 import { useSupabase } from '~/providers/SupabaseProvider'
 import { useAsyncAction } from '~/hooks/useAsyncAction'
 
@@ -31,6 +32,9 @@ export function FavoriteButton({ listingId, size = 18, restockEligible = false }
   return (
     <>
       <XStack
+        testID={QA.listingFavorite}
+        accessibilityLabel={saved ? 'Remove from favorites' : 'Add to favorites'}
+        accessibilityRole="button"
         position="absolute"
         top="$2"
         right="$2"

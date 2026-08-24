@@ -69,6 +69,7 @@ import { pickMedia, pickImages, pickVideos, releasePickedImage, type PickedImage
 import { fitImagesForPostCard } from '~/lib/media/fit-post-image'
 import { splitPostMediaItems } from '~/lib/media/split-post-media'
 import { communityRoutes, routes } from '~/lib/routes'
+import { QA } from '~/lib/qa/test-ids'
 import { uploadEventCoverImage, uploadPostImages, uploadPostVideos } from '~/lib/supabase/storage-upload'
 import { SHEET_SEARCH_MIN_ITEMS, filterBySearchQuery } from '~/lib/search'
 import { maxLength, optionalUrl } from '~/lib/validation'
@@ -409,6 +410,7 @@ export function CreatePostForm({
   const groupParam = useQueryParam('groupId')
   const companyParam = useQueryParam('companyId')
   const composeParam = useQueryParam('compose')
+  const qaSeedParam = useQueryParam('qaSeed')
 
   useEffect(() => {
     if (gifParam) form.fields.imageUrl.setValue(decodeURIComponent(gifParam))
@@ -422,8 +424,11 @@ export function CreatePostForm({
     }
     if (composeParam === 'poll' || composeParam === 'event') setComposeMode(composeParam)
     if (composeParam === 'media') void pickPostMedia()
+    if (qaSeedParam && !form.fields.content.value) {
+      form.fields.content.onChange(decodeURIComponent(qaSeedParam))
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [companyParam, composeParam, gifParam, groupParam])
+  }, [companyParam, composeParam, gifParam, groupParam, qaSeedParam])
 
   // Restore autosaved draft (works offline on web + native).
   useEffect(() => {
@@ -1156,6 +1161,8 @@ export function CreatePostForm({
             }}
             invalid={!!contentError}
             placeholder={contentPlaceholder}
+            testID={QA.postComposerInput}
+            accessibilityLabel={contentPlaceholder}
             minHeight={composeMode === 'article' ? 220 : composeMode === 'text' ? 150 : 96}
             fontSize={18}
             lineHeight={26}
@@ -1823,6 +1830,8 @@ export function CreatePostForm({
           ) : null}
 
           <Button
+            testID={QA.postSubmit}
+            accessibilityLabel={composeMode === 'article' ? 'Publish' : 'Post'}
             backgroundColor={canPost ? communityUi.brand : communityUi.border}
             color={canPost ? 'white' : communityUi.textMuted}
             borderRadius={999}

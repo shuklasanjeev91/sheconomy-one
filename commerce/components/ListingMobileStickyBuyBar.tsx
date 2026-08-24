@@ -8,6 +8,7 @@ import { bottomBarPositionStyle } from '~/lib/layout/styles'
 import { chromeSurfaceStyle } from '~/lib/theme/surfaces'
 import { useAppLayout } from '~/hooks/useAppLayout'
 import { useAppUi } from '~/lib/theme/useAppUi'
+import { QA } from '~/lib/qa/test-ids'
 
 type ListingMobileStickyBuyBarProps = {
   price: number
@@ -120,6 +121,8 @@ export function ListingMobileStickyBuyBar({
         <XStack gap="$2" width="100%" minWidth={0}>
           <Theme name={BRAND_THEME}>
             <Button
+              testID={QA.listingAddToCart}
+              accessibilityLabel={label}
               tone="primary"
               size="$4"
               flex={1}
@@ -137,6 +140,8 @@ export function ListingMobileStickyBuyBar({
           </Theme>
           {onBuyNow ? (
             <Button
+              testID={QA.listingBuyNow}
+              accessibilityLabel={buyNowLabel}
               tone="outline"
               size="$4"
               flex={1}

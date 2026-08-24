@@ -10,7 +10,7 @@ import { ProfileLink } from '~/community/components/ProfileLink'
 import { RepostPreviewCard } from '~/community/components/RepostPreviewCard'
 import type { usePostEngagement } from '~/community/hooks/usePostEngagement'
 import { BRAND_BLUE, REACTION_TYPES } from '~/community/lib/constants'
-import { useCommunityUi } from '~/community/lib/community-theme'
+import { QA } from '~/lib/qa/test-ids'
 import { mentionsToPlainText } from '~/community/lib/mentions'
 import { setPostFeatured } from '~/community/lib/featured-posts'
 import {
@@ -525,6 +525,7 @@ export function PostActionSheets({
             <SheetAction
               icon={Icons.Pencil}
               label="Edit post"
+              testID={QA.postEdit}
               description="Update what you wrote"
               onPress={() => engagement.openSheet('edit')}
             />
@@ -533,6 +534,7 @@ export function PostActionSheets({
             <SheetAction
               icon={Icons.Trash2}
               label="Delete post"
+              testID={QA.postDelete}
               description="Remove this post from the feed"
               onPress={() => engagement.openSheet('delete-confirm')}
             />
@@ -566,6 +568,7 @@ export function PostActionSheets({
           <SheetAction
             icon={Icons.Bookmark}
             label={saved ? 'Unsave post' : 'Save post'}
+            testID={saved ? QA.postUnsave : QA.postSave}
             onPress={handleSaveToggle}
           />
           {saved ? (
@@ -759,6 +762,8 @@ export function PostActionSheets({
               editEncodedRef.current = encoded
             }}
             placeholder="What do you want to talk about?"
+            testID={QA.postEditInput}
+            accessibilityLabel="Edit post text"
             suggestionsPlacement="top"
             minHeight={110}
             backgroundColor={ui.surface}
@@ -773,6 +778,8 @@ export function PostActionSheets({
               Cancel
             </Button>
             <Button
+              testID={QA.postEditSave}
+              accessibilityLabel="Save"
               backgroundColor={BRAND_BLUE}
               color="white"
               borderRadius={999}
@@ -830,6 +837,8 @@ export function PostActionSheets({
               Cancel
             </Button>
             <Button
+              testID={QA.postDeleteConfirm}
+              accessibilityLabel="Delete"
               backgroundColor={ui.error}
               color="white"
               borderRadius={999}
@@ -869,11 +878,13 @@ function SheetAction({
   icon: Icon,
   label,
   description,
+  testID,
   onPress,
 }: {
   icon: typeof Icons.Link
   label: string
   description?: string
+  testID?: string
   onPress: () => void
 }) {
   const ui = useAppUi()
@@ -886,6 +897,9 @@ function SheetAction({
       paddingHorizontal="$2"
       borderRadius={10}
       cursor="pointer"
+      testID={testID}
+      accessibilityLabel={label}
+      accessibilityRole="button"
       hoverStyle={{ backgroundColor: ui.surfaceHover }}
       onPress={onPress}
     >

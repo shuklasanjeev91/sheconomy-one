@@ -25,6 +25,7 @@ import {
 import { buildAiSearchHref } from '~/lib/search/ai-search'
 import { appRoutes } from '~/lib/routes'
 import { navigateApp } from '~/lib/platform/navigate'
+import { QA } from '~/lib/qa/test-ids'
 import { useAppUi } from '~/lib/theme/useAppUi'
 
 type AppSearchFieldProps = {
@@ -271,6 +272,7 @@ export function AppSearchField({ compact, initialQuery = '', scope: scopeProp }:
           minWidth={0}
           unstyled
           value={query}
+          testID={QA.searchInput}
           accessibilityLabel={`Search ${SEARCH_SCOPE_LABELS[activeScope]}`}
           onChangeText={(value) => {
             setQuery(value)

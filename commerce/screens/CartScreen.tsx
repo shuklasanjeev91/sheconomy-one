@@ -27,6 +27,7 @@ import {
   StockNotifyButton,
   useCommercePalette,
 } from '~/commerce/components'
+import { QA } from '~/lib/qa/test-ids'
 import {
   computeSelectedTotals,
   setCartItemsSelected,
@@ -1055,7 +1056,9 @@ function CartRow({
           Save for later
         </CommerceLink>
         <YStack height={16} width={1} backgroundColor={c.border} />
-        <CommerceLink onPress={() => onRemove(item.id)}>Delete</CommerceLink>
+        <CommerceLink testID={QA.cartItemDelete} accessibilityLabel="Delete cart item" onPress={() => onRemove(item.id)}>
+          Delete
+        </CommerceLink>
       </XStack>
 
       {overStock ? (

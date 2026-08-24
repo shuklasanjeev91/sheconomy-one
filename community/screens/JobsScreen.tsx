@@ -17,6 +17,7 @@ import { Button, Icons, ScrollView, Spinner, Text, XStack, YStack } from '~/comp
 import { INVALIDATION_TOPICS } from '~/lib/cache/invalidation'
 import { useAutoRefresh } from '~/lib/cache/useAutoRefresh'
 import { communityRoutes } from '~/lib/routes'
+import { QA } from '~/lib/qa/test-ids'
 import { useScreenSearch } from '~/hooks/useScreenSearch'
 import { useSupabase } from '~/providers/SupabaseProvider'
 
@@ -229,6 +230,8 @@ export function JobsScreen() {
                 color="white"
                 borderRadius={999}
                 icon={<Icons.Plus size={16} color="white" />}
+                testID={QA.jobCreate}
+                accessibilityLabel="Post a job"
               >
                 Post a job
               </Button>

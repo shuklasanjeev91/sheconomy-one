@@ -92,10 +92,14 @@ export function CommerceLink({
   children,
   onPress,
   fontSize = 13,
+  testID,
+  accessibilityLabel,
 }: {
   children: ReactNode
   onPress?: () => void
   fontSize?: number
+  testID?: string
+  accessibilityLabel?: string
 }) {
   const ui = useAppUi()
   return (
@@ -105,6 +109,8 @@ export function CommerceLink({
       color={ui.link}
       cursor="pointer"
       hoverStyle={{ color: ui.brandDark }}
+      testID={testID}
+      accessibilityLabel={accessibilityLabel}
     >
       {children}
     </Text>

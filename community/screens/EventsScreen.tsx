@@ -16,6 +16,7 @@ import { Button, Icons, Image, ScrollView, Spinner, Text, XStack, YStack } from 
 import { INVALIDATION_TOPICS } from '~/lib/cache/invalidation'
 import { useAutoRefresh } from '~/lib/cache/useAutoRefresh'
 import { communityRoutes } from '~/lib/routes'
+import { QA } from '~/lib/qa/test-ids'
 
 import { BRAND_NAME } from '~/config/brand'
 
@@ -121,6 +122,8 @@ export function EventsScreen() {
                 color="white"
                 borderRadius={999}
                 icon={<Icons.Plus size={16} color="white" />}
+                testID={QA.eventCreate}
+                accessibilityLabel="Create event"
               >
                 Create event
               </Button>

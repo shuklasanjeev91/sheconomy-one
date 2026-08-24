@@ -23,6 +23,7 @@ import { useProfile } from '~/hooks/useProfile'
 import { useVendorShops } from '~/hooks/useVendorShops'
 import { useAppUi } from '~/lib/theme/useAppUi'
 import { useAiAssistOptional } from '~/providers/AiAssistProvider'
+import { QA } from '~/lib/qa/test-ids'
 
 import { BRAND_NAME } from '~/config/brand'
 
@@ -224,6 +225,8 @@ function QuickActionsRow({
             hoverStyle={{ backgroundColor: ui.surfaceHover }}
             pressStyle={{ opacity: 0.9 }}
             onPress={() => onNavigate(action.href)}
+            testID={QA.accountMenu(action.id)}
+            accessibilityLabel={action.label}
           >
             <YStack position="relative">
               <Icon size={20} color={ui.text} />
@@ -292,6 +295,7 @@ function AccountMenuSectionBlock({
           label={menuItem.label}
           description={menuItem.description}
           badge={menuItem.badge}
+          testID={QA.accountMenu(menuItem.id)}
           onPress={() => {
             if (menuItem.action) {
               onAction?.(menuItem.action)
@@ -312,6 +316,7 @@ function MenuRow({
   onPress,
   tone = 'default',
   badge,
+  testID,
 }: {
   icon: typeof Icons.User
   label: string
@@ -319,6 +324,7 @@ function MenuRow({
   onPress: () => void
   tone?: 'default' | 'danger'
   badge?: number
+  testID?: string
 }) {
   const ui = useAppUi()
   const color = tone === 'danger' ? ui.danger : ui.text
@@ -336,6 +342,8 @@ function MenuRow({
       hoverStyle={{ backgroundColor: ui.surfaceHover }}
       pressStyle={{ opacity: 0.85 }}
       onPress={onPress}
+      testID={testID}
+      accessibilityLabel={label}
     >
       <Icon size={20} color={iconColor} />
       <YStack flex={1} gap={2} minWidth={0}>

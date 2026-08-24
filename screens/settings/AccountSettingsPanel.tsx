@@ -15,6 +15,7 @@ import { copyToClipboard } from '~/lib/platform/clipboard'
 import { appRoutes, routes } from '~/lib/routes'
 import { useAppUi } from '~/lib/theme/useAppUi'
 import { useSupabase } from '~/providers/SupabaseProvider'
+import { QA } from '~/lib/qa/test-ids'
 
 export function AccountSettingsPanel() {
   const ui = useAppUi()
@@ -298,6 +299,8 @@ export function AccountSettingsPanel() {
           borderColor={ui.border}
           hoverStyle={{ backgroundColor: ui.navHover }}
           cursor="pointer"
+          testID={QA.profileEdit}
+          accessibilityLabel="Your profile"
         >
           <Icons.User size={18} color={ui.brand} />
           <YStack flex={1} gap={2}>

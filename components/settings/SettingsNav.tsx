@@ -9,6 +9,7 @@ import {
   settingsSectionFromPath,
   type SettingsNavItem,
 } from '~/components/settings/config'
+import { QA } from '~/lib/qa/test-ids'
 
 const GROUP_LABELS: Record<SettingsNavItem['group'], string> = {
   account: 'Your account',
@@ -66,6 +67,8 @@ export function SettingsNav({
                       hoverStyle={{ backgroundColor: active ? ui.surfaceMuted : ui.navHover }}
                       cursor="pointer"
                       onPress={onNavigate}
+                      testID={QA.settingsNav(item.id)}
+                      accessibilityLabel={item.label}
                     >
                       <Icon size={compact ? 20 : 18} color={active ? ui.brand : ui.textSecondary} />
                       <YStack flex={1} gap={compact ? 2 : 0} minWidth={0}>

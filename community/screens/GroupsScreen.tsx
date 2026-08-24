@@ -18,6 +18,7 @@ import { Avatar, Button, Icons, ScrollView, Spinner, Text, XStack, YStack } from
 import { INVALIDATION_TOPICS } from '~/lib/cache/invalidation'
 import { useAutoRefresh } from '~/lib/cache/useAutoRefresh'
 import { communityRoutes } from '~/lib/routes'
+import { QA } from '~/lib/qa/test-ids'
 import { useScreenSearch } from '~/hooks/useScreenSearch'
 import { useSupabase } from '~/providers/SupabaseProvider'
 
@@ -129,6 +130,8 @@ export function GroupsScreen() {
                 color="white"
                 borderRadius={999}
                 onPress={() => router.push(communityRoutes.groupCreate)}
+                testID={QA.groupCreate}
+                accessibilityLabel="Create group"
               >
                 Create group
               </Button>

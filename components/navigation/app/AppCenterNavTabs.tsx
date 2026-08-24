@@ -11,6 +11,7 @@ import { useAppUi } from '~/lib/theme/useAppUi'
 
 import { APP_CENTER_NAV, getAppColors } from '~/components/navigation/app/config'
 import { warmProductTabRoute } from '~/components/navigation/app/warm-product-tab-route'
+import { QA } from '~/lib/qa/test-ids'
 
 /** Tamagui layout animation is costly on Hermes during rapid tab switches. */
 const tabAnim = Platform.OS === 'web' ? ('quick' as const) : undefined
@@ -114,6 +115,8 @@ export function AppCenterNavTabs({ variant = 'desktop', compact = false }: AppCe
             title={item.label}
             role="link"
             accessibilityRole="link"
+            testID={QA.topTab(item.label)}
+            accessibilityLabel={item.label}
             onPressIn={() => warmProductTabRoute(String(item.href))}
             onPress={() => pressNavItem(item)}
           >

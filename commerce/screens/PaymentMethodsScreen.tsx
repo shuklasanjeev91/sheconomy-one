@@ -36,6 +36,7 @@ import { FullWidthLayout, PageSection } from '~/components/layout'
 import { radius } from '~/config/tokens'
 import { useProfile } from '~/hooks/useProfile'
 import { useAppUi } from '~/lib/theme/useAppUi'
+import { QA } from '~/lib/qa/test-ids'
 import { useCallback, useEffect, useMemo, useState } from 'react'
 
 type AddMode = 'card' | 'upi' | null
@@ -239,6 +240,8 @@ export function PaymentMethodsScreen() {
                     borderRadius={999}
                     icon={<Icons.CreditCard size={16} />}
                     onPress={() => setAddMode((mode) => (mode === 'card' ? null : 'card'))}
+                    testID={QA.paymentAddCard}
+                    accessibilityLabel="Add debit or credit card"
                   >
                     Debit / credit card
                   </Button>

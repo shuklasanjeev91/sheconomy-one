@@ -3,6 +3,7 @@ import { usePathname } from 'one'
 import { AppLink } from '~/components/navigation/AppLink'
 import { Icons, Text, XStack } from '~/components/ui'
 import { classRoutes, isClassAudioPath } from '~/lib/routes'
+import { QA } from '~/lib/qa/test-ids'
 import { useAppUi } from '~/lib/theme/useAppUi'
 
 const TABS = [
@@ -48,6 +49,8 @@ export function ClassMediaTabs() {
               cursor="pointer"
               hoverStyle={{ opacity: 0.9 }}
               pressStyle={{ opacity: 0.85 }}
+              testID={QA.classMediaTab(tab.id)}
+              accessibilityLabel={tab.label}
             >
               <Icon size={16} color={active ? ui.text : ui.textSecondary} />
               <Text

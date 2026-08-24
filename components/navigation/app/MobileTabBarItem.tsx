@@ -15,6 +15,7 @@ type MobileTabBarItemProps = {
   children: ReactNode
   onPress?: () => void
   accessibilityLabel?: string
+  testID?: string
   /** Hide caption on very narrow widths — icon stays visible. */
   showLabel?: boolean
 }
@@ -37,6 +38,7 @@ export const MobileTabBarItem = forwardRef<
     children,
     onPress,
     accessibilityLabel,
+    testID,
     showLabel = true,
     ...props
   },
@@ -58,6 +60,7 @@ export const MobileTabBarItem = forwardRef<
       cursor="pointer"
       pressStyle={{ opacity: 0.82, scale: 0.97 }}
       onPress={onPress}
+      testID={testID}
       aria-label={accessibilityLabel ?? label}
       role="tab"
       aria-selected={isFocused}

@@ -29,6 +29,7 @@ import {
 } from '~/components/navigation/app/mobile-tab-bar-width'
 import { MobileTabBarItem } from '~/components/navigation/app/MobileTabBarItem'
 import { useAppUi } from '~/lib/theme/useAppUi'
+import { QA } from '~/lib/qa/test-ids'
 
 const TAB_ICON = { active: 24, inactive: 22 } as const
 
@@ -80,6 +81,8 @@ export function AppMobileBottomTabs() {
   if (tabs.length === 0) {
     return null
   }
+
+  const tabTestSection = section ?? 'app'
 
   const isCoWork = section === 'co-work'
   const activeColor = isCoWork ? coworkUi.brandLight : appColors.brand
@@ -198,6 +201,7 @@ export function AppMobileBottomTabs() {
                 inactiveColor={inactiveColor}
                 activePillBg={activePillBg}
                 badgeBorderColor={dockSurface}
+                testID={QA.bottomTab(tabTestSection, tab.label)}
                 onPress={tab.onPress}
               >
                 {iconNode}
@@ -218,6 +222,7 @@ export function AppMobileBottomTabs() {
               inactiveColor={inactiveColor}
               activePillBg={activePillBg}
               badgeBorderColor={dockSurface}
+              testID={QA.bottomTab(tabTestSection, tab.label)}
               onPress={() => pressTab(tab)}
             >
               {iconNode}

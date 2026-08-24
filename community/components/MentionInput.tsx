@@ -22,6 +22,8 @@ type MentionInputProps = {
   suggestionsPlacement?: 'top' | 'bottom'
   onSubmitEditing?: () => void
   autoFocus?: boolean
+  testID?: string
+  accessibilityLabel?: string
   // Style passthrough forwarded to the underlying input.
   minHeight?: number
   fontSize?: number
@@ -43,6 +45,8 @@ export function MentionInput({
   suggestionsPlacement = 'bottom',
   onSubmitEditing,
   autoFocus,
+  testID,
+  accessibilityLabel,
   flex,
   ...inputStyle
 }: MentionInputProps) {
@@ -122,6 +126,8 @@ export function MentionInput({
     autoFocus,
     onFocus: handleFocus,
     onBlur: handleBlur,
+    testID,
+    accessibilityLabel: accessibilityLabel ?? placeholder,
     ...inputStyle,
   }
 

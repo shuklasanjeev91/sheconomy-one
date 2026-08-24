@@ -26,6 +26,7 @@ import type {
 import { castPollVote } from '~/community/lib/polls'
 import { collectPostMedia, type PostMediaItem } from '~/community/lib/post-media'
 import { useCommunityUi } from '~/community/lib/community-theme'
+import { QA } from '~/lib/qa/test-ids'
 import { extractFirstUrl, parseVideoProvider } from '~/lib/link-preview'
 import {
   getPostTypeSurface,
@@ -303,6 +304,9 @@ export const FeedPostCard = memo(function FeedPostCard({
             borderRadius={999}
             flexShrink={0}
             cursor="pointer"
+            testID={QA.postMore}
+            accessibilityLabel="Post options"
+            accessibilityRole="button"
             hoverStyle={{ backgroundColor: communityUi.divider }}
             onPress={() => engagement.openSheet('options')}
           >

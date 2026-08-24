@@ -25,6 +25,7 @@ import {
 } from '~/lib/address/address.store'
 import { getAddressTypeLabel, groupAddressesByType } from '~/lib/address/address.utils'
 import { useAppDispatch, useAppSelector } from '~/lib/store/hooks'
+import { QA } from '~/lib/qa/test-ids'
 import { useAppUi } from '~/lib/theme/useAppUi'
 
 type AddressManagerProps = {
@@ -141,6 +142,8 @@ export function AddressManager({
           disabled={isLoading || isSaving}
           icon={<Icons.Plus size={18} />}
           onPress={openCreate}
+          testID={QA.addressAdd}
+          accessibilityLabel="Add address"
         >
           Add address
         </Button>
