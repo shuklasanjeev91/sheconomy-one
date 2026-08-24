@@ -8,6 +8,10 @@ import {
   type ShopAddress,
   type ShopOwnerProfile,
 } from '~/commerce/lib/shop-location'
+import { BRAND_NAME } from '~/config/brand'
+import { commerceRoutes } from '~/lib/routes'
+import { pageSeo, plainSnippet } from '~/lib/seo/seo-helpers'
+import { publishSsrPageSeo } from '~/lib/seo/ssr-page-seo-slot'
 
 export type ShopDetail = Pick<
   Tables<'shops'>,
@@ -140,5 +144,20 @@ export async function shopLoader({
 }: LoaderProps<{ slug?: string }>): Promise<ShopLoaderResult> {
   const slug = typeof params.slug === 'string' ? params.slug : params.slug?.[0]
   if (!slug) return { data: null, error: 'Shop not found' }
-  return fetchShopDetail(slug)
+  const result = await fetchShopDetail(slug)
+  if (result.data) {
+    publishSsrPageSeo(
+      pageSeo({
+        title: result.data.shop_name,
+        description:
+          plainSnippet(result.data.shop_description) ||
+          `Shop ${result.data.shop_name} on ${BRAND_NAME} — browse products from this women-led business.`,
+        image: result.data.logo_url ?? null,
+        canonicalPath: String(commerceRoutes.shop(result.data.slug ?? slug)),
+      }),
+    )
+  } else {
+    publishSsrPageSeo(null)
+  }
+  return result
 }

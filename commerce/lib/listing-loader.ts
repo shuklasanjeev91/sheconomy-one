@@ -5,6 +5,9 @@ import type { ListingAttribute, ListingVariation } from '~/commerce/lib/listing-
 import { normalizeListingImageUrl } from '~/commerce/lib/listing-images'
 import { isListingStorefrontVisible, ACTIVE_LISTING_FILTER } from '~/commerce/lib/listing-visibility'
 import { isUuid, listingSlugMatches, slugifyTitle } from '~/commerce/lib/seo-urls'
+import { commerceRoutes } from '~/lib/routes'
+import { pageSeo, plainSnippet } from '~/lib/seo/seo-helpers'
+import { publishSsrPageSeo } from '~/lib/seo/ssr-page-seo-slot'
 import { supabase } from '~/lib/supabase'
 import type { Json, Tables } from '~/lib/supabase'
 
@@ -364,7 +367,30 @@ export async function listingLoader({
 }: LoaderProps<{ slug?: string }>): Promise<ListingLoaderResult> {
   const slug = typeof params.slug === 'string' ? params.slug : params.slug?.[0]
   if (!slug) return { data: null, error: 'Listing not found' }
-  return fetchListingDetail(slug)
+  const result = await fetchListingDetail(slug)
+  publishListingSeo(result, slug)
+  return result
+}
+
+function publishListingSeo(result: ListingLoaderResult, slug: string) {
+  if (!result.data) {
+    publishSsrPageSeo(null)
+    return
+  }
+  const images = mapListingImages(result.data)
+  const primaryImage =
+    images.find((image) => image.is_primary)?.image_url ?? images[0]?.image_url ?? null
+  publishSsrPageSeo(
+    pageSeo({
+      title: result.data.title,
+      description: plainSnippet(result.data.description) || undefined,
+      image: primaryImage,
+      type: 'product',
+      canonicalPath: String(
+        commerceRoutes.listing(result.data.slug ?? slug ?? result.data.id),
+      ),
+    }),
+  )
 }
 
 export function mapListingImages(listing: ListingRow | null): ListingImage[] {

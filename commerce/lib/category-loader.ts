@@ -11,8 +11,12 @@ import {
   listingBrowseFiltersFromRouteParams,
   type ListingBrowseFilters,
 } from '~/commerce/lib/filters'
+import { BRAND_NAME } from '~/config/brand'
 import { CACHE_KEYS } from '~/lib/bootstrap/cache-keys'
 import { writeAppCache } from '~/lib/cache/app-cache'
+import { commerceRoutes } from '~/lib/routes'
+import { pageSeo } from '~/lib/seo/seo-helpers'
+import { publishSsrPageSeo } from '~/lib/seo/ssr-page-seo-slot'
 
 export type CategoryLoaderResult = {
   category: CategorySummary | null
@@ -55,6 +59,22 @@ export async function fetchCategoryPageData(
   }
 }
 
+function publishCategorySeo(result: CategoryLoaderResult, slug: string) {
+  if (!result.category) {
+    publishSsrPageSeo(null)
+    return
+  }
+  const name = result.category.seo_name || result.category.category
+  publishSsrPageSeo(
+    pageSeo({
+      title: name,
+      description: `Shop ${name} from women-led businesses on ${BRAND_NAME}.`,
+      image: result.category.category_image_url,
+      canonicalPath: String(commerceRoutes.category(slug)),
+    }),
+  )
+}
+
 export async function categoryLoader({
   params,
   path,
@@ -71,5 +91,7 @@ export async function categoryLoader({
     filters = listingBrowseFiltersFromRouteParams(Object.fromEntries(new URLSearchParams(query)))
   }
 
-  return fetchCategoryPageData(slug, filters)
+  const result = await fetchCategoryPageData(slug, filters)
+  publishCategorySeo(result, slug)
+  return result
 }

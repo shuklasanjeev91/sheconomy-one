@@ -81,7 +81,7 @@ export async function postSeoLoader({
     .trim()
     .slice(0, 200)
 
-  const title = `${author} on ${BRAND_NAME}`
+  const title = author
   const description =
     snippet ||
     `See this post from ${author} on ${BRAND_NAME} — marketplace and community for women.`
