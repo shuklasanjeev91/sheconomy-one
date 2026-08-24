@@ -19,6 +19,7 @@ import {
   SITE_NAME,
   type PageSeo,
 } from '~/lib/seo/seo'
+import { readSsrLoaderPageSeo } from '~/lib/seo/read-ssr-loader-seo'
 import { buildAbsoluteUrl } from '~/lib/platform/url'
 
 type SeoContextValue = {
@@ -92,8 +93,9 @@ export function RouteSeoProvider({ children }: { children: ReactNode }) {
 function RouteSeoTags({ getOverride }: { getOverride: () => PageSeo | null }) {
   const pathname = usePathname()
   const override = getOverride()
+  const ssrLoaderSeo = readSsrLoaderPageSeo()
   const defaults = resolveRouteSeo(pathname)
-  const seo = override ?? defaults
+  const seo = override ?? ssrLoaderSeo ?? defaults
 
   const title = buildPageTitle(seo.title)
   const description = (seo.description ?? DEFAULT_DESCRIPTION).slice(0, 300)

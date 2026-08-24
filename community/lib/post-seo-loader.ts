@@ -4,6 +4,7 @@ import { collectPostMedia } from '~/community/lib/post-media'
 import { BRAND_NAME } from '~/config/brand'
 import { communityRoutes } from '~/lib/routes'
 import type { PageSeo } from '~/lib/seo/seo'
+import { publishSsrPageSeo } from '~/lib/seo/ssr-page-seo-slot'
 import { supabase } from '~/lib/supabase'
 
 export type PostSeoLoaderResult = {
@@ -42,7 +43,10 @@ export async function postSeoLoader({
   path,
 }: LoaderProps<{ id?: string }>): Promise<PostSeoLoaderResult> {
   const id = resolvePostId(params ?? {}, path)
-  if (!id) return null
+  if (!id) {
+    publishSsrPageSeo(null)
+    return null
+  }
 
   const { data, error } = await supabase
     .from('posts_with_stats')
@@ -53,7 +57,11 @@ export async function postSeoLoader({
     .eq('is_deleted', false)
     .maybeSingle()
 
-  if (error || !data) return { id, seo: { title: 'Post', type: 'article' } }
+  if (error || !data) {
+    const fallback: PageSeo = { title: 'Post', type: 'article' }
+    publishSsrPageSeo(fallback)
+    return { id, seo: fallback }
+  }
 
   const media = collectPostMedia({
     image_url: data.image_url,
@@ -78,14 +86,18 @@ export async function postSeoLoader({
     snippet ||
     `See this post from ${author} on ${BRAND_NAME} — marketplace and community for women.`
 
+  const seo: PageSeo = {
+    title,
+    description,
+    image,
+    type: 'article',
+    canonicalPath: String(communityRoutes.post(id)),
+  }
+
+  publishSsrPageSeo(seo)
+
   return {
     id,
-    seo: {
-      title,
-      description,
-      image,
-      type: 'article',
-      canonicalPath: String(communityRoutes.post(id)),
-    },
+    seo,
   }
 }
