@@ -20,22 +20,17 @@ export function TodayCelebrationsCard() {
   const communityUi = useCommunityUi()
   const { isAuthenticated } = useProfile()
   const [items, setItems] = useState<ConnectionOccasion[]>([])
-  // Begin in loading state when authenticated so the card is always visible
-  // immediately — never flashes null before the first fetch completes.
   const [loading, setLoading] = useState(isAuthenticated)
-  const [loaded, setLoaded] = useState(false)
 
   const load = useCallback(() => {
     if (!isAuthenticated) {
       setItems([])
-      setLoaded(false)
       return
     }
     setLoading(true)
     void fetchConnectionOccasionsToday().then(({ data }) => {
       setItems(data)
       setLoading(false)
-      setLoaded(true)
     })
   }, [isAuthenticated])
 
@@ -43,8 +38,7 @@ export function TodayCelebrationsCard() {
     load()
   }, [load])
 
-  // Authenticated users always see the card (loading, empty, or items).
-  const hasContent = isAuthenticated
+  const hasContent = isAuthenticated && (loading || items.length > 0)
   useReportForYouContent(hasContent)
   if (!hasContent) return null
 
@@ -64,10 +58,6 @@ export function TodayCelebrationsCard() {
 
   return (
     <CommunityCard padding={16} gap={12}>
-      {/*
-        Header always visible for authenticated users.
-        Spinner shows while the fetch is in flight.
-      */}
       <XStack alignItems="center" justifyContent="space-between" gap={8}>
         <YStack flex={1} minWidth={0} gap={2}>
           <Text fontSize={16} fontWeight="700" color={communityUi.text}>
@@ -79,18 +69,6 @@ export function TodayCelebrationsCard() {
         </YStack>
         {loading ? <Spinner size="small" /> : null}
       </XStack>
-
-      {/*
-        After loading:
-        - Show celebration cards if any exist today.
-        - Show a gentle empty-state message if none — so the card never
-          silently disappears and the user understands there's nothing today.
-      */}
-      {loaded && items.length === 0 ? (
-        <Text fontSize={13} color={communityUi.textMuted}>
-          No celebrations among your connections today. Check back tomorrow!
-        </Text>
-      ) : null}
 
       {items.length > 0 ? (
         <HorizontalScrollRow gap={10}>
