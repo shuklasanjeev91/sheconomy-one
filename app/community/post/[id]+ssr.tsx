@@ -1,10 +1,9 @@
 import { useLoader } from 'one'
 
 import { AppErrorBoundary } from '~/components/AppErrorBoundary'
-import { DocumentSeoTags } from '~/components/seo/DocumentSeoTags'
+import { usePageSeo } from '~/components/seo/RouteSeo'
 import { PostDetailScreen } from '~/community/screens/PostDetailScreen'
 import { postSeoLoader } from '~/community/lib/post-seo-loader'
-import { getPostShareUrl } from '~/lib/share'
 
 export async function loader(props: Parameters<typeof postSeoLoader>[0]) {
   return postSeoLoader(props)
@@ -16,15 +15,10 @@ export async function loader(props: Parameters<typeof postSeoLoader>[0]) {
  */
 export default function CommunityPostDetailPage() {
   const data = useLoader(loader)
+  usePageSeo(data?.seo ?? null)
 
   return (
     <AppErrorBoundary scope="PostDetail">
-      {data?.seo ? (
-        <DocumentSeoTags
-          seo={data.seo}
-          url={data.id ? getPostShareUrl(data.id) : undefined}
-        />
-      ) : null}
       <PostDetailScreen />
     </AppErrorBoundary>
   )
