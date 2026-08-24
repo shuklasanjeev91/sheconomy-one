@@ -1,6 +1,7 @@
 import { AppLink } from '~/components/navigation/AppLink'
 import type { CommunityPost } from '~/community/lib/community'
 import { trackCommunityCommerceShare } from '~/community/lib/community-commerce-analytics'
+import { useCommunityUi } from '~/community/lib/community-theme'
 import { ShareButton } from '~/components/share/ShareButton'
 import { BRAND_NAME } from '~/config/brand'
 import { communityRoutes } from '~/lib/routes'
