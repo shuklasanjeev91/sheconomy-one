@@ -324,21 +324,19 @@ export function CreatePostForm({
     (items: PickedImage[]) => {
       void (async () => {
         const { photos: imageItems, videos: videoItems } = splitPostMediaItems(items)
+        if (!imageItems.length && !videoItems.length) return
+        form.fields.imageUrl.setValue('')
+        // Keep photos and videos together — mixed media posts are supported.
         if (imageItems.length) {
           const fitted = await fitImagesForPostCard(imageItems)
-          form.fields.imageUrl.setValue('')
-          videos.forEach(releasePickedImage)
-          setVideos([])
           setPhotos((current) => [...current, ...fitted].slice(0, MAX_PHOTOS))
-        } else if (videoItems.length) {
-          form.fields.imageUrl.setValue('')
-          photos.forEach(releasePickedImage)
-          setPhotos([])
+        }
+        if (videoItems.length) {
           setVideos((current) => [...current, ...videoItems].slice(0, MAX_VIDEOS))
         }
       })()
     },
-    [form.fields.imageUrl, photos, videos],
+    [form.fields.imageUrl],
   )
 
   const pickPhotos = useCallback(async () => {
@@ -353,7 +351,6 @@ export function CreatePostForm({
       if (!picked.length) return
       const fitted = await fitImagesForPostCard(picked)
       form.fields.imageUrl.setValue('')
-      setVideos([])
       setPhotos((current) => [...current, ...fitted].slice(0, MAX_PHOTOS))
     } catch (error) {
       toast.show('Could not add photo', {
@@ -372,8 +369,6 @@ export function CreatePostForm({
       const picked = await pickVideos({ multiple: true, maxCount: MAX_VIDEOS - videos.length })
       if (picked.length) {
         form.fields.imageUrl.setValue('')
-        photos.forEach(releasePickedImage)
-        setPhotos([])
         setVideos((current) => [...current, ...picked].slice(0, MAX_VIDEOS))
       }
     } catch (error) {
@@ -384,7 +379,7 @@ export function CreatePostForm({
     } finally {
       setIsPicking(false)
     }
-  }, [form.fields.imageUrl, isPicking, photos, toast, videos.length])
+  }, [form.fields.imageUrl, isPicking, toast, videos.length])
 
   const pickPostMedia = useCallback(async () => {
     if (isPicking) return
@@ -742,262 +737,277 @@ export function CreatePostForm({
 
     setIsPosting(true)
     setUploadProgress(null)
-    let result: { id: string | null; error: string | null }
-    if (composeMode === 'poll') {
-      result = await createCommunityPost(user.id, {
-        content: finalContent,
-        visibility,
-        companyId: targetCompanyId,
-        groupId: targetGroupId,
-        poll: {
-          question: content.trim() || finalContent.trim(),
-          options: filledPollOptions,
-          durationDays: pollDurationDays,
-        },
-      })
-    } else if (composeMode === 'celebration') {
-      const occasionMeta = CELEBRATION_OCCASIONS.find((o) => o.value === occasion)
-      let celebrationImageUrl: string | null = null
-      if (celebrationCover[0]) {
-        setUploadProgress(0)
-        const files = await preparePickedImagesForUpload(celebrationCover)
-        const { urls, error: uploadError } = await uploadPostImages(user.id, files, {
-          onProgress: setUploadProgress,
+    let result: { id: string | null; error: string | null } = { id: null, error: null }
+    try {
+      if (composeMode === 'poll') {
+        result = await createCommunityPost(user.id, {
+          content: finalContent,
+          visibility,
+          companyId: targetCompanyId,
+          groupId: targetGroupId,
+          poll: {
+            question: content.trim() || finalContent.trim(),
+            options: filledPollOptions,
+            durationDays: pollDurationDays,
+          },
         })
-        if (uploadError) {
-          setIsPosting(false)
-          toast.show('Could not upload photo', { tone: 'danger', message: uploadError })
+      } else if (composeMode === 'celebration') {
+        const occasionMeta = CELEBRATION_OCCASIONS.find((o) => o.value === occasion)
+        let celebrationImageUrl: string | null = null
+        if (celebrationCover[0]) {
+          setUploadProgress(0)
+          const files = await preparePickedImagesForUpload(celebrationCover)
+          const { urls, error: uploadError } = await uploadPostImages(user.id, files, {
+            onProgress: setUploadProgress,
+          })
+          if (uploadError) {
+            toast.show('Could not upload photo', { tone: 'danger', message: uploadError })
+            return
+          }
+          celebrationImageUrl = urls[0] ?? null
+        }
+        result = await createCommunityPost(user.id, {
+          content: finalContent,
+          visibility,
+          companyId: targetCompanyId,
+          groupId: targetGroupId,
+          celebration: {
+            occasion,
+            title: celebrationTitle.trim(),
+            subtitle: occasionMeta?.label ?? null,
+            imageUrl: celebrationImageUrl,
+          },
+        })
+      } else if (composeMode === 'product' && selectedListing) {
+        const shopForListing = shops.find((s) => s.id === activeShopId) ?? null
+        result = await createCommunityPost(user.id, {
+          content: finalContent,
+          visibility,
+          companyId: targetCompanyId,
+          groupId: targetGroupId,
+          product: {
+            listingId: selectedListing.id,
+            title: selectedListing.title,
+            price: selectedListing.price,
+            currency: shopForListing?.shop_currency ?? null,
+            imageUrl: selectedListing.primaryImageUrl,
+            slug: selectedListing.slug,
+            shopName: shopForListing?.shop_name ?? null,
+          },
+        })
+      } else if (composeMode === 'shop' && selectedShop) {
+        result = await createCommunityPost(user.id, {
+          content: finalContent,
+          visibility,
+          companyId: targetCompanyId,
+          groupId: targetGroupId,
+          shop: {
+            shopId: selectedShop.id,
+            name: selectedShop.shop_name,
+            logoUrl: selectedShop.logo_url,
+            slug: selectedShop.slug,
+            description: selectedShop.shop_description,
+          },
+        })
+      } else if (composeMode === 'event') {
+        const startIso =
+          eventDate && eventTime ? new Date(`${eventDate}T${eventTime}`).toISOString() : null
+        const endIso =
+          eventEndDate && eventEndTime
+            ? new Date(`${eventEndDate}T${eventEndTime}`).toISOString()
+            : undefined
+
+        if (!startIso) {
+          toast.show('Add a start date and time', { tone: 'danger' })
           return
         }
-        celebrationImageUrl = urls[0] ?? null
-      }
-      result = await createCommunityPost(user.id, {
-        content: finalContent,
-        visibility,
-        companyId: targetCompanyId,
-        groupId: targetGroupId,
-        celebration: {
-          occasion,
-          title: celebrationTitle.trim(),
-          subtitle: occasionMeta?.label ?? null,
-          imageUrl: celebrationImageUrl,
-        },
-      })
-    } else if (composeMode === 'product' && selectedListing) {
-      const shopForListing = shops.find((s) => s.id === activeShopId) ?? null
-      result = await createCommunityPost(user.id, {
-        content: finalContent,
-        visibility,
-        companyId: targetCompanyId,
-        groupId: targetGroupId,
-        product: {
-          listingId: selectedListing.id,
-          title: selectedListing.title,
-          price: selectedListing.price,
-          currency: shopForListing?.shop_currency ?? null,
-          imageUrl: selectedListing.primaryImageUrl,
-          slug: selectedListing.slug,
-          shopName: shopForListing?.shop_name ?? null,
-        },
-      })
-    } else if (composeMode === 'shop' && selectedShop) {
-      result = await createCommunityPost(user.id, {
-        content: finalContent,
-        visibility,
-        companyId: targetCompanyId,
-        groupId: targetGroupId,
-        shop: {
-          shopId: selectedShop.id,
-          name: selectedShop.shop_name,
-          logoUrl: selectedShop.logo_url,
-          slug: selectedShop.slug,
-          description: selectedShop.shop_description,
-        },
-      })
-    } else if (composeMode === 'event') {
-      const startIso =
-        eventDate && eventTime ? new Date(`${eventDate}T${eventTime}`).toISOString() : null
-      const endIso =
-        eventEndDate && eventEndTime
-          ? new Date(`${eventEndDate}T${eventEndTime}`).toISOString()
-          : undefined
 
-      if (!startIso) {
-        setIsPosting(false)
-        toast.show('Add a start date and time', { tone: 'danger' })
+        let coverUrl: string | null = null
+        if (eventCover[0]) {
+          setUploadProgress(0)
+          const [file] = await preparePickedImagesForUpload(eventCover)
+          const { data: uploaded, error: uploadError } = await uploadEventCoverImage(user.id, file, {
+            onProgress: setUploadProgress,
+          })
+          if (uploadError || !uploaded) {
+            toast.show('Could not upload cover image', {
+              tone: 'danger',
+              message: uploadError ?? 'Try again shortly.',
+            })
+            return
+          }
+          coverUrl = uploaded.publicUrl
+        }
+
+        const locationLabel = eventIsOnline
+          ? eventMeetingUrl.trim() || 'Online'
+          : eventLocation.trim() || undefined
+
+        const synced = await createEventAndFeedPost(user.id, {
+          title: eventTitle.trim(),
+          description: finalContent.trim() || undefined,
+          startTime: startIso,
+          endTime: endIso,
+          isOnline: eventIsOnline,
+          location: eventIsOnline ? undefined : locationLabel,
+          meetingUrl: eventIsOnline ? eventMeetingUrl.trim() || undefined : undefined,
+          imageUrl: coverUrl ?? undefined,
+          isFree: true,
+          shareToFeed: true,
+          visibility,
+          rsvpEnabled: eventRsvp,
+        })
+
+        result = { id: synced.postId, error: synced.error }
+      } else if (composeMode === 'article') {
+        let mediaUrls: string[] = []
+        const coverSource = articleCover.length ? articleCover : photos
+        if (coverSource.length) {
+          setUploadProgress(0)
+          const files = await preparePickedImagesForUpload(coverSource)
+          const { urls, error: uploadError } = await uploadPostImages(user.id, files, {
+            onProgress: setUploadProgress,
+          })
+          if (uploadError) {
+            toast.show('Could not upload photos', {
+              tone: 'danger',
+              message: uploadError,
+            })
+            return
+          }
+          mediaUrls = urls
+        }
+        const finalImageUrl = mediaUrls.length ? mediaUrls[0] : imageUrl || null
+        const tags = articleTags
+          .split(',')
+          .map((tag) => tag.trim())
+          .filter(Boolean)
+          .slice(0, 8)
+        result = await createCommunityPost(user.id, {
+          content: finalContent,
+          imageUrl: finalImageUrl,
+          mediaUrls: mediaUrls.length ? mediaUrls : null,
+          visibility,
+          companyId: targetCompanyId,
+          groupId: targetGroupId,
+          postType: 'article',
+          articleTitle: articleTitle.trim(),
+          articleTags: tags.length ? tags : null,
+        })
+      } else {
+        let mediaUrls: string[] = []
+        let videoUrls: string[] = []
+        const photoCount = photos.length
+        const videoCount = videos.length
+        const totalSteps = photoCount + videoCount
+
+        if (photoCount) {
+          setUploadProgress(0)
+          const files = await preparePickedImagesForUpload(photos)
+          const { urls, error: uploadError } = await uploadPostImages(user.id, files, {
+            onProgress: (photoProgress) => {
+              if (!totalSteps) return
+              const weighted = (photoProgress * photoCount) / totalSteps
+              setUploadProgress(weighted)
+            },
+          })
+          if (uploadError) {
+            toast.show('Could not upload photos', {
+              tone: 'danger',
+              message: uploadError,
+            })
+            return
+          }
+          mediaUrls = urls
+        }
+
+        if (videoCount) {
+          if (!photoCount) setUploadProgress(0)
+          const files = await preparePickedImagesForUpload(videos)
+          const { urls, error: uploadError } = await uploadPostVideos(user.id, files, {
+            onProgress: (videoProgress) => {
+              if (!totalSteps) return
+              const photoShare = photoCount / totalSteps
+              const weighted = photoShare + (videoProgress * videoCount) / totalSteps
+              setUploadProgress(weighted)
+            },
+          })
+          if (uploadError) {
+            toast.show('Could not upload video', {
+              tone: 'danger',
+              message: uploadError,
+            })
+            return
+          }
+          videoUrls = urls
+        }
+
+        const finalImageUrl = mediaUrls.length || videoUrls.length ? null : imageUrl || null
+        result = await createCommunityPost(user.id, {
+          content: finalContent,
+          imageUrl: finalImageUrl,
+          mediaUrls: mediaUrls.length ? mediaUrls : null,
+          videoUrls: videoUrls.length ? videoUrls : null,
+          visibility,
+          companyId: targetCompanyId,
+          groupId: targetGroupId,
+          products: attachedProducts.length ? attachedProducts : null,
+          linkPreview: mediaUrls.length || videoUrls.length || finalImageUrl ? null : linkPreview,
+        })
+      }
+
+      if (result.error || !result.id) {
+        toast.show('Could not post', { tone: 'danger', message: result.error ?? 'Try again shortly.' })
         return
       }
 
-      let coverUrl: string | null = null
-      if (eventCover[0]) {
-        setUploadProgress(0)
-        const [file] = await preparePickedImagesForUpload(eventCover)
-        const { data: uploaded, error: uploadError } = await uploadEventCoverImage(user.id, file, {
-          onProgress: setUploadProgress,
+      toast.show('Posted', { tone: 'success', message: 'Your update is live.' })
+      if (attachedProducts.length && result.id) {
+        trackCommunityPostListingsAttached({
+          postId: result.id,
+          listingIds: attachedProducts
+            .map((product) => product.listingId)
+            .filter((id): id is string => Boolean(id)),
+          source: initialListingId ? 'pdp_share' : 'composer',
         })
-        if (uploadError || !uploaded) {
-          setIsPosting(false)
-          toast.show('Could not upload cover image', {
-            tone: 'danger',
-            message: uploadError ?? 'Try again shortly.',
-          })
-          return
-        }
-        coverUrl = uploaded.publicUrl
       }
-
-      const locationLabel = eventIsOnline
-        ? eventMeetingUrl.trim() || 'Online'
-        : eventLocation.trim() || undefined
-
-      const synced = await createEventAndFeedPost(user.id, {
-        title: eventTitle.trim(),
-        description: finalContent.trim() || undefined,
-        startTime: startIso,
-        endTime: endIso,
-        isOnline: eventIsOnline,
-        location: eventIsOnline ? undefined : locationLabel,
-        meetingUrl: eventIsOnline ? eventMeetingUrl.trim() || undefined : undefined,
-        imageUrl: coverUrl ?? undefined,
-        isFree: true,
-        shareToFeed: true,
-        visibility,
-        rsvpEnabled: eventRsvp,
+      void clearComposeDraft()
+      form.resetAll()
+      setPollOptions(['', ''])
+      setEventTitle('')
+      setEventDate('')
+      setEventTime('')
+      setEventLocation('')
+      setEventCover([])
+      setCelebrationTitle('')
+      setOccasion('new_job')
+      setCelebrationCover([])
+      setArticleTitle('')
+      setSelectedListing(null)
+      setSelectedShop(null)
+      setAttachedProducts([])
+      setProductPickerOpen(false)
+      setComposeMode('text')
+      setLinkPreview(null)
+      setLinkLoading(false)
+      dismissedUrlsRef.current.clear()
+      previewUrlRef.current = null
+      photos.forEach(releasePickedImage)
+      setPhotos([])
+      videos.forEach(releasePickedImage)
+      setVideos([])
+      onSuccess?.()
+      // Overlay usage closes via onSuccess; the standalone route navigates home.
+      if (!embedded) router.push(communityRoutes.home)
+    } catch (error) {
+      toast.show('Could not post', {
+        tone: 'danger',
+        message: error instanceof Error ? error.message : 'Try again shortly.',
       })
-
-      result = { id: synced.postId, error: synced.error }
-    } else if (composeMode === 'article') {
-      let mediaUrls: string[] = []
-      const coverSource = articleCover.length ? articleCover : photos
-      if (coverSource.length) {
-        setUploadProgress(0)
-        const files = await preparePickedImagesForUpload(coverSource)
-        const { urls, error: uploadError } = await uploadPostImages(user.id, files, {
-          onProgress: setUploadProgress,
-        })
-        if (uploadError) {
-          setIsPosting(false)
-          toast.show('Could not upload photos', {
-            tone: 'danger',
-            message: uploadError,
-          })
-          return
-        }
-        mediaUrls = urls
-      }
-      const finalImageUrl = mediaUrls.length ? mediaUrls[0] : imageUrl || null
-      const tags = articleTags
-        .split(',')
-        .map((tag) => tag.trim())
-        .filter(Boolean)
-        .slice(0, 8)
-      result = await createCommunityPost(user.id, {
-        content: finalContent,
-        imageUrl: finalImageUrl,
-        mediaUrls: mediaUrls.length ? mediaUrls : null,
-        visibility,
-        companyId: targetCompanyId,
-        groupId: targetGroupId,
-        postType: 'article',
-        articleTitle: articleTitle.trim(),
-        articleTags: tags.length ? tags : null,
-      })
-    } else {
-      let mediaUrls: string[] = []
-      let videoUrls: string[] = []
-      if (photos.length) {
-        setUploadProgress(0)
-        const files = await preparePickedImagesForUpload(photos)
-        const { urls, error: uploadError } = await uploadPostImages(user.id, files, {
-          onProgress: setUploadProgress,
-        })
-        if (uploadError) {
-          setIsPosting(false)
-          setUploadProgress(null)
-          toast.show('Could not upload photos', {
-            tone: 'danger',
-            message: uploadError,
-          })
-          return
-        }
-        mediaUrls = urls
-      } else if (videos.length) {
-        setUploadProgress(0)
-        const files = await preparePickedImagesForUpload(videos)
-        const { urls, error: uploadError } = await uploadPostVideos(user.id, files, {
-          onProgress: setUploadProgress,
-        })
-        if (uploadError) {
-          setIsPosting(false)
-          setUploadProgress(null)
-          toast.show('Could not upload video', {
-            tone: 'danger',
-            message: uploadError,
-          })
-          return
-        }
-        videoUrls = urls
-      }
-
-      const finalImageUrl = mediaUrls.length || videoUrls.length ? null : imageUrl || null
-      result = await createCommunityPost(user.id, {
-        content: finalContent,
-        imageUrl: finalImageUrl,
-        mediaUrls: mediaUrls.length ? mediaUrls : null,
-        videoUrls: videoUrls.length ? videoUrls : null,
-        visibility,
-        companyId: targetCompanyId,
-        groupId: targetGroupId,
-        products: attachedProducts.length ? attachedProducts : null,
-        linkPreview: mediaUrls.length || videoUrls.length || finalImageUrl ? null : linkPreview,
-      })
+    } finally {
+      setIsPosting(false)
+      setUploadProgress(null)
     }
-    setIsPosting(false)
-    setUploadProgress(null)
-
-    if (result.error || !result.id) {
-      toast.show('Could not post', { tone: 'danger', message: result.error ?? 'Try again shortly.' })
-      return
-    }
-
-    toast.show('Posted', { tone: 'success', message: 'Your update is live.' })
-    if (attachedProducts.length && result.id) {
-      trackCommunityPostListingsAttached({
-        postId: result.id,
-        listingIds: attachedProducts
-          .map((product) => product.listingId)
-          .filter((id): id is string => Boolean(id)),
-        source: initialListingId ? 'pdp_share' : 'composer',
-      })
-    }
-    void clearComposeDraft()
-    form.resetAll()
-    setPollOptions(['', ''])
-    setEventTitle('')
-    setEventDate('')
-    setEventTime('')
-    setEventLocation('')
-    setEventCover([])
-    setCelebrationTitle('')
-    setOccasion('new_job')
-    setCelebrationCover([])
-    setArticleTitle('')
-    setSelectedListing(null)
-    setSelectedShop(null)
-    setAttachedProducts([])
-    setProductPickerOpen(false)
-    setComposeMode('text')
-    setLinkPreview(null)
-    setLinkLoading(false)
-    dismissedUrlsRef.current.clear()
-    previewUrlRef.current = null
-    photos.forEach(releasePickedImage)
-    setPhotos([])
-    videos.forEach(releasePickedImage)
-    setVideos([])
-    onSuccess?.()
-    // Overlay usage closes via onSuccess; the standalone route navigates home.
-    if (!embedded) router.push(communityRoutes.home)
   }
 
   const contentPlaceholder =
@@ -1804,8 +1814,12 @@ export function CreatePostForm({
             />
           </ScrollView>
 
-          {uploadProgress != null && uploadProgress > 0 ? (
-            <UploadProgressBar progress={uploadProgress} label="Uploading media…" compact />
+          {uploadProgress != null ? (
+            <UploadProgressBar
+              progress={Math.max(uploadProgress, 1)}
+              label={uploadProgress <= 0 ? 'Preparing media…' : 'Uploading media…'}
+              compact
+            />
           ) : null}
 
           <Button

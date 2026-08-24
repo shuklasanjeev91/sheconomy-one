@@ -32,6 +32,25 @@ export type UploadResult = {
   publicUrl: string
 }
 
+/** Local file prepared for storage — prefer `data` (Uint8Array) over RN Blobs. */
+export type StorageUploadFile = {
+  data?: Uint8Array | ArrayBuffer
+  arrayBuffer?: ArrayBuffer
+  blob?: Blob
+  mimeType: string
+  fileName?: string
+}
+
+function resolveStorageUploadBody(
+  file: StorageUploadFile,
+): ArrayBuffer | Uint8Array | Blob | null {
+  if (file.data instanceof Uint8Array && file.data.byteLength > 0) return file.data
+  if (file.data instanceof ArrayBuffer && file.data.byteLength > 0) return file.data
+  if (file.arrayBuffer && file.arrayBuffer.byteLength > 0) return file.arrayBuffer
+  if (file.blob && file.blob.size > 0) return file.blob
+  return null
+}
+
 function extensionForMime(mimeType: string) {
   if (mimeType.includes('png')) return 'png'
   if (mimeType.includes('webp')) return 'webp'
@@ -106,7 +125,7 @@ export async function uploadStorageObject(
 export async function uploadListingImages(
   userId: string,
   shopId: string,
-  files: Array<{ blob: Blob; mimeType: string; fileName?: string }>,
+  files: StorageUploadFile[],
   options?: { onProgress?: UploadProgressHandler },
 ) {
   const uploads: UploadResult[] = []
@@ -117,10 +136,14 @@ export async function uploadListingImages(
       const index = uploads.length
       const ext = file.fileName?.split('.').pop() ?? extensionForMime(file.mimeType)
       const path = `${userId}/shops/${shopId}/listings/${Date.now()}-${index}-${randomSuffix()}.${ext}`
+      const body = resolveStorageUploadBody(file)
+      if (!body) {
+        return { error: 'Image data is empty.' }
+      }
       const { data, error } = await uploadStorageObject(
         STORAGE_BUCKETS.listingImages,
         path,
-        file.blob,
+        body,
         file.mimeType,
         { onProgress: onFileProgress },
       )
@@ -149,18 +172,22 @@ export async function uploadListingImages(
  */
 export async function uploadEventCoverImage(
   userId: string,
-  file: { blob: Blob; mimeType: string; fileName?: string },
+  file: StorageUploadFile,
   options?: { onProgress?: UploadProgressHandler },
 ) {
   const ext = file.fileName?.split('.').pop() ?? extensionForMime(file.mimeType)
   const path = `${userId}/events/${Date.now()}-${randomSuffix()}.${ext}`
+  const body = resolveStorageUploadBody(file)
+  if (!body) {
+    return { data: null, error: 'Image data is empty.' }
+  }
 
-  return uploadStorageObject(STORAGE_BUCKETS.postImages, path, file.blob, file.mimeType, options)
+  return uploadStorageObject(STORAGE_BUCKETS.postImages, path, body, file.mimeType, options)
 }
 
 export async function uploadPostImages(
   userId: string,
-  files: Array<{ blob: Blob; mimeType: string; fileName?: string }>,
+  files: StorageUploadFile[],
   options?: { onProgress?: UploadProgressHandler },
 ) {
   const uploads: UploadResult[] = []
@@ -171,10 +198,14 @@ export async function uploadPostImages(
       const index = uploads.length
       const ext = file.fileName?.split('.').pop() ?? extensionForMime(file.mimeType)
       const path = `${userId}/posts/${Date.now()}-${index}-${randomSuffix()}.${ext}`
+      const body = resolveStorageUploadBody(file)
+      if (!body) {
+        return { error: 'Image data is empty.' }
+      }
       const { data, error } = await uploadStorageObject(
         STORAGE_BUCKETS.postImages,
         path,
-        file.blob,
+        body,
         file.mimeType,
         { onProgress: onFileProgress },
       )
@@ -200,7 +231,7 @@ export async function uploadPostImages(
 export async function uploadListingVideos(
   userId: string,
   shopId: string,
-  files: Array<{ blob: Blob; mimeType: string; fileName?: string }>,
+  files: StorageUploadFile[],
   options?: { onProgress?: UploadProgressHandler },
 ) {
   const uploads: UploadResult[] = []
@@ -211,10 +242,14 @@ export async function uploadListingVideos(
       const index = uploads.length
       const ext = file.fileName?.split('.').pop() ?? extensionForMime(file.mimeType)
       const path = `${userId}/shops/${shopId}/listings/videos/${Date.now()}-${index}-${randomSuffix()}.${ext}`
+      const body = resolveStorageUploadBody(file)
+      if (!body) {
+        return { error: 'Video data is empty.' }
+      }
       const { data, error } = await uploadStorageObject(
         STORAGE_BUCKETS.listingImages,
         path,
-        file.blob,
+        body,
         file.mimeType,
         { onProgress: onFileProgress, maxBytes: MAX_VIDEO_BYTES },
       )
@@ -242,7 +277,7 @@ export async function uploadListingVideos(
  */
 export async function uploadPostVideos(
   userId: string,
-  files: Array<{ blob: Blob; mimeType: string; fileName?: string }>,
+  files: StorageUploadFile[],
   options?: { onProgress?: UploadProgressHandler },
 ) {
   const uploads: UploadResult[] = []
@@ -253,10 +288,14 @@ export async function uploadPostVideos(
       const index = uploads.length
       const ext = file.fileName?.split('.').pop() ?? extensionForMime(file.mimeType)
       const path = `${userId}/posts/videos/${Date.now()}-${index}-${randomSuffix()}.${ext}`
+      const body = resolveStorageUploadBody(file)
+      if (!body) {
+        return { error: 'Video data is empty.' }
+      }
       const { data, error } = await uploadStorageObject(
         STORAGE_BUCKETS.postImages,
         path,
-        file.blob,
+        body,
         file.mimeType,
         { onProgress: onFileProgress, maxBytes: MAX_VIDEO_BYTES },
       )
@@ -284,13 +323,15 @@ export async function uploadPostVideos(
  */
 export async function uploadGroupAvatarImage(
   userId: string,
-  file: { blob: Blob; mimeType: string; fileName?: string },
+  file: StorageUploadFile,
   options?: { onProgress?: UploadProgressHandler },
 ) {
   const ext = file.fileName?.split('.').pop() ?? extensionForMime(file.mimeType)
   const path = `${userId}/group-avatars/${Date.now()}-${randomSuffix()}.${ext}`
+  const body = resolveStorageUploadBody(file)
+  if (!body) return { data: null, error: 'Image data is empty.' }
 
-  return uploadStorageObject(STORAGE_BUCKETS.postImages, path, file.blob, file.mimeType, options)
+  return uploadStorageObject(STORAGE_BUCKETS.postImages, path, body, file.mimeType, options)
 }
 
 export type ProfileMediaUpload = {
@@ -335,18 +376,20 @@ export async function uploadProfileAvatarImage(
 export async function uploadOrderEvidenceImages(
   userId: string,
   orderId: string,
-  files: Array<{ blob: Blob; mimeType: string; fileName?: string }>,
-  kind: 'return' | 'review' = 'return',
+  files: StorageUploadFile[],
+  kind: 'return' | 'review' | 'exchange' = 'return',
 ) {
   const uploads: UploadResult[] = []
   for (let index = 0; index < files.length; index += 1) {
     const file = files[index]
     const ext = file.fileName?.split('.').pop() ?? extensionForMime(file.mimeType)
     const path = `${userId}/orders/${orderId}/${kind}/${Date.now()}-${index}-${randomSuffix()}.${ext}`
+    const body = resolveStorageUploadBody(file)
+    if (!body) return { data: null as UploadResult[] | null, error: 'Image data is empty.' }
     const { data, error } = await uploadStorageObject(
       STORAGE_BUCKETS.postImages,
       path,
-      file.blob,
+      body,
       file.mimeType,
     )
     if (error || !data) return { data: null as UploadResult[] | null, error: error ?? 'Upload failed' }
@@ -371,13 +414,15 @@ export async function uploadProfileCoverImage(
 export async function uploadShopLogoImage(
   userId: string,
   shopId: string,
-  file: { blob: Blob; mimeType: string; fileName?: string },
+  file: StorageUploadFile,
   options?: { onProgress?: UploadProgressHandler },
 ) {
   const ext = file.fileName?.split('.').pop() ?? extensionForMime(file.mimeType)
   const path = `${userId}/shops/${shopId}/logo/${Date.now()}-${randomSuffix()}.${ext}`
+  const body = resolveStorageUploadBody(file)
+  if (!body) return { data: null, error: 'Image data is empty.' }
 
-  return uploadStorageObject(STORAGE_BUCKETS.shopImages, path, file.blob, file.mimeType, options)
+  return uploadStorageObject(STORAGE_BUCKETS.shopImages, path, body, file.mimeType, options)
 }
 
 /**
@@ -385,7 +430,7 @@ export async function uploadShopLogoImage(
  * bucket. Returns the public URL to store on `categories.category_image_url`.
  */
 export async function uploadCategoryImage(
-  file: { blob: Blob; mimeType: string; fileName?: string },
+  file: StorageUploadFile,
   options?: { categoryId?: string | null; onProgress?: UploadProgressHandler },
 ) {
   const mimeType = file.mimeType || 'image/jpeg'
@@ -396,8 +441,14 @@ export async function uploadCategoryImage(
     }
   }
 
-  const size = file.blob.size
-  if (size <= 0) {
+  const body = resolveStorageUploadBody(file)
+  const size =
+    body instanceof ArrayBuffer
+      ? body.byteLength
+      : body instanceof Uint8Array
+        ? body.byteLength
+        : body?.size ?? 0
+  if (!body || size <= 0) {
     return { data: null, error: 'Image data is empty.' }
   }
   if (size > CATEGORY_IMAGE_MAX_BYTES) {
@@ -408,7 +459,7 @@ export async function uploadCategoryImage(
   const folder = options?.categoryId?.trim() || 'unsaved'
   const path = `category_images/uploads/${folder}/${Date.now()}-${randomSuffix()}.${ext}`
 
-  return uploadStorageObject(STORAGE_BUCKETS.categoriesMedia, path, file.blob, mimeType, {
+  return uploadStorageObject(STORAGE_BUCKETS.categoriesMedia, path, body, mimeType, {
     onProgress: options?.onProgress,
     maxBytes: CATEGORY_IMAGE_MAX_BYTES,
   })
@@ -417,19 +468,18 @@ export async function uploadCategoryImage(
 /** Upload a user selfie / room photo for visual preview (private bucket). */
 export async function uploadVisualPreviewInput(
   userId: string,
-  file: { blob: Blob; mimeType: string; fileName?: string },
+  file: StorageUploadFile,
   options?: { onProgress?: UploadProgressHandler },
 ) {
   const ext = file.fileName?.split('.').pop() ?? extensionForMime(file.mimeType)
   const path = `${userId}/inputs/${Date.now()}-${randomSuffix()}.${ext}`
+  const body = resolveStorageUploadBody(file)
+  if (!body) return { data: null, error: 'Image data is empty.' }
 
-  return uploadStorageObject(
-    STORAGE_BUCKETS.visualPreviews,
-    path,
-    file.blob,
-    file.mimeType,
-    { ...options, maxBytes: 7 * 1024 * 1024 },
-  )
+  return uploadStorageObject(STORAGE_BUCKETS.visualPreviews, path, body, file.mimeType, {
+    ...options,
+    maxBytes: 7 * 1024 * 1024,
+  })
 }
 
 

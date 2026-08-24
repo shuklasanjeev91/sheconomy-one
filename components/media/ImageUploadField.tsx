@@ -14,7 +14,7 @@ import {
 } from '~/components/ui'
 import {
   pickMedia,
-  pickedImageToBlob,
+  readPickedImageBytes,
   type PickedImage,
 } from '~/lib/media/pick-image'
 import {
@@ -450,15 +450,24 @@ function revokeWebBlobUrl(image: PickedImage) {
 /** Alias — supports photos, videos, and files via `accept`. */
 export const MediaUploadField = ImageUploadField
 
-export async function preparePickedImagesForUpload(images: PickedImage[]) {
-  const files: Array<{ blob: Blob; mimeType: string; fileName?: string }> = []
+/** Prepared local media ready for storage upload. Prefer `data` (never re-read RN Blobs). */
+export type PreparedUploadFile = {
+  data: Uint8Array
+  mimeType: string
+  fileName?: string
+}
+
+export async function preparePickedImagesForUpload(
+  images: PickedImage[],
+): Promise<PreparedUploadFile[]> {
+  const files: PreparedUploadFile[] = []
 
   for (const image of images) {
-    const blob = await pickedImageToBlob(image)
+    const bytes = await readPickedImageBytes(image)
     files.push({
-      blob,
-      mimeType: image.mimeType || blob.type || 'image/jpeg',
-      fileName: image.fileName,
+      data: new Uint8Array(bytes.buffer),
+      mimeType: bytes.mimeType || image.mimeType || 'image/jpeg',
+      fileName: bytes.fileName ?? image.fileName,
     })
   }
 

@@ -1,6 +1,7 @@
 import type { PickedImage } from '~/lib/media/pick-image'
 import { getImageSize } from '~/lib/media/crop-image'
 import { POST_CARD_JPEG_QUALITY, POST_CARD_MAX_EDGE } from '~/lib/media/post-card-image'
+import { isPickedVideo } from '~/lib/media/split-post-media'
 
 export { POST_CARD_MAX_EDGE, POST_CARD_JPEG_QUALITY } from '~/lib/media/post-card-image'
 
@@ -17,7 +18,7 @@ function isGif(image: PickedImage): boolean {
  */
 export async function fitImageForPostCard(image: PickedImage): Promise<PickedImage> {
   if (typeof document === 'undefined') return image
-  if (isGif(image)) return image
+  if (isPickedVideo(image) || isGif(image)) return image
 
   const size = await getImageSize(image.uri)
   const longest = Math.max(size.width, size.height)

@@ -7,6 +7,9 @@ export type UploadProgressHandler = (percent: number) => void
 
 export type UploadBody = Blob | ArrayBuffer | Uint8Array
 
+/** Per-file ceiling so a stalled native upload cannot leave Posting… forever. */
+const NATIVE_UPLOAD_TIMEOUT_MS = 120_000
+
 function encodeObjectPath(path: string) {
   return path
     .split('/')
@@ -25,12 +28,32 @@ async function toArrayBuffer(data: UploadBody): Promise<ArrayBuffer | null> {
     copy.set(data)
     return copy.buffer
   }
+  // React Native Blob.arrayBuffer() is known to hang indefinitely — never call it.
+  if (Platform.OS !== 'web') {
+    return null
+  }
   try {
     const buffer = await data.arrayBuffer()
     return buffer.byteLength > 0 ? buffer : null
   } catch {
     return null
   }
+}
+
+function withTimeout<T>(promise: Promise<T>, ms: number, message: string): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    const timer = setTimeout(() => reject(new Error(message)), ms)
+    promise.then(
+      (value) => {
+        clearTimeout(timer)
+        resolve(value)
+      },
+      (error) => {
+        clearTimeout(timer)
+        reject(error)
+      },
+    )
+  })
 }
 
 /** Upload with byte progress on web (XHR); native falls back to standard upload. */
@@ -48,15 +71,31 @@ export async function uploadBlobWithProgress(
     // React Native Blob uploads are unreliable with supabase-js. Always send bytes.
     const buffer = await toArrayBuffer(data)
     if (!buffer) {
-      return { error: 'Image data is empty.' }
+      return {
+        error:
+          data instanceof Blob
+            ? 'Could not read media bytes for upload. Try picking the file again.'
+            : 'Image data is empty.',
+      }
     }
-    const { error } = await supabase.storage.from(bucket).upload(path, new Uint8Array(buffer), {
-      contentType,
-      upsert: options?.upsert ?? true,
-      cacheControl: '3600',
-    })
-    onProgress?.(error ? 0 : 100)
-    return { error: error?.message ?? null }
+    try {
+      const { error } = await withTimeout(
+        supabase.storage.from(bucket).upload(path, new Uint8Array(buffer), {
+          contentType,
+          upsert: options?.upsert ?? true,
+          cacheControl: '3600',
+        }),
+        NATIVE_UPLOAD_TIMEOUT_MS,
+        'Upload timed out. Check your connection and try again.',
+      )
+      onProgress?.(error ? 0 : 100)
+      return { error: error?.message ?? null }
+    } catch (error) {
+      onProgress?.(0)
+      return {
+        error: error instanceof Error ? error.message : 'Upload failed.',
+      }
+    }
   }
 
   const blob =
@@ -100,16 +139,15 @@ export async function uploadBlobWithProgress(
     }
 
     xhr.onerror = () => resolve({ error: 'Upload failed' })
+    xhr.ontimeout = () => resolve({ error: 'Upload timed out. Check your connection and try again.' })
+    xhr.timeout = NATIVE_UPLOAD_TIMEOUT_MS
     xhr.send(blob)
   })
 }
 
-export async function uploadFilesWithAggregateProgress(
-  files: Array<{ blob: Blob; mimeType: string }>,
-  uploadOne: (
-    file: { blob: Blob; mimeType: string },
-    onFileProgress: UploadProgressHandler,
-  ) => Promise<{ error: string | null }>,
+export async function uploadFilesWithAggregateProgress<T extends { mimeType: string }>(
+  files: T[],
+  uploadOne: (file: T, onFileProgress: UploadProgressHandler) => Promise<{ error: string | null }>,
   onProgress?: UploadProgressHandler,
 ) {
   if (!files.length) return { error: null as string | null }
