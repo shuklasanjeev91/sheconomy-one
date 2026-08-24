@@ -66,6 +66,13 @@ export function RouteSeoProvider({ children }: { children: ReactNode }) {
 
 function RouteSeoTags({ override }: { override: PageSeo | null }) {
   const pathname = usePathname()
+  // Post detail SSR pages render `DocumentSeoTags` with the real `og:image`.
+  // Skip generic defaults here so crawlers (WhatsApp) don't latch onto the
+  // first tag — which would be `/app-icon.png` instead of the post photo.
+  if (!override && pathname?.startsWith('/community/post/')) {
+    return null
+  }
+
   const defaults = resolveRouteSeo(pathname)
   const seo = override ?? defaults
 
