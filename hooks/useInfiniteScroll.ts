@@ -14,7 +14,7 @@ type SentinelNode = (View & { measureInWindow?: View['measureInWindow'] }) | HTM
 function parseMarginPx(rootMargin: string | number): number {
   if (typeof rootMargin === 'number') return rootMargin
   const match = rootMargin.match(/(-?\d+(?:\.\d+)?)/)
-  return match ? Number(match[1]) : 240
+  return match ? Number(match[1]) : 480
 }
 
 /**
@@ -25,7 +25,7 @@ function parseMarginPx(rootMargin: string | number): number {
  */
 export function useInfiniteScroll(
   onLoadMore: () => void,
-  { enabled = true, rootMargin = '240px' }: UseInfiniteScrollOptions = {},
+  { enabled = true, rootMargin = '480px' }: UseInfiniteScrollOptions = {},
 ) {
   const sentinelRef = useRef<SentinelNode>(null)
   const onLoadMoreRef = useRef(onLoadMore)
@@ -49,7 +49,7 @@ export function useInfiniteScroll(
     // a short debounce elapses if the parent no-ops.
     setTimeout(() => {
       inFlight.current = false
-    }, 450)
+    }, 180)
   }, [enabled])
 
   const checkNativeVisibility = useCallback(() => {
@@ -103,7 +103,7 @@ export function useInfiniteScroll(
   useEffect(() => {
     if (!enabled) return
     checkNativeVisibility()
-    const id = setInterval(checkNativeVisibility, 280)
+    const id = setInterval(checkNativeVisibility, 120)
     return () => clearInterval(id)
   }, [enabled, scrollY, checkNativeVisibility])
 

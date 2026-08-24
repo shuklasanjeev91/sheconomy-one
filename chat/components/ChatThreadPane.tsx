@@ -708,7 +708,7 @@ export function ChatThreadPane({
             }}
             contentContainerStyle={{ paddingVertical: 12 }}
             style={{ flex: 1 }}
-            drawDistance={280}
+            drawDistance={450}
             ListHeaderComponent={
               loadingOlder ? (
                 <YStack width="100%" alignItems="center" paddingVertical={10}>

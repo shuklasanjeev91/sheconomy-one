@@ -50,5 +50,5 @@ export function warmAllProductTabRoutes(): void {
       const loader = PRODUCT_TAB_WARM_IMPORTS[path]
       if (loader) void loader()
     }
-  }, 1500)
+  }, 400)
 }

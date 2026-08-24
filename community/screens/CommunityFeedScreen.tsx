@@ -63,7 +63,7 @@ export function CommunityFeedScreen() {
     endReachedReadyRef.current = false
     const timer = setTimeout(() => {
       endReachedReadyRef.current = true
-    }, 700)
+    }, 150)
     return () => clearTimeout(timer)
   }, [sort, contentFilter])
 
@@ -222,10 +222,10 @@ export function CommunityFeedScreen() {
                   onScroll={onFeedScroll}
                   scrollEventThrottle={16}
                   onEndReached={onEndReached}
-                  onEndReachedThreshold={0.4}
+                  onEndReachedThreshold={0.7}
                   onRefresh={onRefresh}
                   refreshing={isRefreshing}
-                  drawDistance={250}
+                  drawDistance={500}
                   style={{ flex: 1, width: '100%' }}
                   contentContainerStyle={{ paddingBottom: FEED_LIST_BOTTOM_PAD }}
                 />

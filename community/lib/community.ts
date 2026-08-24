@@ -9,7 +9,7 @@ import { notifyHashtagFollowers } from '~/community/lib/hashtag-follows'
 import { isVideoMediaUrl, normalizeUrlList } from '~/community/lib/post-media'
 import { extractFirstUrl, parseVideoProvider } from '~/lib/link-preview'
 
-export const COMMUNITY_PAGE_SIZE = 15
+export const COMMUNITY_PAGE_SIZE = 20
 
 export type CommunityAuthor = {
   full_name: string | null

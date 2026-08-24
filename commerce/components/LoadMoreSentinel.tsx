@@ -19,7 +19,7 @@ export function LoadMoreSentinel({
   isLoadingMore,
   onLoadMore,
   label = 'Load more',
-  rootMargin = '320px',
+  rootMargin = '600px',
 }: LoadMoreSentinelProps) {
   const ui = useAppUi()
   const { sentinelRef, supportsAutoLoad } = useInfiniteScroll(onLoadMore, {

@@ -314,7 +314,7 @@ export function ChatListPane({
           getItemType={(item) => item.kind}
           contentContainerStyle={{ paddingTop: 8, paddingBottom: scrollBottomPadding }}
           style={{ flex: 1 }}
-          drawDistance={200}
+          drawDistance={400}
           extraData={{ activeChatId, showArchived, archivedChats: archivedChats.length }}
           renderItem={({ item }) => {
             if (item.kind === 'archived-header') {

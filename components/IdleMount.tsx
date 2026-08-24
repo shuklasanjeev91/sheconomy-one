@@ -7,7 +7,7 @@ import { scheduleIdle } from '~/lib/schedule-idle'
 export function IdleMount({
   children,
   fallback = null,
-  timeoutMs = Platform.OS === 'web' ? 2500 : 200,
+  timeoutMs = Platform.OS === 'web' ? 800 : 120,
 }: {
   children: ReactNode
   fallback?: ReactNode

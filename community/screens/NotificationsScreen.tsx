@@ -200,7 +200,7 @@ export function NotificationsScreen() {
                   void load(page + 1, true)
                 }
               }}
-              onEndReachedThreshold={0.5}
+              onEndReachedThreshold={0.75}
               onRefresh={() => void load(0, false)}
               refreshing={isLoading && items.length > 0}
               style={{ flex: 1 }}

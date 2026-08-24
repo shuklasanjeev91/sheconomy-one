@@ -222,7 +222,8 @@ export function HashtagFeedScreen() {
             onEndReached={() => {
               if (hasMore && !isLoadingMore) loadMore()
             }}
-            onEndReachedThreshold={0.6}
+            onEndReachedThreshold={0.75}
+            drawDistance={500}
             style={{ flex: 1 }}
             contentContainerStyle={{
               paddingBottom: Platform.OS === 'web' ? 24 : APP_LAYOUT.mobileTabBarHeight + 64,

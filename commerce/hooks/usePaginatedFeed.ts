@@ -18,6 +18,11 @@ type PrefetchBuffer<T> = {
   result: PaginatedResult<T>
 }
 
+/** Start next-page prefetch almost immediately so scroll never waits on idle. */
+const PREFETCH_IDLE_MS = 80
+/** Debounce only enough to collapse FlashList fling storms. */
+const LOAD_MORE_DEBOUNCE_MS = 120
+
 export { markFeedFresh } from '~/lib/cache/feed-freshness'
 
 function mergeUnique<T extends { id: string }>(existing: T[], next: T[]): T[] {
@@ -58,7 +63,8 @@ export function usePaginatedFeed<T extends { id: string }>({
   const pageRef = useRef(initialSnapshot?.page ?? 0)
   const hasMoreRef = useRef(initialSnapshot?.hasMore ?? true)
   const prefetchBufferRef = useRef<PrefetchBuffer<T> | null>(null)
-  const prefetchInFlightRef = useRef<number | null>(null)
+  const prefetchInFlightPageRef = useRef<number | null>(null)
+  const prefetchPromiseRef = useRef<Promise<PrefetchBuffer<T> | null> | null>(null)
   const cancelIdlePrefetchRef = useRef<(() => void) | null>(null)
   const fetchPageRef = useRef(fetchPage)
   fetchPageRef.current = fetchPage
@@ -70,7 +76,8 @@ export function usePaginatedFeed<T extends { id: string }>({
     cancelIdlePrefetchRef.current?.()
     cancelIdlePrefetchRef.current = null
     prefetchBufferRef.current = null
-    prefetchInFlightRef.current = null
+    prefetchInFlightPageRef.current = null
+    prefetchPromiseRef.current = null
   }, [])
 
   const persistFirstPage = useCallback(
@@ -85,6 +92,43 @@ export function usePaginatedFeed<T extends { id: string }>({
     if (cacheKey) markFeedFresh(cacheKey)
   }, [cacheKey])
 
+  const startPrefetch = useCallback(
+    (afterPage: number, generation: number): Promise<PrefetchBuffer<T> | null> => {
+      const nextPage = afterPage + 1
+      if (prefetchBufferRef.current?.page === nextPage) {
+        return Promise.resolve(prefetchBufferRef.current)
+      }
+      if (prefetchInFlightPageRef.current === nextPage && prefetchPromiseRef.current) {
+        return prefetchPromiseRef.current
+      }
+
+      prefetchInFlightPageRef.current = nextPage
+      const promise = fetchPageRef
+        .current(nextPage)
+        .then((result) => {
+          if (generation !== fetchGenerationRef.current) return null
+          if (pageRef.current !== afterPage) return null
+          if (result.error) return null
+          const buffered = { page: nextPage, result }
+          prefetchBufferRef.current = buffered
+          return buffered
+        })
+        .catch(() => null)
+        .finally(() => {
+          if (prefetchInFlightPageRef.current === nextPage) {
+            prefetchInFlightPageRef.current = null
+          }
+          if (prefetchPromiseRef.current === promise) {
+            prefetchPromiseRef.current = null
+          }
+        })
+
+      prefetchPromiseRef.current = promise
+      return promise
+    },
+    [],
+  )
+
   const schedulePrefetch = useCallback(
     (afterPage: number, generation: number) => {
       if (!prefetchNext) return
@@ -93,32 +137,16 @@ export function usePaginatedFeed<T extends { id: string }>({
 
       const nextPage = afterPage + 1
       if (prefetchBufferRef.current?.page === nextPage) return
-      if (prefetchInFlightRef.current === nextPage) return
+      if (prefetchInFlightPageRef.current === nextPage) return
 
       cancelIdlePrefetchRef.current = scheduleIdle(() => {
         if (generation !== fetchGenerationRef.current) return
         if (!hasMoreRef.current) return
         if (pageRef.current !== afterPage) return
-        if (prefetchBufferRef.current?.page === nextPage) return
-        if (prefetchInFlightRef.current === nextPage) return
-
-        prefetchInFlightRef.current = nextPage
-        void fetchPageRef
-          .current(nextPage)
-          .then((result) => {
-            if (generation !== fetchGenerationRef.current) return
-            if (pageRef.current !== afterPage) return
-            if (result.error) return
-            prefetchBufferRef.current = { page: nextPage, result }
-          })
-          .finally(() => {
-            if (prefetchInFlightRef.current === nextPage) {
-              prefetchInFlightRef.current = null
-            }
-          })
-      }, 1500)
+        void startPrefetch(afterPage, generation)
+      }, PREFETCH_IDLE_MS)
     },
-    [prefetchNext],
+    [prefetchNext, startPrefetch],
   )
 
   const applyAppendResult = useCallback(
@@ -327,22 +355,60 @@ export function usePaginatedFeed<T extends { id: string }>({
     }
     const now = Date.now()
     // Debounce rapid onEndReached storms from FlashList during fling.
-    if (now - loadMoreAtRef.current < 400) return
+    if (now - loadMoreAtRef.current < LOAD_MORE_DEBOUNCE_MS) return
     loadMoreAtRef.current = now
+    if (inFlightRef.current) return
 
     const nextPage = pageRef.current + 1
+    const afterPage = pageRef.current
+    const generation = fetchGenerationRef.current
     const buffered = prefetchBufferRef.current
     if (buffered?.page === nextPage && !buffered.result.error) {
-      if (inFlightRef.current) return
       prefetchBufferRef.current = null
-      const generation = fetchGenerationRef.current
       applyAppendResult(nextPage, buffered.result, generation)
       return
     }
 
-    if (inFlightRef.current) return
-    void loadPage(nextPage, true)
-  }, [applyAppendResult, enabled, isLoading, isLoadingMore, isRefreshing, loadPage])
+    // Cancel delayed idle prefetch and share one in-flight request for this page.
+    cancelIdlePrefetchRef.current?.()
+    cancelIdlePrefetchRef.current = null
+
+    inFlightRef.current = true
+    setIsLoadingMore(true)
+
+    const work = prefetchNext
+      ? startPrefetch(afterPage, generation).then((ready) => {
+          if (generation !== fetchGenerationRef.current) return
+          if (ready?.page === nextPage && !ready.result.error) {
+            prefetchBufferRef.current = null
+            applyAppendResult(nextPage, ready.result, generation)
+            return
+          }
+          return fetchPageRef.current(nextPage).then((result) => {
+            if (generation !== fetchGenerationRef.current) return
+            applyAppendResult(nextPage, result, generation)
+          })
+        })
+      : fetchPageRef.current(nextPage).then((result) => {
+          if (generation !== fetchGenerationRef.current) return
+          applyAppendResult(nextPage, result, generation)
+        })
+
+    void work.finally(() => {
+      if (generation === fetchGenerationRef.current) {
+        setIsLoadingMore(false)
+        inFlightRef.current = false
+      }
+    })
+  }, [
+    applyAppendResult,
+    enabled,
+    isLoading,
+    isLoadingMore,
+    isRefreshing,
+    prefetchNext,
+    startPrefetch,
+  ])
 
   const refresh = useCallback(() => {
     if (!enabled) return

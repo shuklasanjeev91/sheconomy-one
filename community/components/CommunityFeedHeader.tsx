@@ -75,7 +75,7 @@ export function CommunityFeedHeader({
             <UnreadChatRevisitStrip />
           </ForYouSlot>
         </IdleMount>
-        <IdleMount timeoutMs={300}>
+        <IdleMount timeoutMs={150}>
           <ForYouSlot id={FOR_YOU_SLOT.composeDraft}>
             <ComposeDraftRevisitStrip />
           </ForYouSlot>
@@ -128,7 +128,7 @@ export function CommunityFeedHeader({
             <SavedCollectionRevisitStrip />
           </ForYouSlot>
         </IdleMount>
-        <IdleMount timeoutMs={800}>
+        <IdleMount timeoutMs={400}>
           <ForYouSlot id={FOR_YOU_SLOT.events}>
             <EventRevisitStrip />
           </ForYouSlot>
