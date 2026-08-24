@@ -101,20 +101,26 @@ export function useForYouSlotsOptional() {
 /**
  * Report whether this strip currently has content to show.
  * Safe no-op outside the For you hub.
+ *
+ * Depends on stable `register` / `unregister` only — not the whole slots
+ * context object. Depending on `slots` re-ran unregister→register on every
+ * density update and caused "Maximum update depth exceeded".
  */
 export function useReportForYouContent(hasContent: boolean) {
   const slots = useForYouSlotsOptional()
   const slotId = useContext(ForYouSlotIdContext)
+  const register = slots?.register
+  const unregister = slots?.unregister
 
   useEffect(() => {
-    if (!slots || !slotId) return
-    slots.register(slotId, hasContent)
-  }, [slots, slotId, hasContent])
+    if (!register || !slotId) return
+    register(slotId, hasContent)
+  }, [register, slotId, hasContent])
 
   useEffect(() => {
-    if (!slots || !slotId) return
-    return () => slots.unregister(slotId)
-  }, [slots, slotId])
+    if (!unregister || !slotId) return
+    return () => unregister(slotId)
+  }, [unregister, slotId])
 }
 
 type ForYouSlotProps = {
