@@ -418,7 +418,7 @@ export function ProgramScreen() {
             </YStack>
           </YStack>
 
-          <YStack width={isDesktop ? 340 : '100%'} flexShrink={0}>
+          <YStack width={isDesktop ? 420 : '100%'} flexShrink={0}>
             <ProgramUpNextPanel
               currentProgramId={program.id}
               queue={queue}

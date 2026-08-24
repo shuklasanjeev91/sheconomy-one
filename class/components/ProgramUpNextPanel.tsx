@@ -1,20 +1,15 @@
 import { useEffect, useMemo, useState } from 'react'
-import { AppLink } from '~/components/navigation/AppLink'
 
+import { ProgramCard } from '~/class/components/ProgramCard'
 import {
   getClassAutoplaySync,
   loadClassAutoplay,
   setClassAutoplay,
   subscribeClassAutoplay,
 } from '~/class/lib/autoplay-preference'
-import {
-  formatProgramDuration,
-  getProgramSlug,
-  getProgramThumbnailUrl,
-  type Program,
-} from '~/class/lib/programs'
+import { getProgramSlug, type Program } from '~/class/lib/programs'
 import { classRoutes } from '~/lib/routes'
-import { Image, Spinner, Switch, Text, XStack, YStack } from '~/components/ui'
+import { Spinner, Switch, Text, XStack, YStack } from '~/components/ui'
 import { getShadowStyle, radius } from '~/config/tokens'
 import { useAppUi } from '~/lib/theme/useAppUi'
 
@@ -60,7 +55,6 @@ export function ProgramUpNextPanel({
       borderColor={ui.borderSubtle}
       backgroundColor={ui.surface}
       style={getShadowStyle('sm')}
-      maxHeight={520}
     >
       <XStack alignItems="center" justifyContent="space-between" gap="$3">
         <Text fontSize={15} fontWeight="700" color={ui.text}>
@@ -82,65 +76,26 @@ export function ProgramUpNextPanel({
           <Spinner size="small" color={ui.brand} />
         </YStack>
       ) : (
-        <YStack gap="$2" maxHeight={440} overflow="scroll">
-          {items.map((item, index) => {
+        <XStack gap="$3" flexWrap="wrap" width="100%" alignItems="stretch">
+          {items.map((item) => {
             const href = playlistId
               ? classRoutes.program(getProgramSlug(item), { playlist: playlistId })
               : classRoutes.program(getProgramSlug(item))
-            const thumb = getProgramThumbnailUrl(item)
+            const alone = items.length === 1
             return (
-              <AppLink key={item.id} href={href}>
-                <XStack
-                  gap="$3"
-                  alignItems="center"
-                  padding="$2"
-                  borderRadius={10}
-                  hoverStyle={{ backgroundColor: ui.surfaceMuted }}
-                  pressStyle={{ opacity: 0.92 }}
-                  cursor="pointer"
-                >
-                  <Text
-                    fontSize={12}
-                    fontWeight="700"
-                    color={ui.textMuted}
-                    width={18}
-                    textAlign="center"
-                  >
-                    {index + 1}
-                  </Text>
-                  <YStack
-                    width={120}
-                    aspectRatio={16 / 9}
-                    borderRadius={8}
-                    overflow="hidden"
-                    backgroundColor={ui.imagePlaceholder}
-                    flexShrink={0}
-                  >
-                    {thumb ? (
-                      <Image
-                        src={thumb}
-                        width="100%"
-                        height="100%"
-                        objectFit="cover"
-                        alt={item.title}
-                      />
-                    ) : null}
-                  </YStack>
-                  <YStack flex={1} gap="$1" minWidth={0}>
-                    <Text fontSize={13} fontWeight="600" color={ui.text} numberOfLines={2}>
-                      {item.title}
-                    </Text>
-                    <Text fontSize={11} color={ui.textMuted} numberOfLines={1}>
-                      {[item.category, item.duration ? formatProgramDuration(item.duration) : null]
-                        .filter(Boolean)
-                        .join(' · ')}
-                    </Text>
-                  </YStack>
-                </XStack>
-              </AppLink>
+              <YStack
+                key={item.id}
+                flexBasis={alone ? '100%' : '47%'}
+                flexGrow={alone ? 0 : 1}
+                flexShrink={1}
+                maxWidth={alone ? '100%' : '48.5%'}
+                minWidth={alone ? undefined : 140}
+              >
+                <ProgramCard program={item} width="100%" href={href} />
+              </YStack>
             )
           })}
-        </YStack>
+        </XStack>
       )}
     </YStack>
   )
