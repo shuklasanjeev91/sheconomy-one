@@ -48,20 +48,28 @@ import {
   type UserListKind,
 } from '~/community/lib/user-lists'
 import {
+  AppBottomSheet,
   Avatar,
   Badge,
   Button,
+  Field,
   Icons,
   Image,
+  Input,
   Spinner,
   Text,
+  TextArea,
   XStack,
   YStack,
   useAppToast,
   useMedia,
 } from '~/components/ui'
+import { LocationPickerField } from '~/components/geo'
+import { SearchSelectField } from '~/components/forms/SearchSelectField'
+import { INDUSTRY_OPTIONS } from '~/lib/datasets/industries'
+import { JOB_TITLE_OPTIONS } from '~/lib/datasets/job-titles'
 import { ShareButton } from '~/components/share'
-import { updateProfileImages } from '~/community/lib/profile-sections'
+import { updateProfileImages, updateProfileAbout, type AboutInput } from '~/community/lib/profile-sections'
 import { readPickedImageBytes, type PickedImage } from '~/lib/media/pick-image'
 import { cropIfNeeded, pickImagesWithCrop } from '~/lib/media/pick-and-crop'
 import { patchSessionProfile } from '~/lib/profile/profile-store'
@@ -413,6 +421,7 @@ function ProfileHero({
   const toast = useAppToast()
   const [uploadingAvatar, setUploadingAvatar] = useState(false)
   const [uploadingCover, setUploadingCover] = useState(false)
+  const [editIntroOpen, setEditIntroOpen] = useState(false)
   /**
    * Optimistic URL — local file/blob while uploading, then the public URL until
    * `profile.avatar_url` / `cover_url` catch up from useProfile refresh.
@@ -650,36 +659,62 @@ function ProfileHero({
             paddingTop="$3"
             alignItems="center"
             width="100%"
-            justifyContent="flex-start"
+            justifyContent="space-between"
             flexDirection="row"
           >
-            {headerActions}
+            {/* Left side: external header actions + share buttons */}
+            <XStack gap="$2" flexWrap="wrap" alignItems="center" flex={1}>
+              {headerActions}
+              {isOwnProfile ? (
+                <XStack gap="$2" flexWrap="wrap">
+                  <ShareButton
+                    variant="outline"
+                    label="Share"
+                    sheetTitle="Share profile"
+                    copyLabel="Copy profile link"
+                    copyToastMessage="Profile link copied to clipboard."
+                    payload={{
+                      url: getProfileShareUrl(profile.username),
+                      title: displayName,
+                      text: profile.headline ?? undefined,
+                    }}
+                  />
+                  <ShareButton
+                    variant="outline"
+                    label="Link in bio"
+                    sheetTitle="Share your hub"
+                    copyLabel="Copy hub link"
+                    copyToastMessage="Creator hub link copied."
+                    payload={{
+                      url: getCreatorHubShareUrl(profile.username),
+                      title: `${displayName} on SHEconomy`,
+                      text: 'Shop, community, Class, and Co-Work in one link.',
+                    }}
+                  />
+                </XStack>
+              ) : null}
+            </XStack>
+
+            {/* Right side: edit intro icon (own profile only) */}
             {isOwnProfile ? (
-              <XStack gap="$2" flexWrap="wrap">
-                <ShareButton
-                  variant="outline"
-                  label="Share"
-                  sheetTitle="Share profile"
-                  copyLabel="Copy profile link"
-                  copyToastMessage="Profile link copied to clipboard."
-                  payload={{
-                    url: getProfileShareUrl(profile.username),
-                    title: displayName,
-                    text: profile.headline ?? undefined,
-                  }}
-                />
-                <ShareButton
-                  variant="outline"
-                  label="Link in bio"
-                  sheetTitle="Share your hub"
-                  copyLabel="Copy hub link"
-                  copyToastMessage="Creator hub link copied."
-                  payload={{
-                    url: getCreatorHubShareUrl(profile.username),
-                    title: `${displayName} on SHEconomy`,
-                    text: 'Shop, community, Class, and Co-Work in one link.',
-                  }}
-                />
+              <XStack
+                width={36}
+                height={36}
+                borderRadius={999}
+                borderWidth={1}
+                borderColor={ui.borderSubtle}
+                backgroundColor={ui.surface}
+                alignItems="center"
+                justifyContent="center"
+                cursor="pointer"
+                hoverStyle={{ opacity: 0.75 }}
+                pressStyle={{ opacity: 0.6 }}
+                onPress={() => setEditIntroOpen(true)}
+                accessibilityLabel="Edit profile intro"
+                accessibilityRole="button"
+                flexShrink={0}
+              >
+                <Icons.Pencil size={16} color={ui.textSecondary ?? ui.textMuted} />
               </XStack>
             ) : null}
           </XStack>
@@ -763,9 +798,214 @@ function ProfileHero({
           </Text>
         </YStack>
       </YStack>
+
+      {/* Edit intro sheet — only mounts when own profile */}
+      {isOwnProfile ? (
+        <EditIntroSheet
+          profile={profile}
+          open={editIntroOpen}
+          onOpenChange={setEditIntroOpen}
+          onSaved={() => {
+            toast.show('Profile updated', { tone: 'success' })
+            setEditIntroOpen(false)
+          }}
+        />
+      ) : null}
     </YStack>
   )
 }
+
+// ---------------------------------------------------------------------------
+// Edit Intro Sheet
+// ---------------------------------------------------------------------------
+
+type EditIntroSheetProps = {
+  profile: ProfileDisplay
+  open: boolean
+  onOpenChange: (open: boolean) => void
+  onSaved: () => void
+}
+
+function EditIntroSheet({ profile, open, onOpenChange, onSaved }: EditIntroSheetProps) {
+  const ui = useAppUi()
+  const toast = useAppToast()
+  const [form, setForm] = useState<AboutInput>({})
+  const [saving, setSaving] = useState(false)
+
+  // Populate the form every time the sheet opens so values are fresh
+  useEffect(() => {
+    if (!open) return
+    setForm({
+      full_name: profile.full_name ?? '',
+      headline: profile.headline ?? '',
+      occupation: profile.occupation ?? '',
+      industry: profile.industry ?? '',
+      business_name: profile.business_name ?? '',
+      location: profile.location ?? '',
+      bio: profile.bio ?? '',
+    })
+  }, [open, profile])
+
+  function patch(partial: Partial<AboutInput>) {
+    setForm((prev) => ({ ...prev, ...partial }))
+  }
+
+  async function handleSave() {
+    const name = form.full_name?.trim()
+    if (!name) {
+      toast.show('Name is required', { tone: 'danger' })
+      return
+    }
+    setSaving(true)
+    const { error } = await updateProfileAbout(profile.id, form)
+    setSaving(false)
+    if (error) {
+      toast.show('Could not save profile', { tone: 'danger', message: error })
+      return
+    }
+    onSaved()
+  }
+
+  const saveFooter = (
+    <XStack paddingHorizontal="$4" paddingVertical="$3" borderTopWidth={1} borderTopColor={ui.borderSubtle}>
+      <Button
+        flex={1}
+        onPress={() => void handleSave()}
+        disabled={saving}
+        theme="active"
+        borderRadius={999}
+        height={50}
+      >
+        {saving ? <Spinner size="small" color="white" /> : 'Save'}
+      </Button>
+    </XStack>
+  )
+
+  return (
+    <AppBottomSheet
+      open={open}
+      onOpenChange={onOpenChange}
+      title="Edit intro"
+      footer={saveFooter}
+      scrollable
+    >
+      <YStack gap="$3" paddingHorizontal="$4" paddingBottom="$4" paddingTop="$2">
+
+        {/* ── Basic info ── */}
+        <Text fontSize={16} fontWeight="700" color={ui.text} marginTop="$1">
+          Basic info
+        </Text>
+
+        <Field label="Full name" required>
+          <Input
+            value={form.full_name ?? ''}
+            onChangeText={(text) => patch({ full_name: text })}
+            placeholder="Your full name"
+            backgroundColor={ui.surface}
+            maxLength={80}
+          />
+        </Field>
+
+        <Field label="Headline">
+          <TextArea
+            value={form.headline ?? ''}
+            onChangeText={(text) => patch({ headline: text })}
+            placeholder="e.g. Founder · Product leader · Speaker"
+            backgroundColor={ui.surface}
+            maxLength={220}
+            minHeight={80}
+            numberOfLines={3}
+          />
+          <Text
+            fontSize={12}
+            color={ui.textMuted}
+            textAlign="right"
+            marginTop="$1"
+          >
+            {(form.headline ?? '').length}/220
+          </Text>
+        </Field>
+
+        {/* ── Current position ── */}
+        <Text fontSize={16} fontWeight="700" color={ui.text} marginTop="$1">
+          Current position
+        </Text>
+
+        <SearchSelectField
+          label="Occupation / Title"
+          value={form.occupation ?? ''}
+          onChange={(occupation) => patch({ occupation })}
+          options={JOB_TITLE_OPTIONS}
+          allowCustom
+          placeholder="Your role or title"
+          searchPlaceholder="Search or type a title"
+          sheetTitle="Occupation"
+        />
+
+        <Field label="Company / Business name">
+          <Input
+            value={form.business_name ?? ''}
+            onChangeText={(text) => patch({ business_name: text })}
+            placeholder="e.g. Acme Inc."
+            backgroundColor={ui.surface}
+            maxLength={100}
+          />
+        </Field>
+
+        {/* ── Industry ── */}
+        <SearchSelectField
+          label="Industry"
+          value={form.industry ?? ''}
+          onChange={(industry) => patch({ industry })}
+          options={INDUSTRY_OPTIONS}
+          allowCustom
+          placeholder="e.g. Retail, Technology"
+          searchPlaceholder="Search industries"
+          sheetTitle="Industry"
+        />
+
+        {/* ── Location ── */}
+        <Text fontSize={16} fontWeight="700" color={ui.text} marginTop="$1">
+          Location
+        </Text>
+
+        <LocationPickerField
+          value={form.location ?? ''}
+          onChange={(text) => patch({ location: text })}
+          label="City / Region"
+        />
+
+        {/* ── About / Bio ── */}
+        <Text fontSize={16} fontWeight="700" color={ui.text} marginTop="$1">
+          About
+        </Text>
+
+        <Field label="Bio">
+          <TextArea
+            value={form.bio ?? ''}
+            onChangeText={(text) => patch({ bio: text })}
+            placeholder="Tell your network a bit about yourself…"
+            backgroundColor={ui.surface}
+            maxLength={2600}
+            minHeight={120}
+            numberOfLines={5}
+          />
+          <Text
+            fontSize={12}
+            color={ui.textMuted}
+            textAlign="right"
+            marginTop="$1"
+          >
+            {(form.bio ?? '').length}/2600
+          </Text>
+        </Field>
+
+      </YStack>
+    </AppBottomSheet>
+  )
+}
+
+// ---------------------------------------------------------------------------
 
 function ProfileCompletionCard({ percent }: { percent: number }) {
   const ui = useAppUi()
