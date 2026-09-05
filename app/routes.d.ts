@@ -220,6 +220,7 @@ declare module 'one' {
         | `/profile/${OneRouter.SingleRoutePart<T>}/connections`
         | `/profile/${OneRouter.SingleRoutePart<T>}/followers`
         | `/profile/${OneRouter.SingleRoutePart<T>}/following`
+        | `/profile/${OneRouter.SingleRoutePart<T>}/shop`
         | `/shop/${OneRouter.SingleRoutePart<T>}`
         | `/shop/${OneRouter.SingleRoutePart<T>}/privacy`
         | `/shop/${OneRouter.SingleRoutePart<T>}/refunds`
@@ -266,6 +267,7 @@ declare module 'one' {
         | `/profile/[username]/connections`
         | `/profile/[username]/followers`
         | `/profile/[username]/following`
+        | `/profile/[username]/shop`
         | `/shop/[slug]`
         | `/shop/[slug]/privacy`
         | `/shop/[slug]/refunds`
@@ -313,6 +315,7 @@ declare module 'one' {
         '/profile/[username]/connections': RouteInfo<{ username: string }>
         '/profile/[username]/followers': RouteInfo<{ username: string }>
         '/profile/[username]/following': RouteInfo<{ username: string }>
+        '/profile/[username]/shop': RouteInfo<{ username: string }>
         '/shop/[slug]': RouteInfo<{ slug: string }>
         '/shop/[slug]/privacy': RouteInfo<{ slug: string }>
         '/shop/[slug]/refunds': RouteInfo<{ slug: string }>
