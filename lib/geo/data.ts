@@ -1,24 +1,12 @@
-import type { ICity, ICountry, IState } from 'country-state-city'
+import { City, Country, State, type ICity, type ICountry, type IState } from 'country-state-city'
 
 import type { GeoOption } from '~/lib/geo/types'
-
-type GeoLib = typeof import('country-state-city')
-
-let geoLib: GeoLib | null = null
-
-function csc(): GeoLib {
-  if (!geoLib) {
-    // Defer parsing the full country-state-city dataset until first geo lookup.
-    geoLib = require('country-state-city') as GeoLib
-  }
-  return geoLib
-}
 
 let countriesCache: ICountry[] | null = null
 
 export function getAllGeoCountries(): ICountry[] {
   if (!countriesCache) {
-    countriesCache = csc().Country.getAllCountries().sort((a, b) => a.name.localeCompare(b.name))
+    countriesCache = Country.getAllCountries().sort((a, b) => a.name.localeCompare(b.name))
   }
   return countriesCache
 }
@@ -30,7 +18,7 @@ function toIsoString(value: unknown): string {
 export function getCountryByCode(isoCode: string): ICountry | undefined {
   const code = toIsoString(isoCode)
   if (!code) return undefined
-  return csc().Country.getCountryByCode(code.toUpperCase())
+  return Country.getCountryByCode(code.toUpperCase())
 }
 
 export function getCountryName(isoCode: string, fallback?: string | null): string {
@@ -62,7 +50,7 @@ export function getDefaultCountryCode(): string {
 
 export function getStatesOfCountry(countryCode: string): IState[] {
   const code = resolveCountryCode(countryCode)
-  return csc().State.getStatesOfCountry(code).sort((a, b) => a.name.localeCompare(b.name))
+  return State.getStatesOfCountry(code).sort((a, b) => a.name.localeCompare(b.name))
 }
 
 export function getStateByName(countryCode: string, stateName: string): IState | undefined {
@@ -74,9 +62,9 @@ export function getStateByName(countryCode: string, stateName: string): IState |
 export function getCitiesOfState(countryCode: string, stateName: string): ICity[] {
   const state = getStateByName(countryCode, stateName)
   if (!state) return []
-  return csc()
-    .City.getCitiesOfState(resolveCountryCode(countryCode), state.isoCode)
-    .sort((a, b) => a.name.localeCompare(b.name))
+  return City.getCitiesOfState(resolveCountryCode(countryCode), state.isoCode).sort((a, b) =>
+    a.name.localeCompare(b.name),
+  )
 }
 
 export function countryToOption(country: ICountry): GeoOption {
