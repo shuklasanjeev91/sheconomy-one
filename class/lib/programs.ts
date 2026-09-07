@@ -433,7 +433,9 @@ export async function fetchPublishedProgramsPage(
     query = query.eq('featured', true)
   }
   if (options?.language) {
-    query = query.eq('language', options.language)
+    // Use ilike so DB values stored as 'EN', 'en', 'English', etc. all match
+    // the normalized lowercase code that the language filter produces.
+    query = query.ilike('language', options.language)
   }
   if (options?.authorId && options?.externalAuthorId) {
     query = query.or(
