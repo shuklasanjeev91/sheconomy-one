@@ -25,7 +25,7 @@ type UseMeetingRecordingOptions = {
   onStarted?: (mode?: 'cloud') => void
   onStopped?: (status?: MeetingRecordingStatus | string) => void
   onReady?: (recording: MeetingRecordingSummary) => void
-  onError?: (message: string) => void
+  onError?: (message: string, configRequired?: boolean) => void
 }
 
 export function useMeetingRecording({
@@ -161,7 +161,16 @@ export function useMeetingRecording({
       })
 
       if (!cloud.ok || !cloud.recordingId) {
-        onErrorRef.current?.(cloud.error || 'Could not start cloud recording')
+        // Surface configRequired so the caller can show a targeted setup alert
+        // instead of a raw technical error message.
+        if (cloud.configRequired) {
+          onErrorRef.current?.(
+            'Recording storage is not set up. Ask your app administrator to configure Supabase Storage S3 access keys.',
+            true,
+          )
+        } else {
+          onErrorRef.current?.(cloud.error || 'Could not start cloud recording')
+        }
         return false
       }
 
