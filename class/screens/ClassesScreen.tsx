@@ -44,11 +44,13 @@ export function ClassesScreen() {
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null)
   const [selectedLanguage, setSelectedLanguage] = useState<string | null>(null)
 
+  // Reset filters whenever the media tab changes (Video ↔ Audio).
   useEffect(() => {
     setSelectedCategory(null)
     setSelectedLanguage(null)
   }, [mediaTab])
 
+  // Bootstrap: load categories, featured, and available languages.
   useEffect(() => {
     let cancelled = false
 
@@ -85,11 +87,16 @@ export function ClassesScreen() {
     }
   }, [mediaTab])
 
+  // Build the paginated feed fetcher.
+  // Language codes coming from the filter are lowercase-normalized (e.g. 'en', 'hi').
+  // Programs in the DB may store language in mixed casing — use case-insensitive
+  // matching so every stored variant ('EN', 'en', 'English') is captured correctly.
   const fetchPage = useCallback(
     async (page: number) => {
       const result = await fetchPublishedProgramsPage(page, PROGRAM_PAGE_SIZE, {
         mediaType: mediaTab,
         category: selectedCategory ?? undefined,
+        // Pass as-is; fetchPublishedProgramsPage now uses ilike for language.
         language: selectedLanguage ?? undefined,
       })
       return {
@@ -107,18 +114,26 @@ export function ClassesScreen() {
     fetchPage,
     cacheKey: `${mediaTab === 'audio' ? CACHE_KEYS.classesAudio : CACHE_KEYS.classesVideo}:${selectedCategory ?? 'all'}:${selectedLanguage ?? 'all'}`,
   })
+
+  // Only show programs matching the current media tab (video vs audio).
   const programs = useMemo(
     () => feed.items.filter((program) => program.media_type === mediaTab),
     [feed.items, mediaTab],
   )
+
+  // Featured programs: tab-filtered, then language-filtered client-side.
   const featuredForTab = useMemo(() => {
     const forTab = featured.filter((program) => program.media_type === mediaTab)
     if (!selectedLanguage) return forTab
     return forTab.filter(
-      (program) => (program.language ?? 'en').trim().toLowerCase() === selectedLanguage,
+      (program) =>
+        (program.language ?? 'en').trim().toLowerCase() === selectedLanguage.trim().toLowerCase(),
     )
   }, [featured, mediaTab, selectedLanguage])
+
   const error = metaError ?? feed.error
+
+  // Language codes: prefer server-side list; fall back to deriving from loaded programs.
   const languageCodes = useMemo(() => {
     if (availableLanguages.length > 0) return availableLanguages
     return collectProgramLanguages(programs)
@@ -149,12 +164,14 @@ export function ClassesScreen() {
       <EnrolledProgramsRevisitRail mediaType={mediaTab} />
       <SavedProgramsRail mediaType={mediaTab} />
 
+      {/* ── Language filter ─────────────────────────────────────────────── */}
       {showLanguageFilter ? (
         <YStack gap="$2" width="100%">
           <Text fontSize={13} fontWeight="700" color={ui.textMuted} letterSpacing={0.2}>
             Language
           </Text>
           <XStack flexWrap="wrap" gap="$2" width="100%">
+            {/* "All languages" clears the selection */}
             <CategoryChip
               label="All languages"
               active={!selectedLanguage}
@@ -164,14 +181,18 @@ export function ClassesScreen() {
               <CategoryChip
                 key={code}
                 label={formatProgramLanguage(code)}
-                active={selectedLanguage === code}
-                onPress={() => setSelectedLanguage(code)}
+                active={
+                  selectedLanguage !== null &&
+                  selectedLanguage.trim().toLowerCase() === code.trim().toLowerCase()
+                }
+                onPress={() => setSelectedLanguage(code.trim().toLowerCase())}
               />
             ))}
           </XStack>
         </YStack>
       ) : null}
 
+      {/* ── Category filter ──────────────────────────────────────────────── */}
       {categoryChips.length > 1 ? (
         <YStack gap="$2" width="100%">
           <Text fontSize={13} fontWeight="700" color={ui.textMuted} letterSpacing={0.2}>
@@ -190,12 +211,14 @@ export function ClassesScreen() {
         </YStack>
       ) : null}
 
+      {/* ── Error banner ─────────────────────────────────────────────────── */}
       {error ? (
         <Text color={ui.danger} fontSize={14}>
           {error}
         </Text>
       ) : null}
 
+      {/* ── Content ──────────────────────────────────────────────────────── */}
       {feed.isLoading && programs.length === 0 ? (
         <CardGridSkeleton count={4} />
       ) : programs.length === 0 ? (

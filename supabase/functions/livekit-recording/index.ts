@@ -9,7 +9,7 @@ import {
 } from '~/supabase/functions/_shared/recording-helpers.ts'
 import { readEgressS3Config } from '~/supabase/functions/_shared/s3-sign.ts'
 
-type Action = 'start' | 'stop' | 'status' | 'reconcile'
+type Action = 'start' | 'stop' | 'status' | 'reconcile' | 'check'
 
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') {
@@ -29,6 +29,16 @@ Deno.serve(async (req) => {
         },
         500,
       )
+    }
+
+    // `check` is a lightweight probe — returns whether S3 recording storage is
+    // ready so the client can show or hide the Record button early.
+    const body = await req.json().catch(() => ({}))
+    const action = String(body.action ?? '') as Action
+
+    if (action === 'check') {
+      const s3 = readEgressS3Config()
+      return jsonResponse({ ok: true, recordingConfigured: !!s3 })
     }
 
     const authHeader = req.headers.get('Authorization')
@@ -52,10 +62,8 @@ Deno.serve(async (req) => {
       return jsonResponse({ ok: false, error: 'Unauthorized' }, 401)
     }
 
-    const body = await req.json()
     const meetingId = String(body.meetingId ?? '')
     const roomName = String(body.roomName ?? '')
-    const action = String(body.action ?? '') as Action
     const recordingId = body.recordingId ? String(body.recordingId) : undefined
 
     if (!meetingId || !['start', 'stop', 'status', 'reconcile'].includes(action)) {
@@ -86,6 +94,7 @@ Deno.serve(async (req) => {
 
     const egress = new EgressClient(livekitUrl, apiKey, apiSecret)
 
+    // ── status / reconcile ────────────────────────────────────────────────────
     if (action === 'status' || action === 'reconcile') {
       const targetId = recordingId
       let query = serviceSupabase
@@ -125,6 +134,7 @@ Deno.serve(async (req) => {
       })
     }
 
+    // ── start ─────────────────────────────────────────────────────────────────
     if (action === 'start') {
       if (meeting.status === 'ended') {
         return jsonResponse({ ok: false, error: 'Meeting has ended.' }, 400)
@@ -135,14 +145,14 @@ Deno.serve(async (req) => {
         return jsonResponse(
           {
             ok: false,
-            error:
-              'Cloud recording is not configured. Create Supabase Storage S3 access keys and set SUPABASE_S3_ACCESS_KEY_ID and SUPABASE_S3_SECRET_ACCESS_KEY.',
+            error: 'Recording storage is not configured. Add S3_ACCESS_KEY_ID and S3_SECRET_ACCESS_KEY as Edge Function secrets in the Supabase dashboard.',
             configRequired: true,
           },
           503,
         )
       }
 
+      // Check for an already-active recording (idempotent start).
       const { data: active } = await serviceSupabase
         .from('meeting_recordings')
         .select('id, status, recording_sid')
@@ -260,7 +270,7 @@ Deno.serve(async (req) => {
       }
     }
 
-    // stop
+    // ── stop ──────────────────────────────────────────────────────────────────
     if (!recordingId) {
       const { data: active } = await serviceSupabase
         .from('meeting_recordings')
@@ -295,6 +305,8 @@ Deno.serve(async (req) => {
   }
 })
 
+// ── helpers ───────────────────────────────────────────────────────────────────
+
 async function stopRecording(
   serviceSupabase: ReturnType<typeof createClient>,
   egress: EgressClient,
@@ -314,7 +326,7 @@ async function stopRecording(
     try {
       await egress.stopEgress(recording.recording_sid)
     } catch (stopError) {
-      // Egress may already be stopping/complete — continue into processing.
+      // Egress may already be stopping / complete — continue to processing.
       console.warn('stopEgress warning:', stopError)
     }
   }

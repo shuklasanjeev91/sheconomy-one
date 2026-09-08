@@ -18,11 +18,28 @@ Deno.serve(async (req) => {
 
     const enabled = Boolean(livekitUrl && apiKey && apiSecret)
 
+    // Recording requires Supabase Storage S3 access keys so that LiveKit Egress
+    // can push MP4 files into the private `meeting-recordings` bucket.
+    // Accept all naming conventions — SUPABASE_S3_ACCESS_KEY_ID (recommended),
+    // S3_ACCESS_KEY_ID (short form), and LIVEKIT_EGRESS_S3_ACCESS_KEY (legacy).
+    const s3AccessKey =
+      Deno.env.get('SUPABASE_S3_ACCESS_KEY_ID') ||
+      Deno.env.get('S3_ACCESS_KEY_ID') ||
+      Deno.env.get('LIVEKIT_EGRESS_S3_ACCESS_KEY')
+    const s3Secret =
+      Deno.env.get('SUPABASE_S3_SECRET_ACCESS_KEY') ||
+      Deno.env.get('S3_SECRET_ACCESS_KEY') ||
+      Deno.env.get('LIVEKIT_EGRESS_S3_SECRET')
+    const recordingConfigured = Boolean(enabled && s3AccessKey && s3Secret)
+
     return new Response(
       JSON.stringify({
         enabled,
         url: enabled ? livekitUrl : null,
         maxParticipants: Number.isFinite(maxParticipants) ? maxParticipants : 500,
+        // Tells the client whether cloud recording storage is ready.
+        // When false, the Record button is hidden / disabled for hosts.
+        recordingConfigured,
       }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
     )

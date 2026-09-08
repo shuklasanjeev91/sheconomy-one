@@ -5,12 +5,20 @@ export type LiveKitConfig = {
   enabled: boolean
   serverUrl: string | null
   maxParticipants: number
+  /**
+   * True when Supabase Storage S3 access keys are configured in the edge
+   * function, meaning cloud recording (LiveKit Egress → S3 bucket) is ready.
+   * When false, the Record button is hidden for hosts to avoid a confusing
+   * "Cloud recording is not configured" error mid-meeting.
+   */
+  recordingConfigured: boolean
 }
 
 type LiveKitConfigResponse = {
   enabled?: boolean
   url?: string | null
   maxParticipants?: number
+  recordingConfigured?: boolean
   error?: string
 }
 
@@ -21,6 +29,7 @@ const DEFAULT_CONFIG: LiveKitConfig = {
   enabled: false,
   serverUrl: null,
   maxParticipants: 500,
+  recordingConfigured: false,
 }
 
 /** Fetch public LiveKit config from sheconomy_db edge function (cached). */
@@ -39,7 +48,7 @@ export async function fetchLiveKitConfig(): Promise<LiveKitConfig> {
       const message = error.message || ''
       // Fallback until livekit-config is deployed: token endpoint still provides URL.
       if (message.includes('404') || message.toLowerCase().includes('not found')) {
-        const fallback: LiveKitConfig = { enabled: true, serverUrl: null, maxParticipants: 500 }
+        const fallback: LiveKitConfig = { enabled: true, serverUrl: null, maxParticipants: 500, recordingConfigured: false }
         cachedConfig = fallback
         return fallback
       }
@@ -57,6 +66,7 @@ export async function fetchLiveKitConfig(): Promise<LiveKitConfig> {
       enabled: !!payload.enabled && !!payload.url,
       serverUrl: payload.url ?? null,
       maxParticipants: payload.maxParticipants ?? 500,
+      recordingConfigured: !!payload.recordingConfigured,
     }
 
     cachedConfig = config

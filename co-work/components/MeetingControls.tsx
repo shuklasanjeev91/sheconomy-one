@@ -274,7 +274,7 @@ export function MeetingControls({
                   onPress={onToggleRecord}
                   compact={compact}
                 />
-              ) : null}
+              ) : null} 
               {caps.supportsLiveCaptions ? (
                 <ControlButton
                   label={captionsActive ? 'Hide CC' : 'Captions'}
@@ -292,22 +292,22 @@ export function MeetingControls({
                 compact={compact}
                 badgeCount={unreadChatCount}
               />
-              <ControlButton
+              {/* <ControlButton
                 label="Participants"
                 icon={Icons.Users}
                 variant={panel === 'people' || raisedHandCount > 0 ? 'brand' : 'neutral'}
                 onPress={onTogglePeople}
                 compact={compact}
                 badgeCount={raisedHandCount}
-              />
-              <ControlButton
+              /> */}
+              {/* <ControlButton
                 label="Info"
                 icon={Icons.Info}
                 variant={panel === 'info' ? 'brand' : 'neutral'}
                 onPress={onToggleInfo}
                 compact={compact}
-              />
-              {onShare ? (
+              /> */}
+              {/* {onShare ? (
                 <ControlButton
                   label="Share"
                   icon={Icons.Share2}
@@ -315,7 +315,7 @@ export function MeetingControls({
                   onPress={onShare}
                   compact={compact}
                 />
-              ) : null}
+              ) : null} */}
               {isHost && onToggleInvite ? (
                 <ControlButton
                   label="Invite"

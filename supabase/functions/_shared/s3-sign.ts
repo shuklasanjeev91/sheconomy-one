@@ -21,10 +21,19 @@ export type EgressS3Config = {
  */
 export function readEgressS3Config(): EgressS3Config | null {
   const supabaseUrl = Deno.env.get('SUPABASE_URL') ?? ''
+  // Accept all common naming conventions for the key pair.
+  // In order of preference:
+  //   SUPABASE_S3_ACCESS_KEY_ID   — recommended name (matches Supabase docs)
+  //   S3_ACCESS_KEY_ID            — short name (what some projects save as)
+  //   LIVEKIT_EGRESS_S3_ACCESS_KEY — legacy alias
   const accessKey =
-    Deno.env.get('SUPABASE_S3_ACCESS_KEY_ID') || Deno.env.get('LIVEKIT_EGRESS_S3_ACCESS_KEY')
+    Deno.env.get('SUPABASE_S3_ACCESS_KEY_ID') ||
+    Deno.env.get('S3_ACCESS_KEY_ID') ||
+    Deno.env.get('LIVEKIT_EGRESS_S3_ACCESS_KEY')
   const secret =
-    Deno.env.get('SUPABASE_S3_SECRET_ACCESS_KEY') || Deno.env.get('LIVEKIT_EGRESS_S3_SECRET')
+    Deno.env.get('SUPABASE_S3_SECRET_ACCESS_KEY') ||
+    Deno.env.get('S3_SECRET_ACCESS_KEY') ||
+    Deno.env.get('LIVEKIT_EGRESS_S3_SECRET')
   if (!supabaseUrl || !accessKey || !secret) return null
 
   return {

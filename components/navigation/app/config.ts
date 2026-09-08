@@ -18,6 +18,7 @@ import {
   isClassPath,
   isClassAudioPath,
   isClassHomePath,
+  isClassPlaylistsPath,
   isClassVideoPath,
   isCoWorkPath,
   isCoWorkHomePath,
@@ -335,7 +336,7 @@ export const APP_CHAT_MOBILE_TABS: AppMobileTabItem[] = [
   },
 ]
 
-/** Bottom tabs — classes: Video + Audio (Home covers hub / program detail). */
+/** Bottom tabs — classes: Video + Audio + Playlists (Home covers hub / program detail). */
 export const APP_CLASS_MOBILE_TABS: AppMobileTabItem[] = [
   {
     href: classRoutes.video,
@@ -349,6 +350,12 @@ export const APP_CLASS_MOBILE_TABS: AppMobileTabItem[] = [
     label: 'Audio',
     icon: Icons.Radio,
     match: (path) => isClassAudioPath(path),
+  },
+  {
+    href: classRoutes.playlists,
+    label: 'Playlists',
+    icon: Icons.List,
+    match: (path) => isClassPlaylistsPath(path),
   },
 ]
 

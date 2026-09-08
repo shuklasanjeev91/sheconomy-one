@@ -1,4 +1,5 @@
 import { Platform } from 'react-native'
+import { useSafeAreaInsets } from 'react-native-safe-area-context'
 
 import { Button, Icons, ScrollView, Text, XStack, YStack } from '~/components/ui'
 import { getShadowStyle, radius } from '~/config/tokens'
@@ -23,8 +24,15 @@ type GenderDeniedModalProps = {
 export function GenderDeniedModal({ open, onClose, onVerify }: GenderDeniedModalProps) {
   const ui = useAppUi()
   const { isDesktop } = useAppLayout()
+  // Gives the real status-bar / notch height on every device (0 on web/desktop).
+  const insets = useSafeAreaInsets()
 
   if (!open) return null
+
+  // On mobile the overlay starts at y=0 (covers the full screen) so we pad the
+  // inner card down by the top safe-area inset so it clears the status bar.
+  // On desktop (or web) we centre the card in the viewport so no top inset needed.
+  const safeTop = isDesktop ? 0 : insets.top
 
   return (
     <YStack
@@ -49,8 +57,12 @@ export function GenderDeniedModal({ open, onClose, onVerify }: GenderDeniedModal
         borderWidth={isDesktop ? 1 : 0}
         borderColor={ui.borderSubtle}
         overflow="hidden"
+        // Push the whole card below the status bar using the real inset value.
+        // This keeps all touch targets aligned with what the user sees.
+        paddingTop={safeTop}
         style={isDesktop ? getShadowStyle('lg') : undefined}
       >
+        {/* ── Header ── */}
         <XStack
           alignItems="center"
           justifyContent="space-between"
@@ -59,7 +71,6 @@ export function GenderDeniedModal({ open, onClose, onVerify }: GenderDeniedModal
           borderBottomWidth={1}
           borderBottomColor={ui.borderSubtle}
           backgroundColor={ui.background}
-          top={60}
         >
           <XStack alignItems="center" gap="$3" flex={1}>
             <YStack
@@ -81,6 +92,8 @@ export function GenderDeniedModal({ open, onClose, onVerify }: GenderDeniedModal
               </Text>
             </YStack>
           </XStack>
+
+          {/* Close button — touch target is exactly where the icon appears */}
           <Button
             size="$2"
             circular
@@ -91,13 +104,16 @@ export function GenderDeniedModal({ open, onClose, onVerify }: GenderDeniedModal
           />
         </XStack>
 
-        <ScrollView contentContainerStyle={{ padding: 20, gap: 16 }} showsVerticalScrollIndicator={false}>
+        {/* ── Body ── */}
+        <ScrollView
+          contentContainerStyle={{ padding: 20, gap: 16 }}
+          showsVerticalScrollIndicator={false}
+        >
           <YStack
             padding="$3.5"
             borderRadius={radius.chip}
             backgroundColor={ui.roseSurface}
             gap="$1.5"
-            top={44}
           >
             <Text fontSize={15} fontWeight="700" color={ui.text}>
               This space is for verified women
@@ -113,7 +129,6 @@ export function GenderDeniedModal({ open, onClose, onVerify }: GenderDeniedModal
             borderRadius={radius.chip}
             backgroundColor={ui.surfaceMuted}
             gap="$2"
-            top={34}
           >
             <Text fontSize={13} fontWeight="700" color={ui.text}>
               Our commitment
@@ -128,7 +143,6 @@ export function GenderDeniedModal({ open, onClose, onVerify }: GenderDeniedModal
             borderRadius={radius.chip}
             backgroundColor={ui.surfaceMuted}
             gap="$2"
-            top={34}
           >
             <Text fontSize={13} fontWeight="700" color={ui.text}>
               What you can still do
@@ -147,11 +161,11 @@ export function GenderDeniedModal({ open, onClose, onVerify }: GenderDeniedModal
             ))}
           </YStack>
 
-          <Text fontSize={12} color={ui.textMuted} textAlign="center" lineHeight={18} top={24}>
+          <Text fontSize={12} color={ui.textMuted} textAlign="center" lineHeight={18}>
             Thank you for understanding and supporting women in business on {BRAND_NAME}.
           </Text>
 
-          <YStack gap="$2.5" top={24}>
+          <YStack gap="$2.5">
             <Button tone="primary" size="$4" borderRadius={radius.pill} onPress={onVerify}>
               Start human verification
             </Button>
