@@ -236,7 +236,16 @@ function MeetingRoomOverlay({
         tone: 'success',
         message: 'Open Recordings to share a revocable link.',
       }),
-    onError: (message) => toast.show(message, { tone: 'danger' }),
+    onError: (message, configRequired) => {
+      if (configRequired) {
+        toast.show('Recording unavailable', {
+          tone: 'danger',
+          message: 'Cloud recording storage is not set up. Contact your administrator.',
+        })
+      } else {
+        toast.show(message, { tone: 'danger' })
+      }
+    },
   })
 
   const recordingIndicator = useMeetingRecordingIndicator(
