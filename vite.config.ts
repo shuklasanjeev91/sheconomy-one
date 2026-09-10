@@ -52,6 +52,10 @@ export default defineConfig(({ mode }) => {
     server: {
       port: 8081,
       strictPort: false,
+      // Physical devices / tunnels hit Vite with a non-localhost Host header.
+      // Without this, iPad loads fail with "Blocked request. This host is not allowed."
+      allowedHosts: true,
+      host: true,
       ws: {
         path: '/__vxrnhmr',
       },
