@@ -19,8 +19,8 @@ export function getSearchParam(key: string): string | null {
 
 /**
  * Absolute public URL for share / SEO / deep links.
- * Always uses the canonical app origin (sheconomy.in), never the current
- * preview host (e.g. *.vercel.app) or localhost.
+ * Always uses https://sheconomy.in, never the current preview host
+ * (e.g. sheconomy-one-eight.vercel.app) or localhost.
  */
 export function buildAbsoluteUrl(path: string): string {
   return buildAppUrl(path)

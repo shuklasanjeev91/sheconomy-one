@@ -5,16 +5,10 @@ export const APP_SCHEME = 'sheconomy'
 export const DEFAULT_APP_ORIGIN = 'https://sheconomy.in'
 
 /**
- * Origin used for links that must open the installed app (share sheets,
- * invites, notification action URLs, QR codes).
- *
- * `sheconomy.in` answers every request with a 308 to `www`. Neither Android's
- * Digital Asset Links fetcher nor Apple's AASA fetcher follows redirects, so
- * the apex cannot be verified and a browser handles apex links even when the
- * app is installed. `www` serves directly, so deep links are handed out there.
- *
- * Keep `DEFAULT_APP_ORIGIN` for payment callbacks, SEO, and Supabase-stored
- * URLs — those already canonicalize on the apex.
+ * Host used only for incoming Universal Links / App Links. Android Digital
+ * Asset Links and Apple AASA are registered on `www` (the apex 308s and
+ * those fetchers do not follow redirects). Share sheets and copied links still
+ * use `DEFAULT_APP_ORIGIN` (`https://sheconomy.in`).
  */
 export const DEEP_LINK_ORIGIN = 'https://www.sheconomy.in'
 
@@ -155,10 +149,30 @@ export function resolveDeepLinkOrigin(): string {
   }
 }
 
-/** Deep link into the native app, or HTTPS path on web. */
+/**
+ * Public HTTPS URL for share sheets, OG tags, invites, and copied links.
+ * Always the apex production domain — never a Vercel preview host or www.
+ */
 export function buildAppUrl(path: string): string {
   const normalized = path.startsWith('/') ? path : `/${path}`
-  return `${resolveDeepLinkOrigin()}${normalized}`
+  return `${DEFAULT_APP_ORIGIN}${normalized}`
+}
+
+/** Rewrite any share URL onto https://sheconomy.in (strips *.vercel.app / www). */
+export function toPublicShareUrl(url: string): string {
+  const trimmed = url.trim()
+  if (!trimmed) return DEFAULT_APP_ORIGIN
+  if (trimmed.startsWith('sheconomy://')) {
+    const path = trimmed.replace(/^sheconomy:\/\//, '').replace(/^\//, '')
+    return `${DEFAULT_APP_ORIGIN}/${path}`
+  }
+  if (trimmed.startsWith('/')) return `${DEFAULT_APP_ORIGIN}${trimmed}`
+  try {
+    const parsed = new URL(trimmed.includes('://') ? trimmed : `https://${trimmed}`)
+    return `${DEFAULT_APP_ORIGIN}${parsed.pathname}${parsed.search}${parsed.hash}`
+  } catch {
+    return `${DEFAULT_APP_ORIGIN}/${trimmed.replace(/^\//, '')}`
+  }
 }
 
 /** Custom-scheme URL for "open in app" buttons from web marketing pages. */

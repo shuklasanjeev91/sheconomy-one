@@ -1,12 +1,28 @@
 import { Linking, Platform, Share } from 'react-native'
 
 import { BRAND_NAME } from '~/config/brand'
+import { toPublicShareUrl } from '~/config/app-origin'
 import { copyToClipboard } from '~/lib/platform/clipboard'
 
 import type { SharePayload } from '~/lib/share/types'
 
+function publicSharePayload(payload: SharePayload): SharePayload {
+  const url = toPublicShareUrl(payload.url)
+  return {
+    ...payload,
+    url,
+    text: payload.text
+      ? payload.text.replace(/https?:\/\/[^\s]+/g, (match) =>
+          /vercel\.app/i.test(match) || /sheconomy\.(in|com)/i.test(match)
+            ? toPublicShareUrl(match)
+            : match,
+        )
+      : payload.text,
+  }
+}
+
 export async function copyShareLink(url: string): Promise<boolean> {
-  return copyToClipboard(url)
+  return copyToClipboard(toPublicShareUrl(url))
 }
 
 /** Known one-tap share destinations rendered in the share sheet. */
@@ -20,7 +36,7 @@ export type ShareTargetKey =
 
 /** Build the deep/intent link for a specific share destination. */
 export function buildShareTargetUrl(key: ShareTargetKey, payload: SharePayload): string {
-  const { url, title, text } = payload
+  const { url, title, text } = publicSharePayload(payload)
   const trimmedText = text?.trim()
   const message = trimmedText ? `${trimmedText} ${url}` : url
 
@@ -79,7 +95,7 @@ export function canUseSystemShare(): boolean {
 export async function shareViaSystem(
   payload: SharePayload,
 ): Promise<'shared' | 'copied' | 'cancelled'> {
-  const { url, title, text } = payload
+  const { url, title, text } = publicSharePayload(payload)
   const shareTitle = title ?? BRAND_NAME
   const shareText = text?.trim() ? `${text.trim()}\n${url}` : url
 

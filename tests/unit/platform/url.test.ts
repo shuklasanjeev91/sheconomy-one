@@ -1,12 +1,13 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import {
-  DEEP_LINK_ORIGIN,
   DEFAULT_APP_ORIGIN,
   canonicalizePublicUrl,
   normalizeAppOrigin,
+  toPublicShareUrl,
 } from '~/config/app-origin'
 import { buildAbsoluteUrl } from '~/lib/platform/url'
+import { buildShareTargetUrl } from '~/lib/share/actions'
 import { getListingShareUrl, getMeetingShareUrl, getPostShareUrl, getProfileShopShareUrl, getShoppableFeedShareUrl, getCommunityListingShareUrl } from '~/lib/share/urls'
 
 describe('buildAbsoluteUrl', () => {
@@ -15,14 +16,14 @@ describe('buildAbsoluteUrl', () => {
     vi.unstubAllGlobals()
   })
 
-  it('uses the deep-link origin, not window.location', () => {
+  it('uses sheconomy.in, not window.location or Vercel preview hosts', () => {
     vi.stubEnv('EXPO_PUBLIC_WEB_APP_URL', 'https://sheconomy.in')
     vi.stubGlobal('window', {
-      location: { origin: 'https://sheconomy-one-sanjeev-shuklas-projects.vercel.app' },
+      location: { origin: 'https://sheconomy-one-eight.vercel.app' },
     })
 
     expect(buildAbsoluteUrl('/co-work/meeting/EJB-GHW-FJY')).toBe(
-      `${DEEP_LINK_ORIGIN}/co-work/meeting/EJB-GHW-FJY`,
+      `${DEFAULT_APP_ORIGIN}/co-work/meeting/EJB-GHW-FJY`,
     )
   })
 
@@ -30,10 +31,10 @@ describe('buildAbsoluteUrl', () => {
     vi.stubEnv('EXPO_PUBLIC_WEB_APP_URL', 'https://preview.vercel.app')
     vi.stubEnv('ONE_SERVER_URL', 'http://localhost:8081')
 
-    expect(buildAbsoluteUrl('listings/foo')).toBe(`${DEEP_LINK_ORIGIN}/listings/foo`)
+    expect(buildAbsoluteUrl('listings/foo')).toBe(`${DEFAULT_APP_ORIGIN}/listings/foo`)
   })
 
-  it('maps brand aliases (.com / www) to sheconomy.in', () => {
+  it('maps brand aliases (.com / www) and Vercel previews to sheconomy.in', () => {
     expect(normalizeAppOrigin('https://sheconomy.com')).toBe(DEFAULT_APP_ORIGIN)
     expect(normalizeAppOrigin('https://www.sheconomy.in/path')).toBe(DEFAULT_APP_ORIGIN)
     expect(canonicalizePublicUrl('https://sheconomy.com/community/post/1')).toBe(
@@ -41,21 +42,32 @@ describe('buildAbsoluteUrl', () => {
     )
     expect(
       canonicalizePublicUrl(
-        'https://sheconomy-one-sanjeev-shuklas-projects.vercel.app/co-work/meeting/ABC',
+        'https://sheconomy-one-eight.vercel.app/co-work/meeting/ABC',
       ),
     ).toBe('https://sheconomy.in/co-work/meeting/ABC')
+    expect(
+      toPublicShareUrl('https://sheconomy-one-eight.vercel.app/community/post/1'),
+    ).toBe('https://sheconomy.in/community/post/1')
+    expect(toPublicShareUrl('https://www.sheconomy.in/listing/bag')).toBe(
+      'https://sheconomy.in/listing/bag',
+    )
   })
 
-  it('builds meeting, listing, and post share URLs on the App-Link verified host', () => {
+  it('builds meeting, listing, and post share URLs on sheconomy.in', () => {
     vi.stubEnv('EXPO_PUBLIC_WEB_APP_URL', 'https://sheconomy.in')
 
     expect(getMeetingShareUrl('EJB-GHW-FJY')).toBe(
-      `${DEEP_LINK_ORIGIN}/co-work/meeting/EJB-GHW-FJY`,
+      `${DEFAULT_APP_ORIGIN}/co-work/meeting/EJB-GHW-FJY`,
     )
-    expect(getListingShareUrl('handmade-bag')).toMatch(/^https:\/\/www\.sheconomy\.in\//)
-    expect(getPostShareUrl('abc')).toMatch(/^https:\/\/www\.sheconomy\.in\//)
+    expect(getListingShareUrl('handmade-bag')).toMatch(/^https:\/\/sheconomy\.in\//)
+    expect(getPostShareUrl('abc')).toMatch(/^https:\/\/sheconomy\.in\//)
     expect(getProfileShopShareUrl('jane')).toMatch(/\/profile\/jane\/shop$/)
     expect(getShoppableFeedShareUrl()).toContain('shoppable=1')
     expect(getCommunityListingShareUrl('/listing/scarf', 'post-1', 'feed')).toContain('source=feed')
+    expect(
+      buildShareTargetUrl('whatsapp', {
+        url: 'https://sheconomy-one-eight.vercel.app/listing/bag',
+      }),
+    ).toContain(encodeURIComponent('https://sheconomy.in/listing/bag'))
   })
 })

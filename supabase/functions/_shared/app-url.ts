@@ -36,10 +36,7 @@ export function resolvePublicAppOrigin(): string {
     if (!value?.trim()) continue
     try {
       const url = new URL(value.includes('://') ? value.trim() : `https://${value.trim()}`)
-      if (isEphemeralHost(url.hostname)) {
-        return url.origin
-      }
-      if (isBrandAliasHost(url.hostname)) {
+      if (isEphemeralHost(url.hostname) || isBrandAliasHost(url.hostname)) {
         return DEFAULT_PUBLIC_APP_ORIGIN
       }
       return url.origin
