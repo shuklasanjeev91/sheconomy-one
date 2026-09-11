@@ -140,8 +140,10 @@ const MODE_DEFAULTS: Record<
 > = {
   all: { pg: 'UPI', bankcode: 'INTENT', s2s: true },
   cards: { pg: 'CC', bankcode: 'CC', s2s: true },
-  netbanking: { pg: 'NB', bankcode: 'HDFB', s2s: true },
-  wallets: { pg: 'CASH', bankcode: 'PAYTM', s2s: true },
+  // No bankcode: PayU then lists the banks live on this account. Naming one
+  // that is not enabled fails after the buyer has already been handed off.
+  netbanking: { pg: 'NB', s2s: true },
+  wallets: { pg: 'CASH', bankcode: 'MOBIKWIK', s2s: true },
   upi: { pg: 'UPI', bankcode: 'INTENT', s2s: true },
   upi_collect: { pg: 'UPI', bankcode: 'UPI', s2s: true },
   upi_intent: { pg: 'UPI', bankcode: 'INTENT', s2s: true },
@@ -154,14 +156,6 @@ const MODE_DEFAULTS: Record<
   },
   upi_paytm: { pg: 'UPI', bankcode: 'PAYTM', extraFields: { upiAppName: 'paytm' }, s2s: true },
   upi_qr: { pg: 'UPI', bankcode: 'INTENT', s2s: true },
-  nb_hdfc: { pg: 'NB', bankcode: 'HDFB', s2s: true },
-  nb_icici: { pg: 'NB', bankcode: 'ICIB', s2s: true },
-  nb_sbi: { pg: 'NB', bankcode: 'SBIB', s2s: true },
-  nb_axis: { pg: 'NB', bankcode: 'AXIB', s2s: true },
-  nb_kotak: { pg: 'NB', bankcode: '162B', s2s: true },
-  nb_yes: { pg: 'NB', bankcode: 'YESB', s2s: true },
-  nb_pnb: { pg: 'NB', bankcode: 'PNBB', s2s: true },
-  nb_bob: { pg: 'NB', bankcode: 'BBRB', s2s: true },
   wallet_mobikwik: { pg: 'CASH', bankcode: 'MOBIKWIK', s2s: true },
   wallet_olamoney: { pg: 'CASH', bankcode: 'OLAM', s2s: true },
   emi: { pg: 'EMI', bankcode: 'EMI', s2s: true },

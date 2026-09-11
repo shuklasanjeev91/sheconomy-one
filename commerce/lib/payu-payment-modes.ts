@@ -25,14 +25,6 @@ export type PayuPaymentModeId =
   | 'qr'
   | 'nb_picker'
   | 'wallet_picker'
-  | 'nb_hdfc'
-  | 'nb_icici'
-  | 'nb_sbi'
-  | 'nb_axis'
-  | 'nb_kotak'
-  | 'nb_yes'
-  | 'nb_pnb'
-  | 'nb_bob'
   | 'wallet_mobikwik'
   | 'wallet_olamoney'
 
@@ -139,16 +131,16 @@ export const PAYU_CARD_OPTIONS: PayuPaymentMode[] = [
   },
 ]
 
-/** Net banking — Merchant Hosted live: pg=NB + bankcode */
+/**
+ * Net banking — `pg=NB` with no `bankcode`, so PayU renders its own bank list.
+ *
+ * Naming a bank here only works if that bank is live on the merchant account;
+ * otherwise PayU discards the choice, shows "Selected payment option is not
+ * available at this moment", and asks for the bank again. PayU's own list is
+ * the authoritative one and carries live downtime status, so let it choose.
+ */
 export const PAYU_NB_OPTIONS: PayuPaymentMode[] = [
-  { id: 'nb_hdfc', label: 'HDFC Bank', shortLabel: 'HDFC', pg: 'NB', bankcode: 'HDFB', seamlessS2s: true },
-  { id: 'nb_icici', label: 'ICICI Bank', shortLabel: 'ICICI', pg: 'NB', bankcode: 'ICIB', seamlessS2s: true },
-  { id: 'nb_sbi', label: 'State Bank of India', shortLabel: 'SBI', pg: 'NB', bankcode: 'SBIB', seamlessS2s: true },
-  { id: 'nb_axis', label: 'Axis Bank', shortLabel: 'Axis', pg: 'NB', bankcode: 'AXIB', seamlessS2s: true },
-  { id: 'nb_kotak', label: 'Kotak Mahindra', shortLabel: 'Kotak', pg: 'NB', bankcode: '162B', seamlessS2s: true },
-  { id: 'nb_yes', label: 'Yes Bank', shortLabel: 'Yes', pg: 'NB', bankcode: 'YESB', seamlessS2s: true },
-  { id: 'nb_pnb', label: 'Punjab National Bank', shortLabel: 'PNB', pg: 'NB', bankcode: 'PNBB', seamlessS2s: true },
-  { id: 'nb_bob', label: 'Bank of Baroda', shortLabel: 'BoB', pg: 'NB', bankcode: 'BBRB', seamlessS2s: true },
+  { id: 'netbanking', label: 'Any Indian bank', shortLabel: 'Net Banking', pg: 'NB' },
 ]
 
 /**
@@ -273,7 +265,6 @@ export const PAYU_CHECKOUT_MODES: PayuPaymentMode[] = [
   { id: 'upi', label: 'UPI', shortLabel: 'UPI', pg: 'UPI', bankcode: 'INTENT', seamlessS2s: true },
   ...PAYU_UPI_OPTIONS,
   ...PAYU_CARD_OPTIONS,
-  { id: 'netbanking', label: 'Net Banking', shortLabel: 'NB', pg: 'NB', bankcode: 'HDFB', seamlessS2s: true },
   ...PAYU_NB_OPTIONS,
   { id: 'wallets', label: 'Wallets', shortLabel: 'Wallets', pg: 'CASH', bankcode: 'MOBIKWIK', seamlessS2s: true },
   ...PAYU_WALLET_OPTIONS,

@@ -100,13 +100,13 @@ const SECTIONS: Section[] = [
   {
     id: 'netbanking',
     title: 'Net banking',
-    hint: 'All major banks',
+    hint: 'Pick your bank on the PayU page',
     options: PAYU_NB_OPTIONS,
   },
   {
     id: 'wallets',
     title: 'Wallets',
-    hint: 'Paytm, PhonePe, Amazon Pay…',
+    hint: 'MobiKwik, Ola Money',
     options: PAYU_WALLET_OPTIONS,
   },
   {

@@ -53,11 +53,12 @@ describe('payu-payment-modes', () => {
     })
     expect(resolvePayuPaymentMode('upi_collect').needsVpa).toBe(true)
     expect(resolvePayuPaymentMode('upi_gpay').seamlessS2s).toBe(true)
-    expect(applyPayuPaymentModeFields({}, { modeId: 'nb_hdfc' })).toMatchObject({
-      pg: 'NB',
-      bankcode: 'HDFB',
-    })
-    expect(payuModeNeedsS2s('nb_hdfc')).toBe(false)
+    // Net banking must reach PayU without a bankcode so PayU lists the banks
+    // live on the account instead of rejecting a hardcoded one.
+    const nbFields = applyPayuPaymentModeFields({}, { modeId: 'netbanking' })
+    expect(nbFields.pg).toBe('NB')
+    expect(nbFields.bankcode).toBeUndefined()
+    expect(payuModeNeedsS2s('netbanking')).toBe(false)
     expect(payuModeNeedsS2s('upi_gpay')).toBe(true)
     expect(payuModeNeedsS2s('cards')).toBe(true)
     expect(applyPayuPaymentModeFields({}, { modeId: 'qr' })).toMatchObject({
@@ -74,7 +75,7 @@ describe('payu-payment-modes', () => {
     expect(payuGroupIdForMode('upi_phonepe')).toBe('upi')
     expect(payuGroupIdForMode('upi_qr')).toBe('upi')
     expect(payuGroupIdForMode('cards')).toBe('cards')
-    expect(payuGroupIdForMode('nb_sbi')).toBe('netbanking')
+    expect(payuGroupIdForMode('netbanking')).toBe('netbanking')
     expect(payuGroupIdForMode('wallet_mobikwik')).toBe('wallets')
   })
 

@@ -291,7 +291,9 @@ Deno.serve(async (request) => {
     fields.s2s_device_info = deviceInfo
   }
 
-  if (!fields.pg || !fields.bankcode) {
+  // Net banking intentionally travels without a bankcode so PayU shows the
+  // banks live on this account; every other pg must name what it is charging.
+  if (!fields.pg || (!fields.bankcode && pgUpper !== 'NB')) {
     return jsonResponse({ error: 'Select a payment method before paying' }, 400)
   }
 

@@ -433,8 +433,9 @@ export function CheckoutPayuPanel({
       setError('Enter your UPI ID (e.g. name@oksbi)')
       return
     }
-    if ((mode === 'netbanking' || mode === 'wallets') && !modeMeta.bankcode) {
-      setError('Select a bank or wallet')
+    // `netbanking` deliberately carries no bankcode — PayU picks the bank.
+    if (mode === 'wallets' && !modeMeta.bankcode) {
+      setError('Select a wallet')
       return
     }
 
