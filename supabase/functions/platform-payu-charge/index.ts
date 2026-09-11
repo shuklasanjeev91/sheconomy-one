@@ -254,6 +254,25 @@ Deno.serve(async (request) => {
   const classicMhcPg = ['NB', 'CASH', 'EMI', 'BNPL', 'PAYPAL', 'MC', 'NEFTRTGS'].includes(pgUpper)
   const useS2s = payuModeNeedsS2s(modeKey) && !classicMhcPg
 
+  /**
+   * `payment_metadata` is the only record of which method a buyer actually
+   * tried — `payment_mode` is just online/cod. Without pg + bankcode a failed
+   * attempt can't be traced back to a bank or wallet.
+   */
+  function metadataWithMethod(extra?: Record<string, unknown>): Record<string, unknown> {
+    return {
+      ...meta,
+      payment_method: {
+        mode: modeKey,
+        pg: fields.pg ?? null,
+        bankcode: fields.bankcode ?? null,
+        flow: useS2s ? 's2s' : 'form_post',
+        attempted_at: new Date().toISOString(),
+      },
+      ...(extra ?? {}),
+    }
+  }
+
   if (useS2s) {
     const forwarded = request.headers.get('x-forwarded-for')?.split(',')[0]?.trim()
     const clientIp =
@@ -337,6 +356,7 @@ Deno.serve(async (request) => {
       .update({
         transaction_id: activeTxnid,
         payment_status: 'pending',
+        payment_metadata: metadataWithMethod(),
         updated_at: new Date().toISOString(),
       })
       .eq('id', orderPaymentId)
@@ -353,10 +373,21 @@ Deno.serve(async (request) => {
   }
 
   if (outcome.kind === 'failure') {
+    const gatewayCode = outcome.message.match(/\bEX\d+\b/i)?.[0]?.toUpperCase() ?? null
+
     await admin
       .from('order_payments')
       .update({
         failure_reason: outcome.message.slice(0, 500),
+        failure_code: gatewayCode,
+        payment_metadata: metadataWithMethod({
+          last_failure: {
+            code: gatewayCode,
+            message: outcome.message.slice(0, 500),
+            unmapped_status: outcome.unmapped || null,
+            at: new Date().toISOString(),
+          },
+        }),
         updated_at: new Date().toISOString(),
       })
       .eq('id', orderPaymentId)
@@ -380,6 +411,7 @@ Deno.serve(async (request) => {
     .update({
       transaction_id: activeTxnid,
       payment_status: outcome.kind === 'success' ? 'processing' : 'pending',
+      payment_metadata: metadataWithMethod(),
       updated_at: new Date().toISOString(),
     })
     .eq('id', orderPaymentId)

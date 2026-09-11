@@ -326,6 +326,28 @@ Deno.serve(async (request) => {
   // MHC / S2S must not send PayU-hosted `service_provider` (forces Payment Page).
   delete fields.service_provider
 
+  /**
+   * Record which method was attempted — `provider` alone is just "payu", so a
+   * failed step otherwise can't be traced back to a bank or wallet.
+   */
+  function metadataWithMethod(extra?: Record<string, unknown>): Record<string, unknown> {
+    const priorMeta =
+      step.metadata && typeof step.metadata === 'object'
+        ? (step.metadata as Record<string, unknown>)
+        : {}
+    return {
+      ...priorMeta,
+      payment_method: {
+        mode: modeKey,
+        pg: fields.pg ?? null,
+        bankcode: fields.bankcode ?? null,
+        flow: useS2s ? 's2s' : 'form_post',
+        attempted_at: new Date().toISOString(),
+      },
+      ...(extra ?? {}),
+    }
+  }
+
   if (useS2s) {
     const forwarded = request.headers.get('x-forwarded-for')?.split(',')[0]?.trim()
     const clientIp =
@@ -358,6 +380,7 @@ Deno.serve(async (request) => {
       provider: 'payu',
       provider_reference: txnid,
       status: 'requires_action',
+      metadata: metadataWithMethod(),
       updated_at: new Date().toISOString(),
     })
     .eq('id', step.id)
@@ -445,11 +468,21 @@ Deno.serve(async (request) => {
   const clientSafeFields = sanitizePayuFieldsForClient(fields)
 
   if (outcome.kind === 'failure') {
+    const gatewayCode = outcome.message.match(/\bEX\d+\b/i)?.[0]?.toUpperCase() ?? null
+
     await admin
       .from('commerce_checkout_payment_steps')
       .update({
         last_error: outcome.message.slice(0, 500),
         status: 'requires_action',
+        metadata: metadataWithMethod({
+          last_failure: {
+            code: gatewayCode,
+            message: outcome.message.slice(0, 500),
+            unmapped_status: outcome.unmapped || null,
+            at: new Date().toISOString(),
+          },
+        }),
         updated_at: new Date().toISOString(),
       })
       .eq('id', step.id)

@@ -1536,7 +1536,6 @@ export function CheckoutScreen() {
                         secondaryColor={c.secondary}
                         initialMode="upi_intent"
                         amountLabel={formatCheckoutMoney(displayTotals.orderTotal)}
-                        disabledMethodSections={['netbanking', 'wallets', 'more']}
                         session={platformPayuPanelSession}
                         onEnsureSession={ensurePlatformPayuSession}
                         onAuthActiveChange={setPayuAuthActive}

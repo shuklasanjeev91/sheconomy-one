@@ -2,6 +2,8 @@ import { describe, expect, it } from 'vitest'
 
 import {
   PAYU_ALLOWED_PG,
+  PAYU_NB_OPTIONS,
+  PAYU_WALLET_OPTIONS,
   applyPayuPaymentModeFields,
   payuGroupIdForMode,
   payuModeNeedsS2s,
@@ -89,4 +91,23 @@ describe('payu-payment-modes', () => {
     )
     expect(fields).toMatchObject({ pg: 'CASH', bankcode: 'PAYTM' })
   })
+
+  it('builds complete form-post fields for every enabled bank and wallet', () => {
+    for (const option of [...PAYU_NB_OPTIONS, ...PAYU_WALLET_OPTIONS]) {
+      const fields = applyPayuPaymentModeFields({}, { modeId: option.id })
+      expect(fields.pg, option.id).toBe(option.pg)
+      expect(fields.bankcode, option.id).toBe(option.bankcode)
+      expect(payuModeNeedsS2s(option.id), option.id).toBe(false)
+    }
+  })
+
+  it.each(['emi', 'bnpl', 'paypal', 'pluxee', 'neft'] as const)(
+    'builds classic merchant-hosted fields for %s',
+    (modeId) => {
+      const fields = applyPayuPaymentModeFields({}, { modeId })
+      expect(fields.pg).toBeTruthy()
+      expect(fields.bankcode).toBeTruthy()
+      expect(payuModeNeedsS2s(modeId)).toBe(false)
+    },
+  )
 })

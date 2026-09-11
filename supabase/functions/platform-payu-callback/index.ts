@@ -45,11 +45,25 @@ async function applyPlatformPayuResult(
   const paymentStatus = mapPayuStatusToPaymentStatus(payuStatus)
   const now = new Date().toISOString()
 
+  // Preserve what the charge step recorded (notably `payment_method`) — a bare
+  // overwrite here loses the pg/bankcode of whatever the buyer actually used.
+  const existingQuery = admin.from('order_payments').select('payment_metadata')
+  const { data: existing } = await (orderPaymentId
+    ? existingQuery.eq('id', orderPaymentId)
+    : existingQuery.eq('transaction_id', txnid)
+  ).maybeSingle()
+
+  const priorMeta =
+    existing?.payment_metadata && typeof existing.payment_metadata === 'object'
+      ? (existing.payment_metadata as Record<string, unknown>)
+      : {}
+
   const updates: Record<string, unknown> = {
     payment_status: paymentStatus,
     transaction_id: txnid || undefined,
     gateway_transaction_id: mihpayid || undefined,
     payment_metadata: {
+      ...priorMeta,
       provider: 'platform_payu',
       payu_response: form,
       processed_via: 'callback',
