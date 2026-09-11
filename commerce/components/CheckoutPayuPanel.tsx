@@ -536,6 +536,13 @@ export function CheckoutPayuPanel({
         savePayuBridgeSession(data.action_url, data.fields)
         if (Platform.OS === 'web') {
           submitPayuFormPost(data.action_url, data.fields)
+          // The POST navigates this page away, so `busy` normally never matters.
+          // If navigation is blocked we would otherwise strand the buyer on a
+          // spinner with Cancel disabled, so give the state a way out.
+          window.setTimeout(() => {
+            setBusy(false)
+            setError('Could not open the PayU payment page. Tap Retry payment to try again.')
+          }, 8000)
           return
         }
         setAcsTitle('Continue to your bank / wallet')

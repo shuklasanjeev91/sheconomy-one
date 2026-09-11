@@ -75,7 +75,7 @@ describe('payu-payment-modes', () => {
     expect(payuGroupIdForMode('upi_qr')).toBe('upi')
     expect(payuGroupIdForMode('cards')).toBe('cards')
     expect(payuGroupIdForMode('nb_sbi')).toBe('netbanking')
-    expect(payuGroupIdForMode('wallet_paytm')).toBe('wallets')
+    expect(payuGroupIdForMode('wallet_mobikwik')).toBe('wallets')
   })
 
   it('rejects unknown pg values', () => {
@@ -87,9 +87,19 @@ describe('payu-payment-modes', () => {
   it('allows explicit bankcode override', () => {
     const fields = applyPayuPaymentModeFields(
       {},
-      { modeId: 'wallets', bankcode: 'PAYTM' },
+      { modeId: 'wallets', bankcode: 'OLAM' },
     )
-    expect(fields).toMatchObject({ pg: 'CASH', bankcode: 'PAYTM' })
+    expect(fields).toMatchObject({ pg: 'CASH', bankcode: 'OLAM' })
+  })
+
+  // Offering a code PayU does not recognise only fails once the buyer has been
+  // handed off, so keep the offered set inside the documented list.
+  // https://docs.payu.in/docs/wallet-codes
+  it('only offers wallets that PayU publishes a bankcode for', () => {
+    const documented = ['AMZPAY', 'AMON', 'OLAM', 'ITZC', 'PAYZP', 'MOBIKWIK', 'PHONEPE']
+    for (const option of PAYU_WALLET_OPTIONS) {
+      expect(documented, option.id).toContain(option.bankcode)
+    }
   })
 
   it('builds complete form-post fields for every enabled bank and wallet', () => {

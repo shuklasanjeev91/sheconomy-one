@@ -1536,6 +1536,9 @@ export function CheckoutScreen() {
                         secondaryColor={c.secondary}
                         initialMode="upi_intent"
                         amountLabel={formatCheckoutMoney(displayTotals.orderTotal)}
+                        // EMI / BNPL / PayPal / Pluxee / NEFT each need separate
+                        // PayU activation that this account does not have yet.
+                        disabledMethodSections={['more']}
                         session={platformPayuPanelSession}
                         onEnsureSession={ensurePlatformPayuSession}
                         onAuthActiveChange={setPayuAuthActive}

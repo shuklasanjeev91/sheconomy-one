@@ -33,11 +33,8 @@ export type PayuPaymentModeId =
   | 'nb_yes'
   | 'nb_pnb'
   | 'nb_bob'
-  | 'wallet_paytm'
-  | 'wallet_phonepe'
-  | 'wallet_amazon'
-  | 'wallet_freecharge'
   | 'wallet_mobikwik'
+  | 'wallet_olamoney'
 
 export type PayuPaymentMode = {
   id: PayuPaymentModeId
@@ -154,24 +151,29 @@ export const PAYU_NB_OPTIONS: PayuPaymentMode[] = [
   { id: 'nb_bob', label: 'Bank of Baroda', shortLabel: 'BoB', pg: 'NB', bankcode: 'BBRB', seamlessS2s: true },
 ]
 
+/**
+ * Only the wallets live on the PayU merchant account. Paytm and Freecharge are
+ * not PayU wallet codes at all, and PHONEPE / AMZPAY are valid codes that this
+ * account has not activated — offering any of them sends the buyer to PayU and
+ * fails there with "Selected payment option is not available at this moment".
+ *
+ * @see https://docs.payu.in/docs/wallet-codes
+ */
 export const PAYU_WALLET_OPTIONS: PayuPaymentMode[] = [
-  { id: 'wallet_paytm', label: 'Paytm', shortLabel: 'Paytm', pg: 'CASH', bankcode: 'PAYTM', seamlessS2s: true },
-  { id: 'wallet_phonepe', label: 'PhonePe', shortLabel: 'PhonePe', pg: 'CASH', bankcode: 'PHONEPE', seamlessS2s: true },
-  { id: 'wallet_amazon', label: 'Amazon Pay', shortLabel: 'Amazon', pg: 'CASH', bankcode: 'AMAZONPAY', seamlessS2s: true },
-  {
-    id: 'wallet_freecharge',
-    label: 'Freecharge',
-    shortLabel: 'Freecharge',
-    pg: 'CASH',
-    bankcode: 'FREC',
-    seamlessS2s: true,
-  },
   {
     id: 'wallet_mobikwik',
     label: 'MobiKwik',
     shortLabel: 'MobiKwik',
     pg: 'CASH',
     bankcode: 'MOBIKWIK',
+    seamlessS2s: true,
+  },
+  {
+    id: 'wallet_olamoney',
+    label: 'Ola Money (Postpaid + Wallet)',
+    shortLabel: 'Ola Money',
+    pg: 'CASH',
+    bankcode: 'OLAM',
     seamlessS2s: true,
   },
 ]
@@ -273,7 +275,7 @@ export const PAYU_CHECKOUT_MODES: PayuPaymentMode[] = [
   ...PAYU_CARD_OPTIONS,
   { id: 'netbanking', label: 'Net Banking', shortLabel: 'NB', pg: 'NB', bankcode: 'HDFB', seamlessS2s: true },
   ...PAYU_NB_OPTIONS,
-  { id: 'wallets', label: 'Wallets', shortLabel: 'Wallets', pg: 'CASH', bankcode: 'PAYTM', seamlessS2s: true },
+  { id: 'wallets', label: 'Wallets', shortLabel: 'Wallets', pg: 'CASH', bankcode: 'MOBIKWIK', seamlessS2s: true },
   ...PAYU_WALLET_OPTIONS,
   { id: 'emi', label: 'EMI', shortLabel: 'EMI', pg: 'EMI', bankcode: 'EMI', seamlessS2s: true },
   { id: 'bnpl', label: 'Buy Now Pay Later', shortLabel: 'BNPL', pg: 'BNPL', bankcode: 'LAZYPAY', seamlessS2s: true },
