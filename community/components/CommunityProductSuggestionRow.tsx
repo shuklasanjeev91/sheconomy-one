@@ -1,6 +1,7 @@
 import { useState } from 'react'
 
 import { useCart } from '~/commerce/hooks/useCart'
+import { findCartItemForListing } from '~/commerce/lib/cart-listing'
 import type { CommunitySuggestion } from '~/community/lib/community-personalization'
 import { AppLink } from '~/components/navigation/AppLink'
 import { useCommunityUi } from '~/community/lib/community-theme'
@@ -21,7 +22,7 @@ export function CommunityProductSuggestionRow({
 }) {
   const communityUi = useCommunityUi()
   const toast = useAppToast()
-  const { addToCart } = useCart()
+  const { addToCart, items } = useCart()
   const { user } = useSupabase()
   const [adding, setAdding] = useState(false)
   const [buying, setBuying] = useState(false)
@@ -29,19 +30,31 @@ export function CommunityProductSuggestionRow({
   const meta = item.listingMeta
   const slug = meta?.slug ?? item.id
   const listingHref = commerceRoutes.listing(slug)
+  // Suggestions add without a variant selection, so match the default cart line.
+  // `addToCart` inserts optimistically, so this flips as soon as the add resolves
+  // and clears again if the line is removed from the cart screen.
+  const inCart = Boolean(findCartItemForListing(items, item.id, null))
   const priceLabel =
     meta?.price != null && !Number.isNaN(meta.price)
       ? formatMoneyLabel(meta.price, meta?.currency ?? 'INR')
       : ''
   const imageSize = compact ? 72 : 96
 
-  async function runCartAction(goToCheckout: boolean) {
-    const setBusy = goToCheckout ? setBuying : setAdding
+  function goToCheckout() {
+    if (!user) {
+      navigateApp(buildSignInUrl(String(commerceRoutes.checkout)))
+      return
+    }
+    navigateApp(commerceRoutes.checkout)
+  }
+
+  async function runCartAction(checkoutAfterAdd: boolean) {
+    const setBusy = checkoutAfterAdd ? setBuying : setAdding
     setBusy(true)
     try {
       const { error } = await addToCart(item.id)
       if (error) {
-        toast.show(goToCheckout ? 'Choose options on the product page' : 'Could not add to cart', {
+        toast.show(checkoutAfterAdd ? 'Choose options on the product page' : 'Could not add to cart', {
           tone: 'default',
           message: error,
         })
@@ -49,17 +62,68 @@ export function CommunityProductSuggestionRow({
         return
       }
       toast.show('Added to cart', { tone: 'success' })
-      if (goToCheckout) {
-        if (!user) {
-          navigateApp(buildSignInUrl(String(commerceRoutes.checkout)))
-        } else {
-          navigateApp(commerceRoutes.checkout)
-        }
-      }
+      if (checkoutAfterAdd) goToCheckout()
     } finally {
       setBusy(false)
     }
   }
+
+  // Sidebar rail stacks the actions; the wider in-feed card sits them side by side.
+  const fill = compact ? ({ width: '100%' } as const) : ({ flex: 1 } as const)
+
+  const cartButton = inCart ? (
+    <Button
+      size="$2"
+      tone="outline"
+      borderRadius={999}
+      {...fill}
+      icon={<Icons.Check size={14} color={communityUi.brand} />}
+      onPress={() => navigateApp(commerceRoutes.cart)}
+    >
+      In cart
+    </Button>
+  ) : (
+    <Button
+      size="$2"
+      tone="outline"
+      borderRadius={999}
+      {...fill}
+      disabled={adding || buying}
+      icon={
+        adding ? <Spinner size="small" /> : <Icons.ShoppingBag size={14} color={communityUi.text} />
+      }
+      onPress={() => void runCartAction(false)}
+    >
+      {adding ? 'Adding…' : 'Add to cart'}
+    </Button>
+  )
+
+  const payButton = inCart ? (
+    <Button
+      size="$2"
+      tone="primary"
+      borderRadius={999}
+      {...fill}
+      icon={<Icons.CreditCard size={14} color="white" />}
+      onPress={goToCheckout}
+    >
+      Checkout
+    </Button>
+  ) : (
+    <Button
+      size="$2"
+      tone="primary"
+      borderRadius={999}
+      {...fill}
+      disabled={adding || buying}
+      icon={
+        buying ? <Spinner size="small" color="white" /> : <Icons.Zap size={14} color="white" />
+      }
+      onPress={() => void runCartAction(true)}
+    >
+      {buying ? 'Loading…' : 'Buy now'}
+    </Button>
+  )
 
   return (
     <YStack
@@ -122,77 +186,13 @@ export function CommunityProductSuggestionRow({
 
       {compact ? (
         <YStack padding={8} paddingTop={0} gap="$2">
-          <Button
-            size="$2"
-            tone="outline"
-            borderRadius={999}
-            width="100%"
-            disabled={adding || buying}
-            icon={
-              adding ? (
-                <Spinner size="small" />
-              ) : (
-                <Icons.ShoppingBag size={14} color={communityUi.text} />
-              )
-            }
-            onPress={() => void runCartAction(false)}
-          >
-            {adding ? 'Adding…' : 'Add to cart'}
-          </Button>
-          <Button
-            size="$2"
-            tone="primary"
-            borderRadius={999}
-            width="100%"
-            disabled={adding || buying}
-            icon={
-              buying ? (
-                <Spinner size="small" color="white" />
-              ) : (
-                <Icons.Zap size={14} color="white" />
-              )
-            }
-            onPress={() => void runCartAction(true)}
-          >
-            {buying ? 'Loading…' : 'Buy now'}
-          </Button>
+          {cartButton}
+          {payButton}
         </YStack>
       ) : (
         <XStack padding={10} paddingTop={0} gap="$2">
-          <Button
-            size="$2"
-            tone="outline"
-            borderRadius={999}
-            flex={1}
-            disabled={adding || buying}
-            icon={
-              adding ? (
-                <Spinner size="small" />
-              ) : (
-                <Icons.ShoppingBag size={14} color={communityUi.text} />
-              )
-            }
-            onPress={() => void runCartAction(false)}
-          >
-            {adding ? 'Adding…' : 'Add to cart'}
-          </Button>
-          <Button
-            size="$2"
-            tone="primary"
-            borderRadius={999}
-            flex={1}
-            disabled={adding || buying}
-            icon={
-              buying ? (
-                <Spinner size="small" color="white" />
-              ) : (
-                <Icons.Zap size={14} color="white" />
-              )
-            }
-            onPress={() => void runCartAction(true)}
-          >
-            {buying ? 'Loading…' : 'Buy now'}
-          </Button>
+          {cartButton}
+          {payButton}
         </XStack>
       )}
     </YStack>
