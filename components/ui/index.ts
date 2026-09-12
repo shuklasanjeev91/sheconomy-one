@@ -62,7 +62,6 @@ export {
   Form,
   Group,
   Portal,
-  ScrollView,
   Square,
   Theme,
   Unspaced,
@@ -73,6 +72,9 @@ export {
   useMedia,
   useTheme,
 } from 'tamagui'
+
+// Keyboard-aware ScrollView — see the file for why iOS needs the inset.
+export { ScrollView } from '~/components/ui/ScrollView'
 
 // Native-safe Image — percentage width/height must not land in RN `source`.
 export { Image } from '~/components/ui/Image'
