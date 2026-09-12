@@ -318,12 +318,10 @@ function CommentRow({
   onReply: () => void
 }) {
   const ui = useAppUi()
-  const [menuOpen, setMenuOpen] = useState(false)
   const [isDeleting, setIsDeleting] = useState(false)
 
   function confirmDelete() {
     const remove = async () => {
-      setMenuOpen(false)
       setIsDeleting(true)
       await onDelete()
       setIsDeleting(false)
@@ -357,48 +355,11 @@ function CommentRow({
           paddingVertical="$2"
           gap={2}
         >
-          <XStack alignItems="center" gap="$2">
-            <ProfileLink userId={comment.userId}>
-              <Text fontSize={13} fontWeight="600" color={ui.text} cursor="pointer">
-                {comment.authorName}
-              </Text>
-            </ProfileLink>
-            {canDelete ? (
-              <XStack
-                marginLeft="auto"
-                padding={3}
-                borderRadius={999}
-                cursor="pointer"
-                opacity={isDeleting ? 0.5 : 1}
-                onPress={() => !isDeleting && setMenuOpen((open) => !open)}
-                accessibilityLabel="Comment options"
-              >
-                {isDeleting ? (
-                  <Spinner size="small" />
-                ) : (
-                  <Icons.MoreHorizontal size={15} color={ui.textMuted} />
-                )}
-              </XStack>
-            ) : null}
-          </XStack>
-          {menuOpen ? (
-            <XStack
-              alignSelf="flex-end"
-              gap="$1.5"
-              alignItems="center"
-              paddingHorizontal="$2"
-              paddingVertical="$1.5"
-              borderRadius={8}
-              backgroundColor={ui.surfaceMuted}
-              cursor="pointer"
-              onPress={confirmDelete}
-            >
-              <Icons.Trash2 size={13} color={ui.danger} />
-              <Text fontSize={12} fontWeight="700" color={ui.danger}>
-                Delete
-              </Text>
-            </XStack>
-          ) : null}
+          <ProfileLink userId={comment.userId}>
+            <Text fontSize={13} fontWeight="600" color={ui.text} cursor="pointer">
+              {comment.authorName}
+            </Text>
+          </ProfileLink>
           {comment.authorHeadline ? (
             <Text fontSize={11} color={ui.textMuted} numberOfLines={1}>
               {comment.authorHeadline}
@@ -431,6 +392,18 @@ function CommentRow({
           >
             Reply
           </Text>
+          {canDelete ? (
+            <Text
+              fontSize={12}
+              fontWeight="600"
+              color={ui.danger}
+              cursor="pointer"
+              opacity={isDeleting ? 0.5 : 1}
+              onPress={() => !isDeleting && confirmDelete()}
+            >
+              {isDeleting ? 'Deleting…' : 'Delete'}
+            </Text>
+          ) : null}
           <Text fontSize={12} color={ui.textMuted}>
             {formatCommentTime(comment.createdAt)}
           </Text>
