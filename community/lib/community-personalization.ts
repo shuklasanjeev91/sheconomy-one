@@ -32,6 +32,11 @@ export type CommunitySuggestionListingMeta = {
   shopId?: string | null
 }
 
+export type CommunitySuggestionGroupMeta = {
+  /** `public` joins immediately; `private` creates a join request. */
+  groupType: string
+}
+
 export type CommunitySuggestion = {
   id: string
   kind: SuggestionKind
@@ -43,6 +48,8 @@ export type CommunitySuggestion = {
   reason: string
   /** Present on `listing` suggestions — powers Add to cart / Buy now in the feed. */
   listingMeta?: CommunitySuggestionListingMeta
+  /** Present on `group` suggestions — tells the Join button which flow to use. */
+  groupMeta?: CommunitySuggestionGroupMeta
 }
 
 export type PersonalizationContext = {
@@ -351,6 +358,7 @@ function scoreGroup(group: Group, ctx: PersonalizationContext): CommunitySuggest
     href: communityRoutes.group(group.id),
     imageUrl: group.avatar_url,
     score: score + BASE_SCORE,
+    groupMeta: { groupType: group.group_type ?? 'public' },
     reason:
       interestScore(ctx.interests, ctx.industry, ctx.occupation, group.title, group.description, industryText) > 0
         ? 'Based on your interests'

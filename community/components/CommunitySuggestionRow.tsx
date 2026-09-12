@@ -1,3 +1,5 @@
+import type { ReactNode } from 'react'
+
 import type { CommunitySuggestion, SuggestionKind } from '~/community/lib/community-personalization'
 import { AppLink } from '~/components/navigation/AppLink'
 import { suggestionKindLabel } from '~/community/lib/community-personalization'
@@ -32,9 +34,12 @@ const KIND_COLOR: Record<SuggestionKind, string> = {
 export function CommunitySuggestionRow({
   item,
   showKindLabel = true,
+  action,
 }: {
   item: CommunitySuggestion
   showKindLabel?: boolean
+  /** Connect / Follow / Join control kept outside the link so taps do not navigate. */
+  action?: ReactNode
 }) {
   const communityUi = useCommunityUi()
   const Icon = KIND_ICON[item.kind]
@@ -49,76 +54,85 @@ export function CommunitySuggestionRow({
   const avatarName = title || subtitle || '?'
 
   return (
-    <AppLink href={item.href as never} asChild>
-      <XStack
-        width="100%"
-        gap={10}
-        alignItems="flex-start"
-        paddingVertical={8}
-        paddingHorizontal={8}
-        borderRadius={8}
-        minHeight={ROW_MIN_HEIGHT}
-        cursor="pointer"
-        hoverStyle={{ backgroundColor: communityUi.divider }}
-        pressStyle={{ opacity: 0.92 }}
-      >
-        {item.imageUrl ? (
-          <YStack width={AVATAR_SIZE} height={AVATAR_SIZE} flexShrink={0} marginTop={2}>
-            <Avatar name={avatarName} src={item.imageUrl} size={AVATAR_SIZE} />
-          </YStack>
-        ) : (
-          <XStack
-            width={AVATAR_SIZE}
-            height={AVATAR_SIZE}
-            flexShrink={0}
-            marginTop={2}
-            borderRadius={999}
-            backgroundColor={KIND_COLOR[item.kind]}
-            alignItems="center"
-            justifyContent="center"
-          >
-            <Icon size={14} color="white" />
-          </XStack>
-        )}
+    <XStack
+      width="100%"
+      gap={10}
+      alignItems="center"
+      paddingVertical={8}
+      paddingHorizontal={8}
+      borderRadius={8}
+      minHeight={ROW_MIN_HEIGHT}
+      hoverStyle={{ backgroundColor: communityUi.divider }}
+    >
+      <AppLink href={item.href as never} asChild>
+        <XStack
+          flex={1}
+          minWidth={0}
+          gap={10}
+          alignItems="flex-start"
+          cursor="pointer"
+          pressStyle={{ opacity: 0.92 }}
+        >
+          {item.imageUrl ? (
+            <YStack width={AVATAR_SIZE} height={AVATAR_SIZE} flexShrink={0} marginTop={2}>
+              <Avatar name={avatarName} src={item.imageUrl} size={AVATAR_SIZE} />
+            </YStack>
+          ) : (
+            <XStack
+              width={AVATAR_SIZE}
+              height={AVATAR_SIZE}
+              flexShrink={0}
+              marginTop={2}
+              borderRadius={999}
+              backgroundColor={KIND_COLOR[item.kind]}
+              alignItems="center"
+              justifyContent="center"
+            >
+              <Icon size={14} color="white" />
+            </XStack>
+          )}
 
-        <YStack flex={1} minWidth={0} gap={2} justifyContent="center">
-          {title ? (
-            <Text
-              fontSize={14}
-              fontWeight="600"
-              lineHeight={18}
-              color={communityUi.text}
-              numberOfLines={1}
-              ellipsizeMode="tail"
-            >
-              {title}
-            </Text>
-          ) : null}
-          {subtitle ? (
-            <Text
-              fontSize={12}
-              lineHeight={16}
-              color={communityUi.textMuted}
-              numberOfLines={1}
-              ellipsizeMode="tail"
-            >
-              {subtitle}
-            </Text>
-          ) : null}
-          {reason ? (
-            <Text
-              fontSize={11}
-              lineHeight={14}
-              fontWeight="500"
-              color={communityUi.brand}
-              numberOfLines={1}
-              ellipsizeMode="tail"
-            >
-              {reason}
-            </Text>
-          ) : null}
-        </YStack>
-      </XStack>
-    </AppLink>
+          <YStack flex={1} minWidth={0} gap={2} justifyContent="center">
+            {title ? (
+              <Text
+                fontSize={14}
+                fontWeight="600"
+                lineHeight={18}
+                color={communityUi.text}
+                numberOfLines={1}
+                ellipsizeMode="tail"
+              >
+                {title}
+              </Text>
+            ) : null}
+            {subtitle ? (
+              <Text
+                fontSize={12}
+                lineHeight={16}
+                color={communityUi.textMuted}
+                numberOfLines={1}
+                ellipsizeMode="tail"
+              >
+                {subtitle}
+              </Text>
+            ) : null}
+            {reason ? (
+              <Text
+                fontSize={11}
+                lineHeight={14}
+                fontWeight="500"
+                color={communityUi.brand}
+                numberOfLines={1}
+                ellipsizeMode="tail"
+              >
+                {reason}
+              </Text>
+            ) : null}
+          </YStack>
+        </XStack>
+      </AppLink>
+
+      {action ? <YStack flexShrink={0}>{action}</YStack> : null}
+    </XStack>
   )
 }

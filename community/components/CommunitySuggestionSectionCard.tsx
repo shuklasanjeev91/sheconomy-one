@@ -3,8 +3,12 @@ import { Platform, View } from 'react-native'
 import { CommunityProductSuggestionRow } from '~/community/components/CommunityProductSuggestionRow'
 import { CommunityShopSuggestionRow } from '~/community/components/CommunityShopSuggestionRow'
 import { CommunitySuggestionRow } from '~/community/components/CommunitySuggestionRow'
+import { CompanyFollowButton } from '~/community/components/CompanyFollowButton'
+import { GroupJoinButton } from '~/community/components/GroupJoinButton'
+import { ProfileConnectButton } from '~/community/components/ProfileConnectButton'
 import { AppLink } from '~/components/navigation/AppLink'
 import { CommunityWidget } from '~/community/components/CommunityWidget'
+import type { CommunitySuggestion } from '~/community/lib/community-personalization'
 import type { SuggestionSection } from '~/community/hooks/useCommunitySuggestions'
 import { useCommunityUi } from '~/community/lib/community-theme'
 import { Text, YStack } from '~/components/ui'
@@ -19,6 +23,20 @@ type CommunitySuggestionSectionCardProps = {
 const ROW_MIN_HEIGHT = 64
 const PRODUCT_CARD_MIN_HEIGHT = 196
 const SECTION_CHROME_HEIGHT = 88
+
+/** Jobs and events stay link-only — they have no single-tap membership action. */
+function suggestionAction(item: CommunitySuggestion) {
+  if (item.kind === 'person') {
+    return <ProfileConnectButton targetUserId={item.id} size="sm" />
+  }
+  if (item.kind === 'company') {
+    return <CompanyFollowButton companyId={item.id} size="sm" />
+  }
+  if (item.kind === 'group') {
+    return <GroupJoinButton groupId={item.id} groupType={item.groupMeta?.groupType} size="sm" />
+  }
+  return null
+}
 
 export function CommunitySuggestionSectionCard({
   section,
@@ -62,6 +80,7 @@ export function CommunitySuggestionSectionCard({
               key={`${item.kind}-${item.id}`}
               item={item}
               showKindLabel={false}
+              action={suggestionAction(item)}
             />
           ),
         )}

@@ -5,18 +5,25 @@ import { useCommunityUi } from '~/community/lib/community-theme'
 import { Spinner, Text, XStack } from '~/components/ui'
 import { routes } from '~/lib/routes'
 
-export function CompanyFollowButton({ company }: { company?: CompanyPage | null }) {
-  const communityUi = useCommunityUi()
-  const follow = useCompanyFollow(company)
+type CompanyFollowButtonProps = {
+  company?: CompanyPage | null
+  /** Use when only the id is known, e.g. community suggestion rows. */
+  companyId?: string | null
+  size?: 'sm' | 'md'
+}
 
-  if (!company || follow.isLoading) {
+export function CompanyFollowButton({ company, companyId, size = 'md' }: CompanyFollowButtonProps) {
+  const communityUi = useCommunityUi()
+  const follow = useCompanyFollow(companyId ?? company)
+
+  if ((!company && !companyId) || follow.isLoading) {
     return <Spinner size="small" color={communityUi.brand} />
   }
 
   if (!follow.isAuthenticated) {
     return (
       <AppLink href={routes.signIn} asChild>
-        <Chip label="Follow" primary />
+        <Chip label="Follow" primary size={size} />
       </AppLink>
     )
   }
@@ -25,6 +32,7 @@ export function CompanyFollowButton({ company }: { company?: CompanyPage | null 
     <Chip
       label={follow.isFollowing ? 'Following' : 'Follow'}
       primary={!follow.isFollowing}
+      size={size}
       disabled={follow.isToggling}
       onPress={follow.toggle}
     />
@@ -36,17 +44,19 @@ function Chip({
   primary,
   disabled,
   onPress,
+  size = 'md',
 }: {
   label: string
   primary?: boolean
   disabled?: boolean
   onPress?: () => void
+  size?: 'sm' | 'md'
 }) {
   const communityUi = useCommunityUi()
   return (
     <XStack
-      paddingHorizontal={16}
-      paddingVertical={8}
+      paddingHorizontal={size === 'sm' ? 12 : 16}
+      paddingVertical={size === 'sm' ? 5 : 8}
       borderRadius={999}
       borderWidth={1}
       borderColor={primary ? communityUi.brand : communityUi.border}
@@ -55,7 +65,11 @@ function Chip({
       cursor={disabled ? 'default' : 'pointer'}
       onPress={disabled ? undefined : onPress}
     >
-      <Text fontSize={14} fontWeight="600" color={primary ? 'white' : communityUi.textMuted}>
+      <Text
+        fontSize={size === 'sm' ? 13 : 14}
+        fontWeight="600"
+        color={primary ? 'white' : communityUi.textMuted}
+      >
         {label}
       </Text>
     </XStack>
