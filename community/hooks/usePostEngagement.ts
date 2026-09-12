@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 
 import type { ReactionType } from '~/community/lib/constants'
 import { REACTION_TYPES } from '~/community/lib/constants'
@@ -49,6 +49,11 @@ export function usePostEngagement(
   const [commentDraft, setCommentDraft] = useState('')
   const [repostDraft, setRepostDraft] = useState('')
   const [error, setError] = useState<string | null>(null)
+  // State updates do not disable a button until React renders again. These
+  // synchronous locks prevent rapid touch/click events from starting duplicate
+  // mutations during that gap on web, iOS, and Android.
+  const commentSubmitInFlightRef = useRef(false)
+  const replySubmitInFlightRef = useRef(new Set<string>())
 
   useEffect(() => {
     setLikeCount(initialLikeCount)
@@ -141,20 +146,26 @@ export function usePostEngagement(
 
     const body = (encodedOverride ?? commentDraft).trim()
     if (!body) return { error: 'Comment is empty' }
+    if (commentSubmitInFlightRef.current) return { error: null }
 
+    commentSubmitInFlightRef.current = true
     setIsCommenting(true)
-    const result = await addPostComment(user.id, postId, body)
-    setIsCommenting(false)
+    try {
+      const result = await addPostComment(user.id, postId, body)
 
-    if (!result.error) {
-      setCommentDraft('')
-      setCommentCount((count) => count + 1)
-      await loadComments()
-    } else {
-      setError(result.error)
+      if (!result.error) {
+        setCommentDraft('')
+        setCommentCount((count) => count + 1)
+        await loadComments()
+      } else {
+        setError(result.error)
+      }
+
+      return result
+    } finally {
+      commentSubmitInFlightRef.current = false
+      setIsCommenting(false)
     }
-
-    return result
   }, [commentDraft, loadComments, postId, user])
 
   const replyToComment = useCallback(
@@ -162,15 +173,21 @@ export function usePostEngagement(
       if (!user) return { error: 'Sign in to reply' }
       const trimmed = body.trim()
       if (!trimmed) return { error: 'Reply is empty' }
+      if (replySubmitInFlightRef.current.has(parentCommentId)) return { error: null }
 
-      const result = await addPostComment(user.id, postId, trimmed, parentCommentId)
-      if (!result.error) {
-        setCommentCount((count) => count + 1)
-        await loadComments()
-      } else {
-        setError(result.error)
+      replySubmitInFlightRef.current.add(parentCommentId)
+      try {
+        const result = await addPostComment(user.id, postId, trimmed, parentCommentId)
+        if (!result.error) {
+          setCommentCount((count) => count + 1)
+          await loadComments()
+        } else {
+          setError(result.error)
+        }
+        return result
+      } finally {
+        replySubmitInFlightRef.current.delete(parentCommentId)
       }
-      return result
     },
     [loadComments, postId, user],
   )
