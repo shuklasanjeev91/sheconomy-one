@@ -16,6 +16,10 @@ import {
   parseE164Phone,
   toE164Phone,
 } from '~/lib/phone/phone'
+import {
+  isPhoneHintSupported,
+  requestAutomaticPhoneNumberHint,
+} from '~/lib/platform/phone-hint'
 import { useAppUi } from '~/lib/theme/useAppUi'
 
 export type PhoneInputProps = {
@@ -63,6 +67,7 @@ export const PhoneInput = forwardRef<PhoneInputHandle, PhoneInputProps>(function
   const [country, setCountry] = useState<Country>(parsed?.country ?? defaultCountry)
   const [national, setNational] = useState(parsed?.nationalNumber ?? '')
   const [sheetOpen, setSheetOpen] = useState(false)
+  const automaticHintAttemptedRef = useRef(false)
 
   const latest = useRef({ country, national, value, onChange })
   latest.current = { country, national, value, onChange }
@@ -87,6 +92,38 @@ export const PhoneInput = forwardRef<PhoneInputHandle, PhoneInputProps>(function
     setCountry(next.country)
     setNational(next.nationalNumber)
   }, [value])
+
+  useEffect(() => {
+    if (
+      automaticHintAttemptedRef.current ||
+      disabled ||
+      value.trim() ||
+      !isPhoneHintSupported()
+    ) {
+      return
+    }
+
+    automaticHintAttemptedRef.current = true
+    let cancelled = false
+    void requestAutomaticPhoneNumberHint().then((result) => {
+      if (cancelled || !result.phoneNumber) return
+
+      const current = latest.current
+      if (current.value.trim() || nationalDigits(current.national)) return
+
+      const normalized = normalizePhoneNumber(result.phoneNumber, current.country)
+      const next = parseE164Phone(normalized)
+      if (!next) return
+
+      setCountry(next.country)
+      setNational(next.nationalNumber)
+      current.onChange(toE164Phone(next.country, next.nationalNumber))
+    })
+
+    return () => {
+      cancelled = true
+    }
+  }, [disabled, value])
 
   function emit(nextCountry: Country, nextNational: string) {
     const digits = nationalDigits(nextNational)

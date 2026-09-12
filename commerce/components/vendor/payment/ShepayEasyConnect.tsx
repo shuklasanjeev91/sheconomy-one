@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { Linking, Platform } from 'react-native'
 
+import { PhoneInput } from '~/components/forms/PhoneInput'
 import {
   Button,
   Field,
@@ -242,10 +243,9 @@ export function ShepayEasyConnect({
           />
         </Field>
         <Field label="Your mobile">
-          <Input
+          <PhoneInput
             value={phone}
-            onChangeText={setPhone}
-            keyboardType="phone-pad"
+            onChange={setPhone}
             placeholder="10-digit mobile"
           />
         </Field>

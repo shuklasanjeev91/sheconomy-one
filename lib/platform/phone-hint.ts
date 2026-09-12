@@ -7,6 +7,8 @@ export type PhoneHintResult = {
 
 /** Single-flight so React Strict Mode remounts share one Play Services hint dialog. */
 let phoneHintInFlight: Promise<PhoneHintResult> | null = null
+let automaticHintRequested = false
+let selectedPhoneNumber: string | null = null
 
 const HINT_TIMEOUT_MS = 120_000
 
@@ -31,7 +33,8 @@ export async function requestPhoneNumberHint(): Promise<PhoneHintResult> {
           setTimeout(() => reject(new Error('Phone number picker timed out.')), HINT_TIMEOUT_MS)
         }),
       ])
-      return { phoneNumber: phone?.trim() || null, error: null }
+      selectedPhoneNumber = phone?.trim() || null
+      return { phoneNumber: selectedPhoneNumber, error: null }
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error ?? '')
       // User dismissed the picker — not an actionable failure.
@@ -49,6 +52,19 @@ export async function requestPhoneNumberHint(): Promise<PhoneHintResult> {
   })()
 
   return phoneHintInFlight
+}
+
+/**
+ * Ask for the Android SIM/account number at most once per app session.
+ * A previously selected number is reused by later empty phone fields.
+ */
+export async function requestAutomaticPhoneNumberHint(): Promise<PhoneHintResult> {
+  if (!isPhoneHintSupported()) return { phoneNumber: null, error: null }
+  if (selectedPhoneNumber) return { phoneNumber: selectedPhoneNumber, error: null }
+  if (automaticHintRequested) return { phoneNumber: null, error: null }
+
+  automaticHintRequested = true
+  return requestPhoneNumberHint()
 }
 
 export function isPhoneHintSupported(): boolean {

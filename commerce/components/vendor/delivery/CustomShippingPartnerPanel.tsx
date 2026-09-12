@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { Linking } from 'react-native'
 
+import { PhoneInput } from '~/components/forms/PhoneInput'
 import {
   AppBottomSheet,
   Badge,
@@ -265,7 +266,11 @@ export function CustomShippingPartnerPanel({
               />
             </Field>
             <Field label={copy.phone} flex={1} minWidth={160}>
-              <Input value={form.phone} onChangeText={(phone) => patchForm({ phone })} keyboardType="phone-pad" />
+              <PhoneInput
+                value={form.phone}
+                onChange={(phone) => patchForm({ phone })}
+                compact
+              />
             </Field>
           </XStack>
           <XStack gap="$3" flexWrap="wrap">
