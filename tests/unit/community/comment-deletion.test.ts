@@ -4,7 +4,10 @@ const maybeSingleMock = vi.fn()
 const selectMock = vi.fn(() => ({ maybeSingle: maybeSingleMock }))
 const eqMock = vi.fn(() => ({ select: selectMock }))
 const deleteMock = vi.fn(() => ({ eq: eqMock }))
-const fromMock = vi.fn(() => ({ delete: deleteMock }))
+const updateUserEqMock = vi.fn(() => ({ select: selectMock }))
+const updateIdEqMock = vi.fn(() => ({ eq: updateUserEqMock }))
+const updateMock = vi.fn(() => ({ eq: updateIdEqMock }))
+const fromMock = vi.fn(() => ({ delete: deleteMock, update: updateMock }))
 
 vi.mock('~/lib/supabase/client', () => ({
   supabase: {
@@ -12,7 +15,7 @@ vi.mock('~/lib/supabase/client', () => ({
   },
 }))
 
-import { deletePostComment } from '~/community/lib/post-engagement'
+import { deletePostComment, updatePostComment } from '~/community/lib/post-engagement'
 
 describe('post comment deletion', () => {
   beforeEach(() => {
@@ -42,6 +45,43 @@ describe('post comment deletion', () => {
 
     await expect(deletePostComment('comment-1')).resolves.toEqual({
       error: 'permission denied',
+    })
+  })
+})
+
+describe('post comment editing', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+  })
+
+  it('updates content and scopes the edit to the comment author', async () => {
+    maybeSingleMock.mockResolvedValue({ data: { id: 'comment-1' }, error: null })
+
+    await expect(updatePostComment('user-1', 'comment-1', ' Updated comment ')).resolves.toEqual({
+      error: null,
+    })
+    expect(updateMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        content: 'Updated comment',
+        is_edited: true,
+      }),
+    )
+    expect(updateIdEqMock).toHaveBeenCalledWith('id', 'comment-1')
+    expect(updateUserEqMock).toHaveBeenCalledWith('user_id', 'user-1')
+  })
+
+  it('rejects an empty edited comment without calling the database', async () => {
+    await expect(updatePostComment('user-1', 'comment-1', '   ')).resolves.toEqual({
+      error: 'Comment cannot be empty.',
+    })
+    expect(fromMock).not.toHaveBeenCalled()
+  })
+
+  it('does not report success when the authenticated user does not own the comment', async () => {
+    maybeSingleMock.mockResolvedValue({ data: null, error: null })
+
+    await expect(updatePostComment('user-1', 'comment-2', 'Nope')).resolves.toEqual({
+      error: 'Comment not found or you cannot edit it.',
     })
   })
 })

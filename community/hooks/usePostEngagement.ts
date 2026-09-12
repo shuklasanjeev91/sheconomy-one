@@ -10,6 +10,7 @@ import {
   fetchUserPostReaction,
   repostPost,
   toggleCommentLike as toggleCommentLikeApi,
+  updatePostComment as updatePostCommentApi,
   upsertPostReaction,
   type PostComment,
   type PostReaction,
@@ -56,6 +57,7 @@ export function usePostEngagement(
   const commentSubmitInFlightRef = useRef(false)
   const replySubmitInFlightRef = useRef(new Set<string>())
   const commentDeleteInFlightRef = useRef(new Set<string>())
+  const commentEditInFlightRef = useRef(new Set<string>())
 
   useEffect(() => {
     setLikeCount(initialLikeCount)
@@ -278,6 +280,38 @@ export function usePostEngagement(
     [comments, user],
   )
 
+  const editComment = useCallback(
+    async (commentId: string, content: string) => {
+      if (!user) return { error: 'Sign in to edit this comment' }
+      const trimmed = content.trim()
+      if (!trimmed) return { error: 'Comment cannot be empty.' }
+      if (commentEditInFlightRef.current.has(commentId)) return { error: null }
+
+      const target = comments.find((comment) => comment.id === commentId)
+      if (!target || target.userId !== user.id) {
+        return { error: 'You can only edit your own comments.' }
+      }
+
+      commentEditInFlightRef.current.add(commentId)
+      try {
+        const result = await updatePostCommentApi(user.id, commentId, trimmed)
+        if (result.error) {
+          setError(result.error)
+          return result
+        }
+        setComments((current) =>
+          current.map((comment) =>
+            comment.id === commentId ? { ...comment, content: trimmed } : comment,
+          ),
+        )
+        return result
+      } finally {
+        commentEditInFlightRef.current.delete(commentId)
+      }
+    },
+    [comments, user],
+  )
+
   const submitRepost = useCallback(async (encodedOverride?: string) => {
     if (!user) return { error: 'Sign in to repost' }
 
@@ -333,6 +367,7 @@ export function usePostEngagement(
     submitComment,
     replyToComment,
     toggleCommentLike,
+    editComment,
     deleteComment,
     submitRepost,
     loadComments,

@@ -43,6 +43,7 @@ type PostCommentsProps = {
   onDraftChange: (value: string) => void
   onSubmit: (encoded?: string) => void
   onLikeComment: (commentId: string) => void
+  onEditComment: (commentId: string, content: string) => Promise<{ error?: string | null } | unknown>
   onDeleteComment: (commentId: string) => Promise<{ error?: string | null } | unknown>
   onReply: (parentCommentId: string, encoded: string) => Promise<unknown> | void
   /** When set, show AI/local comment starters. */
@@ -60,6 +61,7 @@ export function PostComments({
   onDraftChange,
   onSubmit,
   onLikeComment,
+  onEditComment,
   onDeleteComment,
   onReply,
   suggestionContext,
@@ -110,6 +112,7 @@ export function PostComments({
               currentUserId={currentUserId}
               canModerate={canModerate}
               onLikeComment={onLikeComment}
+              onEditComment={onEditComment}
               onDeleteComment={onDeleteComment}
               onReply={onReply}
             />
@@ -175,6 +178,7 @@ function CommentThread({
   currentUserId,
   canModerate,
   onLikeComment,
+  onEditComment,
   onDeleteComment,
   onReply,
 }: {
@@ -184,6 +188,7 @@ function CommentThread({
   currentUserId: string | null
   canModerate: boolean
   onLikeComment: (commentId: string) => void
+  onEditComment: (commentId: string, content: string) => Promise<{ error?: string | null } | unknown>
   onDeleteComment: (commentId: string) => Promise<{ error?: string | null } | unknown>
   onReply: (parentCommentId: string, encoded: string) => Promise<unknown> | void
 }) {
@@ -222,8 +227,10 @@ function CommentThread({
     <YStack gap="$2">
       <CommentRow
         comment={comment}
+        canEdit={comment.userId === currentUserId}
         canDelete={canModerate || comment.userId === currentUserId}
         onLike={() => onLikeComment(comment.id)}
+        onEdit={(content) => onEditComment(comment.id, content)}
         onDelete={() => onDeleteComment(comment.id)}
         onReply={() => openReply()}
       />
@@ -249,8 +256,10 @@ function CommentThread({
                   key={reply.id}
                   comment={reply}
                   isReply
+                  canEdit={reply.userId === currentUserId}
                   canDelete={canModerate || reply.userId === currentUserId}
                   onLike={() => onLikeComment(reply.id)}
+                  onEdit={(content) => onEditComment(reply.id, content)}
                   onDelete={() => onDeleteComment(reply.id)}
                   onReply={() => openReply(reply.authorName)}
                 />
@@ -305,20 +314,44 @@ function CommentThread({
 function CommentRow({
   comment,
   isReply = false,
+  canEdit,
   canDelete,
   onLike,
+  onEdit,
   onDelete,
   onReply,
 }: {
   comment: PostComment
   isReply?: boolean
+  canEdit: boolean
   canDelete: boolean
   onLike: () => void
+  onEdit: (content: string) => Promise<unknown>
   onDelete: () => Promise<unknown>
   onReply: () => void
 }) {
   const ui = useAppUi()
+  const [editOpen, setEditOpen] = useState(false)
+  const [editDraft, setEditDraft] = useState(comment.content)
+  const [isEditing, setIsEditing] = useState(false)
+  const editEncodedRef = useRef(comment.content)
   const [isDeleting, setIsDeleting] = useState(false)
+
+  async function submitEdit() {
+    const body = (editEncodedRef.current || editDraft).trim()
+    if (!body || isEditing) return
+    setIsEditing(true)
+    const result = (await onEdit(body)) as { error?: string | null } | undefined
+    setIsEditing(false)
+    if (result?.error) return
+    setEditOpen(false)
+  }
+
+  function cancelEdit() {
+    setEditDraft(comment.content)
+    editEncodedRef.current = comment.content
+    setEditOpen(false)
+  }
 
   function confirmDelete() {
     const remove = async () => {
@@ -365,12 +398,46 @@ function CommentRow({
               {comment.authorHeadline}
             </Text>
           ) : null}
-          <PostContentText
-            content={comment.content}
-            collapsible={false}
-            fontSize={14}
-            lineHeight={20}
-          />
+          {editOpen ? (
+            <YStack gap="$2">
+              <MentionInput
+                value={editDraft}
+                onChangeText={(text) => {
+                  editEncodedRef.current = text
+                  setEditDraft(text)
+                }}
+                onEncodedChange={(encoded) => {
+                  editEncodedRef.current = encoded
+                }}
+                multiline
+                autoFocus
+                minHeight={64}
+                backgroundColor={ui.surface}
+                placeholder="Edit comment…"
+              />
+              <XStack gap="$2" justifyContent="flex-end">
+                <Button size="$2" tone="outline" disabled={isEditing} onPress={cancelEdit}>
+                  Cancel
+                </Button>
+                <Button
+                  size="$2"
+                  tone="primary"
+                  disabled={!editDraft.trim() || isEditing}
+                  icon={isEditing ? <Spinner size="small" color="white" /> : undefined}
+                  onPress={() => void submitEdit()}
+                >
+                  {isEditing ? 'Saving…' : 'Save'}
+                </Button>
+              </XStack>
+            </YStack>
+          ) : (
+            <PostContentText
+              content={comment.content}
+              collapsible={false}
+              fontSize={14}
+              lineHeight={20}
+            />
+          )}
         </YStack>
 
         <XStack gap="$3" paddingLeft="$2" alignItems="center">
@@ -392,6 +459,21 @@ function CommentRow({
           >
             Reply
           </Text>
+          {canEdit ? (
+            <Text
+              fontSize={12}
+              fontWeight="600"
+              color={ui.textMuted}
+              cursor="pointer"
+              onPress={() => {
+                setEditDraft(comment.content)
+                editEncodedRef.current = comment.content
+                setEditOpen(true)
+              }}
+            >
+              Edit
+            </Text>
+          ) : null}
           {canDelete ? (
             <Text
               fontSize={12}

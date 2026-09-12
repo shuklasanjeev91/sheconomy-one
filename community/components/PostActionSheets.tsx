@@ -376,6 +376,16 @@ export function PostActionSheets({
               }
             })
           }}
+          onEditComment={(commentId, content) =>
+            engagement.editComment(commentId, content).then((result) => {
+              if (result?.error) {
+                toast.show('Could not edit comment', { tone: 'danger', message: result.error })
+                return result
+              }
+              toast.show('Comment updated', { tone: 'success' })
+              return result
+            })
+          }
           onDeleteComment={(commentId) =>
             engagement.deleteComment(commentId).then((result) => {
               if (result?.error) {

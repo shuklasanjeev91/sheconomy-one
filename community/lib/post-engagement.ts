@@ -177,6 +177,34 @@ export async function addPostComment(
   return { error: error?.message ?? null }
 }
 
+/** Edit one of the signed-in user's comments. */
+export async function updatePostComment(
+  userId: string,
+  commentId: string,
+  content: string,
+): Promise<{ error: string | null }> {
+  const trimmed = content.trim()
+  if (!trimmed) return { error: 'Comment cannot be empty.' }
+
+  const mentions = extractMentions(trimmed)
+  const { data, error } = await supabase
+    .from('comments')
+    .update({
+      content: trimmed,
+      mentions: mentions.length ? mentions : null,
+      is_edited: true,
+      updated_at: new Date().toISOString(),
+    })
+    .eq('id', commentId)
+    .eq('user_id', userId)
+    .select('id')
+    .maybeSingle()
+
+  if (error) return { error: error.message }
+  if (!data) return { error: 'Comment not found or you cannot edit it.' }
+  return { error: null }
+}
+
 /**
  * Delete a comment. RLS allows the comment author and the author of the post it
  * sits under, so the filter stays on the id alone — scoping to the caller's
