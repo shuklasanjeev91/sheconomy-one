@@ -397,7 +397,10 @@ export function AppBottomSheet({
       snapPointsMode="percent"
       zIndex={100_000}
       animation={SHEET_ANIMATION}
-      moveOnKeyboardChange={false}
+      // Keep focused inputs above the software keyboard on iOS and Android.
+      // This also covers native nested-sheet layers because they render inside
+      // this top-level sheet frame.
+      moveOnKeyboardChange={!isWeb}
     >
       <SheetOverlay animation={SHEET_ANIMATION} />
       <SheetFrame
