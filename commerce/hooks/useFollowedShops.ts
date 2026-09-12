@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
 import {
   fetchFollowedShopIds,
@@ -24,15 +24,20 @@ export function useFollowedShops(limit = 12) {
   const { user, isLoading: authLoading } = useSupabase()
   const [state, setState] = useState<FollowedShopsState>(emptyState)
   const [isLoading, setIsLoading] = useState(true)
+  const loadedForUserRef = useRef<string | null>(null)
 
   const reload = useCallback(async () => {
     if (!user) {
       setState(emptyState)
+      loadedForUserRef.current = null
       setIsLoading(false)
       return
     }
 
-    setIsLoading(true)
+    // Follow/unfollow notifications trigger background reloads. Preserve the
+    // rendered recommendation rail after the first load instead of collapsing
+    // it back to a loading placeholder.
+    if (loadedForUserRef.current !== user.id) setIsLoading(true)
     const [idsResult, shopsResult] = await Promise.all([
       fetchFollowedShopIds(user.id),
       fetchFollowedShops(user.id, limit),
@@ -43,6 +48,7 @@ export function useFollowedShops(limit = 12) {
       items: shopsResult.items,
       error: idsResult.error ?? shopsResult.error,
     })
+    loadedForUserRef.current = user.id
     setIsLoading(false)
   }, [limit, user])
 

@@ -21,7 +21,10 @@ export function CommunitySuggestionsSections({
   const communityUi = useCommunityUi()
   const { sections, isLoading } = useCommunitySuggestions(perKindLimit)
 
-  if (isLoading) {
+  // Keep the current cards mounted during background personalization refreshes.
+  // Replacing a tall rail with this small placeholder collapses its scroll range
+  // and causes the cross-platform jump seen after Follow/Add actions.
+  if (isLoading && sections.length === 0) {
     return (
       <CommunityWidget title="Add to your feed">
         <XStack paddingVertical={16} justifyContent="center">

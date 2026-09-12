@@ -14,14 +14,14 @@ export function useShopFollow(shopId?: string | null) {
   const [isToggling, setIsToggling] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
-  const reload = useCallback(async () => {
+  const reload = useCallback(async (showLoading = true) => {
     if (!shopId || !user) {
       setIsFollowing(false)
       setIsLoading(false)
       return
     }
 
-    setIsLoading(true)
+    if (showLoading) setIsLoading(true)
     const result = await fetchShopFollowState(user.id, shopId)
     setIsFollowing(result.isFollowing)
     setError(result.error)
@@ -44,7 +44,10 @@ export function useShopFollow(shopId?: string | null) {
       : await followShop(user.id, shopId)
 
     if (!result.error) {
-      await reload()
+      // Keep the existing button mounted while confirming the new state.
+      // Replacing it with an un-sized spinner makes compact rails visibly jump.
+      setIsFollowing(!isFollowing)
+      await reload(false)
     } else {
       setError(result.error)
     }
