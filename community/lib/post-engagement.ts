@@ -177,6 +177,24 @@ export async function addPostComment(
   return { error: error?.message ?? null }
 }
 
+/** Delete one of the signed-in user's comments. Replies cascade in Postgres. */
+export async function deletePostComment(
+  userId: string,
+  commentId: string,
+): Promise<{ error: string | null }> {
+  const { data, error } = await supabase
+    .from('comments')
+    .delete()
+    .eq('id', commentId)
+    .eq('user_id', userId)
+    .select('id')
+    .maybeSingle()
+
+  if (error) return { error: error.message }
+  if (!data) return { error: 'Comment not found or you cannot delete it.' }
+  return { error: null }
+}
+
 /** Toggle the signed-in user's like on a comment. */
 export async function toggleCommentLike(
   userId: string,

@@ -338,6 +338,7 @@ export function PostActionSheets({
           comments={engagement.comments}
           isLoading={engagement.isLoadingComments}
           isAuthenticated={engagement.isAuthenticated}
+          currentUserId={engagement.user?.id ?? null}
           commentDraft={engagement.commentDraft}
           isCommenting={engagement.isCommenting}
           onDraftChange={engagement.setCommentDraft}
@@ -374,6 +375,16 @@ export function PostActionSheets({
               }
             })
           }}
+          onDeleteComment={(commentId) =>
+            engagement.deleteComment(commentId).then((result) => {
+              if (result?.error) {
+                toast.show('Could not delete comment', { tone: 'danger', message: result.error })
+                return result
+              }
+              toast.show('Comment deleted', { tone: 'success' })
+              return result
+            })
+          }
           onReply={(parentId, encoded) => {
             if (!engagement.isAuthenticated) {
               requireAuth('comment')

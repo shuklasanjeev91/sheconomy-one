@@ -4,6 +4,7 @@ import type { ReactionType } from '~/community/lib/constants'
 import { REACTION_TYPES } from '~/community/lib/constants'
 import {
   addPostComment,
+  deletePostComment as deletePostCommentApi,
   fetchPostComments,
   fetchPostReactions,
   fetchUserPostReaction,
@@ -54,6 +55,7 @@ export function usePostEngagement(
   // mutations during that gap on web, iOS, and Android.
   const commentSubmitInFlightRef = useRef(false)
   const replySubmitInFlightRef = useRef(new Set<string>())
+  const commentDeleteInFlightRef = useRef(new Set<string>())
 
   useEffect(() => {
     setLikeCount(initialLikeCount)
@@ -233,6 +235,49 @@ export function usePostEngagement(
     [comments, user],
   )
 
+  const deleteComment = useCallback(
+    async (commentId: string) => {
+      if (!user) return { error: 'Sign in to delete this comment' }
+      if (commentDeleteInFlightRef.current.has(commentId)) return { error: null }
+
+      const target = comments.find((comment) => comment.id === commentId)
+      if (!target || target.userId !== user.id) {
+        return { error: 'You can only delete your own comments.' }
+      }
+
+      commentDeleteInFlightRef.current.add(commentId)
+      try {
+        const result = await deletePostCommentApi(user.id, commentId)
+        if (result.error) {
+          setError(result.error)
+          return result
+        }
+
+        const removedIds = new Set([commentId])
+        let changed = true
+        while (changed) {
+          changed = false
+          for (const comment of comments) {
+            if (
+              comment.parentCommentId &&
+              removedIds.has(comment.parentCommentId) &&
+              !removedIds.has(comment.id)
+            ) {
+              removedIds.add(comment.id)
+              changed = true
+            }
+          }
+        }
+        setComments((current) => current.filter((comment) => !removedIds.has(comment.id)))
+        setCommentCount((count) => Math.max(0, count - removedIds.size))
+        return result
+      } finally {
+        commentDeleteInFlightRef.current.delete(commentId)
+      }
+    },
+    [comments, user],
+  )
+
   const submitRepost = useCallback(async (encodedOverride?: string) => {
     if (!user) return { error: 'Sign in to repost' }
 
@@ -288,6 +333,7 @@ export function usePostEngagement(
     submitComment,
     replyToComment,
     toggleCommentLike,
+    deleteComment,
     submitRepost,
     loadComments,
     loadReactions,

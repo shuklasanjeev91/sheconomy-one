@@ -1,4 +1,5 @@
 import { useMemo, useRef, useState } from 'react'
+import { Alert, Platform } from 'react-native'
 
 import { CommentSuggestionChips } from '~/community/components/CommentSuggestionChips'
 import { MentionInput } from '~/community/components/MentionInput'
@@ -34,11 +35,13 @@ type PostCommentsProps = {
   comments: PostComment[]
   isLoading: boolean
   isAuthenticated: boolean
+  currentUserId: string | null
   commentDraft: string
   isCommenting: boolean
   onDraftChange: (value: string) => void
   onSubmit: (encoded?: string) => void
   onLikeComment: (commentId: string) => void
+  onDeleteComment: (commentId: string) => Promise<{ error?: string | null } | unknown>
   onReply: (parentCommentId: string, encoded: string) => Promise<unknown> | void
   /** When set, show AI/local comment starters. */
   suggestionContext?: CommentSuggestionContext
@@ -48,11 +51,13 @@ export function PostComments({
   comments,
   isLoading,
   isAuthenticated,
+  currentUserId,
   commentDraft,
   isCommenting,
   onDraftChange,
   onSubmit,
   onLikeComment,
+  onDeleteComment,
   onReply,
   suggestionContext,
 }: PostCommentsProps) {
@@ -99,7 +104,9 @@ export function PostComments({
               comment={comment}
               replies={repliesByParent.get(comment.id) ?? []}
               isAuthenticated={isAuthenticated}
+              currentUserId={currentUserId}
               onLikeComment={onLikeComment}
+              onDeleteComment={onDeleteComment}
               onReply={onReply}
             />
           ))}
@@ -112,14 +119,22 @@ export function PostComments({
             <CommentSuggestionChips
               context={suggestionContext}
               disabled={isCommenting}
-              onSelect={(text) => onDraftChange(text)}
+              onSelect={(text) => {
+                // MentionInput's encoded value is held separately. Keep it in
+                // sync when a suggestion replaces the visible controlled value.
+                encodedRef.current = text
+                onDraftChange(text)
+              }}
             />
           ) : null}
           <XStack gap="$2" alignItems="center">
             <MentionInput
               flex={1}
               value={commentDraft}
-              onChangeText={onDraftChange}
+              onChangeText={(text) => {
+                encodedRef.current = text
+                onDraftChange(text)
+              }}
               onEncodedChange={(encoded) => {
                 encodedRef.current = encoded
               }}
@@ -153,13 +168,17 @@ function CommentThread({
   comment,
   replies,
   isAuthenticated,
+  currentUserId,
   onLikeComment,
+  onDeleteComment,
   onReply,
 }: {
   comment: PostComment
   replies: PostComment[]
   isAuthenticated: boolean
+  currentUserId: string | null
   onLikeComment: (commentId: string) => void
+  onDeleteComment: (commentId: string) => Promise<{ error?: string | null } | unknown>
   onReply: (parentCommentId: string, encoded: string) => Promise<unknown> | void
 }) {
   const ui = useAppUi()
@@ -197,7 +216,9 @@ function CommentThread({
     <YStack gap="$2">
       <CommentRow
         comment={comment}
+        canDelete={comment.userId === currentUserId}
         onLike={() => onLikeComment(comment.id)}
+        onDelete={() => onDeleteComment(comment.id)}
         onReply={() => openReply()}
       />
 
@@ -222,7 +243,9 @@ function CommentThread({
                   key={reply.id}
                   comment={reply}
                   isReply
+                  canDelete={reply.userId === currentUserId}
                   onLike={() => onLikeComment(reply.id)}
+                  onDelete={() => onDeleteComment(reply.id)}
                   onReply={() => openReply(reply.authorName)}
                 />
               ))}
@@ -276,15 +299,39 @@ function CommentThread({
 function CommentRow({
   comment,
   isReply = false,
+  canDelete,
   onLike,
+  onDelete,
   onReply,
 }: {
   comment: PostComment
   isReply?: boolean
+  canDelete: boolean
   onLike: () => void
+  onDelete: () => Promise<unknown>
   onReply: () => void
 }) {
   const ui = useAppUi()
+  const [menuOpen, setMenuOpen] = useState(false)
+  const [isDeleting, setIsDeleting] = useState(false)
+
+  function confirmDelete() {
+    const remove = async () => {
+      setMenuOpen(false)
+      setIsDeleting(true)
+      await onDelete()
+      setIsDeleting(false)
+    }
+
+    if (Platform.OS === 'web') {
+      if (globalThis.confirm?.('Delete this comment? This cannot be undone.')) void remove()
+      return
+    }
+    Alert.alert('Delete comment?', 'This cannot be undone.', [
+      { text: 'Cancel', style: 'cancel' },
+      { text: 'Delete', style: 'destructive', onPress: () => void remove() },
+    ])
+  }
 
   return (
     <XStack gap="$2" alignItems="flex-start">
@@ -304,11 +351,48 @@ function CommentRow({
           paddingVertical="$2"
           gap={2}
         >
-          <ProfileLink userId={comment.userId}>
-            <Text fontSize={13} fontWeight="600" color={ui.text} cursor="pointer">
-              {comment.authorName}
-            </Text>
-          </ProfileLink>
+          <XStack alignItems="center" gap="$2">
+            <ProfileLink userId={comment.userId}>
+              <Text fontSize={13} fontWeight="600" color={ui.text} cursor="pointer">
+                {comment.authorName}
+              </Text>
+            </ProfileLink>
+            {canDelete ? (
+              <XStack
+                marginLeft="auto"
+                padding={3}
+                borderRadius={999}
+                cursor="pointer"
+                opacity={isDeleting ? 0.5 : 1}
+                onPress={() => !isDeleting && setMenuOpen((open) => !open)}
+                accessibilityLabel="Comment options"
+              >
+                {isDeleting ? (
+                  <Spinner size="small" />
+                ) : (
+                  <Icons.MoreHorizontal size={15} color={ui.textMuted} />
+                )}
+              </XStack>
+            ) : null}
+          </XStack>
+          {menuOpen ? (
+            <XStack
+              alignSelf="flex-end"
+              gap="$1.5"
+              alignItems="center"
+              paddingHorizontal="$2"
+              paddingVertical="$1.5"
+              borderRadius={8}
+              backgroundColor={ui.surfaceMuted}
+              cursor="pointer"
+              onPress={confirmDelete}
+            >
+              <Icons.Trash2 size={13} color={ui.danger} />
+              <Text fontSize={12} fontWeight="700" color={ui.danger}>
+                Delete
+              </Text>
+            </XStack>
+          ) : null}
           {comment.authorHeadline ? (
             <Text fontSize={11} color={ui.textMuted} numberOfLines={1}>
               {comment.authorHeadline}
