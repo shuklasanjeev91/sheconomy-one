@@ -240,14 +240,14 @@ export function usePostEngagement(
       if (!user) return { error: 'Sign in to delete this comment' }
       if (commentDeleteInFlightRef.current.has(commentId)) return { error: null }
 
+      // Comment authors and post authors may both delete; RLS is the real gate,
+      // so this only checks the comment is still on screen.
       const target = comments.find((comment) => comment.id === commentId)
-      if (!target || target.userId !== user.id) {
-        return { error: 'You can only delete your own comments.' }
-      }
+      if (!target) return { error: 'Comment not found' }
 
       commentDeleteInFlightRef.current.add(commentId)
       try {
-        const result = await deletePostCommentApi(user.id, commentId)
+        const result = await deletePostCommentApi(commentId)
         if (result.error) {
           setError(result.error)
           return result

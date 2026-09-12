@@ -339,6 +339,7 @@ export function PostActionSheets({
           isLoading={engagement.isLoadingComments}
           isAuthenticated={engagement.isAuthenticated}
           currentUserId={engagement.user?.id ?? null}
+          canModerate={isOwnPost}
           commentDraft={engagement.commentDraft}
           isCommenting={engagement.isCommenting}
           onDraftChange={engagement.setCommentDraft}

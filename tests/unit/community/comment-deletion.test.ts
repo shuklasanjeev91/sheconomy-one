@@ -2,9 +2,8 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const maybeSingleMock = vi.fn()
 const selectMock = vi.fn(() => ({ maybeSingle: maybeSingleMock }))
-const userEqMock = vi.fn(() => ({ select: selectMock }))
-const idEqMock = vi.fn(() => ({ eq: userEqMock }))
-const deleteMock = vi.fn(() => ({ eq: idEqMock }))
+const eqMock = vi.fn(() => ({ select: selectMock }))
+const deleteMock = vi.fn(() => ({ eq: eqMock }))
 const fromMock = vi.fn(() => ({ delete: deleteMock }))
 
 vi.mock('~/lib/supabase/client', () => ({
@@ -20,22 +19,29 @@ describe('post comment deletion', () => {
     vi.clearAllMocks()
   })
 
-  it('scopes deletion to both comment id and signed-in user id', async () => {
+  it('filters on the comment id alone so post authors can moderate their post', async () => {
     maybeSingleMock.mockResolvedValue({ data: { id: 'comment-1' }, error: null })
 
-    await expect(deletePostComment('user-1', 'comment-1')).resolves.toEqual({ error: null })
+    await expect(deletePostComment('comment-1')).resolves.toEqual({ error: null })
     expect(fromMock).toHaveBeenCalledWith('comments')
     expect(deleteMock).toHaveBeenCalledOnce()
-    expect(idEqMock).toHaveBeenCalledWith('id', 'comment-1')
-    expect(userEqMock).toHaveBeenCalledWith('user_id', 'user-1')
+    expect(eqMock).toHaveBeenCalledExactlyOnceWith('id', 'comment-1')
     expect(selectMock).toHaveBeenCalledWith('id')
   })
 
   it('does not report success when RLS deletes no row', async () => {
     maybeSingleMock.mockResolvedValue({ data: null, error: null })
 
-    await expect(deletePostComment('user-1', 'other-comment')).resolves.toEqual({
+    await expect(deletePostComment('someone-elses-comment')).resolves.toEqual({
       error: 'Comment not found or you cannot delete it.',
+    })
+  })
+
+  it('surfaces database errors', async () => {
+    maybeSingleMock.mockResolvedValue({ data: null, error: { message: 'permission denied' } })
+
+    await expect(deletePostComment('comment-1')).resolves.toEqual({
+      error: 'permission denied',
     })
   })
 })

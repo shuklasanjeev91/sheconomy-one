@@ -36,6 +36,8 @@ type PostCommentsProps = {
   isLoading: boolean
   isAuthenticated: boolean
   currentUserId: string | null
+  /** Post authors moderate their own post, so they can delete any comment on it. */
+  canModerate?: boolean
   commentDraft: string
   isCommenting: boolean
   onDraftChange: (value: string) => void
@@ -52,6 +54,7 @@ export function PostComments({
   isLoading,
   isAuthenticated,
   currentUserId,
+  canModerate = false,
   commentDraft,
   isCommenting,
   onDraftChange,
@@ -105,6 +108,7 @@ export function PostComments({
               replies={repliesByParent.get(comment.id) ?? []}
               isAuthenticated={isAuthenticated}
               currentUserId={currentUserId}
+              canModerate={canModerate}
               onLikeComment={onLikeComment}
               onDeleteComment={onDeleteComment}
               onReply={onReply}
@@ -169,6 +173,7 @@ function CommentThread({
   replies,
   isAuthenticated,
   currentUserId,
+  canModerate,
   onLikeComment,
   onDeleteComment,
   onReply,
@@ -177,6 +182,7 @@ function CommentThread({
   replies: PostComment[]
   isAuthenticated: boolean
   currentUserId: string | null
+  canModerate: boolean
   onLikeComment: (commentId: string) => void
   onDeleteComment: (commentId: string) => Promise<{ error?: string | null } | unknown>
   onReply: (parentCommentId: string, encoded: string) => Promise<unknown> | void
@@ -216,7 +222,7 @@ function CommentThread({
     <YStack gap="$2">
       <CommentRow
         comment={comment}
-        canDelete={comment.userId === currentUserId}
+        canDelete={canModerate || comment.userId === currentUserId}
         onLike={() => onLikeComment(comment.id)}
         onDelete={() => onDeleteComment(comment.id)}
         onReply={() => openReply()}
@@ -243,7 +249,7 @@ function CommentThread({
                   key={reply.id}
                   comment={reply}
                   isReply
-                  canDelete={reply.userId === currentUserId}
+                  canDelete={canModerate || reply.userId === currentUserId}
                   onLike={() => onLikeComment(reply.id)}
                   onDelete={() => onDeleteComment(reply.id)}
                   onReply={() => openReply(reply.authorName)}

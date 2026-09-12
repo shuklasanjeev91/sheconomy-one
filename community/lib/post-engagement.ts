@@ -177,16 +177,19 @@ export async function addPostComment(
   return { error: error?.message ?? null }
 }
 
-/** Delete one of the signed-in user's comments. Replies cascade in Postgres. */
+/**
+ * Delete a comment. RLS allows the comment author and the author of the post it
+ * sits under, so the filter stays on the id alone — scoping to the caller's
+ * user_id here would block post authors from moderating their own post.
+ * Replies cascade in Postgres.
+ */
 export async function deletePostComment(
-  userId: string,
   commentId: string,
 ): Promise<{ error: string | null }> {
   const { data, error } = await supabase
     .from('comments')
     .delete()
     .eq('id', commentId)
-    .eq('user_id', userId)
     .select('id')
     .maybeSingle()
 
