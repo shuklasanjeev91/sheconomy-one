@@ -8158,6 +8158,7 @@ __metadata:
     expo-asset: "npm:~55.0.17"
     expo-audio: "npm:~55.0.15"
     expo-build-properties: "npm:~55.0.0"
+    expo-calendar: "npm:~55.0.19"
     expo-camera: "npm:~55.0.20"
     expo-clipboard: "npm:~55.0.14"
     expo-contacts: "npm:~55.0.15"
@@ -11531,6 +11532,16 @@ __metadata:
   peerDependencies:
     expo: "*"
   checksum: 10/8e22b6694ac081d11343572181b128d216b6bc3a1d12a748c7ebf62f9b455caff725f61597d504f6129b5efc0f843af5732debe274882d12a80fd65f0eff47dd
+  languageName: node
+  linkType: hard
+
+"expo-calendar@npm:~55.0.19":
+  version: 55.0.19
+  resolution: "expo-calendar@npm:55.0.19"
+  peerDependencies:
+    expo: "*"
+    react-native: "*"
+  checksum: 10/4db541777387e4849aa51b2b9072aeab15598dd4d1c76172c8d8dd5377c5bf33e4bcfaa6e647ff2e299bf8ff2d2da8fe83c64c76a1339f7c522ec72a7cea4ff0
   languageName: node
   linkType: hard
 

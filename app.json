@@ -3,14 +3,14 @@
     "name": "SHEconomy",
     "slug": "sheconomy",
     "owner": "sheconomy",
-    "version": "6.0.5",
+    "version": "6.0.7",
     "scheme": "sheconomy",
     "newArchEnabled": true,
     "platforms": [
       "ios",
       "android"
     ],
-    "runtimeVersion": "6.0",
+    "runtimeVersion": "6.0.7",
     "updates": {
       "enabled": true,
       "checkAutomatically": "ON_LOAD",
@@ -89,6 +89,13 @@
       "expo-localization",
       "expo-sharing",
       [
+        "expo-calendar",
+        {
+          "calendarPermission": "Allow SHEconomy to add Co-work meetings to your calendar.",
+          "remindersPermission": false
+        }
+      ],
+      [
         "expo-image-picker",
         {
           "photosPermission": "Allow SHEconomy to access your photos to upload listing images and shop logos."
@@ -140,7 +147,7 @@
     },
     "ios": {
       "bundleIdentifier": "com.sheconomy.ecommerce",
-      "buildNumber": "143",
+      "buildNumber": "148",
       "appleTeamId": "52H73QK4CL",
       "supportsTablet": true,
       "requireFullScreen": false,
@@ -199,7 +206,7 @@
     },
     "android": {
       "package": "com.sheconomy.ecommerce",
-      "versionCode": 155,
+      "versionCode": 160,
       "softwareKeyboardLayoutMode": "resize",
       "adaptiveIcon": {
         "foregroundImage": "./public/app-icon-adaptive.png",
