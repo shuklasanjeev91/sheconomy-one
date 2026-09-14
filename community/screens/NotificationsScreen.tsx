@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState, memo } from 'react'
 
 import { CommunityCard } from '~/community/components/CommunityCard'
 import { CommunityPageHeader } from '~/community/components/CommunityPageHeader'
+import { NotificationContextActions } from '~/community/components/NotificationContextActions'
 import {
   CommunityFilterPill,
 } from '~/community/components/CommunityFilters'
@@ -305,42 +306,50 @@ const NotificationRow = memo(function NotificationRow({
       borderBottomColor={communityUi.borderLight}
       backgroundColor={notification.read ? 'transparent' : communityUi.accentMuted}
       alignItems="flex-start"
-      cursor="pointer"
       borderRadius={10}
       marginBottom={4}
       paddingHorizontal={4}
-      hoverStyle={{ backgroundColor: communityUi.hoverBg }}
-      onPress={() => void onOpen(notification)}
     >
       <Avatar name={notification.title} src={notification.image_url ?? undefined} size="$3" />
       <YStack flex={1} gap={4}>
-        <XStack alignItems="center" gap={8}>
-          {!notification.read ? (
-            <YStack
-              width={8}
-              height={8}
-              borderRadius={999}
-              backgroundColor={communityUi.brand}
-              flexShrink={0}
-            />
+        <YStack
+          gap={4}
+          cursor="pointer"
+          hoverStyle={{ opacity: 0.82 }}
+          onPress={() => void onOpen(notification)}
+        >
+          <XStack alignItems="center" gap={8}>
+            {!notification.read ? (
+              <YStack
+                width={8}
+                height={8}
+                borderRadius={999}
+                backgroundColor={communityUi.brand}
+                flexShrink={0}
+              />
+            ) : null}
+            <Text
+              fontSize={14}
+              fontWeight={notification.read ? '500' : '700'}
+              color={communityUi.text}
+              flex={1}
+            >
+              {notification.title}
+            </Text>
+          </XStack>
+          <Text fontSize={13} color={communityUi.textMuted} lineHeight={18}>
+            {notification.message}
+          </Text>
+          {notification.created_at ? (
+            <Text fontSize={11} color={communityUi.textSubtle}>
+              {new Date(notification.created_at).toLocaleString('en-IN')}
+            </Text>
           ) : null}
-          <Text
-            fontSize={14}
-            fontWeight={notification.read ? '500' : '700'}
-            color={communityUi.text}
-            flex={1}
-          >
-            {notification.title}
-          </Text>
-        </XStack>
-        <Text fontSize={13} color={communityUi.textMuted} lineHeight={18}>
-          {notification.message}
-        </Text>
-        {notification.created_at ? (
-          <Text fontSize={11} color={communityUi.textSubtle}>
-            {new Date(notification.created_at).toLocaleString('en-IN')}
-          </Text>
-        ) : null}
+        </YStack>
+        <NotificationContextActions
+          notification={notification}
+          onOpen={() => void onOpen(notification)}
+        />
       </YStack>
     </XStack>
   )

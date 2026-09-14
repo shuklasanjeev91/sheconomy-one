@@ -26,6 +26,11 @@ export type AppNotification = {
   image_url: string | null
   context_id: string | null
   context_type: string | null
+  parent_context_id?: string | null
+  parent_context_type?: string | null
+  data?: Record<string, unknown> | null
+  /** Hydrated from stable notification metadata or its relationship row. */
+  actor_user_id?: string | null
 }
 
 type UnreadListener = () => void
@@ -48,6 +53,7 @@ export function resolveNotificationPath(notification: AppNotification): string |
   const contextType = (notification.context_type ?? '').toLowerCase()
   const contextId = notification.context_id?.trim() || null
   const type = (notification.type ?? '').toLowerCase()
+  const actorUserId = resolveNotificationActorUserId(notification)
 
   const trustPath = resolveMarketplaceTrustNotificationPath({
     type: notification.type,
@@ -56,6 +62,12 @@ export function resolveNotificationPath(notification: AppNotification): string |
     actionUrl: notification.action_url,
   })
   if (trustPath) return trustPath
+
+  // A connection notification's context_id is the connection row UUID, not a
+  // profile UUID. Routing that value to /profile/:id caused "Profile not found".
+  if (type.includes('connection') && actorUserId) {
+    return communityRoutes.userProfile(actorUserId)
+  }
 
   // Profile links in action_url embed the username from send time, which
   // breaks after a rename. The context uuid is stable, so prefer it.
@@ -123,7 +135,6 @@ export function resolveNotificationPath(notification: AppNotification): string |
       contextType === 'profile' ||
       contextType === 'user' ||
       type.includes('follow') ||
-      type.includes('connection') ||
       type.includes('endorsement') ||
       type.includes('recommendation')
     ) {
@@ -142,6 +153,104 @@ export function resolveNotificationPath(notification: AppNotification): string |
   if (notification.platform === 'marketplace') return commerceRoutes.home
 
   return appRoutes.notifications
+}
+
+function dataUuid(notification: AppNotification, keys: string[]): string | null {
+  const data = notification.data
+  if (!data || typeof data !== 'object') return null
+  for (const key of keys) {
+    const value = data[key]
+    if (typeof value === 'string' && value.trim()) return value.trim()
+  }
+  return null
+}
+
+/** The member whose activity caused a social notification, when known. */
+export function resolveNotificationActorUserId(notification: AppNotification): string | null {
+  if (notification.actor_user_id) return notification.actor_user_id
+
+  const parentType = (notification.parent_context_type ?? '').toLowerCase()
+  if (
+    notification.parent_context_id &&
+    ['profile', 'user', 'user_profile'].includes(parentType)
+  ) {
+    return notification.parent_context_id
+  }
+
+  const fromData = dataUuid(notification, [
+    'requester_id',
+    'reactor_id',
+    'commenter_id',
+    'replier_id',
+    'liker_id',
+    'mentioner_id',
+    'reposter_id',
+    'endorser_id',
+    'viewer_id',
+    'follower_id',
+  ])
+  if (fromData) return fromData
+
+  const contextType = (notification.context_type ?? '').toLowerCase()
+  if (notification.type === 'profile_viewed' && contextType === 'profile_view') {
+    return notification.context_id
+  }
+  return null
+}
+
+async function hydrateNotificationActors(
+  notifications: AppNotification[],
+  recipientId: string,
+): Promise<AppNotification[]> {
+  const connectionIds = notifications
+    .filter(
+      (item) =>
+        !resolveNotificationActorUserId(item) &&
+        item.context_type?.toLowerCase() === 'connection' &&
+        item.context_id,
+    )
+    .map((item) => item.context_id as string)
+  const followIds = notifications
+    .filter(
+      (item) =>
+        !resolveNotificationActorUserId(item) &&
+        item.context_type?.toLowerCase() === 'follow' &&
+        item.context_id,
+    )
+    .map((item) => item.context_id as string)
+
+  const [connectionsResult, followsResult] = await Promise.all([
+    connectionIds.length
+      ? supabase
+          .from('connections')
+          .select('id, sender_id, receiver_id')
+          .in('id', connectionIds)
+      : Promise.resolve({ data: [], error: null }),
+    followIds.length
+      ? supabase.from('follows').select('id, follower_id').in('id', followIds)
+      : Promise.resolve({ data: [], error: null }),
+  ])
+
+  const actorByContext = new Map<string, string>()
+  for (const row of connectionsResult.data ?? []) {
+    const connection = row as { id: string; sender_id: string; receiver_id: string }
+    actorByContext.set(
+      connection.id,
+      connection.sender_id === recipientId ? connection.receiver_id : connection.sender_id,
+    )
+  }
+  for (const row of followsResult.data ?? []) {
+    const follow = row as { id: string; follower_id: string }
+    actorByContext.set(follow.id, follow.follower_id)
+  }
+
+  return notifications.map((notification) => ({
+    ...notification,
+    actor_user_id:
+      resolveNotificationActorUserId(notification) ??
+      (notification.context_id ? actorByContext.get(notification.context_id) : null) ??
+      null,
+  }))
 }
 
 /** Product filter keys used by the unified inbox. */
@@ -213,7 +322,7 @@ export async function fetchNotifications(
   let query = supabase
     .from('notifications')
     .select(
-      'id, title, message, type, category, platform, read, created_at, action_url, image_url, context_id, context_type',
+      'id, title, message, type, category, platform, read, created_at, action_url, image_url, context_id, context_type, parent_context_id, parent_context_type, data',
       { count: 'exact' },
     )
     .eq('recipient_id', userId)
@@ -259,8 +368,9 @@ export async function fetchNotifications(
   if (error) return { items: [], hasMore: false, error: error.message }
 
   const total = count ?? 0
+  const items = await hydrateNotificationActors((data ?? []) as AppNotification[], userId)
   return {
-    items: (data ?? []) as AppNotification[],
+    items,
     hasMore: total ? to + 1 < total : (data?.length ?? 0) === NOTIFICATION_PAGE_SIZE,
     error: null,
   }
