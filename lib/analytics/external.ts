@@ -5,6 +5,7 @@
  */
 import { Platform } from 'react-native'
 
+import { hasExternalAnalyticsConsent } from '~/community/lib/ad-preferences'
 import { ANALYTICS_CONFIG, EXTERNAL_ANALYTICS_ENABLED } from '~/lib/analytics/config'
 import {
   compactAnalyticsProperties,
@@ -30,7 +31,7 @@ let clarityInitialized = false
 let clarityLoading: Promise<ClarityModule | null> | null = null
 
 function loadNativeClarity(): Promise<ClarityModule | null> {
-  if (Platform.OS === 'web') return Promise.resolve(null)
+  if (Platform.OS === 'web' || !hasExternalAnalyticsConsent()) return Promise.resolve(null)
   if (clarityModule) return Promise.resolve(clarityModule)
   if (clarityLoading) return clarityLoading
 
@@ -51,7 +52,13 @@ function loadNativeClarity(): Promise<ClarityModule | null> {
 }
 
 function ensureNativeClarity(mod: ClarityModule) {
-  if (!EXTERNAL_ANALYTICS_ENABLED || clarityInitialized) return
+  if (
+    !EXTERNAL_ANALYTICS_ENABLED ||
+    !hasExternalAnalyticsConsent() ||
+    clarityInitialized
+  ) {
+    return
+  }
   try {
     mod.initialize(ANALYTICS_CONFIG.clarityProjectId)
     clarityInitialized = true
@@ -61,7 +68,7 @@ function ensureNativeClarity(mod: ClarityModule) {
 }
 
 export function trackExternalPageView(path: string, title?: string) {
-  if (!EXTERNAL_ANALYTICS_ENABLED) return
+  if (!EXTERNAL_ANALYTICS_ENABLED || !hasExternalAnalyticsConsent()) return
 
   if (Platform.OS === 'web') {
     if (typeof window === 'undefined') return
@@ -79,8 +86,9 @@ export function trackExternalPageView(path: string, title?: string) {
   }
 
   void loadNativeClarity().then((mod) => {
-    if (!mod) return
+    if (!mod || !hasExternalAnalyticsConsent()) return
     ensureNativeClarity(mod)
+    if (!hasExternalAnalyticsConsent()) return
     mod.setCurrentScreenName(title || path || 'home')
   })
 }
@@ -89,7 +97,7 @@ export function trackAnalyticsEvent(
   name: string,
   properties: AnalyticsProperties = {},
 ) {
-  if (!EXTERNAL_ANALYTICS_ENABLED) return
+  if (!EXTERNAL_ANALYTICS_ENABLED || !hasExternalAnalyticsConsent()) return
 
   const eventName = sanitizeAnalyticsEventName(name)
   if (!eventName) return
@@ -105,8 +113,9 @@ export function trackAnalyticsEvent(
   }
 
   void loadNativeClarity().then((mod) => {
-    if (!mod) return
+    if (!mod || !hasExternalAnalyticsConsent()) return
     ensureNativeClarity(mod)
+    if (!hasExternalAnalyticsConsent()) return
     void payload
     mod.sendCustomEvent(eventName)
   })
@@ -128,7 +137,7 @@ export function trackCommerceEvent(
     item_count: options.items.reduce((total, item) => total + (item.quantity ?? 1), 0),
   }
 
-  if (!EXTERNAL_ANALYTICS_ENABLED) return
+  if (!EXTERNAL_ANALYTICS_ENABLED || !hasExternalAnalyticsConsent()) return
 
   if (Platform.OS === 'web') {
     if (typeof window === 'undefined') return

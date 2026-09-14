@@ -14,7 +14,9 @@ import {
   useAppToast,
 } from '~/components/ui'
 import { SurfaceCard } from '~/components/layout'
+import { AppLink } from '~/components/navigation/AppLink'
 import { PreferenceRow, SettingsPanel } from '~/components/settings/SettingsPanel'
+import { communityRoutes } from '~/lib/routes'
 import { radius } from '~/config/tokens'
 import {
   getBiometricCapability,
@@ -26,6 +28,8 @@ import {
   unblockCommunityMember,
   type BlockedMember,
 } from '~/community/lib/moderation'
+import { useAdPreferences } from '~/community/hooks/useAdPreferences'
+import type { AdPreferenceKey } from '~/community/lib/ad-preferences'
 import { invalidateCache, INVALIDATION_TOPICS } from '~/lib/cache/invalidation'
 import { feedback } from '~/lib/platform/feedback'
 import { useAppUi } from '~/lib/theme/useAppUi'
@@ -39,6 +43,11 @@ export function PrivacySettingsPanel() {
   const ui = useAppUi()
   const toast = useAppToast()
   const { user } = useSupabase()
+  const {
+    preferences: adPreferences,
+    isLoading: adPreferencesLoading,
+    setPreference: setAdPreference,
+  } = useAdPreferences()
   const [enabled, setEnabled] = useState(false)
   const [label, setLabel] = useState('Biometric unlock')
   const [supported, setSupported] = useState(false)
@@ -47,6 +56,7 @@ export function PrivacySettingsPanel() {
   const [blockedLoading, setBlockedLoading] = useState(!!user?.id)
   const [unblockTarget, setUnblockTarget] = useState<BlockedMember | null>(null)
   const [unblocking, setUnblocking] = useState(false)
+  const [savingAdPreference, setSavingAdPreference] = useState<AdPreferenceKey | null>(null)
 
   const refreshBlocked = useCallback(async () => {
     if (!user?.id) {
@@ -128,6 +138,25 @@ export function PrivacySettingsPanel() {
     )
   }
 
+  const updateAdPreference = useCallback(
+    async (key: AdPreferenceKey, next: boolean, label: string) => {
+      setSavingAdPreference(key)
+      const result = await setAdPreference(key, next)
+      setSavingAdPreference(null)
+
+      if (result.error) {
+        toast.show(`Could not update ${label.toLowerCase()}`, {
+          tone: 'danger',
+          message: result.error,
+        })
+        return
+      }
+
+      toast.show(`${label} ${next ? 'enabled' : 'disabled'}`, { tone: 'success' })
+    },
+    [setAdPreference, toast],
+  )
+
   return (
     <SettingsPanel title="Privacy" description="Visibility, unlock, and blocked members">
       <SurfaceCard padding="$0" borderRadius={radius.card} overflow="hidden">
@@ -187,6 +216,63 @@ export function PrivacySettingsPanel() {
           />
         )}
       </SurfaceCard>
+
+      <YStack gap="$3" marginTop="$4" testID="advertising-privacy-section">
+        <Text fontSize={16} fontWeight="700" color={ui.text}>
+          Advertising and analytics
+        </Text>
+        <Text fontSize={13} color={ui.textMuted} lineHeight={18}>
+          These choices are independent and off by default. When personalized ads are off, you may
+          still see contextual ads based only on the content or section you are viewing—not gender,
+          IP address, or a device fingerprint.
+        </Text>
+
+        <SurfaceCard padding="$0" borderRadius={radius.card} overflow="hidden">
+          <PreferenceRow
+            icon={Icons.Megaphone}
+            title="Personalized ads"
+            subtitle="Use your in-app interests and activity to make sponsored posts more relevant."
+            checked={adPreferences.personalizedAds}
+            disabled={adPreferencesLoading || savingAdPreference !== null}
+            onCheckedChange={(next) => {
+              void updateAdPreference('personalizedAds', next, 'Personalized ads')
+            }}
+          />
+          <Separator />
+          <PreferenceRow
+            icon={Icons.Bell}
+            title="Retargeting notifications"
+            subtitle="Allow reminders about sponsored content you previously interacted with."
+            checked={adPreferences.retargetingNotifications}
+            disabled={adPreferencesLoading || savingAdPreference !== null}
+            onCheckedChange={(next) => {
+              void updateAdPreference(
+                'retargetingNotifications',
+                next,
+                'Retargeting notifications',
+              )
+            }}
+          />
+          <Separator />
+          <PreferenceRow
+            icon={Icons.Activity}
+            title="External analytics"
+            subtitle="Allow third-party analytics and advertising pixels. No external analytics load when off."
+            checked={adPreferences.externalAnalytics}
+            disabled={adPreferencesLoading || savingAdPreference !== null}
+            onCheckedChange={(next) => {
+              void updateAdPreference('externalAnalytics', next, 'External analytics')
+            }}
+          />
+        </SurfaceCard>
+        {user ? (
+          <AppLink href={communityRoutes.ads} asChild>
+            <Button tone="outline" icon={Icons.Megaphone}>
+              Open Ads Manager
+            </Button>
+          </AppLink>
+        ) : null}
+      </YStack>
 
       <YStack gap="$3" marginTop="$4" testID="blocked-members-section">
         <Text fontSize={16} fontWeight="700" color={ui.text}>

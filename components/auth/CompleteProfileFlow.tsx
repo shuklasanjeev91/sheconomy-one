@@ -1,8 +1,8 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
 import { AUTH_LAYOUT } from '~/components/auth/auth-layout'
 import { NativeDateField } from '~/components/forms/NativeDateField'
-import { PhoneInput } from '~/components/forms/PhoneInput'
+import { PhoneInput, type PhoneInputHandle } from '~/components/forms/PhoneInput'
 import { LocationPickerField, GeoSelectField } from '~/components/geo'
 import { PageCenter } from '~/components/layout'
 import { AvatarCaptureField } from '~/components/media/AvatarCaptureField'
@@ -92,6 +92,7 @@ export function CompleteProfileFlow({ returnTo, isNewUser }: CompleteProfileFlow
   const [fullName, setFullName] = useState('')
   const [avatarUrl, setAvatarUrl] = useState<string | null>(null)
   const [phoneE164, setPhoneE164] = useState('')
+  const phoneInputRef = useRef<PhoneInputHandle | null>(null)
   const [otpSent, setOtpSent] = useState(false)
   const [otpCode, setOtpCode] = useState('')
   const [timezone, setTimezone] = useState(detectDeviceTimezone())
@@ -266,20 +267,32 @@ export function CompleteProfileFlow({ returnTo, isNewUser }: CompleteProfileFlow
   }
 
   async function sendPhoneCode() {
-    const e164 = phoneE164.trim()
+    // A button press can land before native/web input events update parent
+    // state. Flush the field's live buffer so the visible number is submitted.
+    const e164 = (phoneInputRef.current?.flush() || phoneE164).trim()
     if (!isValidPhone(e164)) {
       toast.show('Enter a valid mobile number.', { tone: 'warning' })
       return
     }
+
     setBusy(true)
-    const { error } = await supabase.auth.updateUser({ phone: e164 })
-    setBusy(false)
-    if (error) {
-      toast.show(error.message, { tone: 'danger' })
-      return
+    try {
+      const { error } = await supabase.auth.updateUser({ phone: e164 })
+      if (error) {
+        toast.show(error.message, { tone: 'danger' })
+        return
+      }
+      setPhoneE164(e164)
+      setOtpSent(true)
+      toast.show('Code sent', { tone: 'success', message: `Sent to ${e164}` })
+    } catch (error) {
+      toast.show('Could not send code', {
+        tone: 'danger',
+        message: error instanceof Error ? error.message : 'Please try again.',
+      })
+    } finally {
+      setBusy(false)
     }
-    setOtpSent(true)
-    toast.show('Code sent', { tone: 'success', message: `Sent to ${e164}` })
   }
 
   async function verifyPhoneCode() {
@@ -502,6 +515,7 @@ export function CompleteProfileFlow({ returnTo, isNewUser }: CompleteProfileFlow
                 recommended).
               </Text>
               <PhoneInput
+                ref={phoneInputRef}
                 value={phoneE164}
                 onChange={setPhoneE164}
                 defaultCountry={DEFAULT_COUNTRY}

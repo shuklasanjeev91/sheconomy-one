@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState, type ReactNode } from 'react'
 
 import { ListingBrowseView, ListingFiltersShell } from '~/commerce/components'
 import { useSearchListings } from '~/commerce/hooks/useSearchListings'
+import { useSponsoredCommerce } from '~/commerce/hooks/useSponsoredCommerce'
 import { useUserGeo } from '~/commerce/hooks/useUserGeo'
 import {
   buildFilterSearchParams,
@@ -111,6 +112,14 @@ export function UnifiedSearchScreen({
     query: effectiveListingQuery,
     filters,
     enabled: listingsBrowseEnabled,
+  })
+  const sponsoredListings = useSponsoredCommerce({
+    placement: 'commerce_search',
+    context: {
+      query: effectiveListingQuery,
+    },
+    enabled: listingsBrowseEnabled,
+    limit: 2,
   })
 
   const filterKey = useMemo(
@@ -434,6 +443,8 @@ export function UnifiedSearchScreen({
               error={listingsFeed.error}
               onLoadMore={listingsFeed.loadMore}
               onRetry={listingsFeed.refresh}
+              sponsoredItems={sponsoredListings.items}
+              onSponsoredEvent={(item, event) => void sponsoredListings.track(item, event)}
               emptyMessage={
                 aiLoading
                   ? 'Finding matches…'

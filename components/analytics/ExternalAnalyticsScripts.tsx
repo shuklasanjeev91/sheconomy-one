@@ -1,13 +1,31 @@
+import { useSyncExternalStore } from 'react'
 import { Platform } from 'react-native'
 
+import {
+  getAdPreferencesSnapshot,
+  subscribeToAdPreferences,
+} from '~/community/lib/ad-preferences'
 import { ANALYTICS_CONFIG, EXTERNAL_ANALYTICS_ENABLED } from '~/lib/analytics/config'
+
+function getExternalAnalyticsConsent() {
+  return getAdPreferencesSnapshot().externalAnalytics
+}
+
+function useExternalAnalyticsConsent() {
+  return useSyncExternalStore(
+    subscribeToAdPreferences,
+    getExternalAnalyticsConsent,
+    () => false,
+  )
+}
 
 /**
  * Injects Google Tag Manager, GA4, Meta Pixel, and Microsoft Clarity on web.
  * Native platforms use dedicated SDKs via `lib/analytics/external.native.ts`.
  */
 export function ExternalAnalyticsScripts() {
-  if (Platform.OS !== 'web' || !EXTERNAL_ANALYTICS_ENABLED) return null
+  const hasConsent = useExternalAnalyticsConsent()
+  if (Platform.OS !== 'web' || !EXTERNAL_ANALYTICS_ENABLED || !hasConsent) return null
 
   const { googleTagManagerId, googleAnalyticsId, metaPixelId, clarityProjectId } = ANALYTICS_CONFIG
 
@@ -65,7 +83,8 @@ fbq('init', '${metaPixelId}');
 
 /** noscript fallbacks belong in `<body>`, not `<head>`. */
 export function ExternalAnalyticsNoscript() {
-  if (Platform.OS !== 'web' || !EXTERNAL_ANALYTICS_ENABLED) return null
+  const hasConsent = useExternalAnalyticsConsent()
+  if (Platform.OS !== 'web' || !EXTERNAL_ANALYTICS_ENABLED || !hasConsent) return null
 
   const { googleTagManagerId, metaPixelId } = ANALYTICS_CONFIG
 

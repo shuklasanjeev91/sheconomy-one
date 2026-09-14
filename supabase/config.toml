@@ -441,6 +441,12 @@ verify_jwt = true
 [functions.sponsored-admin]
 verify_jwt = true
 
+[functions.sponsored-auction]
+verify_jwt = false
+
+[functions.sponsored-conversion]
+verify_jwt = true
+
 # SHEDelivery partner tracking webhooks (no JWT).
 [functions.shedelivery-webhook]
 verify_jwt = false

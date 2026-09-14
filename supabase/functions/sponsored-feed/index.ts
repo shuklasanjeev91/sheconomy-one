@@ -64,6 +64,7 @@ Deno.serve(async (request) => {
   const [
     { data: profile, error: profileError },
     { data: campaigns, error: campaignError },
+    { data: preference },
   ] = await Promise.all([
     admin
       .from("profiles")
@@ -80,6 +81,11 @@ Deno.serve(async (request) => {
       .gt("ends_at", nowIso)
       .neq("advertiser_user_id", user.id)
       .limit(500),
+    admin
+      .from("ad_privacy_preferences")
+      .select("personalized_ads")
+      .eq("user_id", user.id)
+      .maybeSingle(),
   ]);
   if (profileError || !profile) {
     return jsonResponse({ error: "Could not load viewer profile" }, 500);
@@ -166,10 +172,20 @@ Deno.serve(async (request) => {
     }
   }
 
+  const personalized = preference?.personalized_ads === true;
+  const scoringProfile = personalized
+    ? profile
+    : {
+      country_code: null,
+      location: null,
+      industry: null,
+      interests: [] as string[],
+    };
+
   const eligible = budgetEligible
     .map((campaign) => ({
       campaign,
-      score: audienceScore(campaign.audience ?? {}, profile),
+      score: audienceScore(campaign.audience ?? {}, scoringProfile),
       random: crypto.getRandomValues(new Uint32Array(1))[0] / 0xffffffff,
     }))
     .filter(
@@ -191,7 +207,7 @@ Deno.serve(async (request) => {
       objective: campaign.objective,
       cta: campaign.call_to_action,
       destination_url: campaign.destination_url,
-      match_reason: matchReason(campaign.audience ?? {}, profile),
+      match_reason: matchReason(campaign.audience ?? {}, scoringProfile),
     }));
 
   return jsonResponse({ campaigns: eligible });

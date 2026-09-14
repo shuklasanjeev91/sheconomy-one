@@ -5,6 +5,7 @@ import { Analytics as VercelAnalytics } from '@vercel/analytics/react'
 import { SpeedInsights as VercelSpeedInsights } from '@vercel/speed-insights/react'
 
 import { ExternalAnalyticsNoscript } from '~/components/analytics/ExternalAnalyticsScripts'
+import { useAdPreferences } from '~/community/hooks/useAdPreferences'
 import { trackExternalPageView } from '~/lib/analytics'
 import { EXTERNAL_ANALYTICS_ENABLED } from '~/lib/analytics/config'
 
@@ -14,16 +15,25 @@ import { EXTERNAL_ANALYTICS_ENABLED } from '~/lib/analytics/config'
  */
 export function ExternalAnalyticsTracker() {
   const pathname = usePathname()
+  const { preferences, isLoading } = useAdPreferences()
   const lastPathRef = useRef<string | null>(null)
+  const hasConsent = preferences.externalAnalytics === true
 
   useEffect(() => {
-    if (!EXTERNAL_ANALYTICS_ENABLED) return
+    if (!EXTERNAL_ANALYTICS_ENABLED || isLoading || !hasConsent) return
     if (!pathname || lastPathRef.current === pathname) return
     lastPathRef.current = pathname
     trackExternalPageView(pathname)
-  }, [pathname])
+  }, [hasConsent, isLoading, pathname])
 
-  if (Platform.OS !== 'web' || !EXTERNAL_ANALYTICS_ENABLED) return null
+  if (
+    Platform.OS !== 'web' ||
+    !EXTERNAL_ANALYTICS_ENABLED ||
+    isLoading ||
+    !hasConsent
+  ) {
+    return null
+  }
 
   return (
     <>
