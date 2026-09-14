@@ -164,6 +164,14 @@ export const VENDOR_NAV_GROUPS: VendorNavGroup[] = [
         ready: true,
       },
       {
+        id: 'bundles',
+        label: 'Bundles',
+        description: 'Kit products at a bundle price.',
+        icon: Icons.Layers,
+        href: vendorRoutes.bundles,
+        ready: true,
+      },
+      {
         id: 'orders',
         label: 'Orders',
         description: 'Track and fulfil customer orders.',
@@ -186,6 +194,14 @@ export const VENDOR_NAV_GROUPS: VendorNavGroup[] = [
         ready: true,
       },
       {
+        id: 'customers',
+        label: 'Customers',
+        description: '360 profiles, segments, and journeys.',
+        icon: Icons.Users,
+        href: vendorRoutes.customers,
+        ready: true,
+      },
+      {
         id: 'delivery',
         label: 'Delivery',
         description: 'Shipping options and fulfilment.',
@@ -196,7 +212,7 @@ export const VENDOR_NAV_GROUPS: VendorNavGroup[] = [
       {
         id: 'ads',
         label: 'Ads & Promo',
-        description: 'Campaigns and promotions.',
+        description: 'Sponsored campaigns, discounts, and promotions.',
         icon: Icons.Megaphone,
         href: vendorRoutes.ads,
         ready: true,

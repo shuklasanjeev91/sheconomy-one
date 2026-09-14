@@ -9,6 +9,7 @@ import { BRAND_THEME, getShadowStyle, radius } from '~/config/tokens'
 import { commerceRoutes } from '~/lib/routes'
 import { FullWidthLayout, PageSection } from '~/components/layout'
 import { NearbyShopsSection, NearYouLocationChip } from '~/components/location'
+import { SponsoredListingsRail } from '~/commerce/components/SponsoredListingsRail'
 import { useAppUi } from '~/lib/theme/useAppUi'
 
 import { BRAND_NAME } from '~/config/brand'
@@ -42,6 +43,12 @@ export function ShopsBrowseScreen() {
 
         <NearYouLocationChip />
         <NearbyShopsSection />
+        <SponsoredListingsRail
+          placement="shop_discovery"
+          title="Sponsored shops"
+          shopOnly
+          limit={2}
+        />
 
         {!isLoading && !error && (totalCount > 0 || countries.length > 0) ? (
           <ShopFiltersBar

@@ -1,3 +1,7 @@
+import {
+  buyerCanUseDiscountUserTypes,
+  fetchBuyerDiscountUserType,
+} from '~/commerce/lib/buyer-segment'
 import { supabase } from '~/lib/supabase/client'
 import type { Tables } from '~/lib/supabase'
 import { formatCurrency } from '~/lib/format'
@@ -24,7 +28,7 @@ export {
 
 export type DiscountProfile = Tables<'discount_profiles'>
 
-export type DiscountType = 'percentage' | 'fixed'
+export type DiscountType = 'percentage' | 'fixed' | 'bogo' | 'free_shipping'
 
 export type CartOfferFetchContext = {
   /** Selected-line subtotal (must match checkout selection). */
@@ -73,6 +77,8 @@ function toNumber(value: number | string | null | undefined): number {
  * clamps to the subtotal so the order total can never go negative.
  */
 export function computeDiscountAmount(profile: DiscountLike, subtotal: number): number {
+  if (profile.discount_type === 'free_shipping') return 0
+  if (profile.discount_type === 'bogo') return 0
   const value = toNumber(profile.discount_value)
   let amount = profile.discount_type === 'percentage' ? (subtotal * value) / 100 : value
 
@@ -146,10 +152,27 @@ export async function fetchCouponByCode(code: string): Promise<DiscountProfile |
     .order('valid_from', { ascending: false })
     .limit(1)
 
-  if (error || !data || data.length === 0) return null
-  const profile = data[0]
-  if (!isDiscountProfileActive(profile)) return null
-  return profile
+  if (!error && data && data.length > 0) {
+    const profile = data[0]
+    if (isDiscountProfileActive(profile)) return profile
+  }
+
+  const { data: assignment } = await supabase
+    .from('discount_assignments')
+    .select('discount_profile_id')
+    .ilike('assignment_code', trimmed)
+    .or(`expires_at.is.null,expires_at.gte.${now}`)
+    .limit(1)
+    .maybeSingle()
+
+  if (!assignment?.discount_profile_id) return null
+  const { data: assigned } = await supabase
+    .from('discount_profiles')
+    .select('*')
+    .eq('id', assignment.discount_profile_id)
+    .maybeSingle()
+  if (!assigned || !isDiscountProfileActive(assigned)) return null
+  return assigned
 }
 
 export type ApplyCouponResult = {
@@ -180,6 +203,12 @@ export async function applyCouponCode(options: {
 
   if (usageExhausted(profile)) {
     return { cart: null, error: 'This coupon has reached its usage limit.' }
+  }
+
+  const { data: auth } = await supabase.auth.getUser()
+  const buyerType = await fetchBuyerDiscountUserType(auth.user?.id ?? null)
+  if (!buyerCanUseDiscountUserTypes(profile.eligible_user_types, buyerType)) {
+    return { cart: null, error: 'This coupon is not available for your account.' }
   }
 
   const cartItems = options.items ?? []
@@ -219,7 +248,10 @@ export async function applyCouponCode(options: {
     }
   }
 
-  const amount = computeDiscountAmount(profile, eligibleSubtotal)
+  const amount =
+    profile.discount_type === 'bogo' || profile.discount_type === 'free_shipping'
+      ? 0.01
+      : computeDiscountAmount(profile, eligibleSubtotal)
   if (amount <= 0) {
     return { cart: null, error: "This coupon doesn't apply to your cart." }
   }
@@ -251,9 +283,15 @@ type OfferRow = {
   shop_id: string | null
   applies_to: string
   eligible_listings: string[] | null
+  eligible_user_types: string[] | null
 }
 
-function rowToOffer(row: OfferRow): AvailableOffer {
+function offerType(value: string): AvailableOffer['type'] {
+  if (value === 'percentage' || value === 'bogo' || value === 'free_shipping') return value
+  return 'fixed'
+}
+
+function rowToOffer(row: OfferRow, assigned = false): AvailableOffer {
   const appliesTo = row.applies_to === 'item' ? 'item' : 'order'
   const eligibleListingIds =
     appliesTo === 'item'
@@ -267,7 +305,7 @@ function rowToOffer(row: OfferRow): AvailableOffer {
     code: (row.discount_code ?? '').trim(),
     name: row.discount_name,
     description: row.description,
-    type: row.discount_type === 'percentage' ? 'percentage' : 'fixed',
+    type: offerType(row.discount_type),
     value: toNumber(row.discount_value),
     minOrderAmount: row.min_order_amount == null ? null : toNumber(row.min_order_amount),
     maxDiscountAmount:
@@ -276,25 +314,28 @@ function rowToOffer(row: OfferRow): AvailableOffer {
     shopId: row.shop_id,
     appliesTo,
     eligibleListingIds,
+    eligibleUserTypes: row.eligible_user_types,
+    assignedToUser: assigned,
   }
 }
 
 function mapOfferRows(
   data: OfferRow[],
   listingIdsByDiscount?: Map<string, string[]>,
+  options?: { allowMissingCode?: boolean; assigned?: boolean },
 ): AvailableOffer[] {
   const seen = new Set<string>()
   const offers: AvailableOffer[] = []
 
   for (const row of data) {
     const code = (row.discount_code ?? '').trim()
-    if (!code) continue
-    const key = code.toUpperCase()
+    if (!code && !options?.allowMissingCode) continue
+    const key = (code || row.id).toUpperCase()
     if (seen.has(key)) continue
     if (!isDiscountProfileActive(row)) continue
     if (usageExhausted(row)) continue
 
-    const offer = rowToOffer(row)
+    const offer = rowToOffer(row, options?.assigned)
     if (offer.appliesTo === 'item' && offer.eligibleListingIds?.length === 0) continue
     if (offer.appliesTo === 'item' && listingIdsByDiscount) {
       const linked = listingIdsByDiscount.get(row.id) ?? []
@@ -365,18 +406,18 @@ async function fetchItemOffersForListings(options: {
 }
 
 function mergeOffers(...groups: AvailableOffer[][]): AvailableOffer[] {
-  const byCode = new Map<string, AvailableOffer>()
+  const byKey = new Map<string, AvailableOffer>()
   for (const group of groups) {
     for (const offer of group) {
-      const key = offer.code.toUpperCase()
-      if (!byCode.has(key)) byCode.set(key, offer)
+      const key = (offer.code || offer.id).toUpperCase()
+      if (!byKey.has(key)) byKey.set(key, offer)
     }
   }
-  return [...byCode.values()].sort((a, b) => (a.minOrderAmount ?? 0) - (b.minOrderAmount ?? 0))
+  return [...byKey.values()].sort((a, b) => (a.minOrderAmount ?? 0) - (b.minOrderAmount ?? 0))
 }
 
 const OFFER_SELECT =
-  'id, discount_code, discount_name, description, discount_type, discount_value, min_order_amount, max_discount_amount, valid_from, valid_until, is_active, max_uses_total, total_uses, shop_id, applies_to, eligible_listings'
+  'id, discount_code, discount_name, description, discount_type, discount_value, min_order_amount, max_discount_amount, valid_from, valid_until, is_active, max_uses_total, total_uses, shop_id, applies_to, eligible_listings, eligible_user_types'
 
 /**
  * Fetch coupons the customer can apply (order-level + item-level when listingIds given).
@@ -419,6 +460,9 @@ export async function fetchAvailableOffers(options?: {
 
   if (error || !data) return []
 
+  const { data: auth } = await supabase.auth.getUser()
+  const buyerType = await fetchBuyerDiscountUserType(auth.user?.id ?? null)
+
   const orderOffers = mapOfferRows(data as OfferRow[])
   const listingIds =
     options?.cartContext?.items.map((item) => item.listing_id) ??
@@ -435,12 +479,51 @@ export async function fetchAvailableOffers(options?: {
     merged = mergeOffers(orderOffers, itemOffers)
   }
 
+  if (auth.user?.id) {
+    merged = mergeOffers(merged, await fetchAssignedOffers(auth.user.id))
+  }
+
+  merged = merged.filter((offer) => buyerCanUseDiscountUserTypes(offer.eligibleUserTypes, buyerType))
+
   if (options?.cartContext) {
     const { subtotal, items } = options.cartContext
-    return filterEligibleOffers(merged, subtotal, items)
+    return filterEligibleOffers(merged, subtotal, items, buyerType)
   }
 
   return merged
+}
+
+async function fetchAssignedOffers(userId: string): Promise<AvailableOffer[]> {
+  const now = new Date().toISOString()
+  const { data: assignments, error } = await supabase
+    .from('discount_assignments')
+    .select('discount_profile_id, assignment_code, expires_at')
+    .eq('user_id', userId)
+    .or(`expires_at.is.null,expires_at.gte.${now}`)
+
+  if (error || !assignments?.length) return []
+
+  const ids = assignments.map((row) => row.discount_profile_id)
+  const { data, error: profileError } = await supabase
+    .from('discount_profiles')
+    .select(OFFER_SELECT)
+    .in('id', ids)
+    .eq('is_active', true)
+    .lte('valid_from', now)
+    .or(`valid_until.is.null,valid_until.gte.${now}`)
+
+  if (profileError || !data) return []
+
+  const codeByProfile = new Map(
+    assignments.map((row) => [row.discount_profile_id, row.assignment_code]),
+  )
+  return mapOfferRows(data as OfferRow[], undefined, { allowMissingCode: true, assigned: true }).map(
+    (offer) => ({
+      ...offer,
+      code: offer.code || (codeByProfile.get(offer.id) ?? '').trim() || offer.id.slice(0, 8).toUpperCase(),
+      assignedToUser: true,
+    }),
+  )
 }
 
 /**
@@ -581,6 +664,8 @@ export async function autoApplyBestOffer(options: {
 
 /** Short human label like "10% OFF" or "₹150 OFF" for an offer badge. */
 export function offerBadgeLabel(offer: AvailableOffer, currency: string): string {
+  if (offer.type === 'bogo') return 'BOGO'
+  if (offer.type === 'free_shipping') return 'FREE SHIP'
   if (offer.type === 'percentage') {
     const capped = offer.maxDiscountAmount
       ? ` up to ${formatCurrency(offer.maxDiscountAmount, currency)}`

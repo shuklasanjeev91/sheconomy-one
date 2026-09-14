@@ -6,6 +6,11 @@ import { hasListingImages } from '~/lib/listing-images'
 import type { ListingSummary } from '~/lib/supabase/commerce'
 
 import { ListingCard } from '~/commerce/components/ListingCard'
+import { SponsoredListingCard } from '~/commerce/components/SponsoredListingCard'
+import {
+  mixSponsoredPlacements,
+  type SponsoredCommerceItem,
+} from '~/commerce/hooks/useSponsoredCommerce'
 
 type ListingGridProps = {
   listings: ListingSummary[]
@@ -13,6 +18,11 @@ type ListingGridProps = {
   compact?: boolean
   personalize?: boolean
   showQuickAdd?: boolean
+  sponsoredItems?: SponsoredCommerceItem[]
+  onSponsoredEvent?: (
+    item: SponsoredCommerceItem,
+    event: 'impression' | 'click',
+  ) => void
 }
 
 const GRID_GAP = 12
@@ -57,6 +67,8 @@ export function ListingGrid({
   compact,
   personalize = true,
   showQuickAdd,
+  sponsoredItems = [],
+  onSponsoredEvent,
 }: ListingGridProps) {
   const marketplace = useOptionalMarketplacePersonalization()
 
@@ -69,18 +81,46 @@ export function ListingGrid({
     return marketplace.personalizeListings(filtered, { sort: true })
   }, [listings, marketplace, personalize])
 
+  const mixedListings = useMemo(
+    () =>
+      mixSponsoredPlacements(
+        visibleListings,
+        sponsoredItems.filter(
+          (item): item is Extract<SponsoredCommerceItem, { kind: 'listing' }> =>
+            item.kind === 'listing',
+        ),
+        {
+          getOrganicId: (listing) => listing.id,
+          getSponsoredId: (item) => item.entityId,
+          after: 6,
+          every: 12,
+          maxSponsored: 2,
+        },
+      ),
+    [sponsoredItems, visibleListings],
+  )
+
   const slotWidth = slotWidthForColumns(columns)
 
   return (
     <XStack flexWrap="wrap" width="100%" rowGap={GRID_GAP}>
-      {visibleListings.map((listing, index) => (
+      {mixedListings.map((entry, index) => (
         <XStack
-          key={listing.id}
+          key={entry.key}
           width={slotWidth}
           minWidth={0}
           {...slotInsets(index % columns, columns)}
         >
-          <ListingCard listing={listing} compact={compact} showQuickAdd={showQuickAdd} />
+          {entry.kind === 'organic' ? (
+            <ListingCard listing={entry.item} compact={compact} showQuickAdd={showQuickAdd} />
+          ) : (
+            <SponsoredListingCard
+              item={entry.item}
+              compact={compact}
+              onImpression={(item) => onSponsoredEvent?.(item, 'impression')}
+              onClick={(item) => onSponsoredEvent?.(item, 'click')}
+            />
+          )}
         </XStack>
       ))}
     </XStack>

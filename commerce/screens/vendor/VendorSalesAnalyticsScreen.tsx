@@ -8,7 +8,12 @@ import { SalesAnalyticsHubTabs } from '~/commerce/components/vendor/sales-analyt
 import { SalesAnalyticsRecordsList } from '~/commerce/components/vendor/sales-analytics/SalesAnalyticsRecordsList'
 import { SalesAnalyticsRegionalPanel } from '~/commerce/components/vendor/sales-analytics/SalesAnalyticsRegionalPanel'
 import { SalesAnalyticsSummaryCards } from '~/commerce/components/vendor/sales-analytics/SalesAnalyticsSummaryCards'
-import { SalesAnalyticsTopProductsPanel } from '~/commerce/components/vendor/sales-analytics/SalesAnalyticsTopProductsPanel'
+import { SalesAnalyticsForecastPanel } from '~/commerce/components/vendor/sales-analytics/SalesAnalyticsForecastPanel'
+import {
+  fetchShopDemandForecasts,
+  refreshShopDemandForecasts,
+  type ListingDemandForecast,
+} from '~/commerce/lib/demand-forecast'
 import { SalesAnalyticsTrendPanel } from '~/commerce/components/vendor/sales-analytics/SalesAnalyticsTrendPanel'
 import { Button, Icons, Spinner, Text, XStack, YStack, useAppToast } from '~/components/ui'
 import { PageCenter } from '~/components/layout'
@@ -77,6 +82,8 @@ export function VendorSalesAnalyticsScreen() {
   const [exporting, setExporting] = useState(false)
   const [activeTab, setActiveTab] = useState<SalesAnalyticsHubTab>('overview')
   const [showFilters, setShowFilters] = useState(false)
+  const [forecasts, setForecasts] = useState<ListingDemandForecast[]>([])
+  const [forecastLoading, setForecastLoading] = useState(false)
 
   const accessContext = useMemo(
     () => ({
@@ -99,6 +106,22 @@ export function VendorSalesAnalyticsScreen() {
     () => getSalesAnalyticsHubTabs(detailedRecords.length),
     [detailedRecords.length],
   )
+
+  useEffect(() => {
+    if (!shop?.id || activeTab !== 'forecast') return
+    let active = true
+    setForecastLoading(true)
+    void fetchShopDemandForecasts(shop.id)
+      .then((rows) => {
+        if (active) setForecasts(rows)
+      })
+      .finally(() => {
+        if (active) setForecastLoading(false)
+      })
+    return () => {
+      active = false
+    }
+  }, [activeTab, shop?.id])
 
   const reloadAll = useCallback(async () => {
     if (!shop?.id) return
@@ -494,6 +517,32 @@ export function VendorSalesAnalyticsScreen() {
                 loading={loading.regionalSales}
                 formatAmount={formatAmount}
               />
+            ) : null}
+
+            {activeTab === 'forecast' ? (
+              <YStack gap="$3">
+                <Button
+                  tone="outline"
+                  size="$3"
+                  alignSelf="flex-start"
+                  onPress={() => {
+                    if (!shop?.id) return
+                    setForecastLoading(true)
+                    void refreshShopDemandForecasts()
+                      .then(() => fetchShopDemandForecasts(shop.id))
+                      .then(setForecasts)
+                      .finally(() => setForecastLoading(false))
+                  }}
+                >
+                  Refresh forecast
+                </Button>
+                <SalesAnalyticsForecastPanel
+                  ui={ui}
+                  rows={forecasts}
+                  loading={forecastLoading}
+                  formatAmount={formatAmount}
+                />
+              </YStack>
             ) : null}
           </>
         )}

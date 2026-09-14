@@ -1,6 +1,7 @@
+import { useState } from 'react'
 import type { ReactNode } from 'react'
 
-import { Button, Icons, Text, XStack, YStack } from '~/components/ui'
+import { Button, Icons, Input, Text, XStack, YStack } from '~/components/ui'
 import { radius } from '~/config/tokens'
 import type { DiscountProfile } from '~/lib/discount/discount.type'
 import { DISCOUNT_UI_COPY } from '~/lib/discount/discount-ui.copy'
@@ -14,6 +15,7 @@ type DiscountListItemProps = {
   busy?: boolean
   onToggleActive: () => void
   onDelete: () => void
+  onAssign?: (usernameOrEmail: string) => void
 }
 
 export function DiscountListItem({
@@ -23,7 +25,9 @@ export function DiscountListItem({
   busy,
   onToggleActive,
   onDelete,
+  onAssign,
 }: DiscountListItemProps) {
+  const [assignTo, setAssignTo] = useState('')
   const codeSuffix = discount.discount_code ? ` · ${discount.discount_code}` : ''
   const subtitle = buildDiscountRowSubtitle(discount, currencySymbol)
 
@@ -71,6 +75,29 @@ export function DiscountListItem({
           </Button>
         </XStack>
       </XStack>
+      {onAssign ? (
+        <XStack gap="$2" alignItems="center" flexWrap="wrap">
+          <Input
+            flex={1}
+            minWidth={180}
+            size="$2"
+            value={assignTo}
+            onChangeText={setAssignTo}
+            placeholder="Assign to username or email"
+          />
+          <Button
+            tone="outline"
+            size="$2"
+            disabled={busy || !assignTo.trim()}
+            onPress={() => {
+              onAssign(assignTo.trim())
+              setAssignTo('')
+            }}
+          >
+            Assign offer
+          </Button>
+        </XStack>
+      ) : null}
     </YStack>
   )
 }

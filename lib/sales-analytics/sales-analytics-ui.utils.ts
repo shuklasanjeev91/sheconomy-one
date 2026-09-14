@@ -14,7 +14,7 @@ import type {
 } from '~/lib/sales-analytics/sales-analytics.type'
 import { formatPercentage } from '~/lib/sales-analytics/sales-analytics.utils'
 
-export type SalesAnalyticsHubTab = 'overview' | 'detailed' | 'products' | 'regional'
+export type SalesAnalyticsHubTab = 'overview' | 'detailed' | 'products' | 'regional' | 'forecast'
 
 export type SalesAnalyticsHubTabDef = {
   id: SalesAnalyticsHubTab
@@ -88,6 +88,7 @@ export function getSalesAnalyticsHubTabs(recordCount?: number): SalesAnalyticsHu
     { id: 'detailed', label: 'Records', count: recordCount },
     { id: 'products', label: 'Products' },
     { id: 'regional', label: 'Regional' },
+    { id: 'forecast', label: 'Forecast' },
   ]
 }
 

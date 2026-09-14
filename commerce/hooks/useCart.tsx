@@ -10,6 +10,7 @@ import {
 } from 'react'
 
 import {
+  addBundleToCart as addBundleToCartRpc,
   addListingToCart,
   fetchCartWithItems,
   getCartSessionId,
@@ -53,6 +54,7 @@ type CartContextValue = {
   ) => Promise<{
     error: string | null
   }>
+  addBundleToCart: (bundleId: string, quantity?: number) => Promise<{ error: string | null }>
   updateQuantity: (cartItemId: string, quantity: number) => Promise<{ error: string | null }>
   removeItem: (cartItemId: string) => Promise<{ error: string | null }>
   saveForLater: (cartItemId: string) => Promise<{ error: string | null }>
@@ -496,6 +498,36 @@ export function CartProvider({ children }: { children: ReactNode }) {
     [loadCart, userId],
   )
 
+  const addBundleToCart = useCallback(
+    async (bundleId: string, quantity = 1) => {
+      try {
+        return await runCartMutation('Adding bundle', async () => {
+          const actor = await resolveCartActor(userId)
+          const { cart, error: cartError } = await getOrCreateCart({
+            userId: actor.userId,
+            sessionId: actor.sessionId,
+          })
+          if (cartError || !cart?.id) {
+            return { error: cartError ?? 'Could not create cart' }
+          }
+          const { error: addError } = await addBundleToCartRpc({
+            cartId: cart.id,
+            bundleId,
+            quantity,
+          })
+          if (addError) return { error: addError }
+          void loadCart()
+          return { error: null }
+        })
+      } catch (error) {
+        return {
+          error: error instanceof Error ? error.message : 'Could not add bundle.',
+        }
+      }
+    },
+    [loadCart, userId],
+  )
+
   const updateQuantity = useCallback(
     async (cartItemId: string, quantity: number) => {
       if (!cartData?.cart.id) return { error: 'Cart not found' }
@@ -600,6 +632,7 @@ export function CartProvider({ children }: { children: ReactNode }) {
       error,
       refresh: loadCart,
       addToCart,
+      addBundleToCart,
       updateQuantity,
       removeItem,
       saveForLater,
@@ -611,6 +644,7 @@ export function CartProvider({ children }: { children: ReactNode }) {
     }),
     [
       addToCart,
+      addBundleToCart,
       applyCoupon,
       autoApplied,
       cartData,

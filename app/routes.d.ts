@@ -174,6 +174,8 @@ declare module 'one' {
         | `/vendor/ads`
         | `/vendor/ads/create`
         | `/vendor/analytics`
+        | `/vendor/bundles`
+        | `/vendor/customers`
         | `/vendor/create-listing`
         | `/vendor/delivery`
         | `/vendor/myshop`

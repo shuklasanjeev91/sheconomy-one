@@ -103,6 +103,11 @@ export function VendorListingsScreen() {
                   Add Product
                 </Button>
               </AppLink>
+              <AppLink href={vendorRoutes.bundles} asChild>
+                <Button tone="outline" size="$3" borderRadius={999}>
+                  Bundles
+                </Button>
+              </AppLink>
             </XStack>
           ) : null}
         </XStack>

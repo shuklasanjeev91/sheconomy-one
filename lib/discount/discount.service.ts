@@ -1528,6 +1528,49 @@ export async function updatePosterMetadata(
   })
 }
 
+export async function assignDiscountToCustomer(options: {
+  discountId: string
+  shopId: string
+  usernameOrEmail: string
+  assignmentCode?: string | null
+  accessContext?: DiscountAccessContext
+  scope?: DiscountFetchScope
+}): Promise<DiscountServiceResponse<{ userId: string }>> {
+  try {
+    await assertDiscountManageAccess(options.shopId, options.accessContext, options.scope)
+    const needle = options.usernameOrEmail.trim()
+    if (!needle) {
+      throw new DiscountError(DISCOUNT_ERROR_CODES.INVALID_INPUT, 'Enter a username or email.')
+    }
+
+    const { data: profile, error: profileError } = await supabase
+      .from('profiles')
+      .select('id, username, email')
+      .or(`username.ilike.${needle},email.ilike.${needle}`)
+      .limit(1)
+      .maybeSingle()
+
+    if (profileError || !profile?.id) {
+      throw new DiscountError(DISCOUNT_ERROR_CODES.INVALID_INPUT, 'No customer matched that username or email.')
+    }
+
+    const { data: session } = await supabase.auth.getUser()
+    const { error } = await supabase.from('discount_assignments').upsert(
+      {
+        discount_profile_id: options.discountId,
+        user_id: profile.id,
+        assignment_code: options.assignmentCode?.trim() || null,
+        created_by: session.user?.id ?? null,
+      },
+      { onConflict: 'discount_profile_id,user_id' },
+    )
+    if (error) throw error
+    return ok({ userId: profile.id }, 'Offer assigned')
+  } catch (error) {
+    return fail(error)
+  }
+}
+
 export function clearDiscountRequestCache(): void {
   pendingRequests.clear()
 }

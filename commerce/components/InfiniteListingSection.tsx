@@ -6,6 +6,7 @@ import { useAppLayout } from '~/hooks/useAppLayout'
 import { PageSection } from '~/components/layout'
 import type { ListingFeedKind } from '~/lib/supabase/commerce'
 import { useListingFeed } from '~/commerce/hooks/useListingFeed'
+import { useSponsoredCommerce } from '~/commerce/hooks/useSponsoredCommerce'
 
 import { CommerceSection } from '~/commerce/components/CommerceSection'
 import { ListingGrid } from '~/commerce/components/ListingGrid'
@@ -22,6 +23,8 @@ type InfiniteListingSectionProps = {
   enabled?: boolean
   /** Wrap in PageSection only when content exists (avoids empty home gaps). */
   inset?: boolean
+  /** Defaults on for public browse grids and off for embedded/storefront grids. */
+  sponsored?: boolean
 }
 
 export function InfiniteListingSection({
@@ -33,6 +36,7 @@ export function InfiniteListingSection({
   shopId,
   enabled = true,
   inset = false,
+  sponsored = !inset && !shopId,
 }: InfiniteListingSectionProps) {
   const ui = useAppUi()
   const { listingGridColumns: gridColumns } = useAppLayout()
@@ -40,6 +44,12 @@ export function InfiniteListingSection({
     kind,
     shopId,
     enabled,
+  })
+  const sponsoredCommerce = useSponsoredCommerce({
+    placement: 'commerce_browse',
+    context: { keywords: [kind] },
+    enabled: enabled && sponsored && !shopId,
+    limit: 2,
   })
 
   function wrap(node: ReactNode) {
@@ -74,7 +84,12 @@ export function InfiniteListingSection({
       actionHref={actionHref}
     >
       <YStack gap="$4" width="100%">
-        <ListingGrid listings={items} columns={gridColumns} />
+        <ListingGrid
+          listings={items}
+          columns={gridColumns}
+          sponsoredItems={sponsoredCommerce.items}
+          onSponsoredEvent={(item, event) => void sponsoredCommerce.track(item, event)}
+        />
         <LoadMoreSentinel
           hasMore={hasMore}
           isLoadingMore={isLoadingMore}

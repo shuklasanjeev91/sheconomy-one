@@ -44,6 +44,11 @@ import {
   ListingVisualPreviewButtons,
   ShopActionButtons,
 } from '~/commerce/components'
+import {
+  ListingBundleOffer,
+  ListingPreorderNote,
+  ListingReorderScheduleCard,
+} from '~/commerce/components/ListingCommerceExtras'
 import { fetchListingReturnPolicy, type ListingReturnPolicy } from '~/commerce/lib/return-policies'
 import { listingMediaKind } from '~/commerce/lib/listing-media'
 import { findCartItemForListing } from '~/commerce/lib/cart-listing'
@@ -51,6 +56,7 @@ import { useCart } from '~/commerce/hooks/useCart'
 import { useShopFollow } from '~/commerce/hooks/useShopFollow'
 import { recordListingView } from '~/commerce/lib/recently-viewed'
 import { LISTING_METADATA_KEYS } from '~/commerce/components/vendor/listing-publish/listing-publish.constants'
+import { readMetadataBoolean } from '~/commerce/components/vendor/listing-publish/listing-publish.utils'
 import { useListingReviews } from '~/commerce/hooks/useListingReviews'
 import { useCanonicalListingSlug } from '~/commerce/hooks/useCanonicalSlug'
 import { PageCenter, PageScroll, StickyRail } from '~/components/layout'
@@ -169,7 +175,7 @@ export function ListingScreen({
     averageRating: listing?.average_rating,
     totalReviews: listing?.total_reviews,
   })
-  const { addToCart, items: cartItems, updateQuantity, removeItem } = useCart()
+  const { addToCart, addBundleToCart, items: cartItems, updateQuantity, removeItem } = useCart()
   const { user } = useSupabase()
   const toast = useAppToast()
   const { hasSideRails } = useAppLayout()
@@ -304,13 +310,14 @@ export function ListingScreen({
   const displayPrice = getVariantPrice(listing.price, selectedVariations)
   const displayStock = getVariantStock(listing.stock, selectedVariations)
   const selectedVariantId = selectedVariations[0]?.id ?? null
-  const outOfStock = displayStock === 0
-  const cartItem = findCartItemForListing(cartItems, listing.id, selectedVariantId)
-  const showInCart = Boolean(cartItem) || optimisticInCart
   const listingMeta =
     listing.listing_metadata && typeof listing.listing_metadata === 'object'
       ? (listing.listing_metadata as Record<string, unknown>)
       : {}
+  const outOfStock = displayStock === 0
+  const allowPreorder = readMetadataBoolean(listingMeta, LISTING_METADATA_KEYS.ALLOW_PREORDER, false)
+  const cartItem = findCartItemForListing(cartItems, listing.id, selectedVariantId)
+  const showInCart = Boolean(cartItem) || optimisticInCart
   const followersOnly = Boolean(listingMeta[LISTING_METADATA_KEYS.FOLLOWERS_ONLY])
   const isShopOwner = Boolean(user?.id && listing.shops?.user_id === user.id)
   const purchaseLocked =
@@ -324,7 +331,7 @@ export function ListingScreen({
       })
       return
     }
-    if (addingRef.current || outOfStock) return
+    if (addingRef.current || (outOfStock && !allowPreorder)) return
     addingRef.current = true
 
     // Add to cart: unlock CTA immediately (Checkout UI) so the pink button never sticks
@@ -723,10 +730,24 @@ export function ListingScreen({
               {displayStock != null ? (
                 <YStack gap="$2">
                   <Text fontSize={13} color={displayStock > 0 ? ui.success : ui.error} fontWeight="500">
-                    {displayStock > 0 ? `${displayStock} in stock` : 'Out of stock'}
+                    {displayStock > 0
+                      ? `${displayStock} in stock`
+                      : readMetadataBoolean(listingMeta, LISTING_METADATA_KEYS.ALLOW_PREORDER, false)
+                        ? 'Pre-order'
+                        : 'Out of stock'}
                   </Text>
+                  <ListingPreorderNote metadata={listingMeta} />
                   <LowStockHint stock={displayStock} />
-                  <StockNotifyButton listingId={listing.id} outOfStock={outOfStock} />
+                  <StockNotifyButton listingId={listing.id} outOfStock={outOfStock && !allowPreorder} />
+                  <ListingBundleOffer
+                    listingId={listing.id}
+                    onAddBundle={async (bundleId) => {
+                      const { error } = await addBundleToCart(bundleId)
+                      if (error) toast.show(error, { tone: 'danger' })
+                      else toast.show('Bundle added to cart', { tone: 'success' })
+                    }}
+                  />
+                  <ListingReorderScheduleCard listingId={listing.id} metadata={listingMeta} />
                   <ListingAskQuestion
                     listingId={listing.id}
                     shopId={listing.shop_id}
@@ -815,7 +836,7 @@ export function ListingScreen({
           priceIncludesTax={listing.price_includes_tax}
           taxPercent={listing.tax_percent}
           currency={currency}
-          disabled={(outOfStock && !showInCart) || purchaseLocked}
+          disabled={((outOfStock && !allowPreorder) && !showInCart) || purchaseLocked}
           isLoading={isAddingToCart}
           inCart={showInCart}
           quantity={cartItem?.quantity ?? 1}
@@ -971,10 +992,20 @@ export function ListingScreen({
       {displayStock != null ? (
         <YStack gap="$2">
           <Text fontSize={13} color={displayStock > 0 ? ui.success : ui.error} fontWeight="500">
-            {displayStock > 0 ? `${displayStock} in stock` : 'Out of stock'}
+            {displayStock > 0 ? `${displayStock} in stock` : allowPreorder ? 'Pre-order' : 'Out of stock'}
           </Text>
+          <ListingPreorderNote metadata={listingMeta} />
           <LowStockHint stock={displayStock} />
-          <StockNotifyButton listingId={listing.id} outOfStock={outOfStock} />
+          <StockNotifyButton listingId={listing.id} outOfStock={outOfStock && !allowPreorder} />
+          <ListingBundleOffer
+            listingId={listing.id}
+            onAddBundle={async (bundleId) => {
+              const { error } = await addBundleToCart(bundleId)
+              if (error) toast.show(error, { tone: 'danger' })
+              else toast.show('Bundle added to cart', { tone: 'success' })
+            }}
+          />
+          <ListingReorderScheduleCard listingId={listing.id} metadata={listingMeta} />
           <ListingAskQuestion
             listingId={listing.id}
             shopId={listing.shop_id}
@@ -1045,10 +1076,16 @@ export function ListingScreen({
               flex={1}
               minWidth={200}
               borderRadius={999}
-              disabled={addingRef.current || outOfStock || purchaseLocked}
+              disabled={addingRef.current || (outOfStock && !allowPreorder) || purchaseLocked}
               onPress={() => handleAddToCart(false)}
             >
-              {purchaseLocked ? 'Follow to unlock' : outOfStock ? 'Out of stock' : 'Add to cart'}
+              {purchaseLocked
+                ? 'Follow to unlock'
+                : outOfStock && !allowPreorder
+                  ? 'Out of stock'
+                  : outOfStock
+                    ? 'Pre-order'
+                    : 'Add to cart'}
             </Button>
           </Theme>
           <Button
@@ -1057,7 +1094,7 @@ export function ListingScreen({
             borderRadius={999}
             flex={1}
             minWidth={200}
-            disabled={addingRef.current || outOfStock || purchaseLocked}
+            disabled={addingRef.current || (outOfStock && !allowPreorder) || purchaseLocked}
             onPress={() => handleAddToCart(true)}
           >
             {purchaseLocked ? 'Followers only' : buyNowLabel}

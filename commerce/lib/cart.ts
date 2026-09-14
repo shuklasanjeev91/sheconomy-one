@@ -238,6 +238,20 @@ export async function addListingToCart(options: {
   return { item: data, error: null }
 }
 
+export async function addBundleToCart(options: {
+  cartId: string
+  bundleId: string
+  quantity?: number
+}): Promise<{ item: CartItemRow | null; error: string | null }> {
+  const { data, error } = await supabase.rpc('add_bundle_to_cart', {
+    p_cart_id: options.cartId,
+    p_bundle_id: options.bundleId,
+    p_quantity: options.quantity ?? 1,
+  })
+  if (error) return { item: null, error: error.message }
+  return { item: data as CartItemRow, error: null }
+}
+
 async function recordCartAddAnalytics(options: {
   cartId: string
   listingId: string

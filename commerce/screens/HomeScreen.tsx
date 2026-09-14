@@ -32,8 +32,10 @@ import { VendorFulfillmentHomeStrip } from '~/commerce/components/VendorFulfillm
 import { VendorSlaHomeStrip } from '~/commerce/components/VendorSlaHomeStrip'
 import { WishlistPriceDropHomeStrip } from '~/commerce/components/WishlistPriceDropHomeStrip'
 import { RecentlyViewedRail } from '~/commerce/components/RecentlyViewedRail'
+import { ForYouHomeRail } from '~/commerce/components/ForYouHomeRail'
 import { SaleEventBanner } from '~/commerce/components/SaleEventBanner'
 import { ShopSpotlightCard } from '~/commerce/components/ShopSpotlightCard'
+import { SponsoredListingsRail } from '~/commerce/components/SponsoredListingsRail'
 import {
   Button,
   Card,
@@ -195,6 +197,8 @@ export function HomeScreen({ data, error, loading = false }: HomeScreenProps) {
           />
           <ExpiringOffersHomeStrip inset />
           <RecentlyViewedRail inset />
+          <ForYouHomeRail inset />
+          <SponsoredListingsRail placement="commerce_home" limit={2} inset />
           <CartHomeStrip inset />
           <WishlistPriceDropHomeStrip inset />
           <SavedForLaterHomeStrip inset />

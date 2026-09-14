@@ -118,8 +118,10 @@ export const vendorRoutes = {
   ordersSection: (section: string) =>
     `/vendor/orders?section=${encodeURIComponent(section)}` as Href,
   analytics: '/vendor/analytics' as Href,
+  customers: '/vendor/customers' as Href,
   delivery: '/vendor/delivery' as Href,
   ads: '/vendor/ads' as Href,
+  bundles: '/vendor/bundles' as Href,
   createDiscount: '/vendor/ads/create' as Href,
   reviews: '/vendor/reviews' as Href,
   settings: '/vendor/settings' as Href,

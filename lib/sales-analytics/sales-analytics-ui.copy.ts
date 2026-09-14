@@ -19,5 +19,6 @@ export const SALES_ANALYTICS_UI_COPY = {
     detailed: 'Records',
     products: 'Products',
     regional: 'Regional',
+    forecast: 'Forecast',
   },
 } as const

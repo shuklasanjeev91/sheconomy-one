@@ -38,6 +38,16 @@ export function recordListingView(listingId: string) {
   ids = next
   emit()
   void AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(ids)).catch(() => {})
+  void syncListingView(listingId)
+}
+
+async function syncListingView(listingId: string) {
+  try {
+    const { supabase } = await import('~/lib/supabase/client')
+    await supabase.rpc('record_listing_view', { p_listing_id: listingId })
+  } catch {
+    // Local history still works offline.
+  }
 }
 
 /** Clear recently viewed history on web, iOS, and Android. */

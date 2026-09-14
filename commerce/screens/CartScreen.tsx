@@ -677,7 +677,7 @@ export function CartScreen() {
     >
       <RecentlyViewedRail excludeIds={cartListingIds} />
       {recommendationSeedId ? (
-        <ListingRecommendationsSections listingId={recommendationSeedId} />
+        <ListingRecommendationsSections listingId={recommendationSeedId} sponsoredEnabled={false} />
       ) : null}
     </YStack>
   )

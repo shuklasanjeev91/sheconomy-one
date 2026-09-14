@@ -4,7 +4,7 @@ export type AvailableOffer = {
   code: string
   name: string
   description: string | null
-  type: 'percentage' | 'fixed'
+  type: 'percentage' | 'fixed' | 'bogo' | 'free_shipping'
   value: number
   minOrderAmount: number | null
   maxDiscountAmount: number | null
@@ -18,6 +18,8 @@ export type AvailableOffer = {
    * `null` = no listing filter; `[]` = no eligible lines; non-empty = those listings only.
    */
   eligibleListingIds: string[] | null
+  eligibleUserTypes?: string[] | null
+  assignedToUser?: boolean
 }
 
 export type CartOfferItem = {
@@ -53,6 +55,11 @@ export function isDiscountProfileActive(
 
 /** Estimate the discount an offer would give for a subtotal (clamped to it). */
 export function estimateOfferDiscount(offer: AvailableOffer, subtotal: number): number {
+  if (offer.type === 'free_shipping') return 0
+  if (offer.type === 'bogo') {
+    // Checkout computes BOGO from line items; treat a qualifying cart as "has savings".
+    return subtotal > 0 ? Math.round(subtotal * 0.01 * 100) / 100 : 0
+  }
   let amount = offer.type === 'percentage' ? (subtotal * offer.value) / 100 : offer.value
   if (offer.maxDiscountAmount && offer.maxDiscountAmount > 0 && amount > offer.maxDiscountAmount) {
     amount = offer.maxDiscountAmount
@@ -88,10 +95,21 @@ export function isOfferEligible(
   offer: AvailableOffer,
   cartSubtotal: number,
   items: CartOfferItem[],
+  buyerUserType?: string | null,
 ): boolean {
+  if (offer.eligibleUserTypes?.length && buyerUserType) {
+    const types = offer.eligibleUserTypes
+    if (!types.includes('all') && !types.includes(buyerUserType)) return false
+  } else if (offer.eligibleUserTypes?.length && !offer.eligibleUserTypes.includes('all') && !buyerUserType) {
+    return false
+  }
   const eligible = offerEligibleSubtotal(offer, cartSubtotal, items)
-  if (eligible <= 0) return false
-  if (offer.minOrderAmount != null && eligible < offer.minOrderAmount) return false
+  if (eligible <= 0 && offer.type !== 'bogo' && offer.type !== 'free_shipping') return false
+  if (offer.minOrderAmount != null && eligible < offer.minOrderAmount && offer.type !== 'bogo') {
+    return false
+  }
+  if (offer.type === 'free_shipping') return eligible > 0 || cartSubtotal > 0
+  if (offer.type === 'bogo') return cartSubtotal > 0
   return estimateOfferDiscount(offer, eligible) > 0
 }
 
@@ -100,8 +118,9 @@ export function filterEligibleOffers(
   offers: AvailableOffer[],
   cartSubtotal: number,
   items: CartOfferItem[],
+  buyerUserType?: string | null,
 ): AvailableOffer[] {
-  return offers.filter((offer) => isOfferEligible(offer, cartSubtotal, items))
+  return offers.filter((offer) => isOfferEligible(offer, cartSubtotal, items, buyerUserType))
 }
 
 /**

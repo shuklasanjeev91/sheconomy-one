@@ -101,6 +101,45 @@ export function PricingStep({
           <Text fontSize={11} color={ui.textMuted}>
             We&apos;ll alert you when stock hits this level.
           </Text>
+          <XStack alignItems="flex-start" gap="$3" paddingTop="$2">
+            <Checkbox
+              checked={readMetadataBoolean(meta, LISTING_METADATA_KEYS.ALLOW_PREORDER, false)}
+              onCheckedChange={(checked) =>
+                onUpdateMetadata(LISTING_METADATA_KEYS.ALLOW_PREORDER, !!checked)
+              }
+            />
+            <YStack flex={1} gap="$0.5">
+              <Text fontSize={13} fontWeight="700" color={ui.text}>
+                Allow pre-orders when out of stock
+              </Text>
+              <Text fontSize={12} color={ui.textSecondary}>
+                Buyers can pay now; you ship after restock.
+              </Text>
+            </YStack>
+          </XStack>
+          <Field label="Expected ship date (pre-order)">
+            <Input
+              value={readMetadataString(meta, LISTING_METADATA_KEYS.EXPECTED_SHIP_AT)}
+              onChangeText={(value) => onUpdateMetadata(LISTING_METADATA_KEYS.EXPECTED_SHIP_AT, value)}
+              placeholder="YYYY-MM-DD"
+            />
+          </Field>
+          <XStack alignItems="flex-start" gap="$3">
+            <Checkbox
+              checked={readMetadataBoolean(meta, LISTING_METADATA_KEYS.REPLENISHABLE, false)}
+              onCheckedChange={(checked) =>
+                onUpdateMetadata(LISTING_METADATA_KEYS.REPLENISHABLE, !!checked)
+              }
+            />
+            <YStack flex={1} gap="$0.5">
+              <Text fontSize={13} fontWeight="700" color={ui.text}>
+                Replenishable (scheduled reorder)
+              </Text>
+              <Text fontSize={12} color={ui.textSecondary}>
+                Let buyers set a weekly or monthly reorder reminder.
+              </Text>
+            </YStack>
+          </XStack>
         </ListingPublishCard>
       </YStack>
 

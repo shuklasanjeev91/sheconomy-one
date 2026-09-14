@@ -25,6 +25,7 @@ import {
   filterDiscountsByTab,
   type DiscountHubTab,
 } from '~/lib/discount/discount-ui.utils'
+import * as discountService from '~/lib/discount/discount.service'
 import {
   clearDiscountError,
   deleteDiscountProfile,
@@ -36,7 +37,8 @@ import {
   setDiscountShopId,
   updateDiscountProfile,
 } from '~/lib/discount/discount.store'
-import { vendorRoutes } from '~/lib/routes'
+import { communityRoutes, vendorRoutes } from '~/lib/routes'
+import { AppLink } from '~/components/navigation'
 import { useVendorCurrency } from '~/hooks/useVendorCurrency'
 import { useAppDispatch, useAppSelector } from '~/lib/store/hooks'
 import { useAppUi } from '~/lib/theme/useAppUi'
@@ -153,6 +155,22 @@ export function VendorDiscountScreen() {
     }
   }
 
+  async function handleAssign(discountId: string, usernameOrEmail: string) {
+    if (!shop?.id) return
+    const result = await discountService.assignDiscountToCustomer({
+      discountId,
+      shopId: shop.id,
+      usernameOrEmail,
+      accessContext,
+      scope: DISCOUNT_FETCH_SCOPE.VENDOR,
+    })
+    if (!result.success) {
+      toast.show(result.error ?? 'Could not assign offer', { tone: 'danger' })
+      return
+    }
+    toast.show('Offer assigned to customer', { tone: 'success' })
+  }
+
   async function handleDelete(discountId: string) {
     if (!shop?.id) return
     try {
@@ -226,6 +244,11 @@ export function VendorDiscountScreen() {
             </Text>
           </YStack>
           <XStack gap="$2" flexWrap="wrap">
+            <AppLink href={communityRoutes.ads} asChild>
+              <Button tone="outline" size="$3" icon={<Icons.Megaphone size={15} />}>
+                Ads Manager
+              </Button>
+            </AppLink>
             <Button
               tone="primary"
               size="$3"
@@ -283,6 +306,7 @@ export function VendorDiscountScreen() {
                     busy={loading.updating || loading.deleting}
                     onToggleActive={() => void handleToggleActive(discount.id, discount.is_active)}
                     onDelete={() => void handleDelete(discount.id)}
+                    onAssign={(usernameOrEmail) => void handleAssign(discount.id, usernameOrEmail)}
                   />
                 ))
               ) : (

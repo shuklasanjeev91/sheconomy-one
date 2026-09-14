@@ -7,6 +7,8 @@ import { fetchGroup } from '~/community/lib/groups'
 import { fetchJob } from '~/community/lib/jobs'
 import { fetchPublicProfile } from '~/community/lib/network'
 import { fetchProgramBySlug } from '~/class/lib/programs'
+import { fetchMeetingByCode } from '~/co-work/lib/meetings'
+import type { Meeting } from '~/co-work/lib/types'
 import { getContentCoverUrl, getContentTeaser } from '~/lib/cms/cms.utils'
 import { BRAND_NAME } from '~/config/brand'
 import {
@@ -15,6 +17,7 @@ import {
   classRoutes,
   commerceRoutes,
   communityRoutes,
+  coWorkRoutes,
 } from '~/lib/routes'
 import { pageSeo, plainSnippet, readRouteParam } from '~/lib/seo/seo-helpers'
 import type { PageSeo } from '~/lib/seo/seo'
@@ -44,6 +47,87 @@ function resolveFromPath(
     return decodeURIComponent(match[1])
   } catch {
     return match[1]
+  }
+}
+
+function formatMeetingSeoTime(meeting: Meeting): string {
+  if (meeting.status === 'active' || meeting.status === 'instant') return 'Live now'
+  if (!meeting.scheduled_at) return 'Time to be announced'
+
+  try {
+    return `Scheduled for ${new Intl.DateTimeFormat('en-US', {
+      weekday: 'long',
+      year: 'numeric',
+      month: 'long',
+      day: 'numeric',
+      hour: 'numeric',
+      minute: '2-digit',
+      timeZone: meeting.time_zone ?? undefined,
+      timeZoneName: meeting.time_zone ? 'short' : undefined,
+    }).format(new Date(meeting.scheduled_at))}`
+  } catch {
+    return `Scheduled for ${new Intl.DateTimeFormat('en-US', {
+      dateStyle: 'full',
+      timeStyle: 'short',
+    }).format(new Date(meeting.scheduled_at))}`
+  }
+}
+
+export function buildMeetingPageSeo(meeting: Meeting): PageSeo {
+  const hostName =
+    meeting.host?.full_name?.trim() ||
+    meeting.host?.username?.trim() ||
+    `${BRAND_NAME} member`
+  const details = [
+    plainSnippet(meeting.description, 150),
+    `Hosted by ${hostName}`,
+    formatMeetingSeoTime(meeting),
+    `Join this Co-work meeting on ${BRAND_NAME}.`,
+  ].filter(Boolean)
+
+  return pageSeo({
+    title: meeting.title,
+    description: details.join(' · '),
+    image: meeting.host?.avatar_url || '/app-icon-adaptive.png',
+    canonicalPath: String(coWorkRoutes.meeting(meeting.meeting_code)),
+    noindex: true,
+  })
+}
+
+export async function meetingSeoLoader({
+  params,
+  path,
+}: LoaderProps<{ code?: string }>): Promise<EntitySeoLoaderResult> {
+  const code = resolveFromPath(
+    params ?? {},
+    'code',
+    path,
+    /\/co-work\/meeting\/([^/?#]+)/i,
+  )
+  if (!code) return publish(null)
+
+  try {
+    const meeting = await fetchMeetingByCode(code)
+    if (!meeting) {
+      return publish(
+        pageSeo({
+          title: 'Join Co-work Meeting',
+          description: `Open this meeting invitation on ${BRAND_NAME}.`,
+          canonicalPath: String(coWorkRoutes.meeting(code)),
+          noindex: true,
+        }),
+      )
+    }
+    return publish(buildMeetingPageSeo(meeting))
+  } catch {
+    return publish(
+      pageSeo({
+        title: 'Join Co-work Meeting',
+        description: `Open this meeting invitation on ${BRAND_NAME}.`,
+        canonicalPath: String(coWorkRoutes.meeting(code)),
+        noindex: true,
+      }),
+    )
   }
 }
 

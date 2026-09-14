@@ -9,6 +9,7 @@ import { useAppUi } from '~/lib/theme/useAppUi'
 import { CommercePageHeader } from '~/commerce/components/CommercePageHeader'
 import { ListingGrid } from '~/commerce/components/ListingGrid'
 import { LoadMoreEnd, LoadMoreSentinel } from '~/commerce/components/LoadMoreSentinel'
+import type { SponsoredCommerceItem } from '~/commerce/hooks/useSponsoredCommerce'
 
 type ListingBrowseViewProps = {
   title: string
@@ -24,6 +25,11 @@ type ListingBrowseViewProps = {
   emptyMessage?: string
   hideHeader?: boolean
   showQuickAdd?: boolean
+  sponsoredItems?: SponsoredCommerceItem[]
+  onSponsoredEvent?: (
+    item: SponsoredCommerceItem,
+    event: 'impression' | 'click',
+  ) => void
 }
 
 /** Browse page body — header, grid, infinite scroll. */
@@ -41,6 +47,8 @@ export function ListingBrowseView({
   emptyMessage = 'No listings found.',
   hideHeader = false,
   showQuickAdd = false,
+  sponsoredItems,
+  onSponsoredEvent,
 }: ListingBrowseViewProps) {
   const ui = useAppUi()
   const { listingGridColumns: gridColumns } = useAppLayout()
@@ -130,7 +138,13 @@ export function ListingBrowseView({
               ) : null}
             </XStack>
           ) : null}
-          <ListingGrid listings={items} columns={gridColumns} showQuickAdd={showQuickAdd} />
+          <ListingGrid
+            listings={items}
+            columns={gridColumns}
+            showQuickAdd={showQuickAdd}
+            sponsoredItems={sponsoredItems}
+            onSponsoredEvent={onSponsoredEvent}
+          />
           <LoadMoreSentinel
             hasMore={hasMore}
             isLoadingMore={isLoadingMore}

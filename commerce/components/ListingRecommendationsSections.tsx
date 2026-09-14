@@ -5,7 +5,9 @@ import { hasListingImages } from '~/lib/listing-images'
 
 import { CommerceSection } from '~/commerce/components/CommerceSection'
 import { ListingCarouselRow } from '~/commerce/components/ListingCarouselRow'
+import { SponsoredListingsRail } from '~/commerce/components/SponsoredListingsRail'
 import { useListingRecommendations } from '~/commerce/hooks/useListingRecommendations'
+import { useSponsoredCommerce } from '~/commerce/hooks/useSponsoredCommerce'
 
 type ListingRecommendationsSectionsProps = {
   listingId: string
@@ -15,6 +17,7 @@ type ListingRecommendationsSectionsProps = {
   category?: string | null
   listingType?: string | null
   enabled?: boolean
+  sponsoredEnabled?: boolean
   limit?: number
 }
 
@@ -32,19 +35,37 @@ export function ListingRecommendationsSections({
   category,
   listingType,
   enabled = true,
+  sponsoredEnabled = true,
   limit,
 }: ListingRecommendationsSectionsProps) {
   const ui = useAppUi()
-  const { related, personalized, fromShop, error } = useListingRecommendations(
+  const { related, personalized, fromShop, boughtTogether, error } = useListingRecommendations(
     listingId,
     { enabled, limit, shopId, category, listingType },
   )
+  const sponsored = useSponsoredCommerce({
+    placement: 'listing_detail',
+    context: {
+      listing_id: listingId,
+      shop_id: shopId ?? undefined,
+      keywords: [category, listingType].filter((value): value is string => !!value),
+    },
+    enabled: enabled && sponsoredEnabled,
+    limit: 1,
+  })
+  const sponsoredListings = sponsored.items.filter((item) => item.kind === 'listing')
+  const sponsoredIds = new Set(sponsoredListings.map((item) => item.entityId))
 
-  const relatedVisible = withPhotos(related)
-  const personalizedVisible = withPhotos(personalized)
-  const fromShopVisible = withPhotos(fromShop)
+  const relatedVisible = withPhotos(related).filter((item) => !sponsoredIds.has(item.id))
+  const personalizedVisible = withPhotos(personalized).filter((item) => !sponsoredIds.has(item.id))
+  const fromShopVisible = withPhotos(fromShop).filter((item) => !sponsoredIds.has(item.id))
+  const fbtVisible = withPhotos(boughtTogether).filter((item) => !sponsoredIds.has(item.id))
   const hasAny =
-    fromShopVisible.length > 0 || relatedVisible.length > 0 || personalizedVisible.length > 0
+    sponsoredListings.length > 0 ||
+    fromShopVisible.length > 0 ||
+    relatedVisible.length > 0 ||
+    personalizedVisible.length > 0 ||
+    fbtVisible.length > 0
 
   // Never block the PDP bottom with spinners — sections appear as data is ready.
   if (!hasAny) {
@@ -57,6 +78,12 @@ export function ListingRecommendationsSections({
 
   return (
     <YStack gap="$8" width="100%">
+      {fbtVisible.length > 0 ? (
+        <CommerceSection title="Frequently bought together" subtitle="Shoppers often add these with this item">
+          <ListingCarouselRow listings={fbtVisible} />
+        </CommerceSection>
+      ) : null}
+
       {fromShopVisible.length > 0 ? (
         <CommerceSection
           title={shopName ? `More from ${shopName}` : 'More from this shop'}
@@ -66,6 +93,16 @@ export function ListingRecommendationsSections({
         >
           <ListingCarouselRow listings={fromShopVisible} />
         </CommerceSection>
+      ) : null}
+
+      {sponsoredListings.length > 0 ? (
+        <SponsoredListingsRail
+          placement="listing_detail"
+          title="Sponsored recommendation"
+          listingOnly
+          items={sponsoredListings}
+          onSponsoredEvent={(item, event) => void sponsored.track(item, event)}
+        />
       ) : null}
 
       {relatedVisible.length > 0 ? (

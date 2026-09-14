@@ -13,7 +13,7 @@ import {
 const DEFAULT_LIMIT = Platform.OS === 'web' ? 12 : 6
 
 function cacheKey(
-  kind: 'related' | 'shop' | 'personalized',
+  kind: 'related' | 'shop' | 'personalized' | 'fbt',
   id: string,
   limit: number,
 ) {
@@ -264,4 +264,45 @@ export function prefetchListingRecommendations(
   prefetchAppCache(cacheKey('personalized', listingId, limit), () =>
     fetchPersonalizedListings([listingId], limit),
   )
+  prefetchAppCache(cacheKey('fbt', listingId, limit), () =>
+    fetchFrequentlyBoughtTogether(listingId, limit),
+  )
+}
+
+export async function fetchFrequentlyBoughtTogether(
+  listingId: string,
+  limit = DEFAULT_LIMIT,
+): Promise<ListingSummary[]> {
+  const key = cacheKey('fbt', listingId, limit)
+  const cached = withImages(peekAppCache<ListingSummary[]>(key) ?? [])
+  if (cached.length) return cached.slice(0, limit)
+
+  try {
+    const { supabase } = await import('~/lib/supabase/client')
+    const { data } = await supabase.rpc('get_frequently_bought_together', {
+      product_id: listingId,
+      max_recommendations: Math.max(limit * 2, 8),
+    })
+    const ids = (data ?? []).map((row) => row.id).filter((id) => id !== listingId)
+    const items = withImages(await fetchListingsByIds(ids), limit)
+    if (items.length) void writeAppCache(key, items)
+    return items
+  } catch {
+    return []
+  }
+}
+
+export async function fetchForYouListings(limit = DEFAULT_LIMIT): Promise<ListingSummary[]> {
+  try {
+    const { supabase } = await import('~/lib/supabase/client')
+    const { data } = await supabase.rpc('get_for_you_listing_ids', { max_results: Math.max(limit * 2, 24) })
+    const ids = (data ?? []).map((row) => row.id)
+    if (ids.length) {
+      const items = withImages(await fetchListingsByIds(ids), limit)
+      if (items.length) return items
+    }
+  } catch {
+    // fall through
+  }
+  return fetchPersonalizedListings([], limit)
 }

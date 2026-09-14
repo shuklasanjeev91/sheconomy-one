@@ -3,6 +3,7 @@ import { Platform } from 'react-native'
 
 import { useOptionalMarketplacePersonalization } from '~/commerce/context/MarketplacePersonalizationContext'
 import {
+  fetchFrequentlyBoughtTogether,
   fetchMoreFromShop,
   fetchPersonalizedListings,
   fetchRelatedListings,
@@ -51,6 +52,7 @@ export function useListingRecommendations(
   const [related, setRelated] = useState<ListingSummary[]>(seed)
   const [personalized, setPersonalized] = useState<ListingSummary[]>([])
   const [fromShop, setFromShop] = useState<ListingSummary[]>([])
+  const [boughtTogether, setBoughtTogether] = useState<ListingSummary[]>([])
   const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
@@ -58,6 +60,7 @@ export function useListingRecommendations(
       setRelated([])
       setPersonalized([])
       setFromShop([])
+      setBoughtTogether([])
       setError(null)
       return
     }
@@ -94,6 +97,15 @@ export function useListingRecommendations(
         }
       })
 
+    void fetchFrequentlyBoughtTogether(listingId, limit)
+      .then((items) => {
+        if (!active) return
+        setBoughtTogether(dedupe(items, new Set(used)))
+      })
+      .catch(() => {
+        if (active) setBoughtTogether([])
+      })
+
     void fetchPersonalizedListings([listingId], limit)
       .then((items) => {
         if (!active) return
@@ -120,12 +132,14 @@ export function useListingRecommendations(
     personalization?.isReady,
   ])
 
-  const hasAny = fromShop.length > 0 || related.length > 0 || personalized.length > 0
+  const hasAny =
+    fromShop.length > 0 || related.length > 0 || personalized.length > 0 || boughtTogether.length > 0
 
   return {
     related,
     personalized,
     fromShop,
+    boughtTogether,
     isLoading: false,
     loadingShop: false,
     loadingRelated: false,

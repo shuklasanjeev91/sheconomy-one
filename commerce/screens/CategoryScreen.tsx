@@ -3,6 +3,7 @@ import { useEffect, useMemo, useState } from 'react'
 
 import { Spinner, Text, YStack } from '~/components/ui'
 import { ListingBrowseView, ListingFiltersShell, CommercePageHeader } from '~/commerce/components'
+import { useSponsoredCommerce } from '~/commerce/hooks/useSponsoredCommerce'
 import { useCategoryFilterFacets } from '~/commerce/hooks/useCategoryFilterFacets'
 import { useCategoryListings } from '~/commerce/hooks/useCategoryListings'
 import type { CategoryLoaderResult } from '~/commerce/lib/category-loader'
@@ -59,6 +60,12 @@ export function CategoryScreen({
     categoryId: category?.category_id,
     filters,
     enabled: !!category?.category_id,
+  })
+  const sponsored = useSponsoredCommerce({
+    placement: 'commerce_browse',
+    context: { category_id: category?.category_id },
+    enabled: !!category?.category_id,
+    limit: 2,
   })
   const { facets, isLoading: facetsLoading } = useCategoryFilterFacets(category?.category_id)
 
@@ -140,6 +147,8 @@ export function CategoryScreen({
               onLoadMore={listingsFeed.loadMore}
               onRetry={listingsFeed.refresh}
               emptyMessage={`No listings in ${category.category} yet.`}
+              sponsoredItems={sponsored.items}
+              onSponsoredEvent={(item, event) => void sponsored.track(item, event)}
             />
           </ListingFiltersShell>
         </YStack>

@@ -20,6 +20,8 @@ function TabIcon({ tab, color }: { tab: SalesAnalyticsHubTab; color: string }) {
       return <Icons.Package size={size} color={color} />
     case 'regional':
       return <Icons.MapPin size={size} color={color} />
+    case 'forecast':
+      return <Icons.Activity size={size} color={color} />
     default:
       return <Icons.BarChart3 size={size} color={color} />
   }
