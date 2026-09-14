@@ -4,11 +4,13 @@ import { ShareSheet } from '~/components/share'
 import { Button, Icons, ScrollView, Text, XStack, YStack, useAppToast } from '~/components/ui'
 import { CoWorkPanelShell, CoWorkSectionLabel, CoWorkStatusPill } from '~/co-work/components/CoWorkUi'
 import { MeetingPanelHeader } from '~/co-work/components/MeetingPanelHeader'
+import { buildMeetingSharePayload } from '~/co-work/lib/meeting-share'
 import { formatMeetingCode, getMeetingShareUrl } from '~/co-work/lib/meetings'
 import { useCoWorkTheme } from '~/co-work/lib/theme'
 import type { Meeting } from '~/co-work/lib/types'
 import { BRAND_MEMBER_LABEL } from '~/config/brand'
 import { copyShareLink } from '~/lib/share'
+import { addMeetingToDeviceCalendar } from '~/lib/calendar/device-calendar'
 
 type MeetingInfoPanelProps = {
   meeting: Meeting
@@ -46,6 +48,19 @@ export function MeetingInfoPanel({
       return
     }
     toast.show(`Could not copy ${label.toLowerCase()}`, { tone: 'error' })
+  }
+
+  async function addToCalendar() {
+    const result = await addMeetingToDeviceCalendar(meeting)
+    if (result === 'cancelled') return
+    toast.show(
+      result === 'opened'
+        ? 'Meeting added to calendar'
+        : result === 'shared'
+          ? 'Calendar event ready'
+          : 'Could not open calendar',
+      { tone: result === 'opened' || result === 'shared' ? 'success' : 'danger' },
+    )
   }
 
   return (
@@ -186,6 +201,18 @@ export function MeetingInfoPanel({
         >
           Share invite link
         </Button>
+        {meeting.scheduled_at || meeting.started_at ? (
+          <Button
+            tone="outline"
+            borderRadius={999}
+            borderColor={coworkUi.glassBorder}
+            color={coworkUi.text}
+            icon={<Icons.Calendar size={16} color={coworkUi.brand} />}
+            onPress={() => void addToCalendar()}
+          >
+            Add to calendar
+          </Button>
+        ) : null}
         {isHost && onOpenRecordings ? (
           <Button
             tone="outline"
@@ -218,10 +245,7 @@ export function MeetingInfoPanel({
         title="Share meeting"
         copyLabel="Copy meeting link"
         copyToastMessage="Meeting link copied to clipboard."
-        payload={{
-          url: shareUrl,
-          title: meeting.title,
-        }}
+        payload={buildMeetingSharePayload(meeting)}
       />
     </CoWorkPanelShell>
   )

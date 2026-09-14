@@ -3,6 +3,7 @@ import { AppLink } from '~/components/navigation/AppLink'
 import { useEffect, useMemo } from 'react'
 
 import { CoWorkStatusPill } from '~/co-work/components/CoWorkUi'
+import { buildMeetingSharePayload } from '~/co-work/lib/meeting-share'
 import { fetchUpcomingMeetings, formatMeetingCode } from '~/co-work/lib/meetings'
 import { recordMeetingCode } from '~/co-work/lib/recent-meeting-codes'
 import { coworkGlassStyle, useCoWorkTheme } from '~/co-work/lib/theme'
@@ -10,11 +11,10 @@ import type { Meeting } from '~/co-work/lib/types'
 import { ShareButton } from '~/components/share'
 import { Button, Icons, Spinner, Text, XStack, YStack, useAppToast } from '~/components/ui'
 import { HorizontalScrollRow } from '~/components/layout'
-import { buildMeetingCalendarEvent, shareIcsFile } from '~/lib/calendar/ics'
+import { addMeetingToDeviceCalendar } from '~/lib/calendar/device-calendar'
 import { copyToClipboard } from '~/lib/platform/clipboard'
 import { coworkBoxShadow } from '~/lib/platform/crossStyles'
 import { coWorkRoutes } from '~/lib/routes'
-import { getMeetingShareUrl } from '~/lib/share'
 import { useSupabase } from '~/providers/SupabaseProvider'
 import { CACHE_KEYS } from '~/lib/bootstrap/cache-keys'
 import { useCachedQuery } from '~/hooks/useCachedQuery'
@@ -71,16 +71,18 @@ export function UpcomingMeetingsStrip({
       toast.show('No time set for this meeting', { tone: 'info' })
       return
     }
-    const ics = buildMeetingCalendarEvent({
-      title: meeting.title,
-      description: meeting.description,
-      scheduledAt: meeting.scheduled_at ?? meeting.started_at ?? new Date().toISOString(),
-      meetingCode: meeting.meeting_code,
-    })
-    const result = await shareIcsFile(ics, `sheconomy-${meeting.meeting_code}.ics`)
-    toast.show(result === 'shared' ? 'Calendar event ready' : 'Could not export calendar', {
-      tone: result === 'shared' ? 'success' : 'danger',
-    })
+    const result = await addMeetingToDeviceCalendar(meeting)
+    if (result === 'cancelled') return
+    toast.show(
+      result === 'opened'
+        ? 'Meeting added to calendar'
+        : result === 'shared'
+          ? 'Calendar event ready'
+          : 'Could not open calendar',
+      {
+        tone: result === 'opened' || result === 'shared' ? 'success' : 'danger',
+      },
+    )
   }
 
 
@@ -177,11 +179,7 @@ export function UpcomingMeetingsStrip({
                     sheetTitle="Share meeting"
                     copyLabel="Copy meeting link"
                     copyToastMessage="Meeting link copied."
-                    payload={{
-                      url: getMeetingShareUrl(meeting.meeting_code),
-                      title: meeting.title,
-                      text: `Join with code ${formatMeetingCode(meeting.meeting_code)}`,
-                    }}
+                    payload={buildMeetingSharePayload(meeting)}
                   />
                 </XStack>
               </XStack>

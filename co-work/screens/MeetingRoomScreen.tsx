@@ -28,7 +28,8 @@ import {
 import { useMeetingPresence } from '~/co-work/hooks/useMeetingPresence'
 import { getMediaCapabilities } from '~/co-work/lib/media'
 import { supportsLiveKitVideo } from '~/lib/platform/capabilities'
-import { formatMeetingCode, getMeetingShareUrl } from '~/co-work/lib/meetings'
+import { buildMeetingSharePayload } from '~/co-work/lib/meeting-share'
+import { formatMeetingCode } from '~/co-work/lib/meetings'
 import { coworkGlassStyle, useCoWorkTheme } from '~/co-work/lib/theme'
 import { controlGradientStyle, footerFadeStyle } from '~/lib/platform/crossStyles'
 import type { Meeting } from '~/co-work/lib/types'
@@ -192,7 +193,6 @@ function MeetingRoomOverlay({
 
   const allowRecording = meeting.security_settings?.allowRecording !== false
   const autoRecord = !!meeting.meeting_options?.autoRecord && isHost && allowRecording
-  const shareUrl = getMeetingShareUrl(meeting.meeting_code)
   const admittedCount = presence.participants.filter((p) => p.status === 'admitted').length
   const waitingCount = presence.waitingParticipants.length
   const roomy = isTablet || isDesktop
@@ -900,10 +900,7 @@ function MeetingRoomOverlay({
         title="Share meeting"
         copyLabel="Copy meeting link"
         copyToastMessage="Meeting link copied to clipboard."
-        payload={{
-          url: shareUrl,
-          title: meeting.title,
-        }}
+        payload={buildMeetingSharePayload(meeting)}
       />
     </YStack>
   )

@@ -97,15 +97,24 @@ export async function shareViaSystem(
 ): Promise<'shared' | 'copied' | 'cancelled'> {
   const { url, title, text } = publicSharePayload(payload)
   const shareTitle = title ?? BRAND_NAME
-  const shareText = text?.trim() ? `${text.trim()}\n${url}` : url
+  const trimmedText = text?.trim()
 
   if (Platform.OS !== 'web') {
     try {
-      await Share.share({
-        title: shareTitle,
-        message: shareText,
-        url,
-      })
+      // iOS appends `url` to the share item itself. Including it in `message`
+      // as well produces the duplicated meeting links seen in WhatsApp.
+      await Share.share(
+        Platform.OS === 'ios'
+          ? {
+              title: shareTitle,
+              message: trimmedText || shareTitle,
+              url,
+            }
+          : {
+              title: shareTitle,
+              message: trimmedText ? `${trimmedText}\n${url}` : url,
+            },
+      )
       return 'shared'
     } catch {
       // user cancelled or unavailable
@@ -116,7 +125,7 @@ export async function shareViaSystem(
     try {
       await navigator.share({
         title: shareTitle,
-        text: text?.trim() || undefined,
+        text: trimmedText || undefined,
         url,
       })
       return 'shared'

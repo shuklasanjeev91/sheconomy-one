@@ -20,7 +20,7 @@ import { controlGradientStyle, coworkBoxShadow, pageGradientStyle } from '~/lib/
 import type { MeetingInvitee, MeetingRepeat } from '~/co-work/lib/types'
 import { coWorkRoutes } from '~/lib/routes'
 import { recordMeetingCode } from '~/co-work/lib/recent-meeting-codes'
-import { buildMeetingCalendarEvent, shareIcsFile } from '~/lib/calendar/ics'
+import { addMeetingToDeviceCalendar } from '~/lib/calendar/device-calendar'
 import { openMailtoLink } from '~/lib/platform/openMailto'
 import { useProfile } from '~/hooks/useProfile'
 
@@ -255,13 +255,12 @@ export function ScheduleMeetingScreen() {
 
       recordMeetingCode(meeting.meeting_code)
 
-      const ics = buildMeetingCalendarEvent({
-        title: meeting.title,
-        description: meeting.description,
-        scheduledAt: meeting.scheduled_at ?? scheduledAt,
-        meetingCode: meeting.meeting_code,
-      })
-      await shareIcsFile(ics, `sheconomy-${meeting.meeting_code}.ics`)
+      const calendarResult = await addMeetingToDeviceCalendar(meeting)
+      if (calendarResult === 'opened') {
+        toast.show('Meeting added to calendar', { tone: 'success' })
+      } else if (calendarResult === 'shared') {
+        toast.show('Calendar event ready', { tone: 'success' })
+      }
 
       router.push(coWorkRoutes.meeting(meeting.meeting_code))
     } catch (scheduleError) {

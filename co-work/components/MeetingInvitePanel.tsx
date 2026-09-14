@@ -12,6 +12,7 @@ import {
   mergeInvitees,
   sendMeetingInvites,
 } from '~/co-work/lib/invites'
+import { buildMeetingSharePayload } from '~/co-work/lib/meeting-share'
 import { formatMeetingCode, getMeetingShareUrl } from '~/co-work/lib/meetings'
 import { useCoWorkTheme } from '~/co-work/lib/theme'
 import type { Meeting, MeetingInvitee } from '~/co-work/lib/types'
@@ -185,10 +186,7 @@ export function MeetingInvitePanel({
         title="Share meeting"
         copyLabel="Copy meeting link"
         copyToastMessage="Meeting link copied to clipboard."
-        payload={{
-          url: shareUrl,
-          title: meeting.title,
-        }}
+        payload={buildMeetingSharePayload(meeting)}
       />
     </CoWorkPanelShell>
   )

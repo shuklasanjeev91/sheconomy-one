@@ -9,10 +9,10 @@ import { ShareSheet } from '~/components/share'
 import { Button, Field, Icons, Input, Spinner, Text, XStack, YStack, useAppToast } from '~/components/ui'
 import { CoWorkBrandChip, CoWorkIconBadge } from '~/co-work/components/CoWorkUi'
 import { MeetingInvitePanel } from '~/co-work/components/MeetingInvitePanel'
+import { buildMeetingSharePayload } from '~/co-work/lib/meeting-share'
 import {
   fetchMeetingByCode,
   formatMeetingCode,
-  getMeetingShareUrl,
   verifyMeetingPasscode,
 } from '~/co-work/lib/meetings'
 import { openInstantMeetingSession } from '~/co-work/lib/instant-meeting-session'
@@ -24,6 +24,7 @@ import { coWorkRoutes } from '~/lib/routes'
 import { useProfile } from '~/hooks/useProfile'
 
 import { APP_LAYOUT } from '~/lib/layout/constants'
+import { addMeetingToDeviceCalendar } from '~/lib/calendar/device-calendar'
 
 type MeetingLobbyScreenProps = {
   code: string
@@ -99,6 +100,23 @@ export function MeetingLobbyScreen({ code }: MeetingLobbyScreenProps) {
       code: meeting.meeting_code,
       meeting,
     })
+  }
+
+  async function addToCalendar() {
+    if (!meeting?.scheduled_at && !meeting?.started_at) {
+      toast.show('No time set for this meeting', { tone: 'info' })
+      return
+    }
+    const result = await addMeetingToDeviceCalendar(meeting)
+    if (result === 'cancelled') return
+    toast.show(
+      result === 'opened'
+        ? 'Meeting added to calendar'
+        : result === 'shared'
+          ? 'Calendar event ready'
+          : 'Could not open calendar',
+      { tone: result === 'opened' || result === 'shared' ? 'success' : 'danger' },
+    )
   }
 
   if (loadingMeeting || (isLoading && !user)) {
@@ -235,16 +253,25 @@ export function MeetingLobbyScreen({ code }: MeetingLobbyScreenProps) {
                 >
                   Share
                 </Button>
+                {(meeting.scheduled_at || meeting.started_at) ? (
+                  <Button
+                    tone="outline"
+                    size="$4"
+                    borderRadius={999}
+                    borderColor={coworkUi.glassBorder}
+                    icon={<Icons.Calendar size={17} color={coworkUi.brand} />}
+                    onPress={() => void addToCalendar()}
+                  >
+                    Add to calendar
+                  </Button>
+                ) : null}
                 <ShareSheet
                   open={shareOpen}
                   onOpenChange={setShareOpen}
                   title="Share meeting"
                   copyLabel="Copy meeting link"
                   copyToastMessage="Meeting link copied to clipboard."
-                  payload={{
-                    url: getMeetingShareUrl(meeting.meeting_code),
-                    title: meeting.title,
-                  }}
+                  payload={buildMeetingSharePayload(meeting)}
                 />
               </XStack>
 
