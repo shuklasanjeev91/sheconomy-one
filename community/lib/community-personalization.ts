@@ -62,6 +62,10 @@ export type PersonalizationContext = {
   networkSuggestions?: NetworkMember[]
   excludeUserIds?: Set<string>
   followedShopIds?: Set<string>
+  /** Pages the viewer already follows or manages — never worth suggesting. */
+  excludeCompanyIds?: Set<string>
+  /** Groups the viewer already joined or has a pending request for. */
+  excludeGroupIds?: Set<string>
 }
 
 const KIND_LABEL: Record<SuggestionKind, string> = {
@@ -524,13 +528,17 @@ export async function fetchCommunitySuggestions(
     return !shopId || !followedShopIds.has(shopId)
   })
   const genericShops = (shops.items ?? []).filter((shop) => !followedShopIds.has(shop.id))
+  const excludeCompanyIds = ctx.excludeCompanyIds ?? new Set<string>()
+  const excludeGroupIds = ctx.excludeGroupIds ?? new Set<string>()
+  const genericCompanies = companies.items.filter((company) => !excludeCompanyIds.has(company.id))
+  const genericGroups = groups.items.filter((group) => !excludeGroupIds.has(group.id))
 
   const pools: Record<SuggestionKind, CommunitySuggestion[]> = {
     person: sortByScore(peoplePool.map((member) => scorePerson(member, ctx))),
     listing: sortByScore(genericListings),
     shop: sortByScore(genericShops.map((shop) => scoreShop(shop, ctx))),
-    company: sortByScore(companies.items.map((company) => scoreCompany(company, ctx))),
-    group: sortByScore(groups.items.map((group) => scoreGroup(group, ctx))),
+    company: sortByScore(genericCompanies.map((company) => scoreCompany(company, ctx))),
+    group: sortByScore(genericGroups.map((group) => scoreGroup(group, ctx))),
     job: sortByScore(jobs.items.map((job) => scoreJob(job, ctx))),
     event: sortByScore(events.items.map((event) => scoreEvent(event, ctx))),
   }

@@ -28,9 +28,17 @@ export function NetworkSuggestionsStrip() {
   const { cards: spotlightCards } = useProfessionalSpotlight(12)
   const dismissedIds = useDismissedNetworkSuggestions()
   const boostUserIds = useMemo(() => spotlightCards.map((card) => card.userId), [spotlightCards])
+  const excludeUserIds = useMemo(
+    () =>
+      [...network.connections, ...network.pendingSent, ...network.pendingReceived].map(
+        (member) => member.user_id,
+      ),
+    [network.connections, network.pendingReceived, network.pendingSent],
+  )
   const suggestions = rankNetworkSuggestions(network.suggestions, {
     dismissedIds,
     boostUserIds,
+    excludeUserIds,
     limit: SUGGESTION_LIMIT,
   })
 

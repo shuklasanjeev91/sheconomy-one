@@ -463,9 +463,15 @@ export async function fetchNetworkSummary(userId: string): Promise<NetworkSummar
   let suggestions = ((suggestionsResult.data ?? []) as SuggestionRpcRow[]).map(mapSuggestionRow)
 
   if (suggestions.length === 0) {
-    const fallback = await fetchDiscoverMembers(userId, 8)
+    // Raw profile discovery knows nothing about the viewer's network, so drop
+    // anyone already connected or mid-request before showing them as new.
+    const related = new Set([
+      ...((acceptedResult.data ?? []) as ConnectionRpcRow[]).map((row) => row.user_id),
+      ...pendingRows.map((row) => row.user_id),
+    ])
+    const fallback = await fetchDiscoverMembers(userId, 16)
     if (!fallback.error) {
-      suggestions = fallback.items
+      suggestions = fallback.items.filter((member) => !related.has(member.user_id)).slice(0, 8)
     }
   }
 

@@ -111,12 +111,15 @@ export async function fetchGroupFacets(): Promise<GroupFacets> {
   return { locations: sorted(locations), industries: sorted(industries) }
 }
 
+/** Legacy rows predate the status default being normalized to 'active'. */
+const JOINED_MEMBER_STATUSES = ['active', 'approved']
+
 export async function fetchMyGroups(userId: string): Promise<Group[]> {
   const { data: memberships } = await supabase
     .from('group_members')
     .select('group_id')
     .eq('user_id', userId)
-    .eq('status', 'active')
+    .in('status', JOINED_MEMBER_STATUSES)
 
   const groupIds = (memberships ?? []).map((m) => m.group_id).filter(Boolean) as string[]
   if (!groupIds.length) return []
@@ -175,12 +178,14 @@ export async function fetchGroupMembership(
   groupId: string,
   userId: string,
 ): Promise<{ isMember: boolean; isPending: boolean; role: string | null }> {
+  // limit(1) keeps a stray duplicate row from erroring into a false "not a member".
   const [{ data: member }, { data: request }] = await Promise.all([
     supabase
       .from('group_members')
       .select('role, status')
       .eq('group_id', groupId)
       .eq('user_id', userId)
+      .limit(1)
       .maybeSingle(),
     supabase
       .from('group_join_requests')
@@ -188,11 +193,12 @@ export async function fetchGroupMembership(
       .eq('group_id', groupId)
       .eq('user_id', userId)
       .eq('status', 'pending')
+      .limit(1)
       .maybeSingle(),
   ])
 
   return {
-    isMember: member?.status === 'active',
+    isMember: !!member?.status && JOINED_MEMBER_STATUSES.includes(member.status),
     isPending: !!request,
     role: member?.role ?? null,
   }
@@ -263,9 +269,24 @@ export async function fetchMemberGroupIds(userId: string): Promise<string[]> {
     .from('group_members')
     .select('group_id')
     .eq('user_id', userId)
-    .eq('status', 'active')
+    .in('status', JOINED_MEMBER_STATUSES)
 
   return (data ?? []).map((m) => m.group_id).filter(Boolean) as string[]
+}
+
+/** Groups to keep out of discovery: already joined, or awaiting approval. */
+export async function fetchJoinedOrPendingGroupIds(userId: string): Promise<string[]> {
+  const [memberIds, { data: requests }] = await Promise.all([
+    fetchMemberGroupIds(userId),
+    supabase
+      .from('group_join_requests')
+      .select('group_id')
+      .eq('user_id', userId)
+      .eq('status', 'pending'),
+  ])
+
+  const pendingIds = (requests ?? []).map((row) => row.group_id).filter(Boolean) as string[]
+  return [...new Set([...memberIds, ...pendingIds])]
 }
 
 export type GroupJoinRequest = {

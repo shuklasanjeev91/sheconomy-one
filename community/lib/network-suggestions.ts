@@ -13,15 +13,18 @@ export function rankNetworkSuggestions(
   options: {
     dismissedIds: string[]
     boostUserIds?: string[]
+    /** Already connected / invited / awaiting reply — not suggestable. */
+    excludeUserIds?: string[]
     limit?: number
   },
 ): NetworkMember[] {
   const dismissed = new Set(options.dismissedIds)
+  const excluded = new Set(options.excludeUserIds ?? [])
   const boost = new Set(options.boostUserIds ?? [])
   const limit = Math.max(0, options.limit ?? 4)
 
   return members
-    .filter((member) => !dismissed.has(member.user_id))
+    .filter((member) => !dismissed.has(member.user_id) && !excluded.has(member.user_id))
     .sort((a, b) => {
       const aRank = boost.has(a.user_id) ? 0 : 1
       const bRank = boost.has(b.user_id) ? 0 : 1

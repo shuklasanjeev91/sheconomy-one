@@ -116,12 +116,18 @@ export function NetworkScreen() {
     )
   }
 
-  const sentIds = new Set(network.pendingSent.map((member) => member.user_id))
+  // Anyone already connected, already invited, or awaiting our reply is not a
+  // suggestion — the raw discover list backing `suggestionsList` only omits self.
+  const relatedIds = new Set([
+    ...network.connections.map((member) => member.user_id),
+    ...network.pendingSent.map((member) => member.user_id),
+    ...network.pendingReceived.map((member) => member.user_id),
+  ])
   const dismissed = new Set(dismissedIds)
   const suggestionSource =
     suggestionsList.items.length > 0 ? suggestionsList.items : network.suggestions
   const visibleSuggestions = suggestionSource.filter(
-    (member) => !sentIds.has(member.user_id) && !dismissed.has(member.user_id),
+    (member) => !relatedIds.has(member.user_id) && !dismissed.has(member.user_id),
   )
   const query = search.trim().toLowerCase()
 

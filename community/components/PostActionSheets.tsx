@@ -21,7 +21,7 @@ import {
   unhideCommunityPost,
 } from '~/community/lib/moderation'
 import { feedback } from '~/lib/platform/feedback'
-import { unfollowProfile } from '~/community/lib/profile-follows'
+import { useProfileFollow } from '~/community/hooks/useProfileFollow'
 import {
   defaultSavedCollectionForPost,
   getSavedCommunityPost,
@@ -118,6 +118,7 @@ export function PostActionSheets({
   const shareUrl = getPostShareUrl(post.id)
   const authorName = post.author?.full_name || post.author?.username || 'member'
   const isOwnPost = !!user?.id && user.id === post.user_id
+  const authorFollow = useProfileFollow(isOwnPost ? null : post.user_id)
   const canEditPost =
     isOwnPost && (!post.post_type || !NON_EDITABLE_POST_TYPES.has(post.post_type))
   const postSnippet = mentionsToPlainText(post.content).trim().slice(0, 140)
@@ -630,23 +631,29 @@ export function PostActionSheets({
               })
             }}
           />
-          {!isOwnPost ? (
+          {!isOwnPost && !authorFollow.isLoading ? (
             <SheetAction
-              icon={Icons.UserMinus}
-              label={`Unfollow ${authorName.split(' ')[0]}`}
+              icon={authorFollow.isFollowing ? Icons.UserMinus : Icons.UserPlus}
+              label={`${authorFollow.isFollowing ? 'Unfollow' : 'Follow'} ${authorName.split(' ')[0]}`}
               onPress={() => {
                 if (!user?.id) {
-                  requireAuth('unfollow')
+                  requireAuth(authorFollow.isFollowing ? 'unfollow' : 'follow')
                   return
                 }
-                void unfollowProfile(user.id, post.user_id).then((result) => {
+                const wasFollowing = authorFollow.isFollowing
+                void authorFollow.toggleFollow().then((result) => {
                   if (result.error) {
-                    toast.show('Could not unfollow', { tone: 'danger', message: result.error })
+                    toast.show(wasFollowing ? 'Could not unfollow' : 'Could not follow', {
+                      tone: 'danger',
+                      message: result.error,
+                    })
                     return
                   }
-                  toast.show('Unfollowed', {
+                  toast.show(wasFollowing ? 'Unfollowed' : 'Following', {
                     tone: 'default',
-                    message: `You will see fewer posts from ${authorName}.`,
+                    message: wasFollowing
+                      ? `You will see fewer posts from ${authorName}.`
+                      : `You will see more posts from ${authorName}.`,
                   })
                   engagement.closeSheet()
                 })

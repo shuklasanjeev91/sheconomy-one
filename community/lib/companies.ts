@@ -364,15 +364,26 @@ export async function createCompanyPage(
   return { data: (data as CompanyPage | null) ?? null, error: error?.message ?? null }
 }
 
+export async function fetchFollowedCompanyIds(userId: string): Promise<string[]> {
+  const { data } = await supabase
+    .from('company_followers')
+    .select('company_id')
+    .eq('follower_id', userId)
+
+  return (data ?? []).map((row) => row.company_id).filter(Boolean) as string[]
+}
+
 export async function fetchCompanyFollowState(
   companyId: string,
   userId: string,
 ): Promise<{ isFollowing: boolean; followId: string | null }> {
+  // limit(1) keeps a stray duplicate row from erroring into a false "not following".
   const { data } = await supabase
     .from('company_followers')
     .select('id')
     .eq('company_id', companyId)
     .eq('follower_id', userId)
+    .limit(1)
     .maybeSingle()
 
   return { isFollowing: !!data, followId: data?.id ?? null }

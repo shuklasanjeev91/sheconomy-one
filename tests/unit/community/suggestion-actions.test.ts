@@ -146,4 +146,46 @@ describe('suggestion action payloads', () => {
 
     expect(result.byKind.company.map((item) => item.id)).toEqual(['company-3'])
   })
+
+  it('drops pages the viewer already follows or manages', async () => {
+    fetchCompaniesMock.mockResolvedValue({
+      items: [
+        { id: 'company-followed', name: 'Followed Co', industry: 'Beauty', community_members: 10 },
+        { id: 'company-managed', name: 'My Own Page', industry: 'Beauty', community_members: 10 },
+        { id: 'company-new', name: 'Fresh Co', industry: 'Beauty', community_members: 10 },
+      ],
+    })
+
+    const result = await fetchCommunitySuggestions(
+      {
+        userId: 'me',
+        geo: {},
+        excludeCompanyIds: new Set(['company-followed', 'company-managed']),
+      },
+      { perKindLimit: 4 },
+    )
+
+    expect(result.byKind.company.map((item) => item.id)).toEqual(['company-new'])
+  })
+
+  it('drops groups the viewer already joined or has requested', async () => {
+    fetchGroupsMock.mockResolvedValue({
+      items: [
+        { id: 'group-joined', title: 'Joined', group_type: 'public', members_count: 5 },
+        { id: 'group-requested', title: 'Requested', group_type: 'private', members_count: 5 },
+        { id: 'group-new', title: 'Fresh', group_type: 'public', members_count: 5 },
+      ],
+    })
+
+    const result = await fetchCommunitySuggestions(
+      {
+        userId: 'me',
+        geo: {},
+        excludeGroupIds: new Set(['group-joined', 'group-requested']),
+      },
+      { perKindLimit: 4 },
+    )
+
+    expect(result.byKind.group.map((item) => item.id)).toEqual(['group-new'])
+  })
 })

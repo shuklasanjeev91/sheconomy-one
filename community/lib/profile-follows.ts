@@ -4,12 +4,14 @@ export async function fetchProfileFollowState(
   followerId: string,
   followingId: string,
 ): Promise<{ isFollowing: boolean; followId: string | null }> {
+  // limit(1) keeps a stray duplicate row from erroring into a false "not following".
   const { data } = await supabase
     .from('follows')
     .select('id')
     .eq('follower_id', followerId)
     .eq('following_id', followingId)
     .eq('status', 'active')
+    .limit(1)
     .maybeSingle()
 
   return { isFollowing: !!data, followId: data?.id ?? null }

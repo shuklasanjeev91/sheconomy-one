@@ -8,6 +8,8 @@ import {
   type SuggestionKind,
   type SuggestionSectionMeta,
 } from '~/community/lib/community-personalization'
+import { fetchFollowedCompanyIds, fetchManagedCompanyIds } from '~/community/lib/companies'
+import { fetchJoinedOrPendingGroupIds } from '~/community/lib/groups'
 import { useFollowedShops } from '~/commerce/hooks/useFollowedShops'
 import { useUserGeo } from '~/commerce/hooks/useUserGeo'
 import { useNetwork } from '~/community/hooks/useNetwork'
@@ -91,7 +93,12 @@ export function useCommunitySuggestions(perKindLimit = 4, options?: { deferUntil
       if (!suggestionsCache) setIsLoading(true)
 
       const net = networkRef.current
-      const extra = user ? await fetchPersonalizationProfile(user.id) : null
+      const [extra, followedCompanyIds, managedCompanyIds, relatedGroupIds] = await Promise.all([
+        user ? fetchPersonalizationProfile(user.id) : Promise.resolve(null),
+        user ? fetchFollowedCompanyIds(user.id) : Promise.resolve([]),
+        user ? fetchManagedCompanyIds(user.id) : Promise.resolve(new Set<string>()),
+        user ? fetchJoinedOrPendingGroupIds(user.id) : Promise.resolve([]),
+      ])
       const connectionIds = new Set(net.connections.map((member) => member.user_id))
       const pendingIds = new Set([
         ...net.pendingReceived.map((member) => member.user_id),
@@ -109,6 +116,8 @@ export function useCommunitySuggestions(perKindLimit = 4, options?: { deferUntil
           networkSuggestions: net.suggestions,
           excludeUserIds: new Set([...connectionIds, ...pendingIds, ...(user ? [user.id] : [])]),
           followedShopIds: followedShops.idSet,
+          excludeCompanyIds: new Set([...followedCompanyIds, ...managedCompanyIds]),
+          excludeGroupIds: new Set(relatedGroupIds),
         },
         { perKindLimit },
       )
