@@ -7,13 +7,16 @@ import { CommunitySuggestionSectionCard } from '~/community/components/Community
 import { CommunityFeedHeader } from '~/community/components/CommunityFeedHeader'
 import { CommunityShell } from '~/community/components/CommunityShell'
 import { FeedPostCard } from '~/community/components/FeedPostCard'
+import { SponsoredPostImpressionBoundary } from '~/community/components/SponsoredPostImpressionBoundary'
 import type { FeedSort } from '~/community/components/FeedSortBar'
 import type { FeedContentFilter } from '~/community/lib/community'
 import { trackCommunityFeedShoppableFilter } from '~/community/lib/community-commerce-analytics'
 import { openComposer } from '~/community/lib/composer-store'
 import { useCommunityFeed } from '~/community/hooks/useCommunityFeed'
 import { useCommunitySuggestions } from '~/community/hooks/useCommunitySuggestions'
-import { interleaveFeedWithSuggestions, type FeedEntry } from '~/community/lib/interleave-feed-suggestions'
+import { useSponsoredFeed } from '~/community/hooks/useSponsoredFeed'
+import { interleaveCommunityFeed, type FeedEntry } from '~/community/lib/interleave-feed-suggestions'
+import { recordSponsoredImpressionOnce } from '~/community/lib/sponsored-ads'
 import { refreshStories } from '~/community/lib/story-refresh'
 import { useAppBarScroll } from '~/components/navigation/AppBarScrollContext'
 import { ScreenState, YStack } from '~/components/ui'
@@ -56,6 +59,7 @@ export function CommunityFeedScreen() {
   const { items, isLoading, isLoadingMore, isRefreshing, hasMore, error, loadMore, refresh, removeItem, patchItem } =
     useCommunityFeed(true, sort, contentFilter ?? undefined)
   const { sections, refresh: refreshSuggestions } = useCommunitySuggestions(4)
+  const { items: sponsoredItems, refresh: refreshSponsored } = useSponsoredFeed(!contentFilter)
   const showingCached = items.length > 0 && !!error
   // Avoid FlashList firing onEndReached during the first layout pass.
   const endReachedReadyRef = useRef(false)
@@ -75,17 +79,20 @@ export function CommunityFeedScreen() {
   const showSuggestionsInFeed = !hasDualSideRails && sections.length > 0
 
   const feedEntries = useMemo((): FeedEntry[] => {
-    if (!showSuggestionsInFeed) {
-      return items.map((post) => ({ type: 'post' as const, post }))
-    }
-    return interleaveFeedWithSuggestions(items, sections, SUGGESTION_INTERVAL)
-  }, [items, sections, showSuggestionsInFeed])
+    return interleaveCommunityFeed(
+      items,
+      showSuggestionsInFeed ? sections : [],
+      contentFilter ? [] : sponsoredItems,
+      { suggestionInterval: SUGGESTION_INTERVAL, sponsoredInterval: 6 },
+    )
+  }, [contentFilter, items, sections, showSuggestionsInFeed, sponsoredItems])
 
   const onRefresh = useCallback(async () => {
     refresh()
     refreshSuggestions()
+    refreshSponsored()
     refreshStories()
-  }, [refresh, refreshSuggestions])
+  }, [refresh, refreshSponsored, refreshSuggestions])
 
   const onFeedScroll = useCallback(
     (event: NativeSyntheticEvent<NativeScrollEvent>) => {
@@ -114,6 +121,24 @@ export function CommunityFeedScreen() {
           </YStack>
         )
       }
+      if (entry.type === 'sponsored') {
+        return (
+          <SponsoredPostImpressionBoundary
+            key={`sponsored-${entry.item.campaignId}-${entry.slot}`}
+            item={entry.item}
+          >
+            <YStack width="100%" paddingBottom={12}>
+              <FeedPostCard
+                post={entry.item.post}
+                sponsoredCampaignId={entry.item.campaignId}
+                sponsoredDestinationUrl={entry.item.destinationUrl}
+                sponsoredCallToAction={entry.item.callToAction}
+                sponsoredMatchReason={entry.item.matchReason}
+              />
+            </YStack>
+          </SponsoredPostImpressionBoundary>
+        )
+      }
       return (
         <YStack
           key={`suggestion-${entry.section.kind}-${entry.slot}`}
@@ -140,6 +165,19 @@ export function CommunityFeedScreen() {
           </YStack>
         )
       }
+      if (item.type === 'sponsored') {
+        return (
+          <YStack width="100%" paddingBottom={12}>
+            <FeedPostCard
+              post={item.item.post}
+              sponsoredCampaignId={item.item.campaignId}
+              sponsoredDestinationUrl={item.item.destinationUrl}
+              sponsoredCallToAction={item.item.callToAction}
+              sponsoredMatchReason={item.item.matchReason}
+            />
+          </YStack>
+        )
+      }
       return (
         <YStack width="100%" paddingBottom={12}>
           <CommunitySuggestionSectionCard section={item.section} limit={3} />
@@ -151,10 +189,26 @@ export function CommunityFeedScreen() {
 
   const keyExtractor = useCallback((entry: FeedEntry) => {
     if (entry.type === 'post') return entry.post.id
+    if (entry.type === 'sponsored') return `sponsored-${entry.item.campaignId}-${entry.slot}`
     return `suggestion-${entry.section.kind}-${entry.slot}`
   }, [])
 
   const getItemType = useCallback((entry: FeedEntry) => entry.type, [])
+  const onViewableItemsChanged = useRef(
+    ({
+      viewableItems,
+    }: {
+      viewableItems: Array<{ item: FeedEntry; isViewable?: boolean | null }>
+    }) => {
+      viewableItems.forEach(({ item, isViewable }) => {
+        if (isViewable && item.type === 'sponsored') recordSponsoredImpressionOnce(item.item)
+      })
+    },
+  ).current
+  const viewabilityConfig = useRef({
+    itemVisiblePercentThreshold: 50,
+    minimumViewTime: 1000,
+  }).current
 
   const listHeader = useMemo(
     () => (
@@ -223,6 +277,8 @@ export function CommunityFeedScreen() {
                   scrollEventThrottle={16}
                   onEndReached={onEndReached}
                   onEndReachedThreshold={0.7}
+                  onViewableItemsChanged={onViewableItemsChanged}
+                  viewabilityConfig={viewabilityConfig}
                   onRefresh={onRefresh}
                   refreshing={isRefreshing}
                   drawDistance={500}

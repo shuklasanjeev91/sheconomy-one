@@ -419,6 +419,28 @@ verify_jwt = false
 [functions.platform-payu-webhook]
 verify_jwt = false
 
+[functions.sponsored-campaigns]
+verify_jwt = true
+
+[functions.sponsored-payu-initiate]
+verify_jwt = true
+
+# PayU posts these server/browser callbacks without the member JWT.
+[functions.sponsored-payu-callback]
+verify_jwt = false
+
+[functions.sponsored-payu-webhook]
+verify_jwt = false
+
+[functions.sponsored-feed]
+verify_jwt = true
+
+[functions.sponsored-event]
+verify_jwt = true
+
+[functions.sponsored-admin]
+verify_jwt = true
+
 # SHEDelivery partner tracking webhooks (no JWT).
 [functions.shedelivery-webhook]
 verify_jwt = false

@@ -32,6 +32,7 @@ export const COMMUNITY_LEFT_NAV = [
   { href: communityRoutes.network, label: 'Network', icon: Icons.Users, iconBg: nav.light },
   { href: communityRoutes.saved, label: 'Saved', icon: Icons.Bookmark, iconBg: nav.dark, authRequired: true },
   { href: communityRoutes.analytics, label: 'Analytics', icon: Icons.BarChart3, iconBg: nav.muted, authRequired: true },
+  { href: communityRoutes.ads, label: 'Ads Manager', icon: Icons.Megaphone, iconBg: nav.primary, authRequired: true },
   { href: communityRoutes.groups, label: 'Groups', icon: Icons.UsersRound, iconBg: nav.coral },
   { href: communityRoutes.events, label: 'Events', icon: Icons.Calendar, iconBg: nav.rose },
   { href: communityRoutes.companies, label: 'Pages', icon: Icons.Building2, iconBg: nav.primary },

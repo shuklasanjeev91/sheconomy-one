@@ -164,6 +164,13 @@ export const communityRoutes = {
   event: (id: string) => `/community/events/${encodeURIComponent(id)}` as Href,
   saved: '/community/saved' as Href,
   analytics: '/community/analytics' as Href,
+  ads: '/community/ads' as Href,
+  boostPost: (postId: string) =>
+    `/community/ads/boost/${encodeURIComponent(postId)}` as Href,
+  adCampaign: (campaignId: string) =>
+    `/community/ads/${encodeURIComponent(campaignId)}` as Href,
+  adPaymentSuccess: '/community/ads/payment-success' as Href,
+  adPaymentFailure: '/community/ads/payment-failure' as Href,
 } as const
 
 export const chatRoutes = {

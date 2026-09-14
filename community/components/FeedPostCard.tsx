@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState, memo } from 'react'
-import { Platform, useWindowDimensions } from 'react-native'
+import { Linking, Platform, useWindowDimensions } from 'react-native'
 import { AppLink } from '~/components/navigation/AppLink'
 import { useThemeName } from 'tamagui'
 
@@ -18,6 +18,11 @@ import type { CommunityCommerceSource } from '~/community/lib/community-commerce
 import { ProfileLink } from '~/community/components/ProfileLink'
 import { ProfileConnectButton } from '~/community/components/ProfileConnectButton'
 import { usePostEngagement } from '~/community/hooks/usePostEngagement'
+import {
+  getSponsoredSessionId,
+  trackSponsoredEvent,
+  type SponsoredCallToAction,
+} from '~/community/lib/sponsored-ads'
 import { REACTION_TYPES } from '~/community/lib/constants'
 import type {
   CommunityPoll,
@@ -68,6 +73,20 @@ type FeedPostCardProps = {
   commerceSource?: CommunityCommerceSource
   onPostUpdated?: (postId: string, patch: Partial<CommunityPost>) => void
   onPostDeleted?: (postId: string) => void
+  sponsoredCampaignId?: string
+  sponsoredDestinationUrl?: string | null
+  sponsoredCallToAction?: SponsoredCallToAction
+  sponsoredMatchReason?: string
+  sponsoredPreview?: boolean
+}
+
+const sponsoredCtaLabels: Record<SponsoredCallToAction, string> = {
+  learn_more: 'Learn more',
+  shop_now: 'Shop now',
+  sign_up: 'Sign up',
+  contact_us: 'Contact us',
+  visit_profile: 'Visit profile',
+  none: '',
 }
 
 export const FeedPostCard = memo(function FeedPostCard({
@@ -77,6 +96,11 @@ export const FeedPostCard = memo(function FeedPostCard({
   commerceSource = 'feed',
   onPostUpdated,
   onPostDeleted,
+  sponsoredCampaignId,
+  sponsoredDestinationUrl,
+  sponsoredCallToAction = 'none',
+  sponsoredMatchReason,
+  sponsoredPreview = false,
 }: FeedPostCardProps) {
   const communityUi = useCommunityUi()
   const { user } = useSupabase()
@@ -97,6 +121,7 @@ export const FeedPostCard = memo(function FeedPostCard({
     post.like_count ?? 0,
     post.comment_count ?? 0,
   )
+  const isSponsored = sponsoredPreview || !!sponsoredCampaignId
 
   const authorName =
     post.company?.name ??
@@ -282,7 +307,11 @@ export const FeedPostCard = memo(function FeedPostCard({
               </Text>
             ) : null}
             <XStack gap={4} alignItems="center">
-              {linkToDetail ? (
+              {isSponsored ? (
+                <Text fontSize={12} color={communityUi.textSubtle} fontWeight="600">
+                  Sponsored
+                </Text>
+              ) : linkToDetail ? (
                 <AppLink href={detailHref}>
                   <Text
                     fontSize={12}
@@ -303,6 +332,11 @@ export const FeedPostCard = memo(function FeedPostCard({
               </Text>
               <Icons.Globe size={12} color={communityUi.textSubtle} />
             </XStack>
+            {sponsoredMatchReason ? (
+              <Text fontSize={11} color={communityUi.textSubtle} numberOfLines={2}>
+                Why this ad: {sponsoredMatchReason}
+              </Text>
+            ) : null}
             <XStack paddingTop={4} alignItems="center" alignSelf="flex-start">
               {post.company ? (
                 <CompanyFollowButton companyId={post.company.id} size="sm" />
@@ -448,6 +482,44 @@ export const FeedPostCard = memo(function FeedPostCard({
           {post.shop ? <PostShopCard shop={post.shop} /> : null}
         </YStack>
 
+        {isSponsored && sponsoredCallToAction !== 'none' ? (
+          <XStack
+            marginHorizontal={16}
+            marginBottom={12}
+            padding="$3"
+            borderRadius="$3"
+            alignItems="center"
+            justifyContent="space-between"
+            gap="$3"
+            backgroundColor={communityUi.pageBg}
+            cursor="pointer"
+            onPress={() => {
+              if (sponsoredCampaignId) {
+                void trackSponsoredEvent({
+                  campaignId: sponsoredCampaignId,
+                  postId: post.id,
+                  eventType: 'click',
+                  eventKey: `${sponsoredCampaignId}:${getSponsoredSessionId()}:${Date.now()}:click`,
+                  sessionId: getSponsoredSessionId(),
+                  metadata: { cta: sponsoredCallToAction },
+                })
+              }
+              if (sponsoredDestinationUrl) {
+                void Linking.openURL(sponsoredDestinationUrl)
+              } else if (linkToDetail) {
+                navigateApp(detailHref)
+              }
+            }}
+          >
+            <Text color={communityUi.text} fontWeight="700" flex={1} numberOfLines={1}>
+              {sponsoredDestinationUrl || 'View this post'}
+            </Text>
+            <Button tone="primary" size="$3">
+              {sponsoredCtaLabels[sponsoredCallToAction]}
+            </Button>
+          </XStack>
+        ) : null}
+
         {(engagement.likeCount > 0 || engagement.commentCount > 0) ? (
           <XStack
             paddingHorizontal={12}
@@ -532,6 +604,7 @@ export const FeedPostCard = memo(function FeedPostCard({
       <PostActionSheets
         post={post}
         engagement={engagement}
+        sponsoredCampaignId={sponsoredCampaignId}
         onPostUpdated={onPostUpdated}
         onPostDeleted={onPostDeleted}
       />

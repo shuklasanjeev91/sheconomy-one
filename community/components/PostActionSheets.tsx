@@ -22,6 +22,7 @@ import {
 } from '~/community/lib/moderation'
 import { feedback } from '~/lib/platform/feedback'
 import { useProfileFollow } from '~/community/hooks/useProfileFollow'
+import { trackSponsoredEvent } from '~/community/lib/sponsored-ads'
 import {
   defaultSavedCollectionForPost,
   getSavedCommunityPost,
@@ -50,7 +51,7 @@ import {
   YStack,
   useAppToast,
 } from '~/components/ui'
-import { appRoutes, chatRoutes, routes } from '~/lib/routes'
+import { appRoutes, chatRoutes, communityRoutes, routes } from '~/lib/routes'
 import { copyShareLink } from '~/lib/share'
 import { useAppUi } from '~/lib/theme/useAppUi'
 import { useSupabase } from '~/providers/SupabaseProvider'
@@ -66,6 +67,7 @@ type PostActionSheetsProps = {
   engagement: Engagement
   onPostUpdated?: (postId: string, patch: Partial<CommunityPost>) => void
   onPostDeleted?: (postId: string) => void
+  sponsoredCampaignId?: string
 }
 
 const NON_EDITABLE_POST_TYPES = new Set(['poll', 'event', 'celebration', 'product', 'service'])
@@ -75,6 +77,7 @@ export function PostActionSheets({
   engagement,
   onPostUpdated,
   onPostDeleted,
+  sponsoredCampaignId,
 }: PostActionSheetsProps) {
   const communityUi = useCommunityUi()
   const ui = useAppUi()
@@ -589,6 +592,17 @@ export function PostActionSheets({
               }}
             />
           ) : null}
+          {isOwnPost && Platform.OS === 'web' ? (
+            <SheetAction
+              icon={Icons.Megaphone}
+              label="Boost post"
+              description="Reach more relevant people with a sponsored post"
+              onPress={() => {
+                engagement.closeSheet()
+                navigateApp(communityRoutes.boostPost(post.id))
+              }}
+            />
+          ) : null}
           <SheetAction
             icon={Icons.Bookmark}
             label={saved ? 'Unsave post' : 'Save post'}
@@ -627,6 +641,15 @@ export function PostActionSheets({
                   tone: 'success',
                   message: `Thanks for helping keep ${BRAND_NAME} safe.`,
                 })
+                if (sponsoredCampaignId) {
+                  void trackSponsoredEvent({
+                    campaignId: sponsoredCampaignId,
+                    postId: post.id,
+                    eventType: 'report',
+                    eventKey: `${sponsoredCampaignId}:${user.id}:report`,
+                    metadata: { reason: 'spam' },
+                  })
+                }
                 engagement.closeSheet()
               })
             }}
@@ -660,7 +683,7 @@ export function PostActionSheets({
               }}
             />
           ) : null}
-          {!isOwnPost ? (
+          {!isOwnPost && post.user_id ? (
             <SheetAction
               icon={Icons.UserX}
               label={`Block ${authorName.split(' ')[0]}`}

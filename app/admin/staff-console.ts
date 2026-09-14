@@ -21,6 +21,7 @@ export type StaffNavId =
   | 'cart'
   | 'categories'
   | 'sale-events'
+  | 'sponsored-ads'
   | 'groups'
   | 'company-pages'
   | 'cms'
@@ -40,6 +41,7 @@ const STAFF_ROLE_SET = new Set<string>(STAFF_ROLES)
 
 const STAFF_PATH_PREFIXES: ReadonlyArray<readonly [prefix: string, navId: StaffNavId]> = [
   ['/admin/company-pages', 'company-pages'],
+  ['/admin/sponsored-ads', 'sponsored-ads'],
   ['/admin/sale-events', 'sale-events'],
   ['/admin/categories', 'categories'],
   ['/admin/analytics', 'analytics'],

@@ -10,6 +10,7 @@ import {
   collectPlatformPayuCredentialCandidates,
   matchPlatformPayuCredentials,
 } from '../_shared/platform-payu.ts'
+import { applySponsoredPayuResult } from '../_shared/sponsored-ads.ts'
 
 Deno.serve(async (request) => {
   if (request.method === 'OPTIONS') {
@@ -38,6 +39,15 @@ Deno.serve(async (request) => {
   const admin = createClient(supabaseUrl, serviceRole, {
     auth: { persistSession: false, autoRefreshToken: false },
   })
+
+  // The merchant account may have a single PayU webhook URL configured. Route
+  // sponsored transactions through their own verified, idempotent lifecycle.
+  if (form.udf4 === 'sponsored_ads') {
+    const result = await applySponsoredPayuResult(admin, form, 'webhook')
+    return result.ok
+      ? jsonResponse({ ok: true, txnid: result.txnid, status: result.paymentStatus })
+      : jsonResponse({ ok: false, error: result.error }, result.status)
+  }
 
   if (tampered) {
     await admin.from('payment_logs').insert({

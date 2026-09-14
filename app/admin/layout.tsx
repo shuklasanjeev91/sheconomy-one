@@ -117,6 +117,13 @@ const NAV_GROUPS: AdminNavGroup[] = [
         href: '/admin/sale-events' as Href,
       },
       {
+        id: 'sponsored-ads',
+        label: 'Sponsored Ads',
+        description: 'Review paid campaigns, delivery, refunds, and policy issues.',
+        icon: Icons.Megaphone,
+        href: '/admin/sponsored-ads' as Href,
+      },
+      {
         id: 'groups',
         label: 'Groups',
         description: 'Moderate community groups and group commerce activity.',
