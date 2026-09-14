@@ -592,7 +592,7 @@ export function PostActionSheets({
               }}
             />
           ) : null}
-          {isOwnPost && Platform.OS === 'web' ? (
+          {isOwnPost ? (
             <SheetAction
               icon={Icons.Megaphone}
               label="Boost post"

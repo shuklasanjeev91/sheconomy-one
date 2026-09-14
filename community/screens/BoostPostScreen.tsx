@@ -115,35 +115,7 @@ export function BoostPostScreen({
     return Math.max(0, Math.floor(budget / 0.2))
   }, [totalBudget])
 
-  if (Platform.OS !== 'web') {
-    return (
-      <CommunityShell>
-        <CommunityPageHeader
-          title="Boost post"
-          subtitle="Campaign purchases are available on the SHEconomy website."
-        />
-        <YStack
-          gap="$3"
-          padding="$5"
-          borderRadius="$4"
-          borderWidth={1}
-          borderColor={ui.border}
-          backgroundColor={ui.surface}
-        >
-          <Text fontSize={18} fontWeight="700" color={ui.text}>
-            Create boosts on the web
-          </Text>
-          <Text color={ui.textSecondary} lineHeight={22}>
-            To comply with App Store and Play payment rules, this app does not link to an external
-            campaign checkout. Campaigns purchased on the website will appear in Ads Manager here.
-          </Text>
-          <Button tone="outline" onPress={() => router.replace(communityRoutes.ads)}>
-            View Ads Manager
-          </Button>
-        </YStack>
-      </CommunityShell>
-    )
-  }
+  const canCheckout = Platform.OS === 'web'
 
   async function submit() {
     const budget = Number(totalBudget)
@@ -201,6 +173,17 @@ export function BoostPostScreen({
         tone: 'danger',
         message: result.error ?? 'Please try again.',
       })
+      return
+    }
+
+    if (!canCheckout) {
+      setSubmitting(false)
+      toast.show('Campaign saved', {
+        tone: 'success',
+        message:
+          'You can monitor this campaign in Ads Manager. Delivery starts after prepaid budget is confirmed and the campaign is approved.',
+      })
+      router.replace(communityRoutes.ads)
       return
     }
 
@@ -318,10 +301,18 @@ export function BoostPostScreen({
 
           <YStack gap="$2">
             <Button tone="primary" disabled={submitting} onPress={submit}>
-              {submitting ? 'Opening PayU…' : `Pay ${formatCurrency(Number(totalBudget) || 0, 'INR')}`}
+              {submitting
+                ? canCheckout
+                  ? 'Opening PayU…'
+                  : 'Saving campaign…'
+                : canCheckout
+                  ? `Pay ${formatCurrency(Number(totalBudget) || 0, 'INR')}`
+                  : 'Save campaign'}
             </Button>
             <Text fontSize={12} color={ui.textMuted} textAlign="center">
-              Payment authorizes review. Delivery starts only after approval.
+              {canCheckout
+                ? 'Payment authorizes review. Delivery starts only after approval.'
+                : 'This app does not process campaign billing. Delivery starts after prepaid budget is confirmed and the campaign is approved. You can pause, resume, and view results here.'}
             </Text>
           </YStack>
         </YStack>

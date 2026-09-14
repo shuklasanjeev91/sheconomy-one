@@ -99,10 +99,6 @@ function campaignPayload(body: Record<string, unknown>):
   };
 }
 
-function isWeb(body: Record<string, unknown>): boolean {
-  return cleanString(body.client_platform, 20).toLowerCase() === "web";
-}
-
 Deno.serve(async (request) => {
   if (request.method === "OPTIONS") {
     return new Response("ok", { headers: corsHeaders });
@@ -149,11 +145,6 @@ Deno.serve(async (request) => {
   }
 
   if (action === "create") {
-    if (!isWeb(body)) {
-      return jsonResponse({
-        error: "Campaign creation and payment are available on web only",
-      }, 403);
-    }
     const parsed = campaignPayload(body);
     if ("error" in parsed) return jsonResponse({ error: parsed.error }, 400);
     const ownership = await validateOwnedPublicPost(
@@ -246,11 +237,6 @@ Deno.serve(async (request) => {
       .limit(1)
       .maybeSingle();
     const paid = Boolean(completedPayment || current.paid_at);
-    if (!paid && !isWeb(body)) {
-      return jsonResponse({
-        error: "Changes requiring payment are available on web only",
-      }, 403);
-    }
     if (
       paid &&
       (Number(parsed.value.total_budget) !== Number(current.total_budget) ||

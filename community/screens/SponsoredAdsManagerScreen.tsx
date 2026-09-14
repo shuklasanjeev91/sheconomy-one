@@ -1,4 +1,3 @@
-import { Platform } from 'react-native'
 import { AppLink } from '~/components/navigation/AppLink'
 
 import { CommunityPageHeader } from '~/community/components/CommunityPageHeader'
@@ -38,17 +37,17 @@ export function SponsoredAdsManagerScreen() {
         title="Ads Manager"
         subtitle="Manage sponsored posts, budgets, delivery, and results."
         actions={
-          Platform.OS === 'web' ? (
-            <AppLink href={communityRoutes.home} asChild>
-              <Button tone="primary" icon={Icons.Megaphone}>
-                Choose a post to boost
-              </Button>
-            </AppLink>
-          ) : undefined
+          <AppLink href={communityRoutes.home} asChild>
+            <Button tone="primary" icon={Icons.Megaphone}>
+              Choose a post to boost
+            </Button>
+          </AppLink>
         }
       />
 
-      {Platform.OS !== 'web' ? (
+      {campaigns.some((campaign) =>
+        ['draft', 'pending_payment', 'rejected'].includes(campaign.status)
+      ) ? (
         <YStack
           gap="$2"
           padding="$4"
@@ -58,11 +57,11 @@ export function SponsoredAdsManagerScreen() {
           backgroundColor={ui.surfaceMuted}
         >
           <Text fontWeight="700" color={ui.text}>
-            Campaign purchases are available on the website
+            Some campaigns are waiting to go live
           </Text>
           <Text color={ui.textSecondary} lineHeight={21}>
-            Campaigns purchased on sheconomy.com appear here automatically. You can monitor,
-            pause, resume, or request a refund from this app.
+            Delivery starts after prepaid budget is confirmed and review is approved. You can edit
+            unfinished campaigns, then pause, resume, and view results in this app.
           </Text>
         </YStack>
       ) : null}
@@ -93,7 +92,7 @@ export function SponsoredAdsManagerScreen() {
             No campaigns yet
           </Text>
           <Text color={ui.textSecondary} textAlign="center">
-            On the website, open your post menu and choose Boost post.
+            Open one of your posts and choose Boost post to create a campaign.
           </Text>
         </YStack>
       ) : (
@@ -173,8 +172,7 @@ function CampaignRow({
             Resume
           </Button>
         ) : null}
-        {['draft', 'pending_payment', 'rejected'].includes(campaign.status) &&
-        Platform.OS === 'web' ? (
+        {['draft', 'pending_payment', 'rejected'].includes(campaign.status) ? (
           <AppLink
             href={`${communityRoutes.boostPost(campaign.post_id)}?campaign=${encodeURIComponent(campaign.id)}` as never}
             asChild

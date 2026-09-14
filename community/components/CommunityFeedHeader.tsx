@@ -43,7 +43,12 @@ import { FeedSortBar, type FeedSort } from '~/community/components/FeedSortBar'
 import { FOR_YOU_SLOT } from '~/community/lib/for-you-density'
 import type { FeedContentFilter } from '~/community/lib/community'
 import { IdleMount } from '~/components/IdleMount'
-import { YStack } from '~/components/ui'
+import { AppLink } from '~/components/navigation/AppLink'
+import { Icons, Text, XStack, YStack } from '~/components/ui'
+import { useAppLayout } from '~/hooks/useAppLayout'
+import { useProfile } from '~/hooks/useProfile'
+import { communityRoutes } from '~/lib/routes'
+import { useCommunityUi } from '~/community/lib/community-theme'
 
 type CommunityFeedHeaderProps = {
   contentFilter: FeedContentFilter | null
@@ -179,8 +184,47 @@ export function CommunityFeedHeader({
       <StoriesStrip />
       {forYou}
       <FeedComposer />
+      <NativeAdsManagerEntry />
       <FeedFilterChips value={contentFilter} onChange={onContentFilterChange} />
       <FeedSortBar value={sort} onChange={onSortChange} />
     </YStack>
+  )
+}
+
+function NativeAdsManagerEntry() {
+  const communityUi = useCommunityUi()
+  const { hasSideRails } = useAppLayout()
+  const { isAuthenticated } = useProfile()
+  if (hasSideRails || !isAuthenticated) return null
+
+  return (
+    <AppLink href={communityRoutes.ads} asChild>
+      <XStack
+        alignItems="center"
+        justifyContent="space-between"
+        gap="$3"
+        padding="$3"
+        borderRadius="$4"
+        borderWidth={1}
+        borderColor={communityUi.border}
+        backgroundColor={communityUi.cardBg}
+        cursor="pointer"
+      >
+        <XStack alignItems="center" gap="$3" flex={1} minWidth={0}>
+          <Icons.Megaphone size={18} color={communityUi.brand} />
+          <YStack flex={1} minWidth={0} gap={2}>
+            <Text fontSize={14} fontWeight="700" color={communityUi.text}>
+              Ads Manager
+            </Text>
+            <Text fontSize={12} color={communityUi.textMuted} numberOfLines={1}>
+              Boost posts, track results, pause or resume campaigns
+            </Text>
+          </YStack>
+        </XStack>
+        <Text fontSize={13} fontWeight="700" color={communityUi.brand}>
+          Open
+        </Text>
+      </XStack>
+    </AppLink>
   )
 }

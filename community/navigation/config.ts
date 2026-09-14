@@ -53,6 +53,7 @@ export const COMMUNITY_LEFT_NAV_VISIBLE = 7
 /** Quick browse links — community shortcuts not in the default left sidebar list */
 export const COMMUNITY_DISCOVER_LINKS = [
   { href: communityRoutes.createPost, label: 'Create post', icon: Icons.PenSquare, iconBg: nav.primary },
+  { href: communityRoutes.ads, label: 'Ads Manager', icon: Icons.Megaphone, iconBg: nav.primary },
   { href: communityRoutes.groupCreate, label: 'Create group', icon: Icons.UsersRound, iconBg: nav.coral },
   { href: communityRoutes.eventCreate, label: 'Create event', icon: Icons.CalendarPlus, iconBg: nav.rose },
 ] as const satisfies ReadonlyArray<{

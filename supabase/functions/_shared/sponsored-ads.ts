@@ -107,6 +107,24 @@ export async function requireSponsoredUser(
   return { admin: server.admin, user };
 }
 
+export async function optionalSponsoredUser(
+  request: Request,
+): Promise<{ admin: SupabaseClient; user: User | null } | Response> {
+  const server = getServerClients();
+  if (!server) return jsonResponse({ error: "Server is not configured" }, 503);
+  const authorization = request.headers.get("Authorization");
+  if (!authorization) return { admin: server.admin, user: null };
+
+  const client = createClient(server.supabaseUrl, server.anonKey, {
+    global: { headers: { Authorization: authorization } },
+    auth: { persistSession: false, autoRefreshToken: false },
+  });
+  const {
+    data: { user },
+  } = await client.auth.getUser();
+  return { admin: server.admin, user: user ?? null };
+}
+
 export async function readJsonObject(
   request: Request,
 ): Promise<Record<string, unknown> | Response> {
