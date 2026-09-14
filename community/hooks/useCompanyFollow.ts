@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react'
 
 import {
   fetchCompanyFollowState,
+  fetchManagedCompanyIds,
   followCompany,
   unfollowCompany,
   type CompanyPage,
@@ -13,17 +14,23 @@ export function useCompanyFollow(company?: CompanyPage | string | null) {
   const { user } = useSupabase()
   const companyId = typeof company === 'string' ? company : company?.id ?? null
   const [isFollowing, setIsFollowing] = useState(false)
+  const [isManager, setIsManager] = useState(false)
   const [isLoading, setIsLoading] = useState(true)
   const [isToggling, setIsToggling] = useState(false)
 
   const load = useCallback(async () => {
     if (!user || !companyId) {
       setIsFollowing(false)
+      setIsManager(false)
       setIsLoading(false)
       return
     }
-    const state = await fetchCompanyFollowState(companyId, user.id)
+    const [state, managedIds] = await Promise.all([
+      fetchCompanyFollowState(companyId, user.id),
+      fetchManagedCompanyIds(user.id),
+    ])
     setIsFollowing(state.isFollowing)
+    setIsManager(managedIds.has(companyId))
     setIsLoading(false)
   }, [companyId, user])
 
@@ -45,5 +52,5 @@ export function useCompanyFollow(company?: CompanyPage | string | null) {
     return result
   }, [companyId, isFollowing, user])
 
-  return { isFollowing, isLoading, isToggling, isAuthenticated: !!user, toggle }
+  return { isFollowing, isManager, isLoading, isToggling, isAuthenticated: !!user, toggle }
 }

@@ -1,5 +1,10 @@
 import { isUuid } from '~/commerce/lib/seo-urls'
-import { INVALIDATION_TOPICS, invalidateCache } from '~/lib/cache/invalidation'
+import {
+  INVALIDATION_TOPICS,
+  cacheKeyMatches,
+  invalidateCache,
+  subscribeCacheInvalidation,
+} from '~/lib/cache/invalidation'
 import { supabase } from '~/lib/supabase/client'
 
 export const COMPANY_PAGE_SIZE = 20
@@ -193,6 +198,53 @@ export async function fetchCompanyMembership(
   }
 
   return { role: null, isManager: false, isOwner: false }
+}
+
+/**
+ * Ids of the pages a user owns or administers.
+ *
+ * Shared per user because feed rows each render a follow control, and every one
+ * of them needs the answer to decide whether to render at all.
+ */
+const managedCompanyIdsByUser = new Map<string, Promise<Set<string>>>()
+
+subscribeCacheInvalidation((keys) => {
+  if (cacheKeyMatches(INVALIDATION_TOPICS.communityCompanies, keys)) {
+    managedCompanyIdsByUser.clear()
+  }
+})
+
+export async function fetchManagedCompanyIds(userId: string): Promise<Set<string>> {
+  const cached = managedCompanyIdsByUser.get(userId)
+  if (cached) return cached
+
+  const pending = (async () => {
+    try {
+      const [{ data: memberships }, { data: created }] = await Promise.all([
+        supabase
+          .from('company_members')
+          .select('company_id')
+          .eq('user_id', userId)
+          .in('role', ['owner', 'admin']),
+        // Covers pages created before the company_members backfill.
+        supabase.from('companypages').select('id').eq('created_by', userId),
+      ])
+
+      const ids = [
+        ...(memberships ?? []).map((row) => row.company_id),
+        ...(created ?? []).map((row) => row.id),
+      ].filter(Boolean) as string[]
+
+      return new Set(ids)
+    } catch {
+      // A failed lookup must not stick, or the user stays a non-manager all session.
+      managedCompanyIdsByUser.delete(userId)
+      return new Set<string>()
+    }
+  })()
+
+  managedCompanyIdsByUser.set(userId, pending)
+  return pending
 }
 
 export async function fetchCompanyMembers(companyId: string): Promise<CompanyMember[]> {

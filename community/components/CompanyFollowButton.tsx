@@ -20,6 +20,9 @@ export function CompanyFollowButton({ company, companyId, size = 'md' }: Company
     return <Spinner size="small" color={communityUi.brand} />
   }
 
+  // You manage this page — following your own page is a no-op.
+  if (follow.isManager) return null
+
   if (!follow.isAuthenticated) {
     return (
       <AppLink href={routes.signIn} asChild>
