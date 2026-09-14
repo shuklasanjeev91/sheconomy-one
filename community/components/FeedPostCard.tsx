@@ -4,6 +4,8 @@ import { AppLink } from '~/components/navigation/AppLink'
 import { useThemeName } from 'tamagui'
 
 import { CommunityCard } from '~/community/components/CommunityCard'
+import { CompanyFollowButton } from '~/community/components/CompanyFollowButton'
+import { GroupJoinButton } from '~/community/components/GroupJoinButton'
 import { PostActionSheets } from '~/community/components/PostActionSheets'
 import { PostContentText } from '~/community/components/PostContentText'
 import { PostImageLightbox } from '~/community/components/PostImageLightbox'
@@ -13,6 +15,7 @@ import { PostMediaCarousel } from '~/community/components/PostMediaCarousel'
 import { PostMediaSlide } from '~/community/components/PostMediaSlide'
 import type { CommunityCommerceSource } from '~/community/lib/community-commerce-analytics'
 import { ProfileLink } from '~/community/components/ProfileLink'
+import { ProfileConnectButton } from '~/community/components/ProfileConnectButton'
 import { usePostEngagement } from '~/community/hooks/usePostEngagement'
 import { REACTION_TYPES } from '~/community/lib/constants'
 import type {
@@ -75,6 +78,7 @@ export const FeedPostCard = memo(function FeedPostCard({
   onPostDeleted,
 }: FeedPostCardProps) {
   const communityUi = useCommunityUi()
+  const { user } = useSupabase()
   const themeName = useThemeName()
   const [congratulateOpen, setCongratulateOpen] = useState(false)
   const postSurface = useMemo(
@@ -297,6 +301,19 @@ export const FeedPostCard = memo(function FeedPostCard({
                 ·
               </Text>
               <Icons.Globe size={12} color={communityUi.textSubtle} />
+            </XStack>
+            <XStack paddingTop={4} alignItems="center" alignSelf="flex-start">
+              {post.company ? (
+                <CompanyFollowButton companyId={post.company.id} size="sm" />
+              ) : post.group ? (
+                <GroupJoinButton
+                  groupId={post.group.id}
+                  groupType={post.group.group_type}
+                  size="sm"
+                />
+              ) : post.user_id && post.user_id !== user?.id ? (
+                <ProfileConnectButton targetUserId={post.user_id} size="sm" />
+              ) : null}
             </XStack>
           </YStack>
           <XStack

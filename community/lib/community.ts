@@ -30,6 +30,7 @@ export type PostGroupContext = {
   name: string
   title: string
   avatar_url: string | null
+  group_type: string | null
 }
 
 export type FeedSort = 'top' | 'recent'
@@ -519,7 +520,10 @@ async function enrichPostsWithContext(posts: CommunityPost[]): Promise<Community
           .in('id', companyIds)
       : Promise.resolve({ data: [] }),
     groupIds.length
-      ? supabase.from('groups').select('id, name, title, avatar_url').in('id', groupIds)
+      ? supabase
+          .from('groups')
+          .select('id, name, title, avatar_url, group_type')
+          .in('id', groupIds)
       : Promise.resolve({ data: [] }),
   ])
 
@@ -532,7 +536,13 @@ async function enrichPostsWithContext(posts: CommunityPost[]): Promise<Community
   const groupById = new Map(
     (groupsRes.data ?? []).map((g) => [
       g.id,
-      { id: g.id, name: g.name, title: g.title, avatar_url: g.avatar_url },
+      {
+        id: g.id,
+        name: g.name,
+        title: g.title,
+        avatar_url: g.avatar_url,
+        group_type: g.group_type,
+      },
     ]),
   )
 

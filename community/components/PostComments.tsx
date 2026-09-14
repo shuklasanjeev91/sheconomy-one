@@ -3,6 +3,7 @@ import { Alert, Platform } from 'react-native'
 
 import { CommentSuggestionChips } from '~/community/components/CommentSuggestionChips'
 import { MentionInput } from '~/community/components/MentionInput'
+import { ProfileConnectButton } from '~/community/components/ProfileConnectButton'
 import { ProfileLink } from '~/community/components/ProfileLink'
 import { PostContentText } from '~/community/components/PostContentText'
 import type { CommentSuggestionContext } from '~/community/lib/comment-suggestions'
@@ -388,11 +389,24 @@ function CommentRow({
           paddingVertical="$2"
           gap={2}
         >
-          <ProfileLink userId={comment.userId}>
-            <Text fontSize={13} fontWeight="600" color={ui.text} cursor="pointer">
-              {comment.authorName}
-            </Text>
-          </ProfileLink>
+          <XStack alignItems="center" justifyContent="space-between" gap="$2" minWidth={0}>
+            <ProfileLink userId={comment.userId}>
+              <Text
+                flexShrink={1}
+                minWidth={0}
+                fontSize={13}
+                fontWeight="600"
+                color={ui.text}
+                cursor="pointer"
+                numberOfLines={1}
+              >
+                {comment.authorName}
+              </Text>
+            </ProfileLink>
+            {!canEdit ? (
+              <ProfileConnectButton targetUserId={comment.userId} size="sm" />
+            ) : null}
+          </XStack>
           {comment.authorHeadline ? (
             <Text fontSize={11} color={ui.textMuted} numberOfLines={1}>
               {comment.authorHeadline}
