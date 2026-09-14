@@ -92,7 +92,7 @@
         "expo-calendar",
         {
           "calendarPermission": "Allow SHEconomy to add Co-work meetings to your calendar.",
-          "remindersPermission": false
+          "remindersPermission": "Allow SHEconomy to access reminders when using calendar features."
         }
       ],
       [
