@@ -1,6 +1,6 @@
 /**
  * Static checks for Android FGS policy + targetSdk 36.
- * MediaProjection screen share is allowed; phone-call / unused FGS stay stripped.
+ * No FGS types in the AAB — Play rejected mediaProjection for this listing.
  * Run: yarn verify:android-fgs
  *
  * Also inspects android/ after prebuild when present.
@@ -66,12 +66,14 @@ if (fgsPluginIndex < 0) {
 }
 
 const versionCode = appJson.expo?.android?.versionCode
-if (typeof versionCode !== 'number' || versionCode < 119) {
-  warnings.push(`android.versionCode is ${versionCode}; expected >= 119 for Play resubmit`)
+if (typeof versionCode !== 'number' || versionCode < 165) {
+  warnings.push(`android.versionCode is ${versionCode}; expected >= 165 for Play resubmit`)
 }
 
 const perms = appJson.expo?.android?.permissions ?? []
 for (const forbidden of [
+  'android.permission.FOREGROUND_SERVICE',
+  'android.permission.FOREGROUND_SERVICE_MEDIA_PROJECTION',
   'android.permission.FOREGROUND_SERVICE_MICROPHONE',
   'android.permission.FOREGROUND_SERVICE_PHONE_CALL',
   'android.permission.FOREGROUND_SERVICE_CAMERA',
@@ -81,46 +83,36 @@ for (const forbidden of [
   'android.permission.USE_FULL_SCREEN_INTENT',
 ]) {
   if (perms.includes(forbidden)) {
-    errors.push(`Do not declare ${forbidden} — unused/telecom FGS must stay out of the AAB`)
-  }
-}
-
-for (const required of [
-  'android.permission.FOREGROUND_SERVICE',
-  'android.permission.FOREGROUND_SERVICE_MEDIA_PROJECTION',
-]) {
-  if (!perms.includes(required)) {
-    errors.push(`Declare ${required} for Co-Work Android screen share`)
+    errors.push(`Do not declare ${forbidden} — unused FGS must stay out of the AAB`)
   }
 }
 
 const livekitPlugin = plugins.find(
   (entry) => Array.isArray(entry) && entry[0] === '@livekit/react-native-expo-plugin',
 )
-if (livekitPlugin?.[1]?.android?.enableScreenShareService !== true) {
-  errors.push('LiveKit enableScreenShareService must be true on Android')
+if (livekitPlugin?.[1]?.android?.enableScreenShareService !== false) {
+  errors.push('LiveKit enableScreenShareService must be false on Android')
 }
 
 const screenSharePlugin = plugins.find(
   (entry) => Array.isArray(entry) && entry[0] === 'expo-livekit-screen-share',
 )
 if (
-  screenSharePlugin?.[1]?.android?.enableScreenShareService !== true ||
-  screenSharePlugin?.[1]?.android?.foregroundServicePermission !== true
+  screenSharePlugin?.[1]?.android?.enableScreenShareService !== false ||
+  screenSharePlugin?.[1]?.android?.foregroundServicePermission !== false
 ) {
-  errors.push('expo-livekit-screen-share Android screen-share FGS flags must be true')
+  errors.push('expo-livekit-screen-share Android screen-share FGS flags must be false')
 }
 
 mustInclude(callKeepPluginPath, 'withCallKeepIos', 'CallKeep is iOS-only')
 mustNotInclude(callKeepPluginPath, 'VoiceConnectionService', 'CallKeep must not register Android ConnectionService')
-mustInclude(fgsPluginPath, 'FOREGROUND_SERVICE_MEDIA_PROJECTION', 'FGS plugin keeps MediaProjection permission')
-mustInclude(fgsPluginPath, 'ENABLE_SCREEN_SHARE_SERVICE', 'FGS plugin enables LiveKit screen-share meta')
+mustInclude(fgsPluginPath, 'FOREGROUND_SERVICE_MEDIA_PROJECTION', 'FGS plugin strips MediaProjection permission')
+mustInclude(fgsPluginPath, 'MediaProjectionService', 'FGS plugin strips MediaProjectionService')
 mustInclude(fgsPluginPath, "tools:node", 'FGS compliance plugin uses tools:node=remove')
 {
   const fgsSrc = read(fgsPluginPath)
-  const servicesBlock = fgsSrc.match(/SERVICES_TO_REMOVE\s*=\s*\[([\s\S]*?)\]/)?.[1] ?? ''
-  if (servicesBlock.includes('MediaProjectionService')) {
-    errors.push('SERVICES_TO_REMOVE must not include MediaProjectionService')
+  if (!fgsSrc.includes("'android:value': 'false'") && !fgsSrc.includes('"android:value": "false"')) {
+    errors.push('ENABLE_SCREEN_SHARE_SERVICE meta-data must be forced to false')
   }
 }
 
@@ -142,6 +134,7 @@ for (const manifestPath of mergedManifestCandidates) {
     'FOREGROUND_SERVICE_PHONE_CALL',
     'FOREGROUND_SERVICE_CAMERA',
     'FOREGROUND_SERVICE_LOCATION',
+    'FOREGROUND_SERVICE_MEDIA_PROJECTION',
   ]) {
     const lines = manifest.split('\n').filter((line) => line.includes(name))
     for (const line of lines) {
@@ -151,23 +144,10 @@ for (const manifestPath of mergedManifestCandidates) {
     }
   }
 
-  const mediaProjectionPermLines = manifest
-    .split('\n')
-    .filter((line) => line.includes('FOREGROUND_SERVICE_MEDIA_PROJECTION'))
-  if (!mediaProjectionPermLines.some((line) => !line.includes('tools:node'))) {
-    // Allow positive declaration (no tools:node=remove)
-    const hasPositive = mediaProjectionPermLines.some(
-      (line) => !line.includes('tools:node="remove"') && !line.includes("tools:node='remove'"),
-    )
-    if (!hasPositive) {
-      errors.push('Merged manifest must declare FOREGROUND_SERVICE_MEDIA_PROJECTION (not remove)')
-    }
-  } else {
-    const hasPositive = mediaProjectionPermLines.some(
-      (line) => !line.includes('tools:node="remove"') && !line.includes("tools:node='remove'"),
-    )
-    if (!hasPositive) {
-      errors.push('Merged manifest must declare FOREGROUND_SERVICE_MEDIA_PROJECTION (not remove)')
+  const fgsLines = manifest.split('\n').filter((line) => /android.permission.FOREGROUND_SERVICE"/.test(line))
+  for (const line of fgsLines) {
+    if (!line.includes('FOREGROUND_SERVICE_') && !line.includes('tools:node="remove"') && !line.includes("tools:node='remove'")) {
+      errors.push('Merged manifest still declares FOREGROUND_SERVICE without tools:node=remove')
     }
   }
 
@@ -182,18 +162,8 @@ for (const manifestPath of mergedManifestCandidates) {
     .split('\n')
     .filter((line) => line.includes('MediaProjectionService'))
   for (const line of mediaServiceLines) {
-    if (line.includes('tools:node="remove"') || line.includes("tools:node='remove'")) {
-      errors.push('MediaProjectionService must remain enabled (no tools:node=remove)')
-    }
-  }
-
-  if (!manifest.includes('io.livekit.reactnative.expo.ENABLE_SCREEN_SHARE_SERVICE" android:value="true"')
-    && !manifest.includes("io.livekit.reactnative.expo.ENABLE_SCREEN_SHARE_SERVICE' android:value='true'")
-    && !/ENABLE_SCREEN_SHARE_SERVICE"[^>]*android:value="true"/.test(manifest)
-    && !/android:value="true"[^>]*ENABLE_SCREEN_SHARE_SERVICE/.test(manifest)) {
-    // Flexible attribute order
-    if (!/ENABLE_SCREEN_SHARE_SERVICE[\s\S]{0,80}android:value="true"|android:value="true"[\s\S]{0,80}ENABLE_SCREEN_SHARE_SERVICE/.test(manifest)) {
-      errors.push('ENABLE_SCREEN_SHARE_SERVICE meta-data must be true')
+    if (!line.includes('tools:node="remove"') && !line.includes("tools:node='remove'")) {
+      errors.push('MediaProjectionService must be tools:node=remove')
     }
   }
 }
@@ -215,7 +185,7 @@ if (fs.existsSync(gradlePath)) {
   }
 }
 
-console.log('=== Android FGS / API 36 compliance check (MediaProjection allowed) ===')
+console.log('=== Android FGS / API 36 compliance check (no FGS types) ===')
 for (const warning of warnings) console.warn('WARN:', warning)
 for (const error of errors) console.error('ERR:', error)
 
@@ -224,6 +194,6 @@ if (errors.length) {
   process.exit(1)
 }
 
-console.log('\nOK — CallKeep/telecom FGS stripped; MediaProjection screen share enabled; target API 36.')
-console.log('Play Console: declare mediaProjection FGS with a demo of Co-Work Present → capture prompt.')
+console.log('\nOK — All FGS types stripped; target API 36.')
+console.log('Play Console: do not declare any foreground service types for this AAB.')
 console.log('See doc/android-play-fgs/README.md')

@@ -16,7 +16,9 @@ export function getMediaCapabilities(): MediaCapabilities {
   return {
     platform,
     supportsVideo: liveKit,
-    supportsScreenShare: hasDisplayMedia() || isNativeRuntime(),
+    // Android Present requires MediaProjection FGS, which Play rejected for this listing.
+    // Android Present requires MediaProjection FGS, which Play rejected for this listing.
+    supportsScreenShare: hasDisplayMedia() || platform === 'ios',
     supportsRecording: hasMediaRecorder() || isNativeRuntime(),
     supportsLiveCaptions: hasSpeechRecognition() || isNativeRuntime(),
   }

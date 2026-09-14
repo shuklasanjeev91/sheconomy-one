@@ -1,38 +1,34 @@
 # Google Play — Foreground Services + Target API 36
 
-Use this when shipping Co-Work screen share on Android and keeping CallKeep/telecom FGS out of the AAB.
+Play rejected this marketplace listing for foreground-service types
+(`phoneCall`, `microphone`, and later `mediaProjection`): permission not
+declared correctly, interruption without material user impact, and
+functionality not user-initiated / not perceptible.
 
-## Policy split (Jul 2026 → restored MediaProjection)
+The Android AAB therefore **declares no FGS types**.
 
-Play previously rejected `phoneCall` / `microphone` / `mediaProjection` for SHEconomy. CallKeep ConnectionService is still **not** core for the Android marketplace listing, so those types stay stripped.
-
-**MediaProjection is restored** so Co-Work **Present** can show the system screen-capture sheet and keep a perceptible “sharing screen” notification while presenting.
-
-| Platform | Calls | Screen share |
-|----------|-------|--------------|
-| Android | In-app overlay + push (no CallKeep FGS) | MediaProjection FGS (user-initiated) |
+| Platform | Calls | Screen share (Present) |
+|----------|-------|------------------------|
+| Android | In-app overlay + push (no CallKeep FGS) | Disabled — present from iOS or web |
 | iOS | CallKit | Broadcast Extension |
 | Web | In-app | Browser screen share |
 
 ## Engineering checklist (in repo)
 
 - [`app.json`](../../app.json) — `targetSdkVersion` **36**, `compileSdkVersion` **36**
-  - Declare `FOREGROUND_SERVICE` + `FOREGROUND_SERVICE_MEDIA_PROJECTION`
-  - LiveKit / expo-livekit-screen-share Android screen-share flags **true**
-- [`plugins/withCallKeep.cjs`](../../plugins/withCallKeep.cjs) — **iOS only** (no Android ConnectionService)
+  - Do **not** declare `FOREGROUND_SERVICE*` permissions
+  - LiveKit / expo-livekit-screen-share Android screen-share flags **false**
+- [`plugins/withCallKeep.cjs`](../../plugins/withCallKeep.cjs) — **iOS only**
 - [`plugins/withAndroidFgsCompliance.cjs`](../../plugins/withAndroidFgsCompliance.cjs) — last plugin:
-  - `tools:node=remove` for CallKeep / location FGS + phone telecom permissions
-  - **Keeps** `MediaProjectionService` + MediaProjection permission + `ENABLE_SCREEN_SHARE_SERVICE=true`
+  - `tools:node=remove` for CallKeep, location, and WebRTC MediaProjection FGS
+  - `ENABLE_SCREEN_SHARE_SERVICE=false`
 - Verify: `yarn verify:android-fgs`
 
 ## Play Console steps
 
 1. Upload production AAB with a bumped `versionCode`.
 2. App bundle explorer: confirm **Target SDK = 36**.
-3. Foreground service permissions:
-   - Expect **`mediaProjection`** only (for Co-Work Present).
-   - Do **not** declare phoneCall / microphone / camera FGS unless you restore those services.
-4. Attach a short demo video: join Co-Work meeting → tap Present → system capture prompt → ongoing share notification → stop share.
-5. Submit for review.
+3. Foreground service permissions: **none**. If a previous declaration exists, remove it / mark as not used.
+4. Submit for review.
 
-Do **not** re-declare phoneCall / microphone FGS for Android unless you restore CallKeep ConnectionService and ship a matching demo.
+Do **not** re-declare `mediaProjection` unless you restore Android Present, keep an ongoing share notification, and attach a demo of user-tapped Present → system capture prompt.

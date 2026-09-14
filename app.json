@@ -3,7 +3,7 @@
     "name": "SHEconomy",
     "slug": "sheconomy",
     "owner": "sheconomy",
-    "version": "6.0.8",
+    "version": "6.0.9",
     "scheme": "sheconomy",
     "newArchEnabled": true,
     "platforms": [
@@ -68,7 +68,7 @@
         {
           "android": {
             "audioType": "communication",
-            "enableScreenShareService": true
+            "enableScreenShareService": false
           }
         }
       ],
@@ -80,8 +80,8 @@
             "appGroupIdentifier": "group.com.sheconomy.ecommerce"
           },
           "android": {
-            "enableScreenShareService": true,
-            "foregroundServicePermission": true
+            "enableScreenShareService": false,
+            "foregroundServicePermission": false
           }
         }
       ],
@@ -206,7 +206,7 @@
     },
     "android": {
       "package": "com.sheconomy.ecommerce",
-      "versionCode": 164,
+      "versionCode": 165,
       "softwareKeyboardLayoutMode": "resize",
       "adaptiveIcon": {
         "foregroundImage": "./public/app-icon-adaptive.png",
@@ -253,9 +253,7 @@
         "android.permission.READ_CONTACTS",
         "android.permission.WRITE_CONTACTS",
         "android.permission.BLUETOOTH_CONNECT",
-        "android.permission.MODIFY_AUDIO_SETTINGS",
-        "android.permission.FOREGROUND_SERVICE",
-        "android.permission.FOREGROUND_SERVICE_MEDIA_PROJECTION"
+        "android.permission.MODIFY_AUDIO_SETTINGS"
       ]
     },
     "extra": {

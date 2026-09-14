@@ -1,10 +1,12 @@
 /**
- * Google Play FGS compliance (partial):
+ * Google Play FGS compliance:
  *
- * Strip VoIP ConnectionService / phone-call / unused location FGS types that
- * were rejected for this marketplace listing. Keep MediaProjection so Co-Work
- * screen share works on Android (user-initiated Present → system capture UI +
- * ongoing "sharing screen" notification).
+ * Strip every foreground-service type from the Android AAB. Play rejected
+ * phoneCall / microphone / mediaProjection for this marketplace listing
+ * (undeclared or unused FGS, not user-initiated / not perceptible).
+ *
+ * Co-Work Present stays on iOS (Broadcast Extension) and web. Android
+ * meetings still work for camera, mic, and viewing someone else's share.
  *
  * iOS CallKit / Broadcast Extension are unchanged.
  */
@@ -18,11 +20,14 @@ const SERVICES_TO_REMOVE = [
   'expo.modules.location.services.LocationTaskService',
   'io.wazo.callkeep.VoiceConnectionService',
   'io.wazo.callkeep.RNCallKeepBackgroundMessagingService',
+  'com.oney.WebRTCModule.MediaProjectionService',
 ]
 
 const PERMISSIONS_TO_REMOVE = [
+  'android.permission.FOREGROUND_SERVICE',
   'android.permission.FOREGROUND_SERVICE_CAMERA',
   'android.permission.FOREGROUND_SERVICE_LOCATION',
+  'android.permission.FOREGROUND_SERVICE_MEDIA_PROJECTION',
   'android.permission.FOREGROUND_SERVICE_MICROPHONE',
   'android.permission.FOREGROUND_SERVICE_PHONE_CALL',
   'android.permission.MANAGE_OWN_CALLS',
@@ -71,18 +76,6 @@ function ensureRemovePermission(manifest, name) {
   })
 }
 
-function ensurePermission(manifest, name) {
-  if (!manifest['uses-permission']) manifest['uses-permission'] = []
-  manifest['uses-permission'] = manifest['uses-permission'].filter(
-    (entry) => entry?.$?.['android:name'] !== name,
-  )
-  manifest['uses-permission'].push({
-    $: {
-      'android:name': name,
-    },
-  })
-}
-
 function withAndroidFgsCompliance(config) {
   return withAndroidManifest(config, (mod) => {
     const androidManifest = mod.modResults
@@ -99,17 +92,6 @@ function withAndroidFgsCompliance(config) {
       ensureRemovePermission(manifest, name)
     }
 
-    // Keep MediaProjection FGS for Co-Work Present (Android screen share).
-    ensurePermission(manifest, 'android.permission.FOREGROUND_SERVICE')
-    ensurePermission(manifest, 'android.permission.FOREGROUND_SERVICE_MEDIA_PROJECTION')
-
-    // Drop any tools:node=remove for MediaProjectionService so WebRTC's merge wins.
-    if (application.service) {
-      application.service = application.service.filter(
-        (service) => service?.$?.['android:name'] !== 'com.oney.WebRTCModule.MediaProjectionService',
-      )
-    }
-
     if (!application['meta-data']) application['meta-data'] = []
     application['meta-data'] = application['meta-data'].filter(
       (item) => item?.$?.['android:name'] !== SCREEN_SHARE_SERVICE_META,
@@ -117,7 +99,7 @@ function withAndroidFgsCompliance(config) {
     application['meta-data'].push({
       $: {
         'android:name': SCREEN_SHARE_SERVICE_META,
-        'android:value': 'true',
+        'android:value': 'false',
       },
     })
 
@@ -128,5 +110,5 @@ function withAndroidFgsCompliance(config) {
 module.exports = createRunOncePlugin(
   withAndroidFgsCompliance,
   'withAndroidFgsCompliance',
-  '3.0.0',
+  '4.0.0',
 )

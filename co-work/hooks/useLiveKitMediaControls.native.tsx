@@ -97,8 +97,12 @@ export function useLiveKitMediaControls(preferSpeaker = true): LiveKitMediaContr
         await showIosBroadcastPicker()
       }
 
-      // Android: LiveKit/WebRTC shows the MediaProjection consent sheet, then
-      // runs MediaProjectionService (FGS) while presenting.
+      if (enabling && Platform.OS === 'android') {
+        throw new Error(
+          'Present from iPhone, iPad, or the website. Android meetings can still view a shared screen.',
+        )
+      }
+
       // iOS: connects to ScreenShareExtension via the app-group socket.
       await setLocalScreenShareEnabled(localParticipant, enabling, 'native')
     } catch (error) {

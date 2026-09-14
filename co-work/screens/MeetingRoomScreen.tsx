@@ -381,9 +381,11 @@ function MeetingRoomOverlay({
       toast.show('Screen share is not available on this device', {
         tone: 'info',
         message:
-          Platform.OS === 'web'
-            ? 'Use Chrome or Edge, or update your browser to enable screen sharing.'
-            : 'Rebuild the app with the screen-share broadcast extension enabled.',
+          Platform.OS === 'android'
+            ? 'Present from iPhone, iPad, or the website. Android meetings can still view a shared screen.'
+            : Platform.OS === 'web'
+              ? 'Use Chrome or Edge, or update your browser to enable screen sharing.'
+              : 'Rebuild the app with the screen-share broadcast extension enabled.',
       })
       return
     }
@@ -839,7 +841,7 @@ function MeetingRoomOverlay({
           caps={{
             ...caps,
             supportsVideo: true,
-            supportsScreenShare: true,
+            supportsScreenShare: Platform.OS !== 'android',
             supportsRecording: isHost && allowRecording && !!liveKit,
             supportsLiveCaptions: true,
           }}
