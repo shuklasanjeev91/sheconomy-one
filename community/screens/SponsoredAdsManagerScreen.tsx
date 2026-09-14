@@ -1,5 +1,7 @@
+import { useState } from 'react'
 import { AppLink } from '~/components/navigation/AppLink'
 
+import { BoostPostPickerSheet } from '~/community/components/BoostPostPickerSheet'
 import { CommunityPageHeader } from '~/community/components/CommunityPageHeader'
 import { CommunityShell } from '~/community/components/CommunityShell'
 import { useSponsoredCampaigns } from '~/community/hooks/useSponsoredCampaigns'
@@ -18,6 +20,7 @@ export function SponsoredAdsManagerScreen() {
   const toast = useAppToast()
   const { campaigns, isLoading, actingId, error, refresh, changeStatus } =
     useSponsoredCampaigns()
+  const [pickerOpen, setPickerOpen] = useState(false)
 
   async function act(
     campaign: SponsoredCampaign,
@@ -37,12 +40,16 @@ export function SponsoredAdsManagerScreen() {
         title="Ads Manager"
         subtitle="Manage sponsored posts, budgets, delivery, and results."
         actions={
-          <AppLink href={communityRoutes.home} asChild>
-            <Button tone="primary" icon={Icons.Megaphone}>
-              Choose a post to boost
-            </Button>
-          </AppLink>
+          <Button tone="primary" icon={Icons.Megaphone} onPress={() => setPickerOpen(true)}>
+            Choose a post to boost
+          </Button>
         }
+      />
+
+      <BoostPostPickerSheet
+        open={pickerOpen}
+        onOpenChange={setPickerOpen}
+        campaigns={campaigns}
       />
 
       {campaigns.some((campaign) =>
@@ -92,8 +99,11 @@ export function SponsoredAdsManagerScreen() {
             No campaigns yet
           </Text>
           <Text color={ui.textSecondary} textAlign="center">
-            Open one of your posts and choose Boost post to create a campaign.
+            Pick one of your public posts to promote it in the community feed.
           </Text>
+          <Button tone="primary" icon={Icons.Megaphone} onPress={() => setPickerOpen(true)}>
+            Choose a post to boost
+          </Button>
         </YStack>
       ) : (
         <YStack gap="$3">

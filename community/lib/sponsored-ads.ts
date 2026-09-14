@@ -98,6 +98,13 @@ export type SponsoredCampaignInput = {
   frequencyCapPerDay: number
 }
 
+export type BoostablePost = {
+  id: string
+  content: string
+  postType: string | null
+  createdAt: string | null
+}
+
 export type SponsoredFeedItem = {
   campaignId: string
   post: CommunityPost
@@ -166,6 +173,43 @@ export async function fetchSponsoredCampaigns(): Promise<ServiceResult<Sponsored
   return {
     data: error ? null : ((data ?? []) as unknown as SponsoredCampaign[]),
     error: error?.message ?? null,
+  }
+}
+
+/**
+ * Own public posts, the only ones `sponsored-campaigns` accepts for a boost.
+ * Drafts, deleted posts, and connection-only posts are rejected server side.
+ */
+export async function fetchBoostablePosts(
+  userId: string,
+  limit = 25,
+): Promise<ServiceResult<BoostablePost[]>> {
+  const { data, error } = await supabase
+    .from('posts')
+    .select('id, content, post_type, created_at')
+    .eq('user_id', userId)
+    .eq('is_deleted', false)
+    .eq('visibility', 'public')
+    .order('created_at', { ascending: false })
+    .limit(limit)
+
+  if (error) return { data: null, error: error.message }
+
+  const rows = (data ?? []) as Array<{
+    id: string
+    content: string | null
+    post_type: string | null
+    created_at: string | null
+  }>
+
+  return {
+    data: rows.map((row) => ({
+      id: row.id,
+      content: row.content ?? '',
+      postType: row.post_type ?? null,
+      createdAt: row.created_at,
+    })),
+    error: null,
   }
 }
 
