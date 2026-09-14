@@ -98,12 +98,14 @@ export function FaceCaptureOverlay({
         borderColor={ring}
         position="relative"
         alignSelf="center"
+        pointerEvents="none"
       >
         {Platform.OS !== 'web' ? (
           showCamera && cameraPermission?.granted ? (
             <ExpoCameraView
               ref={cameraRef}
               style={StyleSheet.absoluteFill}
+              pointerEvents="none"
               facing="front"
               mode="picture"
               mirror

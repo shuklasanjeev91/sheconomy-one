@@ -288,6 +288,7 @@ function VerificationFlow({
           flexGrow={fillHeight ? 1 : 0}
           flexShrink={1}
           flexBasis={fillHeight ? 0 : 'auto'}
+          zIndex={0}
           width="100%"
           minHeight={0}
           showsVerticalScrollIndicator={false}
@@ -406,6 +407,10 @@ function VerificationFlow({
           borderTopWidth={1}
           borderTopColor={ui.borderSubtle}
           backgroundColor={ui.surface}
+          position="relative"
+          zIndex={20}
+          elevation={20}
+          pointerEvents="auto"
         >
           {cameraBlocked ? (
             <Button

@@ -173,6 +173,9 @@ export const NativeFaceAnalyzer = forwardRef<NativeFaceAnalyzerHandle, NativeFac
         ref={webViewRef}
         source={{ html: getNativeAnalyzerHtml() }}
         onMessage={onMessage}
+        pointerEvents="none"
+        accessible={false}
+        importantForAccessibility="no-hide-descendants"
         originWhitelist={['*']}
         javaScriptEnabled
         domStorageEnabled
@@ -184,7 +187,6 @@ export const NativeFaceAnalyzer = forwardRef<NativeFaceAnalyzerHandle, NativeFac
           width: 1,
           height: 1,
           opacity: 0,
-          pointerEvents: 'none',
         }}
       />
     )
