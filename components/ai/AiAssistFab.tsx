@@ -5,7 +5,12 @@ import { useComposerState } from '~/community/lib/composer-store'
 import { Icons, YStack } from '~/components/ui'
 import { radius } from '~/config/tokens'
 import { useAppLayout } from '~/hooks/useAppLayout'
-import { isChatConversationPath, isChatPath, isCreatePostPath } from '~/lib/routes'
+import {
+  isChatConversationPath,
+  isChatPath,
+  isCoWorkLivePath,
+  isCreatePostPath,
+} from '~/lib/routes'
 import { useAppUi } from '~/lib/theme/useAppUi'
 import { useAiAssist } from '~/providers/AiAssistProvider'
 
@@ -25,7 +30,14 @@ export function AiAssistFab() {
   const { open: composerOpen } = useComposerState()
   const { isDesktop, mobileTabBarOffset, safeRight, safeBottom } = useAppLayout()
 
-  if (open || composerOpen || isCreatePostPath(pathname ?? '')) return null
+  if (
+    open ||
+    composerOpen ||
+    isCreatePostPath(pathname ?? '') ||
+    isCoWorkLivePath(pathname ?? '')
+  ) {
+    return null
+  }
 
   // Mobile chat list also shows the PenSquare compose FAB at the same corner.
   const stackAboveChatCompose =

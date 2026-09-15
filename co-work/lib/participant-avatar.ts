@@ -43,5 +43,11 @@ export function isCameraTileOff(input: {
 }
 
 export function participantDisplayName(participant: Participant | null | undefined): string {
-  return participant?.name?.trim() || participant?.identity || 'Participant'
+  const name = participant?.name?.trim()
+  if (name && !/^user_[a-z0-9]+$/i.test(name)) return name
+  const identity = participant?.identity?.trim()
+  if (!identity || /^user_[a-z0-9]+$/i.test(identity) || /^[0-9a-f-]{32,36}$/i.test(identity)) {
+    return 'Guest'
+  }
+  return identity
 }

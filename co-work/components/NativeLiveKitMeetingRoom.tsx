@@ -37,6 +37,7 @@ import { fetchLiveKitCredentials } from '~/co-work/lib/livekit'
 import { getLiveKitRoomOptions } from '~/co-work/lib/livekit-room-options'
 import { bindRemoteScreenShareQuality } from '~/co-work/lib/livekit-screen-share'
 import { composeMeetingStageTracks } from '~/co-work/lib/meeting-stage-tracks'
+import { meetingGalleryLayout } from '~/co-work/lib/meeting-gallery-layout'
 import { useCoWorkTheme } from '~/co-work/lib/theme'
 import { fetchLiveKitConfig, type LiveKitConfig } from '~/lib/livekit/config'
 import { ensureLiveKitGlobals } from '~/lib/livekit/ensure-globals'
@@ -379,8 +380,6 @@ function NativeMeetingVideoStage() {
   const pipTrack = layoutState.pipTrack
   const hasScreenShare = layoutState.hasScreenShare
   const isLocalScreenSharing = layoutState.isLocalScreenSharing
-  // Three equal full-width rows — only for the 3-person gallery case.
-  const isThreeStack = !hasScreenShare && stageTracks.length === 3
 
   const useWideLayout = isDesktop || isTablet || width >= 768
   const topInset = Math.max(safeTop, 12) + HEADER_CLEARANCE
@@ -388,6 +387,10 @@ function NativeMeetingVideoStage() {
   const horizontalPad = useWideLayout ? 20 : 12
   const stageWidth = Math.max(width - horizontalPad * 2, 160)
   const stageHeight = Math.max(height - topInset - bottomInset, 180)
+  const gallery = meetingGalleryLayout(stageTracks.length, {
+    width: stageWidth,
+    height: stageHeight,
+  })
 
   return (
     <YStack
@@ -421,81 +424,54 @@ function NativeMeetingVideoStage() {
         </YStack>
       ) : (
         <YStack flex={1} width="100%" height="100%" position="relative">
-          {isThreeStack ? (
-            <YStack flex={1} width="100%" height="100%" gap={STAGE_GAP}>
-              {stageTracks.map((trackRef) => {
-                const isScreen =
-                  trackRef.source === Track.Source.ScreenShare ||
-                  (isTrackReference(trackRef) &&
-                    trackRef.publication.source === Track.Source.ScreenShare)
-                const name = participantDisplayName(trackRef.participant)
-                const tileHeight = Math.max(Math.floor((stageHeight - STAGE_GAP * 2) / 3), 100)
+          <XStack
+            flex={1}
+            width="100%"
+            flexWrap={hasScreenShare ? 'nowrap' : 'wrap'}
+            alignContent={hasScreenShare || stageTracks.length <= 1 ? 'stretch' : 'center'}
+            justifyContent="center"
+            gap={STAGE_GAP}
+          >
+            {stageTracks.map((trackRef, index) => {
+              const isScreen =
+                trackRef.source === Track.Source.ScreenShare ||
+                (isTrackReference(trackRef) &&
+                  trackRef.publication.source === Track.Source.ScreenShare)
+              const name = participantDisplayName(trackRef.participant)
 
-                return (
-                  <YStack key={
+              // Screen-share focus fills the stage. Camera galleries share one
+              // responsive layout with web: 2×2 for three/four on portrait devices.
+              const tileWidth = hasScreenShare
+                ? stageWidth
+                : Math.floor(
+                    (stageWidth - STAGE_GAP * Math.max(gallery.columns - 1, 0)) /
+                      gallery.columns,
+                  )
+              const tileHeight = hasScreenShare
+                ? index === 0
+                  ? stageHeight
+                  : Math.floor(stageHeight / 3)
+                : Math.floor(
+                    (stageHeight - STAGE_GAP * Math.max(gallery.rows - 1, 0)) /
+                      gallery.rows,
+                  )
+
+              return (
+                <NativeVideoTile
+                  key={
                     (isTrackReference(trackRef) ? trackRef.publication.trackSid : null) ??
                     `${trackRef.participant.identity}-${trackRef.source}`
-                  } flex={1} width="100%" minHeight={0}>
-                    <NativeVideoTile
-                      trackRef={trackRef}
-                      name={name}
-                      isScreen={isScreen}
-                      width={stageWidth}
-                      height={tileHeight}
-                      radius={14}
-                      fill
-                    />
-                  </YStack>
-                )
-              })}
-            </YStack>
-          ) : (
-            <XStack
-              flex={1}
-              width="100%"
-              flexWrap={hasScreenShare ? 'nowrap' : 'wrap'}
-              alignContent={hasScreenShare || stageTracks.length <= 1 ? 'stretch' : 'center'}
-              justifyContent="center"
-              gap={STAGE_GAP}
-            >
-              {stageTracks.map((trackRef, index) => {
-                const isScreen =
-                  trackRef.source === Track.Source.ScreenShare ||
-                  (isTrackReference(trackRef) &&
-                    trackRef.publication.source === Track.Source.ScreenShare)
-                const name = participantDisplayName(trackRef.participant)
-
-                // Screen-share focus: first tile fills the stage; extras stack below if any.
-                const tileWidth = hasScreenShare
-                  ? stageWidth
-                  : stageTracks.length <= 1
-                    ? stageWidth
-                    : Math.floor((stageWidth - STAGE_GAP) / 2)
-                const tileHeight = hasScreenShare
-                  ? index === 0
-                    ? stageHeight
-                    : Math.floor(stageHeight / 3)
-                  : stageTracks.length <= 1
-                    ? stageHeight
-                    : Math.floor((stageHeight - STAGE_GAP) / Math.ceil(stageTracks.length / 2))
-
-                return (
-                  <NativeVideoTile
-                    key={
-                      (isTrackReference(trackRef) ? trackRef.publication.trackSid : null) ??
-                      `${trackRef.participant.identity}-${trackRef.source}`
-                    }
-                    trackRef={trackRef}
-                    name={name}
-                    isScreen={isScreen}
-                    width={tileWidth}
-                    height={Math.max(tileHeight, 120)}
-                    radius={hasScreenShare && index === 0 ? coworkUi.radius.tile : 14}
-                  />
-                )
-              })}
-            </XStack>
-          )}
+                  }
+                  trackRef={trackRef}
+                  name={name}
+                  isScreen={isScreen}
+                  width={tileWidth}
+                  height={Math.max(tileHeight, 100)}
+                  radius={hasScreenShare && index === 0 ? coworkUi.radius.tile : 14}
+                />
+              )
+            })}
+          </XStack>
 
           {pipTrack ? (
             <YStack
@@ -555,7 +531,6 @@ function NativeVideoTile({
   height,
   radius,
   compact,
-  fill,
 }: {
   trackRef: import('@livekit/components-core').TrackReferenceOrPlaceholder
   name: string
@@ -564,8 +539,6 @@ function NativeVideoTile({
   height: number
   radius: number
   compact?: boolean
-  /** When true, tile stretches to fill a flex parent (used by the 3-person stack). */
-  fill?: boolean
 }) {
   const { ui: coworkUi } = useCoWorkTheme()
   const avatarUrl = getParticipantAvatarUrl(trackRef.participant)
@@ -601,9 +574,8 @@ function NativeVideoTile({
 
   return (
     <YStack
-      width={fill ? '100%' : width}
-      height={fill ? '100%' : height}
-      flex={fill ? 1 : undefined}
+      width={width}
+      height={height}
       maxWidth="100%"
       borderRadius={radius}
       overflow="hidden"
