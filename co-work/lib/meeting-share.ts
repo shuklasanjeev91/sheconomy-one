@@ -1,12 +1,8 @@
 import type { SharePayload } from '~/lib/share'
 import { getMeetingShareUrl } from '~/lib/share'
 
+import { formatMeetingCode } from '~/co-work/lib/meetings'
 import type { Meeting } from '~/co-work/lib/types'
-
-function formatMeetingCode(code: string): string {
-  const clean = code.replace(/\s/g, '').toUpperCase()
-  return `${clean.slice(0, 3)} ${clean.slice(3, 6)} ${clean.slice(6)}`.trim()
-}
 
 function meetingDateTime(meeting: Meeting): { date: string; time: string } {
   const raw = meeting.scheduled_at ?? meeting.started_at

@@ -150,12 +150,15 @@ export async function ensureMeetingRoomId(meeting: Meeting): Promise<Meeting> {
   return { ...mapMeeting(data as Record<string, unknown>), room_id: roomId as string }
 }
 
+/** Listed statuses — `ended` stays visible until the 24h retention window closes. */
+const LISTED_MEETING_STATUSES = ['scheduled', 'instant', 'active', 'ended'] as const
+
 export async function fetchHostedMeetings(userId: string): Promise<Meeting[]> {
   const { data, error } = await supabase
     .from('meetings')
     .select(MEETING_SELECT)
     .eq('host_id', userId)
-    .in('status', ['scheduled', 'instant', 'active'])
+    .in('status', LISTED_MEETING_STATUSES)
     .order('scheduled_at', { ascending: true, nullsFirst: false })
     .limit(50)
 
@@ -205,7 +208,7 @@ export async function fetchMyMeetings(userId: string): Promise<Meeting[]> {
     .from('meetings')
     .select(MEETING_SELECT)
     .in('id', invitedIds)
-    .in('status', ['scheduled', 'instant', 'active'])
+    .in('status', LISTED_MEETING_STATUSES)
     .order('scheduled_at', { ascending: true, nullsFirst: false })
 
   const invited = filterMeetingsWithinRetention(
@@ -231,17 +234,44 @@ export async function fetchUpcomingMeetings(): Promise<Meeting[]> {
   )
 }
 
+/** Strip separators so `ABC-DEF-GHI`, `abc def ghi` and `ABCDEFGHI` compare equal. */
+export function normalizeMeetingCode(code: string): string {
+  return code.replace(/[^a-zA-Z0-9]/g, '').toUpperCase()
+}
+
+/**
+ * Codes are persisted in two shapes — older rows use `ABC-DEF-GHI`, newer ones
+ * `ABCDEFGHI` — while recent-code chips and typed input arrive stripped. Match
+ * every shape so a dashed meeting still resolves from a plain code.
+ */
+export function meetingCodeVariants(code: string): string[] {
+  const plain = normalizeMeetingCode(code)
+  if (!plain) return []
+
+  const variants = new Set<string>([plain])
+  const asTyped = code.trim().toUpperCase()
+  if (asTyped) variants.add(asTyped)
+  if (plain.length === 9) {
+    variants.add(`${plain.slice(0, 3)}-${plain.slice(3, 6)}-${plain.slice(6)}`)
+  }
+  return [...variants]
+}
+
 export async function fetchMeetingByCode(code: string): Promise<Meeting | null> {
-  const normalized = code.trim().toUpperCase()
+  const candidates = meetingCodeVariants(code)
+  if (!candidates.length) return null
+
   const { data, error } = await supabase
     .from('meetings')
     .select(MEETING_SELECT)
-    .eq('meeting_code', normalized)
-    .maybeSingle()
+    .in('meeting_code', candidates)
+    .order('created_at', { ascending: false })
+    .limit(1)
 
   if (error) throw new Error(error.message)
-  if (!data) return null
-  const meeting = mapMeeting(data as Record<string, unknown>)
+  const row = data?.[0]
+  if (!row) return null
+  const meeting = mapMeeting(row as Record<string, unknown>)
   if (!meeting.room_id) return ensureMeetingRoomId(meeting)
   return meeting
 }
@@ -401,7 +431,10 @@ export async function expireHostedMeetingsPastRetention(
   nowMs = Date.now(),
 ): Promise<void> {
   const expiredHosted = meetings.filter(
-    (meeting) => meeting.host_id === hostUserId && isMeetingPastRetention(meeting, nowMs),
+    (meeting) =>
+      meeting.host_id === hostUserId &&
+      meeting.status !== 'ended' &&
+      isMeetingPastRetention(meeting, nowMs),
   )
   if (!expiredHosted.length) return
 
@@ -616,7 +649,7 @@ export async function sendMeetingChatMessage(
 export { getMeetingShareUrl } from '~/lib/share/urls'
 
 export function formatMeetingCode(code: string): string {
-  const clean = code.replace(/\s/g, '').toUpperCase()
+  const clean = normalizeMeetingCode(code)
   if (clean.length <= 3) return clean
   return `${clean.slice(0, 3)} ${clean.slice(3, 6)} ${clean.slice(6)}`.trim()
 }

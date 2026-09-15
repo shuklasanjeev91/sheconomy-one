@@ -50,6 +50,11 @@ function statusTone(status: Meeting['status']) {
   }
 }
 
+/** Ended rooms stay listed for 24h so hosts can still open recordings. */
+function isRejoinable(status: Meeting['status']) {
+  return status !== 'ended' && status !== 'cancelled'
+}
+
 export function CoWorkMeetingsScreen() {
   const { ui: coworkUi, gradients: coworkGradients, shadows: coworkShadows } = useCoWorkTheme()
   const router = useRouter()
@@ -139,7 +144,7 @@ export function CoWorkMeetingsScreen() {
         <YStack gap="$3">
           <CoWorkBrandChip label="YOUR MEETINGS" />
           <Text fontSize={30} fontWeight="800" color={coworkUi.text} letterSpacing={-0.8}>
-            Upcoming & active
+            Upcoming & recent
           </Text>
           <Text color={coworkUi.textSecondary} lineHeight={22}>
             Meetings you host on {BRAND_NAME}
@@ -196,33 +201,35 @@ export function CoWorkMeetingsScreen() {
                 <CoWorkStatusPill label={meeting.status} tone={statusTone(meeting.status)} />
               </XStack>
               <XStack gap="$2" flexWrap="wrap">
-                <Button
-                  tone="primary"
-                  size="$3"
-                  borderRadius={999}
-                  onPress={() => {
-                    void (async () => {
-                      const perms = await ensureMeetingMediaPermissions()
-                      if (!perms.ok) {
-                        toast.show('Camera & microphone required', {
-                          tone: 'error',
-                          message: perms.message,
-                        })
-                        return
-                      }
-                      if (Platform.OS === 'web') {
-                        navigateApp(coWorkRoutes.meetingLive(meeting.meeting_code))
-                      } else {
-                        openInstantMeetingSession({
-                          code: meeting.meeting_code,
-                          meeting,
-                        })
-                      }
-                    })()
-                  }}
-                >
-                  Start
-                </Button>
+                {isRejoinable(meeting.status) ? (
+                  <Button
+                    tone="primary"
+                    size="$3"
+                    borderRadius={999}
+                    onPress={() => {
+                      void (async () => {
+                        const perms = await ensureMeetingMediaPermissions()
+                        if (!perms.ok) {
+                          toast.show('Camera & microphone required', {
+                            tone: 'error',
+                            message: perms.message,
+                          })
+                          return
+                        }
+                        if (Platform.OS === 'web') {
+                          navigateApp(coWorkRoutes.meetingLive(meeting.meeting_code))
+                        } else {
+                          openInstantMeetingSession({
+                            code: meeting.meeting_code,
+                            meeting,
+                          })
+                        }
+                      })()
+                    }}
+                  >
+                    Start
+                  </Button>
+                ) : null}
                 <Button
                   tone="outline"
                   size="$3"
@@ -230,7 +237,7 @@ export function CoWorkMeetingsScreen() {
                   borderColor={coworkUi.glassBorder}
                   onPress={() => navigateApp(coWorkRoutes.meeting(meeting.meeting_code))}
                 >
-                  Lobby
+                  {isRejoinable(meeting.status) ? 'Lobby' : 'Details'}
                 </Button>
                 {meeting.status === 'scheduled' ? (
                   <Button
