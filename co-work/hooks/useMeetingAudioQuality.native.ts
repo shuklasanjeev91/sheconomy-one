@@ -11,6 +11,11 @@ import {
   type MeetingAudioQuality,
   type MeetingMicrophonePermission,
 } from '~/co-work/lib/meeting-audio-quality'
+import {
+  configureLiveKitCallAudio,
+  getActiveCallMediaMode,
+  toggleCallSpeaker,
+} from '~/co-work/lib/livekit-call-audio'
 
 function createSpeakerTestWaveBase64(): string {
   const sampleRate = 8000
@@ -50,6 +55,7 @@ export function useMeetingAudioQuality(
   room: Room,
   localParticipant: LocalParticipant,
   audioEnabled: boolean,
+  speakerOn: boolean,
 ): MeetingAudioQuality {
   const [connectionStatus, setConnectionStatus] = useState(() =>
     deriveMeetingConnectionStatus(room.state, localParticipant.connectionQuality),
@@ -139,6 +145,7 @@ export function useMeetingAudioQuality(
   const testSpeaker = useCallback(async () => {
     setError(null)
     setSpeakerTesting(true)
+    const mediaMode = getActiveCallMediaMode()
     let player: { play: () => void; remove: () => void } | null = null
     try {
       const [FileSystem, Audio] = await Promise.all([
@@ -161,9 +168,17 @@ export function useMeetingAudioQuality(
       } catch {
         // Best-effort cleanup.
       }
+      // expo-audio can replace the native call audio session. Re-assert
+      // LiveKit communication mode and the user's selected output route.
+      try {
+        await configureLiveKitCallAudio(mediaMode)
+        await toggleCallSpeaker(speakerOn)
+      } catch {
+        // The room may already be closing.
+      }
       setSpeakerTesting(false)
     }
-  }, [])
+  }, [speakerOn])
 
   return {
     connectionStatus,

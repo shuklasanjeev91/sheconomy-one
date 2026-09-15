@@ -79,7 +79,12 @@ export function useLiveKitMediaControls(preferSpeaker = true): LiveKitMediaContr
     useLocalParticipant()
   const [speakerOn, setSpeakerOn] = useState(preferSpeaker)
   const videoEffects = useMeetingVideoEffects()
-  const audioQuality = useMeetingAudioQuality(room, localParticipant, isMicrophoneEnabled)
+  const audioQuality = useMeetingAudioQuality(
+    room,
+    localParticipant,
+    isMicrophoneEnabled,
+    speakerOn,
+  )
   const muteInFlightRef = useRef(false)
 
   useEffect(() => {
