@@ -3,6 +3,7 @@ import { useState } from 'react'
 import { Avatar, Button, Icons, Spinner, Text, XStack, YStack, useAppToast } from '~/components/ui'
 import { useCoWorkTheme } from '~/co-work/lib/theme'
 import type { MeetingParticipant } from '~/co-work/lib/types'
+import { safeMeetingDisplayName } from '~/co-work/lib/meeting-display-name'
 
 type MeetingWaitingRoomRequestsProps = {
   participants: MeetingParticipant[]
@@ -25,7 +26,10 @@ export function MeetingWaitingRoomRequests({
   const first = participants[0]
   if (!first) return null
 
-  const name = first.profile?.full_name || first.profile?.username || 'A participant'
+  const name = safeMeetingDisplayName(
+    first.display_name || first.profile?.full_name || first.profile?.username,
+    'A participant',
+  )
   const remaining = participants.length - 1
 
   const run = async (action: 'admit' | 'reject' | 'all', task: () => Promise<void>) => {

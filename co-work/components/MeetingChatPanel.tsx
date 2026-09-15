@@ -5,6 +5,7 @@ import { CoWorkPanelShell } from '~/co-work/components/CoWorkUi'
 import { MeetingPanelHeader } from '~/co-work/components/MeetingPanelHeader'
 import { useCoWorkTheme } from '~/co-work/lib/theme'
 import type { MeetingChatMessage } from '~/co-work/lib/types'
+import { safeMeetingDisplayName } from '~/co-work/lib/meeting-display-name'
 
 type MeetingChatPanelProps = {
   messages: MeetingChatMessage[]
@@ -12,9 +13,17 @@ type MeetingChatPanelProps = {
   onClose: () => void
   fullWidth?: boolean
   currentUserId?: string
+  participantDisplayNames?: Record<string, string>
 }
 
-export function MeetingChatPanel({ messages, onSend, onClose, fullWidth, currentUserId }: MeetingChatPanelProps) {
+export function MeetingChatPanel({
+  messages,
+  onSend,
+  onClose,
+  fullWidth,
+  currentUserId,
+  participantDisplayNames = {},
+}: MeetingChatPanelProps) {
   const { ui: coworkUi, gradients: coworkGradients, shadows: coworkShadows } = useCoWorkTheme()
   const [draft, setDraft] = useState('')
 
@@ -53,11 +62,16 @@ export function MeetingChatPanel({ messages, onSend, onClose, fullWidth, current
           ) : null}
           {messages.map((msg) => {
             const isSelf = currentUserId ? msg.sender_id === currentUserId : false
+            const senderName = safeMeetingDisplayName(
+              participantDisplayNames[msg.sender_id] ||
+                msg.sender?.full_name ||
+                msg.sender?.username,
+            )
             return (
               <XStack key={msg.id} gap="$2" alignItems="flex-end" justifyContent={isSelf ? 'flex-end' : 'flex-start'}>
                 {!isSelf ? (
                   <Avatar
-                    name={msg.sender?.full_name || msg.sender?.username || 'User'}
+                    name={senderName}
                     src={msg.sender?.avatar_url ?? undefined}
                     size="$3"
                   />
@@ -76,7 +90,7 @@ export function MeetingChatPanel({ messages, onSend, onClose, fullWidth, current
                 >
                   {!isSelf ? (
                     <Text fontSize={11} fontWeight="700" color={coworkUi.brandLight}>
-                      {msg.sender?.full_name || msg.sender?.username || 'Member'}
+                      {senderName}
                     </Text>
                   ) : null}
                   <Text fontSize={14} color={coworkUi.text} lineHeight={20}>

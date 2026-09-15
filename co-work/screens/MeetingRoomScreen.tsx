@@ -91,6 +91,7 @@ export function MeetingRoomScreen(props: MeetingRoomScreenProps) {
   const presence = useMeetingPresence({
     meeting: props.meeting,
     userId: props.userId,
+    displayName: props.displayName,
     isHost: props.isHost,
     enabled: true,
   })
@@ -318,6 +319,19 @@ function MeetingRoomOverlay({
   const autoRecord = !!meeting.meeting_options?.autoRecord && isHost && allowRecording
   const admittedCount = presence.participants.filter((p) => p.status === 'admitted').length
   const waitingCount = presence.waitingParticipants.length
+  const participantDisplayNames = useMemo(
+    () =>
+      Object.fromEntries(
+        presence.participants.map((participant) => [
+          participant.user_id,
+          participant.display_name ||
+            participant.profile?.full_name ||
+            participant.profile?.username ||
+            'Guest',
+        ]),
+      ),
+    [presence.participants],
+  )
   const roomy = isTablet || isDesktop
   const narrowPhone = isMobile && !isTablet && !isDesktop
 
@@ -960,6 +974,7 @@ function MeetingRoomOverlay({
           <MeetingChatPanel
             messages={presence.chatMessages}
             currentUserId={userId}
+            participantDisplayNames={participantDisplayNames}
             onSend={(text) => void presence.sendChat(text)}
             onClose={() => presence.setPanel('none')}
             fullWidth={panelFullWidth}

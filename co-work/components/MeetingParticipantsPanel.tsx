@@ -5,6 +5,7 @@ import { CoWorkPanelShell, CoWorkSectionLabel } from '~/co-work/components/CoWor
 import { MeetingPanelHeader } from '~/co-work/components/MeetingPanelHeader'
 import { useCoWorkTheme } from '~/co-work/lib/theme'
 import type { MeetingParticipant } from '~/co-work/lib/types'
+import { safeMeetingDisplayName } from '~/co-work/lib/meeting-display-name'
 
 type MeetingParticipantsPanelProps = {
   participants: MeetingParticipant[]
@@ -149,7 +150,11 @@ function ParticipantRow({
   handRaised?: boolean
 }) {
   const { ui: coworkUi } = useCoWorkTheme()
-  const name = participant.profile?.full_name || participant.profile?.username || 'Member'
+  const name = safeMeetingDisplayName(
+    participant.display_name ||
+      participant.profile?.full_name ||
+      participant.profile?.username,
+  )
 
   return (
     <XStack

@@ -154,6 +154,7 @@ export function ChatCallScreen({ code, callType, callId, needsAnswer = false }: 
           meeting!.host_id === user!.id,
           false,
           meetingSessionIdRef.current,
+          profile?.full_name || profile?.username || 'Guest',
         )
         if (!cancelled) setJoined(true)
       } catch (joinError) {
@@ -165,7 +166,7 @@ export function ChatCallScreen({ code, callType, callId, needsAnswer = false }: 
     return () => {
       cancelled = true
     }
-  }, [meeting, user, awaitingAnswer])
+  }, [awaitingAnswer, meeting, profile?.full_name, profile?.username, user])
 
   useEffect(() => {
     if (!joined) return

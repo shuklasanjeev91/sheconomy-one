@@ -25,10 +25,12 @@ import {
 import type { Meeting, MeetingChatMessage, MeetingParticipant, SignalPayload } from '~/co-work/lib/types'
 import type { LiveCaptionLine } from '~/co-work/lib/live-captions'
 import type { FloatingMeetingReaction } from '~/co-work/lib/meeting-reactions'
+import { safeMeetingDisplayName } from '~/co-work/lib/meeting-display-name'
 
 type UseMeetingPresenceOptions = {
   meeting: Meeting
   userId: string
+  displayName: string
   isHost: boolean
   enabled: boolean
 }
@@ -43,6 +45,7 @@ const POLL_INTERVAL_MS = 4000
 export function useMeetingPresence({
   meeting,
   userId,
+  displayName,
   isHost,
   enabled,
 }: UseMeetingPresenceOptions) {
@@ -103,10 +106,12 @@ export function useMeetingPresence({
     setParticipants(rows)
     displayNameByUserRef.current = Object.fromEntries(
       rows.map((row) => {
-        const name =
-          row.profile?.full_name?.trim() ||
-          row.profile?.username?.trim() ||
-          'Participant'
+        const name = safeMeetingDisplayName(
+          row.display_name?.trim() ||
+            row.profile?.full_name?.trim() ||
+            row.profile?.username?.trim(),
+          'Participant',
+        )
         return [row.user_id, name]
       }),
     )
@@ -132,7 +137,10 @@ export function useMeetingPresence({
 
       setUnreadChatCount((count) => count + 1)
       const senderName =
-        message.sender?.full_name || message.sender?.username || 'Someone'
+        displayNameByUserRef.current[message.sender_id] ||
+        message.sender?.full_name ||
+        message.sender?.username ||
+        'Someone'
       setLatestChatNotice({
         id: message.id,
         title: `${senderName} in chat`,
@@ -267,7 +275,14 @@ export function useMeetingPresence({
 
     try {
       const waitingRoom = !isHost && !!meeting.security_settings?.waitingRoom
-      await joinMeetingParticipant(meeting.id, userId, isHost, waitingRoom, sessionIdRef.current)
+      await joinMeetingParticipant(
+        meeting.id,
+        userId,
+        isHost,
+        waitingRoom,
+        sessionIdRef.current,
+        displayName,
+      )
       // `ended` included: the host reopening a finished meeting restarts it.
       if (isHost && meeting.status !== 'active') {
         await startMeeting(meeting.id)
@@ -336,6 +351,7 @@ export function useMeetingPresence({
     }
   }, [
     enabled,
+    displayName,
     handleSignal,
     handleConnectionState,
     ingestRemoteChatMessage,

@@ -7,6 +7,8 @@ import { ensureMeetingMediaPermissions } from '~/co-work/lib/meeting-media-permi
 import { fetchMeetingByCode } from '~/co-work/lib/meetings'
 import type { Meeting } from '~/co-work/lib/types'
 import { MeetingRoomScreen } from '~/co-work/screens/MeetingRoomScreen'
+import { MeetingJoinScreen } from '~/co-work/components/MeetingJoinScreen'
+import { formatMeetingCode } from '~/co-work/lib/meetings'
 import { useCoWorkTheme } from '~/co-work/lib/theme'
 import { useProfile } from '~/hooks/useProfile'
 import { AuthSignInFlow } from '~/components/auth/AuthSignInFlow'
@@ -22,7 +24,7 @@ type MeetingLiveScreenProps = {
 }
 
 /**
- * Instant / live meeting entry: permissions → load meeting → join room.
+ * Instant / live meeting entry: load → confirm identity/devices → permissions → room.
  * Kept separate from the lobby so LiveKit only loads on the live path.
  */
 export function MeetingLiveScreen({
@@ -33,10 +35,11 @@ export function MeetingLiveScreen({
   const { ui: coworkUi } = useCoWorkTheme()
   const { profile, user, isAuthenticated, isLoading } = useProfile()
   const [meeting, setMeeting] = useState<Meeting | null>(initialMeeting)
-  const [phase, setPhase] = useState<'permissions' | 'loading' | 'ready' | 'error'>(
-    initialMeeting ? 'permissions' : 'permissions'
+  const [phase, setPhase] = useState<'loading' | 'confirm' | 'joining' | 'ready' | 'error'>(
+    initialMeeting ? 'confirm' : 'loading',
   )
   const [error, setError] = useState<string | null>(null)
+  const [confirmedDisplayName, setConfirmedDisplayName] = useState('')
 
   const normalizedCode = code.replace(/\s/g, '').trim()
 
@@ -45,22 +48,15 @@ export function MeetingLiveScreen({
     navigateApp(coWorkRoutes.home)
   }, [onExit])
 
-  const boot = useCallback(async () => {
+  const loadMeeting = useCallback(async () => {
     if (!normalizedCode) {
       setPhase('error')
       setError('Missing meeting code. Go back to Co-Work and try again.')
       return
     }
 
-    setPhase('permissions')
+    setPhase('loading')
     setError(null)
-
-    const perms = await ensureMeetingMediaPermissions()
-    if (!perms.ok) {
-      setPhase('error')
-      setError(perms.message ?? 'Camera and microphone permission is required.')
-      return
-    }
 
     if (initialMeeting && initialMeeting.meeting_code.replace(/\s/g, '').trim() === normalizedCode) {
       if (initialMeeting.status === 'cancelled') {
@@ -69,7 +65,7 @@ export function MeetingLiveScreen({
         return
       }
       setMeeting(initialMeeting)
-      setPhase('ready')
+      setPhase('confirm')
       return
     }
 
@@ -87,16 +83,30 @@ export function MeetingLiveScreen({
         return
       }
       setMeeting(row)
-      setPhase('ready')
+      setPhase('confirm')
     } catch (loadError) {
       setPhase('error')
       setError(loadError instanceof Error ? loadError.message : 'Failed to load meeting')
     }
   }, [normalizedCode, initialMeeting])
 
+  const joinMeeting = useCallback(async (displayName: string) => {
+    setPhase('joining')
+    setError(null)
+    const permissions = await ensureMeetingMediaPermissions()
+    if (!permissions.ok) {
+      const message = permissions.message ?? 'Microphone permission is required to join.'
+      setError(message)
+      setPhase('error')
+      throw new Error(message)
+    }
+    setConfirmedDisplayName(displayName)
+    setPhase('ready')
+  }, [])
+
   useEffect(() => {
-    void boot()
-  }, [boot])
+    void loadMeeting()
+  }, [loadMeeting])
 
   if (isLoading && !user) {
     return (
@@ -113,12 +123,26 @@ export function MeetingLiveScreen({
     return <AuthSignInFlow returnTo={String(coWorkRoutes.meetingLive(normalizedCode || code))} />
   }
 
+  if (phase === 'confirm' && meeting) {
+    return (
+      <MeetingJoinScreen
+        meetingTitle={meeting.title}
+        meetingCode={formatMeetingCode(meeting.meeting_code)}
+        profileName={profile?.full_name || profile?.username || 'Guest'}
+        email={user.email ?? null}
+        avatarUrl={profile?.avatar_url}
+        onJoin={joinMeeting}
+        onBack={exitMeeting}
+      />
+    )
+  }
+
   if (phase === 'ready' && meeting) {
     return (
       <MeetingRoomScreen
         meeting={meeting}
         userId={user.id}
-        displayName={profile?.full_name || profile?.username || 'You'}
+        displayName={confirmedDisplayName || profile?.full_name || profile?.username || 'Guest'}
         avatarUrl={profile?.avatar_url}
         isHost={meeting.host_id === user.id}
         onLeave={exitMeeting}
@@ -136,7 +160,18 @@ export function MeetingLiveScreen({
           {error ?? 'Something went wrong'}
         </Text>
         <YStack gap="$3" width="100%" maxWidth={360}>
-          <Button tone="primary" borderRadius={999} onPress={() => void boot()}>
+          <Button
+            tone="primary"
+            borderRadius={999}
+            onPress={() => {
+              if (meeting) {
+                setError(null)
+                setPhase('confirm')
+              } else {
+                void loadMeeting()
+              }
+            }}
+          >
             Try again
           </Button>
           {onExit ? (
@@ -159,9 +194,7 @@ export function MeetingLiveScreen({
     <ScreenCenter backgroundColor="#0c080a">
       <Spinner size="large" color={coworkUi.brand} />
       <Text color={coworkUi.textSecondary} marginTop="$3" textAlign="center" paddingHorizontal="$6">
-        {phase === 'permissions'
-          ? 'Allow camera and microphone to continue…'
-          : 'Starting meeting…'}
+        {phase === 'joining' ? 'Checking camera and microphone…' : 'Loading meeting…'}
       </Text>
     </ScreenCenter>
   )

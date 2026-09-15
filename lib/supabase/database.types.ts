@@ -7179,6 +7179,7 @@ export type Database = {
       meeting_participants: {
         Row: {
           created_at: string | null
+          display_name: string | null
           id: string
           is_host: boolean | null
           is_muted: boolean | null
@@ -7195,6 +7196,7 @@ export type Database = {
         }
         Insert: {
           created_at?: string | null
+          display_name?: string | null
           id?: string
           is_host?: boolean | null
           is_muted?: boolean | null
@@ -7211,6 +7213,7 @@ export type Database = {
         }
         Update: {
           created_at?: string | null
+          display_name?: string | null
           id?: string
           is_host?: boolean | null
           is_muted?: boolean | null
@@ -17605,6 +17608,14 @@ export type Database = {
       }
       leave_meeting_participant: {
         Args: { meeting_id_input: string; session_id_input: string }
+        Returns: undefined
+      }
+      set_meeting_participant_display_name: {
+        Args: {
+          display_name_input: string
+          meeting_id_input: string
+          session_id_input: string
+        }
         Returns: undefined
       }
       update_meeting_participant_media: {

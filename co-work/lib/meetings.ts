@@ -2,6 +2,7 @@ import { supabase } from '~/lib/supabase/client'
 import { INVALIDATION_TOPICS, invalidateCache } from '~/lib/cache/invalidation'
 
 import { parseMeetingInvitees } from '~/co-work/lib/invites'
+import { normalizeMeetingDisplayName } from '~/co-work/lib/meeting-display-name'
 import type {
   CreateMeetingInput,
   Meeting,
@@ -14,7 +15,7 @@ const MEETING_SELECT =
   'id, title, description, meeting_code, host_id, status, scheduled_at, started_at, ended_at, time_zone, max_participants, room_id, security_settings, meeting_options, invitees, created_at, host:profiles!meetings_host_id_fkey(full_name, username, avatar_url)'
 
 const PARTICIPANT_SELECT =
-  'id, meeting_id, user_id, status, is_host, is_muted, is_video_off, joined_at, left_at, profile:profiles!meeting_participants_user_id_fkey(full_name, username, avatar_url)'
+  'id, meeting_id, user_id, display_name, status, is_host, is_muted, is_video_off, joined_at, left_at, profile:profiles!meeting_participants_user_id_fkey(full_name, username, avatar_url)'
 
 type MeetingTimeFields = Pick<Meeting, 'scheduled_at' | 'started_at' | 'created_at'>
 
@@ -96,6 +97,7 @@ function mapParticipant(row: Record<string, unknown>): MeetingParticipant {
     id: row.id as string,
     meeting_id: row.meeting_id as string,
     user_id: row.user_id as string,
+    display_name: (row.display_name as string | null) ?? null,
     status: row.status as MeetingParticipant['status'],
     is_host: (row.is_host as boolean | null) ?? null,
     is_muted: (row.is_muted as boolean | null) ?? null,
@@ -426,7 +428,10 @@ export async function joinMeetingParticipant(
   _isHost: boolean,
   _waitingRoom: boolean,
   sessionId: string,
+  displayName: string,
 ): Promise<MeetingParticipant> {
+  const cleanedDisplayName = normalizeMeetingDisplayName(displayName)
+  if (!cleanedDisplayName) throw new Error('Enter a valid display name before joining.')
   const { data, error } = await supabase.rpc('join_meeting_participant', {
     meeting_id_input: meetingId,
     session_id_input: sessionId,
@@ -441,7 +446,19 @@ export async function joinMeetingParticipant(
     }
     throw new Error(error.message)
   }
-  return mapParticipant(data as Record<string, unknown>)
+  const { error: displayNameError } = await supabase.rpc(
+    'set_meeting_participant_display_name',
+    {
+      meeting_id_input: meetingId,
+      session_id_input: sessionId,
+      display_name_input: cleanedDisplayName,
+    },
+  )
+  if (displayNameError) throw new Error(displayNameError.message)
+  return mapParticipant({
+    ...(data as Record<string, unknown>),
+    display_name: cleanedDisplayName,
+  })
 }
 
 async function reviewerId(): Promise<string | null> {

@@ -93,7 +93,14 @@ export function useMeetingSession({
 
     try {
       const waitingRoom = !isHost && !!meeting.security_settings?.waitingRoom
-      await joinMeetingParticipant(meeting.id, userId, isHost, waitingRoom, sessionIdRef.current)
+      await joinMeetingParticipant(
+        meeting.id,
+        userId,
+        isHost,
+        waitingRoom,
+        sessionIdRef.current,
+        displayName,
+      )
       // `ended` included: the host reopening a finished meeting restarts it.
       if (isHost && meeting.status !== 'active') await startMeeting(meeting.id)
 
@@ -201,6 +208,7 @@ export function useMeetingSession({
     }
   }, [
     caps.supportsVideo,
+    displayName,
     enabled,
     isHost,
     meeting,

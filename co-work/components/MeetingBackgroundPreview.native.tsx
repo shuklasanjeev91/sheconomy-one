@@ -24,6 +24,7 @@ type NativeEffectTrack = MediaStreamTrack & {
 
 export function MeetingBackgroundPreview() {
   const trackRef = useRef<LocalVideoTrack | null>(null)
+  const effectsSupportedRef = useRef(false)
   const [streamUrl, setStreamUrl] = useState<string | null>(null)
   const [selection, setSelection] = useState<VirtualBackgroundSelection>(OFF_BACKGROUND)
   const [busy, setBusy] = useState(true)
@@ -33,6 +34,10 @@ export function MeetingBackgroundPreview() {
     const next = await resolveVirtualBackgroundSelection(normalizeVirtualBackground(value))
     const track = trackRef.current?.mediaStreamTrack as NativeEffectTrack | undefined
     if (!track) return
+    if (!effectsSupportedRef.current && next.mode !== 'off') {
+      setError('Virtual backgrounds require the latest app build. Camera preview is still active.')
+      return
+    }
     setBusy(true)
     setError(null)
     try {
@@ -55,10 +60,8 @@ export function MeetingBackgroundPreview() {
     let cancelled = false
     void (async () => {
       try {
-        if (!MeetingVideoEffectsNative?.isSupported()) {
-          throw new Error('Install the latest SHEconomy build to use virtual backgrounds.')
-        }
-        MeetingVideoEffectsNative.registerProcessor()
+        effectsSupportedRef.current = !!MeetingVideoEffectsNative?.isSupported()
+        if (effectsSupportedRef.current) MeetingVideoEffectsNative?.registerProcessor()
         const track = await createLocalVideoTrack({
           resolution: { width: 640, height: 360, frameRate: 15 },
         })
@@ -69,8 +72,13 @@ export function MeetingBackgroundPreview() {
         trackRef.current = track
         const stream = new MediaStream([track.mediaStreamTrack as never])
         setStreamUrl(stream.toURL())
-        const saved = await loadVirtualBackgroundPreference()
-        await apply(saved)
+        if (effectsSupportedRef.current) {
+          const saved = await loadVirtualBackgroundPreference()
+          await apply(saved)
+        } else {
+          setError('Virtual backgrounds require the latest app build. Camera preview is still active.')
+          setBusy(false)
+        }
       } catch (cause) {
         setError(cause instanceof Error ? cause.message : 'Could not start camera preview.')
         setBusy(false)
@@ -80,6 +88,7 @@ export function MeetingBackgroundPreview() {
       cancelled = true
       const track = trackRef.current
       trackRef.current = null
+      effectsSupportedRef.current = false
       try {
         ;(track?.mediaStreamTrack as NativeEffectTrack | undefined)?._setVideoEffects([])
       } catch {

@@ -53,9 +53,6 @@ export function MeetingBackgroundPreview() {
     let cancelled = false
     void (async () => {
       try {
-        if (!supportsBackgroundProcessors()) {
-          throw new Error('Background effects are unavailable in this browser.')
-        }
         const track = await createLocalVideoTrack({
           resolution: { width: 640, height: 360, frameRate: 15 },
         })
@@ -64,10 +61,15 @@ export function MeetingBackgroundPreview() {
           return
         }
         trackRef.current = track
+        if (videoRef.current) track.attach(videoRef.current)
+        if (!supportsBackgroundProcessors()) {
+          setError('Background effects are unavailable in this browser. Camera preview is still active.')
+          setBusy(false)
+          return
+        }
         const processor = BackgroundProcessor({ mode: 'disabled', maxFps: 15 })
         await track.setProcessor(processor)
         processorRef.current = processor
-        if (videoRef.current) track.attach(videoRef.current)
         const saved = await loadVirtualBackgroundPreference()
         await apply(saved)
       } catch (cause) {

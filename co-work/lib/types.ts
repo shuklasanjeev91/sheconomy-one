@@ -80,6 +80,7 @@ export type MeetingParticipant = {
   id: string
   meeting_id: string
   user_id: string
+  display_name?: string | null
   status: ParticipantStatus
   is_host: boolean | null
   is_muted: boolean | null

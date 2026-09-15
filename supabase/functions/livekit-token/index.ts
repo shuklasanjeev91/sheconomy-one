@@ -51,7 +51,14 @@ Deno.serve(async (req) => {
     const meetingId = String(body.meetingId ?? '')
     const roomName = String(body.roomName ?? '')
     const participantUserId = String(body.participantUserId ?? '')
-    const displayName = String(body.displayName ?? 'Guest').slice(0, 80)
+    const requestedDisplayName = String(body.displayName ?? '').trim().slice(0, 80)
+    const displayName =
+      /^user_[a-z0-9]+$/i.test(requestedDisplayName) ||
+      /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(
+        requestedDisplayName,
+      )
+        ? ''
+        : requestedDisplayName
     const bodyAvatarUrl =
       typeof body.avatarUrl === 'string' && body.avatarUrl.trim() ? body.avatarUrl.trim() : null
 
@@ -93,6 +100,12 @@ Deno.serve(async (req) => {
 
     const userId = authData.user.id
     const isHost = meeting.host_id === userId
+    const { data: participant } = await supabase
+      .from('meeting_participants')
+      .select('status, display_name')
+      .eq('meeting_id', meetingId)
+      .eq('user_id', userId)
+      .maybeSingle()
 
     if (action === 'remove-participant') {
       if (!isHost || !participantUserId) {
@@ -131,13 +144,6 @@ Deno.serve(async (req) => {
         })
       }
 
-      const { data: participant } = await supabase
-        .from('meeting_participants')
-        .select('status')
-        .eq('meeting_id', meetingId)
-        .eq('user_id', userId)
-        .maybeSingle()
-
       if (participant?.status === 'removed') {
         return new Response(JSON.stringify({ error: 'You have been removed from this meeting.' }), {
           status: 403,
@@ -162,6 +168,7 @@ Deno.serve(async (req) => {
       .maybeSingle()
 
     const resolvedName =
+      participant?.display_name ||
       displayName ||
       profile?.full_name ||
       profile?.username ||
