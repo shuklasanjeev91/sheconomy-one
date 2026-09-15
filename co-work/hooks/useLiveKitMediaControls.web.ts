@@ -5,6 +5,7 @@ import { CALL_AUDIO_CAPTURE } from '~/co-work/lib/livekit-call-audio'
 import type { LiveKitMediaControls } from '~/co-work/lib/livekit-media-controls'
 import { setLocalScreenShareEnabled } from '~/co-work/lib/livekit-screen-share'
 import { useMeetingVideoEffects } from '~/co-work/hooks/useMeetingVideoEffects.web'
+import { useMeetingAudioQuality } from '~/co-work/hooks/useMeetingAudioQuality.web'
 
 /** Native-only UI — exported so web never crashes if a shared import path is used. */
 export function NativeScreenCapturePicker() {
@@ -19,6 +20,7 @@ export function useLiveKitMediaControls(_preferSpeaker = true): LiveKitMediaCont
   // earpiece route. Keep speakerOn true so UI does not fake a Phone mode.
   const [speakerOn] = useState(true)
   const videoEffects = useMeetingVideoEffects()
+  const audioQuality = useMeetingAudioQuality(room, localParticipant, isMicrophoneEnabled)
   const muteInFlightRef = useRef(false)
 
   const toggleSpeaker = useCallback(async () => {
@@ -32,10 +34,11 @@ export function useLiveKitMediaControls(_preferSpeaker = true): LiveKitMediaCont
     muteInFlightRef.current = true
     void localParticipant
       .setMicrophoneEnabled(next, { ...CALL_AUDIO_CAPTURE })
+      .catch(audioQuality.reportError)
       .finally(() => {
         muteInFlightRef.current = false
       })
-  }, [isMicrophoneEnabled, localParticipant])
+  }, [audioQuality.reportError, isMicrophoneEnabled, localParticipant])
 
   return {
     room,
@@ -44,6 +47,7 @@ export function useLiveKitMediaControls(_preferSpeaker = true): LiveKitMediaCont
     videoEnabled: isCameraEnabled,
     screenSharing: isScreenShareEnabled,
     videoEffects,
+    audioQuality,
     speakerOn,
     toggleAudio,
     toggleVideo: () => void localParticipant.setCameraEnabled(!isCameraEnabled),

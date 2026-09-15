@@ -13,6 +13,7 @@ import { CoWorkAlertBanner, CoWorkStatusPill } from '~/co-work/components/CoWork
 import { LiveKitMeetingRoom, type LiveKitMediaControls } from '~/co-work/components/LiveKitMeetingRoom'
 import { MeetingChatPanel } from '~/co-work/components/MeetingChatPanel'
 import { MeetingBackgroundPanel } from '~/co-work/components/MeetingBackgroundPanel'
+import { MeetingAudioPanel } from '~/co-work/components/MeetingAudioPanel'
 import { MeetingControls } from '~/co-work/components/MeetingControls'
 import { MeetingInfoPanel } from '~/co-work/components/MeetingInfoPanel'
 import { MeetingInvitePanel } from '~/co-work/components/MeetingInvitePanel'
@@ -30,6 +31,7 @@ import {
 } from '~/co-work/hooks/useMeetingRecording'
 import { useMeetingPresence } from '~/co-work/hooks/useMeetingPresence'
 import { getMediaCapabilities } from '~/co-work/lib/media'
+import { connectionStatusLabel } from '~/co-work/lib/meeting-audio-quality'
 import { supportsLiveKitVideo } from '~/lib/platform/capabilities'
 import { buildMeetingSharePayload } from '~/co-work/lib/meeting-share'
 import { formatMeetingCode } from '~/co-work/lib/meetings'
@@ -440,6 +442,18 @@ function MeetingRoomOverlay({
     })
   }, [presence, toast])
 
+  const toggleMeetingAudio = useCallback(() => {
+    if (!liveKit) {
+      toast.show('Still connecting…', {
+        tone: 'info',
+        message: 'Wait a moment for the room to join, then try mute again.',
+      })
+      return
+    }
+    void presence.syncMediaState({ is_muted: liveKit.audioEnabled })
+    liveKit.toggleAudio()
+  }, [liveKit, presence, toast])
+
   const sendReaction = useCallback(
     (emoji: string) => {
       presence.sendReaction(emoji, displayName)
@@ -611,6 +625,18 @@ function MeetingRoomOverlay({
                 ) : null}
                 {captions.active ? <CoWorkStatusPill label="CC" tone="brand" /> : null}
                 {presence.handRaised ? <CoWorkStatusPill label="✋" tone="coral" /> : null}
+                {liveKit ? (
+                  <CoWorkStatusPill
+                    label={connectionStatusLabel(liveKit.audioQuality.connectionStatus)}
+                    tone={
+                      liveKit.audioQuality.connectionStatus === 'excellent'
+                        ? 'live'
+                        : liveKit.audioQuality.connectionStatus === 'good'
+                          ? 'brand'
+                          : 'warning'
+                    }
+                  />
+                ) : null}
               </XStack>
               <XStack alignItems="center" gap="$2" flexWrap="wrap">
                 <Button
@@ -696,6 +722,24 @@ function MeetingRoomOverlay({
           />
         ) : null}
 
+        {liveKit?.audioQuality.connectionStatus === 'reconnecting' ? (
+          <CoWorkAlertBanner
+            tone="warning"
+            message="Audio connection interrupted — reconnecting automatically."
+            actionLabel="Retry"
+            onAction={() => void liveKit.audioQuality.retryConnection()}
+          />
+        ) : null}
+
+        {liveKit?.audioQuality.error ? (
+          <CoWorkAlertBanner
+            tone="danger"
+            message={liveKit.audioQuality.error}
+            actionLabel="Audio settings"
+            onAction={() => presence.setPanel('audio')}
+          />
+        ) : null}
+
         {showError ? (
           <CoWorkAlertBanner
             tone="danger"
@@ -714,6 +758,28 @@ function MeetingRoomOverlay({
           />
         ) : null}
       </YStack>
+
+      {liveKit && presence.panel === 'audio' ? (
+        <YStack
+          position={overlayPosition}
+          top={panelTop}
+          right={panelFullWidth ? 0 : 12}
+          left={panelFullWidth ? 0 : undefined}
+          bottom={panelBottom}
+          zIndex={25}
+          pointerEvents="auto"
+        >
+          <MeetingAudioPanel
+            audio={liveKit.audioQuality}
+            audioEnabled={liveKit.audioEnabled}
+            speakerOn={liveKit.speakerOn}
+            onToggleAudio={toggleMeetingAudio}
+            onToggleSpeaker={() => void liveKit.toggleSpeaker()}
+            onClose={() => presence.setPanel('none')}
+            fullWidth={panelFullWidth}
+          />
+        </YStack>
+      ) : null}
 
       {liveKit && presence.panel === 'backgrounds' ? (
         <YStack
@@ -899,17 +965,8 @@ function MeetingRoomOverlay({
           raisedHandCount={raisedHandCount}
           reactionTrayOpen={reactionTrayOpen}
           busy={exiting}
-          onToggleAudio={() => {
-            if (!liveKit) {
-              toast.show('Still connecting…', {
-                tone: 'info',
-                message: 'Wait a moment for the room to join, then try mute again.',
-              })
-              return
-            }
-            void presence.syncMediaState({ is_muted: liveKit.audioEnabled })
-            liveKit.toggleAudio()
-          }}
+          onToggleAudio={toggleMeetingAudio}
+          onOpenAudioSettings={liveKit ? () => presence.togglePanel('audio') : undefined}
           onToggleVideo={() => {
             if (!liveKit) {
               toast.show('Still connecting…', {

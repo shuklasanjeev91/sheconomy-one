@@ -14,13 +14,14 @@ type MeetingControlsProps = {
   recording: boolean
   captionsActive: boolean
   isHost: boolean
-  panel: 'none' | 'chat' | 'people' | 'invite' | 'info' | 'recordings' | 'backgrounds'
+  panel: 'none' | 'chat' | 'people' | 'invite' | 'info' | 'recordings' | 'backgrounds' | 'audio'
   backgroundActive?: boolean
   unreadChatCount?: number
   raisedHandCount?: number
   reactionTrayOpen?: boolean
   busy?: boolean
   onToggleAudio: () => void
+  onOpenAudioSettings?: () => void
   onToggleVideo: () => void
   onToggleBackgrounds?: () => void
   onToggleScreen: () => void
@@ -161,6 +162,7 @@ export function MeetingControls({
   reactionTrayOpen = false,
   busy = false,
   onToggleAudio,
+  onOpenAudioSettings,
   onToggleVideo,
   onToggleBackgrounds,
   onToggleScreen,
@@ -233,6 +235,15 @@ export function MeetingControls({
                 onPress={onToggleAudio}
                 compact={compact}
               />
+              {onOpenAudioSettings ? (
+                <ControlButton
+                  label="Audio"
+                  icon={Icons.SlidersHorizontal}
+                  variant={panel === 'audio' ? 'brand' : 'neutral'}
+                  onPress={onOpenAudioSettings}
+                  compact={compact}
+                />
+              ) : null}
               {caps.supportsVideo ? (
                 <>
                   <ControlButton

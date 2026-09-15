@@ -53,7 +53,7 @@ export function useMeetingPresence({
   const [participants, setParticipants] = useState<MeetingParticipant[]>([])
   const [chatMessages, setChatMessages] = useState<MeetingChatMessage[]>([])
   const [panel, setPanel] = useState<
-    'none' | 'chat' | 'people' | 'invite' | 'info' | 'recordings' | 'backgrounds'
+    'none' | 'chat' | 'people' | 'invite' | 'info' | 'recordings' | 'backgrounds' | 'audio'
   >('none')
   const [error, setError] = useState<string | null>(null)
   const [isConnecting, setIsConnecting] = useState(true)
@@ -487,7 +487,7 @@ export function useMeetingPresence({
     mediaHandlersRef.current = handlers
   }, [])
 
-  const togglePanel = useCallback((next: 'chat' | 'people' | 'invite' | 'info' | 'recordings' | 'backgrounds') => {
+  const togglePanel = useCallback((next: 'chat' | 'people' | 'invite' | 'info' | 'recordings' | 'backgrounds' | 'audio') => {
     setPanel((current) => {
       const opening = current !== next
       if (opening && next === 'chat') {
@@ -499,7 +499,7 @@ export function useMeetingPresence({
   }, [])
 
   const setPanelSafe = useCallback(
-    (next: 'none' | 'chat' | 'people' | 'invite' | 'info' | 'recordings' | 'backgrounds') => {
+    (next: 'none' | 'chat' | 'people' | 'invite' | 'info' | 'recordings' | 'backgrounds' | 'audio') => {
       if (next === 'chat') {
         setUnreadChatCount(0)
         setLatestChatNotice(null)

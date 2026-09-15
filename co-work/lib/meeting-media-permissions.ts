@@ -1,4 +1,5 @@
 import { Platform } from 'react-native'
+import { CALL_AUDIO_CAPTURE } from '~/co-work/lib/livekit-call-audio'
 
 export type MeetingMediaPermissionResult = {
   ok: boolean
@@ -8,7 +9,7 @@ export type MeetingMediaPermissionResult = {
 }
 
 /**
- * Ask for camera + microphone before joining a Co-Work room.
+ * Require microphone access and request optional camera access before joining.
  * Must run from a user gesture on web; on native shows system permission sheets.
  *
  * Web uses getUserMedia only (no expo-camera import — the web stub used to omit
@@ -26,9 +27,36 @@ export async function ensureMeetingMediaPermissions(): Promise<MeetingMediaPermi
           message: 'Camera and microphone are not available in this browser.',
         }
       }
-      const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true })
-      stream.getTracks().forEach((track) => track.stop())
-      return { ok: true, cameraGranted: true, microphoneGranted: true }
+      let microphoneGranted = false
+      try {
+        const audioStream = await navigator.mediaDevices.getUserMedia({
+          audio: { ...CALL_AUDIO_CAPTURE },
+          video: false,
+        })
+        microphoneGranted = true
+        audioStream.getTracks().forEach((track) => track.stop())
+      } catch (cause) {
+        const blocked =
+          cause instanceof Error && /NotAllowed|Permission|denied/i.test(cause.name + cause.message)
+        return {
+          ok: false,
+          cameraGranted: false,
+          microphoneGranted: false,
+          message: blocked
+            ? 'Microphone access is blocked. Allow it in your browser site settings and try again.'
+            : 'No working microphone was found. Check your audio device and try again.',
+        }
+      }
+
+      let cameraGranted = false
+      try {
+        const videoStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: false })
+        cameraGranted = true
+        videoStream.getTracks().forEach((track) => track.stop())
+      } catch {
+        // Camera is optional: users can still join with clear audio.
+      }
+      return { ok: microphoneGranted, cameraGranted, microphoneGranted }
     }
 
     // eslint-disable-next-line @typescript-eslint/no-require-imports
@@ -38,19 +66,19 @@ export async function ensureMeetingMediaPermissions(): Promise<MeetingMediaPermi
     const cameraGranted = !!cam.granted
     const microphoneGranted = !!mic.granted
 
-    if (!cameraGranted || !microphoneGranted) {
-      const blocked = (!cameraGranted && !cam.canAskAgain) || (!microphoneGranted && !mic.canAskAgain)
+    if (!microphoneGranted) {
       return {
         ok: false,
         cameraGranted,
         microphoneGranted,
-        message: blocked
-          ? 'Camera or microphone access is blocked. Enable it in Settings → SHEconomy, then try again.'
-          : 'Camera and microphone permission is required to start a meeting.',
+        message: !mic.canAskAgain
+          ? 'Microphone access is blocked. Enable it in Settings → SHEconomy, then try again.'
+          : 'Microphone permission is required to join with audio.',
       }
     }
 
-    return { ok: true, cameraGranted: true, microphoneGranted: true }
+    // Camera permission is optional; LiveKit joins audio-first when it is denied.
+    return { ok: true, cameraGranted, microphoneGranted: true }
   } catch (error) {
     return {
       ok: false,
