@@ -105,6 +105,22 @@ export function MeetingRoomScreen(props: MeetingRoomScreenProps) {
     )
   }
 
+  if (presence.isRejected) {
+    return (
+      <ScreenCenter backgroundColor={coworkUi.pageBg} padding="$6" gap="$4">
+        <Text fontSize={24} fontWeight="800" color={coworkUi.text} textAlign="center">
+          The host declined your join request
+        </Text>
+        <Text color={coworkUi.textSecondary} textAlign="center">
+          You were not admitted to {title}.
+        </Text>
+        <Button tone="primary" size="$3" borderRadius={999} onPress={() => (props.onLeave ? props.onLeave() : navigateApp(coWorkRoutes.home))}>
+          Back to Co-Work
+        </Button>
+      </ScreenCenter>
+    )
+  }
+
   if (presence.isWaiting) {
     return (
       <ScreenCenter backgroundColor={coworkUi.pageBg} padding="$6" gap="$4">
@@ -124,9 +140,17 @@ export function MeetingRoomScreen(props: MeetingRoomScreenProps) {
           Waiting for the host to let you in
         </Text>
         <Text color={coworkUi.textSecondary} textAlign="center">
-          You&apos;ll join {title} as soon as the host admits you.
+          We notified the host. You&apos;ll join {title} as soon as they admit you.
         </Text>
         <Text color={coworkUi.textMuted}>Meeting ID: {formatMeetingCode(props.meeting.meeting_code)}</Text>
+        <Button
+          tone="outline"
+          size="$3"
+          borderRadius={999}
+          onPress={() => (props.onLeave ? props.onLeave() : navigateApp(coWorkRoutes.home))}
+        >
+          Leave waiting room
+        </Button>
       </ScreenCenter>
     )
   }
@@ -143,7 +167,7 @@ export function MeetingRoomScreen(props: MeetingRoomScreenProps) {
         displayName={props.displayName}
         avatarUrl={props.avatarUrl}
         isHost={props.isHost}
-        enabled={!presence.isWaiting}
+        enabled={!presence.isWaiting && !presence.isRejected}
         onDisconnected={() => {
           void presence.leave()
         }}
@@ -728,6 +752,7 @@ function MeetingRoomOverlay({
             participants={presence.participants}
             isHost={isHost}
             onAdmit={(id) => void presence.admit(id)}
+            onReject={isHost ? (id) => void presence.reject(id) : undefined}
             onAdmitAll={isHost ? () => void presence.admitAllWaiting() : undefined}
             onClose={() => presence.setPanel('none')}
             raisedHands={presence.raisedHands}

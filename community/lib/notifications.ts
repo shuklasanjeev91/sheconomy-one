@@ -78,6 +78,21 @@ export function resolveNotificationPath(notification: AppNotification): string |
   const fromUrl = pathFromNotificationUrl(notification.action_url)
   if (fromUrl) return fromUrl
 
+  const meetingCode =
+    typeof notification.data?.meeting_code === 'string'
+      ? notification.data.meeting_code.trim()
+      : ''
+  if (type.startsWith('meeting_') || contextType === 'meeting') {
+    if (meetingCode) {
+      return type === 'meeting_access_request' ||
+        type === 'meeting_admitted' ||
+        type === 'meeting_participant_joined' ||
+        type === 'meeting_started'
+        ? coWorkRoutes.meetingLive(meetingCode)
+        : coWorkRoutes.meeting(meetingCode)
+    }
+  }
+
   if (contextId) {
     if (
       contextType === 'post' ||
@@ -126,7 +141,8 @@ export function resolveNotificationPath(notification: AppNotification): string |
       return communityRoutes.event(contextId)
     }
     if (contextType === 'meeting' || type.startsWith('meeting_')) {
-      return coWorkRoutes.meeting(contextId)
+      if (meetingCode) return coWorkRoutes.meeting(meetingCode)
+      return coWorkRoutes.home
     }
     if (contextType === 'class' || contextType === 'course' || type.startsWith('class_')) {
       return classRoutes.program(contextId)

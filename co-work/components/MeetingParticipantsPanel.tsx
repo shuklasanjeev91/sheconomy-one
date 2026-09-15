@@ -10,6 +10,7 @@ type MeetingParticipantsPanelProps = {
   participants: MeetingParticipant[]
   isHost: boolean
   onAdmit: (participantId: string) => void
+  onReject?: (participantId: string) => void
   onAdmitAll?: () => void
   onClose: () => void
   raisedHands?: Record<string, boolean>
@@ -20,6 +21,7 @@ export function MeetingParticipantsPanel({
   participants,
   isHost,
   onAdmit,
+  onReject,
   onAdmitAll,
   onClose,
   raisedHands = {},
@@ -56,9 +58,16 @@ export function MeetingParticipantsPanel({
                   participant={p}
                   action={
                     isHost ? (
-                      <Button tone="primary" size="$2" borderRadius={999} onPress={() => onAdmit(p.id)}>
-                        Admit
-                      </Button>
+                      <XStack gap="$2">
+                        <Button tone="primary" size="$2" borderRadius={999} onPress={() => onAdmit(p.id)}>
+                          Admit
+                        </Button>
+                        {onReject ? (
+                          <Button tone="outline" size="$2" borderRadius={999} onPress={() => onReject(p.id)}>
+                            Deny
+                          </Button>
+                        ) : null}
+                      </XStack>
                     ) : null
                   }
                 />

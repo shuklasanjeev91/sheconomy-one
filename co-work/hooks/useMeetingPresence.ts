@@ -3,6 +3,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 
 import {
   admitParticipant,
+  rejectParticipant,
   endMeeting,
   fetchMeetingChat,
   fetchMeetingParticipants,
@@ -78,6 +79,7 @@ export function useMeetingPresence({
 
   const selfParticipant = participants.find((p) => p.user_id === userId)
   const isWaiting = selfParticipant?.status === 'waiting'
+  const isRejected = selfParticipant?.status === 'rejected'
   const waitingParticipants = participants.filter((p) => p.status === 'waiting')
 
   const refreshParticipants = useCallback(async () => {
@@ -380,6 +382,14 @@ export function useMeetingPresence({
     [refreshParticipants],
   )
 
+  const reject = useCallback(
+    async (participantId: string) => {
+      await rejectParticipant(participantId)
+      await refreshParticipants()
+    },
+    [refreshParticipants],
+  )
+
   const admitAllWaiting = useCallback(async () => {
     const waiting = participants.filter((p) => p.status === 'waiting')
     await Promise.all(waiting.map((p) => admitParticipant(p.id)))
@@ -480,6 +490,7 @@ export function useMeetingPresence({
     error,
     isConnecting,
     isWaiting,
+    isRejected,
     waitingParticipants,
     handRaised,
     raisedHands,
@@ -497,6 +508,7 @@ export function useMeetingPresence({
     togglePanel,
     sendChat,
     admit,
+    reject,
     admitAllWaiting,
     leave,
     hostEnd,

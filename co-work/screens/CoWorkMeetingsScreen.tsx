@@ -1,5 +1,5 @@
 import { useRouter } from 'one'
-import { AppState, Platform, type AppStateStatus } from 'react-native'
+import { AppState, Alert, Platform, type AppStateStatus } from 'react-native'
 import { useCallback, useEffect, useState } from 'react'
 
 import { AuthSignInFlow } from '~/components/auth/AuthSignInFlow'
@@ -9,6 +9,7 @@ import { CoWorkBrandChip, CoWorkStatusPill } from '~/co-work/components/CoWorkUi
 import { ensureMeetingMediaPermissions } from '~/co-work/lib/meeting-media-permissions'
 import { openInstantMeetingSession } from '~/co-work/lib/instant-meeting-session'
 import {
+  cancelMeeting,
   fetchMyMeetings,
   filterMeetingsWithinRetention,
   formatMeetingCode,
@@ -231,6 +232,43 @@ export function CoWorkMeetingsScreen() {
                 >
                   Lobby
                 </Button>
+                {meeting.status === 'scheduled' ? (
+                  <Button
+                    tone="outline"
+                    size="$3"
+                    borderRadius={999}
+                    borderColor={coworkUi.glassBorder}
+                    onPress={() => {
+                      Alert.alert(
+                        'Cancel meeting?',
+                        'Invitees will be notified that this meeting will not take place.',
+                        [
+                          { text: 'Keep', style: 'cancel' },
+                          {
+                            text: 'Cancel meeting',
+                            style: 'destructive',
+                            onPress: () => {
+                              void (async () => {
+                                try {
+                                  await cancelMeeting(meeting.id)
+                                  toast.show('Meeting cancelled', { tone: 'success' })
+                                  await load({ silent: true })
+                                } catch (error) {
+                                  toast.show(
+                                    error instanceof Error ? error.message : 'Could not cancel meeting',
+                                    { tone: 'error' },
+                                  )
+                                }
+                              })()
+                            },
+                          },
+                        ],
+                      )
+                    }}
+                  >
+                    Cancel
+                  </Button>
+                ) : null}
               </XStack>
             </YStack>
           ))}

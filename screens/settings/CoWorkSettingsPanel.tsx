@@ -9,9 +9,9 @@ export function CoWorkSettingsPanel() {
   return (
     <ProductChannelSettingsPanel
       title="Co-Work"
-      description="Meeting invites, 30/5-minute reminders, and recordings"
+      description="Meeting invites, reminders before start, waiting-room requests, and join alerts"
       successLabel="Co-Work alerts"
-      emailSubtitle="Meeting invites, reminders, and recordings"
+      emailSubtitle="Meeting invites, schedule reminders, and cancellations"
       whatsappSubtitle="Optional meeting reminders on WhatsApp"
       fetchPrefs={fetchCoworkNotificationPrefs}
       savePrefs={saveCoworkNotificationPrefs}

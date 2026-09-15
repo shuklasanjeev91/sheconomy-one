@@ -282,6 +282,7 @@ export async function createMeeting(hostId: string, input: CreateMeetingInput): 
   const passcode = security.passcode?.trim()
   const securitySettings = {
     waitingRoom: security.waitingRoom ?? false,
+    waiting_room: security.waitingRoom ?? false,
     muteOnJoin: security.muteOnJoin ?? false,
     videoOffOnJoin: security.videoOffOnJoin ?? false,
     allowScreenShare: security.allowScreenShare !== false,
@@ -307,6 +308,7 @@ export async function createMeeting(hostId: string, input: CreateMeetingInput): 
     enableMeetingChat: options.enableMeetingChat !== false && security.allowChat !== false,
     host_video_on: options.defaultVideo ?? true,
     participant_video_on: options.defaultVideo ?? true,
+    allowJoinBeforeHost: options.allowJoinBeforeHost ?? false,
     allow_join_before_host: options.allowJoinBeforeHost ?? false,
     auto_record: options.autoRecord ?? false,
     time_zone: input.timeZone ?? Intl.DateTimeFormat().resolvedOptions().timeZone,
@@ -429,12 +431,18 @@ export async function joinMeetingParticipant(
   isHost: boolean,
   waitingRoom: boolean,
 ): Promise<MeetingParticipant> {
-  const status = waitingRoom ? 'waiting' : 'admitted'
-  const joinedAt = waitingRoom ? null : new Date().toISOString()
+  const { data: existing } = await supabase
+    .from('meeting_participants')
+    .select('id, status')
+    .eq('meeting_id', meetingId)
+    .eq('user_id', userId)
+    .maybeSingle()
 
-  // Upsert: React Strict Mode / reconnect can call join twice; select-then-insert
-  // races on meeting_participants_meeting_id_user_id_key and surfaces as
-  // "Live updates paused" even though the room is fine.
+  // Stay admitted across reconnects. Rejected guests may request again.
+  const keepAdmitted = existing?.status === 'admitted' || isHost
+  const status = keepAdmitted ? 'admitted' : waitingRoom ? 'waiting' : 'admitted'
+  const joinedAt = status === 'waiting' ? null : new Date().toISOString()
+
   const { data, error } = await supabase
     .from('meeting_participants')
     .upsert(
@@ -457,17 +465,57 @@ export async function joinMeetingParticipant(
   return mapParticipant(data as Record<string, unknown>)
 }
 
+async function reviewerId(): Promise<string | null> {
+  const { data } = await supabase.auth.getUser()
+  return data.user?.id ?? null
+}
+
 export async function admitParticipant(participantId: string): Promise<void> {
+  const reviewedBy = await reviewerId()
   const { error } = await supabase
     .from('meeting_participants')
     .update({
       status: 'admitted',
       joined_at: new Date().toISOString(),
       left_at: null,
+      reviewed_at: new Date().toISOString(),
+      reviewed_by: reviewedBy,
     })
     .eq('id', participantId)
 
   if (error) throw new Error(error.message)
+}
+
+export async function rejectParticipant(participantId: string): Promise<void> {
+  const reviewedBy = await reviewerId()
+  const { error } = await supabase
+    .from('meeting_participants')
+    .update({
+      status: 'rejected',
+      left_at: new Date().toISOString(),
+      reviewed_at: new Date().toISOString(),
+      reviewed_by: reviewedBy,
+    })
+    .eq('id', participantId)
+
+  if (error) throw new Error(error.message)
+}
+
+export async function cancelMeeting(meetingId: string): Promise<void> {
+  const now = new Date().toISOString()
+  const { error } = await supabase
+    .from('meetings')
+    .update({ status: 'cancelled', ended_at: now })
+    .eq('id', meetingId)
+
+  if (error) throw new Error(error.message)
+
+  await supabase
+    .from('meeting_rooms')
+    .update({ is_active: false, ended_at: now })
+    .eq('meeting_id', meetingId)
+
+  invalidateCache(INVALIDATION_TOPICS.coWorkMeetings)
 }
 
 export async function leaveMeetingParticipant(meetingId: string, userId: string): Promise<void> {
@@ -499,7 +547,7 @@ export async function fetchMeetingParticipants(meetingId: string): Promise<Meeti
     .from('meeting_participants')
     .select(PARTICIPANT_SELECT)
     .eq('meeting_id', meetingId)
-    .in('status', ['admitted', 'waiting'])
+    .in('status', ['admitted', 'waiting', 'rejected'])
     .order('joined_at', { ascending: true })
 
   if (error) throw new Error(error.message)

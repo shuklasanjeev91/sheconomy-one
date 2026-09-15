@@ -52,9 +52,14 @@ export const REMINDER_FAMILIES: ReminderFamily[] = [
   {
     id: 'cowork',
     title: 'Co-Work meetings',
-    description: 'Invites plus 30- and 5-minute reminders before start',
+    description: 'Invites, Zoom-style reminders (3h, 2h, 1h, 30m, 15m), join requests, and live-join alerts',
     settingsSection: 'co-work',
-    examples: ['Meeting invite', '30 min reminder', '5 min reminder'],
+    examples: [
+      'Meeting invite',
+      '3h / 2h / 1h / 30m / 15m reminders',
+      'Waiting-room join request',
+      'Someone joined',
+    ],
   },
   {
     id: 'class',

@@ -62,7 +62,7 @@ Deno.serve(async (req) => {
 
     const { data: meeting, error: meetingError } = await supabase
       .from('meetings')
-      .select('id, room_id, status, host_id, security_settings')
+      .select('id, room_id, status, host_id, security_settings, meeting_options')
       .eq('id', meetingId)
       .maybeSingle()
 
@@ -91,7 +91,18 @@ Deno.serve(async (req) => {
     const isHost = meeting.host_id === userId
 
     if (!isHost) {
-      const waitingRoomEnabled = meeting.security_settings?.waiting_room === true
+      const security = (meeting.security_settings ?? {}) as Record<string, unknown>
+      const options = (meeting.meeting_options ?? {}) as Record<string, unknown>
+      const waitingRoomEnabled = security.waitingRoom === true || security.waiting_room === true
+      const allowJoinBeforeHost =
+        options.allowJoinBeforeHost === true || options.allow_join_before_host === true
+
+      if (meeting.status === 'scheduled' && !allowJoinBeforeHost) {
+        return new Response(JSON.stringify({ error: 'Waiting for the host to start this meeting.' }), {
+          status: 403,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        })
+      }
 
       const { data: participant } = await supabase
         .from('meeting_participants')
@@ -100,6 +111,13 @@ Deno.serve(async (req) => {
         .eq('user_id', userId)
         .maybeSingle()
 
+      if (participant?.status === 'rejected') {
+        return new Response(JSON.stringify({ error: 'You have been removed from this meeting.' }), {
+          status: 403,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        })
+      }
+
       if (waitingRoomEnabled) {
         if (!participant || participant.status !== 'admitted') {
           return new Response(JSON.stringify({ error: 'You have not been admitted to this meeting.' }), {
@@ -107,11 +125,6 @@ Deno.serve(async (req) => {
             headers: { ...corsHeaders, 'Content-Type': 'application/json' },
           })
         }
-      } else if (participant && participant.status === 'rejected') {
-        return new Response(JSON.stringify({ error: 'You have been removed from this meeting.' }), {
-          status: 403,
-          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-        })
       }
     }
 

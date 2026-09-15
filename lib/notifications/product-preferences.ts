@@ -91,13 +91,20 @@ const CLASS_TYPES = [
 
 const COWORK_TYPES = [
   'meeting_invitation',
+  'meeting_reminder_3h',
+  'meeting_reminder_2h',
+  'meeting_reminder_1h',
   'meeting_reminder_30min',
+  'meeting_reminder_15min',
   'meeting_reminder_5min',
   'meeting_started',
   'meeting_cancelled',
   'meeting_rescheduled',
   'meeting_recording_available',
   'meeting_access_request',
+  'meeting_admitted',
+  'meeting_rejected',
+  'meeting_participant_joined',
   'meeting_chat_message',
 ] as const
 

@@ -69,4 +69,15 @@ describe('notification contextual actions', () => {
     )
     expect(resolveNotificationPath(item)).toBe('/community/analytics')
   })
+
+  it('opens Co-Work live from waiting-room join requests', () => {
+    const item = notification({
+      type: 'meeting_access_request',
+      context_type: 'meeting',
+      context_id: '55555555-5555-4555-8555-555555555555',
+      action_url: null,
+      data: { meeting_code: 'ABCD12' },
+    })
+    expect(resolveNotificationPath(item)).toBe('/co-work/meeting/ABCD12/live')
+  })
 })
