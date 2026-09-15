@@ -1,4 +1,3 @@
-import { filterMeetingsWithinRetention } from '~/co-work/lib/meetings'
 import { inviteeKey, parseMeetingInvitees } from '~/co-work/lib/invites'
 import type { Meeting, MeetingInvitee } from '~/co-work/lib/types'
 import { coWorkRoutes } from '~/lib/routes'
@@ -123,7 +122,7 @@ export async function fetchPendingMeetingInvites(
     if (pendingInvite) byId.set(meeting.id, meeting)
   }
 
-  return filterMeetingsWithinRetention([...byId.values()])
+  return [...byId.values()]
 }
 
 /** Dedupe cards when the same invite appears under user id and email keys. */

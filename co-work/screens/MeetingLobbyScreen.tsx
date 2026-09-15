@@ -13,6 +13,7 @@ import { buildMeetingSharePayload } from '~/co-work/lib/meeting-share'
 import {
   fetchMeetingByCode,
   formatMeetingCode,
+  isMeetingJoinable,
   verifyMeetingPasscode,
 } from '~/co-work/lib/meetings'
 import { openInstantMeetingSession } from '~/co-work/lib/instant-meeting-session'
@@ -64,7 +65,7 @@ export function MeetingLobbyScreen({ code }: MeetingLobbyScreenProps) {
         setMeeting(null)
         return
       }
-      if (row.status === 'ended') setError('This meeting has ended.')
+      if (row.status === 'cancelled') setError('The host cancelled this meeting.')
       setMeeting(row)
       if (!row.security_settings?.passcode && !row.security_settings?.requirePasscode) {
         setVerified(true)
@@ -206,7 +207,7 @@ export function MeetingLobbyScreen({ code }: MeetingLobbyScreenProps) {
             </YStack>
           ) : null}
 
-          {meeting && verified && !error?.includes('ended') ? (
+          {meeting && verified && isMeetingJoinable(meeting) ? (
             <YStack
               gap="$4"
               padding="$5"

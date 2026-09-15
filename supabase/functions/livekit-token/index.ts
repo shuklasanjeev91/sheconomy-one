@@ -73,9 +73,11 @@ Deno.serve(async (req) => {
       })
     }
 
-    if (meeting.status === 'ended') {
-      return new Response(JSON.stringify({ error: 'Meeting has ended.' }), {
-        status: 400,
+    // Only cancelling closes a meeting. An `ended` one can be restarted by the
+    // host, so it stays tokenable the same way a `scheduled` one is.
+    if (meeting.status === 'cancelled') {
+      return new Response(JSON.stringify({ error: 'The host cancelled this meeting.' }), {
+        status: 403,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       })
     }
@@ -97,7 +99,8 @@ Deno.serve(async (req) => {
       const allowJoinBeforeHost =
         options.allowJoinBeforeHost === true || options.allow_join_before_host === true
 
-      if (meeting.status === 'scheduled' && !allowJoinBeforeHost) {
+      const hostAway = meeting.status === 'scheduled' || meeting.status === 'ended'
+      if (hostAway && !allowJoinBeforeHost) {
         return new Response(JSON.stringify({ error: 'Waiting for the host to start this meeting.' }), {
           status: 403,
           headers: { ...corsHeaders, 'Content-Type': 'application/json' },

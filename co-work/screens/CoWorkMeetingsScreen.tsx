@@ -11,10 +11,8 @@ import { openInstantMeetingSession } from '~/co-work/lib/instant-meeting-session
 import {
   cancelMeeting,
   fetchMyMeetings,
-  filterMeetingsWithinRetention,
   formatMeetingCode,
   getMeetingAnchorAt,
-  getMeetingRetentionExpiresAt,
 } from '~/co-work/lib/meetings'
 import { coworkGlassStyle, useCoWorkTheme } from '~/co-work/lib/theme'
 import { coworkBoxShadow, pageGradientStyle } from '~/lib/platform/crossStyles'
@@ -50,9 +48,15 @@ function statusTone(status: Meeting['status']) {
   }
 }
 
-/** Ended rooms stay listed for 24h so hosts can still open recordings. */
+/** An ended meeting can be restarted, so only cancelling removes the join button. */
 function isRejoinable(status: Meeting['status']) {
-  return status !== 'ended' && status !== 'cancelled'
+  return status !== 'cancelled'
+}
+
+function joinLabel(status: Meeting['status']) {
+  if (status === 'active') return 'Join'
+  if (status === 'ended') return 'Restart'
+  return 'Start'
 }
 
 export function CoWorkMeetingsScreen() {
@@ -71,7 +75,6 @@ export function CoWorkMeetingsScreen() {
       setError(null)
     }
     try {
-      // fetchMyMeetings soft-deletes hosted rows past 24h and filters the list.
       setMeetings(await fetchMyMeetings(user.id))
     } catch (loadError) {
       if (!opts?.silent) {
@@ -86,41 +89,7 @@ export function CoWorkMeetingsScreen() {
     void load()
   }, [load])
 
-  // Drop expired cards while this screen stays open (Android / iOS / web).
-  useEffect(() => {
-    if (!meetings.length) return
-
-    const now = Date.now()
-    const stillValid = filterMeetingsWithinRetention(meetings, now)
-    if (stillValid.length !== meetings.length) {
-      setMeetings(stillValid)
-      void load({ silent: true })
-      return
-    }
-
-    let nextExpiryMs: number | null = null
-    for (const meeting of meetings) {
-      const expiresAt = getMeetingRetentionExpiresAt(meeting)
-      if (!expiresAt) continue
-      const expiresMs = expiresAt.getTime()
-      if (expiresMs <= now) continue
-      if (nextExpiryMs == null || expiresMs < nextExpiryMs) {
-        nextExpiryMs = expiresMs
-      }
-    }
-
-    if (nextExpiryMs == null) return
-
-    const delay = Math.min(Math.max(nextExpiryMs - now + 50, 0), 2_147_483_647)
-    const timer = setTimeout(() => {
-      setMeetings((prev) => filterMeetingsWithinRetention(prev))
-      void load({ silent: true })
-    }, delay)
-
-    return () => clearTimeout(timer)
-  }, [meetings, load])
-
-  // Re-check retention when returning from background on real devices.
+  // Refresh status pills when returning from background on real devices.
   useEffect(() => {
     const onChange = (state: AppStateStatus) => {
       if (state === 'active') void load({ silent: true })
@@ -227,7 +196,7 @@ export function CoWorkMeetingsScreen() {
                       })()
                     }}
                   >
-                    Start
+                    {joinLabel(meeting.status)}
                   </Button>
                 ) : null}
                 <Button
@@ -239,7 +208,7 @@ export function CoWorkMeetingsScreen() {
                 >
                   {isRejoinable(meeting.status) ? 'Lobby' : 'Details'}
                 </Button>
-                {meeting.status === 'scheduled' ? (
+                {meeting.host_id === user.id && meeting.status !== 'cancelled' ? (
                   <Button
                     tone="outline"
                     size="$3"
@@ -248,7 +217,9 @@ export function CoWorkMeetingsScreen() {
                     onPress={() => {
                       Alert.alert(
                         'Cancel meeting?',
-                        'Invitees will be notified that this meeting will not take place.',
+                        meeting.status === 'ended'
+                          ? 'This closes the meeting for good. Nobody will be able to restart or rejoin it.'
+                          : 'Invitees will be notified that this meeting will not take place.',
                         [
                           { text: 'Keep', style: 'cancel' },
                           {

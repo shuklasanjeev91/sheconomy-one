@@ -239,7 +239,8 @@ export function useMeetingPresence({
     try {
       const waitingRoom = !isHost && !!meeting.security_settings?.waitingRoom
       await joinMeetingParticipant(meeting.id, userId, isHost, waitingRoom)
-      if (isHost && (meeting.status === 'scheduled' || meeting.status === 'instant')) {
+      // `ended` included: the host reopening a finished meeting restarts it.
+      if (isHost && meeting.status !== 'active') {
         await startMeeting(meeting.id)
       }
       await refreshParticipants()

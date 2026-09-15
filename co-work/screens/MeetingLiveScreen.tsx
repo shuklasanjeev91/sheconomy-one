@@ -63,9 +63,9 @@ export function MeetingLiveScreen({
     }
 
     if (initialMeeting && initialMeeting.meeting_code.replace(/\s/g, '').trim() === normalizedCode) {
-      if (initialMeeting.status === 'ended') {
+      if (initialMeeting.status === 'cancelled') {
         setPhase('error')
-        setError('This meeting has ended.')
+        setError('The host cancelled this meeting.')
         return
       }
       setMeeting(initialMeeting)
@@ -81,9 +81,9 @@ export function MeetingLiveScreen({
         setError('Meeting not found. Check the code and try again.')
         return
       }
-      if (row.status === 'ended') {
+      if (row.status === 'cancelled') {
         setPhase('error')
-        setError('This meeting has ended.')
+        setError('The host cancelled this meeting.')
         return
       }
       setMeeting(row)
