@@ -12,6 +12,8 @@ type MeetingParticipantsPanelProps = {
   onAdmit: (participantId: string) => void
   onReject?: (participantId: string) => void
   onAdmitAll?: () => void
+  onRemove?: (participantId: string) => void
+  onAllowRejoin?: (participantId: string) => void
   onClose: () => void
   raisedHands?: Record<string, boolean>
   fullWidth?: boolean
@@ -23,6 +25,8 @@ export function MeetingParticipantsPanel({
   onAdmit,
   onReject,
   onAdmitAll,
+  onRemove,
+  onAllowRejoin,
   onClose,
   raisedHands = {},
   fullWidth,
@@ -30,6 +34,7 @@ export function MeetingParticipantsPanel({
   const { ui: coworkUi } = useCoWorkTheme()
   const admitted = participants.filter((p) => p.status === 'admitted')
   const waiting = participants.filter((p) => p.status === 'waiting')
+  const removed = participants.filter((p) => p.status === 'removed')
 
   return (
     <CoWorkPanelShell fullWidth={fullWidth}>
@@ -85,9 +90,49 @@ export function MeetingParticipantsPanel({
             {[...admitted]
               .sort((a, b) => Number(!!raisedHands[b.user_id]) - Number(!!raisedHands[a.user_id]))
               .map((p) => (
-                <ParticipantRow key={p.id} participant={p} handRaised={!!raisedHands[p.user_id]} />
+                <ParticipantRow
+                  key={p.id}
+                  participant={p}
+                  handRaised={!!raisedHands[p.user_id]}
+                  action={
+                    isHost && !p.is_host && onRemove ? (
+                      <Button
+                        tone="outline"
+                        size="$2"
+                        borderRadius={999}
+                        onPress={() => onRemove(p.id)}
+                      >
+                        Remove
+                      </Button>
+                    ) : null
+                  }
+                />
               ))}
           </YStack>
+
+          {isHost && removed.length > 0 ? (
+            <YStack gap="$2">
+              <CoWorkSectionLabel>Removed</CoWorkSectionLabel>
+              {removed.map((participant) => (
+                <ParticipantRow
+                  key={participant.id}
+                  participant={participant}
+                  action={
+                    onAllowRejoin ? (
+                      <Button
+                        tone="outline"
+                        size="$2"
+                        borderRadius={999}
+                        onPress={() => onAllowRejoin(participant.id)}
+                      >
+                        Allow rejoin
+                      </Button>
+                    ) : null
+                  }
+                />
+              ))}
+            </YStack>
+          ) : null}
         </YStack>
       </ScrollView>
     </CoWorkPanelShell>

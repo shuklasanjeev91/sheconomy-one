@@ -66,6 +66,24 @@ export async function fetchLiveKitCredentials(
   }
 }
 
+export async function disconnectLiveKitParticipant(
+  meetingId: string,
+  roomName: string,
+  participantUserId: string,
+): Promise<void> {
+  const { data, error } = await supabase.functions.invoke('livekit-token', {
+    body: {
+      action: 'remove-participant',
+      meetingId,
+      roomName,
+      participantUserId,
+    },
+  })
+  if (error) throw new Error(error.message || 'Could not remove participant from the media room.')
+  const payload = data as { error?: string }
+  if (payload?.error) throw new Error(payload.error)
+}
+
 export async function getLiveKitMaxParticipants(): Promise<number> {
   const config = await fetchLiveKitConfig()
   return config.maxParticipants

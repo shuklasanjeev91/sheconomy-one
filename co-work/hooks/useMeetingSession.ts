@@ -4,6 +4,7 @@ import { Platform } from 'react-native'
 
 import {
   admitParticipant,
+  createMeetingSessionId,
   endMeeting,
   fetchMeetingChat,
   fetchMeetingParticipants,
@@ -44,6 +45,7 @@ export function useMeetingSession({
 }: UseMeetingSessionOptions) {
   const caps = useMemo(() => getMediaCapabilities(), [])
   const channelRef = useRef<RealtimeChannel | null>(null)
+  const sessionIdRef = useRef(createMeetingSessionId())
   const connectGenerationRef = useRef(0)
   const mediaRef = useRef<ReturnType<typeof createMediaSession>>(null)
   const [participants, setParticipants] = useState<MeetingParticipant[]>([])
@@ -91,7 +93,7 @@ export function useMeetingSession({
 
     try {
       const waitingRoom = !isHost && !!meeting.security_settings?.waitingRoom
-      await joinMeetingParticipant(meeting.id, userId, isHost, waitingRoom)
+      await joinMeetingParticipant(meeting.id, userId, isHost, waitingRoom, sessionIdRef.current)
       // `ended` included: the host reopening a finished meeting restarts it.
       if (isHost && meeting.status !== 'active') await startMeeting(meeting.id)
 
@@ -215,7 +217,7 @@ export function useMeetingSession({
     mediaRef.current = null
     if (channelRef.current) await unsubscribeMeetingChannel(channelRef.current)
     channelRef.current = null
-    await leaveMeetingParticipant(meeting.id, userId)
+    await leaveMeetingParticipant(meeting.id, userId, sessionIdRef.current)
     setLocalStream(null)
   }, [meeting.id, userId])
 
@@ -240,13 +242,13 @@ export function useMeetingSession({
   const toggleAudio = useCallback(async () => {
     const next = mediaRef.current?.toggleAudio() ?? !audioEnabled
     setAudioEnabled(next)
-    await updateParticipantMedia(meeting.id, userId, { is_muted: !next })
+    await updateParticipantMedia(meeting.id, userId, { is_muted: !next }, sessionIdRef.current)
   }, [audioEnabled, meeting.id, userId])
 
   const toggleVideo = useCallback(async () => {
     const next = mediaRef.current?.toggleVideo() ?? !videoEnabled
     setVideoEnabled(next)
-    await updateParticipantMedia(meeting.id, userId, { is_video_off: !next })
+    await updateParticipantMedia(meeting.id, userId, { is_video_off: !next }, sessionIdRef.current)
   }, [meeting.id, userId, videoEnabled])
 
   const toggleScreenShare = useCallback(async () => {

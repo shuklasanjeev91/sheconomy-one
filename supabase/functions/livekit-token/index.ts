@@ -1,6 +1,6 @@
 import 'jsr:@supabase/functions-js/edge-runtime.d.ts'
 import { createClient } from 'jsr:@supabase/supabase-js@2'
-import { AccessToken } from 'npm:livekit-server-sdk@2'
+import { AccessToken, RoomServiceClient } from 'npm:livekit-server-sdk@2'
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -47,8 +47,10 @@ Deno.serve(async (req) => {
     }
 
     const body = await req.json()
+    const action = String(body.action ?? 'token')
     const meetingId = String(body.meetingId ?? '')
     const roomName = String(body.roomName ?? '')
+    const participantUserId = String(body.participantUserId ?? '')
     const displayName = String(body.displayName ?? 'Guest').slice(0, 80)
     const bodyAvatarUrl =
       typeof body.avatarUrl === 'string' && body.avatarUrl.trim() ? body.avatarUrl.trim() : null
@@ -92,6 +94,28 @@ Deno.serve(async (req) => {
     const userId = authData.user.id
     const isHost = meeting.host_id === userId
 
+    if (action === 'remove-participant') {
+      if (!isHost || !participantUserId) {
+        return new Response(JSON.stringify({ error: 'Only the host can remove a participant.' }), {
+          status: 403,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        })
+      }
+      try {
+        const serviceUrl = livekitUrl.replace(/^wss:/, 'https:').replace(/^ws:/, 'http:')
+        const roomService = new RoomServiceClient(serviceUrl, apiKey, apiSecret)
+        await roomService.removeParticipant(roomName, participantUserId)
+      } catch (removeError) {
+        // The database removal remains authoritative. An already-disconnected
+        // participant will not exist in LiveKit and does not need another kick.
+        const message = removeError instanceof Error ? removeError.message : String(removeError)
+        if (!/not found|does not exist|participant.*missing/i.test(message)) throw removeError
+      }
+      return new Response(JSON.stringify({ ok: true }), {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      })
+    }
+
     if (!isHost) {
       const security = (meeting.security_settings ?? {}) as Record<string, unknown>
       const options = (meeting.meeting_options ?? {}) as Record<string, unknown>
@@ -114,7 +138,7 @@ Deno.serve(async (req) => {
         .eq('user_id', userId)
         .maybeSingle()
 
-      if (participant?.status === 'rejected') {
+      if (participant?.status === 'removed') {
         return new Response(JSON.stringify({ error: 'You have been removed from this meeting.' }), {
           status: 403,
           headers: { ...corsHeaders, 'Content-Type': 'application/json' },

@@ -1,6 +1,6 @@
 export type MeetingStatus = 'scheduled' | 'instant' | 'active' | 'ended' | 'cancelled'
 
-export type ParticipantStatus = 'waiting' | 'admitted' | 'rejected' | 'left'
+export type ParticipantStatus = 'waiting' | 'admitted' | 'rejected' | 'left' | 'removed'
 
 export type MeetingSecuritySettings = {
   passcode?: string

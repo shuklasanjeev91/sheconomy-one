@@ -16,6 +16,7 @@ import { ScreenCenter, ScreenFill } from '~/components/layout'
 import { AuthSignInFlow } from '~/components/auth/AuthSignInFlow'
 import { LiveKitMeetingRoom, type LiveKitMediaControls } from '~/co-work/components/LiveKitMeetingRoom'
 import {
+  createMeetingSessionId,
   endMeeting,
   fetchMeetingByCode,
   joinMeetingParticipant,
@@ -63,6 +64,7 @@ export function ChatCallScreen({ code, callType, callId, needsAnswer = false }: 
   const [ringerName, setRingerName] = useState('Incoming call')
   const [ringerAvatar, setRingerAvatar] = useState<string | null>(null)
   const hungUpRef = useRef(false)
+  const meetingSessionIdRef = useRef(createMeetingSessionId())
 
   useEffect(() => {
     setResolvedCallType(callType)
@@ -146,7 +148,13 @@ export function ChatCallScreen({ code, callType, callId, needsAnswer = false }: 
     let cancelled = false
     async function join() {
       try {
-        await joinMeetingParticipant(meeting!.id, user!.id, meeting!.host_id === user!.id, false)
+        await joinMeetingParticipant(
+          meeting!.id,
+          user!.id,
+          meeting!.host_id === user!.id,
+          false,
+          meetingSessionIdRef.current,
+        )
         if (!cancelled) setJoined(true)
       } catch (joinError) {
         if (cancelled) return
@@ -203,7 +211,7 @@ export function ChatCallScreen({ code, callType, callId, needsAnswer = false }: 
         await updateCallStatus(callId, 'ended')
       }
       if (meeting && user) {
-        await leaveMeetingParticipant(meeting.id, user.id)
+        await leaveMeetingParticipant(meeting.id, user.id, meetingSessionIdRef.current)
         if (meeting.host_id === user.id) {
           await endMeeting(meeting.id)
         }

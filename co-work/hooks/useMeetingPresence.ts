@@ -2,17 +2,21 @@ import type { RealtimeChannel } from '@supabase/supabase-js'
 import { useCallback, useEffect, useRef, useState } from 'react'
 
 import {
+  allowMeetingParticipantRejoin,
   admitParticipant,
+  createMeetingSessionId,
   rejectParticipant,
   endMeeting,
   fetchMeetingChat,
   fetchMeetingParticipants,
   joinMeetingParticipant,
   leaveMeetingParticipant,
+  removeMeetingParticipant,
   sendMeetingChatMessage,
   startMeeting,
   updateParticipantMedia,
 } from '~/co-work/lib/meetings'
+import { disconnectLiveKitParticipant } from '~/co-work/lib/livekit'
 import {
   broadcastSignal,
   joinMeetingChannel,
@@ -43,6 +47,7 @@ export function useMeetingPresence({
   enabled,
 }: UseMeetingPresenceOptions) {
   const channelRef = useRef<RealtimeChannel | null>(null)
+  const sessionIdRef = useRef(createMeetingSessionId())
   const connectGenerationRef = useRef(0)
   const handRaisedRef = useRef(false)
   const mediaHandlersRef = useRef<MediaHandlers>({})
@@ -57,6 +62,8 @@ export function useMeetingPresence({
   >('none')
   const [error, setError] = useState<string | null>(null)
   const [isConnecting, setIsConnecting] = useState(true)
+  const [connectionFailed, setConnectionFailed] = useState(false)
+  const [removedByHost, setRemovedByHost] = useState(false)
   const [handRaised, setHandRaised] = useState(false)
   const [raisedHands, setRaisedHands] = useState<Record<string, boolean>>({})
   const [liveCaptions, setLiveCaptions] = useState<LiveCaptionLine[]>([])
@@ -83,6 +90,7 @@ export function useMeetingPresence({
   const selfParticipant = participants.find((p) => p.user_id === userId)
   const isWaiting = selfParticipant?.status === 'waiting'
   const isRejected = selfParticipant?.status === 'rejected'
+  const isRemoved = removedByHost || selfParticipant?.status === 'removed'
   const waitingParticipants = participants.filter((p) => p.status === 'waiting')
   const hostParticipant = participants.find((p) => p.is_host || p.user_id === meeting.host_id)
   const isHostPresent =
@@ -253,11 +261,13 @@ export function useMeetingPresence({
     intentionalDisconnectRef.current = false
     setIsConnecting(true)
     setError(null)
+    setConnectionFailed(false)
+    setRemovedByHost(false)
     setIsRealtimeConnected(false)
 
     try {
       const waitingRoom = !isHost && !!meeting.security_settings?.waitingRoom
-      await joinMeetingParticipant(meeting.id, userId, isHost, waitingRoom)
+      await joinMeetingParticipant(meeting.id, userId, isHost, waitingRoom, sessionIdRef.current)
       // `ended` included: the host reopening a finished meeting restarts it.
       if (isHost && meeting.status !== 'active') {
         await startMeeting(meeting.id)
@@ -265,7 +275,10 @@ export function useMeetingPresence({
       await refreshParticipants()
     } catch (joinError) {
       if (generation !== connectGenerationRef.current) return
-      setError(joinError instanceof Error ? joinError.message : 'Failed to join meeting')
+      const message = joinError instanceof Error ? joinError.message : 'Failed to join meeting'
+      setError(message)
+      setRemovedByHost(/removed from this meeting/i.test(message))
+      setConnectionFailed(!/removed from this meeting/i.test(message))
       setIsConnecting(false)
       return
     }
@@ -351,7 +364,7 @@ export function useMeetingPresence({
       }
     }
     try {
-      await leaveMeetingParticipant(meeting.id, userId)
+      await leaveMeetingParticipant(meeting.id, userId, sessionIdRef.current)
     } catch {
       // Navigation / UI exit must not hang on a failed leave update.
     }
@@ -427,6 +440,30 @@ export function useMeetingPresence({
     await refreshParticipants()
   }, [participants, refreshParticipants])
 
+  const remove = useCallback(
+    async (participantId: string) => {
+      const participant = participants.find((row) => row.id === participantId)
+      if (!participant || participant.is_host) return
+      await removeMeetingParticipant(participantId)
+      try {
+        if (meeting.room_id) {
+          await disconnectLiveKitParticipant(meeting.id, meeting.room_id, participant.user_id)
+        }
+      } finally {
+        await refreshParticipants()
+      }
+    },
+    [meeting.id, meeting.room_id, participants, refreshParticipants],
+  )
+
+  const allowRejoin = useCallback(
+    async (participantId: string) => {
+      await allowMeetingParticipantRejoin(participantId)
+      await refreshParticipants()
+    },
+    [refreshParticipants],
+  )
+
   const leave = useCallback(async () => {
     connectGenerationRef.current += 1
     await disconnect()
@@ -478,7 +515,7 @@ export function useMeetingPresence({
 
   const syncMediaState = useCallback(
     async (patch: { is_muted?: boolean; is_video_off?: boolean }) => {
-      await updateParticipantMedia(meeting.id, userId, patch)
+      await updateParticipantMedia(meeting.id, userId, patch, sessionIdRef.current)
     },
     [meeting.id, userId],
   )
@@ -527,6 +564,8 @@ export function useMeetingPresence({
     isConnecting,
     isWaiting,
     isRejected,
+    isRemoved,
+    connectionFailed,
     waitingParticipants,
     handRaised,
     raisedHands,
@@ -548,6 +587,8 @@ export function useMeetingPresence({
     admit,
     reject,
     admitAllWaiting,
+    remove,
+    allowRejoin,
     leave,
     hostEnd,
     toggleHandRaise,

@@ -7184,10 +7184,12 @@ export type Database = {
           is_muted: boolean | null
           is_video_off: boolean | null
           joined_at: string | null
+          last_seen_at: string | null
           left_at: string | null
           meeting_id: string
           reviewed_at: string | null
           reviewed_by: string | null
+          session_id: string | null
           status: string
           user_id: string
         }
@@ -7198,10 +7200,12 @@ export type Database = {
           is_muted?: boolean | null
           is_video_off?: boolean | null
           joined_at?: string | null
+          last_seen_at?: string | null
           left_at?: string | null
           meeting_id: string
           reviewed_at?: string | null
           reviewed_by?: string | null
+          session_id?: string | null
           status?: string
           user_id: string
         }
@@ -7212,10 +7216,12 @@ export type Database = {
           is_muted?: boolean | null
           is_video_off?: boolean | null
           joined_at?: string | null
+          last_seen_at?: string | null
           left_at?: string | null
           meeting_id?: string
           reviewed_at?: string | null
           reviewed_by?: string | null
+          session_id?: string | null
           status?: string
           user_id?: string
         }
@@ -17593,6 +17599,23 @@ export type Database = {
       }
     }
     Functions: {
+      join_meeting_participant: {
+        Args: { meeting_id_input: string; session_id_input: string }
+        Returns: Database["public"]["Tables"]["meeting_participants"]["Row"]
+      }
+      leave_meeting_participant: {
+        Args: { meeting_id_input: string; session_id_input: string }
+        Returns: undefined
+      }
+      update_meeting_participant_media: {
+        Args: {
+          is_muted_input?: boolean | null
+          is_video_off_input?: boolean | null
+          meeting_id_input: string
+          session_id_input: string
+        }
+        Returns: undefined
+      }
       _cancel_unpaid_checkout_group: {
         Args: { p_group_id: string }
         Returns: Json

@@ -280,10 +280,11 @@ export function LiveKitMeetingRoom({
       setCredentials(creds)
     } catch (loadError) {
       setError(loadError instanceof Error ? loadError.message : 'Failed to connect to LiveKit')
+      onDisconnected()
     } finally {
       setLoading(false)
     }
-  }, [avatarUrl, displayName, enabled, meetingId, roomId])
+  }, [avatarUrl, displayName, enabled, meetingId, onDisconnected, roomId])
 
   useEffect(() => {
     void loadCredentials()

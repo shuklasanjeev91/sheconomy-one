@@ -2,7 +2,7 @@
 // universal link can make this the very first screen module Hermes loads.
 import '~/lib/polyfills/install-dom-exception'
 
-import { Platform } from 'react-native'
+import { Alert, Platform } from 'react-native'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { RoomEvent } from 'livekit-client'
 
@@ -98,6 +98,15 @@ export function MeetingRoomScreen(props: MeetingRoomScreenProps) {
   const title = useMemo(() => props.meeting.title, [props.meeting.title])
   const caps = useMemo(() => getMediaCapabilities(), [])
   const useLiveKit = supportsLiveKitVideo() && !!props.meeting.room_id
+  const [mediaReconnectFailed, setMediaReconnectFailed] = useState(false)
+  const [mediaReconnectKey, setMediaReconnectKey] = useState(0)
+  const handleMediaDisconnected = useCallback(() => setMediaReconnectFailed(true), [])
+
+  const leaveMeetingScreen = useCallback(async () => {
+    await presence.leave()
+    if (props.onLeave) props.onLeave()
+    else navigateApp(coWorkRoutes.home)
+  }, [presence, props])
 
   if (presence.isConnecting) {
     return (
@@ -123,6 +132,34 @@ export function MeetingRoomScreen(props: MeetingRoomScreenProps) {
           Back to Co-Work
         </Button>
       </ScreenCenter>
+    )
+  }
+
+  if (presence.isRemoved) {
+    return (
+      <MeetingReconnectFallback
+        title="You were removed from this meeting"
+        message="The host must allow you to rejoin before this meeting link will work again."
+        error={presence.error}
+        onRetry={() => presence.retryJoinRequest()}
+        onLeave={leaveMeetingScreen}
+      />
+    )
+  }
+
+  if (presence.connectionFailed || mediaReconnectFailed) {
+    return (
+      <MeetingReconnectFallback
+        title="Unable to reconnect"
+        message="Check your internet connection, then try joining the meeting again."
+        error={presence.error}
+        onRetry={async () => {
+          setMediaReconnectFailed(false)
+          setMediaReconnectKey((value) => value + 1)
+          await presence.retryJoinRequest()
+        }}
+        onLeave={leaveMeetingScreen}
+      />
     )
   }
 
@@ -152,15 +189,14 @@ export function MeetingRoomScreen(props: MeetingRoomScreenProps) {
       raisedHands={presence.raisedHands}
     >
       <LiveKitMeetingRoom
+        key={mediaReconnectKey}
         meetingId={props.meeting.id}
         roomId={props.meeting.room_id ?? ''}
         displayName={props.displayName}
         avatarUrl={props.avatarUrl}
         isHost={props.isHost}
         enabled={!presence.isWaiting && !presence.isRejected}
-        onDisconnected={() => {
-          void presence.leave()
-        }}
+        onDisconnected={handleMediaDisconnected}
         overlay={
           useLiveKit
             ? (liveKit) => (
@@ -176,6 +212,79 @@ export function MeetingRoomScreen(props: MeetingRoomScreenProps) {
         }
       />
     </MeetingLiveSignalsProvider>
+  )
+}
+
+function MeetingReconnectFallback({
+  title,
+  message,
+  error,
+  onRetry,
+  onLeave,
+}: {
+  title: string
+  message: string
+  error?: string | null
+  onRetry: () => Promise<void>
+  onLeave: () => Promise<void>
+}) {
+  const { ui: coworkUi } = useCoWorkTheme()
+  const [busy, setBusy] = useState<'retry' | 'leave' | null>(null)
+
+  const run = async (action: 'retry' | 'leave', task: () => Promise<void>) => {
+    if (busy) return
+    setBusy(action)
+    try {
+      await task()
+    } finally {
+      setBusy(null)
+    }
+  }
+
+  return (
+    <ScreenCenter backgroundColor={coworkUi.pageBg} padding="$6" gap="$4">
+      <YStack
+        width={64}
+        height={64}
+        borderRadius={999}
+        alignItems="center"
+        justifyContent="center"
+        backgroundColor={coworkUi.warningMuted}
+        borderWidth={1}
+        borderColor={coworkUi.borderSoft}
+      >
+        <Icons.AlertTriangle size={26} color={coworkUi.warning} />
+      </YStack>
+      <Text fontSize={24} fontWeight="800" color={coworkUi.text} textAlign="center">
+        {title}
+      </Text>
+      <Text color={coworkUi.textSecondary} textAlign="center" maxWidth={460}>
+        {message}
+      </Text>
+      {error ? (
+        <Text color={coworkUi.danger} textAlign="center" maxWidth={460}>
+          {error}
+        </Text>
+      ) : null}
+      <XStack gap="$3" flexWrap="wrap" justifyContent="center">
+        <Button
+          tone="primary"
+          borderRadius={999}
+          disabled={!!busy}
+          onPress={() => void run('retry', onRetry)}
+        >
+          {busy === 'retry' ? 'Retrying…' : 'Retry'}
+        </Button>
+        <Button
+          tone="outline"
+          borderRadius={999}
+          disabled={!!busy}
+          onPress={() => void run('leave', onLeave)}
+        >
+          {busy === 'leave' ? 'Leaving…' : 'Leave Meeting'}
+        </Button>
+      </XStack>
+    </ScreenCenter>
   )
 }
 
@@ -515,6 +624,44 @@ function MeetingRoomOverlay({
     })
   }, [isHost, liveKit?.room, presence, toast, userId])
 
+  const confirmRemoveParticipant = useCallback(
+    (participantId: string) => {
+      const remove = () => {
+        void presence
+          .remove(participantId)
+          .then(() => toast.show('Participant removed', { tone: 'success' }))
+          .catch((cause) =>
+            toast.show('Could not remove participant', {
+              tone: 'danger',
+              message: cause instanceof Error ? cause.message : 'Please try again.',
+            }),
+          )
+      }
+      if (Platform.OS === 'web') {
+        if (
+          typeof window !== 'undefined' &&
+          window.confirm('Remove this participant? They cannot rejoin until you allow them.')
+        ) {
+          remove()
+        }
+        return
+      }
+      Alert.alert(
+        'Remove participant?',
+        'They will be disconnected and cannot rejoin until you allow them.',
+        [
+          { text: 'Cancel', style: 'cancel' },
+          {
+            text: 'Remove',
+            style: 'destructive',
+            onPress: remove,
+          },
+        ],
+      )
+    },
+    [presence, toast],
+  )
+
   const handleLeave = useCallback(() => {
     if (exitingRef.current) return
     exitingRef.current = true
@@ -836,6 +983,15 @@ function MeetingRoomOverlay({
             onAdmit={(id) => void presence.admit(id)}
             onReject={isHost ? (id) => void presence.reject(id) : undefined}
             onAdmitAll={isHost ? () => void presence.admitAllWaiting() : undefined}
+            onRemove={isHost ? confirmRemoveParticipant : undefined}
+            onAllowRejoin={
+              isHost
+                ? (id) =>
+                    void presence
+                      .allowRejoin(id)
+                      .then(() => toast.show('Participant may request to rejoin', { tone: 'success' }))
+                : undefined
+            }
             onClose={() => presence.setPanel('none')}
             raisedHands={presence.raisedHands}
             fullWidth={panelFullWidth}

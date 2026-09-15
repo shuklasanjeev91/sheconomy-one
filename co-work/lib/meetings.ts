@@ -18,6 +18,15 @@ const PARTICIPANT_SELECT =
 
 type MeetingTimeFields = Pick<Meeting, 'scheduled_at' | 'started_at' | 'created_at'>
 
+export function createMeetingSessionId(): string {
+  if (typeof globalThis.crypto?.randomUUID === 'function') return globalThis.crypto.randomUUID()
+  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (character) => {
+    const random = Math.floor(Math.random() * 16)
+    const value = character === 'x' ? random : (random & 0x3) | 0x8
+    return value.toString(16)
+  })
+}
+
 /** Same timestamp shown via formatWhen: scheduled → started → created. */
 export function getMeetingAnchorAt(meeting: MeetingTimeFields): Date | null {
   const raw = meeting.scheduled_at ?? meeting.started_at ?? meeting.created_at
@@ -413,41 +422,25 @@ export async function verifyMeetingPasscode(meetingId: string, passcode: string)
 
 export async function joinMeetingParticipant(
   meetingId: string,
-  userId: string,
-  isHost: boolean,
-  waitingRoom: boolean,
+  _userId: string,
+  _isHost: boolean,
+  _waitingRoom: boolean,
+  sessionId: string,
 ): Promise<MeetingParticipant> {
-  const { data: existing } = await supabase
-    .from('meeting_participants')
-    .select('id, status')
-    .eq('meeting_id', meetingId)
-    .eq('user_id', userId)
-    .maybeSingle()
+  const { data, error } = await supabase.rpc('join_meeting_participant', {
+    meeting_id_input: meetingId,
+    session_id_input: sessionId,
+  })
 
-  // Stay admitted across reconnects. Rejected guests may request again.
-  const keepAdmitted = existing?.status === 'admitted' || isHost
-  const status = keepAdmitted ? 'admitted' : waitingRoom ? 'waiting' : 'admitted'
-  const joinedAt = status === 'waiting' ? null : new Date().toISOString()
-
-  const { data, error } = await supabase
-    .from('meeting_participants')
-    .upsert(
-      {
-        meeting_id: meetingId,
-        user_id: userId,
-        is_host: isHost,
-        status,
-        joined_at: joinedAt,
-        left_at: null,
-        is_muted: false,
-        is_video_off: false,
-      },
-      { onConflict: 'meeting_id,user_id' },
-    )
-    .select(PARTICIPANT_SELECT)
-    .single()
-
-  if (error) throw new Error(error.message)
+  if (error) {
+    if (/PARTICIPANT_REMOVED/i.test(error.message)) {
+      throw new Error('You were removed from this meeting. Ask the host to allow you to rejoin.')
+    }
+    if (/MEETING_CANCELLED/i.test(error.message)) {
+      throw new Error('The host cancelled this meeting.')
+    }
+    throw new Error(error.message)
+  }
   return mapParticipant(data as Record<string, unknown>)
 }
 
@@ -487,6 +480,36 @@ export async function rejectParticipant(participantId: string): Promise<void> {
   if (error) throw new Error(error.message)
 }
 
+export async function removeMeetingParticipant(participantId: string): Promise<void> {
+  const reviewedBy = await reviewerId()
+  const { error } = await supabase
+    .from('meeting_participants')
+    .update({
+      status: 'removed',
+      left_at: new Date().toISOString(),
+      reviewed_at: new Date().toISOString(),
+      reviewed_by: reviewedBy,
+    })
+    .eq('id', participantId)
+
+  if (error) throw new Error(error.message)
+}
+
+export async function allowMeetingParticipantRejoin(participantId: string): Promise<void> {
+  const { error } = await supabase
+    .from('meeting_participants')
+    .update({
+      status: 'waiting',
+      left_at: null,
+      reviewed_at: null,
+      reviewed_by: null,
+      session_id: null,
+    })
+    .eq('id', participantId)
+
+  if (error) throw new Error(error.message)
+}
+
 export async function cancelMeeting(meetingId: string): Promise<void> {
   const now = new Date().toISOString()
   const { error } = await supabase
@@ -504,26 +527,31 @@ export async function cancelMeeting(meetingId: string): Promise<void> {
   invalidateCache(INVALIDATION_TOPICS.coWorkMeetings)
 }
 
-export async function leaveMeetingParticipant(meetingId: string, userId: string): Promise<void> {
-  const { error } = await supabase
-    .from('meeting_participants')
-    .update({ status: 'left', left_at: new Date().toISOString() })
-    .eq('meeting_id', meetingId)
-    .eq('user_id', userId)
+export async function leaveMeetingParticipant(
+  meetingId: string,
+  _userId: string,
+  sessionId: string,
+): Promise<void> {
+  const { error } = await supabase.rpc('leave_meeting_participant', {
+    meeting_id_input: meetingId,
+    session_id_input: sessionId,
+  })
 
   if (error) throw new Error(error.message)
 }
 
 export async function updateParticipantMedia(
   meetingId: string,
-  userId: string,
+  _userId: string,
   patch: { is_muted?: boolean; is_video_off?: boolean },
+  sessionId: string,
 ): Promise<void> {
-  const { error } = await supabase
-    .from('meeting_participants')
-    .update(patch)
-    .eq('meeting_id', meetingId)
-    .eq('user_id', userId)
+  const { error } = await supabase.rpc('update_meeting_participant_media', {
+    meeting_id_input: meetingId,
+    session_id_input: sessionId,
+    is_muted_input: patch.is_muted ?? null,
+    is_video_off_input: patch.is_video_off ?? null,
+  })
 
   if (error) throw new Error(error.message)
 }
@@ -533,7 +561,7 @@ export async function fetchMeetingParticipants(meetingId: string): Promise<Meeti
     .from('meeting_participants')
     .select(PARTICIPANT_SELECT)
     .eq('meeting_id', meetingId)
-    .in('status', ['admitted', 'waiting', 'rejected'])
+    .in('status', ['admitted', 'waiting', 'rejected', 'removed'])
     .order('joined_at', { ascending: true })
 
   if (error) throw new Error(error.message)

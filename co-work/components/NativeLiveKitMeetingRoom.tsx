@@ -2,7 +2,7 @@
 import '~/lib/polyfills/install-dom-exception'
 
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { useWindowDimensions } from 'react-native'
+import { AppState, useWindowDimensions } from 'react-native'
 import { ConnectionState, RoomEvent, Track } from 'livekit-client'
 import {
   LiveKitRoom,
@@ -139,6 +139,7 @@ export function NativeLiveKitMeetingRoom({
       } catch (loadError) {
         if (cancelled) return
         setError(loadError instanceof Error ? loadError.message : 'Failed to connect to LiveKit')
+        onDisconnected()
       } finally {
         if (!cancelled) setLoading(false)
       }
@@ -148,7 +149,7 @@ export function NativeLiveKitMeetingRoom({
     return () => {
       cancelled = true
     }
-  }, [audioReady, avatarUrl, displayName, enabled, meetingId, roomId])
+  }, [audioReady, avatarUrl, displayName, enabled, meetingId, onDisconnected, roomId])
 
   if (!roomId) {
     return (
@@ -275,6 +276,25 @@ function NativeLiveKitMeetingContent({
   const preferSpeaker = mediaMode !== 'audio'
   const liveKit = useLiveKitMediaControls(preferSpeaker)
   const micForcedRef = useRef(false)
+
+  useEffect(() => {
+    const subscription = AppState.addEventListener('change', (state) => {
+      if (state !== 'active') return
+      void (async () => {
+        try {
+          await configureLiveKitCallAudio(mediaMode)
+          await applyPreferredCallAudioOutput(mediaMode, liveKit.speakerOn)
+          if (liveKit.room.state === ConnectionState.Connected) {
+            await reinforceCallMediaOnConnect(liveKit.room, mediaMode)
+          }
+        } catch {
+          // LiveKit continues its own reconnect cycle; the final disconnect
+          // callback presents the explicit Retry / Leave Meeting screen.
+        }
+      })()
+    })
+    return () => subscription.remove()
+  }, [liveKit.room, liveKit.speakerOn, mediaMode])
 
   useEffect(() => {
     const room = liveKit.room
