@@ -9,6 +9,7 @@ import { ShareSheet } from '~/components/share'
 import { Button, Field, Icons, Input, Spinner, Text, XStack, YStack, useAppToast } from '~/components/ui'
 import { CoWorkBrandChip, CoWorkIconBadge } from '~/co-work/components/CoWorkUi'
 import { MeetingInvitePanel } from '~/co-work/components/MeetingInvitePanel'
+import { MeetingBackgroundPreview } from '~/co-work/components/MeetingBackgroundPreview'
 import { buildMeetingSharePayload } from '~/co-work/lib/meeting-share'
 import {
   fetchMeetingByCode,
@@ -222,6 +223,7 @@ export function MeetingLobbyScreen({ code }: MeetingLobbyScreenProps) {
               <Text color={coworkUi.textSecondary} fontSize={14}>
                 Hosted by {meeting.host?.full_name || meeting.host?.username || BRAND_MEMBER_LABEL}
               </Text>
+              <MeetingBackgroundPreview />
               <XStack gap="$3" flexWrap="wrap">
                 <Button
                   tone="primary"

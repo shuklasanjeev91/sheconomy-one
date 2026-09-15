@@ -14,6 +14,7 @@ export const STORAGE_BUCKETS = {
   postImages: 'post-images',
   visualPreviews: 'visual-previews',
   categoriesMedia: 'categories_media',
+  meetingBackgrounds: 'meeting-backgrounds',
 } as const
 
 const MAX_IMAGE_BYTES = 8 * 1024 * 1024

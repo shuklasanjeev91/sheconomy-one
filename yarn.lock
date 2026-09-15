@@ -3376,6 +3376,18 @@ __metadata:
   languageName: node
   linkType: hard
 
+"@livekit/track-processors@npm:^0.7.2":
+  version: 0.7.2
+  resolution: "@livekit/track-processors@npm:0.7.2"
+  dependencies:
+    "@mediapipe/tasks-vision": "npm:0.10.14"
+  peerDependencies:
+    "@types/dom-mediacapture-transform": ^0.1.9
+    livekit-client: ^1.12.0 || ^2.1.0
+  checksum: 10/18627b7ed53d35a51fe884c96fd9a3433f775e86603ac29d03818e14548659a51bf440196c53e899e42d4a5205cce1d05c24f270760ffc4d89f955a55e9eec6c
+  languageName: node
+  linkType: hard
+
 "@malept/cross-spawn-promise@npm:^2.0.0":
   version: 2.0.0
   resolution: "@malept/cross-spawn-promise@npm:2.0.0"
@@ -3401,6 +3413,13 @@ __metadata:
   version: 0.4.1633559619
   resolution: "@mediapipe/face_mesh@npm:0.4.1633559619"
   checksum: 10/aab20f4a293eb4c8794794260b1efb8f7110053efc923f786b95f0eb17dd4f2cd75897c20c0bfa1ae7fb89ce68d36e5d882b48dbeb33382eaf82423cbe001510
+  languageName: node
+  linkType: hard
+
+"@mediapipe/tasks-vision@npm:0.10.14":
+  version: 0.10.14
+  resolution: "@mediapipe/tasks-vision@npm:0.10.14"
+  checksum: 10/59bd0e5da5c14f2b449721c91e2d81c0602ba51222231455418bec7860281299021088db6e384d696093769fbad62b2a19818582714cd8a4e174d3561c322861
   languageName: node
   linkType: hard
 
@@ -8109,6 +8128,7 @@ __metadata:
     "@livekit/react-native-callkeep": "npm:^4.3.16"
     "@livekit/react-native-expo-plugin": "npm:^1.0.2"
     "@livekit/react-native-webrtc": "npm:^144.1.1"
+    "@livekit/track-processors": "npm:^0.7.2"
     "@mediapipe/face_mesh": "npm:~0.4.0"
     "@microsoft/react-native-clarity": "npm:^4.6.3"
     "@playwright/test": "npm:^1.61.1"

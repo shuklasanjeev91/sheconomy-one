@@ -1,0 +1,9 @@
+{
+  "platforms": ["apple", "android"],
+  "apple": {
+    "modules": ["MeetingVideoEffectsModule"]
+  },
+  "android": {
+    "modules": ["com.sheconomy.meetingvideoeffects.MeetingVideoEffectsModule"]
+  }
+}

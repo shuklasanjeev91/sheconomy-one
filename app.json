@@ -3,14 +3,14 @@
     "name": "SHEconomy",
     "slug": "sheconomy",
     "owner": "sheconomy",
-    "version": "6.0.9",
+    "version": "6.0.10",
     "scheme": "sheconomy",
     "newArchEnabled": true,
     "platforms": [
       "ios",
       "android"
     ],
-    "runtimeVersion": "6.0.7",
+    "runtimeVersion": "6.0.8",
     "updates": {
       "enabled": true,
       "checkAutomatically": "ON_LOAD",

@@ -14,13 +14,15 @@ type MeetingControlsProps = {
   recording: boolean
   captionsActive: boolean
   isHost: boolean
-  panel: 'none' | 'chat' | 'people' | 'invite' | 'info' | 'recordings'
+  panel: 'none' | 'chat' | 'people' | 'invite' | 'info' | 'recordings' | 'backgrounds'
+  backgroundActive?: boolean
   unreadChatCount?: number
   raisedHandCount?: number
   reactionTrayOpen?: boolean
   busy?: boolean
   onToggleAudio: () => void
   onToggleVideo: () => void
+  onToggleBackgrounds?: () => void
   onToggleScreen: () => void
   onToggleHand: () => void
   onToggleReactions?: () => void
@@ -147,6 +149,7 @@ export function MeetingControls({
   caps,
   audioEnabled,
   videoEnabled,
+  backgroundActive = false,
   screenSharing,
   handRaised,
   recording,
@@ -159,6 +162,7 @@ export function MeetingControls({
   busy = false,
   onToggleAudio,
   onToggleVideo,
+  onToggleBackgrounds,
   onToggleScreen,
   onToggleHand,
   onToggleReactions,
@@ -230,13 +234,24 @@ export function MeetingControls({
                 compact={compact}
               />
               {caps.supportsVideo ? (
-                <ControlButton
-                  label={videoEnabled ? 'Stop video' : 'Start video'}
-                  icon={videoEnabled ? Icons.Video : Icons.VideoOff}
-                  variant={videoEnabled ? 'neutral' : 'danger'}
-                  onPress={onToggleVideo}
-                  compact={compact}
-                />
+                <>
+                  <ControlButton
+                    label={videoEnabled ? 'Stop video' : 'Start video'}
+                    icon={videoEnabled ? Icons.Video : Icons.VideoOff}
+                    variant={videoEnabled ? 'neutral' : 'danger'}
+                    onPress={onToggleVideo}
+                    compact={compact}
+                  />
+                  {onToggleBackgrounds ? (
+                    <ControlButton
+                      label="Backgrounds"
+                      icon={Icons.Sparkles}
+                      variant={panel === 'backgrounds' || backgroundActive ? 'brand' : 'neutral'}
+                      onPress={onToggleBackgrounds}
+                      compact={compact}
+                    />
+                  ) : null}
+                </>
               ) : null}
               {caps.supportsScreenShare ? (
                 <ControlButton

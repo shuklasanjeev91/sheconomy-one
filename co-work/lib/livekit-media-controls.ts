@@ -1,4 +1,5 @@
 import type { LocalParticipant, Room } from 'livekit-client'
+import type { MeetingVideoEffects } from '~/co-work/lib/meeting-video-effects'
 
 export type LiveKitMediaControls = {
   room: Room
@@ -6,6 +7,7 @@ export type LiveKitMediaControls = {
   audioEnabled: boolean
   videoEnabled: boolean
   screenSharing: boolean
+  videoEffects: MeetingVideoEffects
   /** True when local output is forced to the loudspeaker (vs earpiece / BT). */
   speakerOn: boolean
   toggleAudio: () => void

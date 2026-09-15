@@ -14,6 +14,7 @@ import {
 } from '~/co-work/lib/livekit-call-audio'
 import type { LiveKitMediaControls } from '~/co-work/lib/livekit-media-controls'
 import { setLocalScreenShareEnabled } from '~/co-work/lib/livekit-screen-share'
+import { useMeetingVideoEffects } from '~/co-work/hooks/useMeetingVideoEffects.native'
 
 type ScreenCapturePickerHandle = React.ElementRef<typeof ScreenCapturePickerView>
 
@@ -76,6 +77,7 @@ export function useLiveKitMediaControls(preferSpeaker = true): LiveKitMediaContr
   const { localParticipant, isMicrophoneEnabled, isCameraEnabled, isScreenShareEnabled } =
     useLocalParticipant()
   const [speakerOn, setSpeakerOn] = useState(preferSpeaker)
+  const videoEffects = useMeetingVideoEffects()
   const muteInFlightRef = useRef(false)
 
   useEffect(() => {
@@ -151,6 +153,7 @@ export function useLiveKitMediaControls(preferSpeaker = true): LiveKitMediaContr
     audioEnabled: isMicrophoneEnabled,
     videoEnabled: isCameraEnabled,
     screenSharing: isScreenShareEnabled,
+    videoEffects,
     speakerOn,
     toggleAudio,
     toggleVideo: () => void localParticipant.setCameraEnabled(!isCameraEnabled),

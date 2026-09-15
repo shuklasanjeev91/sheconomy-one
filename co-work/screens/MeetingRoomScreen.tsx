@@ -12,6 +12,7 @@ import { Button, Icons, Spinner, Text, XStack, YStack, useAppToast } from '~/com
 import { CoWorkAlertBanner, CoWorkStatusPill } from '~/co-work/components/CoWorkUi'
 import { LiveKitMeetingRoom, type LiveKitMediaControls } from '~/co-work/components/LiveKitMeetingRoom'
 import { MeetingChatPanel } from '~/co-work/components/MeetingChatPanel'
+import { MeetingBackgroundPanel } from '~/co-work/components/MeetingBackgroundPanel'
 import { MeetingControls } from '~/co-work/components/MeetingControls'
 import { MeetingInfoPanel } from '~/co-work/components/MeetingInfoPanel'
 import { MeetingInvitePanel } from '~/co-work/components/MeetingInvitePanel'
@@ -718,6 +719,25 @@ function MeetingRoomOverlay({
         ) : null}
       </YStack>
 
+      {liveKit && presence.panel === 'backgrounds' ? (
+        <YStack
+          position={overlayPosition}
+          top={panelTop}
+          right={panelFullWidth ? 0 : 12}
+          left={panelFullWidth ? 0 : undefined}
+          bottom={panelBottom}
+          zIndex={25}
+          pointerEvents="auto"
+        >
+          <MeetingBackgroundPanel
+            userId={userId}
+            effects={liveKit.videoEffects}
+            onClose={() => presence.setPanel('none')}
+            fullWidth={panelFullWidth}
+          />
+        </YStack>
+      ) : null}
+
       {presence.panel === 'chat' ? (
         <YStack
           position={overlayPosition}
@@ -878,6 +898,7 @@ function MeetingRoomOverlay({
           captionsActive={captions.active}
           isHost={isHost}
           panel={presence.panel}
+          backgroundActive={(liveKit?.videoEffects.selection.mode ?? 'off') !== 'off'}
           unreadChatCount={presence.unreadChatCount}
           raisedHandCount={raisedHandCount}
           reactionTrayOpen={reactionTrayOpen}
@@ -904,6 +925,7 @@ function MeetingRoomOverlay({
             void presence.syncMediaState({ is_video_off: liveKit.videoEnabled })
             liveKit.toggleVideo()
           }}
+          onToggleBackgrounds={() => presence.togglePanel('backgrounds')}
           onToggleScreen={() => void toggleScreenShare()}
           onToggleHand={toggleHand}
           onToggleReactions={() => setReactionTrayOpen((open) => !open)}
