@@ -18,6 +18,8 @@ export type SignalingHandlers = {
   onSignal: (payload: SignalPayload) => void
   onParticipantChange?: () => void
   onChatMessage?: (row?: MeetingChatInsertRow) => void
+  onPresenceSync?: (onlineUserIds: string[]) => void
+  onConnectionState?: (connected: boolean) => void
 }
 
 /** Channel name passed to supabase.channel() */
@@ -79,9 +81,16 @@ function attachMeetingChannelListeners(
         handlers.onChatMessage?.(row ?? undefined)
       },
     )
+    .on('presence', { event: 'sync' }, () => {
+      handlers.onPresenceSync?.(Object.keys(channel.presenceState()))
+    })
 }
 
-async function subscribeMeetingChannel(channel: RealtimeChannel, userId: string): Promise<RealtimeChannel> {
+async function subscribeMeetingChannel(
+  channel: RealtimeChannel,
+  userId: string,
+  onConnectionState?: (connected: boolean) => void,
+): Promise<RealtimeChannel> {
   const SUBSCRIBE_TIMEOUT_MS = 8_000
 
   return new Promise((resolve, reject) => {
@@ -94,11 +103,13 @@ async function subscribeMeetingChannel(channel: RealtimeChannel, userId: string)
     }
 
     const timer = setTimeout(() => {
+      onConnectionState?.(false)
       finish(() => reject(new Error('Meeting channel subscribe timed out')))
     }, SUBSCRIBE_TIMEOUT_MS)
 
     channel.subscribe(async (status, err) => {
       if (status === 'SUBSCRIBED') {
+        onConnectionState?.(true)
         try {
           await channel.track({ userId, online_at: new Date().toISOString() })
         } catch {
@@ -108,6 +119,7 @@ async function subscribeMeetingChannel(channel: RealtimeChannel, userId: string)
         return
       }
       if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT' || status === 'CLOSED') {
+        onConnectionState?.(false)
         finish(() => reject(new Error(err?.message ?? `Failed to join meeting channel (${status})`)))
       }
     })
@@ -126,7 +138,7 @@ async function joinMeetingChannelOnce(
   })
 
   attachMeetingChannelListeners(channel, meetingId, handlers)
-  return subscribeMeetingChannel(channel, userId)
+  return subscribeMeetingChannel(channel, userId, handlers.onConnectionState)
 }
 
 /**

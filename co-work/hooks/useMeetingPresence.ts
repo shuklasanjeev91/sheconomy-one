@@ -33,7 +33,7 @@ type MediaHandlers = {
   onMuteAll?: () => void
 }
 
-const POLL_INTERVAL_MS = 5000
+const POLL_INTERVAL_MS = 4000
 
 /** Supabase-backed meeting presence: participants, chat, waiting room (no media). */
 export function useMeetingPresence({
@@ -48,6 +48,7 @@ export function useMeetingPresence({
   const mediaHandlersRef = useRef<MediaHandlers>({})
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null)
   const realtimeActiveRef = useRef(false)
+  const intentionalDisconnectRef = useRef(false)
 
   const [participants, setParticipants] = useState<MeetingParticipant[]>([])
   const [chatMessages, setChatMessages] = useState<MeetingChatMessage[]>([])
@@ -60,6 +61,8 @@ export function useMeetingPresence({
   const [raisedHands, setRaisedHands] = useState<Record<string, boolean>>({})
   const [liveCaptions, setLiveCaptions] = useState<LiveCaptionLine[]>([])
   const [realtimeDegraded, setRealtimeDegraded] = useState(false)
+  const [isRealtimeConnected, setIsRealtimeConnected] = useState(false)
+  const [onlineUserIds, setOnlineUserIds] = useState<string[]>([])
   const [unreadChatCount, setUnreadChatCount] = useState(0)
   const [latestChatNotice, setLatestChatNotice] = useState<{
     id: string
@@ -81,6 +84,11 @@ export function useMeetingPresence({
   const isWaiting = selfParticipant?.status === 'waiting'
   const isRejected = selfParticipant?.status === 'rejected'
   const waitingParticipants = participants.filter((p) => p.status === 'waiting')
+  const hostParticipant = participants.find((p) => p.is_host || p.user_id === meeting.host_id)
+  const isHostPresent =
+    isHost ||
+    onlineUserIds.includes(meeting.host_id) ||
+    (!isRealtimeConnected && hostParticipant?.status === 'admitted')
 
   const refreshParticipants = useCallback(async () => {
     const rows = await fetchMeetingParticipants(meeting.id)
@@ -136,8 +144,10 @@ export function useMeetingPresence({
   const startPolling = useCallback(() => {
     if (pollRef.current) return
     pollRef.current = setInterval(() => {
-      void refreshParticipants()
-      void refreshChat()
+      void refreshParticipants().catch(() => undefined)
+      if (!realtimeActiveRef.current) {
+        void refreshChat().catch(() => undefined)
+      }
     }, POLL_INTERVAL_MS)
   }, [refreshChat, refreshParticipants])
 
@@ -145,6 +155,13 @@ export function useMeetingPresence({
     if (!channelRef.current) return false
     broadcastSignal(channelRef.current, payload)
     return true
+  }, [])
+
+  const handleConnectionState = useCallback((connected: boolean) => {
+    if (intentionalDisconnectRef.current) return
+    realtimeActiveRef.current = connected
+    setIsRealtimeConnected(connected)
+    if (!connected) setRealtimeDegraded(true)
   }, [])
 
   const pushFloatingReaction = useCallback(
@@ -233,8 +250,10 @@ export function useMeetingPresence({
     if (!enabled) return
 
     const generation = ++connectGenerationRef.current
+    intentionalDisconnectRef.current = false
     setIsConnecting(true)
     setError(null)
+    setIsRealtimeConnected(false)
 
     try {
       const waitingRoom = !isHost && !!meeting.security_settings?.waitingRoom
@@ -261,6 +280,8 @@ export function useMeetingPresence({
       const channel = await joinMeetingChannel(meeting.id, userId, {
         onSignal: handleSignal,
         onParticipantChange: () => void refreshParticipants(),
+        onPresenceSync: setOnlineUserIds,
+        onConnectionState: handleConnectionState,
         onChatMessage: (row) => {
           if (row?.id && !row.is_deleted) {
             ingestRemoteChatMessage({
@@ -284,13 +305,18 @@ export function useMeetingPresence({
 
       channelRef.current = channel
       realtimeActiveRef.current = true
+      setIsRealtimeConnected(true)
       setRealtimeDegraded(false)
-      stopPolling()
+      // Realtime events can be dropped while an app sleeps or changes network.
+      // Keep a cheap participant reconciliation poll so waiting-room decisions
+      // are observed within a few seconds instead of leaving guests stuck.
+      startPolling()
       await refreshChat()
     } catch {
       if (generation !== connectGenerationRef.current) return
 
       realtimeActiveRef.current = false
+      setIsRealtimeConnected(false)
       setRealtimeDegraded(true)
       startPolling()
       await refreshChat()
@@ -298,6 +324,7 @@ export function useMeetingPresence({
   }, [
     enabled,
     handleSignal,
+    handleConnectionState,
     ingestRemoteChatMessage,
     isHost,
     meeting,
@@ -309,8 +336,11 @@ export function useMeetingPresence({
   ])
 
   const disconnect = useCallback(async () => {
+    intentionalDisconnectRef.current = true
     stopPolling()
     realtimeActiveRef.current = false
+    setIsRealtimeConnected(false)
+    setOnlineUserIds([])
     const channel = channelRef.current
     channelRef.current = null
     if (channel) {
@@ -484,6 +514,11 @@ export function useMeetingPresence({
     void connect()
   }, [connect])
 
+  const retryJoinRequest = useCallback(async () => {
+    setError(null)
+    await connect()
+  }, [connect])
+
   return {
     participants,
     chatMessages,
@@ -497,6 +532,8 @@ export function useMeetingPresence({
     raisedHands,
     liveCaptions,
     realtimeDegraded,
+    isRealtimeConnected,
+    isHostPresent,
     unreadChatCount,
     latestChatNotice,
     clearChatNotice,
@@ -519,6 +556,7 @@ export function useMeetingPresence({
     syncMediaState,
     registerMediaHandlers,
     retryRealtime,
+    retryJoinRequest,
     refreshParticipants,
   }
 }

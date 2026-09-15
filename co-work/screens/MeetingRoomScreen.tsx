@@ -21,6 +21,8 @@ import { MeetingLiveSignalsProvider } from '~/co-work/components/MeetingLiveSign
 import { MeetingParticipantsPanel } from '~/co-work/components/MeetingParticipantsPanel'
 import { MeetingReactionsOverlay } from '~/co-work/components/MeetingReactionsOverlay'
 import { MeetingRecordingsPanel } from '~/co-work/components/MeetingRecordingsPanel'
+import { MeetingWaitingRoom } from '~/co-work/components/MeetingWaitingRoom'
+import { MeetingWaitingRoomRequests } from '~/co-work/components/MeetingWaitingRoomRequests'
 import { useLiveCaptions } from '~/co-work/hooks/useLiveCaptions'
 import {
   useMeetingRecording,
@@ -124,35 +126,20 @@ export function MeetingRoomScreen(props: MeetingRoomScreenProps) {
 
   if (presence.isWaiting) {
     return (
-      <ScreenCenter backgroundColor={coworkUi.pageBg} padding="$6" gap="$4">
-        <YStack
-          width={56}
-          height={56}
-          borderRadius={999}
-          alignItems="center"
-          justifyContent="center"
-          backgroundColor={coworkUi.brandMuted}
-          borderWidth={1}
-          borderColor={coworkUi.borderAccent}
-        >
-          <Icons.Shield size={24} color={coworkUi.brandLight} />
-        </YStack>
-        <Text fontSize={24} fontWeight="800" color={coworkUi.text} textAlign="center">
-          Waiting for the host to let you in
-        </Text>
-        <Text color={coworkUi.textSecondary} textAlign="center">
-          We notified the host. You&apos;ll join {title} as soon as they admit you.
-        </Text>
-        <Text color={coworkUi.textMuted}>Meeting ID: {formatMeetingCode(props.meeting.meeting_code)}</Text>
-        <Button
-          tone="outline"
-          size="$3"
-          borderRadius={999}
-          onPress={() => (props.onLeave ? props.onLeave() : navigateApp(coWorkRoutes.home))}
-        >
-          Leave waiting room
-        </Button>
-      </ScreenCenter>
+      <MeetingWaitingRoom
+        meetingTitle={title}
+        meetingCode={formatMeetingCode(props.meeting.meeting_code)}
+        hostPresent={presence.isHostPresent}
+        realtimeConnected={presence.isRealtimeConnected}
+        realtimeDegraded={presence.realtimeDegraded}
+        error={presence.error}
+        onRetry={presence.retryJoinRequest}
+        onCancel={async () => {
+          await presence.leave()
+          if (props.onLeave) props.onLeave()
+          else navigateApp(coWorkRoutes.home)
+        }}
+      />
     )
   }
 
@@ -715,6 +702,15 @@ function MeetingRoomOverlay({
             message={presence.error ?? ''}
             actionLabel="Dismiss"
             onAction={() => setDismissedError(presence.error)}
+          />
+        ) : null}
+        {isHost && presence.waitingParticipants.length > 0 ? (
+          <MeetingWaitingRoomRequests
+            participants={presence.waitingParticipants}
+            onAdmit={presence.admit}
+            onReject={presence.reject}
+            onAdmitAll={presence.admitAllWaiting}
+            onReview={() => presence.setPanel('people')}
           />
         ) : null}
       </YStack>
