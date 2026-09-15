@@ -9,6 +9,7 @@ export type MeetingStageTracks = {
   pipTrack: TrackReferenceOrPlaceholder | null
   totalTiles: number
   hasScreenShare: boolean
+  isLocalScreenSharing: boolean
 }
 
 function isScreenShareTrack(track: TrackReferenceOrPlaceholder) {
@@ -50,17 +51,18 @@ export function composeMeetingStageTracks(
   const cameras = [...cameraByIdentity.values()]
   const remoteScreens = screenShares.filter((track) => track.participant.identity !== localIdentity)
   const localScreens = screenShares.filter((track) => track.participant.identity === localIdentity)
-  // Prefer remote presenter's screen; fall back to local self-preview while sharing.
-  const focusedScreen = remoteScreens[0] ?? localScreens[0] ?? null
+  const isLocalScreenSharing = localScreens.length > 0
+  // Never render the presenter's own captured display back into that display.
+  // Doing so creates the infinite "hall of mirrors" shown by every screen recorder.
+  // The local publication remains live and remote participants still receive it.
+  const focusedScreen = remoteScreens[0] ?? null
 
   const localCamera =
     cameras.find((track) => track.participant.identity === localIdentity) ?? null
   const remoteCameras = cameras.filter((track) => track.participant.identity !== localIdentity)
 
   if (focusedScreen) {
-    const otherScreens = [...remoteScreens, ...localScreens].filter(
-      (track) => track !== focusedScreen,
-    )
+    const otherScreens = remoteScreens.filter((track) => track !== focusedScreen)
     const stageTracks = [focusedScreen, ...otherScreens]
     // Show self camera in PiP while watching a remote screen; otherwise first remote.
     const pipTrack =
@@ -73,6 +75,7 @@ export function composeMeetingStageTracks(
       pipTrack,
       totalTiles: stageTracks.length + (pipTrack ? 1 : 0),
       hasScreenShare: true,
+      isLocalScreenSharing,
     }
   }
 
@@ -87,6 +90,7 @@ export function composeMeetingStageTracks(
       pipTrack: null,
       totalTiles: 3,
       hasScreenShare: false,
+      isLocalScreenSharing,
     }
   }
 
@@ -99,5 +103,6 @@ export function composeMeetingStageTracks(
     pipTrack,
     totalTiles: stageTracks.length + (pipTrack ? 1 : 0),
     hasScreenShare: false,
+    isLocalScreenSharing,
   }
 }

@@ -42,6 +42,23 @@ function getSheconomyLivekitCss(ui: CoWorkUiTokens, shadows: CoWorkShadows) {
     padding: 88px 12px 112px;
     box-sizing: border-box;
   }
+  .sheconomy-screen-share-status {
+    position: absolute;
+    top: 96px;
+    left: 50%;
+    z-index: 20;
+    transform: translateX(-50%);
+    padding: 8px 14px;
+    border-radius: 999px;
+    color: #ecfdf5;
+    background: rgba(5, 150, 105, 0.92);
+    border: 1px solid rgba(167, 243, 208, 0.48);
+    box-shadow: 0 10px 28px rgba(0, 0, 0, 0.28);
+    font-size: 12px;
+    font-weight: 700;
+    white-space: nowrap;
+    pointer-events: none;
+  }
   .sheconomy-video-gallery {
     display: grid;
     grid-template-columns: repeat(var(--gallery-cols, 1), minmax(0, 1fr));

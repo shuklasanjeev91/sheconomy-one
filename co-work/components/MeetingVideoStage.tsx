@@ -14,7 +14,8 @@ import { SheconomyParticipantTile } from '~/co-work/components/SheconomyParticip
 export function MeetingVideoStage() {
   const { isDesktop } = useAppLayout()
   const { width, height } = useWindowDimensions()
-  const { stageTracks, pipTrack, totalTiles, hasScreenShare } = useMeetingGalleryTracks()
+  const { stageTracks, pipTrack, totalTiles, hasScreenShare, isLocalScreenSharing } =
+    useMeetingGalleryTracks()
 
   const stageWidth = Math.max(width - (isDesktop ? 48 : 24), 160)
   const stageHeight = Math.max(height - 200, 180)
@@ -54,6 +55,11 @@ export function MeetingVideoStage() {
       ) : null}
 
       {totalTiles === 0 ? <div className="sheconomy-video-empty" /> : null}
+      {isLocalScreenSharing ? (
+        <div className="sheconomy-screen-share-status" role="status">
+          You’re sharing your screen · Others can see it
+        </div>
+      ) : null}
     </div>
   )
 }

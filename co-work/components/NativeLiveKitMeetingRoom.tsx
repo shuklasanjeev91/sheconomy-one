@@ -378,6 +378,7 @@ function NativeMeetingVideoStage() {
   const stageTracks = layoutState.stageTracks
   const pipTrack = layoutState.pipTrack
   const hasScreenShare = layoutState.hasScreenShare
+  const isLocalScreenSharing = layoutState.isLocalScreenSharing
   // Three equal full-width rows — only for the 3-person gallery case.
   const isThreeStack = !hasScreenShare && stageTracks.length === 3
 
@@ -410,10 +411,12 @@ function NativeMeetingVideoStage() {
           borderColor="rgba(255,255,255,0.08)"
         >
           <Text color="rgba(255,255,255,0.65)" fontSize={15} fontWeight="600">
-            Waiting for video…
+            {isLocalScreenSharing ? 'You’re presenting' : 'Waiting for video…'}
           </Text>
           <Text color="rgba(255,255,255,0.4)" fontSize={13} marginTop="$2">
-            Turn on your camera or wait for others to join
+            {isLocalScreenSharing
+              ? 'Your screen is visible to other participants'
+              : 'Turn on your camera or wait for others to join'}
           </Text>
         </YStack>
       ) : (
@@ -521,6 +524,25 @@ function NativeMeetingVideoStage() {
           ) : null}
         </YStack>
       )}
+      {isLocalScreenSharing ? (
+        <YStack
+          position="absolute"
+          top={topInset + 8}
+          alignSelf="center"
+          zIndex={30}
+          paddingHorizontal="$3"
+          paddingVertical="$2"
+          borderRadius={999}
+          backgroundColor="rgba(5,150,105,0.94)"
+          borderWidth={1}
+          borderColor="rgba(167,243,208,0.48)"
+          pointerEvents="none"
+        >
+          <Text color="#ecfdf5" fontSize={12} fontWeight="700">
+            You’re sharing your screen · Others can see it
+          </Text>
+        </YStack>
+      ) : null}
     </YStack>
   )
 }
