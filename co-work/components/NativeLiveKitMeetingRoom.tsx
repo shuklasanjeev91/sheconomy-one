@@ -778,9 +778,12 @@ function NativeVideoTile({
   })
 
   const videoRef = useRef(null)
-  // Prefer screen share, else active speaker, for manual/OS iOS PiP.
+  // Prefer screen share, else active speaker, else local camera — solo hosts
+  // still need a registered track for manual iOS PiP ("no video active").
   const isPipCandidate =
-    Platform.OS === 'ios' && showVideo && (isScreen || activeSpeaker)
+    Platform.OS === 'ios' &&
+    showVideo &&
+    (isScreen || activeSpeaker || trackRef.participant.isLocal)
 
   useEffect(() => {
     if (!isPipCandidate) return

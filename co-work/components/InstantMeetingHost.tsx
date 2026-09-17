@@ -34,12 +34,13 @@ export function InstantMeetingHost() {
 
   const presentation = globalSession?.presentation ?? 'fullscreen'
   const collapsed = presentation === 'minimized' || presentation === 'pip'
+  const normalizeMeetingCode = (value: string) => value.replace(/\s/g, '').trim().toUpperCase()
   // Only host media for this meeting code when global session matches (or none yet).
   const ownsSession =
     !globalSession ||
     globalSession.kind !== 'meeting' ||
     !session ||
-    globalSession.code === session.code.replace(/\s/g, '').trim()
+    normalizeMeetingCode(globalSession.code) === normalizeMeetingCode(session.code)
 
   useEffect(() => {
     if (!session || !ownsSession) {
@@ -86,15 +87,17 @@ export function InstantMeetingHost() {
     : 0
   const chromeBottom = !collapsed && !isDesktop ? mobileTabBarOffset : 0
 
+  // Keep a real video surface while minimized (not 4×4). Tiny surfaces drop the
+  // iOS PiP video ref and can stall camera publish; park off-screen instead.
   return (
     <YStack
       position="absolute"
-      top={collapsed ? -4 : chromeTop}
-      left={collapsed ? -4 : 0}
+      top={collapsed ? -420 : chromeTop}
+      left={collapsed ? -420 : 0}
       right={collapsed ? undefined : 0}
       bottom={collapsed ? undefined : chromeBottom}
-      width={collapsed ? 4 : '100%'}
-      height={collapsed ? 4 : undefined}
+      width={collapsed ? 320 : '100%'}
+      height={collapsed ? 180 : undefined}
       zIndex={collapsed ? 1 : 90_000}
       opacity={collapsed ? 0 : 1}
       pointerEvents={collapsed ? 'none' : 'auto'}

@@ -9,7 +9,7 @@ import {
 } from '../../../co-work/lib/meeting-toolbar'
 
 describe('meeting toolbar layout', () => {
-  it('orders the desktop participant dock Mic → Camera → Participants → Chat → Share → Captions → Invite → Browse → More → Leave', () => {
+  it('orders the desktop participant dock Mic → Camera → Participants → Chat → Minimize → Share → Captions → Invite → More → Leave', () => {
     expect(
       meetingToolbarPrimaryKeys({
         viewerRole: 'participant',
@@ -22,10 +22,10 @@ describe('meeting toolbar layout', () => {
       'camera',
       'participants',
       'chat',
+      'browse',
       'share_screen',
       'captions',
       'invite',
-      'browse',
       'more',
       'leave',
     ])
@@ -45,17 +45,17 @@ describe('meeting toolbar layout', () => {
       'security',
       'participants',
       'chat',
+      'browse',
       'share_screen',
       'captions',
       'invite',
-      'browse',
       'more',
       'leave',
       'end_meeting',
     ])
   })
 
-  it('keeps Security flyout host-only and More free of Browse duplicates', () => {
+  it('keeps Security flyout host-only and lists Minimize in More for discoverability', () => {
     expect(meetingToolbarSecurityKeys('host')).toEqual([
       'lock_meeting',
       'mute_all',
@@ -86,6 +86,7 @@ describe('meeting toolbar layout', () => {
       'meeting_info',
       'share_link',
       'fullscreen',
+      'minimize',
       'picture_in_picture',
     ])
 

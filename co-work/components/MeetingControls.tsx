@@ -288,7 +288,7 @@ export function MeetingControls({
     hasAudioSettings: !!onOpenAudioSettings,
     hasShareLink: !!onShare,
     hasFullscreen: !!onToggleFullscreen,
-    hasMinimize: false,
+    hasMinimize: !!onMinimize,
     hasPictureInPicture: !!onPictureInPicture,
   })
 
@@ -522,8 +522,8 @@ export function MeetingControls({
         return onMinimize ? (
           <ControlButton
             key={key}
-            label="Browse"
-            icon={Icons.LayoutGrid}
+            label="Minimize"
+            icon={Icons.Minimize2}
             variant="brand"
             onPress={onMinimize}
             compact={compact}

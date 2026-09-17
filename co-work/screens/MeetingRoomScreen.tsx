@@ -865,12 +865,12 @@ function MeetingRoomOverlay({
   }, [fullscreen, toast])
 
   const minimizeMeeting = useCallback(() => {
-    // Keep LiveKit mounted via InstantMeetingHost while the rest of the app is usable.
-    // Do not remount / re-autoJoin — same code stays open; only collapse chrome.
+    // Keep LiveKit mounted via InstantMeetingHost. Always autoJoin so a remount
+    // (route → overlay handoff) skips the Join confirm lobby.
     openInstantMeetingSession({
       code: meeting.meeting_code,
       meeting,
-      autoJoin: false,
+      autoJoin: true,
     })
     minimizeGlobalSession()
     toast.show('Meeting minimized', {
@@ -891,10 +891,15 @@ function MeetingRoomOverlay({
         '.sheconomy-meeting-overlay video, video',
       )
       if (!result.ok) {
+        // Fall back to in-app minimize so the user can still browse Sheconomy.
         toast.show('Picture-in-Picture unavailable', {
           tone: 'info',
-          message: result.message || sessionPipUnsupportedMessage(caps),
+          message:
+            result.message ||
+            sessionPipUnsupportedMessage(caps) ||
+            'Use Minimize to keep the meeting while you browse Sheconomy.',
         })
+        minimizeMeeting()
         return
       }
       enterGlobalSessionPip()
@@ -905,7 +910,7 @@ function MeetingRoomOverlay({
         })
       }
     })()
-  }, [toast])
+  }, [minimizeMeeting, toast])
 
   const toggleMeetingAudio = useCallback(() => {
     if (!liveKit && !session.hasMedia()) {

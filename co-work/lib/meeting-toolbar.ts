@@ -41,23 +41,24 @@ export type MeetingToolbarOverflowKey =
 /**
  * Desktop / roomy primary order.
  * Hosts get Security + End Meeting; everyone keeps Mic/Camera.
+ * Minimize sits early so it stays on the first row on iPad (not clipped after Invite).
  */
 export function meetingToolbarPrimaryKeys(input: {
   viewerRole: MeetingRole
   supportsVideo?: boolean
   supportsScreenShare?: boolean
   supportsLiveCaptions?: boolean
-  /** Show primary Browse control (mini-player + other Sheconomy tabs). Default true. */
+  /** Show primary Minimize control (mini-player + other Sheconomy tabs). Default true. */
   hasBrowse?: boolean
 }): MeetingToolbarPrimaryKey[] {
   const keys: MeetingToolbarPrimaryKey[] = ['mic']
   if (input.supportsVideo !== false) keys.push('camera')
   if (canChangeCriticalMeetingSettings(input.viewerRole)) keys.push('security')
   keys.push('participants', 'chat')
+  if (input.hasBrowse !== false) keys.push('browse')
   if (input.supportsScreenShare) keys.push('share_screen')
   if (input.supportsLiveCaptions !== false) keys.push('captions')
   keys.push('invite')
-  if (input.hasBrowse !== false) keys.push('browse')
   keys.push('more', 'leave')
   if (canEndMeetingForEveryone(input.viewerRole)) keys.push('end_meeting')
   return keys
@@ -88,7 +89,8 @@ export function meetingToolbarMoreKeys(input: {
   keys.push('meeting_info')
   if (input.hasShareLink) keys.push('share_link')
   if (input.hasFullscreen) keys.push('fullscreen')
-  // Browse is a primary control — keep More free of a duplicate Minimize.
+  // Also list Minimize in More so users who look there (Zoom habit) find it.
+  if (input.hasMinimize) keys.push('minimize')
   if (input.hasPictureInPicture) keys.push('picture_in_picture')
 
   if (canManageMeeting(input.viewerRole) && !canChangeCriticalMeetingSettings(input.viewerRole)) {

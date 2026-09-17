@@ -77,8 +77,10 @@ export function SessionMiniPlayer({ session }: SessionMiniPlayerProps) {
   const onMaximize = useCallback(() => {
     maximizeGlobalSession()
     const instant = peekInstantMeetingSession()
-    if (instant && instant.code === session.code) {
-      // InstantMeetingHost expands in place — no route hop.
+    const normalize = (value: string) => value.replace(/\s/g, '').trim().toUpperCase()
+    // Prefer expanding InstantMeetingHost in place — navigating to maximizeHref
+    // remounted MeetingLiveScreen on the join confirm screen.
+    if (instant && normalize(instant.code) === normalize(session.code)) {
       return
     }
     if (session.maximizeHref) {
@@ -93,6 +95,7 @@ export function SessionMiniPlayer({ session }: SessionMiniPlayerProps) {
         tone: 'info',
         message: sessionPipUnsupportedMessage(caps),
       })
+      // Keep browsing with the in-app mini-player instead of a dead-end error.
       return
     }
     void (async () => {
@@ -102,7 +105,10 @@ export function SessionMiniPlayer({ session }: SessionMiniPlayerProps) {
       if (!result.ok) {
         toast.show('Picture-in-Picture unavailable', {
           tone: 'info',
-          message: result.message || sessionPipUnsupportedMessage(caps),
+          message:
+            result.message ||
+            sessionPipUnsupportedMessage(caps) ||
+            'Keep a camera on, or use Maximize then try again. The in-app mini player still keeps the meeting alive.',
         })
         if (Platform.OS === 'web') minimizeGlobalSession()
         return

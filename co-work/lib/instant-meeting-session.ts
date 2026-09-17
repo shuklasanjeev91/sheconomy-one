@@ -50,12 +50,14 @@ export function openInstantMeetingSession(input: {
   // Same meeting already open — update metadata without remounting LiveKit / join UI.
   if (prev?.code === code) {
     const nextMeeting = input.meeting ?? prev.meeting
-    if (nextMeeting !== prev.meeting || autoJoin !== prev.autoJoin) {
+    // Never downgrade autoJoin to false while the overlay is live — that made
+    // Maximize / remounts land on the Join confirm screen again.
+    const nextAutoJoin = prev.autoJoin || autoJoin
+    if (nextMeeting !== prev.meeting || nextAutoJoin !== prev.autoJoin) {
       session = {
         ...prev,
         meeting: nextMeeting,
-        // Never re-enable autoJoin on an already-open session (would re-trigger join).
-        autoJoin: prev.autoJoin && autoJoin,
+        autoJoin: nextAutoJoin,
       }
       emit()
     }
