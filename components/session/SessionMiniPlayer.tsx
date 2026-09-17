@@ -25,7 +25,7 @@ import { navigateApp } from '~/lib/platform/navigate'
 import { useAppLayout } from '~/hooks/useAppLayout'
 import {
   closeInstantMeetingSession,
-  normalizeInstantMeetingCode,
+  instantMeetingCodesMatch,
   openInstantMeetingSession,
   peekInstantMeetingSession,
 } from '~/co-work/lib/instant-meeting-session'
@@ -79,32 +79,24 @@ export function SessionMiniPlayer({ session }: SessionMiniPlayerProps) {
   const top = defaultPos.y + offset.y
 
   const onMaximize = useCallback(() => {
-    maximizeGlobalSession()
     const instant = peekInstantMeetingSession()
 
     // Meetings must expand InstantMeetingHost in place. Never navigate to
-    // maximizeHref — that remounts MeetingLiveScreen on Join confirm.
+    // maximizeHref — that remounts MeetingLiveScreen on Join confirm / Join now.
     if (session.kind === 'meeting') {
-      const sameInstant =
-        instant &&
-        normalizeInstantMeetingCode(instant.code) ===
-          normalizeInstantMeetingCode(session.code)
-      if (!sameInstant) {
-        openInstantMeetingSession({
-          code: session.code,
-          meeting: instant?.meeting ?? null,
-          autoJoin: true,
-          enteredRoom: true,
-          displayName: instant?.displayName ?? null,
-        })
-      }
+      openInstantMeetingSession({
+        code: session.code,
+        meeting: instant?.meeting ?? null,
+        autoJoin: true,
+        enteredRoom: true,
+        displayName: instant?.displayName ?? null,
+      })
+      maximizeGlobalSession()
       return
     }
 
-    if (
-      instant &&
-      normalizeInstantMeetingCode(instant.code) === normalizeInstantMeetingCode(session.code)
-    ) {
+    maximizeGlobalSession()
+    if (instant && instantMeetingCodesMatch(instant.code, session.code)) {
       return
     }
     if (session.maximizeHref) {

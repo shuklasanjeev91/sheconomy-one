@@ -8,6 +8,7 @@ import {
   loadRememberedMeetingDisplayName,
   safeMeetingDisplayName,
 } from '~/co-work/lib/meeting-display-name'
+import { normalizeInstantMeetingCode } from '~/co-work/lib/instant-meeting-session'
 import {
   fetchMeetingByCode,
   fetchMeetingModerationSettings,
@@ -73,11 +74,14 @@ function MeetingLiveScreenBody({
   const { ui: coworkUi } = useCoWorkTheme()
   const { profile, user, isAuthenticated, isLoading } = useProfile()
   const userId = user?.id
-  const shouldSkipConfirm = autoJoin || resumeEnteredRoom
+  // Once the InstantMeetingHost marks the room entered, never bounce back to
+  // the Join confirm screen on remount / Maximize.
+  const shouldResumeRoom = resumeEnteredRoom
+  const shouldSkipConfirm = autoJoin || shouldResumeRoom
   const [meeting, setMeeting] = useState<Meeting | null>(initialMeeting)
   const [phase, setPhase] = useState<'loading' | 'confirm' | 'joining' | 'ready' | 'error'>(() => {
+    if (shouldResumeRoom) return initialMeeting ? 'ready' : 'loading'
     if (!initialMeeting) return 'loading'
-    if (resumeEnteredRoom) return 'ready'
     return shouldSkipConfirm ? 'joining' : 'confirm'
   })
   const [error, setError] = useState<string | null>(null)
@@ -88,8 +92,9 @@ function MeetingLiveScreenBody({
   const [passcodeVerified, setPasscodeVerified] = useState(false)
   const loadedCodeRef = useRef<string | null>(null)
   const autoJoinAttemptedRef = useRef(false)
+  const resumedRoomRef = useRef(shouldResumeRoom)
 
-  const normalizedCode = code.replace(/\s/g, '').trim()
+  const normalizedCode = normalizeInstantMeetingCode(code)
   const isHost = !!meeting && !!userId && meeting.host_id === userId
   const needsPasscode =
     !!meeting &&
@@ -139,7 +144,10 @@ function MeetingLiveScreenBody({
       return
     }
 
-    if (initialMeeting && initialMeeting.meeting_code.replace(/\s/g, '').trim() === normalizedCode) {
+    if (
+      initialMeeting &&
+      normalizeInstantMeetingCode(initialMeeting.meeting_code) === normalizedCode
+    ) {
       if (initialMeeting.status === 'cancelled') {
         setPhase('error')
         setError('The host cancelled this meeting.')
@@ -150,7 +158,7 @@ function MeetingLiveScreenBody({
       if (ok) {
         setPhase((prev) => {
           if (prev === 'ready' || prev === 'joining') return prev
-          if (resumeEnteredRoom) return 'ready'
+          if (shouldResumeRoom || resumedRoomRef.current) return 'ready'
           return shouldSkipConfirm ? 'joining' : 'confirm'
         })
       }
@@ -176,7 +184,7 @@ function MeetingLiveScreenBody({
       if (ok) {
         setPhase((prev) => {
           if (prev === 'ready' || prev === 'joining') return prev
-          if (resumeEnteredRoom) return 'ready'
+          if (shouldResumeRoom || resumedRoomRef.current) return 'ready'
           return shouldSkipConfirm ? 'joining' : 'confirm'
         })
       }
@@ -184,7 +192,7 @@ function MeetingLiveScreenBody({
       setPhase('error')
       setError(loadError instanceof Error ? loadError.message : 'Failed to load meeting')
     }
-  }, [normalizedCode, initialMeeting, applyMeetingSecurity, shouldSkipConfirm, resumeEnteredRoom])
+  }, [normalizedCode, initialMeeting, applyMeetingSecurity, shouldSkipConfirm, shouldResumeRoom])
 
   const joinMeeting = useCallback(
     async (displayName: string, passcode?: string) => {
@@ -206,19 +214,23 @@ function MeetingLiveScreenBody({
 
       setPhase('joining')
       setError(null)
-      const permissions = await ensureMeetingMobilePermissions({ requestNotifications: true })
-      if (!permissions.ok) {
-        const message = permissions.message ?? 'Microphone permission is required to join.'
-        // Stay on the join confirm screen so the user can open Settings and retry.
-        // Never escalate a permission denial into an uncaught crash.
-        setError(message)
-        setPhase('confirm')
-        throw new Error(message)
+      // Resume / Maximize must not re-prompt permissions — that bounced users to Join.
+      if (!shouldResumeRoom && !resumedRoomRef.current) {
+        const permissions = await ensureMeetingMobilePermissions({ requestNotifications: true })
+        if (!permissions.ok) {
+          const message = permissions.message ?? 'Microphone permission is required to join.'
+          // Stay on the join confirm screen so the user can open Settings and retry.
+          // Never escalate a permission denial into an uncaught crash.
+          setError(message)
+          setPhase('confirm')
+          throw new Error(message)
+        }
       }
       setConfirmedDisplayName(displayName)
+      resumedRoomRef.current = true
       setPhase('ready')
     },
-    [isHost, isLocked, meeting, passcodeVerified],
+    [isHost, isLocked, meeting, passcodeVerified, shouldResumeRoom],
   )
 
   useEffect(() => {
@@ -235,7 +247,8 @@ function MeetingLiveScreenBody({
   // Zoom-style one-tap: after load, enter the room without a second Join click.
   // Resume path (minimize → maximize) already landed on ready with a display name.
   useEffect(() => {
-    if (resumeEnteredRoom && meeting && phase !== 'ready' && phase !== 'error') {
+    if ((shouldResumeRoom || resumedRoomRef.current) && meeting && phase !== 'ready' && phase !== 'error') {
+      resumedRoomRef.current = true
       setPhase('ready')
       if (!confirmedDisplayName.trim()) {
         setConfirmedDisplayName(
@@ -244,7 +257,8 @@ function MeetingLiveScreenBody({
       }
       return
     }
-    if (resumeEnteredRoom && phase === 'ready') {
+    if ((shouldResumeRoom || resumedRoomRef.current) && phase === 'ready') {
+      resumedRoomRef.current = true
       if (!confirmedDisplayName.trim()) {
         setConfirmedDisplayName(
           safeMeetingDisplayName(resumeDisplayName || profile?.full_name || profile?.username),
@@ -281,7 +295,7 @@ function MeetingLiveScreenBody({
     }
   }, [
     shouldSkipConfirm,
-    resumeEnteredRoom,
+    shouldResumeRoom,
     resumeDisplayName,
     confirmedDisplayName,
     meeting,
@@ -311,7 +325,7 @@ function MeetingLiveScreenBody({
     return <AuthSignInFlow returnTo={String(coWorkRoutes.meetingLive(normalizedCode || code))} />
   }
 
-  if (phase === 'confirm' && meeting) {
+  if (phase === 'confirm' && meeting && !shouldResumeRoom && !resumedRoomRef.current) {
     return (
       <MeetingJoinScreen
         meetingTitle={meeting.title}
@@ -329,7 +343,7 @@ function MeetingLiveScreenBody({
     )
   }
 
-  if (phase === 'ready' && meeting) {
+  if ((phase === 'ready' || shouldResumeRoom || resumedRoomRef.current) && meeting) {
     return (
       <MeetingRoomScreen
         meeting={meeting}

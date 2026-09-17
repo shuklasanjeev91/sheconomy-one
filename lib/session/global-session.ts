@@ -97,10 +97,11 @@ export type RegisterGlobalSessionInput = {
 
 export function registerGlobalSession(input: RegisterGlobalSessionInput): void {
   const previous = store.session
+  const nextCode = input.code.replace(/[^a-zA-Z0-9]/g, '').toUpperCase()
   const sameIdentity =
     previous &&
     previous.kind === input.kind &&
-    previous.code === input.code.replace(/\s/g, '').trim()
+    previous.code.replace(/[^a-zA-Z0-9]/g, '').toUpperCase() === nextCode
 
   store = {
     session: {
@@ -111,7 +112,7 @@ export function registerGlobalSession(input: RegisterGlobalSessionInput): void {
       title: input.title,
       subtitle: input.subtitle ?? null,
       maximizeHref: input.maximizeHref,
-      code: input.code.replace(/\s/g, '').trim(),
+      code: nextCode,
       media: {
         audioEnabled: input.media?.audioEnabled ?? previous?.media.audioEnabled ?? true,
         videoEnabled: input.media?.videoEnabled ?? previous?.media.videoEnabled ?? false,
@@ -177,7 +178,11 @@ export function exitGlobalSessionPip(): GlobalSessionState | null {
 
 export function clearGlobalSession(code?: string): void {
   if (!store.session) return
-  if (code && store.session.code !== code.replace(/\s/g, '').trim()) return
+  if (code) {
+    const left = store.session.code.replace(/[^a-zA-Z0-9]/g, '').toUpperCase()
+    const right = code.replace(/[^a-zA-Z0-9]/g, '').toUpperCase()
+    if (left !== right) return
+  }
   store = { session: null, handlers: {} }
   emit()
 }

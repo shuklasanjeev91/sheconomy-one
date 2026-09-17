@@ -886,12 +886,10 @@ function MeetingRoomOverlay({
       tone: 'success',
       message: meetingBrowsingMinimizedNotice('meeting'),
     })
-    // Instant overlay already mounts media — do not call onLeave (that would close it).
-    // Route-based /live screens navigate home so other tabs show under the mini player.
-    if (!onLeave) {
-      navigateApp(coWorkRoutes.home)
-    }
-  }, [displayName, meeting, onLeave, toast])
+    // Always leave lobby /live under the overlay. Staying on Join now made
+    // Maximize look broken when the host briefly hid (code-shape mismatch).
+    navigateApp(coWorkRoutes.home)
+  }, [displayName, meeting, toast])
 
   const enterMeetingPip = useCallback(() => {
     const caps = detectSessionPipCapabilities()

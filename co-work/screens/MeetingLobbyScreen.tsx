@@ -22,7 +22,8 @@ import {
   MEETING_LOCKED_MESSAGE,
   shouldPromptForPasscode,
 } from '~/co-work/lib/meeting-security'
-import { openInstantMeetingSession } from '~/co-work/lib/instant-meeting-session'
+import { openInstantMeetingSession, peekInstantMeetingSession, instantMeetingCodesMatch } from '~/co-work/lib/instant-meeting-session'
+import { maximizeGlobalSession } from '~/lib/session/global-session'
 import { coworkGlassStyle, useCoWorkTheme } from '~/co-work/lib/theme'
 import { controlGradientStyle, coworkBoxShadow, pageGradientStyle } from '~/lib/platform/crossStyles'
 import type { Meeting } from '~/co-work/lib/types'
@@ -146,6 +147,23 @@ function MeetingLobbyScreenBody({ code }: MeetingLobbyScreenProps) {
       autoJoin: true,
     })
   }
+
+  // If Maximize / deep-link landed back on this lobby while the live overlay still
+  // owns the meeting, expand InstantMeetingHost instead of showing Join now again.
+  useEffect(() => {
+    if (!meeting) return
+    const instant = peekInstantMeetingSession()
+    if (!instant?.enteredRoom) return
+    if (!instantMeetingCodesMatch(instant.code, meeting.meeting_code)) return
+    openInstantMeetingSession({
+      code: meeting.meeting_code,
+      meeting,
+      autoJoin: true,
+      enteredRoom: true,
+      displayName: instant.displayName,
+    })
+    maximizeGlobalSession()
+  }, [meeting])
 
   async function addToCalendar() {
     const result = await addMeetingToDeviceCalendar(meeting!)

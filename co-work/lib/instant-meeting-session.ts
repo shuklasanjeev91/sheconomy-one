@@ -37,12 +37,24 @@ function getSnapshot() {
   return session
 }
 
+/**
+ * Identity key for instant ↔ global session matching.
+ * Must strip dashes/spaces — DB rows may be `ABC-DEF-GHI` while typed/global
+ * codes are `ABCDEFGHI`. A mismatch hid InstantMeetingHost on Maximize and
+ * revealed the lobby "Join now" screen underneath.
+ */
 export function normalizeInstantMeetingCode(code: string) {
-  return code.replace(/\s/g, '').trim().toUpperCase()
+  return code.replace(/[^a-zA-Z0-9]/g, '').toUpperCase()
 }
 
 function normalizeCode(code: string) {
   return normalizeInstantMeetingCode(code)
+}
+
+export function instantMeetingCodesMatch(a: string, b: string) {
+  const left = normalizeInstantMeetingCode(a)
+  const right = normalizeInstantMeetingCode(b)
+  return !!left && left === right
 }
 
 /** Open the live meeting overlay without navigating (avoids blank async-route Suspense). */
@@ -61,9 +73,13 @@ export function openInstantMeetingSession(input: {
   const autoJoin = input.autoJoin ?? true
   const prev = session
 
-  // Same meeting already open — update metadata without remounting LiveKit / join UI.
-  if (prev?.code === code) {
+  // Same meeting already open (plain or dashed code) — update metadata without
+  // remounting LiveKit / join UI. Prefer the persisted meeting_code when present.
+  if (prev && instantMeetingCodesMatch(prev.code, code)) {
     const nextMeeting = input.meeting ?? prev.meeting
+    const nextCode = nextMeeting?.meeting_code
+      ? normalizeCode(nextMeeting.meeting_code)
+      : prev.code
     // Never downgrade autoJoin / enteredRoom while the overlay is live — that made
     // Maximize land on the Join confirm screen again.
     const nextAutoJoin = prev.autoJoin || autoJoin
@@ -72,12 +88,14 @@ export function openInstantMeetingSession(input: {
       (input.displayName && input.displayName.trim()) || prev.displayName || null
     if (
       nextMeeting !== prev.meeting ||
+      nextCode !== prev.code ||
       nextAutoJoin !== prev.autoJoin ||
       nextEnteredRoom !== prev.enteredRoom ||
       nextDisplayName !== prev.displayName
     ) {
       session = {
         ...prev,
+        code: nextCode,
         meeting: nextMeeting,
         autoJoin: nextAutoJoin,
         enteredRoom: nextEnteredRoom,

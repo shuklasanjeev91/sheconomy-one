@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 
 import {
   closeInstantMeetingSession,
+  instantMeetingCodesMatch,
   markInstantMeetingEnteredRoom,
   openInstantMeetingSession,
   peekInstantMeetingSession,
@@ -41,6 +42,28 @@ describe('instant meeting session', () => {
     expect(second?.autoJoin).toBe(true)
     expect(second?.enteredRoom).toBe(true)
     expect(second?.displayName).toBe('Sanjeev')
+    closeInstantMeetingSession()
+  })
+
+  it('treats dashed and plain meeting codes as the same meeting', () => {
+    closeInstantMeetingSession()
+    openInstantMeetingSession({
+      code: 'ABCDEFGHI',
+      meeting: { ...meeting, meeting_code: 'ABC-DEF-GHI' },
+      autoJoin: true,
+    })
+    openInstantMeetingSession({
+      code: 'ABC-DEF-GHI',
+      meeting: { ...meeting, meeting_code: 'ABC-DEF-GHI' },
+      autoJoin: true,
+      enteredRoom: true,
+      displayName: 'Ada',
+    })
+    const session = peekInstantMeetingSession()
+    expect(session?.enteredRoom).toBe(true)
+    expect(session?.displayName).toBe('Ada')
+    expect(instantMeetingCodesMatch(session!.code, 'ABC-DEF-GHI')).toBe(true)
+    expect(instantMeetingCodesMatch('ABC DEF GHI', 'abc-def-ghi')).toBe(true)
     closeInstantMeetingSession()
   })
 })

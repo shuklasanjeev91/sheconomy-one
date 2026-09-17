@@ -67,6 +67,26 @@ describe('global session presentation', () => {
     clearGlobalSession('AAA')
     expect(peekGlobalSession()).toBeNull()
   })
+
+  it('matches dashed and plain meeting codes as the same session', () => {
+    registerGlobalSession({
+      kind: 'meeting',
+      code: 'ABC-DEF-GHI',
+      title: 'Standup',
+      maximizeHref: '/co-work/meeting/ABCDEFGHI/live',
+      presentation: 'minimized',
+    })
+    expect(peekGlobalSession()?.code).toBe('ABCDEFGHI')
+    registerGlobalSession({
+      kind: 'meeting',
+      code: 'ABCDEFGHI',
+      title: 'Standup',
+      maximizeHref: '/co-work/meeting/ABCDEFGHI/live',
+    })
+    expect(peekGlobalSession()?.presentation).toBe('minimized')
+    clearGlobalSession('abc def ghi')
+    expect(peekGlobalSession()).toBeNull()
+  })
 })
 
 describe('chromeless shell gating', () => {

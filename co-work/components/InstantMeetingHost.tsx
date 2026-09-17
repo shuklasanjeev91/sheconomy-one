@@ -6,6 +6,7 @@ import { Spinner, Text, YStack } from '~/components/ui'
 import type { InstantMeetingSession } from '~/co-work/lib/instant-meeting-session'
 import {
   closeInstantMeetingSession,
+  instantMeetingCodesMatch,
   normalizeInstantMeetingCode,
   useInstantMeetingSession,
 } from '~/co-work/lib/instant-meeting-session'
@@ -39,12 +40,15 @@ export function InstantMeetingHost() {
   // Instant overlay is the source of truth for LiveKit. Never tear it down just
   // because global session code formatting briefly mismatches — that remounted
   // MeetingLiveScreen on the Join confirm screen after Maximize.
+  // Also never `display:none` on Maximize for a code-shape mismatch (dashed vs
+  // plain) — that revealed the lobby "Join now" screen underneath.
   const globalMatches =
     !globalSession ||
     globalSession.kind !== 'meeting' ||
     !session ||
-    normalizeInstantMeetingCode(globalSession.code) ===
-      normalizeInstantMeetingCode(session.code)
+    instantMeetingCodesMatch(globalSession.code, session.code)
+
+  const sessionCodeKey = session ? normalizeInstantMeetingCode(session.code) : null
 
   useEffect(() => {
     if (!session) {
@@ -75,9 +79,10 @@ export function InstantMeetingHost() {
     return () => {
       cancelled = true
     }
-    // Only remount when the meeting code changes — not on global presentation tweaks.
+    // Remount only when the *normalized* meeting identity changes — not when
+    // dashed ↔ plain code formatting is reconciled on the same meeting.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [session?.code])
+  }, [sessionCodeKey])
 
   if (!session) return null
 
@@ -90,6 +95,8 @@ export function InstantMeetingHost() {
 
   // Keep full layout size while minimized — only hide visually. Off-screen /
   // shrunk surfaces disconnect LiveKit on iOS and remount Join on Maximize.
+  // Never use display:none for foreign-code mismatches while collapsed either —
+  // opacity + pointerEvents is enough and avoids lobby "Join now" flashes.
   return (
     <YStack
       position="absolute"
@@ -99,15 +106,15 @@ export function InstantMeetingHost() {
       bottom={chromeBottom}
       width="100%"
       zIndex={collapsed ? 1 : 90_000}
-      opacity={collapsed ? 0 : 1}
-      pointerEvents={collapsed ? 'none' : 'auto'}
+      opacity={collapsed || !globalMatches ? 0 : 1}
+      pointerEvents={collapsed || !globalMatches ? 'none' : 'auto'}
       overflow="hidden"
       backgroundColor="#0c080a"
       collapsable={false}
-      accessibilityElementsHidden={collapsed}
-      importantForAccessibility={collapsed ? 'no-hide-descendants' : 'auto'}
-      // Hide visually if another meeting owns the global session, but keep mounted.
-      display={!globalMatches && !collapsed ? 'none' : undefined}
+      accessibilityElementsHidden={collapsed || !globalMatches}
+      importantForAccessibility={
+        collapsed || !globalMatches ? 'no-hide-descendants' : 'auto'
+      }
     >
       <AppErrorBoundary scope="InstantMeeting" alwaysShowError>
         {!Body ? (
