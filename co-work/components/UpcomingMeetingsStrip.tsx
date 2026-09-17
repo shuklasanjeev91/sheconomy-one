@@ -36,7 +36,7 @@ export function UpcomingMeetingsStrip({
   const router = useRouter()
   const toast = useAppToast()
   const { data, isLoading: loading, refresh } = useCachedQuery<Meeting[]>({
-    cacheKey: user ? CACHE_KEYS.coWorkUpcoming : null,
+    cacheKey: user ? CACHE_KEYS.coWorkUpcoming(user.id) : null,
     enabled: !!user,
     fetcher: async () => {
       if (!user) return []

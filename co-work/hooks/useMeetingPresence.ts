@@ -367,8 +367,8 @@ export function useMeetingPresence({
         sessionIdRef.current,
         displayName,
       )
-      // `ended` included: the host reopening a finished meeting restarts it.
-      if (isHost && meeting.status !== 'active') {
+      // Host reopen: startMeeting refreshes DB status (ignore stale client cache).
+      if (isHost) {
         await startMeeting(meeting.id)
       }
       await refreshParticipants()

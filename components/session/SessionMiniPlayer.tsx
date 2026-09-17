@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   PanResponder,
   Platform,
@@ -7,7 +7,7 @@ import {
   type PanResponderGestureState,
 } from 'react-native'
 
-import { Button, Icons, Text, XStack, YStack, useAppToast } from '~/components/ui'
+import { Avatar, Button, Icons, Text, XStack, YStack, useAppToast } from '~/components/ui'
 import {
   maximizeGlobalSession,
   minimizeGlobalSession,
@@ -29,32 +29,80 @@ import {
   peekInstantMeetingSession,
 } from '~/co-work/lib/instant-meeting-session'
 
-const MINI_WIDTH = 280
-const MINI_HEIGHT = 152
+/** WhatsApp-style floating call bubble (portrait). */
+const BUBBLE_W = 118
+const BUBBLE_H = 178
+const EDGE = 12
 
 type SessionMiniPlayerProps = {
   session: GlobalSessionState
 }
 
+type CornerPos = { x: number; y: number }
+
+function clamp(n: number, min: number, max: number) {
+  return Math.max(min, Math.min(max, n))
+}
+
+function snapToNearestCorner(
+  x: number,
+  y: number,
+  bounds: { minX: number; maxX: number; minY: number; maxY: number },
+): CornerPos {
+  const corners: CornerPos[] = [
+    { x: bounds.minX, y: bounds.minY },
+    { x: bounds.maxX, y: bounds.minY },
+    { x: bounds.minX, y: bounds.maxY },
+    { x: bounds.maxX, y: bounds.maxY },
+  ]
+  let best = corners[0]!
+  let bestDist = Number.POSITIVE_INFINITY
+  for (const corner of corners) {
+    const d = (corner.x - x) ** 2 + (corner.y - y) ** 2
+    if (d < bestDist) {
+      bestDist = d
+      best = corner
+    }
+  }
+  return best
+}
+
 /**
- * Corner-docked mini-player while a meeting/call continues and the user browses
- * any Sheconomy tab. Maximize restores fullscreen; PiP uses OS APIs when supported.
+ * WhatsApp-call style floating bubble while a meeting/call continues.
+ * Drag → snaps to a corner. Tap video → maximize. Mic / End stay on the bubble.
  */
 export function SessionMiniPlayer({ session }: SessionMiniPlayerProps) {
   const toast = useAppToast()
-  const { safeTop, safeBottom, safeRight } = useAppLayout()
+  const { safeTop, safeBottom, safeLeft, safeRight, mobileTabBarOffset } = useAppLayout()
   const { width, height } = useWindowDimensions()
-  const [offset, setOffset] = useState({ x: 0, y: 0 })
-  const startRef = useRef({ x: 0, y: 0 })
 
-  const defaultPos = useMemo(() => {
-    const x = Math.max(12, width - MINI_WIDTH - Math.max(12, safeRight) - 8)
-    const y = Math.max(safeTop + 12, height - MINI_HEIGHT - safeBottom - 88)
-    return { x, y }
-  }, [height, safeBottom, safeRight, safeTop, width])
+  const bounds = useMemo(() => {
+    const minX = EDGE + Math.max(0, safeLeft)
+    const maxX = Math.max(minX, width - BUBBLE_W - EDGE - Math.max(0, safeRight))
+    const minY = EDGE + Math.max(0, safeTop)
+    const maxY = Math.max(
+      minY,
+      height - BUBBLE_H - EDGE - Math.max(mobileTabBarOffset, safeBottom + 8),
+    )
+    return { minX, maxX, minY, maxY }
+  }, [height, mobileTabBarOffset, safeBottom, safeLeft, safeRight, safeTop, width])
 
-  // Only claim the gesture once the finger moves — otherwise Maximize / Mute /
-  // End taps never fire on iOS/Android (parent stole onStart).
+  const [pos, setPos] = useState<CornerPos>(() => ({
+    x: bounds.maxX,
+    y: bounds.minY,
+  }))
+  const posRef = useRef(pos)
+  posRef.current = pos
+  const dragOrigin = useRef(pos)
+
+  // Keep bubble on-screen when rotation / chrome insets change.
+  useEffect(() => {
+    setPos((current) => ({
+      x: clamp(current.x, bounds.minX, bounds.maxX),
+      y: clamp(current.y, bounds.minY, bounds.maxY),
+    }))
+  }, [bounds.maxX, bounds.maxY, bounds.minX, bounds.minY])
+
   const pan = useMemo(
     () =>
       PanResponder.create({
@@ -62,20 +110,24 @@ export function SessionMiniPlayer({ session }: SessionMiniPlayerProps) {
         onMoveShouldSetPanResponder: (_: GestureResponderEvent, g: PanResponderGestureState) =>
           Math.abs(g.dx) > 6 || Math.abs(g.dy) > 6,
         onPanResponderGrant: () => {
-          startRef.current = offset
+          dragOrigin.current = posRef.current
         },
         onPanResponderMove: (_e, g) => {
-          setOffset({
-            x: startRef.current.x + g.dx,
-            y: startRef.current.y + g.dy,
+          setPos({
+            x: clamp(dragOrigin.current.x + g.dx, bounds.minX, bounds.maxX),
+            y: clamp(dragOrigin.current.y + g.dy, bounds.minY, bounds.maxY),
           })
         },
+        onPanResponderRelease: (_e, g) => {
+          const next = {
+            x: clamp(dragOrigin.current.x + g.dx, bounds.minX, bounds.maxX),
+            y: clamp(dragOrigin.current.y + g.dy, bounds.minY, bounds.maxY),
+          }
+          setPos(snapToNearestCorner(next.x, next.y, bounds))
+        },
       }),
-    [offset],
+    [bounds],
   )
-
-  const left = defaultPos.x + offset.x
-  const top = defaultPos.y + offset.y
 
   const onMaximize = useCallback(() => {
     const instant = peekInstantMeetingSession()
@@ -94,7 +146,6 @@ export function SessionMiniPlayer({ session }: SessionMiniPlayerProps) {
       return
     }
 
-    // 1:1 calls live on their route — restore via maximizeHref, not InstantMeetingHost.
     maximizeGlobalSession()
     if (session.maximizeHref) {
       navigateApp(session.maximizeHref as never)
@@ -120,7 +171,7 @@ export function SessionMiniPlayer({ session }: SessionMiniPlayerProps) {
           message:
             result.message ||
             sessionPipUnsupportedMessage(caps) ||
-            'Keep a camera on, or use Maximize then try again. The in-app mini player still keeps the meeting alive.',
+            'Keep a camera on, or use Maximize then try again. The floating bubble still keeps the meeting alive.',
         })
         if (Platform.OS === 'web') minimizeGlobalSession()
         return
@@ -133,10 +184,6 @@ export function SessionMiniPlayer({ session }: SessionMiniPlayerProps) {
     void peekGlobalSessionHandlers().toggleMic?.()
   }, [])
 
-  const onToggleCamera = useCallback(() => {
-    void peekGlobalSessionHandlers().toggleCamera?.()
-  }, [])
-
   const onEnd = useCallback(() => {
     void peekGlobalSessionHandlers().end?.()
     closeInstantMeetingSession()
@@ -147,126 +194,180 @@ export function SessionMiniPlayer({ session }: SessionMiniPlayerProps) {
     return null
   }
 
-  const compactPip = session.presentation === 'pip'
+  const liveLabel = session.kind === 'call' ? 'Call' : 'Meeting'
+  const count = session.participantCount
 
   return (
     <YStack
-      position="absolute"
-      left={left}
-      top={top}
-      width={compactPip ? 200 : MINI_WIDTH}
-      zIndex={90000}
-      elevation={12}
-      borderRadius={16}
+      position={Platform.OS === 'web' ? ('fixed' as never) : 'absolute'}
+      left={pos.x}
+      top={pos.y}
+      width={BUBBLE_W}
+      height={BUBBLE_H}
+      zIndex={120_000}
+      elevation={24}
+      borderRadius={18}
       overflow="hidden"
       backgroundColor="#1a1016"
-      borderWidth={1}
-      borderColor="rgba(255,255,255,0.14)"
+      borderWidth={1.5}
+      borderColor="rgba(255,255,255,0.22)"
       {...pan.panHandlers}
-      accessibilityLabel={`${session.kind === 'call' ? 'Call' : 'Meeting'} mini player`}
+      style={
+        Platform.OS === 'web'
+          ? {
+              position: 'fixed',
+              zIndex: 120_000,
+              boxShadow: '0 12px 32px rgba(0,0,0,0.45)',
+            }
+          : undefined
+      }
+      accessibilityLabel={`${liveLabel} minimized. Tap to return.`}
     >
-      <XStack
-        paddingHorizontal="$3"
-        paddingVertical="$2"
+      {/* Tap target — WhatsApp expands the call from the bubble face. */}
+      <YStack
+        flex={1}
+        width="100%"
         alignItems="center"
-        justifyContent="space-between"
-        gap="$2"
-        backgroundColor="rgba(216,27,96,0.18)"
+        justifyContent="center"
+        backgroundColor="#2a1520"
+        onPress={onMaximize}
+        cursor="pointer"
+        accessibilityRole="button"
+        accessibilityLabel={`Return to ${liveLabel.toLowerCase()}`}
       >
         <YStack
-          flex={1}
-          minWidth={0}
-          gap={2}
-          onPress={onMaximize}
-          cursor="pointer"
-          accessibilityRole="button"
-          accessibilityLabel="Maximize meeting"
+          position="absolute"
+          top={0}
+          left={0}
+          right={0}
+          bottom={0}
+          backgroundColor="rgba(216,27,96,0.28)"
+          pointerEvents="none"
+        />
+        <Avatar
+          src={session.avatarUrl}
+          name={session.title}
+          size={56}
+          borderWidth={2}
+          borderColor="rgba(255,255,255,0.35)"
+        />
+
+        <XStack
+          position="absolute"
+          top={8}
+          left={8}
+          alignItems="center"
+          gap={5}
+          paddingHorizontal={7}
+          paddingVertical={3}
+          borderRadius={999}
+          backgroundColor="rgba(0,0,0,0.45)"
         >
-          <Text color="#fff" fontSize={13} fontWeight="800" numberOfLines={1}>
+          <YStack width={7} height={7} borderRadius={999} backgroundColor="#22c55e" />
+          <Text color="#fff" fontSize={10} fontWeight="800">
+            {liveLabel}
+          </Text>
+        </XStack>
+
+        {count != null && count > 0 ? (
+          <YStack
+            position="absolute"
+            top={8}
+            right={8}
+            minWidth={22}
+            height={22}
+            paddingHorizontal={6}
+            borderRadius={999}
+            alignItems="center"
+            justifyContent="center"
+            backgroundColor="rgba(216,27,96,0.95)"
+          >
+            <Text color="#fff" fontSize={11} fontWeight="800">
+              {count > 99 ? '99+' : count}
+            </Text>
+          </YStack>
+        ) : null}
+
+        <YStack
+          position="absolute"
+          left={0}
+          right={0}
+          bottom={44}
+          paddingHorizontal={8}
+          alignItems="center"
+        >
+          <Text color="#fff" fontSize={12} fontWeight="800" numberOfLines={1} textAlign="center">
             {session.title}
           </Text>
-          {session.subtitle ? (
-            <Text color="rgba(255,255,255,0.65)" fontSize={11} numberOfLines={1}>
-              {session.subtitle}
-            </Text>
-          ) : (
-            <Text color="rgba(255,255,255,0.55)" fontSize={11} numberOfLines={1}>
-              {session.kind === 'call' ? 'Call continues' : 'Meeting continues while you browse'}
-            </Text>
-          )}
         </YStack>
+      </YStack>
+
+      <XStack
+        height={44}
+        alignItems="center"
+        justifyContent="space-evenly"
+        backgroundColor="rgba(0,0,0,0.55)"
+        borderTopWidth={1}
+        borderTopColor="rgba(255,255,255,0.08)"
+      >
         <Button
           tone="ghost"
           size="$2"
-          borderRadius={999}
+          chromeless
+          circular
+          width={36}
+          height={36}
+          padding={0}
+          onPress={onToggleMic}
+          icon={
+            session.media.audioEnabled ? (
+              <Icons.Mic size={16} color="#fff" />
+            ) : (
+              <Icons.MicOff size={16} color="#ff8fa3" />
+            )
+          }
+          accessibilityLabel={session.media.audioEnabled ? 'Mute' : 'Unmute'}
+        />
+        <Button
+          tone="ghost"
+          size="$2"
+          chromeless
+          circular
+          width={36}
+          height={36}
+          padding={0}
           onPress={onMaximize}
           icon={<Icons.Maximize2 size={16} color="#fff" />}
           accessibilityLabel="Maximize"
         />
-      </XStack>
-
-      {!compactPip ? (
-        <XStack padding="$2" gap="$1.5" flexWrap="wrap" justifyContent="center">
+        {session.pipSupported ? (
           <Button
-            tone="outline"
+            tone="ghost"
             size="$2"
-            borderRadius={999}
-            onPress={onToggleMic}
-            icon={
-              session.media.audioEnabled ? (
-                <Icons.Mic size={14} color="#fff" />
-              ) : (
-                <Icons.MicOff size={14} color="#ff8fa3" />
-              )
-            }
-          >
-            {session.media.audioEnabled ? 'Mute' : 'Unmute'}
-          </Button>
-          {session.kind === 'meeting' || session.media.videoEnabled !== undefined ? (
-            <Button
-              tone="outline"
-              size="$2"
-              borderRadius={999}
-              onPress={onToggleCamera}
-              icon={
-                session.media.videoEnabled ? (
-                  <Icons.Video size={14} color="#fff" />
-                ) : (
-                  <Icons.VideoOff size={14} color="#ff8fa3" />
-                )
-              }
-            >
-              Cam
-            </Button>
-          ) : null}
-          <Button
-            tone="outline"
-            size="$2"
-            borderRadius={999}
+            chromeless
+            circular
+            width={36}
+            height={36}
+            padding={0}
             onPress={onPip}
-            icon={<Icons.Monitor size={14} color="#fff" />}
-          >
-            PiP
-          </Button>
-          <Button
-            tone="outline"
-            size="$2"
-            borderRadius={999}
-            borderColor="rgba(244,63,104,0.45)"
-            color="#ff8fa3"
-            onPress={onEnd}
-            icon={<Icons.PhoneOff size={14} color="#ff8fa3" />}
-          >
-            End
-          </Button>
-        </XStack>
-      ) : (
-        <XStack padding="$2" justifyContent="center">
-          <Button tone="primary" size="$2" borderRadius={999} onPress={onMaximize}>
-            Return to {session.kind === 'call' ? 'call' : 'meeting'}
-          </Button>
-        </XStack>
-      )}
+            icon={<Icons.Monitor size={16} color="#fff" />}
+            accessibilityLabel="Picture in picture"
+          />
+        ) : null}
+        <Button
+          tone="ghost"
+          size="$2"
+          chromeless
+          circular
+          width={36}
+          height={36}
+          padding={0}
+          backgroundColor="rgba(244,63,104,0.9)"
+          onPress={onEnd}
+          icon={<Icons.PhoneOff size={15} color="#fff" />}
+          accessibilityLabel={session.kind === 'call' ? 'End call' : 'Leave meeting'}
+        />
+      </XStack>
     </YStack>
   )
 }

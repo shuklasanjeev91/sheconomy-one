@@ -11,6 +11,7 @@ export const CACHE_KEYS = {
   classesAudio: 'route:classes:audio',
   chatList: (userId: string) => `chat:list:${userId}`,
   coWorkMyMeetings: (userId: string) => `route:cowork:my-meetings:${userId}`,
-  coWorkUpcoming: 'route:cowork:upcoming',
+  /** Per-user — never share upcoming strips across account switches. */
+  coWorkUpcoming: (userId: string) => `route:cowork:upcoming:${userId}`,
   notifications: (userId: string) => `route:notifications:${userId}`,
 } as const

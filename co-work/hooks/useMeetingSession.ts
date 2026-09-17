@@ -107,8 +107,8 @@ export function useMeetingSession({
         sessionIdRef.current,
         displayName,
       )
-      // `ended` included: the host reopening a finished meeting restarts it.
-      if (isHost && meeting.status !== 'active') await startMeeting(meeting.id)
+      // Host reopen: startMeeting refreshes DB status (ignore stale client cache).
+      if (isHost) await startMeeting(meeting.id)
 
       const channel = await joinMeetingChannel(meeting.id, userId, {
         onSignal: (payload) => {

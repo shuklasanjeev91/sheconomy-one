@@ -162,7 +162,6 @@ export function meetingToolbarMoreSections(input: {
   if (input.compact && input.hasInvite !== false) meeting.push('invite')
   if (input.hasShareLink) meeting.push('share_link')
   if (input.hasFullscreen) meeting.push('fullscreen')
-  if (input.hasMinimize) meeting.push('minimize')
   if (input.hasPictureInPicture) meeting.push('picture_in_picture')
 
   const host: MeetingToolbarOverflowKey[] = []
@@ -174,6 +173,11 @@ export function meetingToolbarMoreSections(input: {
   }
 
   const sections: MeetingToolbarMoreSection[] = []
+  // Pin minimize at the top so native More Modal always shows the bubble
+  // action without scrolling past View / Audio sections.
+  if (input.hasMinimize) {
+    sections.push({ title: 'Browse', keys: ['minimize'] })
+  }
   if (view.length) sections.push({ title: 'View', keys: view })
   if (media.length) sections.push({ title: 'Audio & video', keys: media })
   if (meeting.length) sections.push({ title: 'Meeting', keys: meeting })
@@ -184,4 +188,12 @@ export function meetingToolbarMoreSections(input: {
 /** Toolbar must sit above side panels / captions so it stays tappable. */
 export const MEETING_TOOLBAR_Z_INDEX = 150
 export const MEETING_SIDE_PANEL_Z_INDEX = 35
+/** Caption band above video/panels, just under the control dock. */
+export const MEETING_CAPTIONS_Z_INDEX = MEETING_TOOLBAR_Z_INDEX - 30
 export const MEETING_REACTION_TRAY_Z_INDEX = MEETING_TOOLBAR_Z_INDEX + 20
+/**
+ * Portaled More / Security menus escape InstantMeetingHost overflow via
+ * document.body — they must also clear that host's z-index (90_000) or clicks
+ * look like a no-op (menu paints underneath the meeting overlay).
+ */
+export const MEETING_PORTAL_Z_INDEX = 100_000

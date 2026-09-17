@@ -587,6 +587,18 @@ export async function updateMeetingSchedule(
 }
 
 export async function startMeeting(meetingId: string): Promise<void> {
+  // Always read live status — InstantMeetingHost / lobby can pass a stale
+  // cached `active` row after the meeting was ended, which skipped restart and
+  // made LiveKit reject web joins with "This meeting is not active."
+  const { data: row, error: statusError } = await supabase
+    .from('meetings')
+    .select('status')
+    .eq('id', meetingId)
+    .maybeSingle()
+  if (statusError) throw new Error(statusError.message)
+  if (row?.status === 'active') return
+  if (row?.status === 'cancelled') throw new Error('The host cancelled this meeting.')
+
   const { error } = await supabase.rpc('start_meeting_secure', { meeting_id_input: meetingId })
   if (error) throw new Error(error.message)
 }

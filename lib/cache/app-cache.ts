@@ -156,6 +156,24 @@ export async function clearAppCache(key?: string): Promise<void> {
   memory.clear()
   memoryMeta.clear()
   pending.clear()
+
+  // Full wipe — also drop disk so account switches can't resurrect another user's feeds.
+  try {
+    if (Platform.OS === 'web' && typeof window !== 'undefined') {
+      const doomed: string[] = []
+      for (let i = 0; i < window.localStorage.length; i += 1) {
+        const k = window.localStorage.key(i)
+        if (k?.startsWith(STORAGE_PREFIX)) doomed.push(k)
+      }
+      for (const k of doomed) window.localStorage.removeItem(k)
+      return
+    }
+    const keys = await AsyncStorage.getAllKeys()
+    const doomed = keys.filter((k) => k.startsWith(STORAGE_PREFIX))
+    if (doomed.length) await AsyncStorage.multiRemove(doomed)
+  } catch {
+    // ignore quota / private mode
+  }
 }
 
 /** Fire-and-forget fetch that populates memory + disk cache. */

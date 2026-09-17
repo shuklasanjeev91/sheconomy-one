@@ -153,6 +153,8 @@ function MeetingLiveScreenBody({
         setError('The host cancelled this meeting.')
         return
       }
+      // Paint immediately from session cache, then refresh so ended→reopen
+      // does not keep a stale "active" row that skips host restart.
       setMeeting(initialMeeting)
       const ok = await applyMeetingSecurity(initialMeeting)
       if (ok) {
@@ -162,6 +164,14 @@ function MeetingLiveScreenBody({
           return shouldSkipConfirm ? 'joining' : 'confirm'
         })
       }
+      void fetchMeetingByCode(normalizedCode)
+        .then((row) => {
+          if (!row || row.status === 'cancelled') return
+          setMeeting(row)
+        })
+        .catch(() => {
+          // Keep cached meeting — join path refreshes status via startMeeting.
+        })
       return
     }
 

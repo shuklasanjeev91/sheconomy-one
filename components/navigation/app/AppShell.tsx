@@ -31,6 +31,7 @@ import { InstantMeetingHost } from '~/co-work/components/InstantMeetingHost'
 import { ProfileOnboardingNudge } from '~/components/auth/ProfileOnboardingNudge'
 import { GenderVerificationHost } from '~/components/gender-verification/GenderVerificationHost'
 import { GlobalSessionHost } from '~/components/session/GlobalSessionHost'
+import { BindRecentMeetingCodes } from '~/components/session/BindRecentMeetingCodes'
 import { useInstantMeetingSession } from '~/co-work/lib/instant-meeting-session'
 import { useGlobalSession, shouldUseChromelessShell } from '~/lib/session/global-session'
 
@@ -220,6 +221,7 @@ export function AppShell({ children }: AppShellProps) {
           )}
 
           <IncomingCallHost />
+          <BindRecentMeetingCodes />
           <InstantMeetingHost />
           <GlobalSessionHost />
           {/* Mount last so crop sits above InstantMeetingHost (z 90k) during live meetings. */}

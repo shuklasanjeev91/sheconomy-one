@@ -103,6 +103,7 @@ describe('meeting toolbar layout', () => {
         raiseHandOnPrimary: true,
       }),
     ).toEqual([
+      'minimize',
       'view_gallery',
       'view_speaker',
       'view_screen_share',
@@ -116,7 +117,6 @@ describe('meeting toolbar layout', () => {
       'invite',
       'share_link',
       'fullscreen',
-      'minimize',
       'picture_in_picture',
       'host_tools',
     ])
@@ -156,6 +156,7 @@ describe('meeting toolbar layout', () => {
         recording: true,
       }),
     ).toEqual([
+      'minimize',
       'view_gallery',
       'view_speaker',
       'view_screen_share',
@@ -167,7 +168,6 @@ describe('meeting toolbar layout', () => {
       'meeting_info',
       'share_link',
       'fullscreen',
-      'minimize',
       'picture_in_picture',
       'host_tools',
     ])

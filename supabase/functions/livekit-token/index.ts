@@ -82,11 +82,10 @@ Deno.serve(async (req) => {
       })
     }
 
-    if (
-      meeting.status !== 'active' &&
-      !(action === 'end-room' && meeting.status === 'ended')
-    ) {
-      return new Response(JSON.stringify({ error: 'This meeting is not active.' }), {
+    // Only cancellation permanently closes a room. Instant / scheduled / ended
+    // meetings stay tokenable so hosts can reopen and guests can wait for host.
+    if (meeting.status === 'cancelled') {
+      return new Response(JSON.stringify({ error: 'The host cancelled this meeting.' }), {
         status: 403,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       })

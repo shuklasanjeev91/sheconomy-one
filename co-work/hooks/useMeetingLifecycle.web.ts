@@ -3,10 +3,7 @@ import { ConnectionState, RoomEvent, type Room } from 'livekit-client'
 import { useKeepAwake } from 'expo-keep-awake'
 
 import type { LiveKitMediaMode } from '~/co-work/lib/livekit-media-controls'
-import {
-  pauseMeetingCameraForBackground,
-  restoreMeetingMediaAfterForeground,
-} from '~/co-work/lib/livekit-call-media'
+import { restoreMeetingMediaAfterForeground } from '~/co-work/lib/livekit-call-media'
 import {
   meetingLifecycleNotice,
   type MeetingLifecyclePlatform,
@@ -95,15 +92,15 @@ export function useMeetingLifecycle({
     const onVisibilityChange = () => {
       const hidden = document.visibilityState !== 'visible'
       if (hidden) {
+        // Zoom-style: keep publishing camera/mic while the tab is hidden.
+        // Unpublishing on visibilitychange made video look "paused" after tab
+        // switches and after in-app minimize (document can briefly hide).
         intendedCameraRef.current = cameraEnabled
         wasSharingWhenHiddenRef.current = screenSharingRef.current
         setInBackground(true)
         setScreenShareStoppedByOs(false)
         setRestoring(false)
         refreshNotice({ inBackground: true, screenShareStoppedByOs: false, restoring: false })
-        if (room.state === ConnectionState.Connected) {
-          void pauseMeetingCameraForBackground(room)
-        }
         return
       }
 

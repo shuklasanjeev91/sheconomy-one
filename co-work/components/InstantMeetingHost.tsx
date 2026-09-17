@@ -102,6 +102,21 @@ export function InstantMeetingHost() {
           height: windowHeight,
         } as const)
 
+  // Keep the LiveKit surface "rendered" while minimized. `visibility:hidden`
+  // / opacity:0 can pause camera capture on web and native WebRTC. Park the
+  // overlay off-screen instead so publishing continues for the bubble.
+  const collapsedStyle =
+    Platform.OS === 'web'
+      ? ({
+          transform: collapsed ? 'translate3d(-120vw, 0, 0)' : 'translate3d(0, 0, 0)',
+          pointerEvents: collapsed ? ('none' as const) : ('auto' as const),
+        } as const)
+      : ({
+          transform: collapsed
+            ? [{ translateX: -Math.max(windowWidth, 1) * 1.2 }]
+            : [{ translateX: 0 }],
+        } as const)
+
   return (
     <YStack
       position="absolute"
@@ -112,12 +127,15 @@ export function InstantMeetingHost() {
       width="100%"
       height="100%"
       zIndex={collapsed ? 1 : 90_000}
-      opacity={collapsed ? 0 : 1}
+      opacity={1}
       pointerEvents={collapsed ? 'none' : 'auto'}
       overflow="hidden"
       backgroundColor="#0c080a"
       collapsable={false}
-      style={overlayStyle}
+      style={{
+        ...overlayStyle,
+        ...collapsedStyle,
+      }}
       accessibilityElementsHidden={collapsed}
       importantForAccessibility={collapsed ? 'no-hide-descendants' : 'auto'}
     >

@@ -114,6 +114,9 @@ export function useMeetingLifecycle({
       }
 
       if (next !== 'active') {
+        // `inactive` (control center, permission sheets, More modal) must NOT
+        // pause the camera — only true OS background. In-app minimize keeps
+        // AppState active; never treat that as a camera pause.
         if (next === 'background') {
           intendedCameraRef.current = cameraEnabled
           wasSharingWhenBackgroundRef.current = screenSharingRef.current

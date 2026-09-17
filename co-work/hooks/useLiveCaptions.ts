@@ -203,7 +203,10 @@ export function useLiveCaptions({
         if (result.isFinal) commitFinalCaption(text)
         else interim = text
       }
-      if (interim) setInterimText(interim)
+      if (interim) {
+        setError(null)
+        setInterimText(interim)
+      }
     }
 
     recognition.onerror = (event) => {
@@ -238,7 +241,10 @@ export function useLiveCaptions({
 
   const startNativeRecognition = useCallback(async () => {
     const session = await createNativeSpeechSession({
-      onPartial: (text) => setInterimText(text),
+      onPartial: (text) => {
+        setError(null)
+        setInterimText(text)
+      },
       onFinal: (text) => commitFinalCaption(text),
       onError: (message) => {
         setError(message)
@@ -456,15 +462,15 @@ export function useLiveCaptions({
     [localLines, translatedRemote],
   )
 
-  const currentCaption =
-    (interimText
-      ? translatedInterim ||
-        // Avoid flashing English while Hindi (etc.) translation is in flight.
-        (visibleLines.length > 0 ? visibleLines[visibleLines.length - 1]?.text : '') ||
-        '…'
+  // Prefer live interim (translated when ready, else raw STT) so Zoom-style
+  // captions update while someone is still speaking.
+  const currentCaption = (
+    interimText.trim()
+      ? translatedInterim.trim() || interimText.trim()
       : visibleLines.length > 0
-        ? visibleLines[visibleLines.length - 1]?.text
-        : '') || ''
+        ? visibleLines[visibleLines.length - 1]?.text || ''
+        : ''
+  ).trim()
 
   const showingTranslation = visibleLines.some((line) => line.translated)
 

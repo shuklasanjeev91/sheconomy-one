@@ -126,7 +126,7 @@ describe('meeting lifecycle', () => {
   })
 
   it('explains in-app browsing while minimized', () => {
-    expect(meetingBrowsingMinimizedNotice('meeting')).toMatch(/browse Sheconomy/i)
-    expect(meetingBrowsingMinimizedNotice('call')).toMatch(/Call continues/i)
+    expect(meetingBrowsingMinimizedNotice('meeting')).toMatch(/Floating bubble|tap it to return/i)
+    expect(meetingBrowsingMinimizedNotice('call')).toMatch(/Floating bubble|tap it to return/i)
   })
 })

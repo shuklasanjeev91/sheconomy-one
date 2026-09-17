@@ -19,8 +19,7 @@ import {
   type CaptionOverlayPlacement,
   type CaptionOverlaySize,
 } from '~/co-work/lib/caption-overlay-layout'
-import { coworkGlassStyle, useCoWorkTheme } from '~/co-work/lib/theme'
-import { isWebRuntime } from '~/lib/platform/capabilities'
+import { MEETING_CAPTIONS_Z_INDEX } from '~/co-work/lib/meeting-toolbar'
 import { useAppLayout } from '~/hooks/useAppLayout'
 
 type CaptionLanguageOption = { code: string; label: string }
@@ -50,6 +49,19 @@ type MeetingLiveCaptionsProps = {
 
 const SIZE_ORDER: CaptionOverlaySize[] = ['compact', 'comfortable', 'large']
 
+/** Zoom-style caption chrome: always dark + white text over video. */
+const CAPTION_SURFACE = 'rgba(0, 0, 0, 0.82)'
+const CAPTION_BORDER = 'rgba(255, 255, 255, 0.22)'
+const CAPTION_TEXT = '#ffffff'
+const CAPTION_TEXT_MUTED = 'rgba(255, 255, 255, 0.72)'
+const CAPTION_SPEAKER = '#f9a8d4'
+
+const FONT_BY_SIZE: Record<CaptionOverlaySize, { body: number; speaker: number; status: number }> = {
+  compact: { body: 15, speaker: 11, status: 11 },
+  comfortable: { body: 18, speaker: 12, status: 12 },
+  large: { body: 22, speaker: 13, status: 13 },
+}
+
 export function MeetingLiveCaptions({
   active,
   currentCaption,
@@ -73,15 +85,9 @@ export function MeetingLiveCaptions({
   onPlacementChange,
 }: MeetingLiveCaptionsProps) {
   const [settingsOpen, setSettingsOpen] = useState(false)
-  const { ui: coworkUi } = useCoWorkTheme()
   const { width: viewportWidth, height: viewportHeight } = useWindowDimensions()
   const { isDesktop, isTablet } = useAppLayout()
   const effectiveWideLayout = wideLayout ?? (isDesktop || isTablet)
-
-  if (!active && !error) return null
-
-  const recent = lines.filter((line) => line.isFinal).slice(-2)
-  const latest = recent[recent.length - 1]
   const layout = captionOverlayLayout({
     size,
     placement,
@@ -89,8 +95,9 @@ export function MeetingLiveCaptions({
     viewportHeight,
     presentationSafe,
     wideLayout: effectiveWideLayout,
-    bottomOffsetHint: bottomOffset ? bottomOffset + 100 : undefined,
+    bottomOffsetHint: bottomOffset,
   })
+  const fonts = FONT_BY_SIZE[size]
   const sizeIndex = SIZE_ORDER.indexOf(size)
   const canShrink = sizeIndex > 0
   const canGrow = sizeIndex < SIZE_ORDER.length - 1
@@ -100,14 +107,25 @@ export function MeetingLiveCaptions({
       : { bottom: bottomOffset ?? (presentationSafe ? 124 : 112) }
   const horizontalInset = sideInset ?? 12
   const showSettings = !collapsed && settingsOpen
+  const finalLines = lines.filter((line) => line.isFinal && line.text.trim()).slice(-3)
+  const latestFinal = finalLines[finalLines.length - 1]
+  const liveText = currentCaption.trim()
+  const liveIsNew =
+    !!liveText &&
+    liveText !== '…' &&
+    liveText !== latestFinal?.text?.trim()
+  const hasBody = finalLines.length > 0 || liveIsNew
+
+  if (!active && !error) return null
 
   return (
     <YStack
-      position={isWebRuntime() ? ('fixed' as const) : ('absolute' as const)}
+      position="absolute"
       left={horizontalInset}
       right={horizontalInset}
       {...placementProps}
-      zIndex={22}
+      zIndex={MEETING_CAPTIONS_Z_INDEX}
+      elevation={MEETING_CAPTIONS_Z_INDEX}
       pointerEvents="box-none"
       alignItems={layout.align}
       gap="$2"
@@ -118,13 +136,13 @@ export function MeetingLiveCaptions({
           width="100%"
           paddingHorizontal="$3"
           paddingVertical="$2"
-          borderRadius={coworkUi.radius.card}
-          backgroundColor={coworkUi.warningMuted}
+          borderRadius={14}
+          backgroundColor="rgba(120, 53, 15, 0.92)"
           borderWidth={1}
-          borderColor="rgba(251,191,36,0.35)"
+          borderColor="rgba(251, 191, 36, 0.45)"
           pointerEvents="none"
         >
-          <Text fontSize={12} color={coworkUi.warning}>
+          <Text fontSize={13} fontWeight="600" color="#fde68a">
             {error}
           </Text>
         </YStack>
@@ -134,23 +152,28 @@ export function MeetingLiveCaptions({
         <YStack
           width={layout.maxWidth}
           maxWidth="100%"
-          maxHeight={collapsed ? 48 : layout.maxHeight}
-          paddingHorizontal="$3"
-          paddingVertical={collapsed ? '$2' : '$2.5'}
-          borderRadius={16}
+          maxHeight={collapsed ? 52 : layout.maxHeight}
+          paddingHorizontal={collapsed ? '$3' : '$3.5'}
+          paddingVertical={collapsed ? '$2' : '$3'}
+          borderRadius={14}
           borderWidth={1}
-          borderColor="rgba(255,255,255,0.16)"
-          backgroundColor="rgba(12, 8, 10, 0.78)"
-          style={coworkGlassStyle(coworkUi, true)}
-          gap="$2"
+          borderColor={CAPTION_BORDER}
+          backgroundColor={CAPTION_SURFACE}
+          gap="$1.5"
           pointerEvents="auto"
+          overflow="hidden"
         >
           <XStack alignItems="center" justifyContent="space-between" gap="$2">
-            <Text flex={1} fontSize={collapsed ? 12 : size === 'compact' ? 14 : 16} fontWeight="700" color="#fff" numberOfLines={collapsed ? 1 : 3}>
-              {currentCaption ||
-                (collapsed
-                  ? targetLangName || 'Captions on'
-                  : `Listening · ${targetLangName || 'your language'}…`)}
+            <Text
+              flex={1}
+              fontSize={fonts.status}
+              fontWeight="700"
+              color={CAPTION_TEXT_MUTED}
+              numberOfLines={1}
+            >
+              {collapsed
+                ? liveText || latestFinal?.text || targetLangName || 'Captions on'
+                : `CC · ${targetLangName || 'Captions'}`}
             </Text>
             <XStack alignItems="center" gap="$1">
               {!collapsed ? (
@@ -158,7 +181,7 @@ export function MeetingLiveCaptions({
                   label={settingsOpen ? 'Hide caption settings' : 'Caption settings'}
                   onPress={() => setSettingsOpen((open) => !open)}
                 >
-                  <Icons.Settings size={15} color={coworkUi.textSecondary} />
+                  <Icons.Settings size={15} color={CAPTION_TEXT_MUTED} />
                 </CaptionIconButton>
               ) : null}
               <CaptionIconButton
@@ -166,28 +189,53 @@ export function MeetingLiveCaptions({
                 onPress={() => onCollapsedChange?.(!collapsed)}
               >
                 {collapsed ? (
-                  <Icons.ChevronUp size={15} color={coworkUi.textSecondary} />
+                  <Icons.ChevronUp size={15} color={CAPTION_TEXT_MUTED} />
                 ) : (
-                  <Icons.ChevronDown size={15} color={coworkUi.textSecondary} />
+                  <Icons.ChevronDown size={15} color={CAPTION_TEXT_MUTED} />
                 )}
               </CaptionIconButton>
             </XStack>
           </XStack>
-          {!collapsed && latest?.speaker ? (
-            <Text fontSize={11} fontWeight="700" color={coworkUi.textSecondary}>
-              {latest.speaker}
-            </Text>
+
+          {!collapsed ? (
+            hasBody ? (
+              <YStack gap="$2" width="100%">
+                {finalLines.map((line) => (
+                  <CaptionLineRow
+                    key={line.id}
+                    speaker={line.speaker}
+                    text={line.text}
+                    fonts={fonts}
+                  />
+                ))}
+                {liveIsNew ? (
+                  <CaptionLineRow
+                    speaker={latestFinal?.speaker || 'You'}
+                    text={liveText}
+                    fonts={fonts}
+                    live
+                  />
+                ) : null}
+              </YStack>
+            ) : (
+              <Text fontSize={fonts.body} fontWeight="600" color={CAPTION_TEXT} opacity={0.85}>
+                Listening… speak to caption
+              </Text>
+            )
           ) : null}
+
           {showSettings ? (
             <>
-              <XStack alignItems="center" justifyContent="space-between" gap="$2" flexWrap="wrap">
+              <XStack alignItems="center" justifyContent="space-between" gap="$2" flexWrap="wrap" marginTop="$1">
                 {availableLanguages.length && targetLang && onTargetLangChange ? (
                   <Select value={targetLang} onValueChange={onTargetLangChange}>
                     <SelectTrigger
                       height={32}
                       width={168}
                       paddingHorizontal="$2"
-                      iconAfter={<Icons.ChevronDown size={14} color={coworkUi.textMuted} />}
+                      backgroundColor="rgba(255,255,255,0.12)"
+                      borderColor="rgba(255,255,255,0.2)"
+                      iconAfter={<Icons.ChevronDown size={14} color={CAPTION_TEXT_MUTED} />}
                       accessibilityLabel="Caption language — listening and display for you only"
                     >
                       <Select.Value placeholder="Language" />
@@ -203,7 +251,7 @@ export function MeetingLiveCaptions({
                     </SelectContent>
                   </Select>
                 ) : targetLangName ? (
-                  <Text fontSize={10} fontWeight="700" color={coworkUi.textMuted}>
+                  <Text fontSize={11} fontWeight="700" color={CAPTION_TEXT_MUTED}>
                     {targetLangName}
                   </Text>
                 ) : null}
@@ -214,9 +262,9 @@ export function MeetingLiveCaptions({
                       onPress={() => onPlacementChange(layout.placement === 'top' ? 'bottom' : 'top')}
                     >
                       {layout.placement === 'top' ? (
-                        <Icons.ChevronDown size={15} color={coworkUi.textSecondary} />
+                        <Icons.ChevronDown size={15} color={CAPTION_TEXT_MUTED} />
                       ) : (
-                        <Icons.ChevronUp size={15} color={coworkUi.textSecondary} />
+                        <Icons.ChevronUp size={15} color={CAPTION_TEXT_MUTED} />
                       )}
                     </CaptionIconButton>
                   ) : null}
@@ -225,7 +273,7 @@ export function MeetingLiveCaptions({
                     disabled={!canShrink}
                     onPress={() => canShrink && onSizeChange?.(SIZE_ORDER[sizeIndex - 1])}
                   >
-                    <Text color={coworkUi.textSecondary} fontWeight="800">
+                    <Text color={CAPTION_TEXT_MUTED} fontWeight="800">
                       −
                     </Text>
                   </CaptionIconButton>
@@ -234,19 +282,54 @@ export function MeetingLiveCaptions({
                     disabled={!canGrow}
                     onPress={() => canGrow && onSizeChange?.(SIZE_ORDER[sizeIndex + 1])}
                   >
-                    <Text color={coworkUi.textSecondary} fontWeight="800">
+                    <Text color={CAPTION_TEXT_MUTED} fontWeight="800">
                       +
                     </Text>
                   </CaptionIconButton>
                 </XStack>
               </XStack>
-              <Text fontSize={10} color={coworkUi.textMuted}>
+              <Text fontSize={10} color={CAPTION_TEXT_MUTED}>
                 Language applies to you only.
               </Text>
             </>
           ) : null}
         </YStack>
       ) : null}
+    </YStack>
+  )
+}
+
+function CaptionLineRow({
+  speaker,
+  text,
+  fonts,
+  live = false,
+}: {
+  speaker?: string
+  text: string
+  fonts: { body: number; speaker: number; status: number }
+  live?: boolean
+}) {
+  return (
+    <YStack width="100%" gap={2}>
+      {speaker ? (
+        <Text fontSize={fonts.speaker} fontWeight="800" color={CAPTION_SPEAKER} numberOfLines={1}>
+          {speaker}
+        </Text>
+      ) : null}
+      <Text
+        fontSize={fonts.body}
+        fontWeight={live ? '700' : '600'}
+        color={CAPTION_TEXT}
+        lineHeight={fonts.body + 6}
+        style={{
+          textShadowColor: 'rgba(0,0,0,0.55)',
+          textShadowOffset: { width: 0, height: 1 },
+          textShadowRadius: 3,
+        }}
+      >
+        {text}
+      </Text>
     </YStack>
   )
 }
@@ -276,7 +359,8 @@ function CaptionIconButton({
         alignItems: 'center',
         justifyContent: 'center',
         borderRadius: 8,
-        opacity: disabled ? 0.35 : pressed ? 0.6 : 1,
+        backgroundColor: pressed ? 'rgba(255,255,255,0.12)' : 'transparent',
+        opacity: disabled ? 0.35 : 1,
       })}
     >
       {children}

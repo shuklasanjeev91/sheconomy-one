@@ -41,6 +41,10 @@ export type GlobalSessionState = {
   /** Meeting / call code for identity. */
   code: string
   media: GlobalSessionMediaFlags
+  /** Optional face for WhatsApp-style floating bubble. */
+  avatarUrl: string | null
+  /** Admitted participant count for the bubble badge. */
+  participantCount: number | null
   /** True when OS PiP is available on this platform/session. */
   pipSupported: boolean
   /** User-facing reason when PiP is unavailable. */
@@ -90,6 +94,8 @@ export type RegisterGlobalSessionInput = {
   code: string
   media?: Partial<GlobalSessionMediaFlags>
   presentation?: GlobalSessionPresentation
+  avatarUrl?: string | null
+  participantCount?: number | null
   pipSupported?: boolean
   pipUnsupportedMessage?: string | null
   handlers?: GlobalSessionHandlers
@@ -119,6 +125,12 @@ export function registerGlobalSession(input: RegisterGlobalSessionInput): void {
         screenSharing: input.media?.screenSharing ?? previous?.media.screenSharing ?? false,
         speakerOn: input.media?.speakerOn ?? previous?.media.speakerOn ?? true,
       },
+      avatarUrl:
+        input.avatarUrl !== undefined ? input.avatarUrl : (previous?.avatarUrl ?? null),
+      participantCount:
+        input.participantCount !== undefined
+          ? input.participantCount
+          : (previous?.participantCount ?? null),
       pipSupported: input.pipSupported ?? previous?.pipSupported ?? false,
       pipUnsupportedMessage:
         input.pipUnsupportedMessage ?? previous?.pipUnsupportedMessage ?? null,
@@ -135,6 +147,29 @@ export function updateGlobalSessionMedia(media: Partial<GlobalSessionMediaFlags>
     session: {
       ...store.session,
       media: { ...store.session.media, ...media },
+    },
+  }
+  emit()
+}
+
+export function updateGlobalSessionMeta(meta: {
+  avatarUrl?: string | null
+  participantCount?: number | null
+  title?: string
+  subtitle?: string | null
+}): void {
+  if (!store.session) return
+  store = {
+    ...store,
+    session: {
+      ...store.session,
+      avatarUrl: meta.avatarUrl !== undefined ? meta.avatarUrl : store.session.avatarUrl,
+      participantCount:
+        meta.participantCount !== undefined
+          ? meta.participantCount
+          : store.session.participantCount,
+      title: meta.title !== undefined ? meta.title : store.session.title,
+      subtitle: meta.subtitle !== undefined ? meta.subtitle : store.session.subtitle,
     },
   }
   emit()

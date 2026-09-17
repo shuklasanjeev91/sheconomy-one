@@ -2,7 +2,7 @@
 // universal link can make this the very first screen module Hermes loads.
 import '~/lib/polyfills/install-dom-exception'
 
-import { Alert, Platform, useWindowDimensions } from 'react-native'
+import { Platform, useWindowDimensions } from 'react-native'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
 import { MeetingShareSheet } from '~/co-work/components/MeetingShareSheet'
@@ -34,6 +34,7 @@ import {
 import {
   MEETING_TOOLBAR_Z_INDEX,
 } from '~/co-work/lib/meeting-toolbar'
+import { confirmMeetingAction } from '~/co-work/lib/meeting-confirm'
 import { useLiveCaptions } from '~/co-work/hooks/useLiveCaptions'
 import {
   useMeetingRecording,
@@ -449,6 +450,7 @@ function MeetingRoomOverlay({
   meeting,
   userId,
   displayName,
+  avatarUrl,
   onLeave,
   presence,
   caps,
@@ -864,14 +866,13 @@ function MeetingRoomOverlay({
       run()
       return
     }
-    Alert.alert(
-      'Start recording?',
-      'Cloud recording will start. Everyone in the meeting will see a recording notice.',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        { text: 'Start recording', style: 'destructive', onPress: run },
-      ],
-    )
+    confirmMeetingAction({
+      title: 'Start recording?',
+      message: 'Cloud recording will start. Everyone in the meeting will see a recording notice.',
+      confirmLabel: 'Start recording',
+      destructive: true,
+      onConfirm: run,
+    })
   }, [allowRecording, isAuthoritativeHost, recordingSession, toast])
 
   const toggleCaptions = useCallback(() => {
@@ -967,12 +968,34 @@ function MeetingRoomOverlay({
     })
   }, [fullscreen, toast])
 
-  const minimizeMeeting = useCallback(() => {
-    // Drop any open crop sheet so Minimize never reveals Commerce under
-    // "Crop virtual background" chrome (stale session / see-through crop hole).
+  const minimizeMeeting = useCallback(
+    (options?: { browseHref?: string | null }) => {
+      // Drop any open crop sheet so Minimize never reveals Commerce under
+      // "Crop virtual background" chrome (stale session / see-through crop hole).
+      clearImageCropQueue()
+      // Keep LiveKit mounted via InstantMeetingHost. Mark enteredRoom so Maximize
+      // resumes the live room instead of the Join confirm lobby.
+      openInstantMeetingSession({
+        code: meeting.meeting_code,
+        meeting,
+        autoJoin: true,
+        enteredRoom: true,
+        displayName,
+      })
+      minimizeGlobalSession()
+      toast.show('Meeting minimized', {
+        tone: 'success',
+        message: meetingBrowsingMinimizedNotice('meeting'),
+      })
+      // Tab navigation passes browseHref; the Minimize control falls back to Co-Work home.
+      // Never navigate twice (browseAway used to race home vs the tapped tab).
+      navigateApp((options?.browseHref as never) || coWorkRoutes.home)
+    },
+    [displayName, meeting, toast],
+  )
+
+  const collapseMeetingForBrowse = useCallback(() => {
     clearImageCropQueue()
-    // Keep LiveKit mounted via InstantMeetingHost. Mark enteredRoom so Maximize
-    // resumes the live room instead of the Join confirm lobby.
     openInstantMeetingSession({
       code: meeting.meeting_code,
       meeting,
@@ -981,14 +1004,7 @@ function MeetingRoomOverlay({
       displayName,
     })
     minimizeGlobalSession()
-    toast.show('Meeting minimized', {
-      tone: 'success',
-      message: meetingBrowsingMinimizedNotice('meeting'),
-    })
-    // Always leave lobby /live under the overlay. Staying on Join now made
-    // Maximize look broken when the host briefly hid (code-shape mismatch).
-    navigateApp(coWorkRoutes.home)
-  }, [displayName, meeting, toast])
+  }, [displayName, meeting])
 
   const enterMeetingPip = useCallback(() => {
     const caps = detectSessionPipCapabilities()
@@ -1174,20 +1190,14 @@ function MeetingRoomOverlay({
       participants: presence.participants,
       hostUserId: userId,
     })
-    if (Platform.OS === 'web') {
-      if (typeof window !== 'undefined' && window.confirm(`${copy.title}\n\n${copy.message}`)) {
-        runLeave()
-      }
-      return
-    }
-    Alert.alert(copy.title, copy.message, [
-      { text: copy.cancelLabel, style: 'cancel' },
-      {
-        text: copy.confirmLabel,
-        style: copy.willEndMeeting ? 'destructive' : 'default',
-        onPress: runLeave,
-      },
-    ])
+    confirmMeetingAction({
+      title: copy.title,
+      message: copy.message,
+      confirmLabel: copy.confirmLabel,
+      cancelLabel: copy.cancelLabel,
+      destructive: copy.willEndMeeting,
+      onConfirm: runLeave,
+    })
   }, [
     isAuthoritativeHost,
     presence.moderationSettings?.host_leave_behavior,
@@ -1203,6 +1213,8 @@ function MeetingRoomOverlay({
     title: meeting.title || 'Meeting',
     subtitle: formatMeetingCode(meeting.meeting_code),
     maximizeHref: String(coWorkRoutes.meetingLive(meeting.meeting_code)),
+    avatarUrl: avatarUrl ?? meeting.host?.avatar_url ?? null,
+    participantCount: admittedCount,
     media: {
       audioEnabled: liveKit?.audioEnabled ?? true,
       videoEnabled: liveKit?.videoEnabled ?? false,
@@ -1225,7 +1237,7 @@ function MeetingRoomOverlay({
         handleLeave()
       },
       browseAway: () => {
-        minimizeMeeting()
+        collapseMeetingForBrowse()
       },
       enterPip: async () => {
         enterMeetingPip()
@@ -1238,65 +1250,53 @@ function MeetingRoomOverlay({
   const handleEnd = useCallback(() => {
     if (!isAuthoritativeHost || exitingRef.current) return
     const copy = endMeetingConfirmCopy()
-    if (Platform.OS === 'web') {
-      if (typeof window !== 'undefined' && window.confirm(`${copy.title}\n\n${copy.message}`)) {
-        runEndForEveryone()
-      }
-      return
-    }
-    Alert.alert(copy.title, copy.message, [
-      { text: copy.cancelLabel, style: 'cancel' },
-      {
-        text: copy.confirmLabel,
-        style: 'destructive',
-        onPress: runEndForEveryone,
-      },
-    ])
+    confirmMeetingAction({
+      title: copy.title,
+      message: copy.message,
+      confirmLabel: copy.confirmLabel,
+      cancelLabel: copy.cancelLabel,
+      destructive: true,
+      onConfirm: runEndForEveryone,
+    })
   }, [isAuthoritativeHost, runEndForEveryone])
 
   const handleMuteAll = useCallback(() => {
     if (!isAuthoritativeHost) return
-    Alert.alert('Mute all participants?', 'This never turns anyone’s microphone on — only requests mute.', [
-      { text: 'Cancel', style: 'cancel' },
-      {
-        text: 'Mute all',
-        style: 'destructive',
-        onPress: () => {
-          void presence
-            .muteAll()
-            .then(() =>
-              toast.show('Participants muted', {
-                tone: 'success',
-                message: 'This never enables anyone’s microphone.',
-              }),
-            )
-            .catch((cause) =>
-              toast.show('Could not mute participants', {
-                tone: 'danger',
-                message: cause instanceof Error ? cause.message : 'Please try again.',
-              }),
-            )
-        },
+    confirmMeetingAction({
+      title: 'Mute all participants?',
+      message: 'This never turns anyone’s microphone on — only requests mute.',
+      confirmLabel: 'Mute all',
+      destructive: true,
+      onConfirm: () => {
+        void presence
+          .muteAll()
+          .then(() =>
+            toast.show('Participants muted', {
+              tone: 'success',
+              message: 'This never enables anyone’s microphone.',
+            }),
+          )
+          .catch((cause) =>
+            toast.show('Could not mute participants', {
+              tone: 'danger',
+              message: cause instanceof Error ? cause.message : 'Please try again.',
+            }),
+          )
       },
-    ])
+    })
   }, [isAuthoritativeHost, presence, toast])
 
   const handleRemoveAllExceptHost = useCallback(() => {
     if (!isAuthoritativeHost) return
-    Alert.alert(
-      'Remove everyone except host?',
-      'All other participants will be removed from this meeting.',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Remove all',
-          style: 'destructive',
-          onPress: () => {
-            void presence.removeAllExceptHost()
-          },
-        },
-      ],
-    )
+    confirmMeetingAction({
+      title: 'Remove everyone except host?',
+      message: 'All other participants will be removed from this meeting.',
+      confirmLabel: 'Remove all',
+      destructive: true,
+      onConfirm: () => {
+        void presence.removeAllExceptHost()
+      },
+    })
   }, [isAuthoritativeHost, presence])
 
   const handleToggleLock = useCallback(() => {
@@ -1322,38 +1322,23 @@ function MeetingRoomOverlay({
 
   const confirmRemoveParticipant = useCallback(
     (participantId: string) => {
-      const remove = () => {
-        void presence
-          .remove(participantId)
-          .then(() => toast.show('Participant removed', { tone: 'success' }))
-          .catch((cause) =>
-            toast.show('Could not remove participant', {
-              tone: 'danger',
-              message: cause instanceof Error ? cause.message : 'Please try again.',
-            }),
-          )
-      }
-      if (Platform.OS === 'web') {
-        if (
-          typeof window !== 'undefined' &&
-          window.confirm('Remove this participant? They cannot rejoin until you allow them.')
-        ) {
-          remove()
-        }
-        return
-      }
-      Alert.alert(
-        'Remove participant?',
-        'They will be disconnected and cannot rejoin until you allow them.',
-        [
-          { text: 'Cancel', style: 'cancel' },
-          {
-            text: 'Remove',
-            style: 'destructive',
-            onPress: remove,
-          },
-        ],
-      )
+      confirmMeetingAction({
+        title: 'Remove participant?',
+        message: 'They will be disconnected and cannot rejoin until you allow them.',
+        confirmLabel: 'Remove',
+        destructive: true,
+        onConfirm: () => {
+          void presence
+            .remove(participantId)
+            .then(() => toast.show('Participant removed', { tone: 'success' }))
+            .catch((cause) =>
+              toast.show('Could not remove participant', {
+                tone: 'danger',
+                message: cause instanceof Error ? cause.message : 'Please try again.',
+              }),
+            )
+        },
+      })
     },
     [presence, toast],
   )
@@ -2003,7 +1988,7 @@ function MeetingRoomOverlay({
             recording={recording}
             captionsActive={captions.active}
             isHost={isAuthoritativeHost}
-            viewerRole={presence.selfRole}
+            viewerRole={isAuthoritativeHost ? 'host' : presence.selfRole}
             canModerate={canModerate}
             canChangeCriticalSettings={canChangeCriticalMeetingSettings(presence.selfRole)}
             isLocked={!!presence.moderationSettings?.is_locked}

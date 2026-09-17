@@ -46,12 +46,11 @@ export function screenShareRoleLabel(role: MeetingScreenShareRole): string | nul
   return null
 }
 
-/** In-app minimize (mini-player) — not OS background. */
+/** In-app minimize (WhatsApp-style floating bubble) — not OS background. */
 export function meetingBrowsingMinimizedNotice(kind: 'meeting' | 'call' = 'meeting'): string {
-  if (kind === 'call') {
-    return 'Call continues while you browse Sheconomy. Tap Maximize on the mini player to return.'
-  }
-  return 'Meeting continues while you browse Sheconomy. Tap Maximize on the mini player to return.'
+  return kind === 'call'
+    ? 'Floating bubble stays on screen — tap it to return to the call.'
+    : 'Floating bubble stays on screen — tap it to return to the meeting.'
 }
 
 export function meetingBackgroundNotice(snapshot: MeetingLifecycleSnapshot): string {

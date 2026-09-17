@@ -14,6 +14,8 @@ import { signOut as supabaseSignOut, type SignOutScope } from '~/lib/supabase/au
 import { supabase } from '~/lib/supabase'
 import { appRoutes, routes } from '~/lib/routes'
 import { clearCachedProfile } from '~/lib/profile/profile-cache'
+import { clearAppCache } from '~/lib/cache/app-cache'
+import { clearRecentMeetingCodes } from '~/co-work/lib/recent-meeting-codes'
 import { navigateApp } from '~/lib/platform/navigate'
 import { persistor, resetStore, store } from '~/lib/store'
 import { useSupabase } from '~/providers/SupabaseProvider'
@@ -26,6 +28,8 @@ async function clearLocalAppState() {
     // Purge failures are non-fatal — the in-memory reset already applied.
   }
   await clearCachedProfile()
+  await clearAppCache()
+  clearRecentMeetingCodes()
 }
 
 export type CompleteSignInOptions = {

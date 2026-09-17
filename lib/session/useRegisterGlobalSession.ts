@@ -7,6 +7,7 @@ import {
   registerGlobalSession,
   setGlobalSessionHandlers,
   updateGlobalSessionMedia,
+  updateGlobalSessionMeta,
   type GlobalSessionHandlers,
   type GlobalSessionKind,
   type GlobalSessionPresentation,
@@ -28,6 +29,8 @@ type UseRegisterGlobalSessionArgs = {
   subtitle?: string | null
   maximizeHref: string
   presentation?: GlobalSessionPresentation
+  avatarUrl?: string | null
+  participantCount?: number | null
   media: {
     audioEnabled: boolean
     videoEnabled: boolean
@@ -62,6 +65,8 @@ export function useRegisterGlobalSession({
   subtitle,
   maximizeHref,
   presentation,
+  avatarUrl,
+  participantCount,
   media,
   handlers,
 }: UseRegisterGlobalSessionArgs) {
@@ -82,6 +87,8 @@ export function useRegisterGlobalSession({
       subtitle,
       maximizeHref,
       presentation,
+      avatarUrl,
+      participantCount,
       media: {
         audioEnabled: media.audioEnabled,
         videoEnabled: media.videoEnabled,
@@ -106,9 +113,11 @@ export function useRegisterGlobalSession({
     }
   }, [
     active,
+    avatarUrl,
     code,
     kind,
     maximizeHref,
+    participantCount,
     presentation,
     subtitle,
     title,
@@ -129,6 +138,16 @@ export function useRegisterGlobalSession({
     media.speakerOn,
     media.videoEnabled,
   ])
+
+  useEffect(() => {
+    if (!active) return
+    updateGlobalSessionMeta({
+      avatarUrl,
+      participantCount,
+      title,
+      subtitle,
+    })
+  }, [active, avatarUrl, participantCount, subtitle, title])
 
   useEffect(() => {
     if (!active) return

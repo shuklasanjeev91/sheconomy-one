@@ -42,9 +42,9 @@ export async function reinforceCallMediaOnConnect(
 }
 
 /**
- * After app/tab goes to background: pause local camera so audio can keep
- * running under OS background rules (iOS audio session / Android without FGS).
- * Callers restore via restoreMeetingMediaAfterForeground using intendedCameraOn.
+ * After app goes to true OS background (native only): pause local camera so
+ * audio can keep running under OS background rules. Web keeps the camera on
+ * across tab switches / in-app minimize (Zoom-style).
  */
 export async function pauseMeetingCameraForBackground(room: Room): Promise<void> {
   try {

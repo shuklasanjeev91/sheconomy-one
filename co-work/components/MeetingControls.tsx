@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState, type ReactNode } from 'react'
-import { Platform, useWindowDimensions } from 'react-native'
+import { Modal, Platform, Pressable, useWindowDimensions } from 'react-native'
+import { useSafeAreaInsets } from 'react-native-safe-area-context'
 
 import { ViewportOverlay } from '~/components/layout'
 import { Button, Icons, ScrollView, Text, XStack, YStack } from '~/components/ui'
@@ -7,6 +8,7 @@ import { MeetingReactionTray } from '~/co-work/components/MeetingReactionTray'
 import { useAppLayout } from '~/hooks/useAppLayout'
 import { meetingChatToolbarLabel } from '~/co-work/lib/meeting-chat'
 import {
+  MEETING_PORTAL_Z_INDEX,
   MEETING_TOOLBAR_Z_INDEX,
   meetingToolbarMoreSections,
   meetingToolbarPrimaryKeys,
@@ -87,9 +89,9 @@ type ControlVariant = 'neutral' | 'brand' | 'danger' | 'off'
 type FlyoutKind = 'none' | 'more' | 'security'
 
 /**
- * Overflow menu that stays inside the viewport.
- * On web we use `position: fixed` so InstantMeetingHost / footer overflow cannot
- * clip the panel (the "options showing out of box" bug).
+ * Overflow menu that stays inside the viewport on every platform.
+ * - Web: `position: fixed` + body portal (clears InstantMeetingHost overflow/z-index)
+ * - Native: transparent Modal (same overflow escape on iOS/Android)
  */
 type FlyoutPos = {
   bottom: number
@@ -103,15 +105,19 @@ function MeetingFlyoutPanel({
   width,
   maxHeight,
   align,
+  onRequestClose,
   children,
 }: {
   open: boolean
   width: number
   maxHeight: number
   align: 'left' | 'right'
+  onRequestClose?: () => void
   children: ReactNode
 }) {
   const { ui: coworkUi, shadows: coworkShadows } = useCoWorkTheme()
+  const insets = useSafeAreaInsets()
+  const { height: windowHeight } = useWindowDimensions()
   const [anchorEl, setAnchorEl] = useState<HTMLElement | null>(null)
   const [pos, setPos] = useState<FlyoutPos | null>(null)
 
@@ -140,14 +146,29 @@ function MeetingFlyoutPanel({
 
     if (Platform.OS !== 'web') return
 
+    const fallbackPos = (): FlyoutPos => ({
+      bottom: 96,
+      maxHeight: Math.min(
+        maxHeight,
+        Math.max(180, Math.round((typeof window !== 'undefined' ? window.innerHeight : 640) * 0.45)),
+      ),
+      ...(align === 'right' ? { right: 16 } : { left: 16 }),
+    })
+
     const measure = () => {
-      if (!anchorEl || typeof window === 'undefined') return
+      if (typeof window === 'undefined') return
+      if (!anchorEl) {
+        setPos(fallbackPos())
+        return
+      }
       const rect = anchorEl.getBoundingClientRect()
-      if (!rect.width && !rect.height && rect.top === 0 && rect.left === 0) return
+      if (!rect.width && !rect.height && rect.top === 0 && rect.left === 0) {
+        setPos(fallbackPos())
+        return
+      }
       const gap = 10
       const spaceAbove = Math.max(120, Math.round(rect.top - gap - 8))
       const next: FlyoutPos = {
-        // Sit just above the trigger (More / Security cluster).
         bottom: Math.max(12, Math.round(window.innerHeight - rect.top + gap)),
         maxHeight: Math.min(maxHeight, spaceAbove),
       }
@@ -169,7 +190,6 @@ function MeetingFlyoutPanel({
     }
   }, [align, anchorEl, maxHeight, open])
 
-  // Invisible measure target that fills the trigger's relative parent.
   const anchor = (
     <YStack
       ref={bindAnchor as never}
@@ -183,70 +203,114 @@ function MeetingFlyoutPanel({
     />
   )
 
-  if (!open) return anchor
-
-  const panelMaxHeight = pos?.maxHeight ?? maxHeight
-  const panel = (
+  const panelBody = (panelMaxHeight: number) => (
     <YStack
-      position={Platform.OS === 'web' ? ('fixed' as never) : 'absolute'}
-      bottom={Platform.OS === 'web' && pos ? pos.bottom : '100%'}
-      left={
-        Platform.OS === 'web' && pos
-          ? pos.left
-          : align === 'left'
-            ? 8
-            : undefined
-      }
-      right={
-        Platform.OS === 'web' && pos
-          ? pos.right
-          : align === 'right'
-            ? 0
-            : undefined
-      }
-      marginBottom={Platform.OS === 'web' ? 0 : '$2'}
       width={width}
+      height={panelMaxHeight}
       maxHeight={panelMaxHeight}
       borderRadius={coworkUi.radius.panel}
       borderWidth={1}
       borderColor={coworkUi.glassBorder}
       paddingVertical="$2"
-      zIndex={MEETING_TOOLBAR_Z_INDEX + 40}
       pointerEvents="auto"
+      overflow="hidden"
       style={{
         ...meetingBarStyle(coworkUi, true),
         ...coworkBoxShadow(coworkShadows, 'dock'),
-        ...(Platform.OS === 'web' && pos
-          ? { position: 'fixed' as const, zIndex: MEETING_TOOLBAR_Z_INDEX + 40 }
-          : null),
+        height: panelMaxHeight,
+        maxHeight: panelMaxHeight,
       }}
     >
       <ScrollView
         showsVerticalScrollIndicator
         keyboardShouldPersistTaps="handled"
-        style={{ maxHeight: Math.max(120, panelMaxHeight - 12) }}
-        contentContainerStyle={{ paddingBottom: 4 }}
+        style={{ flex: 1, height: panelMaxHeight - 12 }}
+        contentContainerStyle={{ paddingBottom: 8 }}
       >
         {children}
       </ScrollView>
     </YStack>
   )
 
-  // Portal on web so InstantMeetingHost `overflow:hidden` cannot clip options.
+  if (!open) return anchor
+
+  // Web: portal above InstantMeetingHost (z 90k).
   if (Platform.OS === 'web') {
     if (!pos) return anchor
     return (
       <>
         {anchor}
-        <ViewportOverlay>{panel}</ViewportOverlay>
+        <ViewportOverlay>
+          <YStack
+            position={'fixed' as never}
+            top={0}
+            left={0}
+            right={0}
+            bottom={0}
+            zIndex={MEETING_PORTAL_Z_INDEX - 1}
+            pointerEvents="auto"
+            style={{ position: 'fixed', inset: 0, zIndex: MEETING_PORTAL_Z_INDEX - 1 }}
+            onPress={onRequestClose}
+            accessibilityLabel="Close menu"
+          />
+          <YStack
+            position={'fixed' as never}
+            bottom={pos.bottom}
+            left={pos.left}
+            right={pos.right}
+            zIndex={MEETING_PORTAL_Z_INDEX}
+            pointerEvents="box-none"
+            style={{ position: 'fixed', zIndex: MEETING_PORTAL_Z_INDEX }}
+          >
+            {panelBody(pos.maxHeight)}
+          </YStack>
+        </ViewportOverlay>
       </>
     )
   }
 
+  // Native: Modal escapes InstantMeetingHost overflow:hidden (iPad/Android).
+  // Tall enough that Browse (minimize) + View stay reachable without feeling clipped.
+  const nativeMaxHeight = Math.min(
+    Math.max(380, maxHeight),
+    Math.max(340, Math.round(windowHeight * 0.72)),
+  )
   return (
     <>
       {anchor}
-      {panel}
+      <Modal
+        visible={open}
+        transparent
+        animationType="fade"
+        statusBarTranslucent
+        onRequestClose={onRequestClose}
+      >
+        <YStack flex={1} width="100%" height="100%">
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Close menu"
+            onPress={onRequestClose}
+            style={{
+              position: 'absolute',
+              top: 0,
+              left: 0,
+              right: 0,
+              bottom: 0,
+              backgroundColor: 'rgba(12, 8, 10, 0.35)',
+            }}
+          />
+          <YStack
+            flex={1}
+            justifyContent="flex-end"
+            alignItems={align === 'right' ? 'flex-end' : 'flex-start'}
+            paddingHorizontal={16}
+            paddingBottom={Math.max(insets.bottom, 12) + 72}
+            pointerEvents="box-none"
+          >
+            {panelBody(nativeMaxHeight)}
+          </YStack>
+        </YStack>
+      </Modal>
     </>
   )
 }
@@ -273,7 +337,7 @@ function ControlButton({
       bg: coworkUi.meetingControl,
       border: 'transparent',
       icon: coworkUi.text,
-      label: coworkUi.meetingIconMuted,
+      label: coworkUi.text,
     },
     brand: {
       bg: coworkUi.meetingControlActive,
@@ -371,9 +435,9 @@ function OverflowItem({
   const color = danger
     ? coworkUi.danger
     : active
-      ? coworkUi.brandLight
+      ? coworkUi.brand
       : disabled
-        ? coworkUi.meetingIconMuted
+        ? coworkUi.textMuted
         : coworkUi.text
   return (
     <XStack
@@ -394,7 +458,7 @@ function OverflowItem({
       pointerEvents={disabled ? 'none' : 'auto'}
     >
       <Icon size={17} color={color} />
-      <Text fontSize={13} fontWeight="600" color={color} numberOfLines={1}>
+      <Text fontSize={14} fontWeight="700" color={color} numberOfLines={1}>
         {label}
       </Text>
     </XStack>
@@ -471,7 +535,15 @@ export function MeetingControls({
   const effectiveViewMode: MeetingViewMode =
     viewMode === 'screen-share' && !screenShareOnStage ? 'gallery' : viewMode
 
-  const role: MeetingRole = viewerRole ?? (isHost ? 'host' : canModerate ? 'co_host' : 'participant')
+  // Prefer authoritative host flag over a stale participant role row — otherwise
+  // iPad/Android lose Host tools / End / Record while web (faster role refresh) keeps them.
+  const role: MeetingRole = isHost
+    ? 'host'
+    : viewerRole === 'co_host' || viewerRole === 'host'
+      ? viewerRole
+      : canModerate
+        ? 'co_host'
+        : viewerRole ?? 'participant'
   const hasReactions = !!onToggleReactions
   const hasRaiseHand = true
   const primaryKeys = meetingToolbarPrimaryKeys({
@@ -676,7 +748,7 @@ export function MeetingControls({
       case 'minimize':
         return onMinimize
           ? {
-              label: 'Minimize meeting',
+              label: 'Minimize to bubble',
               icon: Icons.Minimize2,
               onPress: runFromFlyout(onMinimize),
             }
@@ -935,20 +1007,27 @@ export function MeetingControls({
         }}
       >
         {onToggleReactions && onSendReaction ? (
-          <MeetingReactionTray open={reactionTrayOpen} onSelect={onSendReaction} />
+          <MeetingReactionTray
+            open={reactionTrayOpen}
+            onSelect={onSendReaction}
+            onRequestClose={() => {
+              if (reactionTrayOpen) onToggleReactions()
+            }}
+          />
         ) : null}
         <MeetingFlyoutPanel
           open={flyout === 'security' && securityItems.length > 0}
           width={flyoutWidth}
           maxHeight={flyoutMaxHeight}
           align="left"
+          onRequestClose={closeFlyout}
         >
           <Text
             paddingHorizontal="$3"
             paddingBottom="$1"
             fontSize={11}
             fontWeight="800"
-            color={coworkUi.meetingIconMuted}
+            color={coworkUi.brand}
           >
             Security
           </Text>
@@ -992,6 +1071,7 @@ export function MeetingControls({
                 width={flyoutWidth}
                 maxHeight={flyoutMaxHeight}
                 align="right"
+                onRequestClose={closeFlyout}
               >
                 <YStack paddingHorizontal="$1" gap="$2">
                   {moreSectionItems.map((section) => (
@@ -1001,7 +1081,8 @@ export function MeetingControls({
                         paddingTop="$1"
                         fontSize={11}
                         fontWeight="800"
-                        color={coworkUi.meetingIconMuted}
+                        letterSpacing={0.4}
+                        color={coworkUi.brand}
                       >
                         {section.title}
                       </Text>
