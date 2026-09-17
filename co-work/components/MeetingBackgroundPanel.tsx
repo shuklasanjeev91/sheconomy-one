@@ -107,16 +107,26 @@ export function MeetingBackgroundPanel({
   )
 
   const upload = useCallback(async () => {
-    const picked = await pickImagesWithCrop({
-      multiple: false,
-      maxCount: 1,
-      aspect: [16, 9],
-      cropTitle: 'Crop virtual background',
-    })
-    const image = picked[0]
-    if (!image) return
-    setBusyId('upload')
     try {
+      // Skip in-app crop during live meetings — InstantMeetingHost used to cover
+      // ImageCropHost (hang = "nothing happens"). OS picker + server resize is enough.
+      const picked = await pickImagesWithCrop({
+        multiple: false,
+        maxCount: 1,
+        aspect: [16, 9],
+        skipCrop: true,
+        allowsEditing: true,
+        cropTitle: 'Crop virtual background',
+      })
+      const image = picked[0]
+      if (!image) {
+        toast.show('No image selected', {
+          tone: 'info',
+          message: 'Pick a photo from your library to use as a background.',
+        })
+        return
+      }
+      setBusyId('upload')
       const created = await uploadCustomVirtualBackground(userId, image)
       await loadCustom()
       await applySelection(customBackgroundSelection(created))

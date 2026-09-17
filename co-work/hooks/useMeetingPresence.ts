@@ -41,6 +41,7 @@ import type {
   MeetingChatMessage,
   MeetingModerationSettings,
   MeetingParticipant,
+  MeetingRole,
   SignalPayload,
 } from '~/co-work/lib/types'
 import type { LiveCaptionLine } from '~/co-work/lib/live-captions'
@@ -121,7 +122,13 @@ export function useMeetingPresence({
   panelRef.current = panel
 
   const selfParticipant = participants.find((p) => p.user_id === userId)
-  const selfRole = selfParticipant?.role ?? (isHost ? 'host' : 'participant')
+  // Prefer the meeting host_id over a stale meeting_roles row — otherwise the
+  // real host loses Make co-host / End Meeting when roles lag behind.
+  const selfRole: MeetingRole = isHost
+    ? 'host'
+    : selfParticipant?.role === 'co_host' || selfParticipant?.role === 'host'
+      ? selfParticipant.role
+      : 'participant'
   const canModerate = canManageMeeting(selfRole)
   const isWaiting = selfParticipant?.status === 'waiting'
   const isRejected = selfParticipant?.status === 'rejected'

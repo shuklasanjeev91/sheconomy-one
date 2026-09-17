@@ -386,6 +386,7 @@ function MeetingRoomOverlay({
   caps,
   title,
   liveKit,
+  isHost,
 }: MeetingRoomScreenProps & {
   presence: PresenceState
   caps: MediaCaps
@@ -484,8 +485,8 @@ function MeetingRoomOverlay({
     if (exiting) markLeaving()
   }, [exiting, markLeaving])
 
-  const isAuthoritativeHost = presence.selfRole === 'host'
-  const canModerate = presence.canModerate
+  const isAuthoritativeHost = isHost || presence.selfRole === 'host'
+  const canModerate = presence.canModerate || isAuthoritativeHost
   const chatEnabled = isMeetingChatEnabled(meetingState)
   const privateChatEnabled = isMeetingPrivateChatEnabled(meetingState)
   const supportsScreenBroadcast =
@@ -1619,7 +1620,7 @@ function MeetingRoomOverlay({
         <MeetingParticipantsPanel
           participants={presence.participants}
           isHost={isAuthoritativeHost}
-          viewerRole={presence.selfRole}
+          viewerRole={isAuthoritativeHost ? 'host' : presence.selfRole}
           currentUserId={userId}
           isLocked={presence.moderationSettings?.is_locked}
           onAdmit={(id) => void presence.admit(id)}

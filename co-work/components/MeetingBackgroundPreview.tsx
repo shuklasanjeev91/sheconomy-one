@@ -92,17 +92,20 @@ export function MeetingBackgroundPreview({ userId }: MeetingBackgroundPreviewPro
       )
       return
     }
-    const picked = await pickImagesWithCrop({
-      multiple: false,
-      maxCount: 1,
-      aspect: [16, 9],
-      cropTitle: 'Crop virtual background',
-    })
-    const image = picked[0]
-    if (!image) return
-    setUploadBusy(true)
-    setError(null)
     try {
+      const picked = await pickImagesWithCrop({
+        multiple: false,
+        maxCount: 1,
+        aspect: [16, 9],
+        cropTitle: 'Crop virtual background',
+      })
+      const image = picked[0]
+      if (!image) {
+        setError('No image selected. Pick a photo to upload as a background.')
+        return
+      }
+      setUploadBusy(true)
+      setError(null)
       const created = await uploadCustomVirtualBackground(userId, image)
       await apply(customBackgroundSelection(created))
     } catch (cause) {

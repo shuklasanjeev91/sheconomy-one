@@ -241,7 +241,12 @@ export function MeetingParticipantsPanel({
                             </Button>
                           ) : null}
                           {actions.includes('make_co_host') && onAssignCoHost ? (
-                            <Button tone="ghost" size="$1" onPress={() => onAssignCoHost(p.user_id)}>
+                            <Button
+                              tone="primary"
+                              size="$1"
+                              borderRadius={999}
+                              onPress={() => onAssignCoHost(p.user_id)}
+                            >
                               Make co-host
                             </Button>
                           ) : null}

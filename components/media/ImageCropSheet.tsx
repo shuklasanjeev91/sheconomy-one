@@ -48,8 +48,8 @@ type Viewport = { width: number; height: number }
 
 const MIN_ZOOM = 1
 const MAX_ZOOM = 4
-/** Above AppBottomSheet (100_000) so crop appears over create-post composer. */
-const CROP_Z_INDEX = 110_000
+/** Above InstantMeetingHost (90_000) and AppBottomSheet (100_000). */
+const CROP_Z_INDEX = 200_000
 const SHEET_ANIMATION = Platform.OS === 'web' ? 'quick' : '100ms'
 
 /**

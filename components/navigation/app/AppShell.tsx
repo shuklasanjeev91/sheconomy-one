@@ -156,6 +156,8 @@ export function AppShell({ children }: AppShellProps) {
             <IncomingCallHost />
             <InstantMeetingHost />
             <GlobalSessionHost />
+            {/* Above InstantMeetingHost so meeting background Upload can crop. */}
+            <ImageCropHost />
           </AppAccessGate>
           <GenderVerificationHost />
         </ScreenFill>
@@ -203,11 +205,12 @@ export function AppShell({ children }: AppShellProps) {
             {/* Global overlays — bottom tabs can open these outside section layouts
                 (e.g. Create Post from /profile, New chat from any chat route). */}
             <CommunityComposerHost />
-            <ImageCropHost />
             <ChatActionsHost />
             <IncomingCallHost />
             <InstantMeetingHost />
             <GlobalSessionHost />
+            {/* Mount last so crop sits above InstantMeetingHost (z 90k) during live meetings. */}
+            <ImageCropHost />
           </ScreenFill>
         </AppBarScrollProvider>
       </AppAccessGate>

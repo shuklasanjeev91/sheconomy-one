@@ -69,7 +69,14 @@ export async function uploadCustomVirtualBackground(
     : bytes.mimeType.includes('webp')
       ? 'webp'
       : 'jpg'
-  const id = crypto.randomUUID()
+  const id =
+    typeof globalThis.crypto?.randomUUID === 'function'
+      ? globalThis.crypto.randomUUID()
+      : 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (character) => {
+          const random = Math.floor(Math.random() * 16)
+          const value = character === 'x' ? random : (random & 0x3) | 0x8
+          return value.toString(16)
+        })
   const path = `${userId}/${id}.${extension}`
   const upload = await uploadStorageObject(
     STORAGE_BUCKETS.meetingBackgrounds,
