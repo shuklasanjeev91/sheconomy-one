@@ -124,7 +124,7 @@ export function MeetingBackgroundPanel({
         maxCount: 1,
         aspect: [16, 9],
         skipCrop: true,
-        allowsEditing: true,
+        allowsEditing: false,
         cropTitle: 'Crop virtual background',
       })
       const image = picked[0]

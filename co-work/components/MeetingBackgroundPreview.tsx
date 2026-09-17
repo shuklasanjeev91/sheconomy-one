@@ -8,10 +8,14 @@ import {
 } from '@livekit/track-processors'
 import { createLocalVideoTrack, type LocalVideoTrack } from 'livekit-client'
 
-import { MeetingBackgroundQuickPicker } from '~/co-work/components/MeetingBackgroundQuickPicker'
+import {
+  MeetingBackgroundQuickPicker,
+  type MeetingBackgroundQuickCustomItem,
+} from '~/co-work/components/MeetingBackgroundQuickPicker'
 import { pickImagesWithCrop } from '~/lib/media/pick-and-crop'
 import {
   customBackgroundSelection,
+  listCustomVirtualBackgrounds,
   resolveVirtualBackgroundSelection,
   uploadCustomVirtualBackground,
 } from '~/co-work/lib/virtual-background-storage'
@@ -38,26 +42,61 @@ export function MeetingBackgroundPreview({ userId }: MeetingBackgroundPreviewPro
   const [uploadBusy, setUploadBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [effectsAvailable, setEffectsAvailable] = useState(true)
+  const [customs, setCustoms] = useState<MeetingBackgroundQuickCustomItem[]>([])
+
+  const refreshCustoms = useCallback(async () => {
+    if (!userId) {
+      setCustoms([])
+      return
+    }
+    try {
+      const rows = await listCustomVirtualBackgrounds(userId)
+      const items: MeetingBackgroundQuickCustomItem[] = []
+      for (const row of rows) {
+        try {
+          const resolved = await resolveVirtualBackgroundSelection(customBackgroundSelection(row))
+          items.push({
+            id: row.id,
+            name: row.name || 'Custom',
+            imageUri: resolved.imageUrl,
+            selection: {
+              ...customBackgroundSelection(row),
+              imageUrl: resolved.imageUrl,
+            },
+          })
+        } catch {
+          items.push({
+            id: row.id,
+            name: row.name || 'Custom',
+            selection: customBackgroundSelection(row),
+          })
+        }
+      }
+      setCustoms(items)
+    } catch {
+      // Library load is best-effort on the lobby.
+    }
+  }, [userId])
 
   const apply = useCallback(async (value: VirtualBackgroundSelection) => {
     const next = await resolveVirtualBackgroundSelection(normalizeVirtualBackground(value))
+    setSelection(next)
+    await saveVirtualBackgroundPreference(next)
+
     if (!effectsAvailableRef.current && next.mode !== 'off') {
       setError(
-        'Background effects are unavailable in this browser. Camera preview is still active.',
+        'Preview effects are unavailable in this browser. Your selection is saved and will apply when you join.',
       )
-      setSelection(OFF_BACKGROUND)
-      await saveVirtualBackgroundPreference(OFF_BACKGROUND)
+      setBusy(false)
       return
     }
+
     const processor = processorRef.current
     if (!processor) {
-      // Camera-only preview (unsupported processors) still remembers "None".
-      if (next.mode === 'off') {
-        setSelection(OFF_BACKGROUND)
-        await saveVirtualBackgroundPreference(OFF_BACKGROUND)
-      }
+      setBusy(false)
       return
     }
+
     setBusy(true)
     setError(null)
     try {
@@ -68,28 +107,25 @@ export function MeetingBackgroundPreview({ userId }: MeetingBackgroundPreviewPro
       } else {
         await processor.switchTo({ mode: 'disabled' })
       }
-      setSelection(next)
-      await saveVirtualBackgroundPreference(next)
     } catch (cause) {
       try {
         await processor.switchTo({ mode: 'disabled' })
       } catch {
         // Keep the ordinary camera preview even if cleanup fails.
       }
-      setSelection(OFF_BACKGROUND)
-      await saveVirtualBackgroundPreference(OFF_BACKGROUND)
-      setError(cause instanceof Error ? cause.message : 'Could not preview this background.')
+      setError(
+        cause instanceof Error
+          ? cause.message
+          : 'Could not preview this background. It is still saved for when you join.',
+      )
     } finally {
       setBusy(false)
     }
   }, [])
 
   const upload = useCallback(async () => {
-    if (!userId) return
-    if (!effectsAvailableRef.current) {
-      setError(
-        'Background effects are unavailable in this browser. Camera preview is still active.',
-      )
+    if (!userId) {
+      setError('Sign in to upload a custom background.')
       return
     }
     try {
@@ -98,24 +134,29 @@ export function MeetingBackgroundPreview({ userId }: MeetingBackgroundPreviewPro
         maxCount: 1,
         aspect: [16, 9],
         skipCrop: true,
-        allowsEditing: true,
+        allowsEditing: false,
         cropTitle: 'Crop virtual background',
       })
       const image = picked[0]
       if (!image) {
-        setError('No image selected. Pick a photo to upload as a background.')
+        setError('No image selected. Pick a photo from your library to use as a background.')
         return
       }
       setUploadBusy(true)
       setError(null)
       const created = await uploadCustomVirtualBackground(userId, image)
+      await refreshCustoms()
       await apply(customBackgroundSelection(created))
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : 'Could not upload this background.')
     } finally {
       setUploadBusy(false)
     }
-  }, [apply, userId])
+  }, [apply, refreshCustoms, userId])
+
+  useEffect(() => {
+    void refreshCustoms()
+  }, [refreshCustoms])
 
   useEffect(() => {
     let cancelled = false
@@ -138,13 +179,18 @@ export function MeetingBackgroundPreview({ userId }: MeetingBackgroundPreviewPro
         }
         trackRef.current = track
         if (videoRef.current) track.attach(videoRef.current)
+        if (!cancelled) setBusy(false)
 
         if (!supported) {
           setError(
             resourceWarning ||
-              'Background effects are unavailable in this browser. Camera preview is still active.',
+              'Preview effects are unavailable in this browser. You can still upload an image — it will apply when you join.',
           )
-          setBusy(false)
+          const saved = await loadVirtualBackgroundPreference()
+          if (!cancelled) {
+            setSelection(normalizeVirtualBackground(saved))
+            await saveVirtualBackgroundPreference(normalizeVirtualBackground(saved))
+          }
           return
         }
 
@@ -153,20 +199,24 @@ export function MeetingBackgroundPreview({ userId }: MeetingBackgroundPreviewPro
           await track.setProcessor(processor)
           processorRef.current = processor
           const saved = await loadVirtualBackgroundPreference()
-          await apply(saved)
+          if (!cancelled) await apply(saved)
         } catch (cause) {
           effectsAvailableRef.current = false
-          if (!cancelled) setEffectsAvailable(false)
-          setError(
-            cause instanceof Error
-              ? cause.message
-              : 'Background effects failed to start. Camera preview is still active.',
-          )
-          setBusy(false)
+          if (!cancelled) {
+            setEffectsAvailable(false)
+            setError(
+              cause instanceof Error
+                ? cause.message
+                : 'Background effects failed to start. You can still upload — it will apply when you join.',
+            )
+            setBusy(false)
+          }
         }
       } catch (cause) {
-        setError(cause instanceof Error ? cause.message : 'Could not start camera preview.')
-        setBusy(false)
+        if (!cancelled) {
+          setError(cause instanceof Error ? cause.message : 'Could not start camera preview.')
+          setBusy(false)
+        }
       }
     })()
     return () => {
@@ -192,6 +242,7 @@ export function MeetingBackgroundPreview({ userId }: MeetingBackgroundPreviewPro
       onSelect={(value) => void apply(value)}
       onUpload={userId ? () => void upload() : undefined}
       uploadBusy={uploadBusy}
+      customItems={customs}
       preview={
         <video
           ref={videoRef}

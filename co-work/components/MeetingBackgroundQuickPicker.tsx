@@ -10,6 +10,13 @@ import {
 } from '~/co-work/lib/virtual-backgrounds'
 import { getVirtualBackgroundPresets } from '~/co-work/lib/virtual-background-presets'
 
+export type MeetingBackgroundQuickCustomItem = {
+  id: string
+  name: string
+  imageUri?: string | null
+  selection: VirtualBackgroundSelection
+}
+
 type MeetingBackgroundQuickPickerProps = {
   preview: ReactNode
   selection: VirtualBackgroundSelection
@@ -20,6 +27,8 @@ type MeetingBackgroundQuickPickerProps = {
   onSelect: (selection: VirtualBackgroundSelection) => void
   onUpload?: () => void
   uploadBusy?: boolean
+  /** Previously uploaded customs — lets Join Now switch/replace images. */
+  customItems?: MeetingBackgroundQuickCustomItem[]
 }
 
 export function MeetingBackgroundQuickPicker({
@@ -31,6 +40,7 @@ export function MeetingBackgroundQuickPicker({
   onSelect,
   onUpload,
   uploadBusy,
+  customItems = [],
 }: MeetingBackgroundQuickPickerProps) {
   const { ui: coworkUi } = useCoWorkTheme()
   const presets = getVirtualBackgroundPresets()
@@ -95,11 +105,23 @@ export function MeetingBackgroundQuickPicker({
             onPress={() => onSelect(preset.selection)}
           />
         ))}
+        {customItems.map((item) => (
+          <QuickTile
+            key={item.id}
+            label={item.name}
+            active={active(item.selection)}
+            dimmed={!effectsAvailable}
+            imageUri={item.imageUri}
+            icon={<Icons.Image size={18} color={coworkUi.text} />}
+            onPress={() => onSelect(item.selection)}
+          />
+        ))}
         {onUpload ? (
           <QuickTile
             label="Upload"
             active={false}
-            dimmed={!effectsAvailable}
+            // Upload must stay tappable even when live preview effects are offline —
+            // preference still saves and applies after Join.
             busy={uploadBusy}
             icon={<Icons.Upload size={18} color={coworkUi.text} />}
             onPress={onUpload}
@@ -108,8 +130,8 @@ export function MeetingBackgroundQuickPicker({
       </XStack>
       {!effectsAvailable ? (
         <Text fontSize={12} color={coworkUi.textMuted}>
-          Background effects are unavailable on this device. Your camera preview still works without
-          a filter.
+          Live preview effects are limited on this device. Uploaded images still save and apply when
+          you join.
         </Text>
       ) : null}
       {error ? (
@@ -127,6 +149,7 @@ function QuickTile({
   onPress,
   icon,
   imageSource,
+  imageUri,
   dimmed,
   busy,
 }: {
@@ -135,6 +158,7 @@ function QuickTile({
   onPress: () => void
   icon?: ReactNode
   imageSource?: import('react-native').ImageSourcePropType
+  imageUri?: string | null
   dimmed?: boolean
   busy?: boolean
 }) {
@@ -145,6 +169,7 @@ function QuickTile({
       accessibilityState={{ selected: active, busy: !!busy }}
       accessibilityLabel={label}
       onPress={onPress}
+      disabled={!!busy}
     >
       <YStack gap={4} width={66} alignItems="center" opacity={dimmed ? 0.55 : 1}>
         <YStack
@@ -158,7 +183,9 @@ function QuickTile({
           alignItems="center"
           justifyContent="center"
         >
-          {imageSource ? (
+          {imageUri ? (
+            <Image source={{ uri: imageUri }} resizeMode="cover" style={{ width: '100%', height: '100%' }} />
+          ) : imageSource ? (
             <Image source={imageSource} resizeMode="cover" style={{ width: '100%', height: '100%' }} />
           ) : (
             icon
