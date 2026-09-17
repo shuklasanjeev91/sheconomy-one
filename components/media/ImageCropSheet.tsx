@@ -338,17 +338,22 @@ export function ImageCropSheet({
               <View style={{ minWidth: 40 }} />
             </XStack>
 
-            {/* Full-bleed stage */}
+            {/* Full-bleed stage — always opaque so app chrome never shows through
+                the crop-frame hole (iPad Minimize bug: commerce under crop UI). */}
             <YStack
               flex={1}
               minHeight={220}
               width="100%"
-              backgroundColor="#080808"
+              backgroundColor="#000"
               alignItems="center"
               justifyContent="center"
               overflow="hidden"
               onLayout={onViewportLayout}
             >
+              <View
+                pointerEvents="none"
+                style={[StyleSheet.absoluteFillObject, { backgroundColor: '#000' }]}
+              />
               {fitted && image ? (
                 <CropStage
                   ref={stageRef}
@@ -361,12 +366,21 @@ export function ImageCropSheet({
                   maxZoom={MAX_ZOOM}
                   onTransformChange={handleTransformChange}
                 />
+              ) : error ? (
+                <YStack gap="$3" padding="$4" alignItems="center" maxWidth={360}>
+                  <Text fontSize={15} color="#ff8a8a" textAlign="center">
+                    {error}
+                  </Text>
+                  <Button tone="outline" borderRadius={999} onPress={onCancel}>
+                    Close
+                  </Button>
+                </YStack>
               ) : (
                 <Spinner size="large" color="white" />
               )}
 
-              {/* True circular / rect vignette via SVG mask */}
-              {viewport.width > 0 && viewport.height > 0 ? (
+              {/* Dim outside the crop window only after the photo is on stage. */}
+              {fitted && image && viewport.width > 0 && viewport.height > 0 ? (
                 <View pointerEvents="none" style={StyleSheet.absoluteFill}>
                   <Svg width={viewport.width} height={viewport.height}>
                     <Defs>
@@ -403,7 +417,7 @@ export function ImageCropSheet({
                     <SvgRect
                       width={viewport.width}
                       height={viewport.height}
-                      fill="rgba(0,0,0,0.68)"
+                      fill="rgba(0,0,0,0.72)"
                       mask={`url(#${maskId})`}
                     />
                     {isCircle ? (

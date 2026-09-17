@@ -8,6 +8,7 @@ import {
   peekGlobalSession,
   peekGlobalSessionHandlers,
 } from '~/lib/session/global-session'
+import { clearImageCropQueue } from '~/lib/media/crop-session'
 import { navigateApp } from '~/lib/platform/navigate'
 import type { Href } from 'one'
 
@@ -20,6 +21,7 @@ export function collapseLiveMeetingForBrowsing(input?: {
   meeting?: Meeting | null
   href?: Href | string | null
 }): void {
+  clearImageCropQueue()
   const browseAway = peekGlobalSessionHandlers().browseAway
   if (browseAway) {
     void browseAway()

@@ -71,6 +71,7 @@ import {
   sessionPipUnsupportedMessage,
 } from '~/lib/session/picture-in-picture'
 import { meetingBrowsingMinimizedNotice } from '~/co-work/lib/meeting-lifecycle'
+import { clearImageCropQueue } from '~/lib/media/crop-session'
 import { useSessionPipOnHide } from '~/lib/session/useSessionPipOnHide'
 import { formatMeetingCode } from '~/co-work/lib/meetings'
 import {
@@ -874,6 +875,9 @@ function MeetingRoomOverlay({
   }, [fullscreen, toast])
 
   const minimizeMeeting = useCallback(() => {
+    // Drop any open crop sheet so Minimize never reveals Commerce under
+    // "Crop virtual background" chrome (stale session / see-through crop hole).
+    clearImageCropQueue()
     // Keep LiveKit mounted via InstantMeetingHost. Mark enteredRoom so Maximize
     // resumes the live room instead of the Join confirm lobby.
     openInstantMeetingSession({

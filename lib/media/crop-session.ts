@@ -77,6 +77,18 @@ export function cancelImageCrop() {
   resolveImageCrop(null)
 }
 
+/** Drop every pending/open crop — used when minimizing a meeting so crop chrome
+ *  cannot linger over Commerce / other tabs. */
+export function clearImageCropQueue() {
+  const current = state.current
+  const pending = queue.splice(0, queue.length)
+  if (current) current.resolve(null)
+  for (const item of pending) item.resolve(null)
+  if (!current && pending.length === 0) return
+  state = CLOSED
+  emit()
+}
+
 function subscribe(listener: () => void) {
   listeners.add(listener)
   return () => {

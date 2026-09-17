@@ -373,7 +373,7 @@ export function MeetingControls({
       case 'minimize':
         return onMinimize
           ? {
-              label: 'Minimize',
+              label: 'Minimize meeting',
               icon: Icons.Minimize2,
               onPress: runFromFlyout(onMinimize),
             }
@@ -522,7 +522,7 @@ export function MeetingControls({
         return onMinimize ? (
           <ControlButton
             key={key}
-            label="Minimize"
+            label="Minimize meeting"
             icon={Icons.Minimize2}
             variant="brand"
             onPress={onMinimize}

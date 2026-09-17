@@ -97,6 +97,8 @@ export function MeetingBackgroundPreview({ userId }: MeetingBackgroundPreviewPro
         multiple: false,
         maxCount: 1,
         aspect: [16, 9],
+        skipCrop: true,
+        allowsEditing: true,
         cropTitle: 'Crop virtual background',
       })
       const image = picked[0]
