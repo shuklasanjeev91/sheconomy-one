@@ -42,6 +42,8 @@ type MeetingParticipantsPanelProps = {
   onAssignCoHost?: (userId: string) => void
   onRemoveCoHost?: (userId: string) => void
   onTransferHost?: (userId: string) => void
+  /** Opens Zoom-style joined-participant picker to transfer host. */
+  onOpenTransferHost?: () => void
   onToggleLock?: () => void
   onMuteAll?: () => void
   onAskAllToUnmute?: () => void
@@ -70,6 +72,7 @@ export function MeetingParticipantsPanel({
   onAssignCoHost,
   onRemoveCoHost,
   onTransferHost,
+  onOpenTransferHost,
   onToggleLock,
   onMuteAll,
   onAskAllToUnmute,
@@ -120,6 +123,17 @@ export function MeetingParticipantsPanel({
                 {bulkActions.includes('lock_meeting') && onToggleLock ? (
                   <Button tone="outline" size="$2" borderRadius={999} onPress={onToggleLock}>
                     {isLocked ? 'Unlock meeting' : 'Lock meeting'}
+                  </Button>
+                ) : null}
+                {onOpenTransferHost ? (
+                  <Button
+                    tone="primary"
+                    size="$2"
+                    borderRadius={999}
+                    onPress={onOpenTransferHost}
+                    icon={<Icons.UserCheck size={14} color="white" />}
+                  >
+                    Transfer host
                   </Button>
                 ) : null}
                 {onAskAllToMute ? (
@@ -202,19 +216,13 @@ export function MeetingParticipantsPanel({
                     onPress: () => onRemoveCoHost(p.user_id),
                   })
                 }
-                if (actions.includes('make_host') && onTransferHost) {
-                  moreItems.push({
-                    key: 'make-host',
-                    label: 'Make host',
-                    onPress: () => onTransferHost(p.user_id),
-                  })
-                }
 
                 const hasPrimary =
                   actions.includes('mute') ||
                   actions.includes('ask_to_unmute') ||
                   actions.includes('stop_video') ||
                   actions.includes('make_co_host') ||
+                  actions.includes('make_host') ||
                   actions.includes('remove')
 
                 return (
@@ -248,6 +256,18 @@ export function MeetingParticipantsPanel({
                               onPress={() => onAssignCoHost(p.user_id)}
                             >
                               Make co-host
+                            </Button>
+                          ) : null}
+                          {actions.includes('make_host') && onTransferHost ? (
+                            <Button
+                              tone="outline"
+                              size="$1"
+                              borderRadius={999}
+                              borderColor={coworkUi.borderAccent}
+                              color={coworkUi.brandLight}
+                              onPress={() => onTransferHost(p.user_id)}
+                            >
+                              Make host
                             </Button>
                           ) : null}
                           {actions.includes('remove') && onRemove ? (

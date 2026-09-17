@@ -6,6 +6,7 @@ import { Alert, Platform, useWindowDimensions } from 'react-native'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
 import { MeetingShareSheet } from '~/co-work/components/MeetingShareSheet'
+import { MeetingTransferHostSheet } from '~/co-work/components/MeetingTransferHostSheet'
 import { ScreenCenter } from '~/components/layout'
 import { Button, Icons, Spinner, Text, XStack, YStack, useAppToast } from '~/components/ui'
 import { CoWorkAlertBanner, CoWorkStatusPill } from '~/co-work/components/CoWorkUi'
@@ -460,6 +461,7 @@ function MeetingRoomOverlay({
   const [dismissedError, setDismissedError] = useState<string | null>(null)
   const [meetingState, setMeetingState] = useState(meeting)
   const [shareOpen, setShareOpen] = useState(false)
+  const [transferHostOpen, setTransferHostOpen] = useState(false)
   const [reactionTrayOpen, setReactionTrayOpen] = useState(false)
   const [exiting, setExiting] = useState(false)
   const exitingRef = useRef(false)
@@ -1735,6 +1737,9 @@ function MeetingRoomOverlay({
                     )
               : undefined
           }
+          onOpenTransferHost={
+            isAuthoritativeHost ? () => setTransferHostOpen(true) : undefined
+          }
           onToggleLock={isAuthoritativeHost ? handleToggleLock : undefined}
           onMuteAll={isAuthoritativeHost ? handleMuteAll : undefined}
           onAskAllToUnmute={
@@ -1809,6 +1814,9 @@ function MeetingRoomOverlay({
                     )
                 }
               : undefined
+          }
+          onTransferHostPress={
+            isAuthoritativeHost ? () => setTransferHostOpen(true) : undefined
           }
           isLocked={!!presence.moderationSettings?.is_locked}
           onToggleLock={isAuthoritativeHost ? handleToggleLock : undefined}
@@ -2033,6 +2041,33 @@ function MeetingRoomOverlay({
       </YStack>
 
       <MeetingShareSheet open={shareOpen} onOpenChange={setShareOpen} meeting={meeting} />
+      <MeetingTransferHostSheet
+        open={transferHostOpen}
+        onOpenChange={setTransferHostOpen}
+        participants={presence.participants}
+        currentUserId={userId}
+        onTransfer={async (id) => {
+          const target = presence.participants.find((row) => row.user_id === id)
+          const name =
+            target?.display_name ||
+            target?.profile?.full_name ||
+            target?.profile?.username ||
+            'Participant'
+          try {
+            await presence.transferHost(id)
+            toast.show('Host transferred', {
+              tone: 'success',
+              message: `${name} is now the host. You’re a co-host.`,
+            })
+          } catch (cause) {
+            toast.show('Could not transfer host', {
+              tone: 'danger',
+              message: cause instanceof Error ? cause.message : 'Please try again.',
+            })
+            throw cause
+          }
+        }}
+      />
     </YStack>
   )
 }

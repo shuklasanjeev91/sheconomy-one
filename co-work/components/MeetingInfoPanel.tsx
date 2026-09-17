@@ -24,6 +24,8 @@ type MeetingInfoPanelProps = {
   onMirrorLocalVideoChange?: (enabled: boolean) => void
   hostLeaveBehavior?: 'end' | 'transfer_to_co_host' | null
   onHostLeaveBehaviorChange?: (behavior: 'end' | 'transfer_to_co_host') => void
+  /** Zoom-style: open joined-participant picker and transfer host now. */
+  onTransferHostPress?: () => void
   isLocked?: boolean
   onToggleLock?: () => void
 }
@@ -40,6 +42,7 @@ export function MeetingInfoPanel({
   onMirrorLocalVideoChange,
   hostLeaveBehavior,
   onHostLeaveBehaviorChange,
+  onTransferHostPress,
   isLocked = false,
   onToggleLock,
 }: MeetingInfoPanelProps) {
@@ -203,9 +206,40 @@ export function MeetingInfoPanel({
             </YStack>
           ) : null}
 
+          {isHost && onTransferHostPress ? (
+            <YStack gap="$2">
+              <CoWorkSectionLabel>Host controls</CoWorkSectionLabel>
+              <YStack
+                gap="$2"
+                padding="$3"
+                borderRadius={14}
+                backgroundColor="rgba(255,255,255,0.04)"
+                borderWidth={1}
+                borderColor={coworkUi.borderSoft}
+              >
+                <Text fontSize={14} fontWeight="700" color={coworkUi.text}>
+                  Transfer host
+                </Text>
+                <Text fontSize={12} color={coworkUi.textMuted} lineHeight={17}>
+                  Pick someone who has joined this meeting. They become the host; you stay as a
+                  co-host — same as Zoom.
+                </Text>
+                <Button
+                  size="$3"
+                  borderRadius={999}
+                  tone="primary"
+                  icon={<Icons.UserCheck size={16} color="white" />}
+                  onPress={onTransferHostPress}
+                >
+                  Choose a participant
+                </Button>
+              </YStack>
+            </YStack>
+          ) : null}
+
           {isHost && onHostLeaveBehaviorChange ? (
             <YStack gap="$2">
-              <CoWorkSectionLabel>When host leaves</CoWorkSectionLabel>
+              <CoWorkSectionLabel>When you leave</CoWorkSectionLabel>
               <YStack
                 gap="$2"
                 padding="$3"
@@ -215,7 +249,7 @@ export function MeetingInfoPanel({
                 borderColor={coworkUi.borderSoft}
               >
                 <Text fontSize={12} color={coworkUi.textMuted} lineHeight={17}>
-                  Choose what happens if you leave without ending the meeting.
+                  If you leave without ending the meeting, choose what happens next.
                 </Text>
                 <XStack gap="$2" flexWrap="wrap">
                   <Button
@@ -224,7 +258,7 @@ export function MeetingInfoPanel({
                     tone={hostLeaveBehavior === 'transfer_to_co_host' ? 'primary' : 'ghost'}
                     onPress={() => onHostLeaveBehaviorChange('transfer_to_co_host')}
                   >
-                    Transfer host
+                    Pass to a co-host
                   </Button>
                   <Button
                     size="$2"
