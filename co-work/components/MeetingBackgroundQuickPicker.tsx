@@ -15,7 +15,11 @@ type MeetingBackgroundQuickPickerProps = {
   selection: VirtualBackgroundSelection
   busy?: boolean
   error?: string | null
+  /** When false, blur/image tiles stay visible but selecting them shows the fallback message. */
+  effectsAvailable?: boolean
   onSelect: (selection: VirtualBackgroundSelection) => void
+  onUpload?: () => void
+  uploadBusy?: boolean
 }
 
 export function MeetingBackgroundQuickPicker({
@@ -23,7 +27,10 @@ export function MeetingBackgroundQuickPicker({
   selection,
   busy,
   error,
+  effectsAvailable = true,
   onSelect,
+  onUpload,
+  uploadBusy,
 }: MeetingBackgroundQuickPickerProps) {
   const { ui: coworkUi } = useCoWorkTheme()
   const presets = getVirtualBackgroundPresets()
@@ -32,6 +39,14 @@ export function MeetingBackgroundQuickPicker({
 
   return (
     <YStack gap="$3">
+      <YStack gap="$1">
+        <Text fontWeight="800" fontSize={15} color={coworkUi.text}>
+          Background
+        </Text>
+        <Text fontSize={12} color={coworkUi.textSecondary}>
+          Preview and apply before you join. You can change this again in the meeting.
+        </Text>
+      </YStack>
       <YStack
         height={210}
         borderRadius={18}
@@ -42,7 +57,16 @@ export function MeetingBackgroundQuickPicker({
       >
         {preview}
         {busy ? (
-          <YStack position="absolute" top={0} right={0} bottom={0} left={0} alignItems="center" justifyContent="center" backgroundColor="rgba(0,0,0,0.35)">
+          <YStack
+            position="absolute"
+            top={0}
+            right={0}
+            bottom={0}
+            left={0}
+            alignItems="center"
+            justifyContent="center"
+            backgroundColor="rgba(0,0,0,0.35)"
+          >
             <Spinner color="#fff" />
           </YStack>
         ) : null}
@@ -57,6 +81,7 @@ export function MeetingBackgroundQuickPicker({
         <QuickTile
           label="Blur"
           active={active(BLUR_BACKGROUND)}
+          dimmed={!effectsAvailable}
           icon={<Icons.Wand2 size={18} color={coworkUi.text} />}
           onPress={() => onSelect(BLUR_BACKGROUND)}
         />
@@ -65,12 +90,33 @@ export function MeetingBackgroundQuickPicker({
             key={preset.id}
             label={preset.name}
             active={active(preset.selection)}
+            dimmed={!effectsAvailable}
             imageSource={preset.thumbnail}
             onPress={() => onSelect(preset.selection)}
           />
         ))}
+        {onUpload ? (
+          <QuickTile
+            label="Upload"
+            active={false}
+            dimmed={!effectsAvailable}
+            busy={uploadBusy}
+            icon={<Icons.Upload size={18} color={coworkUi.text} />}
+            onPress={onUpload}
+          />
+        ) : null}
       </XStack>
-      {error ? <Text fontSize={12} color={coworkUi.danger}>{error}</Text> : null}
+      {!effectsAvailable ? (
+        <Text fontSize={12} color={coworkUi.textMuted}>
+          Background effects are unavailable on this device. Your camera preview still works without
+          a filter.
+        </Text>
+      ) : null}
+      {error ? (
+        <Text fontSize={12} color={coworkUi.danger}>
+          {error}
+        </Text>
+      ) : null}
     </YStack>
   )
 }
@@ -81,17 +127,26 @@ function QuickTile({
   onPress,
   icon,
   imageSource,
+  dimmed,
+  busy,
 }: {
   label: string
   active: boolean
   onPress: () => void
   icon?: ReactNode
-  imageSource?: number
+  imageSource?: import('react-native').ImageSourcePropType
+  dimmed?: boolean
+  busy?: boolean
 }) {
   const { ui: coworkUi } = useCoWorkTheme()
   return (
-    <Pressable accessibilityRole="button" accessibilityState={{ selected: active }} onPress={onPress}>
-      <YStack gap={4} width={66} alignItems="center">
+    <Pressable
+      accessibilityRole="button"
+      accessibilityState={{ selected: active, busy: !!busy }}
+      accessibilityLabel={label}
+      onPress={onPress}
+    >
+      <YStack gap={4} width={66} alignItems="center" opacity={dimmed ? 0.55 : 1}>
         <YStack
           width={66}
           height={43}
@@ -105,7 +160,23 @@ function QuickTile({
         >
           {imageSource ? (
             <Image source={imageSource} resizeMode="cover" style={{ width: '100%', height: '100%' }} />
-          ) : icon}
+          ) : (
+            icon
+          )}
+          {busy ? (
+            <YStack
+              position="absolute"
+              top={0}
+              right={0}
+              bottom={0}
+              left={0}
+              alignItems="center"
+              justifyContent="center"
+              backgroundColor="rgba(0,0,0,0.4)"
+            >
+              <Spinner size="small" color="#fff" />
+            </YStack>
+          ) : null}
         </YStack>
         <Text fontSize={9} color={active ? coworkUi.brand : coworkUi.textMuted} numberOfLines={1}>
           {label}

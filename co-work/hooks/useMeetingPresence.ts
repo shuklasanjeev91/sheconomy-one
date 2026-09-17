@@ -4,27 +4,49 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import {
   allowMeetingParticipantRejoin,
   admitParticipant,
+  assignMeetingCoHost,
   createMeetingSessionId,
   rejectParticipant,
   endMeeting,
+  fetchMeetingById,
   fetchMeetingChat,
+  fetchMeetingControlEvents,
+  fetchMeetingModerationSettings,
   fetchMeetingParticipants,
   joinMeetingParticipant,
   leaveMeetingParticipant,
   removeMeetingParticipant,
+  removeMeetingCoHost,
+  sendMeetingControl,
   sendMeetingChatMessage,
+  softDeleteMeetingChatMessage,
   startMeeting,
+  setMeetingHostLeaveBehavior,
+  setMeetingLocked,
+  transferMeetingHost,
   updateParticipantMedia,
 } from '~/co-work/lib/meetings'
-import { disconnectLiveKitParticipant } from '~/co-work/lib/livekit'
+import {
+  hostLeaveConfirmCopy,
+  shouldEndLiveKitRoomAfterHostLeave,
+} from '~/co-work/lib/meeting-end'
+import { disconnectLiveKitParticipant, endLiveKitRoom } from '~/co-work/lib/livekit'
 import {
   broadcastSignal,
   joinMeetingChannel,
   unsubscribeMeetingChannel,
 } from '~/co-work/lib/signaling'
-import type { Meeting, MeetingChatMessage, MeetingParticipant, SignalPayload } from '~/co-work/lib/types'
+import type {
+  Meeting,
+  MeetingChatMessage,
+  MeetingModerationSettings,
+  MeetingParticipant,
+  SignalPayload,
+} from '~/co-work/lib/types'
 import type { LiveCaptionLine } from '~/co-work/lib/live-captions'
 import type { FloatingMeetingReaction } from '~/co-work/lib/meeting-reactions'
+import { canManageMeeting } from '~/co-work/lib/meeting-role-permissions'
+import type { MeetingChatAudience } from '~/co-work/lib/meeting-role-permissions'
 import { safeMeetingDisplayName } from '~/co-work/lib/meeting-display-name'
 
 type UseMeetingPresenceOptions = {
@@ -37,11 +59,16 @@ type UseMeetingPresenceOptions = {
 
 type MediaHandlers = {
   onMuteAll?: () => void
+  onMuteRequested?: () => void
+  onForceMute?: () => void
+  onAskToUnmute?: () => void
+  onStopVideo?: () => void
+  onMeetingEnded?: () => void
 }
 
 const POLL_INTERVAL_MS = 4000
 
-/** Supabase-backed meeting presence: participants, chat, waiting room (no media). */
+/** Supabase-backed meeting presence + chat (signaling / participant state). Media is SFU-only via MeetingProvider. */
 export function useMeetingPresence({
   meeting,
   userId,
@@ -54,11 +81,14 @@ export function useMeetingPresence({
   const connectGenerationRef = useRef(0)
   const handRaisedRef = useRef(false)
   const mediaHandlersRef = useRef<MediaHandlers>({})
+  const controlsSinceRef = useRef(new Date().toISOString())
+  const seenControlIdsRef = useRef(new Set<string>())
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null)
   const realtimeActiveRef = useRef(false)
   const intentionalDisconnectRef = useRef(false)
 
   const [participants, setParticipants] = useState<MeetingParticipant[]>([])
+  const [moderationSettings, setModerationSettings] = useState<MeetingModerationSettings | null>(null)
   const [chatMessages, setChatMessages] = useState<MeetingChatMessage[]>([])
   const [panel, setPanel] = useState<
     'none' | 'chat' | 'people' | 'invite' | 'info' | 'recordings' | 'backgrounds' | 'audio'
@@ -91,6 +121,8 @@ export function useMeetingPresence({
   panelRef.current = panel
 
   const selfParticipant = participants.find((p) => p.user_id === userId)
+  const selfRole = selfParticipant?.role ?? (isHost ? 'host' : 'participant')
+  const canModerate = canManageMeeting(selfRole)
   const isWaiting = selfParticipant?.status === 'waiting'
   const isRejected = selfParticipant?.status === 'rejected'
   const isRemoved = removedByHost || selfParticipant?.status === 'removed'
@@ -117,6 +149,33 @@ export function useMeetingPresence({
     )
   }, [meeting.id])
 
+  const refreshModerationSettings = useCallback(async () => {
+    setModerationSettings(await fetchMeetingModerationSettings(meeting.id))
+  }, [meeting.id])
+
+  const refreshControls = useCallback(async () => {
+    const events = await fetchMeetingControlEvents(meeting.id, controlsSinceRef.current)
+    for (const event of events) {
+      controlsSinceRef.current = event.created_at
+      if (seenControlIdsRef.current.has(event.id) || event.actor_id === userId) continue
+      seenControlIdsRef.current.add(event.id)
+      if (event.target_user_id && event.target_user_id !== userId) continue
+      if (event.action === 'request_mute' || event.action === 'ask_all_to_mute') {
+        mediaHandlersRef.current.onMuteRequested?.()
+      } else if (event.action === 'force_mute') {
+        mediaHandlersRef.current.onForceMute?.()
+      } else if (event.action === 'ask_to_unmute' || event.action === 'ask_all_to_unmute') {
+        mediaHandlersRef.current.onAskToUnmute?.()
+      } else if (event.action === 'stop_video') {
+        mediaHandlersRef.current.onStopVideo?.()
+      } else if (event.action === 'mute_all') {
+        mediaHandlersRef.current.onMuteAll?.()
+      } else if (event.action === 'meeting_ended') {
+        mediaHandlersRef.current.onMeetingEnded?.()
+      }
+    }
+  }, [meeting.id, userId])
+
   const refreshChat = useCallback(async () => {
     const rows = await fetchMeetingChat(meeting.id)
     setChatMessages(rows)
@@ -124,7 +183,11 @@ export function useMeetingPresence({
 
   const ingestRemoteChatMessage = useCallback(
     (message: MeetingChatMessage) => {
-      if (!message?.id || message.sender_id === userId) return
+      if (!message?.id) return
+      // Own echoes arrive via local send; remote system messages use host/actor ids.
+      if (message.sender_id === userId && message.audience !== 'system' && message.message_type !== 'system') {
+        return
+      }
 
       let isNew = false
       setChatMessages((prev) => {
@@ -137,13 +200,15 @@ export function useMeetingPresence({
 
       setUnreadChatCount((count) => count + 1)
       const senderName =
-        displayNameByUserRef.current[message.sender_id] ||
-        message.sender?.full_name ||
-        message.sender?.username ||
-        'Someone'
+        message.audience === 'system' || message.message_type === 'system'
+          ? 'Meeting'
+          : displayNameByUserRef.current[message.sender_id] ||
+            message.sender?.full_name ||
+            message.sender?.username ||
+            'Someone'
       setLatestChatNotice({
         id: message.id,
-        title: `${senderName} in chat`,
+        title: message.audience === 'system' || message.message_type === 'system' ? 'Meeting update' : `${senderName} in chat`,
         message: message.message_text,
       })
     },
@@ -161,11 +226,13 @@ export function useMeetingPresence({
     if (pollRef.current) return
     pollRef.current = setInterval(() => {
       void refreshParticipants().catch(() => undefined)
+      void refreshModerationSettings().catch(() => undefined)
+      void refreshControls().catch(() => undefined)
       if (!realtimeActiveRef.current) {
         void refreshChat().catch(() => undefined)
       }
     }, POLL_INTERVAL_MS)
-  }, [refreshChat, refreshParticipants])
+  }, [refreshChat, refreshControls, refreshModerationSettings, refreshParticipants])
 
   const sendSignal = useCallback((payload: SignalPayload): boolean => {
     if (!channelRef.current) return false
@@ -222,10 +289,8 @@ export function useMeetingPresence({
         })
         return
       }
-      if (payload.type === 'mute-all' && payload.from !== userId) {
-        mediaHandlersRef.current.onMuteAll?.()
-        return
-      }
+      // Moderation controls are intentionally not trusted from broadcast
+      // payloads. Only server-authorized meeting_control_events are applied.
       if (payload.type === 'caption' && payload.from !== userId && payload.isFinal) {
         setLiveCaptions((current) => [
           ...current.slice(-80),
@@ -240,6 +305,10 @@ export function useMeetingPresence({
             timestamp: payload.timestamp,
           },
         ])
+        return
+      }
+      if (payload.type === 'meeting-ended' && payload.from !== userId) {
+        mediaHandlersRef.current.onMeetingEnded?.()
         return
       }
       if (payload.type !== 'presence' || payload.from === userId) return
@@ -288,6 +357,7 @@ export function useMeetingPresence({
         await startMeeting(meeting.id)
       }
       await refreshParticipants()
+      await refreshModerationSettings()
     } catch (joinError) {
       if (generation !== connectGenerationRef.current) return
       const message = joinError instanceof Error ? joinError.message : 'Failed to join meeting'
@@ -319,6 +389,9 @@ export function useMeetingPresence({
               message_text: row.message_text,
               message_type: row.message_type,
               created_at: row.created_at,
+              audience: (row.audience as MeetingChatMessage['audience']) ?? 'everyone',
+              recipient_id: row.recipient_id ?? null,
+              system_event_type: row.system_event_type ?? null,
               sender: null,
             })
           }
@@ -358,6 +431,7 @@ export function useMeetingPresence({
     isHost,
     meeting,
     refreshChat,
+    refreshModerationSettings,
     refreshParticipants,
     startPolling,
     stopPolling,
@@ -399,8 +473,16 @@ export function useMeetingPresence({
   }, [enabled, meeting.id, userId])
 
   const sendChat = useCallback(
-    async (text: string) => {
-      const message = await sendMeetingChatMessage(meeting.id, userId, text)
+    async (
+      text: string,
+      audience: MeetingChatAudience = 'everyone',
+      recipientId?: string | null,
+    ) => {
+      const message = await sendMeetingChatMessage(meeting.id, userId, text, {
+        audience:
+          audience === 'hosts' ? 'hosts' : audience === 'private' ? 'private' : 'everyone',
+        recipientId: audience === 'private' ? recipientId ?? null : null,
+      })
       setChatMessages((prev) => {
         if (prev.some((row) => row.id === message.id)) return prev
         return [...prev, message]
@@ -408,6 +490,15 @@ export function useMeetingPresence({
       sendSignal({ type: 'chat', from: userId, message })
     },
     [meeting.id, sendSignal, userId],
+  )
+
+  const deleteChat = useCallback(
+    async (messageId: string) => {
+      await softDeleteMeetingChatMessage(messageId)
+      setChatMessages((prev) => prev.filter((row) => row.id !== messageId))
+      await refreshChat()
+    },
+    [refreshChat],
   )
 
   const clearChatNotice = useCallback(() => {
@@ -460,7 +551,7 @@ export function useMeetingPresence({
     async (participantId: string) => {
       const participant = participants.find((row) => row.id === participantId)
       if (!participant || participant.is_host) return
-      await removeMeetingParticipant(participantId)
+      await removeMeetingParticipant(meeting.id, participant.user_id)
       try {
         if (meeting.room_id) {
           await disconnectLiveKitParticipant(meeting.id, meeting.room_id, participant.user_id)
@@ -481,19 +572,67 @@ export function useMeetingPresence({
   )
 
   const leave = useCallback(async () => {
+    const roleAtLeave = selfRole
     connectGenerationRef.current += 1
+    // Notify peers before tearing down the channel when host leave will end the room.
+    if (roleAtLeave === 'host') {
+      const outcome = hostLeaveConfirmCopy({
+        behavior: moderationSettings?.host_leave_behavior,
+        participants,
+        hostUserId: userId,
+      })
+      if (outcome.willEndMeeting) {
+        sendSignal({ type: 'meeting-ended', from: userId, timestamp: Date.now() })
+      }
+    }
+    // Server leave_meeting_participant transfers host or ends the meeting.
     await disconnect()
-  }, [disconnect])
+    if (roleAtLeave === 'host' && meeting.room_id) {
+      try {
+        const latest = await fetchMeetingById(meeting.id)
+        if (
+          shouldEndLiveKitRoomAfterHostLeave({
+            previousRole: roleAtLeave,
+            meetingStatus: latest?.status,
+          })
+        ) {
+          await endLiveKitRoom(meeting.id, meeting.room_id)
+        }
+      } catch {
+        // Transfer keeps the LiveKit room alive; ending is best-effort.
+      }
+    }
+  }, [
+    disconnect,
+    meeting.id,
+    meeting.room_id,
+    moderationSettings?.host_leave_behavior,
+    participants,
+    selfRole,
+    sendSignal,
+    userId,
+  ])
 
   const hostEnd = useCallback(async () => {
     try {
+      // Notify peers immediately (control-event poll is the authoritative path).
+      sendSignal({ type: 'meeting-ended', from: userId, timestamp: Date.now() })
       await endMeeting(meeting.id)
+      if (meeting.room_id) await endLiveKitRoom(meeting.id, meeting.room_id)
     } catch {
       // Still disconnect locally so the host can exit the room UI.
     }
     connectGenerationRef.current += 1
     await disconnect()
-  }, [disconnect, meeting.id])
+  }, [disconnect, meeting.id, meeting.room_id, sendSignal, userId])
+
+  const setHostLeaveBehavior = useCallback(
+    async (behavior: MeetingModerationSettings['host_leave_behavior']) => {
+      await setMeetingHostLeaveBehavior(meeting.id, behavior)
+      await refreshModerationSettings()
+    },
+    [meeting.id, refreshModerationSettings],
+  )
 
   const toggleHandRaise = useCallback(() => {
     const next = !handRaisedRef.current
@@ -510,9 +649,61 @@ export function useMeetingPresence({
     })
   }, [sendSignal, userId])
 
-  const muteAll = useCallback((): boolean => {
-    return sendSignal({ type: 'mute-all', from: userId })
-  }, [sendSignal, userId])
+  const muteAll = useCallback(async () => {
+    await sendMeetingControl(meeting.id, 'mute_all')
+    await refreshParticipants()
+  }, [meeting.id, refreshParticipants])
+
+  const askAllToMute = useCallback(async () => {
+    await sendMeetingControl(meeting.id, 'ask_all_to_mute')
+  }, [meeting.id])
+
+  const askAllToUnmute = useCallback(async () => {
+    await sendMeetingControl(meeting.id, 'ask_all_to_unmute')
+  }, [meeting.id])
+
+  const requestMute = useCallback(async (targetUserId: string) => {
+    await sendMeetingControl(meeting.id, 'request_mute', targetUserId)
+  }, [meeting.id])
+
+  const forceMute = useCallback(async (targetUserId: string) => {
+    await sendMeetingControl(meeting.id, 'force_mute', targetUserId)
+    await refreshParticipants()
+  }, [meeting.id, refreshParticipants])
+
+  const askToUnmute = useCallback(async (targetUserId: string) => {
+    await sendMeetingControl(meeting.id, 'ask_to_unmute', targetUserId)
+  }, [meeting.id])
+
+  const stopVideo = useCallback(async (targetUserId: string) => {
+    await sendMeetingControl(meeting.id, 'stop_video', targetUserId)
+    await refreshParticipants()
+  }, [meeting.id, refreshParticipants])
+
+  const removeAllExceptHost = useCallback(async () => {
+    await sendMeetingControl(meeting.id, 'remove_all_except_host')
+    await refreshParticipants()
+  }, [meeting.id, refreshParticipants])
+
+  const setLocked = useCallback(async (locked: boolean) => {
+    await setMeetingLocked(meeting.id, locked)
+    await refreshModerationSettings()
+  }, [meeting.id, refreshModerationSettings])
+
+  const assignCoHost = useCallback(async (targetUserId: string) => {
+    await assignMeetingCoHost(meeting.id, targetUserId)
+    await refreshParticipants()
+  }, [meeting.id, refreshParticipants])
+
+  const removeCoHost = useCallback(async (targetUserId: string) => {
+    await removeMeetingCoHost(meeting.id, targetUserId)
+    await refreshParticipants()
+  }, [meeting.id, refreshParticipants])
+
+  const transferHost = useCallback(async (targetUserId: string) => {
+    await transferMeetingHost(meeting.id, targetUserId)
+    await refreshParticipants()
+  }, [meeting.id, refreshParticipants])
 
   const broadcastCaption = useCallback(
     (text: string, speaker: string, sourceLang?: string) => {
@@ -567,6 +758,16 @@ export function useMeetingPresence({
     void connect()
   }, [connect])
 
+  // Auto-heal Supabase realtime after brief network blips so chat/participants
+  // do not stay stuck on "Live updates paused" until the user taps Reconnect.
+  useEffect(() => {
+    if (!enabled || !realtimeDegraded || isRealtimeConnected) return
+    const handle = setTimeout(() => {
+      void connect()
+    }, 3500)
+    return () => clearTimeout(handle)
+  }, [connect, enabled, isRealtimeConnected, realtimeDegraded])
+
   const retryJoinRequest = useCallback(async () => {
     setError(null)
     await connect()
@@ -574,6 +775,9 @@ export function useMeetingPresence({
 
   return {
     participants,
+    moderationSettings,
+    selfRole,
+    canModerate,
     chatMessages,
     panel,
     error,
@@ -600,6 +804,7 @@ export function useMeetingPresence({
     setPanel: setPanelSafe,
     togglePanel,
     sendChat,
+    deleteChat,
     admit,
     reject,
     admitAllWaiting,
@@ -607,8 +812,20 @@ export function useMeetingPresence({
     allowRejoin,
     leave,
     hostEnd,
+    setHostLeaveBehavior,
     toggleHandRaise,
     muteAll,
+    askAllToMute,
+    askAllToUnmute,
+    requestMute,
+    forceMute,
+    askToUnmute,
+    stopVideo,
+    removeAllExceptHost,
+    setLocked,
+    assignCoHost,
+    removeCoHost,
+    transferHost,
     broadcastCaption,
     syncMediaState,
     registerMediaHandlers,

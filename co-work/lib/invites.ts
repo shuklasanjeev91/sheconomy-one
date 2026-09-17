@@ -1,5 +1,11 @@
 import { fetchNetworkSummary } from '~/community/lib/network'
 import { INVALIDATION_TOPICS, invalidateCache } from '~/lib/cache/invalidation'
+import { formatInviteDisplayTime } from '~/lib/calendar/invite-time'
+import {
+  buildMeetingInviteEmailText,
+  formatMeetingIdForEmail,
+} from '~/lib/calendar/meeting-invite-email'
+import { buildCalendarLinks } from '~/lib/calendar/ics'
 import { supabase } from '~/lib/supabase/client'
 
 import { getMeetingShareUrl } from '~/co-work/lib/meetings'
@@ -148,7 +154,10 @@ export async function updateMeetingInvitees(meetingId: string, invitees: Meeting
     invited_at: invitee.invited_at ?? new Date().toISOString(),
   }))
 
-  const { error } = await supabase.from('meetings').update({ invitees: stamped }).eq('id', meetingId)
+  const { error } = await supabase.rpc('update_meeting_invitees_secure', {
+    meeting_id_input: meetingId,
+    invitees_input: stamped,
+  })
   if (error) throw new Error(error.message)
   invalidateCache(INVALIDATION_TOPICS.coWorkMeetings)
   return stamped
@@ -182,10 +191,12 @@ export async function sendMeetingInvites(input: {
     },
   })
 
-  if (error) throw new Error(error.message || 'Failed to send invites')
-
-  const payload = data as InviteResponse
+  const payload = (data ?? {}) as InviteResponse
   if (payload.error) throw new Error(payload.error)
+  if (error) {
+    // FunctionsHttpError often only says "non-2xx" — prefer body error when present.
+    throw new Error(payload.error || error.message || 'Failed to send invites')
+  }
 
   invalidateCache(INVALIDATION_TOPICS.coWorkMeetings)
 
@@ -194,23 +205,50 @@ export async function sendMeetingInvites(input: {
 
 export function buildInviteMailtoLink(meeting: Meeting, invitee: MeetingInvitee, hostName: string) {
   const url = getMeetingShareUrl(meeting.meeting_code)
-  const when = meeting.scheduled_at
-    ? new Intl.DateTimeFormat(undefined, {
-        dateStyle: 'full',
-        timeStyle: 'short',
-        timeZone: meeting.time_zone ?? undefined,
-      }).format(new Date(meeting.scheduled_at))
-    : 'soon'
+  const startsAt = meeting.scheduled_at ?? meeting.started_at ?? new Date().toISOString()
+  const display = formatInviteDisplayTime({
+    startsAt,
+    endsAt: meeting.scheduled_end_at,
+    inviteeTimeZone: invitee.timeZone,
+    hostTimeZone: meeting.time_zone,
+  })
+  const passcode = meeting.security_settings?.passcode
+  const calendar = buildCalendarLinks({
+    title: meeting.title,
+    description: [
+      meeting.description,
+      `Join: ${url}`,
+      `Meeting code: ${meeting.meeting_code}`,
+      passcode ? `Passcode: ${passcode}` : null,
+    ]
+      .filter(Boolean)
+      .join('\n\n'),
+    startsAt,
+    endsAt: meeting.scheduled_end_at ?? undefined,
+    url,
+  })
+
+  const text = buildMeetingInviteEmailText({
+    brandLabel: BRAND_COWORK_LABEL,
+    meetingTitle: meeting.title,
+    hostName,
+    dateLabel: display.dateLabel,
+    timeLabel: display.timeLabel,
+    endsLabel: display.endsLabel,
+    joinUrl: url,
+    meetingIdLabel: formatMeetingIdForEmail(meeting.meeting_code),
+    passcode: passcode || null,
+    googleCalendarUrl: calendar.google,
+    outlookCalendarUrl: calendar.outlook,
+    timezoneNote:
+      display.source === 'utc'
+        ? 'Times shown in UTC.'
+        : `Shown in your timezone (${display.timeZone}).`,
+    hostZoneHint: display.hostZoneHint,
+  })
 
   const subject = encodeURIComponent(`Join Co-Work: ${meeting.title}`)
-  const body = encodeURIComponent(
-    `Hi,\n\n${hostName} invited you to a ${BRAND_COWORK_LABEL} meeting.\n\n` +
-      `Meeting: ${meeting.title}\n` +
-      `When: ${when}\n` +
-      `Code: ${meeting.meeting_code}\n` +
-      `Link: ${url}\n\n` +
-      `See you there!`,
-  )
+  const body = encodeURIComponent(text)
   const to = encodeURIComponent(invitee.email ?? '')
   return `mailto:${to}?subject=${subject}&body=${body}`
 }

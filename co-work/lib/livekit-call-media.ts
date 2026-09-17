@@ -2,6 +2,7 @@ import type { Room } from 'livekit-client'
 
 import { CALL_AUDIO_CAPTURE } from '~/co-work/lib/livekit-call-audio'
 import type { LiveKitMediaMode } from '~/co-work/lib/livekit-media-controls'
+import { shouldRestoreCameraAfterForeground } from '~/co-work/lib/meeting-lifecycle'
 
 /**
  * One-shot connect reinforcement for chat calls and co-work meetings.
@@ -38,4 +39,41 @@ export async function reinforceCallMediaOnConnect(
   } catch {
     // Permission denial / missing device — leave the room connected.
   }
+}
+
+/**
+ * After app/tab foreground: keep mic as the user left it, restore camera only
+ * when the OS paused it while the user still intended it on.
+ */
+export async function restoreMeetingMediaAfterForeground(
+  room: Room,
+  mediaMode: LiveKitMediaMode,
+  options?: {
+    intendedCameraOn?: boolean
+  },
+): Promise<{ cameraRestored: boolean }> {
+  const local = room.localParticipant
+  let cameraRestored = false
+
+  try {
+    if (local.isMicrophoneEnabled) {
+      await local.setMicrophoneEnabled(true, { ...CALL_AUDIO_CAPTURE })
+    }
+
+    const mediaAllowsCamera = mediaMode !== 'audio'
+    if (
+      shouldRestoreCameraAfterForeground({
+        intendedCameraOn: !!options?.intendedCameraOn,
+        cameraEnabled: local.isCameraEnabled,
+        mediaAllowsCamera,
+      })
+    ) {
+      await local.setCameraEnabled(true)
+      cameraRestored = local.isCameraEnabled
+    }
+  } catch {
+    // Leave connection intact; UI surfaces OS-paused camera status.
+  }
+
+  return { cameraRestored }
 }

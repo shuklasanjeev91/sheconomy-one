@@ -52,6 +52,7 @@ declare module 'one' {
         | `/admin/components/AdminSaleEventsManager`
         | `/admin/components/AdminSettingsManager`
         | `/admin/components/AdminShopsManager`
+        | `/admin/components/AdminSponsoredAdsManager`
         | `/admin/components/CmsCoverImage`
         | `/admin/components/cms/AdminCmsCategoriesPage`
         | `/admin/components/cms/AdminCmsCommentsPage`
@@ -74,6 +75,7 @@ declare module 'one' {
         | `/admin/sale-events`
         | `/admin/settings`
         | `/admin/shops`
+        | `/admin/sponsored-ads`
         | `/admin/staff-console`
         | `/admin/users`
         | `/auth`
@@ -101,12 +103,16 @@ declare module 'one' {
         | `/class/video`
         | `/co-work`
         | `/co-work/`
+        | `/co-work/chat`
         | `/co-work/join`
         | `/co-work/meeting`
         | `/co-work/meetings`
         | `/co-work/schedule`
         | `/community`
         | `/community/`
+        | `/community/ads`
+        | `/community/ads/payment-failure`
+        | `/community/ads/payment-success`
         | `/community/analytics`
         | `/community/companies`
         | `/community/company`
@@ -175,8 +181,8 @@ declare module 'one' {
         | `/vendor/ads/create`
         | `/vendor/analytics`
         | `/vendor/bundles`
-        | `/vendor/customers`
         | `/vendor/create-listing`
+        | `/vendor/customers`
         | `/vendor/delivery`
         | `/vendor/myshop`
         | `/vendor/myshop/edit`
@@ -203,9 +209,13 @@ declare module 'one' {
         | `/chat/call/${OneRouter.SingleRoutePart<T>}`
         | `/class/${OneRouter.SingleRoutePart<T>}`
         | `/class/playlists/${OneRouter.SingleRoutePart<T>}`
+        | `/co-work/chat/${OneRouter.SingleRoutePart<T>}`
         | `/co-work/meeting/${OneRouter.SingleRoutePart<T>}`
+        | `/co-work/meeting/${OneRouter.SingleRoutePart<T>}/ended`
         | `/co-work/meeting/${OneRouter.SingleRoutePart<T>}/live`
         | `/co-work/recording/${OneRouter.SingleRoutePart<T>}`
+        | `/community/ads/${OneRouter.SingleRoutePart<T>}`
+        | `/community/ads/boost/${OneRouter.SingleRoutePart<T>}`
         | `/community/article/${OneRouter.SingleRoutePart<T>}`
         | `/community/company/${OneRouter.SingleRoutePart<T>}`
         | `/community/events/${OneRouter.SingleRoutePart<T>}`
@@ -215,6 +225,9 @@ declare module 'one' {
         | `/community/people/${OneRouter.SingleRoutePart<T>}`
         | `/community/post/${OneRouter.SingleRoutePart<T>}`
         | `/community/stories/${OneRouter.SingleRoutePart<T>}`
+        | `/cowork/meeting/${OneRouter.SingleRoutePart<T>}`
+        | `/cowork/meeting/${OneRouter.SingleRoutePart<T>}/ended`
+        | `/cowork/meeting/${OneRouter.SingleRoutePart<T>}/live`
         | `/invite/${OneRouter.SingleRoutePart<T>}`
         | `/listing/${OneRouter.SingleRoutePart<T>}`
         | `/orders/${OneRouter.SingleRoutePart<T>}`
@@ -250,9 +263,13 @@ declare module 'one' {
         | `/chat/call/[code]`
         | `/class/[slug]`
         | `/class/playlists/[id]`
+        | `/co-work/chat/[id]`
         | `/co-work/meeting/[code]`
+        | `/co-work/meeting/[code]/ended`
         | `/co-work/meeting/[code]/live`
         | `/co-work/recording/[token]`
+        | `/community/ads/[campaignId]`
+        | `/community/ads/boost/[postId]`
         | `/community/article/[id]`
         | `/community/company/[slug]`
         | `/community/events/[id]`
@@ -262,6 +279,9 @@ declare module 'one' {
         | `/community/people/[tab]`
         | `/community/post/[id]`
         | `/community/stories/[userId]`
+        | `/cowork/meeting/[code]`
+        | `/cowork/meeting/[code]/ended`
+        | `/cowork/meeting/[code]/live`
         | `/invite/[code]`
         | `/listing/[slug]`
         | `/orders/[id]`
@@ -298,9 +318,13 @@ declare module 'one' {
         '/chat/call/[code]': RouteInfo<{ code: string }>
         '/class/[slug]': RouteInfo<{ slug: string }>
         '/class/playlists/[id]': RouteInfo<{ id: string }>
+        '/co-work/chat/[id]': RouteInfo<{ id: string }>
         '/co-work/meeting/[code]': RouteInfo<{ code: string }>
+        '/co-work/meeting/[code]/ended': RouteInfo<{ code: string }>
         '/co-work/meeting/[code]/live': RouteInfo<{ code: string }>
         '/co-work/recording/[token]': RouteInfo<{ token: string }>
+        '/community/ads/[campaignId]': RouteInfo<{ campaignId: string }>
+        '/community/ads/boost/[postId]': RouteInfo<{ postId: string }>
         '/community/article/[id]': RouteInfo<{ id: string }>
         '/community/company/[slug]': RouteInfo<{ slug: string }>
         '/community/events/[id]': RouteInfo<{ id: string }>
@@ -310,6 +334,9 @@ declare module 'one' {
         '/community/people/[tab]': RouteInfo<{ tab: string }>
         '/community/post/[id]': RouteInfo<{ id: string }>
         '/community/stories/[userId]': RouteInfo<{ userId: string }>
+        '/cowork/meeting/[code]': RouteInfo<{ code: string }>
+        '/cowork/meeting/[code]/ended': RouteInfo<{ code: string }>
+        '/cowork/meeting/[code]/live': RouteInfo<{ code: string }>
         '/invite/[code]': RouteInfo<{ code: string }>
         '/listing/[slug]': RouteInfo<{ slug: string }>
         '/orders/[id]': RouteInfo<{ id: string }>

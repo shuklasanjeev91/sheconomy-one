@@ -9,6 +9,7 @@ import { ScreenCenter, ScreenFill } from '~/components/layout'
 import { MeetingVideoStage } from '~/co-work/components/MeetingVideoStage'
 import { useLiveKitMediaControls } from '~/co-work/hooks/useLiveKitMediaControls.web'
 import { fetchLiveKitCredentials } from '~/co-work/lib/livekit'
+import { MeetingLifecycleBanner } from '~/co-work/components/MeetingLifecycleBanner'
 import { reinforceCallMediaOnConnect } from '~/co-work/lib/livekit-call-media'
 import { buildParticipantMetadata } from '~/co-work/lib/participant-avatar'
 import { getLiveKitRoomOptions } from '~/co-work/lib/livekit-room-options'
@@ -19,6 +20,8 @@ import { fetchLiveKitConfig, type LiveKitConfig } from '~/lib/livekit/config'
 import { supportsLiveKitVideo } from '~/lib/platform/capabilities'
 import { pageGradientStyle } from '~/lib/platform/crossStyles'
 import { meetingViewportStyle } from '~/lib/platform/viewport'
+import { useMeetingMachine } from '~/co-work/components/MeetingProvider'
+import { useMeetingLifecycle } from '~/co-work/hooks/useMeetingLifecycle.web'
 
 export type { LiveKitMediaControls, LiveKitMeetingRoomProps } from '~/co-work/lib/livekit-media-controls'
 export { useLiveKitMediaControls } from '~/co-work/hooks/useLiveKitMediaControls.web'
@@ -42,6 +45,15 @@ function getSheconomyLivekitCss(ui: CoWorkUiTokens, shadows: CoWorkShadows) {
     padding: 88px 12px 112px;
     box-sizing: border-box;
   }
+  .sheconomy-video-stage--landscape-phone {
+    /* Padding comes from inline chrome vars — keep CSS padding as fallback only. */
+    padding: var(--stage-pad-top, 62px) var(--stage-pad-right, 10px)
+      var(--stage-pad-bottom, 82px) var(--stage-pad-left, 10px);
+  }
+  .sheconomy-video-stage--portrait-phone {
+    padding: var(--stage-pad-top, 88px) var(--stage-pad-right, 12px)
+      var(--stage-pad-bottom, 108px) var(--stage-pad-left, 12px);
+  }
   .sheconomy-screen-share-status {
     position: absolute;
     top: 96px;
@@ -58,6 +70,10 @@ function getSheconomyLivekitCss(ui: CoWorkUiTokens, shadows: CoWorkShadows) {
     font-weight: 700;
     white-space: nowrap;
     pointer-events: none;
+  }
+  .sheconomy-screen-share-status--viewing {
+    background: rgba(37, 99, 235, 0.92);
+    border-color: rgba(147, 197, 253, 0.5);
   }
   .sheconomy-video-gallery {
     display: grid;
@@ -134,6 +150,11 @@ function getSheconomyLivekitCss(ui: CoWorkUiTokens, shadows: CoWorkShadows) {
     inset: 0 !important;
     z-index: 1;
   }
+  /* Self-view only — web LiveKit VideoTrack has no native mirror prop. */
+  .sheconomy-participant-tile video.sheconomy-video--mirrored,
+  .sheconomy-participant-tile .lk-video-track.sheconomy-video--mirrored {
+    transform: scaleX(-1) !important;
+  }
   .sheconomy-participant-tile[data-lk-source='screen_share'] video,
   .sheconomy-participant-tile[data-lk-source='screen_share'] .lk-video-track,
   .sheconomy-video-gallery--screen .sheconomy-participant-tile[data-lk-source='screen_share'] video {
@@ -150,6 +171,223 @@ function getSheconomyLivekitCss(ui: CoWorkUiTokens, shadows: CoWorkShadows) {
     width: 100%;
     height: 100%;
     flex: 1 1 auto;
+  }
+  .sheconomy-video-gallery--speaker {
+    display: flex;
+    align-items: stretch;
+    justify-content: center;
+    width: 100%;
+    height: 100%;
+    min-height: 0;
+  }
+  .sheconomy-video-gallery--speaker .sheconomy-participant-tile {
+    width: 100%;
+    height: 100%;
+    max-width: 100%;
+    flex: 1 1 auto;
+  }
+  .sheconomy-video-stage--speaker.sheconomy-video-stage--filmstrip-beside
+    .sheconomy-video-gallery--speaker {
+    margin-right: calc(var(--filmstrip-width, 176px) + 12px);
+    width: calc(100% - var(--filmstrip-width, 176px) - 12px);
+  }
+  .sheconomy-video-stage--speaker.sheconomy-video-stage--filmstrip-bottom
+    .sheconomy-video-gallery--speaker {
+    margin-right: 0;
+    margin-bottom: calc(var(--filmstrip-height, 96px) + 8px);
+    width: 100%;
+    height: calc(100% - var(--filmstrip-height, 96px) - 8px);
+  }
+  .sheconomy-video-filmstrip {
+    position: absolute;
+    top: 88px;
+    right: 12px;
+    bottom: 112px;
+    width: var(--filmstrip-width, 176px);
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    overflow-y: auto;
+    z-index: 12;
+    pointer-events: auto;
+    resize: horizontal;
+    min-width: 144px;
+    max-width: min(360px, 42vw);
+    padding: 4px;
+    border-radius: 12px;
+    background: rgba(12, 8, 10, 0.76);
+    box-sizing: border-box;
+  }
+  .sheconomy-video-filmstrip__header {
+    min-height: 30px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    padding: 2px 4px;
+    color: rgba(255, 255, 255, 0.82);
+    font-size: 11px;
+    font-weight: 700;
+    cursor: grab;
+    user-select: none;
+    touch-action: none;
+  }
+  .sheconomy-video-filmstrip__header:active {
+    cursor: grabbing;
+  }
+  .sheconomy-video-filmstrip__header button {
+    width: 28px;
+    height: 28px;
+    border: 1px solid rgba(255, 255, 255, 0.18);
+    border-radius: 999px;
+    color: #fff;
+    background: rgba(255, 255, 255, 0.08);
+    cursor: pointer;
+  }
+  .sheconomy-video-filmstrip--minimized {
+    width: 44px;
+    min-width: 44px;
+    height: 44px;
+    bottom: auto;
+    resize: none;
+    overflow: hidden;
+  }
+  .sheconomy-video-filmstrip .sheconomy-participant-tile {
+    width: 100%;
+    min-height: 96px;
+    flex: 0 0 110px;
+  }
+  .sheconomy-video-stage--filmstrip .sheconomy-video-gallery {
+    margin-right: calc(var(--filmstrip-width, 176px) + 12px);
+    width: calc(100% - var(--filmstrip-width, 176px) - 12px);
+  }
+  .sheconomy-video-stage--filmstrip-bottom.sheconomy-video-stage--filmstrip .sheconomy-video-gallery {
+    margin-right: 0;
+    margin-bottom: calc(var(--filmstrip-height, 92px) + 8px);
+    width: 100%;
+    height: calc(100% - var(--filmstrip-height, 92px) - 8px);
+  }
+  .sheconomy-video-stage--filmstrip-bottom.sheconomy-video-stage--filmstrip-minimized
+    .sheconomy-video-gallery {
+    margin-bottom: 52px;
+    height: calc(100% - 52px);
+  }
+  .sheconomy-video-stage--filmstrip-beside .sheconomy-video-filmstrip {
+    top: 0;
+    right: 0;
+    bottom: 0;
+    left: auto;
+    width: var(--filmstrip-width, 176px);
+    height: auto;
+    flex-direction: column;
+    overflow-y: auto;
+    overflow-x: hidden;
+    resize: horizontal;
+    min-width: 104px;
+    max-width: min(360px, 42vw);
+  }
+  .sheconomy-video-stage--filmstrip-bottom .sheconomy-video-filmstrip {
+    top: auto;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    width: auto;
+    height: var(--filmstrip-height, 92px);
+    flex-direction: row;
+    overflow-x: auto;
+    overflow-y: hidden;
+    resize: none;
+    min-width: 0;
+    max-width: none;
+    transform: none !important;
+  }
+  .sheconomy-video-stage--filmstrip-bottom .sheconomy-video-filmstrip--minimized {
+    left: auto;
+    width: 44px;
+    min-width: 44px;
+    height: 44px;
+  }
+  .sheconomy-video-stage--filmstrip-bottom .sheconomy-video-filmstrip__header {
+    position: sticky;
+    left: 0;
+    flex: 0 0 auto;
+    min-width: 36px;
+  }
+  .sheconomy-video-stage--filmstrip-bottom .sheconomy-video-filmstrip .sheconomy-participant-tile {
+    width: 132px;
+    min-width: 132px;
+    min-height: 0;
+    height: 84px;
+    flex-basis: 132px;
+  }
+  .sheconomy-video-stage--landscape-phone .sheconomy-video-filmstrip {
+    top: 0;
+    right: 0;
+    bottom: 0;
+    min-width: 104px;
+    max-width: 132px;
+    resize: none;
+  }
+  .sheconomy-video-stage--landscape-phone .sheconomy-gallery-pagination {
+    bottom: 12px;
+  }
+  .sheconomy-gallery-pagination {
+    position: absolute;
+    left: 50%;
+    bottom: 118px;
+    transform: translateX(-50%);
+    z-index: 18;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    color: #fff;
+    border-radius: 999px;
+    padding: 6px 10px;
+    background: rgba(12, 8, 10, 0.82);
+    pointer-events: auto;
+  }
+  .sheconomy-gallery-pagination button {
+    color: #fff;
+    background: transparent;
+    border: 0;
+    cursor: pointer;
+    font-weight: 700;
+  }
+  .sheconomy-gallery-pagination button:disabled {
+    opacity: 0.35;
+    cursor: default;
+  }
+  /* Legacy narrow portrait fallback when policy classes are absent. */
+  @media (max-width: 768px) and (orientation: portrait) {
+    .sheconomy-video-stage:not(.sheconomy-video-stage--filmstrip-beside):not(
+        .sheconomy-video-stage--filmstrip-bottom
+      )
+      .sheconomy-video-filmstrip {
+      top: auto;
+      left: 12px;
+      right: 12px;
+      bottom: 112px;
+      width: auto;
+      height: 92px;
+      flex-direction: row;
+      overflow-x: auto;
+      overflow-y: hidden;
+      resize: none;
+      min-width: 0;
+      max-width: none;
+      transform: none !important;
+      padding: 4px;
+    }
+    .sheconomy-video-stage:not(.sheconomy-video-stage--filmstrip-beside):not(
+        .sheconomy-video-stage--filmstrip-bottom
+      )
+      .sheconomy-video-stage--filmstrip
+      .sheconomy-video-gallery {
+      margin-right: 0;
+      margin-bottom: 100px;
+      width: 100%;
+      height: calc(100% - 100px);
+    }
   }
   .sheconomy-video-gallery .lk-participant-placeholder {
     background: #1a1216;
@@ -219,9 +457,47 @@ function getSheconomyLivekitCss(ui: CoWorkUiTokens, shadows: CoWorkShadows) {
     font-size: 12px;
     font-weight: 600;
   }
-  .sheconomy-participant-tile .lk-focus-toggle-button,
-  .sheconomy-participant-tile .lk-connection-quality {
+  .sheconomy-participant-tile .lk-focus-toggle-button {
     display: none !important;
+  }
+  .sheconomy-participant-tile .lk-connection-quality,
+  .sheconomy-connection-quality {
+    display: inline-flex !important;
+    opacity: 0.9 !important;
+  }
+  .sheconomy-tile-role {
+    position: absolute;
+    top: 10px;
+    left: 10px;
+    z-index: 5;
+  }
+  .sheconomy-speaking-indicator {
+    position: absolute;
+    inset: 0;
+    z-index: 3;
+    pointer-events: none;
+    border-radius: inherit;
+    box-shadow: inset 0 0 0 3px ${ui.brandLight};
+  }
+  .sheconomy-mic-muted {
+    margin-right: 4px;
+    font-size: 11px;
+  }
+  .sheconomy-video-gallery--grid {
+    display: grid;
+    grid-template-columns: repeat(var(--gallery-cols, 1), minmax(0, 1fr));
+    grid-template-rows: repeat(var(--gallery-rows, 1), minmax(0, 1fr));
+    width: 100%;
+    height: 100%;
+    min-height: 0;
+    gap: 10px;
+  }
+  .sheconomy-video-gallery--grid > .sheconomy-participant-tile,
+  .sheconomy-video-gallery--grid > .lk-participant-tile {
+    min-width: 0;
+    min-height: 0;
+    width: 100%;
+    height: 100%;
   }
   .sheconomy-video-gallery .lk-pagination-control,
   .sheconomy-video-gallery .lk-pagination-indicator {
@@ -460,6 +736,24 @@ function WebLiveKitMeetingContent({
   const liveKit = useLiveKitMediaControls(mediaMode !== 'audio')
   const { audioBlocked, unlockAudio } = useWebAudioPlaybackUnlock(liveKit.room)
   const micForcedRef = useRef(false)
+  const { state: meetingState } = useMeetingMachine()
+  const viewingScreenShare =
+    meetingState.viewMode === 'screen-share' && !liveKit.screenSharing
+
+  const onForegroundAudio = useCallback(async () => {
+    if (liveKit.room.state === ConnectionState.Connected) {
+      await liveKit.room.startAudio().catch(() => {})
+    }
+  }, [liveKit.room])
+
+  const { notice: lifecycleNotice } = useMeetingLifecycle({
+    room: liveKit.room,
+    mediaMode,
+    screenSharing: liveKit.screenSharing,
+    viewingScreenShare,
+    cameraEnabled: liveKit.videoEnabled,
+    onForegroundAudio,
+  })
 
   useEffect(() => {
     const room = liveKit.room
@@ -509,6 +803,7 @@ function WebLiveKitMeetingContent({
         {mediaMode === 'audio' ? null : <MeetingVideoStage />}
         <RoomAudioRenderer />
       </YStack>
+      <MeetingLifecycleBanner notice={lifecycleNotice} topOffset={80} />
       {audioBlocked ? (
         <XStack
           position="absolute"

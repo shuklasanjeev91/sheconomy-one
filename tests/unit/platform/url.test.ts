@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import {
+  DEEP_LINK_ORIGIN,
   DEFAULT_APP_ORIGIN,
   canonicalizePublicUrl,
   normalizeAppOrigin,
@@ -53,11 +54,11 @@ describe('buildAbsoluteUrl', () => {
     )
   })
 
-  it('builds meeting, listing, and post share URLs on sheconomy.in', () => {
+  it('builds meeting links on the verified host and other shares on the canonical host', () => {
     vi.stubEnv('EXPO_PUBLIC_WEB_APP_URL', 'https://sheconomy.in')
 
     expect(getMeetingShareUrl('EJB-GHW-FJY')).toBe(
-      `${DEFAULT_APP_ORIGIN}/co-work/meeting/EJB-GHW-FJY`,
+      `${DEEP_LINK_ORIGIN}/co-work/meeting/EJB-GHW-FJY`,
     )
     expect(getListingShareUrl('handmade-bag')).toMatch(/^https:\/\/sheconomy\.in\//)
     expect(getPostShareUrl('abc')).toMatch(/^https:\/\/sheconomy\.in\//)

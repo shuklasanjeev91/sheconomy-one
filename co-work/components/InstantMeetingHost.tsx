@@ -8,6 +8,7 @@ import {
   closeInstantMeetingSession,
   useInstantMeetingSession,
 } from '~/co-work/lib/instant-meeting-session'
+import { useGlobalSession } from '~/lib/session/global-session'
 
 type InstantMeetingBodyComponent = ComponentType<{
   session: InstantMeetingSession
@@ -17,18 +18,27 @@ type InstantMeetingBodyComponent = ComponentType<{
 /**
  * Cross-platform instant meeting overlay (web + iOS + Android).
  *
- * - Web: no-op — Co-Work navigates to `/meeting/:code/live`.
- * - Native: keep this file free of LiveKit. AppShell mounts the host on every
- *   screen; a static InstantMeetingBody import evaluates WebRTC at cold start
- *   and blanks the UI after splash. Load the body only when a session opens.
+ * When the global session is minimized/pip, the LiveKit body stays mounted
+ * (hidden) so audio continues while SessionMiniPlayer / other tabs are usable.
+ * Fullscreen presentation covers the shell like before.
  */
 export function InstantMeetingHost() {
   const session = useInstantMeetingSession()
+  const globalSession = useGlobalSession()
   const [Body, setBody] = useState<InstantMeetingBodyComponent | null>(null)
   const [loadError, setLoadError] = useState<string | null>(null)
 
+  const presentation = globalSession?.presentation ?? 'fullscreen'
+  const collapsed = presentation === 'minimized' || presentation === 'pip'
+  // Only host media for this meeting code when global session matches (or none yet).
+  const ownsSession =
+    !globalSession ||
+    globalSession.kind !== 'meeting' ||
+    !session ||
+    globalSession.code === session.code.replace(/\s/g, '').trim()
+
   useEffect(() => {
-    if (Platform.OS === 'web' || !session) {
+    if (!session || !ownsSession) {
       setBody(null)
       setLoadError(null)
       return
@@ -37,44 +47,50 @@ export function InstantMeetingHost() {
     let cancelled = false
     setLoadError(null)
 
-    try {
-      // Register WebRTC globals before the body pulls LiveKit in.
-      // eslint-disable-next-line @typescript-eslint/no-require-imports
-      const { ensureLiveKitGlobals } = require('~/lib/livekit/ensure-globals') as {
-        ensureLiveKitGlobals: () => void
-      }
-      ensureLiveKitGlobals()
+    void (async () => {
+      try {
+        if (Platform.OS !== 'web') {
+          // Register WebRTC globals before the body pulls LiveKit in.
+          const { ensureLiveKitGlobals } = await import('~/lib/livekit/ensure-globals')
+          ensureLiveKitGlobals()
+        }
 
-      // Sync require keeps LiveKit out of the AppShell module graph until open.
-      // eslint-disable-next-line @typescript-eslint/no-require-imports
-      const mod = require('~/co-work/components/InstantMeetingBody') as {
-        InstantMeetingBody: InstantMeetingBodyComponent
+        // Dynamic import keeps LiveKit out of the AppShell graph until open.
+        // Use ESM `import()` — web Vite has no CommonJS `require`.
+        const mod = await import('~/co-work/components/InstantMeetingBody')
+        if (!cancelled) setBody(() => mod.InstantMeetingBody)
+      } catch (error) {
+        if (!cancelled) {
+          setLoadError(error instanceof Error ? error.message : 'Failed to open meeting')
+        }
       }
-      if (!cancelled) setBody(() => mod.InstantMeetingBody)
-    } catch (error) {
-      if (!cancelled) {
-        setLoadError(error instanceof Error ? error.message : 'Failed to open meeting')
-      }
-    }
+    })()
 
     return () => {
       cancelled = true
     }
-  }, [session])
+    // Only remount when the meeting code changes — not on every session object tweak.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [ownsSession, session?.code])
 
-  if (Platform.OS === 'web' || !session) return null
+  if (!session || !ownsSession) return null
 
   return (
     <YStack
       position="absolute"
-      top={0}
-      left={0}
-      right={0}
-      bottom={0}
-      width="100%"
-      height="100%"
-      zIndex={100000}
+      top={collapsed ? -4 : 0}
+      left={collapsed ? -4 : 0}
+      right={collapsed ? undefined : 0}
+      bottom={collapsed ? undefined : 0}
+      width={collapsed ? 4 : '100%'}
+      height={collapsed ? 4 : '100%'}
+      zIndex={collapsed ? 1 : 100000}
+      opacity={collapsed ? 0 : 1}
+      pointerEvents={collapsed ? 'none' : 'auto'}
+      overflow="hidden"
       backgroundColor="#0c080a"
+      accessibilityElementsHidden={collapsed}
+      importantForAccessibility={collapsed ? 'no-hide-descendants' : 'auto'}
     >
       <AppErrorBoundary scope="InstantMeeting" alwaysShowError>
         {!Body ? (

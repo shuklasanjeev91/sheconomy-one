@@ -82,10 +82,11 @@ Deno.serve(async (req) => {
       })
     }
 
-    // Only cancelling closes a meeting. An `ended` one can be restarted by the
-    // host, so it stays tokenable the same way a `scheduled` one is.
-    if (meeting.status === 'cancelled') {
-      return new Response(JSON.stringify({ error: 'The host cancelled this meeting.' }), {
+    if (
+      meeting.status !== 'active' &&
+      !(action === 'end-room' && meeting.status === 'ended')
+    ) {
+      return new Response(JSON.stringify({ error: 'This meeting is not active.' }), {
         status: 403,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       })
@@ -99,17 +100,62 @@ Deno.serve(async (req) => {
     }
 
     const userId = authData.user.id
-    const isHost = meeting.host_id === userId
-    const { data: participant } = await supabase
+    const [{ data: participant }, { data: actorRole }] = await Promise.all([
+      supabase
       .from('meeting_participants')
       .select('status, display_name')
       .eq('meeting_id', meetingId)
       .eq('user_id', userId)
-      .maybeSingle()
+      .maybeSingle(),
+      supabase
+        .from('meeting_roles')
+        .select('role')
+        .eq('meeting_id', meetingId)
+        .eq('user_id', userId)
+        .maybeSingle(),
+    ])
+    const role = String(actorRole?.role ?? '')
+    const isHost = role === 'host' && meeting.host_id === userId
+    const isModerator = isHost || role === 'co_host'
 
     if (action === 'remove-participant') {
-      if (!isHost || !participantUserId) {
-        return new Response(JSON.stringify({ error: 'Only the host can remove a participant.' }), {
+      if (!isModerator || !participantUserId || participantUserId === userId) {
+        return new Response(JSON.stringify({ error: 'Not authorized to remove this participant.' }), {
+          status: 403,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        })
+      }
+      const [{ data: target }, { data: targetRole }, { data: removalEvent }] = await Promise.all([
+        supabase
+          .from('meeting_participants')
+          .select('status')
+          .eq('meeting_id', meetingId)
+          .eq('user_id', participantUserId)
+          .maybeSingle(),
+        supabase
+          .from('meeting_roles')
+          .select('role')
+          .eq('meeting_id', meetingId)
+          .eq('user_id', participantUserId)
+          .maybeSingle(),
+        supabase
+          .from('meeting_control_events')
+          .select('id')
+          .eq('meeting_id', meetingId)
+          .eq('actor_id', userId)
+          .eq('target_user_id', participantUserId)
+          .eq('action', 'removed')
+          .gt('expires_at', new Date().toISOString())
+          .limit(1)
+          .maybeSingle(),
+      ])
+      if (
+        target?.status !== 'removed' ||
+        !removalEvent ||
+        targetRole?.role === 'host' ||
+        (role === 'co_host' && targetRole?.role === 'co_host')
+      ) {
+        return new Response(JSON.stringify({ error: 'Removal was not authorized by the server.' }), {
           status: 403,
           headers: { ...corsHeaders, 'Content-Type': 'application/json' },
         })
@@ -129,6 +175,33 @@ Deno.serve(async (req) => {
       })
     }
 
+    if (action === 'end-room') {
+      if (!isHost || meeting.status !== 'ended') {
+        return new Response(JSON.stringify({ error: 'Room end was not authorized.' }), {
+          status: 403,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        })
+      }
+      const serviceUrl = livekitUrl.replace(/^wss:/, 'https:').replace(/^ws:/, 'http:')
+      const roomService = new RoomServiceClient(serviceUrl, apiKey, apiSecret)
+      try {
+        await roomService.deleteRoom(roomName)
+      } catch (endError) {
+        const message = endError instanceof Error ? endError.message : String(endError)
+        if (!/not found|does not exist|room.*missing/i.test(message)) throw endError
+      }
+      return new Response(JSON.stringify({ ok: true }), {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      })
+    }
+
+    if (!participant || participant.status !== 'admitted') {
+      return new Response(JSON.stringify({ error: 'You are not admitted to this meeting.' }), {
+        status: 403,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      })
+    }
+
     if (!isHost) {
       const security = (meeting.security_settings ?? {}) as Record<string, unknown>
       const options = (meeting.meeting_options ?? {}) as Record<string, unknown>
@@ -144,7 +217,7 @@ Deno.serve(async (req) => {
         })
       }
 
-      if (participant?.status === 'removed') {
+      if (participant.status === 'removed') {
         return new Response(JSON.stringify({ error: 'You have been removed from this meeting.' }), {
           status: 403,
           headers: { ...corsHeaders, 'Content-Type': 'application/json' },
@@ -152,7 +225,7 @@ Deno.serve(async (req) => {
       }
 
       if (waitingRoomEnabled) {
-        if (!participant || participant.status !== 'admitted') {
+        if (participant.status !== 'admitted') {
           return new Response(JSON.stringify({ error: 'You have not been admitted to this meeting.' }), {
             status: 403,
             headers: { ...corsHeaders, 'Content-Type': 'application/json' },
@@ -188,7 +261,9 @@ Deno.serve(async (req) => {
       canPublish: true,
       canSubscribe: true,
       canPublishData: true,
-      roomAdmin: isHost,
+      // Administrative operations only pass through this function after an
+      // authorization check; no client token receives direct room admin.
+      roomAdmin: false,
     })
 
     const jwt = await token.toJwt()

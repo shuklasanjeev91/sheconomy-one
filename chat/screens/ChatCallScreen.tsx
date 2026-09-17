@@ -11,7 +11,7 @@ import {
   updateCallStatus,
 } from '~/chat/lib/calls'
 import { CallOverlay } from '~/chat/components/CallOverlay'
-import { Avatar, Icons, Spinner, Text, XStack, YStack } from '~/components/ui'
+import { Avatar, Icons, Spinner, Text, XStack, YStack, useAppToast } from '~/components/ui'
 import { ScreenCenter, ScreenFill } from '~/components/layout'
 import { AuthSignInFlow } from '~/components/auth/AuthSignInFlow'
 import { LiveKitMeetingRoom, type LiveKitMediaControls } from '~/co-work/components/LiveKitMeetingRoom'
@@ -30,6 +30,16 @@ import { supportsLiveKitVideo } from '~/lib/platform/capabilities'
 import { meetingViewportStyle } from '~/lib/platform/viewport'
 import { brandColors } from '~/config/brand-colors'
 import { supabase } from '~/lib/supabase/client'
+import { openInstantMeetingSession } from '~/co-work/lib/instant-meeting-session'
+import { minimizeGlobalSession, enterGlobalSessionPip } from '~/lib/session/global-session'
+import { useRegisterGlobalSession } from '~/lib/session/useRegisterGlobalSession'
+import {
+  detectSessionPipCapabilities,
+  requestSessionPictureInPicture,
+  sessionPipUnsupportedMessage,
+} from '~/lib/session/picture-in-picture'
+import { meetingBrowsingMinimizedNotice } from '~/co-work/lib/meeting-lifecycle'
+import { useSessionPipOnHide } from '~/lib/session/useSessionPipOnHide'
 
 type ChatCallScreenProps = {
   code: string
@@ -341,7 +351,9 @@ export function ChatCallScreen({ code, callType, callId, needsAnswer = false }: 
           void hangUp()
         }}
         overlay={(liveKit) => (
-          <ChatCallOverlay
+          <ChatCallConnected
+            code={code}
+            meeting={meeting}
             callType={resolvedCallType}
             peerName={peerLabel}
             peerAvatar={peerAvatar}
@@ -357,7 +369,9 @@ export function ChatCallScreen({ code, callType, callId, needsAnswer = false }: 
   )
 }
 
-function ChatCallOverlay({
+function ChatCallConnected({
+  code,
+  meeting,
   callType,
   peerName,
   peerAvatar,
@@ -367,6 +381,8 @@ function ChatCallOverlay({
   liveKit,
   onHangUp,
 }: {
+  code: string
+  meeting: Meeting
   callType: CallType
   peerName: string
   peerAvatar: string | null
@@ -375,6 +391,100 @@ function ChatCallOverlay({
   safeBottom: number
   liveKit: LiveKitMediaControls | null
   onHangUp: () => void
+}) {
+  const toast = useAppToast()
+  const router = useRouter()
+
+  const minimizeCall = useCallback(() => {
+    openInstantMeetingSession({ code, meeting, autoJoin: false })
+    minimizeGlobalSession()
+    toast.show('Call minimized', {
+      tone: 'success',
+      message: meetingBrowsingMinimizedNotice('call'),
+    })
+    router.push(chatRoutes.home)
+  }, [code, meeting, router, toast])
+
+  const enterCallPip = useCallback(() => {
+    const caps = detectSessionPipCapabilities()
+    void (async () => {
+      const result = await requestSessionPictureInPicture('video')
+      if (!result.ok) {
+        toast.show('Picture-in-Picture unavailable', {
+          tone: 'info',
+          message: result.message || sessionPipUnsupportedMessage(caps),
+        })
+        return
+      }
+      enterGlobalSessionPip()
+    })()
+  }, [toast])
+
+  useSessionPipOnHide(!!liveKit)
+
+  useRegisterGlobalSession({
+    active: !!liveKit,
+    kind: 'call',
+    code,
+    title: peerName,
+    subtitle: callType === 'video' ? 'Video call' : 'Voice call',
+    maximizeHref: String(chatRoutes.call(code, { type: callType })),
+    media: {
+      audioEnabled: liveKit?.audioEnabled ?? true,
+      videoEnabled: liveKit?.videoEnabled ?? callType === 'video',
+      speakerOn: liveKit?.speakerOn ?? true,
+    },
+    handlers: {
+      toggleMic: () => liveKit?.toggleAudio(),
+      toggleCamera: () => liveKit?.toggleVideo(),
+      toggleSpeaker: () => {
+        void liveKit?.toggleSpeaker()
+      },
+      end: () => onHangUp(),
+      enterPip: async () => {
+        enterCallPip()
+      },
+    },
+  })
+
+  return (
+    <ChatCallOverlay
+      callType={callType}
+      peerName={peerName}
+      peerAvatar={peerAvatar}
+      elapsed={elapsed}
+      safeTop={safeTop}
+      safeBottom={safeBottom}
+      liveKit={liveKit}
+      onHangUp={onHangUp}
+      onMinimize={minimizeCall}
+      onPictureInPicture={enterCallPip}
+    />
+  )
+}
+
+function ChatCallOverlay({
+  callType,
+  peerName,
+  peerAvatar,
+  elapsed,
+  safeTop,
+  safeBottom,
+  liveKit,
+  onHangUp,
+  onMinimize,
+  onPictureInPicture,
+}: {
+  callType: CallType
+  peerName: string
+  peerAvatar: string | null
+  elapsed: number
+  safeTop: number
+  safeBottom: number
+  liveKit: LiveKitMediaControls | null
+  onHangUp: () => void
+  onMinimize?: () => void
+  onPictureInPicture?: () => void
 }) {
   const muted = liveKit ? !liveKit.audioEnabled : false
   const cameraOff = liveKit ? !liveKit.videoEnabled : callType === 'audio'
@@ -464,6 +574,18 @@ function ChatCallOverlay({
             ) : (
               <Icons.Video size={24} color="#fff" />
             )}
+          </CallControlButton>
+        ) : null}
+
+        {onMinimize ? (
+          <CallControlButton label="Minimize" color={MUTED} onPress={onMinimize}>
+            <Icons.Minimize2 size={24} color="#fff" />
+          </CallControlButton>
+        ) : null}
+
+        {onPictureInPicture ? (
+          <CallControlButton label="PiP" color={MUTED} onPress={onPictureInPicture}>
+            <Icons.Monitor size={24} color="#fff" />
           </CallControlButton>
         ) : null}
 

@@ -68,13 +68,6 @@ export function SpaRedirect({ href }: SpaRedirectProps) {
         attempts += 1
         if (attempts >= maxAttempts || !isNavigatorNotReadyError(error)) {
           console.warn('[SpaRedirect] push failed', target, error)
-          if (typeof window !== 'undefined') {
-            window.location.assign(
-              target.startsWith('http')
-                ? target
-                : `${window.location.origin}${target.startsWith('/') ? target : `/${target}`}`,
-            )
-          }
           return
         }
         timer = setTimeout(tryNavigate, 50)

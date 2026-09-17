@@ -1,65 +1,343 @@
-import { useMemo } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import type { CSSProperties } from 'react'
 import { useWindowDimensions } from 'react-native'
 
 import { TrackLoop } from '@livekit/components-react'
 
 import { useMeetingGalleryTracks } from '~/co-work/hooks/useMeetingGalleryTracks'
-import { meetingGalleryLayout } from '~/co-work/lib/meeting-gallery-layout'
+import {
+  meetingGalleryLayout,
+  paginateMeetingGallery,
+} from '~/co-work/lib/meeting-gallery-layout'
+import {
+  meetingStageContentBox,
+  resolveMeetingChromeLayout,
+} from '~/co-work/lib/meeting-orientation-layout'
+import {
+  applyMeetingUiChromeLayout,
+  resolveMeetingUiChromePadding,
+} from '~/co-work/lib/meeting-ui-chrome'
 import { useAppLayout } from '~/hooks/useAppLayout'
+import { useMeetingMachine } from '~/co-work/components/MeetingProvider'
 
 import { SheconomyParticipantTile } from '~/co-work/components/SheconomyParticipantTile'
+import { screenShareRoleLabel } from '~/co-work/lib/meeting-lifecycle'
 
 /** SHEconomy-branded video gallery — web LiveKit stage (native uses NativeLiveKitMeetingRoom). */
 export function MeetingVideoStage() {
-  const { isDesktop } = useAppLayout()
+  const { isDesktop, isTablet, safeTop, safeBottom, safeLeft, safeRight } = useAppLayout()
+  const { state, dispatch } = useMeetingMachine()
   const { width, height } = useWindowDimensions()
-  const { stageTracks, pipTrack, totalTiles, hasScreenShare, isLocalScreenSharing } =
+  const chrome = useMemo(() => {
+    const base = resolveMeetingChromeLayout({
+      width,
+      height,
+      safeTop,
+      safeBottom,
+      safeLeft,
+      safeRight,
+      isTablet,
+      isDesktop,
+      isNative: false,
+    })
+    return applyMeetingUiChromeLayout(
+      base,
+      resolveMeetingUiChromePadding({
+        chrome: base,
+        uiMode: state.uiMode,
+        controlsVisible: state.controlsVisible,
+        safeTop,
+        safeBottom,
+      }),
+    )
+  }, [
+    height,
+    isDesktop,
+    isTablet,
+    safeBottom,
+    safeLeft,
+    safeRight,
+    safeTop,
+    state.controlsVisible,
+    state.uiMode,
+    width,
+  ])
+  const { stageTracks, filmstripTracks, totalTiles, hasScreenShare, isLocalScreenSharing } =
     useMeetingGalleryTracks()
-
-  const stageWidth = Math.max(width - (isDesktop ? 48 : 24), 160)
-  const stageHeight = Math.max(height - 200, 180)
-  const layout = useMemo(
-    () => meetingGalleryLayout(stageTracks.length, { width: stageWidth, height: stageHeight }),
-    [stageTracks.length, stageWidth, stageHeight],
+  const [page, setPage] = useState(0)
+  const [filmstripWidth, setFilmstripWidth] = useState(chrome.filmstripWidth)
+  const [filmstripOffset, setFilmstripOffset] = useState({ x: 0, y: 0 })
+  const previousScreenShare = useRef(false)
+  const filmstripRef = useRef<HTMLDivElement | null>(null)
+  const dragRef = useRef<{
+    pointerId: number
+    startX: number
+    startY: number
+    originX: number
+    originY: number
+  } | null>(null)
+  const pageSize = chrome.pageSize
+  const filmstripExpanded = filmstripTracks.length > 0 && !state.participantStripMinimized
+  const screenLayoutEarly = state.viewMode === 'screen-share' && hasScreenShare
+  const speakerLayoutEarly = state.viewMode === 'speaker'
+  const filmstripBesideEarly =
+    speakerLayoutEarly || screenLayoutEarly
+      ? chrome.filmstripBeside || width >= 700
+      : chrome.filmstripBeside
+  const { width: stageWidth, height: stageHeight } = meetingStageContentBox({
+    viewportWidth: width,
+    viewportHeight: height,
+    chrome: {
+      ...chrome,
+      filmstripBeside: filmstripBesideEarly,
+      filmstripWidth: filmstripBesideEarly
+        ? Math.max(chrome.filmstripWidth, speakerLayoutEarly ? 120 : chrome.filmstripWidth)
+        : chrome.filmstripWidth,
+      filmstripHeight:
+        speakerLayoutEarly && !filmstripBesideEarly
+          ? Math.max(chrome.filmstripHeight, 96)
+          : chrome.filmstripHeight,
+    },
+    filmstripExpanded,
+  })
+  const paged = useMemo(
+    () => paginateMeetingGallery(stageTracks, page, pageSize),
+    [page, pageSize, stageTracks],
   )
-  const solo = stageTracks.length <= 1 && !pipTrack
-  const galleryClass = hasScreenShare
+
+  useEffect(() => {
+    if (paged.page !== page) setPage(paged.page)
+  }, [page, paged.page])
+
+  useEffect(() => {
+    if (hasScreenShare && !previousScreenShare.current) {
+      dispatch({ type: 'SET_VIEW', viewMode: 'screen-share' })
+    } else if (!hasScreenShare && previousScreenShare.current && state.viewMode === 'screen-share') {
+      dispatch({ type: 'SET_VIEW', viewMode: 'gallery' })
+    }
+    previousScreenShare.current = hasScreenShare
+  }, [dispatch, hasScreenShare, state.viewMode])
+
+  useEffect(() => {
+    setFilmstripWidth(chrome.filmstripWidth)
+  }, [chrome.filmstripWidth])
+
+  useEffect(() => {
+    if (
+      !chrome.filmstripBeside ||
+      chrome.policy === 'landscape-phone' ||
+      state.participantStripMinimized ||
+      !filmstripRef.current ||
+      typeof ResizeObserver === 'undefined'
+    )
+      return
+    const observer = new ResizeObserver(([entry]) => {
+      if (!entry) return
+      setFilmstripWidth(Math.max(144, Math.min(360, Math.round(entry.contentRect.width))))
+    })
+    observer.observe(filmstripRef.current)
+    return () => observer.disconnect()
+  }, [chrome.filmstripBeside, chrome.policy, state.participantStripMinimized])
+
+  useEffect(() => {
+    if (!isDesktop) {
+      setFilmstripOffset({ x: 0, y: 0 })
+      dragRef.current = null
+      return
+    }
+    const onPointerMove = (event: PointerEvent) => {
+      const drag = dragRef.current
+      if (!drag || event.pointerId !== drag.pointerId) return
+      setFilmstripOffset({
+        x: Math.max(
+          -Math.max(stageWidth - filmstripWidth - 24, 0),
+          Math.min(0, drag.originX + event.clientX - drag.startX),
+        ),
+        y: Math.max(0, Math.min(stageHeight - 180, drag.originY + event.clientY - drag.startY)),
+      })
+    }
+    const stopDragging = (event: PointerEvent) => {
+      if (dragRef.current?.pointerId === event.pointerId) dragRef.current = null
+    }
+    window.addEventListener('pointermove', onPointerMove)
+    window.addEventListener('pointerup', stopDragging)
+    window.addEventListener('pointercancel', stopDragging)
+    return () => {
+      window.removeEventListener('pointermove', onPointerMove)
+      window.removeEventListener('pointerup', stopDragging)
+      window.removeEventListener('pointercancel', stopDragging)
+    }
+  }, [filmstripWidth, isDesktop, stageHeight, stageWidth])
+
+  const layout = useMemo(
+    () =>
+      meetingGalleryLayout(paged.items.length, {
+        width: stageWidth,
+        height: stageHeight,
+        preferWide: chrome.galleryPreferWide,
+      }),
+    [chrome.galleryPreferWide, paged.items.length, stageWidth, stageHeight],
+  )
+  const screenLayout = screenLayoutEarly
+  const speakerLayout = speakerLayoutEarly
+  const galleryMode = state.viewMode === 'gallery' || (!screenLayout && !speakerLayout)
+  const solo = galleryMode && paged.items.length <= 1
+  const filmstripBeside = filmstripBesideEarly
+  const galleryClass = screenLayout
     ? 'sheconomy-video-gallery sheconomy-video-gallery--screen'
-    : solo
-      ? 'sheconomy-video-gallery sheconomy-video-gallery--solo'
-      : 'sheconomy-video-gallery'
+    : speakerLayout
+      ? 'sheconomy-video-gallery sheconomy-video-gallery--speaker'
+      : solo
+        ? 'sheconomy-video-gallery sheconomy-video-gallery--solo'
+        : 'sheconomy-video-gallery sheconomy-video-gallery--grid'
+
+  const stageClassName = [
+    'sheconomy-video-stage',
+    filmstripTracks.length > 0 ? 'sheconomy-video-stage--filmstrip' : '',
+    filmstripTracks.length > 0 && state.participantStripMinimized
+      ? 'sheconomy-video-stage--filmstrip-minimized'
+      : '',
+    speakerLayout ? 'sheconomy-video-stage--speaker' : '',
+    filmstripBeside ? 'sheconomy-video-stage--filmstrip-beside' : 'sheconomy-video-stage--filmstrip-bottom',
+    chrome.policy === 'landscape-phone' ? 'sheconomy-video-stage--landscape-phone' : '',
+    chrome.policy === 'portrait-phone' ? 'sheconomy-video-stage--portrait-phone' : '',
+  ]
+    .filter(Boolean)
+    .join(' ')
+
+  const galleryCols = screenLayout || speakerLayout ? 1 : layout.columns
+  const galleryRows = screenLayout || speakerLayout ? 1 : layout.rows
+  const speakerFilmstripWidth = Math.max(
+    filmstripBeside ? filmstripWidth : chrome.filmstripWidth,
+    speakerLayout ? 120 : 0,
+  )
+
 
   return (
-    <div className="sheconomy-video-stage">
+    <div
+      className={stageClassName}
+      style={
+        {
+          '--filmstrip-width': state.participantStripMinimized
+            ? '44px'
+            : `${filmstripBeside ? speakerFilmstripWidth : chrome.filmstripWidth}px`,
+          '--stage-pad-top': `${chrome.stagePaddingTop}px`,
+          '--stage-pad-bottom': `${chrome.stagePaddingBottom}px`,
+          '--stage-pad-left': `${chrome.stagePaddingLeft}px`,
+          '--stage-pad-right': `${chrome.stagePaddingRight}px`,
+          '--filmstrip-height': `${speakerLayout && !filmstripBeside ? Math.max(chrome.filmstripHeight, 96) : chrome.filmstripHeight}px`,
+          paddingTop: chrome.stagePaddingTop,
+          paddingBottom: chrome.stagePaddingBottom,
+          paddingLeft: chrome.stagePaddingLeft,
+          paddingRight: chrome.stagePaddingRight,
+          boxSizing: 'border-box',
+        } as CSSProperties
+      }
+    >
       <div
         className={galleryClass}
         style={
           {
-            '--gallery-cols': hasScreenShare ? 1 : layout.columns,
-            '--gallery-rows': hasScreenShare ? 1 : layout.rows,
+            '--gallery-cols': String(galleryCols),
+            '--gallery-rows': String(galleryRows),
+            // Apply grid template directly — CSS vars alone are flaky in some WebViews.
+            gridTemplateColumns:
+              screenLayout || speakerLayout || solo
+                ? undefined
+                : `repeat(${galleryCols}, minmax(0, 1fr))`,
+            gridTemplateRows:
+              screenLayout || speakerLayout || solo
+                ? undefined
+                : `repeat(${galleryRows}, minmax(0, 1fr))`,
+            display: screenLayout || speakerLayout || solo ? undefined : 'grid',
           } as CSSProperties
         }
       >
-        <TrackLoop tracks={stageTracks}>
-          <SheconomyParticipantTile />
+        <TrackLoop tracks={paged.items}>
+          <SheconomyParticipantTile mirrorLocalVideo={state.mirrorLocalVideo} />
         </TrackLoop>
       </div>
 
-      {pipTrack ? (
-        <div className="sheconomy-video-pip">
-          <TrackLoop tracks={[pipTrack]}>
-            <SheconomyParticipantTile />
-          </TrackLoop>
+      {filmstripTracks.length > 0 ? (
+        <div
+          ref={filmstripRef}
+          className={`sheconomy-video-filmstrip${
+            state.participantStripMinimized ? ' sheconomy-video-filmstrip--minimized' : ''
+          }`}
+          style={{
+            transform: `translate(${filmstripOffset.x}px, ${filmstripOffset.y}px)`,
+          }}
+        >
+          <div
+            className="sheconomy-video-filmstrip__header"
+            onPointerDown={(event) => {
+              if (!isDesktop || !filmstripBeside || state.participantStripMinimized) return
+              dragRef.current = {
+                pointerId: event.pointerId,
+                startX: event.clientX,
+                startY: event.clientY,
+                originX: filmstripOffset.x,
+                originY: filmstripOffset.y,
+              }
+              event.currentTarget.setPointerCapture?.(event.pointerId)
+            }}
+          >
+            {!state.participantStripMinimized ? (
+              <span>{speakerLayout ? 'Others' : 'Participants'}</span>
+            ) : null}
+            <button
+              type="button"
+              aria-label={
+                state.participantStripMinimized
+                  ? 'Maximize participant filmstrip'
+                  : 'Minimize participant filmstrip'
+              }
+              onPointerDown={(event) => event.stopPropagation()}
+              onClick={() => dispatch({ type: 'TOGGLE_PARTICIPANT_STRIP' })}
+            >
+              {state.participantStripMinimized ? '›' : '−'}
+            </button>
+          </div>
+          {!state.participantStripMinimized ? (
+            <TrackLoop tracks={filmstripTracks}>
+              <SheconomyParticipantTile mirrorLocalVideo={state.mirrorLocalVideo} />
+            </TrackLoop>
+          ) : null}
+        </div>
+      ) : null}
+
+      {paged.pageCount > 1 ? (
+        <div className="sheconomy-gallery-pagination">
+          <button disabled={paged.page === 0} onClick={() => setPage((value) => value - 1)}>
+            Previous
+          </button>
+          <span>{paged.page + 1} / {paged.pageCount}</span>
+          <button
+            disabled={paged.page === paged.pageCount - 1}
+            onClick={() => setPage((value) => value + 1)}
+          >
+            Next
+          </button>
         </div>
       ) : null}
 
       {totalTiles === 0 ? <div className="sheconomy-video-empty" /> : null}
-      {isLocalScreenSharing ? (
-        <div className="sheconomy-screen-share-status" role="status">
-          You’re sharing your screen · Others can see it
-        </div>
-      ) : null}
+      {(() => {
+        const role = isLocalScreenSharing ? 'sharing' : hasScreenShare ? 'viewing' : 'none'
+        const label = screenShareRoleLabel(role)
+        return label ? (
+          <div
+            className={
+              role === 'viewing'
+                ? 'sheconomy-screen-share-status sheconomy-screen-share-status--viewing'
+                : 'sheconomy-screen-share-status'
+            }
+            role="status"
+          >
+            {label}
+          </div>
+        ) : null
+      })()}
     </div>
   )
 }

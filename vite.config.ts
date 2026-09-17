@@ -600,6 +600,12 @@ if (typeof g.Response !== 'function') {
         '@tamagui/config',
         'tamagui',
         'date-fns',
+        // LiveKit only — do not prebundle expo-* here; those thrash deps_ssr and
+        // throw "new version of the pre-bundle … page reload" on meeting routes.
+        'livekit-client',
+        '@livekit/components-core',
+        '@livekit/components-react',
+        '@livekit/track-processors',
       ],
     },
 

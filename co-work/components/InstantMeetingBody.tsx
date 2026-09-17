@@ -12,6 +12,7 @@ export function InstantMeetingBody({ session, onExit }: InstantMeetingBodyProps)
     <MeetingLiveScreen
       code={session.code}
       initialMeeting={session.meeting}
+      autoJoin={session.autoJoin}
       onExit={onExit}
     />
   )

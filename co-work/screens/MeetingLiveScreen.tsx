@@ -1,14 +1,28 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 
 import { AppLink } from '~/components/navigation/AppLink'
 import { ScreenCenter } from '~/components/layout'
 import { Button, Spinner, Text, YStack } from '~/components/ui'
-import { ensureMeetingMediaPermissions } from '~/co-work/lib/meeting-media-permissions'
-import { fetchMeetingByCode } from '~/co-work/lib/meetings'
+import { ensureMeetingMobilePermissions } from '~/co-work/lib/meeting-media-permissions'
+import {
+  loadRememberedMeetingDisplayName,
+  safeMeetingDisplayName,
+} from '~/co-work/lib/meeting-display-name'
+import {
+  fetchMeetingByCode,
+  fetchMeetingModerationSettings,
+  formatMeetingCode,
+  verifyMeetingPasscode,
+} from '~/co-work/lib/meetings'
+import {
+  MEETING_LOCKED_MESSAGE,
+  shouldPromptForPasscode,
+} from '~/co-work/lib/meeting-security'
 import type { Meeting } from '~/co-work/lib/types'
 import { MeetingRoomScreen } from '~/co-work/screens/MeetingRoomScreen'
 import { MeetingJoinScreen } from '~/co-work/components/MeetingJoinScreen'
-import { formatMeetingCode } from '~/co-work/lib/meetings'
+import { MeetingProvider } from '~/co-work/components/MeetingProvider'
+import { useSyncMeetingLifecycle } from '~/co-work/hooks/useMeetingStateManager'
 import { useCoWorkTheme } from '~/co-work/lib/theme'
 import { useProfile } from '~/hooks/useProfile'
 import { AuthSignInFlow } from '~/components/auth/AuthSignInFlow'
@@ -19,6 +33,12 @@ type MeetingLiveScreenProps = {
   code: string
   /** When opening from Co-Work create/start, skip the code lookup. */
   initialMeeting?: Meeting | null
+  /**
+   * Zoom-style: skip the second Join Meeting confirm when the caller already
+   * previewed devices / granted permissions (instant start, lobby Join now).
+   * Still shows confirm when a passcode is required or auto-join fails.
+   */
+  autoJoin?: boolean
   /** Overlay / in-place host: close session instead of relying on route alone. */
   onExit?: () => void
 }
@@ -26,27 +46,78 @@ type MeetingLiveScreenProps = {
 /**
  * Instant / live meeting entry: load → confirm identity/devices → permissions → room.
  * Kept separate from the lobby so LiveKit only loads on the live path.
+ * Owns MeetingProvider so LOBBY → JOINING → room states stay centralized.
  */
-export function MeetingLiveScreen({
+export function MeetingLiveScreen(props: MeetingLiveScreenProps) {
+  return (
+    <MeetingProvider>
+      <MeetingLiveScreenBody {...props} />
+    </MeetingProvider>
+  )
+}
+
+function MeetingLiveScreenBody({
   code,
   initialMeeting = null,
+  autoJoin = false,
   onExit,
 }: MeetingLiveScreenProps) {
   const { ui: coworkUi } = useCoWorkTheme()
   const { profile, user, isAuthenticated, isLoading } = useProfile()
+  const userId = user?.id
   const [meeting, setMeeting] = useState<Meeting | null>(initialMeeting)
   const [phase, setPhase] = useState<'loading' | 'confirm' | 'joining' | 'ready' | 'error'>(
-    initialMeeting ? 'confirm' : 'loading',
+    initialMeeting ? (autoJoin ? 'joining' : 'confirm') : 'loading',
   )
   const [error, setError] = useState<string | null>(null)
   const [confirmedDisplayName, setConfirmedDisplayName] = useState('')
+  const [isLocked, setIsLocked] = useState(false)
+  const [passcodeVerified, setPasscodeVerified] = useState(false)
+  const loadedCodeRef = useRef<string | null>(null)
+  const autoJoinAttemptedRef = useRef(false)
 
   const normalizedCode = code.replace(/\s/g, '').trim()
+  const isHost = !!meeting && !!userId && meeting.host_id === userId
+  const needsPasscode =
+    !!meeting &&
+    shouldPromptForPasscode({
+      security: meeting.security_settings,
+      isHost,
+    }) &&
+    !passcodeVerified
+
+  useSyncMeetingLifecycle({
+    inLobby: phase === 'confirm' || phase === 'loading',
+    joining: phase === 'joining',
+    locked: isLocked && !isHost && (phase === 'error' || phase === 'confirm'),
+  })
 
   const exitMeeting = useCallback(() => {
     onExit?.()
     navigateApp(coWorkRoutes.home)
   }, [onExit])
+
+  const applyMeetingSecurity = useCallback(
+    async (row: Meeting) => {
+      const moderation = await fetchMeetingModerationSettings(row.id).catch(() => null)
+      const locked = !!moderation?.is_locked
+      setIsLocked(locked)
+      const hostViewer = !!userId && row.host_id === userId
+      if (locked && !hostViewer) {
+        setPhase('error')
+        setError(MEETING_LOCKED_MESSAGE)
+        return false
+      }
+      setPasscodeVerified(
+        !shouldPromptForPasscode({
+          security: row.security_settings,
+          isHost: hostViewer,
+        }),
+      )
+      return true
+    },
+    [userId],
+  )
 
   const loadMeeting = useCallback(async () => {
     if (!normalizedCode) {
@@ -55,9 +126,6 @@ export function MeetingLiveScreen({
       return
     }
 
-    setPhase('loading')
-    setError(null)
-
     if (initialMeeting && initialMeeting.meeting_code.replace(/\s/g, '').trim() === normalizedCode) {
       if (initialMeeting.status === 'cancelled') {
         setPhase('error')
@@ -65,11 +133,18 @@ export function MeetingLiveScreen({
         return
       }
       setMeeting(initialMeeting)
-      setPhase('confirm')
+      const ok = await applyMeetingSecurity(initialMeeting)
+      if (ok) {
+        setPhase((prev) => {
+          if (prev === 'ready' || prev === 'joining') return prev
+          return autoJoin ? 'joining' : 'confirm'
+        })
+      }
       return
     }
 
-    setPhase('loading')
+    setPhase((prev) => (prev === 'ready' || prev === 'joining' ? prev : 'loading'))
+    setError(null)
     try {
       const row = await fetchMeetingByCode(normalizedCode)
       if (!row) {
@@ -83,30 +158,107 @@ export function MeetingLiveScreen({
         return
       }
       setMeeting(row)
-      setPhase('confirm')
+      const ok = await applyMeetingSecurity(row)
+      if (ok) {
+        setPhase((prev) => {
+          if (prev === 'ready' || prev === 'joining') return prev
+          return autoJoin ? 'joining' : 'confirm'
+        })
+      }
     } catch (loadError) {
       setPhase('error')
       setError(loadError instanceof Error ? loadError.message : 'Failed to load meeting')
     }
-  }, [normalizedCode, initialMeeting])
+  }, [normalizedCode, initialMeeting, applyMeetingSecurity, autoJoin])
 
-  const joinMeeting = useCallback(async (displayName: string) => {
-    setPhase('joining')
-    setError(null)
-    const permissions = await ensureMeetingMediaPermissions()
-    if (!permissions.ok) {
-      const message = permissions.message ?? 'Microphone permission is required to join.'
-      setError(message)
-      setPhase('error')
-      throw new Error(message)
-    }
-    setConfirmedDisplayName(displayName)
-    setPhase('ready')
-  }, [])
+  const joinMeeting = useCallback(
+    async (displayName: string, passcode?: string) => {
+      if (!meeting) throw new Error('Meeting not loaded')
+      if (isLocked && !isHost) {
+        throw new Error(MEETING_LOCKED_MESSAGE)
+      }
+      if (
+        shouldPromptForPasscode({
+          security: meeting.security_settings,
+          isHost,
+        }) &&
+        !passcodeVerified
+      ) {
+        const ok = await verifyMeetingPasscode(meeting.id, passcode ?? '')
+        if (!ok) throw new Error('Incorrect passcode')
+        setPasscodeVerified(true)
+      }
+
+      setPhase('joining')
+      setError(null)
+      const permissions = await ensureMeetingMobilePermissions({ requestNotifications: true })
+      if (!permissions.ok) {
+        const message = permissions.message ?? 'Microphone permission is required to join.'
+        // Stay on the join confirm screen so the user can open Settings and retry.
+        // Never escalate a permission denial into an uncaught crash.
+        setError(message)
+        setPhase('confirm')
+        throw new Error(message)
+      }
+      setConfirmedDisplayName(displayName)
+      setPhase('ready')
+    },
+    [isHost, isLocked, meeting, passcodeVerified],
+  )
 
   useEffect(() => {
+    if (!normalizedCode) {
+      void loadMeeting()
+      return
+    }
+    // Load once per meeting code — avoid setPhase loops when profile identity churns.
+    if (loadedCodeRef.current === normalizedCode) return
+    loadedCodeRef.current = normalizedCode
     void loadMeeting()
-  }, [loadMeeting])
+  }, [loadMeeting, normalizedCode])
+
+  // Zoom-style one-tap: after load, enter the room without a second Join click.
+  useEffect(() => {
+    if (!autoJoin || autoJoinAttemptedRef.current) return
+    if (!meeting || !user || !isAuthenticated) return
+    if (phase !== 'joining' && phase !== 'confirm') return
+    if (isLocked && !isHost) return
+    if (needsPasscode) {
+      // Passcode still needs the confirm UI.
+      if (phase === 'joining') setPhase('confirm')
+      return
+    }
+
+    autoJoinAttemptedRef.current = true
+    let cancelled = false
+    void (async () => {
+      const remembered = await loadRememberedMeetingDisplayName()
+      if (cancelled) return
+      const name = safeMeetingDisplayName(
+        remembered || profile?.full_name || profile?.username,
+      )
+      try {
+        await joinMeeting(name)
+      } catch {
+        // joinMeeting already restored confirm + error — user can tap Join once.
+      }
+    })()
+    return () => {
+      cancelled = true
+    }
+  }, [
+    autoJoin,
+    meeting,
+    user,
+    isAuthenticated,
+    phase,
+    isLocked,
+    isHost,
+    needsPasscode,
+    profile?.full_name,
+    profile?.username,
+    joinMeeting,
+  ])
 
   if (isLoading && !user) {
     return (
@@ -131,6 +283,10 @@ export function MeetingLiveScreen({
         profileName={profile?.full_name || profile?.username || 'Guest'}
         email={user.email ?? null}
         avatarUrl={profile?.avatar_url}
+        userId={user.id}
+        requirePasscode={needsPasscode}
+        isLocked={isLocked && !isHost}
+        lockedMessage={MEETING_LOCKED_MESSAGE}
         onJoin={joinMeeting}
         onBack={exitMeeting}
       />
@@ -191,10 +347,10 @@ export function MeetingLiveScreen({
   }
 
   return (
-    <ScreenCenter backgroundColor="#0c080a">
+    <ScreenCenter backgroundColor={coworkUi.pageBg}>
       <Spinner size="large" color={coworkUi.brand} />
-      <Text color={coworkUi.textSecondary} marginTop="$3" textAlign="center" paddingHorizontal="$6">
-        {phase === 'joining' ? 'Checking camera and microphone…' : 'Loading meeting…'}
+      <Text color={coworkUi.textSecondary} marginTop="$3">
+        {phase === 'joining' ? 'Joining meeting…' : 'Opening meeting…'}
       </Text>
     </ScreenCenter>
   )

@@ -6,7 +6,7 @@ export type MeetingMicrophonePermission = 'checking' | 'granted' | 'denied' | 'p
 export type MeetingAudioDevice = {
   id: string
   label: string
-  kind: 'audioinput' | 'audiooutput'
+  kind: 'audioinput' | 'audiooutput' | 'videoinput'
 }
 
 export type MeetingAudioQuality = {
@@ -20,12 +20,15 @@ export type MeetingAudioQuality = {
   supportsDeviceSelection: boolean
   inputDevices: MeetingAudioDevice[]
   outputDevices: MeetingAudioDevice[]
+  videoDevices: MeetingAudioDevice[]
   activeInputDeviceId: string | null
   activeOutputDeviceId: string | null
+  activeVideoDeviceId: string | null
   testMicrophone: () => void
   testSpeaker: () => Promise<void>
   selectInputDevice: (deviceId: string) => Promise<void>
   selectOutputDevice: (deviceId: string) => Promise<void>
+  selectVideoDevice: (deviceId: string) => Promise<void>
   reportError: (cause: unknown) => void
   clearError: () => void
   retryConnection: () => Promise<void>

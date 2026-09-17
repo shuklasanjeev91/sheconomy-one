@@ -73,76 +73,60 @@ export function MeetingVideoGrid({
   const screenPeer = remotes.find((p) => p.screenSharing && p.screenStream)
   const activeScreen = screenStream ?? screenPeer?.screenStream
 
-  if (layout === 'speaker' && (activeScreen || remotes[0])) {
-    const speaker = remotes[0]
+  if (layout === 'speaker' && (activeScreen || remotes.length > 0 || tiles.length > 0)) {
+    const speakingRemote =
+      [...remotes].sort((left, right) => {
+        // Prefer unmuted speakers when media stream audio isn't leveled here.
+        return Number(right.audioEnabled) - Number(left.audioEnabled)
+      })[0] ?? null
+    const speakerTile =
+      tiles.find((tile) => !tile.isSelf && tile.key === speakingRemote?.peerId) ??
+      tiles.find((tile) => !tile.isSelf) ??
+      tiles[0]
+    const filmstrip = tiles.filter((tile) => tile.key !== speakerTile?.key)
     return (
       <YStack flex={1} gap="$2" width="100%" minHeight={0}>
-        <VideoTile
-          large
-          stream={activeScreen ?? speaker?.stream}
-          name={activeScreen ? `${localName} (Screen)` : speaker?.displayName ?? 'Speaker'}
-          avatarUrl={speaker?.avatarUrl}
-          isScreen={!!activeScreen}
-        />
-        <XStack gap="$2" flexWrap="wrap">
-          {tiles.map((tile) => (
+        {speakerTile ? (
+          <YStack flex={1} minHeight={0} width="100%">
             <VideoTile
-              key={tile.key}
-              stream={tile.stream}
-              name={tile.name}
-              avatarUrl={tile.avatarUrl}
-              muted={tile.muted}
-              videoOff={tile.videoOff}
-              handRaised={tile.handRaised}
-              isSelf={tile.isSelf}
-              isScreen={tile.isScreen}
+              large
+              stream={activeScreen ?? speakerTile.stream}
+              name={
+                activeScreen
+                  ? `${localName} (Screen)`
+                  : speakerTile.name
+              }
+              avatarUrl={speakerTile.avatarUrl}
+              muted={speakerTile.muted}
+              videoOff={speakerTile.videoOff}
+              handRaised={speakerTile.handRaised}
+              isSelf={speakerTile.isSelf}
+              isScreen={!!activeScreen}
             />
-          ))}
-        </XStack>
+          </YStack>
+        ) : null}
+        {filmstrip.length > 0 ? (
+          <XStack gap="$2" flexWrap="nowrap" overflow="hidden">
+            {filmstrip.map((tile) => (
+              <VideoTile
+                key={tile.key}
+                stream={tile.stream}
+                name={tile.name}
+                avatarUrl={tile.avatarUrl}
+                muted={tile.muted}
+                videoOff={tile.videoOff}
+                handRaised={tile.handRaised}
+                isSelf={tile.isSelf}
+                isScreen={tile.isScreen}
+              />
+            ))}
+          </XStack>
+        ) : null}
       </YStack>
     )
   }
 
-  // WhatsApp / Meet 1:1 — remote fills the stage, local floats as PiP.
-  const remote = remotes[0]
-  if (!activeScreen && remotes.length === 1 && remote) {
-    const pipWidth = Math.min(width >= 768 ? 240 : 148, Math.floor(stageWidth * (width >= 768 ? 0.28 : 0.4)))
-    return (
-      <YStack flex={1} width="100%" height="100%" minHeight={0} position="relative">
-        <VideoTile
-          large
-          stream={remote.stream}
-          name={remote.displayName}
-          avatarUrl={remote.avatarUrl}
-          muted={!remote.audioEnabled}
-          videoOff={!remote.videoEnabled}
-          handRaised={remote.handRaised}
-        />
-        <YStack
-          position="absolute"
-          right={12}
-          bottom={12}
-          width={pipWidth}
-          aspectRatio={16 / 9}
-          zIndex={20}
-          borderRadius={16}
-          overflow="hidden"
-        >
-          <VideoTile
-            large
-            stream={localStream}
-            name={localName}
-            avatarUrl={localAvatar}
-            muted={!audioEnabled}
-            videoOff={!videoEnabled}
-            handRaised={handRaised}
-            isSelf
-          />
-        </YStack>
-      </YStack>
-    )
-  }
-
+  // True gallery — two (or more) equal large tiles. Never float local as PiP.
   const galleryTiles = tiles
   const gallery = meetingGalleryLayout(Math.max(galleryTiles.length, 1), {
     width: stageWidth,

@@ -3,6 +3,10 @@ import { Platform } from 'react-native'
 
 import { Avatar, Text, YStack } from '~/components/ui'
 import { useCoWorkTheme } from '~/co-work/lib/theme'
+import {
+  meetingVideoMirrorTransform,
+  shouldMirrorMeetingVideo,
+} from '~/co-work/lib/meeting-video-mirror'
 
 type VideoTileProps = {
   stream?: MediaStream | null
@@ -14,6 +18,8 @@ type VideoTileProps = {
   isSelf?: boolean
   isScreen?: boolean
   large?: boolean
+  /** Self-view mirror preference — default ON. */
+  mirrorLocalVideo?: boolean
 }
 
 export function VideoTile({
@@ -26,6 +32,7 @@ export function VideoTile({
   isSelf,
   isScreen,
   large,
+  mirrorLocalVideo = true,
 }: VideoTileProps) {
   const { ui: coworkUi } = useCoWorkTheme()
   const videoRef = useRef<HTMLVideoElement | null>(null)
@@ -36,6 +43,11 @@ export function VideoTile({
     mirror?: boolean
   }> | null>(null)
   const [streamUrl, setStreamUrl] = useState<string | null>(null)
+  const mirrored = shouldMirrorMeetingVideo({
+    mirrorLocalVideo,
+    isLocal: !!isSelf,
+    isScreenShare: !!isScreen,
+  })
 
   useEffect(() => {
     if (Platform.OS === 'web') return
@@ -96,13 +108,18 @@ export function VideoTile({
           autoPlay
           playsInline
           muted={isSelf}
-          style={{ width: '100%', height: '100%', objectFit: isScreen ? 'contain' : 'cover' }}
+          style={{
+            width: '100%',
+            height: '100%',
+            objectFit: isScreen ? 'contain' : 'cover',
+            transform: meetingVideoMirrorTransform(mirrored),
+          }}
         />
       ) : showNativeVideo ? (
         <RtcView
           streamURL={streamUrl}
           objectFit={isScreen ? 'contain' : 'cover'}
-          mirror={isSelf && !isScreen}
+          mirror={mirrored}
           style={{ width: '100%', height: '100%' }}
         />
       ) : (

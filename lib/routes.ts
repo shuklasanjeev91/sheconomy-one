@@ -216,10 +216,15 @@ export const coWorkRoutes = {
   // Flat `?live=1` used to share a file with lobby and blanked Co-Work/lobby.
   meetingLive: (code: string) =>
     `/co-work/meeting/${encodeURIComponent(code)}/live` as Href,
+  meetingEnded: (code: string) =>
+    `/co-work/meeting/${encodeURIComponent(code)}/ended` as Href,
   recording: (token: string) => `/co-work/recording/${encodeURIComponent(token)}` as Href,
   schedule: '/co-work/schedule' as Href,
   meetings: '/co-work/meetings' as Href,
   join: '/co-work/join' as Href,
+  /** Persistent Co-Work Main Chat (not meeting chat). */
+  chat: '/co-work/chat' as Href,
+  chatThread: (id: string) => `/co-work/chat/${encodeURIComponent(id)}` as Href,
 } as const
 
 /** Shared auth + legacy aliases used across the app. */

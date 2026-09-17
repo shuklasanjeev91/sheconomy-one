@@ -72,6 +72,8 @@ function withAndroidTabletSupport(config) {
 
     application.$['android:supportsRtl'] = 'true'
     mainActivity.$['android:resizeableActivity'] = 'true'
+    // Allow portrait + landscape; meeting UI adapts via orientation layout policy.
+    mainActivity.$['android:screenOrientation'] = 'fullUser'
 
     const configChanges = mainActivity.$['android:configChanges'] || ''
     const required = [
@@ -105,5 +107,5 @@ function withUniversalDeviceSupport(config) {
 module.exports = createRunOncePlugin(
   withUniversalDeviceSupport,
   'with-universal-device-support',
-  '1.0.0',
+  '1.1.0',
 )

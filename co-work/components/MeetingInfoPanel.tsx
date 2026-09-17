@@ -1,10 +1,9 @@
 import { useState } from 'react'
 
-import { ShareSheet } from '~/components/share'
-import { Button, Icons, ScrollView, Text, XStack, YStack, useAppToast } from '~/components/ui'
+import { Button, Icons, ScrollView, Switch, Text, XStack, YStack, useAppToast } from '~/components/ui'
 import { CoWorkPanelShell, CoWorkSectionLabel, CoWorkStatusPill } from '~/co-work/components/CoWorkUi'
 import { MeetingPanelHeader } from '~/co-work/components/MeetingPanelHeader'
-import { buildMeetingSharePayload } from '~/co-work/lib/meeting-share'
+import { MeetingShareSheet } from '~/co-work/components/MeetingShareSheet'
 import { formatMeetingCode, getMeetingShareUrl } from '~/co-work/lib/meetings'
 import { useCoWorkTheme } from '~/co-work/lib/theme'
 import type { Meeting } from '~/co-work/lib/types'
@@ -20,6 +19,13 @@ type MeetingInfoPanelProps = {
   onInvite?: () => void
   onOpenRecordings?: () => void
   fullWidth?: boolean
+  /** Local self-view mirror preference (default ON). */
+  mirrorLocalVideo?: boolean
+  onMirrorLocalVideoChange?: (enabled: boolean) => void
+  hostLeaveBehavior?: 'end' | 'transfer_to_co_host' | null
+  onHostLeaveBehaviorChange?: (behavior: 'end' | 'transfer_to_co_host') => void
+  isLocked?: boolean
+  onToggleLock?: () => void
 }
 
 export function MeetingInfoPanel({
@@ -30,6 +36,12 @@ export function MeetingInfoPanel({
   onInvite,
   onOpenRecordings,
   fullWidth,
+  mirrorLocalVideo = true,
+  onMirrorLocalVideoChange,
+  hostLeaveBehavior,
+  onHostLeaveBehaviorChange,
+  isLocked = false,
+  onToggleLock,
 }: MeetingInfoPanelProps) {
   const { ui: coworkUi } = useCoWorkTheme()
   const toast = useAppToast()
@@ -54,12 +66,12 @@ export function MeetingInfoPanel({
     const result = await addMeetingToDeviceCalendar(meeting)
     if (result === 'cancelled') return
     toast.show(
-      result === 'opened'
+      result === 'saved' || result === 'opened'
         ? 'Meeting added to calendar'
         : result === 'shared'
           ? 'Calendar event ready'
           : 'Could not open calendar',
-      { tone: result === 'opened' || result === 'shared' ? 'success' : 'danger' },
+      { tone: result === 'saved' || result === 'opened' || result === 'shared' ? 'success' : 'danger' },
     )
   }
 
@@ -118,8 +130,12 @@ export function MeetingInfoPanel({
             <CoWorkSectionLabel>Security</CoWorkSectionLabel>
             <XStack gap="$2" flexWrap="wrap">
               <CoWorkStatusPill label="Encrypted" tone="live" />
+              {isLocked ? <CoWorkStatusPill label="Locked" tone="warning" /> : null}
               {security?.waitingRoom !== false ? (
                 <CoWorkStatusPill label="Waiting room" tone="brand" />
+              ) : null}
+              {security?.passcode || security?.requirePasscode ? (
+                <CoWorkStatusPill label="Passcode" tone="coral" />
               ) : null}
               {security?.muteOnJoin ? <CoWorkStatusPill label="Mute on join" tone="coral" /> : null}
               {security?.allowScreenShare === false ? (
@@ -129,7 +145,99 @@ export function MeetingInfoPanel({
                 <CoWorkStatusPill label="No recording" tone="warning" />
               ) : null}
             </XStack>
+            {isHost && onToggleLock ? (
+              <YStack
+                gap="$2"
+                padding="$3"
+                borderRadius={14}
+                backgroundColor="rgba(255,255,255,0.04)"
+                borderWidth={1}
+                borderColor={coworkUi.borderSoft}
+              >
+                <Text fontSize={14} fontWeight="700" color={coworkUi.text}>
+                  Lock meeting
+                </Text>
+                <Text fontSize={12} color={coworkUi.textMuted} lineHeight={17}>
+                  When locked, new participants cannot join until you unlock.
+                </Text>
+                <Button
+                  size="$2"
+                  borderRadius={999}
+                  tone={isLocked ? 'primary' : 'outline'}
+                  borderColor={isLocked ? coworkUi.brand : coworkUi.borderSoft}
+                  onPress={onToggleLock}
+                >
+                  {isLocked ? 'Unlock meeting' : 'Lock Meeting'}
+                </Button>
+              </YStack>
+            ) : null}
           </YStack>
+
+          {onMirrorLocalVideoChange ? (
+            <YStack gap="$2">
+              <CoWorkSectionLabel>Video</CoWorkSectionLabel>
+              <XStack
+                alignItems="center"
+                justifyContent="space-between"
+                gap="$3"
+                padding="$3"
+                borderRadius={14}
+                backgroundColor="rgba(255,255,255,0.04)"
+                borderWidth={1}
+                borderColor={coworkUi.borderSoft}
+              >
+                <YStack flex={1} gap={2} minWidth={0}>
+                  <Text fontSize={14} fontWeight="700" color={coworkUi.text}>
+                    Mirror my video
+                  </Text>
+                  <Text fontSize={12} color={coworkUi.textMuted} lineHeight={17}>
+                    Flip your self-view horizontally. Others still see you unmirrored.
+                  </Text>
+                </YStack>
+                <Switch
+                  checked={mirrorLocalVideo}
+                  onCheckedChange={onMirrorLocalVideoChange}
+                  aria-label="Mirror my video"
+                />
+              </XStack>
+            </YStack>
+          ) : null}
+
+          {isHost && onHostLeaveBehaviorChange ? (
+            <YStack gap="$2">
+              <CoWorkSectionLabel>When host leaves</CoWorkSectionLabel>
+              <YStack
+                gap="$2"
+                padding="$3"
+                borderRadius={14}
+                backgroundColor="rgba(255,255,255,0.04)"
+                borderWidth={1}
+                borderColor={coworkUi.borderSoft}
+              >
+                <Text fontSize={12} color={coworkUi.textMuted} lineHeight={17}>
+                  Choose what happens if you leave without ending the meeting.
+                </Text>
+                <XStack gap="$2" flexWrap="wrap">
+                  <Button
+                    size="$2"
+                    borderRadius={999}
+                    tone={hostLeaveBehavior === 'transfer_to_co_host' ? 'primary' : 'ghost'}
+                    onPress={() => onHostLeaveBehaviorChange('transfer_to_co_host')}
+                  >
+                    Transfer host
+                  </Button>
+                  <Button
+                    size="$2"
+                    borderRadius={999}
+                    tone={hostLeaveBehavior !== 'transfer_to_co_host' ? 'primary' : 'ghost'}
+                    onPress={() => onHostLeaveBehaviorChange('end')}
+                  >
+                    End meeting
+                  </Button>
+                </XStack>
+              </YStack>
+            </YStack>
+          ) : null}
 
           {invitees.length > 0 ? (
             <YStack gap="$2">
@@ -201,18 +309,16 @@ export function MeetingInfoPanel({
         >
           Share invite link
         </Button>
-        {meeting.scheduled_at || meeting.started_at ? (
-          <Button
-            tone="outline"
-            borderRadius={999}
-            borderColor={coworkUi.glassBorder}
-            color={coworkUi.text}
-            icon={<Icons.Calendar size={16} color={coworkUi.brand} />}
-            onPress={() => void addToCalendar()}
-          >
-            Add to calendar
-          </Button>
-        ) : null}
+        <Button
+          tone="outline"
+          borderRadius={999}
+          borderColor={coworkUi.glassBorder}
+          color={coworkUi.text}
+          icon={<Icons.Calendar size={16} color={coworkUi.brand} />}
+          onPress={() => void addToCalendar()}
+        >
+          Add to calendar
+        </Button>
         {isHost && onOpenRecordings ? (
           <Button
             tone="outline"
@@ -239,14 +345,7 @@ export function MeetingInfoPanel({
         ) : null}
       </YStack>
 
-      <ShareSheet
-        open={shareOpen}
-        onOpenChange={setShareOpen}
-        title="Share meeting"
-        copyLabel="Copy meeting link"
-        copyToastMessage="Meeting link copied to clipboard."
-        payload={buildMeetingSharePayload(meeting)}
-      />
+      <MeetingShareSheet open={shareOpen} onOpenChange={setShareOpen} meeting={meeting} />
     </CoWorkPanelShell>
   )
 }

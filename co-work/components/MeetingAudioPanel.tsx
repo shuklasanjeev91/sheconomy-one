@@ -39,8 +39,8 @@ export function MeetingAudioPanel({
   return (
     <CoWorkPanelShell fullWidth={fullWidth}>
       <MeetingPanelHeader
-        title="Audio"
-        subtitle="Microphone, speaker and connection quality"
+        title="Audio & devices"
+        subtitle="Microphone, speaker, camera and connection quality"
         icon={<Icons.SlidersHorizontal size={18} color={coworkUi.brandLight} />}
         onClose={onClose}
       />
@@ -201,6 +201,22 @@ export function MeetingAudioPanel({
               activeId={audio.activeOutputDeviceId}
               onSelect={audio.selectOutputDevice}
             />
+          ) : null}
+
+          {audio.supportsDeviceSelection && audio.videoDevices.length > 0 ? (
+            <AudioDeviceList
+              title="Camera device"
+              devices={audio.videoDevices}
+              activeId={audio.activeVideoDeviceId}
+              onSelect={audio.selectVideoDevice}
+            />
+          ) : null}
+
+          {audio.supportsDeviceSelection === false && Platform.OS === 'web' ? (
+            <Text fontSize={12} color={coworkUi.textMuted} lineHeight={17}>
+              Device selection is not supported in this browser. Use your system sound and camera
+              settings instead.
+            </Text>
           ) : null}
 
           <YStack gap="$2">

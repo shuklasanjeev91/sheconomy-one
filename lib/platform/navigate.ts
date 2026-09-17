@@ -46,42 +46,27 @@ function isNavigatorNotReadyError(error: unknown): boolean {
   return /navigate before mounting the Root Layout|Root Layout/i.test(message)
 }
 
-function fallbackWebAssign(target: string): boolean {
-  if (Platform.OS !== 'web' || typeof window === 'undefined') return false
-  const path = target.startsWith('http')
-    ? target
-    : `${window.location.origin}${target.startsWith('/') ? target : `/${target}`}`
-  // Last-resort recovery only when the SPA router is not mounted yet.
-  window.location.assign(path)
-  return true
-}
-
 function pushTarget(target: Href): void {
   const go = () => {
     // Intentionally identical on web, iOS, and Android: One/Expo `router.push`.
+    // Never falls back to window.location — that hard-reloads the SPA shell.
     try {
       const outcome = router.push(target)
       if (outcome && typeof (outcome as Promise<unknown>).then === 'function') {
         void (outcome as Promise<unknown>).catch((error: unknown) => {
           if (isNavigatorNotReadyError(error)) {
-            if (!fallbackWebAssign(String(target))) {
-              setTimeout(go, 50)
-            }
+            setTimeout(go, 50)
             return
           }
           console.warn('[navigateApp] navigation failed', target, error)
-          fallbackWebAssign(String(target))
         })
       }
     } catch (error) {
       if (isNavigatorNotReadyError(error)) {
-        if (!fallbackWebAssign(String(target))) {
-          setTimeout(go, 50)
-        }
+        setTimeout(go, 50)
         return
       }
       console.warn('[navigateApp] navigation failed', target, error)
-      fallbackWebAssign(String(target))
     }
   }
 
@@ -99,7 +84,7 @@ function pushTarget(target: Href): void {
  * Cross-platform contract:
  * - Web + native share this single entry point (do not branch on Platform for push).
  * - Never uses `router.replace`.
- * - Keeps the Vite / Expo SPA shell mounted (no hard reload for normal navigations).
+ * - Never uses `window.location` hard navigations (keeps the Vite SPA shell mounted).
  * - `?human=verify` opens Human verification immediately (even when already on `/`).
  *
  * Prefer `navigateApp` / `pushApp` / `AppLink` / `usePushRoute` over calling

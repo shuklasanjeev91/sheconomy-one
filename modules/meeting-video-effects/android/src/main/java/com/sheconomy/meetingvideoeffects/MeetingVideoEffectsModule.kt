@@ -1,6 +1,7 @@
 package com.sheconomy.meetingvideoeffects
 
 import android.os.Build
+import android.os.PowerManager
 import android.app.ActivityManager
 import android.content.Context
 import com.oney.WebRTCModule.videoEffects.ProcessorProvider
@@ -38,7 +39,17 @@ class MeetingVideoEffectsModule : Module() {
         ?.getSystemService(Context.ACTIVITY_SERVICE)
         ?.let { it as? ActivityManager }
         ?.isLowRamDevice ?: true
-      Build.VERSION.SDK_INT >= Build.VERSION_CODES.N && !lowRam
+      val thermalConstrained =
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+          context
+            ?.getSystemService(Context.POWER_SERVICE)
+            ?.let { it as? PowerManager }
+            ?.currentThermalStatus
+            ?.let { it >= PowerManager.THERMAL_STATUS_SEVERE } ?: true
+        } else {
+          false
+        }
+      Build.VERSION.SDK_INT >= Build.VERSION_CODES.N && !lowRam && !thermalConstrained
     }
   }
 }

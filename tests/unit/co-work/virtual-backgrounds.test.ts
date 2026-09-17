@@ -13,6 +13,8 @@ import {
   loadVirtualBackgroundPreference,
   normalizeVirtualBackground,
   saveVirtualBackgroundPreference,
+  virtualBackgroundUnavailableMessage,
+  webBackgroundResourceWarning,
 } from '~/co-work/lib/virtual-backgrounds'
 
 describe('virtual background preferences', () => {
@@ -55,5 +57,20 @@ describe('virtual background preferences', () => {
     const stored = JSON.parse(storage.writePersistentValue.mock.calls[0][1])
     expect(stored.storagePath).toBe('user/custom-1.jpg')
     expect(stored.imageUrl).toBeUndefined()
+  })
+
+  it('rejects web effects on resource-constrained devices', () => {
+    expect(webBackgroundResourceWarning({ deviceMemory: 2, hardwareConcurrency: 8 })).toContain(
+      'low-memory',
+    )
+    expect(webBackgroundResourceWarning({ deviceMemory: 8, hardwareConcurrency: 2 })).toContain(
+      'processing capacity',
+    )
+    expect(webBackgroundResourceWarning({ deviceMemory: 8, hardwareConcurrency: 8 })).toBeNull()
+  })
+
+  it('keeps unsupported-device messaging non-blocking', () => {
+    expect(virtualBackgroundUnavailableMessage('web')).toContain('camera stays unfiltered')
+    expect(virtualBackgroundUnavailableMessage('native')).toContain('camera stays unfiltered')
   })
 })

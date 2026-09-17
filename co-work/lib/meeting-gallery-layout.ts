@@ -8,24 +8,19 @@ export type GalleryLayoutOptions = {
   width: number
   /** Usable stage height in px (after chrome / padding). */
   height: number
+  /** Prefer wide/landscape packing when the orientation policy says so. */
+  preferWide?: boolean
 }
 
 /**
- * Responsive gallery grid — Google Meet / Zoom / WhatsApp-call style.
+ * Responsive gallery grid — Zoom / Meet style equal tiles.
  *
- * Uses the real stage aspect so portrait tablets (e.g. iPad) never collapse
- * 3 participants into three tall skinny columns.
- *
- * Typical results on portrait stage:
- * - 1: full stage
- * - 2: side-by-side on tablet+ / stacked on narrow phones
- *   (1:1 LiveKit calls use WhatsApp-style PiP instead of this grid)
- * - 3: balanced 2×2-style gallery (one centered final tile)
- * - 4: 2×2
- * - 5–6: 2×3
- * - 7–9: 3×3 when wide enough, else 2×N
- *
- * Landscape / wide stage may use 3 across for 3 people and 3–4 columns for larger groups.
+ * Examples (portrait-friendly defaults):
+ * - 2 → two large tiles (side-by-side when wide enough, else stacked)
+ * - 4 → 2×2
+ * - 6 → 3×2 or 2×3
+ * - 9 → 3×3 when width allows
+ * - more → denser grid; UI paginates beyond pageSize
  */
 export function meetingGalleryLayout(
   trackCount: number,
@@ -38,33 +33,40 @@ export function meetingGalleryLayout(
   const height = Math.max(options.height, 1)
   const aspect = width / height
   const narrowPortrait = aspect < 0.78 // phone portrait stages
+  const phoneLandscape =
+    aspect >= 1.25 &&
+    width >= 500 &&
+    width < 900 &&
+    (options.preferWide || height < 480 || aspect >= 1.6)
   const wideLandscape = aspect >= 1.45 && width >= 900
 
   if (count === 2) {
-    // Phones: stacked like WhatsApp. Tablets / landscape: Meet-style equal tiles.
-    return narrowPortrait ? { columns: 1, rows: 2 } : { columns: 2, rows: 1 }
+    // Two large equal tiles — side-by-side except on very narrow portrait phones.
+    return narrowPortrait && !phoneLandscape ? { columns: 1, rows: 2 } : { columns: 2, rows: 1 }
   }
 
   if (count === 3) {
-    // Zoom-style gallery: avoid three shallow full-width strips on phones,
-    // which crop portrait cameras to eyes/foreheads. Wide stages fit one row.
-    if (wideLandscape) return { columns: 3, rows: 1 }
+    if (wideLandscape || phoneLandscape) return { columns: 3, rows: 1 }
     return { columns: 2, rows: 2 }
   }
 
-  if (count === 4) return { columns: 2, rows: 2 }
+  if (count === 4) {
+    if (phoneLandscape && width >= 640) return { columns: 4, rows: 1 }
+    return { columns: 2, rows: 2 }
+  }
 
   if (count <= 6) {
-    if (width >= 700 && aspect >= 0.95) return { columns: 3, rows: 2 }
+    if (phoneLandscape || (width >= 700 && aspect >= 0.95)) return { columns: 3, rows: 2 }
     return { columns: 2, rows: 3 }
   }
 
   if (count <= 9) {
-    if (width >= 800) return { columns: 3, rows: 3 }
+    // Prefer a true 3×3 gallery whenever the stage can hold it.
+    if (width >= 560 || phoneLandscape || options.preferWide) return { columns: 3, rows: 3 }
     return { columns: 2, rows: Math.ceil(count / 2) }
   }
 
-  const columns = width >= 1100 ? 4 : width >= 800 ? 3 : 2
+  const columns = width >= 1100 ? 4 : width >= 720 || phoneLandscape ? 3 : 2
   return { columns, rows: Math.ceil(count / columns) }
 }
 
@@ -76,4 +78,19 @@ export function chunkGalleryRows<T>(items: T[], columns: number): T[][] {
     rows.push(items.slice(i, i + cols))
   }
   return rows
+}
+
+export function paginateMeetingGallery<T>(
+  items: T[],
+  page: number,
+  pageSize: number,
+): { items: T[]; page: number; pageCount: number } {
+  const size = Math.max(1, Math.floor(pageSize))
+  const pageCount = Math.max(1, Math.ceil(items.length / size))
+  const safePage = Math.min(Math.max(0, Math.floor(page)), pageCount - 1)
+  return {
+    items: items.slice(safePage * size, safePage * size + size),
+    page: safePage,
+    pageCount,
+  }
 }

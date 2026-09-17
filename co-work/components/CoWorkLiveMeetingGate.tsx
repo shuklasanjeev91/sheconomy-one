@@ -35,6 +35,7 @@ export function CoWorkLiveMeetingGate({ children }: { children: ReactNode }) {
         <MeetingLiveScreen
           code={session.code}
           initialMeeting={session.meeting}
+          autoJoin={session.autoJoin}
           onExit={closeInstantMeetingSession}
         />
       </AppErrorBoundary>

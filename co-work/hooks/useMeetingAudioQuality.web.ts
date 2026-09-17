@@ -13,15 +13,17 @@ import {
   type MeetingAudioQuality,
   type MeetingMicrophonePermission,
 } from '~/co-work/lib/meeting-audio-quality'
+import {
+  detectMeetingWebCapabilities,
+  mapWebMediaPermissionError,
+  meetingWebUnsupportedMessage,
+} from '~/co-work/lib/meeting-web'
 
-function messageForMediaError(error: Error): string {
-  if (/NotAllowed|Permission|denied/i.test(error.name + error.message)) {
-    return 'Microphone access is blocked. Allow microphone access in your browser settings and try again.'
-  }
-  if (/NotFound|DevicesNotFound/i.test(error.name + error.message)) {
-    return 'No microphone was found. Connect a microphone and try again.'
-  }
-  return error.message || 'The selected audio device is unavailable.'
+function messageForMediaError(
+  error: Error,
+  kind: 'camera' | 'microphone' = 'microphone',
+): string {
+  return mapWebMediaPermissionError(kind, error)
 }
 
 export function useMeetingAudioQuality(
@@ -41,11 +43,15 @@ export function useMeetingAudioQuality(
   const [error, setError] = useState<string | null>(null)
   const [inputDevices, setInputDevices] = useState<MeetingAudioDevice[]>([])
   const [outputDevices, setOutputDevices] = useState<MeetingAudioDevice[]>([])
+  const [videoDevices, setVideoDevices] = useState<MeetingAudioDevice[]>([])
   const [activeInputDeviceId, setActiveInputDeviceId] = useState<string | null>(
     room.getActiveDevice('audioinput') ?? null,
   )
   const [activeOutputDeviceId, setActiveOutputDeviceId] = useState<string | null>(
     room.getActiveDevice('audiooutput') ?? null,
+  )
+  const [activeVideoDeviceId, setActiveVideoDeviceId] = useState<string | null>(
+    room.getActiveDevice('videoinput') ?? null,
   )
   const microphoneTestTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
@@ -69,6 +75,15 @@ export function useMeetingAudioQuality(
             id: device.deviceId,
             label: device.label || `Speaker ${index + 1}`,
             kind: 'audiooutput' as const,
+          })),
+      )
+      setVideoDevices(
+        devices
+          .filter((device) => device.kind === 'videoinput')
+          .map((device, index) => ({
+            id: device.deviceId,
+            label: device.label || `Camera ${index + 1}`,
+            kind: 'videoinput' as const,
           })),
       )
     } catch (cause) {
@@ -117,6 +132,7 @@ export function useMeetingAudioQuality(
     const onActiveDevice = (kind: MediaDeviceKind, deviceId: string) => {
       if (kind === 'audioinput') setActiveInputDeviceId(deviceId)
       if (kind === 'audiooutput') setActiveOutputDeviceId(deviceId)
+      if (kind === 'videoinput') setActiveVideoDeviceId(deviceId)
     }
     const onMediaError = (cause: Error) => {
       setError(messageForMediaError(cause))
@@ -235,9 +251,47 @@ export function useMeetingAudioQuality(
     [room],
   )
 
+  const selectVideoDevice = useCallback(
+    async (deviceId: string) => {
+      try {
+        setError(null)
+        await room.switchActiveDevice('videoinput', deviceId)
+        setActiveVideoDeviceId(deviceId)
+      } catch (cause) {
+        setError(
+          cause instanceof Error
+            ? messageForMediaError(cause, 'camera')
+            : meetingWebUnsupportedMessage('camera'),
+        )
+      }
+    },
+    [room],
+  )
+
   const retryConnection = useCallback(async () => {
     setError(null)
-    if (!room.canPlaybackAudio) await room.startAudio()
+    try {
+      if (!room.canPlaybackAudio) await room.startAudio()
+      // Nudge LiveKit to recover media after an ICE/network blip.
+      if (
+        room.state === ConnectionState.Disconnected ||
+        room.state === ConnectionState.Reconnecting ||
+        room.state === ConnectionState.SignalReconnecting
+      ) {
+        // LiveKit reconnects itself; startAudio + republish keeps UX responsive.
+        const micOn = room.localParticipant.isMicrophoneEnabled
+        if (micOn) {
+          await room.localParticipant.setMicrophoneEnabled(false)
+          await room.localParticipant.setMicrophoneEnabled(true)
+        }
+      }
+    } catch (cause) {
+      setError(
+        cause instanceof Error
+          ? cause.message
+          : 'Could not restore audio connection. Check your network and try again.',
+      )
+    }
   }, [room])
 
   return {
@@ -248,18 +302,24 @@ export function useMeetingAudioQuality(
     microphoneTesting,
     speakerTesting,
     error,
-    supportsDeviceSelection: !!navigator.mediaDevices?.enumerateDevices,
+    supportsDeviceSelection:
+      !!navigator.mediaDevices?.enumerateDevices && detectMeetingWebCapabilities().enumerateDevices,
     inputDevices,
     outputDevices,
+    videoDevices,
     activeInputDeviceId,
     activeOutputDeviceId,
+    activeVideoDeviceId,
     testMicrophone,
     testSpeaker,
     selectInputDevice,
     selectOutputDevice,
+    selectVideoDevice,
     reportError: (cause) =>
       setError(
-        cause instanceof Error ? messageForMediaError(cause) : 'Could not change microphone state.',
+        cause instanceof Error
+          ? cause.message || messageForMediaError(cause)
+          : 'Could not change media devices.',
       ),
     clearError: () => setError(null),
     retryConnection,

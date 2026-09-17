@@ -15,6 +15,7 @@ import {
   isChatConversationPath,
   isChatPath,
   isCommercePath,
+  isCommunityPath,
   isCreateShopPath,
   isVendorPath,
 } from '~/lib/routes'
@@ -29,7 +30,9 @@ import { ImageCropHost } from '~/components/media/ImageCropHost'
 import { InstantMeetingHost } from '~/co-work/components/InstantMeetingHost'
 import { ProfileOnboardingNudge } from '~/components/auth/ProfileOnboardingNudge'
 import { GenderVerificationHost } from '~/components/gender-verification/GenderVerificationHost'
+import { GlobalSessionHost } from '~/components/session/GlobalSessionHost'
 import { useInstantMeetingSession } from '~/co-work/lib/instant-meeting-session'
+import { useGlobalSession, shouldUseChromelessShell } from '~/lib/session/global-session'
 
 import { AppDesktopHeader } from '~/components/navigation/app/AppDesktopHeader'
 import { AppMobileBottomTabs } from '~/components/navigation/app/AppMobileBottomTabs'
@@ -43,23 +46,22 @@ type AppShellProps = {
 function useChromelessRoute() {
   const pathname = usePathname()
   const instantMeeting = useInstantMeetingSession()
+  const globalSession = useGlobalSession()
   // Full-screen meeting lobby + live room — no app header/tabs (Zoom-style).
-  // Instant meetings stay on Co-Work (no /live hop) and use InstantMeetingHost.
+  // Minimized / PiP sessions keep normal chrome so other tabs stay usable.
   const embedPayuReturn =
     Platform.OS === 'web' &&
     typeof window !== 'undefined' &&
     pathname.startsWith('/orders/payu-return') &&
     new URLSearchParams(window.location.search).get('embed') === '1'
 
-  return (
-    !!instantMeeting ||
-    pathname.startsWith('/ui-kit') ||
-    pathname.startsWith('/payu-embed-return') ||
-    embedPayuReturn ||
-    pathname.startsWith('/co-work/meeting/') ||
-    pathname === '/co-work/meeting' ||
-    pathname.startsWith('/chat/call/')
-  )
+  if (embedPayuReturn) return true
+
+  return shouldUseChromelessShell({
+    pathname,
+    instantMeetingOpen: !!instantMeeting,
+    globalPresentation: globalSession?.presentation ?? null,
+  })
 }
 
 
@@ -117,9 +119,10 @@ export function AppShell({ children }: AppShellProps) {
     !isAdminPath(pathname) &&
     pathname !== '/checkout'
 
-  // Chat is a true two-pane app — lock the shell so panes get a definite height.
-  // Community / class / co-work / commerce use PageScroll (document on desktop web).
-  const lockViewport = isChatPath(pathname)
+  // Chat + Community are pane apps: lock the shell so side rails stay sticky
+  // while only the center column scrolls (Home, Network, Jobs, …).
+  // Class / co-work / commerce keep PageScroll (document on desktop web).
+  const lockViewport = isChatPath(pathname) || isCommunityPath(pathname)
   /** Desktop web document pages: window scroll; main column flexes on short pages. */
   const documentDesktop = Platform.OS === 'web' && isDesktopWeb && !lockViewport
   const documentDesktopFlex =
@@ -128,7 +131,6 @@ export function AppShell({ children }: AppShellProps) {
     lockViewport || Platform.OS !== 'web' || !isDesktopWeb
   const clipShellOverflow =
     lockViewport || Platform.OS !== 'web' || !isDesktopWeb
-
   // Open conversations keep the app header (shared back); hide bottom tabs only.
   const chatConversationMobile = !isDesktop && isChatConversationPath(pathname)
   // Manage Shop uses its own top bar + Etsy-style bottom tabs — hide marketplace header.
@@ -153,6 +155,7 @@ export function AppShell({ children }: AppShellProps) {
             {children}
             <IncomingCallHost />
             <InstantMeetingHost />
+            <GlobalSessionHost />
           </AppAccessGate>
           <GenderVerificationHost />
         </ScreenFill>
@@ -204,6 +207,7 @@ export function AppShell({ children }: AppShellProps) {
             <ChatActionsHost />
             <IncomingCallHost />
             <InstantMeetingHost />
+            <GlobalSessionHost />
           </ScreenFill>
         </AppBarScrollProvider>
       </AppAccessGate>

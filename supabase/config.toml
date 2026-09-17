@@ -499,6 +499,26 @@ verify_jwt = false
 [functions.rest-gateway]
 verify_jwt = true
 
+# Provider redirect is authenticated by one-time, expiring, PKCE-bound state.
+[functions.calendar-oauth-callback]
+verify_jwt = false
+
+[functions.calendar-oauth-start]
+verify_jwt = true
+
+[functions.calendar-oauth-refresh]
+verify_jwt = true
+
+[functions.calendar-oauth-revoke]
+verify_jwt = true
+
+[functions.calendar-event-upsert]
+verify_jwt = true
+
+# Meeting invite emails + in-app notifications (requires signed-in host/co-host).
+[functions.meeting-invite]
+verify_jwt = true
+
 # Gemini visual try-on / view-in-space (JWT required — default).
 [functions.visual-commerce]
 verify_jwt = true

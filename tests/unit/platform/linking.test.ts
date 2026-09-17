@@ -21,6 +21,15 @@ describe('pathFromIncomingUrl', () => {
     )
   })
 
+  it('normalizes the public cowork meeting alias', () => {
+    expect(pathFromIncomingUrl('sheconomy://cowork/meeting/ABC-123')).toBe(
+      '/co-work/meeting/ABC-123',
+    )
+    expect(pathFromIncomingUrl('https://sheconomy.in/cowork/meeting/ABC-123')).toBe(
+      '/co-work/meeting/ABC-123',
+    )
+  })
+
   it('rejects unrelated hosts', () => {
     expect(pathFromIncomingUrl('https://example.com/listing/x')).toBeNull()
     expect(pathFromIncomingUrl('')).toBeNull()

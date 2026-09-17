@@ -1,10 +1,15 @@
 import { useEffect, useState } from 'react'
 
-import { Avatar, Button, Field, Icons, Input, ScrollView, Text, XStack, YStack } from '~/components/ui'
+import { Avatar, Button, Checkbox, Field, Icons, Input, ScrollView, Text, XStack, YStack } from '~/components/ui'
 import { MeetingBackgroundPreview } from '~/co-work/components/MeetingBackgroundPreview'
 import { DevicePrepCard } from '~/co-work/components/DevicePrepCard'
 import { coworkGlassStyle, useCoWorkTheme } from '~/co-work/lib/theme'
-import { normalizeMeetingDisplayName, safeMeetingDisplayName } from '~/co-work/lib/meeting-display-name'
+import {
+  loadRememberedMeetingDisplayName,
+  normalizeMeetingDisplayName,
+  safeMeetingDisplayName,
+  saveRememberedMeetingDisplayName,
+} from '~/co-work/lib/meeting-display-name'
 
 type MeetingJoinScreenProps = {
   meetingTitle: string
@@ -12,7 +17,11 @@ type MeetingJoinScreenProps = {
   profileName: string
   email: string | null
   avatarUrl?: string | null
-  onJoin: (displayName: string) => Promise<void>
+  userId?: string | null
+  requirePasscode?: boolean
+  isLocked?: boolean
+  lockedMessage?: string
+  onJoin: (displayName: string, passcode?: string) => Promise<void>
   onBack: () => void
 }
 
@@ -22,6 +31,10 @@ export function MeetingJoinScreen({
   profileName,
   email,
   avatarUrl,
+  userId,
+  requirePasscode = false,
+  isLocked = false,
+  lockedMessage,
   onJoin,
   onBack,
 }: MeetingJoinScreenProps) {
@@ -29,24 +42,48 @@ export function MeetingJoinScreen({
   const safeProfileName = safeMeetingDisplayName(profileName)
   const [displayName, setDisplayName] = useState(safeProfileName)
   const [editing, setEditing] = useState(false)
+  const [rememberName, setRememberName] = useState(false)
+  const [passcode, setPasscode] = useState('')
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
-    if (!editing) setDisplayName(safeProfileName)
-  }, [editing, safeProfileName])
+    if (!editing && !rememberName) setDisplayName(safeProfileName)
+  }, [editing, rememberName, safeProfileName])
+
+  useEffect(() => {
+    let cancelled = false
+    void loadRememberedMeetingDisplayName().then((remembered) => {
+      if (!cancelled && remembered) {
+        setDisplayName(remembered)
+        setRememberName(true)
+      }
+    })
+    return () => {
+      cancelled = true
+    }
+  }, [])
 
   const join = async () => {
+    if (isLocked) {
+      setError(lockedMessage || 'This meeting is locked.')
+      return
+    }
     const confirmedName = normalizeMeetingDisplayName(displayName)
     if (!confirmedName) {
       setError('Enter a valid name. Internal account IDs cannot be used as display names.')
       setEditing(true)
       return
     }
+    if (requirePasscode && !passcode.trim()) {
+      setError('Enter the meeting passcode to join.')
+      return
+    }
     setBusy(true)
     setError(null)
     try {
-      await onJoin(confirmedName.slice(0, 80))
+      await saveRememberedMeetingDisplayName(rememberName ? confirmedName : null)
+      await onJoin(confirmedName.slice(0, 80), requirePasscode ? passcode.trim() : undefined)
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : 'Could not join the meeting.')
     } finally {
@@ -130,10 +167,57 @@ export function MeetingJoinScreen({
                 Edit display name
               </Button>
             )}
+            <XStack alignItems="center" gap="$3">
+              <Checkbox
+                checked={rememberName}
+                onCheckedChange={(checked) => setRememberName(checked === true)}
+                aria-label="Remember this display name for future meetings"
+              />
+              <Text
+                color={coworkUi.textSecondary}
+                fontSize={13}
+                onPress={() => setRememberName((value) => !value)}
+              >
+                Remember for future meetings
+              </Text>
+            </XStack>
           </YStack>
 
-          <MeetingBackgroundPreview />
+          <MeetingBackgroundPreview userId={userId} />
           <DevicePrepCard />
+
+          {isLocked ? (
+            <YStack
+              padding="$4"
+              borderRadius={14}
+              borderWidth={1}
+              borderColor="rgba(244,63,104,0.35)"
+              backgroundColor={coworkUi.dangerMuted}
+              gap="$2"
+            >
+              <Text fontWeight="800" color={coworkUi.danger}>
+                Meeting locked
+              </Text>
+              <Text color={coworkUi.textSecondary} fontSize={13} lineHeight={18}>
+                {lockedMessage || 'New participants cannot join until the host unlocks the meeting.'}
+              </Text>
+            </YStack>
+          ) : null}
+
+          {requirePasscode && !isLocked ? (
+            <Field label="Passcode">
+              <Input
+                value={passcode}
+                onChangeText={setPasscode}
+                secureTextEntry
+                placeholder="Enter meeting passcode"
+                backgroundColor="rgba(255,255,255,0.05)"
+                borderColor={coworkUi.borderSoft}
+                color={coworkUi.text}
+                borderRadius={14}
+              />
+            </Field>
+          ) : null}
 
           {error ? (
             <Text color={coworkUi.danger} textAlign="center">
@@ -146,11 +230,12 @@ export function MeetingJoinScreen({
               tone="primary"
               size="$4"
               borderRadius={999}
-              disabled={busy}
+              disabled={busy || isLocked}
+              opacity={busy || isLocked ? 0.55 : 1}
               icon={<Icons.Video size={18} color="white" />}
               onPress={() => void join()}
             >
-              {busy ? 'Joining…' : 'Join Meeting'}
+              {busy ? 'Joining…' : isLocked ? 'Meeting locked' : 'Join Meeting'}
             </Button>
             <Button tone="outline" size="$4" borderRadius={999} disabled={busy} onPress={onBack}>
               Back

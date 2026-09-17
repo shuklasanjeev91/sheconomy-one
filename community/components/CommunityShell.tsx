@@ -1,5 +1,4 @@
 import { usePathname } from 'one'
-import { Platform } from 'react-native'
 
 import { CommunityLeftSidebar } from '~/community/components/CommunityLeftSidebar'
 import { CommunityRightSidebar } from '~/community/components/CommunityRightSidebar'
@@ -8,6 +7,7 @@ import { COMMUNITY_LAYOUT } from '~/community/lib/layout'
 import { FullWidthLayout, PageColumns, PageSection } from '~/components/layout'
 import { ScrollView, YStack } from '~/components/ui'
 import { useAppLayout } from '~/hooks/useAppLayout'
+import { usePullToRefresh } from '~/hooks/usePullToRefresh'
 import { APP_LAYOUT } from '~/lib/layout/constants'
 import { LAYOUT_STRETCH, scrollHostTransformReset } from '~/lib/layout/styles'
 import { isCommunityPath } from '~/lib/routes'
@@ -29,9 +29,10 @@ type CommunityShellProps = {
 
 /**
  * Full-width social layout.
- * Desktop web: viewport-locked columns — left/right rails stay put while the
- * center feed scrolls (LinkedIn-style sticky sidebars).
- * Mobile/native: page scroll via FullWidthLayout / PageScroll.
+ * With side rails (desktop web + large tablets): left/right stay pinned while
+ * the center column scrolls — LinkedIn-style sticky sidebars on every
+ * community tab (Home, Network, Jobs, …), not only the feed.
+ * Mobile: page scroll via FullWidthLayout / PageScroll.
  */
 export function CommunityShell({
   children,
@@ -41,30 +42,37 @@ export function CommunityShell({
 }: CommunityShellProps) {
   const communityUi = useCommunityUi()
   const pathname = usePathname()
-  const { hasSideRails, hasDualSideRails, isDesktopWeb, gutter } = useAppLayout()
+  const { hasSideRails, hasDualSideRails, isDesktopWeb, gutter, mobileTabBarOffset } =
+    useAppLayout()
   const showSidebars = isCommunityPath(pathname)
-  // When the feed owns scrolling there is no page scroll to carry the rails,
-  // so they fill the column height and scroll themselves.
-  const railPin = scroll ? 'document' : 'viewport'
-  const stretchColumns = !scroll && hasSideRails
+  const { refreshControl, webPullHandlers } = usePullToRefresh({
+    onRefresh: scroll ? onRefresh : undefined,
+    refreshing,
+  })
 
-  // Desktop web sticky rails: always use center ScrollView for document chrome.
-  // When scroll=false (FlashList feed), skip the outer page scroller on mobile/native.
-  if (Platform.OS === 'web' && isDesktopWeb && showSidebars) {
-    const shellHeight = `calc(100dvh - ${APP_LAYOUT.desktopHeaderHeight}px)` as const
+  // Sticky rails whenever the layout shows side columns — every community tab.
+  if (hasSideRails && showSidebars) {
+    const shellHeight = isDesktopWeb
+      ? (`calc(100dvh - ${APP_LAYOUT.desktopHeaderHeight}px)` as const)
+      : undefined
+    const bottomInset = isDesktopWeb ? 0 : mobileTabBarOffset
 
     return (
       <YStack
+        flex={1}
         width="100%"
         maxWidth="100%"
         alignSelf="stretch"
+        minHeight={0}
         backgroundColor={communityUi.pageBg}
         style={
-          {
-            height: shellHeight,
-            maxHeight: shellHeight,
-            overflow: 'hidden',
-          } as const
+          shellHeight
+            ? ({
+                height: shellHeight,
+                maxHeight: shellHeight,
+                overflow: 'hidden',
+              } as const)
+            : ({ flex: 1, minHeight: 0, overflow: 'hidden' } as const)
         }
       >
         <YStack
@@ -73,6 +81,7 @@ export function CommunityShell({
           width="100%"
           paddingHorizontal={gutter}
           paddingVertical="$3"
+          paddingBottom={bottomInset > 0 ? bottomInset + 12 : undefined}
         >
           <PageColumns
             gap={COMMUNITY_LAYOUT.columnGap}
@@ -89,6 +98,8 @@ export function CommunityShell({
                 minWidth={0}
                 minHeight={0}
                 showsVerticalScrollIndicator
+                refreshControl={refreshControl}
+                {...(webPullHandlers as object)}
                 style={
                   {
                     flex: 1,
@@ -107,7 +118,13 @@ export function CommunityShell({
                   paddingBottom: 24,
                 }}
               >
-                <YStack flex={1} minWidth={0} gap="$3" backgroundColor={communityUi.pageBg} {...LAYOUT_STRETCH}>
+                <YStack
+                  flex={1}
+                  minWidth={0}
+                  gap="$3"
+                  backgroundColor={communityUi.pageBg}
+                  {...LAYOUT_STRETCH}
+                >
                   {children}
                 </YStack>
               </ScrollView>
@@ -141,20 +158,16 @@ export function CommunityShell({
       flex={1}
     >
       <PageSection paddingVertical="$3" flex={scroll ? undefined : 1} minHeight={scroll ? undefined : 0}>
-        <PageColumns
-          gap={COMMUNITY_LAYOUT.columnGap}
-          flex={scroll ? undefined : 1}
+        <YStack
+          flex={1}
+          minWidth={0}
           minHeight={scroll ? undefined : 0}
-          alignItems={stretchColumns ? 'stretch' : undefined}
+          gap="$3"
+          backgroundColor={communityUi.pageBg}
+          {...LAYOUT_STRETCH}
         >
-          {showSidebars ? <CommunityLeftSidebar pin={railPin} /> : null}
-
-          <YStack flex={1} minWidth={0} minHeight={scroll ? undefined : 0} gap="$3" backgroundColor={communityUi.pageBg} {...LAYOUT_STRETCH}>
-            {children}
-          </YStack>
-
-          {showSidebars && hasDualSideRails ? <CommunityRightSidebar pin={railPin} /> : null}
-        </PageColumns>
+          {children}
+        </YStack>
       </PageSection>
     </FullWidthLayout>
   )

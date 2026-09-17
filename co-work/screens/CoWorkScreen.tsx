@@ -1,5 +1,4 @@
 import { useRouter } from 'one'
-import { Platform } from 'react-native'
 import { useState } from 'react'
 
 import { AppLink } from '~/components/navigation/AppLink'
@@ -12,14 +11,13 @@ import {
   recordMeetingCode,
   useRecentMeetingCodes,
 } from '~/co-work/lib/recent-meeting-codes'
-import { ensureMeetingMediaPermissions } from '~/co-work/lib/meeting-media-permissions'
+import { ensureMeetingMobilePermissions } from '~/co-work/lib/meeting-media-permissions'
 import { openInstantMeetingSession } from '~/co-work/lib/instant-meeting-session'
 import { Button, Icons, Input, Spinner, Text, XStack, YStack, useAppToast } from '~/components/ui'
 import { CoWorkBrandChip, CoWorkFeatureCard, CoWorkIconBadge } from '~/co-work/components/CoWorkUi'
 import { createMeeting } from '~/co-work/lib/meetings'
 import { coworkGlassStyle, useCoWorkTheme } from '~/co-work/lib/theme'
 import { controlGradientStyle, coworkBoxShadow, pageGradientStyle } from '~/lib/platform/crossStyles'
-import { navigateApp } from '~/lib/platform/navigate'
 import { coWorkRoutes } from '~/lib/routes'
 import { useProfile } from '~/hooks/useProfile'
 import { useAppLayout } from '~/hooks/useAppLayout'
@@ -67,8 +65,8 @@ function buildFeatures(brandLight: string) {
     },
     {
       icon: <Icons.MessageSquare size={20} color={brandLight} />,
-      title: 'Live chat',
-      description: 'Message everyone in the room without interrupting.',
+      title: 'Main + meeting chat',
+      description: 'Persistent Co-Work Main Chat outside rooms; Meeting Chat stays in the live call.',
     },
     {
       icon: <Icons.Shield size={20} color={brandLight} />,
@@ -98,9 +96,9 @@ export function CoWorkScreen() {
     try {
       // Permission sheets must come before navigation — LiveKit join without
       // camera/mic access blanks or freezes the chromeless meeting route on iPad.
-      const perms = await ensureMeetingMediaPermissions()
+      const perms = await ensureMeetingMobilePermissions({ requestNotifications: true })
       if (!perms.ok) {
-        toast.show('Camera & microphone required', {
+        toast.show('Microphone required', {
           tone: 'error',
           message: perms.message,
         })
@@ -117,16 +115,13 @@ export function CoWorkScreen() {
         throw new Error('Meeting was created without a join code. Please try again.')
       }
       recordMeetingCode(meeting.meeting_code)
-      if (Platform.OS === 'web') {
-        // Web: dedicated live route is fine (no Hermes Suspense blank).
-        navigateApp(coWorkRoutes.meetingLive(meeting.meeting_code))
-      } else {
-        // Native Release: stay on Co-Work — InstantMeetingHost mounts LiveKit in-place.
-        openInstantMeetingSession({
-          code: meeting.meeting_code,
-          meeting,
-        })
-      }
+      // Stay on Co-Work — InstantMeetingHost mounts LiveKit in-place (web + native).
+      // Avoids /live route hops that can trigger Vite dep-optimizer full reloads.
+      openInstantMeetingSession({
+        code: meeting.meeting_code,
+        meeting,
+        autoJoin: true,
+      })
       setLaunchOverlay(false)
     } catch (createError) {
       setLaunchOverlay(false)
@@ -241,6 +236,17 @@ export function CoWorkScreen() {
               icon={<Icons.Video size={18} color={coworkUi.text} />}
             >
               My meetings
+            </Button>
+          </AppLink>
+          <AppLink href={coWorkRoutes.chat} asChild>
+            <Button
+              tone="outline"
+              size="$4"
+              borderRadius={999}
+              borderColor={coworkUi.glassBorder}
+              icon={<Icons.MessageSquare size={18} color={coworkUi.text} />}
+            >
+              Co-Work Main Chat
             </Button>
           </AppLink>
         </XStack>

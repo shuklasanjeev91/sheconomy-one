@@ -7176,6 +7176,90 @@ export type Database = {
           },
         ]
       }
+      meeting_control_events: {
+        Row: {
+          action: string
+          actor_id: string
+          created_at: string
+          expires_at: string
+          id: string
+          meeting_id: string
+          payload: Json
+          target_user_id: string | null
+        }
+        Insert: {
+          action: string
+          actor_id: string
+          created_at?: string
+          expires_at?: string
+          id?: string
+          meeting_id: string
+          payload?: Json
+          target_user_id?: string | null
+        }
+        Update: {
+          action?: string
+          actor_id?: string
+          created_at?: string
+          expires_at?: string
+          id?: string
+          meeting_id?: string
+          payload?: Json
+          target_user_id?: string | null
+        }
+        Relationships: []
+      }
+      meeting_moderation_settings: {
+        Row: {
+          host_leave_behavior: string
+          is_locked: boolean
+          meeting_id: string
+          updated_at: string
+          updated_by: string | null
+        }
+        Insert: {
+          host_leave_behavior?: string
+          is_locked?: boolean
+          meeting_id: string
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Update: {
+          host_leave_behavior?: string
+          is_locked?: boolean
+          meeting_id?: string
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Relationships: []
+      }
+      meeting_roles: {
+        Row: {
+          assigned_at: string
+          assigned_by: string | null
+          meeting_id: string
+          role: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          assigned_at?: string
+          assigned_by?: string | null
+          meeting_id: string
+          role: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          assigned_at?: string
+          assigned_by?: string | null
+          meeting_id?: string
+          role?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       meeting_participants: {
         Row: {
           created_at: string | null
@@ -7421,6 +7505,7 @@ export type Database = {
           repeat: string | null
           room_id: string | null
           scheduled_at: string | null
+          scheduled_end_at: string | null
           security_settings: Json | null
           started_at: string | null
           status: string
@@ -7442,6 +7527,7 @@ export type Database = {
           repeat?: string | null
           room_id?: string | null
           scheduled_at?: string | null
+          scheduled_end_at?: string | null
           security_settings?: Json | null
           started_at?: string | null
           status?: string
@@ -7463,6 +7549,7 @@ export type Database = {
           repeat?: string | null
           room_id?: string | null
           scheduled_at?: string | null
+          scheduled_end_at?: string | null
           security_settings?: Json | null
           started_at?: string | null
           status?: string
@@ -17602,6 +17689,50 @@ export type Database = {
       }
     }
     Functions: {
+      assign_meeting_co_host: {
+        Args: { meeting_id_input: string; target_user_id_input: string }
+        Returns: undefined
+      }
+      cancel_meeting_secure: {
+        Args: { meeting_id_input: string }
+        Returns: undefined
+      }
+      end_meeting_secure: {
+        Args: { meeting_id_input: string }
+        Returns: undefined
+      }
+      moderate_meeting_participants: {
+        Args: {
+          action_input: string
+          meeting_id_input: string
+          target_user_id_input?: string | null
+        }
+        Returns: string
+      }
+      remove_meeting_co_host: {
+        Args: { meeting_id_input: string; target_user_id_input: string }
+        Returns: undefined
+      }
+      review_meeting_participant: {
+        Args: { decision_input: string; participant_id_input: string }
+        Returns: undefined
+      }
+      set_meeting_locked: {
+        Args: { locked_input: boolean; meeting_id_input: string }
+        Returns: Database["public"]["Tables"]["meeting_moderation_settings"]["Row"]
+      }
+      start_meeting_secure: {
+        Args: { meeting_id_input: string }
+        Returns: undefined
+      }
+      transfer_meeting_host: {
+        Args: { meeting_id_input: string; target_user_id_input: string }
+        Returns: undefined
+      }
+      update_meeting_invitees_secure: {
+        Args: { invitees_input: Json; meeting_id_input: string }
+        Returns: undefined
+      }
       join_meeting_participant: {
         Args: { meeting_id_input: string; session_id_input: string }
         Returns: Database["public"]["Tables"]["meeting_participants"]["Row"]

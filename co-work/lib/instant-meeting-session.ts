@@ -5,6 +5,11 @@ import type { Meeting } from '~/co-work/lib/types'
 export type InstantMeetingSession = {
   code: string
   meeting: Meeting | null
+  /**
+   * Skip the second Join Meeting confirm screen and enter the room once
+   * identity / passcode / lock checks pass (Zoom-style one-tap).
+   */
+  autoJoin: boolean
 }
 
 let session: InstantMeetingSession | null = null
@@ -25,14 +30,43 @@ function getSnapshot() {
   return session
 }
 
+function normalizeCode(code: string) {
+  return code.replace(/\s/g, '').trim()
+}
+
 /** Open the live meeting overlay without navigating (avoids blank async-route Suspense). */
 export function openInstantMeetingSession(input: {
   code: string
   meeting?: Meeting | null
+  /** Defaults to true for Zoom-style entry. Set false when restoring a live room (minimize). */
+  autoJoin?: boolean
 }) {
-  const code = input.code.replace(/\s/g, '').trim()
+  const code = normalizeCode(input.code)
   if (!code) return
-  session = { code, meeting: input.meeting ?? null }
+
+  const autoJoin = input.autoJoin ?? true
+  const prev = session
+
+  // Same meeting already open — update metadata without remounting LiveKit / join UI.
+  if (prev?.code === code) {
+    const nextMeeting = input.meeting ?? prev.meeting
+    if (nextMeeting !== prev.meeting || autoJoin !== prev.autoJoin) {
+      session = {
+        ...prev,
+        meeting: nextMeeting,
+        // Never re-enable autoJoin on an already-open session (would re-trigger join).
+        autoJoin: prev.autoJoin && autoJoin,
+      }
+      emit()
+    }
+    return
+  }
+
+  session = {
+    code,
+    meeting: input.meeting ?? null,
+    autoJoin,
+  }
   emit()
 }
 

@@ -13,6 +13,7 @@ import { MeetingAiDraftPanel } from '~/co-work/components/MeetingAiDraftPanel'
 import { defaultScheduleDateTime, ScheduleDateTimeField } from '~/co-work/components/ScheduleDateTimeField'
 import { ScheduleSection, ScheduleToggleRow } from '~/co-work/components/ScheduleFormFields'
 import { MeetingInvitePicker } from '~/co-work/components/MeetingInvitePicker'
+import { CalendarConnectionsPanel } from '~/co-work/components/CalendarConnectionsPanel'
 import { createMeeting } from '~/co-work/lib/meetings'
 import { sendMeetingInvites, buildInviteMailtoLink, emailToInvitee } from '~/co-work/lib/invites'
 import { coworkGlassStyle, useCoWorkTheme } from '~/co-work/lib/theme'
@@ -21,6 +22,11 @@ import type { MeetingInvitee, MeetingRepeat } from '~/co-work/lib/types'
 import { coWorkRoutes } from '~/lib/routes'
 import { recordMeetingCode } from '~/co-work/lib/recent-meeting-codes'
 import { addMeetingToDeviceCalendar } from '~/lib/calendar/device-calendar'
+import {
+  calendarProviderLabel,
+  syncMeetingToConnectedCalendars,
+} from '~/lib/calendar/connections'
+import { assertUtcIso, isValidIanaTimeZone, normalizeIanaTimeZone, rebaseUtcIsoWallClock, resolveDeviceIanaTimeZone, SCHEDULE_TIMEZONE_OPTIONS } from '~/lib/calendar/timezone'
 import { openMailtoLink } from '~/lib/platform/openMailto'
 import { useProfile } from '~/hooks/useProfile'
 
@@ -47,9 +53,13 @@ export function ScheduleMeetingScreen() {
     return typeof value === 'string' && value.trim() ? value.trim() : null
   }, [params.prompt])
 
+  const [timeZone, setTimeZone] = useState(resolveDeviceIanaTimeZone)
   const [title, setTitle] = useState('')
   const [description, setDescription] = useState('')
-  const [scheduledAt, setScheduledAt] = useState(defaultScheduleDateTime)
+  const [scheduledAt, setScheduledAt] = useState(() => defaultScheduleDateTime(timeZone))
+  const [scheduledEndAt, setScheduledEndAt] = useState(() =>
+    new Date(Date.parse(defaultScheduleDateTime(timeZone)) + 60 * 60 * 1000).toISOString(),
+  )
   const [maxParticipants, setMaxParticipants] = useState('100')
   const [passcode, setPasscode] = useState('')
   const [waitingRoom, setWaitingRoom] = useState(true)
@@ -64,13 +74,31 @@ export function ScheduleMeetingScreen() {
   const [defaultAudio, setDefaultAudio] = useState(true)
   const [allowJoinBeforeHost, setAllowJoinBeforeHost] = useState(false)
   const [autoRecord, setAutoRecord] = useState(false)
+  const [captionsEnabled, setCaptionsEnabled] = useState(false)
   const [isRecurring, setIsRecurring] = useState(false)
   const [repeat, setRepeat] = useState<MeetingRepeat>(null)
   const [invitees, setInvitees] = useState<MeetingInvitee[]>([])
   const [saving, setSaving] = useState(false)
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({})
 
-  const timeZone = useMemo(() => Intl.DateTimeFormat().resolvedOptions().timeZone, [])
+  function onTimeZoneChange(nextRaw: string) {
+    const next = normalizeIanaTimeZone(nextRaw)
+    setTimeZone(next)
+    setFieldErrors((current) => ({
+      ...current,
+      timeZone: isValidIanaTimeZone(next) ? '' : 'Use an IANA timezone such as Asia/Kolkata',
+    }))
+    if (!isValidIanaTimeZone(next) || !isValidIanaTimeZone(timeZone) || next === timeZone) return
+    // Keep the same wall clock (e.g. 10:00) when the host switches zones.
+    try {
+      const nextStart = rebaseUtcIsoWallClock(scheduledAt, timeZone, next)
+      const nextEnd = rebaseUtcIsoWallClock(scheduledEndAt, timeZone, next)
+      setScheduledAt(nextStart)
+      setScheduledEndAt(nextEnd)
+    } catch {
+      // Leave existing instants if the wall clock is invalid in the new zone.
+    }
+  }
 
   function onTitleChange(value: string) {
     setTitle(value)
@@ -95,6 +123,8 @@ export function ScheduleMeetingScreen() {
       title,
       description,
       scheduledAt,
+      scheduledEndAt,
+      timeZone,
       maxParticipants,
       passcode,
       waitingRoom,
@@ -109,6 +139,7 @@ export function ScheduleMeetingScreen() {
       defaultAudio,
       allowJoinBeforeHost,
       autoRecord,
+      captionsEnabled,
       isRecurring,
       repeat,
     }),
@@ -120,6 +151,7 @@ export function ScheduleMeetingScreen() {
       allowScreenShare,
       authenticatedOnly,
       autoRecord,
+      captionsEnabled,
       defaultAudio,
       defaultVideo,
       description,
@@ -129,6 +161,8 @@ export function ScheduleMeetingScreen() {
       passcode,
       repeat,
       scheduledAt,
+      scheduledEndAt,
+      timeZone,
       title,
       videoOffOnJoin,
       waitingRoom,
@@ -144,6 +178,10 @@ export function ScheduleMeetingScreen() {
       if (typeof draft.title === 'string') setTitle(draft.title)
       if (typeof draft.description === 'string') setDescription(draft.description)
       if (typeof draft.scheduledAt === 'string') setScheduledAt(draft.scheduledAt)
+      if (typeof draft.scheduledEndAt === 'string') setScheduledEndAt(draft.scheduledEndAt)
+      if (typeof draft.timeZone === 'string' && isValidIanaTimeZone(draft.timeZone)) {
+        setTimeZone(draft.timeZone)
+      }
       if (typeof draft.maxParticipants === 'string') setMaxParticipants(draft.maxParticipants)
       if (typeof draft.passcode === 'string') setPasscode(draft.passcode)
       if (typeof draft.waitingRoom === 'boolean') setWaitingRoom(draft.waitingRoom)
@@ -160,6 +198,7 @@ export function ScheduleMeetingScreen() {
         setAllowJoinBeforeHost(draft.allowJoinBeforeHost)
       }
       if (typeof draft.autoRecord === 'boolean') setAutoRecord(draft.autoRecord)
+      if (typeof draft.captionsEnabled === 'boolean') setCaptionsEnabled(draft.captionsEnabled)
       if (typeof draft.isRecurring === 'boolean') setIsRecurring(draft.isRecurring)
       if (draft.repeat !== undefined) setRepeat(draft.repeat)
     },
@@ -191,14 +230,34 @@ export function ScheduleMeetingScreen() {
       toast.show('Choose a date and time', { tone: 'danger' })
       return
     }
+    if (!isValidIanaTimeZone(timeZone)) {
+      setFieldErrors((current) => ({ ...current, timeZone: 'Enter a valid IANA timezone' }))
+      toast.show('Enter a valid IANA timezone, such as Asia/Kolkata', { tone: 'danger' })
+      return
+    }
+    let startsAt: string
+    let endsAt: string
+    try {
+      startsAt = assertUtcIso(scheduledAt, 'Start time')
+      endsAt = assertUtcIso(scheduledEndAt, 'End time')
+    } catch (error) {
+      toast.show(error instanceof Error ? error.message : 'Choose valid meeting times', { tone: 'danger' })
+      return
+    }
+    if (Date.parse(endsAt) <= Date.parse(startsAt)) {
+      setFieldErrors((current) => ({ ...current, scheduledEndAt: 'End time must be after start time' }))
+      toast.show('End time must be after start time', { tone: 'danger' })
+      return
+    }
 
     setSaving(true)
     try {
       const meeting = await createMeeting(user.id, {
         title: title.trim(),
         description: description.trim() || undefined,
-        scheduledAt,
-        timeZone,
+        scheduledAt: startsAt,
+        scheduledEndAt: endsAt,
+        timeZone: normalizeIanaTimeZone(timeZone),
         maxParticipants: capacity,
         isRecurring,
         repeat: isRecurring ? repeat : null,
@@ -220,6 +279,8 @@ export function ScheduleMeetingScreen() {
           defaultAudio,
           allowJoinBeforeHost,
           autoRecord,
+          recordingMode: !allowRecording ? 'disabled' : autoRecord ? 'automatic' : 'manual',
+          captionsEnabled,
           enableMeetingChat: allowChat,
         },
         invitees,
@@ -255,11 +316,20 @@ export function ScheduleMeetingScreen() {
 
       recordMeetingCode(meeting.meeting_code)
 
-      const calendarResult = await addMeetingToDeviceCalendar(meeting)
-      if (calendarResult === 'opened') {
-        toast.show('Meeting added to calendar', { tone: 'success' })
-      } else if (calendarResult === 'shared') {
-        toast.show('Calendar event ready', { tone: 'success' })
+      const syncResults = await syncMeetingToConnectedCalendars(meeting.id)
+      const syncedProviders = syncResults.filter((row) => row.ok).map((row) => row.provider)
+      if (syncedProviders.length > 0) {
+        toast.show('Added to calendar', {
+          tone: 'success',
+          message: syncedProviders.map((provider) => calendarProviderLabel(provider)).join(' · '),
+        })
+      } else {
+        const calendarResult = await addMeetingToDeviceCalendar(meeting)
+        if (calendarResult === 'saved' || calendarResult === 'opened') {
+          toast.show('Meeting added to calendar', { tone: 'success' })
+        } else if (calendarResult === 'shared') {
+          toast.show('Calendar invite ready (ICS)', { tone: 'success' })
+        }
       }
 
       router.push(coWorkRoutes.meeting(meeting.meeting_code))
@@ -339,12 +409,60 @@ export function ScheduleMeetingScreen() {
                 multiline
               />
             </Field>
-            <ScheduleDateTimeField value={scheduledAt} onChange={setScheduledAt} />
-            <Field label={`Timezone · ${timeZone}`}>
-              <Text fontSize={12} color={coworkUi.textMuted}>
-                Invitees will see the meeting time in this timezone.
+            <Field label="Timezone" error={fieldErrors.timeZone || undefined} required>
+              <Input
+                value={timeZone}
+                onChangeText={onTimeZoneChange}
+                autoCapitalize="none"
+                autoCorrect={false}
+                placeholder="Asia/Kolkata"
+                backgroundColor="rgba(255,255,255,0.05)"
+                borderColor={fieldErrors.timeZone ? coworkUi.danger : coworkUi.borderSoft}
+                color={coworkUi.text}
+                borderRadius={14}
+              />
+              <XStack gap="$2" flexWrap="wrap" marginTop="$2">
+                {[resolveDeviceIanaTimeZone(), ...SCHEDULE_TIMEZONE_OPTIONS]
+                  .filter((zone, index, all) => all.indexOf(zone) === index)
+                  .slice(0, 8)
+                  .map((zone) => (
+                    <Button
+                      key={zone}
+                      size="$2"
+                      borderRadius={999}
+                      tone={timeZone === zone ? 'primary' : 'outline'}
+                      borderColor={timeZone === zone ? coworkUi.brand : coworkUi.borderSoft}
+                      onPress={() => onTimeZoneChange(zone)}
+                    >
+                      {zone}
+                    </Button>
+                  ))}
+              </XStack>
+              <Text fontSize={12} color={coworkUi.textMuted} marginTop="$2">
+                You pick a wall clock in this timezone. Times are stored as UTC; each attendee sees
+                them in their own local timezone.
               </Text>
             </Field>
+            <ScheduleDateTimeField
+              value={scheduledAt}
+              timeZone={timeZone}
+              onChange={(next) => {
+                const previousDuration = Math.max(5 * 60 * 1000, Date.parse(scheduledEndAt) - Date.parse(scheduledAt))
+                setScheduledAt(next)
+                setScheduledEndAt(new Date(Date.parse(next) + previousDuration).toISOString())
+              }}
+              label="Starts"
+            />
+            <ScheduleDateTimeField
+              value={scheduledEndAt}
+              timeZone={timeZone}
+              onChange={setScheduledEndAt}
+              label="Ends"
+              minDate={new Date(scheduledAt)}
+            />
+            {fieldErrors.scheduledEndAt ? (
+              <Text fontSize={12} color={coworkUi.danger}>{fieldErrors.scheduledEndAt}</Text>
+            ) : null}
             <Field label="Max participants" error={fieldErrors.maxParticipants || undefined}>
               <Input
                 value={maxParticipants}
@@ -365,6 +483,8 @@ export function ScheduleMeetingScreen() {
             </Text>
             <MeetingInvitePicker hostId={user.id} value={invitees} onChange={setInvitees} />
           </ScheduleSection>
+
+          <CalendarConnectionsPanel redirectTo="/co-work/schedule" />
 
           <ScheduleSection title="Recurrence">
             <ScheduleToggleRow
@@ -431,14 +551,36 @@ export function ScheduleMeetingScreen() {
           <ScheduleSection title="Room features">
             <ScheduleToggleRow label="Screen sharing" checked={allowScreenShare} onCheckedChange={setAllowScreenShare} />
             <ScheduleToggleRow label="In-meeting chat" checked={allowChat} onCheckedChange={setAllowChat} />
-            <ScheduleToggleRow label="Recording" checked={allowRecording} onCheckedChange={setAllowRecording} />
+            <ScheduleToggleRow
+              label="Allow recording"
+              description="Hosts may start a recording during the meeting"
+              checked={allowRecording}
+              onCheckedChange={(checked) => {
+                setAllowRecording(checked)
+                if (!checked) setAutoRecord(false)
+              }}
+            />
+            <ScheduleToggleRow
+              label="Auto-record"
+              description="Start recording when the meeting begins"
+              checked={allowRecording && autoRecord}
+              onCheckedChange={(checked) => {
+                setAllowRecording(checked || allowRecording)
+                setAutoRecord(checked)
+              }}
+            />
+            <ScheduleToggleRow
+              label="Live captions"
+              description="Enable captions for this scheduled meeting"
+              checked={captionsEnabled}
+              onCheckedChange={setCaptionsEnabled}
+            />
             <ScheduleToggleRow label="Raise hand" checked={allowHandRaise} onCheckedChange={setAllowHandRaise} />
             <ScheduleToggleRow
               label="Join before host"
               checked={allowJoinBeforeHost}
               onCheckedChange={setAllowJoinBeforeHost}
             />
-            <ScheduleToggleRow label="Auto-record" checked={autoRecord} onCheckedChange={setAutoRecord} />
           </ScheduleSection>
 
           <ScheduleSection title="Defaults">

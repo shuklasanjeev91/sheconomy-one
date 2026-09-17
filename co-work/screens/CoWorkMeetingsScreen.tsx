@@ -1,12 +1,13 @@
 import { useRouter } from 'one'
-import { AppState, Alert, Platform, type AppStateStatus } from 'react-native'
+import { AppState, Alert, type AppStateStatus } from 'react-native'
 import { useCallback, useEffect, useState } from 'react'
 
 import { AuthSignInFlow } from '~/components/auth/AuthSignInFlow'
 import { AppPage, LAYOUT_STRETCH } from '~/components/layout'
 import { Button, ScreenState, Text, XStack, YStack, useAppToast } from '~/components/ui'
 import { CoWorkBrandChip, CoWorkStatusPill } from '~/co-work/components/CoWorkUi'
-import { ensureMeetingMediaPermissions } from '~/co-work/lib/meeting-media-permissions'
+import { CalendarConnectionsPanel } from '~/co-work/components/CalendarConnectionsPanel'
+import { ensureMeetingMobilePermissions } from '~/co-work/lib/meeting-media-permissions'
 import { openInstantMeetingSession } from '~/co-work/lib/instant-meeting-session'
 import {
   cancelMeeting,
@@ -16,6 +17,7 @@ import {
 } from '~/co-work/lib/meetings'
 import { coworkGlassStyle, useCoWorkTheme } from '~/co-work/lib/theme'
 import { coworkBoxShadow, pageGradientStyle } from '~/lib/platform/crossStyles'
+import { formatMeetingInstantForViewer } from '~/lib/calendar/timezone'
 import { navigateApp } from '~/lib/platform/navigate'
 import type { Meeting } from '~/co-work/lib/types'
 import { coWorkRoutes } from '~/lib/routes'
@@ -26,14 +28,8 @@ import { BRAND_NAME } from '~/config/brand'
 function formatWhen(meeting: Meeting) {
   const anchor = getMeetingAnchorAt(meeting)
   if (!anchor) return 'Time TBD'
-  return new Intl.DateTimeFormat(undefined, {
-    weekday: 'short',
-    month: 'short',
-    day: 'numeric',
-    hour: 'numeric',
-    minute: '2-digit',
-    timeZone: meeting.time_zone ?? undefined,
-  }).format(anchor)
+  // Always show in the viewer's local timezone (same UTC instant for everyone).
+  return formatMeetingInstantForViewer(anchor.toISOString())
 }
 
 function statusTone(status: Meeting['status']) {
@@ -120,6 +116,8 @@ export function CoWorkMeetingsScreen() {
           </Text>
         </YStack>
 
+        <CalendarConnectionsPanel redirectTo="/co-work/meetings" />
+
         <ScreenState
           loading={loading}
           error={error}
@@ -177,22 +175,21 @@ export function CoWorkMeetingsScreen() {
                     borderRadius={999}
                     onPress={() => {
                       void (async () => {
-                        const perms = await ensureMeetingMediaPermissions()
+                        const perms = await ensureMeetingMobilePermissions({
+                          requestNotifications: true,
+                        })
                         if (!perms.ok) {
-                          toast.show('Camera & microphone required', {
+                          toast.show('Microphone required', {
                             tone: 'error',
                             message: perms.message,
                           })
                           return
                         }
-                        if (Platform.OS === 'web') {
-                          navigateApp(coWorkRoutes.meetingLive(meeting.meeting_code))
-                        } else {
-                          openInstantMeetingSession({
-                            code: meeting.meeting_code,
-                            meeting,
-                          })
-                        }
+                        openInstantMeetingSession({
+                          code: meeting.meeting_code,
+                          meeting,
+                          autoJoin: true,
+                        })
                       })()
                     }}
                   >

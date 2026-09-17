@@ -12,6 +12,9 @@ export type MeetingChatInsertRow = {
   message_type: string
   created_at: string | null
   is_deleted?: boolean | null
+  audience?: string | null
+  recipient_id?: string | null
+  system_event_type?: string | null
 }
 
 export type SignalingHandlers = {
@@ -75,11 +78,21 @@ function attachMeetingChannelListeners(
     )
     .on(
       'postgres_changes',
+      { event: '*', schema: 'public', table: 'meeting_roles', filter: `meeting_id=eq.${meetingId}` },
+      () => handlers.onParticipantChange?.(),
+    )
+    .on(
+      'postgres_changes',
       { event: 'INSERT', schema: 'public', table: 'meeting_chat_messages', filter: `meeting_id=eq.${meetingId}` },
       (payload) => {
         const row = payload.new as MeetingChatInsertRow | null
         handlers.onChatMessage?.(row ?? undefined)
       },
+    )
+    .on(
+      'postgres_changes',
+      { event: 'UPDATE', schema: 'public', table: 'meeting_chat_messages', filter: `meeting_id=eq.${meetingId}` },
+      () => handlers.onChatMessage?.(undefined),
     )
     .on('presence', { event: 'sync' }, () => {
       handlers.onPresenceSync?.(Object.keys(channel.presenceState()))

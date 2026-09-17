@@ -2,6 +2,12 @@ import 'jsr:@supabase/functions-js/edge-runtime.d.ts'
 import { createClient } from 'jsr:@supabase/supabase-js@2'
 
 import { appBaseUrl, sendResendEmail } from '../_shared/resend.ts'
+import { formatInviteWhen } from '../_shared/meeting-invite-time.ts'
+import {
+  buildMeetingInviteEmailHtml,
+  buildMeetingInviteEmailText,
+  formatMeetingIdForEmail,
+} from '../_shared/meeting-invite-email.ts'
 
 const BRAND_NAME = 'SHEconomy'
 const BRAND_COWORK_LABEL = `${BRAND_NAME} Co-Work`
@@ -18,6 +24,24 @@ type Invitee = {
   email?: string
   avatar?: string | null
   headline?: string | null
+  locale?: string
+  timeZone?: string
+  timezone?: string
+}
+
+function escapeIcs(value: unknown) {
+  return String(value ?? '').replace(/\\/g, '\\\\').replace(/\n/g, '\\n').replace(/,/g, '\\,').replace(/;/g, '\\;')
+}
+
+function icsUtc(value: string) {
+  return new Date(value).toISOString().replace(/[-:]/g, '').replace(/\.\d{3}Z$/, 'Z')
+}
+
+function base64Utf8(value: string) {
+  const bytes = new TextEncoder().encode(value)
+  let binary = ''
+  for (const byte of bytes) binary += String.fromCharCode(byte)
+  return btoa(binary)
 }
 
 function inviteeKey(invitee: Invitee) {
@@ -89,7 +113,7 @@ Deno.serve(async (req) => {
 
     const { data: meeting, error: meetingError } = await supabase
       .from('meetings')
-      .select('id, title, meeting_code, host_id, scheduled_at, time_zone, invitees')
+      .select('id, title, description, meeting_code, host_id, scheduled_at, scheduled_end_at, time_zone, invitees, security_settings')
       .eq('id', meetingId)
       .maybeSingle()
 
@@ -100,26 +124,42 @@ Deno.serve(async (req) => {
       })
     }
 
-    if (meeting.host_id !== authData.user.id) {
-      return new Response(JSON.stringify({ error: 'Only the host can send invites.' }), {
-        status: 403,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+    // Direct UPDATE on meetings is revoked for authenticated (secure RPCs only).
+    // Prefer the host-gated RPC; fall back to service role after an authz check.
+    const isMeetingOwner = meeting.host_id === authData.user.id
+    if (!isMeetingOwner) {
+      const { data: actorRole } = await supabase.rpc('meeting_actor_role', {
+        meeting_id_input: meetingId,
       })
+      if (actorRole !== 'host' && actorRole !== 'co_host') {
+        return new Response(JSON.stringify({ error: 'Only the host or co-host can send invites.' }), {
+          status: 403,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        })
+      }
     }
 
     const existing = Array.isArray(meeting.invitees) ? (meeting.invitees as Invitee[]) : []
     const merged = mergeInvitees(existing, invitees)
 
-    const { error: updateError } = await supabase
-      .from('meetings')
-      .update({ invitees: merged })
-      .eq('id', meetingId)
+    const { error: rpcError } = await supabase.rpc('update_meeting_invitees_secure', {
+      meeting_id_input: meetingId,
+      invitees_input: merged,
+    })
 
-    if (updateError) {
-      return new Response(JSON.stringify({ error: updateError.message }), {
-        status: 400,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      })
+    if (rpcError) {
+      // Co-hosts (or missing RPC) update via service role after the role check above.
+      const { error: updateError } = await service
+        .from('meetings')
+        .update({ invitees: merged, updated_at: new Date().toISOString() })
+        .eq('id', meetingId)
+
+      if (updateError) {
+        return new Response(JSON.stringify({ error: updateError.message || rpcError.message }), {
+          status: 400,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        })
+      }
     }
 
     const { data: hostProfile } = await supabase
@@ -130,14 +170,6 @@ Deno.serve(async (req) => {
 
     const hostName = hostProfile?.full_name || hostProfile?.username || `A ${BRAND_NAME} host`
     const joinUrl = `${appBaseUrl()}/co-work/meeting/${meeting.meeting_code}`
-    const when = meeting.scheduled_at
-      ? new Date(meeting.scheduled_at).toLocaleString('en-IN', {
-          timeZone: meeting.time_zone ?? 'Asia/Kolkata',
-          dateStyle: 'medium',
-          timeStyle: 'short',
-        })
-      : 'Starting soon'
-
     let notifications = 0
     let emailsSent = 0
     const mailtoLinks: string[] = []
@@ -145,7 +177,18 @@ Deno.serve(async (req) => {
     const roomId = meeting.meeting_code
 
     for (const invitee of invitees) {
+      const key = inviteeKey(invitee)
       if (invitee.type === 'user' && invitee.id && !invitee.id.startsWith('email:')) {
+        const { error: reserveError } = await service.from('meeting_invite_deliveries').insert({
+          meeting_id: meeting.id,
+          invitee_key: key,
+          channel: 'notification',
+        })
+        if (reserveError?.code === '23505') continue
+        if (reserveError) {
+          console.warn('meeting-invite delivery reserve failed', reserveError.message)
+          // Still attempt notification — idempotency table is best-effort.
+        }
         const { data: notificationId, error: notifyError } = await service.rpc(
           'create_notification_from_template',
           {
@@ -165,36 +208,64 @@ Deno.serve(async (req) => {
           },
         )
 
-        if (!notifyError && notificationId) notifications += 1
+        if (notifyError) {
+          await service.from('meeting_invite_deliveries').delete()
+            .eq('meeting_id', meeting.id).eq('invitee_key', key).eq('channel', 'notification')
+        } else if (notificationId) notifications += 1
         continue
       }
 
       const email = (invitee.email ?? invitee.name).trim().toLowerCase()
       if (!email.includes('@')) continue
+      const { error: reserveError } = await service.from('meeting_invite_deliveries').insert({
+        meeting_id: meeting.id,
+        invitee_key: key,
+        channel: 'email',
+      })
+      if (reserveError?.code === '23505') continue
+      if (reserveError) {
+        console.warn('meeting-invite email reserve failed', reserveError.message)
+      }
 
-      const subject = `Join Co-Work: ${meeting.title}`
-      const html = `
-        <p>Hi,</p>
-        <p><strong>${hostName}</strong> invited you to a ${BRAND_COWORK_LABEL} meeting.</p>
-        <p><strong>${meeting.title}</strong><br/>${when}</p>
-        <p>Meeting code: <strong>${meeting.meeting_code}</strong></p>
-        ${message ? `<p>${message}</p>` : ''}
-        <p><a href="${joinUrl}">Join meeting</a></p>
-      `
+      // Soft-lookup: profiles.email may be missing or RLS-shaped; never fail the invite.
+      let profileTimeZone: string | null = null
+      let profileLocale: string | null = null
+      try {
+        const { data: emailProfile } = await service
+          .from('profiles')
+          .select('timezone, preferred_language')
+          .eq('email', email)
+          .maybeSingle()
+        profileTimeZone = emailProfile?.timezone ?? null
+        profileLocale = emailProfile?.preferred_language ?? null
+      } catch {
+        // ignore
+      }
 
       if (resendKey) {
         try {
-          await sendResendEmail(resendKey, {
+          const sent = await sendCalendarInviteEmail({
+            resendKey,
             to: email,
-            subject,
-            html,
-            from: `${BRAND_COWORK_LABEL} <cowork@sheconomy.com>`,
+            inviteeName: invitee.name,
+            hostName,
+            meeting,
+            joinUrl,
+            message,
+            inviteeTimeZone: invitee.timeZone || invitee.timezone || null,
+            profileTimeZone,
+            locale: invitee.locale || profileLocale || 'en',
           })
-          emailsSent += 1
+          if (sent) emailsSent += 1
+          else throw new Error('send failed')
         } catch {
+          await service.from('meeting_invite_deliveries').delete()
+            .eq('meeting_id', meeting.id).eq('invitee_key', key).eq('channel', 'email')
           mailtoLinks.push(`mailto:${email}`)
         }
       } else {
+        await service.from('meeting_invite_deliveries').delete()
+          .eq('meeting_id', meeting.id).eq('invitee_key', key).eq('channel', 'email')
         mailtoLinks.push(`mailto:${email}`)
       }
     }
@@ -217,3 +288,103 @@ Deno.serve(async (req) => {
     })
   }
 })
+
+async function sendCalendarInviteEmail(input: {
+  resendKey: string
+  to: string
+  inviteeName: string
+  hostName: string
+  meeting: {
+    id: string
+    title: string
+    description?: string | null
+    meeting_code: string
+    scheduled_at?: string | null
+    scheduled_end_at?: string | null
+    time_zone?: string | null
+    security_settings?: { passcode?: string } | null
+  }
+  joinUrl: string
+  message: string
+  inviteeTimeZone?: string | null
+  profileTimeZone?: string | null
+  locale?: string
+}): Promise<boolean> {
+  const subject = `Join Co-Work: ${input.meeting.title}`
+  const startAt = input.meeting.scheduled_at || new Date().toISOString()
+  const endAt = input.meeting.scheduled_end_at || new Date(Date.parse(startAt) + 3600000).toISOString()
+  const display = formatInviteWhen({
+    startsAt: startAt,
+    endsAt: endAt,
+    inviteeTimeZone: input.inviteeTimeZone,
+    profileTimeZone: input.profileTimeZone,
+    hostTimeZone: input.meeting.time_zone,
+    locale: input.locale,
+  })
+  const passcode = input.meeting.security_settings?.passcode
+  const calendarDescription = [
+    input.meeting.description,
+    `Join: ${input.joinUrl}`,
+    `Meeting code: ${input.meeting.meeting_code}`,
+    passcode ? `Passcode: ${passcode}` : null,
+  ].filter(Boolean).join('\n\n')
+
+  // ICS uses absolute UTC — calendar apps show the recipient's local time.
+  const ics = [
+    'BEGIN:VCALENDAR', 'VERSION:2.0', 'PRODID:-//SHEconomy//Co-Work//EN', 'CALSCALE:GREGORIAN',
+    'METHOD:REQUEST', 'BEGIN:VEVENT', `UID:meeting-${input.meeting.id}@sheconomy.com`,
+    `DTSTAMP:${icsUtc(new Date().toISOString())}`, `DTSTART:${icsUtc(startAt)}`,
+    `DTEND:${icsUtc(endAt)}`, `SUMMARY:${escapeIcs(input.meeting.title)}`,
+    `DESCRIPTION:${escapeIcs(calendarDescription)}`, `LOCATION:${escapeIcs(input.joinUrl)}`,
+    `URL:${input.joinUrl}`, `ATTENDEE;RSVP=TRUE:mailto:${input.to}`, 'END:VEVENT', 'END:VCALENDAR',
+  ].join('\r\n') + '\r\n'
+
+  const dates = `${icsUtc(startAt)}/${icsUtc(endAt)}`
+  const googleUrl = new URL('https://calendar.google.com/calendar/render')
+  googleUrl.searchParams.set('action', 'TEMPLATE')
+  googleUrl.searchParams.set('text', input.meeting.title)
+  googleUrl.searchParams.set('dates', dates)
+  googleUrl.searchParams.set('details', calendarDescription)
+  const outlookUrl = new URL('https://outlook.office.com/calendar/0/deeplink/compose')
+  outlookUrl.searchParams.set('path', '/calendar/action/compose')
+  outlookUrl.searchParams.set('rru', 'addevent')
+  outlookUrl.searchParams.set('subject', input.meeting.title)
+  outlookUrl.searchParams.set('startdt', startAt)
+  outlookUrl.searchParams.set('enddt', endAt)
+  outlookUrl.searchParams.set('body', calendarDescription)
+
+  const timezoneNote =
+    display.source === 'utc'
+      ? 'Times shown in UTC. Your calendar app will convert the attached invite to your local timezone.'
+      : `Shown in your timezone (${display.timeZone}).`
+
+  const emailInput = {
+    brandLabel: BRAND_COWORK_LABEL,
+    meetingTitle: input.meeting.title,
+    hostName: input.hostName,
+    dateLabel: display.dateLabel,
+    timeLabel: display.timeLabel,
+    endsLabel: display.endsLabel,
+    joinUrl: input.joinUrl,
+    meetingIdLabel: formatMeetingIdForEmail(input.meeting.meeting_code),
+    passcode: passcode || null,
+    personalMessage: input.message || null,
+    googleCalendarUrl: googleUrl.toString(),
+    outlookCalendarUrl: outlookUrl.toString(),
+    timezoneNote,
+    hostZoneHint: display.hostZoneHint,
+  }
+
+  const html = buildMeetingInviteEmailHtml(emailInput)
+  const text = buildMeetingInviteEmailText(emailInput)
+
+  await sendResendEmail(input.resendKey, {
+    to: input.to,
+    subject,
+    html,
+    text,
+    from: `${BRAND_COWORK_LABEL} <cowork@sheconomy.com>`,
+    attachments: [{ filename: `sheconomy-${input.meeting.meeting_code}.ics`, content: base64Utf8(ics) }],
+  })
+  return true
+}

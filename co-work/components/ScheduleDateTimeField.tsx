@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { ScrollView } from 'react-native'
 import {
   addDays,
@@ -18,10 +18,18 @@ import {
 
 import { AppBottomSheet, Button, Field, Icons, Text, XStack, YStack } from '~/components/ui'
 import { useCoWorkTheme } from '~/co-work/lib/theme'
+import {
+  getZonedWallTime,
+  resolveDeviceIanaTimeZone,
+  zonedWallTimeToUtcIso,
+  type ZonedWallTime,
+} from '~/lib/calendar/timezone'
 
 type ScheduleDateTimeFieldProps = {
   value: string
   onChange: (iso: string) => void
+  /** IANA zone used to interpret the wall-clock picker (stored separately on the meeting). */
+  timeZone?: string
   label?: string
   /** Earliest selectable day. Defaults to today so meetings cannot be booked in the past. */
   minDate?: Date
@@ -42,38 +50,72 @@ const QUICK_TIMES = [
   { label: '6:00 PM', hours: 18 },
 ]
 
-function parseDate(iso: string) {
+type DraftWall = Required<ZonedWallTime>
+
+function wallToUtcIso(wall: DraftWall, timeZone: string): string {
+  return zonedWallTimeToUtcIso(wall, timeZone)
+}
+
+function wallFromUtcIso(iso: string, timeZone: string): DraftWall {
+  return getZonedWallTime(iso, timeZone)
+}
+
+function nextFullHourWall(timeZone: string): DraftWall {
+  const now = getZonedWallTime(new Date().toISOString(), timeZone)
+  let hour = now.hour + 1
+  let { year, month, day } = now
+  if (hour >= 24) {
+    hour = 0
+    const nextDay = new Date(Date.UTC(year, month - 1, day + 1))
+    year = nextDay.getUTCFullYear()
+    month = nextDay.getUTCMonth() + 1
+    day = nextDay.getUTCDate()
+  }
+  return { year, month, day, hour, minute: 0, second: 0 }
+}
+
+function snapWall(wall: DraftWall): DraftWall {
+  const minutes = Math.round(wall.minute / MINUTE_STEP) * MINUTE_STEP
+  if (minutes >= 60) {
+    return { ...wall, hour: (wall.hour + 1) % 24, minute: 0, second: 0 }
+  }
+  return { ...wall, minute: minutes, second: 0 }
+}
+
+function parseWall(iso: string, timeZone: string): DraftWall | null {
   if (!iso) return null
-  const parsed = new Date(iso)
-  return Number.isNaN(parsed.getTime()) ? null : parsed
+  try {
+    return snapWall(wallFromUtcIso(iso, timeZone))
+  } catch {
+    return null
+  }
 }
 
-function nextFullHour() {
-  const next = new Date()
-  next.setMinutes(0, 0, 0)
-  next.setHours(next.getHours() + 1)
-  return next
+function wallAsLocalDate(wall: DraftWall): Date {
+  // Local Date used only for calendar UI (date-fns); not for UTC conversion.
+  return new Date(wall.year, wall.month - 1, wall.day, wall.hour, wall.minute, 0, 0)
 }
 
-function snapToStep(date: Date) {
-  const snapped = new Date(date)
-  snapped.setSeconds(0, 0)
-  const minutes = Math.round(snapped.getMinutes() / MINUTE_STEP) * MINUTE_STEP
-  if (minutes >= 60) snapped.setHours(snapped.getHours() + 1, 0)
-  else snapped.setMinutes(minutes)
-  return snapped
+function formatWallDate(wall: DraftWall): string {
+  return format(wallAsLocalDate(wall), 'EEE, d MMM yyyy')
 }
 
-function withDay(day: Date, time: Date) {
-  const next = new Date(day)
-  next.setHours(time.getHours(), time.getMinutes(), 0, 0)
-  return next
+function formatWallTime(wall: DraftWall): string {
+  return format(wallAsLocalDate(wall), 'h:mm a')
 }
 
-function withTime(base: Date, hours: number, minutes: number) {
-  const next = new Date(base)
-  next.setHours(hours, minutes, 0, 0)
-  return next
+function withDay(day: Date, wall: DraftWall): DraftWall {
+  return {
+    ...wall,
+    year: day.getFullYear(),
+    month: day.getMonth() + 1,
+    day: day.getDate(),
+    second: 0,
+  }
+}
+
+function withTime(wall: DraftWall, hours: number, minutes: number): DraftWall {
+  return { ...wall, hour: hours, minute: minutes, second: 0 }
 }
 
 function chunk<T>(items: T[], size: number) {
@@ -85,10 +127,11 @@ function chunk<T>(items: T[], size: number) {
 /**
  * Date/time picker for scheduling — one Tamagui sheet for web, iOS and Android.
  *
+ * Wall-clock values are interpreted in `timeZone` and converted to UTC ISO on confirm.
+ *
  * `@react-native-community/datetimepicker` cannot be used here: Metro stubs its
  * native component and TurboModules (`lib/metro-stubs/datetimepicker-*`) and the
- * VxRN release bundle aliases the whole package to a no-op (`vite.config.ts`),
- * so a platform picker renders nothing and never fires `onChange` on device.
+ * VxRN release bundle aliases the whole package to a no-op (`vite.config.ts`).
  *
  * Layout note: the sheet body sizes itself to its content, so nothing in here
  * may use `flex` for vertical space — a `flex` child would resolve to zero
@@ -97,26 +140,40 @@ function chunk<T>(items: T[], size: number) {
 export function ScheduleDateTimeField({
   value,
   onChange,
+  timeZone: timeZoneProp,
   label = 'Date & time',
   minDate,
 }: ScheduleDateTimeFieldProps) {
   const { ui: coworkUi } = useCoWorkTheme()
+  const timeZone = timeZoneProp && timeZoneProp.includes('/') ? timeZoneProp : resolveDeviceIanaTimeZone()
   const [open, setOpen] = useState(false)
   const [step, setStep] = useState<'date' | 'time'>('date')
-  const [draft, setDraft] = useState(() => snapToStep(parseDate(value) ?? nextFullHour()))
+  const [draft, setDraft] = useState<DraftWall>(() =>
+    parseWall(value, timeZone) ?? nextFullHourWall(timeZone),
+  )
 
-  const selected = useMemo(() => parseDate(value), [value])
+  const selected = useMemo(() => parseWall(value, timeZone), [timeZone, value])
   const minDay = useMemo(() => startOfDay(minDate ?? new Date()), [minDate])
 
+  useEffect(() => {
+    if (!open) {
+      setDraft(parseWall(value, timeZone) ?? nextFullHourWall(timeZone))
+    }
+  }, [open, timeZone, value])
+
   function openSheet() {
-    setDraft(snapToStep(parseDate(value) ?? nextFullHour()))
+    setDraft(parseWall(value, timeZone) ?? nextFullHourWall(timeZone))
     setStep('date')
     setOpen(true)
   }
 
   function confirm() {
-    onChange(draft.toISOString())
-    setOpen(false)
+    try {
+      onChange(wallToUtcIso(snapWall(draft), timeZone))
+      setOpen(false)
+    } catch {
+      // Keep the sheet open if the wall clock is invalid in this zone.
+    }
   }
 
   return (
@@ -146,11 +203,11 @@ export function ScheduleDateTimeField({
               color={selected ? coworkUi.text : coworkUi.textMuted}
               numberOfLines={1}
             >
-              {selected ? format(selected, 'EEE, d MMM yyyy') : 'Select date & time'}
+              {selected ? formatWallDate(selected) : 'Select date & time'}
             </Text>
             {selected ? (
               <Text fontSize={12} color={coworkUi.textMuted}>
-                {format(selected, 'h:mm a')}
+                {formatWallTime(selected)} · {timeZone}
               </Text>
             ) : null}
           </YStack>
@@ -158,7 +215,7 @@ export function ScheduleDateTimeField({
         </XStack>
 
         <Text fontSize={11} color={coworkUi.textMuted}>
-          Uses your device timezone
+          Wall clock in {timeZone}; stored as UTC.
         </Text>
       </YStack>
 
@@ -183,10 +240,13 @@ export function ScheduleDateTimeField({
         <YStack gap="$4" width="100%">
           <YStack gap="$1" alignItems="center" minHeight={56}>
             <Text fontSize={20} fontWeight="800" color={coworkUi.text} letterSpacing={-0.4}>
-              {format(draft, 'EEE, d MMM yyyy')}
+              {formatWallDate(draft)}
             </Text>
             <Text fontSize={16} fontWeight="700" color={coworkUi.brand}>
-              {format(draft, 'h:mm a')}
+              {formatWallTime(draft)}
+            </Text>
+            <Text fontSize={12} color={coworkUi.textMuted}>
+              {timeZone}
             </Text>
           </YStack>
 
@@ -215,7 +275,7 @@ export function ScheduleDateTimeField({
 
           {step === 'date' ? (
             <CalendarPanel
-              value={draft}
+              value={wallAsLocalDate(draft)}
               minDay={minDay}
               onSelect={(day) => {
                 setDraft(withDay(day, draft))
@@ -380,10 +440,16 @@ function CalendarPanel({
   )
 }
 
-function TimePanel({ value, onChange }: { value: Date; onChange: (next: Date) => void }) {
+function TimePanel({
+  value,
+  onChange,
+}: {
+  value: DraftWall
+  onChange: (next: DraftWall) => void
+}) {
   const { ui: coworkUi } = useCoWorkTheme()
-  const hour = value.getHours()
-  const minute = Math.min(55, Math.round(value.getMinutes() / MINUTE_STEP) * MINUTE_STEP)
+  const hour = value.hour
+  const minute = Math.min(55, Math.round(value.minute / MINUTE_STEP) * MINUTE_STEP)
 
   return (
     <YStack gap="$3" width="100%">
@@ -392,7 +458,7 @@ function TimePanel({ value, onChange }: { value: Date; onChange: (next: Date) =>
           label="Hour"
           items={HOURS}
           selected={hour}
-          formatItem={(item) => format(withTime(value, item, 0), 'h a')}
+          formatItem={(item) => format(wallAsLocalDate(withTime(value, item, 0)), 'h a')}
           onSelect={(item) => onChange(withTime(value, item, minute))}
         />
         <WheelColumn
@@ -416,7 +482,7 @@ function TimePanel({ value, onChange }: { value: Date; onChange: (next: Date) =>
       </XStack>
 
       <Text fontSize={12} color={coworkUi.textMuted}>
-        Times are saved in your device timezone.
+        Times are interpreted in the selected timezone, then stored as UTC.
       </Text>
     </YStack>
   )
@@ -465,7 +531,6 @@ function WheelColumn({
           contentContainerStyle={{ paddingVertical: 6 }}
           showsVerticalScrollIndicator={false}
           nestedScrollEnabled
-          // Content lays out after mount on native, so align once it is measurable.
           onContentSizeChange={() => {
             if (aligned.current || index < 0) return
             aligned.current = true
@@ -576,6 +641,6 @@ function NavButton({
   )
 }
 
-export function defaultScheduleDateTime() {
-  return nextFullHour().toISOString()
+export function defaultScheduleDateTime(timeZone = resolveDeviceIanaTimeZone()) {
+  return wallToUtcIso(nextFullHourWall(timeZone), timeZone)
 }

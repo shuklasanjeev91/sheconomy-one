@@ -18,6 +18,8 @@ import {
   type VideoEffectCapability,
   type VideoEffectStatus,
   type VirtualBackgroundSelection,
+  webBackgroundResourceWarning,
+  virtualBackgroundUnavailableMessage,
 } from '~/co-work/lib/virtual-backgrounds'
 
 const PROCESSOR_INIT_TIMEOUT_MS = 12_000
@@ -33,12 +35,22 @@ function processorOptions(selection: VirtualBackgroundSelection): SwitchBackgrou
 }
 
 function withTimeout<T>(promise: Promise<T>, timeoutMs: number): Promise<T> {
-  return Promise.race([
-    promise,
-    new Promise<T>((_, reject) => {
-      setTimeout(() => reject(new Error('Background effect took too long to start.')), timeoutMs)
-    }),
-  ])
+  return new Promise<T>((resolve, reject) => {
+    const timeout = setTimeout(
+      () => reject(new Error('Background effect took too long to start.')),
+      timeoutMs,
+    )
+    promise.then(
+      (value) => {
+        clearTimeout(timeout)
+        resolve(value)
+      },
+      (cause) => {
+        clearTimeout(timeout)
+        reject(cause)
+      },
+    )
+  })
 }
 
 export function useMeetingVideoEffects(): MeetingVideoEffects {
@@ -50,12 +62,22 @@ export function useMeetingVideoEffects(): MeetingVideoEffects {
   const processorRef = useRef<BackgroundProcessorWrapper | null>(null)
   const attachedTrackRef = useRef<LocalVideoTrack | null>(null)
   const slowFrameCountRef = useRef(0)
+  const unavailableReasonRef = useRef<string | null>(null)
   const selectionRef = useRef(selection)
   selectionRef.current = selection
 
   useEffect(() => {
-    const supported = typeof window !== 'undefined' && supportsBackgroundProcessors()
+    const resourceWarning =
+      typeof navigator === 'undefined'
+        ? null
+        : webBackgroundResourceWarning(
+            navigator as Navigator & { deviceMemory?: number },
+          )
+    const supported =
+      typeof window !== 'undefined' && !resourceWarning && supportsBackgroundProcessors()
+    unavailableReasonRef.current = resourceWarning
     setCapability(supported ? 'supported' : 'unavailable')
+    if (resourceWarning) setError(resourceWarning)
     if (!supported) return
     void loadVirtualBackgroundPreference()
       .then(resolveVirtualBackgroundSelection)
@@ -78,6 +100,8 @@ export function useMeetingVideoEffects(): MeetingVideoEffects {
       } catch {
         // The old camera track may already have been stopped/replaced.
       }
+      processorRef.current = null
+      attachedTrackRef.current = null
     }
 
     const processor = BackgroundProcessor({
@@ -91,11 +115,23 @@ export function useMeetingVideoEffects(): MeetingVideoEffects {
           slowFrameCountRef.current = 0
           setError('Background effect was turned off to keep the call smooth.')
           setStatus('error')
+          selectionRef.current = OFF_BACKGROUND
+          setSelection(OFF_BACKGROUND)
+          void saveVirtualBackgroundPreference(OFF_BACKGROUND)
           void processorRef.current?.switchTo({ mode: 'disabled' }).catch(() => undefined)
         }
       },
     })
-    await withTimeout(track.setProcessor(processor), PROCESSOR_INIT_TIMEOUT_MS)
+    try {
+      await withTimeout(track.setProcessor(processor), PROCESSOR_INIT_TIMEOUT_MS)
+    } catch (cause) {
+      try {
+        await track.stopProcessor()
+      } catch {
+        // A timed-out processor may not have attached.
+      }
+      throw cause
+    }
     processorRef.current = processor
     attachedTrackRef.current = track
     return processor
@@ -107,7 +143,9 @@ export function useMeetingVideoEffects(): MeetingVideoEffects {
       setError(null)
 
       if (next.mode !== 'off' && capability !== 'supported') {
-        setError('Virtual backgrounds are not supported by this browser.')
+        setError(
+          unavailableReasonRef.current || virtualBackgroundUnavailableMessage('web'),
+        )
         setStatus('error')
         return false
       }
@@ -139,6 +177,8 @@ export function useMeetingVideoEffects(): MeetingVideoEffects {
         } catch {
           // Raw-camera fallback is best-effort.
         }
+        selectionRef.current = OFF_BACKGROUND
+        setSelection(OFF_BACKGROUND)
         return false
       }
     },
@@ -147,7 +187,13 @@ export function useMeetingVideoEffects(): MeetingVideoEffects {
 
   // Camera toggles and device switches create/replace the local track.
   useEffect(() => {
-    if (!isCameraEnabled || capability !== 'supported') return
+    if (!isCameraEnabled || capability !== 'supported') {
+      const track = attachedTrackRef.current
+      processorRef.current = null
+      attachedTrackRef.current = null
+      if (track) void track.stopProcessor().catch(() => undefined)
+      return
+    }
     void apply(selectionRef.current)
   }, [
     apply,

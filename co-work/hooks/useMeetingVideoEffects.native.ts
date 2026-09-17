@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useLocalParticipant } from '@livekit/react-native'
 import type { LocalVideoTrack } from 'livekit-client'
+import { AppState } from 'react-native'
 
 import MeetingVideoEffectsNative from '~/modules/meeting-video-effects'
 import type { MeetingVideoEffects } from '~/co-work/lib/meeting-video-effects'
@@ -10,6 +11,7 @@ import {
   normalizeVirtualBackground,
   OFF_BACKGROUND,
   saveVirtualBackgroundPreference,
+  virtualBackgroundUnavailableMessage,
   type VideoEffectCapability,
   type VideoEffectStatus,
   type VirtualBackgroundSelection,
@@ -41,17 +43,24 @@ export function useMeetingVideoEffects(): MeetingVideoEffects {
   useEffect(() => {
     let supported = false
     try {
-      supported = !!MeetingVideoEffectsNative?.isSupported()
+      supported = !!MeetingVideoEffectsNative?.isSupported?.()
       if (supported && !registeredRef.current) {
-        registeredRef.current = !!MeetingVideoEffectsNative?.registerProcessor()
+        registeredRef.current = !!MeetingVideoEffectsNative?.registerProcessor?.()
       }
     } catch {
       supported = false
+      registeredRef.current = false
     }
     setCapability(supported && registeredRef.current ? 'supported' : 'unavailable')
+    if (!(supported && registeredRef.current)) {
+      setError(virtualBackgroundUnavailableMessage('native'))
+    }
     void loadVirtualBackgroundPreference()
       .then(resolveVirtualBackgroundSelection)
-      .then(setSelection)
+      .then((value) => {
+        // Never leave a remembered effect active when the processor is missing.
+        setSelection(supported && registeredRef.current ? value : OFF_BACKGROUND)
+      })
       .catch(() => setSelection(OFF_BACKGROUND))
   }, [])
 
@@ -61,7 +70,7 @@ export function useMeetingVideoEffects(): MeetingVideoEffects {
       setError(null)
 
       if (next.mode !== 'off' && capability !== 'supported') {
-        setError('Virtual backgrounds require the latest SHEconomy app.')
+        setError(virtualBackgroundUnavailableMessage('native'))
         setStatus('error')
         return false
       }
@@ -78,7 +87,7 @@ export function useMeetingVideoEffects(): MeetingVideoEffects {
         if (next.mode === 'image' && !next.imageUrl) {
           throw new Error('The selected background image is not available offline.')
         }
-        MeetingVideoEffectsNative?.configure({
+        MeetingVideoEffectsNative?.configure?.({
           mode: next.mode,
           imagePath: next.imageUrl,
           blurRadius: next.blurRadius,
@@ -105,6 +114,8 @@ export function useMeetingVideoEffects(): MeetingVideoEffects {
           // Preserve the camera even if restoring capture constraints fails.
         }
         setError(cause instanceof Error ? cause.message : 'Could not apply background effect.')
+        selectionRef.current = OFF_BACKGROUND
+        setSelection(OFF_BACKGROUND)
         setStatus('error')
         return false
       }
@@ -137,6 +148,42 @@ export function useMeetingVideoEffects(): MeetingVideoEffects {
     },
     [cameraTrack?.track],
   )
+
+  useEffect(() => {
+    const disableForResources = (message: string) => {
+      setError(message)
+      void apply(OFF_BACKGROUND).then(() => {
+        setError(message)
+        setStatus('error')
+      })
+    }
+    const memorySubscription = AppState.addEventListener('memoryWarning', () => {
+      if (selectionRef.current.mode === 'off') return
+      disableForResources(
+        'Background effect was turned off because memory is low. Your camera stays unfiltered.',
+      )
+    })
+    const stateSubscription = AppState.addEventListener('change', (state) => {
+      if (state !== 'active' || capability !== 'supported') return
+      try {
+        if (!MeetingVideoEffectsNative?.isSupported()) {
+          setCapability('unavailable')
+          disableForResources(
+            'Background effect was turned off to protect device performance. Your camera stays unfiltered.',
+          )
+        }
+      } catch {
+        setCapability('unavailable')
+        disableForResources(
+          'Background effects became unavailable. Your camera stays unfiltered.',
+        )
+      }
+    })
+    return () => {
+      memorySubscription.remove()
+      stateSubscription.remove()
+    }
+  }, [apply, capability])
 
   const retry = useCallback(() => apply(selectionRef.current), [apply])
   return { capability, status, selection, error, apply, retry }

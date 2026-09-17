@@ -1,7 +1,7 @@
 // Keep first: LiveKit's WebRTC layer extends DOMException while it evaluates.
 import '~/lib/polyfills/install-dom-exception'
 
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { findNodeHandle, NativeModules, Platform, View } from 'react-native'
 import Constants from 'expo-constants'
 import { useLocalParticipant, useRoomContext } from '@livekit/react-native'
@@ -13,6 +13,7 @@ import {
   type CallAudioRoute,
 } from '~/co-work/lib/livekit-call-audio'
 import type { LiveKitMediaControls } from '~/co-work/lib/livekit-media-controls'
+import { softMediaToggleFailure } from '~/co-work/lib/meeting-mobile'
 import { setLocalScreenShareEnabled } from '~/co-work/lib/livekit-screen-share'
 import { useMeetingVideoEffects } from '~/co-work/hooks/useMeetingVideoEffects.native'
 import { useMeetingAudioQuality } from '~/co-work/hooks/useMeetingAudioQuality.native'
@@ -106,13 +107,9 @@ export function useLiveKitMediaControls(preferSpeaker = true): LiveKitMediaContr
         await showIosBroadcastPicker()
       }
 
-      if (enabling && Platform.OS === 'android') {
-        throw new Error(
-          'Present from iPhone, iPad, or the website. Android meetings can still view a shared screen.',
-        )
-      }
-
-      // iOS: connects to ScreenShareExtension via the app-group socket.
+      // iOS connects to ScreenShareExtension through the app-group socket.
+      // Android opens the MediaProjection consent sheet and keeps capture alive
+      // through the configured foreground screen-share service.
       await setLocalScreenShareEnabled(localParticipant, enabling, 'native')
     } catch (error) {
       if (isAbortOrCancelError(error)) {
@@ -122,26 +119,32 @@ export function useLiveKitMediaControls(preferSpeaker = true): LiveKitMediaContr
           }
           throw new Error(
             enabling
-              ? 'Screen share was cancelled. Choose SHEconomy → Start Broadcast in the system sheet.'
+              ? isAbortOrCancelError(error)
+                ? 'Screen share was cancelled. Choose SHEconomy → Start Broadcast in the system sheet.'
+                : softMediaToggleFailure('screen_share', error)
               : 'Could not stop screen share.',
           )
         }
         throw new Error(
           enabling
-            ? 'Screen share permission was denied. Allow screen capture when prompted.'
+            ? softMediaToggleFailure('screen_share', error)
             : 'Could not stop screen share.',
         )
       }
-      throw error
+      throw new Error(softMediaToggleFailure('screen_share', error))
     }
   }, [localParticipant])
 
   const toggleSpeaker = useCallback(async () => {
-    const next = !speakerOn
-    const route = await toggleCallSpeaker(next)
-    // Reflect the actual selected route so Bluetooth/earpiece don't look like speaker.
-    setSpeakerOn(routeIsSpeaker(route))
-  }, [speakerOn])
+    try {
+      const next = !speakerOn
+      const route = await toggleCallSpeaker(next)
+      // Reflect the actual selected route so Bluetooth/earpiece don't look like speaker.
+      setSpeakerOn(routeIsSpeaker(route))
+    } catch (cause) {
+      audioQuality.reportError(softMediaToggleFailure('speaker', cause))
+    }
+  }, [audioQuality, speakerOn])
 
   const toggleAudio = useCallback(() => {
     if (muteInFlightRef.current) return
@@ -149,24 +152,48 @@ export function useLiveKitMediaControls(preferSpeaker = true): LiveKitMediaContr
     muteInFlightRef.current = true
     void localParticipant
       .setMicrophoneEnabled(next, { ...CALL_AUDIO_CAPTURE })
-      .catch(audioQuality.reportError)
+      .catch((cause) => {
+        audioQuality.reportError(softMediaToggleFailure('microphone', cause))
+      })
       .finally(() => {
         muteInFlightRef.current = false
       })
-  }, [audioQuality.reportError, isMicrophoneEnabled, localParticipant])
+  }, [audioQuality, isMicrophoneEnabled, localParticipant])
 
-  return {
-    room,
-    localParticipant,
-    audioEnabled: isMicrophoneEnabled,
-    videoEnabled: isCameraEnabled,
-    screenSharing: isScreenShareEnabled,
-    videoEffects,
-    audioQuality,
-    speakerOn,
-    toggleAudio,
-    toggleVideo: () => void localParticipant.setCameraEnabled(!isCameraEnabled),
-    toggleScreenShare,
-    toggleSpeaker,
-  }
+  const toggleVideo = useCallback(() => {
+    void localParticipant.setCameraEnabled(!isCameraEnabled).catch((cause) => {
+      audioQuality.reportError(softMediaToggleFailure('camera', cause))
+    })
+  }, [audioQuality, isCameraEnabled, localParticipant])
+
+  return useMemo(
+    () => ({
+      room,
+      localParticipant,
+      audioEnabled: isMicrophoneEnabled,
+      videoEnabled: isCameraEnabled,
+      screenSharing: isScreenShareEnabled,
+      videoEffects,
+      audioQuality,
+      speakerOn,
+      toggleAudio,
+      toggleVideo,
+      toggleScreenShare,
+      toggleSpeaker,
+    }),
+    [
+      room,
+      localParticipant,
+      isMicrophoneEnabled,
+      isCameraEnabled,
+      isScreenShareEnabled,
+      videoEffects,
+      audioQuality,
+      speakerOn,
+      toggleAudio,
+      toggleVideo,
+      toggleScreenShare,
+      toggleSpeaker,
+    ],
+  )
 }

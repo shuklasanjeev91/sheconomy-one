@@ -191,12 +191,15 @@ export function useMeetingAudioQuality(
     supportsDeviceSelection: false,
     inputDevices: [],
     outputDevices: [],
+    videoDevices: [],
     activeInputDeviceId: null,
     activeOutputDeviceId: null,
+    activeVideoDeviceId: null,
     testMicrophone,
     testSpeaker,
     selectInputDevice: async () => {},
     selectOutputDevice: async () => {},
+    selectVideoDevice: async () => {},
     reportError: (cause) =>
       setError(
         cause instanceof Error

@@ -58,5 +58,16 @@
       "icons": [{ "src": "/pwa-icon-192.png", "sizes": "192x192" }]
     }
   ],
+  "related_applications": [
+    {
+      "platform": "play",
+      "id": "com.sheconomy.ecommerce",
+      "url": "https://play.google.com/store/apps/details?id=com.sheconomy.ecommerce"
+    },
+    {
+      "platform": "itunes",
+      "url": "https://apps.apple.com/app/id6499198194"
+    }
+  ],
   "prefer_related_applications": false
 }

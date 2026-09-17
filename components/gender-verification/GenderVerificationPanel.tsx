@@ -260,7 +260,8 @@ export function FaceCaptureOverlay({
 
   if (Platform.OS !== 'web') {
     return (
-      <YStack width="100%" alignItems="center">
+      <YStack width="100%" alignItems="center" position="relative">
+        {/* Keep analyzer out of the scroll/hit stack — only the host clips touches. */}
         <NativeFaceAnalyzer ref={analyzerRef} onReady={onAnalyzerReady} onError={onAnalyzerError} />
         {body}
       </YStack>

@@ -1,41 +1,45 @@
-import { Image } from 'react-native'
+import type { ImageSourcePropType } from 'react-native'
 
 import type { VirtualBackgroundSelection } from '~/co-work/lib/virtual-backgrounds'
 
 export type VirtualBackgroundPreset = {
   id: string
   name: string
-  thumbnail: number
+  thumbnail: ImageSourcePropType
   selection: VirtualBackgroundSelection
 }
 
+/**
+ * Web/SSR-safe presets — files live in `/public/meeting-backgrounds`.
+ * Native uses `virtual-background-presets.native.ts` (Metro `require`).
+ */
 const PRESET_ASSETS = [
   {
     id: 'office',
     name: 'Home office',
-    asset: require('../../public/meeting-backgrounds/office.png'),
+    path: '/meeting-backgrounds/office.png',
   },
   {
     id: 'lounge',
     name: 'Co-work lounge',
-    asset: require('../../public/meeting-backgrounds/lounge.png'),
+    path: '/meeting-backgrounds/lounge.png',
   },
   {
     id: 'studio',
     name: 'Warm studio',
-    asset: require('../../public/meeting-backgrounds/studio.png'),
+    path: '/meeting-backgrounds/studio.png',
   },
 ] as const
 
 export function getVirtualBackgroundPresets(): VirtualBackgroundPreset[] {
-  return PRESET_ASSETS.map(({ id, name, asset }) => ({
+  return PRESET_ASSETS.map(({ id, name, path }) => ({
     id,
     name,
-    thumbnail: asset,
+    thumbnail: { uri: path },
     selection: {
       mode: 'image',
       id,
-      imageUrl: Image.resolveAssetSource(asset).uri,
+      imageUrl: path,
     },
   }))
 }

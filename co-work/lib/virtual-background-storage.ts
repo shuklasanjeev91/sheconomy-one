@@ -1,5 +1,4 @@
 import { Platform } from 'react-native'
-import * as ImageManipulator from 'expo-image-manipulator'
 
 import { readPickedImageBytes, type PickedImage } from '~/lib/media/pick-image'
 import {
@@ -49,6 +48,9 @@ export async function uploadCustomVirtualBackground(
   userId: string,
   image: PickedImage,
 ): Promise<CustomVirtualBackground> {
+  // Dynamic import — keep expo-image-manipulator out of the lobby/meeting module graph
+  // until the user uploads a custom background (avoids Vite deps_ssr pre-bundle thrash).
+  const ImageManipulator = await import('expo-image-manipulator')
   const optimized = await ImageManipulator.manipulateAsync(
     image.uri,
     [{ resize: { width: 1920 } }],

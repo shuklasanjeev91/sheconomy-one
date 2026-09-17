@@ -1,4 +1,5 @@
 import type { Meeting } from '~/co-work/lib/types'
+import { formatMeetingInstantForViewer } from '~/lib/calendar/timezone'
 import { coWorkRoutes } from '~/lib/routes'
 
 export type MeetingRevisitCard = {
@@ -16,14 +17,8 @@ const UPCOMING_STATUSES = new Set<Meeting['status']>(['scheduled', 'instant', 'a
 export function formatMeetingWhenLabel(meeting: Pick<Meeting, 'scheduled_at' | 'started_at' | 'created_at' | 'time_zone'>) {
   const raw = meeting.scheduled_at ?? meeting.started_at ?? meeting.created_at
   if (!raw) return 'Time TBD'
-  return new Intl.DateTimeFormat(undefined, {
-    weekday: 'short',
-    month: 'short',
-    day: 'numeric',
-    hour: 'numeric',
-    minute: '2-digit',
-    timeZone: meeting.time_zone ?? undefined,
-  }).format(new Date(raw))
+  // Viewer-local timezone — host and invitee see different wall clocks for the same UTC instant.
+  return formatMeetingInstantForViewer(raw)
 }
 
 export function buildMeetingRevisitCards(

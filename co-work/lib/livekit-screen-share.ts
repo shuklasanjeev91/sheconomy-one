@@ -38,6 +38,7 @@ export const WEB_SCREEN_SHARE_CAPTURE: ScreenShareCaptureOptions = {
   resolution: ScreenSharePresets.h720fps15.resolution,
   contentHint: 'detail',
   // Prefer sharing a tab/window rather than the meeting page itself (blank recursion).
+  // Modern Chromium/Edge/Firefox present Entire screen / Window / Browser tab in one picker.
   selfBrowserSurface: 'exclude',
   surfaceSwitching: 'include',
   preferCurrentTab: false,

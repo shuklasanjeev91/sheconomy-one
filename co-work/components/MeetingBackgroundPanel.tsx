@@ -308,7 +308,7 @@ function EffectTile({
   onLongPress?: () => void
   busy?: boolean
   icon?: ReactNode
-  imageSource?: number
+  imageSource?: import('react-native').ImageSourcePropType
   imageUri?: string
 }) {
   const { ui: coworkUi } = useCoWorkTheme()

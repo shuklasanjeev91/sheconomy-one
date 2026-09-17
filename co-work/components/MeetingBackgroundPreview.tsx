@@ -9,27 +9,55 @@ import {
 import { createLocalVideoTrack, type LocalVideoTrack } from 'livekit-client'
 
 import { MeetingBackgroundQuickPicker } from '~/co-work/components/MeetingBackgroundQuickPicker'
+import { pickImagesWithCrop } from '~/lib/media/pick-and-crop'
+import {
+  customBackgroundSelection,
+  resolveVirtualBackgroundSelection,
+  uploadCustomVirtualBackground,
+} from '~/co-work/lib/virtual-background-storage'
 import {
   loadVirtualBackgroundPreference,
   normalizeVirtualBackground,
-  saveVirtualBackgroundPreference,
-  type VirtualBackgroundSelection,
   OFF_BACKGROUND,
+  saveVirtualBackgroundPreference,
+  webBackgroundResourceWarning,
+  type VirtualBackgroundSelection,
 } from '~/co-work/lib/virtual-backgrounds'
-import { resolveVirtualBackgroundSelection } from '~/co-work/lib/virtual-background-storage'
 
-export function MeetingBackgroundPreview() {
+type MeetingBackgroundPreviewProps = {
+  userId?: string | null
+}
+
+export function MeetingBackgroundPreview({ userId }: MeetingBackgroundPreviewProps = {}) {
   const videoRef = useRef<HTMLVideoElement | null>(null)
   const trackRef = useRef<LocalVideoTrack | null>(null)
   const processorRef = useRef<BackgroundProcessorWrapper | null>(null)
+  const effectsAvailableRef = useRef(false)
   const [selection, setSelection] = useState<VirtualBackgroundSelection>(OFF_BACKGROUND)
   const [busy, setBusy] = useState(true)
+  const [uploadBusy, setUploadBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [effectsAvailable, setEffectsAvailable] = useState(true)
 
   const apply = useCallback(async (value: VirtualBackgroundSelection) => {
     const next = await resolveVirtualBackgroundSelection(normalizeVirtualBackground(value))
+    if (!effectsAvailableRef.current && next.mode !== 'off') {
+      setError(
+        'Background effects are unavailable in this browser. Camera preview is still active.',
+      )
+      setSelection(OFF_BACKGROUND)
+      await saveVirtualBackgroundPreference(OFF_BACKGROUND)
+      return
+    }
     const processor = processorRef.current
-    if (!processor) return
+    if (!processor) {
+      // Camera-only preview (unsupported processors) still remembers "None".
+      if (next.mode === 'off') {
+        setSelection(OFF_BACKGROUND)
+        await saveVirtualBackgroundPreference(OFF_BACKGROUND)
+      }
+      return
+    }
     setBusy(true)
     setError(null)
     try {
@@ -43,16 +71,59 @@ export function MeetingBackgroundPreview() {
       setSelection(next)
       await saveVirtualBackgroundPreference(next)
     } catch (cause) {
+      try {
+        await processor.switchTo({ mode: 'disabled' })
+      } catch {
+        // Keep the ordinary camera preview even if cleanup fails.
+      }
+      setSelection(OFF_BACKGROUND)
+      await saveVirtualBackgroundPreference(OFF_BACKGROUND)
       setError(cause instanceof Error ? cause.message : 'Could not preview this background.')
     } finally {
       setBusy(false)
     }
   }, [])
 
+  const upload = useCallback(async () => {
+    if (!userId) return
+    if (!effectsAvailableRef.current) {
+      setError(
+        'Background effects are unavailable in this browser. Camera preview is still active.',
+      )
+      return
+    }
+    const picked = await pickImagesWithCrop({
+      multiple: false,
+      maxCount: 1,
+      aspect: [16, 9],
+      cropTitle: 'Crop virtual background',
+    })
+    const image = picked[0]
+    if (!image) return
+    setUploadBusy(true)
+    setError(null)
+    try {
+      const created = await uploadCustomVirtualBackground(userId, image)
+      await apply(customBackgroundSelection(created))
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : 'Could not upload this background.')
+    } finally {
+      setUploadBusy(false)
+    }
+  }, [apply, userId])
+
   useEffect(() => {
     let cancelled = false
     void (async () => {
       try {
+        const resourceWarning =
+          typeof navigator === 'undefined'
+            ? null
+            : webBackgroundResourceWarning(navigator as Navigator & { deviceMemory?: number })
+        const supported = !resourceWarning && supportsBackgroundProcessors()
+        effectsAvailableRef.current = supported
+        if (!cancelled) setEffectsAvailable(supported)
+
         const track = await createLocalVideoTrack({
           resolution: { width: 640, height: 360, frameRate: 15 },
         })
@@ -62,16 +133,32 @@ export function MeetingBackgroundPreview() {
         }
         trackRef.current = track
         if (videoRef.current) track.attach(videoRef.current)
-        if (!supportsBackgroundProcessors()) {
-          setError('Background effects are unavailable in this browser. Camera preview is still active.')
+
+        if (!supported) {
+          setError(
+            resourceWarning ||
+              'Background effects are unavailable in this browser. Camera preview is still active.',
+          )
           setBusy(false)
           return
         }
-        const processor = BackgroundProcessor({ mode: 'disabled', maxFps: 15 })
-        await track.setProcessor(processor)
-        processorRef.current = processor
-        const saved = await loadVirtualBackgroundPreference()
-        await apply(saved)
+
+        try {
+          const processor = BackgroundProcessor({ mode: 'disabled', maxFps: 15 })
+          await track.setProcessor(processor)
+          processorRef.current = processor
+          const saved = await loadVirtualBackgroundPreference()
+          await apply(saved)
+        } catch (cause) {
+          effectsAvailableRef.current = false
+          if (!cancelled) setEffectsAvailable(false)
+          setError(
+            cause instanceof Error
+              ? cause.message
+              : 'Background effects failed to start. Camera preview is still active.',
+          )
+          setBusy(false)
+        }
       } catch (cause) {
         setError(cause instanceof Error ? cause.message : 'Could not start camera preview.')
         setBusy(false)
@@ -82,6 +169,7 @@ export function MeetingBackgroundPreview() {
       const track = trackRef.current
       processorRef.current = null
       trackRef.current = null
+      effectsAvailableRef.current = false
       if (track) {
         track.detach()
         void track.stopProcessor().catch(() => undefined)
@@ -95,7 +183,10 @@ export function MeetingBackgroundPreview() {
       selection={selection}
       busy={busy}
       error={error}
+      effectsAvailable={effectsAvailable}
       onSelect={(value) => void apply(value)}
+      onUpload={userId ? () => void upload() : undefined}
+      uploadBusy={uploadBusy}
       preview={
         <video
           ref={videoRef}

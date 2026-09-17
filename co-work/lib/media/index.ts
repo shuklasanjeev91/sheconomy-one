@@ -16,8 +16,8 @@ export function getMediaCapabilities(): MediaCapabilities {
   return {
     platform,
     supportsVideo: liveKit,
-    // Android Present requires MediaProjection FGS, which Play rejected for this listing.
-    // Android Present requires MediaProjection FGS, which Play rejected for this listing.
+    // Production meetings use LiveKit SFU (getDisplayMedia / native broadcast),
+    // never a peer-to-peer mesh.
     supportsScreenShare: hasDisplayMedia() || platform === 'ios',
     supportsRecording: hasMediaRecorder() || isNativeRuntime(),
     supportsLiveCaptions: hasSpeechRecognition() || isNativeRuntime(),
@@ -35,6 +35,13 @@ const ICE_SERVERS: RTCIceServer[] = [
   { urls: 'stun:stun1.l.google.com:19302' },
 ]
 
+/**
+ * Legacy web peer-to-peer media session.
+ *
+ * @deprecated Production Co-Work meetings use LiveKit SFU (`createLiveKitMeetingMediaAdapter`).
+ * Do NOT use this mesh for large meetings — O(n²) peer connections will not scale.
+ * `createMediaSession` returns null so callers cannot accidentally enable mesh.
+ */
 export class WebMediaSession {
   private localStream: MediaStream | null = null
   private screenStream: MediaStream | null = null
@@ -218,11 +225,19 @@ export class WebMediaSession {
   }
 }
 
+/**
+ * Mesh media is disabled for Co-Work meetings.
+ * Production path: LiveKit SFU via `~/co-work/lib/realtime`.
+ */
 export function createMediaSession(
-  selfId: string,
-  sendSignal: (payload: import('~/co-work/lib/types').SignalPayload) => void,
-  callbacks: MediaSessionCallbacks,
+  _selfId: string,
+  _sendSignal: (payload: import('~/co-work/lib/types').SignalPayload) => void,
+  _callbacks: MediaSessionCallbacks,
 ): WebMediaSession | null {
-  if (typeof navigator === 'undefined' || !navigator.mediaDevices?.getUserMedia) return null
-  return new WebMediaSession(selfId, sendSignal, callbacks)
+  if (typeof __DEV__ !== 'undefined' && __DEV__) {
+    console.warn(
+      '[co-work] createMediaSession (P2P mesh) is disabled. Use LiveKit SFU MeetingMediaAdapter.',
+    )
+  }
+  return null
 }

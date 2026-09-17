@@ -32,6 +32,7 @@ import { navigateApp, replaceApp } from '~/lib/platform/navigate'
 import { refreshProfiles } from '~/lib/profile/refresh'
 import { patchSessionProfile } from '~/lib/profile/profile-store'
 import { persistStorage } from '~/lib/store/storage'
+import { commerceRoutes } from '~/lib/routes'
 
 const {
   dismissStorageKey: STORAGE_KEY,
@@ -167,6 +168,8 @@ export function GenderVerificationHost() {
     if (!onProtectedRoute && !onIntentRoute) return
     if (verificationFlowActive || peekVerificationFlowOpen()) return
     if (didRedirectRef.current) return
+    // User just skipped/dismissed on this path — don't immediately reopen.
+    if (closedOnPathRef.current === pathname) return
 
     if (onIntentRoute) {
       void rememberVerificationReturnTo(pathname)
@@ -285,6 +288,14 @@ export function GenderVerificationHost() {
     closedOnPathRef.current = pathname
     void clearVerificationReturnTo()
     closeVerificationFlow()
+
+    // Leaving Community / Chat / Create store without verifying must land on a
+    // safe surface — otherwise the intent gate reopens and Skip looks broken.
+    if (isHumanVerificationIntentPath(pathname) || requiresGenderVerification(pathname)) {
+      const safePath = (buildVerificationDeniedRedirect().split('?')[0] ??
+        String(commerceRoutes.home)) as Href
+      replaceApp(safePath)
+    }
   }, [closeVerificationFlow, pathname])
 
   const handleVerified = useCallback(() => {

@@ -163,8 +163,7 @@ export function CoWorkPanelShell({
 
   return (
     <YStack
-      width={fullWidth ? '100%' : 360}
-      maxWidth="100%"
+      width="100%"
       height="100%"
       borderRadius={fullWidth ? 0 : coworkUi.radius.panel}
       overflow="hidden"

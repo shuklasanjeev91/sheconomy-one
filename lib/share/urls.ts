@@ -7,6 +7,7 @@ import {
   coWorkRoutes,
 } from '~/lib/routes'
 import { buildAbsoluteUrl } from '~/lib/platform/url'
+import { DEEP_LINK_ORIGIN } from '~/config/app-origin'
 
 export function getProfileShareUrl(handle: string) {
   return buildAbsoluteUrl(appRoutes.userProfile(handle))
@@ -71,5 +72,7 @@ export function getProgramShareUrl(slug: string) {
 }
 
 export function getMeetingShareUrl(code: string) {
-  return buildAbsoluteUrl(coWorkRoutes.meeting(code))
+  // Meeting links must use the host with valid AASA / Digital Asset Links.
+  // Association crawlers do not follow the apex-domain redirect.
+  return `${DEEP_LINK_ORIGIN}${coWorkRoutes.meeting(code)}`
 }

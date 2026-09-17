@@ -4,6 +4,7 @@
  *
  * Declares only modes the binary actually uses:
  * - remote-notification: wake for push (OneSignal / meeting invites)
+ * - picture-in-picture: kept when present in app.json for LiveKit iOS AVKit PiP
  *
  * Do NOT declare `audio` — Apple Guideline 2.5.4 rejects unused background
  * audio when the app has no music/streaming-style persistent playback.
@@ -19,6 +20,8 @@ function withCallKeepIos(config) {
   return withInfoPlist(config, (mod) => {
     const modes = new Set(mod.modResults.UIBackgroundModes ?? [])
     modes.add('remote-notification')
+    // LiveKit iOS VideoTrack AVKit PiP (no voip).
+    modes.add('picture-in-picture')
     modes.delete('audio')
     modes.delete('voip')
     mod.modResults.UIBackgroundModes = Array.from(modes)

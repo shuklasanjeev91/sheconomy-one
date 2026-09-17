@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
 import {
   captionLanguageName,
+  localizeCaptionLine,
   speechRecognitionLocale,
   translateCaptionText,
 } from '~/co-work/lib/caption-translate'
@@ -16,6 +17,43 @@ import {
 } from '~/co-work/lib/native-speech-recognition'
 import { hasSpeechRecognition, isNativeRuntime } from '~/lib/platform/capabilities'
 import { useOptionalRegionPreferences } from '~/lib/locale'
+import { REGION_LANGUAGES } from '~/lib/locale/region-data'
+import { readPersistentValue, writePersistentValue } from '~/lib/platform/storage'
+import type {
+  CaptionOverlayPlacement,
+  CaptionOverlaySize,
+} from '~/co-work/lib/caption-overlay-layout'
+
+export type { CaptionOverlayPlacement, CaptionOverlaySize }
+
+export type LiveCaptionPreferences = {
+  targetLang: string
+  collapsed: boolean
+  size: CaptionOverlaySize
+  placement: CaptionOverlayPlacement
+}
+
+const CAPTION_PREFERENCE_PREFIX = 'cowork.live-captions.v1'
+const VALID_LANGUAGES = new Set<string>(REGION_LANGUAGES.map((language) => language.code))
+const VALID_SIZES = new Set<CaptionOverlaySize>(['compact', 'comfortable', 'large'])
+
+export function normalizeLiveCaptionPreferences(
+  value: Partial<LiveCaptionPreferences> | null | undefined,
+  fallbackLanguage = 'en',
+): LiveCaptionPreferences {
+  const fallback = VALID_LANGUAGES.has(fallbackLanguage.toLowerCase())
+    ? fallbackLanguage.toLowerCase()
+    : 'en'
+  return {
+    targetLang:
+      typeof value?.targetLang === 'string' && VALID_LANGUAGES.has(value.targetLang.toLowerCase())
+        ? value.targetLang.toLowerCase()
+        : fallback,
+    collapsed: value?.collapsed === true,
+    size: value?.size && VALID_SIZES.has(value.size) ? value.size : 'comfortable',
+    placement: value?.placement === 'top' ? 'top' : 'bottom',
+  }
+}
 
 type UseLiveCaptionsOptions = {
   userId: string
@@ -44,33 +82,6 @@ function createSpeechRecognition(): SpeechRecognitionInstance | null {
   return new ctor() as SpeechRecognitionInstance
 }
 
-async function localizeCaptionLine(
-  line: LiveCaptionLine,
-  targetLang: string,
-): Promise<LiveCaptionLine> {
-  const original = (line.originalText || line.text).trim()
-  if (!original) return { ...line, targetLang }
-
-  const result = await translateCaptionText({
-    text: original,
-    targetLang,
-    sourceLang: line.sourceLang || 'auto',
-  })
-
-  const translatedText = result.translatedText.trim() || original
-  const detected = result.detectedSourceLang || line.sourceLang || null
-  const changed = translatedText !== original && !result.skipped
-
-  return {
-    ...line,
-    originalText: original,
-    text: translatedText,
-    sourceLang: detected,
-    targetLang,
-    translated: changed || Boolean(detected && detected.split('-')[0] !== targetLang),
-  }
-}
-
 export function useLiveCaptions({
   userId,
   displayName,
@@ -79,15 +90,21 @@ export function useLiveCaptions({
   onFinalCaption,
 }: UseLiveCaptionsOptions) {
   const region = useOptionalRegionPreferences()
-  const targetLang = (region?.languageCode || 'en').toLowerCase()
+  const regionLanguage = (region?.languageCode || 'en').toLowerCase()
+  const [preferences, setPreferences] = useState<LiveCaptionPreferences>(() =>
+    normalizeLiveCaptionPreferences(null, regionLanguage),
+  )
+  const [preferencesHydrated, setPreferencesHydrated] = useState(false)
+  const targetLang = preferences.targetLang
   const targetLangName = captionLanguageName(targetLang)
   const speakLocale = speechRecognitionLocale(
-    region?.languageCode || 'en',
+    regionLanguage,
     region?.countryCode || 'IN',
   )
 
   const [active, setActive] = useState(false)
   const [interimText, setInterimText] = useState('')
+  const [translatedInterim, setTranslatedInterim] = useState('')
   const [localLines, setLocalLines] = useState<LiveCaptionLine[]>([])
   const [translatedRemote, setTranslatedRemote] = useState<LiveCaptionLine[]>([])
   const [error, setError] = useState<string | null>(null)
@@ -107,15 +124,16 @@ export function useLiveCaptions({
 
   const commitFinalCaption = useCallback(
     (text: string) => {
-      const sourceLang = targetLangRef.current
+      // Never claim the device region as the spoken language — STT text is
+      // auto-detected on each viewer's device when localizing to targetLang.
       const line: LiveCaptionLine = {
         id: `${userId}-${Date.now()}`,
         userId,
         speaker: displayNameRef.current,
         text,
         originalText: text,
-        sourceLang,
-        targetLang: sourceLang,
+        sourceLang: 'auto',
+        targetLang: 'auto',
         translated: false,
         isFinal: true,
         timestamp: Date.now(),
@@ -123,8 +141,9 @@ export function useLiveCaptions({
       void localizeCaptionLine(line, targetLangRef.current).then((localized) => {
         setLocalLines((current) => [...current.slice(-40), localized])
       })
-      onFinalCaptionRef.current?.(text, sourceLang)
+      onFinalCaptionRef.current?.(text, 'auto')
       setInterimText('')
+      setTranslatedInterim('')
     },
     [userId],
   )
@@ -137,6 +156,7 @@ export function useLiveCaptions({
     nativeSessionRef.current = null
     if (native) void native.destroy()
     setInterimText('')
+    setTranslatedInterim('')
   }, [])
 
   const startWebRecognition = useCallback(() => {
@@ -261,6 +281,33 @@ export function useLiveCaptions({
   }, [stopRecognition])
 
   useEffect(() => {
+    let cancelled = false
+    const key = `${CAPTION_PREFERENCE_PREFIX}:${userId}`
+    void readPersistentValue(key).then((raw) => {
+      if (cancelled) return
+      let stored: Partial<LiveCaptionPreferences> | null = null
+      try {
+        stored = raw ? (JSON.parse(raw) as Partial<LiveCaptionPreferences>) : null
+      } catch {
+        stored = null
+      }
+      setPreferences(normalizeLiveCaptionPreferences(stored, regionLanguage))
+      setPreferencesHydrated(true)
+    })
+    return () => {
+      cancelled = true
+    }
+  }, [regionLanguage, userId])
+
+  useEffect(() => {
+    if (!preferencesHydrated) return
+    void writePersistentValue(
+      `${CAPTION_PREFERENCE_PREFIX}:${userId}`,
+      JSON.stringify(preferences),
+    )
+  }, [preferences, preferencesHydrated, userId])
+
+  useEffect(() => {
     if (!enabled && active) {
       stopRecognition()
       setActive(false)
@@ -323,6 +370,33 @@ export function useLiveCaptions({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [targetLang])
 
+  // Translate interim (partial) captions into the selected display language so
+  // the live overlay matches finals — not the spoken/STT language.
+  useEffect(() => {
+    const text = interimText.trim()
+    if (!text || !active) {
+      setTranslatedInterim('')
+      return
+    }
+
+    let cancelled = false
+    const handle = setTimeout(() => {
+      void translateCaptionText({
+        text,
+        targetLang,
+        sourceLang: 'auto',
+      }).then((result) => {
+        if (cancelled) return
+        setTranslatedInterim(result.translatedText.trim() || text)
+      })
+    }, 320)
+
+    return () => {
+      cancelled = true
+      clearTimeout(handle)
+    }
+  }, [active, interimText, targetLang])
+
   const visibleLines = useMemo(
     () =>
       [...translatedRemote, ...localLines]
@@ -346,11 +420,34 @@ export function useLiveCaptions({
   )
 
   const currentCaption =
-    interimText ||
-    (visibleLines.length > 0 ? visibleLines[visibleLines.length - 1]?.text : '') ||
-    ''
+    (interimText
+      ? translatedInterim ||
+        // Avoid flashing English while Hindi (etc.) translation is in flight.
+        (visibleLines.length > 0 ? visibleLines[visibleLines.length - 1]?.text : '') ||
+        '…'
+      : visibleLines.length > 0
+        ? visibleLines[visibleLines.length - 1]?.text
+        : '') || ''
 
   const showingTranslation = visibleLines.some((line) => line.translated)
+
+  const setTargetLang = useCallback((language: string) => {
+    setPreferences((current) =>
+      normalizeLiveCaptionPreferences({ ...current, targetLang: language }, current.targetLang),
+    )
+  }, [])
+
+  const setCollapsed = useCallback((collapsed: boolean) => {
+    setPreferences((current) => ({ ...current, collapsed }))
+  }, [])
+
+  const setOverlaySize = useCallback((size: CaptionOverlaySize) => {
+    setPreferences((current) => ({ ...current, size }))
+  }, [])
+
+  const setPlacement = useCallback((placement: CaptionOverlayPlacement) => {
+    setPreferences((current) => ({ ...current, placement }))
+  }, [])
 
   return {
     supported,
@@ -364,6 +461,12 @@ export function useLiveCaptions({
     targetLang,
     targetLangName,
     showingTranslation,
+    captionPreferences: preferences,
+    availableLanguages: REGION_LANGUAGES,
+    setTargetLang,
+    setCollapsed,
+    setOverlaySize,
+    setPlacement,
     toggleCaptions,
     setActive,
   }

@@ -1,32 +1,42 @@
 import { AppLink } from '~/components/navigation/AppLink'
-import { useCallback, useEffect, useState } from 'react'
-import { Platform } from 'react-native'
+import { useCallback, useEffect, useState, lazy, Suspense } from 'react'
 
 import { AuthSignInFlow } from '~/components/auth/AuthSignInFlow'
 import { FullWidthLayout, LAYOUT_STRETCH, PageSection, ScreenCenter } from '~/components/layout'
 import { BRAND_MEMBER_LABEL } from '~/config/brand'
-import { ShareSheet } from '~/components/share'
+import { MeetingShareSheet } from '~/co-work/components/MeetingShareSheet'
 import { Button, Field, Icons, Input, Spinner, Text, XStack, YStack, useAppToast } from '~/components/ui'
 import { CoWorkBrandChip, CoWorkIconBadge } from '~/co-work/components/CoWorkUi'
 import { MeetingInvitePanel } from '~/co-work/components/MeetingInvitePanel'
-import { MeetingBackgroundPreview } from '~/co-work/components/MeetingBackgroundPreview'
-import { buildMeetingSharePayload } from '~/co-work/lib/meeting-share'
+import { MeetingOpenInApp } from '~/co-work/components/MeetingOpenInApp'
+import { MeetingProvider } from '~/co-work/components/MeetingProvider'
+import { useSyncMeetingLifecycle } from '~/co-work/hooks/useMeetingStateManager'
 import {
   fetchMeetingByCode,
+  fetchMeetingModerationSettings,
   formatMeetingCode,
   isMeetingJoinable,
   verifyMeetingPasscode,
 } from '~/co-work/lib/meetings'
+import {
+  MEETING_LOCKED_MESSAGE,
+  shouldPromptForPasscode,
+} from '~/co-work/lib/meeting-security'
 import { openInstantMeetingSession } from '~/co-work/lib/instant-meeting-session'
 import { coworkGlassStyle, useCoWorkTheme } from '~/co-work/lib/theme'
 import { controlGradientStyle, coworkBoxShadow, pageGradientStyle } from '~/lib/platform/crossStyles'
 import type { Meeting } from '~/co-work/lib/types'
-import { navigateApp } from '~/lib/platform/navigate'
 import { coWorkRoutes } from '~/lib/routes'
 import { useProfile } from '~/hooks/useProfile'
 
 import { APP_LAYOUT } from '~/lib/layout/constants'
 import { addMeetingToDeviceCalendar } from '~/lib/calendar/device-calendar'
+
+const MeetingBackgroundPreview = lazy(() =>
+  import('~/co-work/components/MeetingBackgroundPreview').then((mod) => ({
+    default: mod.MeetingBackgroundPreview,
+  })),
+)
 
 type MeetingLobbyScreenProps = {
   code: string
@@ -34,12 +44,21 @@ type MeetingLobbyScreenProps = {
 
 /** Pre-join lobby only — live room is `/meeting/:code/live` (MeetingLiveScreen). */
 export function MeetingLobbyScreen({ code }: MeetingLobbyScreenProps) {
+  return (
+    <MeetingProvider>
+      <MeetingLobbyScreenBody code={code} />
+    </MeetingProvider>
+  )
+}
+
+function MeetingLobbyScreenBody({ code }: MeetingLobbyScreenProps) {
   const { ui: coworkUi, gradients: coworkGradients, shadows: coworkShadows } = useCoWorkTheme()
   const toast = useAppToast()
   const { profile, user, isAuthenticated, isLoading } = useProfile()
   const [meeting, setMeeting] = useState<Meeting | null>(null)
   const [passcode, setPasscode] = useState('')
   const [verified, setVerified] = useState(false)
+  const [isLocked, setIsLocked] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [loadingMeeting, setLoadingMeeting] = useState(true)
   const [showInvite, setShowInvite] = useState(false)
@@ -48,6 +67,11 @@ export function MeetingLobbyScreen({ code }: MeetingLobbyScreenProps) {
   const isHost = !!meeting && !!user && meeting.host_id === user.id
   const hostName = profile?.full_name || profile?.username || 'You'
   const normalizedCode = code.replace(/\s/g, '').trim()
+
+  useSyncMeetingLifecycle({
+    inLobby: true,
+    locked: isLocked && !isHost,
+  })
 
   const load = useCallback(async () => {
     if (!normalizedCode) {
@@ -68,15 +92,31 @@ export function MeetingLobbyScreen({ code }: MeetingLobbyScreenProps) {
       }
       if (row.status === 'cancelled') setError('The host cancelled this meeting.')
       setMeeting(row)
-      if (!row.security_settings?.passcode && !row.security_settings?.requirePasscode) {
+
+      const moderation = await fetchMeetingModerationSettings(row.id).catch(() => null)
+      const locked = !!moderation?.is_locked
+      setIsLocked(locked)
+      if (locked && row.host_id !== user?.id) {
+        setError(MEETING_LOCKED_MESSAGE)
+      }
+
+      const hostViewer = !!user && row.host_id === user.id
+      if (
+        !shouldPromptForPasscode({
+          security: row.security_settings,
+          isHost: hostViewer,
+        })
+      ) {
         setVerified(true)
+      } else {
+        setVerified(false)
       }
     } catch (loadError) {
       setError(loadError instanceof Error ? loadError.message : 'Failed to load meeting')
     } finally {
       setLoadingMeeting(false)
     }
-  }, [normalizedCode])
+  }, [normalizedCode, user?.id])
 
   useEffect(() => {
     void load()
@@ -94,30 +134,29 @@ export function MeetingLobbyScreen({ code }: MeetingLobbyScreenProps) {
 
   function enterLiveRoom() {
     if (!meeting) return
-    if (Platform.OS === 'web') {
-      navigateApp(coWorkRoutes.meetingLive(meeting.meeting_code))
+    if (isLocked && !isHost) {
+      toast.show('Meeting locked', { tone: 'danger', message: MEETING_LOCKED_MESSAGE })
       return
     }
+    // In-place host keeps the SPA shell mounted (no hard route reload).
+    // autoJoin skips the second Join Meeting screen — lobby already previewed devices.
     openInstantMeetingSession({
       code: meeting.meeting_code,
       meeting,
+      autoJoin: true,
     })
   }
 
   async function addToCalendar() {
-    if (!meeting?.scheduled_at && !meeting?.started_at) {
-      toast.show('No time set for this meeting', { tone: 'info' })
-      return
-    }
-    const result = await addMeetingToDeviceCalendar(meeting)
+    const result = await addMeetingToDeviceCalendar(meeting!)
     if (result === 'cancelled') return
     toast.show(
-      result === 'opened'
+      result === 'saved' || result === 'opened'
         ? 'Meeting added to calendar'
         : result === 'shared'
           ? 'Calendar event ready'
           : 'Could not open calendar',
-      { tone: result === 'opened' || result === 'shared' ? 'success' : 'danger' },
+      { tone: result === 'saved' || result === 'opened' || result === 'shared' ? 'success' : 'danger' },
     )
   }
 
@@ -155,6 +194,8 @@ export function MeetingLobbyScreen({ code }: MeetingLobbyScreenProps) {
                 : (normalizedCode || code).toUpperCase()}
             </Text>
           </YStack>
+
+          <MeetingOpenInApp meetingCode={normalizedCode || code} />
 
           {error ? (
             <YStack
@@ -223,17 +264,30 @@ export function MeetingLobbyScreen({ code }: MeetingLobbyScreenProps) {
               <Text color={coworkUi.textSecondary} fontSize={14}>
                 Hosted by {meeting.host?.full_name || meeting.host?.username || BRAND_MEMBER_LABEL}
               </Text>
-              <MeetingBackgroundPreview />
+              <Suspense
+                fallback={
+                  <YStack alignItems="center" justifyContent="center" minHeight={160} gap="$2">
+                    <Spinner size="small" color={coworkUi.brand} />
+                    <Text fontSize={12} color={coworkUi.textMuted}>
+                      Loading camera preview…
+                    </Text>
+                  </YStack>
+                }
+              >
+                <MeetingBackgroundPreview userId={user?.id} />
+              </Suspense>
               <XStack gap="$3" flexWrap="wrap">
                 <Button
                   tone="primary"
                   size="$4"
                   borderRadius={999}
+                  disabled={isLocked && !isHost}
+                  opacity={isLocked && !isHost ? 0.55 : 1}
                   icon={<Icons.Video size={18} color="white" />}
                   onPress={enterLiveRoom}
                   style={controlGradientStyle(coworkGradients.activeControl, coworkUi.brand)}
                 >
-                  Join now
+                  {isLocked && !isHost ? 'Meeting locked' : 'Join now'}
                 </Button>
                 {isHost ? (
                   <Button
@@ -256,25 +310,20 @@ export function MeetingLobbyScreen({ code }: MeetingLobbyScreenProps) {
                 >
                   Share
                 </Button>
-                {(meeting.scheduled_at || meeting.started_at) ? (
-                  <Button
-                    tone="outline"
-                    size="$4"
-                    borderRadius={999}
-                    borderColor={coworkUi.glassBorder}
-                    icon={<Icons.Calendar size={17} color={coworkUi.brand} />}
-                    onPress={() => void addToCalendar()}
-                  >
-                    Add to calendar
-                  </Button>
-                ) : null}
-                <ShareSheet
+                <Button
+                  tone="outline"
+                  size="$4"
+                  borderRadius={999}
+                  borderColor={coworkUi.glassBorder}
+                  icon={<Icons.Calendar size={17} color={coworkUi.brand} />}
+                  onPress={() => void addToCalendar()}
+                >
+                  Add to calendar
+                </Button>
+                <MeetingShareSheet
                   open={shareOpen}
                   onOpenChange={setShareOpen}
-                  title="Share meeting"
-                  copyLabel="Copy meeting link"
-                  copyToastMessage="Meeting link copied to clipboard."
-                  payload={buildMeetingSharePayload(meeting)}
+                  meeting={meeting}
                 />
               </XStack>
 

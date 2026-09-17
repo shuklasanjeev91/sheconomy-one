@@ -1,5 +1,5 @@
 import { forwardRef, useCallback, useEffect, useImperativeHandle, useRef, useState } from 'react'
-import { Platform } from 'react-native'
+import { Platform, View } from 'react-native'
 
 import type { GenderEstimate } from '~/lib/gender-verification/constants'
 import { getNativeAnalyzerHtml } from '~/lib/gender-verification/native-analyzer-html'
@@ -39,6 +39,25 @@ type PendingRequest = {
 }
 
 const ANALYZE_TIMEOUT_MS = 12_000
+
+/** Off-screen / zero-size host so Android WebView cannot steal button presses. */
+const HIDDEN_HOST_STYLE = {
+  position: 'absolute' as const,
+  left: 0,
+  top: 0,
+  width: 0,
+  height: 0,
+  opacity: 0,
+  overflow: 'hidden' as const,
+  zIndex: -1,
+  elevation: 0,
+}
+
+const HIDDEN_WEBVIEW_STYLE = {
+  width: 1,
+  height: 1,
+  opacity: 0,
+}
 
 type NativeFaceAnalyzerProps = {
   onReady?: () => void
@@ -168,27 +187,35 @@ export const NativeFaceAnalyzer = forwardRef<NativeFaceAnalyzerHandle, NativeFac
 
     const WebView = WebViewComponent
 
+    // Android WebViews sit in a native surface that often ignores RN
+    // `pointerEvents` and can steal Start / Skip taps across the modal.
+    // Clip to a 0×0 host and pin containerStyle so the surface cannot expand.
     return (
-      <WebView
-        ref={webViewRef}
-        source={{ html: getNativeAnalyzerHtml() }}
-        onMessage={onMessage}
+      <View
         pointerEvents="none"
+        collapsable={false}
         accessible={false}
         importantForAccessibility="no-hide-descendants"
-        originWhitelist={['*']}
-        javaScriptEnabled
-        domStorageEnabled
-        allowsInlineMediaPlayback
-        mixedContentMode="always"
-        allowFileAccess
-        style={{
-          position: 'absolute',
-          width: 1,
-          height: 1,
-          opacity: 0,
-        }}
-      />
+        style={HIDDEN_HOST_STYLE}
+      >
+        <WebView
+          ref={webViewRef}
+          source={{ html: getNativeAnalyzerHtml() }}
+          onMessage={onMessage}
+          pointerEvents="none"
+          accessible={false}
+          importantForAccessibility="no-hide-descendants"
+          originWhitelist={['*']}
+          javaScriptEnabled
+          domStorageEnabled
+          allowsInlineMediaPlayback
+          mixedContentMode="always"
+          allowFileAccess
+          androidLayerType="hardware"
+          style={HIDDEN_WEBVIEW_STYLE}
+          containerStyle={HIDDEN_WEBVIEW_STYLE}
+        />
+      </View>
     )
   },
 )

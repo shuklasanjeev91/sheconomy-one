@@ -1,13 +1,17 @@
 import { useMemo } from 'react'
 import { Track } from 'livekit-client'
 
-import { useLocalParticipant, useTracks } from '@livekit/components-react'
+import { useLocalParticipant, useRoomContext, useTracks } from '@livekit/components-react'
 
+import { useMeetingActiveSpeaker } from '~/co-work/hooks/useMeetingActiveSpeaker'
 import { composeMeetingStageTracks } from '~/co-work/lib/meeting-stage-tracks'
+import { useMeetingMachine } from '~/co-work/components/MeetingProvider'
 
-/** Stage tiles (screen share focused) + optional local PiP tile — web. */
+/** Stage tiles + filmstrip for gallery / speaker / screen-share — web. */
 export function useMeetingGalleryTracks() {
   const { localParticipant } = useLocalParticipant()
+  const room = useRoomContext()
+  const { state } = useMeetingMachine()
   const tracks = useTracks(
     [
       { source: Track.Source.Camera, withPlaceholder: true },
@@ -16,8 +20,20 @@ export function useMeetingGalleryTracks() {
     { onlySubscribed: false },
   )
 
+  const activeSpeakerIdentity = useMeetingActiveSpeaker({
+    room,
+    tracks,
+    enabled: state.viewMode === 'speaker' || state.viewMode === 'screen-share',
+  })
+
   return useMemo(
-    () => composeMeetingStageTracks(tracks, localParticipant.identity),
-    [tracks, localParticipant.identity],
+    () =>
+      composeMeetingStageTracks(
+        tracks,
+        localParticipant.identity,
+        state.viewMode,
+        activeSpeakerIdentity,
+      ),
+    [activeSpeakerIdentity, localParticipant.identity, state.viewMode, tracks],
   )
 }

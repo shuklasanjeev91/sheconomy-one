@@ -11,6 +11,7 @@
       "android"
     ],
     "runtimeVersion": "6.0.8",
+    "orientation": "default",
     "updates": {
       "enabled": true,
       "checkAutomatically": "ON_LOAD",
@@ -68,7 +69,7 @@
         {
           "android": {
             "audioType": "communication",
-            "enableScreenShareService": false
+            "enableScreenShareService": true
           }
         }
       ],
@@ -80,8 +81,8 @@
             "appGroupIdentifier": "group.com.sheconomy.ecommerce"
           },
           "android": {
-            "enableScreenShareService": false,
-            "foregroundServicePermission": false
+            "enableScreenShareService": true,
+            "foregroundServicePermission": true
           }
         }
       ],
@@ -162,11 +163,15 @@
       "infoPlist": {
         "CFBundleDisplayName": "SHEconomy",
         "UIBackgroundModes": [
+          "audio",
+          "picture-in-picture",
           "remote-notification"
         ],
         "NSFaceIDUsageDescription": "Unlock SHEconomy with Face ID when biometric unlock is enabled.",
         "NSContactsUsageDescription": "Allow access so you can select contacts to connect with people you know. SHEconomy only uploads the contacts you choose.",
         "NSLocationWhenInUseUsageDescription": "Allow SHEconomy to use your location to autofill delivery addresses, check PIN availability, and show nearby shops. Precise location is optional.",
+        "NSBluetoothAlwaysUsageDescription": "SHEconomy uses Bluetooth so meeting audio can route to your headphones or headset when available.",
+        "NSBluetoothPeripheralUsageDescription": "SHEconomy uses Bluetooth so meeting audio can route to your headphones or headset when available.",
         "UIDeviceFamily": [
           1,
           2,
@@ -220,6 +225,11 @@
           "data": [
             {
               "scheme": "https",
+              "host": "sheconomy.in",
+              "pathPrefix": "/"
+            },
+            {
+              "scheme": "https",
               "host": "www.sheconomy.in",
               "pathPrefix": "/"
             }
@@ -246,6 +256,8 @@
         "android.permission.RECORD_AUDIO",
         "android.permission.CAMERA",
         "android.permission.POST_NOTIFICATIONS",
+        "android.permission.FOREGROUND_SERVICE",
+        "android.permission.FOREGROUND_SERVICE_MEDIA_PROJECTION",
         "android.permission.ACCESS_COARSE_LOCATION",
         "android.permission.ACCESS_FINE_LOCATION",
         "android.permission.USE_BIOMETRIC",

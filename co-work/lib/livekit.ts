@@ -84,6 +84,15 @@ export async function disconnectLiveKitParticipant(
   if (payload?.error) throw new Error(payload.error)
 }
 
+export async function endLiveKitRoom(meetingId: string, roomName: string): Promise<void> {
+  const { data, error } = await supabase.functions.invoke('livekit-token', {
+    body: { action: 'end-room', meetingId, roomName },
+  })
+  if (error) throw new Error(error.message || 'Could not end the media room.')
+  const payload = data as { error?: string }
+  if (payload?.error) throw new Error(payload.error)
+}
+
 export async function getLiveKitMaxParticipants(): Promise<number> {
   const config = await fetchLiveKitConfig()
   return config.maxParticipants

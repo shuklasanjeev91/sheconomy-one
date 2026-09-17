@@ -3,9 +3,11 @@ import { Track } from 'livekit-client'
 import { isTrackReference, type TrackReferenceOrPlaceholder } from '@livekit/components-core'
 
 import { isScreenSharePublication, isScreenShareSource } from '~/co-work/lib/livekit-screen-share'
+import type { MeetingViewMode } from '~/co-work/lib/meeting-state-machine'
 
 export type MeetingStageTracks = {
   stageTracks: TrackReferenceOrPlaceholder[]
+  filmstripTracks: TrackReferenceOrPlaceholder[]
   pipTrack: TrackReferenceOrPlaceholder | null
   totalTiles: number
   hasScreenShare: boolean
@@ -20,10 +22,16 @@ function isScreenShareTrack(track: TrackReferenceOrPlaceholder) {
 /**
  * Normalize camera + screen-share tracks into a focused stage layout that works
  * the same on web and native for every meeting direction.
+ *
+ * Gallery mode always returns every camera as equal stage tiles (paginated by
+ * the UI). Speaker / screen-share modes focus one tile and move the rest to the
+ * filmstrip — they must never leak into gallery.
  */
 export function composeMeetingStageTracks(
   tracks: TrackReferenceOrPlaceholder[],
   localIdentity: string,
+  viewMode: MeetingViewMode = 'gallery',
+  activeSpeakerIdentity?: string | null,
 ): MeetingStageTracks {
   const screenShares: TrackReferenceOrPlaceholder[] = []
   const cameraByIdentity = new Map<string, TrackReferenceOrPlaceholder>()
@@ -60,49 +68,75 @@ export function composeMeetingStageTracks(
   const localCamera =
     cameras.find((track) => track.participant.identity === localIdentity) ?? null
   const remoteCameras = cameras.filter((track) => track.participant.identity !== localIdentity)
+  // Active speaker first among remotes, then remaining remotes, then local — gallery
+  // still shows everyone; order only affects page-1 prominence.
+  const remotesOrdered = [...remoteCameras].sort((left, right) => {
+    const leftActive =
+      left.participant.identity === activeSpeakerIdentity || left.participant.isSpeaking ? 1 : 0
+    const rightActive =
+      right.participant.identity === activeSpeakerIdentity || right.participant.isSpeaking ? 1 : 0
+    return rightActive - leftActive
+  })
+  const orderedCameras = [...remotesOrdered, ...(localCamera ? [localCamera] : [])]
 
-  if (focusedScreen) {
-    const otherScreens = remoteScreens.filter((track) => track !== focusedScreen)
-    const stageTracks = [focusedScreen, ...otherScreens]
-    // Show self camera in PiP while watching a remote screen; otherwise first remote.
-    const pipTrack =
-      focusedScreen.participant.identity === localIdentity
-        ? remoteCameras[0] ?? null
-        : localCamera ?? remoteCameras[0] ?? null
-
+  // True gallery — every camera is a stage tile. Never collapse to a single focus.
+  if (viewMode === 'gallery') {
     return {
-      stageTracks,
-      pipTrack,
-      totalTiles: stageTracks.length + (pipTrack ? 1 : 0),
+      stageTracks: orderedCameras,
+      filmstripTracks: [],
+      pipTrack: null,
+      totalTiles: orderedCameras.length,
+      hasScreenShare: !!focusedScreen || isLocalScreenSharing,
+      isLocalScreenSharing,
+    }
+  }
+
+  if (focusedScreen && viewMode === 'screen-share') {
+    return {
+      stageTracks: [focusedScreen],
+      filmstripTracks: [...remoteCameras, ...(localCamera ? [localCamera] : [])],
+      pipTrack: null,
+      totalTiles: cameras.length + 1,
       hasScreenShare: true,
       isLocalScreenSharing,
     }
   }
 
-  // Exactly 3 people: equal stacked gallery (no PiP). Keep 1:1 WhatsApp PiP for 2.
-  if (cameras.length === 3) {
-    const stageTracks = [
-      ...remoteCameras,
-      ...(localCamera ? [localCamera] : []),
-    ]
+  if (isLocalScreenSharing && viewMode === 'screen-share') {
+    // Do not render the presenter's capture back into the captured display:
+    // whole-screen sharing would create an infinite mirror. Keep an active
+    // participant in the main area and every camera (including self) in the
+    // filmstrip so presenting never hides the room.
+    const activeSpeaker =
+      remoteCameras.find((track) => track.participant.identity === activeSpeakerIdentity) ??
+      remoteCameras.find((track) => track.participant.isSpeaking) ??
+      remoteCameras[0] ??
+      localCamera
+
     return {
-      stageTracks: stageTracks.length === 3 ? stageTracks : cameras,
+      stageTracks: activeSpeaker ? [activeSpeaker] : [],
+      filmstripTracks: orderedCameras,
       pipTrack: null,
-      totalTiles: 3,
-      hasScreenShare: false,
-      isLocalScreenSharing,
+      totalTiles: orderedCameras.length,
+      hasScreenShare: true,
+      isLocalScreenSharing: true,
     }
   }
 
-  const stageTracks =
-    remoteCameras.length > 0 ? remoteCameras : localCamera ? [localCamera] : cameras
-  const pipTrack = remoteCameras.length > 0 ? localCamera : null
-
+  // Speaker (or screen-share without a focused remote share) — one main tile.
+  // Active speaker may be local or remote; filmstrip holds everyone else.
+  const activeSpeaker =
+    orderedCameras.find((track) => track.participant.identity === activeSpeakerIdentity) ??
+    orderedCameras.find((track) => track.participant.isSpeaking) ??
+    remoteCameras[0] ??
+    localCamera
+  const stageTracks = activeSpeaker ? [activeSpeaker] : []
   return {
     stageTracks,
-    pipTrack,
-    totalTiles: stageTracks.length + (pipTrack ? 1 : 0),
-    hasScreenShare: false,
+    filmstripTracks: orderedCameras.filter((track) => track !== activeSpeaker),
+    pipTrack: null,
+    totalTiles: orderedCameras.length,
+    hasScreenShare: !!focusedScreen || isLocalScreenSharing,
     isLocalScreenSharing,
   }
 }

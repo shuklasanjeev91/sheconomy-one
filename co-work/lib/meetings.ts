@@ -1,18 +1,23 @@
 import { supabase } from '~/lib/supabase/client'
 import { INVALIDATION_TOPICS, invalidateCache } from '~/lib/cache/invalidation'
+import { assertUtcIso, isValidIanaTimeZone, normalizeIanaTimeZone, resolveDeviceIanaTimeZone } from '~/lib/calendar/timezone'
 
 import { parseMeetingInvitees } from '~/co-work/lib/invites'
 import { normalizeMeetingDisplayName } from '~/co-work/lib/meeting-display-name'
+import { mapMeetingSecurityJoinError } from '~/co-work/lib/meeting-security'
 import type {
   CreateMeetingInput,
   Meeting,
   MeetingChatMessage,
+  MeetingControlEvent,
+  MeetingModerationSettings,
   MeetingParticipant,
+  MeetingRole,
   MeetingSecuritySettings,
 } from '~/co-work/lib/types'
 
 const MEETING_SELECT =
-  'id, title, description, meeting_code, host_id, status, scheduled_at, started_at, ended_at, time_zone, max_participants, room_id, security_settings, meeting_options, invitees, created_at, host:profiles!meetings_host_id_fkey(full_name, username, avatar_url)'
+  'id, title, description, meeting_code, host_id, status, scheduled_at, scheduled_end_at, started_at, ended_at, time_zone, max_participants, room_id, security_settings, meeting_options, invitees, is_recurring, repeat, created_at, host:profiles!meetings_host_id_fkey(full_name, username, avatar_url)'
 
 const PARTICIPANT_SELECT =
   'id, meeting_id, user_id, display_name, status, is_host, is_muted, is_video_off, joined_at, left_at, profile:profiles!meeting_participants_user_id_fkey(full_name, username, avatar_url)'
@@ -62,9 +67,36 @@ function normalizeSecuritySettings(value: unknown): MeetingSecuritySettings | nu
     videoOffOnJoin: !!(raw.videoOffOnJoin ?? raw.video_off_on_join),
     allowScreenShare: raw.allowScreenShare !== false && raw.allow_screen_share !== false,
     allowChat: raw.allowChat !== false && raw.allow_chat !== false,
+    allowPrivateChat: raw.allowPrivateChat !== false && raw.allow_private_chat !== false,
     allowRecording: raw.allowRecording !== false && raw.allow_recording !== false,
     allowHandRaise: raw.allowHandRaise !== false && raw.allow_hand_raise !== false,
     authenticatedUsersOnly: !!(raw.authenticatedUsersOnly ?? raw.authenticated_users_only),
+  }
+}
+
+function normalizeMeetingOptions(value: unknown): Meeting['meeting_options'] {
+  const raw = parseJson<Record<string, unknown>>(value)
+  if (!raw) return null
+
+  const autoRecord = !!(raw.autoRecord ?? raw.auto_record)
+  const captionsEnabled = !!(raw.captionsEnabled ?? raw.captions_enabled)
+  const recordingModeRaw = (raw.recordingMode ?? raw.recording_mode) as string | undefined
+  const recordingMode =
+    recordingModeRaw === 'disabled' || recordingModeRaw === 'manual' || recordingModeRaw === 'automatic'
+      ? recordingModeRaw
+      : autoRecord
+        ? 'automatic'
+        : 'manual'
+
+  return {
+    layout: raw.layout === 'speaker' ? 'speaker' : 'grid',
+    defaultVideo: raw.defaultVideo !== false && raw.host_video_on !== false,
+    defaultAudio: raw.defaultAudio !== false,
+    allowJoinBeforeHost: !!(raw.allowJoinBeforeHost ?? raw.allow_join_before_host),
+    autoRecord,
+    recordingMode,
+    captionsEnabled,
+    enableMeetingChat: raw.enableMeetingChat !== false,
   }
 }
 
@@ -77,13 +109,14 @@ function mapMeeting(row: Record<string, unknown>): Meeting {
     host_id: row.host_id as string,
     status: row.status as Meeting['status'],
     scheduled_at: (row.scheduled_at as string | null) ?? null,
+    scheduled_end_at: (row.scheduled_end_at as string | null) ?? null,
     started_at: (row.started_at as string | null) ?? null,
     ended_at: (row.ended_at as string | null) ?? null,
     time_zone: (row.time_zone as string | null) ?? null,
     max_participants: (row.max_participants as number | null) ?? null,
     room_id: (row.room_id as string | null) ?? null,
     security_settings: normalizeSecuritySettings(row.security_settings),
-    meeting_options: parseJson(row.meeting_options),
+    meeting_options: normalizeMeetingOptions(row.meeting_options),
     created_at: (row.created_at as string | null) ?? null,
     is_recurring: (row.is_recurring as boolean | null) ?? null,
     repeat: (row.repeat as Meeting['repeat']) ?? null,
@@ -93,17 +126,21 @@ function mapMeeting(row: Record<string, unknown>): Meeting {
 }
 
 function mapParticipant(row: Record<string, unknown>): MeetingParticipant {
+  const role =
+    (row.role as MeetingRole | undefined) ??
+    ((row.is_host ? 'host' : 'participant') as MeetingRole)
   return {
     id: row.id as string,
     meeting_id: row.meeting_id as string,
     user_id: row.user_id as string,
     display_name: (row.display_name as string | null) ?? null,
     status: row.status as MeetingParticipant['status'],
-    is_host: (row.is_host as boolean | null) ?? null,
+    is_host: role === 'host' ? true : ((row.is_host as boolean | null) ?? null),
     is_muted: (row.is_muted as boolean | null) ?? null,
     is_video_off: (row.is_video_off as boolean | null) ?? null,
     joined_at: (row.joined_at as string | null) ?? null,
     left_at: (row.left_at as string | null) ?? null,
+    role,
     profile: (row.profile as MeetingParticipant['profile']) ?? null,
   }
 }
@@ -294,6 +331,16 @@ export async function createMeeting(hostId: string, input: CreateMeetingInput): 
   const roomId = generateLiveKitRoomId()
   const now = new Date().toISOString()
   const status = input.startNow ? 'instant' : 'scheduled'
+  const timeZone = normalizeIanaTimeZone(input.timeZone?.trim() || resolveDeviceIanaTimeZone())
+  if (!isValidIanaTimeZone(timeZone)) throw new Error('A valid IANA timezone is required')
+  const scheduledAt = assertUtcIso(input.scheduledAt ?? (input.startNow ? now : ''), 'Start time')
+  const scheduledEndAt = assertUtcIso(
+    input.scheduledEndAt ?? new Date(Date.parse(scheduledAt) + 60 * 60 * 1000).toISOString(),
+    'End time',
+  )
+  if (Date.parse(scheduledEndAt) <= Date.parse(scheduledAt)) {
+    throw new Error('End time must be after the start time')
+  }
 
   const security = input.securitySettings ?? {}
   const options = input.meetingOptions ?? {}
@@ -305,6 +352,7 @@ export async function createMeeting(hostId: string, input: CreateMeetingInput): 
     videoOffOnJoin: security.videoOffOnJoin ?? false,
     allowScreenShare: security.allowScreenShare !== false,
     allowChat: security.allowChat !== false,
+    allowPrivateChat: security.allowPrivateChat !== false && security.allowChat !== false,
     allowRecording: security.allowRecording !== false,
     allowHandRaise: security.allowHandRaise !== false,
     authenticated_users_only: security.authenticatedUsersOnly ?? false,
@@ -319,6 +367,9 @@ export async function createMeeting(hostId: string, input: CreateMeetingInput): 
       }),
   }
 
+  const autoRecord = options.autoRecord ?? false
+  const captionsEnabled = options.captionsEnabled ?? false
+  const recordingMode = options.recordingMode ?? (autoRecord ? 'automatic' : 'manual')
   const meetingOptions = {
     layout: options.layout ?? 'grid',
     defaultVideo: options.defaultVideo ?? true,
@@ -328,8 +379,13 @@ export async function createMeeting(hostId: string, input: CreateMeetingInput): 
     participant_video_on: options.defaultVideo ?? true,
     allowJoinBeforeHost: options.allowJoinBeforeHost ?? false,
     allow_join_before_host: options.allowJoinBeforeHost ?? false,
-    auto_record: options.autoRecord ?? false,
-    time_zone: input.timeZone ?? Intl.DateTimeFormat().resolvedOptions().timeZone,
+    autoRecord,
+    auto_record: autoRecord,
+    recordingMode,
+    recording_mode: recordingMode,
+    captionsEnabled,
+    captions_enabled: captionsEnabled,
+    time_zone: timeZone,
   }
 
   const { data, error } = await supabase
@@ -341,9 +397,10 @@ export async function createMeeting(hostId: string, input: CreateMeetingInput): 
       meeting_code: meetingCode,
       room_id: roomId,
       status,
-      scheduled_at: input.scheduledAt ?? (input.startNow ? now : null),
+      scheduled_at: scheduledAt,
+      scheduled_end_at: scheduledEndAt,
       started_at: input.startNow ? now : null,
-      time_zone: input.timeZone ?? Intl.DateTimeFormat().resolvedOptions().timeZone,
+      time_zone: timeZone,
       max_participants: input.maxParticipants ?? 100,
       is_recurring: input.isRecurring ?? false,
       repeat: input.repeat ?? null,
@@ -362,55 +419,19 @@ export async function createMeeting(hostId: string, input: CreateMeetingInput): 
 
   const meeting = mapMeeting(data as Record<string, unknown>)
 
-  await supabase.from('meeting_rooms').insert({
-    meeting_id: meeting.id,
-    host_id: hostId,
-    room_code: roomId,
-    is_active: input.startNow ?? false,
-    activated_at: input.startNow ? now : null,
-    max_participants: input.maxParticipants ?? 100,
-  })
-
   invalidateCache(INVALIDATION_TOPICS.coWorkMeetings)
 
   return meeting
 }
 
 export async function startMeeting(meetingId: string): Promise<void> {
-  const now = new Date().toISOString()
-  const { error } = await supabase
-    .from('meetings')
-    // Clear ended_at so restarting a finished meeting reads as live, not stale.
-    .update({ status: 'active', started_at: now, ended_at: null })
-    .eq('id', meetingId)
-
+  const { error } = await supabase.rpc('start_meeting_secure', { meeting_id_input: meetingId })
   if (error) throw new Error(error.message)
-
-  await supabase
-    .from('meeting_rooms')
-    .update({ is_active: true, activated_at: now })
-    .eq('meeting_id', meetingId)
 }
 
 export async function endMeeting(meetingId: string): Promise<void> {
-  const now = new Date().toISOString()
-  const { error } = await supabase
-    .from('meetings')
-    .update({ status: 'ended', ended_at: now })
-    .eq('id', meetingId)
-
+  const { error } = await supabase.rpc('end_meeting_secure', { meeting_id_input: meetingId })
   if (error) throw new Error(error.message)
-
-  await supabase
-    .from('meeting_rooms')
-    .update({ is_active: false, ended_at: now })
-    .eq('meeting_id', meetingId)
-
-  await supabase
-    .from('meeting_participants')
-    .update({ status: 'left', left_at: now })
-    .eq('meeting_id', meetingId)
-    .eq('status', 'admitted')
 }
 
 export async function verifyMeetingPasscode(meetingId: string, passcode: string): Promise<boolean> {
@@ -438,13 +459,8 @@ export async function joinMeetingParticipant(
   })
 
   if (error) {
-    if (/PARTICIPANT_REMOVED/i.test(error.message)) {
-      throw new Error('You were removed from this meeting. Ask the host to allow you to rejoin.')
-    }
-    if (/MEETING_CANCELLED/i.test(error.message)) {
-      throw new Error('The host cancelled this meeting.')
-    }
-    throw new Error(error.message)
+    const mapped = mapMeetingSecurityJoinError(error.message)
+    throw new Error(mapped ?? error.message)
   }
   const { error: displayNameError } = await supabase.rpc(
     'set_meeting_participant_display_name',
@@ -461,85 +477,50 @@ export async function joinMeetingParticipant(
   })
 }
 
-async function reviewerId(): Promise<string | null> {
-  const { data } = await supabase.auth.getUser()
-  return data.user?.id ?? null
-}
-
 export async function admitParticipant(participantId: string): Promise<void> {
-  const reviewedBy = await reviewerId()
-  const { error } = await supabase
-    .from('meeting_participants')
-    .update({
-      status: 'admitted',
-      joined_at: new Date().toISOString(),
-      left_at: null,
-      reviewed_at: new Date().toISOString(),
-      reviewed_by: reviewedBy,
-    })
-    .eq('id', participantId)
-
-  if (error) throw new Error(error.message)
+  const { error } = await supabase.rpc('review_meeting_participant', {
+    participant_id_input: participantId,
+    decision_input: 'admit',
+  })
+  if (error) {
+    const mapped = mapMeetingSecurityJoinError(error.message)
+    throw new Error(mapped ?? error.message)
+  }
 }
 
 export async function rejectParticipant(participantId: string): Promise<void> {
-  const reviewedBy = await reviewerId()
-  const { error } = await supabase
-    .from('meeting_participants')
-    .update({
-      status: 'rejected',
-      left_at: new Date().toISOString(),
-      reviewed_at: new Date().toISOString(),
-      reviewed_by: reviewedBy,
-    })
-    .eq('id', participantId)
-
+  const { error } = await supabase.rpc('review_meeting_participant', {
+    participant_id_input: participantId,
+    decision_input: 'reject',
+  })
   if (error) throw new Error(error.message)
 }
 
-export async function removeMeetingParticipant(participantId: string): Promise<void> {
-  const reviewedBy = await reviewerId()
-  const { error } = await supabase
-    .from('meeting_participants')
-    .update({
-      status: 'removed',
-      left_at: new Date().toISOString(),
-      reviewed_at: new Date().toISOString(),
-      reviewed_by: reviewedBy,
-    })
-    .eq('id', participantId)
-
+export async function removeMeetingParticipant(
+  meetingId: string,
+  targetUserId: string,
+): Promise<void> {
+  const { error } = await supabase.rpc('moderate_meeting_participants', {
+    meeting_id_input: meetingId,
+    action_input: 'remove',
+    target_user_id_input: targetUserId,
+  })
   if (error) throw new Error(error.message)
 }
 
 export async function allowMeetingParticipantRejoin(participantId: string): Promise<void> {
-  const { error } = await supabase
-    .from('meeting_participants')
-    .update({
-      status: 'waiting',
-      left_at: null,
-      reviewed_at: null,
-      reviewed_by: null,
-      session_id: null,
-    })
-    .eq('id', participantId)
-
+  const { error } = await supabase.rpc('review_meeting_participant', {
+    participant_id_input: participantId,
+    decision_input: 'allow_rejoin',
+  })
   if (error) throw new Error(error.message)
 }
 
 export async function cancelMeeting(meetingId: string): Promise<void> {
-  const now = new Date().toISOString()
-  const { error } = await supabase
-    .from('meetings')
-    .update({ status: 'cancelled', ended_at: now })
-    .eq('id', meetingId)
-
+  const { error } = await supabase.rpc('cancel_meeting_secure', {
+    meeting_id_input: meetingId,
+  })
   if (error) throw new Error(error.message)
-
-  await supabase
-    .from('meeting_rooms')
-    .update({ is_active: false, ended_at: now })
-    .eq('meeting_id', meetingId)
 
   invalidateCache(INVALIDATION_TOPICS.coWorkMeetings)
 }
@@ -574,25 +555,134 @@ export async function updateParticipantMedia(
 }
 
 export async function fetchMeetingParticipants(meetingId: string): Promise<MeetingParticipant[]> {
-  const { data, error } = await supabase
-    .from('meeting_participants')
-    .select(PARTICIPANT_SELECT)
-    .eq('meeting_id', meetingId)
-    .in('status', ['admitted', 'waiting', 'rejected', 'removed'])
-    .order('joined_at', { ascending: true })
+  const [{ data, error }, { data: roleRows, error: roleError }] = await Promise.all([
+    supabase
+      .from('meeting_participants')
+      .select(PARTICIPANT_SELECT)
+      .eq('meeting_id', meetingId)
+      .in('status', ['admitted', 'waiting', 'rejected', 'removed'])
+      .order('joined_at', { ascending: true }),
+    supabase.from('meeting_roles').select('user_id, role').eq('meeting_id', meetingId),
+  ])
 
   if (error) throw new Error(error.message)
-  return (data ?? []).map((row) => mapParticipant(row as Record<string, unknown>))
+  if (roleError) throw new Error(roleError.message)
+  const roles = Object.fromEntries((roleRows ?? []).map((row) => [row.user_id, row.role]))
+  return (data ?? []).map((row) =>
+    mapParticipant({ ...(row as Record<string, unknown>), role: roles[row.user_id] }),
+  )
+}
+
+export async function setMeetingLocked(meetingId: string, locked: boolean): Promise<void> {
+  const { error } = await supabase.rpc('set_meeting_locked', {
+    meeting_id_input: meetingId,
+    locked_input: locked,
+  })
+  if (error) throw new Error(error.message)
+}
+
+export async function fetchMeetingById(meetingId: string): Promise<Meeting | null> {
+  const { data, error } = await supabase
+    .from('meetings')
+    .select(MEETING_SELECT)
+    .eq('id', meetingId)
+    .maybeSingle()
+  if (error) throw new Error(error.message)
+  return data ? mapMeeting(data as Record<string, unknown>) : null
+}
+
+export async function fetchMeetingModerationSettings(
+  meetingId: string,
+): Promise<MeetingModerationSettings | null> {
+  const { data, error } = await supabase
+    .from('meeting_moderation_settings')
+    .select('meeting_id, is_locked, host_leave_behavior')
+    .eq('meeting_id', meetingId)
+    .maybeSingle()
+  if (error) throw new Error(error.message)
+  return data as MeetingModerationSettings | null
+}
+
+export async function setMeetingHostLeaveBehavior(
+  meetingId: string,
+  behavior: MeetingModerationSettings['host_leave_behavior'],
+): Promise<void> {
+  const { error } = await supabase.rpc('set_meeting_host_leave_behavior', {
+    meeting_id_input: meetingId,
+    behavior_input: behavior,
+  })
+  if (error) throw new Error(error.message)
+}
+
+export async function assignMeetingCoHost(meetingId: string, userId: string): Promise<void> {
+  const { error } = await supabase.rpc('assign_meeting_co_host', {
+    meeting_id_input: meetingId,
+    target_user_id_input: userId,
+  })
+  if (error) throw new Error(error.message)
+}
+
+export async function removeMeetingCoHost(meetingId: string, userId: string): Promise<void> {
+  const { error } = await supabase.rpc('remove_meeting_co_host', {
+    meeting_id_input: meetingId,
+    target_user_id_input: userId,
+  })
+  if (error) throw new Error(error.message)
+}
+
+export async function transferMeetingHost(meetingId: string, userId: string): Promise<void> {
+  const { error } = await supabase.rpc('transfer_meeting_host', {
+    meeting_id_input: meetingId,
+    target_user_id_input: userId,
+  })
+  if (error) throw new Error(error.message)
+}
+
+export async function sendMeetingControl(
+  meetingId: string,
+  action:
+    | 'request_mute'
+    | 'force_mute'
+    | 'ask_to_unmute'
+    | 'stop_video'
+    | 'mute_all'
+    | 'ask_all_to_mute'
+    | 'ask_all_to_unmute'
+    | 'remove_all_except_host',
+  targetUserId?: string,
+): Promise<void> {
+  const { error } = await supabase.rpc('moderate_meeting_participants', {
+    meeting_id_input: meetingId,
+    action_input: action,
+    target_user_id_input: targetUserId ?? null,
+  })
+  if (error) throw new Error(error.message)
+}
+
+export async function fetchMeetingControlEvents(
+  meetingId: string,
+  after: string,
+): Promise<MeetingControlEvent[]> {
+  const { data, error } = await supabase
+    .from('meeting_control_events')
+    .select('id, meeting_id, actor_id, target_user_id, action, created_at')
+    .eq('meeting_id', meetingId)
+    .gt('created_at', after)
+    .order('created_at', { ascending: true })
+  if (error) throw new Error(error.message)
+  return (data ?? []) as MeetingControlEvent[]
 }
 
 export async function fetchMeetingChat(meetingId: string): Promise<MeetingChatMessage[]> {
   const { data, error } = await supabase
     .from('meeting_chat_messages')
-    .select('id, meeting_id, sender_id, message_text, message_type, created_at')
+    .select(
+      'id, meeting_id, sender_id, message_text, message_type, created_at, audience, recipient_id, system_event_type',
+    )
     .eq('meeting_id', meetingId)
     .eq('is_deleted', false)
     .order('created_at', { ascending: true })
-    .limit(200)
+    .limit(300)
 
   if (error) throw new Error(error.message)
 
@@ -618,7 +708,16 @@ export async function sendMeetingChatMessage(
   meetingId: string,
   senderId: string,
   message: string,
+  options?: {
+    audience?: 'everyone' | 'hosts' | 'private'
+    recipientId?: string | null
+  },
 ): Promise<MeetingChatMessage> {
+  const audience = options?.audience ?? 'everyone'
+  if (audience === 'private' && !options?.recipientId) {
+    throw new Error('Choose a participant for private chat.')
+  }
+
   const { data, error } = await supabase
     .from('meeting_chat_messages')
     .insert({
@@ -626,8 +725,12 @@ export async function sendMeetingChatMessage(
       sender_id: senderId,
       message_text: message.trim(),
       message_type: 'text',
+      audience,
+      recipient_id: audience === 'private' ? options?.recipientId ?? null : null,
     })
-    .select('id, meeting_id, sender_id, message_text, message_type, created_at')
+    .select(
+      'id, meeting_id, sender_id, message_text, message_type, created_at, audience, recipient_id, system_event_type',
+    )
     .single()
 
   if (error) throw new Error(error.message)
@@ -642,6 +745,13 @@ export async function sendMeetingChatMessage(
     ...(data as MeetingChatMessage),
     sender: profile ?? null,
   }
+}
+
+export async function softDeleteMeetingChatMessage(messageId: string): Promise<void> {
+  const { error } = await supabase.rpc('soft_delete_meeting_chat_message', {
+    message_id_input: messageId,
+  })
+  if (error) throw new Error(error.message)
 }
 
 export { getMeetingShareUrl } from '~/lib/share/urls'

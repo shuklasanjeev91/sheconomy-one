@@ -3,7 +3,6 @@ import { AppLink } from '~/components/navigation/AppLink'
 import { useEffect, useMemo } from 'react'
 
 import { CoWorkStatusPill } from '~/co-work/components/CoWorkUi'
-import { buildMeetingSharePayload } from '~/co-work/lib/meeting-share'
 import { fetchUpcomingMeetings, formatMeetingCode } from '~/co-work/lib/meetings'
 import { recordMeetingCode } from '~/co-work/lib/recent-meeting-codes'
 import { coworkGlassStyle, useCoWorkTheme } from '~/co-work/lib/theme'
@@ -12,6 +11,7 @@ import { ShareButton } from '~/components/share'
 import { Button, Icons, Spinner, Text, XStack, YStack, useAppToast } from '~/components/ui'
 import { HorizontalScrollRow } from '~/components/layout'
 import { addMeetingToDeviceCalendar } from '~/lib/calendar/device-calendar'
+import { formatMeetingInstantForViewer } from '~/lib/calendar/timezone'
 import { copyToClipboard } from '~/lib/platform/clipboard'
 import { coworkBoxShadow } from '~/lib/platform/crossStyles'
 import { coWorkRoutes } from '~/lib/routes'
@@ -22,14 +22,7 @@ import { useCachedQuery } from '~/hooks/useCachedQuery'
 function formatWhen(meeting: Meeting) {
   const raw = meeting.scheduled_at ?? meeting.started_at ?? meeting.created_at
   if (!raw) return 'Time TBD'
-  return new Intl.DateTimeFormat(undefined, {
-    weekday: 'short',
-    month: 'short',
-    day: 'numeric',
-    hour: 'numeric',
-    minute: '2-digit',
-    timeZone: meeting.time_zone ?? undefined,
-  }).format(new Date(raw))
+  return formatMeetingInstantForViewer(raw)
 }
 
 /** Upcoming meetings on Co-Work home (hosted + invited) — web + native. */
@@ -67,20 +60,16 @@ export function UpcomingMeetingsStrip({
   }
 
   async function addToCalendar(meeting: Meeting) {
-    if (!meeting.scheduled_at && !meeting.started_at) {
-      toast.show('No time set for this meeting', { tone: 'info' })
-      return
-    }
     const result = await addMeetingToDeviceCalendar(meeting)
     if (result === 'cancelled') return
     toast.show(
-      result === 'opened'
+      result === 'saved' || result === 'opened'
         ? 'Meeting added to calendar'
         : result === 'shared'
           ? 'Calendar event ready'
           : 'Could not open calendar',
       {
-        tone: result === 'opened' || result === 'shared' ? 'success' : 'danger',
+        tone: result === 'saved' || result === 'opened' || result === 'shared' ? 'success' : 'danger',
       },
     )
   }
@@ -176,10 +165,7 @@ export function UpcomingMeetingsStrip({
                     variant="icon"
                     size="$3"
                     label="Share meeting"
-                    sheetTitle="Share meeting"
-                    copyLabel="Copy meeting link"
-                    copyToastMessage="Meeting link copied."
-                    payload={buildMeetingSharePayload(meeting)}
+                    meeting={meeting}
                   />
                 </XStack>
               </XStack>

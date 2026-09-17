@@ -1,55 +1,124 @@
-import { Platform } from 'react-native'
+import { Linking, Platform } from 'react-native'
 
 import type { Meeting } from '~/co-work/lib/types'
+import {
+  buildMeetingCalendarShareLinks,
+  buildMeetingShareIcs,
+  resolveMeetingShareSchedule,
+} from '~/co-work/lib/meeting-share'
 import { getMeetingShareUrl } from '~/lib/share'
-import { buildMeetingCalendarEvent, shareIcsFile } from '~/lib/calendar/ics'
+import { shareIcsFile } from '~/lib/calendar/ics'
+import { resolveDeviceIanaTimeZone } from '~/lib/calendar/timezone'
 
-export type AddMeetingCalendarResult = 'opened' | 'shared' | 'cancelled' | 'failed'
+export type AddMeetingCalendarResult =
+  | 'saved'
+  | 'opened'
+  | 'shared'
+  | 'cancelled'
+  | 'failed'
 
 /**
- * Opens the native calendar's pre-filled event editor. The user chooses the
- * calendar and confirms Save; web falls back to downloading an ICS file.
+ * Prefer saving directly into the device default calendar (Zoom-style).
+ * Falls back to the system event editor, then ICS / Google Calendar.
  */
 export async function addMeetingToDeviceCalendar(
   meeting: Meeting,
 ): Promise<AddMeetingCalendarResult> {
-  const startsAt = meeting.scheduled_at ?? meeting.started_at
-  if (!startsAt) return 'failed'
+  const schedule = resolveMeetingShareSchedule(meeting)
+  const passcode = meeting.security_settings?.passcode
+  const joinUrl = getMeetingShareUrl(meeting.meeting_code)
+  const notes = [
+    meeting.description?.trim(),
+    `Meeting ID: ${meeting.meeting_code}`,
+    passcode ? `Passcode: ${passcode}` : null,
+    `Join: ${joinUrl}`,
+  ]
+    .filter(Boolean)
+    .join('\n\n')
+  const startDate = new Date(schedule.startsAt)
+  const endDate = new Date(schedule.endsAt)
+  const timeZone = resolveDeviceIanaTimeZone()
 
   if (Platform.OS !== 'web') {
     try {
       const Calendar = await import('expo-calendar')
-      const startDate = new Date(startsAt)
-      const endDate = new Date(startDate.getTime() + 60 * 60 * 1000)
+      const permission = await Calendar.requestCalendarPermissionsAsync()
+      if (permission.status === 'granted') {
+        const calendars = await Calendar.getCalendarsAsync(Calendar.EntityTypes.EVENT)
+        const writable = calendars.filter((calendar) => calendar.allowsModifications)
+        const preferred =
+          writable.find((calendar) => calendar.isPrimary) ||
+          writable.find((calendar) => /icloud|google|outlook|exchange|local/i.test(calendar.source?.name || '')) ||
+          writable[0]
+
+        if (preferred) {
+          await Calendar.createEventAsync(preferred.id, {
+            title: meeting.title,
+            notes,
+            location: 'SHEconomy Co-Work',
+            url: joinUrl,
+            startDate,
+            endDate,
+            timeZone,
+            alarms: [{ relativeOffset: -10 }],
+          })
+          return 'saved'
+        }
+      }
+
       const result = await Calendar.createEventInCalendarAsync({
         title: meeting.title,
-        notes: [
-          meeting.description?.trim(),
-          `Meeting ID: ${meeting.meeting_code}`,
-          `Join: ${getMeetingShareUrl(meeting.meeting_code)}`,
-        ]
-          .filter(Boolean)
-          .join('\n\n'),
-        location: 'SHEconomy Co-work',
-        url: getMeetingShareUrl(meeting.meeting_code),
+        notes,
+        location: 'SHEconomy Co-Work',
+        url: joinUrl,
         startDate,
         endDate,
-        timeZone: meeting.time_zone ?? undefined,
+        timeZone,
       })
-
       return result.action === 'canceled' ? 'cancelled' : 'opened'
     } catch {
-      // Older installed binaries do not include expo-calendar yet.
-      // Fall through to the portable ICS share flow.
+      // Older binaries without expo-calendar — fall through.
     }
   }
 
-  const ics = buildMeetingCalendarEvent({
-    title: meeting.title,
-    description: meeting.description,
-    scheduledAt: startsAt,
-    meetingCode: meeting.meeting_code,
-  })
+  // Web / fallback: open Google Calendar template (most common default), then ICS.
+  try {
+    const { google } = buildMeetingCalendarShareLinks(meeting)
+    if (Platform.OS === 'web' && typeof window !== 'undefined') {
+      const opened = window.open(google, '_blank', 'noopener,noreferrer')
+      if (opened) return 'opened'
+    } else {
+      await Linking.openURL(google)
+      return 'opened'
+    }
+  } catch {
+    // continue to ICS
+  }
+
+  const ics = buildMeetingShareIcs(meeting)
   const result = await shareIcsFile(ics, `sheconomy-${meeting.meeting_code}.ics`)
   return result === 'shared' ? 'shared' : 'failed'
+}
+
+export async function openMeetingCalendarProvider(
+  meeting: Meeting,
+  provider: 'google' | 'outlook' | 'yahoo',
+): Promise<boolean> {
+  const links = buildMeetingCalendarShareLinks(meeting)
+  const url = links[provider]
+  if (Platform.OS === 'web') {
+    if (typeof window === 'undefined') return false
+    return Boolean(window.open(url, '_blank', 'noopener,noreferrer'))
+  }
+  try {
+    await Linking.openURL(url)
+    return true
+  } catch {
+    return false
+  }
+}
+
+export async function downloadMeetingCalendarIcs(meeting: Meeting): Promise<'shared' | 'failed'> {
+  const ics = buildMeetingShareIcs(meeting)
+  return shareIcsFile(ics, `sheconomy-${meeting.meeting_code}.ics`)
 }

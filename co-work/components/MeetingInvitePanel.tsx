@@ -1,6 +1,6 @@
 import { useState } from 'react'
 
-import { ShareSheet } from '~/components/share'
+import { MeetingShareSheet } from '~/co-work/components/MeetingShareSheet'
 import { Button, Icons, Input, ScrollView, Spinner, Text, XStack, YStack, useAppToast } from '~/components/ui'
 import { openMailtoLink } from '~/lib/platform/openMailto'
 import { CoWorkPanelShell, CoWorkSectionLabel } from '~/co-work/components/CoWorkUi'
@@ -12,7 +12,6 @@ import {
   mergeInvitees,
   sendMeetingInvites,
 } from '~/co-work/lib/invites'
-import { buildMeetingSharePayload } from '~/co-work/lib/meeting-share'
 import { formatMeetingCode, getMeetingShareUrl } from '~/co-work/lib/meetings'
 import { useCoWorkTheme } from '~/co-work/lib/theme'
 import type { Meeting, MeetingInvitee } from '~/co-work/lib/types'
@@ -180,14 +179,7 @@ export function MeetingInvitePanel({
         </Button>
       </YStack>
 
-      <ShareSheet
-        open={shareOpen}
-        onOpenChange={setShareOpen}
-        title="Share meeting"
-        copyLabel="Copy meeting link"
-        copyToastMessage="Meeting link copied to clipboard."
-        payload={buildMeetingSharePayload(meeting)}
-      />
+      <MeetingShareSheet open={shareOpen} onOpenChange={setShareOpen} meeting={meeting} />
     </CoWorkPanelShell>
   )
 }

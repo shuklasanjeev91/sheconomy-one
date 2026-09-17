@@ -14,6 +14,10 @@ function isBrandHttpsHost(hostname: string): boolean {
   )
 }
 
+function normalizeMeetingAlias(path: string): string {
+  return path.replace(/^\/cowork(?=\/|$)/i, '/co-work')
+}
+
 /** Parse an incoming deep link / universal link into an in-app path. */
 export function pathFromIncomingUrl(url: string): string | null {
   if (!url) return null
@@ -21,7 +25,7 @@ export function pathFromIncomingUrl(url: string): string | null {
   if (url.startsWith(`${APP_SCHEME}://`)) {
     const rest = url.slice(`${APP_SCHEME}://`.length)
     const path = rest.startsWith('/') ? rest : `/${rest}`
-    return path || '/'
+    return normalizeMeetingAlias(path || '/')
   }
 
   try {
@@ -31,14 +35,14 @@ export function pathFromIncomingUrl(url: string): string | null {
     const origin = resolveAppOrigin()
     const expectedHost = new URL(origin).host
     if (parsed.host === expectedHost || isBrandHttpsHost(parsed.hostname)) {
-      return `${parsed.pathname}${parsed.search}` || '/'
+      return normalizeMeetingAlias(`${parsed.pathname}${parsed.search}` || '/')
     }
 
     if (url.startsWith(origin)) {
-      return url.slice(origin.length) || '/'
+      return normalizeMeetingAlias(url.slice(origin.length) || '/')
     }
     if (url.startsWith(DEFAULT_APP_ORIGIN)) {
-      return url.slice(DEFAULT_APP_ORIGIN.length) || '/'
+      return normalizeMeetingAlias(url.slice(DEFAULT_APP_ORIGIN.length) || '/')
     }
   } catch {
     return null

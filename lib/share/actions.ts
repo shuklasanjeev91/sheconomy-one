@@ -73,6 +73,16 @@ export async function openShareTarget(
 
   if (Platform.OS === 'web') {
     if (typeof window === 'undefined') return false
+    // mailto: must use navigation / anchor — window.open is often blocked.
+    if (key === 'email') {
+      const anchor = document.createElement('a')
+      anchor.href = targetUrl
+      anchor.rel = 'noopener'
+      document.body.appendChild(anchor)
+      anchor.click()
+      anchor.remove()
+      return true
+    }
     // Never assign window.location — that unloads the SPA. Open in a new context.
     const opened = window.open(targetUrl, '_blank', 'noopener,noreferrer')
     return Boolean(opened)

@@ -2,11 +2,15 @@ import type { ReactNode } from 'react'
 import { useState } from 'react'
 
 import { ShareSheet } from '~/components/share/ShareSheet'
+import { MeetingShareSheet } from '~/co-work/components/MeetingShareSheet'
 import { Button, Icons } from '~/components/ui'
+import type { Meeting } from '~/co-work/lib/types'
 import type { SharePayload } from '~/lib/share'
 
 type ShareButtonProps = {
-  payload: SharePayload
+  payload?: SharePayload
+  /** When set, opens the Zoom-style meeting share sheet (calendar + social). */
+  meeting?: Meeting
   label?: string
   variant?: 'icon' | 'outline' | 'ghost'
   size?: '$2' | '$3' | '$4'
@@ -15,10 +19,12 @@ type ShareButtonProps = {
   copyToastMessage?: string
   extraActions?: ReactNode
   onOpen?: () => void
+  autoAddToCalendar?: boolean
 }
 
 export function ShareButton({
   payload,
+  meeting,
   label = 'Share',
   variant = 'outline',
   size = '$3',
@@ -27,6 +33,7 @@ export function ShareButton({
   copyToastMessage,
   extraActions,
   onOpen,
+  autoAddToCalendar,
 }: ShareButtonProps) {
   const [open, setOpen] = useState(false)
 
@@ -36,15 +43,24 @@ export function ShareButton({
   }
 
   const sheet = open ? (
-    <ShareSheet
-      open={open}
-      onOpenChange={setOpen}
-      payload={payload}
-      title={sheetTitle ?? label}
-      copyLabel={copyLabel}
-      copyToastMessage={copyToastMessage}
-      extraActions={extraActions}
-    />
+    meeting ? (
+      <MeetingShareSheet
+        open={open}
+        onOpenChange={setOpen}
+        meeting={meeting}
+        autoAddToCalendar={autoAddToCalendar}
+      />
+    ) : payload ? (
+      <ShareSheet
+        open={open}
+        onOpenChange={setOpen}
+        payload={payload}
+        title={sheetTitle ?? label}
+        copyLabel={copyLabel}
+        copyToastMessage={copyToastMessage}
+        extraActions={extraActions}
+      />
+    ) : null
   ) : null
 
   if (variant === 'icon') {

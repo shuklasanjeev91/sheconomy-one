@@ -28,6 +28,29 @@ export const BLUR_BACKGROUND: VirtualBackgroundSelection = {
   blurRadius: DEFAULT_BLUR_RADIUS,
 }
 
+export type WebBackgroundDeviceInfo = {
+  deviceMemory?: number
+  hardwareConcurrency?: number
+}
+
+/** Conservative guard: segmentation can otherwise make the ordinary camera unusable. */
+export function webBackgroundResourceWarning(
+  device: WebBackgroundDeviceInfo | null | undefined,
+): string | null {
+  if (!device) return null
+  if (typeof device.deviceMemory === 'number' && device.deviceMemory <= 2) {
+    return 'Virtual backgrounds are unavailable on low-memory devices. Your camera stays unfiltered.'
+  }
+  if (
+    typeof device.hardwareConcurrency === 'number' &&
+    device.hardwareConcurrency > 0 &&
+    device.hardwareConcurrency <= 2
+  ) {
+    return 'Virtual backgrounds need more processing capacity on this device. Your camera stays unfiltered.'
+  }
+  return null
+}
+
 export function normalizeVirtualBackground(
   value: Partial<VirtualBackgroundSelection> | null | undefined,
 ): VirtualBackgroundSelection {
@@ -79,4 +102,11 @@ export function virtualBackgroundLabel(selection: VirtualBackgroundSelection): s
   if (selection.mode === 'blur') return 'Blur'
   if (selection.mode === 'image') return 'Virtual background'
   return 'None'
+}
+
+/** User-facing copy when segmentation cannot run; never blocks joining. */
+export function virtualBackgroundUnavailableMessage(platform: 'web' | 'native'): string {
+  return platform === 'web'
+    ? 'Virtual backgrounds are not supported by this browser. Your camera stays unfiltered.'
+    : 'Virtual backgrounds are unavailable on this device right now. Your camera stays unfiltered.'
 }

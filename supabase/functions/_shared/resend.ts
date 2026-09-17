@@ -8,7 +8,9 @@ export async function sendResendEmail(
     to: string
     subject: string
     html: string
+    text?: string
     from?: string
+    attachments?: { filename: string; content: string }[]
   },
 ) {
   const response = await fetch('https://api.resend.com/emails', {
@@ -22,6 +24,8 @@ export async function sendResendEmail(
       to: [payload.to],
       subject: payload.subject,
       html: payload.html,
+      text: payload.text,
+      attachments: payload.attachments,
     }),
   })
 

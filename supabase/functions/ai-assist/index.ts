@@ -1367,6 +1367,56 @@ function parseTranslateJson(
   }
 }
 
+const INDIC_LANGS = new Set(['hi', 'bn', 'mr', 'gu', 'pa', 'ta', 'te', 'kn', 'ml', 'or', 'ne', 'si'])
+
+/** True when translated output plausibly matches the viewer's target script. */
+function captionLooksLikeTargetLang(text: string, targetLang: string): boolean {
+  const base = targetLang.split('-')[0]?.toLowerCase() || 'en'
+  const hasLatin = /[A-Za-z]{2,}/.test(text)
+  const hasDevanagari = /[\u0900-\u097F]/.test(text)
+  const hasArabic = /[\u0600-\u06FF]/.test(text)
+  const hasCjk = /[\u3040-\u30ff\u3400-\u9fff\uac00-\ud7af]/.test(text)
+  if (INDIC_LANGS.has(base)) return hasDevanagari || !hasLatin
+  if (base === 'ar' || base === 'ur' || base === 'fa') return hasArabic || !hasLatin
+  if (base === 'zh' || base === 'ja' || base === 'ko') return hasCjk || !hasLatin
+  if (base === 'en' || base === 'es' || base === 'fr' || base === 'de' || base === 'pt' || base === 'it') {
+    // Latin targets: reject if still only Devanagari/CJK with no Latin letters.
+    if ((hasDevanagari || hasCjk || hasArabic) && !hasLatin) return false
+    return true
+  }
+  return true
+}
+
+async function translateViaMyMemory(
+  text: string,
+  targetLang: string,
+  sourceLang: string,
+): Promise<{ translatedText: string; detectedSourceLang: string | null } | null> {
+  const target = targetLang.split('-')[0] || 'en'
+  const source = sourceLang === 'auto' ? 'autodetect' : sourceLang.split('-')[0] || 'autodetect'
+  try {
+    const url = new URL('https://api.mymemory.translated.net/get')
+    url.searchParams.set('q', text.slice(0, 450))
+    url.searchParams.set('langpair', `${source}|${target}`)
+    const response = await fetch(url.toString(), { method: 'GET' })
+    if (!response.ok) return null
+    const payload = (await response.json()) as {
+      responseData?: { translatedText?: string }
+      responseStatus?: number
+    }
+    const translated = payload.responseData?.translatedText?.trim()
+    if (!translated || payload.responseStatus !== 200) return null
+    // MyMemory sometimes echoes "PLEASE SELECT TWO DISTINCT LANGUAGES" etc.
+    if (/PLEASE SELECT|INVALID|MYMEMORY/i.test(translated)) return null
+    return {
+      translatedText: translated,
+      detectedSourceLang: source === 'autodetect' ? null : source,
+    }
+  } catch {
+    return null
+  }
+}
+
 function parseModerateImageJson(
   raw: string | null,
 ): { verdict: 'approved' | 'rejected'; reasons: string[]; confidence: number } | null {
@@ -2066,14 +2116,16 @@ Deno.serve(async (req) => {
         typeof context.target_label === 'string' && context.target_label.trim()
           ? context.target_label.trim()
           : targetLang
+      const targetBase = targetLang.split('-')[0] || targetLang
+      const sourceBase = sourceLang === 'auto' ? 'auto' : sourceLang.split('-')[0] || sourceLang
 
-      // Fast path: identical language codes and short ASCII-only English → skip model.
-      if (sourceLang !== 'auto' && sourceLang === targetLang) {
+      // Fast path: identical language codes → skip model.
+      if (sourceBase !== 'auto' && sourceBase === targetBase) {
         return json({
           text,
           translatedText: text,
-          detectedSourceLang: sourceLang,
-          targetLang,
+          detectedSourceLang: sourceBase,
+          targetLang: targetBase,
           usedFallback: false,
           skipped: true,
           product: 'cowork',
@@ -2083,34 +2135,56 @@ Deno.serve(async (req) => {
       const systemPrompt = [
         'You are a live meeting caption translator (Zoom / Google Meet style).',
         'Detect the source language automatically unless source is provided.',
-        `Translate the caption into ${targetLabel} (BCP-47/base code: ${targetLang}).`,
+        `ALWAYS translate the caption into ${targetLabel} (language code: ${targetBase}).`,
+        'Never leave the text in the source language when the target differs.',
+        'Example: English "hello" → Hindi "नमस्ते"; Hindi "नमस्ते" → English "hello".',
         'Return ONLY JSON: {"translatedText":"...","detectedSourceLang":"xx"}',
         'Keep speaker meaning, names, numbers, and punctuation. Do not add commentary.',
-        'If the text is already in the target language, return it unchanged.',
-        sourceLang !== 'auto' ? `Hint source language code: ${sourceLang}.` : '',
+        'Only return the text unchanged when it is already written in the target language/script.',
+        sourceBase !== 'auto' ? `Hint source language code: ${sourceBase}.` : '',
       ]
         .filter(Boolean)
         .join('\n')
 
       const completion = await callGemini(systemPrompt, [], text)
       const parsed = parseTranslateJson(completion.answer)
-      if (parsed?.translatedText) {
+      const geminiText = parsed?.translatedText?.trim() || ''
+      const geminiLooksGood =
+        !!geminiText &&
+        (geminiText !== text
+          ? true
+          : captionLooksLikeTargetLang(geminiText, targetBase))
+
+      if (geminiLooksGood && !(geminiText === text && !captionLooksLikeTargetLang(text, targetBase))) {
         return json({
           text,
-          translatedText: parsed.translatedText,
-          detectedSourceLang: parsed.detectedSourceLang ?? sourceLang,
-          targetLang,
+          translatedText: geminiText,
+          detectedSourceLang: parsed?.detectedSourceLang ?? (sourceBase === 'auto' ? null : sourceBase),
+          targetLang: targetBase,
           usedFallback: false,
           product: 'cowork',
         })
       }
 
-      // Fallback: return original so captions never go blank mid-call.
+      const memory = await translateViaMyMemory(text, targetBase, sourceBase)
+      if (memory?.translatedText && memory.translatedText !== text) {
+        return json({
+          text,
+          translatedText: memory.translatedText,
+          detectedSourceLang: memory.detectedSourceLang,
+          targetLang: targetBase,
+          usedFallback: false,
+          provider: 'mymemory',
+          product: 'cowork',
+        })
+      }
+
+      // Last resort: return original so captions never go blank mid-call.
       return json({
         text,
         translatedText: text,
-        detectedSourceLang: sourceLang === 'auto' ? null : sourceLang,
-        targetLang,
+        detectedSourceLang: sourceBase === 'auto' ? null : sourceBase,
+        targetLang: targetBase,
         usedFallback: true,
         product: 'cowork',
       })

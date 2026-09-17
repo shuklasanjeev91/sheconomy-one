@@ -1,4 +1,5 @@
-import { Modal, Platform } from 'react-native'
+import type { ReactNode } from 'react'
+import { Modal, Platform, Pressable, View } from 'react-native'
 
 import {
   FaceCaptureOverlay,
@@ -293,6 +294,7 @@ function VerificationFlow({
           minHeight={0}
           showsVerticalScrollIndicator={false}
           keyboardShouldPersistTaps="handled"
+          nestedScrollEnabled
           contentContainerStyle={{
             paddingHorizontal: 20,
             paddingTop: 16,
@@ -397,37 +399,40 @@ function VerificationFlow({
           ) : null}
         </ScrollView>
 
-        {/* Sticky actions — always visible on iPad / phone */}
-        <YStack
-          width="100%"
-          gap="$2.5"
-          paddingHorizontal={20}
-          paddingTop={12}
-          paddingBottom={footerPad}
-          borderTopWidth={1}
-          borderTopColor={ui.borderSubtle}
-          backgroundColor={ui.surface}
-          position="relative"
-          zIndex={20}
-          elevation={20}
-          pointerEvents="auto"
+        {/* Sticky actions — RN View + elevation so Android touches hit buttons,
+            not a sibling WebView surface from the face analyzer. */}
+        <View
+          collapsable={false}
+          pointerEvents="box-none"
+          style={{
+            width: '100%',
+            zIndex: 40,
+            elevation: 40,
+            backgroundColor: ui.surface,
+            borderTopWidth: 1,
+            borderTopColor: ui.borderSubtle,
+            paddingHorizontal: 20,
+            paddingTop: 12,
+            paddingBottom: footerPad,
+            gap: 10,
+          }}
         >
           {cameraBlocked ? (
-            <Button
-              tone="primary"
-              size="$4"
-              borderRadius={radius.pill}
+            <ActionButton
+              primary
+              label="Open Settings"
               onPress={() => {
                 if ('openCameraSettings' in verification) verification.openCameraSettings()
               }}
-            >
-              Open Settings
-            </Button>
+              brand={ui.brand}
+              onBrand={ui.onBrand}
+              text={ui.text}
+              border={ui.borderSubtle}
+            />
           ) : (
-            <Button
-              tone="primary"
-              size="$4"
-              borderRadius={radius.pill}
+            <ActionButton
+              primary
+              label={primaryLabel}
               disabled={isRunning || softRetrying || !verification.supported}
               onPress={() => {
                 void verification.start()
@@ -437,31 +442,94 @@ function VerificationFlow({
                   <Icons.Camera size={18} color={ui.onBrand} />
                 ) : undefined
               }
-            >
-              {primaryLabel}
-            </Button>
+              brand={ui.brand}
+              onBrand={ui.onBrand}
+              text={ui.text}
+              border={ui.borderSubtle}
+            />
           )}
 
           {verification.phase === 'error' && !cameraBlocked && !softRetrying ? (
-            <Button tone="outline" size="$4" borderRadius={radius.pill} onPress={verification.reset}>
-              Reset
-            </Button>
+            <ActionButton
+              label="Reset"
+              onPress={verification.reset}
+              brand={ui.brand}
+              onBrand={ui.onBrand}
+              text={ui.text}
+              border={ui.borderSubtle}
+            />
           ) : null}
 
-          <Button
-            tone="outline"
-            size="$4"
-            borderRadius={radius.pill}
+          <ActionButton
+            label="Skip for now"
             onPress={onClose}
-            aria-label="Skip human verification"
-          >
-            Skip for now
-          </Button>
+            accessibilityLabel="Skip human verification"
+            brand={ui.brand}
+            onBrand={ui.onBrand}
+            text={ui.text}
+            border={ui.borderSubtle}
+          />
           <Text fontSize={12} color={ui.textMuted} textAlign="center" lineHeight={17}>
             Skip keeps Commerce, Classes, and Co-Work unlocked.
           </Text>
-        </YStack>
+        </View>
       </YStack>
     </GenderVerificationErrorBoundary>
+  )
+}
+
+/**
+ * RN Pressable footer actions — Tamagui Button presses can be swallowed on
+ * Android when a sibling WebView (face analyzer) owns a native surface.
+ */
+function ActionButton({
+  label,
+  onPress,
+  primary = false,
+  disabled = false,
+  icon,
+  accessibilityLabel,
+  brand,
+  onBrand,
+  text,
+  border,
+}: {
+  label: string
+  onPress: () => void
+  primary?: boolean
+  disabled?: boolean
+  icon?: ReactNode
+  accessibilityLabel?: string
+  brand: string
+  onBrand: string
+  text: string
+  border: string
+}) {
+  return (
+    <Pressable
+      accessibilityRole="button"
+      accessibilityLabel={accessibilityLabel ?? label}
+      disabled={disabled}
+      onPress={onPress}
+      style={({ pressed }) => ({
+        minHeight: 48,
+        borderRadius: 999,
+        alignItems: 'center',
+        justifyContent: 'center',
+        flexDirection: 'row',
+        paddingHorizontal: 20,
+        paddingVertical: 14,
+        opacity: disabled ? 0.5 : pressed ? 0.88 : 1,
+        backgroundColor: primary ? brand : 'transparent',
+        borderWidth: primary ? 0 : 1.5,
+        borderColor: border,
+        transform: pressed && !disabled ? [{ scale: 0.98 }] : undefined,
+      })}
+    >
+      {icon ? <View style={{ marginRight: 8 }}>{icon}</View> : null}
+      <Text fontSize={15} fontWeight="700" color={primary ? onBrand : text}>
+        {label}
+      </Text>
+    </Pressable>
   )
 }
