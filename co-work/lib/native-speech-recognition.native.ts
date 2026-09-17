@@ -37,6 +37,7 @@ export async function createNativeSpeechSession(
 
   try {
     const available = await Voice.isAvailable()
+    // iOS returns 1; Android may return true/1/"1"
     if (!available) return null
   } catch {
     return null
@@ -83,7 +84,7 @@ export async function createNativeSpeechSession(
   const restartSoon = () => {
     if (!shouldRestart || starting) return
     starting = true
-    const delay = Platform.OS === 'android' ? 280 : 120
+    const delay = Platform.OS === 'android' ? 350 : 160
     setTimeout(() => {
       if (!shouldRestart) {
         starting = false
@@ -91,8 +92,16 @@ export async function createNativeSpeechSession(
       }
       void Voice.start(locale)
         .catch(() => {
-          shouldRestart = false
-          handlers.onError?.('Could not restart live captions')
+          // Soft-retry once more after LiveKit audio session settles.
+          setTimeout(() => {
+            if (!shouldRestart) return
+            void Voice.start(locale).catch(() => {
+              shouldRestart = false
+              handlers.onError?.(
+                'Could not start speech recognition during the call. Try toggling Captions again.',
+              )
+            })
+          }, 700)
         })
         .finally(() => {
           starting = false
@@ -116,26 +125,40 @@ export async function createNativeSpeechSession(
       shouldRestart = true
       lastPartial = ''
       try {
-        await Voice.stop()
+        await Voice.cancel()
       } catch {
-        // ignore — may not be running yet
+        try {
+          await Voice.stop()
+        } catch {
+          // ignore — may not be running yet
+        }
       }
+      // Brief yield so LiveKit's audio session can share the mic with Voice.
+      await new Promise((resolve) => setTimeout(resolve, Platform.OS === 'ios' ? 180 : 280))
       await Voice.start(locale)
     },
     async stop() {
       shouldRestart = false
       try {
-        await Voice.stop()
+        await Voice.cancel()
       } catch {
-        // ignore
+        try {
+          await Voice.stop()
+        } catch {
+          // ignore
+        }
       }
     },
     async destroy() {
       shouldRestart = false
       try {
-        await Voice.stop()
+        await Voice.cancel()
       } catch {
-        // ignore
+        try {
+          await Voice.stop()
+        } catch {
+          // ignore
+        }
       }
       try {
         await Voice.destroy()

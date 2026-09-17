@@ -3,6 +3,7 @@ export default {
   isAvailable: async () => 0,
   start: async () => undefined,
   stop: async () => undefined,
+  cancel: async () => undefined,
   destroy: async () => undefined,
   removeAllListeners: () => undefined,
   onSpeechPartialResults: null as null,

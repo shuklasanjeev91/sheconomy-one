@@ -72,7 +72,11 @@ type UseLiveCaptionsOptions = {
   displayName: string
   enabled: boolean
   remoteCaptions: LiveCaptionLine[]
+  /** True when any peer (including self) wants captions — keep STT publishing. */
+  roomWantsCaptions?: boolean
   onFinalCaption?: (text: string, sourceLang: string) => void
+  /** Final + interim publish so peers see live Zoom-style captions. */
+  onPublishCaption?: (text: string, sourceLang: string, isFinal: boolean) => void
 }
 
 type SpeechRecognitionInstance = SpeechRecognition & {
@@ -99,7 +103,9 @@ export function useLiveCaptions({
   displayName,
   enabled,
   remoteCaptions,
+  roomWantsCaptions = false,
   onFinalCaption,
+  onPublishCaption,
 }: UseLiveCaptionsOptions) {
   const region = useOptionalRegionPreferences()
   const regionLanguage = (region?.languageCode || 'en').toLowerCase()
@@ -109,16 +115,17 @@ export function useLiveCaptions({
   const [preferencesHydrated, setPreferencesHydrated] = useState(false)
   const targetLang = preferences.targetLang
   const targetLangName = captionLanguageName(targetLang)
-  // Zoom-style: STT follows the captions language (or an explicit spoken override),
-  // not the device region — otherwise Hindi captions never hear English speech (and vice versa).
+  // STT uses spoken language (device region by default). Display/translation uses
+  // targetLang so A can speak English while B reads Hindi captions.
   const spokenLangCode =
-    preferences.spokenLang === 'auto' ? targetLang : preferences.spokenLang
+    preferences.spokenLang === 'auto' ? regionLanguage : preferences.spokenLang
   const speakLocale = speechRecognitionLocale(
     spokenLangCode,
     region?.countryCode || 'IN',
   )
 
   const [active, setActive] = useState(false)
+  const [publishing, setPublishing] = useState(false)
   const [interimText, setInterimText] = useState('')
   const [translatedInterim, setTranslatedInterim] = useState('')
   const [localLines, setLocalLines] = useState<LiveCaptionLine[]>([])
@@ -131,18 +138,49 @@ export function useLiveCaptions({
   const spokenLangCodeRef = useRef(spokenLangCode)
   const speakLocaleRef = useRef(speakLocale)
   const activeRef = useRef(active)
+  const publishingRef = useRef(publishing)
   const localizedCacheRef = useRef<Map<string, LiveCaptionLine>>(new Map())
   const onFinalCaptionRef = useRef(onFinalCaption)
+  const onPublishCaptionRef = useRef(onPublishCaption)
   const displayNameRef = useRef(displayName)
+  const lastInterimBroadcastRef = useRef('')
+  const lastInterimBroadcastAtRef = useRef(0)
+  const startingLockRef = useRef(false)
   onFinalCaptionRef.current = onFinalCaption
+  onPublishCaptionRef.current = onPublishCaption
   displayNameRef.current = displayName
   targetLangRef.current = targetLang
   spokenLangCodeRef.current = spokenLangCode
   speakLocaleRef.current = speakLocale
   activeRef.current = active
+  publishingRef.current = publishing
 
   const supported = isLiveCaptionsSupported()
   const canPublish = canPublishLiveCaptions()
+
+  const publishCaption = useCallback((text: string, isFinal: boolean) => {
+    const trimmed = text.trim()
+    if (!trimmed) return
+    const sourceLang = spokenLangCodeRef.current || 'auto'
+    if (isFinal) {
+      if (onPublishCaptionRef.current) {
+        onPublishCaptionRef.current(trimmed, sourceLang, true)
+      } else {
+        onFinalCaptionRef.current?.(trimmed, sourceLang)
+      }
+      return
+    }
+    const now = Date.now()
+    if (
+      trimmed === lastInterimBroadcastRef.current &&
+      now - lastInterimBroadcastAtRef.current < 450
+    ) {
+      return
+    }
+    lastInterimBroadcastRef.current = trimmed
+    lastInterimBroadcastAtRef.current = now
+    onPublishCaptionRef.current?.(trimmed, sourceLang, false)
+  }, [])
 
   const commitFinalCaption = useCallback(
     (text: string) => {
@@ -164,23 +202,13 @@ export function useLiveCaptions({
       void localizeCaptionLine(line, targetLangRef.current).then((localized) => {
         setLocalLines((current) => [...current.slice(-40), localized])
       })
-      onFinalCaptionRef.current?.(text, sourceLang)
+      publishCaption(text, true)
       setInterimText('')
       setTranslatedInterim('')
+      lastInterimBroadcastRef.current = ''
     },
-    [userId],
+    [publishCaption, userId],
   )
-
-  const stopRecognition = useCallback(() => {
-    shouldRestartRef.current = false
-    recognitionRef.current?.stop()
-    recognitionRef.current = null
-    const native = nativeSessionRef.current
-    nativeSessionRef.current = null
-    if (native) void native.destroy()
-    setInterimText('')
-    setTranslatedInterim('')
-  }, [])
 
   const startWebRecognition = useCallback(() => {
     const recognition = createSpeechRecognition()
@@ -206,6 +234,7 @@ export function useLiveCaptions({
       if (interim) {
         setError(null)
         setInterimText(interim)
+        publishCaption(interim, false)
       }
     }
 
@@ -213,7 +242,7 @@ export function useLiveCaptions({
       if (event.error === 'not-allowed') {
         setError('Microphone access is required for live captions')
         shouldRestartRef.current = false
-        setActive(false)
+        setPublishing(false)
         return
       }
       if (event.error !== 'aborted' && event.error !== 'no-speech') {
@@ -224,12 +253,13 @@ export function useLiveCaptions({
     recognition.onend = () => {
       if (shouldRestartRef.current) {
         try {
-          // Pick up a language change that happened while recognition was running.
           recognition.lang = speakLocaleRef.current
           recognition.start()
         } catch {
-          setActive(false)
+          setPublishing(false)
         }
+      } else {
+        setPublishing(false)
       }
     }
 
@@ -237,75 +267,108 @@ export function useLiveCaptions({
     recognitionRef.current = recognition
     recognition.start()
     return true
-  }, [commitFinalCaption])
+  }, [commitFinalCaption, publishCaption])
 
   const startNativeRecognition = useCallback(async () => {
     const session = await createNativeSpeechSession({
       onPartial: (text) => {
         setError(null)
         setInterimText(text)
+        publishCaption(text, false)
       },
       onFinal: (text) => commitFinalCaption(text),
       onError: (message) => {
         setError(message)
         if (message.toLowerCase().includes('microphone')) {
           shouldRestartRef.current = false
-          setActive(false)
+          setPublishing(false)
+          if (!activeRef.current) return
         }
       },
     })
     if (!session) {
-      setError(null)
-      setActive(true)
+      setError('Speech recognition unavailable — you can still view others’ captions')
       return false
     }
     nativeSessionRef.current = session
     shouldRestartRef.current = true
     await session.start(speakLocaleRef.current)
     return true
-  }, [commitFinalCaption])
+  }, [commitFinalCaption, publishCaption])
 
   const startRecognition = useCallback(() => {
     if (!canPublish) {
       setError(null)
-      setActive(true)
+      setPublishing(false)
       return
     }
+    if (publishingRef.current && (recognitionRef.current || nativeSessionRef.current)) {
+      return
+    }
+    if (startingLockRef.current) return
+    startingLockRef.current = true
 
     setError(null)
     void (async () => {
       try {
         if (isNativeRuntime()) {
           const started = await startNativeRecognition()
-          if (started) {
-            setActive(true)
-            return
-          }
-          // Native Voice unavailable — still show remote captions.
-          setActive(true)
+          setPublishing(started)
           return
         }
 
         if (!hasSpeechRecognition() || !startWebRecognition()) {
-          setActive(false)
+          setPublishing(false)
           return
         }
-        setActive(true)
+        setPublishing(true)
       } catch {
         setError('Could not start live captions')
-        setActive(false)
+        setPublishing(false)
+      } finally {
+        startingLockRef.current = false
       }
     })()
   }, [canPublish, startNativeRecognition, startWebRecognition])
 
+  const stopRecognition = useCallback(() => {
+    shouldRestartRef.current = false
+    recognitionRef.current?.stop()
+    recognitionRef.current = null
+    const native = nativeSessionRef.current
+    nativeSessionRef.current = null
+    if (native) void native.destroy()
+    setInterimText('')
+    setTranslatedInterim('')
+    setPublishing(false)
+  }, [])
+
   const toggleCaptions = useCallback(() => {
     if (active) {
-      stopRecognition()
       setActive(false)
+      // Keep publishing if someone else in the room still wants captions.
+      if (!roomWantsCaptions) stopRecognition()
       return
     }
+    setPreferences((current) => ({ ...current, collapsed: false }))
+    setActive(true)
     startRecognition()
-  }, [active, startRecognition, stopRecognition])
+  }, [active, roomWantsCaptions, startRecognition, stopRecognition])
+
+  // Room-wide publish: when any peer wants captions, every device STTs its mic
+  // so speech from A appears for B (and vice versa) in each viewer’s language.
+  useEffect(() => {
+    if (!enabled) {
+      if (publishingRef.current) stopRecognition()
+      if (activeRef.current) setActive(false)
+      return
+    }
+    if (active || roomWantsCaptions) {
+      startRecognition()
+      return
+    }
+    if (publishingRef.current) stopRecognition()
+  }, [active, enabled, roomWantsCaptions, startRecognition, stopRecognition])
 
   useEffect(() => {
     return () => stopRecognition()
@@ -318,7 +381,7 @@ export function useLiveCaptions({
     const previous = prevSpeakLocaleRef.current
     prevSpeakLocaleRef.current = speakLocale
     if (previous === speakLocale) return
-    if (!activeRef.current || !canPublish) return
+    if (!publishingRef.current || !canPublish) return
     stopRecognition()
     startRecognition()
   }, [canPublish, speakLocale, startRecognition, stopRecognition])
@@ -462,14 +525,17 @@ export function useLiveCaptions({
     [localLines, translatedRemote],
   )
 
-  // Prefer live interim (translated when ready, else raw STT) so Zoom-style
-  // captions update while someone is still speaking.
+  // Prefer live interim (local STT or remote peer) so Zoom-style captions update
+  // while someone is still speaking.
+  const remoteInterim = [...translatedRemote].reverse().find((line) => !line.isFinal)
   const currentCaption = (
     interimText.trim()
       ? translatedInterim.trim() || interimText.trim()
-      : visibleLines.length > 0
-        ? visibleLines[visibleLines.length - 1]?.text || ''
-        : ''
+      : remoteInterim?.text?.trim()
+        ? remoteInterim.text
+        : visibleLines.length > 0
+          ? visibleLines[visibleLines.length - 1]?.text || ''
+          : ''
   ).trim()
 
   const showingTranslation = visibleLines.some((line) => line.translated)
@@ -508,6 +574,7 @@ export function useLiveCaptions({
     supported,
     canPublish,
     active,
+    publishing,
     error,
     interimText,
     visibleLines,

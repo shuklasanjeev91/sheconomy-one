@@ -621,21 +621,30 @@ function MeetingRoomOverlay({
     displayName,
     enabled: true,
     remoteCaptions: presence.liveCaptions,
-    onFinalCaption: (text, sourceLang) =>
-      presence.broadcastCaption(text, displayName, sourceLang),
+    roomWantsCaptions: presence.roomWantsCaptions,
+    onPublishCaption: (text, sourceLang, isFinal) =>
+      presence.broadcastCaption(text, displayName, sourceLang, isFinal),
   })
   const captionsPrefAppliedRef = useRef(false)
   const prevSelfRoleRef = useRef(presence.selfRole)
   const prevCaptionLangRef = useRef(captions.targetLang)
 
   useEffect(() => {
+    presence.setCaptionWanted(captions.active)
+  }, [captions.active, presence.setCaptionWanted])
+
+  useEffect(() => {
     if (captionsPrefAppliedRef.current) return
     if (!meeting.meeting_options?.captionsEnabled || !captions.supported) return
     captionsPrefAppliedRef.current = true
-    if (!captions.active) captions.toggleCaptions()
+    if (!captions.active) {
+      captions.setCollapsed(false)
+      captions.toggleCaptions()
+    }
     // Depend on primitives — full `captions` object identity churned every render.
   }, [
     captions.active,
+    captions.setCollapsed,
     captions.supported,
     captions.toggleCaptions,
     meeting.meeting_options?.captionsEnabled,
@@ -882,19 +891,14 @@ function MeetingRoomOverlay({
     }
     const turningOn = !captions.active
     captions.toggleCaptions()
-    if (turningOn && !captions.canPublish) {
-      toast.show(`Viewing captions in ${captions.targetLangName}`, {
+    if (turningOn) {
+      toast.show(`Live captions on · ${captions.targetLangName}`, {
         tone: 'success',
-        message: 'Speech from others is auto-translated to your language',
+        message: 'Others’ speech is translated to your language. Keep speaking to caption yourself for the room.',
       })
       return
     }
-    toast.show(turningOn ? `Live captions on · ${captions.targetLangName}` : 'Live captions off', {
-      tone: 'success',
-      message: turningOn
-        ? 'Other languages are translated to your default language'
-        : undefined,
-    })
+    toast.show('Live captions off', { tone: 'success' })
   }, [captions, toast])
 
   const toggleScreenShare = useCallback(async () => {

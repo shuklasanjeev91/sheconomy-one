@@ -216,6 +216,8 @@ export type SignalPayload =
   | { type: 'mute-all'; from: string }
   | { type: 'kick'; from: string; to: string }
   | { type: 'caption'; from: string; speaker: string; text: string; isFinal: boolean; timestamp: number; sourceLang?: string }
+  /** Peers start/stop publishing local STT so others can view translated captions. */
+  | { type: 'caption-wanted'; from: string; wanted: boolean; timestamp: number }
   | { type: 'chat'; from: string; message: MeetingChatMessage }
   | { type: 'reaction'; from: string; emoji: string; name: string; timestamp: number }
   | { type: 'meeting-ended'; from: string; timestamp: number }

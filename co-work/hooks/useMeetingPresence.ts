@@ -109,6 +109,7 @@ export function useMeetingPresence({
   const [handRaised, setHandRaised] = useState(false)
   const [raisedHands, setRaisedHands] = useState<Record<string, boolean>>({})
   const [liveCaptions, setLiveCaptions] = useState<LiveCaptionLine[]>([])
+  const [captionWantedByUser, setCaptionWantedByUser] = useState<Record<string, boolean>>({})
   const [realtimeDegraded, setRealtimeDegraded] = useState(false)
   const [isRealtimeConnected, setIsRealtimeConnected] = useState(false)
   const [onlineUserIds, setOnlineUserIds] = useState<string[]>([])
@@ -306,20 +307,39 @@ export function useMeetingPresence({
       }
       // Moderation controls are intentionally not trusted from broadcast
       // payloads. Only server-authorized meeting_control_events are applied.
-      if (payload.type === 'caption' && payload.from !== userId && payload.isFinal) {
-        setLiveCaptions((current) => [
-          ...current.slice(-80),
-          {
-            id: `${payload.from}-${payload.timestamp}`,
-            userId: payload.from,
-            speaker: payload.speaker,
-            text: payload.text,
-            originalText: payload.text,
-            sourceLang: payload.sourceLang ?? null,
-            isFinal: true,
-            timestamp: payload.timestamp,
-          },
-        ])
+      // Live captions: accept finals + interim so peers see Zoom-style live text.
+      if (payload.type === 'caption' && payload.from !== userId) {
+        const nextLine: LiveCaptionLine = {
+          id: `${payload.from}-${payload.timestamp}-${payload.isFinal ? 'f' : 'i'}`,
+          userId: payload.from,
+          speaker: payload.speaker,
+          text: payload.text,
+          originalText: payload.text,
+          sourceLang: payload.sourceLang ?? null,
+          isFinal: !!payload.isFinal,
+          timestamp: payload.timestamp,
+        }
+        setLiveCaptions((current) => {
+          const withoutPeerInterim = current.filter(
+            (line) => !(line.userId === payload.from && !line.isFinal),
+          )
+          if (!payload.isFinal) {
+            return [...withoutPeerInterim.slice(-80), nextLine]
+          }
+          return [...withoutPeerInterim.slice(-80), nextLine]
+        })
+        return
+      }
+      if (payload.type === 'caption-wanted' && payload.from !== userId) {
+        setCaptionWantedByUser((current) => {
+          if (!payload.wanted) {
+            const next = { ...current }
+            delete next[payload.from]
+            return next
+          }
+          if (current[payload.from]) return current
+          return { ...current, [payload.from]: true }
+        })
         return
       }
       if (payload.type === 'meeting-ended' && payload.from !== userId) {
@@ -721,19 +741,45 @@ export function useMeetingPresence({
   }, [meeting.id, refreshParticipants])
 
   const broadcastCaption = useCallback(
-    (text: string, speaker: string, sourceLang?: string) => {
+    (text: string, speaker: string, sourceLang?: string, isFinal = true) => {
+      const trimmed = text.trim()
+      if (!trimmed) return
       sendSignal({
         type: 'caption',
         from: userId,
         speaker,
-        text,
-        isFinal: true,
+        text: trimmed,
+        isFinal,
         timestamp: Date.now(),
         sourceLang: sourceLang || undefined,
       })
     },
     [sendSignal, userId],
   )
+
+  const setCaptionWanted = useCallback(
+    (wanted: boolean) => {
+      setCaptionWantedByUser((current) => {
+        if (wanted) {
+          if (current[userId]) return current
+          return { ...current, [userId]: true }
+        }
+        if (!current[userId]) return current
+        const next = { ...current }
+        delete next[userId]
+        return next
+      })
+      sendSignal({
+        type: 'caption-wanted',
+        from: userId,
+        wanted,
+        timestamp: Date.now(),
+      })
+    },
+    [sendSignal, userId],
+  )
+
+  const roomWantsCaptions = Object.values(captionWantedByUser).some(Boolean)
 
   const syncMediaState = useCallback(
     async (patch: { is_muted?: boolean; is_video_off?: boolean }) => {
@@ -827,6 +873,8 @@ export function useMeetingPresence({
     handRaised,
     raisedHands,
     liveCaptions,
+    roomWantsCaptions,
+    setCaptionWanted,
     realtimeDegraded,
     isRealtimeConnected,
     isHostPresent,
