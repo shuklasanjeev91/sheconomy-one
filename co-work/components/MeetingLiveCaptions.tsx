@@ -190,7 +190,7 @@ export function MeetingLiveCaptions({
                       width={168}
                       paddingHorizontal="$2"
                       iconAfter={<Icons.ChevronDown size={14} color={coworkUi.textMuted} />}
-                      accessibilityLabel="Caption language for this viewer only"
+                      accessibilityLabel="Caption language — listening and display for you only"
                     >
                       <Select.Value placeholder="Language" />
                     </SelectTrigger>

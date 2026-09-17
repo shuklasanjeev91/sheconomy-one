@@ -27,13 +27,19 @@ import type {
 export type { CaptionOverlayPlacement, CaptionOverlaySize }
 
 export type LiveCaptionPreferences = {
+  /** Caption display / translation language for this viewer. */
   targetLang: string
+  /**
+   * Speech-to-text language for this device.
+   * `auto` follows `targetLang` (Zoom-style: captions language drives recognition).
+   */
+  spokenLang: 'auto' | string
   collapsed: boolean
   size: CaptionOverlaySize
   placement: CaptionOverlayPlacement
 }
 
-const CAPTION_PREFERENCE_PREFIX = 'cowork.live-captions.v1'
+const CAPTION_PREFERENCE_PREFIX = 'cowork.live-captions.v2'
 const VALID_LANGUAGES = new Set<string>(REGION_LANGUAGES.map((language) => language.code))
 const VALID_SIZES = new Set<CaptionOverlaySize>(['compact', 'comfortable', 'large'])
 
@@ -44,11 +50,17 @@ export function normalizeLiveCaptionPreferences(
   const fallback = VALID_LANGUAGES.has(fallbackLanguage.toLowerCase())
     ? fallbackLanguage.toLowerCase()
     : 'en'
+  const targetLang =
+    typeof value?.targetLang === 'string' && VALID_LANGUAGES.has(value.targetLang.toLowerCase())
+      ? value.targetLang.toLowerCase()
+      : fallback
+  const spokenRaw =
+    typeof value?.spokenLang === 'string' ? value.spokenLang.toLowerCase() : 'auto'
+  const spokenLang =
+    spokenRaw === 'auto' || VALID_LANGUAGES.has(spokenRaw) ? spokenRaw : 'auto'
   return {
-    targetLang:
-      typeof value?.targetLang === 'string' && VALID_LANGUAGES.has(value.targetLang.toLowerCase())
-        ? value.targetLang.toLowerCase()
-        : fallback,
+    targetLang,
+    spokenLang,
     collapsed: value?.collapsed === true,
     size: value?.size && VALID_SIZES.has(value.size) ? value.size : 'comfortable',
     placement: value?.placement === 'top' ? 'top' : 'bottom',
@@ -97,8 +109,12 @@ export function useLiveCaptions({
   const [preferencesHydrated, setPreferencesHydrated] = useState(false)
   const targetLang = preferences.targetLang
   const targetLangName = captionLanguageName(targetLang)
+  // Zoom-style: STT follows the captions language (or an explicit spoken override),
+  // not the device region — otherwise Hindi captions never hear English speech (and vice versa).
+  const spokenLangCode =
+    preferences.spokenLang === 'auto' ? targetLang : preferences.spokenLang
   const speakLocale = speechRecognitionLocale(
-    regionLanguage,
+    spokenLangCode,
     region?.countryCode || 'IN',
   )
 
@@ -112,27 +128,34 @@ export function useLiveCaptions({
   const nativeSessionRef = useRef<NativeSpeechSession | null>(null)
   const shouldRestartRef = useRef(false)
   const targetLangRef = useRef(targetLang)
+  const spokenLangCodeRef = useRef(spokenLangCode)
+  const speakLocaleRef = useRef(speakLocale)
+  const activeRef = useRef(active)
   const localizedCacheRef = useRef<Map<string, LiveCaptionLine>>(new Map())
   const onFinalCaptionRef = useRef(onFinalCaption)
   const displayNameRef = useRef(displayName)
   onFinalCaptionRef.current = onFinalCaption
   displayNameRef.current = displayName
   targetLangRef.current = targetLang
+  spokenLangCodeRef.current = spokenLangCode
+  speakLocaleRef.current = speakLocale
+  activeRef.current = active
 
   const supported = isLiveCaptionsSupported()
   const canPublish = canPublishLiveCaptions()
 
   const commitFinalCaption = useCallback(
     (text: string) => {
-      // Never claim the device region as the spoken language — STT text is
-      // auto-detected on each viewer's device when localizing to targetLang.
+      // Tag with the STT language we asked for; each viewer still auto-detects
+      // when localizing into their own targetLang.
+      const sourceLang = spokenLangCodeRef.current || 'auto'
       const line: LiveCaptionLine = {
         id: `${userId}-${Date.now()}`,
         userId,
         speaker: displayNameRef.current,
         text,
         originalText: text,
-        sourceLang: 'auto',
+        sourceLang,
         targetLang: 'auto',
         translated: false,
         isFinal: true,
@@ -141,7 +164,7 @@ export function useLiveCaptions({
       void localizeCaptionLine(line, targetLangRef.current).then((localized) => {
         setLocalLines((current) => [...current.slice(-40), localized])
       })
-      onFinalCaptionRef.current?.(text, 'auto')
+      onFinalCaptionRef.current?.(text, sourceLang)
       setInterimText('')
       setTranslatedInterim('')
     },
@@ -166,7 +189,7 @@ export function useLiveCaptions({
       return false
     }
 
-    recognition.lang = speakLocale
+    recognition.lang = speakLocaleRef.current
     recognition.continuous = true
     recognition.interimResults = true
     recognition.maxAlternatives = 1
@@ -198,6 +221,8 @@ export function useLiveCaptions({
     recognition.onend = () => {
       if (shouldRestartRef.current) {
         try {
+          // Pick up a language change that happened while recognition was running.
+          recognition.lang = speakLocaleRef.current
           recognition.start()
         } catch {
           setActive(false)
@@ -209,7 +234,7 @@ export function useLiveCaptions({
     recognitionRef.current = recognition
     recognition.start()
     return true
-  }, [commitFinalCaption, speakLocale])
+  }, [commitFinalCaption])
 
   const startNativeRecognition = useCallback(async () => {
     const session = await createNativeSpeechSession({
@@ -230,9 +255,9 @@ export function useLiveCaptions({
     }
     nativeSessionRef.current = session
     shouldRestartRef.current = true
-    await session.start(speakLocale)
+    await session.start(speakLocaleRef.current)
     return true
-  }, [commitFinalCaption, speakLocale])
+  }, [commitFinalCaption])
 
   const startRecognition = useCallback(() => {
     if (!canPublish) {
@@ -279,6 +304,18 @@ export function useLiveCaptions({
   useEffect(() => {
     return () => stopRecognition()
   }, [stopRecognition])
+
+  // Restart STT when the captions / spoken language changes so recognition
+  // actually follows the picker (Zoom-style language switch mid-meeting).
+  const prevSpeakLocaleRef = useRef(speakLocale)
+  useEffect(() => {
+    const previous = prevSpeakLocaleRef.current
+    prevSpeakLocaleRef.current = speakLocale
+    if (previous === speakLocale) return
+    if (!activeRef.current || !canPublish) return
+    stopRecognition()
+    startRecognition()
+  }, [canPublish, speakLocale, startRecognition, stopRecognition])
 
   useEffect(() => {
     let cancelled = false
@@ -433,7 +470,19 @@ export function useLiveCaptions({
 
   const setTargetLang = useCallback((language: string) => {
     setPreferences((current) =>
-      normalizeLiveCaptionPreferences({ ...current, targetLang: language }, current.targetLang),
+      normalizeLiveCaptionPreferences(
+        { ...current, targetLang: language },
+        current.targetLang,
+      ),
+    )
+  }, [])
+
+  const setSpokenLang = useCallback((language: string) => {
+    setPreferences((current) =>
+      normalizeLiveCaptionPreferences(
+        { ...current, spokenLang: language },
+        current.targetLang,
+      ),
     )
   }, [])
 
@@ -460,10 +509,13 @@ export function useLiveCaptions({
     transcriptLines,
     targetLang,
     targetLangName,
+    spokenLang: preferences.spokenLang,
+    spokenLangCode,
     showingTranslation,
     captionPreferences: preferences,
     availableLanguages: REGION_LANGUAGES,
     setTargetLang,
+    setSpokenLang,
     setCollapsed,
     setOverlaySize,
     setPlacement,

@@ -540,6 +540,8 @@ function MeetingRoomOverlay({
       presence.broadcastCaption(text, displayName, sourceLang),
   })
   const captionsPrefAppliedRef = useRef(false)
+  const prevSelfRoleRef = useRef(presence.selfRole)
+  const prevCaptionLangRef = useRef(captions.targetLang)
 
   useEffect(() => {
     if (captionsPrefAppliedRef.current) return
@@ -553,6 +555,41 @@ function MeetingRoomOverlay({
     captions.toggleCaptions,
     meeting.meeting_options?.captionsEnabled,
   ])
+
+  // Notify the assignee when they become co-host / host mid-meeting (Zoom-style).
+  useEffect(() => {
+    const previous = prevSelfRoleRef.current
+    const next = presence.selfRole
+    prevSelfRoleRef.current = next
+    if (previous === next) return
+    if (next === 'co_host') {
+      toast.show('You’re now a co-host', {
+        tone: 'success',
+        message: 'You can mute participants, admit waiting guests, and manage chat.',
+      })
+      return
+    }
+    if (next === 'host' && previous !== 'host') {
+      toast.show('You’re now the host', {
+        tone: 'success',
+        message: 'You can end the meeting, lock it, and assign co-hosts.',
+      })
+      return
+    }
+    if (previous === 'co_host' && next === 'participant') {
+      toast.show('Co-host role removed', { tone: 'info' })
+    }
+  }, [presence.selfRole, toast])
+
+  useEffect(() => {
+    const previous = prevCaptionLangRef.current
+    prevCaptionLangRef.current = captions.targetLang
+    if (previous === captions.targetLang || !captions.active) return
+    toast.show(`Captions · ${captions.targetLangName}`, {
+      tone: 'info',
+      message: 'Listening and translating into this language for you only.',
+    })
+  }, [captions.active, captions.targetLang, captions.targetLangName, toast])
 
   const recordingSession = useMeetingRecording({
     room: liveKit?.room,
@@ -1629,16 +1666,28 @@ function MeetingRoomOverlay({
           }
           onAssignCoHost={
             isAuthoritativeHost
-              ? (id) =>
+              ? (id) => {
+                  const target = presence.participants.find((row) => row.user_id === id)
+                  const name =
+                    target?.display_name ||
+                    target?.profile?.full_name ||
+                    target?.profile?.username ||
+                    'Participant'
                   void presence
                     .assignCoHost(id)
-                    .then(() => toast.show('Co-host assigned', { tone: 'success' }))
+                    .then(() =>
+                      toast.show(`${name} is now a co-host`, {
+                        tone: 'success',
+                        message: 'They can help manage participants and the waiting room.',
+                      }),
+                    )
                     .catch((cause) =>
                       toast.show('Could not assign co-host', {
                         tone: 'danger',
                         message: cause instanceof Error ? cause.message : 'Please try again.',
                       }),
                     )
+                }
               : undefined
           }
           onRemoveCoHost={
@@ -1812,7 +1861,9 @@ function MeetingRoomOverlay({
         topOffset={chrome.captionTopOffset}
         bottomOffset={chrome.captionBottomOffset}
         sideInset={chrome.captionSideInset}
-        onTargetLangChange={captions.setTargetLang}
+        onTargetLangChange={(language) => {
+          captions.setTargetLang(language)
+        }}
         onCollapsedChange={captions.setCollapsed}
         onSizeChange={captions.setOverlaySize}
         onPlacementChange={captions.setPlacement}

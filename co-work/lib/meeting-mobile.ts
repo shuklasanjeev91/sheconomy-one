@@ -109,13 +109,17 @@ export function meetingMobileInterruptionNotice(
   }
 }
 
-/** Classify AppState transitions for interruption UX (iOS phone calls use inactive). */
+/** Classify AppState transitions for interruption UX.
+ * active→inactive is Control Center / app switcher / incoming call chrome — not
+ * a confirmed phone call. Treat as brief app_inactive so we don't flash a
+ * "Phone call in progress" banner for every system sheet.
+ */
 export function classifyMeetingAppStateInterruption(input: {
   previous: string
   next: string
 }): MeetingMobileInterruptionKind {
   if (input.next === 'inactive' && input.previous === 'active') {
-    return 'phone_call'
+    return 'app_inactive'
   }
   if (input.next === 'background') {
     return 'none' // background notice handled separately

@@ -42,6 +42,21 @@ export async function reinforceCallMediaOnConnect(
 }
 
 /**
+ * After app/tab goes to background: pause local camera so audio can keep
+ * running under OS background rules (iOS audio session / Android without FGS).
+ * Callers restore via restoreMeetingMediaAfterForeground using intendedCameraOn.
+ */
+export async function pauseMeetingCameraForBackground(room: Room): Promise<void> {
+  try {
+    if (room.localParticipant.isCameraEnabled) {
+      await room.localParticipant.setCameraEnabled(false)
+    }
+  } catch {
+    // Soft-fail — connection stays up; banner explains OS limits.
+  }
+}
+
+/**
  * After app/tab foreground: keep mic as the user left it, restore camera only
  * when the OS paused it while the user still intended it on.
  */

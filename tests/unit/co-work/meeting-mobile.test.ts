@@ -37,14 +37,15 @@ describe('meeting mobile requirements', () => {
     expect(softMediaToggleFailure('speaker')).toMatch(/speaker|earpiece|Bluetooth/i)
   })
 
-  it('classifies phone-call style AppState inactive transitions', () => {
+  it('classifies active→inactive as brief app interruption (not a phone call)', () => {
     expect(
       classifyMeetingAppStateInterruption({ previous: 'active', next: 'inactive' }),
-    ).toBe('phone_call')
+    ).toBe('app_inactive')
     expect(
       classifyMeetingAppStateInterruption({ previous: 'active', next: 'background' }),
     ).toBe('none')
     expect(meetingMobileInterruptionNotice('phone_call')).toMatch(/Phone call/i)
+    expect(meetingMobileInterruptionNotice('app_inactive')).toMatch(/stays connected|system UI/i)
   })
 
   it('surfaces phone-call interruption in lifecycle banner copy', () => {

@@ -8,7 +8,10 @@ import {
   applyPreferredCallAudioOutput,
   configureLiveKitCallAudio,
 } from '~/co-work/lib/livekit-call-audio'
-import { restoreMeetingMediaAfterForeground } from '~/co-work/lib/livekit-call-media'
+import {
+  pauseMeetingCameraForBackground,
+  restoreMeetingMediaAfterForeground,
+} from '~/co-work/lib/livekit-call-media'
 import {
   meetingLifecycleNotice,
   type MeetingLifecyclePlatform,
@@ -123,6 +126,18 @@ export function useMeetingLifecycle({
             screenShareStoppedByOs: false,
             restoring: false,
           })
+          // Pause camera so audio can continue under OS background rules.
+          void (async () => {
+            try {
+              await configureLiveKitCallAudio(mediaMode)
+              await applyPreferredCallAudioOutput(mediaMode, speakerOnRef.current)
+              if (room.state === ConnectionState.Connected) {
+                await pauseMeetingCameraForBackground(room)
+              }
+            } catch {
+              // Soft-fail — stay connected; banner explains limits.
+            }
+          })()
         }
         return
       }

@@ -3,7 +3,10 @@ import { ConnectionState, RoomEvent, type Room } from 'livekit-client'
 import { useKeepAwake } from 'expo-keep-awake'
 
 import type { LiveKitMediaMode } from '~/co-work/lib/livekit-media-controls'
-import { restoreMeetingMediaAfterForeground } from '~/co-work/lib/livekit-call-media'
+import {
+  pauseMeetingCameraForBackground,
+  restoreMeetingMediaAfterForeground,
+} from '~/co-work/lib/livekit-call-media'
 import {
   meetingLifecycleNotice,
   type MeetingLifecyclePlatform,
@@ -99,6 +102,9 @@ export function useMeetingLifecycle({
         setScreenShareStoppedByOs(false)
         setRestoring(false)
         refreshNotice({ inBackground: true, screenShareStoppedByOs: false, restoring: false })
+        if (room.state === ConnectionState.Connected) {
+          void pauseMeetingCameraForBackground(room)
+        }
         return
       }
 

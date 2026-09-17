@@ -24,12 +24,14 @@ export function captionLooksLikeTargetLang(text: string, targetLang: string): bo
   const hasDevanagari = /[\u0900-\u097F]/.test(text)
   const hasArabic = /[\u0600-\u06FF]/.test(text)
   const hasCjk = /[\u3040-\u30ff\u3400-\u9fff\uac00-\ud7af]/.test(text)
-  if (INDIC_LANGS.has(base)) return hasDevanagari || !hasLatin
-  if (base === 'ar' || base === 'ur' || base === 'fa') return hasArabic || !hasLatin
-  if (base === 'zh' || base === 'ja' || base === 'ko') return hasCjk || !hasLatin
+  // Indic targets: only treat as already-localized when Devanagari (or similar) is present.
+  // Do not treat "no Latin" as Hindi — that wrongly skipped English→Hindi translation.
+  if (INDIC_LANGS.has(base)) return hasDevanagari
+  if (base === 'ar' || base === 'ur' || base === 'fa') return hasArabic
+  if (base === 'zh' || base === 'ja' || base === 'ko') return hasCjk
   if (['en', 'es', 'fr', 'de', 'pt', 'it'].includes(base)) {
     if ((hasDevanagari || hasCjk || hasArabic) && !hasLatin) return false
-    return true
+    return hasLatin || !hasDevanagari
   }
   return true
 }

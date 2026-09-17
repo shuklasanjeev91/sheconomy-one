@@ -7,6 +7,7 @@ describe('live caption viewer preferences', () => {
   it('uses the viewer region language for new preferences', () => {
     expect(normalizeLiveCaptionPreferences(null, 'hi')).toEqual({
       targetLang: 'hi',
+      spokenLang: 'auto',
       collapsed: false,
       size: 'comfortable',
       placement: 'bottom',
@@ -18,6 +19,7 @@ describe('live caption viewer preferences', () => {
       normalizeLiveCaptionPreferences(
         {
           targetLang: 'fr',
+          spokenLang: 'en',
           collapsed: true,
           size: 'large',
           placement: 'top',
@@ -26,6 +28,7 @@ describe('live caption viewer preferences', () => {
       ),
     ).toEqual({
       targetLang: 'fr',
+      spokenLang: 'en',
       collapsed: true,
       size: 'large',
       placement: 'top',
@@ -37,6 +40,7 @@ describe('live caption viewer preferences', () => {
       normalizeLiveCaptionPreferences(
         {
           targetLang: 'xx',
+          spokenLang: 'zz',
           size: 'huge' as never,
           placement: 'left' as never,
         },
@@ -44,6 +48,7 @@ describe('live caption viewer preferences', () => {
       ),
     ).toEqual({
       targetLang: 'de',
+      spokenLang: 'auto',
       collapsed: false,
       size: 'comfortable',
       placement: 'bottom',
