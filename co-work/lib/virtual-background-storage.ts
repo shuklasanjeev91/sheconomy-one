@@ -16,6 +16,11 @@ export type CustomVirtualBackground = {
   name: string
   storagePath: string
   createdAt: string | null
+  /**
+   * Local file URI ready for the native/web processor right after upload.
+   * Prefer this over a round-trip signed HTTPS URL (native decode can't open https).
+   */
+  localUri?: string
 }
 
 type VirtualBackgroundRow = {
@@ -23,6 +28,67 @@ type VirtualBackgroundRow = {
   name: string
   image_url: string
   created_at: string | null
+}
+
+function newBackgroundId() {
+  if (typeof globalThis.crypto?.randomUUID === 'function') return globalThis.crypto.randomUUID()
+  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (character) => {
+    const random = Math.floor(Math.random() * 16)
+    const value = character === 'x' ? random : (random & 0x3) | 0x8
+    return value.toString(16)
+  })
+}
+
+function isLocalImageUri(uri: string) {
+  return (
+    uri.startsWith('file:') ||
+    uri.startsWith('blob:') ||
+    uri.startsWith('data:') ||
+    uri.startsWith('content:') ||
+    uri.startsWith('ph://') ||
+    uri.startsWith('assets-library:') ||
+    (uri.startsWith('/') && !uri.startsWith('//'))
+  )
+}
+
+/**
+ * Give native processors a stable file:// path. HTTPS signed URLs are downloaded
+ * first — iOS/Android background processors cannot open remote URLs reliably.
+ */
+async function materializeLocalImage(uri: string, cacheKey: string): Promise<string> {
+  if (Platform.OS === 'web') return uri
+  if (uri.startsWith('file:') || (uri.startsWith('/') && !uri.startsWith('//'))) {
+    return uri.startsWith('file:') ? uri : `file://${uri}`
+  }
+
+  const FileSystem = await import('expo-file-system/legacy')
+  const safeKey = cacheKey.replace(/[^a-zA-Z0-9_-]/g, '-')
+  const destination = `${FileSystem.cacheDirectory}meeting-background-${safeKey}.jpg`
+  const existing = await FileSystem.getInfoAsync(destination)
+  if (existing.exists) {
+    await FileSystem.deleteAsync(destination, { idempotent: true })
+  }
+
+  if (uri.startsWith('http://') || uri.startsWith('https://')) {
+    const result = await FileSystem.downloadAsync(uri, destination)
+    if (result.status < 200 || result.status >= 300) {
+      throw new Error('Could not cache the background image.')
+    }
+    return result.uri.startsWith('file:') ? result.uri : `file://${result.uri}`
+  }
+
+  // content:// / ph:// / manipulator output — copy into app cache.
+  try {
+    await FileSystem.copyAsync({ from: uri, to: destination })
+  } catch {
+    // Some schemes need downloadAsync even when not http.
+    const result = await FileSystem.downloadAsync(uri, destination)
+    if (result.status < 200 || result.status >= 300) {
+      throw new Error('Could not cache the background image.')
+    }
+    return result.uri.startsWith('file:') ? result.uri : `file://${result.uri}`
+  }
+  return destination.startsWith('file:') ? destination : `file://${destination}`
 }
 
 export async function listCustomVirtualBackgrounds(
@@ -64,25 +130,14 @@ export async function uploadCustomVirtualBackground(
   if (bytes.byteLength > MAX_BACKGROUND_BYTES) {
     throw new Error('Background images must be 8 MB or smaller.')
   }
-  const extension = bytes.mimeType.includes('png')
-    ? 'png'
-    : bytes.mimeType.includes('webp')
-      ? 'webp'
-      : 'jpg'
-  const id =
-    typeof globalThis.crypto?.randomUUID === 'function'
-      ? globalThis.crypto.randomUUID()
-      : 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (character) => {
-          const random = Math.floor(Math.random() * 16)
-          const value = character === 'x' ? random : (random & 0x3) | 0x8
-          return value.toString(16)
-        })
+  const extension = 'jpg'
+  const id = newBackgroundId()
   const path = `${userId}/${id}.${extension}`
   const upload = await uploadStorageObject(
     STORAGE_BUCKETS.meetingBackgrounds,
     path,
     bytes.buffer,
-    bytes.mimeType,
+    'image/jpeg',
     { maxBytes: MAX_BACKGROUND_BYTES },
   )
   if (upload.error) throw new Error(upload.error)
@@ -106,7 +161,19 @@ export async function uploadCustomVirtualBackground(
     throw new Error(error.message)
   }
   const row = data as VirtualBackgroundRow
-  return { id: row.id, name: row.name, storagePath: row.image_url, createdAt: row.created_at }
+  let localUri = optimized.uri
+  try {
+    localUri = await materializeLocalImage(optimized.uri, id)
+  } catch {
+    // Still return optimized.uri — apply may succeed with the manipulator file.
+  }
+  return {
+    id: row.id,
+    name: row.name,
+    storagePath: row.image_url,
+    createdAt: row.created_at,
+    localUri,
+  }
 }
 
 export async function deleteCustomVirtualBackground(background: CustomVirtualBackground) {
@@ -131,29 +198,25 @@ async function signedBackgroundUrl(storagePath: string): Promise<string> {
   return data.signedUrl
 }
 
-async function cacheNativeImage(uri: string, cacheKey: string): Promise<string> {
-  if (Platform.OS === 'web' || uri.startsWith('file:')) return uri
-  const FileSystem = await import('expo-file-system/legacy')
-  const safeKey = cacheKey.replace(/[^a-zA-Z0-9_-]/g, '-')
-  const destination = `${FileSystem.cacheDirectory}meeting-background-${safeKey}.jpg`
-  const existing = await FileSystem.getInfoAsync(destination)
-  if (existing.exists) return destination
-  const result = await FileSystem.downloadAsync(uri, destination)
-  if (result.status < 200 || result.status >= 300) {
-    throw new Error('Could not cache the background image.')
-  }
-  return result.uri
-}
-
 export async function resolveVirtualBackgroundSelection(
   selection: VirtualBackgroundSelection,
 ): Promise<VirtualBackgroundSelection> {
   if (selection.mode !== 'image') return selection
+
+  const cacheKey = selection.id ?? selection.storagePath ?? 'preset'
+  const existing = selection.imageUrl?.trim()
+
+  // Prefer a ready local/blob URI (fresh upload) — avoid HTTPS for native processors.
+  if (existing && isLocalImageUri(existing)) {
+    const imageUrl = await materializeLocalImage(existing, cacheKey)
+    return { ...selection, imageUrl }
+  }
+
   const source = selection.storagePath
     ? await signedBackgroundUrl(selection.storagePath)
-    : selection.imageUrl
+    : existing
   if (!source) throw new Error('The selected background image is unavailable.')
-  const imageUrl = await cacheNativeImage(source, selection.id ?? selection.storagePath ?? 'preset')
+  const imageUrl = await materializeLocalImage(source, cacheKey)
   return { ...selection, imageUrl }
 }
 
@@ -164,5 +227,7 @@ export function customBackgroundSelection(
     mode: 'image',
     id: background.id,
     storagePath: background.storagePath,
+    // Apply immediately from the local upload file when present.
+    imageUrl: background.localUri,
   }
 }

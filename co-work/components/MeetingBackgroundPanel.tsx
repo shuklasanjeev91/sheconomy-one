@@ -86,19 +86,28 @@ export function MeetingBackgroundPanel({
   }, [loadCustom])
 
   const applySelection = useCallback(
-    async (value: VirtualBackgroundSelection) => {
+    async (value: VirtualBackgroundSelection): Promise<boolean> => {
       setBusyId(value.id ?? value.mode)
       try {
         const resolved = await resolveVirtualBackgroundSelection(value)
+        if (resolved.mode === 'image' && !resolved.imageUrl) {
+          toast.show('Background not applied', {
+            tone: 'danger',
+            message: 'Could not load the image file for this background.',
+          })
+          return false
+        }
         const ok = await effects.apply(resolved)
         if (!ok) {
           toast.show('Background not applied', { tone: 'danger', message: effects.error ?? undefined })
         }
+        return ok
       } catch (error) {
         toast.show('Background not applied', {
           tone: 'danger',
           message: error instanceof Error ? error.message : undefined,
         })
+        return false
       } finally {
         setBusyId(null)
       }
@@ -129,8 +138,13 @@ export function MeetingBackgroundPanel({
       setBusyId('upload')
       const created = await uploadCustomVirtualBackground(userId, image)
       await loadCustom()
-      await applySelection(customBackgroundSelection(created))
-      toast.show('Background uploaded', { tone: 'success' })
+      const applied = await applySelection(customBackgroundSelection(created))
+      toast.show(applied ? 'Background applied' : 'Background uploaded', {
+        tone: applied ? 'success' : 'warning',
+        message: applied
+          ? 'Your custom image is now your virtual background.'
+          : 'Saved to your library — tap it again if the camera did not update.',
+      })
     } catch (error) {
       toast.show('Upload failed', {
         tone: 'danger',

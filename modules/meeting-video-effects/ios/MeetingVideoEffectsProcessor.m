@@ -38,7 +38,12 @@ static dispatch_queue_t gConfigQueue;
 
 - (CIImage *)backgroundImageForPath:(NSString *)path extent:(CGRect)extent {
   if (![self.cachedBackgroundPath isEqualToString:path]) {
-    NSURL *url = [path hasPrefix:@"file://"] ? [NSURL URLWithString:path] : [NSURL fileURLWithPath:path];
+    NSURL *url = nil;
+    if ([path hasPrefix:@"http://"] || [path hasPrefix:@"https://"] || [path hasPrefix:@"file://"]) {
+      url = [NSURL URLWithString:path];
+    } else if (path.length > 0) {
+      url = [NSURL fileURLWithPath:path];
+    }
     self.cachedBackground = url ? [CIImage imageWithContentsOfURL:url] : nil;
     self.cachedBackgroundPath = path;
   }
@@ -96,8 +101,10 @@ static dispatch_queue_t gConfigQueue;
   CIImage *background = nil;
   if ([mode isEqualToString:@"image"] && imagePath.length > 0) {
     background = [self backgroundImageForPath:imagePath extent:extent];
-  }
-  if (!background) {
+    // Do not silently blur when an image was requested but failed to load —
+    // that looked like the custom upload never applied.
+    if (!background) background = foreground;
+  } else {
     CIFilter *blur = [CIFilter filterWithName:@"CIGaussianBlur"];
     [blur setValue:foreground forKey:kCIInputImageKey];
     [blur setValue:@(MAX(5.0, MIN(24.0, blurRadius))) forKey:kCIInputRadiusKey];

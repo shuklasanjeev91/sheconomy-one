@@ -102,13 +102,15 @@ private class MeetingBackgroundProcessor(private val context: Context) : VideoFr
     if (MeetingBackgroundConfig.mode == "image" && !path.isNullOrBlank()) {
       if (cachedImagePath != path) {
         cachedImage?.recycle()
-        val localPath = if (path.startsWith("file:")) Uri.parse(path).path else path
-        cachedImage = localPath?.let(BitmapFactory::decodeFile)
+        cachedImage = decodeBackgroundBitmap(path)
         cachedImagePath = path
       }
       cachedImage?.let { image ->
         return centerCrop(image, source.width, source.height)
       }
+      // Image mode with a failed decode must not silently fall back to blur —
+      // that looks like the upload "did nothing" / applied the wrong effect.
+      return source
     }
 
     // A small downsample/upscale gives a stable real-time blur on API 24+.
@@ -122,6 +124,26 @@ private class MeetingBackgroundProcessor(private val context: Context) : VideoFr
     val blurred = Bitmap.createScaledBitmap(tiny, source.width, source.height, true)
     tiny.recycle()
     return blurred
+  }
+
+  private fun decodeBackgroundBitmap(path: String): Bitmap? {
+    return try {
+      when {
+        path.startsWith("file:") -> {
+          val localPath = Uri.parse(path).path
+          localPath?.let(BitmapFactory::decodeFile)
+        }
+        path.startsWith("content:") -> {
+          context.contentResolver.openInputStream(Uri.parse(path))?.use { stream ->
+            BitmapFactory.decodeStream(stream)
+          }
+        }
+        path.startsWith("/") -> BitmapFactory.decodeFile(path)
+        else -> BitmapFactory.decodeFile(path)
+      }
+    } catch (_: Exception) {
+      null
+    }
   }
 
   private fun centerCrop(image: Bitmap, width: Int, height: Int): Bitmap {
