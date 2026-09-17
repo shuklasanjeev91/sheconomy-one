@@ -1,21 +1,24 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import {
   ConnectionQuality,
+  ConnectionState,
   RoomEvent,
   type LocalParticipant,
   type Room,
 } from 'livekit-client'
 
 import {
-  deriveMeetingConnectionStatus,
-  type MeetingAudioQuality,
-  type MeetingMicrophonePermission,
-} from '~/co-work/lib/meeting-audio-quality'
-import {
   configureLiveKitCallAudio,
   getActiveCallMediaMode,
   toggleCallSpeaker,
 } from '~/co-work/lib/livekit-call-audio'
+import {
+  deriveMeetingConnectionStatus,
+  MEETING_RECONNECT_BANNER_DEBOUNCE_MS,
+  type MeetingAudioQuality,
+  type MeetingConnectionStatus,
+  type MeetingMicrophonePermission,
+} from '~/co-work/lib/meeting-audio-quality'
 
 function createSpeakerTestWaveBase64(): string {
   const sampleRate = 8000
@@ -57,7 +60,7 @@ export function useMeetingAudioQuality(
   audioEnabled: boolean,
   speakerOn: boolean,
 ): MeetingAudioQuality {
-  const [connectionStatus, setConnectionStatus] = useState(() =>
+  const [connectionStatus, setConnectionStatus] = useState<MeetingConnectionStatus>(() =>
     deriveMeetingConnectionStatus(room.state, localParticipant.connectionQuality),
   )
   const [microphonePermission, setMicrophonePermission] =
@@ -67,6 +70,7 @@ export function useMeetingAudioQuality(
   const [speakerTesting, setSpeakerTesting] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const microphoneTestTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const reconnectBannerTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   useEffect(() => {
     let cancelled = false
@@ -89,10 +93,26 @@ export function useMeetingAudioQuality(
   }, [audioEnabled])
 
   useEffect(() => {
+    const applyStatus = (next: MeetingConnectionStatus) => {
+      if (next === 'reconnecting') {
+        if (reconnectBannerTimerRef.current) return
+        reconnectBannerTimerRef.current = setTimeout(() => {
+          reconnectBannerTimerRef.current = null
+          setConnectionStatus(
+            deriveMeetingConnectionStatus(room.state, localParticipant.connectionQuality),
+          )
+        }, MEETING_RECONNECT_BANNER_DEBOUNCE_MS)
+        return
+      }
+      if (reconnectBannerTimerRef.current) {
+        clearTimeout(reconnectBannerTimerRef.current)
+        reconnectBannerTimerRef.current = null
+      }
+      setConnectionStatus(next)
+    }
+
     const syncConnection = () =>
-      setConnectionStatus(
-        deriveMeetingConnectionStatus(room.state, localParticipant.connectionQuality),
-      )
+      applyStatus(deriveMeetingConnectionStatus(room.state, localParticipant.connectionQuality))
     const onQuality = (_quality: ConnectionQuality, participant: { identity?: string }) => {
       if (participant.identity === localParticipant.identity) syncConnection()
     }
@@ -113,6 +133,10 @@ export function useMeetingAudioQuality(
       room.off(RoomEvent.ConnectionStateChanged, syncConnection)
       room.off(RoomEvent.ConnectionQualityChanged, onQuality as never)
       room.off(RoomEvent.MediaDevicesError, onMediaError)
+      if (reconnectBannerTimerRef.current) {
+        clearTimeout(reconnectBannerTimerRef.current)
+        reconnectBannerTimerRef.current = null
+      }
     }
   }, [localParticipant, room])
 
@@ -168,8 +192,6 @@ export function useMeetingAudioQuality(
       } catch {
         // Best-effort cleanup.
       }
-      // expo-audio can replace the native call audio session. Re-assert
-      // LiveKit communication mode and the user's selected output route.
       try {
         await configureLiveKitCallAudio(mediaMode)
         await toggleCallSpeaker(speakerOn)
@@ -179,6 +201,35 @@ export function useMeetingAudioQuality(
       setSpeakerTesting(false)
     }
   }, [speakerOn])
+
+  const retryConnection = useCallback(async () => {
+    setError(null)
+    const mediaMode = getActiveCallMediaMode()
+    try {
+      await configureLiveKitCallAudio(mediaMode)
+      await toggleCallSpeaker(speakerOn)
+      if (
+        room.state === ConnectionState.Connected ||
+        room.state === ConnectionState.Reconnecting ||
+        room.state === ConnectionState.SignalReconnecting
+      ) {
+        const micOn = room.localParticipant.isMicrophoneEnabled
+        if (micOn) {
+          await room.localParticipant.setMicrophoneEnabled(false)
+          await room.localParticipant.setMicrophoneEnabled(true)
+        }
+      }
+      setConnectionStatus(
+        deriveMeetingConnectionStatus(room.state, localParticipant.connectionQuality),
+      )
+    } catch (cause) {
+      setError(
+        cause instanceof Error
+          ? cause.message
+          : 'Could not restore audio connection. Check your network and try again.',
+      )
+    }
+  }, [localParticipant.connectionQuality, room, speakerOn])
 
   return {
     connectionStatus,
@@ -207,6 +258,6 @@ export function useMeetingAudioQuality(
           : 'Could not change microphone state. Check microphone permission and try again.',
       ),
     clearError: () => setError(null),
-    retryConnection: async () => {},
+    retryConnection,
   }
 }

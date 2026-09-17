@@ -18,7 +18,7 @@ import {
 } from '~/co-work/lib/meeting-lifecycle'
 import { classifyMeetingAppStateInterruption } from '~/co-work/lib/meeting-mobile'
 import { useMeetingStateManager } from '~/co-work/hooks/useMeetingStateManager'
-import { useConnectivity, useOnReconnect } from '~/providers/ConnectivityProvider'
+import { useOnReconnect } from '~/providers/ConnectivityProvider'
 
 type UseMeetingLifecycleArgs = {
   room: Room
@@ -39,7 +39,6 @@ export function useMeetingLifecycle({
 }: UseMeetingLifecycleArgs) {
   useKeepAwake('sheconomy-meeting-native')
   const { syncLifecycle } = useMeetingStateManager()
-  const { isOnline } = useConnectivity()
   const [notice, setNotice] = useState<string | null>(null)
   const [inBackground, setInBackground] = useState(AppState.currentState !== 'active')
   const [phoneCallInterrupted, setPhoneCallInterrupted] = useState(false)
@@ -198,21 +197,38 @@ export function useMeetingLifecycle({
   }, [screenShareStoppedByOs])
 
   useEffect(() => {
-    if (!isOnline) {
-      setReconnecting(true)
+    if (
+      room.state === ConnectionState.Reconnecting ||
+      room.state === ConnectionState.SignalReconnecting
+    ) {
+      return
+    }
+    if (room.state === ConnectionState.Connected && reconnecting) {
+      setReconnecting(false)
       syncLifecycle({
         inMeeting: true,
-        mediaReconnecting: true,
+        mediaReconnecting: false,
         screenSharing,
         audioOnly: mediaMode === 'audio',
       })
-      refreshNotice({ reconnecting: true })
+      refreshNotice({ reconnecting: false })
     }
-  }, [isOnline, mediaMode, refreshNotice, screenSharing, syncLifecycle])
+  }, [mediaMode, reconnecting, refreshNotice, room.state, screenSharing, syncLifecycle])
 
   useOnReconnect(() => {
-    setReconnecting(true)
-    refreshNotice({ reconnecting: true })
+    if (
+      room.state === ConnectionState.Connected ||
+      room.state === ConnectionState.Connecting
+    ) {
+      setReconnecting(false)
+      refreshNotice({ reconnecting: false })
+    } else if (
+      room.state === ConnectionState.Reconnecting ||
+      room.state === ConnectionState.SignalReconnecting
+    ) {
+      setReconnecting(true)
+      refreshNotice({ reconnecting: true })
+    }
     void (async () => {
       try {
         await configureLiveKitCallAudio(mediaMode)
@@ -236,47 +252,73 @@ export function useMeetingLifecycle({
           audioOnly: mediaMode === 'audio',
         })
       } finally {
-        setReconnecting(false)
-        refreshNotice({ reconnecting: false })
+        if (room.state === ConnectionState.Connected || room.state === ConnectionState.Connecting) {
+          setReconnecting(false)
+          refreshNotice({ reconnecting: false })
+        }
       }
     })()
   })
 
   useEffect(() => {
+    let debounceTimer: ReturnType<typeof setTimeout> | null = null
     const onConnection = (state: ConnectionState) => {
       if (
         state === ConnectionState.Reconnecting ||
         state === ConnectionState.SignalReconnecting
       ) {
-        setReconnecting(true)
-        syncLifecycle({
-          inMeeting: true,
-          mediaReconnecting: true,
-          screenSharing: screenSharingRef.current,
-          audioOnly: mediaMode === 'audio',
-        })
-        refreshNotice({ reconnecting: true })
+        if (debounceTimer) return
+        debounceTimer = setTimeout(() => {
+          debounceTimer = null
+          if (
+            room.state !== ConnectionState.Reconnecting &&
+            room.state !== ConnectionState.SignalReconnecting
+          ) {
+            return
+          }
+          setReconnecting(true)
+          syncLifecycle({
+            inMeeting: true,
+            mediaReconnecting: true,
+            screenSharing: screenSharingRef.current,
+            audioOnly: mediaMode === 'audio',
+          })
+          refreshNotice({ reconnecting: true })
+        }, 1_500)
         return
       }
-      if (state === ConnectionState.Connected) {
-        setReconnecting(false)
+      if (debounceTimer) {
+        clearTimeout(debounceTimer)
+        debounceTimer = null
+      }
+      setReconnecting(false)
+      if (state === ConnectionState.Connected || state === ConnectionState.Connecting) {
         syncLifecycle({
           inMeeting: true,
           mediaReconnecting: false,
           screenSharing: screenSharingRef.current,
           audioOnly: mediaMode === 'audio',
         })
-        refreshNotice({ reconnecting: false })
       }
+      refreshNotice({ reconnecting: false })
     }
     room.on(RoomEvent.ConnectionStateChanged, onConnection)
+    if (
+      room.state === ConnectionState.Connected ||
+      room.state === ConnectionState.Connecting ||
+      room.state === ConnectionState.Disconnected
+    ) {
+      setReconnecting(false)
+      refreshNotice({ reconnecting: false })
+    }
     return () => {
       room.off(RoomEvent.ConnectionStateChanged, onConnection)
+      if (debounceTimer) clearTimeout(debounceTimer)
     }
   }, [mediaMode, refreshNotice, room, syncLifecycle])
 
   useEffect(() => {
-    if (reconnecting || !isOnline) return
+    if (reconnecting) return
     if (room.state !== ConnectionState.Connected) return
     syncLifecycle({
       inMeeting: true,
@@ -284,7 +326,7 @@ export function useMeetingLifecycle({
       screenSharing,
       audioOnly: mediaMode === 'audio',
     })
-  }, [isOnline, mediaMode, reconnecting, room.state, screenSharing, syncLifecycle])
+  }, [mediaMode, reconnecting, room.state, screenSharing, syncLifecycle])
 
   return {
     notice,

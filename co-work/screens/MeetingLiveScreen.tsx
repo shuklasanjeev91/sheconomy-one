@@ -195,7 +195,7 @@ function MeetingLiveScreenBody({
   }, [normalizedCode, initialMeeting, applyMeetingSecurity, shouldSkipConfirm, shouldResumeRoom])
 
   const joinMeeting = useCallback(
-    async (displayName: string, passcode?: string) => {
+    async (displayName: string, passcode?: string, options?: { skipPermissionPrompt?: boolean }) => {
       if (!meeting) throw new Error('Meeting not loaded')
       if (isLocked && !isHost) {
         throw new Error(MEETING_LOCKED_MESSAGE)
@@ -215,8 +215,12 @@ function MeetingLiveScreenBody({
       setPhase('joining')
       setError(null)
       // Resume / Maximize must not re-prompt permissions — that bounced users to Join.
-      if (!shouldResumeRoom && !resumedRoomRef.current) {
-        const permissions = await ensureMeetingMobilePermissions({ requestNotifications: true })
+      // Instant "New" already requested mic in the click gesture; skip a second prompt
+      // that can hang behind the fullscreen overlay on web.
+      if (!shouldResumeRoom && !resumedRoomRef.current && !options?.skipPermissionPrompt) {
+        const permissions = await ensureMeetingMobilePermissions({
+          requestNotifications: false,
+        })
         if (!permissions.ok) {
           const message = permissions.message ?? 'Microphone permission is required to join.'
           // Stay on the join confirm screen so the user can open Settings and retry.
@@ -277,22 +281,22 @@ function MeetingLiveScreenBody({
     }
 
     autoJoinAttemptedRef.current = true
-    let cancelled = false
+    // Do not abort on effect cleanup. Dependency churn (joinMeeting identity,
+    // profile hydration) used to cancel before joinMeeting ran and left the UI
+    // stuck on "Joining meeting…" forever because autoJoinAttemptedRef stayed true.
     void (async () => {
       const remembered = await loadRememberedMeetingDisplayName()
-      if (cancelled) return
       const name = safeMeetingDisplayName(
         resumeDisplayName || remembered || profile?.full_name || profile?.username,
       )
       try {
-        await joinMeeting(name)
+        await joinMeeting(name, undefined, { skipPermissionPrompt: true })
       } catch {
         // joinMeeting already restored confirm + error — user can tap Join once.
+        // Allow a later manual retry from the confirm screen.
+        autoJoinAttemptedRef.current = false
       }
     })()
-    return () => {
-      cancelled = true
-    }
   }, [
     shouldSkipConfirm,
     shouldResumeRoom,

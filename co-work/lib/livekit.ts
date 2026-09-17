@@ -1,6 +1,7 @@
 import { fetchLiveKitConfig } from '~/lib/livekit/config'
 import { supabase } from '~/lib/supabase/client'
 import { supabaseConfig } from '~/lib/supabase/env'
+import { readSupabaseFunctionError } from '~/lib/supabase/function-error'
 
 export type LiveKitCredentials = {
   token: string
@@ -46,7 +47,13 @@ export async function fetchLiveKitCredentials(
   })
 
   if (error) {
-    throw new Error(error.message || 'Failed to get LiveKit meeting token')
+    throw new Error(
+      await readSupabaseFunctionError(
+        error,
+        data,
+        'Could not join the video room. Check your connection and try again.',
+      ),
+    )
   }
 
   const payload = data as LiveKitTokenResponse
@@ -79,7 +86,11 @@ export async function disconnectLiveKitParticipant(
       participantUserId,
     },
   })
-  if (error) throw new Error(error.message || 'Could not remove participant from the media room.')
+  if (error) {
+    throw new Error(
+      await readSupabaseFunctionError(error, data, 'Could not remove participant from the media room.'),
+    )
+  }
   const payload = data as { error?: string }
   if (payload?.error) throw new Error(payload.error)
 }
@@ -88,7 +99,9 @@ export async function endLiveKitRoom(meetingId: string, roomName: string): Promi
   const { data, error } = await supabase.functions.invoke('livekit-token', {
     body: { action: 'end-room', meetingId, roomName },
   })
-  if (error) throw new Error(error.message || 'Could not end the media room.')
+  if (error) {
+    throw new Error(await readSupabaseFunctionError(error, data, 'Could not end the media room.'))
+  }
   const payload = data as { error?: string }
   if (payload?.error) throw new Error(payload.error)
 }

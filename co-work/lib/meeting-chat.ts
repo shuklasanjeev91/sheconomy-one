@@ -11,6 +11,7 @@ export type MeetingSystemChatEvent =
   | 'mute_all'
 
 export function isMeetingChatEnabled(meeting: Pick<Meeting, 'security_settings' | 'meeting_options'>): boolean {
+  if (meeting.security_settings?.participantChatWith === 'off') return false
   if (meeting.security_settings?.allowChat === false) return false
   if (meeting.meeting_options?.enableMeetingChat === false) return false
   return true
@@ -21,6 +22,7 @@ export function isMeetingPrivateChatEnabled(
   meeting: Pick<Meeting, 'security_settings' | 'meeting_options'>,
 ): boolean {
   if (!isMeetingChatEnabled(meeting)) return false
+  if (meeting.security_settings?.participantChatWith === 'hosts') return false
   if (meeting.security_settings?.allowPrivateChat === false) return false
   return meetingFeatureFlags.audienceChat
 }
@@ -28,7 +30,14 @@ export function isMeetingPrivateChatEnabled(
 export function meetingChatComposerAudiences(input: {
   viewerRole: MeetingRole
   privateEnabled: boolean
+  participantChatWith?: 'everyone' | 'hosts' | 'off' | null
 }): MeetingChatAudience[] {
+  const chatWith = input.participantChatWith ?? 'everyone'
+  const isModerator = canManageMeetingChat(input.viewerRole)
+
+  if (!isModerator && chatWith === 'off') return []
+  if (!isModerator && chatWith === 'hosts') return ['hosts']
+
   const audiences: MeetingChatAudience[] = ['everyone']
   if (input.privateEnabled) audiences.push('private')
   if (canSendHostsOnlyChat(input.viewerRole)) audiences.push('hosts')

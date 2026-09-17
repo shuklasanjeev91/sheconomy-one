@@ -1,5 +1,5 @@
 import { Button, Text, YStack } from '~/components/ui'
-import { ScreenCenter, ScreenFill } from '~/components/layout'
+import { ScreenFill } from '~/components/layout'
 import { useCoWorkTheme } from '~/co-work/lib/theme'
 import { pageGradientStyle } from '~/lib/platform/crossStyles'
 
@@ -25,13 +25,17 @@ export function MeetingEndedScreen({
 
   return (
     <ScreenFill
+      flex={1}
+      width="100%"
+      height="100%"
+      minHeight={0}
       style={pageGradientStyle(coworkGradients.page, coworkUi.pageBg)}
       backgroundColor={coworkUi.pageBg}
       alignItems="center"
       justifyContent="center"
       padding="$5"
     >
-      <ScreenCenter gap="$4" maxWidth={420} width="100%">
+      <YStack gap="$4" maxWidth={420} width="100%" alignItems="center">
         <YStack
           width={64}
           height={64}
@@ -42,9 +46,11 @@ export function MeetingEndedScreen({
           borderWidth={1}
           borderColor="rgba(244,63,104,0.35)"
         >
-          <Text fontSize={28}>✓</Text>
+          <Text fontSize={28} color={coworkUi.text}>
+            ✓
+          </Text>
         </YStack>
-        <YStack gap="$2" alignItems="center">
+        <YStack gap="$2" alignItems="center" width="100%">
           <Text
             fontSize={24}
             fontWeight="800"
@@ -61,7 +67,7 @@ export function MeetingEndedScreen({
         <Button tone="primary" size="$4" borderRadius={999} width="100%" onPress={onDone}>
           Back to Co-Work
         </Button>
-      </ScreenCenter>
+      </YStack>
     </ScreenFill>
   )
 }

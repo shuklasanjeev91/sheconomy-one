@@ -7,6 +7,37 @@ export function canManageMeeting(viewerRole: MeetingRole): boolean {
   return viewerRole === 'host' || viewerRole === 'co_host'
 }
 
+/** Edit schedule/details or cancel a meeting — host + co-host. */
+export function canEditOrCancelMeeting(viewerRole: MeetingRole): boolean {
+  return canManageMeeting(viewerRole)
+}
+
+/** Open Zoom-style Host tools sheet — host + co-host. */
+export function canOpenHostTools(viewerRole: MeetingRole): boolean {
+  return canManageMeeting(viewerRole)
+}
+
+/**
+ * Change live participant permissions (share / chat / unmute / video) — host only.
+ * Co-hosts can view Host tools but cannot flip these toggles.
+ */
+export function canChangeParticipantPermissions(viewerRole: MeetingRole): boolean {
+  return canChangeCriticalMeetingSettings(viewerRole)
+}
+
+/**
+ * Out-of-meeting gate when we have host_id and/or an explicit viewer role
+ * (e.g. My Meetings list, schedule edit screen).
+ */
+export function canEditOrCancelMeetingForUser(input: {
+  userId: string
+  hostId: string
+  viewerRole?: MeetingRole | null
+}): boolean {
+  if (input.hostId === input.userId) return true
+  return canEditOrCancelMeeting(meetingRoleFromFlags({ role: input.viewerRole }))
+}
+
 /** Mute / stop-video / remove a specific participant. */
 export function canModerateParticipant(
   viewerRole: MeetingRole,

@@ -148,31 +148,10 @@ export function MeetingInfoPanel({
                 <CoWorkStatusPill label="No recording" tone="warning" />
               ) : null}
             </XStack>
-            {isHost && onToggleLock ? (
-              <YStack
-                gap="$2"
-                padding="$3"
-                borderRadius={14}
-                backgroundColor="rgba(255,255,255,0.04)"
-                borderWidth={1}
-                borderColor={coworkUi.borderSoft}
-              >
-                <Text fontSize={14} fontWeight="700" color={coworkUi.text}>
-                  Lock meeting
-                </Text>
-                <Text fontSize={12} color={coworkUi.textMuted} lineHeight={17}>
-                  When locked, new participants cannot join until you unlock.
-                </Text>
-                <Button
-                  size="$2"
-                  borderRadius={999}
-                  tone={isLocked ? 'primary' : 'outline'}
-                  borderColor={isLocked ? coworkUi.brand : coworkUi.borderSoft}
-                  onPress={onToggleLock}
-                >
-                  {isLocked ? 'Unlock meeting' : 'Lock Meeting'}
-                </Button>
-              </YStack>
+            {isLocked ? (
+              <Text fontSize={12} color={coworkUi.textMuted} lineHeight={17}>
+                Meeting is locked. Use Security or Participants to unlock.
+              </Text>
             ) : null}
           </YStack>
 
@@ -362,10 +341,10 @@ export function MeetingInfoPanel({
             icon={<Icons.Circle size={16} color={coworkUi.brandLight} />}
             onPress={onOpenRecordings}
           >
-            Meeting recordings
+            Recording history
           </Button>
         ) : null}
-        {isHost && onInvite ? (
+        {onInvite ? (
           <Button
             tone="outline"
             borderRadius={999}

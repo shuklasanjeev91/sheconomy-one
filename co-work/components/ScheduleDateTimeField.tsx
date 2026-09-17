@@ -19,7 +19,9 @@ import {
 import { AppBottomSheet, Button, Field, Icons, Text, XStack, YStack } from '~/components/ui'
 import { useCoWorkTheme } from '~/co-work/lib/theme'
 import {
+  coerceIanaTimeZone,
   getZonedWallTime,
+  isValidIanaTimeZone,
   resolveDeviceIanaTimeZone,
   zonedWallTimeToUtcIso,
   type ZonedWallTime,
@@ -61,17 +63,32 @@ function wallFromUtcIso(iso: string, timeZone: string): DraftWall {
 }
 
 function nextFullHourWall(timeZone: string): DraftWall {
-  const now = getZonedWallTime(new Date().toISOString(), timeZone)
-  let hour = now.hour + 1
-  let { year, month, day } = now
-  if (hour >= 24) {
-    hour = 0
-    const nextDay = new Date(Date.UTC(year, month - 1, day + 1))
-    year = nextDay.getUTCFullYear()
-    month = nextDay.getUTCMonth() + 1
-    day = nextDay.getUTCDate()
+  const zone = coerceIanaTimeZone(timeZone)
+  try {
+    const now = getZonedWallTime(new Date().toISOString(), zone)
+    let hour = now.hour + 1
+    let { year, month, day } = now
+    if (hour >= 24) {
+      hour = 0
+      const nextDay = new Date(Date.UTC(year, month - 1, day + 1))
+      year = nextDay.getUTCFullYear()
+      month = nextDay.getUTCMonth() + 1
+      day = nextDay.getUTCDate()
+    }
+    return { year, month, day, hour, minute: 0, second: 0 }
+  } catch {
+    const local = new Date()
+    local.setMinutes(0, 0, 0)
+    local.setHours(local.getHours() + 1)
+    return {
+      year: local.getFullYear(),
+      month: local.getMonth() + 1,
+      day: local.getDate(),
+      hour: local.getHours(),
+      minute: 0,
+      second: 0,
+    }
   }
-  return { year, month, day, hour, minute: 0, second: 0 }
 }
 
 function snapWall(wall: DraftWall): DraftWall {
@@ -145,7 +162,12 @@ export function ScheduleDateTimeField({
   minDate,
 }: ScheduleDateTimeFieldProps) {
   const { ui: coworkUi } = useCoWorkTheme()
-  const timeZone = timeZoneProp && timeZoneProp.includes('/') ? timeZoneProp : resolveDeviceIanaTimeZone()
+  const timeZone =
+    timeZoneProp && isValidIanaTimeZone(timeZoneProp)
+      ? coerceIanaTimeZone(timeZoneProp)
+      : timeZoneProp && timeZoneProp.includes('/')
+        ? coerceIanaTimeZone(timeZoneProp)
+        : resolveDeviceIanaTimeZone()
   const [open, setOpen] = useState(false)
   const [step, setStep] = useState<'date' | 'time'>('date')
   const [draft, setDraft] = useState<DraftWall>(() =>

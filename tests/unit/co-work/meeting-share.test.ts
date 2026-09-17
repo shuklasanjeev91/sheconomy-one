@@ -34,7 +34,7 @@ const meeting: Meeting = {
 }
 
 describe('meeting sharing', () => {
-  it('includes Zoom-style details, passcode, and calendar links', () => {
+  it('includes Zoom-style details and passcode without raw calendar URLs', () => {
     const payload = buildMeetingSharePayload(meeting)
     const whatsappMessage = decodeURIComponent(
       buildShareTargetUrl('whatsapp', payload).split('?text=')[1] ?? '',
@@ -47,10 +47,11 @@ describe('meeting sharing', () => {
     expect(whatsappMessage).toContain('Host: Sanjeev Shukla')
     expect(whatsappMessage).toContain('Meeting ID: VAC LLM WGO')
     expect(whatsappMessage).toContain('Passcode: 482910')
-    expect(whatsappMessage).toContain('Add to Calendar')
-    expect(whatsappMessage).toContain('Google Calendar:')
-    expect(whatsappMessage).toContain('Outlook:')
-    expect(whatsappMessage.match(/https:\/\/sheconomy\.in\/co-work\/meeting\/VACLLMWGO/g)?.length).toBeGreaterThanOrEqual(1)
+    expect(whatsappMessage).toContain('Add to Calendar from the meeting page')
+    expect(whatsappMessage).not.toContain('Google Calendar:')
+    expect(whatsappMessage).not.toContain('calendar.google.com')
+    expect(whatsappMessage).not.toContain('outlook.office.com')
+    expect(whatsappMessage).toContain('https://www.sheconomy.in/co-work/meeting/VACLLMWGO')
   })
 
   it('builds Google and Outlook calendar deeplinks', () => {
@@ -75,10 +76,12 @@ describe('meeting sharing', () => {
     expect(schedule.endsAt).toBe('2026-09-16T13:00:00.000Z')
   })
 
-  it('copies a full invitation block for paste into any chat', () => {
+  it('copies a full invitation block with join URL for paste into any chat', () => {
     const text = buildMeetingInvitationText(meeting)
     expect(text).toContain('SHEconomy Co-Work Meeting Invitation')
     expect(text).toContain('Join SHEconomy Co-Work Meeting')
+    expect(text).toContain('https://www.sheconomy.in/co-work/meeting/VACLLMWGO')
     expect(text).toContain('Passcode: 482910')
+    expect(text).not.toContain('calendar.google.com')
   })
 })

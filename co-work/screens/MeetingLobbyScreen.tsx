@@ -6,7 +6,7 @@ import { FullWidthLayout, LAYOUT_STRETCH, PageSection, ScreenCenter } from '~/co
 import { BRAND_MEMBER_LABEL } from '~/config/brand'
 import { MeetingShareSheet } from '~/co-work/components/MeetingShareSheet'
 import { Button, Field, Icons, Input, Spinner, Text, XStack, YStack, useAppToast } from '~/components/ui'
-import { CoWorkBrandChip, CoWorkIconBadge } from '~/co-work/components/CoWorkUi'
+import { CoWorkIconBadge } from '~/co-work/components/CoWorkUi'
 import { MeetingInvitePanel } from '~/co-work/components/MeetingInvitePanel'
 import { MeetingOpenInApp } from '~/co-work/components/MeetingOpenInApp'
 import { MeetingProvider } from '~/co-work/components/MeetingProvider'
@@ -22,15 +22,18 @@ import {
   MEETING_LOCKED_MESSAGE,
   shouldPromptForPasscode,
 } from '~/co-work/lib/meeting-security'
-import { openInstantMeetingSession, peekInstantMeetingSession, instantMeetingCodesMatch } from '~/co-work/lib/instant-meeting-session'
+import {
+  openInstantMeetingSession,
+  peekInstantMeetingSession,
+  instantMeetingCodesMatch,
+} from '~/co-work/lib/instant-meeting-session'
 import { maximizeGlobalSession } from '~/lib/session/global-session'
-import { coworkGlassStyle, useCoWorkTheme } from '~/co-work/lib/theme'
+import { meetingBarStyle, useCoWorkTheme } from '~/co-work/lib/theme'
 import { controlGradientStyle, coworkBoxShadow, pageGradientStyle } from '~/lib/platform/crossStyles'
 import type { Meeting } from '~/co-work/lib/types'
 import { coWorkRoutes } from '~/lib/routes'
 import { useProfile } from '~/hooks/useProfile'
-
-import { APP_LAYOUT } from '~/lib/layout/constants'
+import { useAppLayout } from '~/hooks/useAppLayout'
 import { addMeetingToDeviceCalendar } from '~/lib/calendar/device-calendar'
 
 const MeetingBackgroundPreview = lazy(() =>
@@ -54,6 +57,8 @@ export function MeetingLobbyScreen({ code }: MeetingLobbyScreenProps) {
 
 function MeetingLobbyScreenBody({ code }: MeetingLobbyScreenProps) {
   const { ui: coworkUi, gradients: coworkGradients, shadows: coworkShadows } = useCoWorkTheme()
+  const { isDesktop, isTablet } = useAppLayout()
+  const wide = isDesktop || isTablet
   const toast = useAppToast()
   const { profile, user, isAuthenticated, isLoading } = useProfile()
   const [meeting, setMeeting] = useState<Meeting | null>(null)
@@ -64,6 +69,7 @@ function MeetingLobbyScreenBody({ code }: MeetingLobbyScreenProps) {
   const [loadingMeeting, setLoadingMeeting] = useState(true)
   const [showInvite, setShowInvite] = useState(false)
   const [shareOpen, setShareOpen] = useState(false)
+  const [moreOpen, setMoreOpen] = useState(false)
 
   const isHost = !!meeting && !!user && meeting.host_id === user.id
   const hostName = profile?.full_name || profile?.username || 'You'
@@ -139,8 +145,6 @@ function MeetingLobbyScreenBody({ code }: MeetingLobbyScreenProps) {
       toast.show('Meeting locked', { tone: 'danger', message: MEETING_LOCKED_MESSAGE })
       return
     }
-    // In-place host keeps the SPA shell mounted (no hard route reload).
-    // autoJoin skips the second Join Meeting screen — lobby already previewed devices.
     openInstantMeetingSession({
       code: meeting.meeting_code,
       meeting,
@@ -148,8 +152,6 @@ function MeetingLobbyScreenBody({ code }: MeetingLobbyScreenProps) {
     })
   }
 
-  // If Maximize / deep-link landed back on this lobby while the live overlay still
-  // owns the meeting, expand InstantMeetingHost instead of showing Join now again.
   useEffect(() => {
     if (!meeting) return
     const instant = peekInstantMeetingSession()
@@ -174,7 +176,10 @@ function MeetingLobbyScreenBody({ code }: MeetingLobbyScreenProps) {
         : result === 'shared'
           ? 'Calendar event ready'
           : 'Could not open calendar',
-      { tone: result === 'saved' || result === 'opened' || result === 'shared' ? 'success' : 'danger' },
+      {
+        tone:
+          result === 'saved' || result === 'opened' || result === 'shared' ? 'success' : 'danger',
+      },
     )
   }
 
@@ -193,184 +198,216 @@ function MeetingLobbyScreenBody({ code }: MeetingLobbyScreenProps) {
     return <AuthSignInFlow returnTo={String(coWorkRoutes.meeting(normalizedCode || code))} />
   }
 
+  const joinReady = meeting && verified && isMeetingJoinable(meeting)
+  const title = meeting?.title ?? 'Join meeting'
+  const codeLabel = meeting
+    ? formatMeetingCode(meeting.meeting_code)
+    : (normalizedCode || code).toUpperCase()
+
+  const sidebar = (
+    <YStack gap="$4" flex={wide ? 1 : undefined} minWidth={wide ? 280 : undefined} maxWidth={wide ? 380 : undefined}>
+      <YStack gap="$2">
+        <Text fontSize={wide ? 28 : 26} fontWeight="800" color={coworkUi.text} letterSpacing={-0.6}>
+          {title}
+        </Text>
+        <Text color={coworkUi.meetingIconMuted} fontSize={14} fontWeight="600" letterSpacing={1}>
+          {codeLabel}
+        </Text>
+        {meeting ? (
+          <Text color={coworkUi.textSecondary} fontSize={13}>
+            Hosted by {meeting.host?.full_name || meeting.host?.username || BRAND_MEMBER_LABEL}
+          </Text>
+        ) : null}
+      </YStack>
+
+      <MeetingOpenInApp meetingCode={normalizedCode || code} />
+
+      {error ? (
+        <YStack
+          padding="$3.5"
+          borderRadius={coworkUi.radius.panel}
+          borderWidth={1}
+          borderColor="rgba(244,63,104,0.35)"
+          backgroundColor={coworkUi.dangerMuted}
+        >
+          <Text color={coworkUi.danger}>{error}</Text>
+        </YStack>
+      ) : null}
+
+      {meeting && !verified ? (
+        <YStack gap="$3" padding="$4" borderRadius={coworkUi.radius.panel} style={meetingBarStyle(coworkUi, true)}>
+          <XStack alignItems="center" gap="$3">
+            <CoWorkIconBadge icon={Icons.Lock} />
+            <YStack gap={2} flex={1}>
+              <Text fontWeight="700" fontSize={15} color={coworkUi.text}>
+                Passcode required
+              </Text>
+              <Text color={coworkUi.textSecondary} fontSize={12}>
+                Enter the passcode from your host
+              </Text>
+            </YStack>
+          </XStack>
+          <Field label="Passcode">
+            <Input
+              value={passcode}
+              onChangeText={setPasscode}
+              secureTextEntry
+              backgroundColor={coworkUi.meetingControl}
+              borderColor={coworkUi.borderSoft}
+              color={coworkUi.text}
+              borderRadius={12}
+            />
+          </Field>
+          <Button tone="primary" borderRadius={12} onPress={() => void handleVerifyPasscode()}>
+            Continue
+          </Button>
+        </YStack>
+      ) : null}
+
+      {joinReady ? (
+        <YStack gap="$3">
+          <Button
+            tone="primary"
+            size="$5"
+            borderRadius={12}
+            disabled={isLocked && !isHost}
+            opacity={isLocked && !isHost ? 0.55 : 1}
+            icon={<Icons.Video size={18} color="white" />}
+            onPress={enterLiveRoom}
+            style={controlGradientStyle(coworkGradients.activeControl, coworkUi.brand)}
+          >
+            {isLocked && !isHost ? 'Meeting locked' : 'Join'}
+          </Button>
+          <XStack gap="$2" alignItems="center" flexWrap="wrap">
+            <Button
+              tone="outline"
+              size="$3"
+              borderRadius={12}
+              borderColor={coworkUi.glassBorder}
+              backgroundColor={coworkUi.meetingControl}
+              onPress={() => setShareOpen(true)}
+              icon={<Icons.Share2 size={15} color={coworkUi.text} />}
+            >
+              Share
+            </Button>
+            {isHost ? (
+              <Button
+                tone="outline"
+                size="$3"
+                borderRadius={12}
+                borderColor={coworkUi.glassBorder}
+                backgroundColor={coworkUi.meetingControl}
+                icon={<Icons.UserPlus size={15} color={coworkUi.text} />}
+                onPress={() => setShowInvite((open) => !open)}
+              >
+                {showInvite ? 'Hide invite' : 'Invite'}
+              </Button>
+            ) : null}
+            <Button
+              tone="ghost"
+              size="$3"
+              borderRadius={12}
+              icon={<Icons.MoreHorizontal size={16} color={coworkUi.meetingIconMuted} />}
+              onPress={() => setMoreOpen((open) => !open)}
+            >
+              More
+            </Button>
+          </XStack>
+          {moreOpen ? (
+            <YStack gap="$2">
+              <Button
+                tone="outline"
+                size="$3"
+                borderRadius={12}
+                borderColor={coworkUi.glassBorder}
+                icon={<Icons.Calendar size={15} color={coworkUi.text} />}
+                onPress={() => void addToCalendar()}
+              >
+                Add to calendar
+              </Button>
+            </YStack>
+          ) : null}
+          <MeetingShareSheet open={shareOpen} onOpenChange={setShareOpen} meeting={meeting!} />
+        </YStack>
+      ) : null}
+
+      <AppLink href={coWorkRoutes.home} asChild>
+        <Button tone="ghost" size="$3">
+          Back to Co-Work
+        </Button>
+      </AppLink>
+    </YStack>
+  )
+
+  const preview = joinReady ? (
+    <YStack
+      flex={wide ? 1.65 : undefined}
+      minHeight={wide ? 420 : 240}
+      borderRadius={coworkUi.radius.panel}
+      borderWidth={1}
+      borderColor={coworkUi.glassBorder}
+      overflow="hidden"
+      style={{
+        ...meetingBarStyle(coworkUi),
+        ...coworkBoxShadow(coworkShadows, 'card'),
+      }}
+    >
+      <Suspense
+        fallback={
+          <YStack flex={1} alignItems="center" justifyContent="center" minHeight={220} gap="$2">
+            <Spinner size="small" color={coworkUi.brand} />
+            <Text fontSize={12} color={coworkUi.textMuted}>
+              Loading camera preview…
+            </Text>
+          </YStack>
+        }
+      >
+        <MeetingBackgroundPreview userId={user?.id} />
+      </Suspense>
+    </YStack>
+  ) : null
+
   return (
     <FullWidthLayout
       scroll
       backgroundColor={coworkUi.pageBg}
       style={pageGradientStyle(coworkGradients.page, coworkUi.pageBg)}
     >
-      <PageSection paddingVertical="$6" {...LAYOUT_STRETCH}>
-        <YStack gap="$5" width="100%" maxWidth={APP_LAYOUT.maxFormWidth} alignSelf="center">
-          <YStack gap="$3">
-            <CoWorkBrandChip />
-            <Text fontSize={30} fontWeight="800" color={coworkUi.text} letterSpacing={-0.8}>
-              {meeting?.title ?? 'Join meeting'}
-            </Text>
-            <Text color={coworkUi.textSecondary} fontSize={15}>
-              {meeting
-                ? formatMeetingCode(meeting.meeting_code)
-                : (normalizedCode || code).toUpperCase()}
-            </Text>
-          </YStack>
-
-          <MeetingOpenInApp meetingCode={normalizedCode || code} />
-
-          {error ? (
-            <YStack
-              padding="$4"
-              borderRadius={coworkUi.radius.card}
-              borderWidth={1}
-              borderColor="rgba(244,63,104,0.35)"
-              backgroundColor={coworkUi.dangerMuted}
-            >
-              <Text color={coworkUi.danger}>{error}</Text>
+      <PageSection paddingVertical="$5" {...LAYOUT_STRETCH}>
+        <YStack gap="$5" width="100%" maxWidth={wide ? 1100 : 520} alignSelf="center">
+          {wide && joinReady ? (
+            <XStack gap="$5" alignItems="stretch" width="100%">
+              {preview}
+              {sidebar}
+            </XStack>
+          ) : (
+            <YStack gap="$4" width="100%">
+              {preview}
+              {sidebar}
             </YStack>
-          ) : null}
+          )}
 
-          {meeting && !verified ? (
+          {isHost && showInvite && user && meeting ? (
             <YStack
-              gap="$4"
-              padding="$5"
-              borderRadius={coworkUi.radius.card}
+              height={360}
+              borderRadius={coworkUi.radius.panel}
               borderWidth={1}
-              borderColor={coworkUi.glassBorder}
-              style={{
-                ...coworkGlassStyle(coworkUi, true),
-                ...coworkBoxShadow(coworkShadows, 'card'),
-              }}
+              borderColor={coworkUi.borderSoft}
+              overflow="hidden"
+              style={meetingBarStyle(coworkUi, true)}
             >
-              <XStack alignItems="center" gap="$3">
-                <CoWorkIconBadge icon={Icons.Lock} />
-                <YStack gap={2}>
-                  <Text fontWeight="800" fontSize={17} color={coworkUi.text}>
-                    Protected meeting
-                  </Text>
-                  <Text color={coworkUi.textSecondary} fontSize={13}>
-                    Enter the passcode from your host to continue
-                  </Text>
-                </YStack>
-              </XStack>
-              <Field label="Passcode">
-                <Input
-                  value={passcode}
-                  onChangeText={setPasscode}
-                  secureTextEntry
-                  backgroundColor="rgba(255,255,255,0.05)"
-                  borderColor={coworkUi.borderSoft}
-                  color={coworkUi.text}
-                  borderRadius={14}
-                />
-              </Field>
-              <Button tone="primary" borderRadius={999} onPress={() => void handleVerifyPasscode()}>
-                Continue
-              </Button>
-            </YStack>
-          ) : null}
-
-          {meeting && verified && isMeetingJoinable(meeting) ? (
-            <YStack
-              gap="$4"
-              padding="$5"
-              borderRadius={coworkUi.radius.card}
-              borderWidth={1}
-              borderColor={coworkUi.glassBorder}
-              style={{
-                ...coworkGlassStyle(coworkUi, true),
-                ...coworkBoxShadow(coworkShadows, 'card'),
-              }}
-            >
-              <Text color={coworkUi.textSecondary} fontSize={14}>
-                Hosted by {meeting.host?.full_name || meeting.host?.username || BRAND_MEMBER_LABEL}
-              </Text>
-              <Suspense
-                fallback={
-                  <YStack alignItems="center" justifyContent="center" minHeight={160} gap="$2">
-                    <Spinner size="small" color={coworkUi.brand} />
-                    <Text fontSize={12} color={coworkUi.textMuted}>
-                      Loading camera preview…
-                    </Text>
-                  </YStack>
+              <MeetingInvitePanel
+                meeting={meeting}
+                hostId={user.id}
+                hostName={hostName}
+                onClose={() => setShowInvite(false)}
+                fullWidth
+                onInviteesUpdated={(next) =>
+                  setMeeting((current) => (current ? { ...current, invitees: next } : current))
                 }
-              >
-                <MeetingBackgroundPreview userId={user?.id} />
-              </Suspense>
-              <XStack gap="$3" flexWrap="wrap">
-                <Button
-                  tone="primary"
-                  size="$4"
-                  borderRadius={999}
-                  disabled={isLocked && !isHost}
-                  opacity={isLocked && !isHost ? 0.55 : 1}
-                  icon={<Icons.Video size={18} color="white" />}
-                  onPress={enterLiveRoom}
-                  style={controlGradientStyle(coworkGradients.activeControl, coworkUi.brand)}
-                >
-                  {isLocked && !isHost ? 'Meeting locked' : 'Join now'}
-                </Button>
-                {isHost ? (
-                  <Button
-                    tone="outline"
-                    size="$4"
-                    borderRadius={999}
-                    borderColor={coworkUi.borderAccent}
-                    icon={<Icons.UserPlus size={18} color={coworkUi.brandLight} />}
-                    onPress={() => setShowInvite((open) => !open)}
-                  >
-                    {showInvite ? 'Hide invites' : 'Invite people'}
-                  </Button>
-                ) : null}
-                <Button
-                  tone="outline"
-                  size="$4"
-                  borderRadius={999}
-                  borderColor={coworkUi.glassBorder}
-                  onPress={() => setShareOpen(true)}
-                >
-                  Share
-                </Button>
-                <Button
-                  tone="outline"
-                  size="$4"
-                  borderRadius={999}
-                  borderColor={coworkUi.glassBorder}
-                  icon={<Icons.Calendar size={17} color={coworkUi.brand} />}
-                  onPress={() => void addToCalendar()}
-                >
-                  Add to calendar
-                </Button>
-                <MeetingShareSheet
-                  open={shareOpen}
-                  onOpenChange={setShareOpen}
-                  meeting={meeting}
-                />
-              </XStack>
-
-              {isHost && showInvite && user ? (
-                <YStack
-                  height={420}
-                  borderRadius={coworkUi.radius.card}
-                  borderWidth={1}
-                  borderColor={coworkUi.borderSoft}
-                  overflow="hidden"
-                >
-                  <MeetingInvitePanel
-                    meeting={meeting}
-                    hostId={user.id}
-                    hostName={hostName}
-                    onClose={() => setShowInvite(false)}
-                    fullWidth
-                    onInviteesUpdated={(next) =>
-                      setMeeting((current) => (current ? { ...current, invitees: next } : current))
-                    }
-                  />
-                </YStack>
-              ) : null}
+              />
             </YStack>
           ) : null}
-
-          <AppLink href={coWorkRoutes.home} asChild>
-            <Button tone="ghost">Open Co-Work</Button>
-          </AppLink>
         </YStack>
       </PageSection>
     </FullWidthLayout>

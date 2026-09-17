@@ -7,13 +7,22 @@ import {
 } from '~/co-work/lib/meeting-audio-quality'
 
 describe('meeting audio connection quality', () => {
-  it('shows reconnecting while the transport is recovering', () => {
+  it('shows reconnecting only while LiveKit is recovering an existing session', () => {
     expect(
       deriveMeetingConnectionStatus(ConnectionState.Reconnecting, ConnectionQuality.Excellent),
     ).toBe('reconnecting')
     expect(
       deriveMeetingConnectionStatus(ConnectionState.SignalReconnecting, ConnectionQuality.Good),
     ).toBe('reconnecting')
+  })
+
+  it('does not treat initial join or settled disconnect as an audio interrupt', () => {
+    expect(
+      deriveMeetingConnectionStatus(ConnectionState.Connecting, ConnectionQuality.Unknown),
+    ).toBe('good')
+    expect(
+      deriveMeetingConnectionStatus(ConnectionState.Disconnected, ConnectionQuality.Lost),
+    ).toBe('poor')
   })
 
   it('maps LiveKit participant quality to user-facing states', () => {

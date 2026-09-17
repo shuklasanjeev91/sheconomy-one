@@ -30,6 +30,8 @@ export type LiveKitMeetingRoomProps = {
   isHost: boolean
   enabled: boolean
   mediaMode?: LiveKitMediaMode
+  /** Fired once the SFU room is actually connected (not on token fetch). */
+  onConnected?: () => void
   onDisconnected: () => void
   overlay?: (liveKit: LiveKitMediaControls | null) => React.ReactNode
 }

@@ -12,7 +12,7 @@ import {
   type MeetingLifecyclePlatform,
 } from '~/co-work/lib/meeting-lifecycle'
 import { useMeetingStateManager } from '~/co-work/hooks/useMeetingStateManager'
-import { useConnectivity, useOnReconnect } from '~/providers/ConnectivityProvider'
+import { useOnReconnect } from '~/providers/ConnectivityProvider'
 
 type UseMeetingLifecycleArgs = {
   room: Room
@@ -34,7 +34,6 @@ export function useMeetingLifecycle({
 }: UseMeetingLifecycleArgs) {
   useKeepAwake('sheconomy-meeting-web')
   const { syncLifecycle } = useMeetingStateManager()
-  const { isOnline } = useConnectivity()
   const [notice, setNotice] = useState<string | null>(null)
   const [inBackground, setInBackground] = useState(false)
   const [screenShareStoppedByOs, setScreenShareStoppedByOs] = useState(false)
@@ -168,21 +167,42 @@ export function useMeetingLifecycle({
   }, [screenShareStoppedByOs])
 
   useEffect(() => {
-    if (!isOnline) {
-      setReconnecting(true)
+    // Only surface the interrupt chip for active LiveKit recovery.
+    // Do not key off NetInfo offline + Disconnected — local camera can still
+    // paint while reachability flaps, which produced a sticky false banner.
+    if (
+      room.state === ConnectionState.Reconnecting ||
+      room.state === ConnectionState.SignalReconnecting
+    ) {
+      return
+    }
+    if (room.state === ConnectionState.Connected && reconnecting) {
+      setReconnecting(false)
       syncLifecycle({
         inMeeting: true,
-        mediaReconnecting: true,
+        mediaReconnecting: false,
         screenSharing,
         audioOnly: mediaMode === 'audio',
       })
-      refreshNotice({ reconnecting: true })
+      refreshNotice({ reconnecting: false })
     }
-  }, [isOnline, mediaMode, refreshNotice, screenSharing, syncLifecycle])
+  }, [mediaMode, reconnecting, refreshNotice, room.state, screenSharing, syncLifecycle])
 
   useOnReconnect(() => {
-    setReconnecting(true)
-    refreshNotice({ reconnecting: true })
+    // Reachability restored. Only show reconnect UI if LiveKit is actually recovering.
+    if (
+      room.state === ConnectionState.Connected ||
+      room.state === ConnectionState.Connecting
+    ) {
+      setReconnecting(false)
+      refreshNotice({ reconnecting: false })
+    } else if (
+      room.state === ConnectionState.Reconnecting ||
+      room.state === ConnectionState.SignalReconnecting
+    ) {
+      setReconnecting(true)
+      refreshNotice({ reconnecting: true })
+    }
     void (async () => {
       try {
         await onForegroundAudio?.()
@@ -198,48 +218,78 @@ export function useMeetingLifecycle({
           })
         }
       } finally {
-        setReconnecting(false)
-        refreshNotice({ reconnecting: false })
+        if (room.state === ConnectionState.Connected || room.state === ConnectionState.Connecting) {
+          setReconnecting(false)
+          refreshNotice({ reconnecting: false })
+        }
       }
     })()
   })
 
   useEffect(() => {
+    let debounceTimer: ReturnType<typeof setTimeout> | null = null
     const onConnection = (state: ConnectionState) => {
       if (
         state === ConnectionState.Reconnecting ||
         state === ConnectionState.SignalReconnecting
       ) {
-        setReconnecting(true)
-        syncLifecycle({
-          inMeeting: true,
-          mediaReconnecting: true,
-          screenSharing: screenSharingRef.current,
-          audioOnly: mediaMode === 'audio',
-        })
-        refreshNotice({ reconnecting: true })
+        if (debounceTimer) return
+        debounceTimer = setTimeout(() => {
+          debounceTimer = null
+          if (
+            room.state !== ConnectionState.Reconnecting &&
+            room.state !== ConnectionState.SignalReconnecting
+          ) {
+            return
+          }
+          setReconnecting(true)
+          syncLifecycle({
+            inMeeting: true,
+            mediaReconnecting: true,
+            screenSharing: screenSharingRef.current,
+            audioOnly: mediaMode === 'audio',
+          })
+          refreshNotice({ reconnecting: true })
+        }, 1_500)
         return
       }
-      if (state === ConnectionState.Connected) {
-        setReconnecting(false)
+      if (debounceTimer) {
+        clearTimeout(debounceTimer)
+        debounceTimer = null
+      }
+      // Connected / Connecting / Disconnected — never leave a sticky interrupt chip.
+      setReconnecting(false)
+      if (state === ConnectionState.Connected || state === ConnectionState.Connecting) {
         syncLifecycle({
           inMeeting: true,
           mediaReconnecting: false,
           screenSharing: screenSharingRef.current,
           audioOnly: mediaMode === 'audio',
         })
-        refreshNotice({ reconnecting: false })
       }
+      refreshNotice({ reconnecting: false })
     }
     room.on(RoomEvent.ConnectionStateChanged, onConnection)
+    // Clear a stale chip if we mounted while already connected.
+    if (
+      room.state === ConnectionState.Connected ||
+      room.state === ConnectionState.Connecting ||
+      room.state === ConnectionState.Disconnected
+    ) {
+      setReconnecting(false)
+      refreshNotice({ reconnecting: false })
+    }
     return () => {
       room.off(RoomEvent.ConnectionStateChanged, onConnection)
+      if (debounceTimer) clearTimeout(debounceTimer)
     }
   }, [mediaMode, refreshNotice, room, syncLifecycle])
 
   // Keep the centralized machine aligned with active screen share / audio-only mode.
+  // Prefer LiveKit Connected over sticky NetInfo offline — media can stay healthy
+  // while reachability flaps (localhost / captive portals).
   useEffect(() => {
-    if (reconnecting || !isOnline) return
+    if (reconnecting) return
     if (room.state !== ConnectionState.Connected) return
     syncLifecycle({
       inMeeting: true,
@@ -247,7 +297,7 @@ export function useMeetingLifecycle({
       screenSharing,
       audioOnly: mediaMode === 'audio',
     })
-  }, [isOnline, mediaMode, reconnecting, room.state, screenSharing, syncLifecycle])
+  }, [mediaMode, reconnecting, room.state, screenSharing, syncLifecycle])
 
   return {
     notice,

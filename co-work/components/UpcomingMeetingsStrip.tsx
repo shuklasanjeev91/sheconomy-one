@@ -3,16 +3,15 @@ import { AppLink } from '~/components/navigation/AppLink'
 import { useEffect, useMemo } from 'react'
 
 import { CoWorkStatusPill } from '~/co-work/components/CoWorkUi'
-import { fetchUpcomingMeetings, formatMeetingCode } from '~/co-work/lib/meetings'
+import { MeetingCardOverflowMenu } from '~/co-work/components/MeetingCardOverflowMenu'
+import { fetchMyMeetings, formatMeetingCode } from '~/co-work/lib/meetings'
 import { recordMeetingCode } from '~/co-work/lib/recent-meeting-codes'
 import { coworkGlassStyle, useCoWorkTheme } from '~/co-work/lib/theme'
 import type { Meeting } from '~/co-work/lib/types'
-import { ShareButton } from '~/components/share'
 import { Button, Icons, Spinner, Text, XStack, YStack, useAppToast } from '~/components/ui'
 import { HorizontalScrollRow } from '~/components/layout'
 import { addMeetingToDeviceCalendar } from '~/lib/calendar/device-calendar'
 import { formatMeetingInstantForViewer } from '~/lib/calendar/timezone'
-import { copyToClipboard } from '~/lib/platform/clipboard'
 import { coworkBoxShadow } from '~/lib/platform/crossStyles'
 import { coWorkRoutes } from '~/lib/routes'
 import { useSupabase } from '~/providers/SupabaseProvider'
@@ -25,7 +24,7 @@ function formatWhen(meeting: Meeting) {
   return formatMeetingInstantForViewer(raw)
 }
 
-/** Upcoming meetings on Co-Work home (hosted + invited) — web + native. */
+/** Upcoming meetings on Co-Work home (hosted + co-hosted + invited) — web + native. */
 export function UpcomingMeetingsStrip({
   refreshKey = 0,
 }: {
@@ -40,7 +39,8 @@ export function UpcomingMeetingsStrip({
     cacheKey: user ? CACHE_KEYS.coWorkUpcoming : null,
     enabled: !!user,
     fetcher: async () => {
-      const rows = await fetchUpcomingMeetings()
+      if (!user) return []
+      const rows = await fetchMyMeetings(user.id)
       return rows
         .filter((m) => m.status === 'scheduled' || m.status === 'instant' || m.status === 'active')
         .slice(0, 6)
@@ -51,13 +51,6 @@ export function UpcomingMeetingsStrip({
   useEffect(() => {
     if (refreshKey > 0) void refresh()
   }, [refreshKey, refresh])
-
-  async function copyCode(code: string) {
-    const ok = await copyToClipboard(formatMeetingCode(code))
-    toast.show(ok ? 'Meeting code copied' : 'Could not copy code', {
-      tone: ok ? 'success' : 'danger',
-    })
-  }
 
   async function addToCalendar(meeting: Meeting) {
     const result = await addMeetingToDeviceCalendar(meeting)
@@ -73,7 +66,6 @@ export function UpcomingMeetingsStrip({
       },
     )
   }
-
 
   if (!user) return null
 
@@ -137,7 +129,11 @@ export function UpcomingMeetingsStrip({
                   }
                   label={meeting.status}
                 />
-                <Icons.Video size={16} color={coworkUi.brand} />
+                <MeetingCardOverflowMenu
+                  meeting={meeting}
+                  userId={user.id}
+                  onChanged={() => void refresh()}
+                />
               </XStack>
               <Text fontWeight="800" fontSize={15} color={coworkUi.text} numberOfLines={2}>
                 {meeting.title}
@@ -145,30 +141,9 @@ export function UpcomingMeetingsStrip({
               <Text fontSize={12} color={coworkUi.textSecondary} numberOfLines={1}>
                 {formatWhen(meeting)}
               </Text>
-              <XStack alignItems="center" justifyContent="space-between" gap="$2">
-                <Text fontSize={12} fontWeight="600" color={coworkUi.textMuted} flex={1}>
-                  Code {formatMeetingCode(meeting.meeting_code)}
-                </Text>
-                <XStack gap="$1" alignItems="center">
-                  <XStack
-                    padding={6}
-                    borderRadius={999}
-                    cursor="pointer"
-                    hoverStyle={{ backgroundColor: coworkUi.surfaceMuted }}
-                    pressStyle={{ opacity: 0.8 }}
-                    onPress={() => void copyCode(meeting.meeting_code)}
-                    accessibilityLabel="Copy meeting code"
-                  >
-                    <Icons.Copy size={14} color={coworkUi.brand} />
-                  </XStack>
-                  <ShareButton
-                    variant="icon"
-                    size="$3"
-                    label="Share meeting"
-                    meeting={meeting}
-                  />
-                </XStack>
-              </XStack>
+              <Text fontSize={12} fontWeight="600" color={coworkUi.textMuted}>
+                Code {formatMeetingCode(meeting.meeting_code)}
+              </Text>
               <XStack gap="$2" flexWrap="wrap">
                 <Button
                   tone="outline"

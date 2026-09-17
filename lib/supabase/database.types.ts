@@ -17733,6 +17733,24 @@ export type Database = {
         Args: { invitees_input: Json; meeting_id_input: string }
         Returns: undefined
       }
+      update_meeting_schedule_secure: {
+        Args: {
+          meeting_id_input: string
+          title_input: string
+          description_input?: string | null
+          scheduled_at_input?: string | null
+          scheduled_end_at_input?: string | null
+          time_zone_input?: string | null
+          max_participants_input?: number | null
+          is_recurring_input?: boolean | null
+          repeat_input?: string | null
+          security_settings_input?: Json | null
+          meeting_options_input?: Json | null
+          invitees_input?: Json | null
+          convert_to_scheduled_input?: boolean | null
+        }
+        Returns: Database["public"]["Tables"]["meetings"]["Row"]
+      }
       join_meeting_participant: {
         Args: { meeting_id_input: string; session_id_input: string }
         Returns: Database["public"]["Tables"]["meeting_participants"]["Row"]

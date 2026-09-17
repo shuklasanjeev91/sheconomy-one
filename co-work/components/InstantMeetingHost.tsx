@@ -1,17 +1,14 @@
 import { useEffect, useState, type ComponentType } from 'react'
-import { Platform } from 'react-native'
+import { Platform, useWindowDimensions } from 'react-native'
 
 import { AppErrorBoundary } from '~/components/AppErrorBoundary'
-import { Spinner, Text, YStack } from '~/components/ui'
+import { Button, Spinner, Text, YStack } from '~/components/ui'
 import type { InstantMeetingSession } from '~/co-work/lib/instant-meeting-session'
 import {
   closeInstantMeetingSession,
-  instantMeetingCodesMatch,
   normalizeInstantMeetingCode,
   useInstantMeetingSession,
 } from '~/co-work/lib/instant-meeting-session'
-import { useAppLayout } from '~/hooks/useAppLayout'
-import { APP_LAYOUT } from '~/lib/layout/constants'
 import { useGlobalSession } from '~/lib/session/global-session'
 
 type InstantMeetingBodyComponent = ComponentType<{
@@ -22,15 +19,14 @@ type InstantMeetingBodyComponent = ComponentType<{
 /**
  * Cross-platform instant meeting overlay (web + iOS + Android).
  *
- * When the global session is minimized/pip, the LiveKit body stays mounted
- * (hidden) so audio continues while SessionMiniPlayer / other tabs are usable.
- * Fullscreen insets around the app header + bottom tabs so Commerce / Community /
- * Chat / Class stay reachable during the call.
+ * Fullscreen is edge-to-edge (no app header / bottom tabs). When the global
+ * session is minimized/pip, the LiveKit body stays mounted (hidden) so audio
+ * continues while SessionMiniPlayer / other tabs are usable.
  */
 export function InstantMeetingHost() {
   const session = useInstantMeetingSession()
   const globalSession = useGlobalSession()
-  const { isDesktop, mobileTabBarOffset } = useAppLayout()
+  const { width: windowWidth, height: windowHeight } = useWindowDimensions()
   const [Body, setBody] = useState<InstantMeetingBodyComponent | null>(null)
   const [loadError, setLoadError] = useState<string | null>(null)
 
@@ -40,13 +36,11 @@ export function InstantMeetingHost() {
   // Instant overlay is the source of truth for LiveKit. Never tear it down just
   // because global session code formatting briefly mismatches — that remounted
   // MeetingLiveScreen on the Join confirm screen after Maximize.
-  // Also never `display:none` on Maximize for a code-shape mismatch (dashed vs
-  // plain) — that revealed the lobby "Join now" screen underneath.
-  const globalMatches =
-    !globalSession ||
-    globalSession.kind !== 'meeting' ||
-    !session ||
-    instantMeetingCodesMatch(globalSession.code, session.code)
+  //
+  // Important: do NOT hide this overlay (opacity 0) on a code-shape mismatch
+  // while fullscreen. Chromeless shell stays on whenever an instant session
+  // exists, so hiding the host left a blank white iPad viewport with only the
+  // AI FAB / stray chrome visible.
 
   const sessionCodeKey = session ? normalizeInstantMeetingCode(session.code) : null
 
@@ -86,39 +80,58 @@ export function InstantMeetingHost() {
 
   if (!session) return null
 
-  const chromeTop = !collapsed
-    ? isDesktop
-      ? APP_LAYOUT.desktopHeaderHeight
-      : APP_LAYOUT.mobileHeaderHeight
-    : 0
-  const chromeBottom = !collapsed && !isDesktop ? mobileTabBarOffset : 0
-
   // Keep full layout size while minimized — only hide visually. Off-screen /
   // shrunk surfaces disconnect LiveKit on iOS and remount Join on Maximize.
-  // Never use display:none for foreign-code mismatches while collapsed either —
-  // opacity + pointerEvents is enough and avoids lobby "Join now" flashes.
+  //
+  // Web desktop uses document flow (parent may not be 100dvh). Absolute fill
+  // then collapses to zero height — New meeting looked like a reload with no UI.
+  // Fixed inset covers the viewport regardless of shell chrome flips.
+  const overlayStyle =
+    Platform.OS === 'web'
+      ? ({
+          position: 'fixed',
+          inset: 0,
+          width: '100vw',
+          height: '100dvh',
+          maxHeight: '100dvh',
+        } as const)
+      : ({
+          // Explicit window box — parent flex alone can collapse to 0 on iPad
+          // landscape when the shell flips chromeless during join.
+          width: windowWidth,
+          height: windowHeight,
+        } as const)
+
   return (
     <YStack
       position="absolute"
-      top={chromeTop}
+      top={0}
       left={0}
       right={0}
-      bottom={chromeBottom}
+      bottom={0}
       width="100%"
+      height="100%"
       zIndex={collapsed ? 1 : 90_000}
-      opacity={collapsed || !globalMatches ? 0 : 1}
-      pointerEvents={collapsed || !globalMatches ? 'none' : 'auto'}
+      opacity={collapsed ? 0 : 1}
+      pointerEvents={collapsed ? 'none' : 'auto'}
       overflow="hidden"
       backgroundColor="#0c080a"
       collapsable={false}
-      accessibilityElementsHidden={collapsed || !globalMatches}
-      importantForAccessibility={
-        collapsed || !globalMatches ? 'no-hide-descendants' : 'auto'
-      }
+      style={overlayStyle}
+      accessibilityElementsHidden={collapsed}
+      importantForAccessibility={collapsed ? 'no-hide-descendants' : 'auto'}
     >
       <AppErrorBoundary scope="InstantMeeting" alwaysShowError>
         {!Body ? (
-          <YStack flex={1} alignItems="center" justifyContent="center" gap="$4" padding="$6">
+          <YStack
+            flex={1}
+            width="100%"
+            height="100%"
+            alignItems="center"
+            justifyContent="center"
+            gap="$4"
+            padding="$6"
+          >
             {loadError ? (
               <>
                 <Text color="#fff" fontSize={22} fontWeight="800" textAlign="center" letterSpacing={-0.3}>
@@ -127,16 +140,17 @@ export function InstantMeetingHost() {
                 <Text color="#f5a3c0" textAlign="center" fontSize={14} lineHeight={20} maxWidth={340}>
                   {loadError}
                 </Text>
-                <Text
-                  color="#fff"
-                  fontWeight="600"
-                  textDecorationLine="underline"
+                <Button
+                  tone="primary"
+                  size="$4"
+                  borderRadius={999}
+                  width="100%"
+                  maxWidth={360}
                   onPress={closeInstantMeetingSession}
-                  marginTop="$2"
-                  accessibilityRole="button"
+                  accessibilityLabel="Back to Co-Work"
                 >
                   Back to Co-Work
-                </Text>
+                </Button>
               </>
             ) : (
               <>
@@ -144,11 +158,25 @@ export function InstantMeetingHost() {
                 <Text color="#ccc" fontSize={15}>
                   Starting meeting…
                 </Text>
+                <Button
+                  tone="outline"
+                  size="$3"
+                  borderRadius={999}
+                  borderColor="rgba(255,255,255,0.35)"
+                  color="#fff"
+                  marginTop="$2"
+                  onPress={closeInstantMeetingSession}
+                  accessibilityLabel="Back to Co-Work"
+                >
+                  Back to Co-Work
+                </Button>
               </>
             )}
           </YStack>
         ) : (
-          <Body session={session} onExit={closeInstantMeetingSession} />
+          <YStack flex={1} width="100%" height="100%" minHeight={0} collapsable={false}>
+            <Body session={session} onExit={closeInstantMeetingSession} />
+          </YStack>
         )}
       </AppErrorBoundary>
     </YStack>

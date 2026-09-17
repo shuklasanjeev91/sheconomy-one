@@ -7,9 +7,15 @@ export type ZonedWallTime = {
   second?: number
 }
 
+export type ScheduleTimeZoneOption = {
+  value: string
+  city: string
+  region: string
+}
+
 /** Map aliases so DB (`name LIKE '%/%'`) and Intl agree. */
 export function normalizeIanaTimeZone(value: string): string {
-  const trimmed = value.trim()
+  const trimmed = (value ?? '').trim()
   if (trimmed === 'UTC') return 'Etc/UTC'
   return trimmed
 }
@@ -26,11 +32,44 @@ export function isValidIanaTimeZone(value: string): boolean {
   }
 }
 
+/** Always returns a slash-form IANA id suitable for DB storage. */
+export function coerceIanaTimeZone(value?: string | null): string {
+  const normalized = normalizeIanaTimeZone(value ?? '')
+  if (isValidIanaTimeZone(normalized)) return normalized
+  if (normalized.includes('/') && normalized.length > 3) {
+    // Keep host-selected ids even when this runtime's Intl lacks the zone data.
+    return normalized
+  }
+  return resolveDeviceIanaTimeZone()
+}
+
+function readLocalWallParts(date: Date): Required<ZonedWallTime> {
+  return {
+    year: date.getFullYear(),
+    month: date.getMonth() + 1,
+    day: date.getDate(),
+    hour: date.getHours(),
+    minute: date.getMinutes(),
+    second: date.getSeconds(),
+  }
+}
+
 export function resolveDeviceIanaTimeZone(): string {
-  const candidate = normalizeIanaTimeZone(
-    Intl.DateTimeFormat().resolvedOptions().timeZone || 'Etc/UTC',
-  )
-  return isValidIanaTimeZone(candidate) ? candidate : 'Etc/UTC'
+  let candidate = ''
+  try {
+    candidate = normalizeIanaTimeZone(
+      Intl.DateTimeFormat().resolvedOptions().timeZone || '',
+    )
+  } catch {
+    candidate = ''
+  }
+  if (isValidIanaTimeZone(candidate)) return candidate
+  // Prefer a real city zone when Intl works but the device string was empty/invalid.
+  for (const fallback of ['Etc/UTC', 'Asia/Kolkata', 'America/New_York'] as const) {
+    if (isValidIanaTimeZone(fallback)) return fallback
+  }
+  // Last resort for Hermes builds without ICU timezone data — still DB-valid.
+  return 'Etc/UTC'
 }
 
 export function assertUtcIso(value: string, label = 'Date and time'): string {
@@ -70,10 +109,18 @@ function readZonedParts(date: Date, timeZone: string): Required<ZonedWallTime> {
 
 /** Calendar wall-clock parts for an absolute instant in `timeZone`. */
 export function getZonedWallTime(value: string | Date, timeZone: string): Required<ZonedWallTime> {
-  if (!isValidIanaTimeZone(timeZone)) throw new Error('A valid IANA timezone is required')
   const date = value instanceof Date ? value : new Date(assertUtcIso(String(value)))
   if (!Number.isFinite(date.getTime())) throw new Error('Date and time is invalid')
-  return readZonedParts(date, timeZone)
+
+  const zone = coerceIanaTimeZone(timeZone)
+  if (isValidIanaTimeZone(zone)) {
+    try {
+      return readZonedParts(date, zone)
+    } catch {
+      // Hermes / incomplete ICU: fall through to device-local wall clock.
+    }
+  }
+  return readLocalWallParts(date)
 }
 
 /**
@@ -81,8 +128,6 @@ export function getZonedWallTime(value: string | Date, timeZone: string): Requir
  * Example: 10:00 in Asia/Kolkata → 2026-09-15T04:30:00.000Z
  */
 export function zonedWallTimeToUtcIso(parts: ZonedWallTime, timeZone: string): string {
-  if (!isValidIanaTimeZone(timeZone)) throw new Error('A valid IANA timezone is required')
-
   const year = parts.year
   const month = parts.month
   const day = parts.day
@@ -106,27 +151,40 @@ export function zonedWallTimeToUtcIso(parts: ZonedWallTime, timeZone: string): s
     throw new Error('Date and time is invalid')
   }
 
-  // Guess: treat the wall clock as UTC, then correct by the zone offset at that instant.
-  let utcMs = Date.UTC(year, month - 1, day, hour, minute, second)
-  for (let i = 0; i < 3; i += 1) {
-    const seen = readZonedParts(new Date(utcMs), timeZone)
-    const asUtc = Date.UTC(seen.year, seen.month - 1, seen.day, seen.hour, seen.minute, seen.second)
-    const desired = Date.UTC(year, month - 1, day, hour, minute, second)
-    utcMs += desired - asUtc
+  const zone = coerceIanaTimeZone(timeZone)
+  if (!isValidIanaTimeZone(zone)) {
+    // Device-local interpretation when Intl cannot resolve the IANA zone.
+    return new Date(year, month - 1, day, hour, minute, second).toISOString()
   }
 
-  const verified = readZonedParts(new Date(utcMs), timeZone)
-  if (
-    verified.year !== year ||
-    verified.month !== month ||
-    verified.day !== day ||
-    verified.hour !== hour ||
-    verified.minute !== minute
-  ) {
-    throw new Error('Date and time is invalid in the selected timezone')
-  }
+  try {
+    // Guess: treat the wall clock as UTC, then correct by the zone offset at that instant.
+    let utcMs = Date.UTC(year, month - 1, day, hour, minute, second)
+    for (let i = 0; i < 3; i += 1) {
+      const seen = readZonedParts(new Date(utcMs), zone)
+      const asUtc = Date.UTC(seen.year, seen.month - 1, seen.day, seen.hour, seen.minute, seen.second)
+      const desired = Date.UTC(year, month - 1, day, hour, minute, second)
+      utcMs += desired - asUtc
+    }
 
-  return new Date(utcMs).toISOString()
+    const verified = readZonedParts(new Date(utcMs), zone)
+    if (
+      verified.year !== year ||
+      verified.month !== month ||
+      verified.day !== day ||
+      verified.hour !== hour ||
+      verified.minute !== minute
+    ) {
+      throw new Error('Date and time is invalid in the selected timezone')
+    }
+
+    return new Date(utcMs).toISOString()
+  } catch (error) {
+    if (error instanceof Error && error.message.includes('invalid in the selected')) {
+      throw error
+    }
+    return new Date(year, month - 1, day, hour, minute, second).toISOString()
+  }
 }
 
 /**
@@ -148,17 +206,25 @@ export function formatZonedDateTime(
   timeZone: string,
   locale = 'en-IN',
 ): string {
-  if (!isValidIanaTimeZone(timeZone)) throw new Error('A valid IANA timezone is required')
-  return new Intl.DateTimeFormat(locale, {
-    weekday: 'long',
-    year: 'numeric',
-    month: 'long',
-    day: 'numeric',
-    hour: 'numeric',
-    minute: '2-digit',
-    timeZone,
-    timeZoneName: 'short',
-  }).format(new Date(assertUtcIso(value)))
+  const zone = coerceIanaTimeZone(timeZone)
+  const date = new Date(assertUtcIso(value))
+  if (isValidIanaTimeZone(zone)) {
+    try {
+      return new Intl.DateTimeFormat(locale, {
+        weekday: 'long',
+        year: 'numeric',
+        month: 'long',
+        day: 'numeric',
+        hour: 'numeric',
+        minute: '2-digit',
+        timeZone: zone,
+        timeZoneName: 'short',
+      }).format(date)
+    } catch {
+      // fall through
+    }
+  }
+  return date.toLocaleString(locale)
 }
 
 /**
@@ -181,40 +247,105 @@ export function formatMeetingInstantForViewer(
     withTimeZoneName?: boolean
   },
 ): string {
-  const timeZone = options?.timeZone ?? resolveDeviceIanaTimeZone()
-  if (!isValidIanaTimeZone(timeZone)) throw new Error('A valid IANA timezone is required')
+  const timeZone = coerceIanaTimeZone(options?.timeZone ?? resolveDeviceIanaTimeZone())
+  const date = new Date(assertUtcIso(value))
 
-  if (options?.dateStyle || options?.timeStyle) {
-    return new Intl.DateTimeFormat(options.locale, {
-      dateStyle: options.dateStyle,
-      timeStyle: options.timeStyle,
-      timeZone,
-    }).format(new Date(assertUtcIso(value)))
+  const formatWithZone = (zone: string) => {
+    if (options?.dateStyle || options?.timeStyle) {
+      return new Intl.DateTimeFormat(options.locale, {
+        dateStyle: options.dateStyle,
+        timeStyle: options.timeStyle,
+        timeZone: zone,
+      }).format(date)
+    }
+    return new Intl.DateTimeFormat(options?.locale, {
+      weekday: options?.weekday ?? 'short',
+      month: options?.month ?? 'short',
+      day: options?.day ?? 'numeric',
+      hour: options?.hour ?? 'numeric',
+      minute: options?.minute ?? '2-digit',
+      timeZone: zone,
+      timeZoneName: options?.withTimeZoneName === false ? undefined : 'short',
+    }).format(date)
   }
 
-  return new Intl.DateTimeFormat(options?.locale, {
-    weekday: options?.weekday ?? 'short',
-    month: options?.month ?? 'short',
-    day: options?.day ?? 'numeric',
-    hour: options?.hour ?? 'numeric',
-    minute: options?.minute ?? '2-digit',
-    timeZone,
-    timeZoneName: options?.withTimeZoneName === false ? undefined : 'short',
-  }).format(new Date(assertUtcIso(value)))
+  if (isValidIanaTimeZone(timeZone)) {
+    try {
+      return formatWithZone(timeZone)
+    } catch {
+      // fall through
+    }
+  }
+  return date.toLocaleString(options?.locale)
 }
 
-/** Common IANA zones offered in the schedule form (device zone is always first). */
-export const SCHEDULE_TIMEZONE_OPTIONS = [
-  'Asia/Kolkata',
-  'Asia/Dubai',
-  'Asia/Singapore',
-  'Asia/Tokyo',
-  'Europe/London',
-  'Europe/Paris',
-  'America/New_York',
-  'America/Chicago',
-  'America/Denver',
-  'America/Los_Angeles',
-  'Australia/Sydney',
-  'Etc/UTC',
+/** GMT offset label for a zone at the current instant (e.g. "GMT+5:30"). */
+export function formatTimeZoneGmtOffset(timeZone: string, at = new Date()): string {
+  const zone = coerceIanaTimeZone(timeZone)
+  if (!isValidIanaTimeZone(zone)) return 'GMT'
+  try {
+    const parts = new Intl.DateTimeFormat('en-US', {
+      timeZone: zone,
+      timeZoneName: 'shortOffset',
+    }).formatToParts(at)
+    const raw = parts.find((part) => part.type === 'timeZoneName')?.value ?? 'GMT'
+    return raw.replace('UTC', 'GMT')
+  } catch {
+    return 'GMT'
+  }
+}
+
+export function formatScheduleTimeZoneLabel(timeZone: string): string {
+  const zone = coerceIanaTimeZone(timeZone)
+  const option = SCHEDULE_TIMEZONE_OPTIONS.find((row) => row.value === zone)
+  const city = option?.city ?? zone.split('/').pop()?.replace(/_/g, ' ') ?? zone
+  return `(${formatTimeZoneGmtOffset(zone)}) ${city}`
+}
+
+/** Common global IANA zones for the Zoom-style timezone picker. */
+export const SCHEDULE_TIMEZONE_OPTIONS: readonly ScheduleTimeZoneOption[] = [
+  { value: 'Pacific/Honolulu', city: 'Honolulu', region: 'Pacific' },
+  { value: 'America/Anchorage', city: 'Anchorage', region: 'Americas' },
+  { value: 'America/Los_Angeles', city: 'Los Angeles', region: 'Americas' },
+  { value: 'America/Denver', city: 'Denver', region: 'Americas' },
+  { value: 'America/Chicago', city: 'Chicago', region: 'Americas' },
+  { value: 'America/New_York', city: 'New York', region: 'Americas' },
+  { value: 'America/Toronto', city: 'Toronto', region: 'Americas' },
+  { value: 'America/Sao_Paulo', city: 'São Paulo', region: 'Americas' },
+  { value: 'Atlantic/Reykjavik', city: 'Reykjavik', region: 'Atlantic' },
+  { value: 'Europe/London', city: 'London', region: 'Europe' },
+  { value: 'Europe/Paris', city: 'Paris', region: 'Europe' },
+  { value: 'Europe/Berlin', city: 'Berlin', region: 'Europe' },
+  { value: 'Europe/Madrid', city: 'Madrid', region: 'Europe' },
+  { value: 'Europe/Rome', city: 'Rome', region: 'Europe' },
+  { value: 'Europe/Moscow', city: 'Moscow', region: 'Europe' },
+  { value: 'Africa/Cairo', city: 'Cairo', region: 'Africa' },
+  { value: 'Africa/Johannesburg', city: 'Johannesburg', region: 'Africa' },
+  { value: 'Africa/Lagos', city: 'Lagos', region: 'Africa' },
+  { value: 'Asia/Dubai', city: 'Dubai', region: 'Asia' },
+  { value: 'Asia/Karachi', city: 'Karachi', region: 'Asia' },
+  { value: 'Asia/Kolkata', city: 'Kolkata', region: 'Asia' },
+  { value: 'Asia/Dhaka', city: 'Dhaka', region: 'Asia' },
+  { value: 'Asia/Bangkok', city: 'Bangkok', region: 'Asia' },
+  { value: 'Asia/Singapore', city: 'Singapore', region: 'Asia' },
+  { value: 'Asia/Hong_Kong', city: 'Hong Kong', region: 'Asia' },
+  { value: 'Asia/Shanghai', city: 'Shanghai', region: 'Asia' },
+  { value: 'Asia/Tokyo', city: 'Tokyo', region: 'Asia' },
+  { value: 'Asia/Seoul', city: 'Seoul', region: 'Asia' },
+  { value: 'Australia/Perth', city: 'Perth', region: 'Australia' },
+  { value: 'Australia/Sydney', city: 'Sydney', region: 'Australia' },
+  { value: 'Pacific/Auckland', city: 'Auckland', region: 'Pacific' },
+  { value: 'Etc/UTC', city: 'UTC', region: 'Universal' },
 ] as const
+
+/** Ordered list used by pickers (device zone prepended by the UI). */
+export function listScheduleTimeZoneValues(preferred?: string): string[] {
+  const device = resolveDeviceIanaTimeZone()
+  const preferredZone = preferred ? coerceIanaTimeZone(preferred) : null
+  const values = [
+    device,
+    ...(preferredZone ? [preferredZone] : []),
+    ...SCHEDULE_TIMEZONE_OPTIONS.map((row) => row.value),
+  ]
+  return values.filter((zone, index, all) => all.indexOf(zone) === index)
+}

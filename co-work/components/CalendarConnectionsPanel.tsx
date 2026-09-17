@@ -81,9 +81,14 @@ export function CalendarConnectionsPanel({
         message: 'Authorize access, then return here. New meetings sync automatically.',
       })
     } catch (error) {
+      const message = error instanceof Error ? error.message : 'Try again later.'
       toast.show(`Could not connect ${calendarProviderLabel(provider)}`, {
         tone: 'danger',
-        message: error instanceof Error ? error.message : 'Try again later.',
+        message: message.includes('not configured')
+          ? 'Calendar sync is not configured for this build yet.'
+          : message.includes('Could not open')
+            ? 'Could not open the authorization page. Check your browser or try again.'
+            : message,
       })
     } finally {
       setBusyProvider(null)

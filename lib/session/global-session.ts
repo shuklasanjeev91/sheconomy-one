@@ -198,15 +198,14 @@ export function shouldUseChromelessShell(input: {
   if (globalPresentation === 'minimized' || globalPresentation === 'pip') {
     return false
   }
-  // Co-Work meetings keep header + section tabs so Commerce / Community / Chat /
-  // Class stay reachable. InstantMeetingHost insets around chrome; tab presses
-  // collapse the room to the mini-player via browseAway.
+  // Fullscreen Co-Work meeting (route or InstantMeetingHost) — Zoom-style, no
+  // app header/tabs. Minimize restores chrome; tab navigation collapses via
+  // browseAway before leaving the room.
   if (pathname.startsWith('/co-work/meeting/') || pathname === '/co-work/meeting') {
-    return false
+    return true
   }
-  // Instant overlay on /co-work (or any tab) — keep shell chrome visible.
   if (input.instantMeetingOpen) {
-    return false
+    return true
   }
   if (pathname.startsWith('/ui-kit')) return true
   if (pathname.startsWith('/payu-embed-return')) return true

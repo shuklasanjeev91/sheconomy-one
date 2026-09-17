@@ -9,7 +9,7 @@ import {
 } from '../../../co-work/lib/meeting-toolbar'
 
 describe('meeting toolbar layout', () => {
-  it('orders the desktop participant dock Mic → Camera → Participants → Chat → Minimize → Share → Captions → Invite → More → Leave', () => {
+  it('orders primary dock with Reactions and Hand after Chat', () => {
     expect(
       meetingToolbarPrimaryKeys({
         viewerRole: 'participant',
@@ -22,6 +22,8 @@ describe('meeting toolbar layout', () => {
       'camera',
       'participants',
       'chat',
+      'reactions',
+      'raise_hand',
       'browse',
       'share_screen',
       'captions',
@@ -31,13 +33,14 @@ describe('meeting toolbar layout', () => {
     ])
   })
 
-  it('adds Security and End Meeting for hosts', () => {
+  it('adds Security, End, and Stop recording for hosts while recording', () => {
     expect(
       meetingToolbarPrimaryKeys({
         viewerRole: 'host',
         supportsVideo: true,
         supportsScreenShare: true,
         supportsLiveCaptions: true,
+        recording: true,
       }),
     ).toEqual([
       'mic',
@@ -45,26 +48,43 @@ describe('meeting toolbar layout', () => {
       'security',
       'participants',
       'chat',
+      'reactions',
+      'raise_hand',
       'browse',
       'share_screen',
       'captions',
       'invite',
+      'stop_record',
       'more',
       'leave',
       'end_meeting',
     ])
   })
 
-  it('keeps Security flyout host-only and lists Minimize in More for discoverability', () => {
-    expect(meetingToolbarSecurityKeys('host')).toEqual([
-      'lock_meeting',
-      'mute_all',
-      'ask_all_to_mute',
-      'ask_all_to_unmute',
-      'remove_all_except_host',
+  it('keeps Captions on compact primary and moves Invite to More', () => {
+    expect(
+      meetingToolbarPrimaryKeys({
+        viewerRole: 'host',
+        supportsVideo: true,
+        supportsScreenShare: true,
+        supportsLiveCaptions: true,
+        compact: true,
+      }),
+    ).toEqual([
+      'mic',
+      'camera',
+      'security',
+      'participants',
+      'chat',
+      'reactions',
+      'raise_hand',
+      'browse',
+      'share_screen',
+      'captions',
+      'more',
+      'leave',
+      'end_meeting',
     ])
-    expect(meetingToolbarSecurityKeys('co_host')).toEqual([])
-    expect(meetingToolbarSecurityKeys('participant')).toEqual([])
 
     expect(
       meetingToolbarMoreKeys({
@@ -76,18 +96,80 @@ describe('meeting toolbar layout', () => {
         hasFullscreen: true,
         hasMinimize: true,
         hasPictureInPicture: true,
+        compact: true,
+        supportsLiveCaptions: true,
+        hasInvite: true,
+        reactionsOnPrimary: true,
+        raiseHandOnPrimary: true,
       }),
     ).toEqual([
+      'view_gallery',
+      'view_speaker',
+      'view_screen_share',
+      'mirror_video',
+      'hide_self_view',
+      'maximize',
       'audio_settings',
-      'raise_hand',
-      'reactions',
       'record',
+      'background',
+      'meeting_info',
+      'invite',
+      'share_link',
+      'fullscreen',
+      'minimize',
+      'picture_in_picture',
+      'host_tools',
+    ])
+  })
+
+  it('keeps Security flyout slim and groups More without duplicate reactions', () => {
+    expect(meetingToolbarSecurityKeys('host')).toEqual([
+      'lock_meeting',
+      'mute_all',
+      'ask_all_to_mute',
+      'ask_all_to_unmute',
+    ])
+    expect(meetingToolbarSecurityKeys('co_host')).toEqual([])
+    expect(meetingToolbarSecurityKeys('participant')).toEqual([])
+
+    expect(
+      meetingToolbarPrimaryKeys({
+        viewerRole: 'co_host',
+        supportsVideo: true,
+        supportsScreenShare: true,
+        supportsLiveCaptions: true,
+      }),
+    ).toContain('security')
+
+    expect(
+      meetingToolbarMoreKeys({
+        viewerRole: 'host',
+        supportsRecording: true,
+        supportsVideo: true,
+        hasAudioSettings: true,
+        hasShareLink: true,
+        hasFullscreen: true,
+        hasMinimize: true,
+        hasPictureInPicture: true,
+        reactionsOnPrimary: true,
+        raiseHandOnPrimary: true,
+        recording: true,
+      }),
+    ).toEqual([
+      'view_gallery',
+      'view_speaker',
+      'view_screen_share',
+      'mirror_video',
+      'hide_self_view',
+      'maximize',
+      'audio_settings',
       'background',
       'meeting_info',
       'share_link',
       'fullscreen',
       'minimize',
       'picture_in_picture',
+      'host_tools',
     ])
 
     expect(
@@ -97,13 +179,20 @@ describe('meeting toolbar layout', () => {
         supportsVideo: true,
         hasAudioSettings: true,
         hasShareLink: false,
+        reactionsOnPrimary: true,
+        raiseHandOnPrimary: true,
       }),
     ).toEqual([
+      'view_gallery',
+      'view_speaker',
+      'view_screen_share',
+      'mirror_video',
+      'hide_self_view',
+      'maximize',
       'audio_settings',
-      'raise_hand',
-      'reactions',
       'background',
       'meeting_info',
+      'host_tools',
       'ask_all_to_mute',
       'ask_all_to_unmute',
       'manage_participants',

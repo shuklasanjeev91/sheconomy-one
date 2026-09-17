@@ -90,21 +90,21 @@ describe('global session presentation', () => {
 })
 
 describe('chromeless shell gating', () => {
-  it('keeps app chrome for Co-Work meetings so other product tabs stay reachable', () => {
+  it('uses chromeless for fullscreen Co-Work meetings (Zoom-style)', () => {
     expect(
       shouldUseChromelessShell({
         pathname: '/co-work/meeting/ABC/live',
         instantMeetingOpen: false,
         globalPresentation: 'fullscreen',
       }),
-    ).toBe(false)
+    ).toBe(true)
     expect(
       shouldUseChromelessShell({
         pathname: '/co-work',
         instantMeetingOpen: true,
         globalPresentation: 'fullscreen',
       }),
-    ).toBe(false)
+    ).toBe(true)
   })
 
   it('keeps app chrome when the session is minimized or in PiP', () => {
@@ -124,7 +124,7 @@ describe('chromeless shell gating', () => {
     ).toBe(false)
   })
 
-  it('uses chromeless for fullscreen call routes only', () => {
+  it('uses chromeless for fullscreen call routes and ui-kit', () => {
     expect(
       shouldUseChromelessShell({
         pathname: '/chat/call/XYZ',

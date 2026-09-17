@@ -3,11 +3,15 @@ import { describe, expect, it } from 'vitest'
 import {
   canAdmitParticipants,
   canChangeCriticalMeetingSettings,
+  canChangeParticipantPermissions,
+  canEditOrCancelMeeting,
+  canEditOrCancelMeetingForUser,
   canEndMeetingForEveryone,
   canManageMeeting,
   canManageMeetingChat,
   canManageMeetingRoles,
   canModerateParticipant,
+  canOpenHostTools,
   canSendHostsOnlyChat,
   canTransferHost,
   meetingRoleBadgeLabel,
@@ -19,6 +23,21 @@ describe('meeting role permissions', () => {
     expect(canManageMeeting('host')).toBe(true)
     expect(canManageMeeting('co_host')).toBe(true)
     expect(canManageMeeting('participant')).toBe(false)
+  })
+
+  it('allows hosts and co-hosts to edit or cancel meetings', () => {
+    expect(canEditOrCancelMeeting('host')).toBe(true)
+    expect(canEditOrCancelMeeting('co_host')).toBe(true)
+    expect(canEditOrCancelMeeting('participant')).toBe(false)
+    expect(
+      canEditOrCancelMeetingForUser({ userId: 'a', hostId: 'a', viewerRole: 'participant' }),
+    ).toBe(true)
+    expect(
+      canEditOrCancelMeetingForUser({ userId: 'b', hostId: 'a', viewerRole: 'co_host' }),
+    ).toBe(true)
+    expect(
+      canEditOrCancelMeetingForUser({ userId: 'b', hostId: 'a', viewerRole: 'participant' }),
+    ).toBe(false)
   })
 
   it('prevents co-hosts from moderating hosts or peer co-hosts', () => {
@@ -46,6 +65,14 @@ describe('meeting role permissions', () => {
     expect(canManageMeetingChat('co_host')).toBe(true)
     expect(canSendHostsOnlyChat('co_host')).toBe(true)
     expect(canSendHostsOnlyChat('participant')).toBe(false)
+  })
+
+  it('opens Host tools for host and co-host but reserves permission toggles for host', () => {
+    expect(canOpenHostTools('host')).toBe(true)
+    expect(canOpenHostTools('co_host')).toBe(true)
+    expect(canOpenHostTools('participant')).toBe(false)
+    expect(canChangeParticipantPermissions('host')).toBe(true)
+    expect(canChangeParticipantPermissions('co_host')).toBe(false)
   })
 
   it('renders uppercase role badges for host and co-host only', () => {

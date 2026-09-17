@@ -1,34 +1,32 @@
 import { useRouter } from 'one'
-import { AppState, Alert, type AppStateStatus } from 'react-native'
+import { AppState, type AppStateStatus } from 'react-native'
 import { useCallback, useEffect, useState } from 'react'
 
 import { AuthSignInFlow } from '~/components/auth/AuthSignInFlow'
 import { AppPage, LAYOUT_STRETCH } from '~/components/layout'
 import { Button, ScreenState, Text, XStack, YStack, useAppToast } from '~/components/ui'
-import { CoWorkBrandChip, CoWorkStatusPill } from '~/co-work/components/CoWorkUi'
+import { CoWorkStatusPill } from '~/co-work/components/CoWorkUi'
 import { CalendarConnectionsPanel } from '~/co-work/components/CalendarConnectionsPanel'
+import { MeetingCardOverflowMenu } from '~/co-work/components/MeetingCardOverflowMenu'
 import { ensureMeetingMobilePermissions } from '~/co-work/lib/meeting-media-permissions'
 import { openInstantMeetingSession } from '~/co-work/lib/instant-meeting-session'
 import {
-  cancelMeeting,
   fetchMyMeetings,
   formatMeetingCode,
   getMeetingAnchorAt,
 } from '~/co-work/lib/meetings'
-import { coworkGlassStyle, useCoWorkTheme } from '~/co-work/lib/theme'
-import { coworkBoxShadow, pageGradientStyle } from '~/lib/platform/crossStyles'
+import { canEditOrCancelMeetingForUser } from '~/co-work/lib/meeting-role-permissions'
+import { useCoWorkTheme } from '~/co-work/lib/theme'
+import { pageGradientStyle } from '~/lib/platform/crossStyles'
 import { formatMeetingInstantForViewer } from '~/lib/calendar/timezone'
 import { navigateApp } from '~/lib/platform/navigate'
 import type { Meeting } from '~/co-work/lib/types'
 import { coWorkRoutes } from '~/lib/routes'
 import { useProfile } from '~/hooks/useProfile'
 
-import { BRAND_NAME } from '~/config/brand'
-
 function formatWhen(meeting: Meeting) {
   const anchor = getMeetingAnchorAt(meeting)
   if (!anchor) return 'Time TBD'
-  // Always show in the viewer's local timezone (same UTC instant for everyone).
   return formatMeetingInstantForViewer(anchor.toISOString())
 }
 
@@ -56,7 +54,7 @@ function joinLabel(status: Meeting['status']) {
 }
 
 export function CoWorkMeetingsScreen() {
-  const { ui: coworkUi, gradients: coworkGradients, shadows: coworkShadows } = useCoWorkTheme()
+  const { ui: coworkUi, gradients: coworkGradients } = useCoWorkTheme()
   const router = useRouter()
   const toast = useAppToast()
   const { user, isAuthenticated } = useProfile()
@@ -85,7 +83,6 @@ export function CoWorkMeetingsScreen() {
     void load()
   }, [load])
 
-  // Refresh status pills when returning from background on real devices.
   useEffect(() => {
     const onChange = (state: AppStateStatus) => {
       if (state === 'active') void load({ silent: true })
@@ -106,13 +103,12 @@ export function CoWorkMeetingsScreen() {
       style={pageGradientStyle(coworkGradients.page, coworkUi.pageBg)}
     >
       <YStack gap="$5" width="100%" {...LAYOUT_STRETCH}>
-        <YStack gap="$3">
-          <CoWorkBrandChip label="YOUR MEETINGS" />
-          <Text fontSize={30} fontWeight="800" color={coworkUi.text} letterSpacing={-0.8}>
-            Upcoming & recent
+        <YStack gap="$2">
+          <Text fontSize={28} fontWeight="800" color={coworkUi.text} letterSpacing={-0.6}>
+            My meetings
           </Text>
-          <Text color={coworkUi.textSecondary} lineHeight={22}>
-            Meetings you host on {BRAND_NAME}
+          <Text color={coworkUi.textSecondary} fontSize={14} lineHeight={20}>
+            Upcoming and recent sessions you host or co-host
           </Text>
         </YStack>
 
@@ -129,124 +125,95 @@ export function CoWorkMeetingsScreen() {
           onRetry={() => void load()}
         />
 
-        <YStack gap="$3">
-          {meetings.map((meeting) => (
-            <YStack
-              key={meeting.id}
-              gap="$3"
-              padding="$4"
-              paddingLeft="$4"
-              borderRadius={coworkUi.radius.card}
-              borderWidth={1}
-              borderColor={coworkUi.glassBorder}
-              borderLeftWidth={4}
-              borderLeftColor={
-                meeting.status === 'active' || meeting.status === 'instant'
-                  ? coworkUi.live
-                  : coworkUi.brandLight
-              }
-              animation="quick"
-              hoverStyle={{ y: -2, borderColor: coworkUi.borderAccent }}
-              style={{
-                ...coworkGlassStyle(coworkUi, true),
-                ...coworkBoxShadow(coworkShadows, 'card'),
-              }}
-            >
-              <XStack alignItems="flex-start" justifyContent="space-between" gap="$3">
-                <YStack flex={1} gap={4}>
-                  <Text fontWeight="800" fontSize={17} color={coworkUi.text} numberOfLines={2}>
-                    {meeting.title}
-                  </Text>
-                  <Text fontSize={13} color={coworkUi.textSecondary}>
-                    {formatWhen(meeting)}
-                  </Text>
-                  <Text fontSize={12} color={coworkUi.textMuted}>
-                    Code {formatMeetingCode(meeting.meeting_code)}
-                    {meeting.max_participants ? ` · up to ${meeting.max_participants}` : ''}
-                  </Text>
-                </YStack>
-                <CoWorkStatusPill label={meeting.status} tone={statusTone(meeting.status)} />
-              </XStack>
-              <XStack gap="$2" flexWrap="wrap">
-                {isRejoinable(meeting.status) ? (
-                  <Button
-                    tone="primary"
-                    size="$3"
-                    borderRadius={999}
-                    onPress={() => {
-                      void (async () => {
-                        const perms = await ensureMeetingMobilePermissions({
-                          requestNotifications: true,
-                        })
-                        if (!perms.ok) {
-                          toast.show('Microphone required', {
-                            tone: 'error',
-                            message: perms.message,
+        <YStack gap="$2">
+          {meetings.map((meeting) => {
+            const canManage = canEditOrCancelMeetingForUser({
+              userId: user.id,
+              hostId: meeting.host_id,
+              viewerRole: meeting.viewer_role,
+            })
+            return (
+              <YStack
+                key={meeting.id}
+                gap="$2.5"
+                padding="$3.5"
+                borderRadius={coworkUi.radius.panel}
+                borderWidth={1}
+                borderColor={coworkUi.glassBorder}
+                backgroundColor={coworkUi.meetingBarElevated}
+              >
+                <XStack alignItems="flex-start" justifyContent="space-between" gap="$3">
+                  <YStack flex={1} gap={3} minWidth={0}>
+                    <Text fontSize={13} fontWeight="700" color={coworkUi.meetingIconMuted}>
+                      {formatWhen(meeting)}
+                    </Text>
+                    <Text fontWeight="700" fontSize={16} color={coworkUi.text} numberOfLines={2}>
+                      {meeting.title}
+                    </Text>
+                    <Text fontSize={12} color={coworkUi.textMuted} letterSpacing={0.5}>
+                      {formatMeetingCode(meeting.meeting_code)}
+                      {canManage && meeting.viewer_role === 'co_host' ? ' · Co-host' : ''}
+                    </Text>
+                  </YStack>
+                  <XStack alignItems="center" gap="$1.5" flexShrink={0}>
+                    <CoWorkStatusPill
+                      label={
+                        meeting.status === 'instant' || meeting.status === 'active'
+                          ? 'Live'
+                          : meeting.status === 'scheduled'
+                            ? 'Scheduled'
+                            : meeting.status
+                      }
+                      tone={statusTone(meeting.status)}
+                    />
+                    <MeetingCardOverflowMenu
+                      meeting={meeting}
+                      userId={user.id}
+                      onChanged={() => void load({ silent: true })}
+                    />
+                  </XStack>
+                </XStack>
+                <XStack gap="$2" flexWrap="wrap" alignItems="center">
+                  {isRejoinable(meeting.status) ? (
+                    <Button
+                      tone="primary"
+                      size="$3"
+                      borderRadius={12}
+                      onPress={() => {
+                        void (async () => {
+                          const perms = await ensureMeetingMobilePermissions({
+                            requestNotifications: true,
                           })
-                          return
-                        }
-                        openInstantMeetingSession({
-                          code: meeting.meeting_code,
-                          meeting,
-                          autoJoin: true,
-                        })
-                      })()
-                    }}
-                  >
-                    {joinLabel(meeting.status)}
-                  </Button>
-                ) : null}
-                <Button
-                  tone="outline"
-                  size="$3"
-                  borderRadius={999}
-                  borderColor={coworkUi.glassBorder}
-                  onPress={() => navigateApp(coWorkRoutes.meeting(meeting.meeting_code))}
-                >
-                  {isRejoinable(meeting.status) ? 'Lobby' : 'Details'}
-                </Button>
-                {meeting.host_id === user.id && meeting.status !== 'cancelled' ? (
+                          if (!perms.ok) {
+                            toast.show('Microphone required', {
+                              tone: 'error',
+                              message: perms.message,
+                            })
+                            return
+                          }
+                          openInstantMeetingSession({
+                            code: meeting.meeting_code,
+                            meeting,
+                            autoJoin: true,
+                          })
+                        })()
+                      }}
+                    >
+                      {joinLabel(meeting.status)}
+                    </Button>
+                  ) : null}
                   <Button
-                    tone="outline"
+                    tone="ghost"
                     size="$3"
-                    borderRadius={999}
-                    borderColor={coworkUi.glassBorder}
-                    onPress={() => {
-                      Alert.alert(
-                        'Cancel meeting?',
-                        meeting.status === 'ended'
-                          ? 'This closes the meeting for good. Nobody will be able to restart or rejoin it.'
-                          : 'Invitees will be notified that this meeting will not take place.',
-                        [
-                          { text: 'Keep', style: 'cancel' },
-                          {
-                            text: 'Cancel meeting',
-                            style: 'destructive',
-                            onPress: () => {
-                              void (async () => {
-                                try {
-                                  await cancelMeeting(meeting.id)
-                                  toast.show('Meeting cancelled', { tone: 'success' })
-                                  await load({ silent: true })
-                                } catch (error) {
-                                  toast.show(
-                                    error instanceof Error ? error.message : 'Could not cancel meeting',
-                                    { tone: 'error' },
-                                  )
-                                }
-                              })()
-                            },
-                          },
-                        ],
-                      )
-                    }}
+                    borderRadius={12}
+                    onPress={() => navigateApp(coWorkRoutes.meeting(meeting.meeting_code))}
                   >
-                    Cancel
+                    Details
                   </Button>
-                ) : null}
-              </XStack>
-            </YStack>
-          ))}
+                </XStack>
+              </YStack>
+            )
+          })}
         </YStack>
       </YStack>
     </AppPage>

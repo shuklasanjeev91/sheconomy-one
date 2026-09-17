@@ -112,7 +112,7 @@ export function MeetingVideoStage() {
   useEffect(() => {
     if (hasScreenShare && !previousScreenShare.current) {
       dispatch({ type: 'SET_VIEW', viewMode: 'screen-share' })
-    } else if (!hasScreenShare && previousScreenShare.current && state.viewMode === 'screen-share') {
+    } else if (!hasScreenShare && state.viewMode === 'screen-share') {
       dispatch({ type: 'SET_VIEW', viewMode: 'gallery' })
     }
     previousScreenShare.current = hasScreenShare

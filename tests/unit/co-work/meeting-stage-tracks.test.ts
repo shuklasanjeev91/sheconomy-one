@@ -126,4 +126,19 @@ describe('meeting stage tracks', () => {
     expect(result.hasScreenShare).toBe(true)
     expect(result.stageTracks.every((item) => item.source === Track.Source.Camera)).toBe(true)
   })
+
+  it('hides the local camera tile when hideSelfView is on', () => {
+    const localCamera = track('local', Track.Source.Camera)
+    const remoteCamera = track('remote', Track.Source.Camera)
+    const result = composeMeetingStageTracks(
+      [localCamera, remoteCamera],
+      'local',
+      'gallery',
+      null,
+      true,
+    )
+
+    expect(result.stageTracks).toEqual([remoteCamera])
+    expect(result.stageTracks).not.toContain(localCamera)
+  })
 })

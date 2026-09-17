@@ -33,7 +33,8 @@ export function useMeetingGalleryTracks() {
         localParticipant.identity,
         state.viewMode,
         activeSpeakerIdentity,
+        state.hideSelfView,
       ),
-    [activeSpeakerIdentity, localParticipant.identity, state.viewMode, tracks],
+    [activeSpeakerIdentity, localParticipant.identity, state.hideSelfView, state.viewMode, tracks],
   )
 }

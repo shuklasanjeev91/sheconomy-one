@@ -1,6 +1,6 @@
 import { supabase } from '~/lib/supabase/client'
 import { INVALIDATION_TOPICS, invalidateCache } from '~/lib/cache/invalidation'
-import { assertUtcIso, isValidIanaTimeZone, normalizeIanaTimeZone, resolveDeviceIanaTimeZone } from '~/lib/calendar/timezone'
+import { assertUtcIso, coerceIanaTimeZone, resolveDeviceIanaTimeZone } from '~/lib/calendar/timezone'
 
 import { parseMeetingInvitees } from '~/co-work/lib/invites'
 import { normalizeMeetingDisplayName } from '~/co-work/lib/meeting-display-name'
@@ -14,6 +14,7 @@ import type {
   MeetingParticipant,
   MeetingRole,
   MeetingSecuritySettings,
+  UpdateMeetingScheduleInput,
 } from '~/co-work/lib/types'
 
 const MEETING_SELECT =
@@ -59,6 +60,14 @@ function normalizeSecuritySettings(value: unknown): MeetingSecuritySettings | nu
   const raw = parseJson<Record<string, unknown>>(value)
   if (!raw) return null
 
+  const chatWithRaw = (raw.participantChatWith ?? raw.participant_chat_with) as string | undefined
+  const participantChatWith =
+    chatWithRaw === 'hosts' || chatWithRaw === 'off' || chatWithRaw === 'everyone'
+      ? chatWithRaw
+      : raw.allowChat === false || raw.allow_chat === false
+        ? 'off'
+        : 'everyone'
+
   return {
     passcode: (raw.passcode as string | undefined) ?? undefined,
     requirePasscode: !!(raw.requirePasscode ?? raw.require_passcode),
@@ -66,10 +75,16 @@ function normalizeSecuritySettings(value: unknown): MeetingSecuritySettings | nu
     muteOnJoin: !!(raw.muteOnJoin ?? raw.mute_on_join),
     videoOffOnJoin: !!(raw.videoOffOnJoin ?? raw.video_off_on_join),
     allowScreenShare: raw.allowScreenShare !== false && raw.allow_screen_share !== false,
-    allowChat: raw.allowChat !== false && raw.allow_chat !== false,
+    allowChat: raw.allowChat !== false && raw.allow_chat !== false && participantChatWith !== 'off',
     allowPrivateChat: raw.allowPrivateChat !== false && raw.allow_private_chat !== false,
+    participantChatWith,
     allowRecording: raw.allowRecording !== false && raw.allow_recording !== false,
     allowHandRaise: raw.allowHandRaise !== false && raw.allow_hand_raise !== false,
+    allowParticipantRename:
+      raw.allowParticipantRename !== false && raw.allow_participant_rename !== false,
+    allowSelfUnmute: raw.allowSelfUnmute !== false && raw.allow_self_unmute !== false,
+    allowSelfStartVideo:
+      raw.allowSelfStartVideo !== false && raw.allow_self_start_video !== false,
     authenticatedUsersOnly: !!(raw.authenticatedUsersOnly ?? raw.authenticated_users_only),
   }
 }
@@ -216,34 +231,92 @@ export function mergeHostedAndInvitedMeetings(
   return merged
 }
 
+function withViewerRole(
+  meeting: Meeting,
+  userId: string,
+  roleByMeetingId: Record<string, MeetingRole>,
+): Meeting {
+  const fromRoles = roleByMeetingId[meeting.id]
+  const viewer_role =
+    meeting.host_id === userId
+      ? 'host'
+      : fromRoles === 'host' || fromRoles === 'co_host'
+        ? fromRoles
+        : fromRoles === 'participant'
+          ? 'participant'
+          : 'participant'
+  return { ...meeting, viewer_role }
+}
+
+/** Current user's host / co-host / participant role for a meeting (from meeting_roles + host_id). */
+export async function fetchMyMeetingRole(
+  meetingId: string,
+  userId: string,
+  hostId?: string | null,
+): Promise<MeetingRole> {
+  if (hostId && hostId === userId) return 'host'
+
+  const { data, error } = await supabase
+    .from('meeting_roles')
+    .select('role')
+    .eq('meeting_id', meetingId)
+    .eq('user_id', userId)
+    .maybeSingle()
+
+  if (error) throw new Error(error.message)
+  const role = data?.role
+  if (role === 'host' || role === 'co_host' || role === 'participant') return role
+  if (hostId && hostId === userId) return 'host'
+  return 'participant'
+}
+
 export async function fetchMyMeetings(userId: string): Promise<Meeting[]> {
   const hosted = await fetchHostedMeetings(userId)
 
-  const { data: participantRows, error } = await supabase
-    .from('meeting_participants')
-    .select('meeting_id')
-    .eq('user_id', userId)
-    .limit(50)
+  const [{ data: roleRows }, { data: participantRows, error: participantError }] = await Promise.all([
+    supabase
+      .from('meeting_roles')
+      .select('meeting_id, role')
+      .eq('user_id', userId)
+      .in('role', ['host', 'co_host'])
+      .limit(100),
+    supabase.from('meeting_participants').select('meeting_id').eq('user_id', userId).limit(50),
+  ])
 
-  if (error) {
-    return hosted
+  const roleByMeetingId: Record<string, MeetingRole> = {}
+  for (const row of roleRows ?? []) {
+    if (row.role === 'host' || row.role === 'co_host' || row.role === 'participant') {
+      roleByMeetingId[row.meeting_id] = row.role
+    }
   }
 
-  const invitedIds = (participantRows ?? [])
+  const knownIds = new Set(hosted.map((meeting) => meeting.id))
+  const coHostIds = (roleRows ?? [])
+    .filter((row) => row.role === 'co_host' && !knownIds.has(row.meeting_id))
     .map((row) => row.meeting_id)
-    .filter((id) => !hosted.some((meeting) => meeting.id === id))
 
-  if (!invitedIds.length) return hosted
+  const participantIds = participantError
+    ? []
+    : (participantRows ?? [])
+        .map((row) => row.meeting_id)
+        .filter((id) => !knownIds.has(id) && !coHostIds.includes(id))
 
-  const { data: invitedMeetings } = await supabase
+  const extraIds = [...new Set([...coHostIds, ...participantIds])]
+  if (!extraIds.length) {
+    return hosted.map((meeting) => withViewerRole(meeting, userId, roleByMeetingId))
+  }
+
+  const { data: extraMeetings } = await supabase
     .from('meetings')
     .select(MEETING_SELECT)
-    .in('id', invitedIds)
+    .in('id', extraIds)
     .in('status', LISTED_MEETING_STATUSES)
     .order('scheduled_at', { ascending: true, nullsFirst: false })
 
-  const invited = (invitedMeetings ?? []).map((row) => mapMeeting(row as Record<string, unknown>))
-  return mergeHostedAndInvitedMeetings(hosted, invited)
+  const invited = (extraMeetings ?? []).map((row) => mapMeeting(row as Record<string, unknown>))
+  return mergeHostedAndInvitedMeetings(hosted, invited).map((meeting) =>
+    withViewerRole(meeting, userId, roleByMeetingId),
+  )
 }
 
 export async function fetchUpcomingMeetings(): Promise<Meeting[]> {
@@ -331,8 +404,7 @@ export async function createMeeting(hostId: string, input: CreateMeetingInput): 
   const roomId = generateLiveKitRoomId()
   const now = new Date().toISOString()
   const status = input.startNow ? 'instant' : 'scheduled'
-  const timeZone = normalizeIanaTimeZone(input.timeZone?.trim() || resolveDeviceIanaTimeZone())
-  if (!isValidIanaTimeZone(timeZone)) throw new Error('A valid IANA timezone is required')
+  const timeZone = coerceIanaTimeZone(input.timeZone?.trim() || resolveDeviceIanaTimeZone())
   const scheduledAt = assertUtcIso(input.scheduledAt ?? (input.startNow ? now : ''), 'Start time')
   const scheduledEndAt = assertUtcIso(
     input.scheduledEndAt ?? new Date(Date.parse(scheduledAt) + 60 * 60 * 1000).toISOString(),
@@ -422,6 +494,96 @@ export async function createMeeting(hostId: string, input: CreateMeetingInput): 
   invalidateCache(INVALIDATION_TOPICS.coWorkMeetings)
 
   return meeting
+}
+
+export async function updateMeetingSchedule(
+  meetingId: string,
+  input: UpdateMeetingScheduleInput,
+): Promise<Meeting> {
+  const timeZone = coerceIanaTimeZone(input.timeZone)
+  const scheduledAt = assertUtcIso(input.scheduledAt, 'Start time')
+  const scheduledEndAt = assertUtcIso(input.scheduledEndAt, 'End time')
+  if (Date.parse(scheduledEndAt) <= Date.parse(scheduledAt)) {
+    throw new Error('End time must be after the start time')
+  }
+
+  const security = input.securitySettings ?? {}
+  const options = input.meetingOptions ?? {}
+  const passcode = security.passcode?.trim()
+  const securitySettings = {
+    waitingRoom: security.waitingRoom ?? false,
+    waiting_room: security.waitingRoom ?? false,
+    muteOnJoin: security.muteOnJoin ?? false,
+    videoOffOnJoin: security.videoOffOnJoin ?? false,
+    allowScreenShare: security.allowScreenShare !== false,
+    allowChat: security.allowChat !== false,
+    allowPrivateChat: security.allowPrivateChat !== false && security.allowChat !== false,
+    allowRecording: security.allowRecording !== false,
+    allowHandRaise: security.allowHandRaise !== false,
+    authenticated_users_only: security.authenticatedUsersOnly ?? false,
+    ...(passcode
+      ? {
+        passcode,
+        requirePasscode: true,
+        require_passcode: true,
+      }
+      : {
+        requirePasscode: security.requirePasscode ?? false,
+      }),
+  }
+
+  const autoRecord = options.autoRecord ?? false
+  const captionsEnabled = options.captionsEnabled ?? false
+  const recordingMode = options.recordingMode ?? (autoRecord ? 'automatic' : 'manual')
+  const meetingOptions = {
+    layout: options.layout ?? 'grid',
+    defaultVideo: options.defaultVideo ?? true,
+    defaultAudio: options.defaultAudio ?? true,
+    enableMeetingChat: options.enableMeetingChat !== false && security.allowChat !== false,
+    host_video_on: options.defaultVideo ?? true,
+    participant_video_on: options.defaultVideo ?? true,
+    allowJoinBeforeHost: options.allowJoinBeforeHost ?? false,
+    allow_join_before_host: options.allowJoinBeforeHost ?? false,
+    autoRecord,
+    auto_record: autoRecord,
+    recordingMode,
+    recording_mode: recordingMode,
+    captionsEnabled,
+    captions_enabled: captionsEnabled,
+    time_zone: timeZone,
+  }
+
+  const { data, error } = await supabase.rpc('update_meeting_schedule_secure', {
+    meeting_id_input: meetingId,
+    title_input: input.title.trim(),
+    description_input: input.description?.trim() || null,
+    scheduled_at_input: scheduledAt,
+    scheduled_end_at_input: scheduledEndAt,
+    time_zone_input: timeZone,
+    max_participants_input: input.maxParticipants ?? null,
+    is_recurring_input: input.isRecurring ?? null,
+    repeat_input: input.isRecurring ? (input.repeat ?? null) : null,
+    security_settings_input: securitySettings,
+    meeting_options_input: meetingOptions,
+    invitees_input: input.invitees
+      ? input.invitees.map((invitee) => ({
+        ...invitee,
+        invited_at: invitee.invited_at ?? new Date().toISOString(),
+        status: invitee.status ?? 'pending',
+      }))
+      : null,
+    convert_to_scheduled_input: input.convertToScheduled ?? false,
+  })
+
+  if (error) {
+    if (/HOST_REQUIRED/i.test(error.message)) {
+      throw new Error('Only the host or a co-host can edit this meeting.')
+    }
+    throw new Error(error.message)
+  }
+
+  invalidateCache(INVALIDATION_TOPICS.coWorkMeetings)
+  return mapMeeting(data as Record<string, unknown>)
 }
 
 export async function startMeeting(meetingId: string): Promise<void> {
@@ -520,9 +682,100 @@ export async function cancelMeeting(meetingId: string): Promise<void> {
   const { error } = await supabase.rpc('cancel_meeting_secure', {
     meeting_id_input: meetingId,
   })
-  if (error) throw new Error(error.message)
+  if (error) {
+    if (/HOST_REQUIRED/i.test(error.message)) {
+      throw new Error('Only the host or a co-host can cancel this meeting.')
+    }
+    throw new Error(error.message)
+  }
 
   invalidateCache(INVALIDATION_TOPICS.coWorkMeetings)
+}
+
+/** Patch live security / room options mid-meeting (Zoom Host tools). Host only. */
+export async function updateMeetingLiveSettings(
+  meetingId: string,
+  patch: {
+    securitySettings?: Partial<MeetingSecuritySettings>
+    meetingOptions?: Partial<NonNullable<Meeting['meeting_options']>>
+  },
+): Promise<Meeting> {
+  const securityPatch = patch.securitySettings
+    ? {
+        ...patch.securitySettings,
+        ...(patch.securitySettings.participantChatWith
+          ? {
+              allowChat: patch.securitySettings.participantChatWith !== 'off',
+              allow_chat: patch.securitySettings.participantChatWith !== 'off',
+              participantChatWith: patch.securitySettings.participantChatWith,
+              participant_chat_with: patch.securitySettings.participantChatWith,
+            }
+          : {}),
+        ...(typeof patch.securitySettings.allowScreenShare === 'boolean'
+          ? {
+              allowScreenShare: patch.securitySettings.allowScreenShare,
+              allow_screen_share: patch.securitySettings.allowScreenShare,
+            }
+          : {}),
+        ...(typeof patch.securitySettings.allowRecording === 'boolean'
+          ? {
+              allowRecording: patch.securitySettings.allowRecording,
+              allow_recording: patch.securitySettings.allowRecording,
+            }
+          : {}),
+        ...(typeof patch.securitySettings.allowHandRaise === 'boolean'
+          ? {
+              allowHandRaise: patch.securitySettings.allowHandRaise,
+              allow_hand_raise: patch.securitySettings.allowHandRaise,
+            }
+          : {}),
+        ...(typeof patch.securitySettings.allowParticipantRename === 'boolean'
+          ? {
+              allowParticipantRename: patch.securitySettings.allowParticipantRename,
+              allow_participant_rename: patch.securitySettings.allowParticipantRename,
+            }
+          : {}),
+        ...(typeof patch.securitySettings.allowSelfUnmute === 'boolean'
+          ? {
+              allowSelfUnmute: patch.securitySettings.allowSelfUnmute,
+              allow_self_unmute: patch.securitySettings.allowSelfUnmute,
+            }
+          : {}),
+        ...(typeof patch.securitySettings.allowSelfStartVideo === 'boolean'
+          ? {
+              allowSelfStartVideo: patch.securitySettings.allowSelfStartVideo,
+              allow_self_start_video: patch.securitySettings.allowSelfStartVideo,
+            }
+          : {}),
+        ...(typeof patch.securitySettings.waitingRoom === 'boolean'
+          ? {
+              waitingRoom: patch.securitySettings.waitingRoom,
+              waiting_room: patch.securitySettings.waitingRoom,
+            }
+          : {}),
+        ...(typeof patch.securitySettings.allowPrivateChat === 'boolean'
+          ? {
+              allowPrivateChat: patch.securitySettings.allowPrivateChat,
+              allow_private_chat: patch.securitySettings.allowPrivateChat,
+            }
+          : {}),
+      }
+    : null
+
+  const { data, error } = await supabase.rpc('update_meeting_live_settings', {
+    meeting_id_input: meetingId,
+    security_settings_patch: securityPatch,
+    meeting_options_patch: patch.meetingOptions ?? null,
+  })
+
+  if (error) {
+    if (/HOST_REQUIRED/i.test(error.message)) {
+      throw new Error('Only the host can change these meeting settings.')
+    }
+    throw new Error(error.message)
+  }
+
+  return mapMeeting(data as Record<string, unknown>)
 }
 
 export async function leaveMeetingParticipant(

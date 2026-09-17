@@ -9,8 +9,10 @@ import {
 
 import {
   deriveMeetingConnectionStatus,
+  MEETING_RECONNECT_BANNER_DEBOUNCE_MS,
   type MeetingAudioDevice,
   type MeetingAudioQuality,
+  type MeetingConnectionStatus,
   type MeetingMicrophonePermission,
 } from '~/co-work/lib/meeting-audio-quality'
 import {
@@ -31,7 +33,7 @@ export function useMeetingAudioQuality(
   localParticipant: LocalParticipant,
   audioEnabled: boolean,
 ): MeetingAudioQuality {
-  const [connectionStatus, setConnectionStatus] = useState(() =>
+  const [connectionStatus, setConnectionStatus] = useState<MeetingConnectionStatus>(() =>
     deriveMeetingConnectionStatus(room.state, localParticipant.connectionQuality),
   )
   const [microphonePermission, setMicrophonePermission] =
@@ -54,6 +56,7 @@ export function useMeetingAudioQuality(
     room.getActiveDevice('videoinput') ?? null,
   )
   const microphoneTestTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const reconnectBannerTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   const refreshDevices = useCallback(async () => {
     if (!navigator.mediaDevices?.enumerateDevices) return
@@ -122,10 +125,25 @@ export function useMeetingAudioQuality(
   }, [audioEnabled, refreshDevices])
 
   useEffect(() => {
+    const applyStatus = (next: MeetingConnectionStatus) => {
+      if (next === 'reconnecting') {
+        if (reconnectBannerTimerRef.current) return
+        reconnectBannerTimerRef.current = setTimeout(() => {
+          reconnectBannerTimerRef.current = null
+          setConnectionStatus(
+            deriveMeetingConnectionStatus(room.state, localParticipant.connectionQuality),
+          )
+        }, MEETING_RECONNECT_BANNER_DEBOUNCE_MS)
+        return
+      }
+      if (reconnectBannerTimerRef.current) {
+        clearTimeout(reconnectBannerTimerRef.current)
+        reconnectBannerTimerRef.current = null
+      }
+      setConnectionStatus(next)
+    }
     const syncConnection = () =>
-      setConnectionStatus(
-        deriveMeetingConnectionStatus(room.state, localParticipant.connectionQuality),
-      )
+      applyStatus(deriveMeetingConnectionStatus(room.state, localParticipant.connectionQuality))
     const onQuality = (_quality: ConnectionQuality, participant: { identity?: string }) => {
       if (participant.identity === localParticipant.identity) syncConnection()
     }
@@ -158,6 +176,10 @@ export function useMeetingAudioQuality(
       room.off(RoomEvent.ActiveDeviceChanged, onActiveDevice as never)
       room.off(RoomEvent.MediaDevicesError, onMediaError)
       room.off(RoomEvent.AudioPlaybackStatusChanged, syncPlayback)
+      if (reconnectBannerTimerRef.current) {
+        clearTimeout(reconnectBannerTimerRef.current)
+        reconnectBannerTimerRef.current = null
+      }
     }
   }, [localParticipant, refreshDevices, room])
 

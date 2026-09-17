@@ -41,6 +41,12 @@ export function OpenInAppHost() {
 
     setVisible(true)
 
+    const path = getWebPathForApp()
+    // Meeting lobby has its own immediate handoff — avoid a second delayed redirect.
+    if (path.startsWith('/co-work/meeting/') || path.startsWith('/cowork/meeting/')) {
+      return
+    }
+
     const canAutoAttempt = device.isAndroid || isInAppBrowser()
     if (!canAutoAttempt) return
 
@@ -52,7 +58,6 @@ export function OpenInAppHost() {
     }
 
     const timer = window.setTimeout(() => {
-      const path = getWebPathForApp()
       window.location.href = device.isAndroid
         ? buildAndroidAutoIntentUrl(path)
         : buildOpenInAppSchemeUrl(path)

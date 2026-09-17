@@ -102,46 +102,76 @@ export function MeetingParticipantsPanel({
       <ScrollView flex={1} padding="$3">
         <YStack gap="$4">
           {canModerate ? (
-            <YStack gap="$2">
+            <YStack gap="$3">
               <CoWorkSectionLabel>Host controls</CoWorkSectionLabel>
-              <XStack gap="$2" flexWrap="wrap">
-                {bulkActions.includes('mute_all') && onMuteAll ? (
-                  <Button tone="outline" size="$2" borderRadius={999} onPress={onMuteAll}>
-                    Mute all
-                  </Button>
-                ) : null}
-                {bulkActions.includes('ask_all_to_unmute') && onAskAllToUnmute ? (
-                  <Button tone="outline" size="$2" borderRadius={999} onPress={onAskAllToUnmute}>
-                    Ask all to unmute
-                  </Button>
-                ) : null}
-                {bulkActions.includes('remove_all_except_host') && onRemoveAllExceptHost ? (
-                  <Button tone="outline" size="$2" borderRadius={999} onPress={onRemoveAllExceptHost}>
+              {(bulkActions.includes('mute_all') ||
+                bulkActions.includes('ask_all_to_unmute') ||
+                onAskAllToMute) ? (
+                <YStack gap="$1.5">
+                  <Text fontSize={11} fontWeight="700" color={coworkUi.meetingIconMuted}>
+                    Audio
+                  </Text>
+                  <XStack gap="$2" flexWrap="wrap">
+                    {bulkActions.includes('mute_all') && onMuteAll ? (
+                      <Button tone="outline" size="$2" borderRadius={12} onPress={onMuteAll}>
+                        Mute all
+                      </Button>
+                    ) : null}
+                    {onAskAllToMute ? (
+                      <Button tone="outline" size="$2" borderRadius={12} onPress={onAskAllToMute}>
+                        Ask all to mute
+                      </Button>
+                    ) : null}
+                    {bulkActions.includes('ask_all_to_unmute') && onAskAllToUnmute ? (
+                      <Button tone="outline" size="$2" borderRadius={12} onPress={onAskAllToUnmute}>
+                        Ask all to unmute
+                      </Button>
+                    ) : null}
+                  </XStack>
+                </YStack>
+              ) : null}
+              {(bulkActions.includes('lock_meeting') && onToggleLock) || onOpenTransferHost ? (
+                <YStack gap="$1.5">
+                  <Text fontSize={11} fontWeight="700" color={coworkUi.meetingIconMuted}>
+                    Room
+                  </Text>
+                  <XStack gap="$2" flexWrap="wrap">
+                    {bulkActions.includes('lock_meeting') && onToggleLock ? (
+                      <Button tone="outline" size="$2" borderRadius={12} onPress={onToggleLock}>
+                        {isLocked ? 'Unlock' : 'Lock'}
+                      </Button>
+                    ) : null}
+                    {onOpenTransferHost ? (
+                      <Button
+                        tone="primary"
+                        size="$2"
+                        borderRadius={12}
+                        onPress={onOpenTransferHost}
+                        icon={<Icons.UserCheck size={14} color="white" />}
+                      >
+                        Transfer host
+                      </Button>
+                    ) : null}
+                  </XStack>
+                </YStack>
+              ) : null}
+              {bulkActions.includes('remove_all_except_host') && onRemoveAllExceptHost ? (
+                <YStack gap="$1.5">
+                  <Text fontSize={11} fontWeight="700" color={coworkUi.danger}>
+                    Danger
+                  </Text>
+                  <Button
+                    tone="outline"
+                    size="$2"
+                    borderRadius={12}
+                    borderColor="rgba(244,63,104,0.45)"
+                    color={coworkUi.danger}
+                    onPress={onRemoveAllExceptHost}
+                  >
                     Remove all except host
                   </Button>
-                ) : null}
-                {bulkActions.includes('lock_meeting') && onToggleLock ? (
-                  <Button tone="outline" size="$2" borderRadius={999} onPress={onToggleLock}>
-                    {isLocked ? 'Unlock meeting' : 'Lock meeting'}
-                  </Button>
-                ) : null}
-                {onOpenTransferHost ? (
-                  <Button
-                    tone="primary"
-                    size="$2"
-                    borderRadius={999}
-                    onPress={onOpenTransferHost}
-                    icon={<Icons.UserCheck size={14} color="white" />}
-                  >
-                    Transfer host
-                  </Button>
-                ) : null}
-                {onAskAllToMute ? (
-                  <Button tone="ghost" size="$2" borderRadius={999} onPress={onAskAllToMute}>
-                    Ask all to mute
-                  </Button>
-                ) : null}
-              </XStack>
+                </YStack>
+              ) : null}
             </YStack>
           ) : null}
 
@@ -178,6 +208,30 @@ export function MeetingParticipantsPanel({
             </YStack>
           ) : null}
 
+          {(() => {
+            const withHands = admitted.filter((p) => raisedHands[p.user_id])
+            if (withHands.length === 0) return null
+            return (
+              <YStack gap="$2">
+                <CoWorkSectionLabel>Raised hands ({withHands.length})</CoWorkSectionLabel>
+                {withHands.map((p) => (
+                  <ParticipantRow
+                    key={`hand-${p.id}`}
+                    participant={p}
+                    handRaised
+                    action={
+                      p.user_id === currentUserId ? null : (
+                        <Text fontSize={12} color={coworkUi.textMuted}>
+                          Waiting
+                        </Text>
+                      )
+                    }
+                  />
+                ))}
+              </YStack>
+            )
+          })()}
+
           <YStack gap="$2">
             <CoWorkSectionLabel>In the meeting</CoWorkSectionLabel>
             {admitted.length === 0 ? (
@@ -201,84 +255,62 @@ export function MeetingParticipantsPanel({
                   isMuted: !!p.is_muted,
                   isVideoOff: !!p.is_video_off,
                 })
-                const moreItems: MoreAction[] = []
+                const menuItems: MoreAction[] = []
+                if (actions.includes('mute') && onForceMute) {
+                  menuItems.push({ key: 'mute', label: 'Mute', onPress: () => onForceMute(p.user_id) })
+                }
+                if (actions.includes('ask_to_unmute') && onAskToUnmute) {
+                  menuItems.push({
+                    key: 'ask-unmute',
+                    label: 'Ask to unmute',
+                    onPress: () => onAskToUnmute(p.user_id),
+                  })
+                }
                 if (actions.includes('ask_to_mute') && onRequestMute) {
-                  moreItems.push({
+                  menuItems.push({
                     key: 'ask-mute',
                     label: 'Ask to mute',
                     onPress: () => onRequestMute(p.user_id),
                   })
                 }
+                if (actions.includes('stop_video') && onStopVideo) {
+                  menuItems.push({
+                    key: 'stop-video',
+                    label: 'Stop video',
+                    onPress: () => onStopVideo(p.user_id),
+                  })
+                }
+                if (actions.includes('make_co_host') && onAssignCoHost) {
+                  menuItems.push({
+                    key: 'make-cohost',
+                    label: 'Make co-host',
+                    onPress: () => onAssignCoHost(p.user_id),
+                  })
+                }
                 if (actions.includes('remove_co_host') && onRemoveCoHost) {
-                  moreItems.push({
+                  menuItems.push({
                     key: 'remove-cohost',
                     label: 'Remove co-host',
                     onPress: () => onRemoveCoHost(p.user_id),
                   })
                 }
-
-                const hasPrimary =
-                  actions.includes('mute') ||
-                  actions.includes('ask_to_unmute') ||
-                  actions.includes('stop_video') ||
-                  actions.includes('make_co_host') ||
-                  actions.includes('make_host') ||
-                  actions.includes('remove')
+                if (actions.includes('make_host') && onTransferHost) {
+                  menuItems.push({
+                    key: 'make-host',
+                    label: 'Make host',
+                    onPress: () => onTransferHost(p.user_id),
+                  })
+                }
+                if (actions.includes('remove') && onRemove) {
+                  menuItems.push({ key: 'remove', label: 'Remove', onPress: () => onRemove(p.id) })
+                }
 
                 return (
                   <ParticipantRow
                     key={p.id}
                     participant={p}
                     handRaised={!!raisedHands[p.user_id]}
-                    action={
-                      hasPrimary || moreItems.length > 0 ? (
-                        <XStack gap="$1" alignItems="center" flexWrap="wrap" justifyContent="flex-end">
-                          {actions.includes('mute') && onForceMute ? (
-                            <Button tone="ghost" size="$1" onPress={() => onForceMute(p.user_id)}>
-                              Mute
-                            </Button>
-                          ) : null}
-                          {actions.includes('ask_to_unmute') && onAskToUnmute ? (
-                            <Button tone="ghost" size="$1" onPress={() => onAskToUnmute(p.user_id)}>
-                              Ask to unmute
-                            </Button>
-                          ) : null}
-                          {actions.includes('stop_video') && onStopVideo ? (
-                            <Button tone="ghost" size="$1" onPress={() => onStopVideo(p.user_id)}>
-                              Stop video
-                            </Button>
-                          ) : null}
-                          {actions.includes('make_co_host') && onAssignCoHost ? (
-                            <Button
-                              tone="primary"
-                              size="$1"
-                              borderRadius={999}
-                              onPress={() => onAssignCoHost(p.user_id)}
-                            >
-                              Make co-host
-                            </Button>
-                          ) : null}
-                          {actions.includes('make_host') && onTransferHost ? (
-                            <Button
-                              tone="outline"
-                              size="$1"
-                              borderRadius={999}
-                              borderColor={coworkUi.borderAccent}
-                              color={coworkUi.brandLight}
-                              onPress={() => onTransferHost(p.user_id)}
-                            >
-                              Make host
-                            </Button>
-                          ) : null}
-                          {actions.includes('remove') && onRemove ? (
-                            <Button tone="outline" size="$1" onPress={() => onRemove(p.id)}>
-                              Remove
-                            </Button>
-                          ) : null}
-                          {moreItems.length > 0 ? <MoreActionsMenu items={moreItems} /> : null}
-                        </XStack>
-                      ) : null
-                    }
+                    action={menuItems.length > 0 ? <MoreActionsMenu items={menuItems} /> : null}
                   />
                 )
               })}

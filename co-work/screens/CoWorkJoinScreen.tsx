@@ -3,21 +3,17 @@ import { useState } from 'react'
 
 import { AppPage, LAYOUT_STRETCH } from '~/components/layout'
 import { Button, Icons, Input, Text, XStack, YStack } from '~/components/ui'
-import { CoWorkBrandChip, CoWorkIconBadge } from '~/co-work/components/CoWorkUi'
-import { DevicePrepCard } from '~/co-work/components/DevicePrepCard'
 import {
   clearRecentMeetingCodes,
   recordMeetingCode,
   useRecentMeetingCodes,
 } from '~/co-work/lib/recent-meeting-codes'
-import { coworkGlassStyle, useCoWorkTheme } from '~/co-work/lib/theme'
-import { controlGradientStyle, coworkBoxShadow, pageGradientStyle } from '~/lib/platform/crossStyles'
+import { meetingBarStyle, useCoWorkTheme } from '~/co-work/lib/theme'
+import { controlGradientStyle, pageGradientStyle } from '~/lib/platform/crossStyles'
 import { coWorkRoutes } from '~/lib/routes'
 
-import { BRAND_NAME } from '~/config/brand'
-
 export function CoWorkJoinScreen() {
-  const { ui: coworkUi, gradients: coworkGradients, shadows: coworkShadows } = useCoWorkTheme()
+  const { ui: coworkUi, gradients: coworkGradients } = useCoWorkTheme()
   const router = useRouter()
   const recentCodes = useRecentMeetingCodes()
   const [joinCode, setJoinCode] = useState('')
@@ -36,78 +32,62 @@ export function CoWorkJoinScreen() {
       paddingVertical="$6"
       style={pageGradientStyle(coworkGradients.page, coworkUi.pageBg)}
     >
-      <YStack gap="$5" width="100%" {...LAYOUT_STRETCH}>
-        <YStack gap="$3">
-          <CoWorkBrandChip label="JOIN" />
-          <Text fontSize={30} fontWeight="800" color={coworkUi.text} letterSpacing={-0.8}>
-            Enter meeting code
+      <YStack
+        gap="$5"
+        width="100%"
+        maxWidth={420}
+        alignSelf="center"
+        {...LAYOUT_STRETCH}
+      >
+        <YStack gap="$2" alignItems="center">
+          <Text fontSize={28} fontWeight="800" color={coworkUi.text} letterSpacing={-0.6} textAlign="center">
+            Join a meeting
           </Text>
-          <Text color={coworkUi.textSecondary} lineHeight={22}>
-            Join a Co-Work room hosted on {BRAND_NAME}
+          <Text color={coworkUi.textSecondary} textAlign="center" fontSize={14}>
+            Enter the meeting ID from your invite
           </Text>
         </YStack>
 
         <YStack
           gap="$4"
           padding="$5"
-          borderRadius={coworkUi.radius.card}
+          borderRadius={coworkUi.radius.panel}
           borderWidth={1}
           borderColor={coworkUi.glassBorder}
-          style={{
-            ...coworkGlassStyle(coworkUi, true),
-            ...coworkBoxShadow(coworkShadows, 'card'),
-          }}
+          style={meetingBarStyle(coworkUi, true)}
         >
-          <XStack alignItems="center" gap="$3">
-            <CoWorkIconBadge icon={Icons.Hash} />
-            <Text fontWeight="700" color={coworkUi.text}>
-              Meeting code
-            </Text>
-          </XStack>
           <Input
             value={joinCode}
             onChangeText={setJoinCode}
             placeholder="ABC DEF GHI"
             autoCapitalize="characters"
-            backgroundColor="rgba(255,255,255,0.05)"
+            backgroundColor={coworkUi.meetingControl}
             borderColor={coworkUi.borderSoft}
             color={coworkUi.text}
             placeholderTextColor={coworkUi.textMuted}
-            borderRadius={14}
-            fontSize={20}
-            letterSpacing={2}
+            borderRadius={12}
+            fontSize={22}
+            letterSpacing={3}
             textAlign="center"
+            height={56}
           />
-          <XStack gap="$2" flexWrap="wrap">
-            <Button
-              tone="primary"
-              size="$4"
-              borderRadius={999}
-              flex={1}
-              minWidth={160}
-              onPress={() => joinWithCode(joinCode)}
-              style={controlGradientStyle(coworkGradients.activeControl, coworkUi.brand)}
-            >
-              Join meeting
-            </Button>
-          </XStack>
-          <Text fontSize={12} color={coworkUi.textMuted} textAlign="center" lineHeight={18}>
-            Codes are case-insensitive. Spaces are optional.
-          </Text>
+          <Button
+            tone="primary"
+            size="$5"
+            borderRadius={12}
+            icon={<Icons.Video size={18} color="white" />}
+            onPress={() => joinWithCode(joinCode)}
+            style={controlGradientStyle(coworkGradients.activeControl, coworkUi.brand)}
+          >
+            Join
+          </Button>
         </YStack>
 
         {recentCodes.length > 0 ? (
-          <YStack
-            gap="$3"
-            padding="$4"
-            borderRadius={coworkUi.radius.card}
-            borderWidth={1}
-            borderColor={coworkUi.glassBorder}
-            style={coworkGlassStyle(coworkUi, true)}
-          >
-            <XStack alignItems="center" justifyContent="space-between" gap="$2">
-              <Text fontWeight="700" fontSize={14} color={coworkUi.text}>
-                Recent codes
+          <YStack gap="$2.5">
+            <XStack alignItems="center" justifyContent="space-between">
+              <Text fontWeight="700" fontSize={13} color={coworkUi.meetingIconMuted}>
+                Recent
               </Text>
               <Text
                 fontSize={12}
@@ -119,7 +99,7 @@ export function CoWorkJoinScreen() {
                 Clear
               </Text>
             </XStack>
-            <XStack gap="$2" flexWrap="wrap">
+            <XStack gap="$2" flexWrap="wrap" justifyContent="center">
               {recentCodes.map((code) => (
                 <XStack
                   key={code}
@@ -128,7 +108,7 @@ export function CoWorkJoinScreen() {
                   borderRadius={999}
                   borderWidth={1}
                   borderColor={coworkUi.borderSoft}
-                  backgroundColor="rgba(255,255,255,0.04)"
+                  backgroundColor={coworkUi.meetingControl}
                   cursor="pointer"
                   pressStyle={{ opacity: 0.85 }}
                   onPress={() => joinWithCode(code)}
@@ -141,17 +121,6 @@ export function CoWorkJoinScreen() {
             </XStack>
           </YStack>
         ) : null}
-
-        <DevicePrepCard />
-
-        <YStack gap="$2" paddingHorizontal="$1">
-          <Text fontWeight="700" fontSize={14} color={coworkUi.textSecondary}>
-            Tips
-          </Text>
-          <Text fontSize={13} color={coworkUi.textMuted} lineHeight={20}>
-            Ask your host for the meeting code, or open an invite link from email or chat.
-          </Text>
-        </YStack>
       </YStack>
     </AppPage>
   )

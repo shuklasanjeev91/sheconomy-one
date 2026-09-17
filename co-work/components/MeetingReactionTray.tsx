@@ -1,6 +1,7 @@
 import { Button, Text, XStack, YStack } from '~/components/ui'
 import { MEETING_REACTIONS } from '~/co-work/lib/meeting-reactions'
-import { coworkGlassStyle, useCoWorkTheme } from '~/co-work/lib/theme'
+import { MEETING_REACTION_TRAY_Z_INDEX } from '~/co-work/lib/meeting-toolbar'
+import { meetingBarStyle, useCoWorkTheme } from '~/co-work/lib/theme'
 import { coworkBoxShadow } from '~/lib/platform/crossStyles'
 
 type MeetingReactionTrayProps = {
@@ -21,7 +22,7 @@ export function MeetingReactionTray({ open, onSelect }: MeetingReactionTrayProps
       right={0}
       alignItems="center"
       marginBottom={10}
-      zIndex={5}
+      zIndex={MEETING_REACTION_TRAY_Z_INDEX}
       pointerEvents="box-none"
     >
       <XStack
@@ -33,7 +34,7 @@ export function MeetingReactionTray({ open, onSelect }: MeetingReactionTrayProps
         borderWidth={1}
         borderColor={coworkUi.glassBorder}
         style={{
-          ...coworkGlassStyle(coworkUi, true),
+          ...meetingBarStyle(coworkUi, true),
           ...coworkBoxShadow(coworkShadows, 'dock'),
         }}
       >

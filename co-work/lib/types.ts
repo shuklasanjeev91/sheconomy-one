@@ -3,6 +3,8 @@ export type MeetingStatus = 'scheduled' | 'instant' | 'active' | 'ended' | 'canc
 export type ParticipantStatus = 'waiting' | 'admitted' | 'rejected' | 'left' | 'removed'
 export type MeetingRole = 'host' | 'co_host' | 'participant'
 
+export type MeetingParticipantChatWith = 'everyone' | 'hosts' | 'off'
+
 export type MeetingSecuritySettings = {
   passcode?: string
   requirePasscode?: boolean
@@ -13,8 +15,19 @@ export type MeetingSecuritySettings = {
   allowChat?: boolean
   /** Direct participant-to-participant chat when meeting chat is on. */
   allowPrivateChat?: boolean
+  /**
+   * Who participants may chat with (Zoom-style).
+   * Hosts/co-hosts always keep full chat composer options.
+   */
+  participantChatWith?: MeetingParticipantChatWith
   allowRecording?: boolean
   allowHandRaise?: boolean
+  /** Participants may rename themselves in the room. */
+  allowParticipantRename?: boolean
+  /** Participants may unmute themselves after being muted. */
+  allowSelfUnmute?: boolean
+  /** Participants may turn their camera on. */
+  allowSelfStartVideo?: boolean
   authenticatedUsersOnly?: boolean
 }
 
@@ -83,6 +96,8 @@ export type Meeting = {
     username: string | null
     avatar_url: string | null
   } | null
+  /** Current viewer's role when loaded for My Meetings / schedule edit. */
+  viewer_role?: MeetingRole | null
 }
 
 export type MeetingParticipant = {
@@ -161,6 +176,22 @@ export type CreateMeetingInput = {
   isRecurring?: boolean
   repeat?: MeetingRepeat
   invitees?: MeetingInvitee[]
+}
+
+export type UpdateMeetingScheduleInput = {
+  title: string
+  description?: string
+  scheduledAt: string
+  scheduledEndAt: string
+  timeZone: string
+  maxParticipants?: number
+  securitySettings?: MeetingSecuritySettings
+  meetingOptions?: MeetingOptions
+  isRecurring?: boolean
+  repeat?: MeetingRepeat
+  invitees?: MeetingInvitee[]
+  /** When editing an instant/ended meeting into a future slot, flip status to scheduled. */
+  convertToScheduled?: boolean
 }
 
 export type RemoteParticipantState = {

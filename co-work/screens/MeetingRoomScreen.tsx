@@ -15,6 +15,7 @@ import { MeetingChatPanel } from '~/co-work/components/MeetingChatPanel'
 import { MeetingBackgroundPanel } from '~/co-work/components/MeetingBackgroundPanel'
 import { MeetingAudioPanel } from '~/co-work/components/MeetingAudioPanel'
 import { MeetingControls } from '~/co-work/components/MeetingControls'
+import { MeetingHostToolsPanel } from '~/co-work/components/MeetingHostToolsPanel'
 import { MeetingInfoPanel } from '~/co-work/components/MeetingInfoPanel'
 import { MeetingInvitePanel } from '~/co-work/components/MeetingInvitePanel'
 import { MeetingLiveCaptions } from '~/co-work/components/MeetingLiveCaptions'
@@ -25,7 +26,6 @@ import { MeetingRecordingsPanel } from '~/co-work/components/MeetingRecordingsPa
 import { MeetingResponsivePanel } from '~/co-work/components/MeetingResponsivePanel'
 import { MeetingWaitingRoom } from '~/co-work/components/MeetingWaitingRoom'
 import { MeetingWaitingRoomRequests } from '~/co-work/components/MeetingWaitingRoomRequests'
-import { MeetingRoleBadge } from '~/co-work/components/MeetingRoleBadge'
 import { MeetingProvider, useMeetingMachine, useOptionalMeetingMachine } from '~/co-work/components/MeetingProvider'
 import {
   useMeetingStateManager,
@@ -79,13 +79,12 @@ import {
   endMeetingConfirmCopy,
   hostLeaveConfirmCopy,
 } from '~/co-work/lib/meeting-end'
-import { coworkGlassStyle, useCoWorkTheme } from '~/co-work/lib/theme'
-import { controlGradientStyle, footerFadeStyle } from '~/lib/platform/crossStyles'
+import { meetingBarStyle, useCoWorkTheme } from '~/co-work/lib/theme'
+import { footerFadeStyle } from '~/lib/platform/crossStyles'
 import type { Meeting } from '~/co-work/lib/types'
 import { useAppLayout } from '~/hooks/useAppLayout'
 import { navigateApp } from '~/lib/platform/navigate'
 import { coWorkRoutes } from '~/lib/routes'
-import { copyShareLink } from '~/lib/share'
 
 async function withTimeout<T>(promise: Promise<T>, ms: number): Promise<T | null> {
   let timer: ReturnType<typeof setTimeout> | undefined
@@ -142,7 +141,37 @@ function MeetingRoomContent(props: MeetingRoomScreenProps) {
   const useLiveKit = supportsLiveKitVideo() && !!props.meeting.room_id
   const [mediaReconnectFailed, setMediaReconnectFailed] = useState(false)
   const [mediaReconnectKey, setMediaReconnectKey] = useState(0)
-  const handleMediaDisconnected = useCallback(() => setMediaReconnectFailed(true), [])
+  const mediaConnectedRef = useRef(false)
+  const ignoreMediaDisconnectRef = useRef(false)
+  const mediaAutoRetryRef = useRef(0)
+
+  const handleMediaConnected = useCallback(() => {
+    mediaConnectedRef.current = true
+    mediaAutoRetryRef.current = 0
+    setMediaReconnectFailed(false)
+  }, [])
+
+  const handleMediaDisconnected = useCallback(() => {
+    // Ignore tear-down from remount / leave / credential retry — those are not
+    // real network failures and previously flashed "Unable to reconnect".
+    if (ignoreMediaDisconnectRef.current) return
+    if (!mediaConnectedRef.current) return
+
+    // One silent remount before escalating to the full-page reconnect UI.
+    if (mediaAutoRetryRef.current < 1) {
+      mediaAutoRetryRef.current += 1
+      ignoreMediaDisconnectRef.current = true
+      mediaConnectedRef.current = false
+      setMediaReconnectKey((value) => value + 1)
+      setTimeout(() => {
+        ignoreMediaDisconnectRef.current = false
+      }, 250)
+      return
+    }
+
+    mediaConnectedRef.current = false
+    setMediaReconnectFailed(true)
+  }, [])
 
   // Collaboration layer (presence / chat / hands) — separate from SFU media.
   // Update the adapter pointer every change; unbind only on unmount so we never
@@ -189,6 +218,8 @@ function MeetingRoomContent(props: MeetingRoomScreenProps) {
   })
 
   const leaveMeetingScreen = useCallback(async () => {
+    ignoreMediaDisconnectRef.current = true
+    mediaConnectedRef.current = false
     await presence.leave()
     closeInstantMeetingSession()
     clearGlobalSession()
@@ -267,9 +298,15 @@ function MeetingRoomContent(props: MeetingRoomScreenProps) {
         message="Check your internet connection, then try joining the meeting again."
         error={presence.error}
         onRetry={async () => {
+          ignoreMediaDisconnectRef.current = true
+          mediaConnectedRef.current = false
+          mediaAutoRetryRef.current = 0
           setMediaReconnectFailed(false)
           setMediaReconnectKey((value) => value + 1)
           await presence.retryJoinRequest()
+          setTimeout(() => {
+            ignoreMediaDisconnectRef.current = false
+          }, 250)
         }}
         onLeave={leaveMeetingScreen}
       />
@@ -315,6 +352,7 @@ function MeetingRoomContent(props: MeetingRoomScreenProps) {
         avatarUrl={props.avatarUrl}
         isHost={props.isHost}
         enabled={!presence.isWaiting && !presence.isRejected}
+        onConnected={handleMediaConnected}
         onDisconnected={handleMediaDisconnected}
         overlay={
           useLiveKit
@@ -423,7 +461,7 @@ function MeetingRoomOverlay({
   title: string
   liveKit?: LiveKitMediaControls
 }) {
-  const { ui: coworkUi, gradients: coworkGradients } = useCoWorkTheme()
+  const { ui: coworkUi } = useCoWorkTheme()
   const {
     state: meetingMachine,
     bindLiveKitMedia,
@@ -489,6 +527,10 @@ function MeetingRoomOverlay({
   )
   const [dismissedError, setDismissedError] = useState<string | null>(null)
   const [meetingState, setMeetingState] = useState(meeting)
+  useEffect(() => {
+    setMeetingState(meeting)
+  }, [meeting])
+
   const [shareOpen, setShareOpen] = useState(false)
   const [transferHostOpen, setTransferHostOpen] = useState(false)
   const [reactionTrayOpen, setReactionTrayOpen] = useState(false)
@@ -548,8 +590,12 @@ function MeetingRoomOverlay({
     busy: exiting,
     controlsPinned: meetingMachine.controlsPinned,
   })
-  const allowRecording = meeting.security_settings?.allowRecording !== false
-  const autoRecord = !!meeting.meeting_options?.autoRecord && isAuthoritativeHost && allowRecording
+  const allowRecording = meetingState.security_settings?.allowRecording !== false
+  const allowScreenShare = meetingState.security_settings?.allowScreenShare !== false
+  const allowHandRaise = meetingState.security_settings?.allowHandRaise !== false
+  const allowSelfUnmute = meetingState.security_settings?.allowSelfUnmute !== false
+  const allowSelfStartVideo = meetingState.security_settings?.allowSelfStartVideo !== false
+  const autoRecord = !!meetingState.meeting_options?.autoRecord && isAuthoritativeHost && allowRecording
   const admittedCount = presence.participants.filter((p) => p.status === 'admitted').length
   const waitingCount = presence.waitingParticipants.length
   const participantDisplayNames = useMemo(
@@ -566,7 +612,6 @@ function MeetingRoomOverlay({
     [presence.participants],
   )
   const roomy = isTablet || isDesktop
-  const narrowPhone = chrome.panelFullWidth
   const panelTrailingInset = chrome.panelTrailingInset
 
   const captions = useLiveCaptions({
@@ -805,14 +850,28 @@ function MeetingRoomOverlay({
       toast.show('Only the host can record this meeting', { tone: 'info' })
       return
     }
-    try {
-      recordingSession.toggleRecording()
-    } catch (error) {
-      toast.show('Recording failed', {
-        tone: 'error',
-        message: error instanceof Error ? error.message : undefined,
-      })
+    const run = () => {
+      try {
+        recordingSession.toggleRecording()
+      } catch (error) {
+        toast.show('Recording failed', {
+          tone: 'error',
+          message: error instanceof Error ? error.message : undefined,
+        })
+      }
     }
+    if (recordingSession.recording) {
+      run()
+      return
+    }
+    Alert.alert(
+      'Start recording?',
+      'Cloud recording will start. Everyone in the meeting will see a recording notice.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        { text: 'Start recording', style: 'destructive', onPress: run },
+      ],
+    )
   }, [allowRecording, isAuthoritativeHost, recordingSession, toast])
 
   const toggleCaptions = useCallback(() => {
@@ -840,6 +899,10 @@ function MeetingRoomOverlay({
   const toggleScreenShare = useCallback(async () => {
     if (!liveKit) {
       toast.show('Connect to the meeting to share your screen', { tone: 'info' })
+      return
+    }
+    if (!liveKit.screenSharing && !allowScreenShare && !canModerate) {
+      toast.show('The host disabled screen sharing', { tone: 'info' })
       return
     }
     if (!supportsScreenBroadcast) {
@@ -886,7 +949,7 @@ function MeetingRoomOverlay({
         message: message || 'Allow screen recording when prompted, then try again.',
       })
     }
-  }, [liveKit, supportsScreenBroadcast, toast, webCapabilities])
+  }, [allowScreenShare, canModerate, liveKit, supportsScreenBroadcast, toast, webCapabilities])
 
   const toggleFullscreen = useCallback(() => {
     if (!fullscreen.supported) {
@@ -964,10 +1027,36 @@ function MeetingRoomOverlay({
       return
     }
     const audioOn = session.getMediaSnapshot()?.audioEnabled ?? liveKit?.audioEnabled ?? true
+    // Turning mic ON while muted — host may have disabled self-unmute for participants.
+    if (audioOn === false && !allowSelfUnmute && !canModerate) {
+      toast.show('The host disabled unmuting', {
+        tone: 'info',
+        message: 'Ask the host to allow participants to unmute.',
+      })
+      return
+    }
     void presence.syncMediaState({ is_muted: audioOn })
     if (session.hasMedia()) session.toggleMic()
     else liveKit?.toggleAudio()
-  }, [liveKit, presence, session, toast])
+  }, [allowSelfUnmute, canModerate, liveKit, presence, session, toast])
+
+  const toggleHand = useCallback(() => {
+    const raising = !presence.handRaised
+    if (raising && !allowHandRaise && !canModerate) {
+      toast.show('The host disabled raise hand', { tone: 'info' })
+      return
+    }
+    if (session.hasCollaboration()) {
+      if (raising) session.raiseHand()
+      else session.lowerHand()
+    } else {
+      presence.toggleHandRaise()
+    }
+    toast.show(raising ? 'Hand raised' : 'Hand lowered', {
+      tone: 'success',
+      message: raising ? 'Others can see your raised hand on your tile' : undefined,
+    })
+  }, [allowHandRaise, canModerate, presence, session, toast])
 
   const sendReaction = useCallback(
     (emoji: string) => {
@@ -976,14 +1065,6 @@ function MeetingRoomOverlay({
     },
     [displayName, presence],
   )
-
-  const copyMeetingId = useCallback(() => {
-    void copyShareLink(meeting.meeting_code.replace(/\s/g, '')).then((copied) => {
-      toast.show(copied ? 'Meeting ID copied' : 'Could not copy Meeting ID', {
-        tone: copied ? 'success' : 'error',
-      })
-    })
-  }, [meeting.meeting_code, toast])
 
   const exitToCoWork = useCallback(() => {
     closeInstantMeetingSession()
@@ -1024,20 +1105,6 @@ function MeetingRoomOverlay({
       // Room may already be tearing down.
     }
   }, [liveKit, session])
-
-  const toggleHand = useCallback(() => {
-    const raising = !presence.handRaised
-    if (session.hasCollaboration()) {
-      if (raising) session.raiseHand()
-      else session.lowerHand()
-    } else {
-      presence.toggleHandRaise()
-    }
-    toast.show(raising ? 'Hand raised' : 'Hand lowered', {
-      tone: 'success',
-      message: raising ? 'Others can see your raised hand on your tile' : undefined,
-    })
-  }, [presence, session, toast])
 
   const runLeave = useCallback(() => {
     if (exitingRef.current) return
@@ -1189,21 +1256,48 @@ function MeetingRoomOverlay({
 
   const handleMuteAll = useCallback(() => {
     if (!isAuthoritativeHost) return
-    void presence
-      .muteAll()
-      .then(() =>
-        toast.show('Participants muted', {
-          tone: 'success',
-          message: 'This never enables anyone’s microphone.',
-        }),
-      )
-      .catch((cause) =>
-        toast.show('Could not mute participants', {
-          tone: 'danger',
-          message: cause instanceof Error ? cause.message : 'Please try again.',
-        }),
-      )
+    Alert.alert('Mute all participants?', 'This never turns anyone’s microphone on — only requests mute.', [
+      { text: 'Cancel', style: 'cancel' },
+      {
+        text: 'Mute all',
+        style: 'destructive',
+        onPress: () => {
+          void presence
+            .muteAll()
+            .then(() =>
+              toast.show('Participants muted', {
+                tone: 'success',
+                message: 'This never enables anyone’s microphone.',
+              }),
+            )
+            .catch((cause) =>
+              toast.show('Could not mute participants', {
+                tone: 'danger',
+                message: cause instanceof Error ? cause.message : 'Please try again.',
+              }),
+            )
+        },
+      },
+    ])
   }, [isAuthoritativeHost, presence, toast])
+
+  const handleRemoveAllExceptHost = useCallback(() => {
+    if (!isAuthoritativeHost) return
+    Alert.alert(
+      'Remove everyone except host?',
+      'All other participants will be removed from this meeting.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Remove all',
+          style: 'destructive',
+          onPress: () => {
+            void presence.removeAllExceptHost()
+          },
+        },
+      ],
+    )
+  }, [isAuthoritativeHost, presence])
 
   const handleToggleLock = useCallback(() => {
     if (!isAuthoritativeHost) return
@@ -1310,101 +1404,77 @@ function MeetingRoomOverlay({
         }}
       >
         <XStack
-          paddingLeft={Math.max(safeLeft, roomy ? 20 : 12)}
-          paddingRight={Math.max(safeRight, roomy ? 20 : 12)}
-          paddingTop={safeTop > 0 ? safeTop : chrome.policy === 'landscape-phone' ? 6 : 12}
-          paddingBottom={chrome.policy === 'landscape-phone' ? 6 : 10}
+          paddingLeft={Math.max(safeLeft, roomy ? 16 : 12)}
+          paddingRight={Math.max(safeRight, roomy ? 16 : 12)}
+          paddingTop={safeTop > 0 ? safeTop : chrome.policy === 'landscape-phone' ? 6 : 10}
+          paddingBottom={chrome.policy === 'landscape-phone' ? 6 : 8}
           alignItems="center"
           justifyContent="space-between"
           gap="$2"
           borderBottomWidth={1}
           borderBottomColor={coworkUi.borderSoft}
-          style={{
-            ...coworkGlassStyle(coworkUi),
-            ...controlGradientStyle(coworkGradients.header, coworkUi.surfaceElevated),
-          }}
+          style={meetingBarStyle(coworkUi)}
         >
-          <XStack alignItems="center" gap="$2.5" flex={1} minWidth={0}>
+          <XStack alignItems="center" gap="$2" flex={1} minWidth={0}>
             <YStack
-              width={roomy ? 38 : 34}
-              height={roomy ? 38 : 34}
+              width={10}
+              height={10}
               borderRadius={999}
-              alignItems="center"
-              justifyContent="center"
-              backgroundColor={coworkUi.liveMuted}
-              borderWidth={1}
-              borderColor="rgba(52,211,153,0.35)"
-            >
-              <Icons.Shield size={roomy ? 18 : 16} color={coworkUi.live} />
-            </YStack>
-            <YStack gap={2} flex={1} minWidth={0}>
-              <XStack alignItems="center" gap="$2" flexWrap="wrap">
-                <Text
-                  fontSize={roomy ? 18 : 15}
-                  fontWeight="800"
-                  color={coworkUi.text}
-                  numberOfLines={1}
-                  flexShrink={1}
-                  letterSpacing={-0.3}
-                >
-                  {title}
-                </Text>
-                {recording ? (
-                  <CoWorkStatusPill
-                    label={
-                      isAuthoritativeHost && recordingSession.isProcessing
-                        ? 'Processing'
-                        : 'REC'
-                    }
-                    tone={isAuthoritativeHost && recordingSession.isProcessing ? 'warning' : 'danger'}
-                  />
-                ) : null}
-                {captions.active ? <CoWorkStatusPill label="CC" tone="brand" /> : null}
-                {presence.handRaised ? <CoWorkStatusPill label="✋" tone="coral" /> : null}
-                <MeetingRoleBadge role={presence.selfRole} />
-                {liveKit ? (
-                  <CoWorkStatusPill
-                    label={connectionStatusLabel(liveKit.audioQuality.connectionStatus)}
-                    tone={
-                      liveKit.audioQuality.connectionStatus === 'excellent'
-                        ? 'live'
-                        : liveKit.audioQuality.connectionStatus === 'good'
-                          ? 'brand'
-                          : 'warning'
-                    }
-                  />
-                ) : null}
-              </XStack>
-              <XStack alignItems="center" gap="$2" flexWrap="wrap">
-                <Button
-                  tone="ghost"
-                  size="$1"
-                  height={22}
-                  paddingHorizontal="$1.5"
-                  borderRadius={8}
-                  onPress={copyMeetingId}
-                >
-                  <Text fontSize={11} color={coworkUi.textMuted} fontWeight="600">
-                    ID {formatMeetingCode(meeting.meeting_code)}
-                  </Text>
-                </Button>
-                <Text fontSize={11} color={coworkUi.textMuted}>
-                  · Encrypted
-                </Text>
-              </XStack>
-            </YStack>
+              flexShrink={0}
+              backgroundColor={
+                !liveKit
+                  ? coworkUi.meetingIconMuted
+                  : liveKit.audioQuality.connectionStatus === 'excellent' ||
+                      liveKit.audioQuality.connectionStatus === 'good'
+                    ? coworkUi.live
+                    : liveKit.audioQuality.connectionStatus === 'reconnecting'
+                      ? coworkUi.warning
+                      : coworkUi.danger
+              }
+              accessibilityLabel={
+                liveKit
+                  ? connectionStatusLabel(liveKit.audioQuality.connectionStatus)
+                  : 'Connecting'
+              }
+            />
+            <XStack alignItems="center" gap="$2" flex={1} minWidth={0} flexWrap="wrap">
+              <Text
+                fontSize={roomy ? 16 : 14}
+                fontWeight="700"
+                color={coworkUi.text}
+                numberOfLines={1}
+                flexShrink={1}
+                letterSpacing={-0.2}
+              >
+                {title}
+              </Text>
+              {recording ? (
+                <CoWorkStatusPill
+                  label={
+                    isAuthoritativeHost && recordingSession.isProcessing ? 'Processing' : 'REC'
+                  }
+                  tone={
+                    isAuthoritativeHost && recordingSession.isProcessing ? 'warning' : 'danger'
+                  }
+                />
+              ) : null}
+              {captions.active ? <CoWorkStatusPill label="CC" tone="brand" /> : null}
+            </XStack>
           </XStack>
 
           <XStack alignItems="center" gap="$1.5" flexShrink={0}>
             <Button
               tone="outline"
               size="$2"
-              borderRadius={999}
+              height={34}
+              paddingHorizontal="$2.5"
+              borderRadius={coworkUi.radius.control}
               borderColor={coworkUi.glassBorder}
-              backgroundColor="rgba(255,255,255,0.06)"
+              backgroundColor={coworkUi.meetingControl}
               color={coworkUi.text}
               icon={<Icons.Users size={14} color={coworkUi.text} />}
               onPress={() => presence.togglePanel('people')}
+              accessibilityLabel="Participants"
             >
               {admittedCount}
               {waitingCount > 0 && canModerate ? ` +${waitingCount}` : ''}
@@ -1412,79 +1482,93 @@ function MeetingRoomOverlay({
             <Button
               tone="outline"
               size="$2"
-              width={36}
-              height={36}
+              width={34}
+              height={34}
               padding={0}
-              borderRadius={999}
+              borderRadius={coworkUi.radius.control}
               borderColor={presence.panel === 'info' ? coworkUi.borderAccent : coworkUi.glassBorder}
               backgroundColor={
-                presence.panel === 'info' ? coworkUi.brandMuted : 'rgba(255,255,255,0.06)'
+                presence.panel === 'info' ? coworkUi.brandMuted : coworkUi.meetingControl
               }
               onPress={() => presence.togglePanel('info')}
+              accessibilityLabel="Meeting info"
               icon={
                 <Icons.Info
-                  size={16}
+                  size={15}
                   color={presence.panel === 'info' ? coworkUi.brandLight : coworkUi.text}
                 />
               }
             />
-            <Button
-              tone="outline"
-              size="$2"
-              width={36}
-              height={36}
-              padding={0}
-              borderRadius={999}
-              borderColor={coworkUi.glassBorder}
-              backgroundColor="rgba(255,255,255,0.06)"
-              onPress={() => setShareOpen(true)}
-              icon={<Icons.Share2 size={16} color={coworkUi.text} />}
-            />
           </XStack>
         </XStack>
 
-        {!isAuthoritativeHost && recordingIndicator.isRecording ? (
-          <CoWorkAlertBanner
-            tone="danger"
-            message="This meeting is being recorded by the host."
-          />
-        ) : null}
-
-        {presence.realtimeDegraded ? (
-          <CoWorkAlertBanner
-            tone="warning"
-            message="Live updates paused — chat and participants refresh every few seconds."
-            actionLabel="Reconnect"
-            onAction={() => presence.retryRealtime()}
-          />
-        ) : null}
-
-        {liveKit?.audioQuality.connectionStatus === 'reconnecting' ? (
-          <CoWorkAlertBanner
-            tone="warning"
-            message="Audio connection interrupted — reconnecting automatically."
-            actionLabel="Retry"
-            onAction={() => void liveKit.audioQuality.retryConnection()}
-          />
-        ) : null}
-
-        {liveKit?.audioQuality.error ? (
-          <CoWorkAlertBanner
-            tone="danger"
-            message={liveKit.audioQuality.error}
-            actionLabel="Audio settings"
-            onAction={() => presence.setPanel('audio')}
-          />
-        ) : null}
-
-        {showError ? (
-          <CoWorkAlertBanner
-            tone="danger"
-            message={presence.error ?? ''}
-            actionLabel="Dismiss"
-            onAction={() => setDismissedError(presence.error)}
-          />
-        ) : null}
+        {(() => {
+          const reconnecting = liveKit?.audioQuality.connectionStatus === 'reconnecting'
+          const audioError = liveKit?.audioQuality.error
+          const presenceError = showError ? presence.error : null
+          if (reconnecting) {
+            return (
+              <CoWorkAlertBanner
+                tone="warning"
+                message="Network hiccup — restoring audio automatically."
+                actionLabel="Retry"
+                onAction={() => void liveKit?.audioQuality.retryConnection()}
+              />
+            )
+          }
+          if (audioError) {
+            return (
+              <CoWorkAlertBanner
+                tone="danger"
+                message={audioError}
+                actionLabel="Audio settings"
+                onAction={() => presence.setPanel('audio')}
+              />
+            )
+          }
+          if (presenceError) {
+            const isEdgeFn = /non-2xx|Edge Function/i.test(presenceError)
+            return (
+              <CoWorkAlertBanner
+                tone="danger"
+                message={
+                  isEdgeFn
+                    ? 'Could not complete a meeting request. Tap Try again, or leave and rejoin.'
+                    : presenceError
+                }
+                actionLabel={isEdgeFn ? 'Try again' : 'Dismiss'}
+                onAction={() => {
+                  if (isEdgeFn) {
+                    void presence.retryRealtime()
+                    void presence.retryJoinRequest()
+                    return
+                  }
+                  setDismissedError(presence.error)
+                }}
+              />
+            )
+          }
+          // Prefer a single banner — skip the realtime chip while a stronger error is up.
+          if (presence.realtimeDegraded && !presenceError && !audioError) {
+            return (
+              <CoWorkAlertBanner
+                tone="warning"
+                message="Live updates paused — chat and participants refresh every few seconds."
+                actionLabel="Reconnect"
+                onAction={() => presence.retryRealtime()}
+              />
+            )
+          }
+          if (!isAuthoritativeHost && recordingIndicator.isRecording) {
+            return (
+              <CoWorkAlertBanner
+                tone="danger"
+                message="This meeting is being recorded by the host."
+              />
+            )
+          }
+          return null
+        })()}
         {canModerate && presence.waitingParticipants.length > 0 ? (
           <MeetingWaitingRoomRequests
             participants={presence.waitingParticipants}
@@ -1495,86 +1579,6 @@ function MeetingRoomOverlay({
           />
         ) : null}
       </YStack>
-
-      <XStack
-        position={overlayPosition}
-        top={Math.max(safeTop, 8) + (chrome.policy === 'landscape-phone' ? 48 : roomy ? 68 : 64)}
-        alignSelf="center"
-        zIndex={19}
-        pointerEvents={chromeVisible ? 'auto' : 'none'}
-        opacity={chromeVisible ? 1 : 0}
-        gap="$1"
-        padding="$1"
-        borderRadius={999}
-        borderWidth={1}
-        borderColor={coworkUi.glassBorder}
-        style={coworkGlassStyle(coworkUi)}
-      >
-        {(['gallery', 'speaker'] as const).map((viewMode) => (
-          <Button
-            key={viewMode}
-            tone={meetingMachine.viewMode === viewMode ? 'primary' : 'ghost'}
-            size="$1"
-            borderRadius={999}
-            onPress={() => dispatchUi({ type: 'SET_VIEW', viewMode })}
-            aria-label={viewMode === 'gallery' ? 'Gallery view' : 'Speaker view'}
-            aria-pressed={meetingMachine.viewMode === viewMode}
-          >
-            {viewMode === 'gallery'
-              ? narrowPhone
-                ? 'Grid'
-                : 'Gallery'
-              : 'Speaker'}
-          </Button>
-        ))}
-        <Button
-          tone={meetingMachine.viewMode === 'screen-share' ? 'primary' : 'ghost'}
-          size="$1"
-          borderRadius={999}
-          onPress={() => dispatchUi({ type: 'SET_VIEW', viewMode: 'screen-share' })}
-          aria-label="Screen share view"
-          aria-pressed={meetingMachine.viewMode === 'screen-share'}
-        >
-          {narrowPhone ? 'Share' : 'Screen Share'}
-        </Button>
-        <Button
-          tone={meetingMachine.uiMode === 'maximized' ? 'primary' : 'ghost'}
-          size="$1"
-          borderRadius={999}
-          onPress={() => dispatchUi({ type: 'TOGGLE_UI_MODE' })}
-          aria-label={meetingMachine.uiMode === 'maximized' ? 'Normal meeting view' : 'Maximize video'}
-          aria-pressed={meetingMachine.uiMode === 'maximized'}
-        >
-          {meetingMachine.uiMode === 'maximized'
-            ? narrowPhone
-              ? 'Normal'
-              : 'Normal view'
-            : narrowPhone
-              ? 'Max'
-              : 'Maximize'}
-        </Button>
-        <Button
-          tone={meetingMachine.mirrorLocalVideo ? 'primary' : 'ghost'}
-          size="$1"
-          borderRadius={999}
-          onPress={() =>
-            dispatchUi({
-              type: 'SET_MIRROR_LOCAL_VIDEO',
-              enabled: !meetingMachine.mirrorLocalVideo,
-            })
-          }
-          aria-label="Mirror my video"
-          aria-pressed={meetingMachine.mirrorLocalVideo}
-        >
-          {narrowPhone
-            ? meetingMachine.mirrorLocalVideo
-              ? 'Mirror ON'
-              : 'Mirror OFF'
-            : meetingMachine.mirrorLocalVideo
-              ? 'Mirror my video: ON'
-              : 'Mirror my video: OFF'}
-        </Button>
-      </XStack>
 
       <MeetingResponsivePanel
         open={!!liveKit && presence.panel === 'audio'}
@@ -1637,6 +1641,7 @@ function MeetingRoomOverlay({
           participantDisplayNames={participantDisplayNames}
           chatEnabled={chatEnabled}
           privateChatEnabled={privateChatEnabled}
+          participantChatWith={meetingState.security_settings?.participantChatWith}
           canManageChat={canModerate}
           onSend={(text, audience, recipientId) =>
             void presence.sendChat(text, audience, recipientId)
@@ -1791,9 +1796,36 @@ function MeetingRoomOverlay({
               : undefined
           }
           onAskAllToMute={canModerate ? () => void presence.askAllToMute() : undefined}
-          onRemoveAllExceptHost={isAuthoritativeHost ? () => void presence.removeAllExceptHost() : undefined}
+          onRemoveAllExceptHost={isAuthoritativeHost ? handleRemoveAllExceptHost : undefined}
           onClose={() => presence.setPanel('none')}
           raisedHands={presence.raisedHands}
+          fullWidth={panelFullWidth}
+        />
+      </MeetingResponsivePanel>
+
+      <MeetingResponsivePanel
+        open={presence.panel === 'host_tools'}
+        onClose={() => presence.setPanel('none')}
+        presentation={panelPresentation}
+        top={panelTop}
+        bottom={panelBottom}
+        trailingInset={panelTrailingInset}
+        width={sidePanelWidth}
+        overlayPosition={overlayPosition}
+      >
+        <MeetingHostToolsPanel
+          meeting={meetingState}
+          viewerRole={isAuthoritativeHost ? 'host' : presence.selfRole}
+          isLocked={!!presence.moderationSettings?.is_locked}
+          captionsActive={captions.active}
+          onClose={() => presence.setPanel('none')}
+          onMeetingUpdated={setMeetingState}
+          onToggleLock={isAuthoritativeHost ? handleToggleLock : undefined}
+          onOpenParticipants={() => presence.setPanel('people')}
+          onOpenInfo={() => presence.setPanel('info')}
+          onToggleCaptions={toggleCaptions}
+          onMuteAll={isAuthoritativeHost ? handleMuteAll : undefined}
+          onAskAllToMute={canModerate ? () => void presence.askAllToMute() : undefined}
           fullWidth={panelFullWidth}
         />
       </MeetingResponsivePanel>
@@ -1964,6 +1996,9 @@ function MeetingRoomOverlay({
             audioEnabled={liveKit?.audioEnabled ?? true}
             videoEnabled={liveKit?.videoEnabled ?? false}
             screenSharing={liveKit?.screenSharing ?? false}
+            hasActiveScreenShare={
+              !!liveKit?.screenSharing || meetingMachine.viewMode === 'screen-share'
+            }
             handRaised={presence.handRaised}
             recording={recording}
             captionsActive={captions.active}
@@ -1979,6 +2014,24 @@ function MeetingRoomOverlay({
             raisedHandCount={raisedHandCount}
             reactionTrayOpen={reactionTrayOpen}
             busy={exiting}
+            viewMode={meetingMachine.viewMode}
+            mirrorLocalVideo={meetingMachine.mirrorLocalVideo}
+            hideSelfView={meetingMachine.hideSelfView}
+            uiMaximized={meetingMachine.uiMode === 'maximized'}
+            onSetViewMode={(viewMode) => dispatchUi({ type: 'SET_VIEW', viewMode })}
+            onToggleMirror={() =>
+              dispatchUi({
+                type: 'SET_MIRROR_LOCAL_VIDEO',
+                enabled: !meetingMachine.mirrorLocalVideo,
+              })
+            }
+            onToggleHideSelfView={() =>
+              dispatchUi({
+                type: 'SET_HIDE_SELF_VIEW',
+                enabled: !meetingMachine.hideSelfView,
+              })
+            }
+            onToggleMaximize={() => dispatchUi({ type: 'TOGGLE_UI_MODE' })}
             onToggleAudio={toggleMeetingAudio}
             onOpenAudioSettings={liveKit ? () => presence.togglePanel('audio') : undefined}
             onToggleVideo={() => {
@@ -1986,6 +2039,13 @@ function MeetingRoomOverlay({
                 toast.show('Still connecting…', {
                   tone: 'info',
                   message: 'Wait a moment for the room to join, then try video again.',
+                })
+                return
+              }
+              if (liveKit.videoEnabled === false && !allowSelfStartVideo && !canModerate) {
+                toast.show('The host disabled starting video', {
+                  tone: 'info',
+                  message: 'Ask the host to allow participants to turn on their camera.',
                 })
                 return
               }
@@ -2006,6 +2066,9 @@ function MeetingRoomOverlay({
               if (canModerate) presence.togglePanel('invite')
               else setShareOpen(true)
             }}
+            onToggleHostTools={
+              canModerate ? () => presence.togglePanel('host_tools') : undefined
+            }
             onShare={() => setShareOpen(true)}
             onMuteAll={isAuthoritativeHost ? handleMuteAll : undefined}
             onAskAllToMute={canModerate ? () => void presence.askAllToMute() : undefined}
@@ -2018,7 +2081,7 @@ function MeetingRoomOverlay({
                 : undefined
             }
             onRemoveAllExceptHost={
-              isAuthoritativeHost ? () => void presence.removeAllExceptHost() : undefined
+              isAuthoritativeHost ? handleRemoveAllExceptHost : undefined
             }
             onToggleLock={isAuthoritativeHost ? handleToggleLock : undefined}
             onToggleFullscreen={Platform.OS === 'web' ? toggleFullscreen : undefined}

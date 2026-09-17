@@ -146,7 +146,20 @@ export function AppShell({ children }: AppShellProps) {
           survive chromeless ↔ chrome flips. Dual mounts used to remount LiveKit and
           land Maximize on Join Meeting.
         */}
-        <YStack flex={1} width="100%" maxWidth="100%" position="relative" minHeight={0}>
+        <YStack
+          flex={1}
+          width="100%"
+          maxWidth="100%"
+          position="relative"
+          minHeight={0}
+          // Give absolute overlays (InstantMeetingHost) a real viewport box on web
+          // document-scroll pages when a live meeting is open / chromeless.
+          style={
+            Platform.OS === 'web' && useChromelessLayout
+              ? ({ minHeight: '100dvh', height: '100dvh', overflow: 'hidden' } as const)
+              : undefined
+          }
+        >
           {useChromelessLayout ? (
             <ScreenFill
               flex={1}

@@ -1,11 +1,11 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { ConnectionState, RoomEvent, Track, type Room } from 'livekit-client'
+import { ConnectionState, DisconnectReason, RoomEvent, Track, type Room } from 'livekit-client'
 
 import { LiveKitRoom, RoomAudioRenderer } from '@livekit/components-react'
 import '@livekit/components-styles'
 
-import { Icons, Spinner, Text, XStack, YStack } from '~/components/ui'
-import { ScreenCenter, ScreenFill } from '~/components/layout'
+import { Button, Icons, Spinner, Text, XStack, YStack } from '~/components/ui'
+import { ScreenCenter, ScreenFill, ViewportOverlay } from '~/components/layout'
 import { MeetingVideoStage } from '~/co-work/components/MeetingVideoStage'
 import { useLiveKitMediaControls } from '~/co-work/hooks/useLiveKitMediaControls.web'
 import { fetchLiveKitCredentials } from '~/co-work/lib/livekit'
@@ -18,9 +18,9 @@ import type { LiveKitMediaControls, LiveKitMeetingRoomProps } from '~/co-work/li
 import { useCoWorkTheme, type CoWorkShadows, type CoWorkUiTokens } from '~/co-work/lib/theme'
 import { fetchLiveKitConfig, type LiveKitConfig } from '~/lib/livekit/config'
 import { supportsLiveKitVideo } from '~/lib/platform/capabilities'
-import { pageGradientStyle } from '~/lib/platform/crossStyles'
+import { coworkBoxShadow, pageGradientStyle } from '~/lib/platform/crossStyles'
 import { meetingViewportStyle } from '~/lib/platform/viewport'
-import { useMeetingMachine } from '~/co-work/components/MeetingProvider'
+import { useMeetingGalleryTracks } from '~/co-work/hooks/useMeetingGalleryTracks'
 import { useMeetingLifecycle } from '~/co-work/hooks/useMeetingLifecycle.web'
 
 export type { LiveKitMediaControls, LiveKitMeetingRoomProps } from '~/co-work/lib/livekit-media-controls'
@@ -528,6 +528,7 @@ export function LiveKitMeetingRoom({
   avatarUrl,
   enabled,
   mediaMode = 'meeting',
+  onConnected,
   onDisconnected,
   overlay,
 }: LiveKitMeetingRoomProps) {
@@ -555,12 +556,13 @@ export function LiveKitMeetingRoom({
       const creds = await fetchLiveKitCredentials(meetingId, roomId, displayName, avatarUrl)
       setCredentials(creds)
     } catch (loadError) {
+      // Keep the in-room join UI — never treat a token fetch failure as a media
+      // disconnect ("Unable to reconnect"). Parent can still show Retry here.
       setError(loadError instanceof Error ? loadError.message : 'Failed to connect to LiveKit')
-      onDisconnected()
     } finally {
       setLoading(false)
     }
-  }, [avatarUrl, displayName, enabled, meetingId, onDisconnected, roomId])
+  }, [avatarUrl, displayName, enabled, meetingId, roomId])
 
   useEffect(() => {
     void loadCredentials()
@@ -599,23 +601,58 @@ export function LiveKitMeetingRoom({
   }
 
   if (error) {
+    const friendlyError = /non-2xx|Edge Function/i.test(error)
+      ? 'Could not join the video room. Check your connection and try again.'
+      : error
     return (
-      <ScreenFill padding="$4" backgroundColor={coworkUi.pageBg} gap="$3">
-        <Text color={coworkUi.danger} fontWeight="700">
-          Could not join video room
-        </Text>
-        <Text color={coworkUi.textSecondary} lineHeight={22}>
-          {error}
-        </Text>
-        <Text
-          color={coworkUi.brand}
-          fontWeight="600"
-          cursor="pointer"
-          onPress={() => void loadCredentials()}
-        >
-          Try again
-        </Text>
+      <ScreenFill
+        padding="$4"
+        backgroundColor={coworkUi.pageBg}
+        gap="$3"
+        position="relative"
+        style={meetingViewportStyle()}
+      >
         {overlay?.(null)}
+        {/* Portal above meeting chrome — fixed overlay otherwise covers this card. */}
+        <ViewportOverlay>
+          <YStack
+            position={'fixed' as never}
+            top={0}
+            left={0}
+            right={0}
+            bottom={0}
+            alignItems="center"
+            justifyContent="center"
+            padding="$6"
+            gap="$3"
+            zIndex={200_000}
+            pointerEvents="box-none"
+            style={{ position: 'fixed', inset: 0, zIndex: 200_000 }}
+          >
+            <YStack
+              maxWidth={420}
+              width="100%"
+              gap="$3"
+              padding="$5"
+              borderRadius={coworkUi.radius.panel}
+              backgroundColor={coworkUi.surface}
+              borderWidth={1}
+              borderColor={coworkUi.glassBorder}
+              pointerEvents="auto"
+              style={coworkBoxShadow(coworkShadows, 'panel')}
+            >
+              <Text color={coworkUi.danger} fontWeight="800" fontSize={18}>
+                Could not join video room
+              </Text>
+              <Text color={coworkUi.textSecondary} lineHeight={22}>
+                {friendlyError}
+              </Text>
+              <Button tone="primary" borderRadius={999} onPress={() => void loadCredentials()}>
+                Try again
+              </Button>
+            </YStack>
+          </YStack>
+        </ViewportOverlay>
       </ScreenFill>
     )
   }
@@ -644,7 +681,12 @@ export function LiveKitMeetingRoom({
         audio
         video={mediaMode !== 'audio'}
         options={getLiveKitRoomOptions('web')}
-        onDisconnected={onDisconnected}
+        onConnected={onConnected}
+        onDisconnected={(reason) => {
+          // User/leave/unmount initiated — do not escalate to "Unable to reconnect".
+          if (reason === DisconnectReason.CLIENT_INITIATED) return
+          onDisconnected()
+        }}
         style={{
           flex: 1,
           display: 'flex',
@@ -736,9 +778,8 @@ function WebLiveKitMeetingContent({
   const liveKit = useLiveKitMediaControls(mediaMode !== 'audio')
   const { audioBlocked, unlockAudio } = useWebAudioPlaybackUnlock(liveKit.room)
   const micForcedRef = useRef(false)
-  const { state: meetingState } = useMeetingMachine()
-  const viewingScreenShare =
-    meetingState.viewMode === 'screen-share' && !liveKit.screenSharing
+  const { hasScreenShare } = useMeetingGalleryTracks()
+  const viewingScreenShare = hasScreenShare && !liveKit.screenSharing
 
   const onForegroundAudio = useCallback(async () => {
     if (liveKit.room.state === ConnectionState.Connected) {

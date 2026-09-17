@@ -56,6 +56,7 @@ export function MeetingBackgroundPanel({
   const [custom, setCustom] = useState<ResolvedCustomBackground[]>([])
   const [loadingLibrary, setLoadingLibrary] = useState(true)
   const [busyId, setBusyId] = useState<string | null>(null)
+  const [showAll, setShowAll] = useState(false)
 
   const loadCustom = useCallback(async () => {
     setLoadingLibrary(true)
@@ -182,12 +183,13 @@ export function MeetingBackgroundPanel({
   )
 
   const tileBorder = (active: boolean) => active ? coworkUi.brand : coworkUi.borderSoft
+  const quickPresets = presets.slice(0, 4)
 
   return (
     <MeetingSidePanel fullWidth={fullWidth}>
       <MeetingPanelHeader
-        title="Backgrounds & effects"
-        subtitle="Your effect is visible to everyone"
+        title={showAll ? 'All backgrounds' : 'Background'}
+        subtitle="Visible to everyone in the meeting"
         icon={<Icons.Sparkles size={19} color={coworkUi.brand} />}
         onClose={onClose}
       />
@@ -202,7 +204,7 @@ export function MeetingBackgroundPanel({
         ) : null}
 
         <YStack gap="$3">
-          <Text fontWeight="800" color={coworkUi.text}>Quick effects</Text>
+          <Text fontWeight="800" color={coworkUi.text}>Quick picks</Text>
           <XStack gap="$3" flexWrap="wrap">
             <EffectTile
               label="None"
@@ -220,14 +222,26 @@ export function MeetingBackgroundPanel({
               busy={busyId === 'blur'}
               icon={<Icons.Wand2 size={23} color={coworkUi.text} />}
             />
-            <EffectTile
-              label="Upload"
-              active={false}
-              borderColor={coworkUi.borderSoft}
-              onPress={() => void upload()}
-              busy={busyId === 'upload'}
-              icon={<Icons.Upload size={23} color={coworkUi.text} />}
-            />
+            {(showAll ? presets : quickPresets).map((preset) => (
+              <EffectTile
+                key={preset.id}
+                label={preset.name}
+                imageSource={preset.thumbnail}
+                active={selected(effects.selection, preset.selection)}
+                borderColor={tileBorder(selected(effects.selection, preset.selection))}
+                busy={busyId === preset.id}
+                onPress={() => void applySelection(preset.selection)}
+              />
+            ))}
+            {!showAll ? (
+              <EffectTile
+                label="See all"
+                active={false}
+                borderColor={coworkUi.borderSoft}
+                onPress={() => setShowAll(true)}
+                icon={<Icons.LayoutGrid size={23} color={coworkUi.text} />}
+              />
+            ) : null}
           </XStack>
           {effects.selection.mode === 'blur' ? (
             <YStack gap="$2" paddingHorizontal="$1">
@@ -248,56 +262,54 @@ export function MeetingBackgroundPanel({
           ) : null}
         </YStack>
 
-        <YStack gap="$3">
-          <Text fontWeight="800" color={coworkUi.text}>SHEconomy spaces</Text>
-          <XStack gap="$3" flexWrap="wrap">
-            {presets.map((preset) => (
-              <EffectTile
-                key={preset.id}
-                label={preset.name}
-                imageSource={preset.thumbnail}
-                active={selected(effects.selection, preset.selection)}
-                borderColor={tileBorder(selected(effects.selection, preset.selection))}
-                busy={busyId === preset.id}
-                onPress={() => void applySelection(preset.selection)}
-              />
-            ))}
-          </XStack>
-        </YStack>
-
-        <YStack gap="$3">
-          <XStack justifyContent="space-between" alignItems="center">
-            <Text fontWeight="800" color={coworkUi.text}>My backgrounds</Text>
-            {loadingLibrary ? <Spinner size="small" color={coworkUi.brand} /> : null}
-          </XStack>
-          {!loadingLibrary && custom.length === 0 ? (
-            <Text fontSize={13} color={coworkUi.textMuted}>
-              Upload a 16:9 image to use it on all your devices.
-            </Text>
-          ) : null}
-          <XStack gap="$3" flexWrap="wrap">
-            {custom.map((item) => {
-              const value = { ...customBackgroundSelection(item), imageUrl: item.imageUrl }
-              return (
+        {showAll ? (
+          <>
+            <Button tone="ghost" size="$3" alignSelf="flex-start" onPress={() => setShowAll(false)}>
+              Back to quick picks
+            </Button>
+            <YStack gap="$3">
+              <XStack gap="$3" flexWrap="wrap">
                 <EffectTile
-                  key={item.id}
-                  label={item.name}
-                  imageUri={item.imageUrl}
-                  active={selected(effects.selection, value)}
-                  borderColor={tileBorder(selected(effects.selection, value))}
-                  busy={busyId === item.id}
-                  onPress={() => void applySelection(value)}
-                  onLongPress={() => remove(item)}
+                  label="Upload"
+                  active={false}
+                  borderColor={coworkUi.borderSoft}
+                  onPress={() => void upload()}
+                  busy={busyId === 'upload'}
+                  icon={<Icons.Upload size={23} color={coworkUi.text} />}
                 />
-              )
-            })}
-          </XStack>
-          {custom.length ? (
-            <Text fontSize={11} color={coworkUi.textMuted}>
-              Press and hold a custom background to delete it.
-            </Text>
-          ) : null}
-        </YStack>
+              </XStack>
+            </YStack>
+
+            <YStack gap="$3">
+              <XStack justifyContent="space-between" alignItems="center">
+                <Text fontWeight="800" color={coworkUi.text}>My backgrounds</Text>
+                {loadingLibrary ? <Spinner size="small" color={coworkUi.brand} /> : null}
+              </XStack>
+              {!loadingLibrary && custom.length === 0 ? (
+                <Text fontSize={13} color={coworkUi.textMuted}>
+                  Upload a 16:9 image to use it on all your devices.
+                </Text>
+              ) : null}
+              <XStack gap="$3" flexWrap="wrap">
+                {custom.map((item) => {
+                  const value = { ...customBackgroundSelection(item), imageUrl: item.imageUrl }
+                  return (
+                    <EffectTile
+                      key={item.id}
+                      label={item.name}
+                      imageUri={item.imageUrl}
+                      active={selected(effects.selection, value)}
+                      borderColor={tileBorder(selected(effects.selection, value))}
+                      busy={busyId === item.id}
+                      onPress={() => void applySelection(value)}
+                      onDelete={() => remove(item)}
+                    />
+                  )
+                })}
+              </XStack>
+            </YStack>
+          </>
+        ) : null}
 
         {effects.error ? (
           <YStack gap="$2" padding="$3" borderRadius={14} backgroundColor={coworkUi.dangerMuted}>
@@ -315,7 +327,7 @@ function EffectTile({
   active,
   borderColor,
   onPress,
-  onLongPress,
+  onDelete,
   busy,
   icon,
   imageSource,
@@ -325,7 +337,7 @@ function EffectTile({
   active: boolean
   borderColor: string
   onPress: () => void
-  onLongPress?: () => void
+  onDelete?: () => void
   busy?: boolean
   icon?: ReactNode
   imageSource?: import('react-native').ImageSourcePropType
@@ -333,40 +345,69 @@ function EffectTile({
 }) {
   const { ui: coworkUi } = useCoWorkTheme()
   return (
-    <Pressable
-      accessibilityRole="button"
-      accessibilityState={{ selected: active, busy: !!busy }}
-      accessibilityLabel={label}
-      onPress={onPress}
-      onLongPress={onLongPress}
-      style={{ width: 118 }}
-    >
-      <YStack
-        height={72}
-        borderRadius={14}
-        overflow="hidden"
-        borderWidth={active ? 3 : 1}
-        borderColor={borderColor}
-        alignItems="center"
-        justifyContent="center"
-        backgroundColor={coworkUi.surface}
+    <YStack width={118} gap="$1">
+      <Pressable
+        accessibilityRole="button"
+        accessibilityState={{ selected: active, busy: !!busy }}
+        accessibilityLabel={label}
+        onPress={onPress}
+        style={{ width: '100%' }}
       >
-        {imageSource || imageUri ? (
-          <Image
-            source={imageSource ?? { uri: imageUri }}
-            resizeMode="cover"
-            style={{ width: '100%', height: '100%' }}
-          />
-        ) : icon}
-        {busy ? (
-          <YStack position="absolute" top={0} right={0} bottom={0} left={0} alignItems="center" justifyContent="center" backgroundColor="rgba(0,0,0,0.45)">
-            <Spinner size="small" color="#fff" />
-          </YStack>
+        <YStack
+          height={72}
+          borderRadius={14}
+          overflow="hidden"
+          borderWidth={active ? 3 : 1}
+          borderColor={borderColor}
+          alignItems="center"
+          justifyContent="center"
+          backgroundColor={coworkUi.surface}
+        >
+          {imageSource || imageUri ? (
+            <Image
+              source={imageSource ?? { uri: imageUri }}
+              resizeMode="cover"
+              style={{ width: '100%', height: '100%' }}
+            />
+          ) : (
+            icon
+          )}
+          {busy ? (
+            <YStack
+              position="absolute"
+              top={0}
+              right={0}
+              bottom={0}
+              left={0}
+              alignItems="center"
+              justifyContent="center"
+              backgroundColor="rgba(0,0,0,0.45)"
+            >
+              <Spinner size="small" color="#fff" />
+            </YStack>
+          ) : null}
+        </YStack>
+      </Pressable>
+      <XStack alignItems="center" justifyContent="space-between" gap="$1">
+        <Text
+          flex={1}
+          fontSize={11}
+          color={active ? coworkUi.brand : coworkUi.textSecondary}
+          numberOfLines={1}
+        >
+          {label}
+        </Text>
+        {onDelete ? (
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel={`Delete ${label}`}
+            onPress={onDelete}
+            hitSlop={8}
+          >
+            <Icons.Trash2 size={14} color={coworkUi.danger} />
+          </Pressable>
         ) : null}
-      </YStack>
-      <Text marginTop="$1" fontSize={11} color={active ? coworkUi.brand : coworkUi.textSecondary} numberOfLines={1}>
-        {label}
-      </Text>
-    </Pressable>
+      </XStack>
+    </YStack>
   )
 }

@@ -2,8 +2,7 @@ import { useEffect, useState } from 'react'
 
 import { Avatar, Button, Checkbox, Field, Icons, Input, ScrollView, Text, XStack, YStack } from '~/components/ui'
 import { MeetingBackgroundPreview } from '~/co-work/components/MeetingBackgroundPreview'
-import { DevicePrepCard } from '~/co-work/components/DevicePrepCard'
-import { coworkGlassStyle, useCoWorkTheme } from '~/co-work/lib/theme'
+import { meetingBarStyle, useCoWorkTheme } from '~/co-work/lib/theme'
 import {
   loadRememberedMeetingDisplayName,
   normalizeMeetingDisplayName,
@@ -103,21 +102,21 @@ export function MeetingJoinScreen({
           gap="$5"
         >
           <YStack gap="$2">
-            <Text fontSize={30} fontWeight="800" color={coworkUi.text}>
-              Join Meeting
+            <Text fontSize={26} fontWeight="800" color={coworkUi.text} letterSpacing={-0.4}>
+              Join meeting
             </Text>
-            <Text color={coworkUi.textSecondary} fontSize={15}>
+            <Text color={coworkUi.textSecondary} fontSize={14}>
               {meetingTitle} · {meetingCode}
             </Text>
           </YStack>
 
           <YStack
-            padding="$5"
+            padding="$4"
             gap="$4"
-            borderRadius={22}
+            borderRadius={coworkUi.radius.panel}
             borderWidth={1}
             borderColor={coworkUi.glassBorder}
-            style={coworkGlassStyle(coworkUi, true)}
+            style={meetingBarStyle(coworkUi, true)}
           >
             <XStack alignItems="center" gap="$4">
               <Avatar name={displayName || safeProfileName} src={avatarUrl ?? undefined} size="$6" />
@@ -184,7 +183,6 @@ export function MeetingJoinScreen({
           </YStack>
 
           <MeetingBackgroundPreview userId={userId} />
-          <DevicePrepCard />
 
           {isLocked ? (
             <YStack
@@ -228,16 +226,16 @@ export function MeetingJoinScreen({
           <XStack gap="$3" justifyContent="center" flexWrap="wrap">
             <Button
               tone="primary"
-              size="$4"
-              borderRadius={999}
+              size="$5"
+              borderRadius={12}
               disabled={busy || isLocked}
               opacity={busy || isLocked ? 0.55 : 1}
               icon={<Icons.Video size={18} color="white" />}
               onPress={() => void join()}
             >
-              {busy ? 'Joining…' : isLocked ? 'Meeting locked' : 'Join Meeting'}
+              {busy ? 'Joining…' : isLocked ? 'Meeting locked' : 'Join'}
             </Button>
-            <Button tone="outline" size="$4" borderRadius={999} disabled={busy} onPress={onBack}>
+            <Button tone="ghost" size="$4" borderRadius={12} disabled={busy} onPress={onBack}>
               Back
             </Button>
           </XStack>

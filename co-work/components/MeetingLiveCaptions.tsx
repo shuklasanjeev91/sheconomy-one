@@ -1,9 +1,9 @@
 import type { ReactNode } from 'react'
+import { useState } from 'react'
 import { Pressable, useWindowDimensions } from 'react-native'
 
 import {
   Icons,
-  ScrollView,
   Select,
   SelectContent,
   SelectItem,
@@ -13,7 +13,7 @@ import {
   XStack,
   YStack,
 } from '~/components/ui'
-import { formatCaptionTimestamp, type LiveCaptionLine } from '~/co-work/lib/live-captions'
+import { type LiveCaptionLine } from '~/co-work/lib/live-captions'
 import {
   captionOverlayLayout,
   type CaptionOverlayPlacement,
@@ -57,7 +57,7 @@ export function MeetingLiveCaptions({
   error,
   targetLang,
   targetLangName,
-  showingTranslation,
+  showingTranslation: _showingTranslation,
   availableLanguages = [],
   collapsed = false,
   size = 'comfortable',
@@ -72,6 +72,7 @@ export function MeetingLiveCaptions({
   onSizeChange,
   onPlacementChange,
 }: MeetingLiveCaptionsProps) {
+  const [settingsOpen, setSettingsOpen] = useState(false)
   const { ui: coworkUi } = useCoWorkTheme()
   const { width: viewportWidth, height: viewportHeight } = useWindowDimensions()
   const { isDesktop, isTablet } = useAppLayout()
@@ -98,6 +99,7 @@ export function MeetingLiveCaptions({
       ? { top: topOffset ?? (presentationSafe ? 88 : 72) }
       : { bottom: bottomOffset ?? (presentationSafe ? 124 : 112) }
   const horizontalInset = sideInset ?? 12
+  const showSettings = !collapsed && settingsOpen
 
   return (
     <YStack
@@ -133,7 +135,7 @@ export function MeetingLiveCaptions({
           width={layout.maxWidth}
           maxWidth="100%"
           maxHeight={collapsed ? 48 : layout.maxHeight}
-          paddingHorizontal={collapsed ? '$3' : '$3'}
+          paddingHorizontal="$3"
           paddingVertical={collapsed ? '$2' : '$2.5'}
           borderRadius={16}
           borderWidth={1}
@@ -144,28 +146,19 @@ export function MeetingLiveCaptions({
           pointerEvents="auto"
         >
           <XStack alignItems="center" justifyContent="space-between" gap="$2">
-            <XStack alignItems="center" gap="$2" flex={1} minWidth={0}>
-              <YStack width={8} height={8} borderRadius={999} backgroundColor={coworkUi.live} />
-              <Text fontSize={10} fontWeight="800" color={coworkUi.brandLight} letterSpacing={1}>
-                LIVE CAPTIONS
-              </Text>
-              {collapsed ? (
-                <Text flex={1} fontSize={12} color={coworkUi.text} numberOfLines={1}>
-                  {currentCaption || targetLangName || 'On'}
-                </Text>
-              ) : null}
-            </XStack>
+            <Text flex={1} fontSize={collapsed ? 12 : size === 'compact' ? 14 : 16} fontWeight="700" color="#fff" numberOfLines={collapsed ? 1 : 3}>
+              {currentCaption ||
+                (collapsed
+                  ? targetLangName || 'Captions on'
+                  : `Listening · ${targetLangName || 'your language'}…`)}
+            </Text>
             <XStack alignItems="center" gap="$1">
-              {!collapsed && onPlacementChange && !presentationSafe ? (
+              {!collapsed ? (
                 <CaptionIconButton
-                  label={`Move captions to ${layout.placement === 'top' ? 'bottom' : 'top'}`}
-                  onPress={() => onPlacementChange(layout.placement === 'top' ? 'bottom' : 'top')}
+                  label={settingsOpen ? 'Hide caption settings' : 'Caption settings'}
+                  onPress={() => setSettingsOpen((open) => !open)}
                 >
-                  {layout.placement === 'top' ? (
-                    <Icons.ChevronDown size={15} color={coworkUi.textSecondary} />
-                  ) : (
-                    <Icons.ChevronUp size={15} color={coworkUi.textSecondary} />
-                  )}
+                  <Icons.Settings size={15} color={coworkUi.textSecondary} />
                 </CaptionIconButton>
               ) : null}
               <CaptionIconButton
@@ -180,7 +173,12 @@ export function MeetingLiveCaptions({
               </CaptionIconButton>
             </XStack>
           </XStack>
-          {!collapsed ? (
+          {!collapsed && latest?.speaker ? (
+            <Text fontSize={11} fontWeight="700" color={coworkUi.textSecondary}>
+              {latest.speaker}
+            </Text>
+          ) : null}
+          {showSettings ? (
             <>
               <XStack alignItems="center" justifyContent="space-between" gap="$2" flexWrap="wrap">
                 {availableLanguages.length && targetLang && onTargetLangChange ? (
@@ -210,66 +208,44 @@ export function MeetingLiveCaptions({
                   </Text>
                 ) : null}
                 <XStack alignItems="center" gap="$1">
+                  {onPlacementChange && !presentationSafe ? (
+                    <CaptionIconButton
+                      label={`Move captions to ${layout.placement === 'top' ? 'bottom' : 'top'}`}
+                      onPress={() => onPlacementChange(layout.placement === 'top' ? 'bottom' : 'top')}
+                    >
+                      {layout.placement === 'top' ? (
+                        <Icons.ChevronDown size={15} color={coworkUi.textSecondary} />
+                      ) : (
+                        <Icons.ChevronUp size={15} color={coworkUi.textSecondary} />
+                      )}
+                    </CaptionIconButton>
+                  ) : null}
                   <CaptionIconButton
                     label="Make captions smaller"
                     disabled={!canShrink}
                     onPress={() => canShrink && onSizeChange?.(SIZE_ORDER[sizeIndex - 1])}
                   >
-                    <Text color={coworkUi.textSecondary} fontWeight="800">−</Text>
+                    <Text color={coworkUi.textSecondary} fontWeight="800">
+                      −
+                    </Text>
                   </CaptionIconButton>
-                  <Text minWidth={70} textAlign="center" fontSize={9} color={coworkUi.textMuted}>
-                    {showingTranslation || latest?.translated ? 'TRANSLATED' : size.toUpperCase()}
-                  </Text>
                   <CaptionIconButton
                     label="Make captions larger"
                     disabled={!canGrow}
                     onPress={() => canGrow && onSizeChange?.(SIZE_ORDER[sizeIndex + 1])}
                   >
-                    <Text color={coworkUi.textSecondary} fontWeight="800">+</Text>
+                    <Text color={coworkUi.textSecondary} fontWeight="800">
+                      +
+                    </Text>
                   </CaptionIconButton>
                 </XStack>
               </XStack>
               <Text fontSize={10} color={coworkUi.textMuted}>
-                Language applies to you only. Other participants keep their own captions.
+                Language applies to you only.
               </Text>
-              <ScrollView style={{ maxHeight: Math.max(44, layout.maxHeight - 108) }}>
-                {latest?.speaker ? (
-                  <Text fontSize={11} fontWeight="700" color={coworkUi.textSecondary}>
-                    {latest.speaker}
-                  </Text>
-                ) : null}
-                <Text
-                  fontSize={size === 'compact' ? 14 : 16}
-                  fontWeight="700"
-                  color="#fff"
-                  lineHeight={22}
-                >
-                  {currentCaption || `Listening · captions in ${targetLangName || 'your language'}…`}
-                </Text>
-                {latest?.translated && latest.originalText && latest.originalText !== latest.text ? (
-                  <Text fontSize={11} color={coworkUi.textMuted} lineHeight={16}>
-                    Original: {latest.originalText}
-                  </Text>
-                ) : null}
-                {recent.length > 1 && size !== 'compact' ? (
-                  <YStack gap={4} opacity={0.72} marginTop="$2">
-                    {recent.slice(0, -1).map((line) => (
-                      <Text key={line.id} fontSize={12} color={coworkUi.textSecondary} lineHeight={18}>
-                        {line.speaker}: {line.text}
-                      </Text>
-                    ))}
-                  </YStack>
-                ) : null}
-              </ScrollView>
             </>
           ) : null}
         </YStack>
-      ) : null}
-
-      {active && !collapsed && lines.length > 0 ? (
-        <Text fontSize={10} color={coworkUi.textMuted}>
-          Last update {formatCaptionTimestamp(lines[lines.length - 1]?.timestamp ?? Date.now())}
-        </Text>
       ) : null}
     </YStack>
   )

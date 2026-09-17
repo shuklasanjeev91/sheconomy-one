@@ -35,6 +35,8 @@ export type MeetingMachineState = {
   viewMode: MeetingViewMode
   uiMode: MeetingUiMode
   mirrorLocalVideo: boolean
+  /** Zoom-style: hide the local camera tile from gallery / filmstrip. */
+  hideSelfView: boolean
   controlsVisible: boolean
   /** When true, idle auto-hide is disabled until the host unpins. */
   controlsPinned: boolean
@@ -58,6 +60,7 @@ export type MeetingMachineAction =
   | { type: 'SET_UI_MODE'; uiMode: MeetingUiMode }
   | { type: 'TOGGLE_UI_MODE' }
   | { type: 'SET_MIRROR_LOCAL_VIDEO'; enabled: boolean }
+  | { type: 'SET_HIDE_SELF_VIEW'; enabled: boolean }
   | { type: 'SET_CONTROLS'; visible: boolean }
   | { type: 'SET_CONTROLS_PINNED'; pinned: boolean }
   | { type: 'TOGGLE_PARTICIPANT_STRIP' }
@@ -114,6 +117,7 @@ export const initialMeetingMachineState: MeetingMachineState = {
   viewMode: 'gallery',
   uiMode: 'normal',
   mirrorLocalVideo: true,
+  hideSelfView: false,
   controlsVisible: true,
   controlsPinned: false,
   participantStripMinimized: false,
@@ -417,6 +421,9 @@ export function meetingStateReducer(
     case 'SET_MIRROR_LOCAL_VIDEO':
       if (state.mirrorLocalVideo === action.enabled) return state
       return { ...state, mirrorLocalVideo: action.enabled }
+    case 'SET_HIDE_SELF_VIEW':
+      if (state.hideSelfView === action.enabled) return state
+      return { ...state, hideSelfView: action.enabled }
     case 'SET_CONTROLS':
       if (state.controlsVisible === action.visible) return state
       return { ...state, controlsVisible: action.visible }

@@ -77,6 +77,8 @@ export const Button = forwardRef<any, ButtonProps>(function Button(
       letterSpacing={0.15}
       animation="quick"
       disabledStyle={{ opacity: 0.5 }}
+      // HTML default for <button> inside a form is type=submit, which reloads the page.
+      {...({ type: 'button' } as object)}
       {...TONE_STYLE[tone]}
       {...props}
     />

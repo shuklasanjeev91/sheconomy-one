@@ -1,4 +1,4 @@
-import { useEffect } from 'react'
+import { useLayoutEffect } from 'react'
 import { useLocalSearchParams, useParams, usePathname } from 'one'
 
 import { AppErrorBoundary } from '~/components/AppErrorBoundary'
@@ -30,8 +30,10 @@ function useMeetingCode(): string {
 export default function CoWorkMeetingEndedRoute() {
   const code = useMeetingCode()
 
-  // Ensure no InstantMeetingHost reconnect UI covers this page.
-  useEffect(() => {
+  // Tear down InstantMeetingHost before paint. An effect-only close left one
+  // chromeless blank frame on iPad (session still "open" → shell chromeless,
+  // overlay opacity/layout race → white void + stray Back button / AI FAB).
+  useLayoutEffect(() => {
     closeInstantMeetingSession()
     clearGlobalSession()
   }, [])

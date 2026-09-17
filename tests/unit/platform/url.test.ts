@@ -60,6 +60,21 @@ describe('buildAbsoluteUrl', () => {
     expect(getMeetingShareUrl('EJB-GHW-FJY')).toBe(
       `${DEEP_LINK_ORIGIN}/co-work/meeting/EJB-GHW-FJY`,
     )
+    expect(toPublicShareUrl('https://www.sheconomy.in/co-work/meeting/EJB-GHW-FJY')).toBe(
+      `${DEEP_LINK_ORIGIN}/co-work/meeting/EJB-GHW-FJY`,
+    )
+    expect(toPublicShareUrl('https://sheconomy.in/co-work/meeting/EJB-GHW-FJY')).toBe(
+      `${DEEP_LINK_ORIGIN}/co-work/meeting/EJB-GHW-FJY`,
+    )
+    expect(toPublicShareUrl('sheconomy://cowork/meeting/EJB-GHW-FJY')).toBe(
+      `${DEEP_LINK_ORIGIN}/co-work/meeting/EJB-GHW-FJY`,
+    )
+    expect(
+      buildShareTargetUrl('whatsapp', {
+        url: 'https://www.sheconomy.in/co-work/meeting/EJB-GHW-FJY',
+        text: 'Join my meeting',
+      }),
+    ).toContain(encodeURIComponent('https://www.sheconomy.in/co-work/meeting/EJB-GHW-FJY'))
     expect(getListingShareUrl('handmade-bag')).toMatch(/^https:\/\/sheconomy\.in\//)
     expect(getPostShareUrl('abc')).toMatch(/^https:\/\/sheconomy\.in\//)
     expect(getProfileShopShareUrl('jane')).toMatch(/\/profile\/jane\/shop$/)

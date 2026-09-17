@@ -7,6 +7,7 @@ import {
 } from '~/lib/calendar/invite-time'
 import {
   assertUtcIso,
+  coerceIanaTimeZone,
   formatMeetingInstantForViewer,
   formatZonedDateTime,
   getZonedWallTime,
@@ -25,6 +26,14 @@ describe('meeting scheduling timezone helpers', () => {
     expect(normalizeIanaTimeZone('UTC')).toBe('Etc/UTC')
     expect(isValidIanaTimeZone('IST')).toBe(false)
     expect(isValidIanaTimeZone('Mars/Olympus')).toBe(false)
+  })
+
+  it('coerces blank or invalid zones to a DB-safe IANA id without throwing', () => {
+    expect(coerceIanaTimeZone('')).toMatch(/\//)
+    expect(coerceIanaTimeZone('IST')).toMatch(/\//)
+    expect(coerceIanaTimeZone('Asia/Kolkata')).toBe('Asia/Kolkata')
+    expect(() => getZonedWallTime(new Date().toISOString(), '')).not.toThrow()
+    expect(() => getZonedWallTime(new Date().toISOString(), 'IST')).not.toThrow()
   })
 
   it('normalizes instants to canonical UTC ISO and formats in the selected zone', () => {

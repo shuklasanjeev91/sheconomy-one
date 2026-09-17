@@ -32,6 +32,7 @@ export function composeMeetingStageTracks(
   localIdentity: string,
   viewMode: MeetingViewMode = 'gallery',
   activeSpeakerIdentity?: string | null,
+  hideSelfView = false,
 ): MeetingStageTracks {
   const screenShares: TrackReferenceOrPlaceholder[] = []
   const cameraByIdentity = new Map<string, TrackReferenceOrPlaceholder>()
@@ -77,7 +78,8 @@ export function composeMeetingStageTracks(
       right.participant.identity === activeSpeakerIdentity || right.participant.isSpeaking ? 1 : 0
     return rightActive - leftActive
   })
-  const orderedCameras = [...remotesOrdered, ...(localCamera ? [localCamera] : [])]
+  const includeLocal = !hideSelfView && !!localCamera
+  const orderedCameras = [...remotesOrdered, ...(includeLocal && localCamera ? [localCamera] : [])]
 
   // True gallery — every camera is a stage tile. Never collapse to a single focus.
   if (viewMode === 'gallery') {
@@ -94,9 +96,9 @@ export function composeMeetingStageTracks(
   if (focusedScreen && viewMode === 'screen-share') {
     return {
       stageTracks: [focusedScreen],
-      filmstripTracks: [...remoteCameras, ...(localCamera ? [localCamera] : [])],
+      filmstripTracks: [...remoteCameras, ...(includeLocal && localCamera ? [localCamera] : [])],
       pipTrack: null,
-      totalTiles: cameras.length + 1,
+      totalTiles: remoteCameras.length + (includeLocal ? 1 : 0) + 1,
       hasScreenShare: true,
       isLocalScreenSharing,
     }
@@ -111,7 +113,7 @@ export function composeMeetingStageTracks(
       remoteCameras.find((track) => track.participant.identity === activeSpeakerIdentity) ??
       remoteCameras.find((track) => track.participant.isSpeaking) ??
       remoteCameras[0] ??
-      localCamera
+      (includeLocal ? localCamera : null)
 
     return {
       stageTracks: activeSpeaker ? [activeSpeaker] : [],
@@ -129,7 +131,7 @@ export function composeMeetingStageTracks(
     orderedCameras.find((track) => track.participant.identity === activeSpeakerIdentity) ??
     orderedCameras.find((track) => track.participant.isSpeaking) ??
     remoteCameras[0] ??
-    localCamera
+    (includeLocal ? localCamera : null)
   const stageTracks = activeSpeaker ? [activeSpeaker] : []
   return {
     stageTracks,

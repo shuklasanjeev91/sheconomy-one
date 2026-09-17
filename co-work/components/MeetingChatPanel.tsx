@@ -4,7 +4,7 @@ import { Avatar, Button, Icons, Input, ScrollView, Text, XStack, YStack } from '
 import { CoWorkPanelShell } from '~/co-work/components/CoWorkUi'
 import { MeetingPanelHeader } from '~/co-work/components/MeetingPanelHeader'
 import { useCoWorkTheme } from '~/co-work/lib/theme'
-import type { MeetingChatMessage, MeetingParticipant } from '~/co-work/lib/types'
+import type { MeetingChatMessage, MeetingParticipant, MeetingParticipantChatWith } from '~/co-work/lib/types'
 import { safeMeetingDisplayName } from '~/co-work/lib/meeting-display-name'
 import type { MeetingChatAudience } from '~/co-work/lib/meeting-role-permissions'
 import {
@@ -25,6 +25,7 @@ type MeetingChatPanelProps = {
   viewerRole?: MeetingRole
   chatEnabled?: boolean
   privateChatEnabled?: boolean
+  participantChatWith?: MeetingParticipantChatWith | null
   canManageChat?: boolean
   participantDisplayNames?: Record<string, string>
 }
@@ -40,6 +41,7 @@ export function MeetingChatPanel({
   viewerRole = 'participant',
   chatEnabled = true,
   privateChatEnabled = false,
+  participantChatWith = 'everyone',
   canManageChat = false,
   participantDisplayNames = {},
 }: MeetingChatPanelProps) {
@@ -47,6 +49,9 @@ export function MeetingChatPanel({
   const [draft, setDraft] = useState('')
   const [audience, setAudience] = useState<MeetingChatAudience>('everyone')
   const [recipientId, setRecipientId] = useState<string | null>(null)
+  const [recipientQuery, setRecipientQuery] = useState('')
+  const [toMenuOpen, setToMenuOpen] = useState(false)
+  const lastPrivateRecipientRef = useRef<string | null>(null)
   const listRef = useRef<{ scrollToEnd?: (opts?: { animated?: boolean }) => void } | null>(null)
 
   const audiences = useMemo(
@@ -54,9 +59,18 @@ export function MeetingChatPanel({
       meetingChatComposerAudiences({
         viewerRole,
         privateEnabled: privateChatEnabled,
+        participantChatWith,
       }),
-    [privateChatEnabled, viewerRole],
+    [participantChatWith, privateChatEnabled, viewerRole],
   )
+
+  useEffect(() => {
+    if (audiences.length === 0) return
+    if (!audiences.includes(audience)) {
+      setAudience(audiences[0]!)
+      if (audiences[0] !== 'private') setRecipientId(null)
+    }
+  }, [audience, audiences])
 
   const privateTargets = useMemo(
     () =>
@@ -66,9 +80,44 @@ export function MeetingChatPanel({
     [currentUserId, participants],
   )
 
+  const filteredPrivateTargets = useMemo(() => {
+    const q = recipientQuery.trim().toLowerCase()
+    if (!q) return privateTargets
+    return privateTargets.filter((row) => {
+      const name = safeMeetingDisplayName(
+        participantDisplayNames[row.user_id] ||
+          row.display_name ||
+          row.profile?.full_name ||
+          row.profile?.username,
+      ).toLowerCase()
+      return name.includes(q)
+    })
+  }, [participantDisplayNames, privateTargets, recipientQuery])
+
+  const toLabel = useMemo(() => {
+    if (audience === 'everyone') return 'Everyone'
+    if (audience === 'hosts') return 'Hosts'
+    if (!recipientId) return 'Private…'
+    const row = privateTargets.find((p) => p.user_id === recipientId)
+    return safeMeetingDisplayName(
+      participantDisplayNames[recipientId] ||
+        row?.display_name ||
+        row?.profile?.full_name ||
+        row?.profile?.username ||
+        'Participant',
+    )
+  }, [audience, participantDisplayNames, privateTargets, recipientId])
+
   useEffect(() => {
     if (!audiences.includes(audience)) setAudience('everyone')
   }, [audience, audiences])
+
+  useEffect(() => {
+    if (audience === 'private' && !recipientId && lastPrivateRecipientRef.current) {
+      const stillThere = privateTargets.some((p) => p.user_id === lastPrivateRecipientRef.current)
+      if (stillThere) setRecipientId(lastPrivateRecipientRef.current)
+    }
+  }, [audience, privateTargets, recipientId])
 
   useEffect(() => {
     listRef.current?.scrollToEnd?.({ animated: true })
@@ -77,6 +126,9 @@ export function MeetingChatPanel({
   function send() {
     if (!chatEnabled || !draft.trim()) return
     if (audience === 'private' && !recipientId) return
+    if (audience === 'private' && recipientId) {
+      lastPrivateRecipientRef.current = recipientId
+    }
     onSend(draft.trim(), audience, audience === 'private' ? recipientId : null)
     setDraft('')
   }
@@ -247,52 +299,121 @@ export function MeetingChatPanel({
         backgroundColor="rgba(0,0,0,0.15)"
       >
         {chatEnabled && audiences.length > 1 ? (
-          <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-            <XStack gap="$2">
-              {audiences.map((value) => (
-                <Button
-                  key={value}
-                  tone={audience === value ? 'primary' : 'outline'}
-                  size="$2"
-                  borderRadius={999}
-                  onPress={() => setAudience(value)}
-                >
-                  {value === 'everyone' ? 'Everyone' : value === 'hosts' ? 'Hosts only' : 'Private'}
-                </Button>
-              ))}
+          <YStack gap="$2">
+            <XStack alignItems="center" gap="$2">
+              <Text fontSize={12} fontWeight="700" color={coworkUi.meetingIconMuted}>
+                To:
+              </Text>
+              <Button
+                tone="outline"
+                size="$2"
+                borderRadius={12}
+                flex={1}
+                justifyContent="space-between"
+                borderColor={coworkUi.glassBorder}
+                backgroundColor={coworkUi.meetingControl}
+                iconAfter={<Icons.ChevronDown size={14} color={coworkUi.textMuted} />}
+                onPress={() => setToMenuOpen((open) => !open)}
+              >
+                {toLabel}
+              </Button>
             </XStack>
-          </ScrollView>
-        ) : null}
-        {chatEnabled && audience === 'private' ? (
-          <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-            <XStack gap="$2">
-              {privateTargets.length === 0 ? (
-                <Text fontSize={12} color={coworkUi.textMuted}>
-                  No other participants yet.
-                </Text>
-              ) : (
-                privateTargets.map((row) => {
-                  const name = safeMeetingDisplayName(
-                    participantDisplayNames[row.user_id] ||
-                      row.display_name ||
-                      row.profile?.full_name ||
-                      row.profile?.username,
-                  )
-                  return (
-                    <Button
-                      key={row.user_id}
-                      tone={recipientId === row.user_id ? 'primary' : 'outline'}
-                      size="$2"
-                      borderRadius={999}
-                      onPress={() => setRecipientId(row.user_id)}
+            {toMenuOpen ? (
+              <YStack
+                gap={2}
+                padding="$2"
+                borderRadius={12}
+                borderWidth={1}
+                borderColor={coworkUi.glassBorder}
+                backgroundColor={coworkUi.meetingBarElevated}
+              >
+                {audiences.includes('everyone') ? (
+                  <Button
+                    tone={audience === 'everyone' ? 'primary' : 'ghost'}
+                    size="$2"
+                    borderRadius={10}
+                    justifyContent="flex-start"
+                    onPress={() => {
+                      setAudience('everyone')
+                      setToMenuOpen(false)
+                    }}
+                  >
+                    Everyone
+                  </Button>
+                ) : null}
+                {audiences.includes('hosts') ? (
+                  <Button
+                    tone={audience === 'hosts' ? 'primary' : 'ghost'}
+                    size="$2"
+                    borderRadius={10}
+                    justifyContent="flex-start"
+                    onPress={() => {
+                      setAudience('hosts')
+                      setToMenuOpen(false)
+                    }}
+                  >
+                    Hosts only
+                  </Button>
+                ) : null}
+                {audiences.includes('private') ? (
+                  <>
+                    <Text
+                      fontSize={11}
+                      fontWeight="700"
+                      color={coworkUi.meetingIconMuted}
+                      paddingHorizontal="$2"
+                      paddingTop="$1"
                     >
-                      {name}
-                    </Button>
-                  )
-                })
-              )}
-            </XStack>
-          </ScrollView>
+                      Private message
+                    </Text>
+                    <Input
+                      value={recipientQuery}
+                      onChangeText={setRecipientQuery}
+                      placeholder="Search participants"
+                      backgroundColor={coworkUi.meetingControl}
+                      borderColor={coworkUi.borderSoft}
+                      color={coworkUi.text}
+                      placeholderTextColor={coworkUi.textMuted}
+                      borderRadius={10}
+                      height={36}
+                    />
+                    {filteredPrivateTargets.length === 0 ? (
+                      <Text fontSize={12} color={coworkUi.textMuted} padding="$2">
+                        No matching participants.
+                      </Text>
+                    ) : (
+                      filteredPrivateTargets.slice(0, 8).map((row) => {
+                        const name = safeMeetingDisplayName(
+                          participantDisplayNames[row.user_id] ||
+                            row.display_name ||
+                            row.profile?.full_name ||
+                            row.profile?.username,
+                        )
+                        return (
+                          <Button
+                            key={row.user_id}
+                            tone={recipientId === row.user_id ? 'primary' : 'ghost'}
+                            size="$2"
+                            borderRadius={10}
+                            justifyContent="flex-start"
+                            onPress={() => {
+                              setAudience('private')
+                              setRecipientId(row.user_id)
+                              lastPrivateRecipientRef.current = row.user_id
+                              setToMenuOpen(false)
+                              setRecipientQuery('')
+                            }}
+                          >
+                            {name}
+                          </Button>
+                        )
+                      })
+                    )}
+                  </>
+                ) : null}
+              </YStack>
+            ) : null}
+          </YStack>
         ) : null}
         <XStack gap="$2">
           <Input

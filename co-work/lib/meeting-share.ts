@@ -129,15 +129,23 @@ export function buildMeetingCalendarShareLinks(meeting: Meeting) {
   return { google, outlook, yahoo: yahoo.toString(), event: input }
 }
 
+type MeetingInvitationOptions = {
+  /** Include the HTTPS join URL in the body (omit when the share layer attaches `url`). */
+  includeJoinUrl?: boolean
+}
+
 /** Zoom-style invitation block used for social / email / copy invitation. */
-export function buildMeetingInvitationText(meeting: Meeting): string {
+export function buildMeetingInvitationText(
+  meeting: Meeting,
+  options: MeetingInvitationOptions = {},
+): string {
+  const { includeJoinUrl = true } = options
   const schedule = resolveMeetingShareSchedule(meeting)
   const timeZone = resolveDeviceIanaTimeZone()
   const { date, time } = formatShareDateTime(schedule.startsAt, timeZone)
   const host = meeting.host?.full_name || meeting.host?.username || `${BRAND_NAME} host`
   const joinUrl = getMeetingShareUrl(meeting.meeting_code)
   const passcode = meeting.security_settings?.passcode
-  const calendar = buildMeetingCalendarShareLinks(meeting)
 
   const lines = [
     `${BRAND_COWORK_LABEL} Meeting Invitation`,
@@ -149,16 +157,13 @@ export function buildMeetingInvitationText(meeting: Meeting): string {
     schedule.inferred ? 'Time: Starting now (approx. 1 hour)' : `Date: ${date}`,
     schedule.inferred ? null : `Time: ${time}`,
     '',
-    `Join ${BRAND_COWORK_LABEL} Meeting`,
-    joinUrl,
-    '',
+    includeJoinUrl ? `Join ${BRAND_COWORK_LABEL} Meeting` : null,
+    includeJoinUrl ? joinUrl : null,
+    includeJoinUrl ? '' : null,
     `Meeting ID: ${formatMeetingCode(meeting.meeting_code)}`,
     passcode ? `Passcode: ${passcode}` : null,
     '',
-    'Add to Calendar',
-    `Google Calendar: ${calendar.google}`,
-    `Outlook: ${calendar.outlook}`,
-    `Yahoo: ${calendar.yahoo}`,
+    'Add to Calendar from the meeting page (Calendar icon).',
     '',
     '—',
     `Shared via ${BRAND_COWORK_LABEL}`,
@@ -170,12 +175,13 @@ export function buildMeetingInvitationText(meeting: Meeting): string {
 /**
  * Zoom-style meeting invitation for the share sheet.
  * The share layer appends `url` once for destinations that need a link.
+ * Calendar add is via sheet icons — not raw Google/Outlook URLs in the message.
  */
 export function buildMeetingSharePayload(meeting: Meeting): SharePayload {
   return {
     url: getMeetingShareUrl(meeting.meeting_code),
     title: `${meeting.title} · ${BRAND_COWORK_LABEL}`,
-    text: buildMeetingInvitationText(meeting),
+    text: buildMeetingInvitationText(meeting, { includeJoinUrl: false }),
   }
 }
 

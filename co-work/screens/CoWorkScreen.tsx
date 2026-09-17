@@ -4,7 +4,6 @@ import { useState } from 'react'
 import { AppLink } from '~/components/navigation/AppLink'
 import { PageContent, LAYOUT_STRETCH } from '~/components/layout'
 import { IdleMount } from '~/components/IdleMount'
-import { DevicePrepCard } from '~/co-work/components/DevicePrepCard'
 import { RecentMeetingRevisitStrip } from '~/co-work/components/RecentMeetingRevisitStrip'
 import { UpcomingMeetingsStrip } from '~/co-work/components/UpcomingMeetingsStrip'
 import {
@@ -14,40 +13,70 @@ import {
 import { ensureMeetingMobilePermissions } from '~/co-work/lib/meeting-media-permissions'
 import { openInstantMeetingSession } from '~/co-work/lib/instant-meeting-session'
 import { Button, Icons, Input, Spinner, Text, XStack, YStack, useAppToast } from '~/components/ui'
-import { CoWorkBrandChip, CoWorkFeatureCard, CoWorkIconBadge } from '~/co-work/components/CoWorkUi'
+import { CoWorkFeatureCard } from '~/co-work/components/CoWorkUi'
 import { createMeeting } from '~/co-work/lib/meetings'
-import { coworkGlassStyle, useCoWorkTheme } from '~/co-work/lib/theme'
-import { controlGradientStyle, coworkBoxShadow, pageGradientStyle } from '~/lib/platform/crossStyles'
+import { meetingBarStyle, useCoWorkTheme } from '~/co-work/lib/theme'
+import { controlGradientStyle, pageGradientStyle } from '~/lib/platform/crossStyles'
 import { coWorkRoutes } from '~/lib/routes'
 import { useProfile } from '~/hooks/useProfile'
 import { useAppLayout } from '~/hooks/useAppLayout'
 
-import { BRAND_NAME, BRAND_COWORK_LABEL } from '~/config/brand'
+import { BRAND_NAME } from '~/config/brand'
 
-function CoWorkQuickStat({
-  icon: Icon,
+function HomeAction({
   label,
+  icon: Icon,
+  onPress,
+  href,
+  primary,
+  busy,
 }: {
-  icon: typeof Icons.Video
   label: string
+  icon: typeof Icons.Video
+  onPress?: () => void
+  href?: string
+  primary?: boolean
+  busy?: boolean
 }) {
-  const { ui: coworkUi } = useCoWorkTheme()
+  const { ui: coworkUi, gradients: coworkGradients } = useCoWorkTheme()
+  const router = useRouter()
+  const handlePress = () => {
+    if (busy) return
+    if (onPress) onPress()
+    else if (href) router.push(href as never)
+  }
   return (
-    <XStack
-      gap={8}
-      alignItems="center"
-      paddingHorizontal={14}
-      paddingVertical={8}
-      borderRadius={999}
-      borderWidth={1}
-      borderColor={coworkUi.glassBorder}
-      backgroundColor={coworkUi.surfaceMuted}
-    >
-      <Icon size={15} color={coworkUi.brandLight} />
-      <Text fontSize={12} fontWeight="700" color={coworkUi.textSecondary} letterSpacing={0.2}>
+    <YStack alignItems="center" gap="$2" minWidth={96} flex={1}>
+      <Button
+        tone={primary ? 'primary' : 'outline'}
+        width={64}
+        height={64}
+        padding={0}
+        borderRadius={16}
+        borderColor={primary ? 'transparent' : coworkUi.glassBorder}
+        backgroundColor={primary ? coworkUi.brand : coworkUi.meetingControl}
+        disabled={busy}
+        onPress={handlePress}
+        // Web: prevent accidental form submit / full document reload.
+        {...({ type: 'button' } as object)}
+        style={
+          primary
+            ? controlGradientStyle(coworkGradients.activeControl, coworkUi.brand)
+            : undefined
+        }
+        icon={
+          busy ? (
+            <Spinner size="small" color={primary ? '#fff' : coworkUi.text} />
+          ) : (
+            <Icon size={24} color={primary ? '#fff' : coworkUi.text} />
+          )
+        }
+        accessibilityLabel={label}
+      />
+      <Text fontSize={13} fontWeight="700" color={coworkUi.text} textAlign="center">
         {label}
       </Text>
-    </XStack>
+    </YStack>
   )
 }
 
@@ -77,7 +106,7 @@ function buildFeatures(brandLight: string) {
 }
 
 export function CoWorkScreen() {
-  const { ui: coworkUi, gradients: coworkGradients, shadows: coworkShadows } = useCoWorkTheme()
+  const { ui: coworkUi, gradients: coworkGradients } = useCoWorkTheme()
   const features = buildFeatures(coworkUi.brandLight)
   const router = useRouter()
   const toast = useAppToast()
@@ -86,23 +115,20 @@ export function CoWorkScreen() {
   const recentCodes = useRecentMeetingCodes()
   const [joinCode, setJoinCode] = useState('')
   const [creating, setCreating] = useState(false)
-  const [launchOverlay, setLaunchOverlay] = useState(false)
   const [meetingsRefreshKey, setMeetingsRefreshKey] = useState(0)
+  const [showJoinField, setShowJoinField] = useState(false)
 
   async function startInstantMeeting() {
-    if (!user) return
+    if (!user || creating) return
     setCreating(true)
-    setLaunchOverlay(true)
     try {
-      // Permission sheets must come before navigation — LiveKit join without
-      // camera/mic access blanks or freezes the chromeless meeting route on iPad.
-      const perms = await ensureMeetingMobilePermissions({ requestNotifications: true })
+      // Request media first while still in the click gesture (web browsers require it).
+      const perms = await ensureMeetingMobilePermissions({ requestNotifications: false })
       if (!perms.ok) {
         toast.show('Microphone required', {
           tone: 'error',
           message: perms.message,
         })
-        setLaunchOverlay(false)
         return
       }
 
@@ -115,16 +141,12 @@ export function CoWorkScreen() {
         throw new Error('Meeting was created without a join code. Please try again.')
       }
       recordMeetingCode(meeting.meeting_code)
-      // Stay on Co-Work — InstantMeetingHost mounts LiveKit in-place (web + native).
-      // Avoids /live route hops that can trigger Vite dep-optimizer full reloads.
       openInstantMeetingSession({
         code: meeting.meeting_code,
         meeting,
         autoJoin: true,
       })
-      setLaunchOverlay(false)
     } catch (createError) {
-      setLaunchOverlay(false)
       toast.show('Could not start meeting', {
         tone: 'error',
         message: createError instanceof Error ? createError.message : undefined,
@@ -142,173 +164,123 @@ export function CoWorkScreen() {
   }
 
   return (
-    <>
-    {launchOverlay ? (
-      <YStack
-        position="absolute"
-        top={0}
-        left={0}
-        right={0}
-        bottom={0}
-        zIndex={99999}
-        alignItems="center"
-        justifyContent="center"
-        backgroundColor="#D81B60"
-        gap="$3"
-        padding="$6"
-      >
-        <Spinner size="large" color="#fff" />
-        <Text color="#fff" fontWeight="800" fontSize={18} textAlign="center">
-          Starting meeting…
-        </Text>
-        <Text color="rgba(255,255,255,0.85)" fontSize={14} textAlign="center">
-          Connecting camera and room
-        </Text>
-      </YStack>
-    ) : null}
     <PageContent
       scroll
       backgroundColor={coworkUi.pageBg}
-      paddingVertical="$6"
+      paddingVertical="$5"
       style={pageGradientStyle(coworkGradients.page, coworkUi.pageBg)}
       onRefresh={() => setMeetingsRefreshKey((key) => key + 1)}
     >
-      <YStack gap="$7" width="100%" {...LAYOUT_STRETCH}>
+      <YStack gap="$6" width="100%" {...LAYOUT_STRETCH}>
+        <YStack gap="$1">
+          <Text
+            fontSize={isDesktop ? 28 : 24}
+            fontWeight="800"
+            color={coworkUi.text}
+            letterSpacing={-0.6}
+          >
+            Meetings
+          </Text>
+          <Text fontSize={14} color={coworkUi.textSecondary}>
+            Start, join, or schedule — Zoom-simple, {BRAND_NAME}-ready
+          </Text>
+        </YStack>
+
+        <XStack
+          gap="$3"
+          justifyContent="space-around"
+          paddingVertical="$3"
+          paddingHorizontal="$2"
+          borderRadius={coworkUi.radius.panel}
+          borderWidth={1}
+          borderColor={coworkUi.glassBorder}
+          style={meetingBarStyle(coworkUi, true)}
+        >
+          {isAuthenticated ? (
+            <HomeAction
+              label="New"
+              icon={Icons.Video}
+              primary
+              busy={creating}
+              onPress={() => void startInstantMeeting()}
+            />
+          ) : null}
+          <HomeAction
+            label="Join"
+            icon={Icons.Hash}
+            onPress={() => setShowJoinField((open) => !open)}
+          />
+          <HomeAction label="Schedule" icon={Icons.Calendar} href={String(coWorkRoutes.schedule)} />
+        </XStack>
+
+        {showJoinField ? (
+          <YStack
+            gap="$3"
+            padding="$4"
+            borderRadius={coworkUi.radius.panel}
+            borderWidth={1}
+            borderColor={coworkUi.glassBorder}
+            style={meetingBarStyle(coworkUi)}
+          >
+            <Text fontWeight="700" fontSize={15} color={coworkUi.text}>
+              Join with a code
+            </Text>
+            <XStack gap="$2" flexWrap="wrap">
+              <Input
+                flex={1}
+                minWidth={180}
+                value={joinCode}
+                onChangeText={setJoinCode}
+                placeholder="ABC DEF GHI"
+                autoCapitalize="characters"
+                backgroundColor={coworkUi.meetingControl}
+                borderColor={coworkUi.borderSoft}
+                color={coworkUi.text}
+                placeholderTextColor={coworkUi.textMuted}
+                borderRadius={12}
+              />
+              <Button tone="primary" borderRadius={12} onPress={() => joinWithCode(joinCode)}>
+                Join
+              </Button>
+            </XStack>
+            {recentCodes.length > 0 ? (
+              <XStack gap="$2" flexWrap="wrap" alignItems="center">
+                {recentCodes.slice(0, 4).map((code) => (
+                  <XStack
+                    key={code}
+                    paddingHorizontal="$3"
+                    paddingVertical="$1.5"
+                    borderRadius={999}
+                    borderWidth={1}
+                    borderColor={coworkUi.borderSoft}
+                    backgroundColor={coworkUi.meetingControl}
+                    cursor="pointer"
+                    pressStyle={{ opacity: 0.85 }}
+                    onPress={() => joinWithCode(code)}
+                  >
+                    <Text fontSize={12} fontWeight="700" color={coworkUi.text} letterSpacing={1}>
+                      {code}
+                    </Text>
+                  </XStack>
+                ))}
+              </XStack>
+            ) : null}
+          </YStack>
+        ) : null}
+
         <IdleMount>
-          <DevicePrepCard />
           <UpcomingMeetingsStrip refreshKey={meetingsRefreshKey} />
           <RecentMeetingRevisitStrip />
         </IdleMount>
-        <YStack gap="$4" position="relative">
-          <CoWorkBrandChip label={BRAND_COWORK_LABEL} />
-          <Text
-            fontSize={isDesktop ? 40 : 32}
-            fontWeight="800"
-            color={coworkUi.text}
-            letterSpacing={-1.2}
-            lineHeight={isDesktop ? 46 : 38}
-            maxWidth="100%"
-          >
-            Professional meetings, built for your community
-          </Text>
-          <Text fontSize={16} color={coworkUi.textSecondary} lineHeight={25}>
-            Host branded video rooms with chat, screen sharing, waiting room, hand raise, and host controls — all in
-            one {BRAND_NAME} experience.
-          </Text>
-          <XStack gap="$3" flexWrap="wrap" paddingTop="$1">
-            <CoWorkQuickStat icon={Icons.Video} label="HD video" />
-            <CoWorkQuickStat icon={Icons.Shield} label="Secure rooms" />
-            <CoWorkQuickStat icon={Icons.Users} label="Host controls" />
-          </XStack>
-        </YStack>
 
-        <XStack gap="$3" flexWrap="wrap">
-          {isAuthenticated ? (
-            <Button
-              tone="primary"
-              size="$4"
-              borderRadius={999}
-              icon={creating ? <Spinner size="small" color="white" /> : <Icons.Video size={18} color="white" />}
-              disabled={creating}
-              onPress={() => void startInstantMeeting()}
-              style={controlGradientStyle(coworkGradients.activeControl, coworkUi.brand)}
-            >
-              Start instant meeting
-            </Button>
-          ) : null}
-          <AppLink href={coWorkRoutes.schedule} asChild>
-            <Button
-              tone="outline"
-              size="$4"
-              borderRadius={999}
-              borderColor={coworkUi.glassBorder}
-              icon={<Icons.Calendar size={18} color={coworkUi.text} />}
-            >
-              Schedule
-            </Button>
-          </AppLink>
-          <AppLink href={coWorkRoutes.meetings} asChild>
-            <Button
-              tone="outline"
-              size="$4"
-              borderRadius={999}
-              borderColor={coworkUi.glassBorder}
-              icon={<Icons.Video size={18} color={coworkUi.text} />}
-            >
-              My meetings
-            </Button>
-          </AppLink>
-        </XStack>
+        <AppLink href={coWorkRoutes.meetings} asChild>
+          <Button tone="ghost" size="$3" alignSelf="flex-start">
+            My meetings
+          </Button>
+        </AppLink>
 
-        <YStack
-          gap="$3"
-          padding="$4"
-          borderRadius={coworkUi.radius.card}
-          borderWidth={1}
-          borderColor={coworkUi.glassBorder}
-          style={{
-            ...coworkGlassStyle(coworkUi, true),
-            ...coworkBoxShadow(coworkShadows, 'card'),
-          }}
-        >
-          <XStack alignItems="center" gap="$3">
-            <CoWorkIconBadge icon={Icons.Hash} />
-            <YStack flex={1} gap={2}>
-              <Text fontWeight="800" fontSize={17} color={coworkUi.text}>
-                Join with a code
-              </Text>
-              <Text fontSize={13} color={coworkUi.textSecondary}>
-                Or use the Join tab in the bottom bar
-              </Text>
-            </YStack>
-          </XStack>
-          <XStack gap="$2" flexWrap="wrap">
-            <Input
-              flex={1}
-              minWidth={200}
-              value={joinCode}
-              onChangeText={setJoinCode}
-              placeholder="ABC DEF GHI"
-              autoCapitalize="characters"
-              backgroundColor={coworkUi.surfaceMuted}
-              borderColor={coworkUi.borderSoft}
-              color={coworkUi.text}
-              placeholderTextColor={coworkUi.textMuted}
-              borderRadius={14}
-            />
-            <Button tone="primary" borderRadius={14} onPress={() => joinWithCode(joinCode)}>
-              Join meeting
-            </Button>
-          </XStack>
-          {recentCodes.length > 0 ? (
-            <XStack gap="$2" flexWrap="wrap" alignItems="center">
-              <Text fontSize={12} fontWeight="600" color={coworkUi.textMuted}>
-                Recent
-              </Text>
-              {recentCodes.slice(0, 4).map((code) => (
-                <XStack
-                  key={code}
-                  paddingHorizontal="$3"
-                  paddingVertical="$1.5"
-                  borderRadius={999}
-                  borderWidth={1}
-                  borderColor={coworkUi.borderSoft}
-                  backgroundColor="rgba(255,255,255,0.04)"
-                  cursor="pointer"
-                  pressStyle={{ opacity: 0.85 }}
-                  onPress={() => joinWithCode(code)}
-                >
-                  <Text fontSize={12} fontWeight="700" color={coworkUi.text} letterSpacing={1}>
-                    {code}
-                  </Text>
-                </XStack>
-              ))}
-            </XStack>
-          ) : null}
-        </YStack>
-
-        <YStack gap="$3">
-          <Text fontWeight="800" fontSize={18} color={coworkUi.text} letterSpacing={-0.3}>
+        <YStack gap="$3" opacity={0.92}>
+          <Text fontWeight="700" fontSize={15} color={coworkUi.meetingIconMuted} letterSpacing={-0.2}>
             Everything you need
           </Text>
           <XStack gap="$3" flexWrap="wrap">
@@ -319,6 +291,5 @@ export function CoWorkScreen() {
         </YStack>
       </YStack>
     </PageContent>
-    </>
   )
 }

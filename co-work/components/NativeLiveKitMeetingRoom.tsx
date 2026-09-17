@@ -3,7 +3,7 @@ import '~/lib/polyfills/install-dom-exception'
 
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { Platform, ScrollView as NativeScrollView, useWindowDimensions } from 'react-native'
-import { ConnectionState, RoomEvent, Track } from 'livekit-client'
+import { ConnectionState, DisconnectReason, RoomEvent, Track } from 'livekit-client'
 import {
   LiveKitRoom,
   VideoTrack,
@@ -80,6 +80,7 @@ type NativeLiveKitMeetingRoomProps = {
   isHost: boolean
   enabled: boolean
   mediaMode?: import('~/co-work/lib/livekit-media-controls').LiveKitMediaMode
+  onConnected?: () => void
   onDisconnected: () => void
   overlay?: (liveKit: LiveKitMediaControls | null) => React.ReactNode
 }
@@ -93,6 +94,7 @@ export function NativeLiveKitMeetingRoom({
   avatarUrl,
   enabled,
   mediaMode = 'meeting',
+  onConnected,
   onDisconnected,
   overlay,
 }: NativeLiveKitMeetingRoomProps) {
@@ -105,6 +107,7 @@ export function NativeLiveKitMeetingRoom({
   const [loading, setLoading] = useState(false)
   const [audioReady, setAudioReady] = useState(false)
   const [audioError, setAudioError] = useState<string | null>(null)
+  const [retryKey, setRetryKey] = useState(0)
 
   useEffect(() => {
     let cancelled = false
@@ -160,8 +163,9 @@ export function NativeLiveKitMeetingRoom({
         setCredentials(creds)
       } catch (loadError) {
         if (cancelled) return
+        // Token / config failures stay on this screen — do not escalate to the
+        // parent "Unable to reconnect" full-page via onDisconnected.
         setError(loadError instanceof Error ? loadError.message : 'Failed to connect to LiveKit')
-        onDisconnected()
       } finally {
         if (!cancelled) setLoading(false)
       }
@@ -171,7 +175,7 @@ export function NativeLiveKitMeetingRoom({
     return () => {
       cancelled = true
     }
-  }, [audioReady, avatarUrl, displayName, enabled, meetingId, onDisconnected, roomId])
+  }, [audioReady, avatarUrl, displayName, enabled, meetingId, retryKey, roomId])
 
   if (!roomId) {
     return (
@@ -229,15 +233,61 @@ export function NativeLiveKitMeetingRoom({
   }
 
   if (error) {
+    const friendlyError = /non-2xx|Edge Function/i.test(error)
+      ? 'Could not join the video room. Check your connection and try again.'
+      : error
     return (
-      <ScreenFill padding="$4" backgroundColor="#0c080a" gap="$3">
-        <Text color={coworkUi.danger} fontWeight="700">
-          Could not join video room
-        </Text>
-        <Text color={coworkUi.textSecondary} lineHeight={22}>
-          {error}
-        </Text>
-        {overlay?.(null)}
+      <ScreenFill padding="$4" backgroundColor="#0c080a" gap="$3" position="relative">
+        <YStack
+          position="absolute"
+          top={0}
+          left={0}
+          right={0}
+          bottom={0}
+          pointerEvents="box-none"
+          zIndex={100}
+        >
+          {overlay?.(null)}
+        </YStack>
+        <YStack
+          flex={1}
+          alignItems="center"
+          justifyContent="center"
+          padding="$6"
+          gap="$3"
+          zIndex={120}
+          pointerEvents="box-none"
+        >
+          <YStack
+            maxWidth={420}
+            width="100%"
+            gap="$3"
+            padding="$5"
+            borderRadius={16}
+            backgroundColor="rgba(36,17,24,0.96)"
+            borderWidth={1}
+            borderColor="rgba(255,255,255,0.12)"
+            pointerEvents="auto"
+          >
+            <Text color={coworkUi.danger} fontWeight="800" fontSize={18}>
+              Could not join video room
+            </Text>
+            <Text color={coworkUi.textSecondary} lineHeight={22}>
+              {friendlyError}
+            </Text>
+            <Text
+              color={coworkUi.brand}
+              fontWeight="700"
+              onPress={() => {
+                setError(null)
+                setCredentials(null)
+                setRetryKey((value) => value + 1)
+              }}
+            >
+              Try again
+            </Text>
+          </YStack>
+        </YStack>
       </ScreenFill>
     )
   }
@@ -277,7 +327,11 @@ export function NativeLiveKitMeetingRoom({
         audio
         video={mediaMode !== 'audio'}
         options={getLiveKitRoomOptions('native')}
-        onDisconnected={onDisconnected}
+        onConnected={onConnected}
+        onDisconnected={(reason) => {
+          if (reason === DisconnectReason.CLIENT_INITIATED) return
+          onDisconnected()
+        }}
         style={{ flex: 1, width: '100%', height: '100%' }}
       >
         <NativeLiveKitMeetingContent overlay={overlay} mediaMode={mediaMode} avatarUrl={avatarUrl} />
@@ -298,9 +352,19 @@ function NativeLiveKitMeetingContent({
   const preferSpeaker = mediaMode !== 'audio'
   const liveKit = useLiveKitMediaControls(preferSpeaker)
   const micForcedRef = useRef(false)
-  const { state: meetingState } = useMeetingMachine()
-  const viewingScreenShare =
-    meetingState.viewMode === 'screen-share' && !liveKit.screenSharing
+  const tracks = useTracks(
+    [
+      { source: Track.Source.Camera, withPlaceholder: false },
+      { source: Track.Source.ScreenShare, withPlaceholder: false },
+    ],
+    { onlySubscribed: false },
+  )
+  const hasRemoteScreenShare = tracks.some(
+    (track) =>
+      track.source === Track.Source.ScreenShare &&
+      track.participant.identity !== liveKit.room.localParticipant.identity,
+  )
+  const viewingScreenShare = hasRemoteScreenShare && !liveKit.screenSharing
 
   const { notice: lifecycleNotice } = useMeetingLifecycle({
     room: liveKit.room,
@@ -455,8 +519,9 @@ function NativeMeetingVideoStage() {
         localParticipant.identity,
         state.viewMode,
         activeSpeakerIdentity,
+        state.hideSelfView,
       ),
-    [activeSpeakerIdentity, localParticipant.identity, state.viewMode, tracks],
+    [activeSpeakerIdentity, localParticipant.identity, state.hideSelfView, state.viewMode, tracks],
   )
 
   const [page, setPage] = useState(0)
@@ -477,7 +542,7 @@ function NativeMeetingVideoStage() {
   useEffect(() => {
     if (hasScreenShare && !previousScreenShare.current) {
       dispatch({ type: 'SET_VIEW', viewMode: 'screen-share' })
-    } else if (!hasScreenShare && previousScreenShare.current && state.viewMode === 'screen-share') {
+    } else if (!hasScreenShare && state.viewMode === 'screen-share') {
       dispatch({ type: 'SET_VIEW', viewMode: 'gallery' })
     }
     previousScreenShare.current = hasScreenShare

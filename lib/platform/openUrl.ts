@@ -42,8 +42,13 @@ export async function openExternalUrl(url: string): Promise<boolean> {
   }
 
   try {
-    const canOpen = await Linking.canOpenURL(url)
-    if (!canOpen) return false
+    // Android often reports canOpenURL=false for https OAuth URLs unless every
+    // host is listed in queries — still attempt openURL for http(s).
+    const isHttp = /^https?:\/\//i.test(url)
+    if (!isHttp) {
+      const canOpen = await Linking.canOpenURL(url)
+      if (!canOpen) return false
+    }
     await Linking.openURL(url)
     return true
   } catch {

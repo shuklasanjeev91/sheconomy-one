@@ -158,18 +158,42 @@ export function buildAppUrl(path: string): string {
   return `${DEFAULT_APP_ORIGIN}${normalized}`
 }
 
-/** Rewrite any share URL onto https://sheconomy.in (strips *.vercel.app / www). */
+/**
+ * Meeting App Links / Universal Links are verified on `www`. Apex `sheconomy.in`
+ * 308s to www and association handlers do not follow redirects — sharing the apex
+ * link makes the OS open the browser first, then the app. Keep meeting paths on
+ * the verified host.
+ */
+function isMeetingSharePath(pathname: string): boolean {
+  const normalized = pathname.replace(/^\/cowork(?=\/|$)/i, '/co-work')
+  return /^\/co-work\/meeting(\/|$)/i.test(normalized)
+}
+
+function normalizeSharePath(pathname: string, search = '', hash = ''): string {
+  const path = pathname.replace(/^\/cowork(?=\/|$)/i, '/co-work')
+  return `${path.startsWith('/') ? path : `/${path}`}${search}${hash}`
+}
+
+/** Rewrite share URLs onto the public host (strips *.vercel.app). Meeting links stay on www. */
 export function toPublicShareUrl(url: string): string {
   const trimmed = url.trim()
   if (!trimmed) return DEFAULT_APP_ORIGIN
   if (trimmed.startsWith('sheconomy://')) {
     const path = trimmed.replace(/^sheconomy:\/\//, '').replace(/^\//, '')
-    return `${DEFAULT_APP_ORIGIN}/${path}`
+    const normalized = normalizeSharePath(`/${path}`)
+    const origin = isMeetingSharePath(normalized) ? DEEP_LINK_ORIGIN : DEFAULT_APP_ORIGIN
+    return `${origin}${normalized}`
   }
-  if (trimmed.startsWith('/')) return `${DEFAULT_APP_ORIGIN}${trimmed}`
+  if (trimmed.startsWith('/')) {
+    const normalized = normalizeSharePath(trimmed)
+    const origin = isMeetingSharePath(normalized) ? DEEP_LINK_ORIGIN : DEFAULT_APP_ORIGIN
+    return `${origin}${normalized}`
+  }
   try {
     const parsed = new URL(trimmed.includes('://') ? trimmed : `https://${trimmed}`)
-    return `${DEFAULT_APP_ORIGIN}${parsed.pathname}${parsed.search}${parsed.hash}`
+    const normalized = normalizeSharePath(parsed.pathname, parsed.search, parsed.hash)
+    const origin = isMeetingSharePath(parsed.pathname) ? DEEP_LINK_ORIGIN : DEFAULT_APP_ORIGIN
+    return `${origin}${normalized}`
   } catch {
     return `${DEFAULT_APP_ORIGIN}/${trimmed.replace(/^\//, '')}`
   }

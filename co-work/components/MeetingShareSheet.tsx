@@ -120,7 +120,7 @@ export function MeetingShareSheet({
     toast.show(copied ? 'Invitation copied' : 'Could not copy invitation', {
       tone: copied ? 'success' : 'danger',
       message: copied
-        ? 'Paste into WhatsApp, email, Slack, or any chat — includes calendar links.'
+        ? 'Paste into WhatsApp, email, Slack, or any chat. Use Calendar icons here to add the event.'
         : undefined,
     })
     if (copied) onOpenChange(false)
@@ -141,7 +141,7 @@ export function MeetingShareSheet({
             CALENDAR
           </Text>
           <ShareActionRow
-            icon={Icons.Calendar}
+            icon={Icons.CalendarPlus}
             label={
               Platform.OS === 'web'
                 ? 'Add to calendar (Google / ICS)'
@@ -150,17 +150,17 @@ export function MeetingShareSheet({
             onPress={() => void handleAddToDefaultCalendar()}
           />
           <ShareActionRow
-            icon={Icons.ExternalLink}
+            icon={Icons.Calendar}
             label="Google Calendar"
             onPress={() => void handleProvider('google')}
           />
           <ShareActionRow
-            icon={Icons.ExternalLink}
+            icon={Icons.CalendarDays}
             label="Outlook Calendar"
             onPress={() => void handleProvider('outlook')}
           />
           <ShareActionRow
-            icon={Icons.Download}
+            icon={Icons.Calendar}
             label="Download .ics (Apple / others)"
             onPress={() => void handleDownloadIcs()}
           />
