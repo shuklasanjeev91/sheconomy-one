@@ -136,85 +136,84 @@ export function AppShell({ children }: AppShellProps) {
   // Manage Shop uses its own top bar + Etsy-style bottom tabs — hide marketplace header.
   const hideMobileHeader = !isDesktop && isVendorPath(pathname)
 
-  if (chromeless || authScreen.chromeless) {
-    return (
-      <NativeSafeArea edges={['top', 'bottom']}>
-        <ScreenFill
-          flex={1}
-          width="100%"
-          maxWidth="100%"
-          backgroundColor={ui.background}
-          overflow="hidden"
-          style={
-            authScreen.chromeless && !chromeless
-              ? authViewportStyle()
-              : meetingViewportStyle()
-          }
-        >
-          <AppAccessGate>
-            {children}
-            <IncomingCallHost />
-            <InstantMeetingHost />
-            <GlobalSessionHost />
-            {/* Above InstantMeetingHost so meeting background Upload can crop. */}
-            <ImageCropHost />
-          </AppAccessGate>
-          <GenderVerificationHost />
-        </ScreenFill>
-      </NativeSafeArea>
-    )
-  }
+  const useChromelessLayout = chromeless || authScreen.chromeless
 
   return (
-    <NativeSafeArea edges={['top']}>
+    <NativeSafeArea edges={useChromelessLayout ? ['top', 'bottom'] : ['top']}>
       <AppAccessGate>
-        <AppBarScrollProvider>
-          <DesktopScrollTracker />
-          <ScreenFill
-            flex={stretchMainContent ? 1 : undefined}
-            flexGrow={documentDesktop ? 1 : undefined}
-            flexShrink={documentDesktop ? 0 : undefined}
-            flexDirection="column"
-            position="relative"
-            backgroundColor={ui.background}
-            overflow={clipShellOverflow ? 'hidden' : 'visible'}
-            style={{
-              ...(lockViewport ? lockedAppShellStyle() : appShellStyle(isDesktopWeb)),
-              ...documentDesktopFlex,
-            }}
-          >
-            {isDesktop ? <AppDesktopHeader /> : null}
-            {!isDesktop && !hideMobileHeader ? (
-              <AppMobileHeader minimal={compactMobileTopBar || chatConversationMobile} />
-            ) : null}
-            <ProfileOnboardingNudge />
-            <YStack
-              flexGrow={1}
-              flexShrink={0}
-              flex={stretchMainContent ? 1 : undefined}
+        {/*
+          One relative root so InstantMeetingHost / GlobalSessionHost / ImageCropHost
+          survive chromeless ↔ chrome flips. Dual mounts used to remount LiveKit and
+          land Maximize on Join Meeting.
+        */}
+        <YStack flex={1} width="100%" maxWidth="100%" position="relative" minHeight={0}>
+          {useChromelessLayout ? (
+            <ScreenFill
+              flex={1}
               width="100%"
               maxWidth="100%"
-              minHeight={stretchMainContent ? 0 : undefined}
-              style={documentDesktopFlex}
+              backgroundColor={ui.background}
+              overflow="hidden"
+              style={
+                authScreen.chromeless && !chromeless
+                  ? authViewportStyle()
+                  : meetingViewportStyle()
+              }
             >
               {children}
-            </YStack>
-            <WarmTopTabRoutes />
-            {showCommerceFooter ? <CommerceDesktopFooter /> : null}
-            {!isDesktop && !chatConversationMobile && !isSellerLanding ? <AppMobileBottomTabs /> : null}
-            {/* Global overlays — bottom tabs can open these outside section layouts
-                (e.g. Create Post from /profile, New chat from any chat route). */}
-            <CommunityComposerHost />
-            <ChatActionsHost />
-            <IncomingCallHost />
-            <InstantMeetingHost />
-            <GlobalSessionHost />
-            {/* Mount last so crop sits above InstantMeetingHost (z 90k) during live meetings. */}
-            <ImageCropHost />
-          </ScreenFill>
-        </AppBarScrollProvider>
+            </ScreenFill>
+          ) : (
+            <AppBarScrollProvider>
+              <DesktopScrollTracker />
+              <ScreenFill
+                flex={stretchMainContent ? 1 : undefined}
+                flexGrow={documentDesktop ? 1 : undefined}
+                flexShrink={documentDesktop ? 0 : undefined}
+                flexDirection="column"
+                position="relative"
+                backgroundColor={ui.background}
+                overflow={clipShellOverflow ? 'hidden' : 'visible'}
+                style={{
+                  ...(lockViewport ? lockedAppShellStyle() : appShellStyle(isDesktopWeb)),
+                  ...documentDesktopFlex,
+                }}
+              >
+                {isDesktop ? <AppDesktopHeader /> : null}
+                {!isDesktop && !hideMobileHeader ? (
+                  <AppMobileHeader minimal={compactMobileTopBar || chatConversationMobile} />
+                ) : null}
+                <ProfileOnboardingNudge />
+                <YStack
+                  flexGrow={1}
+                  flexShrink={0}
+                  flex={stretchMainContent ? 1 : undefined}
+                  width="100%"
+                  maxWidth="100%"
+                  minHeight={stretchMainContent ? 0 : undefined}
+                  style={documentDesktopFlex}
+                >
+                  {children}
+                </YStack>
+                <WarmTopTabRoutes />
+                {showCommerceFooter ? <CommerceDesktopFooter /> : null}
+                {!isDesktop && !chatConversationMobile && !isSellerLanding ? (
+                  <AppMobileBottomTabs />
+                ) : null}
+                {/* Section overlays — not session-critical across chrome flips. */}
+                <CommunityComposerHost />
+                <ChatActionsHost />
+              </ScreenFill>
+            </AppBarScrollProvider>
+          )}
+
+          <IncomingCallHost />
+          <InstantMeetingHost />
+          <GlobalSessionHost />
+          {/* Mount last so crop sits above InstantMeetingHost (z 90k) during live meetings. */}
+          <ImageCropHost />
+        </YStack>
+        <GenderVerificationHost />
       </AppAccessGate>
-      <GenderVerificationHost />
     </NativeSafeArea>
   )
 }

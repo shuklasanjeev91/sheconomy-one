@@ -25,7 +25,6 @@ import { navigateApp } from '~/lib/platform/navigate'
 import { useAppLayout } from '~/hooks/useAppLayout'
 import {
   closeInstantMeetingSession,
-  instantMeetingCodesMatch,
   openInstantMeetingSession,
   peekInstantMeetingSession,
 } from '~/co-work/lib/instant-meeting-session'
@@ -95,10 +94,8 @@ export function SessionMiniPlayer({ session }: SessionMiniPlayerProps) {
       return
     }
 
+    // 1:1 calls live on their route — restore via maximizeHref, not InstantMeetingHost.
     maximizeGlobalSession()
-    if (instant && instantMeetingCodesMatch(instant.code, session.code)) {
-      return
-    }
     if (session.maximizeHref) {
       navigateApp(session.maximizeHref as never)
     }

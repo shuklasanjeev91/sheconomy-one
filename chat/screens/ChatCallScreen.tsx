@@ -30,7 +30,6 @@ import { supportsLiveKitVideo } from '~/lib/platform/capabilities'
 import { meetingViewportStyle } from '~/lib/platform/viewport'
 import { brandColors } from '~/config/brand-colors'
 import { supabase } from '~/lib/supabase/client'
-import { openInstantMeetingSession } from '~/co-work/lib/instant-meeting-session'
 import { minimizeGlobalSession, enterGlobalSessionPip } from '~/lib/session/global-session'
 import { useRegisterGlobalSession } from '~/lib/session/useRegisterGlobalSession'
 import {
@@ -396,14 +395,15 @@ function ChatCallConnected({
   const router = useRouter()
 
   const minimizeCall = useCallback(() => {
-    openInstantMeetingSession({ code, meeting, autoJoin: false })
+    // Keep the call on GlobalSession mini-player only. Opening InstantMeetingHost
+    // here polluted Maximize with Co-Work Join Meeting UI for 1:1 calls.
     minimizeGlobalSession()
     toast.show('Call minimized', {
       tone: 'success',
       message: meetingBrowsingMinimizedNotice('call'),
     })
     router.push(chatRoutes.home)
-  }, [code, meeting, router, toast])
+  }, [router, toast])
 
   const enterCallPip = useCallback(() => {
     const caps = detectSessionPipCapabilities()
