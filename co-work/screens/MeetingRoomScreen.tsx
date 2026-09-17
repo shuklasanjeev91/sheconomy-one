@@ -59,8 +59,9 @@ import {
   mapWebScreenShareError,
   meetingWebUnsupportedMessage,
 } from '~/co-work/lib/meeting-web'
-import { openInstantMeetingSession, markInstantMeetingEnteredRoom } from '~/co-work/lib/instant-meeting-session'
+import { openInstantMeetingSession, markInstantMeetingEnteredRoom, closeInstantMeetingSession } from '~/co-work/lib/instant-meeting-session'
 import {
+  clearGlobalSession,
   enterGlobalSessionPip,
   minimizeGlobalSession,
 } from '~/lib/session/global-session'
@@ -189,9 +190,26 @@ function MeetingRoomContent(props: MeetingRoomScreenProps) {
 
   const leaveMeetingScreen = useCallback(async () => {
     await presence.leave()
+    closeInstantMeetingSession()
+    clearGlobalSession()
     if (props.onLeave) props.onLeave()
     else navigateApp(coWorkRoutes.home)
   }, [presence, props])
+
+  // If we landed on reconnect after the host ended, tear down the overlay and
+  // show the real Meeting ended page instead of "Unable to reconnect".
+  useEffect(() => {
+    if (!(presence.connectionFailed || mediaReconnectFailed)) return
+    if (props.meeting.status !== 'ended' && props.meeting.status !== 'cancelled') return
+    closeInstantMeetingSession()
+    clearGlobalSession()
+    navigateApp(coWorkRoutes.meetingEnded(props.meeting.meeting_code))
+  }, [
+    mediaReconnectFailed,
+    presence.connectionFailed,
+    props.meeting.meeting_code,
+    props.meeting.status,
+  ])
 
   if (presence.isConnecting) {
     return (
@@ -233,6 +251,16 @@ function MeetingRoomContent(props: MeetingRoomScreenProps) {
   }
 
   if (presence.connectionFailed || mediaReconnectFailed) {
+    // Prefer the dedicated ended page over a misleading reconnect prompt when
+    // the host already ended the room (InstantMeetingHost used to cover /ended).
+    if (props.meeting.status === 'ended' || props.meeting.status === 'cancelled') {
+      return (
+        <ScreenCenter backgroundColor={coworkUi.pageBg} padding="$6" gap="$4">
+          <Spinner size="large" color={coworkUi.brand} />
+          <Text color={coworkUi.textSecondary}>This meeting has ended…</Text>
+        </ScreenCenter>
+      )
+    }
     return (
       <MeetingReconnectFallback
         title="Unable to reconnect"
@@ -711,6 +739,8 @@ function MeetingRoomOverlay({
             // Already disconnected.
           }
           markEnded()
+          closeInstantMeetingSession()
+          clearGlobalSession()
           navigateApp(coWorkRoutes.meetingEnded(meeting.meeting_code))
         })()
       },
@@ -956,6 +986,8 @@ function MeetingRoomOverlay({
   }, [meeting.meeting_code, toast])
 
   const exitToCoWork = useCallback(() => {
+    closeInstantMeetingSession()
+    clearGlobalSession()
     if (onLeave) {
       onLeave()
       return
@@ -965,6 +997,10 @@ function MeetingRoomOverlay({
 
   const exitToMeetingEnded = useCallback(() => {
     markEnded()
+    // Tear down InstantMeetingHost before routing — otherwise the disconnect
+    // shows "Unable to reconnect" over /meeting/:code/ended.
+    closeInstantMeetingSession()
+    clearGlobalSession()
     navigateApp(coWorkRoutes.meetingEnded(meeting.meeting_code))
   }, [markEnded, meeting.meeting_code])
 

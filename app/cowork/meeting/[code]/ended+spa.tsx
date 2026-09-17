@@ -1,9 +1,12 @@
+import { useEffect } from 'react'
 import { useLocalSearchParams, useParams, usePathname } from 'one'
 
 import { AppErrorBoundary } from '~/components/AppErrorBoundary'
 import { ScreenCenter } from '~/components/layout'
 import { Text } from '~/components/ui'
 import { MeetingEndedScreen } from '~/co-work/screens/MeetingEndedScreen'
+import { closeInstantMeetingSession } from '~/co-work/lib/instant-meeting-session'
+import { clearGlobalSession } from '~/lib/session/global-session'
 import { coWorkRoutes } from '~/lib/routes'
 import { navigateApp } from '~/lib/platform/navigate'
 
@@ -23,9 +26,16 @@ function useMeetingCode(): string {
   return match?.[1] ? decodeURIComponent(match[1]) : ''
 }
 
-/** Alias route for /cowork/meeting/:code/ended */
-export default function CoworkMeetingEndedRoute() {
+/** Dedicated meeting-ended landing after host ends (or host-leave ends) the room. */
+export default function CoWorkMeetingEndedRoute() {
   const code = useMeetingCode()
+
+  // Ensure no InstantMeetingHost reconnect UI covers this page.
+  useEffect(() => {
+    closeInstantMeetingSession()
+    clearGlobalSession()
+  }, [])
+
   if (!code) {
     return (
       <ScreenCenter backgroundColor="#D81B60">
@@ -35,6 +45,7 @@ export default function CoworkMeetingEndedRoute() {
       </ScreenCenter>
     )
   }
+
   return (
     <AppErrorBoundary scope="CoWorkMeetingEnded" alwaysShowError>
       <MeetingEndedScreen onDone={() => navigateApp(coWorkRoutes.home)} />

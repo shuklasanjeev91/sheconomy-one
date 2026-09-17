@@ -1,9 +1,12 @@
+import { useEffect } from 'react'
 import { useLocalSearchParams, useParams, usePathname } from 'one'
 
 import { AppErrorBoundary } from '~/components/AppErrorBoundary'
 import { ScreenCenter } from '~/components/layout'
 import { Text } from '~/components/ui'
 import { MeetingEndedScreen } from '~/co-work/screens/MeetingEndedScreen'
+import { closeInstantMeetingSession } from '~/co-work/lib/instant-meeting-session'
+import { clearGlobalSession } from '~/lib/session/global-session'
 import { coWorkRoutes } from '~/lib/routes'
 import { navigateApp } from '~/lib/platform/navigate'
 
@@ -19,13 +22,19 @@ function useMeetingCode(): string {
   const fromParams =
     readRouteParam(routeParams.code) || readRouteParam(localParams.code)
   if (fromParams) return fromParams
-  const match = pathname.match(/\/co-work\/meeting\/([^/?#]+)/i)
+  const match = pathname.match(/\/co-?work\/meeting\/([^/?#]+)/i)
   return match?.[1] ? decodeURIComponent(match[1]) : ''
 }
 
 /** Dedicated meeting-ended landing after host ends (or host-leave ends) the room. */
 export default function CoWorkMeetingEndedRoute() {
   const code = useMeetingCode()
+
+  // Ensure no InstantMeetingHost reconnect UI covers this page.
+  useEffect(() => {
+    closeInstantMeetingSession()
+    clearGlobalSession()
+  }, [])
 
   if (!code) {
     return (
