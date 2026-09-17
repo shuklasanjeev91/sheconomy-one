@@ -84,27 +84,33 @@ export function useMeetingVideoEffects(): MeetingVideoEffects {
 
       setStatus('loading')
       try {
-        if (next.mode === 'image' && !next.imageUrl) {
+        const resolved =
+          next.mode === 'image'
+            ? await resolveVirtualBackgroundSelection(next)
+            : next
+        if (resolved.mode === 'image' && !resolved.imageUrl) {
           throw new Error('The selected background image is not available offline.')
         }
         MeetingVideoEffectsNative?.configure?.({
-          mode: next.mode,
-          imagePath: next.imageUrl,
-          blurRadius: next.blurRadius,
+          mode: resolved.mode,
+          imagePath: resolved.imageUrl,
+          blurRadius: resolved.blurRadius,
         })
         if (track) {
-          if (next.mode === 'off') {
+          if (resolved.mode === 'off') {
             track._setVideoEffects([])
             await track.applyConstraints(NORMAL_CAPTURE)
           } else {
             await track.applyConstraints(EFFECT_CAPTURE)
+            // Bounce so a new imagePath always reloads (native caches by path).
+            track._setVideoEffects([])
             track._setVideoEffects([EFFECT_NAME])
           }
         }
-        selectionRef.current = next
-        setSelection(next)
-        setStatus(next.mode === 'off' ? 'idle' : 'active')
-        await saveVirtualBackgroundPreference(next)
+        selectionRef.current = resolved
+        setSelection(resolved)
+        setStatus(resolved.mode === 'off' ? 'idle' : 'active')
+        await saveVirtualBackgroundPreference(resolved)
         return true
       } catch (cause) {
         try {

@@ -29,6 +29,8 @@ type MeetingBackgroundQuickPickerProps = {
   uploadBusy?: boolean
   /** Previously uploaded customs — lets Join Now switch/replace images. */
   customItems?: MeetingBackgroundQuickCustomItem[]
+  /** Active custom/preset image — shown as a confirmation strip under the camera. */
+  selectedImageUri?: string | null
 }
 
 export function MeetingBackgroundQuickPicker({
@@ -41,6 +43,7 @@ export function MeetingBackgroundQuickPicker({
   onUpload,
   uploadBusy,
   customItems = [],
+  selectedImageUri,
 }: MeetingBackgroundQuickPickerProps) {
   const { ui: coworkUi } = useCoWorkTheme()
   const presets = getVirtualBackgroundPresets()
@@ -79,6 +82,30 @@ export function MeetingBackgroundQuickPicker({
           >
             <Spinner color="#fff" />
           </YStack>
+        ) : null}
+        {selectedImageUri && selection.mode === 'image' ? (
+          <XStack
+            position="absolute"
+            left={10}
+            bottom={10}
+            alignItems="center"
+            gap="$2"
+            paddingHorizontal="$2"
+            paddingVertical={6}
+            borderRadius={999}
+            backgroundColor="rgba(0,0,0,0.72)"
+            borderWidth={1}
+            borderColor="rgba(255,255,255,0.2)"
+          >
+            <Image
+              source={{ uri: selectedImageUri }}
+              resizeMode="cover"
+              style={{ width: 36, height: 24, borderRadius: 6 }}
+            />
+            <Text fontSize={11} color="#fff" fontWeight="700">
+              Background selected
+            </Text>
+          </XStack>
         ) : null}
       </YStack>
       <XStack gap="$2" flexWrap="wrap">

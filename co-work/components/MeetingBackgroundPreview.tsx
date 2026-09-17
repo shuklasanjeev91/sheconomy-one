@@ -13,6 +13,7 @@ import {
   type MeetingBackgroundQuickCustomItem,
 } from '~/co-work/components/MeetingBackgroundQuickPicker'
 import { pickImagesWithCrop } from '~/lib/media/pick-and-crop'
+import { clearImageCropQueue } from '~/lib/media/crop-session'
 import {
   customBackgroundSelection,
   listCustomVirtualBackgrounds,
@@ -27,12 +28,14 @@ import {
   webBackgroundResourceWarning,
   type VirtualBackgroundSelection,
 } from '~/co-work/lib/virtual-backgrounds'
+import { useAppToast } from '~/components/ui'
 
 type MeetingBackgroundPreviewProps = {
   userId?: string | null
 }
 
 export function MeetingBackgroundPreview({ userId }: MeetingBackgroundPreviewProps = {}) {
+  const toast = useAppToast()
   const videoRef = useRef<HTMLVideoElement | null>(null)
   const trackRef = useRef<LocalVideoTrack | null>(null)
   const processorRef = useRef<BackgroundProcessorWrapper | null>(null)
@@ -126,8 +129,10 @@ export function MeetingBackgroundPreview({ userId }: MeetingBackgroundPreviewPro
   const upload = useCallback(async () => {
     if (!userId) {
       setError('Sign in to upload a custom background.')
+      toast.show('Sign in required', { tone: 'danger', message: 'Sign in to upload a background.' })
       return
     }
+    clearImageCropQueue()
     try {
       const picked = await pickImagesWithCrop({
         multiple: false,
@@ -135,26 +140,42 @@ export function MeetingBackgroundPreview({ userId }: MeetingBackgroundPreviewPro
         aspect: [16, 9],
         skipCrop: true,
         allowsEditing: false,
-        cropTitle: 'Crop virtual background',
       })
       const image = picked[0]
-      if (!image) {
-        setError('No image selected. Pick a photo from your library to use as a background.')
+      if (!image?.uri) {
+        // User cancelled the picker — stay quiet.
         return
       }
       setUploadBusy(true)
       setError(null)
       const created = await uploadCustomVirtualBackground(userId, image)
-      await refreshCustoms()
-      await apply(customBackgroundSelection(created))
+      const selectionValue = customBackgroundSelection(created)
+      setCustoms((prev) => {
+        const nextItem: MeetingBackgroundQuickCustomItem = {
+          id: created.id,
+          name: created.name || 'Custom',
+          imageUri: created.localUri ?? selectionValue.imageUrl,
+          selection: selectionValue,
+        }
+        return [nextItem, ...prev.filter((row) => row.id !== created.id)]
+      })
+      await apply(selectionValue)
+      void refreshCustoms()
+      toast.show('Background applied', {
+        tone: 'success',
+        message: 'Your custom image is ready for this meeting.',
+      })
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : 'Could not upload this background.')
+      const message = cause instanceof Error ? cause.message : 'Could not upload this background.'
+      setError(message)
+      toast.show('Upload failed', { tone: 'danger', message })
     } finally {
       setUploadBusy(false)
     }
-  }, [apply, refreshCustoms, userId])
+  }, [apply, refreshCustoms, toast, userId])
 
   useEffect(() => {
+    clearImageCropQueue()
     void refreshCustoms()
   }, [refreshCustoms])
 
@@ -233,6 +254,9 @@ export function MeetingBackgroundPreview({ userId }: MeetingBackgroundPreviewPro
     }
   }, [apply])
 
+  const previewImageUri =
+    selection.mode === 'image' && selection.imageUrl ? selection.imageUrl : null
+
   return (
     <MeetingBackgroundQuickPicker
       selection={selection}
@@ -243,6 +267,7 @@ export function MeetingBackgroundPreview({ userId }: MeetingBackgroundPreviewPro
       onUpload={userId ? () => void upload() : undefined}
       uploadBusy={uploadBusy}
       customItems={customs}
+      selectedImageUri={previewImageUri}
       preview={
         <video
           ref={videoRef}

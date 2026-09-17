@@ -54,20 +54,18 @@ function isLocalImageUri(uri: string) {
 /**
  * Give native processors a stable file:// path. HTTPS signed URLs are downloaded
  * first — iOS/Android background processors cannot open remote URLs reliably.
+ * Always copy into our cache (even for file://) so ImageManipulator / picker temps
+ * are not deleted out from under the processor, and so each apply gets a fresh path
+ * the native cache can invalidate.
  */
 async function materializeLocalImage(uri: string, cacheKey: string): Promise<string> {
   if (Platform.OS === 'web') return uri
-  if (uri.startsWith('file:') || (uri.startsWith('/') && !uri.startsWith('//'))) {
-    return uri.startsWith('file:') ? uri : `file://${uri}`
-  }
 
   const FileSystem = await import('expo-file-system/legacy')
   const safeKey = cacheKey.replace(/[^a-zA-Z0-9_-]/g, '-')
-  const destination = `${FileSystem.cacheDirectory}meeting-background-${safeKey}.jpg`
-  const existing = await FileSystem.getInfoAsync(destination)
-  if (existing.exists) {
-    await FileSystem.deleteAsync(destination, { idempotent: true })
-  }
+  // Unique filename so native processors never keep a stale decoded bitmap/CIImage
+  // when the same logical background id is replaced.
+  const destination = `${FileSystem.cacheDirectory}meeting-background-${safeKey}-${Date.now()}.jpg`
 
   if (uri.startsWith('http://') || uri.startsWith('https://')) {
     const result = await FileSystem.downloadAsync(uri, destination)
@@ -77,16 +75,26 @@ async function materializeLocalImage(uri: string, cacheKey: string): Promise<str
     return result.uri.startsWith('file:') ? result.uri : `file://${result.uri}`
   }
 
-  // content:// / ph:// / manipulator output — copy into app cache.
+  const from =
+    uri.startsWith('file:') || uri.startsWith('/')
+      ? uri
+      : uri
   try {
-    await FileSystem.copyAsync({ from: uri, to: destination })
+    await FileSystem.copyAsync({ from, to: destination })
   } catch {
-    // Some schemes need downloadAsync even when not http.
-    const result = await FileSystem.downloadAsync(uri, destination)
-    if (result.status < 200 || result.status >= 300) {
-      throw new Error('Could not cache the background image.')
+    try {
+      const result = await FileSystem.downloadAsync(uri, destination)
+      if (result.status < 200 || result.status >= 300) {
+        throw new Error('Could not cache the background image.')
+      }
+      return result.uri.startsWith('file:') ? result.uri : `file://${result.uri}`
+    } catch (cause) {
+      // Last resort — return the original URI (may still work for file://).
+      if (uri.startsWith('file:') || (uri.startsWith('/') && !uri.startsWith('//'))) {
+        return uri.startsWith('file:') ? uri : `file://${uri}`
+      }
+      throw cause instanceof Error ? cause : new Error('Could not cache the background image.')
     }
-    return result.uri.startsWith('file:') ? result.uri : `file://${result.uri}`
   }
   return destination.startsWith('file:') ? destination : `file://${destination}`
 }

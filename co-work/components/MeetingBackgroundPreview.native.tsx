@@ -10,6 +10,7 @@ import {
   type MeetingBackgroundQuickCustomItem,
 } from '~/co-work/components/MeetingBackgroundQuickPicker'
 import { pickImagesWithCrop } from '~/lib/media/pick-and-crop'
+import { clearImageCropQueue } from '~/lib/media/crop-session'
 import {
   customBackgroundSelection,
   listCustomVirtualBackgrounds,
@@ -24,6 +25,7 @@ import {
   type VirtualBackgroundSelection,
 } from '~/co-work/lib/virtual-backgrounds'
 import { ensureLiveKitGlobals } from '~/lib/livekit/ensure-globals'
+import { useAppToast } from '~/components/ui'
 
 ensureLiveKitGlobals()
 
@@ -35,7 +37,12 @@ type MeetingBackgroundPreviewProps = {
   userId?: string | null
 }
 
+function sleep(ms: number) {
+  return new Promise((resolve) => setTimeout(resolve, ms))
+}
+
 export function MeetingBackgroundPreview({ userId }: MeetingBackgroundPreviewProps = {}) {
+  const toast = useAppToast()
   const trackRef = useRef<LocalVideoTrack | null>(null)
   const effectsSupportedRef = useRef(false)
   const [streamUrl, setStreamUrl] = useState<string | null>(null)
@@ -76,92 +83,121 @@ export function MeetingBackgroundPreview({ userId }: MeetingBackgroundPreviewPro
       }
       setCustoms(items)
     } catch {
-      // Library load is best-effort on the lobby.
+      // Library load is best-effort on the join screen.
     }
   }, [userId])
 
-  const apply = useCallback(async (value: VirtualBackgroundSelection) => {
-    const next = await resolveVirtualBackgroundSelection(normalizeVirtualBackground(value))
+  const applyNativeEffect = useCallback(async (next: VirtualBackgroundSelection) => {
     const track = trackRef.current?.mediaStreamTrack as NativeEffectTrack | undefined
+    if (!track || typeof track._setVideoEffects !== 'function') return false
+    if (!effectsSupportedRef.current) return false
 
-    // Always persist — Join Now must remember the choice even if preview effects
-    // are offline on this build/device.
-    setSelection(next)
-    await saveVirtualBackgroundPreference(next)
-
-    if (!effectsSupportedRef.current && next.mode !== 'off') {
-      setError(
-        'Preview effects need the latest app build. Your selection is saved and will apply when you join.',
-      )
-      setBusy(false)
-      return
-    }
-    if (!track) {
-      setBusy(false)
-      return
-    }
-
-    setBusy(true)
-    setError(null)
-    try {
-      MeetingVideoEffectsNative?.configure({
-        mode: next.mode,
-        imagePath: next.imageUrl,
-        blurRadius: next.blurRadius,
-      })
-      if (typeof track._setVideoEffects === 'function') {
-        track._setVideoEffects(next.mode === 'off' ? [] : ['sheconomyVirtualBackground'])
-      }
-    } catch (cause) {
-      try {
-        if (typeof track._setVideoEffects === 'function') track._setVideoEffects([])
-      } catch {
-        // Keep the ordinary camera preview even if cleanup fails.
-      }
-      setError(
-        cause instanceof Error
-          ? cause.message
-          : 'Could not preview this background. It is still saved for when you join.',
-      )
-    } finally {
-      setBusy(false)
-    }
+    // Bounce the processor so a new imagePath always reloads (native caches by path).
+    track._setVideoEffects([])
+    await sleep(30)
+    MeetingVideoEffectsNative?.configure({
+      mode: next.mode,
+      imagePath: next.imageUrl,
+      blurRadius: next.blurRadius,
+    })
+    track._setVideoEffects(next.mode === 'off' ? [] : ['sheconomyVirtualBackground'])
+    return true
   }, [])
+
+  const apply = useCallback(
+    async (value: VirtualBackgroundSelection) => {
+      const next = await resolveVirtualBackgroundSelection(normalizeVirtualBackground(value))
+      setSelection(next)
+      await saveVirtualBackgroundPreference(next)
+
+      if (!effectsSupportedRef.current && next.mode !== 'off') {
+        setError(
+          'Preview effects need the latest app build. Your selection is saved and will apply when you join.',
+        )
+        setBusy(false)
+        return
+      }
+
+      setBusy(true)
+      setError(null)
+      try {
+        const ok = await applyNativeEffect(next)
+        if (!ok && next.mode !== 'off') {
+          setError(
+            'Could not preview this background on camera yet. It is saved and will apply when you join.',
+          )
+        }
+      } catch (cause) {
+        try {
+          const track = trackRef.current?.mediaStreamTrack as NativeEffectTrack | undefined
+          track?._setVideoEffects?.([])
+        } catch {
+          // Keep ordinary camera preview.
+        }
+        setError(
+          cause instanceof Error
+            ? cause.message
+            : 'Could not preview this background. It is still saved for when you join.',
+        )
+      } finally {
+        setBusy(false)
+      }
+    },
+    [applyNativeEffect],
+  )
 
   const upload = useCallback(async () => {
     if (!userId) {
       setError('Sign in to upload a custom background.')
+      toast.show('Sign in required', { tone: 'danger', message: 'Sign in to upload a background.' })
       return
     }
+    // Never leave a stale crop sheet covering the join preview.
+    clearImageCropQueue()
     try {
-      // Skip in-app crop on the lobby — OS picker is enough; ImageManipulator resizes.
-      // allowsEditing:false avoids empty iPad picker results after the system crop UI.
       const picked = await pickImagesWithCrop({
         multiple: false,
         maxCount: 1,
         aspect: [16, 9],
         skipCrop: true,
         allowsEditing: false,
-        cropTitle: 'Crop virtual background',
       })
       const image = picked[0]
-      if (!image) {
-        setError('No image selected. Pick a photo from your library to use as a background.')
+      if (!image?.uri) {
+        // User cancelled the picker — stay quiet.
         return
       }
       setUploadBusy(true)
       setError(null)
       const created = await uploadCustomVirtualBackground(userId, image)
-      await refreshCustoms()
-      await apply(customBackgroundSelection(created))
+      const selectionValue = customBackgroundSelection(created)
+      // Optimistic tile so the user sees the new image immediately.
+      setCustoms((prev) => {
+        const nextItem: MeetingBackgroundQuickCustomItem = {
+          id: created.id,
+          name: created.name || 'Custom',
+          imageUri: created.localUri ?? selectionValue.imageUrl,
+          selection: selectionValue,
+        }
+        return [nextItem, ...prev.filter((row) => row.id !== created.id)]
+      })
+      await apply(selectionValue)
+      void refreshCustoms()
+      toast.show('Background applied', {
+        tone: 'success',
+        message: 'Your custom image is ready for this meeting.',
+      })
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : 'Could not upload this background.')
+      const message = cause instanceof Error ? cause.message : 'Could not upload this background.'
+      setError(message)
+      toast.show('Upload failed', { tone: 'danger', message })
     } finally {
       setUploadBusy(false)
     }
-  }, [apply, refreshCustoms, userId])
+  }, [apply, refreshCustoms, toast, userId])
 
   useEffect(() => {
+    clearImageCropQueue()
     void refreshCustoms()
   }, [refreshCustoms])
 
@@ -191,11 +227,6 @@ export function MeetingBackgroundPreview({ userId }: MeetingBackgroundPreviewPro
 
         const saved = await loadVirtualBackgroundPreference()
         if (!cancelled) await apply(saved)
-        if (!effectsSupportedRef.current && !cancelled) {
-          setError(
-            'Preview effects need the latest app build. You can still upload an image — it will apply when you join.',
-          )
-        }
       } catch (cause) {
         if (!cancelled) {
           setError(cause instanceof Error ? cause.message : 'Could not start camera preview.')
@@ -217,6 +248,9 @@ export function MeetingBackgroundPreview({ userId }: MeetingBackgroundPreviewPro
     }
   }, [apply])
 
+  const previewImageUri =
+    selection.mode === 'image' && selection.imageUrl ? selection.imageUrl : null
+
   return (
     <MeetingBackgroundQuickPicker
       selection={selection}
@@ -227,6 +261,7 @@ export function MeetingBackgroundPreview({ userId }: MeetingBackgroundPreviewPro
       onUpload={userId ? () => void upload() : undefined}
       uploadBusy={uploadBusy}
       customItems={customs}
+      selectedImageUri={previewImageUri}
       preview={
         streamUrl ? (
           <RTCView

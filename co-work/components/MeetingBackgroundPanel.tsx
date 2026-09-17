@@ -24,6 +24,7 @@ import {
   type CustomVirtualBackground,
 } from '~/co-work/lib/virtual-background-storage'
 import { pickImagesWithCrop } from '~/lib/media/pick-and-crop'
+import { clearImageCropQueue } from '~/lib/media/crop-session'
 
 type ResolvedCustomBackground = CustomVirtualBackground & { imageUrl?: string }
 
@@ -119,26 +120,21 @@ export function MeetingBackgroundPanel({
     try {
       // Skip in-app crop during live meetings — InstantMeetingHost used to cover
       // ImageCropHost (hang = "nothing happens"). OS picker + server resize is enough.
+      clearImageCropQueue()
       const picked = await pickImagesWithCrop({
         multiple: false,
         maxCount: 1,
         aspect: [16, 9],
         skipCrop: true,
         allowsEditing: false,
-        cropTitle: 'Crop virtual background',
       })
       const image = picked[0]
-      if (!image) {
-        toast.show('No image selected', {
-          tone: 'info',
-          message: 'Pick a photo from your library to use as a background.',
-        })
-        return
-      }
+      if (!image?.uri) return
       setBusyId('upload')
       const created = await uploadCustomVirtualBackground(userId, image)
-      await loadCustom()
+      // Prefer local file for apply before library refresh (HTTPS decode fails natively).
       const applied = await applySelection(customBackgroundSelection(created))
+      await loadCustom()
       toast.show(applied ? 'Background applied' : 'Background uploaded', {
         tone: applied ? 'success' : 'warning',
         message: applied
