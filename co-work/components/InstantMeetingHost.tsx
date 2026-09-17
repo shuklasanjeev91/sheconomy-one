@@ -88,22 +88,22 @@ export function InstantMeetingHost() {
     : 0
   const chromeBottom = !collapsed && !isDesktop ? mobileTabBarOffset : 0
 
-  // Keep a real video surface while minimized (not 4×4). Tiny surfaces drop the
-  // iOS PiP video ref and can stall camera publish; park off-screen instead.
+  // Keep full layout size while minimized — only hide visually. Off-screen /
+  // shrunk surfaces disconnect LiveKit on iOS and remount Join on Maximize.
   return (
     <YStack
       position="absolute"
-      top={collapsed ? -420 : chromeTop}
-      left={collapsed ? -420 : 0}
-      right={collapsed ? undefined : 0}
-      bottom={collapsed ? undefined : chromeBottom}
-      width={collapsed ? 320 : '100%'}
-      height={collapsed ? 180 : undefined}
+      top={chromeTop}
+      left={0}
+      right={0}
+      bottom={chromeBottom}
+      width="100%"
       zIndex={collapsed ? 1 : 90_000}
       opacity={collapsed ? 0 : 1}
       pointerEvents={collapsed ? 'none' : 'auto'}
       overflow="hidden"
       backgroundColor="#0c080a"
+      collapsable={false}
       accessibilityElementsHidden={collapsed}
       importantForAccessibility={collapsed ? 'no-hide-descendants' : 'auto'}
       // Hide visually if another meeting owns the global session, but keep mounted.

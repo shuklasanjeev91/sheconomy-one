@@ -15,6 +15,10 @@ import {
   detectSessionPipCapabilities,
   sessionPipUnsupportedMessage,
 } from '~/lib/session/picture-in-picture'
+import {
+  normalizeInstantMeetingCode,
+  peekInstantMeetingSession,
+} from '~/co-work/lib/instant-meeting-session'
 
 type UseRegisterGlobalSessionArgs = {
   active: boolean
@@ -31,6 +35,20 @@ type UseRegisterGlobalSessionArgs = {
     speakerOn?: boolean
   }
   handlers: GlobalSessionHandlers
+}
+
+function codesMatch(a: string, b: string) {
+  return normalizeInstantMeetingCode(a) === normalizeInstantMeetingCode(b)
+}
+
+/** Keep the mini-player / overlay alive across LiveKit flaps and Maximize. */
+function shouldPreserveGlobalSession(code: string): boolean {
+  const current = peekGlobalSession()
+  if (!current || !codesMatch(current.code, code)) return false
+  if (current.presentation === 'minimized' || current.presentation === 'pip') return true
+  const instant = peekInstantMeetingSession()
+  // InstantMeetingHost still owns this meeting (fullscreen remount / credential refresh).
+  return !!instant && codesMatch(instant.code, code) && (instant.enteredRoom || instant.autoJoin)
 }
 
 /**
@@ -52,14 +70,7 @@ export function useRegisterGlobalSession({
 
   useEffect(() => {
     if (!active || !code) {
-      const current = peekGlobalSession()
-      if (
-        current &&
-        current.code === code.replace(/\s/g, '').trim() &&
-        (current.presentation === 'minimized' || current.presentation === 'pip')
-      ) {
-        return
-      }
+      if (shouldPreserveGlobalSession(code)) return
       clearGlobalSession(code)
       return
     }
@@ -90,15 +101,7 @@ export function useRegisterGlobalSession({
       },
     })
     return () => {
-      const current = peekGlobalSession()
-      // Hand-off to mini-player: keep the global session when collapsing.
-      if (
-        current &&
-        current.code === code.replace(/\s/g, '').trim() &&
-        (current.presentation === 'minimized' || current.presentation === 'pip')
-      ) {
-        return
-      }
+      if (shouldPreserveGlobalSession(code)) return
       clearGlobalSession(code)
     }
   }, [

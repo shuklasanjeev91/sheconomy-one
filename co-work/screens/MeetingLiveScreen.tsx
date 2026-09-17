@@ -235,6 +235,15 @@ function MeetingLiveScreenBody({
   // Zoom-style one-tap: after load, enter the room without a second Join click.
   // Resume path (minimize → maximize) already landed on ready with a display name.
   useEffect(() => {
+    if (resumeEnteredRoom && meeting && phase !== 'ready' && phase !== 'error') {
+      setPhase('ready')
+      if (!confirmedDisplayName.trim()) {
+        setConfirmedDisplayName(
+          safeMeetingDisplayName(resumeDisplayName || profile?.full_name || profile?.username),
+        )
+      }
+      return
+    }
     if (resumeEnteredRoom && phase === 'ready') {
       if (!confirmedDisplayName.trim()) {
         setConfirmedDisplayName(

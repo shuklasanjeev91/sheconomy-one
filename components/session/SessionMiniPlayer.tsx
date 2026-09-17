@@ -25,6 +25,7 @@ import { navigateApp } from '~/lib/platform/navigate'
 import { useAppLayout } from '~/hooks/useAppLayout'
 import {
   closeInstantMeetingSession,
+  normalizeInstantMeetingCode,
   openInstantMeetingSession,
   peekInstantMeetingSession,
 } from '~/co-work/lib/instant-meeting-session'
@@ -53,12 +54,14 @@ export function SessionMiniPlayer({ session }: SessionMiniPlayerProps) {
     return { x, y }
   }, [height, safeBottom, safeRight, safeTop, width])
 
+  // Only claim the gesture once the finger moves — otherwise Maximize / Mute /
+  // End taps never fire on iOS/Android (parent stole onStart).
   const pan = useMemo(
     () =>
       PanResponder.create({
-        onStartShouldSetPanResponder: () => true,
+        onStartShouldSetPanResponder: () => false,
         onMoveShouldSetPanResponder: (_: GestureResponderEvent, g: PanResponderGestureState) =>
-          Math.abs(g.dx) > 4 || Math.abs(g.dy) > 4,
+          Math.abs(g.dx) > 6 || Math.abs(g.dy) > 6,
         onPanResponderGrant: () => {
           startRef.current = offset
         },
@@ -78,22 +81,30 @@ export function SessionMiniPlayer({ session }: SessionMiniPlayerProps) {
   const onMaximize = useCallback(() => {
     maximizeGlobalSession()
     const instant = peekInstantMeetingSession()
-    const normalize = (value: string) => value.replace(/\s/g, '').trim().toUpperCase()
 
-    // Meetings must expand InstantMeetingHost in place. Navigating to maximizeHref
-    // remounts MeetingLiveScreen on the Join confirm screen.
+    // Meetings must expand InstantMeetingHost in place. Never navigate to
+    // maximizeHref — that remounts MeetingLiveScreen on Join confirm.
     if (session.kind === 'meeting') {
-      openInstantMeetingSession({
-        code: session.code,
-        meeting: instant?.meeting ?? null,
-        autoJoin: true,
-        enteredRoom: true,
-        displayName: instant?.displayName ?? null,
-      })
+      const sameInstant =
+        instant &&
+        normalizeInstantMeetingCode(instant.code) ===
+          normalizeInstantMeetingCode(session.code)
+      if (!sameInstant) {
+        openInstantMeetingSession({
+          code: session.code,
+          meeting: instant?.meeting ?? null,
+          autoJoin: true,
+          enteredRoom: true,
+          displayName: instant?.displayName ?? null,
+        })
+      }
       return
     }
 
-    if (instant && normalize(instant.code) === normalize(session.code)) {
+    if (
+      instant &&
+      normalizeInstantMeetingCode(instant.code) === normalizeInstantMeetingCode(session.code)
+    ) {
       return
     }
     if (session.maximizeHref) {
@@ -108,7 +119,6 @@ export function SessionMiniPlayer({ session }: SessionMiniPlayerProps) {
         tone: 'info',
         message: sessionPipUnsupportedMessage(caps),
       })
-      // Keep browsing with the in-app mini-player instead of a dead-end error.
       return
     }
     void (async () => {
@@ -148,7 +158,6 @@ export function SessionMiniPlayer({ session }: SessionMiniPlayerProps) {
     return null
   }
 
-  // While OS PiP is active, keep a thin bar so the user can return.
   const compactPip = session.presentation === 'pip'
 
   return (
@@ -175,7 +184,15 @@ export function SessionMiniPlayer({ session }: SessionMiniPlayerProps) {
         gap="$2"
         backgroundColor="rgba(216,27,96,0.18)"
       >
-        <YStack flex={1} minWidth={0} gap={2}>
+        <YStack
+          flex={1}
+          minWidth={0}
+          gap={2}
+          onPress={onMaximize}
+          cursor="pointer"
+          accessibilityRole="button"
+          accessibilityLabel="Maximize meeting"
+        >
           <Text color="#fff" fontSize={13} fontWeight="800" numberOfLines={1}>
             {session.title}
           </Text>

@@ -559,8 +559,8 @@ export function MeetingControls({
       paddingHorizontal="$1"
       alignItems="center"
       gap={roomy ? '$2' : compact ? '$1' : '$1.5'}
-      justifyContent={roomy ? 'center' : undefined}
-      flexWrap={roomy ? 'wrap' : undefined}
+      justifyContent={undefined}
+      flexWrap={undefined}
     >
       {mediaKeys.map(renderPrimary)}
     </XStack>
@@ -641,22 +641,16 @@ export function MeetingControls({
         ) : null}
 
         <XStack width="100%" alignItems="center" gap="$2">
-          {roomy ? (
-            <YStack flex={1} minWidth={0}>
-              {mediaRow}
-            </YStack>
-          ) : (
-            <ScrollView
-              horizontal
-              showsHorizontalScrollIndicator={false}
-              keyboardShouldPersistTaps="handled"
-              nestedScrollEnabled
-              contentContainerStyle={{ alignItems: 'center', paddingRight: 8 }}
-              style={{ flex: 1, minWidth: 0 }}
-            >
-              {mediaRow}
-            </ScrollView>
-          )}
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            keyboardShouldPersistTaps="handled"
+            nestedScrollEnabled
+            contentContainerStyle={{ alignItems: 'center', paddingRight: 8 }}
+            style={{ flex: 1, minWidth: 0 }}
+          >
+            {mediaRow}
+          </ScrollView>
 
           <XStack
             alignItems="center"
