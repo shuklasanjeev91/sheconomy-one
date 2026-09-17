@@ -6,6 +6,7 @@ import { Spinner, Text, YStack } from '~/components/ui'
 import type { InstantMeetingSession } from '~/co-work/lib/instant-meeting-session'
 import {
   closeInstantMeetingSession,
+  normalizeInstantMeetingCode,
   useInstantMeetingSession,
 } from '~/co-work/lib/instant-meeting-session'
 import { useAppLayout } from '~/hooks/useAppLayout'
@@ -34,16 +35,19 @@ export function InstantMeetingHost() {
 
   const presentation = globalSession?.presentation ?? 'fullscreen'
   const collapsed = presentation === 'minimized' || presentation === 'pip'
-  const normalizeMeetingCode = (value: string) => value.replace(/\s/g, '').trim().toUpperCase()
-  // Only host media for this meeting code when global session matches (or none yet).
-  const ownsSession =
+
+  // Instant overlay is the source of truth for LiveKit. Never tear it down just
+  // because global session code formatting briefly mismatches — that remounted
+  // MeetingLiveScreen on the Join confirm screen after Maximize.
+  const globalMatches =
     !globalSession ||
     globalSession.kind !== 'meeting' ||
     !session ||
-    normalizeMeetingCode(globalSession.code) === normalizeMeetingCode(session.code)
+    normalizeInstantMeetingCode(globalSession.code) ===
+      normalizeInstantMeetingCode(session.code)
 
   useEffect(() => {
-    if (!session || !ownsSession) {
+    if (!session) {
       setBody(null)
       setLoadError(null)
       return
@@ -55,13 +59,10 @@ export function InstantMeetingHost() {
     void (async () => {
       try {
         if (Platform.OS !== 'web') {
-          // Register WebRTC globals before the body pulls LiveKit in.
           const { ensureLiveKitGlobals } = await import('~/lib/livekit/ensure-globals')
           ensureLiveKitGlobals()
         }
 
-        // Dynamic import keeps LiveKit out of the AppShell graph until open.
-        // Use ESM `import()` — web Vite has no CommonJS `require`.
         const mod = await import('~/co-work/components/InstantMeetingBody')
         if (!cancelled) setBody(() => mod.InstantMeetingBody)
       } catch (error) {
@@ -74,11 +75,11 @@ export function InstantMeetingHost() {
     return () => {
       cancelled = true
     }
-    // Only remount when the meeting code changes — not on every session object tweak.
+    // Only remount when the meeting code changes — not on global presentation tweaks.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [ownsSession, session?.code])
+  }, [session?.code])
 
-  if (!session || !ownsSession) return null
+  if (!session) return null
 
   const chromeTop = !collapsed
     ? isDesktop
@@ -105,6 +106,8 @@ export function InstantMeetingHost() {
       backgroundColor="#0c080a"
       accessibilityElementsHidden={collapsed}
       importantForAccessibility={collapsed ? 'no-hide-descendants' : 'auto'}
+      // Hide visually if another meeting owns the global session, but keep mounted.
+      display={!globalMatches && !collapsed ? 'none' : undefined}
     >
       <AppErrorBoundary scope="InstantMeeting" alwaysShowError>
         {!Body ? (

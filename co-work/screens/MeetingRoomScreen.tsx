@@ -58,7 +58,7 @@ import {
   mapWebScreenShareError,
   meetingWebUnsupportedMessage,
 } from '~/co-work/lib/meeting-web'
-import { openInstantMeetingSession } from '~/co-work/lib/instant-meeting-session'
+import { openInstantMeetingSession, markInstantMeetingEnteredRoom } from '~/co-work/lib/instant-meeting-session'
 import {
   enterGlobalSessionPip,
   minimizeGlobalSession,
@@ -463,6 +463,12 @@ function MeetingRoomOverlay({
   const [exiting, setExiting] = useState(false)
   const exitingRef = useRef(false)
 
+  // Persist "already in room" on the InstantMeetingHost session so Maximize
+  // restores MeetingRoomScreen instead of the Join confirm lobby.
+  useEffect(() => {
+    markInstantMeetingEnteredRoom({ displayName, meeting })
+  }, [displayName, meeting])
+
   // Keep SFU adapter pointer fresh without unbind/rebind thrash.
   // useLiveKitMediaControls returns a new object each render — cleanup→null→bind
   // was bumping MeetingProvider adapters in a max-update-depth loop (captions/panels).
@@ -865,12 +871,14 @@ function MeetingRoomOverlay({
   }, [fullscreen, toast])
 
   const minimizeMeeting = useCallback(() => {
-    // Keep LiveKit mounted via InstantMeetingHost. Always autoJoin so a remount
-    // (route → overlay handoff) skips the Join confirm lobby.
+    // Keep LiveKit mounted via InstantMeetingHost. Mark enteredRoom so Maximize
+    // resumes the live room instead of the Join confirm lobby.
     openInstantMeetingSession({
       code: meeting.meeting_code,
       meeting,
       autoJoin: true,
+      enteredRoom: true,
+      displayName,
     })
     minimizeGlobalSession()
     toast.show('Meeting minimized', {
@@ -882,7 +890,7 @@ function MeetingRoomOverlay({
     if (!onLeave) {
       navigateApp(coWorkRoutes.home)
     }
-  }, [meeting, onLeave, toast])
+  }, [displayName, meeting, onLeave, toast])
 
   const enterMeetingPip = useCallback(() => {
     const caps = detectSessionPipCapabilities()

@@ -31,7 +31,9 @@ export function collapseLiveMeetingForBrowsing(input?: {
       openInstantMeetingSession({
         code,
         meeting: input?.meeting ?? instant?.meeting ?? null,
-        autoJoin: false,
+        autoJoin: true,
+        enteredRoom: true,
+        displayName: instant?.displayName ?? null,
       })
     }
     minimizeGlobalSession()

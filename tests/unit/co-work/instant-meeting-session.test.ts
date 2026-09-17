@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 
 import {
   closeInstantMeetingSession,
+  markInstantMeetingEnteredRoom,
   openInstantMeetingSession,
   peekInstantMeetingSession,
 } from '~/co-work/lib/instant-meeting-session'
@@ -23,19 +24,23 @@ describe('instant meeting session', () => {
       code: 'ABC123XYZ',
       meeting,
       autoJoin: true,
+      enteredRoom: false,
+      displayName: null,
     })
     closeInstantMeetingSession()
   })
 
-  it('does not remount the same meeting when re-opened (minimize / maximize)', () => {
+  it('never downgrades autoJoin / enteredRoom on minimize updates', () => {
     closeInstantMeetingSession()
     openInstantMeetingSession({ code: 'ABC123XYZ', meeting, autoJoin: true })
+    markInstantMeetingEnteredRoom({ displayName: 'Sanjeev', meeting })
     const first = peekInstantMeetingSession()
-    openInstantMeetingSession({ code: 'ABC123XYZ', meeting, autoJoin: false })
+    openInstantMeetingSession({ code: 'ABC123XYZ', meeting, autoJoin: false, enteredRoom: false })
     const second = peekInstantMeetingSession()
     expect(second?.code).toBe(first?.code)
-    // autoJoin stays false once cleared so the join screen does not reappear
-    expect(second?.autoJoin).toBe(false)
+    expect(second?.autoJoin).toBe(true)
+    expect(second?.enteredRoom).toBe(true)
+    expect(second?.displayName).toBe('Sanjeev')
     closeInstantMeetingSession()
   })
 })

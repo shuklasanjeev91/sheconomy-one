@@ -25,6 +25,7 @@ import { navigateApp } from '~/lib/platform/navigate'
 import { useAppLayout } from '~/hooks/useAppLayout'
 import {
   closeInstantMeetingSession,
+  openInstantMeetingSession,
   peekInstantMeetingSession,
 } from '~/co-work/lib/instant-meeting-session'
 
@@ -78,15 +79,27 @@ export function SessionMiniPlayer({ session }: SessionMiniPlayerProps) {
     maximizeGlobalSession()
     const instant = peekInstantMeetingSession()
     const normalize = (value: string) => value.replace(/\s/g, '').trim().toUpperCase()
-    // Prefer expanding InstantMeetingHost in place — navigating to maximizeHref
-    // remounted MeetingLiveScreen on the join confirm screen.
+
+    // Meetings must expand InstantMeetingHost in place. Navigating to maximizeHref
+    // remounts MeetingLiveScreen on the Join confirm screen.
+    if (session.kind === 'meeting') {
+      openInstantMeetingSession({
+        code: session.code,
+        meeting: instant?.meeting ?? null,
+        autoJoin: true,
+        enteredRoom: true,
+        displayName: instant?.displayName ?? null,
+      })
+      return
+    }
+
     if (instant && normalize(instant.code) === normalize(session.code)) {
       return
     }
     if (session.maximizeHref) {
       navigateApp(session.maximizeHref as never)
     }
-  }, [session.code, session.maximizeHref])
+  }, [session.code, session.kind, session.maximizeHref])
 
   const onPip = useCallback(() => {
     const caps = detectSessionPipCapabilities()

@@ -39,6 +39,12 @@ type MeetingLiveScreenProps = {
    * Still shows confirm when a passcode is required or auto-join fails.
    */
   autoJoin?: boolean
+  /**
+   * InstantMeetingHost already entered the live room — Maximize must resume
+   * MeetingRoomScreen, never the Join confirm lobby.
+   */
+  resumeEnteredRoom?: boolean
+  resumeDisplayName?: string | null
   /** Overlay / in-place host: close session instead of relying on route alone. */
   onExit?: () => void
 }
@@ -60,17 +66,24 @@ function MeetingLiveScreenBody({
   code,
   initialMeeting = null,
   autoJoin = false,
+  resumeEnteredRoom = false,
+  resumeDisplayName = null,
   onExit,
 }: MeetingLiveScreenProps) {
   const { ui: coworkUi } = useCoWorkTheme()
   const { profile, user, isAuthenticated, isLoading } = useProfile()
   const userId = user?.id
+  const shouldSkipConfirm = autoJoin || resumeEnteredRoom
   const [meeting, setMeeting] = useState<Meeting | null>(initialMeeting)
-  const [phase, setPhase] = useState<'loading' | 'confirm' | 'joining' | 'ready' | 'error'>(
-    initialMeeting ? (autoJoin ? 'joining' : 'confirm') : 'loading',
-  )
+  const [phase, setPhase] = useState<'loading' | 'confirm' | 'joining' | 'ready' | 'error'>(() => {
+    if (!initialMeeting) return 'loading'
+    if (resumeEnteredRoom) return 'ready'
+    return shouldSkipConfirm ? 'joining' : 'confirm'
+  })
   const [error, setError] = useState<string | null>(null)
-  const [confirmedDisplayName, setConfirmedDisplayName] = useState('')
+  const [confirmedDisplayName, setConfirmedDisplayName] = useState(
+    () => resumeDisplayName?.trim() || '',
+  )
   const [isLocked, setIsLocked] = useState(false)
   const [passcodeVerified, setPasscodeVerified] = useState(false)
   const loadedCodeRef = useRef<string | null>(null)
@@ -137,7 +150,8 @@ function MeetingLiveScreenBody({
       if (ok) {
         setPhase((prev) => {
           if (prev === 'ready' || prev === 'joining') return prev
-          return autoJoin ? 'joining' : 'confirm'
+          if (resumeEnteredRoom) return 'ready'
+          return shouldSkipConfirm ? 'joining' : 'confirm'
         })
       }
       return
@@ -162,14 +176,15 @@ function MeetingLiveScreenBody({
       if (ok) {
         setPhase((prev) => {
           if (prev === 'ready' || prev === 'joining') return prev
-          return autoJoin ? 'joining' : 'confirm'
+          if (resumeEnteredRoom) return 'ready'
+          return shouldSkipConfirm ? 'joining' : 'confirm'
         })
       }
     } catch (loadError) {
       setPhase('error')
       setError(loadError instanceof Error ? loadError.message : 'Failed to load meeting')
     }
-  }, [normalizedCode, initialMeeting, applyMeetingSecurity, autoJoin])
+  }, [normalizedCode, initialMeeting, applyMeetingSecurity, shouldSkipConfirm, resumeEnteredRoom])
 
   const joinMeeting = useCallback(
     async (displayName: string, passcode?: string) => {
@@ -218,8 +233,17 @@ function MeetingLiveScreenBody({
   }, [loadMeeting, normalizedCode])
 
   // Zoom-style one-tap: after load, enter the room without a second Join click.
+  // Resume path (minimize → maximize) already landed on ready with a display name.
   useEffect(() => {
-    if (!autoJoin || autoJoinAttemptedRef.current) return
+    if (resumeEnteredRoom && phase === 'ready') {
+      if (!confirmedDisplayName.trim()) {
+        setConfirmedDisplayName(
+          safeMeetingDisplayName(resumeDisplayName || profile?.full_name || profile?.username),
+        )
+      }
+      return
+    }
+    if (!shouldSkipConfirm || autoJoinAttemptedRef.current) return
     if (!meeting || !user || !isAuthenticated) return
     if (phase !== 'joining' && phase !== 'confirm') return
     if (isLocked && !isHost) return
@@ -235,7 +259,7 @@ function MeetingLiveScreenBody({
       const remembered = await loadRememberedMeetingDisplayName()
       if (cancelled) return
       const name = safeMeetingDisplayName(
-        remembered || profile?.full_name || profile?.username,
+        resumeDisplayName || remembered || profile?.full_name || profile?.username,
       )
       try {
         await joinMeeting(name)
@@ -247,7 +271,10 @@ function MeetingLiveScreenBody({
       cancelled = true
     }
   }, [
-    autoJoin,
+    shouldSkipConfirm,
+    resumeEnteredRoom,
+    resumeDisplayName,
+    confirmedDisplayName,
     meeting,
     user,
     isAuthenticated,
