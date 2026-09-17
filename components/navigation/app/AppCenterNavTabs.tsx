@@ -11,6 +11,10 @@ import { useAppUi } from '~/lib/theme/useAppUi'
 
 import { APP_CENTER_NAV, getAppColors } from '~/components/navigation/app/config'
 import { warmProductTabRoute } from '~/components/navigation/app/warm-product-tab-route'
+import {
+  collapseLiveMeetingForBrowsing,
+  shouldCollapseMeetingBeforeNavigate,
+} from '~/co-work/lib/meeting-browse'
 import { QA } from '~/lib/qa/test-ids'
 
 /** Tamagui layout animation is costly on Hermes during rapid tab switches. */
@@ -59,6 +63,10 @@ export function AppCenterNavTabs({ variant = 'desktop', compact = false }: AppCe
     }
 
     setPendingPath(href)
+    if (shouldCollapseMeetingBeforeNavigate()) {
+      collapseLiveMeetingForBrowsing({ href: intent.href })
+      return
+    }
     navigateApp(intent.href)
   }
 

@@ -1,10 +1,7 @@
-import { useLocalSearchParams } from 'one'
+import { SpaRedirect } from '~/components/navigation/SpaRedirect'
+import { coWorkRoutes } from '~/lib/routes'
 
-import { CoWorkMainChatScreen } from '~/co-work/screens/CoWorkMainChatScreen'
-
-export default function CoWorkMainChatThreadRoute() {
-  const params = useLocalSearchParams<{ id?: string | string[] }>()
-  const raw = params.id
-  const chatId = Array.isArray(raw) ? raw[0] : raw
-  return <CoWorkMainChatScreen chatId={chatId ?? null} />
+/** Co-Work Main Chat removed — send legacy thread links to Co-Work home. */
+export default function CoWorkMainChatThreadRedirect() {
+  return <SpaRedirect href={coWorkRoutes.home} />
 }

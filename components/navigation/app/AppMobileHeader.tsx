@@ -56,7 +56,7 @@ export function AppMobileHeader({ minimal = false }: AppMobileHeaderProps) {
       backgroundColor={colors.surface}
       borderBottomWidth={1}
       borderBottomColor={colors.borderSubtle}
-      zIndex={200}
+      zIndex={95_000}
       width="100%"
       position={Platform.OS === 'web' ? 'sticky' : 'relative'}
       top={Platform.OS === 'web' ? 0 : undefined}

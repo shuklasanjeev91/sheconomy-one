@@ -1066,6 +1066,9 @@ function MeetingRoomOverlay({
       end: () => {
         handleLeave()
       },
+      browseAway: () => {
+        minimizeMeeting()
+      },
       enterPip: async () => {
         enterMeetingPip()
       },

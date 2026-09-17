@@ -30,25 +30,27 @@ export function StickyRail({
   const { isDesktopWeb, isDesktop } = useAppLayout()
 
   if (pin === 'viewport' && Platform.OS !== 'web') {
-    // Native tablets: the page doesn't scroll around the rail, so the rail
-    // scrolls itself — otherwise its lower nav items are unreachable in landscape.
-    // Stretch to the row height instead of `height: '100%'`, which collapses to
-    // zero when an ancestor height is not definite.
+    // Native tablets / iPad: pin the rail to the row height and scroll inside
+    // so long left-nav lists stay reachable while the center column scrolls.
     const { gap, ...rest } = props
 
     return (
       <YStack
         flexShrink={0}
         alignSelf="stretch"
+        flex={0}
         minHeight={0}
+        height="100%"
+        maxHeight="100%"
+        overflow="hidden"
         style={style as object}
         {...rest}
       >
         <ScrollView
-          flex={1}
-          minHeight={0}
+          style={{ flex: 1, height: '100%' }}
+          contentContainerStyle={{ paddingBottom: 24, flexGrow: 0 }}
           showsVerticalScrollIndicator={false}
-          contentContainerStyle={{ paddingBottom: 24 }}
+          nestedScrollEnabled
         >
           <YStack width="100%" gap={gap}>
             {children}

@@ -86,6 +86,7 @@ export function useRegisterGlobalSession({
         end: () => handlersRef.current.end?.(),
         enterPip: () => handlersRef.current.enterPip?.(),
         exitPip: () => handlersRef.current.exitPip?.(),
+        browseAway: () => handlersRef.current.browseAway?.(),
       },
     })
     return () => {
@@ -135,6 +136,7 @@ export function useRegisterGlobalSession({
       end: () => handlersRef.current.end?.(),
       enterPip: () => handlersRef.current.enterPip?.(),
       exitPip: () => handlersRef.current.exitPip?.(),
+      browseAway: () => handlersRef.current.browseAway?.(),
     })
   }, [active])
 }

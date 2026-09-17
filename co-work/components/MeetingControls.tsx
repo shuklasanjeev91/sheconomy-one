@@ -278,6 +278,7 @@ export function MeetingControls({
     supportsVideo: caps.supportsVideo,
     supportsScreenShare: caps.supportsScreenShare,
     supportsLiveCaptions: caps.supportsLiveCaptions,
+    hasBrowse: !!onMinimize,
   })
   const securityKeys = meetingToolbarSecurityKeys(role)
   const moreKeys = meetingToolbarMoreKeys({
@@ -287,7 +288,7 @@ export function MeetingControls({
     hasAudioSettings: !!onOpenAudioSettings,
     hasShareLink: !!onShare,
     hasFullscreen: !!onToggleFullscreen,
-    hasMinimize: !!onMinimize,
+    hasMinimize: false,
     hasPictureInPicture: !!onPictureInPicture,
   })
 
@@ -517,6 +518,17 @@ export function MeetingControls({
             compact={compact}
           />
         )
+      case 'browse':
+        return onMinimize ? (
+          <ControlButton
+            key={key}
+            label="Browse"
+            icon={Icons.LayoutGrid}
+            variant="brand"
+            onPress={onMinimize}
+            compact={compact}
+          />
+        ) : null
       case 'more':
         return (
           <ControlButton

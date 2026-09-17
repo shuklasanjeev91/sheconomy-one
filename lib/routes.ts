@@ -222,9 +222,6 @@ export const coWorkRoutes = {
   schedule: '/co-work/schedule' as Href,
   meetings: '/co-work/meetings' as Href,
   join: '/co-work/join' as Href,
-  /** Persistent Co-Work Main Chat (not meeting chat). */
-  chat: '/co-work/chat' as Href,
-  chatThread: (id: string) => `/co-work/chat/${encodeURIComponent(id)}` as Href,
 } as const
 
 /** Shared auth + legacy aliases used across the app. */

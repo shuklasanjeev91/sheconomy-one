@@ -24,6 +24,11 @@ export type GlobalSessionHandlers = {
   /** Enter OS Picture-in-Picture when supported. */
   enterPip?: () => void | Promise<void>
   exitPip?: () => void | Promise<void>
+  /**
+   * Hand off LiveKit to InstantMeetingHost + mini-player so the member can use
+   * Commerce / Community / Chat / Class without ending the meeting.
+   */
+  browseAway?: () => void | Promise<void>
 }
 
 export type GlobalSessionState = {
@@ -183,18 +188,23 @@ export function shouldUseChromelessShell(input: {
   instantMeetingOpen: boolean
   globalPresentation: GlobalSessionPresentation | null
 }): boolean {
-  const { pathname, instantMeetingOpen, globalPresentation } = input
+  const { pathname, globalPresentation } = input
   // Mini-player / PiP: show normal app chrome so other tabs stay usable.
   if (globalPresentation === 'minimized' || globalPresentation === 'pip') {
     return false
   }
-  if (instantMeetingOpen && globalPresentation !== 'minimized') {
-    // Instant overlay fullscreen (or no global session yet).
-    if (!globalPresentation || globalPresentation === 'fullscreen') return true
+  // Co-Work meetings keep header + section tabs so Commerce / Community / Chat /
+  // Class stay reachable. InstantMeetingHost insets around chrome; tab presses
+  // collapse the room to the mini-player via browseAway.
+  if (pathname.startsWith('/co-work/meeting/') || pathname === '/co-work/meeting') {
+    return false
+  }
+  // Instant overlay on /co-work (or any tab) — keep shell chrome visible.
+  if (input.instantMeetingOpen) {
+    return false
   }
   if (pathname.startsWith('/ui-kit')) return true
   if (pathname.startsWith('/payu-embed-return')) return true
-  if (pathname.startsWith('/co-work/meeting/') || pathname === '/co-work/meeting') return true
   if (pathname.startsWith('/chat/call/')) return true
   return false
 }

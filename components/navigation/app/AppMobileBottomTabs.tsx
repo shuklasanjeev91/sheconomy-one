@@ -28,6 +28,10 @@ import {
   shouldShowBottomTabLabels,
 } from '~/components/navigation/app/mobile-tab-bar-width'
 import { MobileTabBarItem } from '~/components/navigation/app/MobileTabBarItem'
+import {
+  collapseLiveMeetingForBrowsing,
+  shouldCollapseMeetingBeforeNavigate,
+} from '~/co-work/lib/meeting-browse'
 import { useAppUi } from '~/lib/theme/useAppUi'
 import { QA } from '~/lib/qa/test-ids'
 
@@ -121,12 +125,16 @@ export function AppMobileBottomTabs() {
       return
     }
     setPendingPath(href)
+    if (shouldCollapseMeetingBeforeNavigate()) {
+      collapseLiveMeetingForBrowsing({ href })
+      return
+    }
     navigateApp(tab.href)
   }
 
   return (
     <YStack
-      zIndex={200}
+      zIndex={95_000}
       // Keep tabs visible on all native phones/tablets — `$gtMd` can mis-fire
       // with Tamagui media on RN and hide the dock entirely.
       {...(Platform.OS === 'web' ? { $gtMd: { display: 'none' as const } } : { display: 'flex' })}

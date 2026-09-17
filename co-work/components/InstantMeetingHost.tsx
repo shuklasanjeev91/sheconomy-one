@@ -8,6 +8,8 @@ import {
   closeInstantMeetingSession,
   useInstantMeetingSession,
 } from '~/co-work/lib/instant-meeting-session'
+import { useAppLayout } from '~/hooks/useAppLayout'
+import { APP_LAYOUT } from '~/lib/layout/constants'
 import { useGlobalSession } from '~/lib/session/global-session'
 
 type InstantMeetingBodyComponent = ComponentType<{
@@ -20,11 +22,13 @@ type InstantMeetingBodyComponent = ComponentType<{
  *
  * When the global session is minimized/pip, the LiveKit body stays mounted
  * (hidden) so audio continues while SessionMiniPlayer / other tabs are usable.
- * Fullscreen presentation covers the shell like before.
+ * Fullscreen insets around the app header + bottom tabs so Commerce / Community /
+ * Chat / Class stay reachable during the call.
  */
 export function InstantMeetingHost() {
   const session = useInstantMeetingSession()
   const globalSession = useGlobalSession()
+  const { isDesktop, mobileTabBarOffset } = useAppLayout()
   const [Body, setBody] = useState<InstantMeetingBodyComponent | null>(null)
   const [loadError, setLoadError] = useState<string | null>(null)
 
@@ -75,16 +79,23 @@ export function InstantMeetingHost() {
 
   if (!session || !ownsSession) return null
 
+  const chromeTop = !collapsed
+    ? isDesktop
+      ? APP_LAYOUT.desktopHeaderHeight
+      : APP_LAYOUT.mobileHeaderHeight
+    : 0
+  const chromeBottom = !collapsed && !isDesktop ? mobileTabBarOffset : 0
+
   return (
     <YStack
       position="absolute"
-      top={collapsed ? -4 : 0}
+      top={collapsed ? -4 : chromeTop}
       left={collapsed ? -4 : 0}
       right={collapsed ? undefined : 0}
-      bottom={collapsed ? undefined : 0}
+      bottom={collapsed ? undefined : chromeBottom}
       width={collapsed ? 4 : '100%'}
-      height={collapsed ? 4 : '100%'}
-      zIndex={collapsed ? 1 : 100000}
+      height={collapsed ? 4 : undefined}
+      zIndex={collapsed ? 1 : 90_000}
       opacity={collapsed ? 0 : 1}
       pointerEvents={collapsed ? 'none' : 'auto'}
       overflow="hidden"

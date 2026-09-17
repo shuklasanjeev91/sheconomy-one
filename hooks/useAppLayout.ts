@@ -60,15 +60,17 @@ export function useAppLayout() {
    * Content sits beside a side rail — community sidebars, settings nav, Manage
    * shop sidebar, two-column pages.
    *
-   * Kept separate from `isDesktop` so a large native tablet can take the wide
-   * content layout while keeping touch chrome: the mobile header and bottom tab
-   * bar stay, only the page splits into rail + content.
+   * Kept separate from `isDesktop` so a large tablet (iPad Pro / web tablet band)
+   * can take the wide content layout while keeping touch chrome when needed:
+   * native always keeps the mobile header + bottom tabs; web uses desktop chrome
+   * only when `gtMd` / `desktopWeb` apply.
    */
-  const hasSideRails = isDesktop || (isNative && width >= APP_LAYOUT.tabletSideRailMinWidth)
+  const hasSideRails =
+    isDesktop || width >= APP_LAYOUT.tabletSideRailMinWidth
 
   /** Room for a second rail (community right sidebar) beside the content. */
   const hasDualSideRails =
-    isWide || (isNative && width >= APP_LAYOUT.tabletDualSideRailMinWidth)
+    isWide || width >= APP_LAYOUT.tabletDualSideRailMinWidth
 
   return {
     listingGridColumns,

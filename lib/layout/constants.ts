@@ -17,12 +17,12 @@ export const APP_LAYOUT = {
   /** Web desktop breakpoint — matches `app/_layout.tsx` media queries. */
   desktopMinWidth: 1021,
   /**
-   * Native tablet width that can host a side rail beside content — iPad Pro
-   * portrait (1024) and up. Chrome stays mobile at any width on native.
+   * Native tablet / iPad width that can host a side rail beside content.
+   * 834 covers iPad 11" portrait (and similar); keep phones (≤430) on stacked layout.
    */
-  tabletSideRailMinWidth: 1024,
-  /** Native tablet width with room for two rails — iPad Pro 13" landscape. */
-  tabletDualSideRailMinWidth: 1281,
+  tabletSideRailMinWidth: 834,
+  /** Room for left + right community rails — iPad Pro landscape / large tablets. */
+  tabletDualSideRailMinWidth: 1100,
   /** Narrow column for OTP inputs and focused forms only — not page shells. */
   maxFormWidth: 560,
   /** Auth form column on desktop split layout. */

@@ -65,8 +65,8 @@ function buildFeatures(brandLight: string) {
     },
     {
       icon: <Icons.MessageSquare size={20} color={brandLight} />,
-      title: 'Main + meeting chat',
-      description: 'Persistent Co-Work Main Chat outside rooms; Meeting Chat stays in the live call.',
+      title: 'In-meeting chat',
+      description: 'Chat with everyone in the live room — private notes and host moderation included.',
     },
     {
       icon: <Icons.Shield size={20} color={brandLight} />,
@@ -236,17 +236,6 @@ export function CoWorkScreen() {
               icon={<Icons.Video size={18} color={coworkUi.text} />}
             >
               My meetings
-            </Button>
-          </AppLink>
-          <AppLink href={coWorkRoutes.chat} asChild>
-            <Button
-              tone="outline"
-              size="$4"
-              borderRadius={999}
-              borderColor={coworkUi.glassBorder}
-              icon={<Icons.MessageSquare size={18} color={coworkUi.text} />}
-            >
-              Co-Work Main Chat
             </Button>
           </AppLink>
         </XStack>

@@ -55,7 +55,7 @@ export function AppDesktopHeader() {
       backgroundColor={colors.surface}
       borderBottomWidth={1}
       borderBottomColor={colors.borderSubtle}
-      zIndex={200}
+      zIndex={95_000}
       position="sticky"
       top={0}
       width="100%"

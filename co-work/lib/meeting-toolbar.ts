@@ -15,6 +15,7 @@ export type MeetingToolbarPrimaryKey =
   | 'share_screen'
   | 'captions'
   | 'invite'
+  | 'browse'
   | 'more'
   | 'leave'
   | 'end_meeting'
@@ -46,6 +47,8 @@ export function meetingToolbarPrimaryKeys(input: {
   supportsVideo?: boolean
   supportsScreenShare?: boolean
   supportsLiveCaptions?: boolean
+  /** Show primary Browse control (mini-player + other Sheconomy tabs). Default true. */
+  hasBrowse?: boolean
 }): MeetingToolbarPrimaryKey[] {
   const keys: MeetingToolbarPrimaryKey[] = ['mic']
   if (input.supportsVideo !== false) keys.push('camera')
@@ -53,7 +56,9 @@ export function meetingToolbarPrimaryKeys(input: {
   keys.push('participants', 'chat')
   if (input.supportsScreenShare) keys.push('share_screen')
   if (input.supportsLiveCaptions !== false) keys.push('captions')
-  keys.push('invite', 'more', 'leave')
+  keys.push('invite')
+  if (input.hasBrowse !== false) keys.push('browse')
+  keys.push('more', 'leave')
   if (canEndMeetingForEveryone(input.viewerRole)) keys.push('end_meeting')
   return keys
 }
@@ -83,7 +88,7 @@ export function meetingToolbarMoreKeys(input: {
   keys.push('meeting_info')
   if (input.hasShareLink) keys.push('share_link')
   if (input.hasFullscreen) keys.push('fullscreen')
-  if (input.hasMinimize) keys.push('minimize')
+  // Browse is a primary control — keep More free of a duplicate Minimize.
   if (input.hasPictureInPicture) keys.push('picture_in_picture')
 
   if (canManageMeeting(input.viewerRole) && !canChangeCriticalMeetingSettings(input.viewerRole)) {

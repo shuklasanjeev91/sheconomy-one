@@ -1,4 +1,5 @@
 import { usePathname } from 'one'
+import { Platform, useWindowDimensions } from 'react-native'
 
 import { CommunityLeftSidebar } from '~/community/components/CommunityLeftSidebar'
 import { CommunityRightSidebar } from '~/community/components/CommunityRightSidebar'
@@ -8,7 +9,6 @@ import { FullWidthLayout, PageColumns, PageSection } from '~/components/layout'
 import { ScrollView, YStack } from '~/components/ui'
 import { useAppLayout } from '~/hooks/useAppLayout'
 import { usePullToRefresh } from '~/hooks/usePullToRefresh'
-import { APP_LAYOUT } from '~/lib/layout/constants'
 import { LAYOUT_STRETCH, scrollHostTransformReset } from '~/lib/layout/styles'
 import { isCommunityPath } from '~/lib/routes'
 
@@ -29,10 +29,10 @@ type CommunityShellProps = {
 
 /**
  * Full-width social layout.
- * With side rails (desktop web + large tablets): left/right stay pinned while
+ * With side rails (desktop web + iPad / large tablets): left/right stay pinned while
  * the center column scrolls — LinkedIn-style sticky sidebars on every
  * community tab (Home, Network, Jobs, …), not only the feed.
- * Mobile: page scroll via FullWidthLayout / PageScroll.
+ * Phone: page scroll via FullWidthLayout / PageScroll.
  */
 export function CommunityShell({
   children,
@@ -42,8 +42,16 @@ export function CommunityShell({
 }: CommunityShellProps) {
   const communityUi = useCommunityUi()
   const pathname = usePathname()
-  const { hasSideRails, hasDualSideRails, isDesktopWeb, gutter, mobileTabBarOffset } =
-    useAppLayout()
+  const { height: windowHeight } = useWindowDimensions()
+  const {
+    hasSideRails,
+    hasDualSideRails,
+    isDesktop,
+    gutter,
+    mobileTabBarOffset,
+    mobileHeaderTotalHeight,
+    desktopHeaderHeight,
+  } = useAppLayout()
   const showSidebars = isCommunityPath(pathname)
   const { refreshControl, webPullHandlers } = usePullToRefresh({
     onRefresh: scroll ? onRefresh : undefined,
@@ -52,10 +60,14 @@ export function CommunityShell({
 
   // Sticky rails whenever the layout shows side columns — every community tab.
   if (hasSideRails && showSidebars) {
-    const shellHeight = isDesktopWeb
-      ? (`calc(100dvh - ${APP_LAYOUT.desktopHeaderHeight}px)` as const)
-      : undefined
-    const bottomInset = isDesktopWeb ? 0 : mobileTabBarOffset
+    // Lock a definite viewport height on web + native tablets. Previously only
+    // `isDesktopWeb` got calc(100dvh…), so iPad (Safari + app) grew with content
+    // and the sidebars scrolled away with the page.
+    const chromePx = isDesktop
+      ? desktopHeaderHeight
+      : mobileHeaderTotalHeight + mobileTabBarOffset
+    const lockedPx = Math.max(240, Math.floor(windowHeight - chromePx))
+    const bottomInset = isDesktop ? 0 : 12
 
     return (
       <YStack
@@ -66,22 +78,31 @@ export function CommunityShell({
         minHeight={0}
         backgroundColor={communityUi.pageBg}
         style={
-          shellHeight
+          Platform.OS === 'web'
             ? ({
-                height: shellHeight,
-                maxHeight: shellHeight,
+                flex: 1,
+                minHeight: 0,
+                height: `calc(100dvh - ${chromePx}px)`,
+                maxHeight: `calc(100dvh - ${chromePx}px)`,
                 overflow: 'hidden',
               } as const)
-            : ({ flex: 1, minHeight: 0, overflow: 'hidden' } as const)
+            : ({
+                flex: 1,
+                minHeight: 0,
+                height: lockedPx,
+                maxHeight: lockedPx,
+                overflow: 'hidden',
+              } as const)
         }
       >
         <YStack
           flex={1}
           minHeight={0}
           width="100%"
+          height="100%"
           paddingHorizontal={gutter}
           paddingVertical="$3"
-          paddingBottom={bottomInset > 0 ? bottomInset + 12 : undefined}
+          paddingBottom={bottomInset > 0 ? bottomInset : undefined}
         >
           <PageColumns
             gap={COMMUNITY_LAYOUT.columnGap}
