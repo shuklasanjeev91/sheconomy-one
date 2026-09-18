@@ -265,11 +265,12 @@ function MeetingLobbyScreenBody({ code }: MeetingLobbyScreenProps) {
       ) : null}
 
       {joinReady ? (
-        <YStack gap="$3">
+        <YStack gap="$3" width="100%">
           <Button
             tone="primary"
             size="$5"
             borderRadius={12}
+            width="100%"
             disabled={isLocked && !isHost}
             opacity={isLocked && !isHost ? 0.55 : 1}
             icon={<Icons.Video size={18} color="white" />}
@@ -342,11 +343,14 @@ function MeetingLobbyScreenBody({ code }: MeetingLobbyScreenProps) {
   const preview = joinReady ? (
     <YStack
       flex={wide ? 1.65 : undefined}
-      minHeight={wide ? 420 : 240}
+      minHeight={wide ? 420 : undefined}
+      padding="$4"
+      gap="$3"
       borderRadius={coworkUi.radius.panel}
       borderWidth={1}
       borderColor={coworkUi.glassBorder}
-      overflow="hidden"
+      // Do not clip — background tiles / Upload live below the camera preview.
+      overflow="visible"
       style={{
         ...meetingBarStyle(coworkUi),
         ...coworkBoxShadow(coworkShadows, 'card'),
@@ -373,8 +377,8 @@ function MeetingLobbyScreenBody({ code }: MeetingLobbyScreenProps) {
       backgroundColor={coworkUi.pageBg}
       style={pageGradientStyle(coworkGradients.page, coworkUi.pageBg)}
     >
-      <PageSection paddingVertical="$5" {...LAYOUT_STRETCH}>
-        <YStack gap="$5" width="100%" maxWidth={wide ? 1100 : 520} alignSelf="center">
+      <PageSection paddingVertical="$5" paddingBottom="$8" {...LAYOUT_STRETCH}>
+        <YStack gap="$5" width="100%" maxWidth={wide ? 1100 : 520} alignSelf="center" paddingBottom="$6">
           {wide && joinReady ? (
             <XStack gap="$5" alignItems="stretch" width="100%">
               {preview}

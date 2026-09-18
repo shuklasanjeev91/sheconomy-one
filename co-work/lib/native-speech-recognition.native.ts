@@ -4,6 +4,10 @@ import Voice, {
 } from '@react-native-voice/voice'
 import { PermissionsAndroid, Platform } from 'react-native'
 
+import {
+  isLikelyCaptionFragment,
+  mergeCaptionHypothesis,
+} from '~/co-work/lib/caption-utterance'
 import { isNativeRuntime } from '~/lib/platform/capabilities'
 
 import type { NativeSpeechHandlers, NativeSpeechSession } from '~/co-work/lib/native-speech-recognition'
@@ -41,11 +45,27 @@ function localeFallbacks(requested: string): string[] {
   return [...new Set(candidates)]
 }
 
+/** Keep the recognizer open longer so multi-word sentences survive LiveKit mic contention. */
+const ANDROID_VOICE_OPTIONS = {
+  EXTRA_LANGUAGE_MODEL: 'LANGUAGE_MODEL_FREE_FORM',
+  EXTRA_MAX_RESULTS: 5,
+  EXTRA_PARTIAL_RESULTS: true,
+  REQUEST_PERMISSIONS_AUTO: true,
+  // ~2.5s of silence before Android ends the utterance (default is much shorter).
+  EXTRA_SPEECH_INPUT_COMPLETE_SILENCE_LENGTH_MILLIS: 2500,
+  EXTRA_SPEECH_INPUT_POSSIBLY_COMPLETE_SILENCE_LENGTH_MILLIS: 2000,
+  EXTRA_SPEECH_INPUT_MINIMUM_LENGTH_MILLIS: 1200,
+} as const
+
 async function startVoiceWithFallback(locales: string[]): Promise<string> {
   let lastError: unknown = null
   for (const locale of locales) {
     try {
-      await Voice.start(locale)
+      if (Platform.OS === 'android') {
+        await Voice.start(locale, ANDROID_VOICE_OPTIONS as never)
+      } else {
+        await Voice.start(locale)
+      }
       return locale
     } catch (error) {
       lastError = error
@@ -76,19 +96,63 @@ export async function createNativeSpeechSession(
   let shouldRestart = false
   let locale = 'en-US'
   let starting = false
-  let lastPartial = ''
+  /** Growing hypothesis for the current spoken utterance. */
+  let utterance = ''
+  let finalizeTimer: ReturnType<typeof setTimeout> | null = null
+
+  const clearFinalizeTimer = () => {
+    if (!finalizeTimer) return
+    clearTimeout(finalizeTimer)
+    finalizeTimer = null
+  }
+
+  const emitPartial = (text: string) => {
+    const merged = mergeCaptionHypothesis(utterance, text)
+    if (!merged) return
+    utterance = merged
+    handlers.onPartial?.(merged)
+  }
+
+  const commitUtterance = (force = false) => {
+    clearFinalizeTimer()
+    const text = utterance.trim()
+    if (!text) return
+    if (!force && isLikelyCaptionFragment(text) && text.split(/\s+/).length <= 1) {
+      // Keep a lone word as live interim — wait for more speech or speech-end.
+      handlers.onPartial?.(text)
+      return
+    }
+    utterance = ''
+    handlers.onFinal?.(text)
+  }
+
+  const scheduleFinalize = (delayMs: number) => {
+    clearFinalizeTimer()
+    finalizeTimer = setTimeout(() => {
+      finalizeTimer = null
+      commitUtterance(true)
+    }, delayMs)
+  }
 
   const onSpeechPartialResults = (event: SpeechResultsEvent) => {
     const text = event.value?.[0]?.trim()
     if (!text) return
-    lastPartial = text
-    handlers.onPartial?.(text)
+    clearFinalizeTimer()
+    emitPartial(text)
   }
 
   const onSpeechResults = (event: SpeechResultsEvent) => {
-    const text = event.value?.[0]?.trim() || lastPartial.trim()
-    lastPartial = ''
-    if (text) handlers.onFinal?.(text)
+    const text = event.value?.[0]?.trim()
+    if (!text && !utterance) return
+    clearFinalizeTimer()
+    if (text) emitPartial(text)
+    // Android often fires results after every short pause with 1–2 words.
+    // Keep accumulating; only finalize after a quiet gap or speech-end.
+    if (Platform.OS === 'android' && isLikelyCaptionFragment(utterance)) {
+      scheduleFinalize(1400)
+      return
+    }
+    scheduleFinalize(Platform.OS === 'android' ? 900 : 350)
   }
 
   const onSpeechError = (event: SpeechErrorEvent) => {
@@ -99,17 +163,17 @@ export async function createNativeSpeechSession(
     if (code.includes('6') || /busy|recognizer/i.test(message)) return
     if (/permission|not.?authorized|denied/i.test(message)) {
       shouldRestart = false
+      clearFinalizeTimer()
       handlers.onError?.('Microphone access is required for live captions')
       return
     }
     // Soft — keep viewing remote captions; restart will retry.
-    // Do not call onError for recoverable pauses (avoids orange banner spam).
   }
 
   const restartSoon = () => {
     if (!shouldRestart || starting) return
     starting = true
-    const delay = Platform.OS === 'android' ? 350 : 220
+    const delay = Platform.OS === 'android' ? 280 : 220
     setTimeout(() => {
       if (!shouldRestart) {
         starting = false
@@ -124,7 +188,6 @@ export async function createNativeSpeechSession(
             if (!shouldRestart) return
             void startVoiceWithFallback(localeFallbacks(locale)).catch(() => {
               shouldRestart = false
-              // Viewing remote captions still works — do not surface a sticky banner.
             })
           }, 900)
         })
@@ -135,6 +198,10 @@ export async function createNativeSpeechSession(
   }
 
   const onSpeechEnd = () => {
+    // Flush whatever we heard before the recognizer restarts.
+    if (utterance.trim()) {
+      commitUtterance(true)
+    }
     handlers.onEnd?.()
     restartSoon()
   }
@@ -148,7 +215,8 @@ export async function createNativeSpeechSession(
     async start(nextLocale: string) {
       locale = nextLocale || 'en-US'
       shouldRestart = true
-      lastPartial = ''
+      utterance = ''
+      clearFinalizeTimer()
       try {
         await Voice.cancel()
       } catch {
@@ -165,6 +233,8 @@ export async function createNativeSpeechSession(
     },
     async stop() {
       shouldRestart = false
+      clearFinalizeTimer()
+      if (utterance.trim()) commitUtterance(true)
       try {
         await Voice.cancel()
       } catch {
@@ -177,6 +247,8 @@ export async function createNativeSpeechSession(
     },
     async destroy() {
       shouldRestart = false
+      clearFinalizeTimer()
+      utterance = ''
       try {
         await Voice.cancel()
       } catch {

@@ -15,9 +15,9 @@ const WIDTHS: Record<CaptionOverlaySize, number> = {
 }
 
 const HEIGHTS: Record<CaptionOverlaySize, number> = {
-  compact: 132,
-  comfortable: 200,
-  large: 280,
+  compact: 160,
+  comfortable: 260,
+  large: 340,
 }
 
 /**

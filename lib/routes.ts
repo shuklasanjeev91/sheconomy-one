@@ -399,6 +399,11 @@ export function isCoWorkJoinPath(pathname: string) {
   return pathname === '/co-work/join' || pathname.startsWith('/co-work/join/')
 }
 
+/** Any meeting room URL: lobby, live, or ended — hide chrome that covers Join / call controls. */
+export function isCoWorkMeetingRoomPath(pathname: string) {
+  return /\/co-?work\/meeting(\/|$)/i.test(pathname)
+}
+
 export function isCoWorkLivePath(pathname: string, search = '') {
   if (/\/co-?work\/meeting\/[^/]+\/live\/?$/i.test(pathname)) return true
   if (!/\/co-?work\/meeting\/[^/]+\/?$/i.test(pathname)) return false

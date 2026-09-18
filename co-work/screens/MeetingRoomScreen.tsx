@@ -5,6 +5,8 @@ import '~/lib/polyfills/install-dom-exception'
 import { Platform, useWindowDimensions } from 'react-native'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
+import { androidPresentNeedsNativeUpdate } from '~/co-work/lib/android-present-build'
+
 import { MeetingShareSheet } from '~/co-work/components/MeetingShareSheet'
 import { MeetingTransferHostSheet } from '~/co-work/components/MeetingTransferHostSheet'
 import { ScreenCenter } from '~/components/layout'
@@ -993,11 +995,18 @@ function MeetingRoomOverlay({
       toast.show('Screen share is not available on this device', {
         tone: 'info',
         message:
-          Platform.OS === 'android'
-            ? 'Present from iPhone, iPad, or the website. Android meetings can still view a shared screen.'
-            : Platform.OS === 'web'
-              ? meetingWebUnsupportedMessage('screen_share')
-              : 'Rebuild the app with the screen-share broadcast extension enabled.',
+          Platform.OS === 'web'
+            ? meetingWebUnsupportedMessage('screen_share')
+            : 'Rebuild the app with screen sharing enabled (MediaProjection on Android, Broadcast Extension on iOS).',
+      })
+      return
+    }
+
+    if (!liveKit.screenSharing && Platform.OS === 'android' && androidPresentNeedsNativeUpdate()) {
+      toast.show('Update SHEconomy to share your screen', {
+        tone: 'info',
+        message:
+          'This Android install is missing screen capture. Install the latest Play update (build 170+), then try Present again. You can still view others’ shared screens.',
       })
       return
     }
@@ -1030,7 +1039,10 @@ function MeetingRoomOverlay({
                 : undefined
       toast.show('Screen share failed', {
         tone: 'error',
-        message: message || 'Allow screen recording when prompted, then try again.',
+        message:
+          Platform.OS === 'android' && androidPresentNeedsNativeUpdate()
+            ? 'Install the latest Play update (build 170+) to restore Present on Android.'
+            : message || 'Allow screen recording when prompted, then try again.',
       })
     }
   }, [allowScreenShare, canModerate, liveKit, supportsScreenBroadcast, toast, webCapabilities])

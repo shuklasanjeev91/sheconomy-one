@@ -157,8 +157,8 @@ export function MeetingBackgroundQuickPicker({
       </XStack>
       {!effectsAvailable ? (
         <Text fontSize={12} color={coworkUi.textMuted}>
-          Live preview effects are limited on this device. Uploaded images still save and apply when
-          you join.
+          Live preview is limited on this device. Your selection is saved and will apply when you
+          join.
         </Text>
       ) : null}
       {error ? (

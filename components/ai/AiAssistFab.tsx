@@ -8,7 +8,7 @@ import { useAppLayout } from '~/hooks/useAppLayout'
 import {
   isChatConversationPath,
   isChatPath,
-  isCoWorkLivePath,
+  isCoWorkMeetingRoomPath,
   isCreatePostPath,
 } from '~/lib/routes'
 import { useInstantMeetingSession } from '~/co-work/lib/instant-meeting-session'
@@ -42,7 +42,7 @@ export function AiAssistFab() {
     open ||
     composerOpen ||
     isCreatePostPath(pathname ?? '') ||
-    isCoWorkLivePath(pathname ?? '') ||
+    isCoWorkMeetingRoomPath(pathname ?? '') ||
     instantFullscreen
   ) {
     return null

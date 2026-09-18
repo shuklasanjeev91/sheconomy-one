@@ -1079,13 +1079,24 @@ function NativeVideoTile({
       if (!next) return
       setStreamAttachId(next)
       clearInterval(poll)
-    }, 150)
+    }, 120)
+    // Screen share: if MediaStream never appears, still unlock render after a beat
+    // once a MediaStreamTrack exists (ensureNativeVideoMediaStream will wrap it).
+    const forceReady = setTimeout(() => {
+      if (resolveNativeVideoStreamAttachId(mediaTrack)) return
+      const trackId = mediaTrack.mediaStreamTrack?.id || trackSid
+      if (isScreen && trackId) {
+        resolveNativeVideoStreamAttachId(mediaTrack)
+        setStreamAttachId(String(trackId))
+      }
+    }, isScreen ? 900 : 2500)
     const stop = setTimeout(() => clearInterval(poll), 30_000)
     return () => {
       clearInterval(poll)
       clearTimeout(stop)
+      clearTimeout(forceReady)
     }
-  }, [mediaTrack, trackSid])
+  }, [isScreen, mediaTrack, trackSid])
 
   // Only treat the surface as ready once MediaStream exists — never use track.sid alone.
   const mediaReadyToken = streamAttachId

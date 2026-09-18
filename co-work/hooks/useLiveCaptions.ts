@@ -540,11 +540,22 @@ export function useLiveCaptions({
   )
 
   // Prefer live interim (local STT or remote peer) so Zoom-style captions update
-  // while someone is still speaking.
+  // while someone is still speaking. Never let a lagging one-word translation
+  // replace a longer live hypothesis mid-utterance.
   const remoteInterim = [...translatedRemote].reverse().find((line) => !line.isFinal)
+  const liveInterim = (() => {
+    const raw = interimText.trim()
+    if (!raw) return ''
+    const translated = translatedInterim.trim()
+    if (!translated) return raw
+    const rawWords = raw.split(/\s+/).filter(Boolean).length
+    const translatedWords = translated.split(/\s+/).filter(Boolean).length
+    if (translatedWords < rawWords && rawWords > 1) return raw
+    return translated
+  })()
   const currentCaption = (
-    interimText.trim()
-      ? translatedInterim.trim() || interimText.trim()
+    liveInterim
+      ? liveInterim
       : remoteInterim?.text?.trim()
         ? remoteInterim.text
         : visibleLines.length > 0

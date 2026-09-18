@@ -111,9 +111,8 @@ export function MeetingBackgroundPreview({ userId }: MeetingBackgroundPreviewPro
       await saveVirtualBackgroundPreference(next)
 
       if (!effectsSupportedRef.current && next.mode !== 'off') {
-        setError(
-          'Preview effects need the latest app build. Your selection is saved and will apply when you join.',
-        )
+        // Preference is saved; muted banner in the picker already explains preview limits.
+        setError(null)
         setBusy(false)
         return
       }
