@@ -45,6 +45,7 @@ import { useMeetingActiveSpeaker } from '~/co-work/hooks/useMeetingActiveSpeaker
 import { fetchLiveKitCredentials } from '~/co-work/lib/livekit'
 import { getLiveKitRoomOptions } from '~/co-work/lib/livekit-room-options'
 import { bindRemoteScreenShareQuality } from '~/co-work/lib/livekit-screen-share'
+import { resolveNativeVideoStreamAttachId } from '~/co-work/lib/native-video-stream-ready'
 import { composeMeetingStageTracks } from '~/co-work/lib/meeting-stage-tracks'
 import { screenShareRoleLabel } from '~/co-work/lib/meeting-lifecycle'
 import { shouldMirrorMeetingVideo } from '~/co-work/lib/meeting-video-mirror'
@@ -876,11 +877,42 @@ function NativeVideoTile({
 
   const publication = isTrackReference(trackRef) ? trackRef.publication : null
   const mediaTrack = publication?.track ?? null
-  // Remount key must change when the MediaStream attaches. Mounting RTCView with an
-  // empty streamURL (publication exists, track not subscribed yet) leaves Android/iOS
-  // stuck on a blank surface even after the remote screen-share track arrives.
-  const mediaReadyToken = mediaTrack?.sid ?? mediaTrack?.mediaStream?.id ?? null
   const trackSid = publication?.trackSid ?? null
+
+  // LiveKit often creates RemoteVideoTrack before MediaStream attaches (especially
+  // Android→iOS screen share). LiveKit's VideoTrack only syncs mediaStream on
+  // track identity change — mounting RTCView with empty toURL() permanently blanks.
+  // Wait for mediaStream.id, then remount VideoTrack with that token.
+  const [streamAttachId, setStreamAttachId] = useState<string | null>(
+    () => resolveNativeVideoStreamAttachId(mediaTrack),
+  )
+  useEffect(() => {
+    if (!mediaTrack) {
+      setStreamAttachId(null)
+      return
+    }
+    const readId = () => resolveNativeVideoStreamAttachId(mediaTrack)
+    const immediate = readId()
+    if (immediate) {
+      setStreamAttachId(immediate)
+      return
+    }
+    setStreamAttachId(null)
+    const poll = setInterval(() => {
+      const next = readId()
+      if (!next) return
+      setStreamAttachId(next)
+      clearInterval(poll)
+    }, 150)
+    const stop = setTimeout(() => clearInterval(poll), 30_000)
+    return () => {
+      clearInterval(poll)
+      clearTimeout(stop)
+    }
+  }, [mediaTrack, trackSid])
+
+  // Only treat the surface as ready once MediaStream exists — never use track.sid alone.
+  const mediaReadyToken = streamAttachId
   const trackDims = (() => {
     try {
       const settings = mediaTrack?.mediaStreamTrack?.getSettings?.()
@@ -892,7 +924,6 @@ function NativeVideoTile({
     }
     return isScreen ? '1280x720' : 'pending'
   })()
-  const showVideo = !!mediaTrack && !!mediaReadyToken && !!surfaceSize && (isScreen || !cameraOff)
   const mirrored = shouldMirrorMeetingVideo({
     mirrorLocalVideo,
     isLocal: trackRef.participant.isLocal,
@@ -901,16 +932,16 @@ function NativeVideoTile({
   })
 
   // Screen share: if the track is subscribed but the surface briefly reports 0×0,
-  // still force a mount after a short delay so Android doesn't stay on "Receiving…".
+  // still force a mount after a short delay so Android/iOS don't stay on "Receiving…".
   const [forceScreenSurface, setForceScreenSurface] = useState(false)
   useEffect(() => {
-    if (!isScreen || showVideo || !mediaTrack) {
+    if (!isScreen || !mediaTrack || (surfaceSize && surfaceSize.w > 1 && surfaceSize.h > 1)) {
       setForceScreenSurface(false)
       return
     }
-    const timer = setTimeout(() => setForceScreenSurface(true), 600)
+    const timer = setTimeout(() => setForceScreenSurface(true), 400)
     return () => clearTimeout(timer)
-  }, [isScreen, mediaTrack, showVideo])
+  }, [isScreen, mediaTrack, surfaceSize])
 
   const effectiveSurface =
     surfaceSize ??
@@ -924,12 +955,12 @@ function NativeVideoTile({
     (isScreen || !cameraOff)
 
   const videoRef = useRef(null)
-  // Prefer screen share, else active speaker, else local camera — solo hosts
-  // still need a registered track for manual iOS PiP ("no video active").
+  // Camera only for PiP — screen-share RTCPIPView blanks the in-meeting stage on iPad.
   const isPipCandidate =
     Platform.OS === 'ios' &&
     shouldRenderVideo &&
-    (isScreen || activeSpeaker || trackRef.participant.isLocal)
+    !isScreen &&
+    (activeSpeaker || trackRef.participant.isLocal)
 
   useEffect(() => {
     if (!isPipCandidate) return
@@ -983,7 +1014,7 @@ function NativeVideoTile({
     >
       {shouldRenderVideo && effectiveSurface && isTrackReference(trackRef) ? (
         <VideoTrack
-          // Remount when stream, size, or mirror preference changes (Android RTCView).
+          // Remount when MediaStream attaches (stream id), size, or mirror changes.
           key={`${trackSid ?? 'track'}-${mediaReadyToken}-${effectiveSurface.w}x${effectiveSurface.h}-${trackDims}-${isScreen ? 'ss' : 'cam'}-${mirrored ? 'm' : 'u'}`}
           ref={videoRef}
           trackRef={trackRef}
@@ -995,13 +1026,13 @@ function NativeVideoTile({
             height: effectiveSurface.h,
             backgroundColor: '#0c080a',
           }}
-          // Android MediaProjection often blanks with contain + zOrder 0; cover +
-          // elevated zOrder keeps frames painting on the RTCView surface.
-          objectFit={isScreen && Platform.OS === 'android' ? 'cover' : isScreen ? 'contain' : 'cover'}
+          // cover + elevated zOrder: Android MediaProjection and iOS receivers both
+          // blank with contain / zOrder 0 on cross-platform screen share.
+          objectFit="cover"
           mirror={mirrored}
-          zOrder={isScreen ? (Platform.OS === 'android' ? 2 : 1) : compact ? 1 : 0}
+          zOrder={isScreen ? 2 : compact ? 1 : 0}
           iosPIP={
-            Platform.OS === 'ios'
+            Platform.OS === 'ios' && !isScreen
               ? {
                   enabled: true,
                   startAutomatically: true,

@@ -101,6 +101,10 @@ function appleConfigForCall(input: {
     'allowBluetooth',
     'allowBluetoothA2DP',
     'allowAirPlay',
+    // Let SFSpeechRecognizer / Voice share the mic with LiveKit WebRTC so
+    // live captions can start during an active meeting (otherwise iPad shows
+    // "Speech recognition unavailable").
+    'mixWithOthers',
   ]
   // Only default to speaker when no accessory path is preferred by the OS
   // and the call is video/meeting. Accessory selection happens in applyPreferredCallAudioOutput.

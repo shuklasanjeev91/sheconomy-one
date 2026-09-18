@@ -276,24 +276,37 @@ export function useLiveCaptions({
         setInterimText(text)
         publishCaption(text, false)
       },
-      onFinal: (text) => commitFinalCaption(text),
+      onFinal: (text) => {
+        setError(null)
+        commitFinalCaption(text)
+      },
       onError: (message) => {
-        setError(message)
-        if (message.toLowerCase().includes('microphone')) {
+        // Soft banners only — remote peer captions still display. Mic denial is sticky.
+        const lower = message.toLowerCase()
+        if (lower.includes('microphone')) {
+          setError(message)
           shouldRestartRef.current = false
           setPublishing(false)
-          if (!activeRef.current) return
+          return
         }
+        setError(message)
       },
     })
     if (!session) {
-      setError('Speech recognition unavailable — you can still view others’ captions')
+      // Keep CC active for viewing room captions; avoid a permanent orange banner.
+      setError(null)
       return false
     }
     nativeSessionRef.current = session
     shouldRestartRef.current = true
-    await session.start(speakLocaleRef.current)
-    return true
+    try {
+      await session.start(speakLocaleRef.current)
+      setError(null)
+      return true
+    } catch {
+      setError(null)
+      return false
+    }
   }, [commitFinalCaption, publishCaption])
 
   const startRecognition = useCallback(() => {
@@ -537,6 +550,16 @@ export function useLiveCaptions({
           ? visibleLines[visibleLines.length - 1]?.text || ''
           : ''
   ).trim()
+
+  // Once remote (or local) captions are flowing, drop soft STT warnings so the
+  // orange banner does not stick over a working CC overlay.
+  useEffect(() => {
+    if (!error) return
+    if (/microphone/i.test(error)) return
+    if (currentCaption || visibleLines.length > 0 || interimText.trim()) {
+      setError(null)
+    }
+  }, [currentCaption, error, interimText, visibleLines.length])
 
   const showingTranslation = visibleLines.some((line) => line.translated)
 

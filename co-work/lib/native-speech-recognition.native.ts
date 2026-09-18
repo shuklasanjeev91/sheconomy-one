@@ -30,17 +30,41 @@ async function ensureMicrophonePermission(): Promise<boolean> {
   }
 }
 
+/** Prefer requested locale; fall back when the OS speech pack is missing (common for hi-IN). */
+function localeFallbacks(requested: string): string[] {
+  const primary = (requested || 'en-US').trim() || 'en-US'
+  const base = primary.split(/[-_]/)[0]?.toLowerCase() || 'en'
+  const candidates = [primary]
+  if (base === 'hi') candidates.push('hi-IN', 'en-IN', 'en-US')
+  else if (base !== 'en') candidates.push(`${base}-IN`, `${base}-US`, 'en-IN', 'en-US')
+  else candidates.push('en-IN', 'en-US')
+  return [...new Set(candidates)]
+}
+
+async function startVoiceWithFallback(locales: string[]): Promise<string> {
+  let lastError: unknown = null
+  for (const locale of locales) {
+    try {
+      await Voice.start(locale)
+      return locale
+    } catch (error) {
+      lastError = error
+    }
+  }
+  throw lastError ?? new Error('Speech recognition failed to start')
+}
+
 export async function createNativeSpeechSession(
   handlers: NativeSpeechHandlers,
 ): Promise<NativeSpeechSession | null> {
   if (!isNativeRuntime()) return null
 
+  // Do not hard-fail on Voice.isAvailable() — on iOS it often returns false until
+  // speech permission is granted / while LiveKit holds the audio session. Try start.
   try {
-    const available = await Voice.isAvailable()
-    // iOS returns 1; Android may return true/1/"1"
-    if (!available) return null
+    await Voice.isAvailable().catch(() => null)
   } catch {
-    return null
+    // continue — start() still prompts for permission
   }
 
   const micOk = await ensureMicrophonePermission()
@@ -78,30 +102,34 @@ export async function createNativeSpeechSession(
       handlers.onError?.('Microphone access is required for live captions')
       return
     }
+    // Soft — keep viewing remote captions; restart will retry.
     handlers.onError?.('Live captions paused — retrying…')
   }
 
   const restartSoon = () => {
     if (!shouldRestart || starting) return
     starting = true
-    const delay = Platform.OS === 'android' ? 350 : 160
+    const delay = Platform.OS === 'android' ? 350 : 220
     setTimeout(() => {
       if (!shouldRestart) {
         starting = false
         return
       }
-      void Voice.start(locale)
+      void startVoiceWithFallback(localeFallbacks(locale))
+        .then((used) => {
+          locale = used
+        })
         .catch(() => {
-          // Soft-retry once more after LiveKit audio session settles.
           setTimeout(() => {
             if (!shouldRestart) return
-            void Voice.start(locale).catch(() => {
+            void startVoiceWithFallback(localeFallbacks(locale)).catch(() => {
               shouldRestart = false
+              // Viewing remote captions still works — avoid a permanent scary banner.
               handlers.onError?.(
-                'Could not start speech recognition during the call. Try toggling Captions again.',
+                'Could not listen on this device — you can still view others’ captions',
               )
             })
-          }, 700)
+          }, 900)
         })
         .finally(() => {
           starting = false
@@ -133,9 +161,10 @@ export async function createNativeSpeechSession(
           // ignore — may not be running yet
         }
       }
-      // Brief yield so LiveKit's audio session can share the mic with Voice.
-      await new Promise((resolve) => setTimeout(resolve, Platform.OS === 'ios' ? 180 : 280))
-      await Voice.start(locale)
+      // Yield so LiveKit's AVAudioSession can share the mic with Voice.
+      await new Promise((resolve) => setTimeout(resolve, Platform.OS === 'ios' ? 280 : 320))
+      const used = await startVoiceWithFallback(localeFallbacks(locale))
+      locale = used
     },
     async stop() {
       shouldRestart = false
