@@ -64,6 +64,6 @@ describe('meeting responsive breakpoints', () => {
     expect(desk.panelPresentation).toBe('side')
     expect(desk.filmstripBeside).toBe(true)
     expect(desk.compactControls).toBe(false)
-    expect(desk.pageSize).toBe(16)
+    expect(desk.pageSize).toBe(25)
   })
 })

@@ -17,8 +17,9 @@ export function getMediaCapabilities(): MediaCapabilities {
     platform,
     supportsVideo: liveKit,
     // Production meetings use LiveKit SFU (getDisplayMedia / native broadcast),
-    // never a peer-to-peer mesh.
-    supportsScreenShare: hasDisplayMedia() || platform === 'ios',
+    // never a peer-to-peer mesh. iOS uses ReplayKit picker; Android uses
+    // MediaProjection via livekit-react-native-webrtc.
+    supportsScreenShare: hasDisplayMedia() || platform === 'ios' || platform === 'android',
     supportsRecording: hasMediaRecorder() || isNativeRuntime(),
     supportsLiveCaptions: hasSpeechRecognition() || isNativeRuntime(),
   }

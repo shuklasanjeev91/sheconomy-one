@@ -1901,6 +1901,9 @@ function MeetingRoomOverlay({
           onOpenParticipants={() => presence.setPanel('people')}
           onOpenInfo={() => presence.setPanel('info')}
           onToggleCaptions={toggleCaptions}
+          onOpenPolls={() => presence.setPanel('polls')}
+          onOpenQa={() => presence.setPanel('qna')}
+          onOpenBreakouts={() => presence.setPanel('breakouts')}
           onMuteAll={isAuthoritativeHost ? handleMuteAll : undefined}
           onAskAllToMute={canModerate ? () => void presence.askAllToMute() : undefined}
           fullWidth={panelFullWidth}

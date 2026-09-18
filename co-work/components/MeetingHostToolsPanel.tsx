@@ -27,6 +27,9 @@ type MeetingHostToolsPanelProps = {
   onOpenParticipants: () => void
   onOpenInfo: () => void
   onToggleCaptions: () => void
+  onOpenPolls?: () => void
+  onOpenQa?: () => void
+  onOpenBreakouts?: () => void
   onMuteAll?: () => void
   onAskAllToMute?: () => void
   fullWidth?: boolean
@@ -101,6 +104,9 @@ export function MeetingHostToolsPanel({
   onOpenParticipants,
   onOpenInfo,
   onToggleCaptions,
+  onOpenPolls,
+  onOpenQa,
+  onOpenBreakouts,
   onMuteAll,
   onAskAllToMute,
   fullWidth,
@@ -261,6 +267,23 @@ export function MeetingHostToolsPanel({
                 icon={Icons.Users}
                 onPress={() => setPage('participants')}
               />
+              {onOpenPolls ? (
+                <HostToolsRow
+                  label="Polls"
+                  icon={Icons.BarChart2}
+                  onPress={onOpenPolls}
+                />
+              ) : null}
+              {onOpenQa ? (
+                <HostToolsRow label="Q&A" icon={Icons.HelpCircle} onPress={onOpenQa} />
+              ) : null}
+              {onOpenBreakouts ? (
+                <HostToolsRow
+                  label="Breakout rooms"
+                  icon={Icons.LayoutGrid}
+                  onPress={onOpenBreakouts}
+                />
+              ) : null}
               <HostToolsRow
                 label="My Notes"
                 icon={Icons.FileText}

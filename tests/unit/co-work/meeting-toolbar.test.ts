@@ -199,6 +199,47 @@ describe('meeting toolbar layout', () => {
     ])
   })
 
+  it('surfaces polls, Q&A, breakouts, and dense gallery in More', () => {
+    expect(
+      meetingToolbarMoreKeys({
+        viewerRole: 'host',
+        supportsRecording: true,
+        supportsVideo: true,
+        hasAudioSettings: true,
+        hasShareLink: true,
+        hasFullscreen: true,
+        hasMinimize: true,
+        hasPictureInPicture: true,
+        hasDenseGallery: true,
+        hasPolls: true,
+        hasQa: true,
+        hasBreakouts: true,
+        reactionsOnPrimary: true,
+        raiseHandOnPrimary: true,
+      }),
+    ).toEqual([
+      'minimize',
+      'view_gallery',
+      'view_speaker',
+      'view_screen_share',
+      'mirror_video',
+      'hide_self_view',
+      'maximize',
+      'view_dense_gallery',
+      'audio_settings',
+      'record',
+      'background',
+      'meeting_info',
+      'share_link',
+      'fullscreen',
+      'picture_in_picture',
+      'polls',
+      'qna',
+      'breakout_rooms',
+      'host_tools',
+    ])
+  })
+
   it('keeps the toolbar above side panels so it stays tappable while chat/people are open', () => {
     expect(MEETING_TOOLBAR_Z_INDEX).toBeGreaterThan(MEETING_SIDE_PANEL_Z_INDEX)
   })
