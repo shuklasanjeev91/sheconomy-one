@@ -115,13 +115,21 @@ describe('chromeless shell gating', () => {
         globalPresentation: 'minimized',
       }),
     ).toBe(false)
+    // Dedicated /live route stays chromeless even if presentation lagged on pip.
     expect(
       shouldUseChromelessShell({
         pathname: '/co-work/meeting/ABC/live',
         instantMeetingOpen: false,
         globalPresentation: 'pip',
       }),
-    ).toBe(false)
+    ).toBe(true)
+    expect(
+      shouldUseChromelessShell({
+        pathname: '/cowork/meeting/ABC/live',
+        instantMeetingOpen: false,
+        globalPresentation: 'fullscreen',
+      }),
+    ).toBe(true)
   })
 
   it('uses chromeless for fullscreen call routes and ui-kit', () => {

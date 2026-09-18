@@ -6,10 +6,14 @@ import { Button, Spinner, Text, YStack } from '~/components/ui'
 import type { InstantMeetingSession } from '~/co-work/lib/instant-meeting-session'
 import {
   closeInstantMeetingSession,
+  instantMeetingCodesMatch,
   normalizeInstantMeetingCode,
   useInstantMeetingSession,
 } from '~/co-work/lib/instant-meeting-session'
 import { useGlobalSession } from '~/lib/session/global-session'
+
+/** Above AppShell header/tabs (95k); below meeting portals / crop (100k+). */
+const INSTANT_MEETING_FULLSCREEN_Z = 96_000
 
 type InstantMeetingBodyComponent = ComponentType<{
   session: InstantMeetingSession
@@ -31,7 +35,15 @@ export function InstantMeetingHost() {
   const [loadError, setLoadError] = useState<string | null>(null)
 
   const presentation = globalSession?.presentation ?? 'fullscreen'
-  const collapsed = presentation === 'minimized' || presentation === 'pip'
+  const sameMeeting =
+    !!session &&
+    !!globalSession &&
+    globalSession.kind === 'meeting' &&
+    instantMeetingCodesMatch(globalSession.code, session.code)
+  // Only park off-screen when THIS meeting is in bubble/PiP. An unrelated
+  // minimized call must not collapse a live Co-Work overlay.
+  const collapsed =
+    sameMeeting && (presentation === 'minimized' || presentation === 'pip')
 
   // Instant overlay is the source of truth for LiveKit. Never tear it down just
   // because global session code formatting briefly mismatches — that remounted
@@ -126,7 +138,7 @@ export function InstantMeetingHost() {
       bottom={0}
       width="100%"
       height="100%"
-      zIndex={collapsed ? 1 : 90_000}
+      zIndex={collapsed ? 1 : INSTANT_MEETING_FULLSCREEN_Z}
       opacity={1}
       pointerEvents={collapsed ? 'none' : 'auto'}
       overflow="hidden"
@@ -135,6 +147,11 @@ export function InstantMeetingHost() {
       style={{
         ...overlayStyle,
         ...collapsedStyle,
+        ...(collapsed
+          ? null
+          : Platform.OS === 'web'
+            ? ({ width: '100vw', height: '100dvh', maxWidth: '100vw' } as const)
+            : ({ width: windowWidth, height: windowHeight, maxWidth: windowWidth } as const)),
       }}
       accessibilityElementsHidden={collapsed}
       importantForAccessibility={collapsed ? 'no-hide-descendants' : 'auto'}

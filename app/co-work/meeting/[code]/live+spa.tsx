@@ -3,13 +3,12 @@ import { useLocalSearchParams, useParams, usePathname } from 'one'
 
 import { AppErrorBoundary } from '~/components/AppErrorBoundary'
 import { ScreenCenter } from '~/components/layout'
-import { Text } from '~/components/ui'
+import { Spinner, Text, YStack } from '~/components/ui'
 import {
   instantMeetingCodesMatch,
   openInstantMeetingSession,
   peekInstantMeetingSession,
 } from '~/co-work/lib/instant-meeting-session'
-import { MeetingLiveScreen } from '~/co-work/screens/MeetingLiveScreen'
 import { maximizeGlobalSession, peekGlobalSession } from '~/lib/session/global-session'
 import { coWorkRoutes } from '~/lib/routes'
 import { navigateApp } from '~/lib/platform/navigate'
@@ -26,16 +25,14 @@ function useMeetingCode(): string {
   const fromParams =
     readRouteParam(routeParams.code) || readRouteParam(localParams.code)
   if (fromParams) return fromParams
-  const match = pathname.match(/\/co-work\/meeting\/([^/?#]+)/i)
+  const match = pathname.match(/\/co-?work\/meeting\/([^/?#]+)/i)
   return match?.[1] ? decodeURIComponent(match[1]) : ''
 }
 
 /**
- * Live room route — LiveKit only loads when this path is opened.
- * Keep lobby / Co-Work home free of this import.
- *
- * If InstantMeetingHost already owns this meeting (minimize → maximize / deep
- * link while live), expand that overlay instead of mounting a second Join flow.
+ * Live room deep link — always hand off to InstantMeetingHost so the room is
+ * edge-to-edge (no SHE header / Co-Work tabs / page gutters). Rendering
+ * MeetingLiveScreen as an AppShell child left white side rails on phone/tablet.
  */
 export default function CoWorkMeetingLiveRoute() {
   const code = useMeetingCode()
@@ -45,25 +42,25 @@ export default function CoWorkMeetingLiveRoute() {
     const instant = peekInstantMeetingSession()
     const global = peekGlobalSession()
     const sameInstant = !!(instant && instantMeetingCodesMatch(instant.code, code))
-    const sameGlobal =
-      global?.kind === 'meeting' && instantMeetingCodesMatch(global.code, code)
-    if (!sameInstant && !sameGlobal) return
-    if (instant?.enteredRoom || global?.presentation === 'minimized' || global?.presentation === 'pip') {
-      openInstantMeetingSession({
-        code,
-        meeting: instant?.meeting ?? null,
-        autoJoin: true,
-        enteredRoom: true,
-        displayName: instant?.displayName ?? null,
-      })
-      maximizeGlobalSession()
+    openInstantMeetingSession({
+      code,
+      meeting: sameInstant ? instant?.meeting ?? null : null,
+      autoJoin: true,
+      enteredRoom: sameInstant ? !!instant?.enteredRoom : false,
+      displayName: sameInstant ? instant?.displayName ?? null : null,
+    })
+    maximizeGlobalSession()
+    // Leave the inset /live route so only the fullscreen overlay remains.
+    if (global?.presentation === 'minimized' || global?.presentation === 'pip' || sameInstant) {
       navigateApp(coWorkRoutes.home)
+      return
     }
+    navigateApp(coWorkRoutes.meetings)
   }, [code])
 
   if (!code) {
     return (
-      <ScreenCenter backgroundColor="#D81B60">
+      <ScreenCenter backgroundColor="#0c080a">
         <Text color="#fff" fontWeight="700" fontSize={16} textAlign="center" paddingHorizontal="$6">
           Missing meeting code. Go back to Co-Work and try again.
         </Text>
@@ -73,7 +70,12 @@ export default function CoWorkMeetingLiveRoute() {
 
   return (
     <AppErrorBoundary scope="CoWorkMeetingLive" alwaysShowError>
-      <MeetingLiveScreen code={code} autoJoin />
+      <YStack flex={1} width="100%" height="100%" backgroundColor="#0c080a" alignItems="center" justifyContent="center">
+        <Spinner size="large" color="#D81B60" />
+        <Text color="#ccc" marginTop="$3" fontSize={14}>
+          Opening meeting…
+        </Text>
+      </YStack>
     </AppErrorBoundary>
   )
 }

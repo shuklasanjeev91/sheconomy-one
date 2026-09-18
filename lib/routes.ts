@@ -400,8 +400,8 @@ export function isCoWorkJoinPath(pathname: string) {
 }
 
 export function isCoWorkLivePath(pathname: string, search = '') {
-  if (/\/co-work\/meeting\/[^/]+\/live\/?$/.test(pathname)) return true
-  if (!/\/co-work\/meeting\/[^/]+\/?$/.test(pathname)) return false
+  if (/\/co-?work\/meeting\/[^/]+\/live\/?$/i.test(pathname)) return true
+  if (!/\/co-?work\/meeting\/[^/]+\/?$/i.test(pathname)) return false
   const query = search.startsWith('?') ? search.slice(1) : search
   const params = new URLSearchParams(query)
   const live = (params.get('live') ?? '').toLowerCase()

@@ -11,6 +11,8 @@ import {
   isCoWorkLivePath,
   isCreatePostPath,
 } from '~/lib/routes'
+import { useInstantMeetingSession } from '~/co-work/lib/instant-meeting-session'
+import { useGlobalSession } from '~/lib/session/global-session'
 import { useAppUi } from '~/lib/theme/useAppUi'
 import { useAiAssist } from '~/providers/AiAssistProvider'
 
@@ -29,12 +31,19 @@ export function AiAssistFab() {
   const { openAssist, open } = useAiAssist()
   const { open: composerOpen } = useComposerState()
   const { isDesktop, mobileTabBarOffset, safeRight, safeBottom } = useAppLayout()
+  const instantMeeting = useInstantMeetingSession()
+  const globalSession = useGlobalSession()
+  const instantFullscreen =
+    !!instantMeeting &&
+    globalSession?.presentation !== 'minimized' &&
+    globalSession?.presentation !== 'pip'
 
   if (
     open ||
     composerOpen ||
     isCreatePostPath(pathname ?? '') ||
-    isCoWorkLivePath(pathname ?? '')
+    isCoWorkLivePath(pathname ?? '') ||
+    instantFullscreen
   ) {
     return null
   }

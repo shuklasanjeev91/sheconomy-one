@@ -1,6 +1,7 @@
 import { useSyncExternalStore } from 'react'
 
 import type { Meeting } from '~/co-work/lib/types'
+import { maximizeGlobalSession } from '~/lib/session/global-session'
 
 export type InstantMeetingSession = {
   code: string
@@ -103,6 +104,11 @@ export function openInstantMeetingSession(input: {
       }
       emit()
     }
+    // Fresh join / re-open expands; minimize handoff passes enteredRoom and
+    // then calls minimizeGlobalSession itself.
+    if (!input.enteredRoom) {
+      maximizeGlobalSession()
+    }
     return
   }
 
@@ -114,6 +120,10 @@ export function openInstantMeetingSession(input: {
     displayName: input.displayName?.trim() || null,
   }
   emit()
+  // Always expand — a leftover minimized/pip presentation from a prior session
+  // would park InstantMeetingHost off-screen and leave the live room inset under
+  // SHE header + Co-Work tabs.
+  maximizeGlobalSession()
 }
 
 /** Mark the overlay as already inside the live room (connected MeetingRoomScreen). */

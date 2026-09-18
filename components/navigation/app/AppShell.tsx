@@ -224,7 +224,7 @@ export function AppShell({ children }: AppShellProps) {
           <BindRecentMeetingCodes />
           <InstantMeetingHost />
           <GlobalSessionHost />
-          {/* Mount last so crop sits above InstantMeetingHost (z 90k) during live meetings. */}
+          {/* Mount last so crop sits above InstantMeetingHost (z 96k) during live meetings. */}
           <ImageCropHost />
         </YStack>
         <GenderVerificationHost />
