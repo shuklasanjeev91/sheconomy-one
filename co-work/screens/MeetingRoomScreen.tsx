@@ -78,7 +78,8 @@ import {
 import { meetingBrowsingMinimizedNotice } from '~/co-work/lib/meeting-lifecycle'
 import { clearImageCropQueue } from '~/lib/media/crop-session'
 import { useSessionPipOnHide } from '~/lib/session/useSessionPipOnHide'
-import { formatMeetingCode } from '~/co-work/lib/meetings'
+import { formatMeetingCode, getMeetingShareUrl } from '~/co-work/lib/meetings'
+import { copyShareLink } from '~/lib/share'
 import {
   endMeetingConfirmCopy,
   hostLeaveConfirmCopy,
@@ -641,6 +642,36 @@ function MeetingRoomOverlay({
   const autoRecord = !!meetingState.meeting_options?.autoRecord && isAuthoritativeHost && allowRecording
   const admittedCount = presence.participants.filter((p) => p.status === 'admitted').length
   const waitingCount = presence.waitingParticipants.length
+  const inviteNudgeShownRef = useRef(false)
+
+  // Zoom-like: nudge the host to share the join code when they are alone in the room.
+  useEffect(() => {
+    if (!isAuthoritativeHost || inviteNudgeShownRef.current) return
+    if (admittedCount !== 1 || presence.isWaiting || presence.isConnecting) return
+    inviteNudgeShownRef.current = true
+    const code = formatMeetingCode(meeting.meeting_code)
+    const shareUrl = getMeetingShareUrl(meeting.meeting_code)
+    toast.show('Invite others to this room', {
+      tone: 'info',
+      message: `Code ${code} · share so 1–N people can join`,
+      actionLabel: 'Copy link',
+      onAction: () => {
+        void copyShareLink(shareUrl).then((copied) => {
+          toast.show(copied ? 'Invite link copied' : 'Could not copy link', {
+            tone: copied ? 'success' : 'error',
+          })
+        })
+      },
+    })
+  }, [
+    admittedCount,
+    isAuthoritativeHost,
+    meeting.meeting_code,
+    presence.isConnecting,
+    presence.isWaiting,
+    toast,
+  ])
+
   const participantDisplayNames = useMemo(
     () =>
       Object.fromEntries(

@@ -14,7 +14,7 @@ import { ensureMeetingMobilePermissions } from '~/co-work/lib/meeting-media-perm
 import { openInstantMeetingSession } from '~/co-work/lib/instant-meeting-session'
 import { Button, Icons, Input, Spinner, Text, XStack, YStack, useAppToast } from '~/components/ui'
 import { CoWorkFeatureCard } from '~/co-work/components/CoWorkUi'
-import { createMeeting } from '~/co-work/lib/meetings'
+import { createMeeting, fetchMeetingByCode } from '~/co-work/lib/meetings'
 import { meetingBarStyle, useCoWorkTheme } from '~/co-work/lib/theme'
 import { controlGradientStyle, pageGradientStyle } from '~/lib/platform/crossStyles'
 import { coWorkRoutes } from '~/lib/routes'
@@ -84,8 +84,8 @@ function buildFeatures(brandLight: string) {
   return [
     {
       icon: <Icons.Video size={20} color={brandLight} />,
-      title: 'HD video',
-      description: `Crystal-clear meetings powered by ${BRAND_NAME} SFU.`,
+      title: 'HD gallery for everyone',
+      description: `1–100+ peers in one ${BRAND_NAME} room — Zoom-simple gallery & speaker views.`,
     },
     {
       icon: <Icons.ScreenShare size={20} color={brandLight} />,
@@ -100,7 +100,7 @@ function buildFeatures(brandLight: string) {
     {
       icon: <Icons.Shield size={20} color={brandLight} />,
       title: 'Host controls',
-      description: 'Waiting room, mute all, and secure passcodes.',
+      description: 'Waiting room, mute all, polls, Q&A, and breakouts.',
     },
   ] as const
 }
@@ -115,6 +115,7 @@ export function CoWorkScreen() {
   const recentCodes = useRecentMeetingCodes()
   const [joinCode, setJoinCode] = useState('')
   const [creating, setCreating] = useState(false)
+  const [joining, setJoining] = useState(false)
   const [meetingsRefreshKey, setMeetingsRefreshKey] = useState(0)
   const [showJoinField, setShowJoinField] = useState(false)
 
@@ -156,11 +157,44 @@ export function CoWorkScreen() {
     }
   }
 
-  function joinWithCode(code: string) {
+  async function joinWithCode(code: string) {
     const normalized = code.replace(/\s/g, '').toUpperCase()
-    if (!normalized) return
+    if (!normalized || joining) return
     recordMeetingCode(normalized)
-    router.push(coWorkRoutes.meeting(normalized))
+    setJoining(true)
+    try {
+      // Zoom-style: resolve the shared meeting + enter InstantMeetingHost so
+      // every peer lands in the same LiveKit room_id (1–N concurrent joiners).
+      const meeting = await fetchMeetingByCode(normalized)
+      if (!meeting) {
+        toast.show('Meeting not found', {
+          tone: 'error',
+          message: 'Check the code and try again.',
+        })
+        router.push(coWorkRoutes.meeting(normalized))
+        return
+      }
+      if (meeting.status === 'cancelled') {
+        toast.show('Meeting cancelled', {
+          tone: 'error',
+          message: 'The host cancelled this meeting.',
+        })
+        return
+      }
+      openInstantMeetingSession({
+        code: meeting.meeting_code,
+        meeting,
+        autoJoin: true,
+      })
+    } catch (joinError) {
+      toast.show('Could not join meeting', {
+        tone: 'error',
+        message: joinError instanceof Error ? joinError.message : undefined,
+      })
+      router.push(coWorkRoutes.meeting(normalized))
+    } finally {
+      setJoining(false)
+    }
   }
 
   return (
@@ -239,8 +273,13 @@ export function CoWorkScreen() {
                 placeholderTextColor={coworkUi.textMuted}
                 borderRadius={12}
               />
-              <Button tone="primary" borderRadius={12} onPress={() => joinWithCode(joinCode)}>
-                Join
+              <Button
+                tone="primary"
+                borderRadius={12}
+                disabled={joining}
+                onPress={() => void joinWithCode(joinCode)}
+              >
+                {joining ? 'Joining…' : 'Join'}
               </Button>
             </XStack>
             {recentCodes.length > 0 ? (

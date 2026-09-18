@@ -7,6 +7,11 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 }
 
+/** Breakout LiveKit names: `{mainRoomId}__bo__{breakoutUuid}` */
+function isBreakoutRoomName(mainRoomId: string, roomName: string): boolean {
+  return roomName.startsWith(`${mainRoomId}__bo__`)
+}
+
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response('ok', { headers: corsHeaders })
@@ -71,7 +76,7 @@ Deno.serve(async (req) => {
 
     const { data: meeting, error: meetingError } = await supabase
       .from('meetings')
-      .select('id, room_id, status, host_id, security_settings, meeting_options')
+      .select('id, room_id, status, host_id, security_settings, meeting_options, max_participants')
       .eq('id', meetingId)
       .maybeSingle()
 
@@ -91,7 +96,11 @@ Deno.serve(async (req) => {
       })
     }
 
-    if (meeting.room_id !== roomName) {
+    const mainRoomId = String(meeting.room_id ?? '')
+    const isMainRoom = !!mainRoomId && mainRoomId === roomName
+    const maybeBreakout = !!mainRoomId && isBreakoutRoomName(mainRoomId, roomName)
+
+    if (!isMainRoom && !maybeBreakout) {
       return new Response(JSON.stringify({ error: 'Invalid room.' }), {
         status: 403,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
@@ -101,11 +110,11 @@ Deno.serve(async (req) => {
     const userId = authData.user.id
     const [{ data: participant }, { data: actorRole }] = await Promise.all([
       supabase
-      .from('meeting_participants')
-      .select('status, display_name')
-      .eq('meeting_id', meetingId)
-      .eq('user_id', userId)
-      .maybeSingle(),
+        .from('meeting_participants')
+        .select('status, display_name')
+        .eq('meeting_id', meetingId)
+        .eq('user_id', userId)
+        .maybeSingle(),
       supabase
         .from('meeting_roles')
         .select('role')
@@ -114,8 +123,41 @@ Deno.serve(async (req) => {
         .maybeSingle(),
     ])
     const role = String(actorRole?.role ?? '')
-    const isHost = role === 'host' && meeting.host_id === userId
-    const isModerator = isHost || role === 'co_host'
+    // Host is authoritative via meetings.host_id — do not require a meeting_roles row.
+    const isHost = meeting.host_id === userId
+    const isModerator = isHost || role === 'co_host' || role === 'host'
+
+    if (maybeBreakout) {
+      const { data: breakout } = await supabase
+        .from('meeting_breakout_rooms')
+        .select('id, status, livekit_room_name')
+        .eq('meeting_id', meetingId)
+        .eq('livekit_room_name', roomName)
+        .maybeSingle()
+
+      if (!breakout || breakout.status !== 'open') {
+        return new Response(JSON.stringify({ error: 'Breakout room is not open.' }), {
+          status: 403,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        })
+      }
+
+      if (!isModerator) {
+        const { data: assignment } = await supabase
+          .from('meeting_breakout_assignments')
+          .select('id')
+          .eq('meeting_id', meetingId)
+          .eq('breakout_id', breakout.id)
+          .eq('user_id', userId)
+          .maybeSingle()
+        if (!assignment) {
+          return new Response(JSON.stringify({ error: 'You are not assigned to this breakout.' }), {
+            status: 403,
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+          })
+        }
+      }
+    }
 
     if (action === 'remove-participant') {
       if (!isModerator || !participantUserId || participantUserId === userId) {
@@ -152,6 +194,7 @@ Deno.serve(async (req) => {
         target?.status !== 'removed' ||
         !removalEvent ||
         targetRole?.role === 'host' ||
+        meeting.host_id === participantUserId ||
         (role === 'co_host' && targetRole?.role === 'co_host')
       ) {
         return new Response(JSON.stringify({ error: 'Removal was not authorized by the server.' }), {
@@ -233,6 +276,22 @@ Deno.serve(async (req) => {
       }
     }
 
+    // Soft capacity check for main room tokens (host always allowed).
+    if (isMainRoom && !isHost) {
+      const cap = typeof meeting.max_participants === 'number' ? meeting.max_participants : 100
+      const { count } = await supabase
+        .from('meeting_participants')
+        .select('id', { count: 'exact', head: true })
+        .eq('meeting_id', meetingId)
+        .eq('status', 'admitted')
+      if (typeof count === 'number' && count > cap) {
+        return new Response(JSON.stringify({ error: 'Meeting is full.' }), {
+          status: 403,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        })
+      }
+    }
+
     const { data: profile } = await supabase
       .from('profiles')
       .select('full_name, username, avatar_url')
@@ -247,10 +306,12 @@ Deno.serve(async (req) => {
       'Guest'
     const avatarUrl = bodyAvatarUrl || profile?.avatar_url || null
 
+    // Unique LiveKit identity per Sheconomy user so 1–N peers share one room
+    // without colliding tiles / publications.
     const token = new AccessToken(apiKey, apiSecret, {
       identity: userId,
       name: String(resolvedName).slice(0, 80),
-      metadata: JSON.stringify({ avatarUrl }),
+      metadata: JSON.stringify({ avatarUrl, meetingId }),
       ttl: '4h',
     })
 
