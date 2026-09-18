@@ -37,6 +37,8 @@ export type MeetingMachineState = {
   mirrorLocalVideo: boolean
   /** Zoom-style: hide the local camera tile from gallery / filmstrip. */
   hideSelfView: boolean
+  /** Wide desktop: 7×7 dense gallery pages (49 tiles). */
+  denseGallery: boolean
   controlsVisible: boolean
   /** When true, idle auto-hide is disabled until the host unpins. */
   controlsPinned: boolean
@@ -61,6 +63,7 @@ export type MeetingMachineAction =
   | { type: 'TOGGLE_UI_MODE' }
   | { type: 'SET_MIRROR_LOCAL_VIDEO'; enabled: boolean }
   | { type: 'SET_HIDE_SELF_VIEW'; enabled: boolean }
+  | { type: 'SET_DENSE_GALLERY'; enabled: boolean }
   | { type: 'SET_CONTROLS'; visible: boolean }
   | { type: 'SET_CONTROLS_PINNED'; pinned: boolean }
   | { type: 'TOGGLE_PARTICIPANT_STRIP' }
@@ -118,6 +121,7 @@ export const initialMeetingMachineState: MeetingMachineState = {
   uiMode: 'normal',
   mirrorLocalVideo: true,
   hideSelfView: false,
+  denseGallery: false,
   controlsVisible: true,
   controlsPinned: false,
   participantStripMinimized: false,
@@ -424,6 +428,9 @@ export function meetingStateReducer(
     case 'SET_HIDE_SELF_VIEW':
       if (state.hideSelfView === action.enabled) return state
       return { ...state, hideSelfView: action.enabled }
+    case 'SET_DENSE_GALLERY':
+      if (state.denseGallery === action.enabled) return state
+      return { ...state, denseGallery: action.enabled }
     case 'SET_CONTROLS':
       if (state.controlsVisible === action.visible) return state
       return { ...state, controlsVisible: action.visible }

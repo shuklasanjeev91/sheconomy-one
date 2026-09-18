@@ -44,12 +44,16 @@ export type MeetingToolbarOverflowKey =
   | 'view_gallery'
   | 'view_speaker'
   | 'view_screen_share'
+  | 'view_dense_gallery'
   | 'mirror_video'
   | 'hide_self_view'
   | 'maximize'
   | 'captions'
   | 'invite'
   | 'host_tools'
+  | 'breakout_rooms'
+  | 'polls'
+  | 'qna'
 
 export type MeetingToolbarMoreSection = {
   title: string
@@ -141,13 +145,18 @@ export function meetingToolbarMoreSections(input: {
   supportsLiveCaptions?: boolean
   hasInvite?: boolean
   hasViewControls?: boolean
+  hasDenseGallery?: boolean
   reactionsOnPrimary?: boolean
   raiseHandOnPrimary?: boolean
   recording?: boolean
+  hasBreakouts?: boolean
+  hasPolls?: boolean
+  hasQa?: boolean
 }): MeetingToolbarMoreSection[] {
   const view: MeetingToolbarOverflowKey[] = []
   if (input.hasViewControls !== false) {
     view.push('view_gallery', 'view_speaker', 'view_screen_share', 'mirror_video', 'hide_self_view', 'maximize')
+    if (input.hasDenseGallery) view.push('view_dense_gallery')
   }
 
   const media: MeetingToolbarOverflowKey[] = []
@@ -163,6 +172,9 @@ export function meetingToolbarMoreSections(input: {
   if (input.hasShareLink) meeting.push('share_link')
   if (input.hasFullscreen) meeting.push('fullscreen')
   if (input.hasPictureInPicture) meeting.push('picture_in_picture')
+  if (input.hasPolls) meeting.push('polls')
+  if (input.hasQa) meeting.push('qna')
+  if (input.hasBreakouts) meeting.push('breakout_rooms')
 
   const host: MeetingToolbarOverflowKey[] = []
   if (canOpenHostTools(input.viewerRole)) {

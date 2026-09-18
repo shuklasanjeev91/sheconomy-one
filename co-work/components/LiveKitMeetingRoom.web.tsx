@@ -331,6 +331,19 @@ function getSheconomyLivekitCss(ui: CoWorkUiTokens, shadows: CoWorkShadows) {
   .sheconomy-video-stage--landscape-phone .sheconomy-gallery-pagination {
     bottom: 12px;
   }
+  .sheconomy-video-filmstrip__overflow {
+    min-width: 72px;
+    min-height: 56px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 12px;
+    background: rgba(255,255,255,0.12);
+    color: #fff;
+    font-weight: 800;
+    font-size: 15px;
+    flex-shrink: 0;
+  }
   .sheconomy-gallery-pagination {
     position: absolute;
     left: 50%;

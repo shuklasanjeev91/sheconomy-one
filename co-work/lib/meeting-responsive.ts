@@ -120,7 +120,8 @@ export function resolveMeetingResponsiveLayout(input: {
         sidePanelWidthFraction: 0.34,
         sidePanelMaxWidth: 380,
         compactControls: false,
-        pageSize: 12,
+        // Zoom-like density for ~100-person rooms (paginated).
+        pageSize: 16,
       }
     case 'desktop':
       return {
@@ -133,7 +134,7 @@ export function resolveMeetingResponsiveLayout(input: {
         sidePanelWidthFraction: 0.32,
         sidePanelMaxWidth: 400,
         compactControls: false,
-        pageSize: 12,
+        pageSize: 25,
       }
     case 'large-desktop':
       return {
@@ -146,7 +147,7 @@ export function resolveMeetingResponsiveLayout(input: {
         sidePanelWidthFraction: 0.28,
         sidePanelMaxWidth: 440,
         compactControls: false,
-        pageSize: 16,
+        pageSize: 25,
       }
   }
 }

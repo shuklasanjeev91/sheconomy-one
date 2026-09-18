@@ -52,8 +52,10 @@ import {
   registerIosPipVideoRef,
 } from '~/lib/session/ios-pip-registry'
 import {
+  capFilmstripTracks,
   meetingGalleryLayout,
   paginateMeetingGallery,
+  resolveMeetingGalleryPageSize,
 } from '~/co-work/lib/meeting-gallery-layout'
 import {
   meetingStageContentBox,
@@ -63,6 +65,7 @@ import {
   applyMeetingUiChromeLayout,
   resolveMeetingUiChromePadding,
 } from '~/co-work/lib/meeting-ui-chrome'
+import { applyMeetingSelectiveCameraSubscribe } from '~/co-work/lib/meeting-selective-subscribe'
 import { useCoWorkTheme } from '~/co-work/lib/theme'
 import { fetchLiveKitConfig, type LiveKitConfig } from '~/lib/livekit/config'
 import { ensureLiveKitGlobals } from '~/lib/livekit/ensure-globals'
@@ -536,7 +539,11 @@ function NativeMeetingVideoStage() {
   )
 
   const [page, setPage] = useState(0)
-  const pageSize = chrome.pageSize
+  const pageSize = resolveMeetingGalleryPageSize({
+    basePageSize: chrome.pageSize,
+    denseGallery: state.denseGallery,
+    breakpoint: chrome.breakpoint,
+  })
   const paged = useMemo(
     () => paginateMeetingGallery(layoutState.stageTracks, page, pageSize),
     [layoutState.stageTracks, page, pageSize],
@@ -545,10 +552,24 @@ function NativeMeetingVideoStage() {
     if (paged.page !== page) setPage(paged.page)
   }, [page, paged.page])
   const stageTracks = paged.items
-  const filmstripTracks = layoutState.filmstripTracks
+  const filmstripCapped = useMemo(
+    () => capFilmstripTracks(layoutState.filmstripTracks),
+    [layoutState.filmstripTracks],
+  )
+  const filmstripTracks = filmstripCapped.visible
   const hasScreenShare = layoutState.hasScreenShare
   const isLocalScreenSharing = layoutState.isLocalScreenSharing
   const previousScreenShare = useRef(false)
+
+  useEffect(() => {
+    const identities = new Set<string>()
+    for (const track of stageTracks) identities.add(track.participant.identity)
+    for (const track of filmstripTracks) identities.add(track.participant.identity)
+    for (const track of layoutState.stageTracks) {
+      if (track.participant.isSpeaking) identities.add(track.participant.identity)
+    }
+    applyMeetingSelectiveCameraSubscribe(room, identities)
+  }, [filmstripTracks, layoutState.stageTracks, room, stageTracks])
 
   useEffect(() => {
     if (hasScreenShare && !previousScreenShare.current) {
@@ -559,7 +580,7 @@ function NativeMeetingVideoStage() {
     previousScreenShare.current = hasScreenShare
   }, [dispatch, hasScreenShare, state.viewMode])
 
-  const showFilmstrip = filmstripTracks.length > 0
+  const showFilmstrip = layoutState.filmstripTracks.length > 0
   const speakerMode = state.viewMode === 'speaker'
   // Speaker view always keeps a filmstrip of the other participants (side on
   // wide layouts, bottom strip on portrait phones).
@@ -702,6 +723,20 @@ function NativeMeetingVideoStage() {
                     activeSpeaker={trackRef.participant.isSpeaking}
                   />
                 ))}
+                {filmstripCapped.overflow > 0 ? (
+                  <YStack
+                    width={chrome.pipWidth}
+                    height={chrome.pipHeight}
+                    borderRadius={10}
+                    alignItems="center"
+                    justifyContent="center"
+                    backgroundColor="rgba(255,255,255,0.12)"
+                  >
+                    <Text color="#fff" fontWeight="800" fontSize={16}>
+                      +{filmstripCapped.overflow}
+                    </Text>
+                  </YStack>
+                ) : null}
               </XStack>
             </NativeScrollView>
           ) : null}

@@ -2,8 +2,10 @@ import { describe, expect, it } from 'vitest'
 import type { Participant } from 'livekit-client'
 
 import {
+  capFilmstripTracks,
   meetingGalleryLayout,
   paginateMeetingGallery,
+  resolveMeetingGalleryPageSize,
 } from '~/co-work/lib/meeting-gallery-layout'
 import { participantDisplayName } from '~/co-work/lib/participant-avatar'
 
@@ -65,5 +67,27 @@ describe('Zoom-style meeting gallery', () => {
       pageCount: 3,
     })
     expect(paginateMeetingGallery(participants.slice(0, 2), 5, 6).page).toBe(0)
+  })
+
+  it('packs dense 25 and 49 tile pages for large rooms', () => {
+    expect(meetingGalleryLayout(25, { width: 1280, height: 800 })).toEqual({
+      columns: 5,
+      rows: 5,
+    })
+    expect(meetingGalleryLayout(49, { width: 1400, height: 900 })).toEqual({
+      columns: 7,
+      rows: 7,
+    })
+  })
+
+  it('caps filmstrip for speaker/share decoder budget', () => {
+    expect(capFilmstripTracks(Array.from({ length: 40 }, (_, i) => i)).overflow).toBe(28)
+    expect(
+      resolveMeetingGalleryPageSize({
+        basePageSize: 25,
+        denseGallery: true,
+        breakpoint: 'large-desktop',
+      }),
+    ).toBe(49)
   })
 })

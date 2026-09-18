@@ -26,6 +26,9 @@ export function shouldPromptForPasscode(input: {
  */
 export function mapMeetingSecurityJoinError(message: string): string | null {
   if (/MEETING_LOCKED/i.test(message)) return MEETING_LOCKED_MESSAGE
+  if (/MEETING_FULL/i.test(message)) {
+    return 'This meeting is full. Ask the host to raise the participant limit or try again later.'
+  }
   if (/PARTICIPANT_REMOVED/i.test(message)) {
     return 'You were removed from this meeting. Ask the host to allow you to rejoin.'
   }

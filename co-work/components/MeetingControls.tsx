@@ -37,7 +37,7 @@ type MeetingControlsProps = {
   /** Lock / mute-all / remove-all — host only. */
   canChangeCriticalSettings?: boolean
   isLocked?: boolean
-  panel: 'none' | 'chat' | 'people' | 'invite' | 'info' | 'recordings' | 'backgrounds' | 'audio' | 'host_tools'
+  panel: 'none' | 'chat' | 'people' | 'invite' | 'info' | 'recordings' | 'backgrounds' | 'audio' | 'host_tools' | 'polls' | 'qna' | 'breakouts'
   backgroundActive?: boolean
   unreadChatCount?: number
   raisedHandCount?: number
@@ -46,10 +46,12 @@ type MeetingControlsProps = {
   viewMode?: MeetingViewMode
   mirrorLocalVideo?: boolean
   hideSelfView?: boolean
+  denseGallery?: boolean
   uiMaximized?: boolean
   onSetViewMode?: (viewMode: MeetingViewMode) => void
   onToggleMirror?: () => void
   onToggleHideSelfView?: () => void
+  onToggleDenseGallery?: () => void
   onToggleMaximize?: () => void
   onToggleAudio: () => void
   onOpenAudioSettings?: () => void
@@ -66,6 +68,9 @@ type MeetingControlsProps = {
   onToggleInfo: () => void
   onToggleInvite?: () => void
   onToggleHostTools?: () => void
+  onTogglePolls?: () => void
+  onToggleQa?: () => void
+  onToggleBreakouts?: () => void
   onShare?: () => void
   onLeave: () => void
   onEnd: () => void
@@ -488,10 +493,12 @@ export function MeetingControls({
   viewMode = 'gallery',
   mirrorLocalVideo = false,
   hideSelfView = false,
+  denseGallery = false,
   uiMaximized = false,
   onSetViewMode,
   onToggleMirror,
   onToggleHideSelfView,
+  onToggleDenseGallery,
   onToggleMaximize,
   onToggleAudio,
   onOpenAudioSettings,
@@ -508,6 +515,9 @@ export function MeetingControls({
   onToggleInfo,
   onToggleInvite,
   onToggleHostTools,
+  onTogglePolls,
+  onToggleQa,
+  onToggleBreakouts,
   onShare,
   onLeave,
   onEnd,
@@ -575,9 +585,13 @@ export function MeetingControls({
     supportsLiveCaptions: caps.supportsLiveCaptions,
     hasInvite: !!(onToggleInvite || onShare),
     hasViewControls: !!(onSetViewMode || onToggleMirror || onToggleMaximize),
+    hasDenseGallery: !!onToggleDenseGallery && (isTablet || isDesktop),
     reactionsOnPrimary: hasReactions,
     raiseHandOnPrimary: hasRaiseHand,
     recording,
+    hasBreakouts: !!onToggleBreakouts,
+    hasPolls: !!onTogglePolls,
+    hasQa: !!onToggleQa,
   })
 
   const closeFlyout = () => setFlyout('none')
@@ -648,6 +662,42 @@ export function MeetingControls({
               icon: Icons.EyeOff,
               active: hideSelfView,
               onPress: runFromFlyout(onToggleHideSelfView),
+            }
+          : null
+      case 'view_dense_gallery':
+        return onToggleDenseGallery
+          ? {
+              label: denseGallery ? 'Standard gallery (25)' : 'Dense gallery (49)',
+              icon: Icons.LayoutGrid,
+              active: denseGallery,
+              onPress: runFromFlyout(onToggleDenseGallery),
+            }
+          : null
+      case 'polls':
+        return onTogglePolls
+          ? {
+              label: 'Polls',
+              icon: Icons.BarChart3,
+              active: panel === 'polls',
+              onPress: runFromFlyout(onTogglePolls),
+            }
+          : null
+      case 'qna':
+        return onToggleQa
+          ? {
+              label: 'Q&A',
+              icon: Icons.HelpCircle,
+              active: panel === 'qna',
+              onPress: runFromFlyout(onToggleQa),
+            }
+          : null
+      case 'breakout_rooms':
+        return onToggleBreakouts
+          ? {
+              label: 'Breakout rooms',
+              icon: Icons.UsersRound,
+              active: panel === 'breakouts',
+              onPress: runFromFlyout(onToggleBreakouts),
             }
           : null
       case 'host_tools':

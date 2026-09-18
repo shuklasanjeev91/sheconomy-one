@@ -4,6 +4,7 @@ import {
   Avatar,
   Button,
   Icons,
+  Input,
   Popover,
   PopoverContent,
   ScrollView,
@@ -83,12 +84,32 @@ export function MeetingParticipantsPanel({
   fullWidth,
 }: MeetingParticipantsPanelProps) {
   const { ui: coworkUi } = useCoWorkTheme()
+  const [query, setQuery] = useState('')
+  const [filter, setFilter] = useState<'all' | 'muted' | 'hand' | 'waiting'>('all')
   const admitted = participants.filter((p) => p.status === 'admitted')
   const waiting = participants.filter((p) => p.status === 'waiting')
   const removed = participants.filter((p) => p.status === 'removed')
   const canModerate = canManageMeeting(viewerRole)
   const canAdmit = canAdmitParticipants(viewerRole)
   const bulkActions = hostBulkActions(viewerRole)
+  const normalizedQuery = query.trim().toLowerCase()
+
+  const matchesQuery = (p: MeetingParticipant) => {
+    if (!normalizedQuery) return true
+    const name = safeMeetingDisplayName(
+      p.display_name || p.profile?.full_name || p.profile?.username || '',
+    ).toLowerCase()
+    return name.includes(normalizedQuery)
+  }
+
+  const filteredAdmitted = admitted.filter((p) => {
+    if (!matchesQuery(p)) return false
+    if (filter === 'hand') return !!raisedHands[p.user_id]
+    if (filter === 'muted') return !!p.is_muted
+    if (filter === 'waiting') return false
+    return true
+  })
+  const filteredWaiting = waiting.filter(matchesQuery)
 
   return (
     <CoWorkPanelShell fullWidth={fullWidth}>
@@ -98,6 +119,40 @@ export function MeetingParticipantsPanel({
         icon={<Icons.Users size={18} color={coworkUi.brandLight} />}
         onClose={onClose}
       />
+
+      <YStack paddingHorizontal="$3" paddingTop="$2" gap="$2">
+        <Input
+          value={query}
+          onChangeText={setQuery}
+          placeholder="Search participants"
+          backgroundColor="rgba(255,255,255,0.05)"
+          borderColor={coworkUi.borderSoft}
+          color={coworkUi.text}
+          borderRadius={12}
+          height={40}
+        />
+        <XStack gap="$1.5" flexWrap="wrap">
+          {(
+            [
+              ['all', 'All'],
+              ['hand', 'Hand raised'],
+              ['muted', 'Muted'],
+              ['waiting', 'Waiting'],
+            ] as const
+          ).map(([key, label]) => (
+            <Button
+              key={key}
+              tone={filter === key ? 'primary' : 'outline'}
+              size="$2"
+              borderRadius={999}
+              onPress={() => setFilter(key)}
+            >
+              {label}
+              {key === 'waiting' && waiting.length ? ` (${waiting.length})` : ''}
+            </Button>
+          ))}
+        </XStack>
+      </YStack>
 
       <ScrollView flex={1} padding="$3">
         <YStack gap="$4">
@@ -175,7 +230,7 @@ export function MeetingParticipantsPanel({
             </YStack>
           ) : null}
 
-          {waiting.length > 0 ? (
+          {(filter === 'waiting' || filter === 'all') && filteredWaiting.length > 0 ? (
             <YStack gap="$2">
               <XStack alignItems="center" justifyContent="space-between">
                 <CoWorkSectionLabel>Waiting room</CoWorkSectionLabel>
@@ -185,7 +240,7 @@ export function MeetingParticipantsPanel({
                   </Button>
                 ) : null}
               </XStack>
-              {waiting.map((p) => (
+              {filteredWaiting.map((p) => (
                 <ParticipantRow
                   key={p.id}
                   participant={p}
@@ -208,38 +263,15 @@ export function MeetingParticipantsPanel({
             </YStack>
           ) : null}
 
-          {(() => {
-            const withHands = admitted.filter((p) => raisedHands[p.user_id])
-            if (withHands.length === 0) return null
-            return (
-              <YStack gap="$2">
-                <CoWorkSectionLabel>Raised hands ({withHands.length})</CoWorkSectionLabel>
-                {withHands.map((p) => (
-                  <ParticipantRow
-                    key={`hand-${p.id}`}
-                    participant={p}
-                    handRaised
-                    action={
-                      p.user_id === currentUserId ? null : (
-                        <Text fontSize={12} color={coworkUi.textMuted}>
-                          Waiting
-                        </Text>
-                      )
-                    }
-                  />
-                ))}
-              </YStack>
-            )
-          })()}
-
+          {filter !== 'waiting' ? (
           <YStack gap="$2">
             <CoWorkSectionLabel>In the meeting</CoWorkSectionLabel>
-            {admitted.length === 0 ? (
+            {filteredAdmitted.length === 0 ? (
               <Text fontSize={13} color={coworkUi.textMuted} paddingVertical="$2">
-                No participants yet.
+                No participants match.
               </Text>
             ) : null}
-            {[...admitted]
+            {[...filteredAdmitted]
               .sort((a, b) => Number(!!raisedHands[b.user_id]) - Number(!!raisedHands[a.user_id]))
               .map((p) => {
                 const role = meetingRoleFromFlags({
@@ -315,6 +347,7 @@ export function MeetingParticipantsPanel({
                 )
               })}
           </YStack>
+          ) : null}
 
           {canModerate && removed.length > 0 ? (
             <YStack gap="$2">

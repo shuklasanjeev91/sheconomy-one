@@ -66,8 +66,57 @@ export function meetingGalleryLayout(
     return { columns: 2, rows: Math.ceil(count / 2) }
   }
 
-  const columns = width >= 1100 ? 4 : width >= 720 || phoneLandscape ? 3 : 2
+  if (count <= 16) {
+    if (width >= 900) return { columns: 4, rows: 4 }
+    if (width >= 720 || phoneLandscape) return { columns: 4, rows: Math.ceil(count / 4) }
+    return { columns: 3, rows: Math.ceil(count / 3) }
+  }
+
+  if (count <= 25) {
+    // Zoom-style 5×5 dense page on wide desktops.
+    if (width >= 1020) return { columns: 5, rows: 5 }
+    if (width >= 900) return { columns: 5, rows: Math.ceil(count / 5) }
+    return { columns: 4, rows: Math.ceil(count / 4) }
+  }
+
+  if (count <= 49) {
+    // Optional ultra-dense 7×7 (large-desktop + dense gallery toggle).
+    if (width >= 1280) return { columns: 7, rows: Math.ceil(count / 7) }
+    if (width >= 1020) return { columns: 5, rows: Math.ceil(count / 5) }
+    return { columns: 4, rows: Math.ceil(count / 4) }
+  }
+
+  const columns = width >= 1280 ? 7 : width >= 1100 ? 5 : width >= 720 || phoneLandscape ? 4 : 3
   return { columns, rows: Math.ceil(count / columns) }
+}
+
+/** Visible filmstrip tiles in speaker/share — keep decoder budget bounded at ~100 peers. */
+export const MEETING_FILMSTRIP_VISIBLE_CAP = 12
+
+export function capFilmstripTracks<T>(tracks: T[], cap = MEETING_FILMSTRIP_VISIBLE_CAP): {
+  visible: T[]
+  overflow: number
+} {
+  const limit = Math.max(1, Math.floor(cap))
+  if (tracks.length <= limit) return { visible: tracks, overflow: 0 }
+  return { visible: tracks.slice(0, limit), overflow: tracks.length - limit }
+}
+
+/** Desktop dense gallery page size (7×7) when the host enables More → Dense gallery. */
+export const MEETING_DENSE_GALLERY_PAGE_SIZE = 49
+
+export function resolveMeetingGalleryPageSize(input: {
+  basePageSize: number
+  denseGallery?: boolean
+  breakpoint?: string
+}): number {
+  if (
+    input.denseGallery &&
+    (input.breakpoint === 'desktop' || input.breakpoint === 'large-desktop')
+  ) {
+    return MEETING_DENSE_GALLERY_PAGE_SIZE
+  }
+  return Math.max(1, input.basePageSize)
 }
 
 /** Split participants into visual rows for an explicit Meet-style grid. */

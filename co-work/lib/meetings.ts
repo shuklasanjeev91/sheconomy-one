@@ -627,6 +627,25 @@ export async function joinMeetingParticipant(
 ): Promise<MeetingParticipant> {
   const cleanedDisplayName = normalizeMeetingDisplayName(displayName)
   if (!cleanedDisplayName) throw new Error('Enter a valid display name before joining.')
+
+  // Soft capacity check before RPC — trigger also enforces MEETING_FULL.
+  const { data: meetingRow } = await supabase
+    .from('meetings')
+    .select('max_participants, host_id')
+    .eq('id', meetingId)
+    .maybeSingle()
+  if (meetingRow && _userId !== meetingRow.host_id) {
+    const cap = meetingRow.max_participants ?? 100
+    const { count } = await supabase
+      .from('meeting_participants')
+      .select('id', { count: 'exact', head: true })
+      .eq('meeting_id', meetingId)
+      .eq('status', 'admitted')
+    if (typeof count === 'number' && count >= cap) {
+      throw new Error('MEETING_FULL')
+    }
+  }
+
   const { data, error } = await supabase.rpc('join_meeting_participant', {
     meeting_id_input: meetingId,
     session_id_input: sessionId,

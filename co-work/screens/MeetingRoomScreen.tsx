@@ -21,6 +21,9 @@ import { MeetingInvitePanel } from '~/co-work/components/MeetingInvitePanel'
 import { MeetingLiveCaptions } from '~/co-work/components/MeetingLiveCaptions'
 import { MeetingLiveSignalsProvider } from '~/co-work/components/MeetingLiveSignalsContext'
 import { MeetingParticipantsPanel } from '~/co-work/components/MeetingParticipantsPanel'
+import { MeetingPollsPanel } from '~/co-work/components/MeetingPollsPanel'
+import { MeetingQaPanel } from '~/co-work/components/MeetingQaPanel'
+import { MeetingBreakoutPanel } from '~/co-work/components/MeetingBreakoutPanel'
 import { MeetingReactionsOverlay } from '~/co-work/components/MeetingReactionsOverlay'
 import { MeetingRecordingsPanel } from '~/co-work/components/MeetingRecordingsPanel'
 import { MeetingResponsivePanel } from '~/co-work/components/MeetingResponsivePanel'
@@ -146,6 +149,7 @@ function MeetingRoomContent(props: MeetingRoomScreenProps) {
   const useLiveKit = supportsLiveKitVideo() && !!props.meeting.room_id
   const [mediaReconnectFailed, setMediaReconnectFailed] = useState(false)
   const [mediaReconnectKey, setMediaReconnectKey] = useState(0)
+  const [breakoutRoomId, setBreakoutRoomId] = useState<string | null>(null)
   const mediaConnectedRef = useRef(false)
   const ignoreMediaDisconnectRef = useRef(false)
   const mediaAutoRetryRef = useRef(0)
@@ -350,9 +354,9 @@ function MeetingRoomContent(props: MeetingRoomScreenProps) {
       )}
     >
       <LiveKitMeetingRoom
-        key={mediaReconnectKey}
+        key={`${mediaReconnectKey}:${breakoutRoomId ?? 'main'}`}
         meetingId={props.meeting.id}
-        roomId={props.meeting.room_id ?? ''}
+        roomId={breakoutRoomId ?? props.meeting.room_id ?? ''}
         displayName={props.displayName}
         avatarUrl={props.avatarUrl}
         isHost={props.isHost}
@@ -370,9 +374,34 @@ function MeetingRoomContent(props: MeetingRoomScreenProps) {
                   caps={caps}
                   title={title}
                   liveKit={liveKit}
+                  activeBreakoutRoomId={breakoutRoomId}
+                  onJoinBreakoutRoom={(roomName) => {
+                    setBreakoutRoomId(roomName)
+                    setMediaReconnectKey((value) => value + 1)
+                  }}
+                  onLeaveBreakoutRoom={() => {
+                    setBreakoutRoomId(null)
+                    setMediaReconnectKey((value) => value + 1)
+                  }}
                 />
               )
-            : () => <MeetingRoomOverlay {...props} presence={presence} caps={caps} title={title} />
+            : () => (
+                <MeetingRoomOverlay
+                  {...props}
+                  presence={presence}
+                  caps={caps}
+                  title={title}
+                  activeBreakoutRoomId={breakoutRoomId}
+                  onJoinBreakoutRoom={(roomName) => {
+                    setBreakoutRoomId(roomName)
+                    setMediaReconnectKey((value) => value + 1)
+                  }}
+                  onLeaveBreakoutRoom={() => {
+                    setBreakoutRoomId(null)
+                    setMediaReconnectKey((value) => value + 1)
+                  }}
+                />
+              )
         }
       />
     </MeetingLiveSignalsProvider>
@@ -463,11 +492,17 @@ function MeetingRoomOverlay({
   title,
   liveKit,
   isHost,
+  activeBreakoutRoomId = null,
+  onJoinBreakoutRoom,
+  onLeaveBreakoutRoom,
 }: MeetingRoomScreenProps & {
   presence: PresenceState
   caps: MediaCaps
   title: string
   liveKit?: LiveKitMediaControls
+  activeBreakoutRoomId?: string | null
+  onJoinBreakoutRoom?: (liveKitRoomName: string) => void
+  onLeaveBreakoutRoom?: () => void
 }) {
   const { ui: coworkUi } = useCoWorkTheme()
   const {
@@ -1454,10 +1489,26 @@ function MeetingRoomOverlay({
                 />
               ) : null}
               {captions.active ? <CoWorkStatusPill label="CC" tone="brand" /> : null}
+              {activeBreakoutRoomId ? (
+                <CoWorkStatusPill label="Breakout" tone="brand" />
+              ) : null}
             </XStack>
           </XStack>
 
           <XStack alignItems="center" gap="$1.5" flexShrink={0}>
+            {activeBreakoutRoomId ? (
+              <Button
+                tone="primary"
+                size="$2"
+                height={34}
+                paddingHorizontal="$2.5"
+                borderRadius={coworkUi.radius.control}
+                onPress={() => onLeaveBreakoutRoom?.()}
+                accessibilityLabel="Return to main meeting"
+              >
+                Main room
+              </Button>
+            ) : null}
             <Button
               tone="outline"
               size="$2"
@@ -1826,6 +1877,88 @@ function MeetingRoomOverlay({
       </MeetingResponsivePanel>
 
       <MeetingResponsivePanel
+        open={presence.panel === 'polls'}
+        onClose={() => presence.setPanel('none')}
+        presentation={panelPresentation}
+        top={panelTop}
+        bottom={panelBottom}
+        trailingInset={panelTrailingInset}
+        width={sidePanelWidth}
+        overlayPosition={overlayPosition}
+      >
+        <MeetingPollsPanel
+          meetingId={meeting.id}
+          userId={userId}
+          canModerate={canModerate}
+          onClose={() => presence.setPanel('none')}
+          fullWidth={panelFullWidth}
+        />
+      </MeetingResponsivePanel>
+
+      <MeetingResponsivePanel
+        open={presence.panel === 'qna'}
+        onClose={() => presence.setPanel('none')}
+        presentation={panelPresentation}
+        top={panelTop}
+        bottom={panelBottom}
+        trailingInset={panelTrailingInset}
+        width={sidePanelWidth}
+        overlayPosition={overlayPosition}
+      >
+        <MeetingQaPanel
+          meetingId={meeting.id}
+          userId={userId}
+          canModerate={canModerate}
+          onClose={() => presence.setPanel('none')}
+          fullWidth={panelFullWidth}
+        />
+      </MeetingResponsivePanel>
+
+      <MeetingResponsivePanel
+        open={presence.panel === 'breakouts'}
+        onClose={() => presence.setPanel('none')}
+        presentation={panelPresentation}
+        top={panelTop}
+        bottom={panelBottom}
+        trailingInset={panelTrailingInset}
+        width={sidePanelWidth}
+        overlayPosition={overlayPosition}
+      >
+        <MeetingBreakoutPanel
+          meetingId={meeting.id}
+          userId={userId}
+          meetingLiveKitRoomId={meeting.room_id ?? meeting.id}
+          participants={presence.participants
+            .filter((row) => row.status === 'admitted')
+            .map((row) => ({
+              user_id: row.user_id,
+              display_name:
+                row.display_name || row.profile?.full_name || row.profile?.username || undefined,
+            }))}
+          canModerate={canModerate}
+          onClose={() => presence.setPanel('none')}
+          onJoinBreakoutRoom={(roomName) => onJoinBreakoutRoom?.(roomName)}
+          onOpenBreakouts={async () => {
+            const { fetchMeetingBreakouts } = await import('~/co-work/lib/meeting-breakouts')
+            const rooms = await fetchMeetingBreakouts(meeting.id)
+            const mine = rooms.find((room) => room.assigneeIds.includes(userId) && room.livekit_room_name)
+            if (mine?.livekit_room_name) onJoinBreakoutRoom?.(mine.livekit_room_name)
+            toast.show('Breakout rooms opened', {
+              tone: 'info',
+              message: mine
+                ? 'Joining your assigned breakout…'
+                : 'Open Breakouts and join your room when ready.',
+            })
+          }}
+          onCloseBreakouts={() => {
+            onLeaveBreakoutRoom?.()
+            toast.show('Returned to the main meeting', { tone: 'success' })
+          }}
+          fullWidth={panelFullWidth}
+        />
+      </MeetingResponsivePanel>
+
+      <MeetingResponsivePanel
         open={presence.panel === 'info'}
         onClose={() => presence.setPanel('none')}
         presentation={panelPresentation}
@@ -2019,6 +2152,7 @@ function MeetingRoomOverlay({
             viewMode={meetingMachine.viewMode}
             mirrorLocalVideo={meetingMachine.mirrorLocalVideo}
             hideSelfView={meetingMachine.hideSelfView}
+            denseGallery={meetingMachine.denseGallery}
             uiMaximized={meetingMachine.uiMode === 'maximized'}
             onSetViewMode={(viewMode) => dispatchUi({ type: 'SET_VIEW', viewMode })}
             onToggleMirror={() =>
@@ -2031,6 +2165,12 @@ function MeetingRoomOverlay({
               dispatchUi({
                 type: 'SET_HIDE_SELF_VIEW',
                 enabled: !meetingMachine.hideSelfView,
+              })
+            }
+            onToggleDenseGallery={() =>
+              dispatchUi({
+                type: 'SET_DENSE_GALLERY',
+                enabled: !meetingMachine.denseGallery,
               })
             }
             onToggleMaximize={() => dispatchUi({ type: 'TOGGLE_UI_MODE' })}
@@ -2071,6 +2211,9 @@ function MeetingRoomOverlay({
             onToggleHostTools={
               canModerate ? () => presence.togglePanel('host_tools') : undefined
             }
+            onTogglePolls={() => presence.togglePanel('polls')}
+            onToggleQa={() => presence.togglePanel('qna')}
+            onToggleBreakouts={() => presence.togglePanel('breakouts')}
             onShare={() => setShareOpen(true)}
             onMuteAll={isAuthoritativeHost ? handleMuteAll : undefined}
             onAskAllToMute={canModerate ? () => void presence.askAllToMute() : undefined}

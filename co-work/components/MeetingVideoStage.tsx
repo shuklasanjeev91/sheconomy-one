@@ -2,12 +2,15 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import type { CSSProperties } from 'react'
 import { useWindowDimensions } from 'react-native'
 
-import { TrackLoop } from '@livekit/components-react'
+import { TrackLoop, useRoomContext } from '@livekit/components-react'
+import { isTrackReference } from '@livekit/components-core'
 
 import { useMeetingGalleryTracks } from '~/co-work/hooks/useMeetingGalleryTracks'
 import {
+  capFilmstripTracks,
   meetingGalleryLayout,
   paginateMeetingGallery,
+  resolveMeetingGalleryPageSize,
 } from '~/co-work/lib/meeting-gallery-layout'
 import {
   meetingStageContentBox,
@@ -17,6 +20,7 @@ import {
   applyMeetingUiChromeLayout,
   resolveMeetingUiChromePadding,
 } from '~/co-work/lib/meeting-ui-chrome'
+import { applyMeetingSelectiveCameraSubscribe } from '~/co-work/lib/meeting-selective-subscribe'
 import { useAppLayout } from '~/hooks/useAppLayout'
 import { useMeetingMachine } from '~/co-work/components/MeetingProvider'
 
@@ -27,6 +31,7 @@ import { screenShareRoleLabel } from '~/co-work/lib/meeting-lifecycle'
 export function MeetingVideoStage() {
   const { isDesktop, isTablet, safeTop, safeBottom, safeLeft, safeRight } = useAppLayout()
   const { state, dispatch } = useMeetingMachine()
+  const room = useRoomContext()
   const { width, height } = useWindowDimensions()
   const chrome = useMemo(() => {
     const base = resolveMeetingChromeLayout({
@@ -76,7 +81,11 @@ export function MeetingVideoStage() {
     originX: number
     originY: number
   } | null>(null)
-  const pageSize = chrome.pageSize
+  const pageSize = resolveMeetingGalleryPageSize({
+    basePageSize: chrome.pageSize,
+    denseGallery: state.denseGallery,
+    breakpoint: chrome.breakpoint,
+  })
   const filmstripExpanded = filmstripTracks.length > 0 && !state.participantStripMinimized
   const screenLayoutEarly = state.viewMode === 'screen-share' && hasScreenShare
   const speakerLayoutEarly = state.viewMode === 'speaker'
@@ -104,10 +113,31 @@ export function MeetingVideoStage() {
     () => paginateMeetingGallery(stageTracks, page, pageSize),
     [page, pageSize, stageTracks],
   )
+  const filmstripCapped = useMemo(
+    () => capFilmstripTracks(filmstripTracks),
+    [filmstripTracks],
+  )
 
   useEffect(() => {
     if (paged.page !== page) setPage(paged.page)
   }, [page, paged.page])
+
+  useEffect(() => {
+    const identities = new Set<string>()
+    for (const track of paged.items) {
+      identities.add(track.participant.identity)
+    }
+    for (const track of filmstripCapped.visible) {
+      identities.add(track.participant.identity)
+    }
+    // Always include anyone actively speaking even if off the current page.
+    for (const track of stageTracks) {
+      if (isTrackReference(track) && track.participant.isSpeaking) {
+        identities.add(track.participant.identity)
+      }
+    }
+    applyMeetingSelectiveCameraSubscribe(room, identities)
+  }, [filmstripCapped.visible, paged.items, room, stageTracks])
 
   useEffect(() => {
     if (hasScreenShare && !previousScreenShare.current) {
@@ -299,9 +329,16 @@ export function MeetingVideoStage() {
             </button>
           </div>
           {!state.participantStripMinimized ? (
-            <TrackLoop tracks={filmstripTracks}>
-              <SheconomyParticipantTile mirrorLocalVideo={state.mirrorLocalVideo} />
-            </TrackLoop>
+            <>
+              <TrackLoop tracks={filmstripCapped.visible}>
+                <SheconomyParticipantTile mirrorLocalVideo={state.mirrorLocalVideo} />
+              </TrackLoop>
+              {filmstripCapped.overflow > 0 ? (
+                <div className="sheconomy-video-filmstrip__overflow" aria-label="More participants">
+                  +{filmstripCapped.overflow}
+                </div>
+              ) : null}
+            </>
           ) : null}
         </div>
       ) : null}

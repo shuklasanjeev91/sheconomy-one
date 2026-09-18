@@ -68,6 +68,8 @@ type MediaHandlers = {
 }
 
 const POLL_INTERVAL_MS = 4000
+const POLL_INTERVAL_LARGE_MS = 12_000
+const LARGE_ROOM_PARTICIPANT_THRESHOLD = 40
 
 /** Supabase-backed meeting presence + chat (signaling / participant state). Media is SFU-only via MeetingProvider. */
 export function useMeetingPresence({
@@ -101,6 +103,9 @@ export function useMeetingPresence({
     | 'backgrounds'
     | 'audio'
     | 'host_tools'
+    | 'polls'
+    | 'qna'
+    | 'breakouts'
   >('none')
   const [error, setError] = useState<string | null>(null)
   const [isConnecting, setIsConnecting] = useState(true)
@@ -126,9 +131,11 @@ export function useMeetingPresence({
   } | null>(null)
   const [floatingReactions, setFloatingReactions] = useState<FloatingMeetingReaction[]>([])
   const displayNameByUserRef = useRef<Record<string, string>>({})
+  const participantsCountRef = useRef(0)
 
   const panelRef = useRef(panel)
   panelRef.current = panel
+  participantsCountRef.current = participants.length
 
   const selfParticipant = participants.find((p) => p.user_id === userId)
   // Prefer the meeting host_id over a stale meeting_roles row — otherwise the
@@ -240,14 +247,19 @@ export function useMeetingPresence({
 
   const startPolling = useCallback(() => {
     if (pollRef.current) return
-    pollRef.current = setInterval(() => {
+    const tick = () => {
       void refreshParticipants().catch(() => undefined)
       void refreshModerationSettings().catch(() => undefined)
       void refreshControls().catch(() => undefined)
       if (!realtimeActiveRef.current) {
         void refreshChat().catch(() => undefined)
       }
-    }, POLL_INTERVAL_MS)
+    }
+    // Large rooms: slower reconciliation; realtime events remain primary.
+    const admittedGuess = participantsCountRef.current
+    const interval =
+      admittedGuess >= LARGE_ROOM_PARTICIPANT_THRESHOLD ? POLL_INTERVAL_LARGE_MS : POLL_INTERVAL_MS
+    pollRef.current = setInterval(tick, interval)
   }, [refreshChat, refreshControls, refreshModerationSettings, refreshParticipants])
 
   const sendSignal = useCallback((payload: SignalPayload): boolean => {
@@ -802,7 +814,10 @@ export function useMeetingPresence({
         | 'recordings'
         | 'backgrounds'
         | 'audio'
-        | 'host_tools',
+        | 'host_tools'
+        | 'polls'
+        | 'qna'
+        | 'breakouts',
     ) => {
     setPanel((current) => {
       const opening = current !== next
@@ -825,7 +840,10 @@ export function useMeetingPresence({
         | 'recordings'
         | 'backgrounds'
         | 'audio'
-        | 'host_tools',
+        | 'host_tools'
+        | 'polls'
+        | 'qna'
+        | 'breakouts',
     ) => {
       if (next === 'chat') {
         setUnreadChatCount(0)
