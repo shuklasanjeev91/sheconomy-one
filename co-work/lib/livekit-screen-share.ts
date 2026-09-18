@@ -82,6 +82,19 @@ async function waitForLocalScreenShareTrack(
   return localParticipant.getTrackPublication(Track.Source.ScreenShare) ?? null
 }
 
+/** True when a published screen-share track looks ready to send frames. */
+export function isLocalScreenShareTrackReady(
+  publication: TrackPublication | null | undefined,
+): boolean {
+  const track = publication?.track
+  if (!track) return false
+  const media = track.mediaStreamTrack
+  if (!media) return false
+  if (media.readyState === 'ended') return false
+  if ('enabled' in media && media.enabled === false) return false
+  return true
+}
+
 export async function setLocalScreenShareEnabled(
   localParticipant: LocalParticipant,
   enabled: boolean,
@@ -98,39 +111,57 @@ export async function setLocalScreenShareEnabled(
   // Ensure the published track is unmuted/enabled after the OS capture sheet.
   // On native, the MediaStream can attach a moment after setScreenShareEnabled resolves.
   const publication = await waitForLocalScreenShareTrack(localParticipant)
-  if (publication?.track) {
-    if (publication.isMuted) {
-      await publication.unmute()
-    }
-    const mediaTrack = publication.track.mediaStreamTrack
-    if (mediaTrack && 'enabled' in mediaTrack) {
-      mediaTrack.enabled = true
-    }
-    // iOS ReplayKit / Android MediaProjection often report 0×0 until the first
-    // frame — force settings so publish + remote RTCView get real dimensions.
-    if (platform === 'native') {
-      forceScreenShareTrackSettings(mediaTrack)
-      // Content hint helps Android WebRTC pick a screen-share encode path.
-      if (mediaTrack && 'contentHint' in mediaTrack) {
-        try {
-          ;(mediaTrack as MediaStreamTrack & { contentHint?: string }).contentHint = 'detail'
-        } catch {
-          // ignore
-        }
+  if (!publication?.track) {
+    throw new Error(
+      platform === 'native'
+        ? 'Screen capture did not start. Allow screen sharing when prompted, keep the sharing notification on, and try again.'
+        : 'Screen capture did not start. Choose a screen, window, or tab and try again.',
+    )
+  }
+
+  if (publication.isMuted) {
+    await publication.unmute()
+  }
+  const mediaTrack = publication.track.mediaStreamTrack
+  if (mediaTrack && 'enabled' in mediaTrack) {
+    mediaTrack.enabled = true
+  }
+  // iOS ReplayKit / Android MediaProjection often report 0×0 until the first
+  // frame — force settings so publish + remote RTCView get real dimensions.
+  if (platform === 'native') {
+    forceScreenShareTrackSettings(mediaTrack)
+    // Content hint helps Android WebRTC pick a screen-share encode path.
+    if (mediaTrack && 'contentHint' in mediaTrack) {
+      try {
+        ;(mediaTrack as MediaStreamTrack & { contentHint?: string }).contentHint = 'detail'
+      } catch {
+        // ignore
       }
-      // Wait briefly for MediaProjection/ReplayKit to attach a real MediaStream.
-      // Publishing without frames makes remote iOS/web tiles stay blank.
-      const started = Date.now()
-      while (Date.now() - started < 4_000) {
-        const stream = publication.track.mediaStream
-        const live = publication.track.mediaStreamTrack
-        const settings = live?.getSettings?.() ?? {}
-        const w = Number(settings.width) || 0
-        const h = Number(settings.height) || 0
-        if (stream?.id && (w > 1 || live?.readyState === 'live')) break
-        await new Promise((resolve) => setTimeout(resolve, 200))
-        forceScreenShareTrackSettings(publication.track.mediaStreamTrack)
+    }
+    // Wait briefly for MediaProjection/ReplayKit to attach a real MediaStream.
+    // Publishing without frames makes remote iOS/web tiles stay blank.
+    const started = Date.now()
+    while (Date.now() - started < 4_000) {
+      if (!isLocalScreenShareTrackReady(publication)) break
+      const stream = publication.track.mediaStream
+      const live = publication.track.mediaStreamTrack
+      const settings = live?.getSettings?.() ?? {}
+      const w = Number(settings.width) || 0
+      const h = Number(settings.height) || 0
+      if (stream?.id && (w > 1 || live?.readyState === 'live')) break
+      await new Promise((resolve) => setTimeout(resolve, 200))
+      forceScreenShareTrackSettings(publication.track.mediaStreamTrack)
+    }
+
+    if (!isLocalScreenShareTrackReady(publication)) {
+      try {
+        await localParticipant.setScreenShareEnabled(false)
+      } catch {
+        // ignore cleanup failures
       }
+      throw new Error(
+        'Screen share started without video frames. Update SHEconomy to the latest Android build, allow the capture prompt, and keep the sharing notification on.',
+      )
     }
   }
 }

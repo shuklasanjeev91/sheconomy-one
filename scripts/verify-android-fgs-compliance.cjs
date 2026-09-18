@@ -67,8 +67,8 @@ if (fgsPluginIndex < 0) {
 }
 
 const versionCode = appJson.expo?.android?.versionCode
-if (typeof versionCode !== 'number' || versionCode < 168) {
-  warnings.push(`android.versionCode is ${versionCode}; bump before Play submit with MediaProjection`)
+if (typeof versionCode !== 'number' || versionCode < 171) {
+  warnings.push(`android.versionCode is ${versionCode}; bump to 171+ before Play submit (MediaProjection race fix)`)
 }
 
 const perms = appJson.expo?.android?.permissions ?? []
@@ -115,6 +115,7 @@ mustInclude(callKeepPluginPath, 'withCallKeepIos', 'CallKeep is iOS-only')
 mustNotInclude(callKeepPluginPath, 'VoiceConnectionService', 'CallKeep must not register Android ConnectionService')
 mustInclude(fgsPluginPath, 'FOREGROUND_SERVICE_MEDIA_PROJECTION', 'FGS plugin documents MediaProjection permission')
 mustInclude(fgsPluginPath, 'ENABLE_SCREEN_SHARE_SERVICE', 'FGS plugin toggles LiveKit screen-share meta')
+mustInclude(fgsPluginPath, 'MediaProjectionService', 'FGS plugin pins MediaProjectionService')
 mustInclude(fgsPluginPath, "tools:node", 'FGS compliance plugin uses tools:node=remove')
 {
   const fgsSrc = read(fgsPluginPath)
@@ -127,6 +128,10 @@ mustInclude(fgsPluginPath, "tools:node", 'FGS compliance plugin uses tools:node=
     errors.push('MediaProjectionService must not be listed in SERVICES_TO_REMOVE')
   }
 }
+
+const racePatchPath = path.join(root, 'scripts', 'patch-webrtc-media-projection-notification.cjs')
+mustInclude(racePatchPath, 'awaitForegroundReady', 'WebRTC patch waits for MediaProjection FGS')
+mustInclude(racePatchPath, 'createScreenStream', 'WebRTC patch gates createScreenStream on FGS ready')
 
 for (const manifestPath of mergedManifestCandidates) {
   if (!fs.existsSync(manifestPath)) {

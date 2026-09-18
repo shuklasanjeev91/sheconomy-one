@@ -4,6 +4,7 @@ import { Platform } from 'react-native'
 /**
  * Android Present needs MediaProjection FGS in the native binary.
  * Store builds before versionCode 170 stripped that service — OTA cannot restore it.
+ * Build 171+ also includes the MediaProjection startCapture race fix.
  */
 export const ANDROID_PRESENT_MIN_VERSION_CODE = 170
 

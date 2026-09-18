@@ -32,3 +32,6 @@ user taps Present → system capture consent → ongoing share notification.
 5. Submit for review.
 
 OTA cannot ship MediaProjection — Android Present needs this native AAB.
+
+Build **171+** also patches a MediaProjection race (FGS must be foreground
+before `startCapture`) that otherwise published blank tracks ~40–60% of the time.

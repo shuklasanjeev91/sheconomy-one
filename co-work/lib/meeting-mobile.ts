@@ -77,6 +77,9 @@ export function softMediaToggleFailure(
     return 'Could not switch speaker / earpiece. Check Bluetooth permissions if using a headset.'
   }
   if (action === 'screen_share') {
+    if (/without video frames|did not start|MediaProjection|foreground|build 17/i.test(raw)) {
+      return raw
+    }
     return meetingPermissionDenialMessage('screen_broadcast')
   }
   if (action === 'camera') {

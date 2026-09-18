@@ -35,6 +35,7 @@ const PERMISSIONS_TO_REMOVE = [
 ]
 
 const SCREEN_SHARE_SERVICE_META = 'io.livekit.reactnative.expo.ENABLE_SCREEN_SHARE_SERVICE'
+const MEDIA_PROJECTION_SERVICE = 'com.oney.WebRTCModule.MediaProjectionService'
 
 function ensureToolsNamespace(doc) {
   // modResults is { manifest: { $: attrs, ... } }. Putting `$` on the document
@@ -73,6 +74,37 @@ function ensureRemovePermission(manifest, name) {
   })
 }
 
+function ensureMediaProjectionService(application) {
+  if (!application.service) application.service = []
+  // Drop remove markers + prior declarations so we pin a single positive entry.
+  application.service = application.service.filter(
+    (service) => service?.$?.['android:name'] !== MEDIA_PROJECTION_SERVICE,
+  )
+  application.service.push({
+    $: {
+      'android:name': MEDIA_PROJECTION_SERVICE,
+      'android:exported': 'false',
+      'android:foregroundServiceType': 'mediaProjection',
+    },
+  })
+}
+
+function ensurePermissionPresent(manifest, name) {
+  if (!manifest['uses-permission']) manifest['uses-permission'] = []
+  const existing = manifest['uses-permission'].filter((entry) => entry?.$?.['android:name'] === name)
+  const hasPositive = existing.some((entry) => entry?.$?.['tools:node'] !== 'remove')
+  // Drop remove markers for this permission.
+  manifest['uses-permission'] = manifest['uses-permission'].filter((entry) => {
+    if (entry?.$?.['android:name'] !== name) return true
+    return entry?.$?.['tools:node'] !== 'remove'
+  })
+  if (!hasPositive) {
+    manifest['uses-permission'].push({
+      $: { 'android:name': name },
+    })
+  }
+}
+
 function withAndroidFgsCompliance(config) {
   return withAndroidManifest(config, (mod) => {
     const androidManifest = mod.modResults
@@ -102,32 +134,9 @@ function withAndroidFgsCompliance(config) {
       },
     })
 
-    // Drop any tools:node=remove markers for MediaProjection that earlier
-    // plugin versions may have left behind.
-    if (application.service) {
-      application.service = application.service.filter((service) => {
-        const name = service?.$?.['android:name']
-        const remove = service?.$?.['tools:node'] === 'remove'
-        if (remove && name === 'com.oney.WebRTCModule.MediaProjectionService') {
-          return false
-        }
-        return true
-      })
-    }
-    if (manifest['uses-permission']) {
-      manifest['uses-permission'] = manifest['uses-permission'].filter((entry) => {
-        const name = entry?.$?.['android:name']
-        const remove = entry?.$?.['tools:node'] === 'remove'
-        if (
-          remove &&
-          (name === 'android.permission.FOREGROUND_SERVICE_MEDIA_PROJECTION' ||
-            name === 'android.permission.FOREGROUND_SERVICE')
-        ) {
-          return false
-        }
-        return true
-      })
-    }
+    ensurePermissionPresent(manifest, 'android.permission.FOREGROUND_SERVICE')
+    ensurePermissionPresent(manifest, 'android.permission.FOREGROUND_SERVICE_MEDIA_PROJECTION')
+    ensureMediaProjectionService(application)
 
     return mod
   })
@@ -136,5 +145,5 @@ function withAndroidFgsCompliance(config) {
 module.exports = createRunOncePlugin(
   withAndroidFgsCompliance,
   'withAndroidFgsCompliance',
-  '5.0.0',
+  '5.1.0',
 )
