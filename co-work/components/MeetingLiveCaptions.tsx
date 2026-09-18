@@ -1,22 +1,16 @@
 import type { ReactNode } from 'react'
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 import {
+  Platform,
   Pressable,
+  ScrollView,
   StyleSheet,
   Text as RNText,
   View,
   useWindowDimensions,
 } from 'react-native'
 
-import {
-  Icons,
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectViewport,
-  XStack,
-} from '~/components/ui'
+import { Icons } from '~/components/ui'
 import { type LiveCaptionLine } from '~/co-work/lib/live-captions'
 import {
   captionOverlayLayout,
@@ -35,7 +29,6 @@ type MeetingLiveCaptionsProps = {
   error?: string | null
   targetLang?: string
   targetLangName?: string
-  /** Speech-to-text language for this device (`auto` = follow region). */
   spokenLang?: string
   spokenLangName?: string
   showingTranslation?: boolean
@@ -58,14 +51,22 @@ type MeetingLiveCaptionsProps = {
 const SIZE_ORDER: CaptionOverlaySize[] = ['compact', 'comfortable', 'large']
 
 const FONT_BY_SIZE: Record<CaptionOverlaySize, { body: number; speaker: number; status: number }> = {
-  compact: { body: 16, speaker: 12, status: 12 },
-  comfortable: { body: 20, speaker: 13, status: 13 },
-  large: { body: 24, speaker: 14, status: 14 },
+  compact: { body: 17, speaker: 12, status: 13 },
+  comfortable: { body: 21, speaker: 13, status: 14 },
+  large: { body: 26, speaker: 14, status: 15 },
 }
 
+/** Opaque Sheconomy caption chrome — never translucent (iPad washed translucent black to white). */
+const CAPTION_BG = '#0c080a'
+const CAPTION_BORDER = '#D81B60'
+const CAPTION_TEXT = '#FFFFFF'
+const CAPTION_MUTED = '#FCE7F3'
+const CAPTION_SPEAKER = '#F9A8D4'
+
 /**
- * Zoom-style captions. Uses RN View/Text + StyleSheet so Tamagui theme tokens
- * cannot wash the surface white (which made caption text invisible on iPad).
+ * Zoom-style captions for web + iOS + Android.
+ * Pure RN View/Text/StyleSheet only — Tamagui theme tokens previously painted a
+ * near-white surface over white text on iPad (empty white caption bar).
  */
 export function MeetingLiveCaptions({
   active,
@@ -109,15 +110,20 @@ export function MeetingLiveCaptions({
   const sizeIndex = SIZE_ORDER.indexOf(size)
   const canShrink = sizeIndex > 0
   const canGrow = sizeIndex < SIZE_ORDER.length - 1
-  // Keep captions clear of shared content + filmstrip when presenting.
   const top = layout.placement === 'top' ? topOffset ?? (presentationSafe ? 96 : 72) : undefined
   const bottom =
     layout.placement === 'bottom' ? bottomOffset ?? (presentationSafe ? 140 : 112) : undefined
   const horizontalInset = sideInset ?? 12
   const showSettings = !collapsed && settingsOpen
 
-  const finalLines = lines.filter((line) => line.isFinal && line.text.trim()).slice(-3)
-  const interimLine = [...lines].reverse().find((line) => !line.isFinal && line.text.trim())
+  const finalLines = useMemo(
+    () => lines.filter((line) => line.isFinal && line.text.trim()).slice(-3),
+    [lines],
+  )
+  const interimLine = useMemo(
+    () => [...lines].reverse().find((line) => !line.isFinal && line.text.trim()),
+    [lines],
+  )
   const liveText = (currentCaption.trim() || interimLine?.text || '').trim()
   const liveIsNew =
     !!liveText &&
@@ -161,16 +167,24 @@ export function MeetingLiveCaptions({
             styles.surface,
             {
               width: layout.maxWidth,
-              maxHeight: collapsed ? 56 : layout.maxHeight,
+              maxHeight: collapsed ? 58 : layout.maxHeight,
               paddingVertical: collapsed ? 10 : 14,
             },
           ]}
           pointerEvents="auto"
+          // iOS: prevent parent theme / blending from washing the bar white.
+          collapsable={false}
         >
           <View style={styles.header}>
-            <RNText style={[styles.status, { fontSize: fonts.status }]} numberOfLines={1}>
+            <RNText
+              style={[styles.status, { fontSize: fonts.status }]}
+              numberOfLines={1}
+              allowFontScaling
+            >
               {collapsed
-                ? liveText || finalLines[finalLines.length - 1]?.text || `CC · ${targetLangName || 'On'}`
+                ? liveText ||
+                  finalLines[finalLines.length - 1]?.text ||
+                  `CC · ${targetLangName || 'On'}`
                 : `CC · ${targetLangName || 'Captions'}`}
             </RNText>
             <View style={styles.headerActions}>
@@ -179,7 +193,7 @@ export function MeetingLiveCaptions({
                   label={settingsOpen ? 'Hide caption settings' : 'Caption settings'}
                   onPress={() => setSettingsOpen((open) => !open)}
                 >
-                  <Icons.Settings size={16} color="#fce7f3" />
+                  <Icons.Settings size={16} color={CAPTION_MUTED} />
                 </CaptionIconButton>
               ) : null}
               <CaptionIconButton
@@ -187,9 +201,9 @@ export function MeetingLiveCaptions({
                 onPress={() => onCollapsedChange?.(!collapsed)}
               >
                 {collapsed ? (
-                  <Icons.ChevronUp size={16} color="#fce7f3" />
+                  <Icons.ChevronUp size={16} color={CAPTION_MUTED} />
                 ) : (
-                  <Icons.ChevronDown size={16} color="#fce7f3" />
+                  <Icons.ChevronDown size={16} color={CAPTION_MUTED} />
                 )}
               </CaptionIconButton>
             </View>
@@ -216,7 +230,7 @@ export function MeetingLiveCaptions({
                 ) : null}
               </View>
             ) : (
-              <RNText style={[styles.listening, { fontSize: fonts.body }]}>
+              <RNText style={[styles.listening, { fontSize: fonts.body }]} allowFontScaling>
                 Listening… captions appear when someone speaks
               </RNText>
             )
@@ -224,43 +238,30 @@ export function MeetingLiveCaptions({
 
           {showSettings ? (
             <View style={styles.settings}>
-              <XStack alignItems="center" justifyContent="space-between" gap="$2" flexWrap="wrap">
+              <View style={styles.settingsRow}>
                 {availableLanguages.length && targetLang && onTargetLangChange ? (
-                  <Select value={targetLang} onValueChange={onTargetLangChange}>
-                    <SelectTrigger
-                      height={34}
-                      width={effectiveWideLayout ? 168 : 148}
-                      paddingHorizontal="$2"
-                      backgroundColor="rgba(255,255,255,0.14)"
-                      borderColor="rgba(255,255,255,0.28)"
-                      iconAfter={<Icons.ChevronDown size={14} color="#fce7f3" />}
-                      accessibilityLabel="Show captions in this language"
-                    >
-                      <Select.Value placeholder="Show me" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectViewport maxHeight={300}>
-                        {availableLanguages.map((language, index) => (
-                          <SelectItem key={language.code} value={language.code} index={index}>
-                            <Select.ItemText>Show · {language.label}</Select.ItemText>
-                          </SelectItem>
-                        ))}
-                      </SelectViewport>
-                    </SelectContent>
-                  </Select>
+                  <CaptionLanguageChips
+                    label="Show"
+                    value={targetLang}
+                    options={availableLanguages}
+                    onChange={onTargetLangChange}
+                    wide={effectiveWideLayout}
+                  />
                 ) : targetLangName ? (
                   <RNText style={styles.settingsHint}>Show · {targetLangName}</RNText>
                 ) : null}
-                <XStack alignItems="center" gap="$1">
+                <View style={styles.headerActions}>
                   {onPlacementChange && !presentationSafe ? (
                     <CaptionIconButton
                       label={`Move captions to ${layout.placement === 'top' ? 'bottom' : 'top'}`}
-                      onPress={() => onPlacementChange(layout.placement === 'top' ? 'bottom' : 'top')}
+                      onPress={() =>
+                        onPlacementChange(layout.placement === 'top' ? 'bottom' : 'top')
+                      }
                     >
                       {layout.placement === 'top' ? (
-                        <Icons.ChevronDown size={16} color="#fce7f3" />
+                        <Icons.ChevronDown size={16} color={CAPTION_MUTED} />
                       ) : (
-                        <Icons.ChevronUp size={16} color="#fce7f3" />
+                        <Icons.ChevronUp size={16} color={CAPTION_MUTED} />
                       )}
                     </CaptionIconButton>
                   ) : null}
@@ -278,37 +279,22 @@ export function MeetingLiveCaptions({
                   >
                     <RNText style={styles.stepper}>+</RNText>
                   </CaptionIconButton>
-                </XStack>
-              </XStack>
+                </View>
+              </View>
               {availableLanguages.length && onSpokenLangChange ? (
-                <Select value={spokenLang || 'auto'} onValueChange={onSpokenLangChange}>
-                  <SelectTrigger
-                    height={34}
-                    width="100%"
-                    maxWidth={effectiveWideLayout ? 280 : 220}
-                    paddingHorizontal="$2"
-                    backgroundColor="rgba(255,255,255,0.14)"
-                    borderColor="rgba(255,255,255,0.28)"
-                    iconAfter={<Icons.ChevronDown size={14} color="#fce7f3" />}
-                    accessibilityLabel="I speak this language — used for speech recognition"
-                  >
-                    <Select.Value placeholder="I speak" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectViewport maxHeight={300}>
-                      <SelectItem value="auto" index={0}>
-                        <Select.ItemText>
-                          I speak · Auto{spokenLangName ? ` (${spokenLangName})` : ''}
-                        </Select.ItemText>
-                      </SelectItem>
-                      {availableLanguages.map((language, index) => (
-                        <SelectItem key={language.code} value={language.code} index={index + 1}>
-                          <Select.ItemText>I speak · {language.label}</Select.ItemText>
-                        </SelectItem>
-                      ))}
-                    </SelectViewport>
-                  </SelectContent>
-                </Select>
+                <CaptionLanguageChips
+                  label="I speak"
+                  value={spokenLang || 'auto'}
+                  options={[
+                    {
+                      code: 'auto',
+                      label: spokenLangName ? `Auto (${spokenLangName})` : 'Auto',
+                    },
+                    ...availableLanguages,
+                  ]}
+                  onChange={onSpokenLangChange}
+                  wide={effectiveWideLayout}
+                />
               ) : spokenLangName ? (
                 <RNText style={styles.settingsHint}>I speak · {spokenLangName}</RNText>
               ) : null}
@@ -320,6 +306,44 @@ export function MeetingLiveCaptions({
           ) : null}
         </View>
       ) : null}
+    </View>
+  )
+}
+
+function CaptionLanguageChips({
+  label,
+  value,
+  options,
+  onChange,
+  wide,
+}: {
+  label: string
+  value: string
+  options: readonly CaptionLanguageOption[]
+  onChange: (code: string) => void
+  wide: boolean
+}) {
+  return (
+    <View style={[styles.chipBlock, { maxWidth: wide ? 320 : 240 }]}>
+      <RNText style={styles.chipLabel}>{label}</RNText>
+      <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.chipScroll}>
+        {options.map((option) => {
+          const selected = option.code === value
+          return (
+            <Pressable
+              key={option.code}
+              accessibilityRole="button"
+              accessibilityState={{ selected }}
+              onPress={() => onChange(option.code)}
+              style={[styles.chip, selected && styles.chipSelected]}
+            >
+              <RNText style={[styles.chipText, selected && styles.chipTextSelected]} numberOfLines={1}>
+                {option.label}
+              </RNText>
+            </Pressable>
+          )
+        })}
+      </ScrollView>
     </View>
   )
 }
@@ -351,6 +375,7 @@ function CaptionLineRow({
             fontWeight: live ? '700' : '600',
           },
         ]}
+        allowFontScaling
       >
         {text}
       </RNText>
@@ -395,11 +420,24 @@ const styles = StyleSheet.create({
   surface: {
     maxWidth: '100%',
     borderRadius: 14,
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.28)',
-    backgroundColor: 'rgba(0,0,0,0.88)',
+    borderWidth: 1.5,
+    borderColor: CAPTION_BORDER,
+    // Opaque — never rgba. Translucent black washed to white under iPad light theme.
+    backgroundColor: CAPTION_BG,
     paddingHorizontal: 14,
     overflow: 'hidden',
+    ...Platform.select({
+      ios: {
+        shadowColor: '#000',
+        shadowOpacity: 0.45,
+        shadowRadius: 10,
+        shadowOffset: { width: 0, height: 4 },
+      },
+      android: {
+        elevation: 8,
+      },
+      default: {},
+    }),
   },
   header: {
     flexDirection: 'row',
@@ -415,7 +453,7 @@ const styles = StyleSheet.create({
   status: {
     flex: 1,
     fontWeight: '800',
-    color: '#fce7f3',
+    color: CAPTION_MUTED,
   },
   body: {
     marginTop: 8,
@@ -425,7 +463,7 @@ const styles = StyleSheet.create({
   listening: {
     marginTop: 8,
     fontWeight: '700',
-    color: '#ffffff',
+    color: CAPTION_TEXT,
   },
   line: {
     width: '100%',
@@ -433,25 +471,65 @@ const styles = StyleSheet.create({
   },
   speaker: {
     fontWeight: '800',
-    color: '#f9a8d4',
+    color: CAPTION_SPEAKER,
   },
   captionText: {
-    color: '#ffffff',
-    textShadowColor: 'rgba(0,0,0,0.65)',
+    color: CAPTION_TEXT,
+    textShadowColor: 'rgba(0,0,0,0.85)',
     textShadowOffset: { width: 0, height: 1 },
     textShadowRadius: 3,
   },
   settings: {
     marginTop: 10,
-    gap: 6,
+    gap: 8,
+  },
+  settingsRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    justifyContent: 'space-between',
+    gap: 8,
+    flexWrap: 'wrap',
   },
   settingsHint: {
     fontSize: 11,
     fontWeight: '600',
-    color: 'rgba(252,231,243,0.85)',
+    color: CAPTION_MUTED,
+  },
+  chipBlock: {
+    flexGrow: 1,
+    gap: 4,
+  },
+  chipLabel: {
+    fontSize: 11,
+    fontWeight: '800',
+    color: CAPTION_SPEAKER,
+  },
+  chipScroll: {
+    flexGrow: 0,
+  },
+  chip: {
+    marginRight: 6,
+    paddingHorizontal: 10,
+    paddingVertical: 7,
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.28)',
+    backgroundColor: '#1a1216',
+  },
+  chipSelected: {
+    borderColor: CAPTION_BORDER,
+    backgroundColor: '#3b0a22',
+  },
+  chipText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: CAPTION_MUTED,
+  },
+  chipTextSelected: {
+    color: CAPTION_TEXT,
   },
   stepper: {
-    color: '#fce7f3',
+    color: CAPTION_MUTED,
     fontWeight: '800',
     fontSize: 16,
   },
@@ -461,15 +539,16 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     borderRadius: 8,
+    backgroundColor: '#1a1216',
   },
   errorBanner: {
     width: '100%',
     paddingHorizontal: 12,
     paddingVertical: 8,
     borderRadius: 12,
-    backgroundColor: 'rgba(120, 53, 15, 0.95)',
+    backgroundColor: '#78350f',
     borderWidth: 1,
-    borderColor: 'rgba(251, 191, 36, 0.5)',
+    borderColor: '#fbbf24',
   },
   errorText: {
     fontSize: 13,
