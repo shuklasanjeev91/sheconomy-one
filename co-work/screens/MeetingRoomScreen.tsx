@@ -1005,7 +1005,7 @@ function MeetingRoomOverlay({
           : Platform.OS === 'ios'
             ? 'Keep the broadcast extension running while you present.'
             : Platform.OS === 'android'
-              ? 'Allow screen capture in the system prompt. A sharing notification stays on while you present.'
+              ? 'Allow screen capture in the system prompt. Keep the sharing notification on while you present.'
               : Platform.OS === 'web' && webCapabilities
                 ? describeMeetingWebScreenShare(webCapabilities)
                 : undefined,

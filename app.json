@@ -211,7 +211,7 @@
     },
     "android": {
       "package": "com.sheconomy.ecommerce",
-      "versionCode": 168,
+      "versionCode": 169,
       "softwareKeyboardLayoutMode": "resize",
       "adaptiveIcon": {
         "foregroundImage": "./public/app-icon-adaptive.png",

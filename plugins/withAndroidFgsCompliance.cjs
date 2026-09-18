@@ -1,12 +1,11 @@
 /**
- * Google Play FGS compliance:
+ * Google Play FGS compliance (narrow strip):
  *
- * Strip every foreground-service type from the Android AAB. Play rejected
- * phoneCall / microphone / mediaProjection for this marketplace listing
- * (undeclared or unused FGS, not user-initiated / not perceptible).
+ * Keep MediaProjection FGS — required for Co-Work Present on Android
+ * (user taps Present → system capture prompt → ongoing share notification).
  *
- * Co-Work Present stays on iOS (Broadcast Extension) and web. Android
- * meetings still work for camera, mic, and viewing someone else's share.
+ * Strip unused FGS types Play rejected for this listing:
+ * phoneCall / microphone / camera / location / CallKeep ConnectionService.
  *
  * iOS CallKit / Broadcast Extension are unchanged.
  */
@@ -20,14 +19,11 @@ const SERVICES_TO_REMOVE = [
   'expo.modules.location.services.LocationTaskService',
   'io.wazo.callkeep.VoiceConnectionService',
   'io.wazo.callkeep.RNCallKeepBackgroundMessagingService',
-  'com.oney.WebRTCModule.MediaProjectionService',
 ]
 
 const PERMISSIONS_TO_REMOVE = [
-  'android.permission.FOREGROUND_SERVICE',
   'android.permission.FOREGROUND_SERVICE_CAMERA',
   'android.permission.FOREGROUND_SERVICE_LOCATION',
-  'android.permission.FOREGROUND_SERVICE_MEDIA_PROJECTION',
   'android.permission.FOREGROUND_SERVICE_MICROPHONE',
   'android.permission.FOREGROUND_SERVICE_PHONE_CALL',
   'android.permission.MANAGE_OWN_CALLS',
@@ -35,6 +31,7 @@ const PERMISSIONS_TO_REMOVE = [
   'android.permission.USE_FULL_SCREEN_INTENT',
   'android.permission.READ_PHONE_STATE',
   'android.permission.READ_PHONE_NUMBERS',
+  // KEEP FOREGROUND_SERVICE + FOREGROUND_SERVICE_MEDIA_PROJECTION
 ]
 
 const SCREEN_SHARE_SERVICE_META = 'io.livekit.reactnative.expo.ENABLE_SCREEN_SHARE_SERVICE'
@@ -92,6 +89,8 @@ function withAndroidFgsCompliance(config) {
       ensureRemovePermission(manifest, name)
     }
 
+    // Force LiveKit MediaProjection foreground service ON for Android Present.
+    // LiveKit / expo-livekit-screen-share plugins also set this; pin true last.
     if (!application['meta-data']) application['meta-data'] = []
     application['meta-data'] = application['meta-data'].filter(
       (item) => item?.$?.['android:name'] !== SCREEN_SHARE_SERVICE_META,
@@ -99,9 +98,36 @@ function withAndroidFgsCompliance(config) {
     application['meta-data'].push({
       $: {
         'android:name': SCREEN_SHARE_SERVICE_META,
-        'android:value': 'false',
+        'android:value': 'true',
       },
     })
+
+    // Drop any tools:node=remove markers for MediaProjection that earlier
+    // plugin versions may have left behind.
+    if (application.service) {
+      application.service = application.service.filter((service) => {
+        const name = service?.$?.['android:name']
+        const remove = service?.$?.['tools:node'] === 'remove'
+        if (remove && name === 'com.oney.WebRTCModule.MediaProjectionService') {
+          return false
+        }
+        return true
+      })
+    }
+    if (manifest['uses-permission']) {
+      manifest['uses-permission'] = manifest['uses-permission'].filter((entry) => {
+        const name = entry?.$?.['android:name']
+        const remove = entry?.$?.['tools:node'] === 'remove'
+        if (
+          remove &&
+          (name === 'android.permission.FOREGROUND_SERVICE_MEDIA_PROJECTION' ||
+            name === 'android.permission.FOREGROUND_SERVICE')
+        ) {
+          return false
+        }
+        return true
+      })
+    }
 
     return mod
   })
@@ -110,5 +136,5 @@ function withAndroidFgsCompliance(config) {
 module.exports = createRunOncePlugin(
   withAndroidFgsCompliance,
   'withAndroidFgsCompliance',
-  '4.0.0',
+  '5.0.0',
 )

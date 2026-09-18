@@ -118,6 +118,19 @@ export async function setLocalScreenShareEnabled(
           // ignore
         }
       }
+      // Wait briefly for MediaProjection/ReplayKit to attach a real MediaStream.
+      // Publishing without frames makes remote iOS/web tiles stay blank.
+      const started = Date.now()
+      while (Date.now() - started < 4_000) {
+        const stream = publication.track.mediaStream
+        const live = publication.track.mediaStreamTrack
+        const settings = live?.getSettings?.() ?? {}
+        const w = Number(settings.width) || 0
+        const h = Number(settings.height) || 0
+        if (stream?.id && (w > 1 || live?.readyState === 'live')) break
+        await new Promise((resolve) => setTimeout(resolve, 200))
+        forceScreenShareTrackSettings(publication.track.mediaStreamTrack)
+      }
     }
   }
 }
