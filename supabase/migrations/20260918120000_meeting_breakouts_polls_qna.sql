@@ -1,4 +1,5 @@
 -- Meeting large-room features: breakouts, polls, Q&A (Zoom-like Co-Work pack B)
+-- Host/co-host checks use public.is_meeting_host_or_co_host (no meeting_participants.role).
 
 -- ---------------------------------------------------------------------------
 -- Breakout rooms
@@ -35,6 +36,7 @@ CREATE INDEX IF NOT EXISTS meeting_breakout_assignments_breakout_idx
 ALTER TABLE public.meeting_breakout_rooms ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.meeting_breakout_assignments ENABLE ROW LEVEL SECURITY;
 
+DROP POLICY IF EXISTS "Breakout rooms visible to meeting participants" ON public.meeting_breakout_rooms;
 CREATE POLICY "Breakout rooms visible to meeting participants"
   ON public.meeting_breakout_rooms FOR SELECT TO authenticated
   USING (
@@ -50,35 +52,13 @@ CREATE POLICY "Breakout rooms visible to meeting participants"
     )
   );
 
+DROP POLICY IF EXISTS "Breakout rooms managed by host or co-host" ON public.meeting_breakout_rooms;
 CREATE POLICY "Breakout rooms managed by host or co-host"
   ON public.meeting_breakout_rooms FOR ALL TO authenticated
-  USING (
-    EXISTS (
-      SELECT 1 FROM public.meetings m
-      WHERE m.id = meeting_breakout_rooms.meeting_id AND m.host_id = auth.uid()
-    )
-    OR EXISTS (
-      SELECT 1 FROM public.meeting_participants mp
-      WHERE mp.meeting_id = meeting_breakout_rooms.meeting_id
-        AND mp.user_id = auth.uid()
-        AND mp.status = 'admitted'
-        AND coalesce(mp.role, 'participant') IN ('host', 'co_host')
-    )
-  )
-  WITH CHECK (
-    EXISTS (
-      SELECT 1 FROM public.meetings m
-      WHERE m.id = meeting_breakout_rooms.meeting_id AND m.host_id = auth.uid()
-    )
-    OR EXISTS (
-      SELECT 1 FROM public.meeting_participants mp
-      WHERE mp.meeting_id = meeting_breakout_rooms.meeting_id
-        AND mp.user_id = auth.uid()
-        AND mp.status = 'admitted'
-        AND coalesce(mp.role, 'participant') IN ('host', 'co_host')
-    )
-  );
+  USING (public.is_meeting_host_or_co_host(meeting_id))
+  WITH CHECK (public.is_meeting_host_or_co_host(meeting_id));
 
+DROP POLICY IF EXISTS "Breakout assignments visible to meeting participants" ON public.meeting_breakout_assignments;
 CREATE POLICY "Breakout assignments visible to meeting participants"
   ON public.meeting_breakout_assignments FOR SELECT TO authenticated
   USING (
@@ -94,34 +74,11 @@ CREATE POLICY "Breakout assignments visible to meeting participants"
     )
   );
 
+DROP POLICY IF EXISTS "Breakout assignments managed by host or co-host" ON public.meeting_breakout_assignments;
 CREATE POLICY "Breakout assignments managed by host or co-host"
   ON public.meeting_breakout_assignments FOR ALL TO authenticated
-  USING (
-    EXISTS (
-      SELECT 1 FROM public.meetings m
-      WHERE m.id = meeting_breakout_assignments.meeting_id AND m.host_id = auth.uid()
-    )
-    OR EXISTS (
-      SELECT 1 FROM public.meeting_participants mp
-      WHERE mp.meeting_id = meeting_breakout_assignments.meeting_id
-        AND mp.user_id = auth.uid()
-        AND mp.status = 'admitted'
-        AND coalesce(mp.role, 'participant') IN ('host', 'co_host')
-    )
-  )
-  WITH CHECK (
-    EXISTS (
-      SELECT 1 FROM public.meetings m
-      WHERE m.id = meeting_breakout_assignments.meeting_id AND m.host_id = auth.uid()
-    )
-    OR EXISTS (
-      SELECT 1 FROM public.meeting_participants mp
-      WHERE mp.meeting_id = meeting_breakout_assignments.meeting_id
-        AND mp.user_id = auth.uid()
-        AND mp.status = 'admitted'
-        AND coalesce(mp.role, 'participant') IN ('host', 'co_host')
-    )
-  );
+  USING (public.is_meeting_host_or_co_host(meeting_id))
+  WITH CHECK (public.is_meeting_host_or_co_host(meeting_id));
 
 -- ---------------------------------------------------------------------------
 -- In-meeting polls
@@ -162,6 +119,7 @@ ALTER TABLE public.meeting_polls ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.meeting_poll_options ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.meeting_poll_votes ENABLE ROW LEVEL SECURITY;
 
+DROP POLICY IF EXISTS "Meeting polls visible to participants" ON public.meeting_polls;
 CREATE POLICY "Meeting polls visible to participants"
   ON public.meeting_polls FOR SELECT TO authenticated
   USING (
@@ -177,35 +135,13 @@ CREATE POLICY "Meeting polls visible to participants"
     )
   );
 
+DROP POLICY IF EXISTS "Meeting polls managed by host or co-host" ON public.meeting_polls;
 CREATE POLICY "Meeting polls managed by host or co-host"
   ON public.meeting_polls FOR ALL TO authenticated
-  USING (
-    EXISTS (
-      SELECT 1 FROM public.meetings m
-      WHERE m.id = meeting_polls.meeting_id AND m.host_id = auth.uid()
-    )
-    OR EXISTS (
-      SELECT 1 FROM public.meeting_participants mp
-      WHERE mp.meeting_id = meeting_polls.meeting_id
-        AND mp.user_id = auth.uid()
-        AND mp.status = 'admitted'
-        AND coalesce(mp.role, 'participant') IN ('host', 'co_host')
-    )
-  )
-  WITH CHECK (
-    EXISTS (
-      SELECT 1 FROM public.meetings m
-      WHERE m.id = meeting_polls.meeting_id AND m.host_id = auth.uid()
-    )
-    OR EXISTS (
-      SELECT 1 FROM public.meeting_participants mp
-      WHERE mp.meeting_id = meeting_polls.meeting_id
-        AND mp.user_id = auth.uid()
-        AND mp.status = 'admitted'
-        AND coalesce(mp.role, 'participant') IN ('host', 'co_host')
-    )
-  );
+  USING (public.is_meeting_host_or_co_host(meeting_id))
+  WITH CHECK (public.is_meeting_host_or_co_host(meeting_id));
 
+DROP POLICY IF EXISTS "Meeting poll options visible with poll" ON public.meeting_poll_options;
 CREATE POLICY "Meeting poll options visible with poll"
   ON public.meeting_poll_options FOR SELECT TO authenticated
   USING (
@@ -218,39 +154,25 @@ CREATE POLICY "Meeting poll options visible with poll"
     )
   );
 
+DROP POLICY IF EXISTS "Meeting poll options managed by host" ON public.meeting_poll_options;
 CREATE POLICY "Meeting poll options managed by host"
   ON public.meeting_poll_options FOR ALL TO authenticated
   USING (
     EXISTS (
       SELECT 1 FROM public.meeting_polls p
-      JOIN public.meetings m ON m.id = p.meeting_id
-      WHERE p.id = meeting_poll_options.poll_id AND m.host_id = auth.uid()
-    )
-    OR EXISTS (
-      SELECT 1 FROM public.meeting_polls p
-      JOIN public.meeting_participants mp ON mp.meeting_id = p.meeting_id
       WHERE p.id = meeting_poll_options.poll_id
-        AND mp.user_id = auth.uid()
-        AND mp.status = 'admitted'
-        AND coalesce(mp.role, 'participant') IN ('host', 'co_host')
+        AND public.is_meeting_host_or_co_host(p.meeting_id)
     )
   )
   WITH CHECK (
     EXISTS (
       SELECT 1 FROM public.meeting_polls p
-      JOIN public.meetings m ON m.id = p.meeting_id
-      WHERE p.id = meeting_poll_options.poll_id AND m.host_id = auth.uid()
-    )
-    OR EXISTS (
-      SELECT 1 FROM public.meeting_polls p
-      JOIN public.meeting_participants mp ON mp.meeting_id = p.meeting_id
       WHERE p.id = meeting_poll_options.poll_id
-        AND mp.user_id = auth.uid()
-        AND mp.status = 'admitted'
-        AND coalesce(mp.role, 'participant') IN ('host', 'co_host')
+        AND public.is_meeting_host_or_co_host(p.meeting_id)
     )
   );
 
+DROP POLICY IF EXISTS "Meeting poll votes visible to participants" ON public.meeting_poll_votes;
 CREATE POLICY "Meeting poll votes visible to participants"
   ON public.meeting_poll_votes FOR SELECT TO authenticated
   USING (
@@ -263,6 +185,7 @@ CREATE POLICY "Meeting poll votes visible to participants"
     )
   );
 
+DROP POLICY IF EXISTS "Meeting poll votes insert by voter" ON public.meeting_poll_votes;
 CREATE POLICY "Meeting poll votes insert by voter"
   ON public.meeting_poll_votes FOR INSERT TO authenticated
   WITH CHECK (
@@ -350,6 +273,7 @@ CREATE INDEX IF NOT EXISTS meeting_questions_meeting_idx ON public.meeting_quest
 ALTER TABLE public.meeting_questions ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.meeting_question_votes ENABLE ROW LEVEL SECURITY;
 
+DROP POLICY IF EXISTS "Meeting questions visible to participants" ON public.meeting_questions;
 CREATE POLICY "Meeting questions visible to participants"
   ON public.meeting_questions FOR SELECT TO authenticated
   USING (
@@ -365,6 +289,7 @@ CREATE POLICY "Meeting questions visible to participants"
     )
   );
 
+DROP POLICY IF EXISTS "Meeting questions insert by admitted participants" ON public.meeting_questions;
 CREATE POLICY "Meeting questions insert by admitted participants"
   ON public.meeting_questions FOR INSERT TO authenticated
   WITH CHECK (
@@ -377,23 +302,15 @@ CREATE POLICY "Meeting questions insert by admitted participants"
     )
   );
 
+DROP POLICY IF EXISTS "Meeting questions update by asker or host" ON public.meeting_questions;
 CREATE POLICY "Meeting questions update by asker or host"
   ON public.meeting_questions FOR UPDATE TO authenticated
   USING (
     asker_id = auth.uid()
-    OR EXISTS (
-      SELECT 1 FROM public.meetings m
-      WHERE m.id = meeting_questions.meeting_id AND m.host_id = auth.uid()
-    )
-    OR EXISTS (
-      SELECT 1 FROM public.meeting_participants mp
-      WHERE mp.meeting_id = meeting_questions.meeting_id
-        AND mp.user_id = auth.uid()
-        AND mp.status = 'admitted'
-        AND coalesce(mp.role, 'participant') IN ('host', 'co_host')
-    )
+    OR public.is_meeting_host_or_co_host(meeting_id)
   );
 
+DROP POLICY IF EXISTS "Meeting question votes visible" ON public.meeting_question_votes;
 CREATE POLICY "Meeting question votes visible"
   ON public.meeting_question_votes FOR SELECT TO authenticated
   USING (
@@ -406,10 +323,12 @@ CREATE POLICY "Meeting question votes visible"
     )
   );
 
+DROP POLICY IF EXISTS "Meeting question votes by voter" ON public.meeting_question_votes;
 CREATE POLICY "Meeting question votes by voter"
   ON public.meeting_question_votes FOR INSERT TO authenticated
   WITH CHECK (user_id = auth.uid());
 
+DROP POLICY IF EXISTS "Meeting question votes delete own" ON public.meeting_question_votes;
 CREATE POLICY "Meeting question votes delete own"
   ON public.meeting_question_votes FOR DELETE TO authenticated
   USING (user_id = auth.uid());
