@@ -19,6 +19,7 @@ export type MeetingToolbarPrimaryKey =
   | 'captions'
   | 'invite'
   | 'browse'
+  | 'record'
   | 'stop_record'
   | 'more'
   | 'leave'
@@ -63,7 +64,7 @@ export type MeetingToolbarMoreSection = {
 /**
  * Primary dock order (Zoom ease-of-use):
  * Mic → Camera → Security? → Participants → Chat → Reactions → Hand →
- * Minimize? → Share? → Captions → Invite? → Stop recording? → More → Leave → End?
+ * Minimize? → Share? → Captions → Invite? → Record/Stop? → More → Leave → End?
  */
 export function meetingToolbarPrimaryKeys(input: {
   viewerRole: MeetingRole
@@ -74,7 +75,9 @@ export function meetingToolbarPrimaryKeys(input: {
   hasBrowse?: boolean
   /** Phone / compact: Invite moves to More to cut horizontal scroll. Captions stay primary. */
   compact?: boolean
-  /** Host is actively recording — surface Stop on the dock. */
+  /** Host/co-host may start cloud recording — surface Record on the dock. */
+  supportsRecording?: boolean
+  /** Actively recording — surface Stop instead of Record. */
   recording?: boolean
   hasReactions?: boolean
   hasRaiseHand?: boolean
@@ -91,8 +94,8 @@ export function meetingToolbarPrimaryKeys(input: {
   if (input.supportsScreenShare) keys.push('share_screen')
   if (input.supportsLiveCaptions !== false) keys.push('captions')
   if (!compact) keys.push('invite')
-  if (input.recording && canEndMeetingForEveryone(input.viewerRole)) {
-    keys.push('stop_record')
+  if (input.supportsRecording) {
+    keys.push(input.recording ? 'stop_record' : 'record')
   }
   keys.push('more', 'leave')
   if (canEndMeetingForEveryone(input.viewerRole)) keys.push('end_meeting')
@@ -125,8 +128,9 @@ export function meetingToolbarMoreKeys(input: {
   /** When reactions/hand are on the primary dock, omit from More. */
   reactionsOnPrimary?: boolean
   raiseHandOnPrimary?: boolean
-  /** Hide start-record in More while Stop is on the primary dock. */
+  /** Hide start-record in More while Record/Stop is on the primary dock. */
   recording?: boolean
+  recordOnPrimary?: boolean
 }): MeetingToolbarOverflowKey[] {
   return meetingToolbarMoreSections(input).flatMap((section) => section.keys)
 }
@@ -149,6 +153,8 @@ export function meetingToolbarMoreSections(input: {
   reactionsOnPrimary?: boolean
   raiseHandOnPrimary?: boolean
   recording?: boolean
+  /** When true, Record lives on the primary dock — omit from More. */
+  recordOnPrimary?: boolean
   hasBreakouts?: boolean
   hasPolls?: boolean
   hasQa?: boolean
@@ -163,7 +169,9 @@ export function meetingToolbarMoreSections(input: {
   if (input.hasAudioSettings) media.push('audio_settings')
   if (input.raiseHandOnPrimary === false) media.push('raise_hand')
   if (input.reactionsOnPrimary === false) media.push('reactions')
-  if (input.supportsRecording && !input.recording) media.push('record')
+  if (input.supportsRecording && !input.recording && input.recordOnPrimary !== true) {
+    media.push('record')
+  }
   if (input.supportsVideo !== false) media.push('background')
 
   const meeting: MeetingToolbarOverflowKey[] = []

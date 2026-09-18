@@ -2,7 +2,7 @@
 import '~/lib/polyfills/install-dom-exception'
 
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { Platform, ScrollView as NativeScrollView, useWindowDimensions } from 'react-native'
+import { Platform, Pressable, ScrollView as NativeScrollView, useWindowDimensions } from 'react-native'
 import { ConnectionState, DisconnectReason, RoomEvent, Track, VideoQuality } from 'livekit-client'
 import type { RemoteTrackPublication } from 'livekit-client'
 import {
@@ -56,6 +56,8 @@ import {
 import {
   capFilmstripTracks,
   meetingGalleryLayout,
+  meetingGalleryPageForIndex,
+  meetingGalleryPages,
   paginateMeetingGallery,
   resolveMeetingGalleryPageSize,
 } from '~/co-work/lib/meeting-gallery-layout'
@@ -397,6 +399,7 @@ function NativeLiveKitMeetingContent({
 
     const unbindIos = bindIosCallAudioManagement(preferSpeaker)
     const unbindScreenShare = bindRemoteScreenShareQuality(room)
+    let reinforcedForConnection = false
 
     const boostRemoteAudio = (publication: { setVolume?: (v: number) => void; kind?: string }) => {
       try {
@@ -418,6 +421,13 @@ function NativeLiveKitMeetingContent({
     }
 
     const onConnected = () => {
+      // Only reinforce once per Connected session — re-running on avatar/mediaMode
+      // dep changes republished the mic and looked like auto mute/unmute.
+      if (reinforcedForConnection) {
+        void syncAvatarMetadata()
+        return
+      }
+      reinforcedForConnection = true
       const forceMic = !micForcedRef.current && initialAudio
       micForcedRef.current = true
       void (async () => {
@@ -440,7 +450,13 @@ function NativeLiveKitMeetingContent({
       }
     }
 
+    const onDisconnected = () => {
+      reinforcedForConnection = false
+      micForcedRef.current = false
+    }
+
     room.on(RoomEvent.Connected, onConnected)
+    room.on(RoomEvent.Disconnected, onDisconnected)
     room.on(RoomEvent.TrackSubscribed, onTrackSubscribed as never)
     if (room.state === ConnectionState.Connected) {
       onConnected()
@@ -448,6 +464,7 @@ function NativeLiveKitMeetingContent({
 
     return () => {
       room.off(RoomEvent.Connected, onConnected)
+      room.off(RoomEvent.Disconnected, onDisconnected)
       room.off(RoomEvent.TrackSubscribed, onTrackSubscribed as never)
       unbindScreenShare()
       unbindIos()
@@ -541,6 +558,7 @@ function NativeMeetingVideoStage() {
   )
 
   const [page, setPage] = useState(0)
+  const galleryPagerRef = useRef<NativeScrollView | null>(null)
   const pageSize = resolveMeetingGalleryPageSize({
     basePageSize: chrome.pageSize,
     denseGallery: state.denseGallery,
@@ -549,6 +567,10 @@ function NativeMeetingVideoStage() {
   const paged = useMemo(
     () => paginateMeetingGallery(layoutState.stageTracks, page, pageSize),
     [layoutState.stageTracks, page, pageSize],
+  )
+  const galleryPages = useMemo(
+    () => meetingGalleryPages(layoutState.stageTracks, pageSize),
+    [layoutState.stageTracks, pageSize],
   )
   useEffect(() => {
     if (paged.page !== page) setPage(paged.page)
@@ -562,6 +584,17 @@ function NativeMeetingVideoStage() {
   const hasScreenShare = layoutState.hasScreenShare
   const isLocalScreenSharing = layoutState.isLocalScreenSharing
   const previousScreenShare = useRef(false)
+
+  // Zoom-style: jump to the page that holds the active speaker when they speak off-page.
+  useEffect(() => {
+    if (state.viewMode !== 'gallery' || !activeSpeakerIdentity) return
+    const index = layoutState.stageTracks.findIndex(
+      (track) => track.participant.identity === activeSpeakerIdentity,
+    )
+    if (index < 0) return
+    const target = meetingGalleryPageForIndex(index, pageSize)
+    if (target !== page) setPage(target)
+  }, [activeSpeakerIdentity, layoutState.stageTracks, page, pageSize, state.viewMode])
 
   useEffect(() => {
     const identities = new Set<string>()
@@ -589,6 +622,7 @@ function NativeMeetingVideoStage() {
   const filmstripBeside = speakerMode ? chrome.filmstripBeside || width >= 700 : chrome.filmstripBeside
   const filmstripExpanded = showFilmstrip && !state.participantStripMinimized
   const screenLayout = state.viewMode === 'screen-share' && hasScreenShare
+  const galleryMode = state.viewMode === 'gallery' || (!screenLayout && !speakerMode)
   const { width: mainWidth, height: mainHeight } = meetingStageContentBox({
     viewportWidth: width,
     viewportHeight: height,
@@ -607,6 +641,72 @@ function NativeMeetingVideoStage() {
     height: mainHeight,
     preferWide: chrome.galleryPreferWide,
   })
+
+  useEffect(() => {
+    if (!galleryMode || mainWidth <= 0) return
+    galleryPagerRef.current?.scrollTo({ x: page * mainWidth, animated: false })
+  }, [galleryMode, mainWidth, page])
+
+  const goToPage = (nextPage: number) => {
+    const safe = Math.min(Math.max(0, nextPage), Math.max(paged.pageCount - 1, 0))
+    setPage(safe)
+    if (mainWidth > 0) {
+      galleryPagerRef.current?.scrollTo({ x: safe * mainWidth, animated: true })
+    }
+  }
+
+  const renderGalleryPage = (pageTracks: typeof stageTracks, pageIndex: number) => {
+    const pageLayout = meetingGalleryLayout(pageTracks.length, {
+      width: mainWidth,
+      height: mainHeight,
+      preferWide: chrome.galleryPreferWide,
+    })
+    return (
+      <XStack
+        key={`gallery-page-${pageIndex}`}
+        width={mainWidth}
+        height={mainHeight}
+        flexWrap="wrap"
+        alignContent={pageTracks.length <= 1 ? 'stretch' : 'center'}
+        justifyContent="center"
+        gap={STAGE_GAP}
+      >
+        {pageTracks.map((trackRef) => {
+          const isScreen =
+            trackRef.source === Track.Source.ScreenShare ||
+            (isTrackReference(trackRef) &&
+              trackRef.publication.source === Track.Source.ScreenShare)
+          const name = participantDisplayName(trackRef.participant)
+          const tileWidth = Math.floor(
+            (mainWidth - STAGE_GAP * Math.max(pageLayout.columns - 1, 0)) / pageLayout.columns,
+          )
+          const tileHeight = Math.floor(
+            (mainHeight - STAGE_GAP * Math.max(pageLayout.rows - 1, 0)) / pageLayout.rows,
+          )
+          return (
+            <NativeVideoTile
+              key={
+                (isTrackReference(trackRef) ? trackRef.publication.trackSid : null) ??
+                `${trackRef.participant.identity}-${trackRef.source}-p${pageIndex}`
+              }
+              trackRef={trackRef}
+              name={name}
+              isScreen={isScreen}
+              width={tileWidth}
+              height={Math.max(tileHeight, chrome.policy === 'landscape-phone' ? 72 : 100)}
+              radius={14}
+              mirrorLocalVideo={state.mirrorLocalVideo}
+              activeSpeaker={
+                !isScreen &&
+                (trackRef.participant.isSpeaking ||
+                  trackRef.participant.identity === activeSpeakerIdentity)
+              }
+            />
+          )
+        })}
+      </XStack>
+    )
+  }
 
   return (
     <YStack
@@ -641,60 +741,75 @@ function NativeMeetingVideoStage() {
         </YStack>
       ) : (
         <YStack flex={1} width="100%" height="100%" position="relative">
-          <XStack
-            width={mainWidth}
-            height={mainHeight}
-            flexWrap={screenLayout ? 'nowrap' : 'wrap'}
-            alignContent={screenLayout || stageTracks.length <= 1 ? 'stretch' : 'center'}
-            justifyContent="center"
-            gap={STAGE_GAP}
-          >
-            {stageTracks.map((trackRef, index) => {
-              const isScreen =
-                trackRef.source === Track.Source.ScreenShare ||
-                (isTrackReference(trackRef) &&
-                  trackRef.publication.source === Track.Source.ScreenShare)
-              const name = participantDisplayName(trackRef.participant)
+          {galleryMode && paged.pageCount > 1 ? (
+            <NativeScrollView
+              ref={galleryPagerRef}
+              horizontal
+              pagingEnabled
+              showsHorizontalScrollIndicator={false}
+              decelerationRate="fast"
+              style={{ width: mainWidth, height: mainHeight }}
+              onMomentumScrollEnd={(event) => {
+                const next = Math.round(event.nativeEvent.contentOffset.x / Math.max(mainWidth, 1))
+                if (next !== page) setPage(next)
+              }}
+            >
+              {galleryPages.map((pageTracks, pageIndex) => renderGalleryPage(pageTracks, pageIndex))}
+            </NativeScrollView>
+          ) : (
+            <XStack
+              width={mainWidth}
+              height={mainHeight}
+              flexWrap={screenLayout ? 'nowrap' : 'wrap'}
+              alignContent={screenLayout || stageTracks.length <= 1 ? 'stretch' : 'center'}
+              justifyContent="center"
+              gap={STAGE_GAP}
+            >
+              {stageTracks.map((trackRef, index) => {
+                const isScreen =
+                  trackRef.source === Track.Source.ScreenShare ||
+                  (isTrackReference(trackRef) &&
+                    trackRef.publication.source === Track.Source.ScreenShare)
+                const name = participantDisplayName(trackRef.participant)
 
-              // Screen-share focus fills the stage. Camera galleries share one
-              // responsive layout with web: 2×2 for three/four on portrait devices.
-              const tileWidth = screenLayout
-                ? mainWidth
-                : Math.floor(
-                    (mainWidth - STAGE_GAP * Math.max(gallery.columns - 1, 0)) /
-                      gallery.columns,
-                  )
-              const tileHeight = screenLayout
-                ? index === 0
-                  ? mainHeight
-                  : Math.floor(mainHeight / 3)
-                : Math.floor(
-                    (mainHeight - STAGE_GAP * Math.max(gallery.rows - 1, 0)) /
-                      gallery.rows,
-                  )
+                const tileWidth = screenLayout
+                  ? mainWidth
+                  : Math.floor(
+                      (mainWidth - STAGE_GAP * Math.max(gallery.columns - 1, 0)) /
+                        gallery.columns,
+                    )
+                const tileHeight = screenLayout
+                  ? index === 0
+                    ? mainHeight
+                    : Math.floor(mainHeight / 3)
+                  : Math.floor(
+                      (mainHeight - STAGE_GAP * Math.max(gallery.rows - 1, 0)) /
+                        gallery.rows,
+                    )
 
-              return (
-                <NativeVideoTile
-                  key={
-                    (isTrackReference(trackRef) ? trackRef.publication.trackSid : null) ??
-                    `${trackRef.participant.identity}-${trackRef.source}`
-                  }
-                  trackRef={trackRef}
-                  name={name}
-                  isScreen={isScreen}
-                  width={tileWidth}
-                  height={Math.max(tileHeight, chrome.policy === 'landscape-phone' ? 72 : 100)}
-                  radius={screenLayout && index === 0 ? coworkUi.radius.tile : 14}
-                  mirrorLocalVideo={state.mirrorLocalVideo}
-                  activeSpeaker={
-                    !isScreen &&
-                    (trackRef.participant.isSpeaking ||
-                      trackRef.participant.identity === activeSpeakerIdentity)
-                  }
-                />
-              )
-            })}
-          </XStack>
+                return (
+                  <NativeVideoTile
+                    key={
+                      (isTrackReference(trackRef) ? trackRef.publication.trackSid : null) ??
+                      `${trackRef.participant.identity}-${trackRef.source}`
+                    }
+                    trackRef={trackRef}
+                    name={name}
+                    isScreen={isScreen}
+                    width={tileWidth}
+                    height={Math.max(tileHeight, chrome.policy === 'landscape-phone' ? 72 : 100)}
+                    radius={screenLayout && index === 0 ? coworkUi.radius.tile : 14}
+                    mirrorLocalVideo={state.mirrorLocalVideo}
+                    activeSpeaker={
+                      !isScreen &&
+                      (trackRef.participant.isSpeaking ||
+                        trackRef.participant.identity === activeSpeakerIdentity)
+                    }
+                  />
+                )
+              })}
+            </XStack>
+          )}
 
           {filmstripExpanded ? (
             <NativeScrollView
@@ -777,22 +892,83 @@ function NativeMeetingVideoStage() {
             </YStack>
           ) : null}
           {paged.pageCount > 1 ? (
-            <XStack position="absolute" bottom={4} alignSelf="center" gap="$2" alignItems="center">
-              <Text
-                color={paged.page === 0 ? 'rgba(255,255,255,0.35)' : '#fff'}
-                fontWeight="700"
-                onPress={paged.page === 0 ? undefined : () => setPage((value) => value - 1)}
+            <XStack
+              position="absolute"
+              bottom={filmstripExpanded && !filmstripBeside ? chrome.filmstripHeight + 10 : 12}
+              alignSelf="center"
+              gap="$2"
+              alignItems="center"
+              zIndex={28}
+              paddingHorizontal={12}
+              paddingVertical={8}
+              borderRadius={999}
+              backgroundColor="rgba(12,8,10,0.88)"
+              borderWidth={1}
+              borderColor="rgba(255,255,255,0.16)"
+            >
+              <Pressable
+                disabled={paged.page === 0}
+                onPress={() => goToPage(paged.page - 1)}
+                hitSlop={10}
+                accessibilityRole="button"
+                accessibilityLabel="Previous gallery page"
               >
-                Previous
+                <Text
+                  color={paged.page === 0 ? 'rgba(255,255,255,0.35)' : '#fff'}
+                  fontWeight="800"
+                  fontSize={14}
+                >
+                  ‹ Prev
+                </Text>
+              </Pressable>
+              <XStack gap={6} alignItems="center">
+                {Array.from({ length: Math.min(paged.pageCount, 8) }).map((_, dot) => {
+                  const pageIndex =
+                    paged.pageCount <= 8
+                      ? dot
+                      : Math.min(
+                          Math.max(0, paged.page - 3) + dot,
+                          paged.pageCount - 1,
+                        )
+                  const active = pageIndex === paged.page
+                  return (
+                    <Pressable
+                      key={`dot-${pageIndex}-${dot}`}
+                      onPress={() => goToPage(pageIndex)}
+                      hitSlop={8}
+                      accessibilityRole="button"
+                      accessibilityLabel={`Gallery page ${pageIndex + 1}`}
+                    >
+                      <YStack
+                        width={active ? 10 : 7}
+                        height={active ? 10 : 7}
+                        borderRadius={999}
+                        backgroundColor={active ? '#F9A8D4' : 'rgba(255,255,255,0.35)'}
+                      />
+                    </Pressable>
+                  )
+                })}
+              </XStack>
+              <Text color="#fff" fontSize={12} fontWeight="700">
+                {paged.page + 1}/{paged.pageCount}
               </Text>
-              <Text color="#fff" fontSize={12}>{paged.page + 1} / {paged.pageCount}</Text>
-              <Text
-                color={paged.page === paged.pageCount - 1 ? 'rgba(255,255,255,0.35)' : '#fff'}
-                fontWeight="700"
-                onPress={paged.page === paged.pageCount - 1 ? undefined : () => setPage((value) => value + 1)}
+              <Pressable
+                disabled={paged.page === paged.pageCount - 1}
+                onPress={() => goToPage(paged.page + 1)}
+                hitSlop={10}
+                accessibilityRole="button"
+                accessibilityLabel="Next gallery page"
               >
-                Next
-              </Text>
+                <Text
+                  color={
+                    paged.page === paged.pageCount - 1 ? 'rgba(255,255,255,0.35)' : '#fff'
+                  }
+                  fontWeight="800"
+                  fontSize={14}
+                >
+                  Next ›
+                </Text>
+              </Pressable>
             </XStack>
           ) : null}
         </YStack>

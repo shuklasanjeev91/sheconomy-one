@@ -4,6 +4,8 @@ import type { Participant } from 'livekit-client'
 import {
   capFilmstripTracks,
   meetingGalleryLayout,
+  meetingGalleryPageForIndex,
+  meetingGalleryPages,
   paginateMeetingGallery,
   resolveMeetingGalleryPageSize,
 } from '~/co-work/lib/meeting-gallery-layout'
@@ -89,5 +91,31 @@ describe('Zoom-style meeting gallery', () => {
         breakpoint: 'large-desktop',
       }),
     ).toBe(49)
+  })
+
+  it('raises dense gallery page size on phone and tablet', () => {
+    expect(
+      resolveMeetingGalleryPageSize({
+        basePageSize: 9,
+        denseGallery: true,
+        breakpoint: 'mobile',
+      }),
+    ).toBe(16)
+    expect(
+      resolveMeetingGalleryPageSize({
+        basePageSize: 16,
+        denseGallery: true,
+        breakpoint: 'tablet',
+      }),
+    ).toBe(25)
+  })
+
+  it('maps indexes to gallery pages for swipe paging', () => {
+    expect(meetingGalleryPageForIndex(0, 9)).toBe(0)
+    expect(meetingGalleryPageForIndex(9, 9)).toBe(1)
+    expect(meetingGalleryPages([0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10], 9)).toEqual([
+      [0, 1, 2, 3, 4, 5, 6, 7, 8],
+      [9, 10],
+    ])
   })
 })

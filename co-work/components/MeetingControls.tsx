@@ -567,6 +567,7 @@ export function MeetingControls({
     supportsLiveCaptions: caps.supportsLiveCaptions,
     hasBrowse: !!onMinimize,
     compact,
+    supportsRecording: caps.supportsRecording,
     recording,
     hasReactions,
     hasRaiseHand,
@@ -585,10 +586,11 @@ export function MeetingControls({
     supportsLiveCaptions: caps.supportsLiveCaptions,
     hasInvite: !!(onToggleInvite || onShare),
     hasViewControls: !!(onSetViewMode || onToggleMirror || onToggleMaximize),
-    hasDenseGallery: !!onToggleDenseGallery && (isTablet || isDesktop),
+    hasDenseGallery: !!onToggleDenseGallery,
     reactionsOnPrimary: hasReactions,
     raiseHandOnPrimary: hasRaiseHand,
     recording,
+    recordOnPrimary: caps.supportsRecording === true,
     hasBreakouts: !!onToggleBreakouts,
     hasPolls: !!onTogglePolls,
     hasQa: !!onToggleQa,
@@ -667,7 +669,13 @@ export function MeetingControls({
       case 'view_dense_gallery':
         return onToggleDenseGallery
           ? {
-              label: denseGallery ? 'Standard gallery (25)' : 'Dense gallery (49)',
+              label: denseGallery
+                ? 'Standard gallery'
+                : isDesktop
+                  ? 'Dense gallery (49)'
+                  : isTablet
+                    ? 'Dense gallery (25)'
+                    : 'Dense gallery (16)',
               icon: Icons.LayoutGrid,
               active: denseGallery,
               onPress: runFromFlyout(onToggleDenseGallery),
@@ -952,6 +960,17 @@ export function MeetingControls({
             label="Stop"
             icon={Icons.Circle}
             variant="danger"
+            onPress={onToggleRecord}
+            compact={compact}
+          />
+        )
+      case 'record':
+        return (
+          <ControlButton
+            key={key}
+            label="Record"
+            icon={Icons.Circle}
+            variant={recording ? 'danger' : 'brand'}
             onPress={onToggleRecord}
             compact={compact}
           />

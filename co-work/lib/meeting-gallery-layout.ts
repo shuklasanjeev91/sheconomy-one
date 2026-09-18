@@ -102,21 +102,25 @@ export function capFilmstripTracks<T>(tracks: T[], cap = MEETING_FILMSTRIP_VISIB
   return { visible: tracks.slice(0, limit), overflow: tracks.length - limit }
 }
 
-/** Desktop dense gallery page size (7×7) when the host enables More → Dense gallery. */
+/** Dense gallery page sizes — Zoom-like for phones through desktop. */
 export const MEETING_DENSE_GALLERY_PAGE_SIZE = 49
+export const MEETING_DENSE_GALLERY_PAGE_SIZE_TABLET = 25
+export const MEETING_DENSE_GALLERY_PAGE_SIZE_MOBILE = 16
 
 export function resolveMeetingGalleryPageSize(input: {
   basePageSize: number
   denseGallery?: boolean
   breakpoint?: string
 }): number {
-  if (
-    input.denseGallery &&
-    (input.breakpoint === 'desktop' || input.breakpoint === 'large-desktop')
-  ) {
+  if (!input.denseGallery) return Math.max(1, input.basePageSize)
+  if (input.breakpoint === 'desktop' || input.breakpoint === 'large-desktop') {
     return MEETING_DENSE_GALLERY_PAGE_SIZE
   }
-  return Math.max(1, input.basePageSize)
+  if (input.breakpoint === 'laptop' || input.breakpoint === 'tablet') {
+    return MEETING_DENSE_GALLERY_PAGE_SIZE_TABLET
+  }
+  // Phone / mobile dense — 4×4 Zoom-style page.
+  return MEETING_DENSE_GALLERY_PAGE_SIZE_MOBILE
 }
 
 /** Split participants into visual rows for an explicit Meet-style grid. */
@@ -142,4 +146,21 @@ export function paginateMeetingGallery<T>(
     page: safePage,
     pageCount,
   }
+}
+
+/** Which gallery page holds `index` (0-based). */
+export function meetingGalleryPageForIndex(index: number, pageSize: number): number {
+  const size = Math.max(1, Math.floor(pageSize))
+  return Math.floor(Math.max(0, Math.floor(index)) / size)
+}
+
+/** Slice every page for a swipeable Zoom-style gallery pager. */
+export function meetingGalleryPages<T>(items: T[], pageSize: number): T[][] {
+  const size = Math.max(1, Math.floor(pageSize))
+  if (items.length === 0) return [[]]
+  const pages: T[][] = []
+  for (let i = 0; i < items.length; i += size) {
+    pages.push(items.slice(i, i + size))
+  }
+  return pages
 }

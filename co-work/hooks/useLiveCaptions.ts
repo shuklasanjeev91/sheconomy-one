@@ -281,7 +281,8 @@ export function useLiveCaptions({
         commitFinalCaption(text)
       },
       onError: (message) => {
-        // Soft banners only — remote peer captions still display. Mic denial is sticky.
+        // Soft banners only for mic denial. Transient STT issues must not cover the stage —
+        // remote captions still work while viewing.
         const lower = message.toLowerCase()
         if (lower.includes('microphone')) {
           setError(message)
@@ -289,7 +290,7 @@ export function useLiveCaptions({
           setPublishing(false)
           return
         }
-        setError(message)
+        // Ignore soft/unavailable STT noise (common during LiveKit audio sessions).
       },
     })
     if (!session) {

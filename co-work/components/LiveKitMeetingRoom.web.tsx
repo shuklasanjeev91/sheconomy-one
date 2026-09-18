@@ -370,6 +370,24 @@ function getSheconomyLivekitCss(ui: CoWorkUiTokens, shadows: CoWorkShadows) {
     opacity: 0.35;
     cursor: default;
   }
+  .sheconomy-gallery-pagination__dots {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+  .sheconomy-gallery-pagination__dot {
+    width: 7px;
+    height: 7px;
+    padding: 0;
+    border-radius: 999px;
+    background: rgba(255, 255, 255, 0.35);
+    min-width: 7px;
+  }
+  .sheconomy-gallery-pagination__dot--active {
+    width: 10px;
+    height: 10px;
+    background: #f9a8d4;
+  }
   /* Legacy narrow portrait fallback when policy classes are absent. */
   @media (max-width: 768px) and (orientation: portrait) {
     .sheconomy-video-stage:not(.sheconomy-video-stage--filmstrip-beside):not(

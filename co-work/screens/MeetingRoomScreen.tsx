@@ -761,7 +761,7 @@ function MeetingRoomOverlay({
     room: liveKit?.room,
     meetingId: meeting.id,
     meetingCode: meeting.meeting_code,
-    enabled: allowRecording && isAuthoritativeHost,
+    enabled: allowRecording && (isAuthoritativeHost || canModerate),
     autoStart: autoRecord,
     captionLines: captions.transcriptLines,
     onStarted: () => {
@@ -800,7 +800,7 @@ function MeetingRoomOverlay({
 
   const recordingIndicator = useMeetingRecordingIndicator(
     meeting.id,
-    allowRecording && !isAuthoritativeHost,
+    allowRecording && !(isAuthoritativeHost || canModerate),
   )
 
   const showError = presence.error && presence.error !== dismissedError
@@ -810,7 +810,7 @@ function MeetingRoomOverlay({
     chrome.breakpoint === 'large-desktop' ? 440 : chrome.breakpoint === 'desktop' ? 400 : 380,
     Math.round(viewportWidth * chrome.panelMaxWidthFraction),
   )
-  const recording = isAuthoritativeHost
+  const recording = isAuthoritativeHost || canModerate
     ? recordingSession.recording || recordingSession.isProcessing
     : recordingIndicator.isRecording
 
@@ -929,8 +929,15 @@ function MeetingRoomOverlay({
       toast.show('Recording is disabled for this meeting', { tone: 'info' })
       return
     }
-    if (!isAuthoritativeHost) {
-      toast.show('Only the host can record this meeting', { tone: 'info' })
+    if (!isAuthoritativeHost && !canModerate) {
+      toast.show('Only the host or co-host can record this meeting', { tone: 'info' })
+      return
+    }
+    if (!liveKit) {
+      toast.show('Still connecting…', {
+        tone: 'info',
+        message: 'Wait for the room to join, then start recording.',
+      })
       return
     }
     const run = () => {
@@ -954,7 +961,7 @@ function MeetingRoomOverlay({
       destructive: true,
       onConfirm: run,
     })
-  }, [allowRecording, isAuthoritativeHost, recordingSession, toast])
+  }, [allowRecording, canModerate, isAuthoritativeHost, liveKit, recordingSession, toast])
 
   const toggleCaptions = useCallback(() => {
     if (!captions.supported) {
@@ -1127,7 +1134,9 @@ function MeetingRoomOverlay({
       })
       return
     }
-    void presence.syncMediaState({ is_muted: audioOn })
+    // is_muted means "participant is muted" — sync the *next* state after toggle.
+    const nextMuted = audioOn
+    void presence.syncMediaState({ is_muted: nextMuted })
     if (session.hasMedia()) session.toggleMic()
     else liveKit?.toggleAudio()
   }, [allowSelfUnmute, canModerate, liveKit, presence, session, toast])
@@ -2157,7 +2166,7 @@ function MeetingRoomOverlay({
               ...caps,
               supportsVideo: true,
               supportsScreenShare: supportsScreenBroadcast,
-              supportsRecording: isAuthoritativeHost && allowRecording && !!liveKit,
+              supportsRecording: (isAuthoritativeHost || canModerate) && allowRecording && !!liveKit,
               supportsLiveCaptions: true,
             }}
             audioEnabled={liveKit?.audioEnabled ?? true}

@@ -26,6 +26,7 @@ describe('co-work feature matrix (web + native)', () => {
       supportsVideo: true,
       supportsScreenShare: true,
       supportsLiveCaptions: true,
+      supportsRecording: true,
     })
     for (const key of [
       'mic',
@@ -38,6 +39,7 @@ describe('co-work feature matrix (web + native)', () => {
       'share_screen',
       'captions',
       'invite',
+      'record',
       'more',
       'leave',
       'end_meeting',

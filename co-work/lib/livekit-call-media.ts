@@ -31,9 +31,10 @@ export async function reinforceCallMediaOnConnect(
       await local.setCameraEnabled(true)
     }
 
-    if (forceMic || local.isMicrophoneEnabled) {
-      // Republish with speech-processing constraints even if already enabled so
-      // both sides get AEC/NS. When forceMic is false we only touch an already-on mic.
+    // Only publish/republish when we must enable a muted mic on first join.
+    // Re-calling setMicrophoneEnabled(true) while already live republishes the
+    // track (stopMicTrackOnMute) and looks like auto mute/unmute on Android.
+    if (forceMic && !local.isMicrophoneEnabled) {
       await local.setMicrophoneEnabled(true, { ...CALL_AUDIO_CAPTURE })
     }
   } catch {
@@ -71,9 +72,8 @@ export async function restoreMeetingMediaAfterForeground(
   let cameraRestored = false
 
   try {
-    if (local.isMicrophoneEnabled) {
-      await local.setMicrophoneEnabled(true, { ...CALL_AUDIO_CAPTURE })
-    }
+    // Never republish an already-on mic on foreground — that causes mute flicker.
+    // Mic stays as the user left it; only camera may need restore after OS pause.
 
     const mediaAllowsCamera = mediaMode !== 'audio'
     if (

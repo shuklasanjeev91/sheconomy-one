@@ -94,6 +94,7 @@ export function resolveMeetingResponsiveLayout(input: {
         sidePanelWidthFraction: 1,
         sidePanelMaxWidth: width,
         compactControls: true,
+        // Default gallery page (3×3). Dense toggle raises to 16 on native phones.
         pageSize: 9,
       }
     case 'tablet':
@@ -107,7 +108,8 @@ export function resolveMeetingResponsiveLayout(input: {
         sidePanelWidthFraction: isLandscape ? 0.4 : 0.48,
         sidePanelMaxWidth: 420,
         compactControls: false,
-        pageSize: 9,
+        // Default 3×3; dense gallery raises to 25 on tablets.
+        pageSize: 16,
       }
     case 'laptop':
       return {

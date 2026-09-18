@@ -40,6 +40,7 @@ describe('meeting toolbar layout', () => {
         supportsVideo: true,
         supportsScreenShare: true,
         supportsLiveCaptions: true,
+        supportsRecording: true,
         recording: true,
       }),
     ).toEqual([
@@ -59,6 +60,30 @@ describe('meeting toolbar layout', () => {
       'leave',
       'end_meeting',
     ])
+  })
+
+  it('puts Record on the primary dock for host and co-host when allowed', () => {
+    expect(
+      meetingToolbarPrimaryKeys({
+        viewerRole: 'host',
+        supportsVideo: true,
+        supportsScreenShare: true,
+        supportsLiveCaptions: true,
+        supportsRecording: true,
+        recording: false,
+      }),
+    ).toContain('record')
+
+    expect(
+      meetingToolbarPrimaryKeys({
+        viewerRole: 'co_host',
+        supportsVideo: true,
+        supportsScreenShare: true,
+        supportsLiveCaptions: true,
+        supportsRecording: true,
+        recording: false,
+      }),
+    ).toContain('record')
   })
 
   it('keeps Captions on compact primary and moves Invite to More', () => {
@@ -101,6 +126,7 @@ describe('meeting toolbar layout', () => {
         hasInvite: true,
         reactionsOnPrimary: true,
         raiseHandOnPrimary: true,
+        recordOnPrimary: true,
       }),
     ).toEqual([
       'minimize',
@@ -111,7 +137,6 @@ describe('meeting toolbar layout', () => {
       'hide_self_view',
       'maximize',
       'audio_settings',
-      'record',
       'background',
       'meeting_info',
       'invite',
@@ -216,6 +241,7 @@ describe('meeting toolbar layout', () => {
         hasBreakouts: true,
         reactionsOnPrimary: true,
         raiseHandOnPrimary: true,
+        recordOnPrimary: true,
       }),
     ).toEqual([
       'minimize',
@@ -227,7 +253,6 @@ describe('meeting toolbar layout', () => {
       'maximize',
       'view_dense_gallery',
       'audio_settings',
-      'record',
       'background',
       'meeting_info',
       'share_link',

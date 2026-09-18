@@ -9,6 +9,7 @@ import { useMeetingGalleryTracks } from '~/co-work/hooks/useMeetingGalleryTracks
 import {
   capFilmstripTracks,
   meetingGalleryLayout,
+  meetingGalleryPageForIndex,
   paginateMeetingGallery,
   resolveMeetingGalleryPageSize,
 } from '~/co-work/lib/meeting-gallery-layout'
@@ -121,6 +122,17 @@ export function MeetingVideoStage() {
   useEffect(() => {
     if (paged.page !== page) setPage(paged.page)
   }, [page, paged.page])
+
+  // Jump to the page holding the active speaker (Zoom-style).
+  useEffect(() => {
+    if (state.viewMode !== 'gallery') return
+    const speaking = stageTracks.findIndex(
+      (track) => isTrackReference(track) && track.participant.isSpeaking,
+    )
+    if (speaking < 0) return
+    const target = meetingGalleryPageForIndex(speaking, pageSize)
+    if (target !== page) setPage(target)
+  }, [page, pageSize, stageTracks, state.viewMode])
 
   useEffect(() => {
     const identities = new Set<string>()
@@ -344,16 +356,45 @@ export function MeetingVideoStage() {
       ) : null}
 
       {paged.pageCount > 1 ? (
-        <div className="sheconomy-gallery-pagination">
-          <button disabled={paged.page === 0} onClick={() => setPage((value) => value - 1)}>
-            Previous
-          </button>
-          <span>{paged.page + 1} / {paged.pageCount}</span>
+        <div className="sheconomy-gallery-pagination" role="navigation" aria-label="Gallery pages">
           <button
+            type="button"
+            disabled={paged.page === 0}
+            onClick={() => setPage((value) => value - 1)}
+          >
+            ‹ Prev
+          </button>
+          <div className="sheconomy-gallery-pagination__dots" aria-hidden>
+            {Array.from({ length: Math.min(paged.pageCount, 8) }).map((_, dot) => {
+              const pageIndex =
+                paged.pageCount <= 8
+                  ? dot
+                  : Math.min(Math.max(0, paged.page - 3) + dot, paged.pageCount - 1)
+              const active = pageIndex === paged.page
+              return (
+                <button
+                  key={`web-dot-${pageIndex}-${dot}`}
+                  type="button"
+                  className={
+                    active
+                      ? 'sheconomy-gallery-pagination__dot sheconomy-gallery-pagination__dot--active'
+                      : 'sheconomy-gallery-pagination__dot'
+                  }
+                  onClick={() => setPage(pageIndex)}
+                  aria-label={`Gallery page ${pageIndex + 1}`}
+                />
+              )
+            })}
+          </div>
+          <span>
+            {paged.page + 1} / {paged.pageCount}
+          </span>
+          <button
+            type="button"
             disabled={paged.page === paged.pageCount - 1}
             onClick={() => setPage((value) => value + 1)}
           >
-            Next
+            Next ›
           </button>
         </div>
       ) : null}

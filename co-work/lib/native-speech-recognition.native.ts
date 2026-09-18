@@ -103,7 +103,7 @@ export async function createNativeSpeechSession(
       return
     }
     // Soft — keep viewing remote captions; restart will retry.
-    handlers.onError?.('Live captions paused — retrying…')
+    // Do not call onError for recoverable pauses (avoids orange banner spam).
   }
 
   const restartSoon = () => {
@@ -124,10 +124,7 @@ export async function createNativeSpeechSession(
             if (!shouldRestart) return
             void startVoiceWithFallback(localeFallbacks(locale)).catch(() => {
               shouldRestart = false
-              // Viewing remote captions still works — avoid a permanent scary banner.
-              handlers.onError?.(
-                'Could not listen on this device — you can still view others’ captions',
-              )
+              // Viewing remote captions still works — do not surface a sticky banner.
             })
           }, 900)
         })
