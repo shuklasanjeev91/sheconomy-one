@@ -284,7 +284,8 @@ export function meetingStageContentBox(input: {
   if (input.filmstripExpanded && !chrome.filmstripBeside) {
     return {
       width: availableWidth,
-      height: Math.max(availableHeight - chrome.filmstripHeight - 8, 100),
+      // Extra gap so captions / share chrome clear the filmstrip strip.
+      height: Math.max(availableHeight - chrome.filmstripHeight - 14, 100),
     }
   }
   return { width: availableWidth, height: availableHeight }

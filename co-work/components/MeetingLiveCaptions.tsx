@@ -35,6 +35,9 @@ type MeetingLiveCaptionsProps = {
   error?: string | null
   targetLang?: string
   targetLangName?: string
+  /** Speech-to-text language for this device (`auto` = follow region). */
+  spokenLang?: string
+  spokenLangName?: string
   showingTranslation?: boolean
   availableLanguages?: readonly CaptionLanguageOption[]
   collapsed?: boolean
@@ -46,6 +49,7 @@ type MeetingLiveCaptionsProps = {
   bottomOffset?: number
   sideInset?: number
   onTargetLangChange?: (language: string) => void
+  onSpokenLangChange?: (language: string) => void
   onCollapsedChange?: (collapsed: boolean) => void
   onSizeChange?: (size: CaptionOverlaySize) => void
   onPlacementChange?: (placement: CaptionOverlayPlacement) => void
@@ -70,6 +74,8 @@ export function MeetingLiveCaptions({
   error,
   targetLang,
   targetLangName,
+  spokenLang = 'auto',
+  spokenLangName,
   showingTranslation: _showingTranslation,
   availableLanguages = [],
   collapsed = false,
@@ -81,6 +87,7 @@ export function MeetingLiveCaptions({
   bottomOffset,
   sideInset,
   onTargetLangChange,
+  onSpokenLangChange,
   onCollapsedChange,
   onSizeChange,
   onPlacementChange,
@@ -102,9 +109,10 @@ export function MeetingLiveCaptions({
   const sizeIndex = SIZE_ORDER.indexOf(size)
   const canShrink = sizeIndex > 0
   const canGrow = sizeIndex < SIZE_ORDER.length - 1
-  const top = layout.placement === 'top' ? topOffset ?? (presentationSafe ? 88 : 72) : undefined
+  // Keep captions clear of shared content + filmstrip when presenting.
+  const top = layout.placement === 'top' ? topOffset ?? (presentationSafe ? 96 : 72) : undefined
   const bottom =
-    layout.placement === 'bottom' ? bottomOffset ?? (presentationSafe ? 124 : 112) : undefined
+    layout.placement === 'bottom' ? bottomOffset ?? (presentationSafe ? 140 : 112) : undefined
   const horizontalInset = sideInset ?? 12
   const showSettings = !collapsed && settingsOpen
 
@@ -221,27 +229,27 @@ export function MeetingLiveCaptions({
                   <Select value={targetLang} onValueChange={onTargetLangChange}>
                     <SelectTrigger
                       height={34}
-                      width={168}
+                      width={effectiveWideLayout ? 168 : 148}
                       paddingHorizontal="$2"
                       backgroundColor="rgba(255,255,255,0.14)"
                       borderColor="rgba(255,255,255,0.28)"
                       iconAfter={<Icons.ChevronDown size={14} color="#fce7f3" />}
-                      accessibilityLabel="Caption language — display language for you"
+                      accessibilityLabel="Show captions in this language"
                     >
-                      <Select.Value placeholder="Language" />
+                      <Select.Value placeholder="Show me" />
                     </SelectTrigger>
                     <SelectContent>
                       <SelectViewport maxHeight={300}>
                         {availableLanguages.map((language, index) => (
                           <SelectItem key={language.code} value={language.code} index={index}>
-                            <Select.ItemText>{language.label}</Select.ItemText>
+                            <Select.ItemText>Show · {language.label}</Select.ItemText>
                           </SelectItem>
                         ))}
                       </SelectViewport>
                     </SelectContent>
                   </Select>
                 ) : targetLangName ? (
-                  <RNText style={styles.settingsHint}>{targetLangName}</RNText>
+                  <RNText style={styles.settingsHint}>Show · {targetLangName}</RNText>
                 ) : null}
                 <XStack alignItems="center" gap="$1">
                   {onPlacementChange && !presentationSafe ? (
@@ -272,8 +280,41 @@ export function MeetingLiveCaptions({
                   </CaptionIconButton>
                 </XStack>
               </XStack>
+              {availableLanguages.length && onSpokenLangChange ? (
+                <Select value={spokenLang || 'auto'} onValueChange={onSpokenLangChange}>
+                  <SelectTrigger
+                    height={34}
+                    width="100%"
+                    maxWidth={effectiveWideLayout ? 280 : 220}
+                    paddingHorizontal="$2"
+                    backgroundColor="rgba(255,255,255,0.14)"
+                    borderColor="rgba(255,255,255,0.28)"
+                    iconAfter={<Icons.ChevronDown size={14} color="#fce7f3" />}
+                    accessibilityLabel="I speak this language — used for speech recognition"
+                  >
+                    <Select.Value placeholder="I speak" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectViewport maxHeight={300}>
+                      <SelectItem value="auto" index={0}>
+                        <Select.ItemText>
+                          I speak · Auto{spokenLangName ? ` (${spokenLangName})` : ''}
+                        </Select.ItemText>
+                      </SelectItem>
+                      {availableLanguages.map((language, index) => (
+                        <SelectItem key={language.code} value={language.code} index={index + 1}>
+                          <Select.ItemText>I speak · {language.label}</Select.ItemText>
+                        </SelectItem>
+                      ))}
+                    </SelectViewport>
+                  </SelectContent>
+                </Select>
+              ) : spokenLangName ? (
+                <RNText style={styles.settingsHint}>I speak · {spokenLangName}</RNText>
+              ) : null}
               <RNText style={styles.settingsHint}>
-                Your language is for display. Everyone’s speech is captioned for the room.
+                You see captions in your display language. Speech recognition follows what you speak
+                so peers can read you in theirs.
               </RNText>
             </View>
           ) : null}

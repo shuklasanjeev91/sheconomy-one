@@ -92,8 +92,8 @@ export function resolveMeetingUiChromePadding(input: {
   }
 
   // Maximized (or immersive share) with minimal chrome — max video area.
-  // Leave a thin bottom band for the critical Leave/End peek.
-  const peekClearance = 52
+  // Leave a thin bottom band for the critical Leave/End peek + captions.
+  const peekClearance = 56
   const headerClearance = 12
   return {
     stagePaddingTop: Math.max(safeTop, 4) + headerClearance,
@@ -103,7 +103,7 @@ export function resolveMeetingUiChromePadding(input: {
     panelTop: Math.max(safeTop, 4) + 48,
     panelBottom: peekClearance + Math.max(safeBottom, 4),
     captionTopOffset: Math.max(safeTop, 4) + 20,
-    captionBottomOffset: peekClearance + 12,
+    captionBottomOffset: peekClearance + 16,
   }
 }
 

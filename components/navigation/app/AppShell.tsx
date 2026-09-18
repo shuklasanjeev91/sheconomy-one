@@ -138,9 +138,17 @@ export function AppShell({ children }: AppShellProps) {
   const hideMobileHeader = !isDesktop && isVendorPath(pathname)
 
   const useChromelessLayout = chromeless || authScreen.chromeless
+  // Meeting overlay owns its own safe-area padding (header/dock). Wrapping the
+  // shell in top+bottom SafeArea left white/black letterbox rails on phones.
+  const meetingEdgeToEdge = chromeless && !authScreen.chromeless
+  const safeEdges = meetingEdgeToEdge
+    ? ([] as const)
+    : useChromelessLayout
+      ? (['top', 'bottom'] as const)
+      : (['top'] as const)
 
   return (
-    <NativeSafeArea edges={useChromelessLayout ? ['top', 'bottom'] : ['top']}>
+    <NativeSafeArea edges={[...safeEdges]}>
       <AppAccessGate>
         {/*
           One relative root so InstantMeetingHost / GlobalSessionHost / ImageCropHost

@@ -30,6 +30,10 @@ export type LiveKitMeetingRoomProps = {
   isHost: boolean
   enabled: boolean
   mediaMode?: LiveKitMediaMode
+  /** Join with microphone published (default true). Pre-join mute sets false. */
+  initialAudio?: boolean
+  /** Join with camera published when mediaMode allows video (default true). */
+  initialVideo?: boolean
   /** Fired once the SFU room is actually connected (not on token fetch). */
   onConnected?: () => void
   onDisconnected: () => void

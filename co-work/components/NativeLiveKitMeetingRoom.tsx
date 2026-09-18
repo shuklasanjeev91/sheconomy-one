@@ -80,6 +80,8 @@ type NativeLiveKitMeetingRoomProps = {
   isHost: boolean
   enabled: boolean
   mediaMode?: import('~/co-work/lib/livekit-media-controls').LiveKitMediaMode
+  initialAudio?: boolean
+  initialVideo?: boolean
   onConnected?: () => void
   onDisconnected: () => void
   overlay?: (liveKit: LiveKitMediaControls | null) => React.ReactNode
@@ -94,6 +96,8 @@ export function NativeLiveKitMeetingRoom({
   avatarUrl,
   enabled,
   mediaMode = 'meeting',
+  initialAudio = true,
+  initialVideo = true,
   onConnected,
   onDisconnected,
   overlay,
@@ -324,8 +328,8 @@ export function NativeLiveKitMeetingRoom({
         serverUrl={credentials.serverUrl}
         token={credentials.token}
         connect
-        audio
-        video={mediaMode !== 'audio'}
+        audio={initialAudio}
+        video={mediaMode !== 'audio' && initialVideo}
         options={getLiveKitRoomOptions('native')}
         onConnected={onConnected}
         onDisconnected={(reason) => {
@@ -334,7 +338,12 @@ export function NativeLiveKitMeetingRoom({
         }}
         style={{ flex: 1, width: '100%', height: '100%' }}
       >
-        <NativeLiveKitMeetingContent overlay={overlay} mediaMode={mediaMode} avatarUrl={avatarUrl} />
+        <NativeLiveKitMeetingContent
+          overlay={overlay}
+          mediaMode={mediaMode}
+          avatarUrl={avatarUrl}
+          initialAudio={initialAudio}
+        />
       </LiveKitRoom>
     </ScreenFill>
   )
@@ -344,10 +353,12 @@ function NativeLiveKitMeetingContent({
   overlay,
   mediaMode = 'meeting',
   avatarUrl,
+  initialAudio = true,
 }: {
   overlay?: (liveKit: LiveKitMediaControls | null) => React.ReactNode
   mediaMode?: import('~/co-work/lib/livekit-media-controls').LiveKitMediaMode
   avatarUrl?: string | null
+  initialAudio?: boolean
 }) {
   const preferSpeaker = mediaMode !== 'audio'
   const liveKit = useLiveKitMediaControls(preferSpeaker)
@@ -402,7 +413,7 @@ function NativeLiveKitMeetingContent({
     }
 
     const onConnected = () => {
-      const forceMic = !micForcedRef.current
+      const forceMic = !micForcedRef.current && initialAudio
       micForcedRef.current = true
       void (async () => {
         await reinforceCallMediaOnConnect(room, mediaMode, { forceMicEnable: forceMic })
@@ -436,7 +447,7 @@ function NativeLiveKitMeetingContent({
       unbindScreenShare()
       unbindIos()
     }
-  }, [avatarUrl, liveKit.room, mediaMode, preferSpeaker])
+  }, [avatarUrl, initialAudio, liveKit.room, mediaMode, preferSpeaker])
 
   return (
     <YStack flex={1} width="100%" height="100%" position="relative" backgroundColor="#0c080a">

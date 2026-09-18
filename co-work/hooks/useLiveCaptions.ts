@@ -584,6 +584,7 @@ export function useLiveCaptions({
     targetLangName,
     spokenLang: preferences.spokenLang,
     spokenLangCode,
+    spokenLangName: captionLanguageName(spokenLangCode),
     showingTranslation,
     captionPreferences: preferences,
     availableLanguages: REGION_LANGUAGES,

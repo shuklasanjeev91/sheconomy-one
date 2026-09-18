@@ -20,7 +20,11 @@ type MeetingJoinScreenProps = {
   requirePasscode?: boolean
   isLocked?: boolean
   lockedMessage?: string
-  onJoin: (displayName: string, passcode?: string) => Promise<void>
+  onJoin: (
+    displayName: string,
+    passcode?: string,
+    options?: { audioEnabled?: boolean; videoEnabled?: boolean },
+  ) => Promise<void>
   onBack: () => void
 }
 
@@ -45,6 +49,8 @@ export function MeetingJoinScreen({
   const [passcode, setPasscode] = useState('')
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [audioEnabled, setAudioEnabled] = useState(true)
+  const [videoEnabled, setVideoEnabled] = useState(true)
 
   useEffect(() => {
     if (!editing && !rememberName) setDisplayName(safeProfileName)
@@ -82,7 +88,10 @@ export function MeetingJoinScreen({
     setError(null)
     try {
       await saveRememberedMeetingDisplayName(rememberName ? confirmedName : null)
-      await onJoin(confirmedName.slice(0, 80), requirePasscode ? passcode.trim() : undefined)
+      await onJoin(confirmedName.slice(0, 80), requirePasscode ? passcode.trim() : undefined, {
+        audioEnabled,
+        videoEnabled,
+      })
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : 'Could not join the meeting.')
     } finally {
@@ -183,6 +192,50 @@ export function MeetingJoinScreen({
           </YStack>
 
           <MeetingBackgroundPreview userId={userId} />
+
+          <XStack
+            alignItems="center"
+            justifyContent="center"
+            gap="$3"
+            flexWrap="wrap"
+            paddingVertical="$1"
+          >
+            <Button
+              tone={audioEnabled ? 'outline' : 'primary'}
+              size="$3"
+              borderRadius={999}
+              icon={
+                audioEnabled ? (
+                  <Icons.Mic size={16} color={coworkUi.text} />
+                ) : (
+                  <Icons.MicOff size={16} color="white" />
+                )
+              }
+              onPress={() => setAudioEnabled((value) => !value)}
+              accessibilityLabel={audioEnabled ? 'Mute microphone before joining' : 'Unmute microphone'}
+            >
+              {audioEnabled ? 'Mic on' : 'Mic off'}
+            </Button>
+            <Button
+              tone={videoEnabled ? 'outline' : 'primary'}
+              size="$3"
+              borderRadius={999}
+              icon={
+                videoEnabled ? (
+                  <Icons.Video size={16} color={coworkUi.text} />
+                ) : (
+                  <Icons.VideoOff size={16} color="white" />
+                )
+              }
+              onPress={() => setVideoEnabled((value) => !value)}
+              accessibilityLabel={videoEnabled ? 'Turn camera off before joining' : 'Turn camera on'}
+            >
+              {videoEnabled ? 'Camera on' : 'Camera off'}
+            </Button>
+          </XStack>
+          <Text fontSize={12} color={coworkUi.textMuted} textAlign="center">
+            Your mic and camera preferences carry into the meeting.
+          </Text>
 
           {isLocked ? (
             <YStack

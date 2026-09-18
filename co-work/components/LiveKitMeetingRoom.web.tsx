@@ -528,6 +528,8 @@ export function LiveKitMeetingRoom({
   avatarUrl,
   enabled,
   mediaMode = 'meeting',
+  initialAudio = true,
+  initialVideo = true,
   onConnected,
   onDisconnected,
   overlay,
@@ -678,8 +680,8 @@ export function LiveKitMeetingRoom({
         serverUrl={credentials.serverUrl}
         token={credentials.token}
         connect
-        audio
-        video={mediaMode !== 'audio'}
+        audio={initialAudio}
+        video={mediaMode !== 'audio' && initialVideo}
         options={getLiveKitRoomOptions('web')}
         onConnected={onConnected}
         onDisconnected={(reason) => {
@@ -698,7 +700,12 @@ export function LiveKitMeetingRoom({
           background: 'transparent',
         }}
       >
-        <WebLiveKitMeetingContent overlay={overlay} mediaMode={mediaMode} avatarUrl={avatarUrl} />
+        <WebLiveKitMeetingContent
+          overlay={overlay}
+          mediaMode={mediaMode}
+          avatarUrl={avatarUrl}
+          initialAudio={initialAudio}
+        />
       </LiveKitRoom>
       <style>{getSheconomyLivekitCss(coworkUi, coworkShadows)}</style>
     </ScreenFill>
@@ -770,10 +777,12 @@ function WebLiveKitMeetingContent({
   overlay,
   mediaMode = 'meeting',
   avatarUrl,
+  initialAudio = true,
 }: {
   overlay?: (liveKit: LiveKitMediaControls | null) => React.ReactNode
   mediaMode?: import('~/co-work/lib/livekit-media-controls').LiveKitMediaMode
   avatarUrl?: string | null
+  initialAudio?: boolean
 }) {
   const liveKit = useLiveKitMediaControls(mediaMode !== 'audio')
   const { audioBlocked, unlockAudio } = useWebAudioPlaybackUnlock(liveKit.room)
@@ -812,7 +821,8 @@ function WebLiveKitMeetingContent({
     }
 
     const onConnected = () => {
-      const forceMic = !micForcedRef.current
+      // Honor pre-join mute — never force-enable mic when the user joined muted.
+      const forceMic = !micForcedRef.current && initialAudio
       micForcedRef.current = true
       void reinforceCallMediaOnConnect(room, mediaMode, { forceMicEnable: forceMic })
       void syncAvatarMetadata()
@@ -828,7 +838,7 @@ function WebLiveKitMeetingContent({
       room.off(RoomEvent.Connected, onConnected)
       unbindScreenShare()
     }
-  }, [avatarUrl, liveKit.room, mediaMode])
+  }, [avatarUrl, initialAudio, liveKit.room, mediaMode])
 
   return (
     <YStack flex={1} width="100%" height="100%" position="relative" style={{ minHeight: 0, overflow: 'hidden' }}>

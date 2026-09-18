@@ -272,8 +272,8 @@ function MeetingFlyoutPanel({
   // Native: Modal escapes InstantMeetingHost overflow:hidden (iPad/Android).
   // Tall enough that Browse (minimize) + View stay reachable without feeling clipped.
   const nativeMaxHeight = Math.min(
-    Math.max(380, maxHeight),
-    Math.max(340, Math.round(windowHeight * 0.72)),
+    Math.max(420, maxHeight),
+    Math.max(360, Math.round(windowHeight * 0.78)),
   )
   return (
     <>
@@ -529,7 +529,11 @@ export function MeetingControls({
   const roomy = !forceCompact && (isTablet || isDesktop)
   const bottomPad = forceCompact ? '$1.5' : '$2'
   const [flyout, setFlyout] = useState<FlyoutKind>('none')
-  const flyoutMaxHeight = Math.max(220, Math.min(420, Math.round(windowHeight * 0.55)))
+  // Keep More tall enough for Browse + Record + Host on phone / landscape.
+  const flyoutMaxHeight = Math.max(
+    240,
+    Math.min(compact ? 460 : 420, Math.round(windowHeight * (compact ? 0.62 : 0.55))),
+  )
   const flyoutWidth = roomy ? 280 : 248
   const screenShareOnStage = hasActiveScreenShare ?? screenSharing
   const effectiveViewMode: MeetingViewMode =

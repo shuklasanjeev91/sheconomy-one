@@ -109,6 +109,10 @@ type MeetingRoomScreenProps = {
   isHost: boolean
   /** Optional — overlay host closes session; default navigates to Co-Work home. */
   onLeave?: () => void
+  /** Pre-join mic preference (default on). */
+  initialAudioEnabled?: boolean
+  /** Pre-join camera preference (default on when video is supported). */
+  initialVideoEnabled?: boolean
 }
 
 type PresenceState = ReturnType<typeof useMeetingPresence>
@@ -353,6 +357,8 @@ function MeetingRoomContent(props: MeetingRoomScreenProps) {
         avatarUrl={props.avatarUrl}
         isHost={props.isHost}
         enabled={!presence.isWaiting && !presence.isRejected}
+        initialAudio={props.initialAudioEnabled !== false}
+        initialVideo={props.initialVideoEnabled !== false}
         onConnected={handleMediaConnected}
         onDisconnected={handleMediaDisconnected}
         overlay={
@@ -1930,6 +1936,8 @@ function MeetingRoomOverlay({
         error={captions.error}
         targetLang={captions.targetLang}
         targetLangName={captions.targetLangName}
+        spokenLang={captions.spokenLang}
+        spokenLangName={captions.spokenLangName}
         showingTranslation={captions.showingTranslation}
         availableLanguages={captions.availableLanguages}
         collapsed={captions.captionPreferences.collapsed}
@@ -1944,6 +1952,9 @@ function MeetingRoomOverlay({
         sideInset={chrome.captionSideInset}
         onTargetLangChange={(language) => {
           captions.setTargetLang(language)
+        }}
+        onSpokenLangChange={(language) => {
+          captions.setSpokenLang(language)
         }}
         onCollapsedChange={captions.setCollapsed}
         onSizeChange={captions.setOverlaySize}
@@ -1994,7 +2005,9 @@ function MeetingRoomOverlay({
             isHost={isAuthoritativeHost}
             viewerRole={isAuthoritativeHost ? 'host' : presence.selfRole}
             canModerate={canModerate}
-            canChangeCriticalSettings={canChangeCriticalMeetingSettings(presence.selfRole)}
+            canChangeCriticalSettings={canChangeCriticalMeetingSettings(
+              isAuthoritativeHost ? 'host' : presence.selfRole,
+            )}
             isLocked={!!presence.moderationSettings?.is_locked}
             panel={presence.panel}
             backgroundActive={(liveKit?.videoEffects.selection.mode ?? 'off') !== 'off'}

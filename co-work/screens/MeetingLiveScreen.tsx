@@ -90,6 +90,8 @@ function MeetingLiveScreenBody({
   )
   const [isLocked, setIsLocked] = useState(false)
   const [passcodeVerified, setPasscodeVerified] = useState(false)
+  const [joinAudioEnabled, setJoinAudioEnabled] = useState(true)
+  const [joinVideoEnabled, setJoinVideoEnabled] = useState(true)
   const loadedCodeRef = useRef<string | null>(null)
   const autoJoinAttemptedRef = useRef(false)
   const resumedRoomRef = useRef(shouldResumeRoom)
@@ -205,7 +207,15 @@ function MeetingLiveScreenBody({
   }, [normalizedCode, initialMeeting, applyMeetingSecurity, shouldSkipConfirm, shouldResumeRoom])
 
   const joinMeeting = useCallback(
-    async (displayName: string, passcode?: string, options?: { skipPermissionPrompt?: boolean }) => {
+    async (
+      displayName: string,
+      passcode?: string,
+      options?: {
+        skipPermissionPrompt?: boolean
+        audioEnabled?: boolean
+        videoEnabled?: boolean
+      },
+    ) => {
       if (!meeting) throw new Error('Meeting not loaded')
       if (isLocked && !isHost) {
         throw new Error(MEETING_LOCKED_MESSAGE)
@@ -239,6 +249,12 @@ function MeetingLiveScreenBody({
           setPhase('confirm')
           throw new Error(message)
         }
+      }
+      if (typeof options?.audioEnabled === 'boolean') {
+        setJoinAudioEnabled(options.audioEnabled)
+      }
+      if (typeof options?.videoEnabled === 'boolean') {
+        setJoinVideoEnabled(options.videoEnabled)
       }
       setConfirmedDisplayName(displayName)
       resumedRoomRef.current = true
@@ -365,6 +381,8 @@ function MeetingLiveScreenBody({
         displayName={confirmedDisplayName || profile?.full_name || profile?.username || 'Guest'}
         avatarUrl={profile?.avatar_url}
         isHost={meeting.host_id === user.id}
+        initialAudioEnabled={joinAudioEnabled}
+        initialVideoEnabled={joinVideoEnabled}
         onLeave={exitMeeting}
       />
     )
