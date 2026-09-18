@@ -70,7 +70,33 @@ installAbortSignalHelpers()
 
 // LiveKit screen-share on iOS/Android often logs a recoverable dimensions miss;
 // keep it out of the red LogBox overlay in meeting builds.
-LogBox.ignoreLogs([/could not determine track dimensions, using defaults/i])
+LogBox.ignoreLogs([
+  /could not determine track dimensions, using defaults/i,
+  'could not determine track dimensions, using defaults',
+])
+
+// LogBox.ignoreLogs alone is not enough in some Expo/OTA builds — console.error
+// still becomes a red SyntheticError overlay that covers the live meeting.
+const originalConsoleError = console.error.bind(console)
+console.error = (...args: unknown[]) => {
+  const text = args
+    .map((arg) => {
+      if (typeof arg === 'string') return arg
+      if (arg && typeof arg === 'object' && 'message' in arg) {
+        return String((arg as { message?: unknown }).message ?? '')
+      }
+      try {
+        return JSON.stringify(arg)
+      } catch {
+        return String(arg)
+      }
+    })
+    .join(' ')
+  if (/could not determine track dimensions, using defaults/i.test(text)) {
+    return
+  }
+  originalConsoleError(...(args as Parameters<typeof console.error>))
+}
 
 // Dev-only noise from react-native-svg + upstream RN deprecations (harmless on current stack).
 if (__DEV__) {

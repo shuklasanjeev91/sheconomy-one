@@ -13,7 +13,10 @@ import {
   type TrackPublishOptions,
 } from 'livekit-client'
 
-import { patchLiveKitWaitForDimensions } from '~/co-work/lib/livekit-patch-dimensions'
+import {
+  forceScreenShareTrackSettings,
+  patchLiveKitWaitForDimensions,
+} from '~/co-work/lib/livekit-patch-dimensions'
 
 // Apply as soon as meeting screen-share code loads (web + native).
 patchLiveKitWaitForDimensions()
@@ -102,6 +105,19 @@ export async function setLocalScreenShareEnabled(
     const mediaTrack = publication.track.mediaStreamTrack
     if (mediaTrack && 'enabled' in mediaTrack) {
       mediaTrack.enabled = true
+    }
+    // iOS ReplayKit / Android MediaProjection often report 0×0 until the first
+    // frame — force settings so publish + remote RTCView get real dimensions.
+    if (platform === 'native') {
+      forceScreenShareTrackSettings(mediaTrack)
+      // Content hint helps Android WebRTC pick a screen-share encode path.
+      if (mediaTrack && 'contentHint' in mediaTrack) {
+        try {
+          ;(mediaTrack as MediaStreamTrack & { contentHint?: string }).contentHint = 'detail'
+        } catch {
+          // ignore
+        }
+      }
     }
   }
 }

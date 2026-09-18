@@ -3,7 +3,8 @@ import '~/lib/polyfills/install-dom-exception'
 
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { Platform, ScrollView as NativeScrollView, useWindowDimensions } from 'react-native'
-import { ConnectionState, DisconnectReason, RoomEvent, Track } from 'livekit-client'
+import { ConnectionState, DisconnectReason, RoomEvent, Track, VideoQuality } from 'livekit-client'
+import type { RemoteTrackPublication } from 'livekit-client'
 import {
   LiveKitRoom,
   VideoTrack,
@@ -880,6 +881,17 @@ function NativeVideoTile({
   // stuck on a blank surface even after the remote screen-share track arrives.
   const mediaReadyToken = mediaTrack?.sid ?? mediaTrack?.mediaStream?.id ?? null
   const trackSid = publication?.trackSid ?? null
+  const trackDims = (() => {
+    try {
+      const settings = mediaTrack?.mediaStreamTrack?.getSettings?.()
+      const w = Number(settings?.width) || 0
+      const h = Number(settings?.height) || 0
+      if (w > 1 && h > 1) return `${w}x${h}`
+    } catch {
+      // ignore
+    }
+    return isScreen ? '1280x720' : 'pending'
+  })()
   const showVideo = !!mediaTrack && !!mediaReadyToken && !!surfaceSize && (isScreen || !cameraOff)
   const mirrored = shouldMirrorMeetingVideo({
     mirrorLocalVideo,
@@ -888,12 +900,35 @@ function NativeVideoTile({
     source: trackRef.source,
   })
 
+  // Screen share: if the track is subscribed but the surface briefly reports 0×0,
+  // still force a mount after a short delay so Android doesn't stay on "Receiving…".
+  const [forceScreenSurface, setForceScreenSurface] = useState(false)
+  useEffect(() => {
+    if (!isScreen || showVideo || !mediaTrack) {
+      setForceScreenSurface(false)
+      return
+    }
+    const timer = setTimeout(() => setForceScreenSurface(true), 600)
+    return () => clearTimeout(timer)
+  }, [isScreen, mediaTrack, showVideo])
+
+  const effectiveSurface =
+    surfaceSize ??
+    (forceScreenSurface && isScreen
+      ? { w: Math.max(Math.floor(width), 2), h: Math.max(Math.floor(height), 2) }
+      : null)
+  const shouldRenderVideo =
+    !!mediaTrack &&
+    !!mediaReadyToken &&
+    !!effectiveSurface &&
+    (isScreen || !cameraOff)
+
   const videoRef = useRef(null)
   // Prefer screen share, else active speaker, else local camera — solo hosts
   // still need a registered track for manual iOS PiP ("no video active").
   const isPipCandidate =
     Platform.OS === 'ios' &&
-    showVideo &&
+    shouldRenderVideo &&
     (isScreen || activeSpeaker || trackRef.participant.isLocal)
 
   useEffect(() => {
@@ -905,6 +940,20 @@ function NativeVideoTile({
       }
     }
   }, [isPipCandidate])
+
+  // Keep remote screen-share subscribed at full quality while this tile is mounted.
+  useEffect(() => {
+    if (!isScreen || trackRef.participant.isLocal || !publication) return
+    const remote = publication as RemoteTrackPublication
+    try {
+      if (!remote.isSubscribed) remote.setSubscribed(true)
+      remote.setVideoDimensions({ width: 1280, height: 720 })
+      remote.setVideoQuality(VideoQuality.HIGH)
+      remote.setEnabled(true)
+    } catch {
+      // soft-fail
+    }
+  }, [isScreen, publication, mediaReadyToken, trackRef.participant.isLocal])
 
   return (
     <YStack
@@ -932,22 +981,25 @@ function NativeVideoTile({
         }
       }}
     >
-      {showVideo && surfaceSize && isTrackReference(trackRef) ? (
+      {shouldRenderVideo && effectiveSurface && isTrackReference(trackRef) ? (
         <VideoTrack
           // Remount when stream, size, or mirror preference changes (Android RTCView).
-          key={`${trackSid ?? 'track'}-${mediaReadyToken}-${surfaceSize.w}x${surfaceSize.h}-${isScreen ? 'ss' : 'cam'}-${mirrored ? 'm' : 'u'}`}
+          key={`${trackSid ?? 'track'}-${mediaReadyToken}-${effectiveSurface.w}x${effectiveSurface.h}-${trackDims}-${isScreen ? 'ss' : 'cam'}-${mirrored ? 'm' : 'u'}`}
           ref={videoRef}
           trackRef={trackRef}
           style={{
             position: 'absolute',
             top: 0,
             left: 0,
-            width: surfaceSize.w,
-            height: surfaceSize.h,
+            width: effectiveSurface.w,
+            height: effectiveSurface.h,
+            backgroundColor: '#0c080a',
           }}
-          objectFit={isScreen ? 'contain' : 'cover'}
+          // Android MediaProjection often blanks with contain + zOrder 0; cover +
+          // elevated zOrder keeps frames painting on the RTCView surface.
+          objectFit={isScreen && Platform.OS === 'android' ? 'cover' : isScreen ? 'contain' : 'cover'}
           mirror={mirrored}
-          zOrder={isScreen ? 0 : compact ? 1 : 0}
+          zOrder={isScreen ? (Platform.OS === 'android' ? 2 : 1) : compact ? 1 : 0}
           iosPIP={
             Platform.OS === 'ios'
               ? {
