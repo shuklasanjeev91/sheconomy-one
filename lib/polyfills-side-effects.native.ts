@@ -68,6 +68,10 @@ function installAbortSignalHelpers() {
 
 installAbortSignalHelpers()
 
+// LiveKit screen-share on iOS/Android often logs a recoverable dimensions miss;
+// keep it out of the red LogBox overlay in meeting builds.
+LogBox.ignoreLogs([/could not determine track dimensions, using defaults/i])
+
 // Dev-only noise from react-native-svg + upstream RN deprecations (harmless on current stack).
 if (__DEV__) {
   LogBox.ignoreLogs([

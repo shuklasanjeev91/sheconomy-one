@@ -13,6 +13,11 @@ import {
   type TrackPublishOptions,
 } from 'livekit-client'
 
+import { patchLiveKitWaitForDimensions } from '~/co-work/lib/livekit-patch-dimensions'
+
+// Apply as soon as meeting screen-share code loads (web + native).
+patchLiveKitWaitForDimensions()
+
 /** Prefer a single mid/high layer so adaptiveStream never asks for a missing low simulcast. */
 export const SCREEN_SHARE_SUBSCRIBE_DIMENSIONS = { width: 1280, height: 720 } as const
 

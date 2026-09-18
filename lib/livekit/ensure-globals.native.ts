@@ -24,4 +24,9 @@ export function ensureLiveKitGlobals() {
   // eslint-disable-next-line @typescript-eslint/no-require-imports
   const { registerGlobals } = require('@livekit/react-native') as typeof import('@livekit/react-native')
   registerGlobals()
+
+  // Must run after livekit-client is loadable — silences screen-share LogBox.
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  const { patchLiveKitWaitForDimensions } = require('~/co-work/lib/livekit-patch-dimensions') as typeof import('~/co-work/lib/livekit-patch-dimensions')
+  patchLiveKitWaitForDimensions()
 }
